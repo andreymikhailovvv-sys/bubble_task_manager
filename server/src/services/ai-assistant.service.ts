@@ -20,6 +20,7 @@ import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, c
 import { buildTaskChatContext, isTaskChatContextV2Enabled, type TaskChatContextDiagnostics } from './task-chat-context.service.js';
 import { formatTaskChatMemory, isTaskChatMemoryEnabled, resolveTaskChatActiveHistoryLimits, TASK_CHAT_MEMORY_TARGET_MAX_MESSAGES, TASK_CHAT_MEMORY_TARGET_TOKEN_BUDGET, TASK_CHAT_MEMORY_TRIGGER_MAX_MESSAGES, TASK_CHAT_MEMORY_TRIGGER_TOKEN_BUDGET, updateTaskChatMemoryIfNeeded, type TaskChatContextMessage } from './task-chat-memory.service.js';
 import { TASK_MONITOR_FOLLOWUP_TOOL, createMonitoringTrigger } from './task-monitoring-trigger.service.js';
+import { cancelPendingMonitoringTriggers } from './task-monitoring.service.js';
 import { executeTaskContextLookup, TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS, TASK_CHAT_CONTEXT_MAX_TOOL_CALLS, TASK_CHAT_STORED_FILE_FETCH_LIMIT, TASK_CONTEXT_LOOKUP_TOOL, type TaskContextLookupArguments } from './task-chat-context-lookup.service.js';
 import type { TaskAiProgressStatus } from './task-ai-progress.js';
 import { taskService, computeNextRecurringDueDate } from './task.service.js';
@@ -1766,6 +1767,9 @@ export const aiAssistantService = {
         createdAt: new Date(appendStartedAt + index)
       }))
     });
+    if (normalizedMessages.some(message => message.role === 'user')) {
+      await cancelPendingMonitoringTriggers(input.userId, input.taskId);
+    }
   },
 
   appendTaskDialogAssistantMessage: async (input: { userId: string; taskId: string; content: string; creditsSpentMilli: number; webSearchUsed?: boolean; webSources?: TaskWebSource[]; webCitations?: TaskWebCitation[]; generatedDocumentId?: string | null; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; telegramReadOwnerId?: string | null; taskProposalId?: string | null }) => {
