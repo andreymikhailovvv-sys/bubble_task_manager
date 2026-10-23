@@ -19,6 +19,7 @@ import { isDynamicTextBillingEnabled, refundDynamicResponsesCall, runDynamicResp
 import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordAiCreditCharge, recordOpenAiTranscriptionUsage, recordOpenAiUsageShadow, type OpenAiTranscriptionUsage } from './ai-usage-metering.service.js';
 import { buildTaskChatContext, isTaskChatContextV2Enabled, type TaskChatContextDiagnostics } from './task-chat-context.service.js';
 import { formatTaskChatMemory, isTaskChatMemoryEnabled, resolveTaskChatActiveHistoryLimits, TASK_CHAT_MEMORY_TARGET_MAX_MESSAGES, TASK_CHAT_MEMORY_TARGET_TOKEN_BUDGET, TASK_CHAT_MEMORY_TRIGGER_MAX_MESSAGES, TASK_CHAT_MEMORY_TRIGGER_TOKEN_BUDGET, updateTaskChatMemoryIfNeeded, type TaskChatContextMessage } from './task-chat-memory.service.js';
+import { TASK_MONITOR_FOLLOWUP_TOOL, createMonitoringTrigger } from './task-monitoring-trigger.service.js';
 import { executeTaskContextLookup, TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS, TASK_CHAT_CONTEXT_MAX_TOOL_CALLS, TASK_CHAT_STORED_FILE_FETCH_LIMIT, TASK_CONTEXT_LOOKUP_TOOL, type TaskContextLookupArguments } from './task-chat-context-lookup.service.js';
 import type { TaskAiProgressStatus } from './task-ai-progress.js';
 import { taskService, computeNextRecurringDueDate } from './task.service.js';
@@ -241,7 +242,7 @@ export const TASK_ASSISTANT_RESPONSE_FORMAT = {
   }
 };
 
-export function createTaskChatOpenAiPayload(model: string, messages: TaskChatProviderInput[], maxOutputTokens?: number, options?: { reasoningEffort?: string; allowTools?: boolean; allowWebSearch?: boolean }) {
+export function createTaskChatOpenAiPayload(model: string, messages: TaskChatProviderInput[], maxOutputTokens?: number, options?: { reasoningEffort?: string; allowTools?: boolean; allowWebSearch?: boolean; monitoringTools?: boolean }) {
   const allowTools = options?.allowTools !== false;
   const allowWebSearch = allowTools && options?.allowWebSearch === true;
   return {
@@ -252,7 +253,7 @@ export function createTaskChatOpenAiPayload(model: string, messages: TaskChatPro
       return { type: message.type, call_id: message.call_id, output: message.output };
     }),
     text: { format: TASK_ASSISTANT_RESPONSE_FORMAT },
-    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL, AI_IMAGE_TOOL, AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, TELEGRAM_PREPARE_SEND_TOOL, TELEGRAM_REQUEST_READ_TOOL, ...(allowWebSearch ? [AI_CHAT_WEB_SEARCH_TOOL] : [])], tool_choice: 'auto', parallel_tool_calls: false, ...(allowWebSearch ? { max_tool_calls: 1 } : {}) } : { tool_choice: 'none' }),
+    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL, AI_IMAGE_TOOL, AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, TELEGRAM_PREPARE_SEND_TOOL, TELEGRAM_REQUEST_READ_TOOL, ...(options?.monitoringTools ? [TASK_MONITOR_FOLLOWUP_TOOL] : []), ...(allowWebSearch ? [AI_CHAT_WEB_SEARCH_TOOL] : [])], tool_choice: 'auto', parallel_tool_calls: false, ...(allowWebSearch ? { max_tool_calls: 1 } : {}) } : { tool_choice: 'none' }),
     ...(options?.reasoningEffort ? { reasoning: { effort: options.reasoningEffort } } : {}),
     ...(maxOutputTokens === undefined ? {} : { max_output_tokens: maxOutputTokens })
   };
@@ -1896,6 +1897,8 @@ export const aiAssistantService = {
       }
     });
 
+    const monitoringEnabled = task.aiMonitoringEnabled === true && task.userId === input.userId &&
+      !task.parentTaskId && !task.collaborationId && task.taskType === 'TASK';
     const useContextV2 = isTaskChatContextV2Enabled(input.userId);
     const history = useContextV2 ? input.history : normalizeHistory(input.history);
     const question = input.question.trim();
@@ -1998,6 +2001,8 @@ export const aiAssistantService = {
         ].join('\n')
       },
       { role: 'user', content: `Контекст задачи:\n${taskContext}` },
+      ...(monitoringEnabled ? [{ role: 'system' as const,
+        content: 'Владелец включил beta-автомониторинг этой задачи. Если ожидаешь ответ от пользователя, можешь использовать set_task_monitoring_trigger. В остальных задачах такого инструмента нет. Отвечай по существу, избегай навязчивых повторений. Не заявляй о выполненных внешних действиях, пока они не подтверждены.' }] : []),
       ...(fileCatalogText ? [{ role: 'user' as const, content: fileCatalogText }] : []),
       ...(memoryReady ? [{ role: 'user' as const, content: formatTaskChatMemory(memoryResult!.memory!.summary) }] : []),
       ...trimmedHistory,
@@ -2092,7 +2097,7 @@ export const aiAssistantService = {
           }
           const startedAt = Date.now();
           const reasoning = supportsReasoningEffort(model) ? reasoningEffort : undefined;
-          const preflightPayload = createTaskChatOpenAiPayload(model, providerInput, undefined, { reasoningEffort: reasoning, allowTools: !isForcedFinalRound, allowWebSearch });
+          const preflightPayload = createTaskChatOpenAiPayload(model, providerInput, undefined, { reasoningEffort: reasoning, allowTools: !isForcedFinalRound, allowWebSearch, monitoringTools: monitoringEnabled });
           let maxOutputTokens: number | undefined;
           let dynamicReservation: WalletReservation | null = null;
           if (dynamicBilling && !input.skipCreditsCharge) {
@@ -2119,7 +2124,7 @@ export const aiAssistantService = {
             maxOutputTokens = Math.min(TASK_CHAT_MAX_OUTPUT_TOKENS, calculateAffordableOutputTokens(model, inputTokens, dynamicReservation.totalMilli - desired.inputCreditsMilli));
             if (maxOutputTokens < TASK_CHAT_MIN_OUTPUT_TOKENS) throw new Error('Недостаточно AI кредитов');
           }
-          const payload = createTaskChatOpenAiPayload(model, providerInput, maxOutputTokens, { reasoningEffort: reasoning, allowTools: !isForcedFinalRound, allowWebSearch });
+          const payload = createTaskChatOpenAiPayload(model, providerInput, maxOutputTokens, { reasoningEffort: reasoning, allowTools: !isForcedFinalRound, allowWebSearch, monitoringTools: monitoringEnabled });
           console.info('[AI] Sending OpenAI request', { requestId, providerCallIndex, mode: input.mode ?? 'fast', model, taskId: input.taskId, userId: input.userId });
           const openAiResponse = await openAiFetch('https://api.openai.com/v1/responses', {
             method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` }, body: JSON.stringify({ ...payload, stream: true })
@@ -2189,6 +2194,15 @@ export const aiAssistantService = {
             try { args = JSON.parse(call.arguments) as TaskContextLookupArguments; } catch {
               providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: false, code: 'INVALID_ARGUMENTS' }) });
               console.info('[AI task chat round] completed', { requestId, taskId: input.taskId, userId: input.userId, providerCallIndex, toolCallsExecuted, hadToolCall: true, toolOperation: null, inputTokens: usage?.input_tokens ?? null, outputTokens: usage?.output_tokens ?? null, actualCreditsMilli: roundCost, isForcedFinalRound });
+              continue;
+            }
+            if (call.name === 'set_task_monitoring_trigger') {
+              toolCallsExecuted += 1;
+              const trigger = monitoringEnabled
+                ? await createMonitoringTrigger(input.userId, input.taskId, args)
+                : { ok: false, code: 'MONITORING_DISABLED' };
+              providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(trigger) });
+              input.onProgress?.('forming_answer');
               continue;
             }
             if (call.name === 'request_telegram_chat_read') {
