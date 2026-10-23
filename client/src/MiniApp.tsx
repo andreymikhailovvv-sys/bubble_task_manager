@@ -3854,8 +3854,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             {listTasks.map((task) => {
               const isEvent = task.taskType === 'EVENT';
               const hasOverdueState = !isEvent && isOverdue(task);
-              const taskSphereColor = task.sphereId ? spheres.find((item) => item.id === task.sphereId)?.color ?? null : null;
-              const leftStripeColor = hexToRgba(taskSphereColor ?? '', 0.95) ?? 'rgba(100,116,139,0.95)';
+              const taskSphere = task.sphereId ? spheres.find((item) => item.id === task.sphereId) : undefined;
+              const taskSphereColor = taskSphere?.color ?? (isEvent ? '#d97706' : '#64748b');
+              const taskSphereLabel = taskSphere?.name ?? (isEvent ? 'Событие' : 'Без сектора');
               const importanceRating = Math.max(0, Math.min(1, task.importance / 5));
               const importanceBadgeColor = `rgba(${Math.round(80 + importanceRating * 170)}, ${Math.round(165 - importanceRating * 95)}, ${Math.round(220 - importanceRating * 190)}, ${isLightTheme ? 0.48 : 0.32})`;
               const subtaskProgress = subtaskProgressByParent.get(task.id);
@@ -3863,14 +3864,14 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               const progressPercent = hasSubtasks
                 ? Math.round(((subtaskProgress?.completed ?? 0) / (subtaskProgress?.total ?? 1)) * 100)
                 : 0;
-              const taskCardStyle: CSSProperties & Record<'--miniapp-task-stripe', string> = isEvent
-                ? { '--miniapp-task-stripe': 'rgba(245,158,11,0.95)', borderColor: 'rgba(245,158,11,0.72)', borderLeftWidth: '1px', borderLeftColor: 'rgba(245,158,11,0.95)' }
-                : { '--miniapp-task-stripe': leftStripeColor, borderLeftWidth: '4px', borderLeftColor: leftStripeColor };
+              const taskCardStyle = {
+                '--miniapp-sector-color': taskSphereColor
+              } as CSSProperties;
 
               return (
                 <article
                   key={task.id}
-                  className={`miniapp-task-list-card border border-slate-700 bg-slate-800/80 p-3 ${hasOverdueState ? 'miniapp-task-overdue' : ''} ${isEvent ? 'miniapp-task-list-event-card' : ''}`}
+                  className={`miniapp-task-list-card relative border border-slate-700 bg-slate-800/80 p-3 ${hasOverdueState ? 'miniapp-task-overdue' : ''} ${isEvent ? 'miniapp-task-list-event-card' : ''}`}
                   style={taskCardStyle}
                 >
                   <button
@@ -3878,8 +3879,12 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     className="relative flex w-full items-start gap-2 text-left"
                     onClick={() => openTaskModal(task)}
                   >
-                    <div className="min-w-0 flex-1 pr-5">
-                      <h3 className="truncate font-semibold">{task.title}</h3>
+                    <div className="min-w-0 flex-1 pr-9">
+                      <span className="miniapp-task-sector-badge mb-2 inline-flex max-w-full items-center gap-1.5 truncate rounded-full px-2.5 py-1 text-[11px] font-semibold">
+                        <span className="miniapp-task-sector-dot h-1.5 w-1.5 shrink-0 rounded-full" aria-hidden="true" />
+                        <span className="truncate">{taskSphereLabel}</span>
+                      </span>
+                      <h3 className="miniapp-task-title truncate font-semibold">{task.title}</h3>
                       {listSortMode === 'importance' ? (
                         <>
                           <p className={`mt-1 text-xs font-medium ${hasOverdueState ? 'miniapp-overdue-label' : 'text-sky-200'}`}>{formatRemaining(task.dueDate)}</p>
@@ -3894,8 +3899,13 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                         </>
                       ) : (
                         <>
-                          <p className="mt-1 text-xs text-slate-300">{isEvent ? 'Событие' : 'Дедлайн'}: {formatDueDate(task.dueDate)}</p>
-                          <p className={`mt-0.5 text-xs font-medium ${hasOverdueState ? 'miniapp-overdue-label' : 'text-sky-200'}`}>{formatRemaining(task.dueDate)}</p>
+                          <p className="miniapp-task-date mt-1 inline-flex items-center gap-1.5 text-xs">
+                            <CalendarDays size={13} aria-hidden="true" />
+                            {isEvent ? 'Событие' : 'Дедлайн'}: {formatDueDate(task.dueDate)}
+                          </p>
+                          <p className={`miniapp-task-time mt-1 flex items-center gap-1.5 text-xs font-semibold ${hasOverdueState ? 'miniapp-overdue-label' : ''}`}>
+                            <Clock3 size={13} aria-hidden="true" />{formatRemaining(task.dueDate)}
+                          </p>
                         </>
                       )}
                     </div>
@@ -3910,6 +3920,16 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       </span>
                     ) : null}
                   </button>
+                  {!isEvent ? (
+                    <button type="button"
+                      className="miniapp-task-complete-trigger absolute right-3 top-3 inline-flex items-center justify-center rounded-full"
+                      onClick={() => void completeTask(task.id)}
+                      disabled={completingId === task.id}
+                      aria-label={`Завершить задачу: ${task.title}`}
+                      title="Завершить задачу">
+                      {completingId === task.id ? <Loader2 size={18} className="animate-spin" /> : <span className="miniapp-task-complete-ring" />}
+                    </button>
+                  ) : null}
                 </article>
               );
             })}
