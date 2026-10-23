@@ -1,6 +1,7 @@
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, ChatMode, GeneratedDocument, Habit, Sphere, Task, TaskAttachment, TaskComment, WebCitation, WebSource, TelegramInlineSendDraft, TelegramReadDraft, TelegramReadApproval } from './types';
 
 export type TaskMonitoringStatus = { id: string; label: string; detail?: string | null; createdAt: string };
+export type TaskMonitoringTrigger = { id: string; dueAt: string; question: string; state: string };
 
 export type ApiError = Error & { status?: number; code?: string };
 export type AiCheckupSchedule = { id: string; time: string; instructions: string };
@@ -516,6 +517,7 @@ export const api = {
   deleteSphere: (id: string) => request<{ ok: true }>(`/api/spheres/${id}`, { method: 'DELETE' }),
   getTasks: () => request<Task[]>('/api/tasks'),
   createTask: (payload: Partial<Task>) => request<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(payload) }),
+  getTaskMonitoringTriggers: (id: string) => request<TaskMonitoringTrigger[]>(`/api/tasks/${id}/monitoring/triggers`),
   getTaskMonitoringStatuses: (id: string) => request<TaskMonitoringStatus[]>(`/api/tasks/${id}/monitoring/statuses`),
   addTaskMonitoringStatus: (id: string, payload: { label: string; detail?: string }) =>
     request<TaskMonitoringStatus>(`/api/tasks/${id}/monitoring/statuses`, { method: 'POST', body: JSON.stringify(payload) }),
