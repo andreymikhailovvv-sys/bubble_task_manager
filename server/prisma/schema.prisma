@@ -540,6 +540,7 @@ model TaskAiConversationMemory {
 model GeneralAiMessage {
   aiTaskProposalId String?
   monitoringTaskId String?
+  monitoringEventKey String? @unique
   id        String        @id @default(cuid())
   userId    String
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
