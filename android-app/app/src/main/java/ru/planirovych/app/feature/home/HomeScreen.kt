@@ -30,7 +30,8 @@ import ru.planirovych.app.data.model.*
 private enum class AuthMode { LOGIN, REGISTER }
 
 @Composable
-fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
+fun HomeScreen(vm: HomeViewModel, dark: Boolean,
+    notificationTaskId:String?=null,openGeneralAi:Boolean=false) {
     val state by vm.state.collectAsStateWithLifecycle()
     var settings by remember { mutableStateOf(false) }
     var creationMenu by remember { mutableStateOf(false) }
@@ -39,6 +40,9 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
     var createNote by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(initialPage=0,pageCount={4})
     val pagerScope = rememberCoroutineScope()
+    LaunchedEffect(openGeneralAi){
+        if(openGeneralAi)pagerState.scrollToPage(2)
+    }
     var authMode by remember { mutableStateOf<AuthMode?>(null) }
     var openedTaskId by remember { mutableStateOf<String?>(null) }
     var newSubtaskParentId by remember { mutableStateOf<String?>(null) }
@@ -57,6 +61,14 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
         newSubtaskParentId = null
         subtaskReturnToTaskId = null
         taskAiChatId = null
+    }
+    LaunchedEffect(notificationTaskId,state.user?.id){
+        if(!notificationTaskId.isNullOrBlank()){
+            openedTaskId=notificationTaskId
+            newSubtaskParentId=null
+            subtaskReturnToTaskId=null
+            pagerState.scrollToPage(0)
+        }
     }
 
     Scaffold(contentWindowInsets = WindowInsets.safeDrawing,
