@@ -121,3 +121,11 @@ data class TaskAttachment(
     val size: Int,
 )
 @Serializable data class TaskAttachmentLink(val url: String, val fileName: String)
+
+@Serializable
+data class StandaloneNoteGroup(
+    val id: String,
+    val name: String,
+    val color: String = "#8b5cf6",
+    val sphereId: String? = null,
+)
