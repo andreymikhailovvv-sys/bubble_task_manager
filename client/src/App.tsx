@@ -3092,7 +3092,7 @@ ${allContext}`,
     const attachmentPreviews = quick ? [] : await makeAiAttachmentPreviews(aiChatPendingFiles);
     const userMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'user', content: userContent, createdAt: new Date().toISOString(), attachmentPreviews };
     const history = quick
-      ? orderAiChatMessagesChronologically(quickAiChatMessages).slice(-20)
+      ? orderAiChatMessagesChronologically(quickAiChatMessages.filter(message => !message.monitoringTaskId)).slice(-20)
       : (activeAiChat?.messages ?? []);
     if (quick) {
       quickAiFollowBottomRef.current = true;
