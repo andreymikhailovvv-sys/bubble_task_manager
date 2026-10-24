@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.JsonObject
+import ru.planirovych.app.data.repository.userMessage
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -13,7 +14,11 @@ import ru.planirovych.app.data.repository.WorkspaceRepository
 import ru.planirovych.app.data.repository.userMessage
 import ru.planirovych.app.ui.theme.ThemePreferences
 
-data class HomeState(val loading: Boolean = true, val user: CurrentUser? = null, val spheres: List<Sphere> = emptyList(), val tasks: List<Task> = emptyList(), val habits: List<Habit> = emptyList(), val query: String = "", val error: String? = null, val authError: String? = null, val authBusy: Boolean = false, val taskBusy: Boolean = false, val taskError: String? = null, val habitBusy: Boolean = false,
+data class TaskCreationChild(val title:String,val description:String,val dueDate:String?)
+data class TaskCreationFile(val name:String,val mime:String,val bytes:ByteArray)
+
+data class HomeState(val loading: Boolean = true, val user: CurrentUser? = null, val spheres: List<Sphere> = emptyList(), val tasks: List<Task> = emptyList(), val habits: List<Habit> = emptyList(), val query: String = "", val error: String? = null, val authError: String? = null, val authBusy: Boolean = false, val taskBusy: Boolean = false, val taskError: String? = null,
+    val recurrenceLoading:Boolean=false, val recurrenceError:String?=null, val habitBusy: Boolean = false,
     val habitHistoryId: String? = null,
     val habitHistory: List<HabitStat>? = null,
     val habitError: String? = null,
@@ -102,6 +107,56 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
             done()
         } catch(error:Throwable) {
             mutable.update { it.copy(habitBusy=false,habitError=error.userMessage()) }
+        }
+    }
+    fun parseCreationRecurrence(text:String,onParsed:(RecurrenceParseResponse)->Unit) {
+        if(mutable.value.recurrenceLoading || text.isBlank())return
+        viewModelScope.launch {
+            mutable.update{it.copy(recurrenceLoading=true,recurrenceError=null)}
+            try {
+                val parsed=repository.parseTaskRecurrence(text.trim())
+                mutable.update{it.copy(recurrenceLoading=false)}
+                onParsed(parsed)
+            }catch(cause:Throwable){
+                mutable.update{it.copy(recurrenceLoading=false,recurrenceError=cause.userMessage())}
+            }
+        }
+    }
+    fun clearRecurrenceError() {
+        mutable.update{it.copy(recurrenceError=null)}
+    }
+    fun createDetailedTask(payload:JsonObject,
+        subtasks:List<TaskCreationChild>,attachments:List<TaskCreationFile>,done:()->Unit){
+        if(mutable.value.taskBusy)return
+        viewModelScope.launch {
+            mutable.update{it.copy(taskBusy=true,taskError=null)}
+            var parent:Task?=null
+            try {
+                val created=repository.createTopLevelTask(payload)
+                parent=created
+                for(child in subtasks) {
+                    repository.createDraftSubtask(created,child.title,child.description,child.dueDate)
+                }
+                for(file in attachments){
+                    repository.addTaskAttachment(created.id,file.name,file.mime,file.bytes)
+                }
+                val updated=repository.loadTasks()
+                mutable.update{it.copy(taskBusy=false,tasks=updated,taskError=null)}
+                done()
+            }catch(cause:Throwable){
+                val created=parent
+                if(created==null){
+                    mutable.update{it.copy(taskBusy=false,taskError=cause.userMessage())}
+                } else {
+                    // Do not let retry create duplicate parent records after a partial failure.
+                    val updated=runCatching{repository.loadTasks()}.getOrNull()
+                    mutable.update{it.copy(taskBusy=false,
+                        tasks=updated?:it.tasks,
+                        taskError="Объект создан, но часть подзадач или вложений не удалось добавить: "+
+                            cause.userMessage())}
+                    done()
+                }
+            }
         }
     }
     fun createTopLevelTask(payload: JsonObject, done: () -> Unit) =

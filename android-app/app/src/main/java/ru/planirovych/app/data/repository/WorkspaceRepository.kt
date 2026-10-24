@@ -82,6 +82,13 @@ class WorkspaceRepository(private val api: PlanirovychApi) {
     suspend fun completeHabit(id: String) { api.completeHabit(id, buildJsonObject { put("dateKey", java.time.LocalDate.now().toString()) }) }
     suspend fun createHabit(payload: JsonObject): Habit = api.createHabit(payload)
     suspend fun createTopLevelTask(payload: JsonObject): Task = api.createTask(payload)
+    suspend fun parseTaskRecurrence(text:String):RecurrenceParseResponse =
+        api.parseRecurrence(buildJsonObject {
+            put("text",text)
+            put("userTimeZone",java.time.ZoneId.systemDefault().id)
+        })
+    suspend fun createDraftSubtask(parent:Task,title:String,description:String,dueDate:String?) =
+        createSubtask(parent,title,description,dueDate)
     suspend fun createHabit(name: String) {
         api.createHabit(buildJsonObject {
             put("name", name.trim())

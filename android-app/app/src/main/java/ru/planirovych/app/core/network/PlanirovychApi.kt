@@ -17,6 +17,8 @@ interface PlanirovychApi {
     @POST("api/auth/logout") suspend fun logout(): OkResponse
     @GET("api/spheres") suspend fun spheres(): List<Sphere>
     @GET("api/tasks") suspend fun tasks(): List<Task>
+    @POST("api/ai/parse-recurrence")
+    suspend fun parseRecurrence(@Body payload: JsonObject): RecurrenceParseResponse
     @PATCH("api/tasks/{id}") suspend fun updateTask(@Path("id") id: String, @Body changes: JsonObject): Task
     @POST("api/tasks") suspend fun createTask(@Body payload: JsonObject): Task
     @DELETE("api/tasks/{id}") suspend fun deleteTask(@Path("id") id: String, @Query("scope") scope: String = "me"): OkResponse

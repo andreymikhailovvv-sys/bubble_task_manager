@@ -25,6 +25,10 @@ import ru.planirovych.app.data.model.*
 @Composable
 fun NativeQuickTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,
     onClose:()->Unit) {
+    if(type != TaskType.REMINDER){
+        NativeDetailedTaskCreateSheet(type,vm,dark,onClose)
+        return
+    }
     val state by vm.state.collectAsStateWithLifecycle()
     val context=LocalContext.current
     var title by remember(type){mutableStateOf("")}
@@ -46,24 +50,27 @@ fun NativeQuickTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,
     }
     ModalBottomSheet(onDismissRequest=onClose,
         sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),
-        containerColor=MaterialTheme.colorScheme.surface) {
-        Column(Modifier.fillMaxWidth().heightIn(max=570.dp)
+        containerColor=if(dark)Color(0xFF121E31) else Color.White,
+        shape=RoundedCornerShape(topStart=29.dp,topEnd=29.dp)) {
+        Column(Modifier.fillMaxWidth().heightIn(max=450.dp)
             .verticalScroll(rememberScrollState()).padding(horizontal=18.dp,vertical=12.dp)
             .navigationBarsPadding(),verticalArrangement=Arrangement.spacedBy(13.dp)) {
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,
                 verticalAlignment=Alignment.CenterVertically){
-                Text("Новое "+label.lowercase(),fontSize=19.sp,
-                    fontWeight=FontWeight.Bold,color=MaterialTheme.colorScheme.onSurface)
+                Text("НОВОЕ НАПОМИНАНИЕ",fontSize=11.sp,letterSpacing=2.sp,
+                    fontWeight=FontWeight.Bold,color=if(dark)Color(0xFFC4B5FD) else Color(0xFF6D28D9))
                 IconButton(onClick=onClose){Icon(Icons.Default.Close,"Закрыть")}
             }
             OutlinedTextField(value=title,onValueChange={title=it},
-                modifier=Modifier.fillMaxWidth(),label={Text("Название")},
-                singleLine=false,maxLines=2)
+                modifier=Modifier.fillMaxWidth(),label={Text("Название напоминания")},
+                singleLine=false,maxLines=2,shape=RoundedCornerShape(16.dp))
             OutlinedTextField(value=description,onValueChange={description=it},
-                modifier=Modifier.fillMaxWidth(),label={Text("Описание")},minLines=2,maxLines=4)
+                modifier=Modifier.fillMaxWidth(),label={Text("Описание")},
+                minLines=2,maxLines=4,shape=RoundedCornerShape(16.dp))
             if(type==TaskType.EVENT)OutlinedTextField(value=location,onValueChange={location=it},
                 modifier=Modifier.fillMaxWidth(),label={Text("Место проведения")},singleLine=true)
-            OutlinedButton(onClick=chooseDate,modifier=Modifier.fillMaxWidth()){
+            OutlinedButton(onClick=chooseDate,modifier=Modifier.fillMaxWidth(),
+                shape=RoundedCornerShape(15.dp)){
                 Icon(Icons.Default.CalendarMonth,null);Spacer(Modifier.width(8.dp))
                 Text(dueDate?.let { runCatching{
                     OffsetDateTime.parse(it).format(DateTimeFormatter.ofPattern("dd.MM.yyyy, HH:mm"))

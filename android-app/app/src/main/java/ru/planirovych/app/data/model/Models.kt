@@ -129,3 +129,10 @@ data class StandaloneNoteGroup(
     val color: String = "#8b5cf6",
     val sphereId: String? = null,
 )
+
+@Serializable
+data class RecurrenceParseResponse(
+    val summary: String,
+    val schedule: kotlinx.serialization.json.JsonObject,
+    val nextDueDate: String? = null,
+)
