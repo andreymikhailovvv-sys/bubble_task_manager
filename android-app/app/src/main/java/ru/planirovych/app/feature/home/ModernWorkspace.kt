@@ -1,5 +1,7 @@
 package ru.planirovych.app.feature.home
 
+import kotlinx.coroutines.launch
+
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.pager.HorizontalPager
