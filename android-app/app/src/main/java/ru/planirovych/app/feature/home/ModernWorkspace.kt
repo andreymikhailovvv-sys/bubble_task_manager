@@ -83,7 +83,6 @@ fun ModernWorkspace(
     var habitName by remember { mutableStateOf("") }
     val sectors = remember(state.spheres) { state.spheres.associateBy { it.id } }
     val searchQuery = state.query.trim().lowercase(Locale.getDefault())
-    val today = LocalDate.now()
     val now = System.currentTimeMillis()
     val rootTasks = remember(state.tasks, period, searchQuery, mode, sectorFilterEnabled, selectedSectors, timelineSector, sort) {
         state.tasks.asSequence()
@@ -143,8 +142,9 @@ fun ModernWorkspace(
                 onFilter = { filtersOpen=true }, onNotes = { notesOpen=true },
                 onPostpone = { vm.postponeOverdue() }, canPostpone = overdue && !state.taskBusy)
         }
-        if (state.taskError != null) item {
-            Text(state.taskError, color=MaterialTheme.colorScheme.error, style=MaterialTheme.typography.bodySmall)
+        state.taskError?.let { error ->
+            item { Text(error, color=MaterialTheme.colorScheme.error,
+                style=MaterialTheme.typography.bodySmall) }
         }
         if (mode == WorkspaceMode.LIST) {
             if (rootTasks.isEmpty()) item { EmptyWorkspaceMessage("Задачи не найдены.", colors) }
@@ -398,7 +398,7 @@ private fun ModernTaskCard(task:Task,sphere:Sphere?,colors:WorkspaceColors,dark:
                         fontWeight=FontWeight.SemiBold,fontSize=11.sp,lineHeight=14.sp)
                 }
                 Text(task.title,color=colors.text,fontWeight=FontWeight.SemiBold,
-                    fontSize=15.sp,lineHeight=20.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
+                    fontSize=15.sp,lineHeight=20.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
                 if(showImportance){
                     Text(remainingDue(task.dueDate),fontSize=12.sp,
                         color=if(isOverdue)Color(0xFFE11D48) else if(dark)Color(0xFF7DD3FC) else Color(0xFF0369A1))
