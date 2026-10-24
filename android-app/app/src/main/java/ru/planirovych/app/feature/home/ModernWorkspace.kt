@@ -2,6 +2,8 @@ package ru.planirovych.app.feature.home
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.*
@@ -65,26 +67,50 @@ fun ModernWorkspace(
     search: (String) -> Unit,
     settings: () -> Unit,
     onOpenTask: (String) -> Unit,
+    pagerState: PagerState,
     modifier: Modifier = Modifier,
 ) {
     val colors = remember(dark) { workspaceColors(dark) }
-    var mode by rememberSaveable { mutableStateOf(WorkspaceMode.LIST) }
     var period by rememberSaveable { mutableStateOf(PeriodFilter.ALL) }
     var sort by rememberSaveable { mutableStateOf(SortTasks.URGENCY) }
     var selectedSectors by remember { mutableStateOf(setOf<String>()) }
     var sectorFilterEnabled by rememberSaveable { mutableStateOf(false) }
     var timelineSector by rememberSaveable { mutableStateOf("all") }
     var filtersOpen by remember { mutableStateOf(false) }
-    var notesOpen by remember { mutableStateOf(false) }
     var scoreOpen by remember { mutableStateOf(false) }
     var creditsOpen by remember { mutableStateOf(false) }
-    var selectedHabit by remember { mutableStateOf<Habit?>(null) }
+    var selectedHabitId by remember { mutableStateOf<String?>(null) }
     var createHabitOpen by remember { mutableStateOf(false) }
     var habitName by remember { mutableStateOf("") }
     val sectors = remember(state.spheres) { state.spheres.associateBy { it.id } }
     val searchQuery = state.query.trim().lowercase(Locale.getDefault())
     val now = System.currentTimeMillis()
-    val rootTasks = remember(state.tasks, period, searchQuery, mode, sectorFilterEnabled, selectedSectors, timelineSector, sort) {
+    val overdue = state.tasks.any { it.status != TaskStatus.DONE && it.taskType == TaskType.TASK &&
+        it.dueDate != null && dueMillis(it.dueDate) < now }
+    val habits = remember(state.habits) {
+        state.habits.filter { !it.isAutoCompleted && !it.isArchived }.sortedWith(
+            compareBy<Habit> { h -> isHabitDoneToday(h) }.thenBy { it.createdAt ?: "" }
+        )
+    }
+    HorizontalPager(state=pagerState,modifier=modifier.fillMaxSize(),
+        beyondViewportPageCount=1) { page ->
+        when(page) {
+            2 -> Box(Modifier.fillMaxSize().padding(26.dp),
+                contentAlignment=Alignment.Center) {
+                Column(horizontalAlignment=Alignment.CenterHorizontally,
+                    verticalArrangement=Arrangement.spacedBy(13.dp)) {
+                    Icon(Icons.Default.SmartToy,null,tint=colors.purple,
+                        modifier=Modifier.size(44.dp))
+                    Text("Chats AI",color=colors.text,
+                        fontWeight=FontWeight.Bold,fontSize=21.sp)
+                    Text("Раздел появится позже",color=colors.secondaryText,
+                        textAlign=TextAlign.Center,fontSize=13.sp)
+                }
+            }
+            3 -> NativeNotesPage(vm=vm,colors=colors,modifier=Modifier.fillMaxSize())
+            else -> {
+                val contentMode = if(page==1) WorkspaceMode.TIMELINE else WorkspaceMode.LIST
+    val rootTasks = remember(state.tasks, period, searchQuery, contentMode, sectorFilterEnabled, selectedSectors, timelineSector, sort) {
         state.tasks.asSequence()
             .filter { it.status != TaskStatus.DONE }
             .filter {
@@ -104,7 +130,7 @@ fun ModernWorkspace(
                     task.description.orEmpty().lowercase(Locale.getDefault()).contains(searchQuery)
             }
             .filter { task ->
-                if (mode == WorkspaceMode.LIST) {
+                if (contentMode == WorkspaceMode.LIST) {
                     task.parentTaskId == null && task.taskType == TaskType.TASK &&
                         (!sectorFilterEnabled || (task.sphereId != null && selectedSectors.contains(task.sphereId)))
                 } else {
@@ -113,40 +139,33 @@ fun ModernWorkspace(
                         task.sphereId == timelineSector)
                 }
             }
-            .sortedWith(if (mode == WorkspaceMode.LIST && sort == SortTasks.IMPORTANCE)
+            .sortedWith(if (contentMode == WorkspaceMode.LIST && sort == SortTasks.IMPORTANCE)
                 compareByDescending<Task> { it.importance }.thenBy { dueMillis(it.dueDate) }
             else compareBy<Task> { dueMillis(it.dueDate) })
             .toList()
     }
-    val overdue = state.tasks.any { it.status != TaskStatus.DONE && it.taskType == TaskType.TASK &&
-        it.dueDate != null && dueMillis(it.dueDate) < now }
-    val habits = remember(state.habits) {
-        state.habits.filter { !it.isAutoCompleted && !it.isArchived }.sortedWith(
-            compareBy<Habit> { h -> isHabitDoneToday(h) }.thenBy { it.createdAt ?: "" }
-        )
-    }
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start=14.dp, end=14.dp, top=12.dp, bottom=28.dp),
         verticalArrangement = Arrangement.spacedBy(13.dp),
     ) {
         item { WorkspaceTopbar(state, colors, search, settings,
             onCredits={ creditsOpen=true }, onScore={ scoreOpen=true }) }
-        if (mode == WorkspaceMode.LIST) item {
-            HabitsStrip(habits, colors, dark, onHabitClick = { selectedHabit = it }, onAdd = { habitName = ""; createHabitOpen = true })
+        if (contentMode == WorkspaceMode.LIST) item {
+            HabitsStrip(habits, colors, dark, onHabitClick = { selectedHabitId = it.id }, onAdd = { habitName = ""; createHabitOpen = true })
         }
         item {
-            WorkspaceToolbar(colors, dark, mode, setMode={ mode=it },
-                filtered = period != PeriodFilter.ALL || if (mode == WorkspaceMode.LIST)
+            WorkspaceToolbar(colors, dark,
+                filtered = period != PeriodFilter.ALL || if (contentMode == WorkspaceMode.LIST)
                     sort != SortTasks.URGENCY || sectorFilterEnabled else timelineSector != "all",
-                onFilter = { filtersOpen=true }, onNotes = { notesOpen=true },
+                onFilter = { filtersOpen=true },
                 onPostpone = { vm.postponeOverdue() }, canPostpone = overdue && !state.taskBusy)
         }
         state.taskError?.let { error ->
             item { Text(error, color=MaterialTheme.colorScheme.error,
                 style=MaterialTheme.typography.bodySmall) }
         }
-        if (mode == WorkspaceMode.LIST) {
+        if (contentMode == WorkspaceMode.LIST) {
             if (rootTasks.isEmpty()) item { EmptyWorkspaceMessage("Задачи не найдены.", colors) }
             items(rootTasks, key={it.id}) { task ->
                 ModernTaskCard(task, sectors[task.sphereId], colors, dark,
@@ -158,10 +177,14 @@ fun ModernWorkspace(
             TimelineWorkspace(rootTasks, state.spheres, colors, dark, onOpenTask)
         }
     }
+
+            }
+        }
+    }
     if (filtersOpen) {
         ModalBottomSheet(onDismissRequest={filtersOpen=false}, containerColor=colors.panel,
             contentColor=colors.text) {
-            WorkspaceFilters(colors, mode, period, onPeriod={period=it}, sort, onSort={sort=it},
+            WorkspaceFilters(colors, if(pagerState.currentPage==1) WorkspaceMode.TIMELINE else WorkspaceMode.LIST, period, onPeriod={period=it}, sort, onSort={sort=it},
                 state.spheres, selectedSectors, sectorFilterEnabled,
                 onSectorEnabled={enabled -> sectorFilterEnabled=enabled
                     if (enabled && selectedSectors.isEmpty()) selectedSectors=state.spheres.map { it.id }.toSet()
@@ -171,7 +194,6 @@ fun ModernWorkspace(
                 onReset={period=PeriodFilter.ALL;sort=SortTasks.URGENCY;sectorFilterEnabled=false;timelineSector="all"})
         }
     }
-    if (notesOpen) NativeNotesSheet(vm=vm, colors=colors, onClose={notesOpen=false})
     if (scoreOpen) AlertDialog(onDismissRequest={scoreOpen=false},
         title={Text("Рейтинг эффективности")}, text={
             Column(verticalArrangement=Arrangement.spacedBy(7.dp)){
@@ -194,13 +216,11 @@ fun ModernWorkspace(
             TextButton(onClick={createHabitOpen=false;vm.createHabit(habitName)},
                 enabled=habitName.isNotBlank()){Text("Создать")}
         }, dismissButton={TextButton(onClick={createHabitOpen=false}){Text("Отмена")}})
-    if (selectedHabit != null) {
-        val habit = selectedHabit!!
-        AlertDialog(onDismissRequest={selectedHabit=null},
-            title={Text(habit.icon + " " + habit.name)},
-            text={Text("Выполнено сегодня: "+completedHabitToday(habit).toString()+" из "+habit.targetCount.toString())},
-            confirmButton={TextButton(onClick={selectedHabit=null;vm.completeHabit(habit.id)}){Text("Отметить повтор")}},
-            dismissButton={TextButton(onClick={selectedHabit=null}){Text("Закрыть")}})
+    selectedHabitId?.let { id ->
+        state.habits.firstOrNull { it.id == id }?.let {habit->
+            NativeHabitDetailSheet(vm=vm,habit=habit,dark=dark,
+                onClose={selectedHabitId=null})
+        }
     }
 }
 
@@ -312,40 +332,38 @@ private fun HabitsStrip(habits:List<Habit>, colors:WorkspaceColors, dark:Boolean
 }
 
 @Composable private fun WorkspaceToolbar(colors:WorkspaceColors,dark:Boolean,
-    mode:WorkspaceMode,setMode:(WorkspaceMode)->Unit,filtered:Boolean,onFilter:()->Unit,
-    onNotes:()->Unit,onPostpone:()->Unit,canPostpone:Boolean) {
-    Surface(shape=RoundedCornerShape(23.dp),color=colors.panel,
-        border=BorderStroke(1.dp,colors.panelBorder),shadowElevation=3.dp) {
-        Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-            Row(horizontalArrangement=Arrangement.spacedBy(9.dp),modifier=Modifier.fillMaxWidth()) {
-                Row(Modifier.weight(1f).height(43.dp).clip(RoundedCornerShape(15.dp))
-                    .background(colors.muted).padding(3.dp),verticalAlignment=Alignment.CenterVertically) {
-                    ModeButton("Список",Icons.Default.List,mode==WorkspaceMode.LIST,colors,
-                        Modifier.weight(1f)){setMode(WorkspaceMode.LIST)}
-                    ModeButton("Таймлайн",Icons.Default.DateRange,mode==WorkspaceMode.TIMELINE,colors,
-                        Modifier.weight(1f)){setMode(WorkspaceMode.TIMELINE)}
-                }
-                Box(Modifier.size(43.dp).clip(RoundedCornerShape(14.dp))
-                    .border(1.dp,if(filtered) colors.purple else colors.panelBorder,RoundedCornerShape(14.dp))
-                    .background(colors.muted).clickable(onClick=onFilter),
-                    contentAlignment=Alignment.Center) {
-                    Icon(Icons.Default.FilterList,"Фильтры задач",tint=if(filtered) colors.purple else colors.text,
-                        modifier=Modifier.size(20.dp))
-                }
-            }
-            Row(horizontalArrangement=Arrangement.spacedBy(7.dp),modifier=Modifier.fillMaxWidth()) {
-                ToolbarButton("Заметки",Icons.Default.StickyNote2,colors.text,colors.muted,
-                    colors.panelBorder,Modifier.weight(1f), onNotes)
-                ToolbarButton("Отложить",Icons.Default.Schedule,
-                    if(dark) Color(0xFF7DD3FC) else Color(0xFF0369A1),
-                    tinted(Color(0xFF38BDF8),colors.panel,if(dark).08f else .07f),
-                    tinted(Color(0xFF38BDF8),colors.panel,.34f),Modifier.weight(1.06f),
-                    onPostpone, enabled=canPostpone)
-                ToolbarButton("Оптимизировать",Icons.Default.AutoAwesome,
-                    if(dark) Color(0xFFF9A8D4) else Color(0xFFBE185D),
-                    tinted(Color(0xFFF472B6),colors.panel,.13f),
-                    tinted(Color(0xFFF472B6),colors.panel,.35f),Modifier.weight(1.5f),
-                    {},enabled=false,dimDisabled=false)
+    filtered:Boolean,onFilter:()->Unit,onPostpone:()->Unit,canPostpone:Boolean) {
+    Surface(shape=RoundedCornerShape(19.dp),
+        color=tinted(colors.purple,colors.panel,if(dark).12f else .045f),
+        border=BorderStroke(1.dp,tinted(colors.purple,colors.panelBorder,if(dark).44f else .22f)),
+        shadowElevation=2.dp) {
+        Row(Modifier.fillMaxWidth().padding(9.dp),
+            horizontalArrangement=Arrangement.spacedBy(8.dp),
+            verticalAlignment=Alignment.CenterVertically) {
+            ToolbarButton("Отложить",Icons.Default.Schedule,
+                if(dark)Color(0xFF7DD3FC) else Color(0xFF0369A1),
+                tinted(Color(0xFF38BDF8),colors.panel,.10f),
+                tinted(Color(0xFF38BDF8),colors.panel,.34f),
+                Modifier.weight(1.13f),onPostpone,enabled=canPostpone)
+            ToolbarButton("Оптимизировать",Icons.Default.AutoAwesome,
+                if(dark)Color(0xFFF9A8D4) else Color(0xFFBE185D),
+                tinted(Color(0xFFF472B6),colors.panel,.13f),
+                tinted(Color(0xFFF472B6),colors.panel,.35f),
+                Modifier.weight(1.55f),{},enabled=false,dimDisabled=false)
+            Row(Modifier.weight(1f).height(43.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(if(filtered)colors.selected else colors.muted)
+                .border(1.dp,if(filtered)colors.purple else colors.panelBorder,
+                    RoundedCornerShape(14.dp))
+                .clickable(onClick=onFilter),
+                horizontalArrangement=Arrangement.Center,
+                verticalAlignment=Alignment.CenterVertically) {
+                Icon(Icons.Default.FilterList,"Фильтры",
+                    tint=if(filtered)colors.purple else colors.text,
+                    modifier=Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Фильтры",fontSize=10.5.sp,color=colors.text,
+                    fontWeight=FontWeight.SemiBold,maxLines=1)
             }
         }
     }
