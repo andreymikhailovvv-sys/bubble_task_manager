@@ -35,6 +35,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.StrokeCap
@@ -498,14 +499,15 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                                     inner()
                                 }
                             })
-                        IconButton(onClick={picker.launch(arrayOf("*/*"))},
-                            enabled=!busy&&!attaching,
-                            modifier=Modifier.size(38.dp).clip(CircleShape)
-                                .background(c.accent.copy(alpha=.11f))){
-                            Icon(Icons.Default.AttachFile,"Прикрепить файл",
-                                tint=c.accent,modifier=Modifier.size(19.dp))
+                        Box(Modifier.size(42.dp).clip(CircleShape)
+                            .background(if(dark)Color(0xFF253349) else Color(0xFFF8FAFC))
+                            .border(1.dp,c.border,CircleShape)
+                            .clickable(enabled=!busy&&!attaching){
+                                picker.launch(arrayOf("*/*"))
+                            },contentAlignment=Alignment.Center){
+                            TaskChatPaperclip(c.secondary)
                         }
-                        Box(Modifier.size(38.dp).clip(CircleShape)
+                        Box(Modifier.size(42.dp).clip(CircleShape)
                             .background(if(!busy&&(draft.isNotBlank()||files.isNotEmpty()))
                                 c.accent else c.border)
                             .clickable(enabled=!busy&&!attaching&&
@@ -513,9 +515,9 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                             contentAlignment=Alignment.Center){
                             if(busy)CircularProgressIndicator(Modifier.size(18.dp),
                                 strokeWidth=2.dp,color=c.text)
-                            else Icon(Icons.Default.ArrowUpward,"Отправить",
+                            else Icon(Icons.Default.Send,"Отправить",
                                 tint=if(dark)Color(0xFF1A1633) else Color.White,
-                                modifier=Modifier.size(20.dp))
+                                modifier=Modifier.size(19.dp))
                         }
                     }
                     if(pendingRetry && !busy){
@@ -902,5 +904,30 @@ private fun NativeMonitoringTriggerChips(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TaskChatPaperclip(tint:Color){
+    // Lucide-style Paperclip, matching MiniAiChatComposer.tsx: Paperclip 17px.
+    // Unlike Material AttachFile the line is fine and the orientation is clean.
+    Canvas(Modifier.size(18.dp)){
+        val x=size.width/24f
+        val y=size.height/24f
+        val path=Path().apply{
+            moveTo(21.44f*x,11.05f*y)
+            lineTo(12.25f*x,20.24f*y)
+            cubicTo(9.91f*x,22.58f*y,6.09f*x,22.58f*y,3.76f*x,20.24f*y)
+            cubicTo(1.42f*x,17.90f*y,1.42f*x,14.09f*y,3.76f*x,11.75f*y)
+            lineTo(12.95f*x,2.56f*y)
+            cubicTo(14.51f*x,1.0f*y,17.05f*x,1.0f*y,18.61f*x,2.56f*y)
+            cubicTo(20.17f*x,4.12f*y,20.17f*x,6.66f*y,18.61f*x,8.22f*y)
+            lineTo(9.41f*x,17.41f*y)
+            cubicTo(8.63f*x,18.19f*y,7.36f*x,18.19f*y,6.59f*x,17.41f*y)
+            cubicTo(5.80f*x,16.63f*y,5.80f*x,15.36f*y,6.59f*x,14.58f*y)
+            lineTo(15.07f*x,6.10f*y)
+        }
+        drawPath(path,tint,style=Stroke(width=1.7.dp.toPx(),
+            cap=StrokeCap.Round,join=StrokeJoin.Round))
     }
 }
