@@ -36,6 +36,37 @@ class WorkspaceRepository(private val api: PlanirovychApi) {
             put("importance", parent.importance.coerceIn(1, 5))
         })
     suspend fun deleteTask(id: String) { api.deleteTask(id, "me") }
+    suspend fun postponeOverdue(tasks: List<Task>) {
+        // Same calendar-day replacement as the Mini App; never move events/reminders.
+        val today = java.time.LocalDate.now()
+        tasks.filter { it.status != TaskStatus.DONE && it.taskType == TaskType.TASK }
+            .forEach { task ->
+                val due = runCatching { java.time.OffsetDateTime.parse(task.dueDate) }.getOrNull()
+                    ?: return@forEach
+                if (!due.toInstant().isBefore(java.time.Instant.now())) return@forEach
+                val local = due.atZoneSameInstant(java.time.ZoneId.systemDefault())
+                val next = local.withYear(today.year).withMonth(today.monthValue)
+                    .withDayOfMonth(today.dayOfMonth).toInstant().toString()
+                api.updateTask(task.id, buildJsonObject { put("dueDate", next) })
+            }
+    }
+    suspend fun loadHabits() = api.habits()
+    suspend fun completeHabit(id: String) { api.completeHabit(id, buildJsonObject { }) }
+    suspend fun createHabit(name: String) {
+        api.createHabit(buildJsonObject {
+            put("name", name.trim())
+            put("icon", "✨")
+            put("color", "#22c55e")
+            put("targetCount", 1)
+            put("recurrenceType", "DAILY")
+        })
+    }
+    suspend fun loadNotes() = api.notes()
+    suspend fun createNote(title: String, content: String) =
+        api.createNote(buildJsonObject { put("title", title); put("content", content) })
+    suspend fun saveNote(id: String, title: String, content: String) =
+        api.updateNote(id, buildJsonObject { put("title", title); put("content", content) })
+    suspend fun deleteNote(id: String) { api.deleteNote(id) }
     suspend fun login(login: String, password: String) = api.login(LoginRequest(login, password)).user
     suspend fun register(login: String, password: String, name: String, consent: Boolean) = api.register(RegisterRequest(login, password, name.ifBlank { null }, consent)).user
     suspend fun logout() { api.logout() }
