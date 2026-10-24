@@ -175,7 +175,7 @@ fun ModernWorkspace(
                     onComplete={vm.changeStatus(task.id, TaskStatus.DONE)})
             }
         } else item {
-            TimelineWorkspace(rootTasks, state.tasks, state.habits,
+            NativeTimelineWorkspace(rootTasks, state.tasks, state.habits,
                 state.spheres, colors, dark, onOpenTask)
         }
     }
@@ -520,68 +520,6 @@ private fun ModernTaskCard(task:Task,sphere:Sphere?,colors:WorkspaceColors,dark:
             options.forEachIndexed { index,option ->
                 DropdownMenuItem(text={Text(option)},onClick={onSelect(index);expanded=false},
                     trailingIcon=if(index==selected) ({ Icon(Icons.Default.Check,null) }) else null)
-            }
-        }
-    }
-}
-
-@Composable private fun TimelineWorkspace(tasks:List<Task>, spheres:List<Sphere>,
-    colors:WorkspaceColors,dark:Boolean,onOpen:(String)->Unit) {
-    var scale by rememberSaveable{mutableStateOf(TimelineScale.DAY)}
-    var anchor by rememberSaveable {mutableStateOf(LocalDate.now().toString())}
-    val date=runCatching{LocalDate.parse(anchor)}.getOrElse{LocalDate.now()}
-    val start=when(scale){TimelineScale.DAY->date; TimelineScale.WEEK->date.minusDays((date.dayOfWeek.value-1).toLong()); TimelineScale.MONTH->date.withDayOfMonth(1)}
-    val end=when(scale){TimelineScale.DAY->start;TimelineScale.WEEK->start.plusDays(6);TimelineScale.MONTH->start.plusMonths(1).minusDays(1)}
-    val visible=tasks.filter{ task -> parseDueDate(task.dueDate)?.toLocalDate()?.let{!it.isBefore(start)&&!it.isAfter(end)}==true}
-    Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
-        Surface(shape=RoundedCornerShape(20.dp),color=colors.panel,border=BorderStroke(1.dp,colors.panelBorder)) {
-            Column(Modifier.padding(11.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(5.dp)) {
-                    TimelineScale.entries.forEach {option ->
-                        Box(Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(10.dp))
-                            .background(if(scale==option) colors.selected else colors.muted)
-                            .clickable {scale=option;anchor=LocalDate.now().toString()},
-                            contentAlignment=Alignment.Center) {
-                            Text(option.label,fontSize=12.sp,fontWeight=FontWeight.Medium,
-                                color=if(scale==option)colors.selectedText else colors.text)
-                        }
-                    }
-                }
-                Row(verticalAlignment=Alignment.CenterVertically,modifier=Modifier.fillMaxWidth(),
-                    horizontalArrangement=Arrangement.SpaceBetween) {
-                    IconButton(onClick={anchor=when(scale){TimelineScale.DAY->date.minusDays(1);TimelineScale.WEEK->date.minusWeeks(1);TimelineScale.MONTH->date.minusMonths(1)}.toString()}) {
-                        Icon(Icons.Default.ChevronLeft,"Назад",tint=colors.text)
-                    }
-                    Column(horizontalAlignment=Alignment.CenterHorizontally) {
-                        Text(if(start==end)start.format(DateTimeFormatter.ofPattern("d MMMM yyyy",Locale("ru"))) else
-                            start.format(DateTimeFormatter.ofPattern("d MMM",Locale("ru")))+" – "+
-                                end.format(DateTimeFormatter.ofPattern("d MMM",Locale("ru"))),
-                            color=colors.text,fontSize=13.sp,fontWeight=FontWeight.SemiBold)
-                        Text("Выбранный период",fontSize=10.sp,color=colors.secondaryText)
-                    }
-                    IconButton(onClick={anchor=when(scale){TimelineScale.DAY->date.plusDays(1);TimelineScale.WEEK->date.plusWeeks(1);TimelineScale.MONTH->date.plusMonths(1)}.toString()}) {
-                        Icon(Icons.Default.ChevronRight,"Вперёд",tint=colors.text)
-                    }
-                }
-            }
-        }
-        if (visible.isEmpty()) EmptyWorkspaceMessage("На выбранный период нет задач.",colors)
-        else visible.sortedBy{dueMillis(it.dueDate)}.forEach{task ->
-            val sphere=spheres.firstOrNull{it.id==task.sphereId}
-            Surface(shape=RoundedCornerShape(15.dp),color=tinted(parseWorkspaceColor(sphere?.color ?: "#38bdf8"),colors.card,.12f),
-                border=BorderStroke(1.dp,tinted(parseWorkspaceColor(sphere?.color ?: "#38bdf8"),colors.card,.5f))) {
-                Row(Modifier.fillMaxWidth().clickable{if(task.taskType!=TaskType.REMINDER)onOpen(task.id)}
-                    .padding(12.dp),verticalAlignment=Alignment.CenterVertically) {
-                    Text((parseDueDate(task.dueDate)?.format(DateTimeFormatter.ofPattern("HH:mm"))?:"--:--"),
-                        fontWeight=FontWeight.Bold,fontSize=12.sp,color=colors.secondaryText)
-                    Spacer(Modifier.width(13.dp))
-                    Column {
-                        Text((if(task.taskType==TaskType.REMINDER)"🔔 " else "")+task.title,
-                            fontSize=14.sp,color=colors.text,fontWeight=FontWeight.SemiBold)
-                        Text(if(task.taskType==TaskType.EVENT)"Событие" else if(task.taskType==TaskType.REMINDER)
-                            "Напоминание" else "Задача",fontSize=11.sp,color=colors.secondaryText)
-                    }
-                }
             }
         }
     }
