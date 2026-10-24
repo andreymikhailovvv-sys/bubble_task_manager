@@ -131,11 +131,11 @@ export const aiController = {
       // project snapshots are display caches and can have re-ordered tails
       // after multi-device synchronization. The server's dated rows win.
       const serverQuickHistory = isQuickChat
-        ? await aiAssistantService.listGeneralDialog({ userId: req.user!.id })
+        ? await aiAssistantService.listGeneralDialog({ userId: req.user!.id, excludeMonitoringMessages: true })
         : [];
       const promptHistory = isQuickChat && serverQuickHistory.length > 0
         ? serverQuickHistory.slice(-20)
-        : history;
+        : (isQuickChat ? history.filter(message => !('monitoringTaskId' in message)) : history);
       const clientSurface = req.body?.clientSurface === 'web' || req.body?.clientSurface === 'miniapp' ? req.body.clientSurface : undefined;
       // Persist uploads under the authenticated user and this message ID.
       // Model tools, not pre-model regex routes, decide read versus edit.
