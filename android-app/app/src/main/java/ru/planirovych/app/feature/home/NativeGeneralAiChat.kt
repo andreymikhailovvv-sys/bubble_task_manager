@@ -232,6 +232,39 @@ internal fun NativeGeneralAiChatPage(
                                 fontWeight=FontWeight.SemiBold)
                         }
                     }
+                    Box{
+                        Row(Modifier.clip(RoundedCornerShape(10.dp))
+                            .background(c.bg)
+                            .border(1.dp,c.border,RoundedCornerShape(10.dp))
+                            .clickable(enabled=!isTelegram && !state.saving){modelMenu=true}
+                            .padding(horizontal=7.dp,vertical=7.dp),
+                            verticalAlignment=Alignment.CenterVertically){
+                            Text(when(model){
+                                "gpt-6-luna"->"Luna"
+                                "gpt-5.4-mini"->"Mini"
+                                else->"Sol"
+                            },fontSize=10.sp,color=c.text,
+                                fontWeight=FontWeight.SemiBold)
+                            Icon(Icons.Default.ArrowDropDown,null,
+                                tint=c.secondary,modifier=Modifier.size(16.dp))
+                        }
+                        DropdownMenu(expanded=modelMenu,
+                            onDismissRequest={modelMenu=false}){
+                            listOf("gpt-6-luna" to "GPT-6 Luna",
+                                "gpt-5.4-mini" to "GPT-5.4 mini",
+                                "gpt-6.1-sol" to "GPT-6.1 Sol").forEach{(key,label)->
+                                DropdownMenuItem(text={Text(label)},
+                                    onClick={
+                                        project?.id?.let{pid->
+                                            thread?.id?.let{tid->
+                                                vm.setGeneralAiModel(pid,tid,key)
+                                            }
+                                        }
+                                        modelMenu=false
+                                    })
+                            }
+                        }
+                    }
                     IconButton(onClick=onExit,modifier=Modifier.size(32.dp)){
                         Icon(Icons.Default.Close,"Закрыть общий чат",tint=c.text)
                     }
@@ -468,7 +501,7 @@ internal fun NativeGeneralAiChatPage(
                                     Text(t.title,color=c.text,fontSize=13.sp,
                                         fontWeight=FontWeight.Bold,maxLines=2)
                                     Spacer(Modifier.height(4.dp))
-                                    Text("\${t.messages.size} сообщ.",
+                                    Text("${t.messages.size} сообщ.",
                                         color=c.secondary,fontSize=11.sp)
                                 }
                                 val editable=t.id!=QUICK_AI_THREAD_ID &&
@@ -515,7 +548,7 @@ internal fun NativeGeneralAiChatPage(
     deleteProject?.let{target->
         AlertDialog(onDismissRequest={deleteProject=null},
             title={Text("Удалить проект?")},
-            text={Text("Проект «\${target.title}» и его чаты будут удалены.")},
+            text={Text("Проект «${target.title}» и его чаты будут удалены.")},
             confirmButton={TextButton(onClick={
                 vm.deleteGeneralAiProject(target.id);deleteProject=null
             }){Text("Удалить")}},
@@ -524,7 +557,7 @@ internal fun NativeGeneralAiChatPage(
     deleteThread?.let{target->
         AlertDialog(onDismissRequest={deleteThread=null},
             title={Text("Удалить чат?")},
-            text={Text("«\${target.title}»: переписка будет удалена из проекта.")},
+            text={Text("«${target.title}»: переписка будет удалена из проекта.")},
             confirmButton={TextButton(onClick={
                 project?.id?.let{vm.deleteGeneralAiThread(it,target.id)}
                 deleteThread=null
