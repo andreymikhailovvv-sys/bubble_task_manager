@@ -17,6 +17,8 @@ import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
@@ -418,9 +420,7 @@ private fun TimelineMonth(first:LocalDate,tasks:List<Task>,allTasks:List<Task>,
                             timelineEntries(date,tasks,allTasks,habits,spheres)
                         }
                         val outside=date.month!=first.month
-                        val eventCount=entries.count{it.kind=="Событие"}
-                        val subCount=entries.count{it.kind=="Подзадача"}
-                        Box(Modifier.weight(1f).height(87.dp)
+                        Box(Modifier.weight(1f).height(100.dp)
                             .clip(RoundedCornerShape(9.dp))
                             .background(when{
                                 date==LocalDate.now()->colors.selected
@@ -435,18 +435,27 @@ private fun TimelineMonth(first:LocalDate,tasks:List<Task>,allTasks:List<Task>,
                                     color=if(outside)colors.secondaryText.copy(alpha=.55f)
                                         else colors.text,fontWeight=FontWeight.Bold)
                                 entries.take(3).forEach{entry->
-                                    Box(Modifier.fillMaxWidth().height(15.dp)
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(entry.color.copy(alpha=if(dark).32f else .18f))
-                                        .border(.7.dp,entry.color.copy(alpha=.7f),
-                                            RoundedCornerShape(4.dp))
-                                        .padding(start=2.dp),contentAlignment=Alignment.CenterStart){
-                                        Text(when(entry.kind){
-                                            "Событие"->"◆ "+entry.title
-                                            "Подзадача"->"↳ "+entry.title
-                                            "Напоминание"->"🔔 "+entry.title
-                                            else->entry.title
-                                        },fontSize=8.sp,color=colors.text,maxLines=1,
+                                    val accent=when(entry.kind){
+                                        "Событие"->Color(0xFFF59E0B)
+                                        "Напоминание"->Color(0xFF0284C7)
+                                        "Подзадача"->colors.purple
+                                        else->entry.color
+                                    }
+                                    Box(Modifier.fillMaxWidth().height(19.dp)
+                                        .clip(RoundedCornerShape(5.dp))
+                                        .background(accent.copy(alpha=if(dark).32f else .18f))
+                                        .border(.7.dp,accent.copy(alpha=.7f),
+                                            RoundedCornerShape(5.dp)),
+                                        contentAlignment=Alignment.Center){
+                                        // Exact vertical/horizontal centering: no emoji baseline
+                                        // shifts, no leading-only padding on tiny month cells.
+                                        Text(entry.title,
+                                            modifier=Modifier.fillMaxWidth().padding(horizontal=2.dp),
+                                            fontSize=8.sp,lineHeight=9.sp,
+                                            style=TextStyle(platformStyle=PlatformTextStyle(
+                                                includeFontPadding=false)),
+                                            textAlign=TextAlign.Center,color=colors.text,
+                                            maxLines=1,softWrap=false,
                                             overflow=TextOverflow.Ellipsis)
                                     }
                                 }
