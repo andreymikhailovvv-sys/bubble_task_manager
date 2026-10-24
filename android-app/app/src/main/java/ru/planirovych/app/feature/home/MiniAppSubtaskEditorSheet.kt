@@ -241,7 +241,7 @@ fun MiniAppSubtaskEditorSheet(
                 if(!isNew){
                     Spacer(Modifier.height(9.dp))
                     Row(Modifier.clip(CircleShape).background(c.panel)
-                        .border(1.dp,c.border,CircleShape)
+                        .border(1.dp,c.line,CircleShape)
                         .clickable{saveThen(onBack)}
                         .padding(horizontal=11.dp,vertical=7.dp),
                         verticalAlignment=Alignment.CenterVertically) {
@@ -271,7 +271,7 @@ fun MiniAppSubtaskEditorSheet(
                         Row(Modifier.fillMaxWidth().padding(bottom=5.dp)
                             .clip(RoundedCornerShape(11.dp))
                             .background(c.panel)
-                            .border(1.dp,c.border,RoundedCornerShape(11.dp))
+                            .border(1.dp,c.line,RoundedCornerShape(11.dp))
                             .padding(start=7.dp),verticalAlignment=Alignment.CenterVertically){
                             Icon(Icons.Default.AttachFile,null,tint=c.purple,
                                 modifier=Modifier.size(13.dp))
