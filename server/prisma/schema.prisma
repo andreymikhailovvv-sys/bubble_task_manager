@@ -990,3 +990,11 @@ model StandaloneNoteGroup {
   @@unique([userId, name])
   @@index([userId, createdAt])
 }
+
+// Anonymous reservations for the standalone birthday wishlist.
+// One database row per gift ensures atomic claiming across browser sessions.
+model GiftWishlistReservation {
+  id             String   @id
+  ownerTokenHash String   @db.VarChar(64)
+  createdAt      DateTime @default(now())
+}
