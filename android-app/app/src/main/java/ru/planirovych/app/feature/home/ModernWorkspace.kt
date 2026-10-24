@@ -114,7 +114,7 @@ fun ModernWorkspace(
             .filter { it.status != TaskStatus.DONE }
             .filter {
                 val date = parseDueDate(it.dueDate)
-                when(period) {
+                if(contentMode==WorkspaceMode.TIMELINE) true else when(period) {
                     PeriodFilter.ALL -> true
                     PeriodFilter.TODAY -> date?.toLocalDate() == LocalDate.now()
                     PeriodFilter.TOMORROW -> date?.toLocalDate() == LocalDate.now().plusDays(1)
@@ -133,9 +133,11 @@ fun ModernWorkspace(
                     task.parentTaskId == null && task.taskType == TaskType.TASK &&
                         (!sectorFilterEnabled || (task.sphereId != null && selectedSectors.contains(task.sphereId)))
                 } else {
+                    val sectorId = task.sphereId ?: if(task.parentTaskId!=null)
+                        state.tasks.firstOrNull { it.id==task.parentTaskId }?.sphereId else null
                     (timelineSector == "all" ||
-                        (timelineSector == "without-sphere" && task.sphereId == null) ||
-                        task.sphereId == timelineSector)
+                        (timelineSector == "without-sphere" && sectorId == null) ||
+                        sectorId == timelineSector)
                 }
             }
             .sortedWith(if (contentMode == WorkspaceMode.LIST && sort == SortTasks.IMPORTANCE)
@@ -173,7 +175,8 @@ fun ModernWorkspace(
                     onComplete={vm.changeStatus(task.id, TaskStatus.DONE)})
             }
         } else item {
-            TimelineWorkspace(rootTasks, state.spheres, colors, dark, onOpenTask)
+            TimelineWorkspace(rootTasks, state.tasks, state.habits,
+                state.spheres, colors, dark, onOpenTask)
         }
     }
 
