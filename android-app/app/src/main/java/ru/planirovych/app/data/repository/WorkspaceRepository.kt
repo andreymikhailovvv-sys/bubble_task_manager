@@ -65,6 +65,20 @@ class WorkspaceRepository(private val api: PlanirovychApi) {
     suspend fun taskAttachmentLink(taskId: String, attachmentId: String) =
         api.taskAttachmentLink(taskId, attachmentId).url
     suspend fun loadHabits() = api.habits()
+    suspend fun loadHabitHistory(id: String) = api.habitHistory(id)
+    suspend fun recordHabit(id: String,dateKey: String,amount: Int): Habit =
+        api.completeHabit(id,buildJsonObject {
+            put("dateKey",dateKey)
+            put("amount",amount)
+            val recordedDate=java.time.LocalDate.parse(dateKey).atTime(12,0)
+                .atZone(java.time.ZoneId.systemDefault()).toInstant().toString()
+            put("completedAt",recordedDate)
+        })
+    suspend fun undoHabit(id: String,dateKey: String,amount: Int): Habit =
+        api.uncompleteHabit(id,buildJsonObject { put("dateKey",dateKey);put("amount",amount) })
+    suspend fun editHabit(id: String,changes: JsonObject): Habit = api.updateHabit(id,changes)
+    suspend fun finishHabit(id: String) { api.finishHabit(id) }
+    suspend fun deleteHabit(id: String) { api.deleteHabit(id) }
     suspend fun completeHabit(id: String) { api.completeHabit(id, buildJsonObject { put("dateKey", java.time.LocalDate.now().toString()) }) }
     suspend fun createHabit(name: String) {
         api.createHabit(buildJsonObject {
