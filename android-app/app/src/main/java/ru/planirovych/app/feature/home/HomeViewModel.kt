@@ -11,7 +11,11 @@ import ru.planirovych.app.data.repository.WorkspaceRepository
 import ru.planirovych.app.data.repository.userMessage
 import ru.planirovych.app.ui.theme.ThemePreferences
 
-data class HomeState(val loading: Boolean = true, val user: CurrentUser? = null, val spheres: List<Sphere> = emptyList(), val tasks: List<Task> = emptyList(), val habits: List<Habit> = emptyList(), val query: String = "", val error: String? = null, val authError: String? = null, val authBusy: Boolean = false, val taskBusy: Boolean = false, val taskError: String? = null, val habitBusy: Boolean = false, val notes: List<StandaloneNote> = emptyList(), val notesLoading: Boolean = false, val notesBusy: Boolean = false, val notesError: String? = null, val attachmentTaskId: String? = null,
+data class HomeState(val loading: Boolean = true, val user: CurrentUser? = null, val spheres: List<Sphere> = emptyList(), val tasks: List<Task> = emptyList(), val habits: List<Habit> = emptyList(), val query: String = "", val error: String? = null, val authError: String? = null, val authBusy: Boolean = false, val taskBusy: Boolean = false, val taskError: String? = null, val habitBusy: Boolean = false,
+    val habitHistoryId: String? = null,
+    val habitHistory: List<HabitStat>? = null,
+    val habitError: String? = null,
+    val notes: List<StandaloneNote> = emptyList(), val notesLoading: Boolean = false, val notesBusy: Boolean = false, val notesError: String? = null, val attachmentTaskId: String? = null,
     val taskAttachments: List<TaskAttachment> = emptyList(),
     val taskAttachmentsBusy: Boolean = false, val taskAttachmentsError: String? = null)
 class HomeViewModel(private val repository: WorkspaceRepository, private val themes: ThemePreferences) : ViewModel() {
@@ -97,6 +101,57 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
             mutable.update { it.copy(habitBusy = false, taskError = error.userMessage()) }
         }
     }
+
+    fun loadHabitHistory(id: String) = viewModelScope.launch {
+        mutable.update { it.copy(habitHistoryId=id,habitHistory=null,habitError=null) }
+        try {
+            val history=repository.loadHabitHistory(id)
+            mutable.update { if(it.habitHistoryId==id)it.copy(habitHistory=history) else it }
+        } catch (error:Throwable) {
+            mutable.update { if(it.habitHistoryId==id)it.copy(habitError=error.userMessage()) else it }
+        }
+    }
+    fun clearHabitError() { mutable.update { it.copy(habitError=null) } }
+    private fun mutateHabit(id:String,change:suspend ()->Habit,done:()->Unit={}) {
+        if(mutable.value.habitBusy)return
+        viewModelScope.launch {
+            mutable.update { it.copy(habitBusy=true,habitError=null) }
+            try {
+                val habit=change()
+                val history=repository.loadHabitHistory(id)
+                mutable.update { state ->
+                    state.copy(habitBusy=false,
+                        habits=state.habits.map { if(it.id==id)habit else it },
+                        habitHistory=if(state.habitHistoryId==id)history else state.habitHistory)
+                }
+                done()
+            } catch(error:Throwable) {
+                mutable.update { it.copy(habitBusy=false,habitError=error.userMessage()) }
+            }
+        }
+    }
+    fun recordHabitDay(id:String,dateKey:String,amount:Int=1) =
+        mutateHabit(id,{repository.recordHabit(id,dateKey,amount)})
+    fun uncompleteHabitDay(id:String,dateKey:String,amount:Int) =
+        mutateHabit(id,{repository.undoHabit(id,dateKey,amount)})
+    fun editHabit(id:String,changes:JsonObject,done:()->Unit={}) =
+        mutateHabit(id,{repository.editHabit(id,changes)},done)
+    fun removeHabit(id:String,finish:Boolean,done:()->Unit) {
+        if(mutable.value.habitBusy)return
+        viewModelScope.launch {
+            mutable.update{it.copy(habitBusy=true,habitError=null)}
+            try {
+                if(finish)repository.finishHabit(id) else repository.deleteHabit(id)
+                val refreshed=repository.loadHabits()
+                mutable.update { it.copy(habits=refreshed,habitBusy=false,
+                    habitHistory=if(it.habitHistoryId==id)null else it.habitHistory) }
+                done()
+            } catch(error:Throwable) {
+                mutable.update { it.copy(habitBusy=false,habitError=error.userMessage()) }
+            }
+        }
+    }
+
     fun loadNotes() = viewModelScope.launch {
         mutable.update { it.copy(notesLoading = true, notesError = null) }
         try {
