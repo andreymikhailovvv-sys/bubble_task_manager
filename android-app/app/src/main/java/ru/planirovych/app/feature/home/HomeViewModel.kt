@@ -65,8 +65,16 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
     private var generalLoadedForUser:String?=null
 
     fun loadGeneralAi(userId:String?,force:Boolean=false){
-        if(userId==null)return
+        if(userId==null){
+            generalLoadedForUser=null
+            generalAiMutable.value=GeneralAiChatState()
+            return
+        }
         if(!force && generalLoadedForUser==userId)return
+        if(generalLoadedForUser!=userId){
+            // Never display one account's chat tree during another login.
+            generalAiMutable.value=GeneralAiChatState(loading=true)
+        }
         generalLoadedForUser=userId
         generalAiMutable.update{it.copy(loading=true,error=null)}
         viewModelScope.launch {
