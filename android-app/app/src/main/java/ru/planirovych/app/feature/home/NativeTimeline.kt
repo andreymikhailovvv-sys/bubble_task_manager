@@ -118,51 +118,83 @@ internal fun NativeTimelineWorkspace(
     else if(start==end)start.format(DateTimeFormatter.ofPattern("d MMMM yyyy",Locale("ru")))
     else start.format(DateTimeFormatter.ofPattern("d MMM",Locale("ru")))+" – "+
         end.format(DateTimeFormatter.ofPattern("d MMM yyyy",Locale("ru")))
-    Column(verticalArrangement=Arrangement.spacedBy(12.dp)){
-        Surface(shape=RoundedCornerShape(20.dp),color=colors.panel,
-            border=BorderStroke(1.dp,colors.panelBorder)){
-            Column(Modifier.padding(11.dp),verticalArrangement=Arrangement.spacedBy(11.dp)){
-                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(5.dp)){
-                    TimelineZoom.entries.forEach{option->
-                        Box(Modifier.weight(1f).height(38.dp)
-                            .clip(RoundedCornerShape(11.dp))
-                            .background(if(option==zoom)colors.selected else colors.muted)
-                            .border(1.dp,if(option==zoom)colors.purple else colors.panelBorder,
-                                RoundedCornerShape(11.dp))
-                            .clickable{zoom=option},contentAlignment=Alignment.Center){
-                            Text(option.label,color=if(option==zoom)colors.selectedText else colors.text,
-                                fontSize=12.sp,fontWeight=FontWeight.SemiBold)
-                        }
-                    }
+    Column(verticalArrangement=Arrangement.spacedBy(10.dp)){
+        // This mirrors MiniApp's two independent navigation bars:
+        // miniapp-timeline-view-switch and miniapp-timeline-date-nav.
+        val switchShape=RoundedCornerShape(12.dp)
+        Row(Modifier.fillMaxWidth().clip(switchShape)
+            .background(if(dark)Color(0xFF0F172A) else Color(0xFFF1F5F9))
+            .border(1.dp,if(dark)Color(0xFF64748B).copy(alpha=.45f)
+                else Color(0xFFCBD5E1),switchShape)
+            .padding(3.dp),
+            horizontalArrangement=Arrangement.spacedBy(3.dp)){
+            TimelineZoom.entries.forEach{option->
+                val active=option==zoom
+                Box(Modifier.weight(1f).height(34.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(if(active)Color(0xFF7C3AED) else Color.Transparent)
+                    .clickable{zoom=option},
+                    contentAlignment=Alignment.Center){
+                    Text(option.label,
+                        color=if(active)Color.White
+                            else if(dark)Color(0xFF94A3B8) else Color(0xFF334155),
+                        fontSize=11.sp,fontWeight=FontWeight.Bold)
                 }
-                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
-                    horizontalArrangement=Arrangement.SpaceBetween){
-                    IconButton(onClick={
-                        anchorRaw=when(zoom){
-                            TimelineZoom.DAY->anchor.minusDays(1)
-                            TimelineZoom.WEEK->anchor.minusWeeks(1)
-                            TimelineZoom.MONTH->anchor.minusMonths(1)
-                        }.toString()
-                    }){Icon(Icons.Default.ChevronLeft,"Предыдущий период",tint=colors.text)}
-                    Column(horizontalAlignment=Alignment.CenterHorizontally,
-                        modifier=Modifier.weight(1f)){
-                        Text(label.replaceFirstChar{it.uppercase()},
-                            fontSize=13.sp,fontWeight=FontWeight.SemiBold,color=colors.text,
-                            textAlign=TextAlign.Center,maxLines=2)
-                        Text(when(zoom){
-                            TimelineZoom.DAY->"Выбранный день"
-                            TimelineZoom.WEEK->"Выбранная неделя"
-                            TimelineZoom.MONTH->"Выбранный месяц"
-                        },color=colors.secondaryText,fontSize=10.sp)
-                    }
-                    IconButton(onClick={
-                        anchorRaw=when(zoom){
-                            TimelineZoom.DAY->anchor.plusDays(1)
-                            TimelineZoom.WEEK->anchor.plusWeeks(1)
-                            TimelineZoom.MONTH->anchor.plusMonths(1)
-                        }.toString()
-                    }){Icon(Icons.Default.ChevronRight,"Следующий период",tint=colors.text)}
+            }
+        }
+        val dateShape=RoundedCornerShape(14.dp)
+        val arrowColor=if(dark)Color(0xFFC4B5FD) else Color(0xFF6D28D9)
+        Row(Modifier.fillMaxWidth().height(52.dp)
+            .clip(dateShape)
+            .background(if(dark)Color(0xFF22233E) else Color(0xFFFAF7FF))
+            .border(1.dp,Color(0xFF8B5CF6).copy(alpha=if(dark).42f else .28f),
+                dateShape),
+            verticalAlignment=Alignment.CenterVertically){
+            Box(Modifier.width(38.dp).fillMaxHeight()
+                .clickable {
+                    anchorRaw=when(zoom){
+                        TimelineZoom.DAY->anchor.minusDays(1)
+                        TimelineZoom.WEEK->anchor.minusWeeks(1)
+                        TimelineZoom.MONTH->anchor.minusMonths(1)
+                    }.toString()
+                },contentAlignment=Alignment.Center){
+                Icon(Icons.Default.ChevronLeft,"Предыдущий период",
+                    tint=arrowColor,modifier=Modifier.size(20.dp))
+            }
+            Box(Modifier.width(1.dp).fillMaxHeight()
+                .background(Color(0xFF8B5CF6).copy(alpha=.17f)))
+            Row(Modifier.weight(1f).padding(horizontal=6.dp),
+                verticalAlignment=Alignment.CenterVertically,
+                horizontalArrangement=Arrangement.Center){
+                Icon(Icons.Default.CalendarMonth,null,tint=arrowColor,
+                    modifier=Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Column(horizontalAlignment=Alignment.CenterHorizontally,
+                    verticalArrangement=Arrangement.spacedBy(1.dp)){
+                    Text(label.replaceFirstChar{it.uppercase()},
+                        fontSize=12.sp,fontWeight=FontWeight.Bold,
+                        color=if(dark)Color(0xFFF8FAFC) else Color(0xFF1E293B),
+                        textAlign=TextAlign.Center,maxLines=1,
+                        overflow=TextOverflow.Ellipsis)
+                    Text(when(zoom){
+                        TimelineZoom.DAY->"Выбранный день"
+                        TimelineZoom.WEEK->"Выбранная неделя"
+                        TimelineZoom.MONTH->"Выбранный месяц"
+                    },color=colors.secondaryText,fontSize=9.sp)
                 }
+            }
+            Box(Modifier.width(1.dp).fillMaxHeight()
+                .background(Color(0xFF8B5CF6).copy(alpha=.17f)))
+            Box(Modifier.width(38.dp).fillMaxHeight()
+                .clickable{
+                    anchorRaw=when(zoom){
+                        TimelineZoom.DAY->anchor.plusDays(1)
+                        TimelineZoom.WEEK->anchor.plusWeeks(1)
+                        TimelineZoom.MONTH->anchor.plusMonths(1)
+                    }.toString()
+                },contentAlignment=Alignment.Center){
+                Icon(Icons.Default.ChevronRight,"Следующий период",
+                    tint=arrowColor,modifier=Modifier.size(20.dp))
             }
         }
         when(zoom){
