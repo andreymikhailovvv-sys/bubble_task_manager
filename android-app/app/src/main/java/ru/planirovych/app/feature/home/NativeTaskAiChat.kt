@@ -422,7 +422,7 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                     }
                 Column(Modifier.align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .padding(horizontal=12.dp,bottom=10.dp)
+                    .padding(start=12.dp,end=12.dp,bottom=10.dp)
                     .onSizeChanged{composerHeightPx=it.height},
                     verticalArrangement=Arrangement.spacedBy(7.dp)){
                     if(reply!=null){
