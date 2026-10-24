@@ -204,9 +204,10 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
     var historyPositioned by remember(task.id){mutableStateOf(false)}
     var lastItemCount by remember(task.id){mutableIntStateOf(0)}
     LaunchedEffect(task.id,ui.taskId,ui.loading,messages.size,busy,sendingDisplay,
-        monitoringStatuses.size,triggers.size){
+        monitoringStatuses.size,triggers.size,ui.lastActionReports.size){
         if(ui.taskId!=task.id || ui.loading)return@LaunchedEffect
         val currentCount=messages.size+
+            (if(ui.lastActionReports.isNotEmpty())1 else 0)+
             (if(monitoringStatuses.isNotEmpty())1 else 0)+
             (if(triggers.isNotEmpty())1 else 0)+
             (if(busy&&sendingDisplay!=null)1 else 0)+(if(busy)1 else 0)
@@ -329,6 +330,13 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                                         runCatching{ctx.startActivity(
                                             Intent(Intent.ACTION_VIEW,parsed))}
                                 }})
+                        }
+                        if(ui.lastActionReports.isNotEmpty())item(key="ai-last-actions"){
+                            Column(verticalArrangement=Arrangement.spacedBy(6.dp)){
+                                ui.lastActionReports.forEach{report->
+                                    NativeMonitoringActionPill(report,c)
+                                }
+                            }
                         }
                         if(monitoringStatuses.isNotEmpty())item(key="monitoring-status-cards"){
                             NativeMonitoringStatusChips(monitoringStatuses,c)
