@@ -48,9 +48,9 @@ private data class TaskChatColors(val bg:Color,val panel:Color,val text:Color,
     val secondary:Color,val border:Color,val user:Color,val assistant:Color,val accent:Color)
 private fun chatColors(dark:Boolean)=if(dark)TaskChatColors(
     Color(0xFF0E1728),Color(0xFF152239),Color(0xFFF1F5F9),Color(0xFFA7B7CC),
-    Color(0xFF39465F),Color(0xFF4C1D95),Color(0xFF1D2B42),Color(0xFFC4B5FD))
+    Color(0xFF39465F),Color(0xFF29394F),Color(0xFF1D2B42),Color(0xFFC4B5FD))
 else TaskChatColors(Color(0xFFF7F8FC),Color.White,Color(0xFF111827),
-    Color(0xFF64748B),Color(0xFFDDE3EC),Color(0xFFEDE0FF),
+    Color(0xFF64748B),Color(0xFFDDE3EC),Color(0xFFE9EEF7),
     Color.White,Color(0xFF6D28D9))
 
 private data class ReplyTarget(val id:String,val role:String,val content:String)
@@ -173,9 +173,23 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
     LaunchedEffect(ui.busy,ui.error,ui.taskId){
         if(!ui.busy&&ui.error!=null&&ui.taskId==task.id)pendingRetry=true
     }
-    LaunchedEffect(messages.size,busy,sendingDisplay){
-        val size=messages.size+if(busy&&sendingDisplay!=null)1 else 0
-        if(size>0)listState.animateScrollToItem(size-1)
+    // The existing history must appear at its last message immediately.
+    // Do not animate through the entire transcript on first opening.
+    var historyPositioned by remember(task.id){mutableStateOf(false)}
+    var lastItemCount by remember(task.id){mutableIntStateOf(0)}
+    LaunchedEffect(task.id,ui.taskId,ui.loading,messages.size,busy,sendingDisplay){
+        if(ui.taskId!=task.id || ui.loading)return@LaunchedEffect
+        val currentCount=messages.size+
+            (if(busy&&sendingDisplay!=null)1 else 0)+(if(busy)1 else 0)
+        if(!historyPositioned){
+            if(currentCount>0)listState.scrollToItem(currentCount-1)
+            historyPositioned=true
+        }else if(currentCount>lastItemCount && currentCount>0){
+            val lastVisible=listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            val nearBottom=lastVisible >= (lastItemCount-2).coerceAtLeast(0)
+            if(busy || nearBottom)listState.scrollToItem(currentCount-1)
+        }
+        lastItemCount=currentCount
     }
 
     Dialog(onDismissRequest=onClose,
@@ -186,53 +200,58 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
             border=BorderStroke(1.dp,c.accent.copy(alpha=.32f))){
             Column(Modifier.fillMaxSize()){
                 Row(Modifier.fillMaxWidth().background(c.panel)
-                    .padding(horizontal=13.dp,vertical=11.dp),
+                    .heightIn(min=58.dp)
+                    .padding(horizontal=11.dp,vertical=8.dp),
                     verticalAlignment=Alignment.CenterVertically,
-                    horizontalArrangement=Arrangement.spacedBy(9.dp)){
-                    Box(Modifier.size(39.dp).clip(CircleShape)
-                        .background(c.accent.copy(alpha=.16f)),
+                    horizontalArrangement=Arrangement.spacedBy(7.dp)){
+                    Box(Modifier.size(32.dp).clip(CircleShape)
+                        .background(c.accent.copy(alpha=.12f)),
                         contentAlignment=Alignment.Center){
                         Icon(Icons.Default.SmartToy,null,tint=c.accent,
-                            modifier=Modifier.size(23.dp))
-                    }
-                    Column(Modifier.weight(1f)){
-                        Text("Помощь ИИ",fontWeight=FontWeight.Bold,
-                            color=c.text,fontSize=17.sp)
-                        Text(task.title,color=c.secondary,fontSize=11.sp,
-                            maxLines=1,overflow=TextOverflow.Ellipsis)
-                    }
-                    IconButton(onClick={vm.syncTaskAiHistory(task.id)},
-                        modifier=Modifier.size(34.dp)){
-                        Icon(Icons.Default.Refresh,"Обновить чат",tint=c.secondary,
                             modifier=Modifier.size(19.dp))
                     }
-                    IconButton(onClick=onClose,modifier=Modifier.size(34.dp)){
-                        Icon(Icons.Default.Close,"Закрыть чат",tint=c.text,
-                            modifier=Modifier.size(21.dp))
+                    Column(Modifier.weight(1f),
+                        verticalArrangement=Arrangement.spacedBy(1.dp)){
+                        Text("Помощь ИИ",fontWeight=FontWeight.Bold,
+                            color=c.text,fontSize=16.sp,maxLines=1)
+                        Text(task.title,color=c.secondary,fontSize=10.sp,
+                            maxLines=1,overflow=TextOverflow.Ellipsis)
                     }
-                }
-                Box(Modifier.fillMaxWidth().background(c.panel)
-                    .padding(start=62.dp,end=14.dp,bottom=10.dp)){
-                    Row(Modifier.clip(RoundedCornerShape(10.dp))
-                        .background(c.bg).border(1.dp,c.border,RoundedCornerShape(10.dp))
-                        .clickable {modelMenu=true}
-                        .padding(horizontal=10.dp,vertical=7.dp),
-                        verticalAlignment=Alignment.CenterVertically){
-                        Text(modelOptions.firstOrNull{it.first==model}?.second?:model,
-                            color=c.text,fontSize=11.sp,fontWeight=FontWeight.SemiBold)
-                        Spacer(Modifier.width(5.dp))
-                        Icon(Icons.Default.ExpandMore,null,
-                            modifier=Modifier.size(16.dp),tint=c.secondary)
-                    }
-                    DropdownMenu(expanded=modelMenu,onDismissRequest={modelMenu=false}){
-                        modelOptions.forEach{(key,title)->
-                            DropdownMenuItem(
-                                text={Text(title)},
-                                onClick={model=key;modelMenu=false},
-                                trailingIcon=if(model==key){{Icon(Icons.Default.Check,null)}}
-                                    else null
-                            )
+                    Box {
+                        Row(Modifier.clip(RoundedCornerShape(11.dp))
+                            .background(c.bg)
+                            .border(1.dp,c.border,RoundedCornerShape(11.dp))
+                            .clickable {modelMenu=true}
+                            .padding(horizontal=8.dp,vertical=8.dp),
+                            verticalAlignment=Alignment.CenterVertically,
+                            horizontalArrangement=Arrangement.spacedBy(3.dp)){
+                            Text(when(model){
+                                "gpt-6-luna" -> "Luna"
+                                "gpt-5.4-mini" -> "Mini"
+                                else -> "Sol"
+                            },color=c.text,fontSize=11.sp,fontWeight=FontWeight.SemiBold)
+                            Icon(Icons.Default.ExpandMore,null,
+                                modifier=Modifier.size(15.dp),tint=c.secondary)
                         }
+                        DropdownMenu(expanded=modelMenu,onDismissRequest={modelMenu=false}){
+                            modelOptions.forEach{(key,title)->
+                                DropdownMenuItem(
+                                    text={Text(title)},
+                                    onClick={model=key;modelMenu=false},
+                                    trailingIcon=if(model==key){{Icon(Icons.Default.Check,null)}}
+                                        else null
+                                )
+                            }
+                        }
+                    }
+                    IconButton(onClick={vm.syncTaskAiHistory(task.id)},
+                        modifier=Modifier.size(30.dp)){
+                        Icon(Icons.Default.Refresh,"Обновить чат",tint=c.secondary,
+                            modifier=Modifier.size(17.dp))
+                    }
+                    IconButton(onClick=onClose,modifier=Modifier.size(30.dp)){
+                        Icon(Icons.Default.Close,"Закрыть чат",tint=c.text,
+                            modifier=Modifier.size(20.dp))
                     }
                 }
                 HorizontalDivider(color=c.border)
@@ -252,7 +271,8 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                                 textAlign=androidx.compose.ui.text.style.TextAlign.Center)
                         }
                     }
-                    LazyColumn(state=listState,modifier=Modifier.fillMaxSize(),
+                    LazyColumn(state=listState,
+                        modifier=Modifier.fillMaxSize().alpha(if(historyPositioned)1f else 0f),
                         contentPadding=PaddingValues(horizontal=12.dp,vertical=12.dp),
                         verticalArrangement=Arrangement.spacedBy(12.dp)){
                         items(messages,key={m->m.id?:"\${m.role}-\${messages.indexOf(m)}"}){
@@ -346,24 +366,28 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                         .padding(start=5.dp,end=7.dp,top=5.dp,bottom=5.dp),
                         verticalAlignment=Alignment.Bottom,
                         horizontalArrangement=Arrangement.spacedBy(6.dp)){
-                        IconButton(onClick={picker.launch(arrayOf("*/*"))},
-                            enabled=!busy&&!attaching,modifier=Modifier.size(38.dp)){
-                            Icon(Icons.Default.AttachFile,"Прикрепить файл",
-                                tint=c.accent,modifier=Modifier.size(21.dp))
-                        }
                         BasicTextField(value=draft,onValueChange={
                             draft=it;pendingRetry=false
-                        },modifier=Modifier.weight(1f).heightIn(min=38.dp,max=142.dp)
-                            .padding(vertical=9.dp),
+                        },modifier=Modifier.weight(1f).heightIn(min=42.dp,max=142.dp),
                             textStyle=TextStyle(color=c.text,fontSize=14.sp,lineHeight=20.sp),
                             maxLines=6,enabled=!busy,cursorBrush=SolidColor(c.accent),
                             decorationBox={inner->
-                                Box{
+                                Box(Modifier.fillMaxWidth()
+                                    .defaultMinSize(minHeight=42.dp)
+                                    .padding(horizontal=11.dp,vertical=8.dp),
+                                    contentAlignment=Alignment.CenterStart){
                                     if(draft.isEmpty())Text("Сообщение ИИ…",
-                                        color=c.secondary,fontSize=14.sp)
+                                        color=c.secondary,fontSize=14.sp,lineHeight=20.sp)
                                     inner()
                                 }
                             })
+                        IconButton(onClick={picker.launch(arrayOf("*/*"))},
+                            enabled=!busy&&!attaching,
+                            modifier=Modifier.size(38.dp).clip(CircleShape)
+                                .background(c.accent.copy(alpha=.11f))){
+                            Icon(Icons.Default.AttachFile,"Прикрепить файл",
+                                tint=c.accent,modifier=Modifier.size(19.dp))
+                        }
                         Box(Modifier.size(38.dp).clip(CircleShape)
                             .background(if(!busy&&(draft.isNotBlank()||files.isNotEmpty()))
                                 c.accent else c.border)
@@ -412,9 +436,8 @@ private fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,
                         verticalAlignment=Alignment.CenterVertically){
                         Text(message.authorName ?: if(isUser)"Вы" else "ИИ",
-                            color=if(isUser && !c.user.isDarkColor())Color(0xFF5B21B6)
-                                else c.accent,
-                            fontSize=10.sp,fontWeight=FontWeight.Bold)
+                            color=if(isUser) c.secondary else c.accent,
+                            fontSize=12.sp,fontWeight=FontWeight.Bold)
                         if(pending)Text("Отправляется…",color=c.secondary,fontSize=9.sp)
                         else IconButton(onClick={
                             val clipboard=context.getSystemService(
@@ -426,7 +449,9 @@ private fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                                 tint=c.secondary,modifier=Modifier.size(14.dp))
                         }
                     }
-                    Text(content,color=c.text,fontSize=13.sp,lineHeight=20.sp)
+                    if(!isUser) NativeAiFormattedMessage(
+                        text=content,textColor=c.text,linkColor=c.accent)
+                    else Text(content,color=c.text,fontSize=13.sp,lineHeight=20.sp)
                     if(message.messageKind=="MONITOR_ACTION"){
                         Text("Действие автомониторинга",color=c.secondary,fontSize=10.sp)
                     }
