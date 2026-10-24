@@ -9,6 +9,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -22,6 +28,11 @@ import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.*
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextStyle
@@ -227,7 +238,7 @@ internal fun NativeGeneralAiChatPage(
                             .padding(horizontal=8.dp,vertical=6.dp),
                             horizontalArrangement=Arrangement.spacedBy(5.dp),
                             verticalAlignment=Alignment.CenterVertically){
-                            Text(if(p.icon=="telegram")"✈" else p.icon,fontSize=15.sp)
+                            GeneralAiProjectGlyph(p.icon,18.dp)
                             Text(p.title,color=Color.White,fontSize=10.sp,
                                 maxLines=1,overflow=TextOverflow.Ellipsis,
                                 fontWeight=FontWeight.SemiBold)
@@ -412,13 +423,30 @@ internal fun NativeGeneralAiChatPage(
             }
         }
 
-        if(menuOpen){
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha=.42f))
-                .clickable {menuOpen=false})
+        // Keep the overlay mounted for the exit animation. Mini App slides
+        // the drawer from the left rather than showing it instantaneously.
+        AnimatedVisibility(visible=menuOpen,
+            enter=fadeIn(animationSpec=tween(200)),
+            exit=fadeOut(animationSpec=tween(180))){
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(
+                alpha=if(dark).64f else .32f)).clickable { menuOpen=false })
+        }
+        AnimatedVisibility(
+            visible=menuOpen,modifier=Modifier.align(Alignment.CenterStart),
+            enter=slideInHorizontally(
+                initialOffsetX={-it},
+                animationSpec=tween(290,easing=FastOutSlowInEasing)),
+            exit=slideOutHorizontally(
+                targetOffsetX={-it},
+                animationSpec=tween(245,easing=FastOutSlowInEasing))
+        ){
             Surface(Modifier.fillMaxHeight().fillMaxWidth(.86f).widthIn(max=375.dp),
-                color=c.panel,shadowElevation=16.dp,
-                shape=RoundedCornerShape(topEnd=20.dp,bottomEnd=20.dp)){
+                color=Color.Transparent,shadowElevation=18.dp,
+                shape=RoundedCornerShape(topEnd=22.dp,bottomEnd=22.dp)){
                 Column(Modifier.fillMaxSize()
+                    .background(Brush.verticalGradient(
+                        if(dark)listOf(Color(0xFF121B30),Color(0xFF0C1426))
+                        else listOf(Color.White,Color(0xFFF8FAFC))))
                     .verticalScroll(rememberScrollState())
                     .padding(13.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
                     Row(Modifier.fillMaxWidth(),
@@ -441,12 +469,9 @@ internal fun NativeGeneralAiChatPage(
                     }
                     state.projects.forEachIndexed{index,p->
                         val current=project?.id==p.id
-                        Surface(color=if(current)c.accent.copy(alpha=.1f)else c.bg,
-                            shape=RoundedCornerShape(21.dp),
-                            border=BorderStroke(1.dp,if(current)c.accent.copy(alpha=.4f)
-                                else c.border)){
-                            Column(Modifier.fillMaxWidth().padding(11.dp),
-                                verticalArrangement=Arrangement.spacedBy(9.dp)){
+                        AiSidebarGradientCard(
+                            active=current,accent=nativeProjectColor(p.color),
+                            dark=dark,modifier=Modifier.fillMaxWidth()){
                                 Row(Modifier.fillMaxWidth().clickable{
                                     vm.chooseGeneralAiChat(p.id,p.chats.firstOrNull()?.id
                                         ?:QUICK_AI_THREAD_ID)
@@ -454,12 +479,12 @@ internal fun NativeGeneralAiChatPage(
                                     Box(Modifier.size(41.dp).clip(RoundedCornerShape(15.dp))
                                         .background(nativeProjectColor(p.color)),
                                         contentAlignment=Alignment.Center){
-                                        Text(if(p.icon=="telegram")"✈" else p.icon,
-                                            fontSize=19.sp,color=Color.White)
+                                        GeneralAiProjectGlyph(p.icon,23.dp)
                                     }
                                     Spacer(Modifier.width(9.dp))
-                                    Text(p.title,Modifier.weight(1f),color=c.text,
-                                        fontWeight=FontWeight.Bold,fontSize=13.sp,
+                                    Text(p.title,Modifier.weight(1f),
+                                        color=if(dark)Color(0xFFF8FAFC)else Color(0xFF0F172A),
+                                        fontWeight=FontWeight.Bold,fontSize=14.sp,
                                         maxLines=2)
                                 }
                                 Row(horizontalArrangement=Arrangement.spacedBy(7.dp)){
@@ -473,7 +498,6 @@ internal fun NativeGeneralAiChatPage(
                                         deleteProject=p
                                     }
                                 }
-                            }
                         }
                     }
                     Spacer(Modifier.height(3.dp))
@@ -489,21 +513,21 @@ internal fun NativeGeneralAiChatPage(
                     }
                     project?.chats.orEmpty().forEach{t->
                         val active=thread?.id==t.id
-                        Surface(shape=RoundedCornerShape(20.dp),
-                            color=if(active)Color(0xFF06B6D4).copy(alpha=.09f) else c.bg,
-                            border=BorderStroke(1.dp,if(active)Color(0xFF06B6D4)
-                                .copy(alpha=.3f)else c.border)){
-                            Column(Modifier.fillMaxWidth().padding(11.dp),
-                                verticalArrangement=Arrangement.spacedBy(9.dp)){
+                        AiSidebarGradientCard(
+                            active=active,accent=Color(0xFF06B6D4),
+                            dark=dark,modifier=Modifier.fillMaxWidth()){
                                 Column(Modifier.fillMaxWidth().clickable{
                                     project?.id?.let{vm.chooseGeneralAiChat(it,t.id)}
                                     menuOpen=false
                                 }){
-                                    Text(t.title,color=c.text,fontSize=13.sp,
+                                    Text(t.title,
+                                        color=if(dark)Color(0xFFF8FAFC)else Color(0xFF0F172A),
+                                        fontSize=14.sp,
                                         fontWeight=FontWeight.Bold,maxLines=2)
                                     Spacer(Modifier.height(4.dp))
                                     Text("${t.messages.size} сообщ.",
-                                        color=c.secondary,fontSize=11.sp)
+                                        color=if(dark)Color(0xFFA8B8CE)
+                                            else Color(0xFF64748B),fontSize=12.sp)
                                 }
                                 val editable=t.id!=QUICK_AI_THREAD_ID &&
                                     !t.id.startsWith("telegram-ai-assistant:") &&
@@ -515,7 +539,6 @@ internal fun NativeGeneralAiChatPage(
                                         danger=true,enabled=editable&&!isBusy&&
                                             (project?.chats?.size?:0)>1){deleteThread=t}
                                 }
-                            }
                         }
                     }
                 }
