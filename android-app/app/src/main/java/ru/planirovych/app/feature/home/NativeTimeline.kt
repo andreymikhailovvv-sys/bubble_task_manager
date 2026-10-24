@@ -3,6 +3,10 @@ package ru.planirovych.app.feature.home
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.ui.input.pointer.*
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.shape.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -52,7 +56,7 @@ private fun timelineHabitScheduled(habit:Habit,date:LocalDate):Boolean{
 private data class TimelineEntry(
     val key:String,val time:LocalTime,val title:String,
     val kind:String,val color:Color,val taskId:String?=null,
-    val habit:Habit?=null
+    val habit:Habit?=null,val sectorName:String?=null
 )
 private fun timelineEntries(date:LocalDate,tasks:List<Task>,allTasks:List<Task>,
     habits:List<Habit>,spheres:List<Sphere>):List<TimelineEntry>{
@@ -72,7 +76,8 @@ private fun timelineEntries(date:LocalDate,tasks:List<Task>,allTasks:List<Task>,
             "Напоминание" -> Color(0xFF0284C7)
             else -> calendarColor(spheres.firstOrNull{it.id==source.sphereId}?.color)
         }
-        TimelineEntry(task.id,due.toLocalTime(),task.title,kind,accent,task.id)
+        TimelineEntry(task.id,due.toLocalTime(),task.title,kind,accent,task.id,
+            sectorName=spheres.firstOrNull{it.id==source.sphereId}?.name)
     }.toMutableList()
     habits.filter{timelineHabitScheduled(it,date)}.forEach{habit->
         val times=habit.reminderTimes.ifEmpty{listOfNotNull(habit.reminderTime)}
@@ -92,6 +97,7 @@ internal fun NativeTimelineWorkspace(
     colors:WorkspaceColors,dark:Boolean,onOpen:(String)->Unit
 ){
     var zoom by rememberSaveable{mutableStateOf(TimelineZoom.DAY)}
+    var weekScale by rememberSaveable{mutableFloatStateOf(1f)}
     var anchorRaw by rememberSaveable{mutableStateOf(LocalDate.now().toString())}
     val anchor=runCatching{LocalDate.parse(anchorRaw)}.getOrDefault(LocalDate.now())
     val start=when(zoom){
@@ -159,7 +165,9 @@ internal fun NativeTimelineWorkspace(
         when(zoom){
             TimelineZoom.DAY->TimelineDay(anchor,tasks,allTasks,habits,spheres,colors,dark,onOpen)
             TimelineZoom.WEEK->TimelineWeek(start,tasks,allTasks,habits,spheres,colors,dark,
-                onOpen,openDay={anchorRaw=it.toString();zoom=TimelineZoom.DAY})
+                onOpen,weekScale=weekScale,
+                onWeekScaleChange={weekScale=it.coerceIn(.72f,1.8f)},
+                openDay={anchorRaw=it.toString();zoom=TimelineZoom.DAY})
             TimelineZoom.MONTH->TimelineMonth(start,tasks,allTasks,habits,spheres,colors,dark,
                 openDay={anchorRaw=it.toString();zoom=TimelineZoom.DAY})
         }
@@ -168,49 +176,81 @@ internal fun NativeTimelineWorkspace(
 
 @Composable
 private fun TimelineEventCard(entry:TimelineEntry,c:WorkspaceColors,dark:Boolean,
-    compact:Boolean=false,onOpen:(String)->Unit){
+    compact:Boolean=false,scale:Float=1f,onOpen:(String)->Unit){
     val isEvent=entry.kind=="Событие"
     val isReminder=entry.kind=="Напоминание"
     val isSubtask=entry.kind=="Подзадача"
     val isHabit=entry.kind=="Привычка"
-    val edge=if(isSubtask)entry.color else if(isEvent)Color(0xFFD97706)
-        else if(isReminder)Color(0xFF0284C7) else entry.color
-    val base=when{
+    val kindColor=when {
+        isEvent->Color(0xFFD97706)
+        isReminder->Color(0xFF0284C7)
+        isHabit->Color(0xFF059669)
+        else->c.purple
+    }
+    // A sector is shown as a labeled chip instead of a colored card in the
+    // weekly calendar. Kind accents still distinguish events and reminders.
+    val edge=if(compact){
+        when{
+            isEvent->kindColor.copy(alpha=.75f)
+            isReminder->kindColor.copy(alpha=.75f)
+            isHabit->kindColor.copy(alpha=.6f)
+            else->c.panelBorder
+        }
+    } else if(isEvent||isReminder)kindColor else entry.color
+    val base=when {
         isEvent->if(dark)Color(0xFF543717) else Color(0xFFFFF4D6)
         isReminder->if(dark)Color(0xFF163955) else Color(0xFFE0F2FE)
-        isSubtask->if(dark)Color(0xFF263348) else Color(0xFFF3F5FA)
         isHabit->if(dark)Color(0xFF1A352B) else Color(0xFFEFFCF2)
+        isSubtask->if(dark)Color(0xFF263348) else Color(0xFFF3F5FA)
         else->if(dark)Color(0xFF1B2C41) else Color(0xFFF6F8FC)
     }
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(if(compact)9.dp else 13.dp))
-        .background(base)
-        .border(1.dp,edge.copy(alpha=if(dark).65f else .48f),
-            RoundedCornerShape(if(compact)9.dp else 13.dp))
+    val radius=RoundedCornerShape(if(compact)9.dp else 13.dp)
+    val adjusted=if(compact)scale.coerceIn(.72f,1.8f) else 1f
+    Row(Modifier.fillMaxWidth().clip(radius).background(base)
+        .border(1.dp,edge.copy(alpha=if(dark).72f else .6f),radius)
         .clickable(enabled=entry.taskId!=null&&!isReminder){
             entry.taskId?.let(onOpen)
-        }.heightIn(min=if(compact)34.dp else if(isSubtask)44.dp else 54.dp),
+        }.heightIn(min=if(compact)(37f*adjusted).dp
+            else if(isSubtask)44.dp else 54.dp),
         verticalAlignment=Alignment.CenterVertically){
-        Box(Modifier.width(if(isSubtask)5.dp else 3.dp)
-            .heightIn(min=if(compact)34.dp else 48.dp).background(edge))
-        Column(Modifier.weight(1f).padding(horizontal=if(compact)6.dp else 10.dp,
-            vertical=5.dp),verticalArrangement=Arrangement.spacedBy(2.dp)){
-            Text(entry.title,color=c.text,fontSize=if(compact)10.sp else if(isSubtask)12.sp else 13.sp,
+        if(!compact){
+            Box(Modifier.width(if(isSubtask)5.dp else 3.dp)
+                .heightIn(min=if(isSubtask)40.dp else 49.dp).background(edge))
+        }
+        Column(Modifier.weight(1f).padding(
+            horizontal=if(compact)(7f*adjusted).dp else 10.dp,
+            vertical=if(compact)(5f*adjusted).dp else 6.dp),
+            verticalArrangement=Arrangement.spacedBy(if(compact)3.dp else 2.dp)){
+            Text(entry.title,color=c.text,
+                fontSize=if(compact)(10.5f*adjusted).sp else if(isSubtask)12.sp else 13.sp,
+                lineHeight=if(compact)(13f*adjusted).sp else 17.sp,
                 fontWeight=FontWeight.SemiBold,maxLines=if(compact)2 else 1,
                 overflow=TextOverflow.Ellipsis)
             Text(entry.kind+" · "+shortTime(entry.time),
                 color=if(isEvent)if(dark)Color(0xFFFCD34D) else Color(0xFF92400E)
                     else if(isReminder)if(dark)Color(0xFF7DD3FC) else Color(0xFF0369A1)
                     else c.secondaryText,
-                fontSize=if(compact)9.sp else 11.sp,maxLines=1)
+                fontSize=if(compact)(9f*adjusted).sp else 11.sp,
+                maxLines=1)
+            if(compact && !entry.sectorName.isNullOrBlank() && !isHabit && !isReminder){
+                Surface(shape=RoundedCornerShape(6.dp),color=c.selected,
+                    border=BorderStroke(.6.dp,c.purple.copy(alpha=.40f))){
+                    Text(entry.sectorName,modifier=Modifier.padding(
+                        horizontal=(5f*adjusted).dp,vertical=(2f*adjusted).dp),
+                        color=c.selectedText,fontWeight=FontWeight.Medium,
+                        fontSize=(8.5f*adjusted).sp,maxLines=1,
+                        overflow=TextOverflow.Ellipsis)
+                }
+            }
         }
         if(!compact){
-            Icon(when{
+            Icon(when {
                 isEvent->Icons.Default.Event
                 isReminder->Icons.Default.Notifications
                 isSubtask->Icons.Default.SubdirectoryArrowRight
                 isHabit->Icons.Default.AutoAwesome
                 else->Icons.Default.CheckCircleOutline
-            },null,tint=edge,modifier=Modifier.padding(end=9.dp).size(16.dp))
+            },null,tint=kindColor,modifier=Modifier.padding(end=9.dp).size(16.dp))
         }
     }
 }
