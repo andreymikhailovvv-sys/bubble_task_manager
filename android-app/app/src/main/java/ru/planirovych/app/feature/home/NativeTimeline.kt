@@ -31,10 +31,11 @@ private fun calendarColor(color:String?):Color = runCatching {
     Color(android.graphics.Color.parseColor(color ?: "#64748b"))
 }.getOrDefault(Color(0xFF64748B))
 private fun timelineHabitScheduled(habit:Habit,date:LocalDate):Boolean{
+    val rawCreated=habit.createdAt ?: return false
     val created=runCatching {
-        OffsetDateTime.parse(habit.createdAt).toLocalDate()
+        OffsetDateTime.parse(rawCreated).toLocalDate()
     }.recoverCatching{
-        Instant.parse(habit.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()
+        Instant.parse(rawCreated).atZone(ZoneId.systemDefault()).toLocalDate()
     }.getOrDefault(LocalDate.now())
     if(date.isBefore(created))return false
     if(habit.isAutoCompleted || habit.isArchived)return false
