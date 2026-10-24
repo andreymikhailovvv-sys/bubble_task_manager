@@ -110,6 +110,12 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
     var attachmentError by remember(task.id){mutableStateOf<String?>(null)}
     var pendingRetry by remember(task.id){mutableStateOf(false)}
     val busy=ui.taskId==task.id && ui.busy
+    val triggers=if(ui.taskId==task.id && task.aiMonitoringEnabled)
+        ui.monitoringTriggers else emptyList()
+    val monitoringStatuses=if(ui.taskId==task.id)
+        ui.monitoringStatuses else emptyList()
+    var monitoringPanelOpen by remember(task.id){mutableStateOf(false)}
+    var currentTime by remember(task.id){mutableLongStateOf(System.currentTimeMillis())}
     val messages=if(ui.taskId==task.id)ui.messages else emptyList()
     val error=if(ui.taskId==task.id)ui.error else null
     val modelOptions=listOf(
@@ -125,6 +131,13 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
         }
     }
     DisposableEffect(task.id){onDispose{vm.closeTaskAi()}}
+    LaunchedEffect(task.id){
+        while(isActive){
+            vm.refreshTaskAiMonitoring(task.id)
+            currentTime=System.currentTimeMillis()
+            delay(30_000)
+        }
+    }
     val picker=rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments()
     ){uris->
@@ -190,9 +203,12 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
     // Do not animate through the entire transcript on first opening.
     var historyPositioned by remember(task.id){mutableStateOf(false)}
     var lastItemCount by remember(task.id){mutableIntStateOf(0)}
-    LaunchedEffect(task.id,ui.taskId,ui.loading,messages.size,busy,sendingDisplay){
+    LaunchedEffect(task.id,ui.taskId,ui.loading,messages.size,busy,sendingDisplay,
+        monitoringStatuses.size,triggers.size){
         if(ui.taskId!=task.id || ui.loading)return@LaunchedEffect
         val currentCount=messages.size+
+            (if(monitoringStatuses.isNotEmpty())1 else 0)+
+            (if(triggers.isNotEmpty())1 else 0)+
             (if(busy&&sendingDisplay!=null)1 else 0)+(if(busy)1 else 0)
         if(!historyPositioned){
             if(currentCount>0)listState.scrollToItem(currentCount-1)
@@ -255,6 +271,16 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                             }
                         }
                     }
+                    if(task.taskType==TaskType.TASK && task.parentTaskId==null){
+                        IconButton(onClick={
+                            vm.refreshTaskAiMonitoring(task.id)
+                            monitoringPanelOpen=true
+                        },modifier=Modifier.size(29.dp)){
+                            Icon(Icons.Default.Radar,"Автомониторинг и статусы",
+                                tint=if(task.aiMonitoringEnabled)c.accent else c.secondary,
+                                modifier=Modifier.size(17.dp))
+                        }
+                    }
                     IconButton(onClick={vm.syncTaskAiHistory(task.id)},
                         modifier=Modifier.size(30.dp)){
                         Icon(Icons.Default.Refresh,"Обновить чат",tint=c.secondary,
@@ -286,8 +312,11 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                         modifier=Modifier.fillMaxSize().alpha(if(historyPositioned)1f else 0f),
                         contentPadding=PaddingValues(horizontal=12.dp,vertical=12.dp),
                         verticalArrangement=Arrangement.spacedBy(12.dp)){
-                        items(messages,key={m->m.id?:"\${m.role}-\${messages.indexOf(m)}"}){
-                            message-> TaskChatBubble(message,c,ctx,
+                        items(messages,key={m->m.id?:m.role+"-"+messages.indexOf(m)}){
+                            message->
+                            if(message.messageKind=="MONITOR_ACTION"){
+                                NativeMonitoringActionPill(message.content,c)
+                            }else TaskChatBubble(message,c,ctx,
                                 onReply={reply=ReplyTarget(message.id.orEmpty(),
                                     message.role,message.content)},
                                 onProposalAction={id,action->
@@ -301,20 +330,19 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                                             Intent(Intent.ACTION_VIEW,parsed))}
                                 }})
                         }
+                        if(monitoringStatuses.isNotEmpty())item(key="monitoring-status-cards"){
+                            NativeMonitoringStatusChips(monitoringStatuses,c)
+                        }
+                        if(triggers.isNotEmpty())item(key="monitoring-active-triggers"){
+                            NativeMonitoringTriggerChips(triggers,currentTime,c)
+                        }
                         if(busy&&sendingDisplay!=null)item(key="pending-user"){
                             TaskChatBubble(TaskAiChatMessage(role="user",
                                 content=sendingDisplay.orEmpty()),c,ctx,
                                 onReply={},pending=true)
                         }
                         if(busy)item(key="assistant-thinking"){
-                            Row(verticalAlignment=Alignment.CenterVertically,
-                                horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                                CircularProgressIndicator(
-                                    modifier=Modifier.size(17.dp),strokeWidth=2.dp,
-                                    color=c.accent)
-                                Text("ИИ обрабатывает запрос…",color=c.secondary,
-                                    fontSize=12.sp)
-                            }
+                            NativeTaskAiProgressChip(ui.progressStatus?:"analyzing_request",c)
                         }
                     }
                 }
@@ -419,6 +447,41 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                 }
             }
         }
+    }
+    if(monitoringPanelOpen){
+        AlertDialog(onDismissRequest={monitoringPanelOpen=false},
+            containerColor=c.panel,
+            title={Text("Автомониторинг",color=c.text,fontWeight=FontWeight.Bold)},
+            text={
+                Column(Modifier.heightIn(max=430.dp)
+                    .verticalScroll(rememberScrollState()),
+                    verticalArrangement=Arrangement.spacedBy(10.dp)){
+                    Text(if(task.aiMonitoringEnabled)
+                        "Автомониторинг задачи включён"
+                        else "Автомониторинг задачи выключен",
+                        color=c.secondary,fontSize=12.sp)
+                    if(monitoringStatuses.isEmpty())Text("Пока нет статусов.",
+                        color=c.secondary,fontSize=12.sp)
+                    monitoringStatuses.forEach{status->
+                        Column(Modifier.fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(c.bg).padding(11.dp)){
+                            Text(status.label,color=c.text,
+                                fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+                            status.detail?.takeIf{it.isNotBlank()}?.let{
+                                Text(it,color=c.secondary,fontSize=11.sp)
+                            }
+                            status.createdAt?.let{
+                                Text(it.take(16).replace('T',' '),
+                                    color=c.secondary,fontSize=10.sp)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton={TextButton(onClick={monitoringPanelOpen=false}){
+                Text("Закрыть")
+            }})
     }
 }
 
