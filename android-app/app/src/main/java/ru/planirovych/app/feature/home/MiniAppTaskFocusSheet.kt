@@ -71,6 +71,7 @@ fun MiniAppTaskFocusSheet(
     onSave: (String, JsonObject, () -> Unit) -> Unit,
     onChangeStatus: (String, TaskStatus, () -> Unit) -> Unit,
     onDelete: (String, () -> Unit) -> Unit, onClearError: () -> Unit,
+    onOpenAiChat:(String)->Unit,
 ) {
     val c=remember(dark){focusColors(dark)}
     val ctx=LocalContext.current
@@ -286,10 +287,7 @@ fun MiniAppTaskFocusSheet(
                     FocusAction("Открыть диалог с ИИ",Icons.Default.SmartToy,Color(0xFF9333EA),
                         Modifier.fillMaxWidth(),enabled=!busy,
                         gradient=Brush.horizontalGradient(listOf(Color(0xFF7C3AED),Color(0xFFA855F7)))){
-                        saveThen {
-                            val url="https://planirovych.ru/?taskId="+Uri.encode(task.id)+"&openAi=1"
-                            runCatching{ctx.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(url)))}
-                        }
+                        saveThen { onOpenAiChat(task.id) }
                     }
                     Spacer(Modifier.height(20.dp))
                     HorizontalDivider(color=c.border)
