@@ -2976,7 +2976,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     const attachmentPreviews = await makeAiAttachmentPreviews(aiChatPendingFiles);
     const userMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'user', content: userMessageContent, createdAt: new Date().toISOString(), attachmentPreviews };
     const history = activeAiChat?.id === QUICK_AI_CHAT_ID
-      ? orderAiChatMessagesChronologically(activeAiChat.messages).slice(-20)
+      ? orderAiChatMessagesChronologically(activeAiChat.messages.filter(message => !message.monitoringTaskId)).slice(-20)
       : (activeAiChat?.messages ?? []);
     generalAiChatNearBottomRef.current = true;
     updateActiveAiChatMessages((messages) => [...messages, userMessage]);
