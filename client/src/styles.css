@@ -10078,6 +10078,25 @@ body[data-theme='light'] .task-monitor-button,
 }
 body[data-theme='light'] .task-monitor-button:hover,
 .miniapp-light .task-monitor-button:hover { background: #e1edf2; }
+/* Monitoring is an opt-in mode: show its enabled state on the closed button. */
+.task-monitor-button.task-monitor-button-active {
+  border-color: rgba(74, 222, 128, .53);
+  background: rgba(22, 163, 74, .24);
+  color: #a7f3d0;
+}
+.task-monitor-button.task-monitor-button-active:hover {
+  background: rgba(22, 163, 74, .32);
+}
+body[data-theme='light'] .task-monitor-button.task-monitor-button-active,
+.miniapp-light .task-monitor-button.task-monitor-button-active {
+  border-color: #9bd8af;
+  background: #e1f6e8;
+  color: #187642;
+}
+body[data-theme='light'] .task-monitor-button.task-monitor-button-active:hover,
+.miniapp-light .task-monitor-button.task-monitor-button-active:hover {
+  background: #c9edd6;
+}
 .task-monitor-unread {
   background: #e2edf1;
   border: 1px solid #8ba8b5;
