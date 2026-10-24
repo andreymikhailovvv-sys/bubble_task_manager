@@ -10,6 +10,9 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.Json
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import retrofit2.HttpException
 import ru.planirovych.app.core.network.PlanirovychApi
 import ru.planirovych.app.data.model.*
@@ -103,7 +106,8 @@ class WorkspaceRepository(private val api: PlanirovychApi) {
     }
     suspend fun sendTaskAiMessage(
         id:String,requestId:String,question:String,model:String,
-        attachments:List<TaskAiFile>,userMessage:String=question
+        attachments:List<TaskAiFile>,userMessage:String=question,
+        onProgress:(String)->Unit={}
     ):TaskAiReply {
         val payload=buildJsonObject {
             put("clientRequestId",requestId)
@@ -126,7 +130,25 @@ class WorkspaceRepository(private val api: PlanirovychApi) {
                 }
             })
         }
-        val response=api.sendTaskAi(id,payload)
+        // Mini App uses NDJSON. Status events are emitted by the actual
+        // server-side tools and never inferred from a local animation/timer.
+        val response=withContext(Dispatchers.IO) {
+            var result:JsonObject?=null
+            api.streamTaskAi(id,payload).use{body->
+                body.charStream().buffered().forEachLine{line->
+                    if(line.isBlank())return@forEachLine
+                    val event=Json.parseToJsonElement(line) as? JsonObject
+                        ?: throw IllegalStateException("Некорректный ответ ИИ")
+                    when(event.optString("type")){
+                        "status"->event.optString("status")?.let(onProgress)
+                        "result"->result=event["result"] as? JsonObject
+                        "error"->throw IllegalStateException(
+                            event.optString("message")?:"Ошибка запроса ИИ")
+                    }
+                }
+            }
+            result ?: throw IllegalStateException("Сервер не вернул ответ ИИ")
+        }
         val summary=(response["actionReports"] as? kotlinx.serialization.json.JsonArray)
             .orEmpty().mapNotNull{
                 (it as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull
@@ -135,6 +157,11 @@ class WorkspaceRepository(private val api: PlanirovychApi) {
             ?.booleanOrNull?:false
         return TaskAiReply(response.optString("answer").orEmpty(),changed,summary,response)
     }
+
+    suspend fun loadTaskMonitoringTriggers(id:String):List<TaskMonitoringTrigger> =
+        api.taskMonitoringTriggers(id)
+    suspend fun loadTaskMonitoringStatuses(id:String):List<TaskMonitoringStatus> =
+        api.taskMonitoringStatuses(id)
 
     suspend fun updateTaskAiProposal(id:String,action:String){
         val empty=buildJsonObject{}
