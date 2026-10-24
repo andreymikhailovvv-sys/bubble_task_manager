@@ -249,6 +249,29 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
             })
         }})
     }
+    fun applyGeneralAiProposal(id:String,action:String){
+        viewModelScope.launch{
+            try{
+                repository.updateTaskAiProposal(id,action)
+                val updated=repository.loadTasks()
+                mutable.update{it.copy(tasks=updated)}
+                generalAiMutable.update{it.copy(error=null)}
+            }catch(t:Throwable){
+                generalAiMutable.update{it.copy(error=t.userMessage())}
+            }
+        }
+    }
+    fun generalAiDocumentLink(id:String,onReady:(String)->Unit){
+        viewModelScope.launch{
+            try{
+                val link=repository.taskAiDocumentLink(id)
+                    ?:throw IllegalStateException("Ссылка на документ недоступна")
+                onReady(link)
+            }catch(t:Throwable){
+                generalAiMutable.update{it.copy(error=t.userMessage())}
+            }
+        }
+    }
     fun sendGeneralAi(
         projectId:String,chatId:String,requestId:String,question:String,
         messageContent:String,files:List<TaskAiFile>,model:String,
