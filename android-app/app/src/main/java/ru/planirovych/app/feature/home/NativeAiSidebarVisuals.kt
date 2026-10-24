@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -76,15 +77,10 @@ internal fun GeneralAiProjectGlyph(icon:String,size:Dp){
         return
     }
     val shape=remember{PathParser().parsePathString(TELEGRAM_SVG_PATH).toPath()}
-    Canvas(Modifier.then(Modifier).clip(RoundedCornerShape(1.dp))
-        .then(Modifier).padding(0.dp)
-        .then(Modifier)
-        .run{androidx.compose.foundation.layout.size(size)}){
-        withTransform({scale(
-            scaleX=this@Canvas.size.width/24f,
-            scaleY=this@Canvas.size.height/24f,
-            pivot=Offset.Zero
-        )}){
+    Canvas(Modifier.size(size)){
+        val xScale=this.size.width/24f
+        val yScale=this.size.height/24f
+        withTransform({scale(xScale,yScale,pivot=Offset.Zero)}){
             drawPath(shape,Color.White)
         }
     }
