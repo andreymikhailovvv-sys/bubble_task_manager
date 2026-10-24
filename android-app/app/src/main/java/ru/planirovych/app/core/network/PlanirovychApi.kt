@@ -34,6 +34,11 @@ interface PlanirovychApi {
     @GET("api/habits") suspend fun habits(): List<Habit>
     @POST("api/habits") suspend fun createHabit(@Body payload: JsonObject): Habit
     @POST("api/habits/{id}/complete") suspend fun completeHabit(@Path("id") id: String, @Body payload: JsonObject): Habit
+    @GET("api/habits/{id}/history") suspend fun habitHistory(@Path("id") id: String): List<HabitStat>
+    @PATCH("api/habits/{id}") suspend fun updateHabit(@Path("id") id: String,@Body payload: JsonObject): Habit
+    @POST("api/habits/{id}/uncomplete") suspend fun uncompleteHabit(@Path("id") id: String,@Body payload: JsonObject): Habit
+    @POST("api/habits/{id}/finish") suspend fun finishHabit(@Path("id") id: String): JsonObject
+    @DELETE("api/habits/{id}") suspend fun deleteHabit(@Path("id") id: String): JsonObject
     @GET("api/notes") suspend fun notes(): List<StandaloneNote>
     @POST("api/notes") suspend fun createNote(@Body payload: JsonObject): StandaloneNote
     @PATCH("api/notes/{id}") suspend fun updateNote(@Path("id") id: String, @Body payload: JsonObject): StandaloneNote
