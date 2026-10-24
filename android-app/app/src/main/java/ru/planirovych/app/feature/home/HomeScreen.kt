@@ -33,6 +33,10 @@ private enum class AuthMode { LOGIN, REGISTER }
 fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
     val state by vm.state.collectAsStateWithLifecycle()
     var settings by remember { mutableStateOf(false) }
+    var creationMenu by remember { mutableStateOf(false) }
+    var creationType by remember { mutableStateOf<TaskType?>(null) }
+    var createHabit by remember { mutableStateOf(false) }
+    var createNote by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(initialPage=0,pageCount={4})
     val pagerScope = rememberCoroutineScope()
     var authMode by remember { mutableStateOf<AuthMode?>(null) }
@@ -47,6 +51,39 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
 
     Scaffold(contentWindowInsets = WindowInsets.safeDrawing,
         containerColor = MaterialTheme.colorScheme.background,
+        floatingActionButton = {
+            if(!state.loading && state.error==null) {
+                Box {
+                    FloatingActionButton(
+                        onClick={creationMenu=!creationMenu},
+                        shape=CircleShape,
+                        containerColor=if(dark)Color(0xFFA78BFA) else Color(0xFF6D28D9),
+                        contentColor=if(dark)Color(0xFF131125) else Color.White,
+                        elevation=FloatingActionButtonDefaults.elevation(defaultElevation=7.dp)
+                    ) {
+                        Icon(if(creationMenu)Icons.Default.Close else Icons.Default.Add,
+                            "Добавить",modifier=Modifier.size(27.dp))
+                    }
+                    DropdownMenu(expanded=creationMenu,onDismissRequest={creationMenu=false}) {
+                        listOf(
+                            Triple("Добавить задачу",Icons.Default.CheckCircle,TaskType.TASK),
+                            Triple("Добавить событие",Icons.Default.Event,TaskType.EVENT),
+                            Triple("Добавить напоминание",Icons.Default.Notifications,TaskType.REMINDER),
+                        ).forEach { (label,icon,type)->
+                            DropdownMenuItem(text={Text(label)},leadingIcon={Icon(icon,null)},
+                                onClick={creationType=type;creationMenu=false})
+                        }
+                        HorizontalDivider()
+                        DropdownMenuItem(text={Text("Добавить привычку")},
+                            leadingIcon={Icon(Icons.Default.AutoAwesome,null)},
+                            onClick={createHabit=true;creationMenu=false})
+                        DropdownMenuItem(text={Text("Добавить заметку")},
+                            leadingIcon={Icon(Icons.Default.StickyNote2,null)},
+                            onClick={createNote=true;creationMenu=false})
+                    }
+                }
+            }
+        },
         bottomBar = {
             if(!state.loading && state.error == null) {
                 val tabs = listOf(
@@ -55,8 +92,14 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
                     Triple("Chats AI",Icons.Default.SmartToy,"Раздел ИИ"),
                     Triple("Заметки",Icons.Default.StickyNote2,"Заметки")
                 )
-                NavigationBar(containerColor=MaterialTheme.colorScheme.surface,
-                    tonalElevation=7.dp) {
+                NavigationBar(
+                    modifier=Modifier.border(
+                        width=if(dark)0.dp else 1.dp,
+                        color=if(dark)Color.Transparent else Color(0xFFDDE2F0)),
+                    containerColor=if(dark)Color(0xFF121827) else Color.White,
+                    contentColor=if(dark)Color(0xFFE2E8F0) else Color(0xFF172238),
+                    tonalElevation=0.dp
+                ) {
                     tabs.forEachIndexed { index,tab ->
                         NavigationBarItem(
                             selected=pagerState.currentPage==index,
@@ -66,6 +109,13 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
                             label={Text(tab.first,maxLines=1,
                                 style=MaterialTheme.typography.labelSmall)},
                             alwaysShowLabel=true,
+                            colors=NavigationBarItemDefaults.colors(
+                                selectedIconColor=if(dark)Color(0xFFD8B4FE) else Color(0xFF6828C6),
+                                selectedTextColor=if(dark)Color(0xFFF1E8FF) else Color(0xFF5420A7),
+                                indicatorColor=if(dark)Color(0xFF34264E) else Color(0xFFECE0FF),
+                                unselectedIconColor=if(dark)Color(0xFF9CA3AF) else Color(0xFF55647E),
+                                unselectedTextColor=if(dark)Color(0xFF9CA3AF) else Color(0xFF55647E)
+                            ),
                         )
                     }
                 }
@@ -87,6 +137,14 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
             )
         }
     }
+    creationType?.let { type ->
+        NativeQuickTaskCreateSheet(type=type,vm=vm,dark=dark,
+            onClose={creationType=null})
+    }
+    if(createHabit) NativeHabitCreateSheet(vm=vm,dark=dark,
+        onClose={createHabit=false})
+    if(createNote) NativeQuickNoteCreateSheet(vm=vm,dark=dark,
+        onClose={createNote=false})
     if (settings) SettingsSheet(
         state.user, dark, { vm.setDark(it) }, { settings = false },
         { authMode = it; settings = false }, { vm.logout { settings = false } },
@@ -316,7 +374,15 @@ private fun taskSortTime(value: String?): Long {
 
 @Composable private fun EmptyCard(text:String){Surface(Modifier.fillMaxWidth(),shape=RoundedCornerShape(20.dp),color=MaterialTheme.colorScheme.surfaceVariant){Column(Modifier.padding(28.dp).fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally){Icon(Icons.Default.CheckCircle,null,tint=MaterialTheme.colorScheme.primary);Spacer(Modifier.height(8.dp));Text(text)}}}
 
-@OptIn(ExperimentalMaterial3Api::class) @Composable private fun SettingsSheet(user:CurrentUser?,dark:Boolean,setDark:(Boolean)->Unit,close:()->Unit,auth:(AuthMode)->Unit,logout:()->Unit){ModalBottomSheet(onDismissRequest=close){Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){Text("Настройки",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold);Text(user?.displayName ?: "Профиль");Text(if(user?.hasAccount==true)"Аккаунт Планировыча" else "Локальный профиль устройства",color=MaterialTheme.colorScheme.onSurfaceVariant);Row(verticalAlignment=Alignment.CenterVertically){Icon(if(dark)Icons.Default.DarkMode else Icons.Default.LightMode,null);Text("Тёмная тема",Modifier.padding(start=10.dp).weight(1f));Switch(dark,{setDark(it)})};if(user?.hasAccount==true)OutlinedButton(logout,Modifier.fillMaxWidth()){Text("Выйти")}else Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){Button({auth(AuthMode.LOGIN)},Modifier.weight(1f)){Text("Войти")};OutlinedButton({auth(AuthMode.REGISTER)},Modifier.weight(1f)){Text("Регистрация")}};Spacer(Modifier.height(8.dp))}}}
+@OptIn(ExperimentalMaterial3Api::class) @Composable private fun SettingsSheet(user:CurrentUser?,dark:Boolean,setDark:(Boolean)->Unit,close:()->Unit,auth:(AuthMode)->Unit,logout:()->Unit){ModalBottomSheet(onDismissRequest=close){Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){Text("Настройки",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold);Text(user?.displayName ?: "Профиль");Text(if(user?.hasAccount==true)"Аккаунт Планировыча" else "Локальный профиль устройства",color=MaterialTheme.colorScheme.onSurfaceVariant);Row(verticalAlignment=Alignment.CenterVertically){Icon(if(dark)Icons.Default.DarkMode else Icons.Default.LightMode,null);Text("Тёмная тема",Modifier.padding(start=10.dp).weight(1f));Switch(checked=dark,onCheckedChange=setDark,
+    colors=SwitchDefaults.colors(
+        checkedThumbColor=Color.White,
+        checkedTrackColor=if(dark)Color(0xFF7C3AED) else Color(0xFF6D28D9),
+        uncheckedThumbColor=Color(0xFF6D28D9),
+        uncheckedTrackColor=Color(0xFFE8E1F4),
+        uncheckedBorderColor=Color(0xFFB8A8D6),
+        uncheckedIconColor=Color(0xFF6D28D9)
+    ))};if(user?.hasAccount==true)OutlinedButton(logout,Modifier.fillMaxWidth()){Text("Выйти")}else Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){Button({auth(AuthMode.LOGIN)},Modifier.weight(1f)){Text("Войти")};OutlinedButton({auth(AuthMode.REGISTER)},Modifier.weight(1f)){Text("Регистрация")}};Spacer(Modifier.height(8.dp))}}}
 
 @Composable private fun AuthDialog(mode:AuthMode,busy:Boolean,error:String?,close:()->Unit,login:(String,String,()->Unit)->Unit,register:(String,String,String,Boolean,()->Unit)->Unit){var username by remember{mutableStateOf("")};var password by remember{mutableStateOf("")};var name by remember{mutableStateOf("")};var consent by remember{mutableStateOf(false)};val context=LocalContext.current;AlertDialog(onDismissRequest={if(!busy)close()},title={Text(if(mode==AuthMode.LOGIN)"Вход в аккаунт" else "Регистрация")},text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)){OutlinedTextField(username,{username=it},label={Text("Логин")},singleLine=true);if(mode==AuthMode.REGISTER)OutlinedTextField(name,{name=it},label={Text("Имя")},singleLine=true);OutlinedTextField(password,{password=it},label={Text("Пароль")},singleLine=true);if(mode==AuthMode.REGISTER){Row(verticalAlignment=Alignment.Top){Checkbox(consent,{consent=it});Text("Я согласен на обработку персональных данных",Modifier.padding(top=12.dp))};TextButton({context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://planirovych.ru/legal/consent")))}){Text("Прочитать согласие")};Row{TextButton({context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://planirovych.ru/legal/terms")))}){Text("Условия")};TextButton({context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://planirovych.ru/legal/privacy")))}){Text("Конфиденциальность")}}};error?.let{Text(it,color=MaterialTheme.colorScheme.error)}}},confirmButton={Button(onClick={if(mode==AuthMode.LOGIN){login(username,password,close)}else{register(username,password,name,consent,close)}},enabled=!busy&&username.isNotBlank()&&password.isNotBlank()&&(mode==AuthMode.LOGIN||consent)){if(busy)CircularProgressIndicator(Modifier.size(18.dp),strokeWidth=2.dp)else Text(if(mode==AuthMode.LOGIN)"Войти" else "Зарегистрироваться")}},dismissButton={TextButton(close,enabled=!busy){Text("Отмена")}})}
 private fun parseColor(value:String,fallback:Color)=runCatching{Color(android.graphics.Color.parseColor(value))}.getOrDefault(fallback)
