@@ -505,7 +505,7 @@ private fun ModernTaskCard(task:Task,sphere:Sphere?,colors:WorkspaceColors,dark:
         DropdownMenu(expanded=expanded,onDismissRequest={expanded=false}) {
             options.forEachIndexed { index,option ->
                 DropdownMenuItem(text={Text(option)},onClick={onSelect(index);expanded=false},
-                    trailingIcon={if(index==selected) { {Icon(Icons.Default.Check,null)} } else null})
+                    trailingIcon=if(index==selected) ({ Icon(Icons.Default.Check,null) }) else null)
             }
         }
     }
