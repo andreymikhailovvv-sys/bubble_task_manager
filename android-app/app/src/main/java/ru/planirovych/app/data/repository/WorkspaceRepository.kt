@@ -50,6 +50,20 @@ class WorkspaceRepository(private val api: PlanirovychApi) {
                 api.updateTask(task.id, buildJsonObject { put("dueDate", next) })
             }
     }
+
+    suspend fun loadTaskAttachments(taskId: String) = api.taskAttachments(taskId)
+    suspend fun addTaskAttachment(taskId: String, name: String, mime: String, bytes: ByteArray) =
+        api.addTaskAttachment(taskId, buildJsonObject {
+            put("name", name)
+            put("mimeType", mime)
+            put("size", bytes.size)
+            put("contentBase64", android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP))
+        })
+    suspend fun removeTaskAttachment(taskId: String, attachmentId: String) {
+        api.removeTaskAttachment(taskId, attachmentId)
+    }
+    suspend fun taskAttachmentLink(taskId: String, attachmentId: String) =
+        api.taskAttachmentLink(taskId, attachmentId).url
     suspend fun loadHabits() = api.habits()
     suspend fun completeHabit(id: String) { api.completeHabit(id, buildJsonObject { put("dateKey", java.time.LocalDate.now().toString()) }) }
     suspend fun createHabit(name: String) {

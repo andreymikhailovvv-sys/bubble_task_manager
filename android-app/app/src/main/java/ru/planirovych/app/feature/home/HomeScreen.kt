@@ -78,7 +78,31 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
             newSubtaskParentId = null
             vm.clearTaskError()
         }
-        TaskEditorSheet(
+        if (openedTask != null && parent == null && openedTask.taskType != TaskType.REMINDER) {
+            MiniAppTaskFocusSheet(
+                task = openedTask,
+                tasks = state.tasks,
+                spheres = state.spheres,
+                dark = dark,
+                busy = state.taskBusy,
+                error = state.taskError,
+                onBack = back,
+                onOpenSubtask = { childId ->
+                    openedTaskId = childId
+                    newSubtaskParentId = null
+                    vm.clearTaskError()
+                },
+                onNewSubtask = {
+                    newSubtaskParentId = openedTask.id
+                    openedTaskId = null
+                    vm.clearTaskError()
+                },
+                onSave = vm::saveTask,
+                onChangeStatus = vm::changeStatus,
+                onDelete = vm::deleteTask,
+                onClearError = vm::clearTaskError,
+            )
+        } else TaskEditorSheet(
             task = openedTask,
             parent = parent,
             tasks = state.tasks,

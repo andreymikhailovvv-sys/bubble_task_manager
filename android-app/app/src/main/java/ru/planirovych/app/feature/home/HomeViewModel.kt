@@ -11,7 +11,9 @@ import ru.planirovych.app.data.repository.WorkspaceRepository
 import ru.planirovych.app.data.repository.userMessage
 import ru.planirovych.app.ui.theme.ThemePreferences
 
-data class HomeState(val loading: Boolean = true, val user: CurrentUser? = null, val spheres: List<Sphere> = emptyList(), val tasks: List<Task> = emptyList(), val habits: List<Habit> = emptyList(), val query: String = "", val error: String? = null, val authError: String? = null, val authBusy: Boolean = false, val taskBusy: Boolean = false, val taskError: String? = null, val habitBusy: Boolean = false, val notes: List<StandaloneNote> = emptyList(), val notesLoading: Boolean = false, val notesBusy: Boolean = false, val notesError: String? = null)
+data class HomeState(val loading: Boolean = true, val user: CurrentUser? = null, val spheres: List<Sphere> = emptyList(), val tasks: List<Task> = emptyList(), val habits: List<Habit> = emptyList(), val query: String = "", val error: String? = null, val authError: String? = null, val authBusy: Boolean = false, val taskBusy: Boolean = false, val taskError: String? = null, val habitBusy: Boolean = false, val notes: List<StandaloneNote> = emptyList(), val notesLoading: Boolean = false, val notesBusy: Boolean = false, val notesError: String? = null, val attachmentTaskId: String? = null,
+    val taskAttachments: List<TaskAttachment> = emptyList(),
+    val taskAttachmentsBusy: Boolean = false, val taskAttachmentsError: String? = null)
 class HomeViewModel(private val repository: WorkspaceRepository, private val themes: ThemePreferences) : ViewModel() {
     private val mutable = MutableStateFlow(HomeState())
     val state = mutable.asStateFlow()
@@ -140,6 +142,60 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
             mutable.update { it.copy(notesBusy = false, notesError = error.userMessage()) }
         }
     }
+
+
+    fun loadTaskAttachments(taskId: String) = viewModelScope.launch {
+        mutable.update { it.copy(attachmentTaskId = taskId,
+            taskAttachments = emptyList(), taskAttachmentsBusy = false, taskAttachmentsError = null) }
+        try {
+            val files = repository.loadTaskAttachments(taskId)
+            mutable.update { if (it.attachmentTaskId == taskId)
+                it.copy(taskAttachments = files) else it }
+        } catch (cause: Throwable) {
+            mutable.update { if (it.attachmentTaskId == taskId)
+                it.copy(taskAttachmentsError = cause.userMessage()) else it }
+        }
+    }
+    fun uploadTaskAttachment(taskId: String, name: String, mimeType: String, bytes: ByteArray) {
+        if (mutable.value.taskAttachmentsBusy || mutable.value.attachmentTaskId != taskId) return
+        viewModelScope.launch {
+            mutable.update { it.copy(taskAttachmentsBusy = true, taskAttachmentsError = null) }
+            try {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    repository.addTaskAttachment(taskId, name, mimeType, bytes)
+                }
+                val files = repository.loadTaskAttachments(taskId)
+                mutable.update { if(it.attachmentTaskId == taskId)
+                    it.copy(taskAttachments = files, taskAttachmentsBusy = false) else it }
+            } catch (cause: Throwable) {
+                mutable.update { if(it.attachmentTaskId == taskId)
+                    it.copy(taskAttachmentsBusy = false, taskAttachmentsError = cause.userMessage()) else it }
+            }
+        }
+    }
+    fun removeTaskAttachment(taskId: String, attachmentId: String) {
+        if (mutable.value.taskAttachmentsBusy || mutable.value.attachmentTaskId != taskId) return
+        viewModelScope.launch {
+            mutable.update { it.copy(taskAttachmentsBusy = true, taskAttachmentsError = null) }
+            try {
+                repository.removeTaskAttachment(taskId, attachmentId)
+                val files = repository.loadTaskAttachments(taskId)
+                mutable.update { if(it.attachmentTaskId == taskId)
+                    it.copy(taskAttachments = files, taskAttachmentsBusy = false) else it }
+            } catch (cause: Throwable) {
+                mutable.update { if(it.attachmentTaskId == taskId)
+                    it.copy(taskAttachmentsBusy = false, taskAttachmentsError = cause.userMessage()) else it }
+            }
+        }
+    }
+    fun openTaskAttachmentLink(taskId: String, attachmentId: String, open: (String) -> Unit) =
+        viewModelScope.launch {
+            try { open(repository.taskAttachmentLink(taskId, attachmentId)) }
+            catch (cause: Throwable) {
+                mutable.update { if (it.attachmentTaskId == taskId)
+                    it.copy(taskAttachmentsError = cause.userMessage()) else it }
+            }
+        }
 
     fun search(value: String) { mutable.update { it.copy(query=value) } }
     fun setDark(value: Boolean) { viewModelScope.launch { themes.setDark(value) } }
