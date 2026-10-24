@@ -71,7 +71,6 @@ fun ModernWorkspace(
     modifier: Modifier = Modifier,
 ) {
     val colors = remember(dark) { workspaceColors(dark) }
-    val mode = if (pagerState.currentPage == 1) WorkspaceMode.TIMELINE else WorkspaceMode.LIST
     var period by rememberSaveable { mutableStateOf(PeriodFilter.ALL) }
     var sort by rememberSaveable { mutableStateOf(SortTasks.URGENCY) }
     var selectedSectors by remember { mutableStateOf(setOf<String>()) }
@@ -86,40 +85,6 @@ fun ModernWorkspace(
     val sectors = remember(state.spheres) { state.spheres.associateBy { it.id } }
     val searchQuery = state.query.trim().lowercase(Locale.getDefault())
     val now = System.currentTimeMillis()
-    val rootTasks = remember(state.tasks, period, searchQuery, mode, sectorFilterEnabled, selectedSectors, timelineSector, sort) {
-        state.tasks.asSequence()
-            .filter { it.status != TaskStatus.DONE }
-            .filter {
-                val date = parseDueDate(it.dueDate)
-                when(period) {
-                    PeriodFilter.ALL -> true
-                    PeriodFilter.TODAY -> date?.toLocalDate() == LocalDate.now()
-                    PeriodFilter.TOMORROW -> date?.toLocalDate() == LocalDate.now().plusDays(1)
-                    PeriodFilter.WEEK -> date != null && !date.toInstant().isBefore(Instant.now()) &&
-                        !date.toInstant().isAfter(Instant.now().plus(Duration.ofDays(7)))
-                    PeriodFilter.MONTH -> date != null && !date.toInstant().isBefore(Instant.now()) &&
-                        !date.toInstant().isAfter(Instant.now().plus(Duration.ofDays(30)))
-                }
-            }
-            .filter { task ->
-                searchQuery.isEmpty() || task.title.lowercase(Locale.getDefault()).contains(searchQuery) ||
-                    task.description.orEmpty().lowercase(Locale.getDefault()).contains(searchQuery)
-            }
-            .filter { task ->
-                if (mode == WorkspaceMode.LIST) {
-                    task.parentTaskId == null && task.taskType == TaskType.TASK &&
-                        (!sectorFilterEnabled || (task.sphereId != null && selectedSectors.contains(task.sphereId)))
-                } else {
-                    (timelineSector == "all" ||
-                        (timelineSector == "without-sphere" && task.sphereId == null) ||
-                        task.sphereId == timelineSector)
-                }
-            }
-            .sortedWith(if (mode == WorkspaceMode.LIST && sort == SortTasks.IMPORTANCE)
-                compareByDescending<Task> { it.importance }.thenBy { dueMillis(it.dueDate) }
-            else compareBy<Task> { dueMillis(it.dueDate) })
-            .toList()
-    }
     val overdue = state.tasks.any { it.status != TaskStatus.DONE && it.taskType == TaskType.TASK &&
         it.dueDate != null && dueMillis(it.dueDate) < now }
     val habits = remember(state.habits) {
@@ -144,6 +109,41 @@ fun ModernWorkspace(
             }
             3 -> NativeNotesPage(vm=vm,colors=colors,modifier=Modifier.fillMaxSize())
             else -> {
+                val contentMode = if(page==1) WorkspaceMode.TIMELINE else WorkspaceMode.LIST
+    val rootTasks = remember(state.tasks, period, searchQuery, contentMode, sectorFilterEnabled, selectedSectors, timelineSector, sort) {
+        state.tasks.asSequence()
+            .filter { it.status != TaskStatus.DONE }
+            .filter {
+                val date = parseDueDate(it.dueDate)
+                when(period) {
+                    PeriodFilter.ALL -> true
+                    PeriodFilter.TODAY -> date?.toLocalDate() == LocalDate.now()
+                    PeriodFilter.TOMORROW -> date?.toLocalDate() == LocalDate.now().plusDays(1)
+                    PeriodFilter.WEEK -> date != null && !date.toInstant().isBefore(Instant.now()) &&
+                        !date.toInstant().isAfter(Instant.now().plus(Duration.ofDays(7)))
+                    PeriodFilter.MONTH -> date != null && !date.toInstant().isBefore(Instant.now()) &&
+                        !date.toInstant().isAfter(Instant.now().plus(Duration.ofDays(30)))
+                }
+            }
+            .filter { task ->
+                searchQuery.isEmpty() || task.title.lowercase(Locale.getDefault()).contains(searchQuery) ||
+                    task.description.orEmpty().lowercase(Locale.getDefault()).contains(searchQuery)
+            }
+            .filter { task ->
+                if (contentMode == WorkspaceMode.LIST) {
+                    task.parentTaskId == null && task.taskType == TaskType.TASK &&
+                        (!sectorFilterEnabled || (task.sphereId != null && selectedSectors.contains(task.sphereId)))
+                } else {
+                    (timelineSector == "all" ||
+                        (timelineSector == "without-sphere" && task.sphereId == null) ||
+                        task.sphereId == timelineSector)
+                }
+            }
+            .sortedWith(if (contentMode == WorkspaceMode.LIST && sort == SortTasks.IMPORTANCE)
+                compareByDescending<Task> { it.importance }.thenBy { dueMillis(it.dueDate) }
+            else compareBy<Task> { dueMillis(it.dueDate) })
+            .toList()
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start=14.dp, end=14.dp, top=12.dp, bottom=28.dp),
@@ -151,12 +151,12 @@ fun ModernWorkspace(
     ) {
         item { WorkspaceTopbar(state, colors, search, settings,
             onCredits={ creditsOpen=true }, onScore={ scoreOpen=true }) }
-        if (mode == WorkspaceMode.LIST) item {
+        if (contentMode == WorkspaceMode.LIST) item {
             HabitsStrip(habits, colors, dark, onHabitClick = { selectedHabitId = it.id }, onAdd = { habitName = ""; createHabitOpen = true })
         }
         item {
             WorkspaceToolbar(colors, dark,
-                filtered = period != PeriodFilter.ALL || if (mode == WorkspaceMode.LIST)
+                filtered = period != PeriodFilter.ALL || if (contentMode == WorkspaceMode.LIST)
                     sort != SortTasks.URGENCY || sectorFilterEnabled else timelineSector != "all",
                 onFilter = { filtersOpen=true },
                 onPostpone = { vm.postponeOverdue() }, canPostpone = overdue && !state.taskBusy)
@@ -165,7 +165,7 @@ fun ModernWorkspace(
             item { Text(error, color=MaterialTheme.colorScheme.error,
                 style=MaterialTheme.typography.bodySmall) }
         }
-        if (mode == WorkspaceMode.LIST) {
+        if (contentMode == WorkspaceMode.LIST) {
             if (rootTasks.isEmpty()) item { EmptyWorkspaceMessage("Задачи не найдены.", colors) }
             items(rootTasks, key={it.id}) { task ->
                 ModernTaskCard(task, sectors[task.sphereId], colors, dark,
@@ -184,7 +184,7 @@ fun ModernWorkspace(
     if (filtersOpen) {
         ModalBottomSheet(onDismissRequest={filtersOpen=false}, containerColor=colors.panel,
             contentColor=colors.text) {
-            WorkspaceFilters(colors, mode, period, onPeriod={period=it}, sort, onSort={sort=it},
+            WorkspaceFilters(colors, if(pagerState.currentPage==1) WorkspaceMode.TIMELINE else WorkspaceMode.LIST, period, onPeriod={period=it}, sort, onSort={sort=it},
                 state.spheres, selectedSectors, sectorFilterEnabled,
                 onSectorEnabled={enabled -> sectorFilterEnabled=enabled
                     if (enabled && selectedSectors.isEmpty()) selectedSectors=state.spheres.map { it.id }.toSet()
