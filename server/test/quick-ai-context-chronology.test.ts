@@ -69,8 +69,8 @@ test('server routes quick model prompts from persisted DB history, not stale bro
 test('both web and miniapp always send chronological quick context', () => {
   const web = read('../../client/src/App.tsx');
   const mini = read('../../client/src/MiniApp.tsx');
-  assert.match(web, /quickAiChatMessages\\.filter\\(message => !message\\.monitoringTaskId\\)/);
-  assert.match(mini, /activeAiChat\\.messages\\.filter\\(message => !message\\.monitoringTaskId\\)/);
+  assert.ok(web.includes('quickAiChatMessages.filter(message => !message.monitoringTaskId)'));
+  assert.ok(mini.includes('activeAiChat.messages.filter(message => !message.monitoringTaskId)'));
   assert.match(mini, /role: 'user', content: userMessageContent, createdAt:/);
   assert.match(mini, /role: 'assistant', createdAt:/);
 });
