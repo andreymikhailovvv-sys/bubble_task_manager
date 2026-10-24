@@ -1,5 +1,7 @@
 package ru.planirovych.app.feature.home
 
+import kotlinx.coroutines.launch
+
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -94,17 +96,10 @@ fun ModernWorkspace(
     HorizontalPager(state=pagerState,modifier=modifier.fillMaxSize(),
         beyondViewportPageCount=1) { page ->
         when(page) {
-            2 -> Box(Modifier.fillMaxSize().padding(26.dp),
-                contentAlignment=Alignment.Center) {
-                Column(horizontalAlignment=Alignment.CenterHorizontally,
-                    verticalArrangement=Arrangement.spacedBy(13.dp)) {
-                    Icon(Icons.Default.SmartToy,null,tint=colors.purple,
-                        modifier=Modifier.size(44.dp))
-                    Text("Chats AI",color=colors.text,
-                        fontWeight=FontWeight.Bold,fontSize=21.sp)
-                    Text("Раздел появится позже",color=colors.secondaryText,
-                        textAlign=TextAlign.Center,fontSize=13.sp)
-                }
+            2 -> {
+                val pagerScope=rememberCoroutineScope()
+                NativeGeneralAiChatPage(vm=vm,userId=state.user?.id,dark=dark,
+                    onExit={pagerScope.launch{pagerState.animateScrollToPage(0)}})
             }
             3 -> NativeNotesPage(vm=vm,colors=colors,modifier=Modifier.fillMaxSize())
             else -> {

@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.*
-import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import ru.planirovych.app.data.repository.userMessage
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -32,6 +34,20 @@ data class TaskAiChatState(
     val requestId:String?=null,
 )
 
+data class GeneralAiChatState(
+    val projects:List<GeneralAiProject> = emptyList(),
+    val selectedProjectId:String?=null,
+    val selectedChatId:String=QUICK_AI_THREAD_ID,
+    val loading:Boolean=false,val saving:Boolean=false,val busy:Boolean=false,
+    val error:String?=null,val progressStatus:String?=null,
+    val pendingMessage:TaskAiChatMessage?=null
+){
+    val project:GeneralAiProject? get()=projects.firstOrNull{it.id==selectedProjectId}
+        ?:projects.firstOrNull()
+    val chat:GeneralAiThread? get()=project?.chats?.firstOrNull{it.id==selectedChatId}
+        ?:project?.chats?.firstOrNull()
+}
+
 data class HomeState(val loading: Boolean = true, val user: CurrentUser? = null, val spheres: List<Sphere> = emptyList(), val tasks: List<Task> = emptyList(), val habits: List<Habit> = emptyList(), val query: String = "", val error: String? = null, val authError: String? = null, val authBusy: Boolean = false, val taskBusy: Boolean = false, val taskError: String? = null,
     val recurrenceLoading:Boolean=false, val recurrenceError:String?=null, val habitBusy: Boolean = false,
     val habitHistoryId: String? = null,
@@ -43,6 +59,316 @@ data class HomeState(val loading: Boolean = true, val user: CurrentUser? = null,
 class HomeViewModel(private val repository: WorkspaceRepository, private val themes: ThemePreferences) : ViewModel() {
     private val mutable = MutableStateFlow(HomeState())
     private val taskAiMutable=MutableStateFlow(TaskAiChatState())
+    private val generalAiMutable=MutableStateFlow(GeneralAiChatState())
+    val generalAi=generalAiMutable.asStateFlow()
+    private val generalWriteMutex=Mutex()
+    private var generalLoadedForUser:String?=null
+
+    fun loadGeneralAi(userId:String?,force:Boolean=false){
+        if(userId==null){
+            generalLoadedForUser=null
+            generalAiMutable.value=GeneralAiChatState()
+            return
+        }
+        if(!force && generalLoadedForUser==userId)return
+        if(generalLoadedForUser!=userId){
+            // Never display one account's chat tree during another login.
+            generalAiMutable.value=GeneralAiChatState(loading=true)
+        }
+        generalLoadedForUser=userId
+        generalAiMutable.update{it.copy(loading=true,error=null)}
+        viewModelScope.launch {
+            try{
+                var remote=repository.loadGeneralAiProjects()
+                if(remote.isEmpty()){
+                    // Only initialize a fresh account once; never generate a
+                    // different quick-chat project on every tab switch.
+                    remote=generalWriteMutex.withLock{
+                        val existing=repository.loadGeneralAiProjects()
+                        if(existing.isNotEmpty())existing
+                        else repository.persistGeneralAiProjects(defaultGeneralAiProjects())
+                    }
+                }
+                val quick=repository.loadQuickAiHistory()
+                remote=mergeQuickAiMessages(remote,quick)
+                generalAiMutable.update{current->
+                    if(generalLoadedForUser!=userId)current else {
+                        val projectId=current.selectedProjectId
+                            ?.takeIf{id->remote.any{it.id==id}} ?:remote.firstOrNull()?.id
+                        val project=remote.firstOrNull{it.id==projectId}
+                        val chatId=current.selectedChatId.takeIf{id->
+                            project?.chats?.any{it.id==id}==true
+                        }?:project?.chats?.firstOrNull()?.id?:QUICK_AI_THREAD_ID
+                        current.copy(projects=remote,selectedProjectId=projectId,
+                            selectedChatId=chatId,loading=false,error=null)
+                    }
+                }
+            }catch(error:Throwable){
+                generalLoadedForUser=null
+                generalAiMutable.update{it.copy(loading=false,error=error.userMessage())}
+            }
+        }
+    }
+    private fun mergeQuickAiMessages(
+        projects:List<GeneralAiProject>,messages:List<JsonObject>
+    ):List<GeneralAiProject>{
+        if(projects.isEmpty())return projects
+        val first=projects.first()
+        val idx=first.chats.indexOfFirst{it.id==QUICK_AI_THREAD_ID}
+        val existing=if(idx>=0)first.chats[idx] else GeneralAiThread(
+            QUICK_AI_THREAD_ID,QUICK_AI_TITLE)
+        val combined=first.chats.toMutableList()
+        val merged=existing.copy(messages=messages.takeLast(100))
+        if(idx>=0)combined[idx]=merged else combined.add(0,merged)
+        return listOf(first.copy(chats=combined))+projects.drop(1)
+    }
+    fun chooseGeneralAiChat(projectId:String,chatId:String){
+        generalAiMutable.update{current->
+            if(current.projects.any{p->p.id==projectId && p.chats.any{it.id==chatId}})
+                current.copy(selectedProjectId=projectId,selectedChatId=chatId,error=null)
+            else current
+        }
+        syncGeneralAiThread(projectId,chatId)
+    }
+    fun refreshGeneralAi(){
+        if(generalAiMutable.value.busy||generalAiMutable.value.saving)return
+        val userId=mutable.value.user?.id?:return
+        loadGeneralAi(userId,force=true)
+    }
+    fun syncGeneralAiThread(projectId:String,chatId:String){
+        if(generalAiMutable.value.busy || generalAiMutable.value.saving)return
+        viewModelScope.launch {
+            try{
+                val remote=if(chatId==QUICK_AI_THREAD_ID)
+                    repository.loadQuickAiHistory()
+                else repository.loadGeneralAiThread(projectId,chatId)
+                generalAiMutable.update {state->
+                    if(state.busy||state.saving)state else state.copy(
+                        projects=state.projects.map{p->
+                            if(p.id!=projectId)p else p.copy(
+                                chats=p.chats.map{c->
+                                    if(c.id==chatId)c.copy(messages=remote) else c
+                                })
+                        }
+                    )
+                }
+            }catch(_:Throwable){/* transient network error; preserve history */}
+        }
+    }
+
+    /** Each structural edit merges into the newest server state while serialized.
+      * Sending a full stale Android snapshot could erase browser chat history.
+      */
+    private fun modifyGeneralProjects(
+        operation:(List<GeneralAiProject>)->List<GeneralAiProject>,
+        after:(List<GeneralAiProject>)->Unit={}
+    ){
+        if(generalAiMutable.value.saving||generalAiMutable.value.busy)return
+        generalAiMutable.update{it.copy(saving=true,error=null)}
+        viewModelScope.launch {
+            try{
+                val saved=generalWriteMutex.withLock {
+                    val remote=repository.loadGeneralAiProjects()
+                    repository.persistGeneralAiProjects(operation(remote))
+                }
+                generalAiMutable.update{it.copy(projects=saved,saving=false,error=null)}
+                after(saved)
+            }catch(e:Throwable){
+                generalAiMutable.update{it.copy(saving=false,error=e.userMessage())}
+            }
+        }
+    }
+    fun createGeneralAiProject(title:String,color:String,icon:String){
+        val id=java.util.UUID.randomUUID().toString()
+        val chatId=java.util.UUID.randomUUID().toString()
+        modifyGeneralProjects({remote->remote+GeneralAiProject(
+            id,title.trim().ifBlank{"Новый проект"},color,icon,
+            listOf(GeneralAiThread(chatId,"Новый чат")))
+        },{saved->
+            if(saved.any{it.id==id})chooseGeneralAiChat(id,chatId)
+        })
+    }
+    fun editGeneralAiProject(id:String,title:String,color:String,icon:String){
+        modifyGeneralProjects({remote->remote.map{
+            if(it.id==id && !it.isTelegram && remote.firstOrNull()?.id!=id)
+                it.copy(title=title.trim().ifBlank{"Проект"},color=color,icon=icon)
+            else it
+        }})
+    }
+    fun deleteGeneralAiProject(id:String){
+        modifyGeneralProjects({remote->
+            if(remote.firstOrNull()?.id==id ||
+                id==TELEGRAM_AI_PROJECT_ID ||remote.size<=1)remote
+            else remote.filterNot{it.id==id}
+        },{saved->
+            val project=saved.firstOrNull() ?:return@modifyGeneralProjects
+            val state=generalAiMutable.value
+            if(saved.none{it.id==state.selectedProjectId}){
+                chooseGeneralAiChat(project.id,
+                    project.chats.firstOrNull()?.id?:QUICK_AI_THREAD_ID)
+            }
+        })
+    }
+    fun createGeneralAiThread(projectId:String){
+        val id=java.util.UUID.randomUUID().toString()
+        modifyGeneralProjects({remote->remote.map{p->
+            if(p.id!=projectId||p.isTelegram)p else p.copy(
+                chats=listOf(GeneralAiThread(id,"Чат ${p.chats.size+1}"))+p.chats)
+        }},{saved->
+            if(saved.any{p->p.id==projectId&&p.chats.any{it.id==id}})
+                chooseGeneralAiChat(projectId,id)
+        })
+    }
+    fun renameGeneralAiThread(projectId:String,chatId:String,title:String){
+        if(chatId==QUICK_AI_THREAD_ID||chatId.startsWith("telegram-ai-assistant:"))return
+        modifyGeneralProjects({remote->remote.map{p->
+            if(p.id!=projectId||p.isTelegram)p else p.copy(
+                chats=p.chats.map{c->
+                    if(c.id==chatId)c.copy(title=title.trim().ifBlank{"Новый чат"}) else c
+                })
+        }})
+    }
+    fun deleteGeneralAiThread(projectId:String,chatId:String){
+        if(chatId==QUICK_AI_THREAD_ID||chatId.startsWith("telegram-ai-assistant:"))return
+        modifyGeneralProjects({remote->remote.map{p->
+            if(p.id!=projectId||p.isTelegram||p.chats.size<=1)p
+            else p.copy(chats=p.chats.filterNot{it.id==chatId})
+        }},{saved->
+            val state=generalAiMutable.value
+            if(state.selectedChatId==chatId && state.selectedProjectId==projectId){
+                saved.firstOrNull{it.id==projectId}?.chats?.firstOrNull()?.let{
+                    chooseGeneralAiChat(projectId,it.id)
+                }
+            }
+        })
+    }
+    fun setGeneralAiModel(projectId:String,chatId:String,model:String){
+        if(chatId==QUICK_AI_THREAD_ID){
+            // Quick model in MiniApp is per-session, not persisted on the server.
+            generalAiMutable.update{state->state.copy(projects=state.projects.map{p->
+                if(p.id==projectId)p.copy(chats=p.chats.map{c->
+                    if(c.id==chatId)c.copy(model=model) else c
+                }) else p
+            })}
+        }else modifyGeneralProjects({remote->remote.map{p->
+            if(p.id!=projectId)p else p.copy(chats=p.chats.map{c->
+                if(c.id==chatId)c.copy(model=model,modelChangedAt=java.time.Instant.now().toString())
+                else c
+            })
+        }})
+    }
+    fun applyGeneralAiProposal(id:String,action:String){
+        viewModelScope.launch{
+            try{
+                repository.updateTaskAiProposal(id,action)
+                val updated=repository.loadTasks()
+                mutable.update{it.copy(tasks=updated)}
+                generalAiMutable.update{it.copy(error=null)}
+            }catch(t:Throwable){
+                generalAiMutable.update{it.copy(error=t.userMessage())}
+            }
+        }
+    }
+    fun generalAiDocumentLink(id:String,onReady:(String)->Unit){
+        viewModelScope.launch{
+            try{
+                val link=repository.taskAiDocumentLink(id)
+                    ?:throw IllegalStateException("Ссылка на документ недоступна")
+                onReady(link)
+            }catch(t:Throwable){
+                generalAiMutable.update{it.copy(error=t.userMessage())}
+            }
+        }
+    }
+    fun sendGeneralAi(
+        projectId:String,chatId:String,requestId:String,question:String,
+        messageContent:String,files:List<TaskAiFile>,model:String,
+        onDone:()->Unit={}
+    ){
+        val current=generalAiMutable.value
+        val project=current.projects.firstOrNull{it.id==projectId} ?:return
+        val thread=project.chats.firstOrNull{it.id==chatId}?:return
+        if(current.busy||current.saving)return
+        val optimistic=buildJsonObject{
+            put("id",requestId);put("role","user");put("content",messageContent)
+            put("createdAt",java.time.Instant.now().toString())
+        }
+        generalAiMutable.update{state->
+            state.copy(busy=true,error=null,progressStatus="analyzing_request",
+                pendingMessage=repository.readTaskAiMessage(optimistic))
+        }
+        viewModelScope.launch {
+            try{
+                val response=repository.askGeneralAi(project,
+                    thread.copy(model=model),thread.messages,requestId,question,files
+                ){status->
+                    generalAiMutable.update{state->
+                        if(state.busy)state.copy(progressStatus=status)else state
+                    }
+                }
+                val answer=response.aiString("answer")
+                if(chatId==QUICK_AI_THREAD_ID){
+                    val remote=repository.loadQuickAiHistory()
+                    generalAiMutable.update{state->state.copy(
+                        projects=mergeQuickAiMessages(state.projects,remote))}
+                }else{
+                    val assistant=buildJsonObject{
+                        put("id",java.util.UUID.randomUUID().toString())
+                        put("role","assistant")
+                        put("content",answer+
+                            (response["actionReports"] as? JsonArray).orEmpty()
+                                .mapNotNull{(it as? JsonPrimitive)?.contentOrNull}
+                                .takeIf{it.isNotEmpty()}?.let{
+                                    "\n\nИзменения:\n- "+it.joinToString("\n- ")
+                                }.orEmpty())
+                        put("createdAt",java.time.Instant.now().toString())
+                        (response["billing"] as? JsonObject)?.get("creditsSpentMilli")?.let{
+                            put("creditsSpentMilli",it)
+                        }
+                        listOf("webSearchUsed","webSources","webCitations",
+                            "generatedDocument","taskProposal","telegramSendDraft",
+                            "telegramReadDraft","telegramSuggestedReply").forEach{key->
+                            response[key]?.let{put(key,it)}
+                        }
+                    }
+                    val saved=generalWriteMutex.withLock {
+                        val fresh=repository.loadGeneralAiProjects()
+                        repository.persistGeneralAiProjects(fresh.map{p->
+                            if(p.id!=projectId)p else p.copy(chats=p.chats.map{c->
+                                if(c.id!=chatId)c else {
+                                    val ids=c.messages.map{it.aiString("id")}.toSet()
+                                    c.copy(
+                                        title=if(c.title.matches(Regex("Новый чат|Чат \\d+")) &&
+                                            c.messages.isEmpty())
+                                            response.aiString("suggestedChatTitle")
+                                                .ifBlank{c.title} else c.title,
+                                        messages=c.messages+
+                                            listOf(optimistic,assistant).filterNot{
+                                                it.aiString("id") in ids
+                                            })
+                                }
+                            })
+                        })
+                    }
+                    generalAiMutable.update{it.copy(projects=saved)}
+                }
+                if((response["taskDataChanged"] as? JsonPrimitive)?.booleanOrNull==true){
+                    runCatching{repository.loadTasks()}.onSuccess{tasks->
+                        mutable.update{it.copy(tasks=tasks)}
+                    }
+                }
+                generalAiMutable.update{it.copy(
+                    busy=false,progressStatus=null,pendingMessage=null,error=null)}
+                onDone()
+            }catch(e:Throwable){
+                // A retry must keep the same requestId; server idempotency
+                // prevents duplicate tool actions / credit charges.
+                generalAiMutable.update{it.copy(
+                    busy=false,progressStatus=null,pendingMessage=null,error=e.userMessage())}
+            }
+        }
+    }
+
     val taskAi=taskAiMutable.asStateFlow()
     fun openTaskAi(taskId:String){
         taskAiMutable.value=TaskAiChatState(taskId=taskId,loading=true)

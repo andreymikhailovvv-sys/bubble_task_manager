@@ -15,13 +15,16 @@ object NetworkModule {
         val json = Json { ignoreUnknownKeys = true; coerceInputValues = true; explicitNulls = false }
         val client = OkHttpClient.Builder()
             .cookieJar(PersistentCookieJar(context))
-            // Task AI responses can take several minutes. All other API calls
-            // retain OkHttp's regular timeouts.
+            // Task and general AI streams can take several minutes.
+            // Keep ordinary API timeouts unchanged.
             .addInterceptor { chain ->
                 val taskAiSend=chain.request().method=="POST" &&
                     Regex(".*/api/tasks/[^/]+/ai-chat$").matches(
                         chain.request().url.encodedPath)
-                if(taskAiSend)chain.withReadTimeout(240,TimeUnit.SECONDS)
+                val generalAiSend=chain.request().method=="POST" &&
+                    chain.request().url.encodedPath.endsWith("/api/ai-chat")
+                if(taskAiSend||generalAiSend)
+                    chain.withReadTimeout(240,TimeUnit.SECONDS)
                     .proceed(chain.request())
                 else chain.proceed(chain.request())
             }

@@ -9,6 +9,7 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Headers
+import retrofit2.http.PUT
 import retrofit2.http.Streaming
 import okhttp3.ResponseBody
 import ru.planirovych.app.data.model.*
@@ -36,6 +37,22 @@ interface PlanirovychApi {
     @POST("api/tasks/{id}/attachments/{attachmentId}/download-link")
     suspend fun taskAttachmentLink(@Path("id") id: String,
         @Path("attachmentId") attachmentId: String): TaskAttachmentLink
+    // The native general chat uses the exact same project tree and thread API
+    // as the web client and Telegram Mini App.
+    @GET("api/ai-chat/projects")
+    suspend fun generalAiProjects():JsonObject
+    @PUT("api/ai-chat/projects")
+    suspend fun saveGeneralAiProjects(@Body payload:JsonObject):JsonObject
+    @GET("api/ai-chat/projects/{projectId}/chats/{chatId}/messages")
+    suspend fun generalAiThread(@Path("projectId") projectId:String,
+        @Path("chatId") chatId:String):JsonObject
+    @GET("api/ai-general-chat")
+    suspend fun generalAiQuickHistory(@Query("userTimeZone") timeZone:String):JsonObject
+    @Streaming
+    @Headers("Accept: application/x-ndjson")
+    @POST("api/ai-chat")
+    suspend fun streamGeneralAi(@Body payload:JsonObject):ResponseBody
+
     @GET("api/tasks/{id}/ai-chat")
     suspend fun taskAiHistory(@Path("id") taskId:String,
         @Query("userTimeZone") userTimeZone:String): JsonObject

@@ -11,6 +11,8 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
@@ -74,7 +76,7 @@ class WorkspaceRepository(private val api: PlanirovychApi) {
         (this[key] as? kotlinx.serialization.json.JsonPrimitive)
             ?.takeUnless{it is kotlinx.serialization.json.JsonNull}?.contentOrNull
 
-    private fun readTaskAiMessage(item:kotlinx.serialization.json.JsonObject):TaskAiChatMessage{
+    fun readTaskAiMessage(item:kotlinx.serialization.json.JsonObject):TaskAiChatMessage{
         val sources=(item["webSources"] as? kotlinx.serialization.json.JsonArray)
             .orEmpty().mapNotNull {source->
                 val obj=source as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
@@ -97,6 +99,74 @@ class WorkspaceRepository(private val api: PlanirovychApi) {
             telegramReadDraft=item["telegramReadDraft"] as? kotlinx.serialization.json.JsonObject
         )
     }
+    suspend fun loadGeneralAiProjects():List<GeneralAiProject> =
+        parseGeneralAiProjects(api.generalAiProjects())
+
+    suspend fun persistGeneralAiProjects(projects:List<GeneralAiProject>):List<GeneralAiProject> =
+        parseGeneralAiProjects(api.saveGeneralAiProjects(buildJsonObject{
+            put("projects",JsonArray(projects.map{it.toJson()}))
+        }))
+
+    suspend fun loadGeneralAiThread(projectId:String,chatId:String):List<JsonObject> =
+        (api.generalAiThread(projectId,chatId)["messages"] as? JsonArray)
+            .orEmpty().mapNotNull{it as? JsonObject}
+
+    suspend fun loadQuickAiHistory():List<JsonObject> =
+        (api.generalAiQuickHistory(java.time.ZoneId.systemDefault().id)["messages"]
+            as? JsonArray).orEmpty().mapNotNull{it as? JsonObject}
+
+    suspend fun askGeneralAi(
+        project:GeneralAiProject,thread:GeneralAiThread,
+        history:List<JsonObject>,requestId:String,question:String,
+        attachments:List<TaskAiFile>,onProgress:(String)->Unit
+    ):JsonObject {
+        val payload=buildJsonObject {
+            put("clientRequestId",requestId)
+            put("question",question)
+            put("model",thread.model ?: "gpt-6-luna")
+            put("projectTitle",if(thread.id==QUICK_AI_THREAD_ID)
+                PERSONAL_AI_PROJECT_TITLE else project.title)
+            put("chatTitle",if(thread.id==QUICK_AI_THREAD_ID)
+                QUICK_AI_TITLE else thread.title)
+            put("projectId",project.id)
+            put("chatId",thread.id)
+            put("clientSurface","miniapp")
+            put("userTimeZone",java.time.ZoneId.systemDefault().id)
+            put("history",JsonArray(if(thread.id==QUICK_AI_THREAD_ID)
+                history.filter{it.aiString("monitoringTaskId").isBlank()}.takeLast(20)
+                    else history))
+            if(attachments.isNotEmpty()){
+                put("attachments",JsonArray(attachments.map{file->
+                    buildJsonObject{
+                        put("name",file.name)
+                        put("mimeType",file.mimeType)
+                        put("size",file.bytes.size)
+                        put("contentBase64",android.util.Base64.encodeToString(
+                            file.bytes,android.util.Base64.NO_WRAP))
+                    }
+                }))
+            }
+        }
+        return withContext(Dispatchers.IO){
+            var result:JsonObject?=null
+            api.streamGeneralAi(payload).use{body->
+                body.charStream().buffered().forEachLine{line->
+                    if(line.isBlank())return@forEachLine
+                    val event=Json.parseToJsonElement(line) as? JsonObject
+                        ?:throw IllegalStateException("Некорректное событие ИИ")
+                    when(event.aiString("type")){
+                        "status"->event.aiString("status").takeIf{it.isNotBlank()}
+                            ?.let(onProgress)
+                        "result"->result=event["result"] as? JsonObject
+                        "error"->throw IllegalStateException(
+                            event.aiString("message","Ошибка запроса ИИ"))
+                    }
+                }
+            }
+            result?:throw IllegalStateException("Сервер не вернул ответ ИИ")
+        }
+    }
+
     suspend fun loadTaskAiHistory(id:String):List<TaskAiChatMessage>{
         val raw=api.taskAiHistory(id,java.time.ZoneId.systemDefault().id)
         val rows=raw["messages"] as? kotlinx.serialization.json.JsonArray

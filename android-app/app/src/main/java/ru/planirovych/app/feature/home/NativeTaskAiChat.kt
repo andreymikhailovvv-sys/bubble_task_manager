@@ -58,12 +58,12 @@ import java.util.Locale
 import java.util.UUID
 import ru.planirovych.app.data.model.*
 
-private data class TaskChatColors(
+internal data class TaskChatColors(
     val bg:Color,val panel:Color,val text:Color,val secondary:Color,
     val border:Color,val user:Color,val userEnd:Color,val userText:Color,
     val assistant:Color,val assistantText:Color,val accent:Color
 )
-private fun chatColors(dark:Boolean)=if(dark)TaskChatColors(
+internal fun chatColors(dark:Boolean)=if(dark)TaskChatColors(
     // Mini App: dark slate thread, dark header, indigo-blue user messages
     Color(0xFF0D1628),Color(0xFF0B1222),Color(0xFFE2E8F0),
     Color(0xFF94A3B8),Color(0xFF364358),
@@ -77,9 +77,9 @@ private fun chatColors(dark:Boolean)=if(dark)TaskChatColors(
     Color(0xFFCFFAFE),Color(0xFF164E63),Color(0xFF6D28D9)
 )
 
-private data class ReplyTarget(val id:String,val role:String,val content:String)
+internal data class ReplyTarget(val id:String,val role:String,val content:String)
 
-private fun serializeTaskAiReply(question:String,target:ReplyTarget?):String{
+internal fun serializeTaskAiReply(question:String,target:ReplyTarget?):String{
     if(target==null)return question
     val payload=buildJsonObject{
         put("messageId",target.id)
@@ -92,13 +92,13 @@ private fun serializeTaskAiReply(question:String,target:ReplyTarget?):String{
     return "[[PLANNER_AI_REPLY_BEGIN]]\n"+payload.toString()+
         "\n[[PLANNER_AI_REPLY_END]]\n"+question
 }
-private fun messageDisplayContent(text:String):String {
+internal fun messageDisplayContent(text:String):String {
     val end="\n[[PLANNER_AI_REPLY_END]]\n"
     if(text.startsWith("[[PLANNER_AI_REPLY_BEGIN]]\n")&&text.contains(end))
         return text.substringAfter(end)
     return text
 }
-private fun isChatAttachmentAllowed(name:String):Boolean =
+internal fun isChatAttachmentAllowed(name:String):Boolean =
     Regex("(?i)\\.(pdf|docx|xls|xlsx|png|jpe?g|webp|gif|txt)$").containsMatchIn(name)
 
 @Composable
@@ -567,7 +567,7 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
 }
 
 @Composable
-private fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
+internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
     context:Context,onReply:()->Unit,pending:Boolean=false,
     onProposalAction:(String,String)->Unit={_,_->},
     actionBusy:Boolean=false,
@@ -800,7 +800,7 @@ private val TASK_AI_PROGRESS_LABELS=mapOf(
 )
 
 @Composable
-private fun NativeTaskAiProgressChip(status:String,c:TaskChatColors){
+internal fun NativeTaskAiProgressChip(status:String,c:TaskChatColors){
     val title=TASK_AI_PROGRESS_LABELS[status] ?: "Обрабатываю запрос"
     Row(Modifier.fillMaxWidth().padding(vertical=5.dp),
         verticalAlignment=Alignment.CenterVertically,
@@ -908,7 +908,7 @@ private fun NativeMonitoringTriggerChips(
 }
 
 @Composable
-private fun TaskChatPaperclip(tint:Color){
+internal fun TaskChatPaperclip(tint:Color){
     // Lucide-style Paperclip, matching MiniAiChatComposer.tsx: Paperclip 17px.
     // Unlike Material AttachFile the line is fine and the orientation is clean.
     Canvas(Modifier.size(18.dp)){
