@@ -80,6 +80,8 @@ class WorkspaceRepository(private val api: PlanirovychApi) {
     suspend fun finishHabit(id: String) { api.finishHabit(id) }
     suspend fun deleteHabit(id: String) { api.deleteHabit(id) }
     suspend fun completeHabit(id: String) { api.completeHabit(id, buildJsonObject { put("dateKey", java.time.LocalDate.now().toString()) }) }
+    suspend fun createHabit(payload: JsonObject): Habit = api.createHabit(payload)
+    suspend fun createTopLevelTask(payload: JsonObject): Task = api.createTask(payload)
     suspend fun createHabit(name: String) {
         api.createHabit(buildJsonObject {
             put("name", name.trim())
@@ -90,10 +92,26 @@ class WorkspaceRepository(private val api: PlanirovychApi) {
         })
     }
     suspend fun loadNotes() = api.notes()
-    suspend fun createNote(title: String, content: String) =
-        api.createNote(buildJsonObject { put("title", title); put("content", content) })
-    suspend fun saveNote(id: String, title: String, content: String) =
-        api.updateNote(id, buildJsonObject { put("title", title); put("content", content) })
+    suspend fun loadNoteGroups() = api.noteGroups()
+    suspend fun createNoteGroup(name: String, color: String) =
+        api.createNoteGroup(buildJsonObject { put("name",name);put("color",color) })
+    suspend fun updateNoteGroup(id:String,name:String,color:String) =
+        api.updateNoteGroup(id,buildJsonObject { put("name",name);put("color",color) })
+    suspend fun deleteNoteGroup(id:String) { api.deleteNoteGroup(id) }
+    suspend fun assignNoteGroup(id:String,groupId:String?) =
+        api.updateNote(id,buildJsonObject {
+            if(groupId==null)put("groupId",JsonNull) else put("groupId",groupId)
+        })
+    suspend fun createNote(title: String, content: String,groupId:String?=null) =
+        api.createNote(buildJsonObject {
+            put("title", title); put("content", content)
+            if(groupId==null)put("groupId",JsonNull)else put("groupId",groupId)
+        })
+    suspend fun saveNote(id: String, title: String, content: String,groupId:String?=null) =
+        api.updateNote(id, buildJsonObject {
+            put("title", title); put("content", content)
+            if(groupId==null)put("groupId",JsonNull)else put("groupId",groupId)
+        })
     suspend fun deleteNote(id: String) { api.deleteNote(id) }
     suspend fun login(login: String, password: String) = api.login(LoginRequest(login, password)).user
     suspend fun register(login: String, password: String, name: String, consent: Boolean) = api.register(RegisterRequest(login, password, name.ifBlank { null }, consent)).user
