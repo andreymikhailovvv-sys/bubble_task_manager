@@ -25,6 +25,17 @@ class WorkspaceRepository(private val api: PlanirovychApi) {
         val spheres = async { api.spheres() }; val tasks = async { api.tasks() }; val habits = async { api.habits() }
         Workspace(spheres.await(), tasks.await(), habits.await())
     }
+    suspend fun creditCatalog():AiCreditCatalog=api.creditPacks()
+    suspend fun creditStatistics():AiCreditUsage=api.creditUsage().statistics
+    suspend fun purchaseCredits(packKey:String,requestId:String,email:String?):AiCreditPurchaseStart =
+        api.startCreditPurchase(packKey,buildJsonObject{
+            put("clientRequestId",requestId)
+            put("clientSurface","web")
+            email?.takeIf{it.isNotBlank()}?.let{put("receiptEmail",it)}
+        })
+    suspend fun purchaseStatus(purchaseId:String):AiCreditPurchase =
+        api.creditPurchaseStatus(purchaseId).purchase
+
     suspend fun loadTasks(): List<Task> = api.tasks()
     suspend fun updateTask(id: String, changes: JsonObject): Task = api.updateTask(id, changes)
     suspend fun updateStatus(id: String, status: TaskStatus): Task =
