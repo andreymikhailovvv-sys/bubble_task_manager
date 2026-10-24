@@ -4,6 +4,12 @@ import kotlinx.coroutines.launch
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.layout.*
@@ -140,13 +146,36 @@ fun ModernWorkspace(
             else compareBy<Task> { dueMillis(it.dueDate) })
             .toList()
     }
+    val workspaceScroll=rememberLazyListState()
+    var headerVisible by remember(page){mutableStateOf(true)}
+    LaunchedEffect(workspaceScroll,page){
+        var previousIndex=workspaceScroll.firstVisibleItemIndex
+        var previousOffset=workspaceScroll.firstVisibleItemScrollOffset
+        var movement=0
+        snapshotFlow{Triple(workspaceScroll.firstVisibleItemIndex,
+            workspaceScroll.firstVisibleItemScrollOffset,
+            workspaceScroll.isScrollInProgress)}.collect{(index,offset,scrolling)->
+            if(scrolling){
+                val delta=if(index==previousIndex)offset-previousOffset
+                    else (index-previousIndex).coerceIn(-3,3)*42
+                if(delta!=0){
+                    if((delta>0&&movement<0)||(delta<0&&movement>0))movement=0
+                    movement=(movement+delta).coerceIn(-100,100)
+                    if(movement>25){headerVisible=false;movement=0}
+                    if(movement< -25){headerVisible=true;movement=0}
+                }
+            }else movement=0
+            if(index==0&&offset==0)headerVisible=true
+            previousIndex=index;previousOffset=offset
+        }
+    }
+    Box(Modifier.fillMaxSize()){
     LazyColumn(
+        state=workspaceScroll,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start=14.dp, end=14.dp, top=12.dp, bottom=28.dp),
+        contentPadding = PaddingValues(start=14.dp,end=14.dp,top=82.dp,bottom=28.dp),
         verticalArrangement = Arrangement.spacedBy(13.dp),
     ) {
-        item { WorkspaceTopbar(state, colors, search, settings,
-            onCredits={ creditsOpen=true }, onScore={ scoreOpen=true }) }
         if (contentMode == WorkspaceMode.LIST) item {
             HabitsStrip(habits, colors, dark, onHabitClick = { selectedHabitId = it.id }, onAdd = { createHabitOpen = true })
         }
@@ -175,7 +204,20 @@ fun ModernWorkspace(
                 onOpenHabit={selectedHabitId=it})
         }
     }
-
+    AnimatedVisibility(visible=headerVisible,
+        modifier=Modifier.align(Alignment.TopCenter)
+            .padding(start=14.dp,end=14.dp,top=9.dp),
+        enter=slideInVertically(initialOffsetY={-it},
+            animationSpec=tween(180))+fadeIn(),
+        exit=slideOutVertically(targetOffsetY={-it},
+            animationSpec=tween(155))+fadeOut()){
+        WorkspaceTopbar(state,colors,
+            search={search(it);headerVisible=true},
+            settings=settings,
+            onCredits={creditsOpen=true},
+            onScore={scoreOpen=true})
+    }
+    }
             }
         }
     }
@@ -192,20 +234,8 @@ fun ModernWorkspace(
                 onReset={period=PeriodFilter.ALL;sort=SortTasks.URGENCY;sectorFilterEnabled=false;timelineSector="all"})
         }
     }
-    if (scoreOpen) AlertDialog(onDismissRequest={scoreOpen=false},
-        title={Text("Рейтинг эффективности")}, text={
-            Column(verticalArrangement=Arrangement.spacedBy(7.dp)){
-                Text((state.user?.efficiencyScore?.toInt() ?: 0).toString()+"/100", style=MaterialTheme.typography.headlineMedium)
-                Text("Задачи: +" + (state.user?.efficiencyTaskScore ?: 0.0))
-                Text("Привычки: +" + (state.user?.efficiencyHabitScore ?: 0.0))
-                Text("Работа с ИИ: +" + (state.user?.efficiencyAiScore ?: 0.0))
-                Text("Режим концентрации: +" + (state.user?.efficiencyFocusScore ?: 0.0))
-            }
-        }, confirmButton={TextButton(onClick={scoreOpen=false}){Text("Закрыть")}})
-    if (creditsOpen) AlertDialog(onDismissRequest={creditsOpen=false},
-        title={Text("ИИ-кредиты")},
-        text={Text("Баланс: " + (state.user?.aiCredits ?: 0).toString())},
-        confirmButton={TextButton(onClick={creditsOpen=false}){Text("Закрыть")}})
+    if(scoreOpen)NativeEfficiencyRatingDialog(state.user,dark){scoreOpen=false}
+    if(creditsOpen)NativeAiCreditsDialog(vm,state.user,dark){creditsOpen=false}
     if (createHabitOpen) NativeHabitCreateSheet(vm=vm,dark=dark,
         onClose={createHabitOpen=false})
     selectedHabitId?.let { id ->
