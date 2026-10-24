@@ -41,7 +41,7 @@ data class CurrentUser(
 @Serializable
 data class Sphere(val id: String, val name: String, val color: String, val icon: String? = null, val generalPrompt: String? = null)
 
-enum class TaskType { TASK, EVENT }
+enum class TaskType { TASK, EVENT, REMINDER }
 enum class TaskStatus { TODO, IN_PROGRESS, DONE }
 
 @Serializable
@@ -98,6 +98,16 @@ data class Habit(
     val durationRemaining: Int? = null,
     val isArchived: Boolean = false,
     val stats: List<HabitStat> = emptyList(),
+    val createdAt: String? = null,
+    val updatedAt: String? = null,
+)
+
+@Serializable
+data class StandaloneNote(
+    val id: String,
+    val title: String = "",
+    val content: String = "",
+    val groupId: String? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null,
 )
