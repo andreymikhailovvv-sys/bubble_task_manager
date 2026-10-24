@@ -176,7 +176,8 @@ fun ModernWorkspace(
             }
         } else item {
             NativeTimelineWorkspace(rootTasks, state.tasks, state.habits,
-                state.spheres, colors, dark, onOpenTask)
+                state.spheres, colors, dark, onOpenTask,
+                onOpenHabit={selectedHabitId=it})
         }
     }
 
