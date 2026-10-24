@@ -75,8 +75,6 @@ fun MiniAppSubtaskEditorSheet(
     var descriptionExpanded by remember(key){mutableStateOf(false)}
     var pendingAction by remember(key){mutableStateOf<String?>(null)}
     var saving by remember(key){mutableStateOf(false)}
-    var dragPx by remember(key){mutableFloatStateOf(0f)}
-    val density=LocalDensity.current
     val maxHeight=(LocalConfiguration.current.screenHeightDp*.79f).dp
 
     val saveThen:((()->Unit)->Unit)={after->
@@ -137,33 +135,13 @@ fun MiniAppSubtaskEditorSheet(
     }
     ModalBottomSheet(
         onDismissRequest={if(isNew || title.isBlank())onBack() else saveThen(onBack)},
-        sheetGesturesEnabled=false,
-        dragHandle=null,
+        sheetGesturesEnabled=true,
+        dragHandle={ BottomSheetDefaults.DragHandle(color=c.muted) },
         containerColor=c.bg,contentColor=c.ink,
         shape=RoundedCornerShape(topStart=30.dp,topEnd=30.dp),
         sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),
     ) {
-        Column(Modifier.fillMaxWidth().heightIn(max=maxHeight)
-            .offset { IntOffset(0,dragPx.toInt()) }.imePadding()) {
-            Box(Modifier.fillMaxWidth().height(24.dp)
-                .pointerInput(key){
-                    detectVerticalDragGestures(
-                        onDragEnd={
-                            val close=dragPx>with(density){76.dp.toPx()}
-                            dragPx=0f
-                            if(close) {
-                                if(isNew || title.isBlank())onBack() else saveThen(onBack)
-                            }
-                        },
-                        onDragCancel={dragPx=0f},
-                        onVerticalDrag={change,amount->
-                            change.consume()
-                            dragPx=(dragPx+amount).coerceIn(0f,260f*density.density)
-                        })
-                },contentAlignment=Alignment.Center) {
-                Box(Modifier.width(37.dp).height(4.dp).clip(CircleShape)
-                    .background(c.muted.copy(alpha=.46f)))
-            }
+        Column(Modifier.fillMaxWidth().heightIn(max=maxHeight).imePadding()) {
             Column(Modifier.weight(1f,fill=false).verticalScroll(rememberScrollState())
                 .padding(horizontal=16.dp).padding(bottom=18.dp)) {
                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
