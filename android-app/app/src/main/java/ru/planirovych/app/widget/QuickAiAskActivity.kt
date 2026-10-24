@@ -134,7 +134,6 @@ class QuickAiAskActivity:ComponentActivity(){
                                             else->"Обрабатываю запрос…"
                                         }}
                                     })
-                                }
                                 reply.aiString("answer")
                             }
                             answer=result.ifBlank{"Запрос отправлен в «Быстрые запросы»."}
