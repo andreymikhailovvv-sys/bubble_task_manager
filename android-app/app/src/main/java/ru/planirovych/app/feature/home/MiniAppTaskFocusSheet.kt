@@ -11,6 +11,11 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
 import androidx.compose.foundation.text.BasicTextField
@@ -88,6 +93,9 @@ fun MiniAppTaskFocusSheet(
     var descriptionExpanded by remember{mutableStateOf(false)}
     var confirmation by remember{mutableStateOf<String?>(null)}
     var saving by remember{mutableStateOf(false)}
+    var handleDragPx by remember(task.id){mutableFloatStateOf(0f)}
+    val density = LocalDensity.current
+    val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * .83f).dp
 
     val saveThen: ((()->Unit)->Unit)={after->
         if(!busy && !saving && title.isNotBlank()) {
@@ -156,10 +164,30 @@ fun MiniAppTaskFocusSheet(
     ModalBottomSheet(onDismissRequest={if(title.isBlank())onBack() else saveThen(onBack)},
         containerColor=c.bg,contentColor=c.text,
         shape=RoundedCornerShape(topStart=30.dp,topEnd=30.dp),
+        sheetGesturesEnabled=false,
         dragHandle=null,
         sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)){
-        Column(Modifier.fillMaxWidth().fillMaxHeight(.96f).imePadding()){
-            Row(Modifier.fillMaxWidth().padding(horizontal=15.dp,vertical=14.dp),
+        Column(Modifier.fillMaxWidth().heightIn(max=maxSheetHeight)
+            .offset { IntOffset(0,handleDragPx.toInt()) }.imePadding()){
+            Box(Modifier.fillMaxWidth().height(24.dp)
+                .pointerInput(task.id) {
+                    detectVerticalDragGestures(
+                        onDragEnd = {
+                            val close = handleDragPx > with(density) { 76.dp.toPx() }
+                            handleDragPx = 0f
+                            if(close)saveThen(onBack)
+                        },
+                        onDragCancel = { handleDragPx = 0f },
+                        onVerticalDrag = { change, amount ->
+                            change.consume()
+                            handleDragPx = (handleDragPx + amount).coerceIn(0f, 260f * density.density)
+                        }
+                    )
+                },contentAlignment=Alignment.Center) {
+                Box(Modifier.width(37.dp).height(4.dp)
+                    .clip(CircleShape).background(c.muted.copy(alpha=.46f)))
+            }
+            Row(Modifier.fillMaxWidth().padding(start=15.dp,end=15.dp,bottom=10.dp),
                 verticalAlignment=Alignment.CenterVertically,
                 horizontalArrangement=Arrangement.SpaceBetween){
                 Text(if(task.taskType==TaskType.EVENT)"РЕДАКТИРОВАНИЕ СОБЫТИЯ" else "ФОКУС ЗАДАЧИ",
@@ -185,8 +213,8 @@ fun MiniAppTaskFocusSheet(
                     }
                 }
             }
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())
-                .padding(horizontal=15.dp).padding(bottom=24.dp)){
+            Column(Modifier.weight(1f,fill=false).verticalScroll(rememberScrollState())
+                .padding(horizontal=15.dp).padding(bottom=20.dp)){
                 BasicTextField(value=title,onValueChange={title=it;onClearError()},
                     modifier=Modifier.fillMaxWidth().padding(top=5.dp,bottom=8.dp),
                     textStyle=TextStyle(color=c.text,fontSize=27.sp,fontWeight=FontWeight.Bold,
@@ -214,9 +242,10 @@ fun MiniAppTaskFocusSheet(
                 Surface(shape=RoundedCornerShape(18.dp),color=c.bg,
                     border=BorderStroke(1.dp,if(dark)Color(0xFF504B70) else Color(0xFFD8D6E3))){
                     BasicTextField(value=description,onValueChange={description=it;onClearError()},
-                        modifier=Modifier.fillMaxWidth().heightIn(min=125.dp)
+                        modifier=Modifier.fillMaxWidth().height(128.dp)
+                            .verticalScroll(rememberScrollState())
                             .padding(horizontal=12.dp,vertical=11.dp),
-                        minLines=5,maxLines=18,enabled=!busy,
+                        minLines=1,enabled=!busy,
                         textStyle=TextStyle(color=c.text,fontSize=14.sp,lineHeight=24.sp),
                         cursorBrush=SolidColor(c.purple),
                         decorationBox={inner->Box{
@@ -339,58 +368,19 @@ fun MiniAppTaskFocusSheet(
             }
         }
     }
-    if(settingsOpen)AlertDialog(onDismissRequest={settingsOpen=false},
-        containerColor=c.bg,
-        title={Text("Настройки задачи",color=c.text)},
-        text={Column(Modifier.verticalScroll(rememberScrollState()),
-            verticalArrangement=Arrangement.spacedBy(12.dp)){
-            Text("Сектор",color=c.muted)
-            Box{
-                OutlinedButton(onClick={sectorMenu=true}){
-                    Text(spheres.find{it.id==sphereId}?.name ?: "Без сектора",color=c.text)
-                    Icon(Icons.Default.ExpandMore,null,tint=c.muted)
-                }
-                DropdownMenu(expanded=sectorMenu,onDismissRequest={sectorMenu=false}){
-                    DropdownMenuItem(text={Text("Без сектора")},onClick={sphereId=null;sectorMenu=false})
-                    spheres.forEach{sphere->DropdownMenuItem(text={Text(sphere.name)},
-                        onClick={sphereId=sphere.id;sectorMenu=false})}
-                }
-            }
-            Text("Уведомлять за",color=c.muted)
-            Box{
-                OutlinedButton(onClick={notifyMenu=true}){
-                    Text(if(notifyMinutes==null)"Без уведомлений" else
-                        "За "+notifyMinutes.toString()+" мин",color=c.text)
-                    Icon(Icons.Default.ExpandMore,null,tint=c.muted)
-                }
-                DropdownMenu(expanded=notifyMenu,onDismissRequest={notifyMenu=false}){
-                    listOf(null,0,5,10,15,30,60,120,1440).forEach{value->
-                        DropdownMenuItem(text={Text(if(value==null)"Без уведомлений" else
-                            if(value==0)"В момент дедлайна" else "За "+value+" минут")},
-                            onClick={notifyMinutes=value;notifyMenu=false})
-                    }
-                }
-            }
-            Row(verticalAlignment=Alignment.CenterVertically){
-                Text("Уведомления от ИИ",Modifier.weight(1f),color=c.text)
-                Switch(checked=aiNotifications,onCheckedChange={aiNotifications=it})
-            }
-            Text("Важность: "+importance,color=c.text)
-            Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
-                (1..5).forEach{level->
-                    Box(Modifier.weight(1f).height(36.dp)
-                        .clip(RoundedCornerShape(9.dp))
-                        .background(if(importance==level)c.purple else c.card)
-                        .clickable{importance=level},contentAlignment=Alignment.Center){
-                        Text(level.toString(),fontWeight=FontWeight.Bold,
-                            color=if(importance==level)Color.White else c.text)
-                    }
-                }
-            }
-            if(task.isRecurring)Text("Повторение: "+(task.recurrenceSummary ?: "включено"),
-                color=c.muted,fontSize=12.sp)
-        }},
-        confirmButton={TextButton(onClick={settingsOpen=false}){Text("Применить")}}
+    if(settingsOpen) FocusTaskSettingsDialog(
+        colors=c,
+        task=task,
+        sectors=spheres,
+        selectedSector=sphereId,
+        onSector={sphereId=it},
+        notifyBefore=notifyMinutes,
+        onNotify={notifyMinutes=it},
+        aiNotifications=aiNotifications,
+        onAiNotifications={aiNotifications=it},
+        importance=importance,
+        onImportance={importance=it},
+        onClose={settingsOpen=false},
     )
     if(descriptionExpanded)Dialog(onDismissRequest={descriptionExpanded=false},
         properties=DialogProperties(usePlatformDefaultWidth=false)){
@@ -430,6 +420,165 @@ fun MiniAppTaskFocusSheet(
         )
     }
 }
+
+// Mini App's compact settings popover, anchored near the upper right of the focus sheet.
+@Composable
+private fun FocusTaskSettingsDialog(
+    colors: FocusColors,
+    task: Task,
+    sectors: List<Sphere>,
+    selectedSector: String?,
+    onSector: (String?) -> Unit,
+    notifyBefore: Int?,
+    onNotify: (Int?) -> Unit,
+    aiNotifications: Boolean,
+    onAiNotifications: (Boolean) -> Unit,
+    importance: Int,
+    onImportance: (Int) -> Unit,
+    onClose: () -> Unit,
+) {
+    var sectorMenu by remember { mutableStateOf(false) }
+    var notifyMenu by remember { mutableStateOf(false) }
+    val c = colors
+    Dialog(onDismissRequest=onClose,
+        properties=DialogProperties(usePlatformDefaultWidth=false)) {
+        Box(Modifier.fillMaxSize().padding(top=64.dp,end=12.dp,start=12.dp),
+            contentAlignment=Alignment.TopEnd) {
+            Surface(
+                modifier=Modifier.widthIn(max=355.dp).heightIn(max=550.dp),
+                shape=RoundedCornerShape(23.dp),
+                color=c.bg,
+                border=BorderStroke(1.dp,c.purple.copy(alpha=.40f)),
+                shadowElevation=20.dp,
+            ) {
+                Column(Modifier.verticalScroll(rememberScrollState()).padding(15.dp),
+                    verticalArrangement=Arrangement.spacedBy(14.dp)) {
+                    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
+                        horizontalArrangement=Arrangement.SpaceBetween) {
+                        Text(if(task.taskType==TaskType.EVENT)"Настройки события" else
+                            "Настройки задачи",fontSize=15.sp,
+                            color=c.text,fontWeight=FontWeight.Bold)
+                        FocusRoundIcon(Icons.Default.Close,c,"Закрыть настройки",onClose)
+                    }
+                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(9.dp)) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Сектор",color=c.muted,fontSize=11.sp,
+                                fontWeight=FontWeight.SemiBold)
+                            Spacer(Modifier.height(5.dp))
+                            Box {
+                                Row(Modifier.fillMaxWidth().height(39.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(c.card)
+                                    .border(1.dp,c.border,RoundedCornerShape(12.dp))
+                                    .clickable{sectorMenu=true}
+                                    .padding(horizontal=9.dp),
+                                    verticalAlignment=Alignment.CenterVertically) {
+                                    val sphere=sectors.firstOrNull{it.id==selectedSector}
+                                    sphere?.let {
+                                        Box(Modifier.size(8.dp).clip(CircleShape)
+                                            .background(runCatching{
+                                                Color(android.graphics.Color.parseColor(it.color))
+                                            }.getOrDefault(c.purple)))
+                                        Spacer(Modifier.width(5.dp))
+                                    }
+                                    Text(sphere?.name ?: "Без сектора",
+                                        Modifier.weight(1f),fontSize=11.sp,
+                                        maxLines=1,overflow=TextOverflow.Ellipsis,color=c.text)
+                                    Icon(Icons.Default.ExpandMore,null,tint=c.muted,
+                                        modifier=Modifier.size(14.dp))
+                                }
+                                DropdownMenu(expanded=sectorMenu,onDismissRequest={sectorMenu=false}) {
+                                    DropdownMenuItem(text={Text("Без сектора")},onClick={
+                                        onSector(null);sectorMenu=false
+                                    })
+                                    sectors.forEach { sphere->
+                                        DropdownMenuItem(text={Text(sphere.name)},onClick={
+                                            onSector(sphere.id);sectorMenu=false
+                                        })
+                                    }
+                                }
+                            }
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text("Уведомлять за",color=c.muted,fontSize=11.sp,
+                                fontWeight=FontWeight.SemiBold)
+                            Spacer(Modifier.height(5.dp))
+                            Box {
+                                Row(Modifier.fillMaxWidth().height(39.dp)
+                                    .clip(RoundedCornerShape(12.dp)).background(c.card)
+                                    .border(1.dp,c.border,RoundedCornerShape(12.dp))
+                                    .clickable(enabled=!task.isRecurring){notifyMenu=true}
+                                    .padding(horizontal=9.dp),
+                                    verticalAlignment=Alignment.CenterVertically) {
+                                    Text(when(notifyBefore){
+                                        null -> "Не уведомлять"
+                                        0 -> "В дедлайн"
+                                        60 -> "За час"
+                                        1440 -> "За сутки"
+                                        else -> "За ${notifyBefore} мин"
+                                    },Modifier.weight(1f),fontSize=11.sp,color=c.text,
+                                        maxLines=1,overflow=TextOverflow.Ellipsis)
+                                    Icon(Icons.Default.ExpandMore,null,tint=c.muted,
+                                        modifier=Modifier.size(14.dp))
+                                }
+                                DropdownMenu(expanded=notifyMenu,onDismissRequest={notifyMenu=false}) {
+                                    listOf(null,0,5,10,15,30,60,120,1440).forEach { minutes ->
+                                        DropdownMenuItem(text={Text(when(minutes){
+                                            null -> "Не уведомлять"
+                                            0 -> "В момент дедлайна"
+                                            60 -> "За 1 час"
+                                            120 -> "За 2 часа"
+                                            1440 -> "За сутки"
+                                            else -> "За ${minutes} минут"
+                                        })},onClick={onNotify(minutes);notifyMenu=false})
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                        Checkbox(checked=task.isRecurring,onCheckedChange=null,
+                            modifier=Modifier.size(30.dp))
+                        Spacer(Modifier.width(7.dp))
+                        Text("повторять",color=c.text,fontSize=13.sp)
+                    }
+                    if(task.isRecurring) {
+                        Text("Повторение: "+(task.recurrenceSummary ?: "включено")+
+                            ". Изменить расписание повторений можно в Mini App.",
+                            fontSize=11.sp,color=c.muted,lineHeight=16.sp)
+                    }
+                    if(task.taskType!=TaskType.EVENT) {
+                        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                            Checkbox(checked=aiNotifications,
+                                onCheckedChange=onAiNotifications,
+                                modifier=Modifier.size(30.dp))
+                            Spacer(Modifier.width(7.dp))
+                            Text("уведомления от ИИ",fontSize=13.sp,color=c.text)
+                        }
+                        Text("Важность: ${importance}",color=c.muted,fontSize=12.sp,
+                            fontWeight=FontWeight.SemiBold)
+                        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(7.dp)) {
+                            (1..5).forEach { level ->
+                                Box(Modifier.weight(1f).height(39.dp)
+                                    .clip(RoundedCornerShape(11.dp))
+                                    .background(if(level==importance)c.purple else c.card)
+                                    .border(1.dp,if(level==importance)c.purple else c.border,
+                                        RoundedCornerShape(11.dp))
+                                    .clickable{onImportance(level)},
+                                    contentAlignment=Alignment.Center) {
+                                    Text(level.toString(),fontSize=13.sp,
+                                        fontWeight=FontWeight.Bold,
+                                        color=if(level==importance)Color.White else c.text)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable private fun FocusRoundIcon(icon:androidx.compose.ui.graphics.vector.ImageVector,
     c:FocusColors,label:String,click:()->Unit){
     Box(Modifier.size(34.dp).clip(CircleShape).background(c.bg)
