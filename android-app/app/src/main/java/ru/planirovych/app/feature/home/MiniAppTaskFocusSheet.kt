@@ -2,6 +2,7 @@ package ru.planirovych.app.feature.home
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.text.Html
 import android.content.Intent
 import android.net.Uri
 import android.provider.CalendarContract
@@ -71,7 +72,8 @@ fun MiniAppTaskFocusSheet(
     val state by vm.state.collectAsStateWithLifecycle()
     val scope=rememberCoroutineScope()
     var title by remember(task.id){mutableStateOf(task.title)}
-    var description by remember(task.id){mutableStateOf(task.description.orEmpty())}
+    val initialDescription=remember(task.id){focusReadableDescription(task.description.orEmpty())}
+    var description by remember(task.id){mutableStateOf(initialDescription)}
     var dueDate by remember(task.id){mutableStateOf(task.dueDate)}
     var sphereId by remember(task.id){mutableStateOf(task.sphereId)}
     var importance by remember(task.id){mutableIntStateOf(task.importance.coerceIn(1,5))}
@@ -91,7 +93,7 @@ fun MiniAppTaskFocusSheet(
         if(!busy && !saving && title.isNotBlank()) {
             val changes=buildJsonObject {
                 if(title.trim()!=task.title)put("title",title.trim())
-                if(description!=task.description.orEmpty()) {
+                if(description!=initialDescription) {
                     if(description.isBlank())put("description",JsonNull) else put("description",description)
                 }
                 if(dueDate!=task.dueDate) {
@@ -114,6 +116,9 @@ fun MiniAppTaskFocusSheet(
                 onSave(task.id,changes) { saving=false;after() }
             }
         }
+    }
+    LaunchedEffect(busy,error) {
+        if(!busy && error!=null) saving=false
     }
     val selectDueDate={
         val old=focusDate(dueDate) ?: LocalDateTime.now()
@@ -148,7 +153,7 @@ fun MiniAppTaskFocusSheet(
         }
     }
 
-    ModalBottomSheet(onDismissRequest={saveThen(onBack)},
+    ModalBottomSheet(onDismissRequest={if(title.isBlank())onBack() else saveThen(onBack)},
         containerColor=c.bg,contentColor=c.text,
         shape=RoundedCornerShape(topStart=30.dp,topEnd=30.dp),
         dragHandle=null,
@@ -176,7 +181,7 @@ fun MiniAppTaskFocusSheet(
                     }
                     FocusRoundIcon(Icons.Default.Settings,c,"Настройки"){settingsOpen=true}
                     FocusRoundIcon(Icons.Default.Close,c,"Сохранить и закрыть"){
-                        saveThen(onBack)
+                        if(title.isBlank())onBack() else saveThen(onBack)
                     }
                 }
             }
@@ -507,3 +512,9 @@ private fun focusSubtaskRemaining(value:String):String{
     return (if(hrs==0L)mins.coerceAtLeast(1).toString()+" м" else hrs.toString()+" ч")+
         if(diff<0)" назад" else ""
 }
+
+/** Show the same readable description as Mini App; untouched rich text stays intact. */
+private fun focusReadableDescription(raw: String): String =
+    if(Regex("<[a-zA-Z][^>]*>").containsMatchIn(raw))
+        Html.fromHtml(raw, Html.FROM_HTML_MODE_COMPACT).toString().trimEnd()
+    else raw
