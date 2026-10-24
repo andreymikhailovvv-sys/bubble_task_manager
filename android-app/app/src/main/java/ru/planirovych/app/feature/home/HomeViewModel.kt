@@ -11,7 +11,7 @@ import ru.planirovych.app.data.repository.WorkspaceRepository
 import ru.planirovych.app.data.repository.userMessage
 import ru.planirovych.app.ui.theme.ThemePreferences
 
-data class HomeState(val loading: Boolean = true, val user: CurrentUser? = null, val spheres: List<Sphere> = emptyList(), val tasks: List<Task> = emptyList(), val habits: List<Habit> = emptyList(), val query: String = "", val error: String? = null, val authError: String? = null, val authBusy: Boolean = false, val taskBusy: Boolean = false, val taskError: String? = null)
+data class HomeState(val loading: Boolean = true, val user: CurrentUser? = null, val spheres: List<Sphere> = emptyList(), val tasks: List<Task> = emptyList(), val habits: List<Habit> = emptyList(), val query: String = "", val error: String? = null, val authError: String? = null, val authBusy: Boolean = false, val taskBusy: Boolean = false, val taskError: String? = null, val habitBusy: Boolean = false, val notes: List<StandaloneNote> = emptyList(), val notesLoading: Boolean = false, val notesBusy: Boolean = false, val notesError: String? = null)
 class HomeViewModel(private val repository: WorkspaceRepository, private val themes: ThemePreferences) : ViewModel() {
     private val mutable = MutableStateFlow(HomeState())
     val state = mutable.asStateFlow()
@@ -58,6 +58,88 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
 
     fun deleteTask(id: String, done: () -> Unit) =
         mutateTask({ repository.deleteTask(id) }, done)
+
+
+    fun postponeOverdue() {
+        if (mutable.value.taskBusy) return
+        viewModelScope.launch {
+            mutable.update { it.copy(taskBusy = true, taskError = null) }
+            try {
+                repository.postponeOverdue(mutable.value.tasks)
+                val tasks = repository.loadTasks()
+                mutable.update { it.copy(tasks = tasks, taskBusy = false) }
+            } catch (error: Throwable) {
+                mutable.update { it.copy(taskBusy = false, taskError = error.userMessage()) }
+            }
+        }
+    }
+    fun completeHabit(id: String) = viewModelScope.launch {
+        if (mutable.value.habitBusy) return@launch
+        mutable.update { it.copy(habitBusy = true, taskError = null) }
+        try {
+            repository.completeHabit(id)
+            val habits = repository.loadHabits()
+            mutable.update { it.copy(habits = habits, habitBusy = false) }
+        } catch (error: Throwable) {
+            mutable.update { it.copy(habitBusy = false, taskError = error.userMessage()) }
+        }
+    }
+    fun createHabit(name: String) = viewModelScope.launch {
+        if (mutable.value.habitBusy || name.isBlank()) return@launch
+        mutable.update { it.copy(habitBusy = true, taskError = null) }
+        try {
+            repository.createHabit(name)
+            val habits = repository.loadHabits()
+            mutable.update { it.copy(habits = habits, habitBusy = false) }
+        } catch (error: Throwable) {
+            mutable.update { it.copy(habitBusy = false, taskError = error.userMessage()) }
+        }
+    }
+    fun loadNotes() = viewModelScope.launch {
+        mutable.update { it.copy(notesLoading = true, notesError = null) }
+        try {
+            val notes = repository.loadNotes()
+            mutable.update { it.copy(notes = notes, notesLoading = false) }
+        } catch (error: Throwable) {
+            mutable.update { it.copy(notesLoading = false, notesError = error.userMessage()) }
+        }
+    }
+    fun createNote(title: String, content: String, done: () -> Unit) = viewModelScope.launch {
+        if (mutable.value.notesBusy) return@launch
+        mutable.update { it.copy(notesBusy = true, notesError = null) }
+        try {
+            repository.createNote(title, content)
+            val notes = repository.loadNotes()
+            mutable.update { it.copy(notes = notes, notesBusy = false) }
+            done()
+        } catch (error: Throwable) {
+            mutable.update { it.copy(notesBusy = false, notesError = error.userMessage()) }
+        }
+    }
+    fun saveNote(id: String, title: String, content: String, done: () -> Unit) = viewModelScope.launch {
+        if (mutable.value.notesBusy) return@launch
+        mutable.update { it.copy(notesBusy = true, notesError = null) }
+        try {
+            repository.saveNote(id, title, content)
+            val notes = repository.loadNotes()
+            mutable.update { it.copy(notes = notes, notesBusy = false) }
+            done()
+        } catch (error: Throwable) {
+            mutable.update { it.copy(notesBusy = false, notesError = error.userMessage()) }
+        }
+    }
+    fun deleteNote(id: String, done: () -> Unit) = viewModelScope.launch {
+        if (mutable.value.notesBusy) return@launch
+        mutable.update { it.copy(notesBusy = true, notesError = null) }
+        try {
+            repository.deleteNote(id)
+            val notes = repository.loadNotes()
+            mutable.update { it.copy(notes = notes, notesBusy = false) }
+            done()
+        } catch (error: Throwable) {
+            mutable.update { it.copy(notesBusy = false, notesError = error.userMessage()) }
+        }
+    }
 
     fun search(value: String) { mutable.update { it.copy(query=value) } }
     fun setDark(value: Boolean) { viewModelScope.launch { themes.setDark(value) } }
