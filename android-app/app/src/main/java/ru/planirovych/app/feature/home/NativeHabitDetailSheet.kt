@@ -39,10 +39,12 @@ private fun habitPalette(dark:Boolean)=if(dark)HabitPalette(
 private fun habitAccent(raw:String):Color=runCatching{
     Color(android.graphics.Color.parseColor(raw))
 }.getOrDefault(Color(0xFF22C55E))
-private fun habitCreated(habit:Habit):LocalDate=runCatching {
-    Instant.parse(habit.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()
-}.getOrElse {
-    runCatching{OffsetDateTime.parse(habit.createdAt).toLocalDate()}.getOrDefault(LocalDate.now())
+private fun habitCreated(habit:Habit):LocalDate {
+    val raw=habit.createdAt ?: return LocalDate.now()
+    return runCatching {
+        Instant.parse(raw).atZone(ZoneId.systemDefault()).toLocalDate()
+    }.recoverCatching { OffsetDateTime.parse(raw).toLocalDate() }
+        .getOrDefault(LocalDate.now())
 }
 private fun habitScheduled(habit:Habit,date:LocalDate,created:LocalDate):Boolean {
     if(date.isBefore(created))return false
