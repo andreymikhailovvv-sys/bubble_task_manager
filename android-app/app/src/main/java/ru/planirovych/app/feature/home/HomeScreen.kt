@@ -103,6 +103,21 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
                 onDelete = vm::deleteTask,
                 onClearError = vm::clearTaskError,
             )
+        } else if (parent != null) {
+            MiniAppSubtaskEditorSheet(
+                task = openedTask,
+                parent = parent,
+                dark = dark,
+                vm = vm,
+                busy = state.taskBusy,
+                error = state.taskError,
+                onBack = back,
+                onSave = vm::saveTask,
+                onCreateSubtask = vm::createSubtask,
+                onChangeStatus = vm::changeStatus,
+                onDelete = vm::deleteTask,
+                onClearError = vm::clearTaskError,
+            )
         } else TaskEditorSheet(
             task = openedTask,
             parent = parent,
