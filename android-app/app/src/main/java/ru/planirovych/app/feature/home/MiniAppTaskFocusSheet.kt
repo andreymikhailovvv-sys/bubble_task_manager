@@ -190,7 +190,7 @@ fun MiniAppTaskFocusSheet(
                 BasicTextField(value=title,onValueChange={title=it;onClearError()},
                     modifier=Modifier.fillMaxWidth().padding(top=5.dp,bottom=8.dp),
                     textStyle=TextStyle(color=c.text,fontSize=27.sp,fontWeight=FontWeight.Bold,
-                        lineHeight=32.sp,letterSpacing=(-.6).sp),
+                        lineHeight=32.sp,letterSpacing=(-0.6f).sp),
                     maxLines=4,enabled=!busy,cursorBrush=SolidColor(c.purple),
                     decorationBox={inner->Box{
                         if(title.isEmpty())Text("Без названия",color=c.muted,fontSize=27.sp)
