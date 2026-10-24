@@ -11,6 +11,11 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
 import androidx.compose.foundation.text.BasicTextField
@@ -88,6 +93,9 @@ fun MiniAppTaskFocusSheet(
     var descriptionExpanded by remember{mutableStateOf(false)}
     var confirmation by remember{mutableStateOf<String?>(null)}
     var saving by remember{mutableStateOf(false)}
+    var handleDragPx by remember(task.id){mutableFloatStateOf(0f)}
+    val density = LocalDensity.current
+    val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * .83f).dp
 
     val saveThen: ((()->Unit)->Unit)={after->
         if(!busy && !saving && title.isNotBlank()) {
@@ -156,10 +164,30 @@ fun MiniAppTaskFocusSheet(
     ModalBottomSheet(onDismissRequest={if(title.isBlank())onBack() else saveThen(onBack)},
         containerColor=c.bg,contentColor=c.text,
         shape=RoundedCornerShape(topStart=30.dp,topEnd=30.dp),
+        sheetGesturesEnabled=false,
         dragHandle=null,
         sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)){
-        Column(Modifier.fillMaxWidth().fillMaxHeight(.96f).imePadding()){
-            Row(Modifier.fillMaxWidth().padding(horizontal=15.dp,vertical=14.dp),
+        Column(Modifier.fillMaxWidth().heightIn(max=maxSheetHeight)
+            .offset { IntOffset(0,handleDragPx.toInt()) }.imePadding()){
+            Box(Modifier.fillMaxWidth().height(24.dp)
+                .pointerInput(task.id) {
+                    detectVerticalDragGestures(
+                        onDragEnd = {
+                            val close = handleDragPx > with(density) { 76.dp.toPx() }
+                            handleDragPx = 0f
+                            if(close)saveThen(onBack)
+                        },
+                        onDragCancel = { handleDragPx = 0f },
+                        onVerticalDrag = { change, amount ->
+                            change.consume()
+                            handleDragPx = (handleDragPx + amount).coerceIn(0f, 260f * density.density)
+                        }
+                    )
+                },contentAlignment=Alignment.Center) {
+                Box(Modifier.width(37.dp).height(4.dp)
+                    .clip(CircleShape).background(c.muted.copy(alpha=.46f)))
+            }
+            Row(Modifier.fillMaxWidth().padding(start=15.dp,end=15.dp,bottom=10.dp),
                 verticalAlignment=Alignment.CenterVertically,
                 horizontalArrangement=Arrangement.SpaceBetween){
                 Text(if(task.taskType==TaskType.EVENT)"РЕДАКТИРОВАНИЕ СОБЫТИЯ" else "ФОКУС ЗАДАЧИ",
@@ -185,8 +213,8 @@ fun MiniAppTaskFocusSheet(
                     }
                 }
             }
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())
-                .padding(horizontal=15.dp).padding(bottom=24.dp)){
+            Column(Modifier.weight(1f,fill=false).verticalScroll(rememberScrollState())
+                .padding(horizontal=15.dp).padding(bottom=20.dp)){
                 BasicTextField(value=title,onValueChange={title=it;onClearError()},
                     modifier=Modifier.fillMaxWidth().padding(top=5.dp,bottom=8.dp),
                     textStyle=TextStyle(color=c.text,fontSize=27.sp,fontWeight=FontWeight.Bold,
@@ -214,9 +242,10 @@ fun MiniAppTaskFocusSheet(
                 Surface(shape=RoundedCornerShape(18.dp),color=c.bg,
                     border=BorderStroke(1.dp,if(dark)Color(0xFF504B70) else Color(0xFFD8D6E3))){
                     BasicTextField(value=description,onValueChange={description=it;onClearError()},
-                        modifier=Modifier.fillMaxWidth().heightIn(min=125.dp)
+                        modifier=Modifier.fillMaxWidth().height(128.dp)
+                            .verticalScroll(rememberScrollState())
                             .padding(horizontal=12.dp,vertical=11.dp),
-                        minLines=5,maxLines=18,enabled=!busy,
+                        minLines=1,enabled=!busy,
                         textStyle=TextStyle(color=c.text,fontSize=14.sp,lineHeight=24.sp),
                         cursorBrush=SolidColor(c.purple),
                         decorationBox={inner->Box{
@@ -339,58 +368,19 @@ fun MiniAppTaskFocusSheet(
             }
         }
     }
-    if(settingsOpen)AlertDialog(onDismissRequest={settingsOpen=false},
-        containerColor=c.bg,
-        title={Text("Настройки задачи",color=c.text)},
-        text={Column(Modifier.verticalScroll(rememberScrollState()),
-            verticalArrangement=Arrangement.spacedBy(12.dp)){
-            Text("Сектор",color=c.muted)
-            Box{
-                OutlinedButton(onClick={sectorMenu=true}){
-                    Text(spheres.find{it.id==sphereId}?.name ?: "Без сектора",color=c.text)
-                    Icon(Icons.Default.ExpandMore,null,tint=c.muted)
-                }
-                DropdownMenu(expanded=sectorMenu,onDismissRequest={sectorMenu=false}){
-                    DropdownMenuItem(text={Text("Без сектора")},onClick={sphereId=null;sectorMenu=false})
-                    spheres.forEach{sphere->DropdownMenuItem(text={Text(sphere.name)},
-                        onClick={sphereId=sphere.id;sectorMenu=false})}
-                }
-            }
-            Text("Уведомлять за",color=c.muted)
-            Box{
-                OutlinedButton(onClick={notifyMenu=true}){
-                    Text(if(notifyMinutes==null)"Без уведомлений" else
-                        "За "+notifyMinutes.toString()+" мин",color=c.text)
-                    Icon(Icons.Default.ExpandMore,null,tint=c.muted)
-                }
-                DropdownMenu(expanded=notifyMenu,onDismissRequest={notifyMenu=false}){
-                    listOf(null,0,5,10,15,30,60,120,1440).forEach{value->
-                        DropdownMenuItem(text={Text(if(value==null)"Без уведомлений" else
-                            if(value==0)"В момент дедлайна" else "За "+value+" минут")},
-                            onClick={notifyMinutes=value;notifyMenu=false})
-                    }
-                }
-            }
-            Row(verticalAlignment=Alignment.CenterVertically){
-                Text("Уведомления от ИИ",Modifier.weight(1f),color=c.text)
-                Switch(checked=aiNotifications,onCheckedChange={aiNotifications=it})
-            }
-            Text("Важность: "+importance,color=c.text)
-            Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
-                (1..5).forEach{level->
-                    Box(Modifier.weight(1f).height(36.dp)
-                        .clip(RoundedCornerShape(9.dp))
-                        .background(if(importance==level)c.purple else c.card)
-                        .clickable{importance=level},contentAlignment=Alignment.Center){
-                        Text(level.toString(),fontWeight=FontWeight.Bold,
-                            color=if(importance==level)Color.White else c.text)
-                    }
-                }
-            }
-            if(task.isRecurring)Text("Повторение: "+(task.recurrenceSummary ?: "включено"),
-                color=c.muted,fontSize=12.sp)
-        }},
-        confirmButton={TextButton(onClick={settingsOpen=false}){Text("Применить")}}
+    if(settingsOpen) FocusTaskSettingsDialog(
+        colors=c,
+        task=task,
+        sectors=spheres,
+        selectedSector=sphereId,
+        onSector={sphereId=it},
+        notifyBefore=notifyMinutes,
+        onNotify={notifyMinutes=it},
+        aiNotifications=aiNotifications,
+        onAiNotifications={aiNotifications=it},
+        importance=importance,
+        onImportance={importance=it},
+        onClose={settingsOpen=false},
     )
     if(descriptionExpanded)Dialog(onDismissRequest={descriptionExpanded=false},
         properties=DialogProperties(usePlatformDefaultWidth=false)){
