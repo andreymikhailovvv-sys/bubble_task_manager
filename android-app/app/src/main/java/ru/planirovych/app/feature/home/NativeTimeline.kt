@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.PlatformTextStyle
@@ -299,94 +300,178 @@ private fun TimelineDay(day:LocalDate,tasks:List<Task>,allTasks:List<Task>,
     }
 }
 
+/**
+ * One-to-one layout mapping of MiniApp.tsx' miniapp-calendar-grid.
+ * Seven equal-width days are visible at once. Week and month intentionally
+ * share the weekday row, day-number headers, and compact colored entries.
+ * No horizontal scroll, zoom controls or sector pills exist in Mini App.
+ */
 @Composable
-private fun TimelineWeek(monday:LocalDate,tasks:List<Task>,allTasks:List<Task>,
+private fun TimelineWeek(
+    monday:LocalDate,tasks:List<Task>,allTasks:List<Task>,
     habits:List<Habit>,spheres:List<Sphere>,colors:WorkspaceColors,dark:Boolean,
-    onOpen:(String)->Unit,weekScale:Float,onWeekScaleChange:(Float)->Unit,
-    openDay:(LocalDate)->Unit){
+    onOpen:(String)->Unit,onOpenHabit:(String)->Unit,
+    openDay:(LocalDate)->Unit
+){
+    MiniAppCalendarGrid(
+        first=monday,monthMode=false,tasks=tasks,allTasks=allTasks,
+        habits=habits,spheres=spheres,colors=colors,dark=dark,
+        onOpen=onOpen,onOpenHabit=onOpenHabit,openDay=openDay
+    )
+}
+
+@Composable
+private fun TimelineMonth(
+    first:LocalDate,tasks:List<Task>,allTasks:List<Task>,
+    habits:List<Habit>,spheres:List<Sphere>,colors:WorkspaceColors,dark:Boolean,
+    onOpen:(String)->Unit,openDay:(LocalDate)->Unit
+){
+    MiniAppCalendarGrid(
+        first=first,monthMode=true,tasks=tasks,allTasks=allTasks,
+        habits=habits,spheres=spheres,colors=colors,dark=dark,
+        onOpen=onOpen,onOpenHabit={},openDay=openDay
+    )
+}
+
+@Composable
+private fun MiniAppCalendarGrid(
+    first:LocalDate,monthMode:Boolean,
+    tasks:List<Task>,allTasks:List<Task>,habits:List<Habit>,
+    spheres:List<Sphere>,colors:WorkspaceColors,dark:Boolean,
+    onOpen:(String)->Unit,onOpenHabit:(String)->Unit,openDay:(LocalDate)->Unit
+){
     val labels=listOf("Пн","Вт","Ср","Чт","Пт","Сб","Вс")
-    val currentScale by rememberUpdatedState(weekScale)
-    val updateScale by rememberUpdatedState(onWeekScaleChange)
-    Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
-        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End,
-            verticalAlignment=Alignment.CenterVertically){
-            Icon(Icons.Default.ZoomIn,"Изменить масштаб недели",
-                tint=colors.secondaryText,modifier=Modifier.size(15.dp))
-            Spacer(Modifier.width(5.dp))
-            Text("Масштаб",color=colors.secondaryText,fontSize=11.sp)
-            Spacer(Modifier.width(8.dp))
-            IconButton(onClick={onWeekScaleChange(weekScale-.15f)},
-                enabled=weekScale>.73f,modifier=Modifier.size(32.dp)){
-                Icon(Icons.Default.Remove,"Уменьшить масштаб",
-                    tint=colors.purple,modifier=Modifier.size(18.dp))
-            }
-            Text("${(weekScale*100).toInt()}%",
-                color=colors.text,fontSize=11.sp,fontWeight=FontWeight.Bold,
-                textAlign=TextAlign.Center,modifier=Modifier.width(44.dp))
-            IconButton(onClick={onWeekScaleChange(weekScale+.15f)},
-                enabled=weekScale<1.79f,modifier=Modifier.size(32.dp)){
-                Icon(Icons.Default.Add,"Увеличить масштаб",
-                    tint=colors.purple,modifier=Modifier.size(18.dp))
+    val gridStart=first.minusDays((first.dayOfWeek.value-1).toLong())
+    val rows=if(monthMode)6 else 1
+    val referenceMonth=first.month
+    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(4.dp)){
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)){
+            labels.forEach{label->
+                Text(label,
+                    modifier=Modifier.weight(1f).padding(vertical=5.dp),
+                    textAlign=TextAlign.Center,color=colors.secondaryText,
+                    fontSize=10.sp,fontWeight=FontWeight.ExtraBold)
             }
         }
-        // Intercept *only* two-finger gestures. A single finger remains
-        // available for horizontal week scrolling and outer page gestures.
-        Row(Modifier.fillMaxWidth()
-            .pointerInput(Unit){
-                awaitEachGesture {
-                    do {
-                        val event=awaitPointerEvent(PointerEventPass.Initial)
-                        if(event.changes.count{it.pressed}>=2){
-                            val factor=event.calculateZoom()
-                            if(factor.isFinite() && factor>0f && factor!=1f){
-                                updateScale((currentScale*factor).coerceIn(.72f,1.8f))
-                            }
-                            event.changes.forEach{it.consume()}
-                        }
-                    }while(event.changes.any{it.pressed})
+        repeat(rows){week->
+            // A single seven-column row, as CSS grid-template-columns: repeat(7, minmax(0,1fr)).
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max),
+                horizontalArrangement=Arrangement.spacedBy(4.dp),
+                verticalAlignment=Alignment.Top){
+                repeat(7){index->
+                    val day=gridStart.plusDays((week*7+index).toLong())
+                    val dayEntries=remember(day,monthMode,tasks,allTasks,habits,spheres) {
+                        val all=timelineEntries(day,tasks,allTasks,habits,spheres)
+                        if(monthMode)all.filter{it.kind!="Привычка"} else all
+                    }
+                    CalendarDayCell(
+                        date=day,entries=dayEntries,
+                        outside=monthMode&&day.month!=referenceMonth,
+                        monthMode=monthMode,colors=colors,dark=dark,
+                        modifier=Modifier.weight(1f).fillMaxHeight(),
+                        onDay={openDay(day)},onTask=onOpen,onHabit=onOpenHabit
+                    )
                 }
             }
-            .horizontalScroll(rememberScrollState()),
-            horizontalArrangement=Arrangement.spacedBy(6.dp)){
-            repeat(7){index->
-                val date=monday.plusDays(index.toLong())
-                val items=remember(date,tasks,allTasks,habits,spheres){
-                    timelineEntries(date,tasks,allTasks,habits,spheres)
-                }
-                Surface(Modifier.width((155f*weekScale).dp).heightIn(min=230.dp),
-                    shape=RoundedCornerShape(15.dp),
-                    color=colors.panel,border=BorderStroke(1.dp,
-                        if(date==LocalDate.now())colors.purple else colors.panelBorder)){
-                    Column(Modifier.padding((7f*weekScale).dp),
-                        verticalArrangement=Arrangement.spacedBy((7f*weekScale).dp)){
-                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp))
-                            .background(if(date==LocalDate.now())colors.selected else colors.muted)
-                            .clickable{openDay(date)}.padding(8.dp),
-                            horizontalAlignment=Alignment.CenterHorizontally){
-                            Text(labels[index],color=colors.secondaryText,
-                                fontSize=(11f*weekScale).sp)
-                            Text(date.dayOfMonth.toString(),fontWeight=FontWeight.Bold,
-                                color=colors.text,fontSize=(18f*weekScale).sp)
-                            Text(date.format(DateTimeFormatter.ofPattern("MMM",Locale("ru"))),
-                                color=colors.secondaryText,fontSize=(10f*weekScale).sp)
-                        }
-                        if(items.isEmpty()){
-                            Text("Нет записей",color=colors.secondaryText,
-                                fontSize=(10f*weekScale).sp,
-                                modifier=Modifier.padding(top=14.dp))
-                        }
-                        items.groupBy{it.time.hour}.forEach{(hour,group)->
-                            Text(String.format(Locale.US,"%02d:00",hour),
-                                color=colors.secondaryText,fontSize=(10f*weekScale).sp,
-                                fontWeight=FontWeight.SemiBold)
-                            group.forEach{
-                                TimelineEventCard(it,colors,dark,compact=true,
-                                    scale=weekScale,onOpen=onOpen)
-                            }
-                        }
-                        TextButton(onClick={openDay(date)},modifier=Modifier.fillMaxWidth()){
-                            Text("Открыть день",fontSize=(10f*weekScale).sp)
-                        }
+        }
+    }
+}
+
+/** MiniApp's miniapp-calendar-day and miniapp-calendar-date. */
+@Composable
+private fun CalendarDayCell(
+    date:LocalDate,entries:List<TimelineEntry>,
+    outside:Boolean,monthMode:Boolean,colors:WorkspaceColors,dark:Boolean,
+    modifier:Modifier=Modifier,
+    onDay:()->Unit,onTask:(String)->Unit,onHabit:(String)->Unit
+){
+    val today=date==LocalDate.now()
+    val shape=RoundedCornerShape(12.dp)
+    val cellBg=when{
+        today->if(dark)Color(0xFF261F42) else Color(0xFFF5F3FF)
+        dark->Color(0xFF172338)
+        else->Color(0xFFF8FAFC)
+    }
+    val edge=when{
+        today->if(dark)Color(0xFF8B5CF6) else Color(0xFF9F77D5)
+        dark->Color(0xFF3F5067)
+        else->Color(0xFFCBD5E1)
+    }
+    // Outside-month days remain real interactive dates, just faded.
+    Column(
+        modifier.then(Modifier
+            .alpha(if(outside).42f else 1f)
+            .clip(shape)
+            .background(cellBg)
+            .border(1.dp,edge,shape)
+            .heightIn(min=if(monthMode)104.dp else 144.dp)
+            .padding(horizontal=if(monthMode)3.dp else 2.dp,vertical=5.dp)),
+        horizontalAlignment=Alignment.CenterHorizontally,
+        verticalArrangement=Arrangement.spacedBy(3.dp)
+    ){
+        // In week view, MiniApp shows the short weekday *inside* each cell.
+        Row(
+            Modifier.fillMaxWidth().height(25.dp)
+                .clip(RoundedCornerShape(7.dp)).clickable(onClick=onDay),
+            verticalAlignment=Alignment.CenterVertically,
+            horizontalArrangement=Arrangement.Center
+        ){
+            if(!monthMode){
+                Text(date.format(DateTimeFormatter.ofPattern("EE",Locale("ru"))),
+                    color=colors.secondaryText,fontSize=9.sp,maxLines=1)
+                Spacer(Modifier.width(2.dp))
+            }
+            Box(Modifier.size(24.dp)
+                .clip(CircleShape)
+                .background(if(today)Color(0xFF7C3AED) else Color.Transparent),
+                contentAlignment=Alignment.Center
+            ){
+                Text(date.dayOfMonth.toString(),
+                    color=if(today)Color.White else colors.text,
+                    fontSize=12.sp,fontWeight=FontWeight.Bold,
+                    style=TextStyle(platformStyle=PlatformTextStyle(includeFontPadding=false)),
+                    textAlign=TextAlign.Center)
+            }
+        }
+        if(monthMode){
+            val visible=entries.take(3)
+            visible.forEach{entry->
+                MiniAppCalendarEntry(
+                    entry=entry,monthMode=true,dark=dark,
+                    onClick={
+                        if(entry.taskId!=null&&entry.kind!="Напоминание")onTask(entry.taskId)
+                    })
+            }
+            if(entries.size>visible.size){
+                Text("Ещё ${entries.size-visible.size}",
+                    modifier=Modifier.fillMaxWidth().padding(start=2.dp,top=1.dp),
+                    color=if(dark)Color(0xFFA78BFA) else Color(0xFF6D28D9),
+                    fontWeight=FontWeight.Bold,fontSize=9.sp,maxLines=1)
+            }
+        }else{
+            // MiniApp calendar groups entries by hour inside each day.
+            val hourGroups=remember(entries) { entries.groupBy{it.time.hour}.toSortedMap() }
+            hourGroups.forEach{(hour,items)->
+                val groupShape=RoundedCornerShape(8.dp)
+                Column(
+                    Modifier.fillMaxWidth()
+                        .clip(groupShape)
+                        .background(if(dark)Color(0xFF142033) else Color(0xFFF1F5F9))
+                        .border(1.dp,if(dark)Color(0xFF415167) else Color(0xFFCBD5E1),
+                            groupShape)
+                        .padding(horizontal=2.dp,vertical=3.dp),
+                    verticalArrangement=Arrangement.spacedBy(3.dp)
+                ){
+                    Text(String.format(Locale.US,"%02d:00",hour),
+                        modifier=Modifier.padding(start=1.dp),
+                        color=colors.secondaryText,fontSize=8.8.sp,
+                        maxLines=1,fontWeight=FontWeight.Bold)
+                    items.forEach{entry->
+                        MiniAppCalendarEntry(entry=entry,monthMode=false,dark=dark,
+                            onClick={
+                                if(entry.kind=="Привычка")entry.habit?.id?.let(onHabit)
+                                else if(entry.kind!="Напоминание")entry.taskId?.let(onTask)
+                            })
                     }
                 }
             }
@@ -394,76 +479,58 @@ private fun TimelineWeek(monday:LocalDate,tasks:List<Task>,allTasks:List<Task>,
     }
 }
 
+/** MiniApp's miniapp-calendar-entry, miniapp-calendar-event-entry and reminder variant. */
 @Composable
-private fun TimelineMonth(first:LocalDate,tasks:List<Task>,allTasks:List<Task>,
-    habits:List<Habit>,spheres:List<Sphere>,colors:WorkspaceColors,dark:Boolean,
-    openDay:(LocalDate)->Unit){
-    val start=first.minusDays((first.dayOfWeek.value-1).toLong())
-    val weekdays=listOf("Пн","Вт","Ср","Чт","Пт","Сб","Вс")
-    Surface(shape=RoundedCornerShape(17.dp),color=colors.panel,
-        border=BorderStroke(1.dp,colors.panelBorder)){
-        Column(Modifier.padding(6.dp),verticalArrangement=Arrangement.spacedBy(4.dp)){
-            Row(Modifier.fillMaxWidth()){
-                weekdays.forEach{label->
-                    Text(label,Modifier.weight(1f).padding(vertical=5.dp),
-                        textAlign=TextAlign.Center,fontSize=10.sp,
-                        fontWeight=FontWeight.Bold,color=colors.secondaryText)
-                }
-            }
-            repeat(6){week->
-                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(3.dp)){
-                    repeat(7){index->
-                        val date=start.plusDays((week*7+index).toLong())
-                        val entries=remember(date,tasks,allTasks,habits,spheres){
-                            timelineEntries(date,tasks,allTasks,habits,spheres)
-                        }
-                        val outside=date.month!=first.month
-                        Box(Modifier.weight(1f).height(100.dp)
-                            .clip(RoundedCornerShape(9.dp))
-                            .background(when{
-                                date==LocalDate.now()->colors.selected
-                                outside->colors.field.copy(alpha=.45f)
-                                else->colors.card
-                            })
-                            .border(1.dp,if(date==LocalDate.now())colors.purple
-                                else colors.panelBorder.copy(alpha=.6f),RoundedCornerShape(9.dp))
-                            .clickable{openDay(date)}.padding(3.dp)){
-                            Column(verticalArrangement=Arrangement.spacedBy(3.dp)){
-                                Text(date.dayOfMonth.toString(),fontSize=11.sp,
-                                    color=if(outside)colors.secondaryText.copy(alpha=.55f)
-                                        else colors.text,fontWeight=FontWeight.Bold)
-                                entries.take(3).forEach{entry->
-                                    val accent=when(entry.kind){
-                                        "Событие"->Color(0xFFF59E0B)
-                                        "Напоминание"->Color(0xFF0284C7)
-                                        "Подзадача"->colors.purple
-                                        else->entry.color
-                                    }
-                                    Box(Modifier.fillMaxWidth().height(19.dp)
-                                        .clip(RoundedCornerShape(5.dp))
-                                        .background(accent.copy(alpha=if(dark).32f else .18f))
-                                        .border(.7.dp,accent.copy(alpha=.7f),
-                                            RoundedCornerShape(5.dp)),
-                                        contentAlignment=Alignment.Center){
-                                        // Exact vertical/horizontal centering: no emoji baseline
-                                        // shifts, no leading-only padding on tiny month cells.
-                                        Text(entry.title,
-                                            modifier=Modifier.fillMaxWidth().padding(horizontal=2.dp),
-                                            fontSize=8.sp,lineHeight=9.sp,
-                                            style=TextStyle(platformStyle=PlatformTextStyle(
-                                                includeFontPadding=false)),
-                                            textAlign=TextAlign.Center,color=colors.text,
-                                            maxLines=1,softWrap=false,
-                                            overflow=TextOverflow.Ellipsis)
-                                    }
-                                }
-                                if(entries.size>3)Text("+${entries.size-3}",
-                                    color=colors.purple,fontSize=9.sp)
-                            }
-                        }
-                    }
-                }
-            }
-        }
+private fun MiniAppCalendarEntry(
+    entry:TimelineEntry,monthMode:Boolean,dark:Boolean,onClick:()->Unit
+){
+    val isEvent=entry.kind=="Событие"
+    val isReminder=entry.kind=="Напоминание"
+    val accent=when{
+        isEvent->Color(0xFFF59E0B)
+        isReminder->Color(0xFF0284C7)
+        else->entry.color
+    }
+    val shape=RoundedCornerShape(5.dp)
+    val background=when{
+        isEvent&&dark->Color(0xFF63401E)
+        isEvent->Color(0xFFFEF3C7)
+        isReminder&&dark->Color(0xFF123B59)
+        isReminder->Color(0xFFE0F2FE)
+        dark->mixCalendarColor(Color(0xFF142135),accent,.18f)
+        else->mixCalendarColor(Color.White,accent,.14f)
+    }
+    val textColor=when{
+        isEvent&&dark->Color(0xFFFDE68A)
+        isEvent->Color(0xFF92400E)
+        dark->Color(0xFFE2E8F0)
+        else->Color(0xFF0F172A)
+    }
+    // The tiny calendar chip is *only* the title, like MiniApp. No time,
+    // sector, type, extra emojis or centered multi-line Compose card.
+    Row(Modifier.fillMaxWidth()
+        .heightIn(min=if(monthMode)19.dp else 20.dp)
+        .clip(shape).background(background)
+        .border(1.dp,if(isEvent)accent.copy(alpha=.88f) else accent.copy(alpha=.68f),shape)
+        .clickable(onClick=onClick),
+        verticalAlignment=Alignment.CenterVertically){
+        Box(Modifier.width(if(isEvent)4.dp else 3.dp)
+            .heightIn(min=if(monthMode)18.dp else 19.dp)
+            .background(accent))
+        Text(entry.title,
+            modifier=Modifier.weight(1f).padding(start=2.dp,end=1.dp),
+            color=textColor,
+            fontSize=if(monthMode)9.sp else 9.sp,
+            lineHeight=11.sp,maxLines=1,softWrap=false,
+            overflow=TextOverflow.Clip,
+            textAlign=TextAlign.Start,
+            style=TextStyle(platformStyle=PlatformTextStyle(includeFontPadding=false)))
     }
 }
+private fun mixCalendarColor(background:Color,foreground:Color,amount:Float):Color =
+    Color(
+        red=background.red*(1-amount)+foreground.red*amount,
+        green=background.green*(1-amount)+foreground.green*amount,
+        blue=background.blue*(1-amount)+foreground.blue*amount,
+        alpha=1f
+    )
