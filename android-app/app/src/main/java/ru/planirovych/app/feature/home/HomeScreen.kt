@@ -43,6 +43,10 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
     var openedTaskId by remember { mutableStateOf<String?>(null) }
     var newSubtaskParentId by remember { mutableStateOf<String?>(null) }
     var taskAiChatId by remember { mutableStateOf<String?>(null) }
+    // The global create FAB overlaps the floating send button in the AI chat.
+    LaunchedEffect(pagerState.currentPage) {
+        if(pagerState.currentPage==2)creationMenu=false
+    }
 
     // Never leave the previous account's task editor open after login/logout.
     LaunchedEffect(state.user?.id) {
@@ -54,7 +58,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
     Scaffold(contentWindowInsets = WindowInsets.safeDrawing,
         containerColor = MaterialTheme.colorScheme.background,
         floatingActionButton = {
-            if(!state.loading && state.error==null) {
+            if(!state.loading && state.error==null && pagerState.currentPage!=2) {
                 Box {
                     FloatingActionButton(
                         onClick={creationMenu=!creationMenu},
@@ -91,7 +95,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
                 val tabs = listOf(
                     Triple("Список",Icons.Default.FormatListBulleted,"Задачи списком"),
                     Triple("Таймлайн",Icons.Default.CalendarViewWeek,"Таймлайн"),
-                    Triple("Chats AI",Icons.Default.SmartToy,"Раздел ИИ"),
+                    Triple("Чат с ИИ",Icons.Default.SmartToy,"Общий чат с ИИ"),
                     Triple("Заметки",Icons.Default.StickyNote2,"Заметки")
                 )
                 NavigationBar(
