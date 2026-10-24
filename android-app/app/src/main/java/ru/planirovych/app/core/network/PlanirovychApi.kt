@@ -75,6 +75,16 @@ interface PlanirovychApi {
     suspend fun undoTaskAiProposal(@Path("id") id:String,@Body payload:JsonObject):JsonObject
     @POST("api/ai-documents/{id}/download-link")
     suspend fun taskAiDocumentLink(@Path("id") id:String):JsonObject
+    @GET("api/credit-packs")
+    suspend fun creditPacks():AiCreditCatalog
+    @GET("api/credits/statistics")
+    suspend fun creditUsage():AiCreditUsageResponse
+    @POST("api/payments/yookassa/credit-packs/{packKey}")
+    suspend fun startCreditPurchase(@Path("packKey") packKey:String,
+        @Body payload:JsonObject):AiCreditPurchaseStart
+    @GET("api/payments/yookassa/purchases/{id}")
+    suspend fun creditPurchaseStatus(@Path("id") purchaseId:String):AiCreditPurchaseStatus
+
     @GET("api/habits") suspend fun habits(): List<Habit>
     @POST("api/habits") suspend fun createHabit(@Body payload: JsonObject): Habit
     @POST("api/habits/{id}/complete") suspend fun completeHabit(@Path("id") id: String, @Body payload: JsonObject): Habit
