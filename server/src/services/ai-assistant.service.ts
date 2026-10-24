@@ -1804,15 +1804,17 @@ export const aiAssistantService = {
     // has already had the chance to install its own preferred follow-up.
     // Monitoring fallback failures must not turn a saved/paid AI reply into an
     // apparent chat failure (and trigger a duplicate user retry).
-    await ensureMonitoringFallbackTrigger({
-      userId: input.userId, taskId: input.taskId,
-      assistantCreatedAt: assistantMessage.createdAt
-    }).catch(error => {
-      console.error('[TaskMonitoring] unable to schedule fallback follow-up', {
-        taskId: input.taskId,
-        reason: error instanceof Error ? error.message : 'unknown'
+    if (assistantMessage?.createdAt instanceof Date) {
+      await ensureMonitoringFallbackTrigger({
+        userId: input.userId, taskId: input.taskId,
+        assistantCreatedAt: assistantMessage.createdAt
+      }).catch(error => {
+        console.error('[TaskMonitoring] unable to schedule fallback follow-up', {
+          taskId: input.taskId,
+          reason: error instanceof Error ? error.message : 'unknown'
+        });
       });
-    });
+    }
   },
 
   listGeneralDialog: async (input: { userId: string; since?: Date; userTimeZone?: string }): Promise<ChatMessage[]> => {
