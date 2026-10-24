@@ -81,7 +81,6 @@ fun ModernWorkspace(
     var creditsOpen by remember { mutableStateOf(false) }
     var selectedHabitId by remember { mutableStateOf<String?>(null) }
     var createHabitOpen by remember { mutableStateOf(false) }
-    var habitName by remember { mutableStateOf("") }
     val sectors = remember(state.spheres) { state.spheres.associateBy { it.id } }
     val searchQuery = state.query.trim().lowercase(Locale.getDefault())
     val now = System.currentTimeMillis()
@@ -152,7 +151,7 @@ fun ModernWorkspace(
         item { WorkspaceTopbar(state, colors, search, settings,
             onCredits={ creditsOpen=true }, onScore={ scoreOpen=true }) }
         if (contentMode == WorkspaceMode.LIST) item {
-            HabitsStrip(habits, colors, dark, onHabitClick = { selectedHabitId = it.id }, onAdd = { habitName = ""; createHabitOpen = true })
+            HabitsStrip(habits, colors, dark, onHabitClick = { selectedHabitId = it.id }, onAdd = { createHabitOpen = true })
         }
         item {
             WorkspaceToolbar(colors, dark,
@@ -208,14 +207,8 @@ fun ModernWorkspace(
         title={Text("ИИ-кредиты")},
         text={Text("Баланс: " + (state.user?.aiCredits ?: 0).toString())},
         confirmButton={TextButton(onClick={creditsOpen=false}){Text("Закрыть")}})
-    if (createHabitOpen) AlertDialog(onDismissRequest={createHabitOpen=false},
-        title={Text("Новая привычка")}, text={
-            OutlinedTextField(value=habitName,onValueChange={habitName=it},
-                label={Text("Название привычки")},singleLine=true)
-        }, confirmButton={
-            TextButton(onClick={createHabitOpen=false;vm.createHabit(habitName)},
-                enabled=habitName.isNotBlank()){Text("Создать")}
-        }, dismissButton={TextButton(onClick={createHabitOpen=false}){Text("Отмена")}})
+    if (createHabitOpen) NativeHabitCreateSheet(vm=vm,dark=dark,
+        onClose={createHabitOpen=false})
     selectedHabitId?.let { id ->
         state.habits.firstOrNull { it.id == id }?.let {habit->
             NativeHabitDetailSheet(vm=vm,habit=habit,dark=dark,
