@@ -110,6 +110,9 @@ class WorkspaceRepository(private val api: PlanirovychApi) {
             telegramReadDraft=item["telegramReadDraft"] as? kotlinx.serialization.json.JsonObject
         )
     }
+    suspend fun loadSystemNotifications():AndroidSystemNotificationFeed =
+        api.systemNotifications()
+
     suspend fun loadGeneralAiProjects():List<GeneralAiProject> =
         parseGeneralAiProjects(api.generalAiProjects())
 
