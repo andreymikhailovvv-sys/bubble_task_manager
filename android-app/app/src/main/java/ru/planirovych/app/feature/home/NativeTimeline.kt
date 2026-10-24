@@ -334,18 +334,16 @@ private fun TimelineWeek(monday:LocalDate,tasks:List<Task>,allTasks:List<Task>,
         Row(Modifier.fillMaxWidth()
             .pointerInput(Unit){
                 awaitEachGesture {
-                    awaitPointerEventScope {
-                        do {
-                            val event=awaitPointerEvent(PointerEventPass.Initial)
-                            if(event.changes.count{it.pressed}>=2){
-                                val factor=event.calculateZoom()
-                                if(factor.isFinite() && factor>0f && factor!=1f){
-                                    updateScale((currentScale*factor).coerceIn(.72f,1.8f))
-                                }
-                                event.changes.forEach{it.consume()}
+                    do {
+                        val event=awaitPointerEvent(PointerEventPass.Initial)
+                        if(event.changes.count{it.pressed}>=2){
+                            val factor=event.calculateZoom()
+                            if(factor.isFinite() && factor>0f && factor!=1f){
+                                updateScale((currentScale*factor).coerceIn(.72f,1.8f))
                             }
-                        }while(event.changes.any{it.pressed})
-                    }
+                            event.changes.forEach{it.consume()}
+                        }
+                    }while(event.changes.any{it.pressed})
                 }
             }
             .horizontalScroll(rememberScrollState()),
