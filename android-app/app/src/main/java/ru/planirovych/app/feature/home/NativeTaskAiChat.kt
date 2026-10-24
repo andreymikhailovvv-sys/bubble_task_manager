@@ -25,6 +25,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -44,14 +47,24 @@ import java.util.Locale
 import java.util.UUID
 import ru.planirovych.app.data.model.*
 
-private data class TaskChatColors(val bg:Color,val panel:Color,val text:Color,
-    val secondary:Color,val border:Color,val user:Color,val assistant:Color,val accent:Color)
+private data class TaskChatColors(
+    val bg:Color,val panel:Color,val text:Color,val secondary:Color,
+    val border:Color,val user:Color,val userEnd:Color,val userText:Color,
+    val assistant:Color,val assistantText:Color,val accent:Color
+)
 private fun chatColors(dark:Boolean)=if(dark)TaskChatColors(
-    Color(0xFF0E1728),Color(0xFF152239),Color(0xFFF1F5F9),Color(0xFFA7B7CC),
-    Color(0xFF39465F),Color(0xFF29394F),Color(0xFF1D2B42),Color(0xFFC4B5FD))
-else TaskChatColors(Color(0xFFF7F8FC),Color.White,Color(0xFF111827),
-    Color(0xFF64748B),Color(0xFFDDE3EC),Color(0xFFE9EEF7),
-    Color.White,Color(0xFF6D28D9))
+    // Mini App: dark slate thread, dark header, indigo-blue user messages
+    Color(0xFF0D1628),Color(0xFF0B1222),Color(0xFFE2E8F0),
+    Color(0xFF94A3B8),Color(0xFF364358),
+    Color(0xFF1E3A8A),Color(0xFF312E81),Color(0xFFF8FAFC),
+    Color(0xFF1E293B),Color(0xFFF1F5F9),Color(0xFFC4B5FD)
+) else TaskChatColors(
+    // Mini App: white header, pale thread, blue user, cyan AI responses
+    Color(0xFFF8FAFC),Color.White,Color(0xFF172033),
+    Color(0xFF64748B),Color(0xFFDBE3EF),
+    Color(0xFF2563EB),Color(0xFF4F46E5),Color.White,
+    Color(0xFFCFFAFE),Color(0xFF164E63),Color(0xFF6D28D9)
+)
 
 private data class ReplyTarget(val id:String,val role:String,val content:String)
 
@@ -194,10 +207,8 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
 
     Dialog(onDismissRequest=onClose,
         properties=DialogProperties(usePlatformDefaultWidth=false)){
-        Surface(Modifier.fillMaxSize().padding(top=12.dp)
-            .imePadding(),color=c.bg,
-            shape=RoundedCornerShape(topStart=24.dp,topEnd=24.dp),
-            border=BorderStroke(1.dp,c.accent.copy(alpha=.32f))){
+        Surface(Modifier.fillMaxSize().imePadding(),color=c.bg,
+            shape=RoundedCornerShape(0.dp)){
             Column(Modifier.fillMaxSize()){
                 Row(Modifier.fillMaxWidth().background(c.panel)
                     .heightIn(min=58.dp)
@@ -424,21 +435,26 @@ private fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
         Column(Modifier.widthIn(max=330.dp).fillMaxWidth(.89f),
             horizontalAlignment=if(isUser)Alignment.End else Alignment.Start,
             verticalArrangement=Arrangement.spacedBy(3.dp)){
-            Surface(shape=RoundedCornerShape(
-                topStart=19.dp,topEnd=19.dp,
-                bottomEnd=if(isUser)7.dp else 19.dp,
-                bottomStart=if(isUser)19.dp else 7.dp),
-                color=if(isUser)c.user else c.assistant,
-                border=BorderStroke(1.dp,
-                    if(isUser)c.accent.copy(alpha=.36f)else c.border)){
-                Column(Modifier.padding(12.dp),
-                    verticalArrangement=Arrangement.spacedBy(7.dp)){
+            val bubbleShape=RoundedCornerShape(
+                topStart=22.dp,topEnd=22.dp,
+                bottomEnd=if(isUser)8.dp else 22.dp,
+                bottomStart=if(isUser)22.dp else 8.dp)
+            // Mini App has filled bubbles; neither messages nor the dialog
+            // have violet outlines. Only action/monitor chips keep soft edges.
+            Column(Modifier.fillMaxWidth().clip(bubbleShape).background(
+                    brush=if(isUser)Brush.linearGradient(listOf(c.user,c.userEnd))
+                        else Brush.linearGradient(listOf(c.assistant,c.assistant))
+                ).padding(horizontal=14.dp,vertical=12.dp),
+                verticalArrangement=Arrangement.spacedBy(7.dp)){
                     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,
                         verticalAlignment=Alignment.CenterVertically){
                         Text(message.authorName ?: if(isUser)"Вы" else "ИИ",
-                            color=if(isUser) c.secondary else c.accent,
+                            color=if(isUser)c.userText.copy(alpha=.93f)
+                                else c.assistantText.copy(alpha=.88f),
                             fontSize=12.sp,fontWeight=FontWeight.Bold)
-                        if(pending)Text("Отправляется…",color=c.secondary,fontSize=9.sp)
+                        if(pending)Text("Отправляется…",
+                            color=if(isUser)c.userText.copy(alpha=.7f)else c.secondary,
+                            fontSize=9.sp)
                         else IconButton(onClick={
                             val clipboard=context.getSystemService(
                                 Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -446,12 +462,14 @@ private fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                             Toast.makeText(context,"Скопировано",Toast.LENGTH_SHORT).show()
                         },modifier=Modifier.size(25.dp)){
                             Icon(Icons.Default.ContentCopy,"Копировать",
-                                tint=c.secondary,modifier=Modifier.size(14.dp))
+                                tint=if(isUser)c.userText.copy(alpha=.76f)
+                                    else c.secondary,modifier=Modifier.size(14.dp))
                         }
                     }
                     if(!isUser) NativeAiFormattedMessage(
-                        text=content,textColor=c.text,linkColor=c.accent)
-                    else Text(content,color=c.text,fontSize=13.sp,lineHeight=20.sp)
+                        text=content,textColor=c.assistantText,
+                        linkColor=if(c.bg.red>.5f)Color(0xFF0369A1) else Color(0xFF67E8F9))
+                    else Text(content,color=c.userText,fontSize=13.sp,lineHeight=20.sp)
                     if(message.messageKind=="MONITOR_ACTION"){
                         Text("Действие автомониторинга",color=c.secondary,fontSize=10.sp)
                     }
@@ -491,10 +509,31 @@ private fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                             color=c.secondary,fontSize=9.sp)
                     }
                 }
-            }
-            if(!pending)IconButton(onClick=onReply,modifier=Modifier.size(28.dp)){
-                Icon(Icons.Default.Reply,"Ответить на сообщение",
-                    tint=c.secondary,modifier=Modifier.size(16.dp))
+            if(!pending){
+                Row(Modifier.padding(top=5.dp),
+                    horizontalArrangement=Arrangement.spacedBy(13.dp),
+                    verticalAlignment=Alignment.CenterVertically){
+                    Row(Modifier.clip(CircleShape).clickable(onClick=onReply)
+                        .padding(horizontal=3.dp,vertical=4.dp),
+                        verticalAlignment=Alignment.CenterVertically){
+                        TaskChatThinArrow(color=c.secondary,forward=false)
+                        Spacer(Modifier.width(4.dp))
+                        Text("Ответить",fontSize=10.sp,color=c.secondary)
+                    }
+                    Row(Modifier.clip(CircleShape).clickable {
+                        val share=Intent(Intent.ACTION_SEND).apply{
+                            type="text/plain"
+                            putExtra(Intent.EXTRA_TEXT,content)
+                        }
+                        runCatching{context.startActivity(
+                            Intent.createChooser(share,"Переслать сообщение"))}
+                    }.padding(horizontal=3.dp,vertical=4.dp),
+                        verticalAlignment=Alignment.CenterVertically){
+                        TaskChatThinArrow(color=c.secondary,forward=true)
+                        Spacer(Modifier.width(4.dp))
+                        Text("Переслать",fontSize=10.sp,color=c.secondary)
+                    }
+                }
             }
         }
     }
@@ -568,5 +607,28 @@ private fun NativeAiProposalReview(
                 }){Text("Подтвердить")}
             },
             dismissButton={TextButton(onClick={confirm=null}){Text("Отмена")}})
+    }
+}
+
+@Composable
+private fun TaskChatThinArrow(color:Color,forward:Boolean){
+    // Deliberately thin 1.4dp stroke, like the Mini App's Lucide reply/share
+    // actions. No filled icon button or circular outline.
+    Canvas(Modifier.size(16.dp)){
+        val direction=if(forward)1f else -1f
+        val tip=if(forward).82f else .18f
+        val body=if(forward).54f else .46f
+        val center=.51f
+        val stroke=1.4.dp.toPx()
+        drawLine(color,Offset(tip*size.width,center*size.height),
+            Offset(body*size.width,.23f*size.height),
+            strokeWidth=stroke,cap=StrokeCap.Round)
+        drawLine(color,Offset(tip*size.width,center*size.height),
+            Offset(body*size.width,.79f*size.height),
+            strokeWidth=stroke,cap=StrokeCap.Round)
+        drawLine(color,Offset(tip*size.width,center*size.height),
+            Offset((.18f+(.64f)*(1-direction)/2f)*size.width,
+                center*size.height),
+            strokeWidth=stroke,cap=StrokeCap.Round)
     }
 }
