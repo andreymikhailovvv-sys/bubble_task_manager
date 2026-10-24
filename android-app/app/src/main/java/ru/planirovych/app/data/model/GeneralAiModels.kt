@@ -66,3 +66,24 @@ fun defaultGeneralAiProjects():List<GeneralAiProject> =
     listOf(GeneralAiProject(java.util.UUID.randomUUID().toString(),
         PERSONAL_AI_PROJECT_TITLE,"#8b5cf6","✨",listOf(
             GeneralAiThread(QUICK_AI_THREAD_ID,QUICK_AI_TITLE))))
+
+fun generalAiMessage(item:JsonObject):TaskAiChatMessage{
+    val sources=(item["webSources"] as? JsonArray).orEmpty().mapNotNull{value->
+        val entry=value as? JsonObject?:return@mapNotNull null
+        entry.aiString("url").takeIf{it.isNotBlank()}?.let{
+            entry.aiString("title",it) to it
+        }
+    }
+    return TaskAiChatMessage(
+        id=item.aiString("id").ifBlank{null},
+        role=item.aiString("role","assistant"),
+        content=item.aiString("content"),createdAt=item.aiString("createdAt"),
+        authorName=item.aiString("authorName").ifBlank{null},
+        creditsSpentMilli=(item["creditsSpentMilli"] as? JsonPrimitive)
+            ?.contentOrNull?.toLongOrNull(),
+        webSources=sources,taskProposal=item["taskProposal"] as? JsonObject,
+        generatedDocument=item["generatedDocument"] as? JsonObject,
+        telegramSendDraft=item["telegramSendDraft"] as? JsonObject,
+        telegramReadDraft=item["telegramReadDraft"] as? JsonObject
+    )
+}
