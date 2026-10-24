@@ -7,6 +7,20 @@ function messageIdentity(message: IdentifiedChatMessage): string {
   return message.id || message.role + ':' + message.content;
 }
 
+/**
+ * Project synchronization merges by message ID. A stale device can append an
+ * old message after newer ones, so array order is NOT guaranteed chronology.
+ * Sort before selecting the latest turns for the model. Legacy timestamp-less
+ * messages remain available but do not displace recent dated conversation.
+ */
+export function orderAiChatMessagesChronologically<T extends { createdAt?: string }>(messages: readonly T[]): T[] {
+  return messages.map((message, index) => {
+    const parsed = typeof message.createdAt === 'string' ? Date.parse(message.createdAt) : NaN;
+    return { message, index, timestamp: Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY };
+  }).sort((a, b) => a.timestamp - b.timestamp || a.index - b.index)
+    .map(({ message }) => message);
+}
+
 /** Mirrors the stable, diff-only task chat history reconciliation. */
 export function reconcileActiveAiChatMessages<T extends IdentifiedChatMessage>(
   local: T[], remote: T[], sending: boolean

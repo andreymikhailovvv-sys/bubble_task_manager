@@ -48,7 +48,7 @@ import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShar
 import { AiReplyAction, AiReplyPreview, AiReplyMessageBody, serializeAiReply, type AiReplyTarget } from './components/AiMessageReply';
 import { TelegramIntegrationsMenu } from './components/TelegramIntegrationsMenu';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
-import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike } from './lib/ai-chat-reconciliation';
+import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike, orderAiChatMessagesChronologically } from './lib/ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
 import { DEFAULT_QUICK_AI_CHAT_MODEL, DEFAULT_WEB_PROJECT_CHAT_MODEL, readSavedAiChatModel } from './lib/ai-chat-model';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
@@ -459,7 +459,7 @@ function normalizeAiChatProjects(rawProjects: Array<Partial<AiChatProject>> | nu
   const defaultProject = normalized[0] ?? fallback[0];
   const existingQuickChatIndex = defaultProject.chats.findIndex((chat) => chat.id === QUICK_AI_CHAT_ID || chat.title === QUICK_AI_CHAT_TITLE);
   const existingQuickChat = existingQuickChatIndex >= 0 ? defaultProject.chats[existingQuickChatIndex] : undefined;
-  const mergedQuickChat: AiChatThread = { ...quickChat, ...existingQuickChat, id: QUICK_AI_CHAT_ID, title: QUICK_AI_CHAT_TITLE, model: DEFAULT_QUICK_AI_CHAT_MODEL, messages: reconcileAiChatMessagesWithChips(existingQuickChat?.messages ?? [], quickMessages.slice(-100)) };
+  const mergedQuickChat: AiChatThread = { ...quickChat, ...existingQuickChat, id: QUICK_AI_CHAT_ID, title: QUICK_AI_CHAT_TITLE, model: DEFAULT_QUICK_AI_CHAT_MODEL, messages: orderAiChatMessagesChronologically(reconcileAiChatMessagesWithChips(existingQuickChat?.messages ?? [], quickMessages.slice(-100))).slice(-100) };
   normalized[0] = { ...defaultProject, chats: [mergedQuickChat, ...defaultProject.chats.filter((_, index) => index !== existingQuickChatIndex)] };
   return isolateTaskProposalChips(sanitizeCachedTelegramAssistantProjects(normalized));
 }
@@ -3091,7 +3091,9 @@ ${allContext}`,
     const userContent = serializeAiReply(fileNames.length ? `${question || 'Сообщение с вложением'}\n\n📎 Файлы: ${fileNames.join(', ')}` : question, replyTarget);
     const attachmentPreviews = quick ? [] : await makeAiAttachmentPreviews(aiChatPendingFiles);
     const userMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'user', content: userContent, createdAt: new Date().toISOString(), attachmentPreviews };
-    const history = quick ? quickAiChatMessages : (activeAiChat?.messages ?? []);
+    const history = quick
+      ? orderAiChatMessagesChronologically(quickAiChatMessages).slice(-20)
+      : (activeAiChat?.messages ?? []);
     if (quick) {
       quickAiFollowBottomRef.current = true;
       setAiChatProjects((prev) => prev.map((project, projectIndex) => projectIndex === 0 ? { ...project, chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: [...chat.messages, userMessage].slice(-20) } : chat) } : project));
