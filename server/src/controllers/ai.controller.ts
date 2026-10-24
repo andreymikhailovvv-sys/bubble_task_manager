@@ -107,7 +107,7 @@ export const aiController = {
         return;
       }
       if (streaming) { res.status(200).set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no' }); res.flushHeaders(); }
-      const history = Array.isArray(req.body?.history) ? req.body.history.filter((m: any) => (m?.role === 'user' || m?.role === 'assistant') && typeof m?.content === 'string').map((m: any) => ({ ...(typeof m.id === 'string' ? { id: m.id } : {}), role: m.role, content: m.content })) : [];
+      const history = Array.isArray(req.body?.history) ? req.body.history.filter((m: any) => (m?.role === 'user' || m?.role === 'assistant') && typeof m?.content === 'string').map((m: any) => ({ ...(typeof m.id === 'string' ? { id: m.id } : {}), role: m.role, content: m.content, ...(typeof m.monitoringTaskId === 'string' ? { monitoringTaskId: m.monitoringTaskId } : {}) })) : [];
       // File IDs from the browser's history are hints only. The catalog
       // service checks every referenced document against the signed-in owner.
       const fileReferences = Array.isArray(req.body?.history)
@@ -135,7 +135,7 @@ export const aiController = {
         : [];
       const promptHistory = isQuickChat && serverQuickHistory.length > 0
         ? serverQuickHistory.slice(-20)
-        : (isQuickChat ? history.filter(message => !('monitoringTaskId' in message)) : history);
+        : (isQuickChat ? history.filter((message: { monitoringTaskId?: string }) => !message.monitoringTaskId) : history);
       const clientSurface = req.body?.clientSurface === 'web' || req.body?.clientSurface === 'miniapp' ? req.body.clientSurface : undefined;
       // Persist uploads under the authenticated user and this message ID.
       // Model tools, not pre-model regex routes, decide read versus edit.
