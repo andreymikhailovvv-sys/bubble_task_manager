@@ -503,6 +503,41 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
     val state = mutable.asStateFlow()
     val isDark = themes.isDark.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
     init { refresh() }
+    // AI credit UI runs only while its dialog is visible. Purchases are always
+    // initiated through the existing YooKassa backend, never via local balance.
+    fun loadCreditCatalog(onResult:(AiCreditCatalog)->Unit,onError:(String)->Unit){
+        viewModelScope.launch{
+            runCatching{repository.creditCatalog()}.onSuccess(onResult)
+                .onFailure{onError(it.userMessage())}
+        }
+    }
+    fun loadCreditStatistics(onResult:(AiCreditUsage)->Unit,onError:(String)->Unit){
+        viewModelScope.launch{
+            runCatching{repository.creditStatistics()}.onSuccess(onResult)
+                .onFailure{onError(it.userMessage())}
+        }
+    }
+    fun beginCreditPurchase(packKey:String,requestId:String,receiptEmail:String?,
+        onResult:(AiCreditPurchaseStart)->Unit,onError:(String)->Unit){
+        viewModelScope.launch{
+            runCatching{repository.purchaseCredits(packKey,requestId,receiptEmail)}
+                .onSuccess(onResult).onFailure{onError(it.userMessage())}
+        }
+    }
+    fun checkCreditPurchase(id:String,onResult:(AiCreditPurchase)->Unit,
+        onError:(String)->Unit){
+        viewModelScope.launch{
+            runCatching{repository.purchaseStatus(id)}
+                .onSuccess(onResult).onFailure{onError(it.userMessage())}
+        }
+    }
+    fun refreshCreditsBalance(){
+        viewModelScope.launch{
+            runCatching{repository.establishSession()}.onSuccess{profile->
+                mutable.update{it.copy(user=profile)}
+            }
+        }
+    }
     fun refresh() = viewModelScope.launch {
         mutable.value = HomeState(loading = true)
         runCatching { repository.establishSession() to repository.loadWorkspace() }
