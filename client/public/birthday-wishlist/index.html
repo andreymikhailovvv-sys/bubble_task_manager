@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#11121d">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="description" content="Небольшой виш-лист ко дню рождения. Выбирайте подарки и отмечайте их, чтобы никто не повторился.">
+  <title>Birthday Wishlist · Подарки с любовью</title>
+  <style>
+    :root{color-scheme:dark;--bg:#10111a;--panel:#1b1b28;--muted:#a6a6ba;--text:#f8f6fa;--pink:#ffb4cb;--line:rgba(255,255,255,.12)}
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{margin:0;font-family:Inter,"Segoe UI",Arial,system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+    body:before{content:"";position:fixed;inset:-10% -30%;z-index:-1;pointer-events:none;background:radial-gradient(ellipse at 12% 1%,rgba(170,112,183,.15),transparent 44%),radial-gradient(ellipse at 90% 25%,rgba(245,138,160,.09),transparent 43%)}
+    button,a{font:inherit}button{cursor:pointer}button:disabled{cursor:not-allowed}
+    a{color:inherit;text-decoration:none}
+    button:focus-visible,a:focus-visible{outline:3px solid var(--pink);outline-offset:4px}
+    .shell{max-width:1200px;margin:auto;padding:0 32px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;padding:27px 0;gap:20px}
+    .brand{display:flex;gap:11px;align-items:center;text-transform:uppercase;letter-spacing:.17em;font-size:11px;font-weight:800;color:#fff}
+    .brand-mark{display:grid;place-items:center;width:31px;height:31px;border:1px solid rgba(255,255,255,.25);border-radius:11px;color:var(--pink);font-size:22px}
+    .private-label{font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:#b6b1c5}
+    .hero{position:relative;min-height:345px;border-radius:30px;overflow:hidden;padding:61px 7.2%;background:radial-gradient(circle at 80% 35%,rgba(251,172,181,.3) 0,transparent 35%),linear-gradient(115deg,#272037,#302239 56%,#4a2d3c);border:1px solid rgba(255,255,255,.14);box-shadow:0 24px 100px rgba(0,0,0,.2)}
+    .hero:after{content:"";position:absolute;right:-90px;top:-145px;width:510px;height:510px;border:1px solid rgba(255,255,255,.19);border-radius:50%;box-shadow:0 0 0 46px rgba(255,255,255,.032),0 0 0 111px rgba(255,255,255,.024);pointer-events:none}
+    .eyebrow{display:flex;gap:9px;align-items:center;margin-bottom:20px;text-transform:uppercase;letter-spacing:.21em;font-weight:700;font-size:11px;color:#f4cddd}
+    .eyebrow:before{content:"";width:25px;height:1px;background:currentColor}
+    h1{position:relative;z-index:1;max-width:710px;margin:0;font-family:Georgia,"Times New Roman",serif;font-size:clamp(43px,5.8vw,74px);line-height:1.05;letter-spacing:-.045em;font-weight:400}
+    h1 em{color:#ffc5d6;font-weight:400}
+    .hero-copy{position:relative;z-index:1;max-width:550px;font-size:14px;line-height:1.75;color:#e2d5e2;margin:25px 0 0}
+    .hero-sticker{position:absolute;right:10%;top:69px;width:134px;height:134px;display:grid;place-items:center;text-align:center;border-radius:50%;transform:rotate(13deg);font-family:Georgia,serif;font-size:22px;line-height:1.16;color:#41243b;background:#f8d2dd;box-shadow:0 12px 70px rgba(0,0,0,.16);z-index:1}
+    .hero-sticker:after{content:"✳";position:absolute;top:6px;font-size:17px}
+    .summary{display:flex;align-items:center;gap:22px;flex-wrap:wrap;padding:34px 0 24px}
+    .stat{display:flex;gap:9px;align-items:baseline;color:var(--muted);font-size:12px}
+    .stat strong{font-size:22px;letter-spacing:-.05em;color:#fff}
+    .summary .sep{width:1px;height:24px;background:var(--line)}
+    .live{margin-left:auto;display:flex;align-items:center;gap:9px;color:#a9abb6;font-size:12px}
+    .live:before{content:"";width:7px;height:7px;border-radius:50%;background:#8cdfbd;box-shadow:0 0 0 4px rgba(140,223,189,.1)}
+    .live.offline:before{background:#ffb1b9;box-shadow:0 0 0 4px rgba(255,177,185,.1)}
+    .section-title{display:flex;justify-content:space-between;align-items:end;gap:16px;margin:21px 0 22px}
+    .section-title h2{font-family:Georgia,serif;font-size:31px;font-weight:400;letter-spacing:-.03em;margin:0}
+    .section-title p{color:#a6a6ba;font-size:13px;margin:9px 0 0}
+    .filters{display:flex;gap:7px;flex-wrap:wrap}
+    .filter{border-radius:100px;border:1px solid var(--line);background:transparent;color:#adaabc;padding:9px 15px;font-size:12px;transition:.2s}
+    .filter:hover{color:white;border-color:rgba(255,255,255,.4)}
+    .filter.active{background:#f9dce5;border-color:#f9dce5;color:#342534;font-weight:800}
+    .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:19px;padding-bottom:20px}
+    .gift{min-width:0;overflow:hidden;background:#1a1b27;border:1px solid rgba(255,255,255,.1);border-radius:22px;transition:transform .22s,box-shadow .22s}
+    .gift:hover{transform:translateY(-3px);box-shadow:0 18px 60px rgba(0,0,0,.26)}
+    .gift.claimed{border-color:rgba(244,178,200,.29)}
+    .visual{position:relative;height:235px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+    .visual:after{content:"";position:absolute;inset:0;box-shadow:inset 0 -15px 30px rgba(30,20,40,.05);pointer-events:none}
+    .visual svg{width:72%;height:72%;max-height:190px;filter:drop-shadow(0 15px 20px rgba(46,30,47,.13));transition:transform .3s}
+    .gift:hover .visual svg{transform:translateY(-4px) scale(1.035)}
+    .visual img{width:82%;height:91%;object-fit:contain;mix-blend-mode:multiply;filter:drop-shadow(0 12px 18px rgba(47,36,42,.08))}
+    .visual.map{background:linear-gradient(145deg,#ebe1ee,#d6c8e8)}
+    .visual.camera{background:linear-gradient(140deg,#e9ecf5,#cad8e7)}
+    .visual.charger{background:linear-gradient(135deg,#e3ebdc,#d0d6c1)}
+    .visual.bracelet{background:linear-gradient(130deg,#eaddd4,#f1d5c8)}
+    .visual.perfume{background:#e9dfc8}
+    .visual.lip-oil{background:#f5e2e0}
+    .number{position:absolute;z-index:2;left:18px;top:17px;font-size:11px;color:rgba(32,29,39,.5);font-weight:800;letter-spacing:.1em}
+    .claimed-ribbon{position:absolute;z-index:3;right:15px;top:13px;color:#4c3140;background:#f7dce6;padding:8px 12px;border-radius:100px;font-size:11px;font-weight:800;box-shadow:0 5px 15px #2221}
+    .details{padding:20px 21px 21px}
+    .category{font-size:10px;color:#e8adc4;font-weight:800;text-transform:uppercase;letter-spacing:.15em;margin:0 0 11px}
+    .details h3{font-size:21px;letter-spacing:-.045em;font-weight:650;line-height:1.23;margin:0;min-height:52px}
+    .note{font-size:12px;line-height:1.55;min-height:39px;margin:12px 0 16px;color:#ada8b8}
+    .line{height:1px;background:var(--line);margin-bottom:16px}
+    .actions{display:flex;align-items:center;justify-content:space-between;gap:7px}
+    .shop{display:flex;gap:5px;align-items:center;color:#f9d0e0;font-size:12px;font-weight:700;padding:9px 0}
+    .shop:hover{text-decoration:underline}
+    .shop svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
+    .reserve{display:flex;align-items:center;justify-content:center;gap:8px;min-height:41px;padding:9px 13px;border-radius:12px;border:1px solid #f6d7e1;background:#f5d4df;color:#342634;font-size:12px;font-weight:800;transition:.2s}
+    .reserve:hover:not(:disabled){background:#fff1f6;transform:translateY(-1px)}
+    .reserve .check{height:17px;width:17px;border:1.5px solid #6b4a5b;border-radius:6px;display:grid;place-items:center;font-size:12px}
+    .reserve.owner{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.2);color:#fce6f0}
+    .reserve.owner .check{background:#dfabc0;color:#2a2432;border-color:#dfabc0}
+    .reserve.taken{background:rgba(255,255,255,.045);border-color:rgba(255,255,255,.09);color:#9d97a7}
+    .reserve.taken .check{background:#655765;color:#f0c4d8;border-color:#655765}
+    .reserve:disabled{opacity:.72}
+    .empty{padding:66px 20px;text-align:center;border:1px dashed var(--line);border-radius:20px;color:#c4b9ca}
+    .empty strong{display:block;font-family:Georgia,serif;font-size:26px;font-weight:400;margin-bottom:9px;color:#fff}
+    .offline-banner{display:none;margin:0 0 19px;background:#452d39;border:1px solid #875060;border-radius:14px;padding:14px 18px;color:#ffe3e5;font-size:13px}
+    .offline-banner.show{display:block}
+    .footer{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:35px 0 52px;border-top:1px solid var(--line);color:#a5a1af;font-size:12px}
+    .footer strong{color:#f1c5d7;font-family:Georgia,serif;font-size:19px;font-style:italic;font-weight:400}
+    .footer button{background:transparent;border:0;color:#d9c1cd;text-decoration:underline;text-underline-offset:3px;padding:8px}
+    dialog{border:1px solid rgba(255,255,255,.2);border-radius:24px;max-width:min(430px,calc(100vw - 30px));width:100%;background:#242232;color:#fff;padding:30px;box-shadow:0 30px 90px #0007}
+    dialog::backdrop{background:rgba(11,10,20,.78);backdrop-filter:blur(9px)}
+    .dialog-icon{font-size:30px;color:#f7c3d2}
+    dialog h2{font-family:Georgia,serif;font-size:33px;line-height:1.12;font-weight:400;margin:16px 0 10px}
+    dialog p{font-size:13px;line-height:1.7;color:#c5bcc9;margin:0 0 24px}
+    .dialog-actions{display:flex;gap:9px;justify-content:flex-end}
+    .dialog-actions button{border-radius:12px;padding:12px 16px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#fff;font-size:13px}
+    .dialog-actions button.confirm{background:#f4cfdb;color:#312235;border-color:#f4cfdb;font-weight:800}
+    .toast{position:fixed;bottom:24px;left:50%;transform:translate(-50%,20px);opacity:0;pointer-events:none;border:1px solid rgba(255,255,255,.17);border-radius:14px;background:#322b3b;color:white;padding:13px 18px;z-index:10;box-shadow:0 15px 55px #0006;transition:.22s;font-size:13px;max-width:min(500px,90vw);text-align:center}
+    .toast.show{opacity:1;transform:translate(-50%,0)}
+    @media(max-width:950px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hero-sticker{right:5%;opacity:.58}.hero h1{max-width:600px}}
+    @media(max-width:610px){.shell{padding:0 17px}.topbar{padding:20px 0}.private-label{font-size:9px}.hero{border-radius:22px;padding:44px 24px 50px;min-height:315px}.hero-sticker{width:85px;height:85px;top:24px;right:17px;font-size:15px;opacity:.55}h1{font-size:clamp(43px,11.2vw,59px)}.hero-copy{max-width:310px;font-size:13px}.summary{gap:15px;padding:24px 3px}.summary .sep{height:18px}.live{width:100%;margin:0}.section-title{align-items:start;display:block}.section-title h2{font-size:29px}.filters{margin-top:17px}.grid{grid-template-columns:1fr;gap:17px}.visual{height:255px}.details{padding:20px}.details h3{min-height:auto}.note{min-height:auto}.footer{flex-direction:column;text-align:center}.reserve{padding:10px 14px}}
+    @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important}}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">✳</span><span>THE GIFT EDIT</span></div>
+      <span class="private-label">A very special wishlist · ♡</span>
+    </header>
+    <section class="hero" aria-labelledby="headline">
+      <div class="eyebrow">Birthday edition</div>
+      <h1 id="headline">Маленькие мечты.<br><em>Большая радость.</em></h1>
+      <p class="hero-copy">Здесь собраны идеи подарков ко дню рождения. Выберите то, что хочется подарить, и отметьте. Так сюрпризы останутся сюрпризами, а подарки не повторятся.</p>
+      <div class="hero-sticker" aria-hidden="true">made<br>with love<br>♡</div>
+    </section>
+    <section class="summary" aria-label="Статистика подарков">
+      <div class="stat"><strong>06</strong> идей подарков</div>
+      <span class="sep" aria-hidden="true"></span>
+      <div class="stat"><strong id="free-count">—</strong> свободно</div>
+      <span class="sep" aria-hidden="true"></span>
+      <div class="stat"><strong id="taken-count">—</strong> выбрано</div>
+      <div class="live offline" id="connection-status" role="status">Подключаемся к общему списку…</div>
+    </section>
+    <div class="offline-banner" id="offline-banner" role="alert">Не удалось связаться с общим списком. Отметки пока недоступны, чтобы два человека случайно не выбрали один подарок. Повторите обновление.</div>
+    <section aria-labelledby="items-title">
+      <div class="section-title">
+        <div><h2 id="items-title">Выберите подарок</h2><p>Открывайте ссылки, изучайте и бронируйте одним нажатием.</p></div>
+        <div class="filters" role="group" aria-label="Фильтр подарков">
+          <button class="filter active" type="button" data-filter="all" aria-pressed="true">Все</button>
+          <button class="filter" type="button" data-filter="free" aria-pressed="false">Свободны</button>
+          <button class="filter" type="button" data-filter="taken" aria-pressed="false">Заняты</button>
+        </div>
+      </div>
+      <div class="grid" id="grid" aria-live="polite"></div>
+      <div class="empty" id="empty" hidden><strong>Пока ничего</strong>Попробуйте другой фильтр.</div>
+    </section>
+    <footer class="footer"><strong>Thank you for being here ♡</strong><span>Без регистрации · Ваш выбор виден всем гостям</span><button type="button" id="refresh">Обновить отметки ↻</button></footer>
+  </div>
+  <dialog id="confirm-dialog" aria-labelledby="dialog-title">
+    <div class="dialog-icon">✳</div>
+    <h2 id="dialog-title">Выбрать подарок?</h2>
+    <p id="dialog-copy"></p>
+    <div class="dialog-actions"><button type="button" id="dialog-cancel">Отмена</button><button type="button" class="confirm" id="dialog-confirm">Забронировать</button></div>
+  </dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script>
+    "use strict";
+    const goods = [
+      {id:"map",tag:"Особенный подарок",name:"Карта",note:"Точная модель и вариант — по ссылке на Яндекс Маркет",url:"https://market.yandex.ru/cc/BP2EN4",art:"map"},
+      {id:"camera",tag:"Техника",name:"Фотоаппарат",note:"Выберите модель именно из карточки магазина",url:"https://market.yandex.ru/cc/BP2EjV",art:"camera"},
+      {id:"charger",tag:"Полезные вещи",name:"Зарядное устройство",note:"Характеристики и комплектация — на странице товара",url:"https://market.yandex.ru/cc/BP2Eue",art:"charger"},
+      {id:"bracelet",tag:"Украшения",name:"Браслет",note:"Дизайн и размер — по исходной ссылке",url:"https://market.yandex.ru/cc/BP2FFc",art:"bracelet"},
+      {id:"perfume",tag:"Парфюмерия",name:"TOM FORD Black Orchid",note:"Parfum · 50 мл",url:"https://goldapple.ru/19760314283-black-orchid-parfum",art:"perfume",image:"https://www.perfumenz.co.nz/cdn/shop/products/tom-ford-black-orchid-parfum-50ml---2_1519x1519.png?v=1606690032"},
+      {id:"lip-oil",tag:"Красота",name:"CLARINS Lip Comfort Oil",note:"Масло-блеск для губ · 08 Strawberry · 7 мл",url:"https://goldapple.ru/19000033385-lip-comfort-oil",art:"lip-oil",image:"https://www.harmoniq.se/image/122341/3666057037481.jpg"}
+    ];
+    const artwork = {
+      map:'<svg viewBox="0 0 280 205" aria-hidden="true"><g transform="rotate(-9 140 100)"><rect x="38" y="37" width="208" height="142" rx="15" fill="#a891b4" opacity=".18"/><rect x="29" y="24" width="208" height="142" rx="13" fill="#fff9fa"/><rect x="47" y="40" width="172" height="111" rx="7" fill="#e1d0e6"/><path d="M48 88 83 50l31 17 33-27 72 30v72l-45-19-24 17-54-16-48 21z" fill="#c2adc9"/><path d="M68 78c18 30 46 6 67 35s39 0 62 20" fill="none" stroke="#f9f4f8" stroke-width="7" stroke-linecap="round"/><path d="M158 76c0 16-17 27-17 27s-17-11-17-27a17 17 0 1 1 34 0z" fill="#a16483"/><circle cx="141" cy="76" r="6" fill="#fff"/></g></svg>',
+      camera:'<svg viewBox="0 0 280 205" aria-hidden="true"><rect x="47" y="53" width="186" height="118" rx="22" fill="#73899e"/><rect x="47" y="57" width="186" height="106" rx="20" fill="#fafaf8"/><path d="M86 58 98 39h73l13 19" fill="#d4dee7"/><rect x="69" y="77" width="33" height="16" rx="5" fill="#afbbca"/><circle cx="145" cy="111" r="47" fill="#66788b"/><circle cx="145" cy="111" r="35" fill="#c5d3dd"/><circle cx="145" cy="111" r="27" fill="#526780"/><circle cx="145" cy="111" r="15" fill="#293c57"/><circle cx="139" cy="104" r="7" fill="#7898ae" opacity=".8"/><circle cx="202" cy="78" r="8" fill="#d39c9c"/><path d="M62 143h26" stroke="#cedbe2" stroke-width="7" stroke-linecap="round"/></svg>',
+      charger:'<svg viewBox="0 0 280 205" aria-hidden="true"><path d="M174 125q44 6 45 33t-28 34" fill="none" stroke="#f9f9f1" stroke-width="12" stroke-linecap="round"/><path d="M174 125q44 6 45 33t-28 34" fill="none" stroke="#aab3a2" stroke-width="1"/><g transform="rotate(-15 135 105)"><rect x="72" y="42" width="131" height="121" rx="25" fill="#a6b0a3"/><rect x="67" y="38" width="126" height="120" rx="23" fill="#fefdf7"/><rect x="193" y="72" width="27" height="13" rx="5" fill="#aeb8ae"/><rect x="193" y="111" width="27" height="13" rx="5" fill="#aeb8ae"/><rect x="91" y="57" width="58" height="8" rx="4" fill="#d2d9cb"/><rect x="95" y="85" width="18" height="8" rx="4" fill="#9cad9e"/><rect x="95" y="105" width="18" height="8" rx="4" fill="#9cad9e"/><text x="130" y="140" fill="#a0afa0" font-family="Arial" font-size="16" font-weight="bold">USB-C</text></g></svg>',
+      bracelet:'<svg viewBox="0 0 280 205" aria-hidden="true"><ellipse cx="140" cy="111" rx="85" ry="57" fill="none" stroke="#d19f7b" stroke-width="10"/><ellipse cx="140" cy="111" rx="85" ry="57" fill="none" stroke="#fff0d4" stroke-width="3"/><path d="m140 64 10 18 20 4-15 14 4 20-19-10-19 10 4-20-15-14 20-4z" fill="#f7eddb" stroke="#d5b48c" stroke-width="4"/><circle cx="80" cy="151" r="9" fill="#edceb3" stroke="#e7ac82" stroke-width="4"/><circle cx="204" cy="150" r="9" fill="#edceb3" stroke="#e7ac82" stroke-width="4"/></svg>',
+      perfume:'<svg viewBox="0 0 280 205" aria-hidden="true"><rect x="118" y="31" width="46" height="35" rx="7" fill="#b99860"/><rect x="101" y="61" width="80" height="116" rx="13" fill="#d2af6e"/><rect x="110" y="94" width="63" height="47" rx="3" fill="#f7e4ab"/><text x="141" y="117" font-size="8" text-anchor="middle" fill="#624d31">BLACK ORCHID</text></svg>',
+      "lip-oil":'<svg viewBox="0 0 280 205" aria-hidden="true"><rect x="108" y="36" width="65" height="62" rx="12" fill="#a98659"/><rect x="111" y="89" width="59" height="97" rx="8" fill="#b82b58"/><rect x="115" y="93" width="50" height="85" rx="5" fill="#da4471"/><path d="M117 64h47" stroke="#f0d5a1" stroke-width="4"/></svg>'
+    };
+    const storagePrefix="birthday-wishlist:owner:";
+    const grid=document.getElementById("grid"),dialog=document.getElementById("confirm-dialog");
+    let reserved=new Set(), filter="all", ready=false, busy=false, pending=null, toastTimer=null, refreshPromise=null;
+    const getToken=id=>{try{return localStorage.getItem(storagePrefix+id)||""}catch{return ""}};
+    const saveToken=(id,token)=>localStorage.setItem(storagePrefix+id,token);
+    const clearToken=id=>{try{localStorage.removeItem(storagePrefix+id)}catch{}};
+    const secureToken=()=>Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,"0")).join("");
+    const $=id=>document.getElementById(id);
+    function notify(message){const element=$("toast");element.textContent=message;element.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>element.classList.remove("show"),3500)}
+    function render(){
+      $("free-count").textContent=ready?goods.length-reserved.size:"—";
+      $("taken-count").textContent=ready?reserved.size:"—";
+      const shown=goods.filter(g=>filter==="all"||(filter==="free"?!reserved.has(g.id):reserved.has(g.id)));
+      grid.replaceChildren();
+      for(const [index,g] of shown.entries()){
+        const taken=reserved.has(g.id),owner=taken&&!!getToken(g.id);
+        const card=document.createElement("article");
+        card.className="gift"+(taken?" claimed":"");
+        const img=g.image?'<img src="'+g.image+'" alt="'+g.name+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'"><span class="image-fallback" style="display:none">'+artwork[g.art]+'</span>':artwork[g.art];
+        const buttonLabel=!ready?"Загрузка":taken?(owner?"Мой выбор":"Уже занят"):"Выбрать";
+        card.innerHTML='<div class="visual '+g.art+'"><span class="number">'+String(goods.indexOf(g)+1).padStart(2,"0")+' / 06</span>'+(taken?'<span class="claimed-ribbon">✓ Занято</span>':'')+img+'</div><div class="details"><p class="category">'+g.tag+'</p><h3>'+g.name+'</h3><p class="note">'+g.note+'</p><div class="line"></div><div class="actions"><a class="shop" href="'+g.url+'" target="_blank" rel="noopener noreferrer">Смотреть товар <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a><button class="reserve '+(taken?(owner?"owner":"taken"):"")+'" type="button" '+(!ready||busy||(taken&&!owner)?"disabled":"")+' aria-label="'+(taken?(owner?"Снять свою бронь":"Подарок уже занят"):"Забронировать "+g.name)+'"><span class="check">'+(taken?"✓":"")+'</span>'+buttonLabel+'</button></div></div>';
+        card.querySelector(".reserve").addEventListener("click",()=>showDialog(g));
+        grid.appendChild(card);
+      }
+      $("empty").hidden=shown.length!==0;
+      document.querySelectorAll(".filter").forEach(b=>{const active=b.dataset.filter===filter;b.classList.toggle("active",active);b.setAttribute("aria-pressed",String(active))});
+    }
+    async function refresh(){
+      if(busy||refreshPromise)return refreshPromise;
+      refreshPromise=(async()=>{
+        try{
+          const response=await fetch("/api/gift-wishlist/",{cache:"no-store",credentials:"omit"});
+          if(!response.ok)throw new Error("Сервер недоступен");
+          const payload=await response.json();
+          if(!Array.isArray(payload.reservedIds))throw new Error("Неверные данные");
+          reserved=new Set(payload.reservedIds.filter(id=>goods.some(g=>g.id===id)));
+          ready=true;
+          $("connection-status").textContent="Обновляется для всех гостей";
+          $("connection-status").classList.remove("offline");
+          $("offline-banner").classList.remove("show");
+        }catch{
+          ready=false;
+          $("connection-status").textContent="Нет связи с общим списком";
+          $("connection-status").classList.add("offline");
+          $("offline-banner").classList.add("show");
+        }finally{render();refreshPromise=null}
+      })();
+      return refreshPromise;
+    }
+    function showDialog(g){
+      if(!ready||busy)return;
+      const taken=reserved.has(g.id),owner=taken&&!!getToken(g.id);
+      if(taken&&!owner){notify("Этот подарок уже занят");return}
+      pending={gift:g,release:owner};
+      $("dialog-title").textContent=owner?"Освободить подарок?":"Забронировать подарок?";
+      $("dialog-copy").textContent=owner?'«'+g.name+'» снова станет доступен всем гостям.':'Вы выбираете «'+g.name+'». Остальные гости увидят, что подарок занят. Отменить выбор можно будет с этого браузера.';
+      $("dialog-confirm").textContent=owner?"Снять бронь":"Забронировать";
+      dialog.showModal();
+    }
+    async function changeReservation(){
+      if(!pending||busy)return;
+      const {gift,release}=pending;pending=null;dialog.close();
+      busy=true;render();
+      let token=getToken(gift.id);
+      try{
+        if(!token&&!release){token=secureToken();saveToken(gift.id,token)}
+        const response=await fetch("/api/gift-wishlist/"+encodeURIComponent(gift.id)+"/"+(release?"release":"claim"),{
+          method:"POST",headers:{"Content-Type":"application/json"},credentials:"omit",body:JSON.stringify({token})
+        });
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok){
+          if(response.status===409||response.status===403||response.status===404)clearToken(gift.id);
+          throw new Error(data.error||"Не удалось сохранить выбор");
+        }
+        if(release){clearToken(gift.id);reserved.delete(gift.id)}
+        else reserved.add(gift.id);
+        notify(release?"Подарок снова свободен ♡":"Подарок забронирован ♡");
+      }catch(err){notify(err.message||"Ошибка соединения")}
+      finally{busy=false;render();await refresh()}
+    }
+    document.querySelectorAll(".filter").forEach(button=>button.addEventListener("click",()=>{filter=button.dataset.filter;render()}));
+    $("refresh").addEventListener("click",async()=>{await refresh();notify(ready?"Список обновлён":"Пока нет связи с сервером")});
+    $("dialog-cancel").addEventListener("click",()=>dialog.close());
+    $("dialog-confirm").addEventListener("click",()=>void changeReservation());
+    dialog.addEventListener("close",()=>{pending=null});
+    document.addEventListener("visibilitychange",()=>{if(!document.hidden)void refresh()});
+    window.addEventListener("online",()=>void refresh());
+    setInterval(()=>{if(!document.hidden)void refresh()},10000);
+    render();void refresh();
+  </script>
+</body>
+</html>
