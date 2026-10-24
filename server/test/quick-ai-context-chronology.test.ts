@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { mergeChatProjectSnapshots, chronologicalChatMessages } from '../src/lib/ai-chat-project-sync.js';
 import { orderAiChatMessagesChronologically } from '../../client/src/lib/ai-chat-reconciliation.js';
+import { prisma } from '../src/db/prisma.js';
+import { aiAssistantService } from '../src/services/ai-assistant.service.js';
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const at = (minute: number) => new Date(Date.UTC(2026, 9, 24, 12, minute)).toISOString();
@@ -58,7 +60,7 @@ test('server routes quick model prompts from persisted DB history, not stale bro
   const controller = read('../src/controllers/ai.controller.ts');
   const quick = controller.slice(controller.indexOf('  askAiChat: async'), controller.indexOf('  getGeneralAssistantHistory:'));
   assert.match(quick, /const serverQuickHistory = isQuickChat/);
-  assert.match(quick, /aiAssistantService\.listGeneralDialog\(\{ userId: req\.user!\.id \}\)/);
+  assert.match(quick, /excludeMonitoringMessages: true/);
   assert.match(quick, /const promptHistory = isQuickChat && serverQuickHistory\.length > 0/);
   assert.match(quick, /history: promptHistory/);
   assert.match(quick, /if \(isQuickChat\)/);
@@ -67,8 +69,28 @@ test('server routes quick model prompts from persisted DB history, not stale bro
 test('both web and miniapp always send chronological quick context', () => {
   const web = read('../../client/src/App.tsx');
   const mini = read('../../client/src/MiniApp.tsx');
-  assert.match(web, /orderAiChatMessagesChronologically\(quickAiChatMessages\)\.slice\(-20\)/);
-  assert.match(mini, /orderAiChatMessagesChronologically\(activeAiChat\.messages\)\.slice\(-20\)/);
+  assert.match(web, /quickAiChatMessages\\.filter\\(message => !message\\.monitoringTaskId\\)/);
+  assert.match(mini, /activeAiChat\\.messages\\.filter\\(message => !message\\.monitoringTaskId\\)/);
   assert.match(mini, /role: 'user', content: userMessageContent, createdAt:/);
   assert.match(mini, /role: 'assistant', createdAt:/);
+});
+
+test('the quick prompt excludes monitoring broadcasts without hiding them from the UI feed', async () => {
+  const original = prisma.generalAiMessage.findMany;
+  const queries: Array<Record<string, any>> = [];
+  (prisma.generalAiMessage.findMany as any) = async (query: any) => {
+    queries.push(query);
+    return [];
+  };
+  try {
+    await aiAssistantService.listGeneralDialog({ userId: 'owner', excludeMonitoringMessages: true });
+    await aiAssistantService.listGeneralDialog({ userId: 'owner' });
+    assert.equal(queries.length, 2);
+    assert.equal(queries[0].where.monitoringTaskId, null);
+    assert.equal(queries[0].take, 100);
+    assert.equal(queries[1].where.monitoringTaskId, undefined,
+      'visible Quick AI history must continue to include monitoring messages');
+  } finally {
+    (prisma.generalAiMessage.findMany as any) = original;
+  }
 });
