@@ -346,22 +346,32 @@ fun NativeHabitDetailSheet(vm:HomeViewModel,habit:Habit,dark:Boolean,onClose:()-
 }
 
 @Composable
-private fun HabitSettingsDialog(habit:Habit,c:HabitPalette,busy:Boolean,
+fun NativeHabitCreateSheet(vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
+    val state by vm.state.collectAsStateWithLifecycle()
+    HabitSettingsDialog(
+        habit=null,c=habitPalette(dark),busy=state.habitBusy,
+        onDismiss=onClose,
+        onSave={payload->vm.createHabit(payload,onClose)},
+        onFinish={},onDelete={}
+    )
+}
+@Composable
+private fun HabitSettingsDialog(habit:Habit?,c:HabitPalette,busy:Boolean,
     onDismiss:()->Unit,onSave:(JsonObject)->Unit,onFinish:()->Unit,onDelete:()->Unit){
     val ctx=LocalContext.current
-    var icon by remember(habit.id){mutableStateOf(habit.icon)}
-    var color by remember(habit.id){mutableStateOf(habit.color)}
-    var name by remember(habit.id){mutableStateOf(habit.name)}
-    var target by remember(habit.id){mutableIntStateOf(habit.targetCount)}
-    var reminderTimes by remember(habit.id){mutableStateOf(habit.reminderTimes.ifEmpty {
-        listOfNotNull(habit.reminderTime)
+    var icon by remember(habit?.id ?: "new"){mutableStateOf(habit?.icon ?: "✨")}
+    var color by remember(habit?.id ?: "new"){mutableStateOf(habit?.color ?: "#22c55e")}
+    var name by remember(habit?.id ?: "new"){mutableStateOf(habit?.name.orEmpty())}
+    var target by remember(habit?.id ?: "new"){mutableIntStateOf(habit?.targetCount ?: 1)}
+    var reminderTimes by remember(habit?.id ?: "new"){mutableStateOf(habit?.reminderTimes.orEmpty().ifEmpty {
+        listOfNotNull(habit?.reminderTime)
     })}
-    var duration by remember(habit.id){mutableStateOf(habit.durationMode)}
-    var endDate by remember(habit.id){mutableStateOf(habit.endDate?.take(10))}
-    var totalRepeat by remember(habit.id){mutableIntStateOf(habit.totalRepeatTarget?:1)}
-    var recurrence by remember(habit.id){mutableStateOf(habit.recurrenceType)}
-    var intervalDays by remember(habit.id){mutableIntStateOf(habit.intervalDays?:2)}
-    var weekdays by remember(habit.id){mutableStateOf(habit.weekdays.toSet())}
+    var duration by remember(habit?.id ?: "new"){mutableStateOf(habit?.durationMode ?: HabitDurationMode.FOREVER)}
+    var endDate by remember(habit?.id ?: "new"){mutableStateOf(habit?.endDate?.take(10))}
+    var totalRepeat by remember(habit?.id ?: "new"){mutableIntStateOf(habit?.totalRepeatTarget?:1)}
+    var recurrence by remember(habit?.id ?: "new"){mutableStateOf(habit?.recurrenceType ?: HabitRecurrenceType.DAILY)}
+    var intervalDays by remember(habit?.id ?: "new"){mutableIntStateOf(habit?.intervalDays?:2)}
+    var weekdays by remember(habit?.id ?: "new"){mutableStateOf(habit?.weekdays.orEmpty().toSet())}
     val datePicker={
         val date=endDate?.let{runCatching{LocalDate.parse(it)}.getOrNull()}?:LocalDate.now()
         DatePickerDialog(ctx,{_,year,month,day->
@@ -399,7 +409,7 @@ private fun HabitSettingsDialog(habit:Habit,c:HabitPalette,busy:Boolean,
             Column(Modifier.padding(16.dp)){
                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
                     horizontalArrangement=Arrangement.SpaceBetween){
-                    Text("Настройки привычки",fontSize=17.sp,color=c.text,
+                    Text(if(habit==null)"Новая привычка" else "Настройки привычки",fontSize=17.sp,color=c.text,
                         fontWeight=FontWeight.Bold)
                     HabitCircleIcon(Icons.Default.Close,c,"Закрыть настройки",onDismiss)
                 }
@@ -491,13 +501,15 @@ private fun HabitSettingsDialog(habit:Habit,c:HabitPalette,busy:Boolean,
                         }
                     }
                     Spacer(Modifier.height(4.dp))
-                    HorizontalDivider(color=c.border)
-                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                        OutlinedButton(onClick=onFinish,modifier=Modifier.weight(1f)){
-                            Text("Завершить",fontSize=11.sp)
-                        }
-                        OutlinedButton(onClick=onDelete,modifier=Modifier.weight(1f)){
-                            Text("Удалить",fontSize=11.sp,color=Color(0xFFE11D48))
+                    if(habit!=null){
+                        HorizontalDivider(color=c.border)
+                        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                            OutlinedButton(onClick=onFinish,modifier=Modifier.weight(1f)){
+                                Text("Завершить",fontSize=11.sp)
+                            }
+                            OutlinedButton(onClick=onDelete,modifier=Modifier.weight(1f)){
+                                Text("Удалить",fontSize=11.sp,color=Color(0xFFE11D48))
+                            }
                         }
                     }
                 }
@@ -507,7 +519,7 @@ private fun HabitSettingsDialog(habit:Habit,c:HabitPalette,busy:Boolean,
                     !(recurrence==HabitRecurrenceType.WEEKDAYS&&weekdays.isEmpty()),
                     modifier=Modifier.fillMaxWidth(),
                     shape=RoundedCornerShape(13.dp)){
-                    Text(if(busy)"Сохраняем…" else "Сохранить настройки")
+                    Text(if(busy)"Сохраняем…" else if(habit==null)"Создать привычку" else "Сохранить настройки")
                 }
             }
         }
