@@ -990,11 +990,3 @@ model StandaloneNoteGroup {
   @@unique([userId, name])
   @@index([userId, createdAt])
 }
-
-// Anonymous, globally visible birthday gift claims, isolated from user accounts.
-model BirthdayWishlistReservation {
-  id String @id @default(cuid())
-  giftId String @unique @db.VarChar(60)
-  tokenHash String @db.VarChar(64)
-  reservedAt DateTime @default(now())
-}
