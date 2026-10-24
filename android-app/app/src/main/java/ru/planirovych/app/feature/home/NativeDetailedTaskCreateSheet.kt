@@ -125,6 +125,8 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
                                 arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use{
                                 if(it.moveToFirst())it.getString(0) else null
                             }?.takeIf{it.isNotBlank()} ?: "Вложение"
+                            if(!Regex("(?i)\\.(pdf|docx|xls|xlsx|png|jpe?g|webp|gif|txt)$").containsMatchIn(name))
+                                throw IllegalStateException("Поддерживаются PDF, DOCX, XLS/XLSX, TXT и изображения")
                             TaskCreationFile(name,ctx.contentResolver.getType(uri)
                                 ?: "application/octet-stream",bytes)
                         }
@@ -209,9 +211,7 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
                 if(isEvent){
                     Row(verticalAlignment=Alignment.CenterVertically){
                         CreateRoundIcon(Icons.Default.AttachFile,"Добавить вложение",c){
-                            picker.launch(arrayOf(
-                                "application/pdf","application/vnd.openxmlformats-officedocument.*",
-                                "image/*","text/plain","application/vnd.ms-excel"))
+                            picker.launch(arrayOf("*/*"))
                         }
                         Spacer(Modifier.width(8.dp))
                         Text("Вложения к событию",fontSize=12.sp,color=c.muted)
@@ -363,10 +363,12 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
                     }
                     put("aiNotificationsEnabled",aiNotifications)
                     if(!isEvent)put("aiMonitoringEnabled",aiMonitoring)
-                },if(isEvent)emptyList() else children.map{
-                    TaskCreationChild(it.title.trim().ifBlank{"Новая подзадача"},
-                        it.description.trim(),it.date)
-                }.filter{it.title.isNotBlank() || it.description.isNotBlank() || it.dueDate!=null},
+                },if(isEvent)emptyList() else children
+                    .filter{it.title.isNotBlank() || it.description.isNotBlank() || it.date!=null}
+                    .map{
+                        TaskCreationChild(it.title.trim().ifBlank{"Новая подзадача"},
+                            it.description.trim(),it.date)
+                    },
                     if(isEvent)attachments.toList() else emptyList(),onClose)
             },modifier=Modifier.fillMaxWidth().padding(bottom=12.dp),
                 shape=CircleShape,
