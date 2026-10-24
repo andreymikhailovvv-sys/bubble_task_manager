@@ -87,7 +87,7 @@ private fun timelineEntries(date:LocalDate,tasks:List<Task>,allTasks:List<Task>,
 private fun shortTime(value:LocalTime)=value.format(DateTimeFormatter.ofPattern("HH:mm"))
 
 @Composable
-fun NativeTimelineWorkspace(
+internal fun NativeTimelineWorkspace(
     tasks:List<Task>,allTasks:List<Task>,habits:List<Habit>,spheres:List<Sphere>,
     colors:WorkspaceColors,dark:Boolean,onOpen:(String)->Unit
 ){
