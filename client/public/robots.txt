@@ -3,3 +3,4 @@ Allow: /
 Disallow: /api/
 
 Sitemap: https://planirovych.ru/sitemap.xml
+Disallow: /gifts/

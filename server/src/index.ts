@@ -5,6 +5,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { apiRouter } from './routes/api.js';
+import { birthdayWishlistRouter } from './routes/birthday-wishlist.js';
 import { authSession } from './middleware/auth.js';
 import { passport } from './auth/passport.js';
 import { telegramService } from './services/telegram.service.js';
@@ -59,6 +60,8 @@ app.use(express.json({ limit: requestBodyLimit }));
 app.use(express.urlencoded({ extended: true, limit: requestBodyLimit }));
 app.use(cookieParser());
 app.use(passport.initialize());
+// Independent link-only gift page; no account or guest session is created.
+app.use('/api/gifts-birthday-8f3c2a91', birthdayWishlistRouter);
 app.use(authSession);
 app.use('/api', apiRouter);
 
@@ -90,8 +93,9 @@ app.use(express.static(clientDist, {
     if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-store, must-revalidate');
   }
 }));
-app.get('*', (_, res) => {
+app.get('*', (req, res) => {
   res.setHeader('Cache-Control', 'no-store, must-revalidate');
+  if (req.path.startsWith('/gifts/')) res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
   res.sendFile(path.join(clientDist, 'index.html'));
 });
 

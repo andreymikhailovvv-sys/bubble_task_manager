@@ -4,6 +4,7 @@ import App from './App';
 import MiniApp from './MiniApp';
 import AdminPage from './AdminPage';
 import PublicPages from './PublicPages';
+import BirthdayWishlistPage from './BirthdayWishlistPage';
 import CookieBanner from './components/CookieBanner';
 import TelegramAuthPage from './TelegramAuthPage';
 import { api } from './lib/api';
@@ -68,6 +69,7 @@ window.addEventListener('unhandledrejection', (event) => {
   });
 });
 
+const isBirthdayWishlistRoute = window.location.pathname === '/gifts/celebrate-8f3c2a91';
 const isMiniAppRoute = window.location.pathname.startsWith('/miniapp');
 const isTelegramAuthRoute = window.location.pathname === '/telegram-auth';
 const isAdminRoute = window.location.pathname === '/admin556215';
@@ -83,7 +85,9 @@ const isCompactWorkspaceViewport = window.matchMedia('(max-width: 1024px)').matc
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <AppErrorBoundary>
-      {isAdminRoute
+      {isBirthdayWishlistRoute
+        ? <BirthdayWishlistPage />
+        : isAdminRoute
         ? <AdminPage />
         : isTelegramAuthRoute
           ? <TelegramAuthPage />
@@ -94,7 +98,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             : isCompactWorkspaceViewport
               ? <MiniApp runtime="web" />
               : <App />}
-      {!isMiniAppRoute && !isTelegramAuthRoute && !isAdminRoute ? <CookieBanner /> : null}
+      {!isMiniAppRoute && !isTelegramAuthRoute && !isAdminRoute && !isBirthdayWishlistRoute ? <CookieBanner /> : null}
     </AppErrorBoundary>
   </React.StrictMode>
 );
