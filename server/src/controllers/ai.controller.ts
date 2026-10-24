@@ -125,6 +125,17 @@ export const aiController = {
       const chatTitle = typeof req.body?.chatTitle === 'string' ? req.body.chatTitle : undefined;
       const projectId = typeof req.body?.projectId === 'string' ? req.body.projectId : undefined;
       const chatId = typeof req.body?.chatId === 'string' ? req.body.chatId : undefined;
+      const isQuickChat = chatId === 'quick-ai-requests' ||
+        (!chatId && projectTitle === 'Личный проект' && chatTitle === 'Быстрые запросы');
+      // Quick AI is persisted in the general dialog on the server. Browser
+      // project snapshots are display caches and can have re-ordered tails
+      // after multi-device synchronization. The server's dated rows win.
+      const serverQuickHistory = isQuickChat
+        ? await aiAssistantService.listGeneralDialog({ userId: req.user!.id })
+        : [];
+      const promptHistory = isQuickChat && serverQuickHistory.length > 0
+        ? serverQuickHistory.slice(-20)
+        : history;
       const clientSurface = req.body?.clientSurface === 'web' || req.body?.clientSurface === 'miniapp' ? req.body.clientSurface : undefined;
       // Persist uploads under the authenticated user and this message ID.
       // Model tools, not pre-model regex routes, decide read versus edit.
@@ -134,14 +145,14 @@ export const aiController = {
       });
       const telegramContext = telegramContinuation
         ? await consumeTelegramAiReadRequest(req.user!.id, null, req.body.telegramRead) : null;
-      const result = await aiAssistantService.askAiChat({ userId: req.user!.id, question: telegramContext ?? question, history,
+      const result = await aiAssistantService.askAiChat({ userId: req.user!.id, question: telegramContext ?? question, history: promptHistory,
         model: requestedModel, userTimeZone, projectTitle, chatTitle, projectId, chatId, clientSurface,
         requestId, attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
         fileReferences, currentMessageId: req.body?.clientRequestId,
         onDiagnosticsPrepared: (diagnostics) => { traceDiagnostics = diagnostics; },
         ...(streaming ? { onProgress: (status: import('../services/ai-chat-progress.js').AiChatProgressStatus) => writeStreamEvent({ type: 'status', status }) } : {}) });
       traceResult = result;
-      if (chatId === 'quick-ai-requests' || (!chatId && projectTitle === 'Личный проект' && chatTitle === 'Быстрые запросы')) {
+      if (isQuickChat) {
         if (!telegramContinuation) await aiAssistantService.appendGeneralDialogMessages({ userId: req.user!.id, messages: [{ role: 'user', content: question }] });
         await aiAssistantService.appendGeneralDialogAssistantMessage({ userId: req.user!.id, content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli, taskProposalId: result.taskProposal?.id });
       }
