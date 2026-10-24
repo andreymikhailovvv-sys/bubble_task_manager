@@ -5,6 +5,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { apiRouter } from './routes/api.js';
+import { giftWishlistRouter } from './routes/gift-wishlist.js';
 import { authSession } from './middleware/auth.js';
 import { passport } from './auth/passport.js';
 import { telegramService } from './services/telegram.service.js';
@@ -60,6 +61,7 @@ app.use(express.urlencoded({ extended: true, limit: requestBodyLimit }));
 app.use(cookieParser());
 app.use(passport.initialize());
 app.use(authSession);
+app.use('/api/gift-wishlist', giftWishlistRouter);
 app.use('/api', apiRouter);
 
 app.use('/api', (error: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
@@ -80,6 +82,10 @@ const clientDist = process.env.CLIENT_DIST_PATH
   : path.resolve(__dirname, '../../client/dist');
 
 // Serve public HTML landing pages before the SPA fallback (static uses index:false).
+app.get(['/birthday-wishlist', '/birthday-wishlist/'], (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, must-revalidate');
+  res.sendFile(path.join(clientDist, 'birthday-wishlist', 'index.html'));
+});
 app.use(createPublicSeoPagesMiddleware(clientDist));
 
 // HTML must be revalidated after each Timeweb deployment. Bundled JS/CSS
