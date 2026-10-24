@@ -24,6 +24,10 @@ data class TaskAiChatState(
     val loading:Boolean=false,
     val busy:Boolean=false,
     val actionBusy:Boolean=false,
+    val progressStatus:String?=null,
+    val monitoringTriggers:List<TaskMonitoringTrigger> = emptyList(),
+    val monitoringStatuses:List<TaskMonitoringStatus> = emptyList(),
+    val lastActionReports:List<String> = emptyList(),
     val error:String?=null,
     val requestId:String?=null,
 )
@@ -47,9 +51,26 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                 val history=repository.loadTaskAiHistory(taskId)
                 taskAiMutable.update{if(it.taskId==taskId)it.copy(
                     messages=history,loading=false,error=null) else it}
+                refreshTaskAiMonitoring(taskId)
             }catch(error:Throwable){
                 taskAiMutable.update{if(it.taskId==taskId)it.copy(
                     loading=false,error=error.userMessage())else it}
+            }
+        }
+    }
+    fun refreshTaskAiMonitoring(taskId:String){
+        if(taskAiMutable.value.taskId!=taskId)return
+        viewModelScope.launch{
+            try{
+                val triggers=repository.loadTaskMonitoringTriggers(taskId)
+                val statuses=repository.loadTaskMonitoringStatuses(taskId)
+                taskAiMutable.update{
+                    if(it.taskId==taskId)it.copy(
+                        monitoringTriggers=triggers,monitoringStatuses=statuses)
+                    else it
+                }
+            }catch(_:Throwable){
+                // Monitoring is optional. A permission issue must not break the chat.
             }
         }
     }
@@ -77,18 +98,27 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
         userMessage:String=question,onSuccess:()->Unit={}
     ){
         if(taskAiMutable.value.busy || taskAiMutable.value.taskId!=taskId)return
-        taskAiMutable.update{it.copy(busy=true,error=null,requestId=requestId)}
+        taskAiMutable.update{it.copy(busy=true,error=null,requestId=requestId,
+            progressStatus="analyzing_request",lastActionReports=emptyList())}
         viewModelScope.launch{
             try{
                 val reply=repository.sendTaskAiMessage(taskId,requestId,question,model,
-                    attachments,userMessage)
+                    attachments,userMessage,onProgress={status->
+                        taskAiMutable.update{
+                            if(it.taskId==taskId && it.requestId==requestId)
+                                it.copy(progressStatus=status) else it
+                        }
+                    })
                 // The server writes both messages before returning; never append them
                 // with /messages (which would duplicate the shared chat).
                 val history=repository.loadTaskAiHistory(taskId)
                 taskAiMutable.update{
                     if(it.taskId==taskId)it.copy(messages=history,busy=false,
-                        requestId=null,error=null) else it.copy(busy=false)
+                        requestId=null,progressStatus=null,error=null,
+                        lastActionReports=reply.actionReports)
+                    else it.copy(busy=false,progressStatus=null)
                 }
+                refreshTaskAiMonitoring(taskId)
                 if(reply.taskDataChanged){
                     runCatching{repository.loadTasks()}.onSuccess{tasks->
                         mutable.update{it.copy(tasks=tasks)}
@@ -105,7 +135,8 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                 taskAiMutable.update{
                     if(it.taskId==taskId)it.copy(
                         messages=history?:it.messages,busy=false,
-                        error=error.userMessage(),requestId=requestId)
+                        error=error.userMessage(),requestId=requestId,
+                        progressStatus=null)
                     else it.copy(busy=false)
                 }
             }

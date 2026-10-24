@@ -25,6 +25,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -44,14 +47,24 @@ import java.util.Locale
 import java.util.UUID
 import ru.planirovych.app.data.model.*
 
-private data class TaskChatColors(val bg:Color,val panel:Color,val text:Color,
-    val secondary:Color,val border:Color,val user:Color,val assistant:Color,val accent:Color)
+private data class TaskChatColors(
+    val bg:Color,val panel:Color,val text:Color,val secondary:Color,
+    val border:Color,val user:Color,val userEnd:Color,val userText:Color,
+    val assistant:Color,val assistantText:Color,val accent:Color
+)
 private fun chatColors(dark:Boolean)=if(dark)TaskChatColors(
-    Color(0xFF0E1728),Color(0xFF152239),Color(0xFFF1F5F9),Color(0xFFA7B7CC),
-    Color(0xFF39465F),Color(0xFF29394F),Color(0xFF1D2B42),Color(0xFFC4B5FD))
-else TaskChatColors(Color(0xFFF7F8FC),Color.White,Color(0xFF111827),
-    Color(0xFF64748B),Color(0xFFDDE3EC),Color(0xFFE9EEF7),
-    Color.White,Color(0xFF6D28D9))
+    // Mini App: dark slate thread, dark header, indigo-blue user messages
+    Color(0xFF0D1628),Color(0xFF0B1222),Color(0xFFE2E8F0),
+    Color(0xFF94A3B8),Color(0xFF364358),
+    Color(0xFF1E3A8A),Color(0xFF312E81),Color(0xFFF8FAFC),
+    Color(0xFF1E293B),Color(0xFFF1F5F9),Color(0xFFC4B5FD)
+) else TaskChatColors(
+    // Mini App: white header, pale thread, blue user, cyan AI responses
+    Color(0xFFF8FAFC),Color.White,Color(0xFF172033),
+    Color(0xFF64748B),Color(0xFFDBE3EF),
+    Color(0xFF2563EB),Color(0xFF4F46E5),Color.White,
+    Color(0xFFCFFAFE),Color(0xFF164E63),Color(0xFF6D28D9)
+)
 
 private data class ReplyTarget(val id:String,val role:String,val content:String)
 
@@ -97,6 +110,12 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
     var attachmentError by remember(task.id){mutableStateOf<String?>(null)}
     var pendingRetry by remember(task.id){mutableStateOf(false)}
     val busy=ui.taskId==task.id && ui.busy
+    val triggers=if(ui.taskId==task.id && task.aiMonitoringEnabled)
+        ui.monitoringTriggers else emptyList()
+    val monitoringStatuses=if(ui.taskId==task.id)
+        ui.monitoringStatuses else emptyList()
+    var monitoringPanelOpen by remember(task.id){mutableStateOf(false)}
+    var currentTime by remember(task.id){mutableLongStateOf(System.currentTimeMillis())}
     val messages=if(ui.taskId==task.id)ui.messages else emptyList()
     val error=if(ui.taskId==task.id)ui.error else null
     val modelOptions=listOf(
@@ -112,6 +131,13 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
         }
     }
     DisposableEffect(task.id){onDispose{vm.closeTaskAi()}}
+    LaunchedEffect(task.id){
+        while(isActive){
+            vm.refreshTaskAiMonitoring(task.id)
+            currentTime=System.currentTimeMillis()
+            delay(30_000)
+        }
+    }
     val picker=rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments()
     ){uris->
@@ -177,9 +203,13 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
     // Do not animate through the entire transcript on first opening.
     var historyPositioned by remember(task.id){mutableStateOf(false)}
     var lastItemCount by remember(task.id){mutableIntStateOf(0)}
-    LaunchedEffect(task.id,ui.taskId,ui.loading,messages.size,busy,sendingDisplay){
+    LaunchedEffect(task.id,ui.taskId,ui.loading,messages.size,busy,sendingDisplay,
+        monitoringStatuses.size,triggers.size,ui.lastActionReports.size){
         if(ui.taskId!=task.id || ui.loading)return@LaunchedEffect
         val currentCount=messages.size+
+            (if(ui.lastActionReports.isNotEmpty())1 else 0)+
+            (if(monitoringStatuses.isNotEmpty())1 else 0)+
+            (if(triggers.isNotEmpty())1 else 0)+
             (if(busy&&sendingDisplay!=null)1 else 0)+(if(busy)1 else 0)
         if(!historyPositioned){
             if(currentCount>0)listState.scrollToItem(currentCount-1)
@@ -194,10 +224,8 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
 
     Dialog(onDismissRequest=onClose,
         properties=DialogProperties(usePlatformDefaultWidth=false)){
-        Surface(Modifier.fillMaxSize().padding(top=12.dp)
-            .imePadding(),color=c.bg,
-            shape=RoundedCornerShape(topStart=24.dp,topEnd=24.dp),
-            border=BorderStroke(1.dp,c.accent.copy(alpha=.32f))){
+        Surface(Modifier.fillMaxSize().imePadding(),color=c.bg,
+            shape=RoundedCornerShape(0.dp)){
             Column(Modifier.fillMaxSize()){
                 Row(Modifier.fillMaxWidth().background(c.panel)
                     .heightIn(min=58.dp)
@@ -244,6 +272,16 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                             }
                         }
                     }
+                    if(task.taskType==TaskType.TASK && task.parentTaskId==null){
+                        IconButton(onClick={
+                            vm.refreshTaskAiMonitoring(task.id)
+                            monitoringPanelOpen=true
+                        },modifier=Modifier.size(29.dp)){
+                            Icon(Icons.Default.Radar,"Автомониторинг и статусы",
+                                tint=if(task.aiMonitoringEnabled)c.accent else c.secondary,
+                                modifier=Modifier.size(17.dp))
+                        }
+                    }
                     IconButton(onClick={vm.syncTaskAiHistory(task.id)},
                         modifier=Modifier.size(30.dp)){
                         Icon(Icons.Default.Refresh,"Обновить чат",tint=c.secondary,
@@ -275,8 +313,11 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                         modifier=Modifier.fillMaxSize().alpha(if(historyPositioned)1f else 0f),
                         contentPadding=PaddingValues(horizontal=12.dp,vertical=12.dp),
                         verticalArrangement=Arrangement.spacedBy(12.dp)){
-                        items(messages,key={m->m.id?:"\${m.role}-\${messages.indexOf(m)}"}){
-                            message-> TaskChatBubble(message,c,ctx,
+                        items(messages,key={m->m.id?:m.role+"-"+messages.indexOf(m)}){
+                            message->
+                            if(message.messageKind=="MONITOR_ACTION"){
+                                NativeMonitoringActionPill(message.content,c)
+                            }else TaskChatBubble(message,c,ctx,
                                 onReply={reply=ReplyTarget(message.id.orEmpty(),
                                     message.role,message.content)},
                                 onProposalAction={id,action->
@@ -290,20 +331,26 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                                             Intent(Intent.ACTION_VIEW,parsed))}
                                 }})
                         }
+                        if(ui.lastActionReports.isNotEmpty())item(key="ai-last-actions"){
+                            Column(verticalArrangement=Arrangement.spacedBy(6.dp)){
+                                ui.lastActionReports.forEach{report->
+                                    NativeMonitoringActionPill(report,c)
+                                }
+                            }
+                        }
+                        if(monitoringStatuses.isNotEmpty())item(key="monitoring-status-cards"){
+                            NativeMonitoringStatusChips(monitoringStatuses,c)
+                        }
+                        if(triggers.isNotEmpty())item(key="monitoring-active-triggers"){
+                            NativeMonitoringTriggerChips(triggers,currentTime,c)
+                        }
                         if(busy&&sendingDisplay!=null)item(key="pending-user"){
                             TaskChatBubble(TaskAiChatMessage(role="user",
                                 content=sendingDisplay.orEmpty()),c,ctx,
                                 onReply={},pending=true)
                         }
                         if(busy)item(key="assistant-thinking"){
-                            Row(verticalAlignment=Alignment.CenterVertically,
-                                horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                                CircularProgressIndicator(
-                                    modifier=Modifier.size(17.dp),strokeWidth=2.dp,
-                                    color=c.accent)
-                                Text("ИИ обрабатывает запрос…",color=c.secondary,
-                                    fontSize=12.sp)
-                            }
+                            NativeTaskAiProgressChip(ui.progressStatus?:"analyzing_request",c)
                         }
                     }
                 }
@@ -409,6 +456,41 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
             }
         }
     }
+    if(monitoringPanelOpen){
+        AlertDialog(onDismissRequest={monitoringPanelOpen=false},
+            containerColor=c.panel,
+            title={Text("Автомониторинг",color=c.text,fontWeight=FontWeight.Bold)},
+            text={
+                Column(Modifier.heightIn(max=430.dp)
+                    .verticalScroll(rememberScrollState()),
+                    verticalArrangement=Arrangement.spacedBy(10.dp)){
+                    Text(if(task.aiMonitoringEnabled)
+                        "Автомониторинг задачи включён"
+                        else "Автомониторинг задачи выключен",
+                        color=c.secondary,fontSize=12.sp)
+                    if(monitoringStatuses.isEmpty())Text("Пока нет статусов.",
+                        color=c.secondary,fontSize=12.sp)
+                    monitoringStatuses.forEach{status->
+                        Column(Modifier.fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(c.bg).padding(11.dp)){
+                            Text(status.label,color=c.text,
+                                fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+                            status.detail?.takeIf{it.isNotBlank()}?.let{
+                                Text(it,color=c.secondary,fontSize=11.sp)
+                            }
+                            status.createdAt?.let{
+                                Text(it.take(16).replace('T',' '),
+                                    color=c.secondary,fontSize=10.sp)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton={TextButton(onClick={monitoringPanelOpen=false}){
+                Text("Закрыть")
+            }})
+    }
 }
 
 @Composable
@@ -424,21 +506,26 @@ private fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
         Column(Modifier.widthIn(max=330.dp).fillMaxWidth(.89f),
             horizontalAlignment=if(isUser)Alignment.End else Alignment.Start,
             verticalArrangement=Arrangement.spacedBy(3.dp)){
-            Surface(shape=RoundedCornerShape(
-                topStart=19.dp,topEnd=19.dp,
-                bottomEnd=if(isUser)7.dp else 19.dp,
-                bottomStart=if(isUser)19.dp else 7.dp),
-                color=if(isUser)c.user else c.assistant,
-                border=BorderStroke(1.dp,
-                    if(isUser)c.accent.copy(alpha=.36f)else c.border)){
-                Column(Modifier.padding(12.dp),
-                    verticalArrangement=Arrangement.spacedBy(7.dp)){
+            val bubbleShape=RoundedCornerShape(
+                topStart=22.dp,topEnd=22.dp,
+                bottomEnd=if(isUser)8.dp else 22.dp,
+                bottomStart=if(isUser)22.dp else 8.dp)
+            // Mini App has filled bubbles; neither messages nor the dialog
+            // have violet outlines. Only action/monitor chips keep soft edges.
+            Column(Modifier.fillMaxWidth().clip(bubbleShape).background(
+                    brush=if(isUser)Brush.linearGradient(listOf(c.user,c.userEnd))
+                        else Brush.linearGradient(listOf(c.assistant,c.assistant))
+                ).padding(horizontal=14.dp,vertical=12.dp),
+                verticalArrangement=Arrangement.spacedBy(7.dp)){
                     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,
                         verticalAlignment=Alignment.CenterVertically){
                         Text(message.authorName ?: if(isUser)"Вы" else "ИИ",
-                            color=if(isUser) c.secondary else c.accent,
+                            color=if(isUser)c.userText.copy(alpha=.93f)
+                                else c.assistantText.copy(alpha=.88f),
                             fontSize=12.sp,fontWeight=FontWeight.Bold)
-                        if(pending)Text("Отправляется…",color=c.secondary,fontSize=9.sp)
+                        if(pending)Text("Отправляется…",
+                            color=if(isUser)c.userText.copy(alpha=.7f)else c.secondary,
+                            fontSize=9.sp)
                         else IconButton(onClick={
                             val clipboard=context.getSystemService(
                                 Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -446,12 +533,14 @@ private fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                             Toast.makeText(context,"Скопировано",Toast.LENGTH_SHORT).show()
                         },modifier=Modifier.size(25.dp)){
                             Icon(Icons.Default.ContentCopy,"Копировать",
-                                tint=c.secondary,modifier=Modifier.size(14.dp))
+                                tint=if(isUser)c.userText.copy(alpha=.76f)
+                                    else c.secondary,modifier=Modifier.size(14.dp))
                         }
                     }
                     if(!isUser) NativeAiFormattedMessage(
-                        text=content,textColor=c.text,linkColor=c.accent)
-                    else Text(content,color=c.text,fontSize=13.sp,lineHeight=20.sp)
+                        text=content,textColor=c.assistantText,
+                        linkColor=if(c.bg.red>.5f)Color(0xFF0369A1) else Color(0xFF67E8F9))
+                    else Text(content,color=c.userText,fontSize=13.sp,lineHeight=20.sp)
                     if(message.messageKind=="MONITOR_ACTION"){
                         Text("Действие автомониторинга",color=c.secondary,fontSize=10.sp)
                     }
@@ -491,10 +580,31 @@ private fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                             color=c.secondary,fontSize=9.sp)
                     }
                 }
-            }
-            if(!pending)IconButton(onClick=onReply,modifier=Modifier.size(28.dp)){
-                Icon(Icons.Default.Reply,"Ответить на сообщение",
-                    tint=c.secondary,modifier=Modifier.size(16.dp))
+            if(!pending){
+                Row(Modifier.padding(top=5.dp),
+                    horizontalArrangement=Arrangement.spacedBy(13.dp),
+                    verticalAlignment=Alignment.CenterVertically){
+                    Row(Modifier.clip(CircleShape).clickable(onClick=onReply)
+                        .padding(horizontal=3.dp,vertical=4.dp),
+                        verticalAlignment=Alignment.CenterVertically){
+                        TaskChatThinArrow(color=c.secondary,forward=false)
+                        Spacer(Modifier.width(4.dp))
+                        Text("Ответить",fontSize=10.sp,color=c.secondary)
+                    }
+                    Row(Modifier.clip(CircleShape).clickable {
+                        val share=Intent(Intent.ACTION_SEND).apply{
+                            type="text/plain"
+                            putExtra(Intent.EXTRA_TEXT,content)
+                        }
+                        runCatching{context.startActivity(
+                            Intent.createChooser(share,"Переслать сообщение"))}
+                    }.padding(horizontal=3.dp,vertical=4.dp),
+                        verticalAlignment=Alignment.CenterVertically){
+                        TaskChatThinArrow(color=c.secondary,forward=true)
+                        Spacer(Modifier.width(4.dp))
+                        Text("Переслать",fontSize=10.sp,color=c.secondary)
+                    }
+                }
             }
         }
     }
@@ -568,5 +678,158 @@ private fun NativeAiProposalReview(
                 }){Text("Подтвердить")}
             },
             dismissButton={TextButton(onClick={confirm=null}){Text("Отмена")}})
+    }
+}
+
+@Composable
+private fun TaskChatThinArrow(color:Color,forward:Boolean){
+    // Deliberately thin 1.4dp stroke, like the Mini App's Lucide reply/share
+    // actions. No filled icon button or circular outline.
+    Canvas(Modifier.size(16.dp)){
+        val direction=if(forward)1f else -1f
+        val tip=if(forward).82f else .18f
+        val body=if(forward).54f else .46f
+        val center=.51f
+        val stroke=1.4.dp.toPx()
+        drawLine(color,Offset(tip*size.width,center*size.height),
+            Offset(body*size.width,.23f*size.height),
+            strokeWidth=stroke,cap=StrokeCap.Round)
+        drawLine(color,Offset(tip*size.width,center*size.height),
+            Offset(body*size.width,.79f*size.height),
+            strokeWidth=stroke,cap=StrokeCap.Round)
+        drawLine(color,Offset(tip*size.width,center*size.height),
+            Offset((.18f+(.64f)*(1-direction)/2f)*size.width,
+                center*size.height),
+            strokeWidth=stroke,cap=StrokeCap.Round)
+    }
+}
+
+private val TASK_AI_PROGRESS_LABELS=mapOf(
+    "analyzing_request" to "Анализирую запрос",
+    "using_chat_history" to "Учитываю историю диалога",
+    "searching_subtasks" to "Ищу нужную подзадачу",
+    "analyzing_subtasks" to "Анализирую подзадачи",
+    "reading_subtask" to "Изучаю детали подзадачи",
+    "searching_files" to "Ищу нужный файл",
+    "reading_file" to "Изучаю содержимое файла",
+    "reading_attachment" to "Изучаю вложение",
+    "searching_tasks" to "Ищу задачи",
+    "listing_tasks" to "Собираю список задач",
+    "reading_task" to "Изучаю задачу",
+    "searching_web" to "Ищу в интернете",
+    "analyzing_web_results" to "Изучаю найденные источники",
+    "analyzing_retrieved_context" to "Анализирую найденные данные",
+    "forming_answer" to "Формирую ответ",
+    "applying_changes" to "Вношу изменения",
+    "generating_image" to "Создаю изображение",
+    "editing_image" to "Редактирую изображение",
+    "editing_document" to "Редактирую документ"
+)
+
+@Composable
+private fun NativeTaskAiProgressChip(status:String,c:TaskChatColors){
+    val title=TASK_AI_PROGRESS_LABELS[status] ?: "Обрабатываю запрос"
+    Row(Modifier.fillMaxWidth().padding(vertical=5.dp),
+        verticalAlignment=Alignment.CenterVertically,
+        horizontalArrangement=Arrangement.spacedBy(8.dp)){
+        Box(Modifier.size(26.dp).clip(CircleShape)
+            .background(c.accent.copy(alpha=.1f)),
+            contentAlignment=Alignment.Center){
+            Icon(Icons.Default.AutoAwesome,null,
+                tint=c.accent,modifier=Modifier.size(14.dp))
+        }
+        Column(verticalArrangement=Arrangement.spacedBy(3.dp)){
+            Text(title,color=c.text,fontSize=12.sp,
+                fontWeight=FontWeight.SemiBold)
+            LinearProgressIndicator(
+                modifier=Modifier.width(86.dp).height(2.dp),
+                color=c.accent,trackColor=c.border)
+        }
+    }
+}
+
+@Composable
+private fun NativeMonitoringActionPill(content:String,c:TaskChatColors){
+    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.Start){
+        Row(Modifier.widthIn(max=330.dp)
+            .clip(RoundedCornerShape(13.dp))
+            .background(c.accent.copy(alpha=.09f))
+            .border(1.dp,c.accent.copy(alpha=.2f),RoundedCornerShape(13.dp))
+            .padding(horizontal=11.dp,vertical=9.dp),
+            verticalAlignment=Alignment.Top,
+            horizontalArrangement=Arrangement.spacedBy(8.dp)){
+            Icon(Icons.Default.AutoAwesome,null,tint=c.accent,
+                modifier=Modifier.size(15.dp))
+            Column(verticalArrangement=Arrangement.spacedBy(2.dp)){
+                Text("Действие ИИ",color=c.accent,fontWeight=FontWeight.Bold,
+                    fontSize=10.sp)
+                Text(content,color=c.text,fontSize=12.sp,lineHeight=17.sp)
+            }
+        }
+    }
+}
+@Composable
+private fun NativeMonitoringStatusChips(
+    statuses:List<TaskMonitoringStatus>,c:TaskChatColors
+){
+    Column(verticalArrangement=Arrangement.spacedBy(6.dp)){
+        statuses.sortedByDescending{it.createdAt.orEmpty()}.take(3).forEach{status->
+            Row(Modifier.fillMaxWidth(),
+                horizontalArrangement=Arrangement.Start){
+                Row(Modifier.widthIn(max=335.dp)
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(c.accent.copy(alpha=.08f))
+                    .border(1.dp,c.accent.copy(alpha=.17f),
+                        RoundedCornerShape(13.dp))
+                    .padding(horizontal=11.dp,vertical=8.dp),
+                    verticalAlignment=Alignment.Top,
+                    horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                    Icon(Icons.Default.CheckCircleOutline,null,
+                        tint=c.accent,modifier=Modifier.size(15.dp))
+                    Column(verticalArrangement=Arrangement.spacedBy(2.dp)){
+                        Text(status.label,color=c.text,fontSize=12.sp,
+                            fontWeight=FontWeight.SemiBold)
+                        status.detail?.takeIf{it.isNotBlank()}?.let{
+                            Text(it,color=c.secondary,fontSize=11.sp,maxLines=4)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+@Composable
+private fun NativeMonitoringTriggerChips(
+    triggers:List<TaskMonitoringTrigger>,now:Long,c:TaskChatColors
+){
+    Column(verticalArrangement=Arrangement.spacedBy(6.dp)){
+        triggers.forEach{trigger->
+            val due=runCatching{
+                java.time.Instant.parse(trigger.dueAt).toEpochMilli()
+            }.recoverCatching {
+                java.time.OffsetDateTime.parse(trigger.dueAt).toInstant().toEpochMilli()
+            }.getOrDefault(now)
+            val seconds=((due-now+999)/1000).coerceAtLeast(0)
+            val timeText=when {
+                seconds>=3600->(seconds/3600).toString()+" ч "+
+                    ((seconds%3600+59)/60).toString()+" мин"
+                seconds>=60->((seconds+59)/60).toString()+" мин"
+                else->"скоро"
+            }
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.Start){
+                Row(Modifier.clip(CircleShape)
+                    .background(c.accent.copy(alpha=.09f))
+                    .border(1.dp,c.accent.copy(alpha=.22f),CircleShape)
+                    .padding(horizontal=11.dp,vertical=7.dp),
+                    horizontalArrangement=Arrangement.spacedBy(6.dp),
+                    verticalAlignment=Alignment.CenterVertically){
+                    Icon(Icons.Default.Schedule,null,tint=c.accent,
+                        modifier=Modifier.size(13.dp))
+                    Text("Триггер запущен · "+timeText,
+                        color=c.accent,fontSize=11.sp,
+                        fontWeight=FontWeight.SemiBold,maxLines=1)
+                }
+            }
+        }
     }
 }

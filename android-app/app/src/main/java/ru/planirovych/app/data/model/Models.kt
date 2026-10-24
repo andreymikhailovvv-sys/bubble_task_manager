@@ -60,6 +60,7 @@ data class Task(
     val recurrenceSummary: String? = null,
     val recurrenceUntil: String? = null,
     val aiNotificationsEnabled: Boolean = false,
+    val aiMonitoringEnabled: Boolean = false,
     val importance: Int = 0,
     val urgency: Int = 0,
     val priorityScore: Double = 0.0,
@@ -160,4 +161,19 @@ data class TaskAiReply(
     val taskDataChanged:Boolean=false,
     val actionReports:List<String> = emptyList(),
     val raw:kotlinx.serialization.json.JsonObject
+)
+
+@Serializable
+data class TaskMonitoringTrigger(
+    val id:String,
+    val dueAt:String,
+    val question:String="",
+    val state:String=""
+)
+@Serializable
+data class TaskMonitoringStatus(
+    val id:String,
+    val label:String,
+    val detail:String?=null,
+    val createdAt:String?=null
 )
