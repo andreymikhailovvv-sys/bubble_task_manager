@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ArrowUpRight, Camera, Check, CreditCard, Gift, Heart, Map, PlugZap,
+  ArrowUpRight, Camera, Check, CreditCard, Gift, Heart, Map as MapIcon, PlugZap,
   RefreshCw, Sparkles, Watch
 } from 'lucide-react';
 import './BirthdayWishlistPage.css';
@@ -81,7 +81,7 @@ function Symbol({ kind }: { kind: GiftVisual }) {
   if (kind === 'camera') return <Camera {...props} />;
   if (kind === 'charger') return <PlugZap {...props} />;
   if (kind === 'bracelet') return <Watch {...props} />;
-  if (kind === 'map') return <Map {...props} />;
+  if (kind === 'map') return <MapIcon {...props} />;
   if (kind === 'black-orchid') return <Sparkles {...props} />;
   return <Heart {...props} />;
 }
