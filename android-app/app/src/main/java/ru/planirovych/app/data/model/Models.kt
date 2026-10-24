@@ -111,3 +111,13 @@ data class StandaloneNote(
     val createdAt: String? = null,
     val updatedAt: String? = null,
 )
+
+@Serializable
+data class TaskAttachment(
+    val id: String,
+    val taskId: String,
+    val name: String,
+    val mimeType: String,
+    val size: Int,
+)
+@Serializable data class TaskAttachmentLink(val url: String, val fileName: String)
