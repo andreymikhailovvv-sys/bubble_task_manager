@@ -141,7 +141,7 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                                 chats=p.chats.map{c->
                                     if(c.id==chatId)c.copy(messages=remote) else c
                                 })
-                        })
+                        }
                     )
                 }
             }catch(_:Throwable){/* transient network error; preserve history */}
@@ -340,7 +340,7 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                                             })
                                 }
                             })
-                        }})
+                        })
                     }
                     generalAiMutable.update{it.copy(projects=saved)}
                 }
