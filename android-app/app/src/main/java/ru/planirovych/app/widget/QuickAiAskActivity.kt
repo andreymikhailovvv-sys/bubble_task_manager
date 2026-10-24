@@ -111,14 +111,14 @@ class QuickAiAskActivity:ComponentActivity(){
                     scope.launch{
                         try{
                             val result=withContext(Dispatchers.IO){
-                                val current=app.repository.establishSession()
+                                app.repository.establishSession()
                                 var projects=app.repository.loadGeneralAiProjects()
                                 if(projects.isEmpty()){
                                     projects=app.repository.persistGeneralAiProjects(
                                         defaultGeneralAiProjects())
                                 }
                                 val project=projects.firstOrNull()
-                                    ?:error("Не удалось найти личный проект")
+                                    ?:throw IllegalStateException("Не удалось найти личный проект")
                                 val thread=project.chats.firstOrNull{
                                     it.id==QUICK_AI_THREAD_ID
                                 }?:GeneralAiThread(QUICK_AI_THREAD_ID,QUICK_AI_TITLE)
