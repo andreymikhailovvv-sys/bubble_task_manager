@@ -36,7 +36,9 @@ jobs:
       - name: Install compile SDK
         run: |
           echo "ANDROID_HOME=${ANDROID_HOME}"
-          sdkmanager --install 'platforms;android-36' 'build-tools;36.0.0'
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -path '*/bin/sdkmanager' | sort -V | tail -1)"
+          test -n "$SDKMANAGER"
+          "$SDKMANAGER" --install 'platforms;android-36' 'build-tools;36.0.0'
       - name: Compile native Android Kotlin
         run: |
           chmod +x gradlew
