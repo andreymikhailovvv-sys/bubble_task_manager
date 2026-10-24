@@ -45,7 +45,7 @@ import { AiGeneratedDocumentButton } from './components/AiGeneratedDocumentButto
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
 import { AiReplyAction, AiReplyPreview, AiReplyMessageBody, serializeAiReply, type AiReplyTarget } from './components/AiMessageReply';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
-import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, mergeTelegramManagedMessages, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike } from './lib/ai-chat-reconciliation';
+import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, mergeTelegramManagedMessages, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike, orderAiChatMessagesChronologically } from './lib/ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
 import { DEFAULT_MOBILE_PROJECT_CHAT_MODEL, DEFAULT_QUICK_AI_CHAT_MODEL, readSavedAiChatModel } from './lib/ai-chat-model';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
@@ -1057,7 +1057,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       const nextAiChatProjects = normalizeMiniAiChatProjects(syncedProjects.projects).map((project, projectIndex) => projectIndex === 0 ? {
         ...project,
         chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID
-          ? { ...chat, messages: reconcileAiChatMessagesWithChips(chat.messages, quickMessages) } : chat)
+          ? { ...chat, messages: orderAiChatMessagesChronologically(reconcileAiChatMessagesWithChips(chat.messages, quickMessages)).slice(-100) } : chat)
       } : project);
       if (telegramInbox?.chats.length) {
         const oldProject = nextAiChatProjects.find(p => p.id === telegramInbox.projectId);
@@ -2974,8 +2974,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       ? `${question || 'Пользователь отправил сообщение с вложением.'}\n\n📎 Файлы: ${fileNames.join(', ')}`
       : question, replyToGeneral);
     const attachmentPreviews = await makeAiAttachmentPreviews(aiChatPendingFiles);
-    const userMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'user', content: userMessageContent, attachmentPreviews };
-    const history = activeAiChat?.messages ?? [];
+    const userMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'user', content: userMessageContent, createdAt: new Date().toISOString(), attachmentPreviews };
+    const history = activeAiChat?.id === QUICK_AI_CHAT_ID
+      ? orderAiChatMessagesChronologically(activeAiChat.messages).slice(-20)
+      : (activeAiChat?.messages ?? []);
     generalAiChatNearBottomRef.current = true;
     updateActiveAiChatMessages((messages) => [...messages, userMessage]);
     aiChatDraftValueRef.current = '';
@@ -3002,7 +3004,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       if (result.actionReports?.some((item) => item.startsWith('Изменена заметка'))) {
          window.dispatchEvent(new Event('standalone-notes-updated'));
        }
-       const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
+       const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', createdAt: new Date().toISOString(), content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
       updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
       setReplyToGeneral(null);
       if (history.length === 0 && result.suggestedChatTitle && activeAiChatProject?.id && activeAiChat?.id) {
