@@ -3,6 +3,9 @@ package ru.planirovych.app.feature.home
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
 import androidx.compose.foundation.text.BasicTextField
@@ -114,14 +117,35 @@ fun NativeHabitDetailSheet(vm:HomeViewModel,habit:Habit,dark:Boolean,onClose:()-
     var confirm by remember(habit.id){mutableStateOf<String?>(null)}
     val metrics=remember(habit,month,counts){habitMetrics(habit,month,counts)}
     val amount=habitAmount(today,counts)
+    val density=LocalDensity.current
+    var dragDistance by remember(habit.id){ mutableFloatStateOf(0f) }
     LaunchedEffect(habit.id){vm.loadHabitHistory(habit.id)}
     ModalBottomSheet(
         onDismissRequest=onClose,
+        sheetGesturesEnabled=false,
         containerColor=c.bg,contentColor=c.text,
         sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),
-        dragHandle={BottomSheetDefaults.DragHandle(color=c.muted)},
+        dragHandle={
+            Box(Modifier.fillMaxWidth().height(28.dp)
+                .pointerInput(habit.id) {
+                    detectVerticalDragGestures(
+                        onDragEnd={
+                            if(dragDistance > with(density){64.dp.toPx()})onClose()
+                            dragDistance=0f
+                        },
+                        onDragCancel={dragDistance=0f},
+                        onVerticalDrag={change,amount->
+                            change.consume()
+                            dragDistance=(dragDistance+amount).coerceAtLeast(0f)
+                        }
+                    )
+                },contentAlignment=Alignment.Center) {
+                Box(Modifier.width(38.dp).height(4.dp).clip(CircleShape)
+                    .background(c.muted.copy(alpha=.52f)))
+            }
+        },
     ){
-        Column(Modifier.fillMaxWidth().heightIn(max=(LocalConfiguration.current.screenHeightDp*.86f).dp)
+        Column(Modifier.fillMaxWidth().heightIn(max=(LocalConfiguration.current.screenHeightDp*.75f).dp)
             .verticalScroll(rememberScrollState())
             .padding(horizontal=17.dp,vertical=4.dp)
             .navigationBarsPadding(),
