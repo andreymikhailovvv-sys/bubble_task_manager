@@ -300,41 +300,93 @@ private fun TimelineDay(day:LocalDate,tasks:List<Task>,allTasks:List<Task>,
 @Composable
 private fun TimelineWeek(monday:LocalDate,tasks:List<Task>,allTasks:List<Task>,
     habits:List<Habit>,spheres:List<Sphere>,colors:WorkspaceColors,dark:Boolean,
-    onOpen:(String)->Unit,openDay:(LocalDate)->Unit){
+    onOpen:(String)->Unit,weekScale:Float,onWeekScaleChange:(Float)->Unit,
+    openDay:(LocalDate)->Unit){
     val labels=listOf("Пн","Вт","Ср","Чт","Пт","Сб","Вс")
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement=Arrangement.spacedBy(6.dp)){
-        repeat(7){index->
-            val date=monday.plusDays(index.toLong())
-            val items=remember(date,tasks,allTasks,habits,spheres){
-                timelineEntries(date,tasks,allTasks,habits,spheres)
+    val currentScale by rememberUpdatedState(weekScale)
+    val updateScale by rememberUpdatedState(onWeekScaleChange)
+    Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End,
+            verticalAlignment=Alignment.CenterVertically){
+            Icon(Icons.Default.ZoomIn,"Изменить масштаб недели",
+                tint=colors.secondaryText,modifier=Modifier.size(15.dp))
+            Spacer(Modifier.width(5.dp))
+            Text("Масштаб",color=colors.secondaryText,fontSize=11.sp)
+            Spacer(Modifier.width(8.dp))
+            IconButton(onClick={onWeekScaleChange(weekScale-.15f)},
+                enabled=weekScale>.73f,modifier=Modifier.size(32.dp)){
+                Icon(Icons.Default.Remove,"Уменьшить масштаб",
+                    tint=colors.purple,modifier=Modifier.size(18.dp))
             }
-            Surface(Modifier.width(155.dp).heightIn(min=230.dp),shape=RoundedCornerShape(15.dp),
-                color=colors.panel,border=BorderStroke(1.dp,
-                    if(date==LocalDate.now())colors.purple else colors.panelBorder)){
-                Column(Modifier.padding(7.dp),verticalArrangement=Arrangement.spacedBy(7.dp)){
-                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp))
-                        .background(if(date==LocalDate.now())colors.selected else colors.muted)
-                        .clickable{openDay(date)}.padding(8.dp),
-                        horizontalAlignment=Alignment.CenterHorizontally){
-                        Text(labels[index],color=colors.secondaryText,fontSize=11.sp)
-                        Text(date.dayOfMonth.toString(),fontWeight=FontWeight.Bold,
-                            color=colors.text,fontSize=18.sp)
-                        Text(date.format(DateTimeFormatter.ofPattern("MMM",Locale("ru"))),
-                            color=colors.secondaryText,fontSize=10.sp)
+            Text("${(weekScale*100).toInt()}%",
+                color=colors.text,fontSize=11.sp,fontWeight=FontWeight.Bold,
+                textAlign=TextAlign.Center,modifier=Modifier.width(44.dp))
+            IconButton(onClick={onWeekScaleChange(weekScale+.15f)},
+                enabled=weekScale<1.79f,modifier=Modifier.size(32.dp)){
+                Icon(Icons.Default.Add,"Увеличить масштаб",
+                    tint=colors.purple,modifier=Modifier.size(18.dp))
+            }
+        }
+        // Intercept *only* two-finger gestures. A single finger remains
+        // available for horizontal week scrolling and outer page gestures.
+        Row(Modifier.fillMaxWidth()
+            .pointerInput(Unit){
+                awaitEachGesture {
+                    awaitPointerEventScope {
+                        do {
+                            val event=awaitPointerEvent(PointerEventPass.Initial)
+                            if(event.changes.count{it.pressed}>=2){
+                                val factor=event.calculateZoom()
+                                if(factor.isFinite() && factor>0f && factor!=1f){
+                                    updateScale((currentScale*factor).coerceIn(.72f,1.8f))
+                                }
+                                event.changes.forEach{it.consume()}
+                            }
+                        }while(event.changes.any{it.pressed})
                     }
-                    if(items.isEmpty()){
-                        Text("Нет записей",color=colors.secondaryText,fontSize=10.sp,
-                            modifier=Modifier.padding(top=14.dp))
-                    }
-                    items.groupBy{it.time.hour}.forEach{(hour,group)->
-                        Text(String.format(Locale.US,"%02d:00",hour),
-                            color=colors.secondaryText,fontSize=10.sp,
-                            fontWeight=FontWeight.SemiBold)
-                        group.forEach{TimelineEventCard(it,colors,dark,compact=true,onOpen=onOpen)}
-                    }
-                    TextButton(onClick={openDay(date)},modifier=Modifier.fillMaxWidth()){
-                        Text("Открыть день",fontSize=10.sp)
+                }
+            }
+            .horizontalScroll(rememberScrollState()),
+            horizontalArrangement=Arrangement.spacedBy(6.dp)){
+            repeat(7){index->
+                val date=monday.plusDays(index.toLong())
+                val items=remember(date,tasks,allTasks,habits,spheres){
+                    timelineEntries(date,tasks,allTasks,habits,spheres)
+                }
+                Surface(Modifier.width((155f*weekScale).dp).heightIn(min=230.dp),
+                    shape=RoundedCornerShape(15.dp),
+                    color=colors.panel,border=BorderStroke(1.dp,
+                        if(date==LocalDate.now())colors.purple else colors.panelBorder)){
+                    Column(Modifier.padding((7f*weekScale).dp),
+                        verticalArrangement=Arrangement.spacedBy((7f*weekScale).dp)){
+                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp))
+                            .background(if(date==LocalDate.now())colors.selected else colors.muted)
+                            .clickable{openDay(date)}.padding(8.dp),
+                            horizontalAlignment=Alignment.CenterHorizontally){
+                            Text(labels[index],color=colors.secondaryText,
+                                fontSize=(11f*weekScale).sp)
+                            Text(date.dayOfMonth.toString(),fontWeight=FontWeight.Bold,
+                                color=colors.text,fontSize=(18f*weekScale).sp)
+                            Text(date.format(DateTimeFormatter.ofPattern("MMM",Locale("ru"))),
+                                color=colors.secondaryText,fontSize=(10f*weekScale).sp)
+                        }
+                        if(items.isEmpty()){
+                            Text("Нет записей",color=colors.secondaryText,
+                                fontSize=(10f*weekScale).sp,
+                                modifier=Modifier.padding(top=14.dp))
+                        }
+                        items.groupBy{it.time.hour}.forEach{(hour,group)->
+                            Text(String.format(Locale.US,"%02d:00",hour),
+                                color=colors.secondaryText,fontSize=(10f*weekScale).sp,
+                                fontWeight=FontWeight.SemiBold)
+                            group.forEach{
+                                TimelineEventCard(it,colors,dark,compact=true,
+                                    scale=weekScale,onOpen=onOpen)
+                            }
+                        }
+                        TextButton(onClick={openDay(date)},modifier=Modifier.fillMaxWidth()){
+                            Text("Открыть день",fontSize=(10f*weekScale).sp)
+                        }
                     }
                 }
             }
