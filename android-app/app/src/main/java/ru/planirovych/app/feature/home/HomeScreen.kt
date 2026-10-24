@@ -45,8 +45,8 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
         when {
             state.loading -> Loading(Modifier.padding(padding))
             state.error != null -> ErrorState(state.error!!, vm::refresh, Modifier.padding(padding))
-            else -> Workspace(
-                state, vm::search, { settings = true },
+            else -> ModernWorkspace(
+                vm, state, dark, vm::search, { settings = true },
                 onOpenTask = {
                     openedTaskId = it
                     newSubtaskParentId = null
