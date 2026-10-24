@@ -51,7 +51,7 @@ class WorkspaceRepository(private val api: PlanirovychApi) {
             }
     }
     suspend fun loadHabits() = api.habits()
-    suspend fun completeHabit(id: String) { api.completeHabit(id, buildJsonObject { }) }
+    suspend fun completeHabit(id: String) { api.completeHabit(id, buildJsonObject { put("dateKey", java.time.LocalDate.now().toString()) }) }
     suspend fun createHabit(name: String) {
         api.createHabit(buildJsonObject {
             put("name", name.trim())
