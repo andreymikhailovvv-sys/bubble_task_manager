@@ -1817,10 +1817,11 @@ export const aiAssistantService = {
     }
   },
 
-  listGeneralDialog: async (input: { userId: string; since?: Date; userTimeZone?: string }): Promise<ChatMessage[]> => {
+  listGeneralDialog: async (input: { userId: string; since?: Date; userTimeZone?: string; excludeMonitoringMessages?: boolean }): Promise<ChatMessage[]> => {
     const messages = await prisma.generalAiMessage.findMany({
       where: {
         userId: input.userId,
+        ...(input.excludeMonitoringMessages ? { monitoringTaskId: null } : {}),
         ...(input.since ? { createdAt: { gte: input.since } } : {})
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
