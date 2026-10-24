@@ -81,6 +81,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
         if (openedTask != null && parent == null && openedTask.taskType != TaskType.REMINDER) {
             MiniAppTaskFocusSheet(
                 task = openedTask,
+                vm = vm,
                 tasks = state.tasks,
                 spheres = state.spheres,
                 dark = dark,
