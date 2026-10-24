@@ -11,6 +11,16 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.collect
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.*
@@ -221,7 +231,37 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
     }
     // The existing history must appear at its last message immediately.
     // Do not animate through the entire transcript on first opening.
+    var headerHidden by remember(task.id){mutableStateOf(false)}
+    var composerHeightPx by remember(task.id){mutableIntStateOf(0)}
+    val composerBottomPadding=with(LocalDensity.current){
+        if(composerHeightPx>0)composerHeightPx.toDp()+12.dp else 102.dp
+    }
     var historyPositioned by remember(task.id){mutableStateOf(false)}
+    LaunchedEffect(task.id){
+        var previousIndex:Int?=null
+        var previousOffset=0
+        var movement=0
+        snapshotFlow{
+            Triple(listState.firstVisibleItemIndex,
+                listState.firstVisibleItemScrollOffset,
+                listState.isScrollInProgress)
+        }.distinctUntilChanged().collect{(index,offset,isScrolling)->
+            val oldIndex=previousIndex
+            if(oldIndex!=null && historyPositioned && isScrolling){
+                val delta=if(index==oldIndex)offset-previousOffset
+                    else (index-oldIndex).coerceIn(-3,3)*36
+                if(delta!=0){
+                    movement=if((delta>0 && movement<0) ||
+                        (delta<0 && movement>0))0 else movement
+                    movement=(movement+delta).coerceIn(-80,80)
+                    if(movement>18){headerHidden=true;movement=0}
+                    else if(movement< -18){headerHidden=false;movement=0}
+                }
+            }else if(!isScrolling)movement=0
+            previousIndex=index
+            previousOffset=offset
+        }
+    }
     var lastItemCount by remember(task.id){mutableIntStateOf(0)}
     LaunchedEffect(task.id,ui.taskId,ui.loading,messages.size,busy,sendingDisplay,
         monitoringStatuses.size,triggers.size,ui.lastActionReports.size){
@@ -247,6 +287,11 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
         Surface(Modifier.fillMaxSize().imePadding(),color=c.bg,
             shape=RoundedCornerShape(0.dp)){
             Column(Modifier.fillMaxSize()){
+                AnimatedVisibility(
+                    visible=!headerHidden,
+                    enter=expandVertically(animationSpec=tween(170))+fadeIn(),
+                    exit=shrinkVertically(animationSpec=tween(150))+fadeOut()
+                ){
                 Row(Modifier.fillMaxWidth().background(c.panel)
                     .heightIn(min=58.dp)
                     .padding(horizontal=11.dp,vertical=8.dp),
@@ -312,7 +357,7 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                             modifier=Modifier.size(20.dp))
                     }
                 }
-                HorizontalDivider(color=c.border)
+                }
                 Box(Modifier.weight(1f)){
                     if(ui.taskId==task.id && ui.loading){
                         CircularProgressIndicator(Modifier.align(Alignment.Center))
@@ -331,7 +376,8 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                     }
                     LazyColumn(state=listState,
                         modifier=Modifier.fillMaxSize().alpha(if(historyPositioned)1f else 0f),
-                        contentPadding=PaddingValues(horizontal=12.dp,vertical=12.dp),
+                        contentPadding=PaddingValues(start=12.dp,end=12.dp,
+                            top=12.dp,bottom=composerBottomPadding),
                         verticalArrangement=Arrangement.spacedBy(12.dp)){
                         items(messages,key={m->m.id?:m.role+"-"+messages.indexOf(m)}){
                             message->
@@ -373,10 +419,10 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                             NativeTaskAiProgressChip(ui.progressStatus?:"analyzing_request",c)
                         }
                     }
-                }
-                HorizontalDivider(color=c.border)
-                Column(Modifier.fillMaxWidth().background(c.panel)
-                    .padding(start=12.dp,end=12.dp,top=8.dp,bottom=10.dp),
+                Column(Modifier.align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal=12.dp,bottom=10.dp)
+                    .onSizeChanged{composerHeightPx=it.height},
                     verticalArrangement=Arrangement.spacedBy(7.dp)){
                     if(reply!=null){
                         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp))
@@ -428,9 +474,13 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                             }
                         }
                     }
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
-                        .background(c.bg).border(1.dp,c.border,RoundedCornerShape(20.dp))
-                        .padding(start=5.dp,end=7.dp,top=5.dp,bottom=5.dp),
+                    Row(Modifier.fillMaxWidth()
+                        .shadow(7.dp,RoundedCornerShape(32.dp))
+                        .clip(RoundedCornerShape(32.dp))
+                        .background(c.panel)
+                        .border(1.dp,c.border.copy(alpha=if(dark).7f else .86f),
+                            RoundedCornerShape(32.dp))
+                        .padding(start=7.dp,end=7.dp,top=5.dp,bottom=5.dp),
                         verticalAlignment=Alignment.Bottom,
                         horizontalArrangement=Arrangement.spacedBy(6.dp)){
                         BasicTextField(value=draft,onValueChange={
@@ -472,6 +522,7 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                         Text("Ответ мог сохраниться на сервере. При повторе используется тот же ID запроса.",
                             color=c.secondary,fontSize=10.sp)
                     }
+                }
                 }
             }
         }
