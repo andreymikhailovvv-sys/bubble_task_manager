@@ -695,3 +695,133 @@ private fun TaskChatThinArrow(color:Color,forward:Boolean){
             strokeWidth=stroke,cap=StrokeCap.Round)
     }
 }
+
+private val TASK_AI_PROGRESS_LABELS=mapOf(
+    "analyzing_request" to "Анализирую запрос",
+    "using_chat_history" to "Учитываю историю диалога",
+    "searching_subtasks" to "Ищу нужную подзадачу",
+    "analyzing_subtasks" to "Анализирую подзадачи",
+    "reading_subtask" to "Изучаю детали подзадачи",
+    "searching_files" to "Ищу нужный файл",
+    "reading_file" to "Изучаю содержимое файла",
+    "reading_attachment" to "Изучаю вложение",
+    "searching_tasks" to "Ищу задачи",
+    "listing_tasks" to "Собираю список задач",
+    "reading_task" to "Изучаю задачу",
+    "searching_web" to "Ищу в интернете",
+    "analyzing_web_results" to "Изучаю найденные источники",
+    "analyzing_retrieved_context" to "Анализирую найденные данные",
+    "forming_answer" to "Формирую ответ",
+    "applying_changes" to "Вношу изменения",
+    "generating_image" to "Создаю изображение",
+    "editing_image" to "Редактирую изображение",
+    "editing_document" to "Редактирую документ"
+)
+
+@Composable
+private fun NativeTaskAiProgressChip(status:String,c:TaskChatColors){
+    val title=TASK_AI_PROGRESS_LABELS[status] ?: "Обрабатываю запрос"
+    Row(Modifier.fillMaxWidth().padding(vertical=5.dp),
+        verticalAlignment=Alignment.CenterVertically,
+        horizontalArrangement=Arrangement.spacedBy(8.dp)){
+        Box(Modifier.size(26.dp).clip(CircleShape)
+            .background(c.accent.copy(alpha=.1f)),
+            contentAlignment=Alignment.Center){
+            Icon(Icons.Default.AutoAwesome,null,
+                tint=c.accent,modifier=Modifier.size(14.dp))
+        }
+        Column(verticalArrangement=Arrangement.spacedBy(3.dp)){
+            Text(title,color=c.text,fontSize=12.sp,
+                fontWeight=FontWeight.SemiBold)
+            LinearProgressIndicator(
+                modifier=Modifier.width(86.dp).height(2.dp),
+                color=c.accent,trackColor=c.border)
+        }
+    }
+}
+
+@Composable
+private fun NativeMonitoringActionPill(content:String,c:TaskChatColors){
+    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.Start){
+        Row(Modifier.widthIn(max=330.dp)
+            .clip(RoundedCornerShape(13.dp))
+            .background(c.accent.copy(alpha=.09f))
+            .border(1.dp,c.accent.copy(alpha=.2f),RoundedCornerShape(13.dp))
+            .padding(horizontal=11.dp,vertical=9.dp),
+            verticalAlignment=Alignment.Top,
+            horizontalArrangement=Arrangement.spacedBy(8.dp)){
+            Icon(Icons.Default.AutoAwesome,null,tint=c.accent,
+                modifier=Modifier.size(15.dp))
+            Column(verticalArrangement=Arrangement.spacedBy(2.dp)){
+                Text("Действие ИИ",color=c.accent,fontWeight=FontWeight.Bold,
+                    fontSize=10.sp)
+                Text(content,color=c.text,fontSize=12.sp,lineHeight=17.sp)
+            }
+        }
+    }
+}
+@Composable
+private fun NativeMonitoringStatusChips(
+    statuses:List<TaskMonitoringStatus>,c:TaskChatColors
+){
+    Column(verticalArrangement=Arrangement.spacedBy(6.dp)){
+        statuses.sortedByDescending{it.createdAt.orEmpty()}.take(3).forEach{status->
+            Row(Modifier.fillMaxWidth(),
+                horizontalArrangement=Arrangement.Start){
+                Row(Modifier.widthIn(max=335.dp)
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(c.accent.copy(alpha=.08f))
+                    .border(1.dp,c.accent.copy(alpha=.17f),
+                        RoundedCornerShape(13.dp))
+                    .padding(horizontal=11.dp,vertical=8.dp),
+                    verticalAlignment=Alignment.Top,
+                    horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                    Icon(Icons.Default.CheckCircleOutline,null,
+                        tint=c.accent,modifier=Modifier.size(15.dp))
+                    Column(verticalArrangement=Arrangement.spacedBy(2.dp)){
+                        Text(status.label,color=c.text,fontSize=12.sp,
+                            fontWeight=FontWeight.SemiBold)
+                        status.detail?.takeIf{it.isNotBlank()}?.let{
+                            Text(it,color=c.secondary,fontSize=11.sp,maxLines=4)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+@Composable
+private fun NativeMonitoringTriggerChips(
+    triggers:List<TaskMonitoringTrigger>,now:Long,c:TaskChatColors
+){
+    Column(verticalArrangement=Arrangement.spacedBy(6.dp)){
+        triggers.forEach{trigger->
+            val due=runCatching{
+                java.time.Instant.parse(trigger.dueAt).toEpochMilli()
+            }.recoverCatching {
+                java.time.OffsetDateTime.parse(trigger.dueAt).toInstant().toEpochMilli()
+            }.getOrDefault(now)
+            val seconds=((due-now+999)/1000).coerceAtLeast(0)
+            val timeText=when {
+                seconds>=3600->(seconds/3600).toString()+" ч "+
+                    ((seconds%3600+59)/60).toString()+" мин"
+                seconds>=60->((seconds+59)/60).toString()+" мин"
+                else->"скоро"
+            }
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.Start){
+                Row(Modifier.clip(CircleShape)
+                    .background(c.accent.copy(alpha=.09f))
+                    .border(1.dp,c.accent.copy(alpha=.22f),CircleShape)
+                    .padding(horizontal=11.dp,vertical=7.dp),
+                    horizontalArrangement=Arrangement.spacedBy(6.dp),
+                    verticalAlignment=Alignment.CenterVertically){
+                    Icon(Icons.Default.Schedule,null,tint=c.accent,
+                        modifier=Modifier.size(13.dp))
+                    Text("Триггер запущен · "+timeText,
+                        color=c.accent,fontSize=11.sp,
+                        fontWeight=FontWeight.SemiBold,maxLines=1)
+                }
+            }
+        }
+    }
+}
