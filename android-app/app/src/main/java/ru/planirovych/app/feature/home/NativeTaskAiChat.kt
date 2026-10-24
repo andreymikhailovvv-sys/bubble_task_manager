@@ -109,6 +109,11 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
     var sendingDisplay by remember(task.id){mutableStateOf<String?>(null)}
     var attachmentError by remember(task.id){mutableStateOf<String?>(null)}
     var pendingRetry by remember(task.id){mutableStateOf(false)}
+    // The composer is a draft, not a progress indicator. Keep an exact snapshot
+    // only for recovery after a failed request.
+    var queuedDraft by remember(task.id){mutableStateOf<String?>(null)}
+    var queuedFiles by remember(task.id){mutableStateOf<List<TaskAiFile>>(emptyList())}
+    var queuedReply by remember(task.id){mutableStateOf<ReplyTarget?>(null)}
     val busy=ui.taskId==task.id && ui.busy
     val triggers=if(ui.taskId==task.id && task.aiMonitoringEnabled)
         ui.monitoringTriggers else emptyList()
@@ -185,11 +190,20 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
         sendingQuestion=outgoing
         sendingDisplay=display
         pendingRetry=false
-        vm.sendTaskAi(task.id,id,outgoing,model,files.toList(),
+        val fileSnapshot=files.toList()
+        queuedDraft=draft
+        queuedFiles=fileSnapshot
+        queuedReply=reply
+        // Clear immediately after dispatch, like MiniApp's clearDraft().
+        // The request payload, uploads and optimistic bubble use snapshots.
+        draft=""
+        files.clear()
+        reply=null
+        vm.sendTaskAi(task.id,id,outgoing,model,fileSnapshot,
             userMessage=display){
-            draft=""
-            files.clear()
-            reply=null
+            queuedDraft=null
+            queuedFiles=emptyList()
+            queuedReply=null
             sendingId=null
             sendingQuestion=null
             sendingDisplay=null
@@ -197,7 +211,13 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
         }
     }
     LaunchedEffect(ui.busy,ui.error,ui.taskId){
-        if(!ui.busy&&ui.error!=null&&ui.taskId==task.id)pendingRetry=true
+        if(!ui.busy&&ui.error!=null&&ui.taskId==task.id){
+            pendingRetry=true
+            // An unsuccessful send must not silently discard the user's input.
+            if(draft.isBlank())queuedDraft?.let{draft=it}
+            if(files.isEmpty())files.addAll(queuedFiles)
+            if(reply==null)reply=queuedReply
+        }
     }
     // The existing history must appear at its last message immediately.
     // Do not animate through the entire transcript on first opening.
