@@ -132,12 +132,13 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
             mutable.update{it.copy(taskBusy=true,taskError=null)}
             var parent:Task?=null
             try {
-                parent=repository.createTopLevelTask(payload)
+                val created=repository.createTopLevelTask(payload)
+                parent=created
                 for(child in subtasks) {
-                    repository.createDraftSubtask(parent,child.title,child.description,child.dueDate)
+                    repository.createDraftSubtask(created,child.title,child.description,child.dueDate)
                 }
                 for(file in attachments){
-                    repository.addTaskAttachment(parent.id,file.name,file.mime,file.bytes)
+                    repository.addTaskAttachment(created.id,file.name,file.mime,file.bytes)
                 }
                 val updated=repository.loadTasks()
                 mutable.update{it.copy(taskBusy=false,tasks=updated,taskError=null)}
