@@ -136,8 +136,8 @@ export function TaskMonitoringStatuses({ taskId, enabled, allowed = true, onTask
   return <>
     <div className="task-monitor-status-anchor relative inline-flex shrink-0">
       <button ref={buttonRef} type="button" onClick={() => { setLayout(null); setOpen(value => !value); }}
-        className="task-monitor-button inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold"
-        aria-label="Автомониторинг задачи" aria-expanded={open} aria-controls={open ? popoverId : undefined}>
+        className={`task-monitor-button ${allowed && monitorEnabled ? 'task-monitor-button-active' : ''} inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold`}
+        aria-label={monitorEnabled && allowed ? 'Автомониторинг задачи включён' : 'Автомониторинг задачи выключен'} aria-expanded={open} aria-controls={open ? popoverId : undefined}>
         <Radar size={14} aria-hidden="true" /> <span>Автомониторинг</span>
       </button>
       {allowed && unread > 0 ? <span className="task-monitor-unread absolute -right-1 -top-2 flex min-h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold"
