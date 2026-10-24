@@ -77,7 +77,7 @@ internal fun chatColors(dark:Boolean)=if(dark)TaskChatColors(
     Color(0xFFCFFAFE),Color(0xFF164E63),Color(0xFF6D28D9)
 )
 
-private data class ReplyTarget(val id:String,val role:String,val content:String)
+internal data class ReplyTarget(val id:String,val role:String,val content:String)
 
 internal fun serializeTaskAiReply(question:String,target:ReplyTarget?):String{
     if(target==null)return question
