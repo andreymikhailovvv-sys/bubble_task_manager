@@ -93,8 +93,6 @@ fun MiniAppTaskFocusSheet(
     var descriptionExpanded by remember{mutableStateOf(false)}
     var confirmation by remember{mutableStateOf<String?>(null)}
     var saving by remember{mutableStateOf(false)}
-    var handleDragPx by remember(task.id){mutableFloatStateOf(0f)}
-    val density = LocalDensity.current
     val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * .83f).dp
 
     val saveThen: ((()->Unit)->Unit)={after->
@@ -164,29 +162,12 @@ fun MiniAppTaskFocusSheet(
     ModalBottomSheet(onDismissRequest={if(title.isBlank())onBack() else saveThen(onBack)},
         containerColor=c.bg,contentColor=c.text,
         shape=RoundedCornerShape(topStart=30.dp,topEnd=30.dp),
-        sheetGesturesEnabled=false,
-        dragHandle=null,
+        sheetGesturesEnabled=true,
+        dragHandle={ BottomSheetDefaults.DragHandle(color=c.muted) },
         sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)){
-        Column(Modifier.fillMaxWidth().heightIn(max=maxSheetHeight)
-            .offset { IntOffset(0,handleDragPx.toInt()) }.imePadding()){
-            Box(Modifier.fillMaxWidth().height(24.dp)
-                .pointerInput(task.id) {
-                    detectVerticalDragGestures(
-                        onDragEnd = {
-                            val close = handleDragPx > with(density) { 76.dp.toPx() }
-                            handleDragPx = 0f
-                            if(close)saveThen(onBack)
-                        },
-                        onDragCancel = { handleDragPx = 0f },
-                        onVerticalDrag = { change, amount ->
-                            change.consume()
-                            handleDragPx = (handleDragPx + amount).coerceIn(0f, 260f * density.density)
-                        }
-                    )
-                },contentAlignment=Alignment.Center) {
-                Box(Modifier.width(37.dp).height(4.dp)
-                    .clip(CircleShape).background(c.muted.copy(alpha=.46f)))
-            }
+        // Material handles a downward drag from both the handle and scroll content.
+        // The fixed maximum height avoids fighting the inner scrollable task list.
+        Column(Modifier.fillMaxWidth().heightIn(max=maxSheetHeight).imePadding()){
             Row(Modifier.fillMaxWidth().padding(start=15.dp,end=15.dp,bottom=10.dp),
                 verticalAlignment=Alignment.CenterVertically,
                 horizontalArrangement=Arrangement.SpaceBetween){
