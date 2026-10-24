@@ -46,5 +46,6 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.datastore)
+    implementation("androidx.work:work-runtime-ktx:2.12.0")
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
