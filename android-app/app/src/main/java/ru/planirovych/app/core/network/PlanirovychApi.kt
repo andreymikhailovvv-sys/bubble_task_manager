@@ -21,4 +21,10 @@ interface PlanirovychApi {
     @POST("api/tasks") suspend fun createTask(@Body payload: JsonObject): Task
     @DELETE("api/tasks/{id}") suspend fun deleteTask(@Path("id") id: String, @Query("scope") scope: String = "me"): OkResponse
     @GET("api/habits") suspend fun habits(): List<Habit>
+    @POST("api/habits") suspend fun createHabit(@Body payload: JsonObject): Habit
+    @POST("api/habits/{id}/complete") suspend fun completeHabit(@Path("id") id: String, @Body payload: JsonObject): Habit
+    @GET("api/notes") suspend fun notes(): List<StandaloneNote>
+    @POST("api/notes") suspend fun createNote(@Body payload: JsonObject): StandaloneNote
+    @PATCH("api/notes/{id}") suspend fun updateNote(@Path("id") id: String, @Body payload: JsonObject): StandaloneNote
+    @DELETE("api/notes/{id}") suspend fun deleteNote(@Path("id") id: String): OkResponse
 }
