@@ -42,6 +42,9 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
     var authMode by remember { mutableStateOf<AuthMode?>(null) }
     var openedTaskId by remember { mutableStateOf<String?>(null) }
     var newSubtaskParentId by remember { mutableStateOf<String?>(null) }
+    // Only return to the parent if the subtask was entered from its focus sheet.
+    // Direct timeline navigation must close back to the timeline.
+    var subtaskReturnToTaskId by remember { mutableStateOf<String?>(null) }
     var taskAiChatId by remember { mutableStateOf<String?>(null) }
     // The global create FAB overlaps the floating send button in the AI chat.
     LaunchedEffect(pagerState.currentPage) {
@@ -52,6 +55,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
     LaunchedEffect(state.user?.id) {
         openedTaskId = null
         newSubtaskParentId = null
+        subtaskReturnToTaskId = null
         taskAiChatId = null
     }
 
@@ -135,6 +139,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
                 vm, state, dark, vm::search, { settings = true },
                 onOpenTask = {
                     openedTaskId = it
+                    subtaskReturnToTaskId = null
                     newSubtaskParentId = null
                     vm.clearTaskError()
                 },
@@ -169,7 +174,8 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
         (newSubtaskParentId != null && parent != null)
     if (editorVisible) {
         val back: () -> Unit = {
-            openedTaskId = parent?.id
+            openedTaskId = subtaskReturnToTaskId
+            subtaskReturnToTaskId = null
             newSubtaskParentId = null
             vm.clearTaskError()
         }
@@ -184,11 +190,13 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
                 error = state.taskError,
                 onBack = back,
                 onOpenSubtask = { childId ->
+                    subtaskReturnToTaskId = openedTask.id
                     openedTaskId = childId
                     newSubtaskParentId = null
                     vm.clearTaskError()
                 },
                 onNewSubtask = {
+                    subtaskReturnToTaskId = openedTask.id
                     newSubtaskParentId = openedTask.id
                     openedTaskId = null
                     vm.clearTaskError()
@@ -223,6 +231,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
             error = state.taskError,
             onBack = back,
             onOpenSubtask = { childId ->
+                subtaskReturnToTaskId = openedTask?.id ?: parent?.id
                 openedTaskId = childId
                 newSubtaskParentId = null
                 vm.clearTaskError()
@@ -230,6 +239,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
             onNewSubtask = {
                 val root = openedTask ?: parent
                 if (root != null) {
+                    subtaskReturnToTaskId = root.id
                     newSubtaskParentId = root.id
                     openedTaskId = null
                     vm.clearTaskError()
