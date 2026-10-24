@@ -42,11 +42,13 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
     var authMode by remember { mutableStateOf<AuthMode?>(null) }
     var openedTaskId by remember { mutableStateOf<String?>(null) }
     var newSubtaskParentId by remember { mutableStateOf<String?>(null) }
+    var taskAiChatId by remember { mutableStateOf<String?>(null) }
 
     // Never leave the previous account's task editor open after login/logout.
     LaunchedEffect(state.user?.id) {
         openedTaskId = null
         newSubtaskParentId = null
+        taskAiChatId = null
     }
 
     Scaffold(contentWindowInsets = WindowInsets.safeDrawing,
@@ -191,6 +193,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
                 onChangeStatus = vm::changeStatus,
                 onDelete = vm::deleteTask,
                 onClearError = vm::clearTaskError,
+                onOpenAiChat = {taskAiChatId=it},
             )
         } else if (parent != null) {
             MiniAppSubtaskEditorSheet(
@@ -234,6 +237,12 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
             onDelete = vm::deleteTask,
             onClearError = vm::clearTaskError,
         )
+    }
+    taskAiChatId?.let{id->
+        state.tasks.firstOrNull{it.id==id}?.let{aiTask->
+            NativeTaskAiChat(task=aiTask,vm=vm,dark=dark,
+                onClose={taskAiChatId=null})
+        }
     }
 }
 
