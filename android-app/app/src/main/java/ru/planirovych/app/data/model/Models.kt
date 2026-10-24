@@ -136,3 +136,28 @@ data class RecurrenceParseResponse(
     val schedule: kotlinx.serialization.json.JsonObject,
     val nextDueDate: String? = null,
 )
+
+/** The task chat is shared with MiniApp and the desktop site. */
+data class TaskAiChatMessage(
+    val id:String?=null,
+    val role:String,
+    val content:String,
+    val createdAt:String?=null,
+    val authorName:String?=null,
+    val authorColor:String?=null,
+    val recipientName:String?=null,
+    val messageKind:String?=null,
+    val creditsSpentMilli:Long?=null,
+    val webSources:List<Pair<String,String>> = emptyList(),
+    val taskProposal: kotlinx.serialization.json.JsonObject? = null,
+    val generatedDocument: kotlinx.serialization.json.JsonObject?=null,
+    val telegramSendDraft: kotlinx.serialization.json.JsonObject?=null,
+    val telegramReadDraft: kotlinx.serialization.json.JsonObject?=null,
+)
+data class TaskAiFile(val name:String,val mimeType:String,val bytes:ByteArray)
+data class TaskAiReply(
+    val answer:String,
+    val taskDataChanged:Boolean=false,
+    val actionReports:List<String> = emptyList(),
+    val raw:kotlinx.serialization.json.JsonObject
+)
