@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application android:name=".PlanirovychApplication" android:allowBackup="true" android:label="Планировыч" android:theme="@style/Theme.Planirovych" android:usesCleartextTraffic="false">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
@@ -8,5 +9,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".widget.QuickAiAskActivity"
+            android:exported="false" android:theme="@style/Theme.Planirovych"
+            android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
+        <receiver android:name=".widget.QuickAiWidgetProvider"
+            android:exported="true" android:label="Быстрый запрос ИИ">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/quick_ai_widget_info" />
+        </receiver>
     </application>
 </manifest>
