@@ -97,10 +97,10 @@ private fun shortTime(value:LocalTime)=value.format(DateTimeFormatter.ofPattern(
 @Composable
 internal fun NativeTimelineWorkspace(
     tasks:List<Task>,allTasks:List<Task>,habits:List<Habit>,spheres:List<Sphere>,
-    colors:WorkspaceColors,dark:Boolean,onOpen:(String)->Unit
+    colors:WorkspaceColors,dark:Boolean,onOpen:(String)->Unit,
+    onOpenHabit:(String)->Unit={}
 ){
     var zoom by rememberSaveable{mutableStateOf(TimelineZoom.DAY)}
-    var weekScale by rememberSaveable{mutableFloatStateOf(1f)}
     var anchorRaw by rememberSaveable{mutableStateOf(LocalDate.now().toString())}
     val anchor=runCatching{LocalDate.parse(anchorRaw)}.getOrDefault(LocalDate.now())
     val start=when(zoom){
@@ -168,10 +168,10 @@ internal fun NativeTimelineWorkspace(
         when(zoom){
             TimelineZoom.DAY->TimelineDay(anchor,tasks,allTasks,habits,spheres,colors,dark,onOpen)
             TimelineZoom.WEEK->TimelineWeek(start,tasks,allTasks,habits,spheres,colors,dark,
-                onOpen,weekScale=weekScale,
-                onWeekScaleChange={weekScale=it.coerceIn(.72f,1.8f)},
+                onOpen,onOpenHabit=onOpenHabit,
                 openDay={anchorRaw=it.toString();zoom=TimelineZoom.DAY})
             TimelineZoom.MONTH->TimelineMonth(start,tasks,allTasks,habits,spheres,colors,dark,
+                onOpen=onOpen,
                 openDay={anchorRaw=it.toString();zoom=TimelineZoom.DAY})
         }
     }
