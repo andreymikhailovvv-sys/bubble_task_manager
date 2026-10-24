@@ -18,6 +18,19 @@ function validMessages(value: unknown): JsonMessage[] {
     (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string');
 }
 
+/** Keep cross-device quick chat snapshots chronological before truncating.
+ * Stale devices can save an old message later than a recent message.
+ * Untimestamped legacy records sort before dated messages, preserving their
+ * relative order rather than allowing them to displace the latest context.
+ */
+export function chronologicalChatMessages<T extends { createdAt?: string }>(messages: readonly T[]): T[] {
+  return messages.map((message, index) => {
+    const parsed = typeof message.createdAt === 'string' ? Date.parse(message.createdAt) : NaN;
+    return { message, index, timestamp: Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY };
+  }).sort((a, b) => a.timestamp - b.timestamp || a.index - b.index)
+    .map(({ message }) => message);
+}
+
 export function mergeChatProjectSnapshots(previous: unknown, incoming: unknown): JsonProject[] {
   const current = validProjects(previous);
   const before = new Map(current.map(p => [p.id, p]));
@@ -47,7 +60,9 @@ export function mergeChatProjectSnapshots(previous: unknown, incoming: unknown):
       const modelChangedAt = chat.id === 'quick-ai-requests' ? undefined : (takeSaved ? savedChat?.modelChangedAt : chat.modelChangedAt);
       return { ...chat, ...(model ? { model } : {}),
         ...(typeof modelChangedAt === 'string' && Number.isFinite(Date.parse(modelChangedAt)) ? { modelChangedAt } : {}),
-        messages: [...merged.values()].slice(chat.id === 'quick-ai-requests' ? -100 : -300) };
+        messages: (chat.id === 'quick-ai-requests'
+          ? chronologicalChatMessages([...merged.values()]).slice(-100)
+          : [...merged.values()].slice(-300)) };
     });
     return { ...project, chats };
   });
