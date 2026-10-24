@@ -27,6 +27,7 @@ data class TaskAiChatState(
     val progressStatus:String?=null,
     val monitoringTriggers:List<TaskMonitoringTrigger> = emptyList(),
     val monitoringStatuses:List<TaskMonitoringStatus> = emptyList(),
+    val lastActionReports:List<String> = emptyList(),
     val error:String?=null,
     val requestId:String?=null,
 )
@@ -98,7 +99,7 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
     ){
         if(taskAiMutable.value.busy || taskAiMutable.value.taskId!=taskId)return
         taskAiMutable.update{it.copy(busy=true,error=null,requestId=requestId,
-            progressStatus="analyzing_request")}
+            progressStatus="analyzing_request",lastActionReports=emptyList())}
         viewModelScope.launch{
             try{
                 val reply=repository.sendTaskAiMessage(taskId,requestId,question,model,
@@ -113,7 +114,8 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                 val history=repository.loadTaskAiHistory(taskId)
                 taskAiMutable.update{
                     if(it.taskId==taskId)it.copy(messages=history,busy=false,
-                        requestId=null,progressStatus=null,error=null)
+                        requestId=null,progressStatus=null,error=null,
+                        lastActionReports=reply.actionReports)
                     else it.copy(busy=false,progressStatus=null)
                 }
                 refreshTaskAiMonitoring(taskId)
