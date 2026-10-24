@@ -8,6 +8,8 @@ import kotlinx.serialization.json.put
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.booleanOrNull
 import retrofit2.HttpException
 import ru.planirovych.app.core.network.PlanirovychApi
 import ru.planirovych.app.data.model.*
@@ -64,6 +66,87 @@ class WorkspaceRepository(private val api: PlanirovychApi) {
     }
     suspend fun taskAttachmentLink(taskId: String, attachmentId: String) =
         api.taskAttachmentLink(taskId, attachmentId).url
+
+    private fun kotlinx.serialization.json.JsonObject.optString(key:String):String? =
+        (this[key] as? kotlinx.serialization.json.JsonPrimitive)
+            ?.takeUnless{it is kotlinx.serialization.json.JsonNull}?.contentOrNull
+
+    private fun readTaskAiMessage(item:kotlinx.serialization.json.JsonObject):TaskAiChatMessage{
+        val sources=(item["webSources"] as? kotlinx.serialization.json.JsonArray)
+            .orEmpty().mapNotNull {source->
+                val obj=source as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
+                val url=obj.optString("url")?:return@mapNotNull null
+                (obj.optString("title")?:url) to url
+            }
+        return TaskAiChatMessage(
+            id=item.optString("id"),role=item.optString("role")?:"assistant",
+            content=item.optString("content").orEmpty(),
+            createdAt=item.optString("createdAt"),
+            authorName=item.optString("authorName"),
+            authorColor=item.optString("authorColor"),
+            recipientName=item.optString("recipientName"),
+            messageKind=item.optString("messageKind"),
+            creditsSpentMilli=item.optString("creditsSpentMilli")?.toLongOrNull(),
+            webSources=sources,
+            taskProposal=item["taskProposal"] as? kotlinx.serialization.json.JsonObject,
+            generatedDocument=item["generatedDocument"] as? kotlinx.serialization.json.JsonObject,
+            telegramSendDraft=item["telegramSendDraft"] as? kotlinx.serialization.json.JsonObject,
+            telegramReadDraft=item["telegramReadDraft"] as? kotlinx.serialization.json.JsonObject
+        )
+    }
+    suspend fun loadTaskAiHistory(id:String):List<TaskAiChatMessage>{
+        val raw=api.taskAiHistory(id,java.time.ZoneId.systemDefault().id)
+        val rows=raw["messages"] as? kotlinx.serialization.json.JsonArray
+            ?: return emptyList()
+        return rows.mapNotNull { (it as? kotlinx.serialization.json.JsonObject)
+            ?.let(::readTaskAiMessage) }
+    }
+    suspend fun sendTaskAiMessage(
+        id:String,requestId:String,question:String,model:String,
+        attachments:List<TaskAiFile>,userMessage:String=question
+    ):TaskAiReply {
+        val payload=buildJsonObject {
+            put("clientRequestId",requestId)
+            put("question",question)
+            put("userMessage",userMessage)
+            put("model",model)
+            put("mode",if(model=="gpt-6.1-sol")"smart" else "fast")
+            put("clientSurface","miniapp")
+            put("interactionContext","chat")
+            put("userTimeZone",java.time.ZoneId.systemDefault().id)
+            if(attachments.isNotEmpty())put("attachments",kotlinx.serialization.json.buildJsonArray{
+                attachments.forEach{file ->
+                    add(buildJsonObject{
+                        put("name",file.name)
+                        put("mimeType",file.mimeType)
+                        put("size",file.bytes.size)
+                        put("contentBase64",android.util.Base64.encodeToString(
+                            file.bytes,android.util.Base64.NO_WRAP))
+                    })
+                }
+            })
+        }
+        val response=api.sendTaskAi(id,payload)
+        val summary=(response["actionReports"] as? kotlinx.serialization.json.JsonArray)
+            .orEmpty().mapNotNull{
+                (it as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull
+            }
+        val changed=(response["taskDataChanged"] as? kotlinx.serialization.json.JsonPrimitive)
+            ?.booleanOrNull?:false
+        return TaskAiReply(response.optString("answer").orEmpty(),changed,summary,response)
+    }
+
+    suspend fun updateTaskAiProposal(id:String,action:String){
+        val empty=buildJsonObject{}
+        when(action){
+            "approve"->api.approveTaskAiProposal(id,empty)
+            "reject"->api.rejectTaskAiProposal(id,empty)
+            "undo"->api.undoTaskAiProposal(id,empty)
+            else->throw IllegalArgumentException("Неизвестное действие")
+        }
+    }
+    suspend fun taskAiDocumentLink(id:String):String? =
+        api.taskAiDocumentLink(id).optString("url")
     suspend fun loadHabits() = api.habits()
     suspend fun loadHabitHistory(id: String) = api.habitHistory(id)
     suspend fun recordHabit(id: String,dateKey: String,amount: Int): Habit =

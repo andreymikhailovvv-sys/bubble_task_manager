@@ -17,6 +17,17 @@ import ru.planirovych.app.ui.theme.ThemePreferences
 data class TaskCreationChild(val title:String,val description:String,val dueDate:String?)
 data class TaskCreationFile(val name:String,val mime:String,val bytes:ByteArray)
 
+
+data class TaskAiChatState(
+    val taskId:String?=null,
+    val messages:List<TaskAiChatMessage> = emptyList(),
+    val loading:Boolean=false,
+    val busy:Boolean=false,
+    val actionBusy:Boolean=false,
+    val error:String?=null,
+    val requestId:String?=null,
+)
+
 data class HomeState(val loading: Boolean = true, val user: CurrentUser? = null, val spheres: List<Sphere> = emptyList(), val tasks: List<Task> = emptyList(), val habits: List<Habit> = emptyList(), val query: String = "", val error: String? = null, val authError: String? = null, val authBusy: Boolean = false, val taskBusy: Boolean = false, val taskError: String? = null,
     val recurrenceLoading:Boolean=false, val recurrenceError:String?=null, val habitBusy: Boolean = false,
     val habitHistoryId: String? = null,
@@ -27,6 +38,111 @@ data class HomeState(val loading: Boolean = true, val user: CurrentUser? = null,
     val taskAttachmentsBusy: Boolean = false, val taskAttachmentsError: String? = null)
 class HomeViewModel(private val repository: WorkspaceRepository, private val themes: ThemePreferences) : ViewModel() {
     private val mutable = MutableStateFlow(HomeState())
+    private val taskAiMutable=MutableStateFlow(TaskAiChatState())
+    val taskAi=taskAiMutable.asStateFlow()
+    fun openTaskAi(taskId:String){
+        taskAiMutable.value=TaskAiChatState(taskId=taskId,loading=true)
+        viewModelScope.launch{
+            try{
+                val history=repository.loadTaskAiHistory(taskId)
+                taskAiMutable.update{if(it.taskId==taskId)it.copy(
+                    messages=history,loading=false,error=null) else it}
+            }catch(error:Throwable){
+                taskAiMutable.update{if(it.taskId==taskId)it.copy(
+                    loading=false,error=error.userMessage())else it}
+            }
+        }
+    }
+    fun closeTaskAi(){
+        // Do not cancel a response already accepted by the server.
+        // Its history remains shared with the site after this window closes.
+        taskAiMutable.update { it.copy(taskId=null) }
+    }
+    fun syncTaskAiHistory(taskId:String){
+        if(taskAiMutable.value.taskId!=taskId ||
+            taskAiMutable.value.busy || taskAiMutable.value.loading)return
+        viewModelScope.launch{
+            try{
+                val history=repository.loadTaskAiHistory(taskId)
+                taskAiMutable.update{
+                    if(it.taskId==taskId && !it.busy)it.copy(messages=history,error=null)
+                    else it
+                }
+            }catch(_:Throwable){/* retain the last known messages on transient errors */}
+        }
+    }
+    fun sendTaskAi(
+        taskId:String,requestId:String,question:String,model:String,
+        attachments:List<TaskAiFile>,
+        userMessage:String=question,onSuccess:()->Unit={}
+    ){
+        if(taskAiMutable.value.busy || taskAiMutable.value.taskId!=taskId)return
+        taskAiMutable.update{it.copy(busy=true,error=null,requestId=requestId)}
+        viewModelScope.launch{
+            try{
+                val reply=repository.sendTaskAiMessage(taskId,requestId,question,model,
+                    attachments,userMessage)
+                // The server writes both messages before returning; never append them
+                // with /messages (which would duplicate the shared chat).
+                val history=repository.loadTaskAiHistory(taskId)
+                taskAiMutable.update{
+                    if(it.taskId==taskId)it.copy(messages=history,busy=false,
+                        requestId=null,error=null) else it.copy(busy=false)
+                }
+                if(reply.taskDataChanged){
+                    runCatching{repository.loadTasks()}.onSuccess{tasks->
+                        mutable.update{it.copy(tasks=tasks)}
+                    }
+                }
+                runCatching{repository.establishSession()}.onSuccess{user->
+                    mutable.update{it.copy(user=user)}
+                }
+                onSuccess()
+            }catch(error:Throwable){
+                // The response may have been saved before a network interruption.
+                // Synchronize first; resubmission should reuse the same request ID.
+                val history=runCatching{repository.loadTaskAiHistory(taskId)}.getOrNull()
+                taskAiMutable.update{
+                    if(it.taskId==taskId)it.copy(
+                        messages=history?:it.messages,busy=false,
+                        error=error.userMessage(),requestId=requestId)
+                    else it.copy(busy=false)
+                }
+            }
+        }
+    }
+    fun applyTaskAiProposal(taskId:String,proposalId:String,action:String){
+        if(taskAiMutable.value.actionBusy)return
+        taskAiMutable.update{it.copy(actionBusy=true,error=null)}
+        viewModelScope.launch {
+            try {
+                repository.updateTaskAiProposal(proposalId,action)
+                val tasks=repository.loadTasks()
+                val history=repository.loadTaskAiHistory(taskId)
+                mutable.update{it.copy(tasks=tasks)}
+                taskAiMutable.update{if(it.taskId==taskId)it.copy(
+                    actionBusy=false,messages=history,error=null)
+                    else it.copy(actionBusy=false)}
+            }catch(e:Throwable){
+                taskAiMutable.update{it.copy(actionBusy=false,error=e.userMessage())}
+            }
+        }
+    }
+    fun getTaskAiDocumentLink(id:String,onReady:(String)->Unit){
+        viewModelScope.launch {
+            try{
+                val url=repository.taskAiDocumentLink(id)
+                    ?: throw IllegalStateException("Ссылка для скачивания недоступна")
+                onReady(url)
+            }catch(e:Throwable){
+                taskAiMutable.update{it.copy(error=e.userMessage())}
+            }
+        }
+    }
+    fun clearTaskAiError(){
+        taskAiMutable.update{it.copy(error=null)}
+    }
+
     val state = mutable.asStateFlow()
     val isDark = themes.isDark.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
     init { refresh() }

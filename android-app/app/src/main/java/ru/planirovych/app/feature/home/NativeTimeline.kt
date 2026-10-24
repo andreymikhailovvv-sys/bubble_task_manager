@@ -15,6 +15,9 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -241,17 +244,23 @@ private fun TimelineEventCard(entry:TimelineEntry,c:WorkspaceColors,dark:Boolean
     }
     val radius=RoundedCornerShape(if(compact)9.dp else 13.dp)
     val adjusted=if(compact)scale.coerceIn(.72f,1.8f) else 1f
+    val hasSectorStripe=!compact && (entry.kind=="Задача" || isSubtask)
     Row(Modifier.fillMaxWidth().clip(radius).background(base)
+        // Draw the stripe into the already clipped card, so it inherits the
+        // rounded top-left and bottom-left corners. Events/habits/reminders
+        // deliberately do not get a sector stripe.
+        .drawBehind {
+            if(hasSectorStripe){
+                val px=(if(isSubtask)5.dp else 3.dp).toPx()
+                drawRect(color=edge,topLeft=Offset.Zero,size=Size(px,size.height))
+            }
+        }
         .border(1.dp,edge.copy(alpha=if(dark).72f else .6f),radius)
         .clickable(enabled=entry.taskId!=null&&!isReminder){
             entry.taskId?.let(onOpen)
         }.heightIn(min=if(compact)(37f*adjusted).dp
             else if(isSubtask)44.dp else 54.dp),
         verticalAlignment=Alignment.CenterVertically){
-        if(!compact){
-            Box(Modifier.width(if(isSubtask)5.dp else 3.dp)
-                .heightIn(min=if(isSubtask)40.dp else 49.dp).background(edge))
-        }
         Column(Modifier.weight(1f).padding(
             horizontal=if(compact)(7f*adjusted).dp else 10.dp,
             vertical=if(compact)(5f*adjusted).dp else 6.dp),
@@ -540,17 +549,22 @@ private fun MiniAppCalendarEntry(
     }
     // The tiny calendar chip is *only* the title, like MiniApp. No time,
     // sector, type, extra emojis or centered multi-line Compose card.
+    val hasSectorStripe=entry.kind=="Задача" || entry.kind=="Подзадача"
     Row(Modifier.fillMaxWidth()
         .heightIn(min=if(monthMode)19.dp else 20.dp)
         .clip(shape).background(background)
+        .drawBehind {
+            if(hasSectorStripe){
+                drawRect(color=accent,topLeft=Offset.Zero,
+                    size=Size(3.dp.toPx(),size.height))
+            }
+        }
         .border(1.dp,if(isEvent)accent.copy(alpha=.88f) else accent.copy(alpha=.68f),shape)
         .clickable(onClick=onClick),
         verticalAlignment=Alignment.CenterVertically){
-        Box(Modifier.width(if(isEvent)4.dp else 3.dp)
-            .heightIn(min=if(monthMode)18.dp else 19.dp)
-            .background(accent))
         Text(entry.title,
-            modifier=Modifier.weight(1f).padding(start=2.dp,end=1.dp),
+            modifier=Modifier.weight(1f).padding(
+                start=if(hasSectorStripe)5.dp else 3.dp,end=1.dp),
             color=textColor,
             fontSize=if(monthMode)9.sp else 9.sp,
             lineHeight=11.sp,maxLines=1,softWrap=false,
