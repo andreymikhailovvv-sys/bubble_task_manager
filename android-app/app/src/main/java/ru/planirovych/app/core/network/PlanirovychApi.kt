@@ -33,6 +33,12 @@ interface PlanirovychApi {
     @POST("api/tasks/{id}/attachments/{attachmentId}/download-link")
     suspend fun taskAttachmentLink(@Path("id") id: String,
         @Path("attachmentId") attachmentId: String): TaskAttachmentLink
+    @GET("api/tasks/{id}/ai-chat")
+    suspend fun taskAiHistory(@Path("id") taskId:String,
+        @Query("userTimeZone") userTimeZone:String): JsonObject
+    @POST("api/tasks/{id}/ai-chat")
+    suspend fun sendTaskAi(@Path("id") taskId:String,@Body payload:JsonObject): JsonObject
+
     @GET("api/habits") suspend fun habits(): List<Habit>
     @POST("api/habits") suspend fun createHabit(@Body payload: JsonObject): Habit
     @POST("api/habits/{id}/complete") suspend fun completeHabit(@Path("id") id: String, @Body payload: JsonObject): Habit
