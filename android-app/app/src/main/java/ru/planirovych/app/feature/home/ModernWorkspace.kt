@@ -32,7 +32,7 @@ import ru.planirovych.app.data.model.*
  * Keep the screen's visual tokens independent of Material's default tonal surfaces:
  * this prevents the light theme from turning the chips grey/translucent.
  */
-private data class WorkspaceColors(
+internal data class WorkspaceColors(
     val panel: Color, val card: Color, val panelBorder: Color,
     val field: Color, val muted: Color, val text: Color, val secondaryText: Color,
     val purple: Color, val selected: Color, val selectedText: Color,
@@ -56,6 +56,7 @@ private enum class PeriodFilter(val label: String) {
 private enum class SortTasks(val label: String) { URGENCY("По срочности"), IMPORTANCE("По важности") }
 private enum class TimelineScale(val label: String) { DAY("День"), WEEK("Неделя"), MONTH("Месяц") }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModernWorkspace(
     vm: HomeViewModel,
@@ -70,7 +71,7 @@ fun ModernWorkspace(
     var mode by rememberSaveable { mutableStateOf(WorkspaceMode.LIST) }
     var period by rememberSaveable { mutableStateOf(PeriodFilter.ALL) }
     var sort by rememberSaveable { mutableStateOf(SortTasks.URGENCY) }
-    var selectedSectors by rememberSaveable { mutableStateOf(setOf<String>()) }
+    var selectedSectors by remember { mutableStateOf(setOf<String>()) }
     var sectorFilterEnabled by rememberSaveable { mutableStateOf(false) }
     var timelineSector by rememberSaveable { mutableStateOf("all") }
     var filtersOpen by remember { mutableStateOf(false) }
@@ -78,6 +79,8 @@ fun ModernWorkspace(
     var scoreOpen by remember { mutableStateOf(false) }
     var creditsOpen by remember { mutableStateOf(false) }
     var selectedHabit by remember { mutableStateOf<Habit?>(null) }
+    var createHabitOpen by remember { mutableStateOf(false) }
+    var habitName by remember { mutableStateOf("") }
     val sectors = remember(state.spheres) { state.spheres.associateBy { it.id } }
     val searchQuery = state.query.trim().lowercase(Locale.getDefault())
     val today = LocalDate.now()
@@ -131,7 +134,7 @@ fun ModernWorkspace(
         item { WorkspaceTopbar(state, colors, search, settings,
             onCredits={ creditsOpen=true }, onScore={ scoreOpen=true }) }
         if (mode == WorkspaceMode.LIST) item {
-            HabitsStrip(habits, colors, dark, onHabitClick = { selectedHabit = it }, onAdd = { selectedHabit = null; vm.openHabitCreator() })
+            HabitsStrip(habits, colors, dark, onHabitClick = { selectedHabit = it }, onAdd = { habitName = ""; createHabitOpen = true })
         }
         item {
             WorkspaceToolbar(colors, dark, mode, setMode={ mode=it },
@@ -183,6 +186,14 @@ fun ModernWorkspace(
         title={Text("ИИ-кредиты")},
         text={Text("Баланс: " + (state.user?.aiCredits ?: 0).toString())},
         confirmButton={TextButton(onClick={creditsOpen=false}){Text("Закрыть")}})
+    if (createHabitOpen) AlertDialog(onDismissRequest={createHabitOpen=false},
+        title={Text("Новая привычка")}, text={
+            OutlinedTextField(value=habitName,onValueChange={habitName=it},
+                label={Text("Название привычки")},singleLine=true)
+        }, confirmButton={
+            TextButton(onClick={createHabitOpen=false;vm.createHabit(habitName)},
+                enabled=habitName.isNotBlank()){Text("Создать")}
+        }, dismissButton={TextButton(onClick={createHabitOpen=false}){Text("Отмена")}})
     if (selectedHabit != null) {
         val habit = selectedHabit!!
         AlertDialog(onDismissRequest={selectedHabit=null},
