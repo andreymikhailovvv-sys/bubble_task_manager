@@ -19,7 +19,7 @@ import { isDynamicTextBillingEnabled, refundDynamicResponsesCall, runDynamicResp
 import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordAiCreditCharge, recordOpenAiTranscriptionUsage, recordOpenAiUsageShadow, type OpenAiTranscriptionUsage } from './ai-usage-metering.service.js';
 import { buildTaskChatContext, isTaskChatContextV2Enabled, type TaskChatContextDiagnostics } from './task-chat-context.service.js';
 import { formatTaskChatMemory, isTaskChatMemoryEnabled, resolveTaskChatActiveHistoryLimits, TASK_CHAT_MEMORY_TARGET_MAX_MESSAGES, TASK_CHAT_MEMORY_TARGET_TOKEN_BUDGET, TASK_CHAT_MEMORY_TRIGGER_MAX_MESSAGES, TASK_CHAT_MEMORY_TRIGGER_TOKEN_BUDGET, updateTaskChatMemoryIfNeeded, type TaskChatContextMessage } from './task-chat-memory.service.js';
-import { TASK_MONITOR_FOLLOWUP_TOOL, createMonitoringTrigger } from './task-monitoring-trigger.service.js';
+import { TASK_MONITOR_FOLLOWUP_TOOL, createMonitoringTrigger, ensureMonitoringFallbackTrigger } from './task-monitoring-trigger.service.js';
 import { TASK_MONITOR_ACTION_TOOLS, executeTaskMonitoringAction } from './task-monitoring-actions.service.js';
 import { cancelPendingMonitoringTriggers } from './task-monitoring.service.js';
 import { executeTaskContextLookup, TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS, TASK_CHAT_CONTEXT_MAX_TOOL_CALLS, TASK_CHAT_STORED_FILE_FETCH_LIMIT, TASK_CONTEXT_LOOKUP_TOOL, type TaskContextLookupArguments } from './task-chat-context-lookup.service.js';
@@ -1784,7 +1784,7 @@ export const aiAssistantService = {
       select: { id: true }
     });
 
-    await prisma.taskAiMessage.create({
+    const assistantMessage = await prisma.taskAiMessage.create({
       data: {
         taskId: input.taskId,
         userId: input.userId,
@@ -1800,6 +1800,21 @@ export const aiAssistantService = {
         ...(input.telegramReadOwnerId ? { telegramReadOwnerId: input.telegramReadOwnerId } : {})
       }
     });
+    // Schedule only after the actual assistant reply is persisted. The model
+    // has already had the chance to install its own preferred follow-up.
+    // Monitoring fallback failures must not turn a saved/paid AI reply into an
+    // apparent chat failure (and trigger a duplicate user retry).
+    if (assistantMessage?.createdAt instanceof Date) {
+      await ensureMonitoringFallbackTrigger({
+        userId: input.userId, taskId: input.taskId,
+        assistantCreatedAt: assistantMessage.createdAt
+      }).catch(error => {
+        console.error('[TaskMonitoring] unable to schedule fallback follow-up', {
+          taskId: input.taskId,
+          reason: error instanceof Error ? error.message : 'unknown'
+        });
+      });
+    }
   },
 
   listGeneralDialog: async (input: { userId: string; since?: Date; userTimeZone?: string }): Promise<ChatMessage[]> => {

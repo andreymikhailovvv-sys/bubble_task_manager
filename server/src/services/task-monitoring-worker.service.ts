@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { aiAssistantService } from './ai-assistant.service.js';
 import { requireMonitoredTask } from './task-monitoring.service.js';
+import { MONITORING_FALLBACK_QUESTION } from './task-monitoring-trigger.service.js';
 import { publishTaskMonitoringReply } from './task-monitoring-delivery.service.js';
 import { recoverMonitoredDeadlinesOnBoot } from './task-monitoring-schedule.service.js';
 import { registerTaskMonitoringWakeup } from './task-monitoring-wakeup.service.js';
@@ -26,6 +27,31 @@ async function deadlineStillCurrent(taskId: string, sourceId: string, dueAt: Dat
       !item.dueDate || item.dueDate.getTime() !== dueAt.getTime() ||
       (item.id !== taskId && item.parentTaskId !== taskId)) return null;
   return item;
+}
+
+/** A default 3-hour reminder is unnecessary after recorded progress.
+ * Read markers of real task work, not task.updatedAt (which also changes when
+ * the user merely views monitoring statuses).
+ */
+async function hasMonitoringProgressSince(trigger: {
+  taskId: string; userId: string; updatedAt: Date;
+}) {
+  const [status, activity] = await Promise.all([
+    prisma.taskMonitoringStatus.findFirst({
+      where: { taskId: trigger.taskId, userId: trigger.userId,
+        createdAt: { gt: trigger.updatedAt } },
+      select: { id: true }
+    }),
+    prisma.taskActivityEvent.findFirst({
+      where: {
+        actorId: trigger.userId,
+        createdAt: { gt: trigger.updatedAt },
+        task: { OR: [{ id: trigger.taskId }, { parentTaskId: trigger.taskId }] }
+      },
+      select: { id: true }
+    })
+  ]);
+  return Boolean(status || activity);
 }
 
 /** Exactly one worker owns the delivery attempt. No implicit retry of paid AI calls. */
@@ -111,7 +137,8 @@ export async function pollTaskMonitoring(now = new Date()) {
           createdAt: { gt: trigger.updatedAt }
         }, select: { id: true }
       });
-      if (hasAnswer) {
+      if (hasAnswer || (trigger.question === MONITORING_FALLBACK_QUESTION &&
+          await hasMonitoringProgressSince(trigger))) {
         await prisma.taskMonitoringTrigger.update({
           where: { id: trigger.id }, data: { state: 'answered' }
         });

@@ -96,7 +96,7 @@ jobs:
       - name: Verify monitoring chat controls, follow-ups and deduplicated delivery
         run: node --import tsx --test server/test/task-monitoring-chat-ui.test.ts
       - name: Verify opt-in monitoring scheduler and follow-up triggers
-        run: node --import tsx --test server/test/task-monitoring-scheduler.test.ts
+        run: node --import tsx --test server/test/task-monitoring-scheduler.test.ts server/test/task-monitoring-fallback.test.ts
       - name: Verify autonomous monitoring action limits and badges
         run: node --import tsx --test server/test/task-monitoring-actions.test.ts
       - name: Verify monitoring reply delivery across clients and Telegram
