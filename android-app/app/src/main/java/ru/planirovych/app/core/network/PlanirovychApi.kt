@@ -39,6 +39,14 @@ interface PlanirovychApi {
     @POST("api/tasks/{id}/ai-chat")
     suspend fun sendTaskAi(@Path("id") taskId:String,@Body payload:JsonObject): JsonObject
 
+    @POST("api/ai/task-proposals/{id}/approve")
+    suspend fun approveTaskAiProposal(@Path("id") id:String,@Body payload:JsonObject):JsonObject
+    @POST("api/ai/task-proposals/{id}/reject")
+    suspend fun rejectTaskAiProposal(@Path("id") id:String,@Body payload:JsonObject):JsonObject
+    @POST("api/ai/task-proposals/{id}/undo")
+    suspend fun undoTaskAiProposal(@Path("id") id:String,@Body payload:JsonObject):JsonObject
+    @POST("api/ai-documents/{id}/download-link")
+    suspend fun taskAiDocumentLink(@Path("id") id:String):JsonObject
     @GET("api/habits") suspend fun habits(): List<Habit>
     @POST("api/habits") suspend fun createHabit(@Body payload: JsonObject): Habit
     @POST("api/habits/{id}/complete") suspend fun completeHabit(@Path("id") id: String, @Body payload: JsonObject): Habit
