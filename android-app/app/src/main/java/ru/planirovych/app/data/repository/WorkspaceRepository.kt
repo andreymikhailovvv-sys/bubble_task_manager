@@ -136,6 +136,17 @@ class WorkspaceRepository(private val api: PlanirovychApi) {
         return TaskAiReply(response.optString("answer").orEmpty(),changed,summary,response)
     }
 
+    suspend fun updateTaskAiProposal(id:String,action:String){
+        val empty=buildJsonObject{}
+        when(action){
+            "approve"->api.approveTaskAiProposal(id,empty)
+            "reject"->api.rejectTaskAiProposal(id,empty)
+            "undo"->api.undoTaskAiProposal(id,empty)
+            else->throw IllegalArgumentException("Неизвестное действие")
+        }
+    }
+    suspend fun taskAiDocumentLink(id:String):String? =
+        api.taskAiDocumentLink(id).optString("url")
     suspend fun loadHabits() = api.habits()
     suspend fun loadHabitHistory(id: String) = api.habitHistory(id)
     suspend fun recordHabit(id: String,dateKey: String,amount: Int): Habit =
