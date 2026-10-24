@@ -22,9 +22,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
  * records as the Mini App. Unedited HTML is kept byte-for-byte on save;
  * text edits are explicitly converted to escaped, safe HTML.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun NativeNotesSheet(vm: HomeViewModel, colors: WorkspaceColors, onClose: () -> Unit) {
+internal fun NativeNotesPage(vm: HomeViewModel, colors: WorkspaceColors, modifier: Modifier = Modifier) {
     val state by vm.state.collectAsStateWithLifecycle()
     var selected by remember { mutableStateOf<StandaloneNote?>(null) }
     var composing by remember { mutableStateOf(false) }
@@ -33,14 +32,7 @@ internal fun NativeNotesSheet(vm: HomeViewModel, colors: WorkspaceColors, onClos
     var originalText by remember { mutableStateOf("") }
     var deleteConfirm by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { vm.loadNotes() }
-    ModalBottomSheet(
-        onDismissRequest=onClose,
-        containerColor=colors.panel,
-        contentColor=colors.text,
-        sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),
-    ) {
-        Column(Modifier.fillMaxWidth().fillMaxHeight(.88f)
-            .navigationBarsPadding().padding(horizontal=18.dp)) {
+    Column(modifier.fillMaxSize().padding(horizontal=16.dp, vertical=14.dp)) {
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,
                 verticalAlignment=Alignment.CenterVertically) {
                 Text(if(composing) "Заметка" else "Заметки",
@@ -122,7 +114,6 @@ internal fun NativeNotesSheet(vm: HomeViewModel, colors: WorkspaceColors, onClos
                     }
                 }
             }
-        }
     }
     if (deleteConfirm && selected != null) AlertDialog(
         onDismissRequest={deleteConfirm=false},
