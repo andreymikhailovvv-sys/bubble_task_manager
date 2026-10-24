@@ -297,7 +297,7 @@ fun NativeHabitDetailSheet(vm:HomeViewModel,habit:Habit,dark:Boolean,onClose:()-
         onDismiss={settingsOpen=false},
         onSave={payload->vm.editHabit(habit.id,payload){settingsOpen=false}},
         onFinish={settingsOpen=false;confirm="finish"},
-        onDelete={settingsOpen=false;confirm="delete"})
+        onDelete={settingsOpen=false;confirm="delete"},error=state.habitError)
     confirm?.let{action->
         AlertDialog(onDismissRequest={confirm=null},
             title={Text(if(action=="finish")"Завершить привычку?" else "Удалить привычку?")},
@@ -352,12 +352,13 @@ fun NativeHabitCreateSheet(vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
         habit=null,c=habitPalette(dark),busy=state.habitBusy,
         onDismiss=onClose,
         onSave={payload->vm.createHabit(payload,onClose)},
-        onFinish={},onDelete={}
+        onFinish={},onDelete={},error=state.habitError
     )
 }
 @Composable
 private fun HabitSettingsDialog(habit:Habit?,c:HabitPalette,busy:Boolean,
-    onDismiss:()->Unit,onSave:(JsonObject)->Unit,onFinish:()->Unit,onDelete:()->Unit){
+    onDismiss:()->Unit,onSave:(JsonObject)->Unit,onFinish:()->Unit,onDelete:()->Unit,
+    error:String?=null){
     val ctx=LocalContext.current
     var icon by remember(habit?.id ?: "new"){mutableStateOf(habit?.icon ?: "✨")}
     var color by remember(habit?.id ?: "new"){mutableStateOf(habit?.color ?: "#22c55e")}
@@ -514,6 +515,7 @@ private fun HabitSettingsDialog(habit:Habit?,c:HabitPalette,busy:Boolean,
                     }
                 }
                 Spacer(Modifier.height(10.dp))
+                error?.let { Text(it,color=MaterialTheme.colorScheme.error,fontSize=12.sp) }
                 Button(onClick=sendChanges,enabled=!busy&&name.isNotBlank()&&
                     !(duration==HabitDurationMode.UNTIL_DATE&&endDate.isNullOrBlank())&&
                     !(recurrence==HabitRecurrenceType.WEEKDAYS&&weekdays.isEmpty()),
