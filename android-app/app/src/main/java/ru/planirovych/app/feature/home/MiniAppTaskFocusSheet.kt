@@ -5,6 +5,10 @@ import android.app.TimePickerDialog
 import android.content.Intent
 import android.net.Uri
 import android.provider.CalendarContract
+import android.provider.OpenableColumns
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
@@ -22,6 +26,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import java.time.*
@@ -51,6 +59,7 @@ private enum class FocusOrder(val label: String) {
 @Composable
 fun MiniAppTaskFocusSheet(
     task: Task, tasks: List<Task>, spheres: List<Sphere>, dark: Boolean,
+    vm: HomeViewModel,
     busy: Boolean, error: String?,
     onBack: () -> Unit, onOpenSubtask: (String) -> Unit, onNewSubtask: () -> Unit,
     onSave: (String, JsonObject, () -> Unit) -> Unit,
@@ -59,6 +68,8 @@ fun MiniAppTaskFocusSheet(
 ) {
     val c=remember(dark){focusColors(dark)}
     val ctx=LocalContext.current
+    val state by vm.state.collectAsStateWithLifecycle()
+    val scope=rememberCoroutineScope()
     var title by remember(task.id){mutableStateOf(task.title)}
     var description by remember(task.id){mutableStateOf(task.description.orEmpty())}
     var dueDate by remember(task.id){mutableStateOf(task.dueDate)}
@@ -113,6 +124,28 @@ fun MiniAppTaskFocusSheet(
                     .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
             },old.hour,old.minute,true).show()
         },old.year,old.monthValue-1,old.dayOfMonth).show()
+    }
+
+    LaunchedEffect(task.id){vm.loadTaskAttachments(task.id)}
+    val pickFile=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->
+        if(uri!=null){
+            scope.launch {
+                try {
+                    val data=withContext(Dispatchers.IO){
+                        val bytes=ctx.contentResolver.openInputStream(uri)?.use{it.readBytes()}
+                            ?: throw IllegalStateException("Не удалось открыть файл")
+                        val name=ctx.contentResolver.query(uri,
+                            arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use{
+                                if(it.moveToFirst())it.getString(0) else null
+                            }?.takeIf{it.isNotBlank()} ?: "Вложение"
+                        Triple(name,ctx.contentResolver.getType(uri) ?: "application/octet-stream",bytes)
+                    }
+                    vm.uploadTaskAttachment(task.id,data.first,data.second,data.third)
+                } catch(cause:Throwable){
+                    Toast.makeText(ctx,cause.message ?: "Не удалось прочитать файл",Toast.LENGTH_LONG).show()
+                }
+            }
+        }
     }
 
     ModalBottomSheet(onDismissRequest={saveThen(onBack)},
@@ -192,11 +225,37 @@ fun MiniAppTaskFocusSheet(
                     FocusRoundIcon(Icons.Default.OpenInFull,c,"Развернуть описание"){
                         descriptionExpanded=true
                     }
-                    FocusRoundIcon(Icons.Default.AttachFile,c,"Вложения"){
-                        // The authenticated file manager remains in the Mini App.
-                        saveThen {
-                            val url="https://planirovych.ru/?taskId="+Uri.encode(task.id)
-                            runCatching{ctx.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(url)))}
+                    FocusRoundIcon(Icons.Default.AttachFile,c,"Прикрепить файл"){
+                        pickFile.launch(arrayOf("*/*"))
+                    }
+                }
+
+                if(state.attachmentTaskId==task.id){
+                    if(state.taskAttachmentsBusy)LinearProgressIndicator(Modifier.fillMaxWidth())
+                    state.taskAttachmentsError?.let {
+                        Text(it,color=c.red,fontSize=12.sp,modifier=Modifier.padding(bottom=6.dp))
+                    }
+                    state.taskAttachments.forEach{attachment->
+                        Row(Modifier.fillMaxWidth().padding(bottom=6.dp)
+                            .clip(RoundedCornerShape(12.dp)).background(c.card)
+                            .border(1.dp,c.border,RoundedCornerShape(12.dp))
+                            .padding(start=9.dp),verticalAlignment=Alignment.CenterVertically){
+                            Icon(Icons.Default.AttachFile,null,tint=c.purple,
+                                modifier=Modifier.size(14.dp))
+                            Text(attachment.name,Modifier.weight(1f)
+                                .clickable {
+                                    vm.openTaskAttachmentLink(task.id,attachment.id){ url ->
+                                        runCatching { ctx.startActivity(
+                                            Intent(Intent.ACTION_VIEW,Uri.parse(url))) }
+                                    }
+                                }.padding(horizontal=9.dp,vertical=10.dp),
+                                fontSize=12.sp,color=c.text,maxLines=1,overflow=TextOverflow.Ellipsis)
+                            IconButton(onClick={confirmation="file:"+attachment.id},
+                                enabled=!state.taskAttachmentsBusy,
+                                modifier=Modifier.size(32.dp)){
+                                Icon(Icons.Default.Close,"Удалить вложение",
+                                    tint=c.muted,modifier=Modifier.size(14.dp))
+                            }
                         }
                     }
                 }
@@ -350,14 +409,18 @@ fun MiniAppTaskFocusSheet(
         }
     }
     confirmation?.let{action->
+        val isFile=action.startsWith("file:")
         AlertDialog(onDismissRequest={confirmation=null},
-            title={Text(if(action=="delete")"Удалить задачу?" else "Выполнить задачу?")},
-            text={Text((if(action=="delete")"Удалить «" else "Выполнить «")+task.title+"»?")},
+            title={Text(if(isFile)"Удалить вложение?" else if(action=="delete")
+                "Удалить задачу?" else "Выполнить задачу?")},
+            text={Text(if(isFile)"Вложение будет удалено из задачи." else
+                (if(action=="delete")"Удалить «" else "Выполнить «")+task.title+"»?")},
             confirmButton={TextButton(onClick={
                 confirmation=null
-                if(action=="delete")onDelete(task.id,onBack)
+                if(isFile)vm.removeTaskAttachment(task.id,action.removePrefix("file:"))
+                else if(action=="delete")onDelete(task.id,onBack)
                 else saveThen{onChangeStatus(task.id,TaskStatus.DONE,onBack)}
-            }){Text(if(action=="delete")"Удалить" else "Выполнить")}},
+            }){Text(if(isFile || action=="delete")"Удалить" else "Выполнить")}},
             dismissButton={TextButton(onClick={confirmation=null}){Text("Отмена")}}
         )
     }
