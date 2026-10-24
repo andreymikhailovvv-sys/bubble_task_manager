@@ -3,6 +3,10 @@ package ru.planirovych.app.feature.home
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.ui.input.pointer.*
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.shape.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -13,6 +17,8 @@ import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
@@ -52,7 +58,7 @@ private fun timelineHabitScheduled(habit:Habit,date:LocalDate):Boolean{
 private data class TimelineEntry(
     val key:String,val time:LocalTime,val title:String,
     val kind:String,val color:Color,val taskId:String?=null,
-    val habit:Habit?=null
+    val habit:Habit?=null,val sectorName:String?=null
 )
 private fun timelineEntries(date:LocalDate,tasks:List<Task>,allTasks:List<Task>,
     habits:List<Habit>,spheres:List<Sphere>):List<TimelineEntry>{
@@ -72,7 +78,8 @@ private fun timelineEntries(date:LocalDate,tasks:List<Task>,allTasks:List<Task>,
             "Напоминание" -> Color(0xFF0284C7)
             else -> calendarColor(spheres.firstOrNull{it.id==source.sphereId}?.color)
         }
-        TimelineEntry(task.id,due.toLocalTime(),task.title,kind,accent,task.id)
+        TimelineEntry(task.id,due.toLocalTime(),task.title,kind,accent,task.id,
+            sectorName=spheres.firstOrNull{it.id==source.sphereId}?.name)
     }.toMutableList()
     habits.filter{timelineHabitScheduled(it,date)}.forEach{habit->
         val times=habit.reminderTimes.ifEmpty{listOfNotNull(habit.reminderTime)}
@@ -92,6 +99,7 @@ internal fun NativeTimelineWorkspace(
     colors:WorkspaceColors,dark:Boolean,onOpen:(String)->Unit
 ){
     var zoom by rememberSaveable{mutableStateOf(TimelineZoom.DAY)}
+    var weekScale by rememberSaveable{mutableFloatStateOf(1f)}
     var anchorRaw by rememberSaveable{mutableStateOf(LocalDate.now().toString())}
     val anchor=runCatching{LocalDate.parse(anchorRaw)}.getOrDefault(LocalDate.now())
     val start=when(zoom){
@@ -154,18 +162,14 @@ internal fun NativeTimelineWorkspace(
                         }.toString()
                     }){Icon(Icons.Default.ChevronRight,"Следующий период",tint=colors.text)}
                 }
-                TextButton(onClick={anchorRaw=LocalDate.now().toString()},
-                    modifier=Modifier.align(Alignment.End)){
-                    Icon(Icons.Default.Today,null,modifier=Modifier.size(15.dp))
-                    Spacer(Modifier.width(5.dp))
-                    Text("Сегодня",fontSize=11.sp)
-                }
             }
         }
         when(zoom){
             TimelineZoom.DAY->TimelineDay(anchor,tasks,allTasks,habits,spheres,colors,dark,onOpen)
             TimelineZoom.WEEK->TimelineWeek(start,tasks,allTasks,habits,spheres,colors,dark,
-                onOpen,openDay={anchorRaw=it.toString();zoom=TimelineZoom.DAY})
+                onOpen,weekScale=weekScale,
+                onWeekScaleChange={weekScale=it.coerceIn(.72f,1.8f)},
+                openDay={anchorRaw=it.toString();zoom=TimelineZoom.DAY})
             TimelineZoom.MONTH->TimelineMonth(start,tasks,allTasks,habits,spheres,colors,dark,
                 openDay={anchorRaw=it.toString();zoom=TimelineZoom.DAY})
         }
@@ -174,49 +178,81 @@ internal fun NativeTimelineWorkspace(
 
 @Composable
 private fun TimelineEventCard(entry:TimelineEntry,c:WorkspaceColors,dark:Boolean,
-    compact:Boolean=false,onOpen:(String)->Unit){
+    compact:Boolean=false,scale:Float=1f,onOpen:(String)->Unit){
     val isEvent=entry.kind=="Событие"
     val isReminder=entry.kind=="Напоминание"
     val isSubtask=entry.kind=="Подзадача"
     val isHabit=entry.kind=="Привычка"
-    val edge=if(isSubtask)entry.color else if(isEvent)Color(0xFFD97706)
-        else if(isReminder)Color(0xFF0284C7) else entry.color
-    val base=when{
+    val kindColor=when {
+        isEvent->Color(0xFFD97706)
+        isReminder->Color(0xFF0284C7)
+        isHabit->Color(0xFF059669)
+        else->c.purple
+    }
+    // A sector is shown as a labeled chip instead of a colored card in the
+    // weekly calendar. Kind accents still distinguish events and reminders.
+    val edge=if(compact){
+        when{
+            isEvent->kindColor.copy(alpha=.75f)
+            isReminder->kindColor.copy(alpha=.75f)
+            isHabit->kindColor.copy(alpha=.6f)
+            else->c.panelBorder
+        }
+    } else if(isEvent||isReminder)kindColor else entry.color
+    val base=when {
         isEvent->if(dark)Color(0xFF543717) else Color(0xFFFFF4D6)
         isReminder->if(dark)Color(0xFF163955) else Color(0xFFE0F2FE)
-        isSubtask->if(dark)Color(0xFF263348) else Color(0xFFF3F5FA)
         isHabit->if(dark)Color(0xFF1A352B) else Color(0xFFEFFCF2)
+        isSubtask->if(dark)Color(0xFF263348) else Color(0xFFF3F5FA)
         else->if(dark)Color(0xFF1B2C41) else Color(0xFFF6F8FC)
     }
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(if(compact)9.dp else 13.dp))
-        .background(base)
-        .border(1.dp,edge.copy(alpha=if(dark).65f else .48f),
-            RoundedCornerShape(if(compact)9.dp else 13.dp))
+    val radius=RoundedCornerShape(if(compact)9.dp else 13.dp)
+    val adjusted=if(compact)scale.coerceIn(.72f,1.8f) else 1f
+    Row(Modifier.fillMaxWidth().clip(radius).background(base)
+        .border(1.dp,edge.copy(alpha=if(dark).72f else .6f),radius)
         .clickable(enabled=entry.taskId!=null&&!isReminder){
             entry.taskId?.let(onOpen)
-        }.heightIn(min=if(compact)34.dp else if(isSubtask)44.dp else 54.dp),
+        }.heightIn(min=if(compact)(37f*adjusted).dp
+            else if(isSubtask)44.dp else 54.dp),
         verticalAlignment=Alignment.CenterVertically){
-        Box(Modifier.width(if(isSubtask)5.dp else 3.dp)
-            .heightIn(min=if(compact)34.dp else 48.dp).background(edge))
-        Column(Modifier.weight(1f).padding(horizontal=if(compact)6.dp else 10.dp,
-            vertical=5.dp),verticalArrangement=Arrangement.spacedBy(2.dp)){
-            Text(entry.title,color=c.text,fontSize=if(compact)10.sp else if(isSubtask)12.sp else 13.sp,
+        if(!compact){
+            Box(Modifier.width(if(isSubtask)5.dp else 3.dp)
+                .heightIn(min=if(isSubtask)40.dp else 49.dp).background(edge))
+        }
+        Column(Modifier.weight(1f).padding(
+            horizontal=if(compact)(7f*adjusted).dp else 10.dp,
+            vertical=if(compact)(5f*adjusted).dp else 6.dp),
+            verticalArrangement=Arrangement.spacedBy(if(compact)3.dp else 2.dp)){
+            Text(entry.title,color=c.text,
+                fontSize=if(compact)(10.5f*adjusted).sp else if(isSubtask)12.sp else 13.sp,
+                lineHeight=if(compact)(13f*adjusted).sp else 17.sp,
                 fontWeight=FontWeight.SemiBold,maxLines=if(compact)2 else 1,
                 overflow=TextOverflow.Ellipsis)
             Text(entry.kind+" · "+shortTime(entry.time),
                 color=if(isEvent)if(dark)Color(0xFFFCD34D) else Color(0xFF92400E)
                     else if(isReminder)if(dark)Color(0xFF7DD3FC) else Color(0xFF0369A1)
                     else c.secondaryText,
-                fontSize=if(compact)9.sp else 11.sp,maxLines=1)
+                fontSize=if(compact)(9f*adjusted).sp else 11.sp,
+                maxLines=1)
+            if(compact && !entry.sectorName.isNullOrBlank() && !isHabit && !isReminder){
+                Surface(shape=RoundedCornerShape(6.dp),color=c.selected,
+                    border=BorderStroke(.6.dp,c.purple.copy(alpha=.40f))){
+                    Text(entry.sectorName,modifier=Modifier.padding(
+                        horizontal=(5f*adjusted).dp,vertical=(2f*adjusted).dp),
+                        color=c.selectedText,fontWeight=FontWeight.Medium,
+                        fontSize=(8.5f*adjusted).sp,maxLines=1,
+                        overflow=TextOverflow.Ellipsis)
+                }
+            }
         }
         if(!compact){
-            Icon(when{
+            Icon(when {
                 isEvent->Icons.Default.Event
                 isReminder->Icons.Default.Notifications
                 isSubtask->Icons.Default.SubdirectoryArrowRight
                 isHabit->Icons.Default.AutoAwesome
                 else->Icons.Default.CheckCircleOutline
-            },null,tint=edge,modifier=Modifier.padding(end=9.dp).size(16.dp))
+            },null,tint=kindColor,modifier=Modifier.padding(end=9.dp).size(16.dp))
         }
     }
 }
@@ -228,36 +264,33 @@ private fun TimelineDay(day:LocalDate,tasks:List<Task>,allTasks:List<Task>,
     val entries=remember(day,tasks,allTasks,habits,spheres){
         timelineEntries(day,tasks,allTasks,habits,spheres)
     }
-    val quarterGroups=remember(entries){entries.groupBy{
-        it.time.hour*4 + it.time.minute/15
-    }}
-    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(0.dp)){
-        if(entries.isEmpty()) Text("Событий на этот день нет. Ниже доступна часовая сетка.",
-            fontSize=11.sp,color=colors.secondaryText,modifier=Modifier.padding(10.dp))
-        repeat(96){slot->
-            val hour=slot/4
-            val minute=(slot%4)*15
-            val isHour=minute==0
-            Row(Modifier.fillMaxWidth().heightIn(min=if(isHour)31.dp else 24.dp)
-                .background(if(isHour)colors.panel.copy(alpha=.38f) else Color.Transparent),
-                verticalAlignment=Alignment.Top){
-                Text(if(isHour)String.format(Locale.US,"%02d:00",hour) else "",
-                    color=colors.secondaryText,fontWeight=FontWeight.SemiBold,
-                    fontSize=10.sp,modifier=Modifier.width(48.dp).padding(top=6.dp))
-                Column(Modifier.weight(1f)
-                    .border(BorderStroke(if(isHour)1.dp else .5.dp,
-                        colors.panelBorder.copy(alpha=if(isHour).8f else .30f)))
-                    .padding(horizontal=5.dp,vertical=4.dp),
-                    verticalArrangement=Arrangement.spacedBy(6.dp)){
-                    quarterGroups[slot]?.forEach{entry->
-                        TimelineEventCard(entry,colors,dark,onOpen=onOpen)
+    // In the compact day view only occupied hours are shown. There are no
+    // empty quarter-hour slots, unlike the former full 24-hour grid.
+    val byHour=remember(entries){entries.groupBy{it.time.hour}.toSortedMap()}
+    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(8.dp)){
+        if(entries.isEmpty()){
+            Surface(color=colors.panel,shape=RoundedCornerShape(15.dp),
+                border=BorderStroke(1.dp,colors.panelBorder)){
+                Text("На выбранный день нет записей.",color=colors.secondaryText,
+                    fontSize=12.sp,modifier=Modifier.padding(17.dp))
+            }
+        }
+        byHour.forEach{(hour,records)->
+            Surface(shape=RoundedCornerShape(16.dp),color=colors.panel,
+                border=BorderStroke(1.dp,colors.panelBorder)){
+                Row(Modifier.fillMaxWidth().padding(horizontal=9.dp,vertical=10.dp),
+                    horizontalArrangement=Arrangement.spacedBy(9.dp),
+                    verticalAlignment=Alignment.Top){
+                    Column(Modifier.width(45.dp).padding(top=5.dp),
+                        horizontalAlignment=Alignment.CenterHorizontally){
+                        Text(String.format(Locale.US,"%02d:00",hour),
+                            color=colors.purple,fontSize=11.sp,
+                            fontWeight=FontWeight.Bold)
                     }
-                    if(day==LocalDate.now() && hour==LocalTime.now().hour &&
-                        minute==LocalTime.now().minute/15*15) {
-                        Row(verticalAlignment=Alignment.CenterVertically){
-                            Box(Modifier.size(6.dp).background(Color(0xFFF43F5E),CircleShape))
-                            Spacer(Modifier.width(5.dp))
-                            HorizontalDivider(color=Color(0xFFF43F5E),thickness=1.dp)
+                    Column(Modifier.weight(1f),
+                        verticalArrangement=Arrangement.spacedBy(7.dp)){
+                        records.forEach{entry->
+                            TimelineEventCard(entry,colors,dark,onOpen=onOpen)
                         }
                     }
                 }
@@ -269,41 +302,91 @@ private fun TimelineDay(day:LocalDate,tasks:List<Task>,allTasks:List<Task>,
 @Composable
 private fun TimelineWeek(monday:LocalDate,tasks:List<Task>,allTasks:List<Task>,
     habits:List<Habit>,spheres:List<Sphere>,colors:WorkspaceColors,dark:Boolean,
-    onOpen:(String)->Unit,openDay:(LocalDate)->Unit){
+    onOpen:(String)->Unit,weekScale:Float,onWeekScaleChange:(Float)->Unit,
+    openDay:(LocalDate)->Unit){
     val labels=listOf("Пн","Вт","Ср","Чт","Пт","Сб","Вс")
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement=Arrangement.spacedBy(6.dp)){
-        repeat(7){index->
-            val date=monday.plusDays(index.toLong())
-            val items=remember(date,tasks,allTasks,habits,spheres){
-                timelineEntries(date,tasks,allTasks,habits,spheres)
+    val currentScale by rememberUpdatedState(weekScale)
+    val updateScale by rememberUpdatedState(onWeekScaleChange)
+    Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End,
+            verticalAlignment=Alignment.CenterVertically){
+            Icon(Icons.Default.ZoomIn,"Изменить масштаб недели",
+                tint=colors.secondaryText,modifier=Modifier.size(15.dp))
+            Spacer(Modifier.width(5.dp))
+            Text("Масштаб",color=colors.secondaryText,fontSize=11.sp)
+            Spacer(Modifier.width(8.dp))
+            IconButton(onClick={onWeekScaleChange(weekScale-.15f)},
+                enabled=weekScale>.73f,modifier=Modifier.size(32.dp)){
+                Icon(Icons.Default.Remove,"Уменьшить масштаб",
+                    tint=colors.purple,modifier=Modifier.size(18.dp))
             }
-            Surface(Modifier.width(155.dp).heightIn(min=230.dp),shape=RoundedCornerShape(15.dp),
-                color=colors.panel,border=BorderStroke(1.dp,
-                    if(date==LocalDate.now())colors.purple else colors.panelBorder)){
-                Column(Modifier.padding(7.dp),verticalArrangement=Arrangement.spacedBy(7.dp)){
-                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp))
-                        .background(if(date==LocalDate.now())colors.selected else colors.muted)
-                        .clickable{openDay(date)}.padding(8.dp),
-                        horizontalAlignment=Alignment.CenterHorizontally){
-                        Text(labels[index],color=colors.secondaryText,fontSize=11.sp)
-                        Text(date.dayOfMonth.toString(),fontWeight=FontWeight.Bold,
-                            color=colors.text,fontSize=18.sp)
-                        Text(date.format(DateTimeFormatter.ofPattern("MMM",Locale("ru"))),
-                            color=colors.secondaryText,fontSize=10.sp)
-                    }
-                    if(items.isEmpty()){
-                        Text("Нет записей",color=colors.secondaryText,fontSize=10.sp,
-                            modifier=Modifier.padding(top=14.dp))
-                    }
-                    items.groupBy{it.time.hour}.forEach{(hour,group)->
-                        Text(String.format(Locale.US,"%02d:00",hour),
-                            color=colors.secondaryText,fontSize=10.sp,
-                            fontWeight=FontWeight.SemiBold)
-                        group.forEach{TimelineEventCard(it,colors,dark,compact=true,onOpen=onOpen)}
-                    }
-                    TextButton(onClick={openDay(date)},modifier=Modifier.fillMaxWidth()){
-                        Text("Открыть день",fontSize=10.sp)
+            Text("${(weekScale*100).toInt()}%",
+                color=colors.text,fontSize=11.sp,fontWeight=FontWeight.Bold,
+                textAlign=TextAlign.Center,modifier=Modifier.width(44.dp))
+            IconButton(onClick={onWeekScaleChange(weekScale+.15f)},
+                enabled=weekScale<1.79f,modifier=Modifier.size(32.dp)){
+                Icon(Icons.Default.Add,"Увеличить масштаб",
+                    tint=colors.purple,modifier=Modifier.size(18.dp))
+            }
+        }
+        // Intercept *only* two-finger gestures. A single finger remains
+        // available for horizontal week scrolling and outer page gestures.
+        Row(Modifier.fillMaxWidth()
+            .pointerInput(Unit){
+                awaitEachGesture {
+                    do {
+                        val event=awaitPointerEvent(PointerEventPass.Initial)
+                        if(event.changes.count{it.pressed}>=2){
+                            val factor=event.calculateZoom()
+                            if(factor.isFinite() && factor>0f && factor!=1f){
+                                updateScale((currentScale*factor).coerceIn(.72f,1.8f))
+                            }
+                            event.changes.forEach{it.consume()}
+                        }
+                    }while(event.changes.any{it.pressed})
+                }
+            }
+            .horizontalScroll(rememberScrollState()),
+            horizontalArrangement=Arrangement.spacedBy(6.dp)){
+            repeat(7){index->
+                val date=monday.plusDays(index.toLong())
+                val items=remember(date,tasks,allTasks,habits,spheres){
+                    timelineEntries(date,tasks,allTasks,habits,spheres)
+                }
+                Surface(Modifier.width((155f*weekScale).dp).heightIn(min=230.dp),
+                    shape=RoundedCornerShape(15.dp),
+                    color=colors.panel,border=BorderStroke(1.dp,
+                        if(date==LocalDate.now())colors.purple else colors.panelBorder)){
+                    Column(Modifier.padding((7f*weekScale).dp),
+                        verticalArrangement=Arrangement.spacedBy((7f*weekScale).dp)){
+                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp))
+                            .background(if(date==LocalDate.now())colors.selected else colors.muted)
+                            .clickable{openDay(date)}.padding(8.dp),
+                            horizontalAlignment=Alignment.CenterHorizontally){
+                            Text(labels[index],color=colors.secondaryText,
+                                fontSize=(11f*weekScale).sp)
+                            Text(date.dayOfMonth.toString(),fontWeight=FontWeight.Bold,
+                                color=colors.text,fontSize=(18f*weekScale).sp)
+                            Text(date.format(DateTimeFormatter.ofPattern("MMM",Locale("ru"))),
+                                color=colors.secondaryText,fontSize=(10f*weekScale).sp)
+                        }
+                        if(items.isEmpty()){
+                            Text("Нет записей",color=colors.secondaryText,
+                                fontSize=(10f*weekScale).sp,
+                                modifier=Modifier.padding(top=14.dp))
+                        }
+                        items.groupBy{it.time.hour}.forEach{(hour,group)->
+                            Text(String.format(Locale.US,"%02d:00",hour),
+                                color=colors.secondaryText,fontSize=(10f*weekScale).sp,
+                                fontWeight=FontWeight.SemiBold)
+                            group.forEach{
+                                TimelineEventCard(it,colors,dark,compact=true,
+                                    scale=weekScale,onOpen=onOpen)
+                            }
+                        }
+                        TextButton(onClick={openDay(date)},modifier=Modifier.fillMaxWidth()){
+                            Text("Открыть день",fontSize=(10f*weekScale).sp)
+                        }
                     }
                 }
             }
@@ -335,9 +418,7 @@ private fun TimelineMonth(first:LocalDate,tasks:List<Task>,allTasks:List<Task>,
                             timelineEntries(date,tasks,allTasks,habits,spheres)
                         }
                         val outside=date.month!=first.month
-                        val eventCount=entries.count{it.kind=="Событие"}
-                        val subCount=entries.count{it.kind=="Подзадача"}
-                        Box(Modifier.weight(1f).height(87.dp)
+                        Box(Modifier.weight(1f).height(100.dp)
                             .clip(RoundedCornerShape(9.dp))
                             .background(when{
                                 date==LocalDate.now()->colors.selected
@@ -352,18 +433,27 @@ private fun TimelineMonth(first:LocalDate,tasks:List<Task>,allTasks:List<Task>,
                                     color=if(outside)colors.secondaryText.copy(alpha=.55f)
                                         else colors.text,fontWeight=FontWeight.Bold)
                                 entries.take(3).forEach{entry->
-                                    Box(Modifier.fillMaxWidth().height(15.dp)
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(entry.color.copy(alpha=if(dark).32f else .18f))
-                                        .border(.7.dp,entry.color.copy(alpha=.7f),
-                                            RoundedCornerShape(4.dp))
-                                        .padding(start=2.dp),contentAlignment=Alignment.CenterStart){
-                                        Text(when(entry.kind){
-                                            "Событие"->"◆ "+entry.title
-                                            "Подзадача"->"↳ "+entry.title
-                                            "Напоминание"->"🔔 "+entry.title
-                                            else->entry.title
-                                        },fontSize=8.sp,color=colors.text,maxLines=1,
+                                    val accent=when(entry.kind){
+                                        "Событие"->Color(0xFFF59E0B)
+                                        "Напоминание"->Color(0xFF0284C7)
+                                        "Подзадача"->colors.purple
+                                        else->entry.color
+                                    }
+                                    Box(Modifier.fillMaxWidth().height(19.dp)
+                                        .clip(RoundedCornerShape(5.dp))
+                                        .background(accent.copy(alpha=if(dark).32f else .18f))
+                                        .border(.7.dp,accent.copy(alpha=.7f),
+                                            RoundedCornerShape(5.dp)),
+                                        contentAlignment=Alignment.Center){
+                                        // Exact vertical/horizontal centering: no emoji baseline
+                                        // shifts, no leading-only padding on tiny month cells.
+                                        Text(entry.title,
+                                            modifier=Modifier.fillMaxWidth().padding(horizontal=2.dp),
+                                            fontSize=8.sp,lineHeight=9.sp,
+                                            style=TextStyle(platformStyle=PlatformTextStyle(
+                                                includeFontPadding=false)),
+                                            textAlign=TextAlign.Center,color=colors.text,
+                                            maxLines=1,softWrap=false,
                                             overflow=TextOverflow.Ellipsis)
                                     }
                                 }
