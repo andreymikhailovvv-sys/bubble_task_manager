@@ -20,6 +20,17 @@ interface PlanirovychApi {
     @PATCH("api/tasks/{id}") suspend fun updateTask(@Path("id") id: String, @Body changes: JsonObject): Task
     @POST("api/tasks") suspend fun createTask(@Body payload: JsonObject): Task
     @DELETE("api/tasks/{id}") suspend fun deleteTask(@Path("id") id: String, @Query("scope") scope: String = "me"): OkResponse
+
+    @GET("api/tasks/{id}/attachments")
+    suspend fun taskAttachments(@Path("id") id: String): List<TaskAttachment>
+    @POST("api/tasks/{id}/attachments")
+    suspend fun addTaskAttachment(@Path("id") id: String, @Body payload: JsonObject): TaskAttachment
+    @DELETE("api/tasks/{id}/attachments/{attachmentId}")
+    suspend fun removeTaskAttachment(@Path("id") id: String,
+        @Path("attachmentId") attachmentId: String): OkResponse
+    @POST("api/tasks/{id}/attachments/{attachmentId}/download-link")
+    suspend fun taskAttachmentLink(@Path("id") id: String,
+        @Path("attachmentId") attachmentId: String): TaskAttachmentLink
     @GET("api/habits") suspend fun habits(): List<Habit>
     @POST("api/habits") suspend fun createHabit(@Body payload: JsonObject): Habit
     @POST("api/habits/{id}/complete") suspend fun completeHabit(@Path("id") id: String, @Body payload: JsonObject): Habit
