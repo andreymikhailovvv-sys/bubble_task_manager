@@ -11,6 +11,16 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.collect
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.*
@@ -25,6 +35,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.StrokeCap
@@ -109,6 +120,11 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
     var sendingDisplay by remember(task.id){mutableStateOf<String?>(null)}
     var attachmentError by remember(task.id){mutableStateOf<String?>(null)}
     var pendingRetry by remember(task.id){mutableStateOf(false)}
+    // The composer is a draft, not a progress indicator. Keep an exact snapshot
+    // only for recovery after a failed request.
+    var queuedDraft by remember(task.id){mutableStateOf<String?>(null)}
+    var queuedFiles by remember(task.id){mutableStateOf<List<TaskAiFile>>(emptyList())}
+    var queuedReply by remember(task.id){mutableStateOf<ReplyTarget?>(null)}
     val busy=ui.taskId==task.id && ui.busy
     val triggers=if(ui.taskId==task.id && task.aiMonitoringEnabled)
         ui.monitoringTriggers else emptyList()
@@ -185,11 +201,20 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
         sendingQuestion=outgoing
         sendingDisplay=display
         pendingRetry=false
-        vm.sendTaskAi(task.id,id,outgoing,model,files.toList(),
+        val fileSnapshot=files.toList()
+        queuedDraft=draft
+        queuedFiles=fileSnapshot
+        queuedReply=reply
+        // Clear immediately after dispatch, like MiniApp's clearDraft().
+        // The request payload, uploads and optimistic bubble use snapshots.
+        draft=""
+        files.clear()
+        reply=null
+        vm.sendTaskAi(task.id,id,outgoing,model,fileSnapshot,
             userMessage=display){
-            draft=""
-            files.clear()
-            reply=null
+            queuedDraft=null
+            queuedFiles=emptyList()
+            queuedReply=null
             sendingId=null
             sendingQuestion=null
             sendingDisplay=null
@@ -197,11 +222,47 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
         }
     }
     LaunchedEffect(ui.busy,ui.error,ui.taskId){
-        if(!ui.busy&&ui.error!=null&&ui.taskId==task.id)pendingRetry=true
+        if(!ui.busy&&ui.error!=null&&ui.taskId==task.id){
+            pendingRetry=true
+            // An unsuccessful send must not silently discard the user's input.
+            if(draft.isBlank())queuedDraft?.let{draft=it}
+            if(files.isEmpty())files.addAll(queuedFiles)
+            if(reply==null)reply=queuedReply
+        }
     }
     // The existing history must appear at its last message immediately.
     // Do not animate through the entire transcript on first opening.
+    var headerHidden by remember(task.id){mutableStateOf(false)}
+    var composerHeightPx by remember(task.id){mutableIntStateOf(0)}
+    val composerBottomPadding=with(LocalDensity.current){
+        if(composerHeightPx>0)composerHeightPx.toDp()+12.dp else 102.dp
+    }
     var historyPositioned by remember(task.id){mutableStateOf(false)}
+    LaunchedEffect(task.id){
+        var previousIndex:Int?=null
+        var previousOffset=0
+        var movement=0
+        snapshotFlow{
+            Triple(listState.firstVisibleItemIndex,
+                listState.firstVisibleItemScrollOffset,
+                listState.isScrollInProgress)
+        }.distinctUntilChanged().collect{(index,offset,isScrolling)->
+            val oldIndex=previousIndex
+            if(oldIndex!=null && historyPositioned && isScrolling){
+                val delta=if(index==oldIndex)offset-previousOffset
+                    else (index-oldIndex).coerceIn(-3,3)*36
+                if(delta!=0){
+                    movement=if((delta>0 && movement<0) ||
+                        (delta<0 && movement>0))0 else movement
+                    movement=(movement+delta).coerceIn(-80,80)
+                    if(movement>18){headerHidden=true;movement=0}
+                    else if(movement< -18){headerHidden=false;movement=0}
+                }
+            }else if(!isScrolling)movement=0
+            previousIndex=index
+            previousOffset=offset
+        }
+    }
     var lastItemCount by remember(task.id){mutableIntStateOf(0)}
     LaunchedEffect(task.id,ui.taskId,ui.loading,messages.size,busy,sendingDisplay,
         monitoringStatuses.size,triggers.size,ui.lastActionReports.size){
@@ -227,6 +288,11 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
         Surface(Modifier.fillMaxSize().imePadding(),color=c.bg,
             shape=RoundedCornerShape(0.dp)){
             Column(Modifier.fillMaxSize()){
+                AnimatedVisibility(
+                    visible=!headerHidden,
+                    enter=expandVertically(animationSpec=tween(170))+fadeIn(),
+                    exit=shrinkVertically(animationSpec=tween(150))+fadeOut()
+                ){
                 Row(Modifier.fillMaxWidth().background(c.panel)
                     .heightIn(min=58.dp)
                     .padding(horizontal=11.dp,vertical=8.dp),
@@ -292,7 +358,7 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                             modifier=Modifier.size(20.dp))
                     }
                 }
-                HorizontalDivider(color=c.border)
+                }
                 Box(Modifier.weight(1f)){
                     if(ui.taskId==task.id && ui.loading){
                         CircularProgressIndicator(Modifier.align(Alignment.Center))
@@ -311,7 +377,8 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                     }
                     LazyColumn(state=listState,
                         modifier=Modifier.fillMaxSize().alpha(if(historyPositioned)1f else 0f),
-                        contentPadding=PaddingValues(horizontal=12.dp,vertical=12.dp),
+                        contentPadding=PaddingValues(start=12.dp,end=12.dp,
+                            top=12.dp,bottom=composerBottomPadding),
                         verticalArrangement=Arrangement.spacedBy(12.dp)){
                         items(messages,key={m->m.id?:m.role+"-"+messages.indexOf(m)}){
                             message->
@@ -353,10 +420,10 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                             NativeTaskAiProgressChip(ui.progressStatus?:"analyzing_request",c)
                         }
                     }
-                }
-                HorizontalDivider(color=c.border)
-                Column(Modifier.fillMaxWidth().background(c.panel)
-                    .padding(start=12.dp,end=12.dp,top=8.dp,bottom=10.dp),
+                Column(Modifier.align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(start=12.dp,end=12.dp,bottom=10.dp)
+                    .onSizeChanged{composerHeightPx=it.height},
                     verticalArrangement=Arrangement.spacedBy(7.dp)){
                     if(reply!=null){
                         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp))
@@ -408,9 +475,13 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                             }
                         }
                     }
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
-                        .background(c.bg).border(1.dp,c.border,RoundedCornerShape(20.dp))
-                        .padding(start=5.dp,end=7.dp,top=5.dp,bottom=5.dp),
+                    Row(Modifier.fillMaxWidth()
+                        .shadow(7.dp,RoundedCornerShape(32.dp))
+                        .clip(RoundedCornerShape(32.dp))
+                        .background(c.panel)
+                        .border(1.dp,c.border.copy(alpha=if(dark).7f else .86f),
+                            RoundedCornerShape(32.dp))
+                        .padding(start=7.dp,end=7.dp,top=5.dp,bottom=5.dp),
                         verticalAlignment=Alignment.Bottom,
                         horizontalArrangement=Arrangement.spacedBy(6.dp)){
                         BasicTextField(value=draft,onValueChange={
@@ -428,14 +499,15 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                                     inner()
                                 }
                             })
-                        IconButton(onClick={picker.launch(arrayOf("*/*"))},
-                            enabled=!busy&&!attaching,
-                            modifier=Modifier.size(38.dp).clip(CircleShape)
-                                .background(c.accent.copy(alpha=.11f))){
-                            Icon(Icons.Default.AttachFile,"Прикрепить файл",
-                                tint=c.accent,modifier=Modifier.size(19.dp))
+                        Box(Modifier.size(42.dp).clip(CircleShape)
+                            .background(if(dark)Color(0xFF253349) else Color(0xFFF8FAFC))
+                            .border(1.dp,c.border,CircleShape)
+                            .clickable(enabled=!busy&&!attaching){
+                                picker.launch(arrayOf("*/*"))
+                            },contentAlignment=Alignment.Center){
+                            TaskChatPaperclip(c.secondary)
                         }
-                        Box(Modifier.size(38.dp).clip(CircleShape)
+                        Box(Modifier.size(42.dp).clip(CircleShape)
                             .background(if(!busy&&(draft.isNotBlank()||files.isNotEmpty()))
                                 c.accent else c.border)
                             .clickable(enabled=!busy&&!attaching&&
@@ -443,15 +515,16 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                             contentAlignment=Alignment.Center){
                             if(busy)CircularProgressIndicator(Modifier.size(18.dp),
                                 strokeWidth=2.dp,color=c.text)
-                            else Icon(Icons.Default.ArrowUpward,"Отправить",
+                            else Icon(Icons.Default.Send,"Отправить",
                                 tint=if(dark)Color(0xFF1A1633) else Color.White,
-                                modifier=Modifier.size(20.dp))
+                                modifier=Modifier.size(19.dp))
                         }
                     }
                     if(pendingRetry && !busy){
                         Text("Ответ мог сохраниться на сервере. При повторе используется тот же ID запроса.",
                             color=c.secondary,fontSize=10.sp)
                     }
+                }
                 }
             }
         }
@@ -831,5 +904,30 @@ private fun NativeMonitoringTriggerChips(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TaskChatPaperclip(tint:Color){
+    // Lucide-style Paperclip, matching MiniAiChatComposer.tsx: Paperclip 17px.
+    // Unlike Material AttachFile the line is fine and the orientation is clean.
+    Canvas(Modifier.size(18.dp)){
+        val x=size.width/24f
+        val y=size.height/24f
+        val path=Path().apply{
+            moveTo(21.44f*x,11.05f*y)
+            lineTo(12.25f*x,20.24f*y)
+            cubicTo(9.91f*x,22.58f*y,6.09f*x,22.58f*y,3.76f*x,20.24f*y)
+            cubicTo(1.42f*x,17.90f*y,1.42f*x,14.09f*y,3.76f*x,11.75f*y)
+            lineTo(12.95f*x,2.56f*y)
+            cubicTo(14.51f*x,1.0f*y,17.05f*x,1.0f*y,18.61f*x,2.56f*y)
+            cubicTo(20.17f*x,4.12f*y,20.17f*x,6.66f*y,18.61f*x,8.22f*y)
+            lineTo(9.41f*x,17.41f*y)
+            cubicTo(8.63f*x,18.19f*y,7.36f*x,18.19f*y,6.59f*x,17.41f*y)
+            cubicTo(5.80f*x,16.63f*y,5.80f*x,15.36f*y,6.59f*x,14.58f*y)
+            lineTo(15.07f*x,6.10f*y)
+        }
+        drawPath(path,tint,style=Stroke(width=1.7.dp.toPx(),
+            cap=StrokeCap.Round,join=StrokeJoin.Round))
     }
 }
