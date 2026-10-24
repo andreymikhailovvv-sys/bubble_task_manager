@@ -123,7 +123,7 @@ fun MiniAppSubtaskEditorSheet(
             try{
                 val file=withContext(Dispatchers.IO){
                     val bytes=ctx.contentResolver.openInputStream(uri)?.use{it.readBytes()}
-                        ?: error("Не удалось открыть файл")
+                        ?: throw IllegalStateException("Не удалось открыть файл")
                     val name=ctx.contentResolver.query(uri,arrayOf(OpenableColumns.DISPLAY_NAME),
                         null,null,null)?.use{if(it.moveToFirst())it.getString(0) else null}
                         ?.takeIf{it.isNotBlank()} ?: "Вложение"
