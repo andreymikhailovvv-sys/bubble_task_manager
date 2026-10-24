@@ -8,6 +8,9 @@ import retrofit2.http.Query
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.Headers
+import retrofit2.http.Streaming
+import okhttp3.ResponseBody
 import ru.planirovych.app.data.model.*
 
 interface PlanirovychApi {
@@ -38,6 +41,14 @@ interface PlanirovychApi {
         @Query("userTimeZone") userTimeZone:String): JsonObject
     @POST("api/tasks/{id}/ai-chat")
     suspend fun sendTaskAi(@Path("id") taskId:String,@Body payload:JsonObject): JsonObject
+    @Streaming
+    @Headers("Accept: application/x-ndjson")
+    @POST("api/tasks/{id}/ai-chat")
+    suspend fun streamTaskAi(@Path("id") taskId:String,@Body payload:JsonObject):ResponseBody
+    @GET("api/tasks/{id}/monitoring/triggers")
+    suspend fun taskMonitoringTriggers(@Path("id") taskId:String):List<TaskMonitoringTrigger>
+    @GET("api/tasks/{id}/monitoring/statuses")
+    suspend fun taskMonitoringStatuses(@Path("id") taskId:String):List<TaskMonitoringStatus>
 
     @POST("api/ai/task-proposals/{id}/approve")
     suspend fun approveTaskAiProposal(@Path("id") id:String,@Body payload:JsonObject):JsonObject
