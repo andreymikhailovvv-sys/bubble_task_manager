@@ -23,6 +23,7 @@ data class TaskAiChatState(
     val messages:List<TaskAiChatMessage> = emptyList(),
     val loading:Boolean=false,
     val busy:Boolean=false,
+    val actionBusy:Boolean=false,
     val error:String?=null,
     val requestId:String?=null,
 )
@@ -107,6 +108,34 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                         error=error.userMessage(),requestId=requestId)
                     else it.copy(busy=false)
                 }
+            }
+        }
+    }
+    fun applyTaskAiProposal(taskId:String,proposalId:String,action:String){
+        if(taskAiMutable.value.actionBusy)return
+        taskAiMutable.update{it.copy(actionBusy=true,error=null)}
+        viewModelScope.launch {
+            try {
+                repository.updateTaskAiProposal(proposalId,action)
+                val tasks=repository.loadTasks()
+                val history=repository.loadTaskAiHistory(taskId)
+                mutable.update{it.copy(tasks=tasks)}
+                taskAiMutable.update{if(it.taskId==taskId)it.copy(
+                    actionBusy=false,messages=history,error=null)
+                    else it.copy(actionBusy=false)}
+            }catch(e:Throwable){
+                taskAiMutable.update{it.copy(actionBusy=false,error=e.userMessage())}
+            }
+        }
+    }
+    fun getTaskAiDocumentLink(id:String,onReady:(String)->Unit){
+        viewModelScope.launch {
+            try{
+                val url=repository.taskAiDocumentLink(id)
+                    ?: throw IllegalStateException("Ссылка для скачивания недоступна")
+                onReady(url)
+            }catch(e:Throwable){
+                taskAiMutable.update{it.copy(error=e.userMessage())}
             }
         }
     }
