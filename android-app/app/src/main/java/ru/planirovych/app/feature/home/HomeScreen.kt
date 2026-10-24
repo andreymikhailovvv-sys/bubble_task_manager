@@ -4,6 +4,8 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.rememberPagerState
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.*
 import androidx.compose.material.icons.Icons
@@ -31,6 +33,8 @@ private enum class AuthMode { LOGIN, REGISTER }
 fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
     val state by vm.state.collectAsStateWithLifecycle()
     var settings by remember { mutableStateOf(false) }
+    val pagerState = rememberPagerState(initialPage=0,pageCount={4})
+    val pagerScope = rememberCoroutineScope()
     var authMode by remember { mutableStateOf<AuthMode?>(null) }
     var openedTaskId by remember { mutableStateOf<String?>(null) }
     var newSubtaskParentId by remember { mutableStateOf<String?>(null) }
@@ -41,7 +45,33 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
         newSubtaskParentId = null
     }
 
-    Scaffold(contentWindowInsets = WindowInsets.safeDrawing, containerColor = MaterialTheme.colorScheme.background) { padding ->
+    Scaffold(contentWindowInsets = WindowInsets.safeDrawing,
+        containerColor = MaterialTheme.colorScheme.background,
+        bottomBar = {
+            if(!state.loading && state.error == null) {
+                val tabs = listOf(
+                    Triple("Список",Icons.Default.FormatListBulleted,"Задачи списком"),
+                    Triple("Таймлайн",Icons.Default.CalendarViewWeek,"Таймлайн"),
+                    Triple("Chats AI",Icons.Default.SmartToy,"Раздел ИИ"),
+                    Triple("Заметки",Icons.Default.StickyNote2,"Заметки")
+                )
+                NavigationBar(containerColor=MaterialTheme.colorScheme.surface,
+                    tonalElevation=7.dp) {
+                    tabs.forEachIndexed { index,tab ->
+                        NavigationBarItem(
+                            selected=pagerState.currentPage==index,
+                            onClick={pagerScope.launch { pagerState.animateScrollToPage(index) }},
+                            icon={Icon(tab.second,contentDescription=tab.third,
+                                modifier=Modifier.size(21.dp))},
+                            label={Text(tab.first,maxLines=1,
+                                style=MaterialTheme.typography.labelSmall)},
+                            alwaysShowLabel=true,
+                        )
+                    }
+                }
+            }
+        }
+    ) { padding ->
         when {
             state.loading -> Loading(Modifier.padding(padding))
             state.error != null -> ErrorState(state.error!!, vm::refresh, Modifier.padding(padding))
@@ -52,6 +82,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
                     newSubtaskParentId = null
                     vm.clearTaskError()
                 },
+                pagerState = pagerState,
                 modifier = Modifier.padding(padding),
             )
         }
