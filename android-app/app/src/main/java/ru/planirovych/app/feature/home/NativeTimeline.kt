@@ -154,12 +154,6 @@ internal fun NativeTimelineWorkspace(
                         }.toString()
                     }){Icon(Icons.Default.ChevronRight,"Следующий период",tint=colors.text)}
                 }
-                TextButton(onClick={anchorRaw=LocalDate.now().toString()},
-                    modifier=Modifier.align(Alignment.End)){
-                    Icon(Icons.Default.Today,null,modifier=Modifier.size(15.dp))
-                    Spacer(Modifier.width(5.dp))
-                    Text("Сегодня",fontSize=11.sp)
-                }
             }
         }
         when(zoom){
@@ -228,36 +222,33 @@ private fun TimelineDay(day:LocalDate,tasks:List<Task>,allTasks:List<Task>,
     val entries=remember(day,tasks,allTasks,habits,spheres){
         timelineEntries(day,tasks,allTasks,habits,spheres)
     }
-    val quarterGroups=remember(entries){entries.groupBy{
-        it.time.hour*4 + it.time.minute/15
-    }}
-    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(0.dp)){
-        if(entries.isEmpty()) Text("Событий на этот день нет. Ниже доступна часовая сетка.",
-            fontSize=11.sp,color=colors.secondaryText,modifier=Modifier.padding(10.dp))
-        repeat(96){slot->
-            val hour=slot/4
-            val minute=(slot%4)*15
-            val isHour=minute==0
-            Row(Modifier.fillMaxWidth().heightIn(min=if(isHour)31.dp else 24.dp)
-                .background(if(isHour)colors.panel.copy(alpha=.38f) else Color.Transparent),
-                verticalAlignment=Alignment.Top){
-                Text(if(isHour)String.format(Locale.US,"%02d:00",hour) else "",
-                    color=colors.secondaryText,fontWeight=FontWeight.SemiBold,
-                    fontSize=10.sp,modifier=Modifier.width(48.dp).padding(top=6.dp))
-                Column(Modifier.weight(1f)
-                    .border(BorderStroke(if(isHour)1.dp else .5.dp,
-                        colors.panelBorder.copy(alpha=if(isHour).8f else .30f)))
-                    .padding(horizontal=5.dp,vertical=4.dp),
-                    verticalArrangement=Arrangement.spacedBy(6.dp)){
-                    quarterGroups[slot]?.forEach{entry->
-                        TimelineEventCard(entry,colors,dark,onOpen=onOpen)
+    // In the compact day view only occupied hours are shown. There are no
+    // empty quarter-hour slots, unlike the former full 24-hour grid.
+    val byHour=remember(entries){entries.groupBy{it.time.hour}.toSortedMap()}
+    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(8.dp)){
+        if(entries.isEmpty()){
+            Surface(color=colors.panel,shape=RoundedCornerShape(15.dp),
+                border=BorderStroke(1.dp,colors.panelBorder)){
+                Text("На выбранный день нет записей.",color=colors.secondaryText,
+                    fontSize=12.sp,modifier=Modifier.padding(17.dp))
+            }
+        }
+        byHour.forEach{(hour,records)->
+            Surface(shape=RoundedCornerShape(16.dp),color=colors.panel,
+                border=BorderStroke(1.dp,colors.panelBorder)){
+                Row(Modifier.fillMaxWidth().padding(horizontal=9.dp,vertical=10.dp),
+                    horizontalArrangement=Arrangement.spacedBy(9.dp),
+                    verticalAlignment=Alignment.Top){
+                    Column(Modifier.width(45.dp).padding(top=5.dp),
+                        horizontalAlignment=Alignment.CenterHorizontally){
+                        Text(String.format(Locale.US,"%02d:00",hour),
+                            color=colors.purple,fontSize=11.sp,
+                            fontWeight=FontWeight.Bold)
                     }
-                    if(day==LocalDate.now() && hour==LocalTime.now().hour &&
-                        minute==LocalTime.now().minute/15*15) {
-                        Row(verticalAlignment=Alignment.CenterVertically){
-                            Box(Modifier.size(6.dp).background(Color(0xFFF43F5E),CircleShape))
-                            Spacer(Modifier.width(5.dp))
-                            HorizontalDivider(color=Color(0xFFF43F5E),thickness=1.dp)
+                    Column(Modifier.weight(1f),
+                        verticalArrangement=Arrangement.spacedBy(7.dp)){
+                        records.forEach{entry->
+                            TimelineEventCard(entry,colors,dark,onOpen=onOpen)
                         }
                     }
                 }
