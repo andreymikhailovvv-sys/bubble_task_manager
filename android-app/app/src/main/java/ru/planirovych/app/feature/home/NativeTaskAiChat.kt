@@ -258,7 +258,17 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                         items(messages,key={m->m.id?:"\${m.role}-\${messages.indexOf(m)}"}){
                             message-> TaskChatBubble(message,c,ctx,
                                 onReply={reply=ReplyTarget(message.id.orEmpty(),
-                                    message.role,message.content)})
+                                    message.role,message.content)},
+                                onProposalAction={id,action->
+                                    vm.applyTaskAiProposal(task.id,id,action)
+                                },
+                                actionBusy=ui.actionBusy,
+                                onOpenDocument={id->vm.getTaskAiDocumentLink(id){url->
+                                    val parsed=Uri.parse(url)
+                                    if(parsed.scheme=="https"||parsed.scheme=="http")
+                                        runCatching{ctx.startActivity(
+                                            Intent(Intent.ACTION_VIEW,parsed))}
+                                }})
                         }
                         if(busy&&sendingDisplay!=null)item(key="pending-user"){
                             TaskChatBubble(TaskAiChatMessage(role="user",
@@ -379,7 +389,10 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
 
 @Composable
 private fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
-    context:Context,onReply:()->Unit,pending:Boolean=false){
+    context:Context,onReply:()->Unit,pending:Boolean=false,
+    onProposalAction:(String,String)->Unit={_,_->},
+    actionBusy:Boolean=false,
+    onOpenDocument:(String)->Unit={}){
     val isUser=message.role=="user"
     val content=messageDisplayContent(message.content)
     Row(Modifier.fillMaxWidth(),
@@ -428,12 +441,23 @@ private fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                                 overflow=TextOverflow.Ellipsis,fontSize=11.sp)
                         }
                     }
-                    if(message.taskProposal!=null)
-                        Text("ИИ предложил изменения задачи. Для подтверждения откройте чат на сайте.",
-                            fontSize=11.sp,color=c.secondary)
-                    if(message.generatedDocument!=null)
-                        Text("ИИ создал документ, доступный в чате на сайте.",
-                            fontSize=11.sp,color=c.secondary)
+                    message.taskProposal?.let{proposal->
+                        NativeAiProposalReview(proposal,c,actionBusy,onProposalAction)
+                    }
+                    message.generatedDocument?.let{doc->
+                        val id=(doc["id"] as? JsonPrimitive)?.contentOrNull
+                        val fileName=(doc["fileName"] as? JsonPrimitive)?.contentOrNull
+                            ?: "Документ ИИ"
+                        if(id!=null){
+                            OutlinedButton(onClick={onOpenDocument(id)},
+                                shape=RoundedCornerShape(10.dp)){
+                                Icon(Icons.Default.FileDownload,null,
+                                    modifier=Modifier.size(15.dp))
+                                Spacer(Modifier.width(5.dp))
+                                Text(fileName,fontSize=11.sp,maxLines=1)
+                            }
+                        }
+                    }
                     if(message.telegramSendDraft!=null||message.telegramReadDraft!=null)
                         Text("Подтверждение действий Telegram доступно в Mini App.",
                             fontSize=11.sp,color=c.secondary)
@@ -452,3 +476,72 @@ private fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
 }
 private fun Color.isDarkColor():Boolean =
     (red*.299f+green*.587f+blue*.114f)<.52f
+
+@Composable
+private fun NativeAiProposalReview(
+    proposal:JsonObject,c:TaskChatColors,busy:Boolean,
+    onAction:(String,String)->Unit
+){
+    val id=(proposal["id"] as? JsonPrimitive)?.contentOrNull ?: return
+    val status=(proposal["status"] as? JsonPrimitive)?.contentOrNull ?: "PENDING"
+    val operations=(proposal["operations"] as? JsonArray).orEmpty()
+    var confirm by remember(id){mutableStateOf<String?>(null)}
+    Surface(shape=RoundedCornerShape(13.dp),color=c.panel,
+        border=BorderStroke(1.dp,c.accent.copy(alpha=.4f))){
+        Column(Modifier.fillMaxWidth().padding(10.dp),
+            verticalArrangement=Arrangement.spacedBy(7.dp)){
+            Row(verticalAlignment=Alignment.CenterVertically){
+                Icon(Icons.Default.AutoAwesome,null,tint=c.accent,
+                    modifier=Modifier.size(17.dp))
+                Spacer(Modifier.width(7.dp))
+                Text("Предложение ИИ · "+status,
+                    color=c.text,fontSize=12.sp,fontWeight=FontWeight.Bold)
+            }
+            operations.take(6).forEachIndexed{index,item->
+                val obj=item as? JsonObject
+                val title=(obj?.get("title") as? JsonPrimitive)?.contentOrNull
+                    ?: (obj?.get("type") as? JsonPrimitive)?.contentOrNull
+                    ?: "Изменение"
+                Text("${index+1}. "+title,color=c.secondary,fontSize=11.sp,maxLines=2)
+            }
+            if(operations.size>6)Text("И ещё "+(operations.size-6),
+                color=c.secondary,fontSize=11.sp)
+            when(status){
+                "PENDING"->Row(horizontalArrangement=Arrangement.spacedBy(7.dp)){
+                    Button(onClick={confirm="approve"},enabled=!busy,
+                        contentPadding=PaddingValues(horizontal=10.dp,vertical=5.dp),
+                        shape=RoundedCornerShape(10.dp)){
+                        Text("Применить",fontSize=11.sp)
+                    }
+                    OutlinedButton(onClick={confirm="reject"},enabled=!busy,
+                        contentPadding=PaddingValues(horizontal=10.dp,vertical=5.dp),
+                        shape=RoundedCornerShape(10.dp)){
+                        Text("Отклонить",fontSize=11.sp)
+                    }
+                }
+                "APPLIED"->OutlinedButton(onClick={confirm="undo"},enabled=!busy,
+                    shape=RoundedCornerShape(10.dp)){
+                    Text("Отменить изменения",fontSize=11.sp)
+                }
+            }
+        }
+    }
+    confirm?.let{action->
+        AlertDialog(onDismissRequest={confirm=null},
+            title={Text(when(action){
+                "approve"->"Применить изменения ИИ?"
+                "reject"->"Отклонить предложение?"
+                else->"Отменить изменения ИИ?"
+            })},
+            text={Text(if(action=="approve")
+                "Вы подтверждаете применение ${operations.size} предложенных изменений."
+                else "Действие будет отправлено на сервер Планировыча.")},
+            confirmButton={
+                TextButton(onClick={
+                    confirm=null
+                    onAction(id,action)
+                }){Text("Подтвердить")}
+            },
+            dismissButton={TextButton(onClick={confirm=null}){Text("Отмена")}})
+    }
+}
