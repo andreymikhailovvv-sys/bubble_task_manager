@@ -1,4 +1,5 @@
 import { prisma } from '../db/prisma.js';
+import { MONITORING_FALLBACK_QUESTION } from './task-monitoring-followup-policy.js';
 
 /** Reading existing statuses is permitted even after monitoring is turned off. */
 export async function requireMonitoringOwner(userId: string, taskId: string) {
@@ -32,10 +33,16 @@ export async function addMonitoringStatus(userId: string, taskId: string, label:
   });
 }
 
-/** Called after a real user response, not by a model-generated message. */
+/** Human replies supersede only the automatic three-hour fallback.
+ * An explicit AI follow-up is a durable scheduled instruction and remains
+ * pending until its due time, a replacement, or intentional monitoring opt-out.
+ */
 export async function cancelPendingMonitoringTriggers(userId: string, taskId: string, receivedAt = new Date()) {
   return prisma.taskMonitoringTrigger.updateMany({
-    where: { userId, taskId, state: { in: ['pending', 'fired'] }, updatedAt: { lte: receivedAt } },
+    where: {
+      userId, taskId, question: MONITORING_FALLBACK_QUESTION,
+      state: { in: ['pending', 'fired'] }, updatedAt: { lte: receivedAt }
+    },
     data: { state: 'answered' }
   });
 }
