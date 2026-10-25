@@ -56,6 +56,59 @@ object AndroidNotificationDelivery {
             ContextCompat.checkSelfPermission(context,
                 Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED
 
+    /**
+     * FCM data-only messages are shown here rather than by Firebase's automatic
+     * notification UI. Both foreground/background and WorkManager use the same
+     * persistent seen-ID list to avoid duplicate Android notifications.
+     */
+    suspend fun deliverPush(context:Context,data:Map<String,String>){
+        val id=data["notificationId"]?.takeIf{it.isNotBlank()}?:return
+        val recipient=data["userId"]?.takeIf{it.isNotBlank()}?:return
+        val content=data["content"]?.takeIf{it.isNotBlank()}?:return
+        mutex.withLock {
+            val prefs=context.getSharedPreferences(
+                "planirovych_native_notification_ids",Context.MODE_PRIVATE)
+            // The account is set only after successful authenticated feed sync.
+            // Never leak an earlier user's push to a new account on this device.
+            if(prefs.getString("user",null)!=recipient || !canNotify(context))return@withLock
+            val seen=runCatching{
+                val array=JSONArray(prefs.getString("seen","[]")?:"[]")
+                List(array.length()){index->array.getString(index)}
+            }.getOrDefault(emptyList()).toMutableList()
+            if(id in seen)return@withLock
+            publish(context,recipient,id,content,data["taskId"],data["eventKey"])
+            seen.add(id)
+            prefs.edit().putString("seen",JSONArray(seen.distinct().takeLast(SEEN_MAX)).toString()).apply()
+        }
+    }
+
+    private fun publish(context:Context,account:String,id:String,content:String,
+        taskId:String?,eventKey:String?){
+        createChannel(context)
+        val destination=Intent(context,MainActivity::class.java).apply{
+            flags=Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(MainActivity.EXTRA_NOTIFICATION_TASK_ID,taskId)
+            putExtra(MainActivity.EXTRA_NOTIFICATION_ID,id)
+            if(eventKey?.startsWith("ai-checkup:")==true)
+                putExtra(MainActivity.EXTRA_OPEN_GENERAL_AI,true)
+        }
+        val requestCode=(account+":"+id).hashCode()
+        val pending=PendingIntent.getActivity(context,requestCode,destination,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val notification=Notification.Builder(context,CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_planirovych)
+            .setContentTitle("Планировыч")
+            .setContentText(content)
+            .setStyle(Notification.BigTextStyle().bigText(content))
+            .setContentIntent(pending)
+            .setAutoCancel(true)
+            .setCategory(Notification.CATEGORY_REMINDER)
+            .setColor(0xFF8B5CF6.toInt())
+            .build()
+        context.getSystemService(NotificationManager::class.java)
+            .notify(requestCode,notification)
+    }
+
     private fun createChannel(context:Context){
         val manager=context.getSystemService(NotificationManager::class.java)
         val channel=NotificationChannel(CHANNEL_ID,"События Планировыча",
@@ -92,29 +145,8 @@ object AndroidNotificationDelivery {
             if(!firstSync && canNotify(context)){
                 createChannel(context)
                 fresh.filter{it.readAt==null}.forEach{entry->
-                    val destination=Intent(context,MainActivity::class.java).apply{
-                        flags=Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                        putExtra(MainActivity.EXTRA_NOTIFICATION_TASK_ID,entry.taskId)
-                        putExtra(MainActivity.EXTRA_NOTIFICATION_ID,entry.id)
-                        if(entry.eventKey?.startsWith("ai-checkup:")==true)
-                            putExtra(MainActivity.EXTRA_OPEN_GENERAL_AI,true)
-                    }
-                    val requestCode=(account+":"+entry.id).hashCode()
-                    val pending=PendingIntent.getActivity(context,requestCode,
-                        destination,PendingIntent.FLAG_UPDATE_CURRENT or
-                            PendingIntent.FLAG_IMMUTABLE)
-                    val notification=Notification.Builder(context,CHANNEL_ID)
-                        .setSmallIcon(R.drawable.ic_stat_planirovych)
-                        .setContentTitle("Планировыч")
-                        .setContentText(entry.content)
-                        .setStyle(Notification.BigTextStyle().bigText(entry.content))
-                        .setContentIntent(pending)
-                        .setAutoCancel(true)
-                        .setCategory(Notification.CATEGORY_REMINDER)
-                        .setColor(0xFF8B5CF6.toInt())
-                        .build()
-                    context.getSystemService(NotificationManager::class.java)
-                        .notify(requestCode,notification)
+                    publish(context,account,entry.id,entry.content,
+                        entry.taskId,entry.eventKey)
                 }
             }
             selected.addAll(fresh.map{it.id})
