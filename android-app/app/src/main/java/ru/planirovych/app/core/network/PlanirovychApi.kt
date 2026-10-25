@@ -41,6 +41,10 @@ interface PlanirovychApi {
     // as the web client and Telegram Mini App.
     @GET("api/system-notifications")
     suspend fun systemNotifications():AndroidSystemNotificationFeed
+    @POST("api/system-notifications/android-devices")
+    suspend fun registerAndroidPushDevice(@Body data: JsonObject):OkResponse
+    @retrofit2.http.HTTP(method="DELETE", path="api/system-notifications/android-devices", hasBody=true)
+    suspend fun unregisterAndroidPushDevice(@Body data:JsonObject):OkResponse
 
     @GET("api/ai-chat/projects")
     suspend fun generalAiProjects():JsonObject
