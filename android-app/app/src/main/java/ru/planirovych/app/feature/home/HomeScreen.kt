@@ -31,7 +31,8 @@ private enum class AuthMode { LOGIN, REGISTER }
 
 @Composable
 fun HomeScreen(vm: HomeViewModel, dark: Boolean,
-    notificationTaskId:String?=null,openGeneralAi:Boolean=false) {
+    notificationTaskId:String?=null,openGeneralAi:Boolean=false,
+    quickAiMode:String?=null,quickAiRequestId:Int=0) {
     val state by vm.state.collectAsStateWithLifecycle()
     var settings by remember { mutableStateOf(false) }
     var creationMenu by remember { mutableStateOf(false) }
@@ -40,8 +41,20 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     var createNote by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(initialPage=0,pageCount={4})
     val pagerScope = rememberCoroutineScope()
-    LaunchedEffect(openGeneralAi){
+    val generalAiState by vm.generalAi.collectAsStateWithLifecycle()
+    var quickRequestNavigated by remember { mutableIntStateOf(0) }
+    LaunchedEffect(openGeneralAi,quickAiRequestId,generalAiState.projects,state.user?.id){
         if(openGeneralAi)pagerState.scrollToPage(2)
+        if(quickAiRequestId>0 && quickRequestNavigated!=quickAiRequestId &&
+            state.user!=null){
+            val quickProject=generalAiState.projects.firstOrNull{project->
+                project.chats.any{it.id==QUICK_AI_THREAD_ID}
+            }
+            if(quickProject!=null){
+                vm.chooseGeneralAiChat(quickProject.id,QUICK_AI_THREAD_ID)
+                quickRequestNavigated=quickAiRequestId
+            }
+        }
     }
     var authMode by remember { mutableStateOf<AuthMode?>(null) }
     var openedTaskId by remember { mutableStateOf<String?>(null) }
@@ -156,6 +169,8 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                     vm.clearTaskError()
                 },
                 pagerState = pagerState,
+                quickAiMode=quickAiMode,
+                quickAiRequestId=quickAiRequestId,
                 modifier = Modifier.padding(padding),
             )
         }
