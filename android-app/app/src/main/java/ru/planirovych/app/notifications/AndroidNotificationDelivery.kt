@@ -84,7 +84,11 @@ object AndroidNotificationDelivery {
         }
     }
 
-    fun clearIdentity(context:Context){
+    suspend fun clearIdentity(context:Context)=mutex.withLock{
+        clearIdentityLocked(context)
+    }
+
+    private fun clearIdentityLocked(context:Context){
         // Called at the start of an account switch. Data-only pushes will be
         // ignored until the newly authenticated account is successfully synced.
         context.getSharedPreferences("planirovych_native_notification_ids",Context.MODE_PRIVATE)
@@ -94,8 +98,6 @@ object AndroidNotificationDelivery {
             .remove("registeredAt").commit()
         context.getSystemService(NotificationManager::class.java).cancelAll()
     }
-
-    private fun clearIdentityLocked(context:Context)=clearIdentity(context)
 
 
     fun schedule(context:Context){
