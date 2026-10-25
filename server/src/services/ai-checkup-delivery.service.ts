@@ -63,6 +63,18 @@ export async function createAiCheckup(input: {
 
   // A failed Telegram send never makes an already-saved report disappear.
   if (input.sendTelegram) {
+    // Scheduled reports were only announced in Telegram. The same immutable
+    // event must now reach Android and browser notification consumers.
+    await prisma.systemNotification.create({
+      data: {
+        userId: input.userId,
+        eventKey: 'ai-checkup:' + stored.id,
+        content: '🤖 Новый ИИ-чекап готов. Откройте «Быстрые запросы», чтобы прочитать отчёт.'
+      }
+    }).catch((error: unknown) => {
+      if (!(typeof error === 'object' && error !== null &&
+        'code' in error && error.code === 'P2002')) throw error;
+    });
     try {
       await telegramService.notifyDailyAiCheckup({
         userId: input.userId, text: reportText, proposalId
