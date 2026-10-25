@@ -17,9 +17,12 @@ import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
@@ -223,50 +226,50 @@ private fun TimelineEventCard(entry:TimelineEntry,c:WorkspaceColors,dark:Boolean
         isEvent->Color(0xFFD97706)
         isReminder->Color(0xFF0284C7)
         isHabit->Color(0xFF059669)
-        else->c.purple
+        else->entry.color
     }
-    // A sector is shown as a labeled chip instead of a colored card in the
-    // weekly calendar. Kind accents still distinguish events and reminders.
+    // Each task carries its sector color on the card itself, not in a stripe.
     val edge=if(compact){
         when{
             isEvent->kindColor.copy(alpha=.75f)
             isReminder->kindColor.copy(alpha=.75f)
             isHabit->kindColor.copy(alpha=.6f)
-            else->c.panelBorder
+            else->entry.color.copy(alpha=if(dark).65f else .45f)
         }
     } else if(isEvent||isReminder)kindColor else entry.color
     val base=when {
         isEvent->if(dark)Color(0xFF543717) else Color(0xFFFFF4D6)
         isReminder->if(dark)Color(0xFF163955) else Color(0xFFE0F2FE)
         isHabit->if(dark)Color(0xFF1A352B) else Color(0xFFEFFCF2)
-        isSubtask->if(dark)Color(0xFF263348) else Color(0xFFF3F5FA)
-        else->if(dark)Color(0xFF1B2C41) else Color(0xFFF6F8FC)
+        else->mixCalendarColor(
+            if(dark)Color(0xFF172338) else Color.White,entry.color,
+            if(dark).23f else .115f)
     }
     val radius=RoundedCornerShape(if(compact)9.dp else 13.dp)
     val adjusted=if(compact)scale.coerceIn(.72f,1.8f) else 1f
-    val hasSectorStripe=!compact && (entry.kind=="Задача" || isSubtask)
-    Row(Modifier.fillMaxWidth().clip(radius).background(base)
-        // Draw the stripe into the already clipped card, so it inherits the
-        // rounded top-left and bottom-left corners. Events/habits/reminders
-        // deliberately do not get a sector stripe.
-        .drawBehind {
-            if(hasSectorStripe){
-                val px=(if(isSubtask)5.dp else 3.dp).toPx()
-                drawRect(color=edge,topLeft=Offset.Zero,size=Size(px,size.height))
-            }
-        }
-        .border(1.dp,edge.copy(alpha=if(dark).72f else .6f),radius)
+    Row(Modifier.fillMaxWidth()
+        .padding(horizontal=if(isSubtask&&!compact)5.dp else 0.dp)
+        .clip(radius).background(base)
+        .then(if(isEvent)Modifier.drawBehind {
+            val stroke=1.2.dp.toPx()
+            drawRoundRect(color=edge.copy(alpha=.9f),
+                topLeft=Offset(stroke/2,stroke/2),
+                size=Size(size.width-stroke,size.height-stroke),
+                cornerRadius=CornerRadius((if(compact)9.dp else 13.dp).toPx()),
+                style=Stroke(width=stroke,pathEffect=PathEffect.dashPathEffect(
+                    floatArrayOf(6.dp.toPx(),4.dp.toPx()),0f)))
+        } else Modifier.border(1.dp,edge.copy(alpha=if(dark).72f else .6f),radius))
         .clickable(enabled=entry.taskId!=null&&!isReminder){
             entry.taskId?.let(onOpen)
         }.heightIn(min=if(compact)(37f*adjusted).dp
-            else if(isSubtask)44.dp else 54.dp),
+            else if(isSubtask)39.dp else 54.dp),
         verticalAlignment=Alignment.CenterVertically){
         Column(Modifier.weight(1f).padding(
-            horizontal=if(compact)(7f*adjusted).dp else 10.dp,
-            vertical=if(compact)(5f*adjusted).dp else 6.dp),
+            horizontal=if(compact)(7f*adjusted).dp else if(isSubtask)8.dp else 10.dp,
+            vertical=if(compact)(5f*adjusted).dp else if(isSubtask)4.dp else 6.dp),
             verticalArrangement=Arrangement.spacedBy(if(compact)3.dp else 2.dp)){
             Text(entry.title,color=c.text,
-                fontSize=if(compact)(10.5f*adjusted).sp else if(isSubtask)12.sp else 13.sp,
+                fontSize=if(compact)(10.5f*adjusted).sp else if(isSubtask)11.5.sp else 13.sp,
                 lineHeight=if(compact)(13f*adjusted).sp else 17.sp,
                 fontWeight=FontWeight.SemiBold,maxLines=if(compact)2 else 1,
                 overflow=TextOverflow.Ellipsis)
@@ -527,6 +530,7 @@ private fun MiniAppCalendarEntry(
 ){
     val isEvent=entry.kind=="Событие"
     val isReminder=entry.kind=="Напоминание"
+    val isSubtask=entry.kind=="Подзадача"
     val accent=when{
         isEvent->Color(0xFFF59E0B)
         isReminder->Color(0xFF0284C7)
@@ -538,8 +542,8 @@ private fun MiniAppCalendarEntry(
         isEvent->Color(0xFFFEF3C7)
         isReminder&&dark->Color(0xFF123B59)
         isReminder->Color(0xFFE0F2FE)
-        dark->mixCalendarColor(Color(0xFF142135),accent,.18f)
-        else->mixCalendarColor(Color.White,accent,.14f)
+        dark->mixCalendarColor(Color(0xFF142135),accent,.22f)
+        else->mixCalendarColor(Color.White,accent,.13f)
     }
     val textColor=when{
         isEvent&&dark->Color(0xFFFDE68A)
@@ -547,26 +551,27 @@ private fun MiniAppCalendarEntry(
         dark->Color(0xFFE2E8F0)
         else->Color(0xFF0F172A)
     }
-    // The tiny calendar chip is *only* the title, like MiniApp. No time,
-    // sector, type, extra emojis or centered multi-line Compose card.
-    val hasSectorStripe=entry.kind=="Задача" || entry.kind=="Подзадача"
+    // Calendar entries keep their sector as a soft background tint.
+    // Events use the same dashed outline in day, week and month views.
     Row(Modifier.fillMaxWidth()
-        .heightIn(min=if(monthMode)19.dp else 20.dp)
+        .padding(horizontal=if(isSubtask)1.dp else 0.dp)
+        .heightIn(min=if(isSubtask)18.dp else if(monthMode)19.dp else 20.dp)
         .clip(shape).background(background)
-        .drawBehind {
-            if(hasSectorStripe){
-                drawRect(color=accent,topLeft=Offset.Zero,
-                    size=Size(3.dp.toPx(),size.height))
-            }
-        }
-        .border(1.dp,if(isEvent)accent.copy(alpha=.88f) else accent.copy(alpha=.68f),shape)
+        .then(if(isEvent)Modifier.drawBehind {
+            val stroke=1.dp.toPx()
+            drawRoundRect(color=accent.copy(alpha=.88f),
+                topLeft=Offset(stroke/2,stroke/2),
+                size=Size(size.width-stroke,size.height-stroke),
+                cornerRadius=CornerRadius(5.dp.toPx()),
+                style=Stroke(width=stroke,pathEffect=PathEffect.dashPathEffect(
+                    floatArrayOf(4.dp.toPx(),3.dp.toPx()),0f)))
+        } else Modifier.border(1.dp,accent.copy(alpha=.55f),shape))
         .clickable(onClick=onClick),
         verticalAlignment=Alignment.CenterVertically){
         Text(entry.title,
-            modifier=Modifier.weight(1f).padding(
-                start=if(hasSectorStripe)5.dp else 3.dp,end=1.dp),
+            modifier=Modifier.weight(1f).padding(start=3.dp,end=1.dp),
             color=textColor,
-            fontSize=if(monthMode)9.sp else 9.sp,
+            fontSize=if(isSubtask)8.3.sp else 9.sp,
             lineHeight=11.sp,maxLines=1,softWrap=false,
             overflow=TextOverflow.Clip,
             textAlign=TextAlign.Start,

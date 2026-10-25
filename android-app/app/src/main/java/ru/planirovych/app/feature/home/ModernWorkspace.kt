@@ -426,8 +426,13 @@ private fun ModernTaskCard(task:Task,sphere:Sphere?,colors:WorkspaceColors,dark:
     showImportance:Boolean,busy:Boolean,onOpen:()->Unit,onComplete:()->Unit){
     val sectorColor=parseWorkspaceColor(sphere?.color ?: "#64748b")
     val isOverdue=task.dueDate!=null && dueMillis(task.dueDate)<System.currentTimeMillis()
-    Surface(shape=RoundedCornerShape(21.dp),color=colors.card,
-        border=BorderStroke(1.dp,colors.panelBorder),shadowElevation=2.dp) {
+    Surface(modifier=Modifier.shadow(
+            elevation=if(dark)2.dp else 6.dp,
+            shape=RoundedCornerShape(21.dp),
+            ambientColor=if(dark)Color(0x22000000) else Color(0x24394C6A),
+            spotColor=if(dark)Color(0x2B000000) else Color(0x34394C6A)),
+        shape=RoundedCornerShape(21.dp),color=colors.card,
+        border=BorderStroke(1.dp,colors.panelBorder),shadowElevation=0.dp) {
         Box(Modifier.fillMaxWidth().heightIn(min=110.dp)) {
             Column(Modifier.fillMaxWidth().clickable(onClick=onOpen).padding(15.dp).padding(end=31.dp),
                 verticalArrangement=Arrangement.spacedBy(6.dp)) {
@@ -441,8 +446,9 @@ private fun ModernTaskCard(task:Task,sphere:Sphere?,colors:WorkspaceColors,dark:
                         color=tinted(sectorColor,colors.text,if(dark).65f else .77f),
                         fontWeight=FontWeight.SemiBold,fontSize=11.sp,lineHeight=14.sp)
                 }
-                Text(task.title,color=colors.text,fontWeight=FontWeight.SemiBold,
-                    fontSize=15.sp,lineHeight=20.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+                Text(task.title,color=colors.text,fontWeight=FontWeight.Bold,
+                    fontSize=16.sp,lineHeight=21.sp,letterSpacing=(-0.1).sp,
+                    maxLines=1,overflow=TextOverflow.Ellipsis)
                 if(showImportance){
                     Text(remainingDue(task.dueDate),fontSize=12.sp,
                         color=if(isOverdue)Color(0xFFE11D48) else if(dark)Color(0xFF7DD3FC) else Color(0xFF0369A1))
