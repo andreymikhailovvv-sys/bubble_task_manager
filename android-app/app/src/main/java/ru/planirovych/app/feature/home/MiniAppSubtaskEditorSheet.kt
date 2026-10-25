@@ -68,7 +68,7 @@ fun MiniAppSubtaskEditorSheet(
     val key=task?.id ?: "new-"+parent.id
     val isNew=task==null
     var title by remember(key){mutableStateOf(task?.title.orEmpty())}
-    val initialDescription=remember(key){childReadDescription(task?.description.orEmpty())}
+    val initialDescription=remember(key){task?.description.orEmpty()}
     var description by remember(key){mutableStateOf(initialDescription)}
     var dueDate by remember(key){mutableStateOf(task?.dueDate)}
     var location by remember(key){mutableStateOf(task?.location.orEmpty())}
@@ -203,18 +203,15 @@ fun MiniAppSubtaskEditorSheet(
                 Spacer(Modifier.height(12.dp))
                 Surface(color=c.bg,shape=RoundedCornerShape(16.dp),
                     border=BorderStroke(1.dp,if(dark)Color(0xFF504771) else Color(0xFFD6D2E5))){
-                    BasicTextField(value=description,onValueChange={description=it;onClearError()},
-                        modifier=Modifier.fillMaxWidth().height(112.dp)
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal=12.dp,vertical=10.dp),
-                        enabled=!busy,minLines=1,
-                        textStyle=TextStyle(color=c.ink,fontSize=14.sp,lineHeight=22.sp),
-                        cursorBrush=SolidColor(c.purple),
-                        decorationBox={inner->Box{
-                            if(description.isEmpty())Text("Описание подзадачи",
-                                color=c.muted,fontSize=13.sp)
-                            inner()
-                        }})
+                    Box(Modifier.fillMaxWidth().height(112.dp)
+                        .clickable(enabled=!busy){descriptionExpanded=true}
+                        .padding(horizontal=12.dp,vertical=10.dp)){
+                        Text(childReadDescription(description)
+                            .ifBlank{"Описание подзадачи"},
+                            color=if(description.isBlank())c.muted else c.ink,
+                            fontSize=14.sp,lineHeight=22.sp,
+                            maxLines=4,overflow=TextOverflow.Ellipsis)
+                    }
                 }
                 if(!isNew){
                     Spacer(Modifier.height(9.dp))
@@ -296,26 +293,11 @@ fun MiniAppSubtaskEditorSheet(
             }
         }
     }
-    if(descriptionExpanded) androidx.compose.ui.window.Dialog(
-        onDismissRequest={descriptionExpanded=false},
-        properties=androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth=false)){
-        Surface(Modifier.fillMaxSize().padding(horizontal=10.dp,vertical=28.dp),
-            shape=RoundedCornerShape(22.dp),color=c.bg){
-            Column(Modifier.padding(16.dp)){
-                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
-                    horizontalArrangement=Arrangement.SpaceBetween){
-                    Text("Описание подзадачи",color=c.ink,fontWeight=FontWeight.Bold)
-                    ChildRoundIcon(Icons.Default.Close,c,"Закрыть"){descriptionExpanded=false}
-                }
-                Spacer(Modifier.height(12.dp))
-                BasicTextField(value=description,onValueChange={description=it;onClearError()},
-                    modifier=Modifier.weight(1f).fillMaxWidth()
-                        .verticalScroll(rememberScrollState()),
-                    textStyle=TextStyle(color=c.ink,fontSize=15.sp,lineHeight=23.sp),
-                    cursorBrush=SolidColor(c.purple))
-            }
-        }
-    }
+    if(descriptionExpanded) NativeRichDescriptionDialog(
+        title="Описание подзадачи",value=description,dark=dark,
+        editorKey=key,onChange={description=it;onClearError()},
+        onClose={descriptionExpanded=false}
+    )
     pendingAction?.let{action->
         val isFile=action.startsWith("file:")
         AlertDialog(onDismissRequest={pendingAction=null},

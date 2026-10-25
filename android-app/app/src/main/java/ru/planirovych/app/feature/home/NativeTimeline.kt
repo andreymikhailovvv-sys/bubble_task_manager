@@ -65,7 +65,8 @@ private fun timelineHabitScheduled(habit:Habit,date:LocalDate):Boolean{
 private data class TimelineEntry(
     val key:String,val time:LocalTime,val title:String,
     val kind:String,val color:Color,val taskId:String?=null,
-    val habit:Habit?=null,val sectorName:String?=null
+    val habit:Habit?=null,val sectorName:String?=null,
+    val dueDate:String?=null
 )
 private fun timelineEntries(date:LocalDate,tasks:List<Task>,allTasks:List<Task>,
     habits:List<Habit>,spheres:List<Sphere>):List<TimelineEntry>{
@@ -86,7 +87,8 @@ private fun timelineEntries(date:LocalDate,tasks:List<Task>,allTasks:List<Task>,
             else -> calendarColor(spheres.firstOrNull{it.id==source.sphereId}?.color)
         }
         TimelineEntry(task.id,due.toLocalTime(),task.title,kind,accent,task.id,
-            sectorName=spheres.firstOrNull{it.id==source.sphereId}?.name)
+            sectorName=spheres.firstOrNull{it.id==source.sphereId}?.name,
+            dueDate=task.dueDate)
     }.toMutableList()
     habits.filter{timelineHabitScheduled(it,date)}.forEach{habit->
         val times=habit.reminderTimes.ifEmpty{listOfNotNull(habit.reminderTime)}
@@ -99,6 +101,19 @@ private fun timelineEntries(date:LocalDate,tasks:List<Task>,allTasks:List<Task>,
     return entries.sortedWith(compareBy<TimelineEntry>{it.time}.thenBy{it.title})
 }
 private fun shortTime(value:LocalTime)=value.format(DateTimeFormatter.ofPattern("HH:mm"))
+private fun timelineDueLabel(raw:String?):String {
+    val due=timelineDate(raw) ?: return ""
+    val minutes=Duration.between(ZonedDateTime.now(),due).toMinutes()
+    val remaining=kotlin.math.abs(minutes)
+    val days=remaining/1440
+    val hours=(remaining%1440)/60
+    val mins=remaining%60
+    val parts=mutableListOf<String>()
+    if(days>0)parts.add(days.toString()+"д")
+    if(hours>0)parts.add(hours.toString()+"ч")
+    if(days==0L && (mins>0 || parts.isEmpty()))parts.add(mins.coerceAtLeast(1).toString()+"м")
+    return (if(minutes<0)"Просрочено на " else "Через ")+parts.joinToString(" ")
+}
 
 @Composable
 internal fun NativeTimelineWorkspace(
@@ -248,8 +263,13 @@ private fun TimelineEventCard(entry:TimelineEntry,c:WorkspaceColors,dark:Boolean
     val radius=RoundedCornerShape(if(compact)9.dp else 13.dp)
     val adjusted=if(compact)scale.coerceIn(.72f,1.8f) else 1f
     Row(Modifier.fillMaxWidth()
-        .padding(horizontal=if(isSubtask&&!compact)5.dp else 0.dp)
-        .clip(radius).background(base)
+        .padding(end=if(isSubtask&&!compact)9.dp else 0.dp)
+        .clip(radius)
+        .background(if(entry.kind=="Задача"||isSubtask)
+            androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(
+                mixCalendarColor(base,entry.color,if(dark).14f else .05f),
+                mixCalendarColor(base,c.card,if(dark).28f else .40f)))
+            else androidx.compose.ui.graphics.Brush.linearGradient(listOf(base,base)))
         .then(if(isEvent)Modifier.drawBehind {
             val stroke=1.2.dp.toPx()
             drawRoundRect(color=edge.copy(alpha=.9f),
@@ -269,16 +289,20 @@ private fun TimelineEventCard(entry:TimelineEntry,c:WorkspaceColors,dark:Boolean
             vertical=if(compact)(5f*adjusted).dp else if(isSubtask)4.dp else 6.dp),
             verticalArrangement=Arrangement.spacedBy(if(compact)3.dp else 2.dp)){
             Text(entry.title,color=c.text,
-                fontSize=if(compact)(10.5f*adjusted).sp else if(isSubtask)11.5.sp else 13.sp,
+                fontSize=if(compact)(10.5f*adjusted).sp else if(isSubtask)12.sp else 14.sp,
                 lineHeight=if(compact)(13f*adjusted).sp else 17.sp,
                 fontWeight=FontWeight.SemiBold,maxLines=if(compact)2 else 1,
                 overflow=TextOverflow.Ellipsis)
-            Text(entry.kind+" · "+shortTime(entry.time),
-                color=if(isEvent)if(dark)Color(0xFFFCD34D) else Color(0xFF92400E)
+            val dueLabel=if(isEvent || isReminder || isHabit)shortTime(entry.time)
+                else timelineDueLabel(entry.dueDate)
+            val late=entry.dueDate?.let{timelineDate(it)?.isBefore(ZonedDateTime.now())}==true
+            Text(dueLabel,
+                color=if(late)if(dark)Color(0xFFF59AB5) else Color(0xFFE11D48)
+                    else if(isEvent)if(dark)Color(0xFFFCD34D) else Color(0xFF92400E)
                     else if(isReminder)if(dark)Color(0xFF7DD3FC) else Color(0xFF0369A1)
                     else c.secondaryText,
-                fontSize=if(compact)(9f*adjusted).sp else 11.sp,
-                maxLines=1)
+                fontSize=if(compact)(9f*adjusted).sp else if(isSubtask)10.sp else 11.sp,
+                fontWeight=FontWeight.SemiBold,maxLines=1)
             if(compact && !entry.sectorName.isNullOrBlank() && !isHabit && !isReminder){
                 Surface(shape=RoundedCornerShape(6.dp),color=c.selected,
                     border=BorderStroke(.6.dp,c.purple.copy(alpha=.40f))){
@@ -290,15 +314,7 @@ private fun TimelineEventCard(entry:TimelineEntry,c:WorkspaceColors,dark:Boolean
                 }
             }
         }
-        if(!compact){
-            Icon(when {
-                isEvent->Icons.Default.Event
-                isReminder->Icons.Default.Notifications
-                isSubtask->Icons.Default.SubdirectoryArrowRight
-                isHabit->Icons.Default.AutoAwesome
-                else->Icons.Default.CheckCircleOutline
-            },null,tint=kindColor,modifier=Modifier.padding(end=9.dp).size(16.dp))
-        }
+        // The day view matches Mini App's unobstructed text-only cards.
     }
 }
 

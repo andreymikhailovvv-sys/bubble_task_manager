@@ -3,6 +3,9 @@ package ru.planirovych.app.feature.home
 import android.text.Html
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -26,7 +29,7 @@ import ru.planirovych.app.data.model.*
 /** Native notes board mirrors MiniApp's StandaloneNotesWorkspace and uses the same API. */
 @Composable
 internal fun NativeNotesPage(vm:HomeViewModel,colors:WorkspaceColors,
-    modifier:Modifier=Modifier){
+    dark:Boolean,modifier:Modifier=Modifier){
     val state by vm.state.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
     val notesScroll=rememberLazyListState()
@@ -121,17 +124,31 @@ internal fun NativeNotesPage(vm:HomeViewModel,colors:WorkspaceColors,
         }
         AnimatedVisibility(visible=searchVisible,
             enter=expandVertically()+fadeIn(),exit=shrinkVertically()+fadeOut()){
-            OutlinedTextField(value=query,onValueChange={query=it},
-                modifier=Modifier.fillMaxWidth().height(46.dp),singleLine=true,
-                textStyle=androidx.compose.ui.text.TextStyle(fontSize=13.sp),
-                leadingIcon={Icon(Icons.Default.Search,null,
-                    modifier=Modifier.size(18.dp))},
-                placeholder={Text("Поиск по заметкам",fontSize=13.sp)},
-                trailingIcon=if(query.isNotEmpty()) ({ IconButton(onClick={query=""}) {
-                    Icon(Icons.Default.Close,"Очистить поиск",
-                        modifier=Modifier.size(17.dp))
-                }}) else null,
-                shape=RoundedCornerShape(13.dp))
+            BasicTextField(value=query,onValueChange={query=it},
+                modifier=Modifier.fillMaxWidth().height(44.dp)
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(colors.field)
+                    .border(1.dp,colors.panelBorder,RoundedCornerShape(13.dp)),
+                singleLine=true,textStyle=TextStyle(fontSize=13.sp,color=colors.text),
+                cursorBrush=SolidColor(colors.purple),
+                decorationBox={inner->
+                    Row(Modifier.fillMaxSize().padding(start=13.dp,end=7.dp),
+                        verticalAlignment=Alignment.CenterVertically){
+                        Icon(Icons.Default.Search,null,tint=colors.secondaryText,
+                            modifier=Modifier.size(18.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Box(Modifier.weight(1f),contentAlignment=Alignment.CenterStart){
+                            if(query.isEmpty())Text("Поиск по заметкам",
+                                fontSize=13.sp,color=colors.secondaryText,maxLines=1)
+                            inner()
+                        }
+                        if(query.isNotEmpty())IconButton(onClick={query=""},
+                            modifier=Modifier.size(30.dp)){
+                            Icon(Icons.Default.Close,"Очистить поиск",
+                                tint=colors.secondaryText,modifier=Modifier.size(16.dp))
+                        }
+                    }
+                })
         }
         state.notesError?.let{Text(it,color=MaterialTheme.colorScheme.error,fontSize=12.sp)}
         if(state.notesLoading && state.notes.isEmpty()){
@@ -210,7 +227,7 @@ internal fun NativeNotesPage(vm:HomeViewModel,colors:WorkspaceColors,
         }
     }
     if(editorOpen) NoteEditorDialog(
-        note=editing,groups=groups,colors=colors,busy=state.notesBusy,
+        note=editing,groups=groups,colors=colors,dark=dark,busy=state.notesBusy,
         error=state.notesError,
         initialGroup=if(groupId!="all"&&groupId!="ungrouped")groupId else null,
         onClose={editorOpen=false;editing=null},
@@ -257,12 +274,11 @@ private fun NoteGroupChip(label:String,active:Boolean,colors:WorkspaceColors,
 }
 @Composable
 private fun NoteEditorDialog(note:StandaloneNote?,groups:List<StandaloneNoteGroup>,
-    colors:WorkspaceColors,busy:Boolean,error:String?,
+    colors:WorkspaceColors,dark:Boolean,busy:Boolean,error:String?,
     initialGroup:String?,onClose:()->Unit,onSave:(String,String,String?)->Unit) {
     var title by remember(note?.id){ mutableStateOf(note?.title.orEmpty()) }
     val original=remember(note?.id){note?.content.orEmpty()}
-    val decoded=remember(note?.id){noteText(original)}
-    var text by remember(note?.id){mutableStateOf(decoded)}
+    var text by remember(note?.id){mutableStateOf(original)}
     var group by remember(note?.id){mutableStateOf(note?.groupId?:initialGroup)}
     var groupsOpen by remember{mutableStateOf(false)}
     androidx.compose.ui.window.Dialog(onDismissRequest=onClose,
@@ -296,15 +312,16 @@ private fun NoteEditorDialog(note:StandaloneNote?,groups:List<StandaloneNoteGrou
                         }
                     }
                 }
-                OutlinedTextField(value=text,onValueChange={text=it},
-                    label={Text("Текст заметки")},modifier=Modifier.fillMaxWidth().weight(1f),
-                    minLines=6)
-                if(note!=null && text!=decoded)Text(
-                    "При изменении текста сложное форматирование заменяется обычным.",
-                    color=colors.secondaryText,fontSize=11.sp)
+                Surface(Modifier.fillMaxWidth().weight(1f),
+                    shape=RoundedCornerShape(13.dp),color=colors.card,
+                    border=BorderStroke(1.dp,colors.panelBorder)){
+                    NativeRichTextEditor(value=text,onChange={text=it},
+                        dark=dark,modifier=Modifier.fillMaxSize(),
+                        editorKey=note?.id?:"new-note")
+                }
                 error?.let{Text(it,color=MaterialTheme.colorScheme.error,fontSize=12.sp)}
                 Button(onClick={
-                    onSave(title.trim(),if(note!=null && text==decoded)original else noteHtml(text),group)
+                    onSave(title.trim(),text,group)
                 },modifier=Modifier.fillMaxWidth(),enabled=!busy,
                     shape=RoundedCornerShape(13.dp)){
                     Text(if(busy)"Сохраняем…" else "Сохранить")

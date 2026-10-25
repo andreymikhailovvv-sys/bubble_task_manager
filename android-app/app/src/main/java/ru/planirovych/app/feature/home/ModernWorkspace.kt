@@ -111,7 +111,7 @@ fun ModernWorkspace(
                     chatVisible=pagerState.currentPage==2,
                     onExit={pagerScope.launch{pagerState.animateScrollToPage(0)}})
             }
-            3 -> NativeNotesPage(vm=vm,colors=colors,modifier=Modifier.fillMaxSize())
+            3 -> NativeNotesPage(vm=vm,colors=colors,dark=dark,modifier=Modifier.fillMaxSize())
             else -> {
                 val contentMode = if(page==1) WorkspaceMode.TIMELINE else WorkspaceMode.LIST
     val rootTasks = remember(state.tasks, period, searchQuery, contentMode, sectorFilterEnabled, selectedSectors, timelineSector, sort) {
