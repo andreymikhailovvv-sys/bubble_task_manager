@@ -29,8 +29,8 @@ export async function createMonitoringTrigger(userId: string, taskId: string, in
       question.length < 4 || question.length > 500) {
     return { ok: false, code: 'INVALID_TRIGGER_ARGUMENTS' };
   }
-  // One pending follow-up per task. Answering will cancel it, and new
-  // trigger calls replace the pending question/time rather than stack spam.
+  // One pending explicit follow-up per task. Ordinary replies do not
+  // cancel it; new trigger calls replace the pending question/time.
   const pending = await prisma.taskMonitoringTrigger.findFirst({
     where: { taskId, userId, state: 'pending' }, orderBy: { createdAt: 'desc' }
   });
