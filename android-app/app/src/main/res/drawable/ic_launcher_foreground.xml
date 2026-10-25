@@ -1,4 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
-<inset xmlns:android="http://schemas.android.com/apk/res/android"
-    android:drawable="@drawable/planirovych_launcher_artwork"
-    android:inset="18%" />
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Transparent foreground: Android masks the gradient background, not a nested PNG circle. -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="6.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M39,37.5 H35 Q30,37.5 30,43 V71 Q30,77 36,77 H68" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="6.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M68,37.5 H73 Q78,37.5 78,43 V60" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="6.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M49,37.5 H59" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="6.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M41,29 V37" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="6.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M66,29 V37" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="7.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M42,55 L50,63 L66,49" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M78,59 C79,66 81,68 87,69 C81,70 79,72 78,79 C77,72 75,70 69,69 C75,68 77,66 78,59 Z" />
+</vector>

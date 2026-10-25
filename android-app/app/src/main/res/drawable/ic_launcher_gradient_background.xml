@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <!-- Fill the entire adaptive icon canvas so the launcher mask controls the silhouette. -->
+    <gradient
+        android:type="linear"
+        android:angle="315"
+        android:startColor="#05B9F3"
+        android:centerColor="#1754FF"
+        android:endColor="#AF08F4" />
+</shape>
