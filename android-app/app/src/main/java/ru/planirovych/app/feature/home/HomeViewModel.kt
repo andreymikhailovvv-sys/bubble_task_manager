@@ -411,10 +411,17 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
         viewModelScope.launch{
             try{
                 val history=repository.loadTaskAiHistory(taskId)
+                val changed = taskAiMutable.value.taskId == taskId &&
+                    taskAiMutable.value.messages != history
                 taskAiMutable.update{
                     if(it.taskId==taskId && !it.busy)it.copy(messages=history,error=null)
                     else it
                 }
+                // A background monitoring reply can arrive during 4-second chat
+                // synchronization. Refresh its trigger as soon as that reply
+                // appears, not on the independent 30-second status poll.
+                if(changed && !taskAiMutable.value.busy)
+                    refreshTaskAiMonitoring(taskId)
             }catch(_:Throwable){/* retain the last known messages on transient errors */}
         }
     }
