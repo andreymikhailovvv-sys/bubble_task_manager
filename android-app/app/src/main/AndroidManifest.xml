@@ -9,9 +9,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".widget.QuickAiAskActivity"
-            android:exported="false" android:theme="@style/Theme.Planirovych"
-            android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
         <receiver android:name=".widget.QuickAiWidgetProvider"
             android:exported="true" android:label="Быстрый запрос ИИ">
             <intent-filter>

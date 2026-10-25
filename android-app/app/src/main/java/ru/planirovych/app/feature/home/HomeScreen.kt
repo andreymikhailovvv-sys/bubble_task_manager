@@ -31,7 +31,8 @@ private enum class AuthMode { LOGIN, REGISTER }
 
 @Composable
 fun HomeScreen(vm: HomeViewModel, dark: Boolean,
-    notificationTaskId:String?=null,openGeneralAi:Boolean=false) {
+    notificationTaskId:String?=null,openGeneralAi:Boolean=false,
+    quickAiMode:String?=null,quickAiRequestId:Int=0) {
     val state by vm.state.collectAsStateWithLifecycle()
     var settings by remember { mutableStateOf(false) }
     var creationMenu by remember { mutableStateOf(false) }
@@ -41,9 +42,9 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     val pagerState = rememberPagerState(initialPage=0,pageCount={4})
     val pagerScope = rememberCoroutineScope()
     val sharedChat by vm.generalAi.collectAsStateWithLifecycle()
-    var quickNavigationHandled by remember(openGeneralAi){mutableStateOf(false)}
-    LaunchedEffect(openGeneralAi,sharedChat.projects){
-        if(openGeneralAi && !quickNavigationHandled){
+    var quickNavigationHandled by remember(openGeneralAi,quickAiRequestId){mutableStateOf(false)}
+    LaunchedEffect(openGeneralAi,quickAiRequestId,sharedChat.projects){
+        if((openGeneralAi||quickAiRequestId>0) && !quickNavigationHandled){
             pagerState.scrollToPage(2)
             // Widget result and scheduled checkup alerts must open Quick Requests,
             // not whichever project conversation happened to be selected last.
@@ -63,6 +64,17 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     // Direct timeline navigation must close back to the timeline.
     var subtaskReturnToTaskId by remember { mutableStateOf<String?>(null) }
     var taskAiChatId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(quickAiRequestId){
+        if(quickAiRequestId>0){
+            // A widget should not be hidden behind an already-open task sheet.
+            openedTaskId=null
+            newSubtaskParentId=null
+            subtaskReturnToTaskId=null
+            taskAiChatId=null
+            creationMenu=false
+            settings=false
+        }
+    }
     // The global create FAB overlaps the floating send button in the AI chat.
     LaunchedEffect(pagerState.currentPage) {
         if(pagerState.currentPage==2)creationMenu=false
@@ -169,6 +181,8 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                     vm.clearTaskError()
                 },
                 pagerState = pagerState,
+                quickAiMode=quickAiMode,
+                quickAiRequestId=quickAiRequestId,
                 modifier = Modifier.padding(padding),
             )
         }
