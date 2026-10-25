@@ -38,6 +38,10 @@ export async function createMonitoringTrigger(userId: string, taskId: string, in
   const trigger = pending
     ? await prisma.taskMonitoringTrigger.update({ where: { id: pending.id }, data: { dueAt, question } })
     : await prisma.taskMonitoringTrigger.create({ data: { taskId, userId, dueAt, question } });
+  console.info('[TaskMonitoring] explicit trigger persisted', {
+    taskId, triggerId: trigger.id, replaced: Boolean(pending),
+    dueAt: trigger.dueAt.toISOString()
+  });
   signalTaskMonitoringWakeup();
   return { ok: true, triggerId: trigger.id, dueAt: trigger.dueAt.toISOString(), label: 'Триггер запущен' };
 }
