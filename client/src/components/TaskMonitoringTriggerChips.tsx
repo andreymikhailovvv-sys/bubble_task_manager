@@ -9,13 +9,46 @@ export function TaskMonitoringTriggerChips({ taskId, enabled }: { taskId: string
   useEffect(() => {
     if (!enabled) { setTriggers([]); return; }
     let alive = true;
+    let requestRevision = 0;
     const load = async () => {
-      try { const rows = await api.getTaskMonitoringTriggers(taskId); if (alive) setTriggers(rows); }
-      catch { if (alive) setTriggers([]); }
+      const revision = ++requestRevision;
+      try {
+        const rows = await api.getTaskMonitoringTriggers(taskId);
+        // Slow older HTTP responses must not roll a fresh trigger back.
+        if (alive && revision === requestRevision) {
+          setTriggers(rows);
+          setNow(Date.now());
+        }
+      } catch {
+        // Keep the last confirmed pending trigger through a transient outage.
+        // A failed poll does not mean the server cancelled it.
+      }
     };
+    const onUpdated = (event: Event) => {
+      if ((event as CustomEvent<{ taskId?: string }>).detail?.taskId === taskId) {
+        void load();
+      }
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    const onFocus = () => { void load(); };
     void load();
-    const interval = window.setInterval(() => { setNow(Date.now()); void load(); }, 30_000);
-    return () => { alive = false; window.clearInterval(interval); };
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void load();
+      setNow(Date.now());
+    }, 10_000);
+    window.addEventListener('task-monitoring-triggers-updated', onUpdated);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      alive = false;
+      requestRevision++;
+      window.clearInterval(interval);
+      window.removeEventListener('task-monitoring-triggers-updated', onUpdated);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [taskId, enabled]);
   if (!enabled || triggers.length === 0) return null;
   return <div className="flex flex-wrap gap-2" aria-live="polite">
