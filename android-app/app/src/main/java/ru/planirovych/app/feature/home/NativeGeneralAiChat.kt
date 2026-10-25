@@ -102,6 +102,14 @@ internal fun NativeGeneralAiChatPage(
     }
     val isBusy=state.busy||state.saving
     val model=thread?.model?:"gpt-6-luna"
+    val speechInput=rememberAiChatSpeechInput(
+        onRecognized={spoken->
+            draft=appendAiDictation(draft,spoken)
+            attachError=null
+            lastRequestHadError=false
+        },
+        onError={message->attachError=message}
+    )
 
     LaunchedEffect(userId){vm.loadGeneralAi(userId)}
     LaunchedEffect(project?.id,thread?.id,userId){
@@ -407,6 +415,11 @@ internal fun NativeGeneralAiChatPage(
                             },contentAlignment=Alignment.Center){
                             TaskChatPaperclip(c.secondary)
                         }
+                        AiChatMicrophoneButton(
+                            enabled=!isBusy&&!isTelegram&&!attaching,
+                            background=if(dark)Color(0xFF253349) else Color(0xFFF8FAFC),
+                            border=c.border,tint=c.secondary,onClick=speechInput
+                        )
                         Box(Modifier.size(42.dp).clip(CircleShape)
                             .background(if(!isBusy&&(draft.isNotBlank()||files.isNotEmpty()))
                                 c.accent else c.border)
