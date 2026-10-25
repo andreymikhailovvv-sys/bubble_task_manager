@@ -43,10 +43,13 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     val pagerScope = rememberCoroutineScope()
     val generalAiState by vm.generalAi.collectAsStateWithLifecycle()
     var quickRequestNavigated by remember { mutableIntStateOf(0) }
-    LaunchedEffect(openGeneralAi,quickAiRequestId,generalAiState.projects,state.user?.id){
+    LaunchedEffect(openGeneralAi){
         if(openGeneralAi)pagerState.scrollToPage(2)
+    }
+    LaunchedEffect(quickAiRequestId,generalAiState.projects,state.user?.id){
         if(quickAiRequestId>0 && quickRequestNavigated!=quickAiRequestId &&
             state.user!=null){
+            pagerState.scrollToPage(2)
             val quickProject=generalAiState.projects.firstOrNull{project->
                 project.chats.any{it.id==QUICK_AI_THREAD_ID}
             }
@@ -63,6 +66,18 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     // Direct timeline navigation must close back to the timeline.
     var subtaskReturnToTaskId by remember { mutableStateOf<String?>(null) }
     var taskAiChatId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(quickAiRequestId){
+        if(quickAiRequestId>0){
+            // A widget must open the real chat, not sit behind a previous
+            // task sheet, AI dialog, or add menu in the existing task stack.
+            openedTaskId=null
+            newSubtaskParentId=null
+            subtaskReturnToTaskId=null
+            taskAiChatId=null
+            creationMenu=false
+            settings=false
+        }
+    }
     // The global create FAB overlaps the floating send button in the AI chat.
     LaunchedEffect(pagerState.currentPage) {
         if(pagerState.currentPage==2)creationMenu=false
