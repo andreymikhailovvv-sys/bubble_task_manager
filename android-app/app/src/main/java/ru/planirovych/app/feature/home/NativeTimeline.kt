@@ -570,7 +570,7 @@ private fun MiniAppCalendarEntry(
     // Calendar entries keep their sector as a soft background tint.
     // Events use the same dashed outline in day, week and month views.
     Row(Modifier.fillMaxWidth()
-        .padding(horizontal=if(isSubtask)1.dp else 0.dp)
+        .padding(end=if(isSubtask)2.dp else 0.dp)
         .heightIn(min=if(isSubtask)18.dp else if(monthMode)19.dp else 20.dp)
         .clip(shape).background(background)
         .then(if(isEvent)Modifier.drawBehind {
