@@ -34,6 +34,8 @@ import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.*
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -65,13 +67,18 @@ private fun nativeProjectColor(value:String):Color=runCatching{
  */
 @Composable
 internal fun NativeGeneralAiChatPage(
-    vm:HomeViewModel,userId:String?,dark:Boolean,onExit:()->Unit
+    vm:HomeViewModel,userId:String?,dark:Boolean,
+    quickAiMode:String?=null,quickAiRequestId:Int=0,
+    chatVisible:Boolean=true,onExit:()->Unit
 ){
     val state by vm.generalAi.collectAsStateWithLifecycle()
     val c=remember(dark){chatColors(dark)}
     val context=LocalContext.current
     val scope=rememberCoroutineScope()
     val listState=rememberLazyListState()
+    val draftFocus=remember{FocusRequester()}
+    val keyboard=LocalSoftwareKeyboardController.current
+    var handledQuickLaunch by remember { mutableIntStateOf(0) }
     var menuOpen by remember{mutableStateOf(false)}
     var modelMenu by remember{mutableStateOf(false)}
     var draft by remember{mutableStateOf("")}
@@ -110,6 +117,21 @@ internal fun NativeGeneralAiChatPage(
         },
         onError={message->attachError=message}
     )
+    LaunchedEffect(quickAiRequestId,quickAiMode,chatVisible,thread?.id,state.loading){
+        if(quickAiRequestId<=0 || handledQuickLaunch==quickAiRequestId ||
+            !chatVisible || state.loading || thread?.id!=QUICK_AI_THREAD_ID ||
+            isTelegram)return@LaunchedEffect
+        // Wait for the current tab and its composer to be laid out.
+        delay(140)
+        if(quickAiMode=="voice"){
+            handledQuickLaunch=quickAiRequestId
+            speechInput()
+        }else if(quickAiMode=="text"){
+            handledQuickLaunch=quickAiRequestId
+            draftFocus.requestFocus()
+            keyboard?.show()
+        }
+    }
 
     LaunchedEffect(userId){vm.loadGeneralAi(userId)}
     LaunchedEffect(project?.id,thread?.id,userId){
@@ -393,7 +415,8 @@ internal fun NativeGeneralAiChatPage(
                         horizontalArrangement=Arrangement.spacedBy(5.dp)){
                         BasicTextField(value=draft,onValueChange={
                             draft=it;lastRequestHadError=false
-                        },modifier=Modifier.weight(1f).heightIn(min=42.dp,max=140.dp),
+                        },modifier=Modifier.weight(1f).heightIn(min=42.dp,max=140.dp)
+                                .focusRequester(draftFocus),
                             textStyle=TextStyle(color=c.text,fontSize=14.sp,lineHeight=20.sp),
                             maxLines=6,enabled=!isBusy&&!isTelegram,
                             cursorBrush=SolidColor(c.accent),
