@@ -93,6 +93,8 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
     val scope=rememberCoroutineScope()
     var title by remember(type){mutableStateOf("")}
     var description by remember(type){mutableStateOf("")}
+    var descriptionExpanded by remember(type){mutableStateOf(false)}
+    var editingChildId by remember(type){mutableStateOf<String?>(null)}
     var location by remember(type){mutableStateOf("")}
     var dueDate by remember(type){mutableStateOf<String?>(null)}
     var sectorId by remember(type){mutableStateOf<String?>(null)}
@@ -196,17 +198,16 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
                 }
                 Surface(shape=RoundedCornerShape(17.dp),color=c.field,
                     border=BorderStroke(1.dp,c.border)){
-                    BasicTextField(description,onValueChange={description=it},
-                        modifier=Modifier.fillMaxWidth().height(126.dp)
-                            .verticalScroll(rememberScrollState())
-                            .padding(12.dp),minLines=1,
-                        textStyle=TextStyle(color=c.text,fontSize=14.sp,lineHeight=23.sp),
-                        cursorBrush=SolidColor(c.violet),
-                        decorationBox={inner->Box{
-                            if(description.isBlank())Text("Введите описание",
-                                color=c.muted,fontSize=14.sp)
-                            inner()
-                        }})
+                    Box(Modifier.fillMaxWidth().height(126.dp)
+                        .clickable{descriptionExpanded=true}
+                        .padding(12.dp)){
+                        Text(if(description.isBlank())"Введите описание"
+                            else android.text.Html.fromHtml(description,
+                                android.text.Html.FROM_HTML_MODE_COMPACT).toString().trim(),
+                            fontSize=14.sp,lineHeight=23.sp,
+                            color=if(description.isBlank())c.muted else c.text,
+                            maxLines=5,overflow=TextOverflow.Ellipsis)
+                    }
                 }
                 if(isEvent){
                     Row(verticalAlignment=Alignment.CenterVertically){
@@ -315,11 +316,16 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
                                             tint=c.muted,modifier=Modifier.size(16.dp))
                                     }
                                 }
-                                OutlinedTextField(child.description,onValueChange={
-                                    if(index in children.indices)children[index]=child.copy(description=it)
-                                },label={Text("Описание")},
-                                    modifier=Modifier.fillMaxWidth(),maxLines=3,
-                                    shape=RoundedCornerShape(10.dp))
+                                OutlinedButton(onClick={editingChildId=child.id},
+                                    modifier=Modifier.fillMaxWidth(),
+                                    shape=RoundedCornerShape(10.dp)){
+                                    Icon(Icons.Default.Edit,"Редактировать описание",
+                                        modifier=Modifier.size(16.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(if(child.description.isBlank())"Добавить описание"
+                                        else "Редактировать описание",
+                                        modifier=Modifier.weight(1f),maxLines=1)
+                                }
                                 Row(verticalAlignment=Alignment.CenterVertically){
                                     CreateRoundIcon(Icons.Default.CalendarMonth,
                                         "Дата подзадачи",c){
@@ -380,6 +386,23 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
                     fontWeight=FontWeight.Bold)
             }
         }
+    }
+    if(descriptionExpanded) NativeRichDescriptionDialog(
+        title=if(isEvent)"Описание события" else "Описание задачи",
+        value=description,dark=dark,editorKey="create-"+type.name,
+        onChange={description=it},onClose={descriptionExpanded=false}
+    )
+    editingChildId?.let{id->
+        val child=children.firstOrNull{it.id==id}
+        if(child!=null)NativeRichDescriptionDialog(
+            title="Описание подзадачи",value=child.description,dark=dark,
+            editorKey=id,
+            onChange={html->
+                val index=children.indexOfFirst{it.id==id}
+                if(index>=0)children[index]=children[index].copy(description=html)
+            },
+            onClose={editingChildId=null}
+        )
     }
     if(settingsOpen){
         AlertDialog(onDismissRequest={settingsOpen=false},

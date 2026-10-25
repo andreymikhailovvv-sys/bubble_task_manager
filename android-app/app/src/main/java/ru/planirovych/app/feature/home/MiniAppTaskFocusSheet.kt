@@ -78,7 +78,7 @@ fun MiniAppTaskFocusSheet(
     val state by vm.state.collectAsStateWithLifecycle()
     val scope=rememberCoroutineScope()
     var title by remember(task.id){mutableStateOf(task.title)}
-    val initialDescription=remember(task.id){focusReadableDescription(task.description.orEmpty())}
+    val initialDescription=remember(task.id){task.description.orEmpty()}
     var description by remember(task.id){mutableStateOf(initialDescription)}
     var dueDate by remember(task.id){mutableStateOf(task.dueDate)}
     var sphereId by remember(task.id){mutableStateOf(task.sphereId)}
@@ -223,18 +223,15 @@ fun MiniAppTaskFocusSheet(
                 Spacer(Modifier.height(12.dp))
                 Surface(shape=RoundedCornerShape(18.dp),color=c.bg,
                     border=BorderStroke(1.dp,if(dark)Color(0xFF504B70) else Color(0xFFD8D6E3))){
-                    BasicTextField(value=description,onValueChange={description=it;onClearError()},
-                        modifier=Modifier.fillMaxWidth().height(128.dp)
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal=12.dp,vertical=11.dp),
-                        minLines=1,enabled=!busy,
-                        textStyle=TextStyle(color=c.text,fontSize=14.sp,lineHeight=24.sp),
-                        cursorBrush=SolidColor(c.purple),
-                        decorationBox={inner->Box{
-                            if(description.isEmpty())Text("Введите описание",color=c.muted,fontSize=14.sp)
-                            inner()
-                        }}
-                    )
+                    Box(Modifier.fillMaxWidth().height(128.dp)
+                        .clickable(enabled=!busy){descriptionExpanded=true}
+                        .padding(horizontal=12.dp,vertical=11.dp)){
+                        Text(focusReadableDescription(description)
+                                .ifBlank{"Введите описание"},
+                            color=if(description.isBlank())c.muted else c.text,
+                            fontSize=14.sp,lineHeight=24.sp,
+                            maxLines=5,overflow=TextOverflow.Ellipsis)
+                    }
                 }
                 Row(Modifier.padding(top=9.dp,bottom=10.dp),
                     horizontalArrangement=Arrangement.spacedBy(9.dp)){
@@ -361,27 +358,11 @@ fun MiniAppTaskFocusSheet(
         onImportance={importance=it},
         onClose={settingsOpen=false},
     )
-    if(descriptionExpanded)Dialog(onDismissRequest={descriptionExpanded=false},
-        properties=DialogProperties(usePlatformDefaultWidth=false)){
-        Surface(Modifier.fillMaxSize().padding(horizontal=10.dp,vertical=26.dp),
-            shape=RoundedCornerShape(22.dp),color=c.bg){
-            Column(Modifier.padding(16.dp)){
-                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
-                    horizontalArrangement=Arrangement.SpaceBetween){
-                    Text("Описание задачи",fontSize=18.sp,fontWeight=FontWeight.Bold,color=c.text)
-                    FocusRoundIcon(Icons.Default.Close,c,"Закрыть"){
-                        descriptionExpanded=false
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-                BasicTextField(value=description,onValueChange={description=it;onClearError()},
-                    modifier=Modifier.fillMaxWidth().weight(1f)
-                        .verticalScroll(rememberScrollState()),
-                    textStyle=TextStyle(color=c.text,fontSize=15.sp,lineHeight=24.sp),
-                    cursorBrush=SolidColor(c.purple))
-            }
-        }
-    }
+    if(descriptionExpanded) NativeRichDescriptionDialog(
+        title="Описание задачи",value=description,dark=dark,
+        editorKey=task.id,onChange={description=it;onClearError()},
+        onClose={descriptionExpanded=false}
+    )
     confirmation?.let{action->
         val isFile=action.startsWith("file:")
         AlertDialog(onDismissRequest={confirmation=null},
