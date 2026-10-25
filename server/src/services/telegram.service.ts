@@ -2269,18 +2269,18 @@ export const telegramService = {
       }
     }
 
-    const habits = BOT_TOKEN ? await prisma.habit.findMany({
+    // The persisted notification feed powers Android and browser delivery.
+    // Habit alerts must be produced even for users without linked Telegram.
+    const habits = await prisma.habit.findMany({
       where: {
         isArchived: false,
-        isAutoCompleted: false,
-        user: { telegramChatId: { not: null } }
+        isAutoCompleted: false
       },
       include: { user: { select: { telegramChatId: true, timeZone: true } } }
-    }) : [];
+    });
 
     for (const habit of habits) {
       const chatId = habit.user.telegramChatId;
-      if (!chatId) continue;
 
       const currentDateKey = dateKeyInTimeZone(now, habit.user.timeZone);
       const currentTime = timeInTimeZone(now, habit.user.timeZone);
@@ -2303,7 +2303,21 @@ export const telegramService = {
         _sum: { amount: true }
       });
       const completed = completion._sum.amount ?? 0;
-      await sendMessage(chatId, getHabitReminderText(habit, completed, label ?? '—'), keyboardHabitReminder(habit.id));
+      const reminderText = getHabitReminderText(habit, completed, label ?? '—');
+      const eventKey = `habit-reminder:${habit.id}:${notificationKey}`;
+      await prisma.systemNotification.create({
+        data: {
+          userId: habit.userId,
+          eventKey,
+          content: reminderText.replace(/<[^>]*>/g, '')
+        }
+      }).catch((error: unknown) => {
+        if (!(typeof error === 'object' && error !== null &&
+          'code' in error && error.code === 'P2002')) throw error;
+      });
+      if (BOT_TOKEN && chatId) {
+        await sendMessage(chatId, reminderText, keyboardHabitReminder(habit.id));
+      }
       await prisma.habit.update({
         where: { id: habit.id },
         data: {
