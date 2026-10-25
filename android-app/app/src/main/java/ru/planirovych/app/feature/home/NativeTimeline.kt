@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.CornerRadius
@@ -230,91 +231,104 @@ internal fun NativeTimelineWorkspace(
     }
 }
 
+
+/**
+ * Day view only: premium, understated timeline. Week and month keep their
+ * existing Mini App calendar-grid rendering.
+ */
 @Composable
-private fun TimelineEventCard(entry:TimelineEntry,c:WorkspaceColors,dark:Boolean,
-    compact:Boolean=false,scale:Float=1f,onOpen:(String)->Unit){
-    val isEvent=entry.kind=="Событие"
-    val isReminder=entry.kind=="Напоминание"
-    val isSubtask=entry.kind=="Подзадача"
-    val isHabit=entry.kind=="Привычка"
-    val kindColor=when {
-        isEvent->Color(0xFFD97706)
-        isReminder->Color(0xFF0284C7)
-        isHabit->Color(0xFF059669)
-        else->entry.color
+private fun DayTimelineCard(
+    entry:TimelineEntry,colors:WorkspaceColors,dark:Boolean,onOpen:(String)->Unit
+){
+    val subtask=entry.kind=="Подзадача"
+    val event=entry.kind=="Событие"
+    val reminder=entry.kind=="Напоминание"
+    val habit=entry.kind=="Привычка"
+    val accent=entry.color
+    val cardBase=if(dark)Color(0xFF19263B) else Color.White
+    val softTint=mixCalendarColor(cardBase,accent,if(dark).105f else .043f)
+    val gradient=androidx.compose.ui.graphics.Brush.horizontalGradient(
+        listOf(softTint,cardBase,cardBase)
+    )
+    val outline=if(dark)Color(0xFF40506A) else Color(0xFFE5EAF2)
+    val stripe=mixCalendarColor(cardBase,accent,if(dark).54f else .35f)
+    val shape=RoundedCornerShape(18.dp)
+    val dueLabel=if(event||reminder||habit)shortTime(entry.time)
+        else timelineDueLabel(entry.dueDate)
+    val overdue=entry.dueDate?.let {
+        timelineDate(it)?.isBefore(ZonedDateTime.now())
+    }==true
+    val statusColor=when {
+        overdue->if(dark)Color(0xFFFF91A9) else Color(0xFFE63962)
+        else->if(dark)Color(0xFF9BAFC9) else Color(0xFF71839F)
     }
-    // Each task carries its sector color on the card itself, not in a stripe.
-    val edge=if(compact){
-        when{
-            isEvent->kindColor.copy(alpha=.75f)
-            isReminder->kindColor.copy(alpha=.75f)
-            isHabit->kindColor.copy(alpha=.6f)
-            else->entry.color.copy(alpha=if(dark).65f else .45f)
-        }
-    } else if(isEvent||isReminder)kindColor else entry.color
-    val base=when {
-        isEvent->if(dark)Color(0xFF543717) else Color(0xFFFFF4D6)
-        isReminder->if(dark)Color(0xFF163955) else Color(0xFFE0F2FE)
-        isHabit->if(dark)Color(0xFF1A352B) else Color(0xFFEFFCF2)
-        else->mixCalendarColor(
-            if(dark)Color(0xFF172338) else Color.White,entry.color,
-            if(dark).23f else .115f)
-    }
-    val radius=RoundedCornerShape(if(compact)9.dp else 13.dp)
-    val adjusted=if(compact)scale.coerceIn(.72f,1.8f) else 1f
-    Row(Modifier.fillMaxWidth()
-        .padding(end=if(isSubtask&&!compact)9.dp else 0.dp)
-        .clip(radius)
-        .background(if(entry.kind=="Задача"||isSubtask)
-            androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(
-                mixCalendarColor(base,entry.color,if(dark).14f else .05f),
-                mixCalendarColor(base,c.card,if(dark).28f else .40f)))
-            else androidx.compose.ui.graphics.Brush.linearGradient(listOf(base,base)))
-        .then(if(isEvent)Modifier.drawBehind {
-            val stroke=1.2.dp.toPx()
-            drawRoundRect(color=edge.copy(alpha=.9f),
-                topLeft=Offset(stroke/2,stroke/2),
-                size=Size(size.width-stroke,size.height-stroke),
-                cornerRadius=CornerRadius((if(compact)9.dp else 13.dp).toPx()),
-                style=Stroke(width=stroke,pathEffect=PathEffect.dashPathEffect(
-                    floatArrayOf(6.dp.toPx(),4.dp.toPx()),0f)))
-        } else Modifier.border(1.dp,edge.copy(alpha=if(dark).72f else .6f),radius))
-        .clickable(enabled=entry.taskId!=null&&!isReminder){
-            entry.taskId?.let(onOpen)
-        }.heightIn(min=if(compact)(37f*adjusted).dp
-            else if(isSubtask)39.dp else 54.dp),
-        verticalAlignment=Alignment.CenterVertically){
-        Column(Modifier.weight(1f).padding(
-            horizontal=if(compact)(7f*adjusted).dp else if(isSubtask)8.dp else 10.dp,
-            vertical=if(compact)(5f*adjusted).dp else if(isSubtask)4.dp else 6.dp),
-            verticalArrangement=Arrangement.spacedBy(if(compact)3.dp else 2.dp)){
-            Text(entry.title,color=c.text,
-                fontSize=if(compact)(10.5f*adjusted).sp else if(isSubtask)12.sp else 14.sp,
-                lineHeight=if(compact)(13f*adjusted).sp else 17.sp,
-                fontWeight=FontWeight.SemiBold,maxLines=if(compact)2 else 1,
-                overflow=TextOverflow.Ellipsis)
-            val dueLabel=if(isEvent || isReminder || isHabit)shortTime(entry.time)
-                else timelineDueLabel(entry.dueDate)
-            val late=entry.dueDate?.let{timelineDate(it)?.isBefore(ZonedDateTime.now())}==true
-            Text(dueLabel,
-                color=if(late)if(dark)Color(0xFFF59AB5) else Color(0xFFE11D48)
-                    else if(isEvent)if(dark)Color(0xFFFCD34D) else Color(0xFF92400E)
-                    else if(isReminder)if(dark)Color(0xFF7DD3FC) else Color(0xFF0369A1)
-                    else c.secondaryText,
-                fontSize=if(compact)(9f*adjusted).sp else if(isSubtask)10.sp else 11.sp,
-                fontWeight=FontWeight.SemiBold,maxLines=1)
-            if(compact && !entry.sectorName.isNullOrBlank() && !isHabit && !isReminder){
-                Surface(shape=RoundedCornerShape(6.dp),color=c.selected,
-                    border=BorderStroke(.6.dp,c.purple.copy(alpha=.40f))){
-                    Text(entry.sectorName,modifier=Modifier.padding(
-                        horizontal=(5f*adjusted).dp,vertical=(2f*adjusted).dp),
-                        color=c.selectedText,fontWeight=FontWeight.Medium,
-                        fontSize=(8.5f*adjusted).sp,maxLines=1,
-                        overflow=TextOverflow.Ellipsis)
+    Row(
+        Modifier.fillMaxWidth()
+            // Subtasks align with tasks on the left; only the right edge is inset.
+            .padding(end=if(subtask)8.dp else 0.dp)
+            .shadow(
+                elevation=if(dark)2.dp else 5.dp,
+                shape=shape,
+                ambientColor=if(dark)Color(0x22000000) else Color(0x12354B6D),
+                spotColor=if(dark)Color(0x28000000) else Color(0x1C354B6D)
+            )
+            .clip(shape)
+            .background(gradient)
+            .drawBehind {
+                // A soft sector accent rather than a saturated, full-card tint.
+                drawRoundRect(
+                    color=stripe,
+                    topLeft=Offset.Zero,
+                    size=Size(3.5.dp.toPx(),size.height),
+                    cornerRadius=CornerRadius(2.dp.toPx())
+                )
+                if(event){
+                    val stroke=1.dp.toPx()
+                    drawRoundRect(
+                        color=accent.copy(alpha=if(dark).60f else .44f),
+                        topLeft=Offset(stroke/2,stroke/2),
+                        size=Size(size.width-stroke,size.height-stroke),
+                        cornerRadius=CornerRadius(18.dp.toPx()),
+                        style=Stroke(width=stroke,
+                            pathEffect=PathEffect.dashPathEffect(
+                                floatArrayOf(6.dp.toPx(),4.dp.toPx()),0f))
+                    )
                 }
             }
+            .then(if(event)Modifier else Modifier.border(1.dp,outline,shape))
+            .clickable(enabled=entry.taskId!=null&&!reminder){
+                entry.taskId?.let(onOpen)
+            }
+            .heightIn(min=if(subtask)54.dp else 62.dp),
+        verticalAlignment=Alignment.Top
+    ){
+        // Card marker retains the sector color; only rail markers are unified.
+        Box(
+            Modifier.padding(start=15.dp,top=20.dp)
+                .size(if(subtask)6.dp else 7.dp)
+                .background(accent,CircleShape)
+        )
+        Column(
+            Modifier.weight(1f)
+                .padding(start=12.dp,end=13.dp,top=12.dp,bottom=12.dp),
+            verticalArrangement=Arrangement.spacedBy(5.dp)
+        ){
+            Text(
+                entry.title,color=colors.text,
+                fontSize=if(subtask)12.5.sp else 14.sp,
+                lineHeight=if(subtask)17.sp else 19.sp,
+                fontWeight=FontWeight.SemiBold,
+                maxLines=1,overflow=TextOverflow.Ellipsis
+            )
+            if(dueLabel.isNotBlank()){
+                Text(
+                    dueLabel,color=statusColor,
+                    fontSize=if(subtask)10.5.sp else 11.5.sp,
+                    lineHeight=15.sp,fontWeight=FontWeight.Medium,maxLines=1
+                )
+            }
         }
-        // The day view matches Mini App's unobstructed text-only cards.
+        // Intentionally no ellipsis button or trailing action.
     }
 }
 
@@ -325,34 +339,56 @@ private fun TimelineDay(day:LocalDate,tasks:List<Task>,allTasks:List<Task>,
     val entries=remember(day,tasks,allTasks,habits,spheres){
         timelineEntries(day,tasks,allTasks,habits,spheres)
     }
-    // In the compact day view only occupied hours are shown. There are no
-    // empty quarter-hour slots, unlike the former full 24-hour grid.
     val byHour=remember(entries){entries.groupBy{it.time.hour}.toSortedMap()}
-    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(8.dp)){
-        if(entries.isEmpty()){
-            Surface(color=colors.panel,shape=RoundedCornerShape(15.dp),
-                border=BorderStroke(1.dp,colors.panelBorder)){
-                Text("На выбранный день нет записей.",color=colors.secondaryText,
-                    fontSize=12.sp,modifier=Modifier.padding(17.dp))
-            }
+    if(entries.isEmpty()){
+        Surface(color=colors.panel,shape=RoundedCornerShape(15.dp),
+            border=BorderStroke(1.dp,colors.panelBorder)){
+            Text("На выбранный день нет записей.",color=colors.secondaryText,
+                fontSize=12.sp,modifier=Modifier.padding(17.dp))
         }
+        return
+    }
+    val rail=if(dark)Color(0xFF46556F) else Color(0xFFE1E6EF)
+    // All left-side markers use exactly the same neutral slate color,
+    // independent of sector, task type and overdue state.
+    val marker=if(dark)Color(0xFF9CACCC) else Color(0xFF8D9BB4)
+    Column(
+        Modifier.fillMaxWidth().padding(top=4.dp,bottom=4.dp)
+            .drawBehind {
+                val x=64.dp.toPx()
+                drawLine(
+                    color=rail,
+                    start=Offset(x,20.dp.toPx()),
+                    end=Offset(x,size.height-14.dp.toPx()),
+                    strokeWidth=1.3.dp.toPx()
+                )
+            },
+        verticalArrangement=Arrangement.spacedBy(11.dp)
+    ){
         byHour.forEach{(hour,records)->
-            Surface(shape=RoundedCornerShape(16.dp),color=colors.panel,
-                border=BorderStroke(1.dp,colors.panelBorder)){
-                Row(Modifier.fillMaxWidth().padding(horizontal=9.dp,vertical=10.dp),
-                    horizontalArrangement=Arrangement.spacedBy(9.dp),
-                    verticalAlignment=Alignment.Top){
-                    Column(Modifier.width(45.dp).padding(top=5.dp),
-                        horizontalAlignment=Alignment.CenterHorizontally){
-                        Text(String.format(Locale.US,"%02d:00",hour),
-                            color=colors.purple,fontSize=11.sp,
-                            fontWeight=FontWeight.Bold)
-                    }
-                    Column(Modifier.weight(1f),
-                        verticalArrangement=Arrangement.spacedBy(7.dp)){
-                        records.forEach{entry->
-                            TimelineEventCard(entry,colors,dark,onOpen=onOpen)
-                        }
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment=Alignment.Top
+            ){
+                Box(Modifier.width(64.dp).height(48.dp)){
+                    Text(
+                        String.format(Locale.US,"%02d:00",hour),
+                        modifier=Modifier.align(Alignment.TopStart).padding(top=16.dp),
+                        color=if(dark)Color(0xFFB7C4D7) else Color(0xFF667895),
+                        fontSize=11.sp,fontWeight=FontWeight.Medium
+                    )
+                    Box(
+                        Modifier.align(Alignment.TopEnd)
+                            .offset(x=4.5.dp,y=19.dp).size(9.dp)
+                            .background(marker,CircleShape)
+                    )
+                }
+                Column(
+                    Modifier.weight(1f).padding(start=13.dp),
+                    verticalArrangement=Arrangement.spacedBy(9.dp)
+                ){
+                    records.forEach{entry->
+                        DayTimelineCard(entry,colors,dark,onOpen)
                     }
                 }
             }
