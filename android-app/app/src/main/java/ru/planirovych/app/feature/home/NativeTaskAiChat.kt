@@ -120,6 +120,14 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
     var sendingDisplay by remember(task.id){mutableStateOf<String?>(null)}
     var attachmentError by remember(task.id){mutableStateOf<String?>(null)}
     var pendingRetry by remember(task.id){mutableStateOf(false)}
+    val speechInput=rememberAiChatSpeechInput(
+        onRecognized={spoken->
+            draft=appendAiDictation(draft,spoken)
+            attachmentError=null
+            pendingRetry=false
+        },
+        onError={message->attachmentError=message}
+    )
     // The composer is a draft, not a progress indicator. Keep an exact snapshot
     // only for recovery after a failed request.
     var queuedDraft by remember(task.id){mutableStateOf<String?>(null)}
@@ -507,6 +515,11 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                             },contentAlignment=Alignment.Center){
                             TaskChatPaperclip(c.secondary)
                         }
+                        AiChatMicrophoneButton(
+                            enabled=!busy&&!attaching,
+                            background=if(dark)Color(0xFF253349) else Color(0xFFF8FAFC),
+                            border=c.border,tint=c.secondary,onClick=speechInput
+                        )
                         Box(Modifier.size(42.dp).clip(CircleShape)
                             .background(if(!busy&&(draft.isNotBlank()||files.isNotEmpty()))
                                 c.accent else c.border)
