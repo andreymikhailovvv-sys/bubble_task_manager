@@ -272,22 +272,32 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
         }
     }
     var lastItemCount by remember(task.id){mutableIntStateOf(0)}
+    val latestAssistant=messages.lastOrNull{it.role=="assistant"}?.let{it.id to it.content}
+    var previousAssistant by remember(task.id){
+        mutableStateOf<Pair<String?,String>?>(null)
+    }
     LaunchedEffect(task.id,ui.taskId,ui.loading,messages.size,busy,sendingDisplay,
-        monitoringStatuses.size,triggers.size,ui.lastActionReports.size){
+        monitoringStatuses.size,triggers.size,ui.lastActionReports.size,latestAssistant){
         if(ui.taskId!=task.id || ui.loading)return@LaunchedEffect
         val currentCount=messages.size+
             (if(ui.lastActionReports.isNotEmpty())1 else 0)+
             (if(monitoringStatuses.isNotEmpty())1 else 0)+
             (if(triggers.isNotEmpty())1 else 0)+
             (if(busy&&sendingDisplay!=null)1 else 0)+(if(busy)1 else 0)
+        val receivedAssistant=latestAssistant!=null && latestAssistant!=previousAssistant
         if(!historyPositioned){
             if(currentCount>0)listState.scrollToItem(currentCount-1)
             historyPositioned=true
+        }else if(currentCount>0 && receivedAssistant){
+            // Incoming AI responses should always become visible, independent
+            // of the old scroll position and any progress-card replacement.
+            listState.scrollToItem(currentCount-1)
         }else if(currentCount>lastItemCount && currentCount>0){
             val lastVisible=listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
             val nearBottom=lastVisible >= (lastItemCount-2).coerceAtLeast(0)
             if(busy || nearBottom)listState.scrollToItem(currentCount-1)
         }
+        previousAssistant=latestAssistant
         lastItemCount=currentCount
     }
 

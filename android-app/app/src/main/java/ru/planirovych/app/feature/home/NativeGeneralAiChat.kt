@@ -147,16 +147,26 @@ internal fun NativeGeneralAiChatPage(
             }
         }
     }
-    LaunchedEffect(thread?.id,messages.size,state.pendingMessage,state.busy){
+    val latestAssistant=messages.lastOrNull{it.role=="assistant"}?.let{it.id to it.content}
+    var previousAssistant by remember(thread?.id){
+        mutableStateOf<Pair<String?,String>?>(null)
+    }
+    LaunchedEffect(thread?.id,messages.size,state.pendingMessage,state.busy,latestAssistant){
         val count=messages.size+(if(state.pendingMessage!=null)1 else 0)+
             (if(state.busy)1 else 0)
+        val receivedAssistant=latestAssistant!=null && latestAssistant!=previousAssistant
         if(!historyPositioned){
             if(count>0)listState.scrollToItem(count-1)
             historyPositioned=true
+        }else if(count>0 && receivedAssistant){
+            // Always reveal a newly received assistant response, even if the
+            // user was previously scrolled up or a progress row disappeared.
+            listState.scrollToItem(count-1)
         }else if(count>lastVisibleCount && count>0){
             val last=listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index?:-1
             if(state.busy || last>=lastVisibleCount-2)listState.scrollToItem(count-1)
         }
+        previousAssistant=latestAssistant
         lastVisibleCount=count
     }
     LaunchedEffect(thread?.id){

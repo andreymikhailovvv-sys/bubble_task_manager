@@ -42,6 +42,18 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     val pagerState = rememberPagerState(initialPage=0,pageCount={4})
     val pagerScope = rememberCoroutineScope()
     val sharedChat by vm.generalAi.collectAsStateWithLifecycle()
+    var requestPersonalChat by remember { mutableStateOf(false) }
+    LaunchedEffect(requestPersonalChat,sharedChat.projects,sharedChat.loading,sharedChat.saving){
+        if(requestPersonalChat && !sharedChat.loading && !sharedChat.saving){
+            val personal=sharedChat.projects.firstOrNull{
+                it.title==PERSONAL_AI_PROJECT_TITLE && !it.isTelegram
+            } ?:sharedChat.projects.firstOrNull{!it.isTelegram}
+            if(personal!=null){
+                requestPersonalChat=false
+                vm.createGeneralAiThread(personal.id)
+            }
+        }
+    }
     var quickNavigationHandled by remember(openGeneralAi,quickAiRequestId){mutableStateOf(false)}
     LaunchedEffect(openGeneralAi,quickAiRequestId,sharedChat.projects){
         if((openGeneralAi||quickAiRequestId>0) && !quickNavigationHandled){
@@ -127,6 +139,15 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                         DropdownMenuItem(text={Text("Добавить заметку")},
                             leadingIcon={Icon(Icons.Default.StickyNote2,null)},
                             onClick={createNote=true;creationMenu=false})
+                        HorizontalDivider()
+                        DropdownMenuItem(text={Text("Создать чат с ИИ")},
+                            leadingIcon={Icon(Icons.Default.SmartToy,null)},
+                            onClick={
+                                creationMenu=false
+                                requestPersonalChat=true
+                                vm.loadGeneralAi(state.user?.id)
+                                pagerScope.launch{pagerState.animateScrollToPage(2)}
+                            })
                     }
                 }
             }

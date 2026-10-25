@@ -3,6 +3,11 @@ package ru.planirovych.app.feature.home
 import android.text.Html
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.*
 import androidx.compose.ui.draw.clip
@@ -24,6 +29,8 @@ internal fun NativeNotesPage(vm:HomeViewModel,colors:WorkspaceColors,
     modifier:Modifier=Modifier){
     val state by vm.state.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
+    val notesScroll=rememberLazyListState()
+    var searchVisible by remember { mutableStateOf(true) }
     var groupId by remember { mutableStateOf("all") }
     var editing by remember { mutableStateOf<StandaloneNote?>(null) }
     var editorOpen by remember { mutableStateOf(false) }
@@ -46,6 +53,32 @@ internal fun NativeNotesPage(vm:HomeViewModel,colors:WorkspaceColors,
             }
             .sortedByDescending{it.updatedAt?:it.createdAt?:""}
             .toList()
+    }
+    LaunchedEffect(notesScroll) {
+        var previousIndex=notesScroll.firstVisibleItemIndex
+        var previousOffset=notesScroll.firstVisibleItemScrollOffset
+        var movement=0
+        snapshotFlow { Triple(notesScroll.firstVisibleItemIndex,
+            notesScroll.firstVisibleItemScrollOffset,notesScroll.isScrollInProgress) }
+            .collect { (index,offset,scrolling)->
+                if(scrolling){
+                    val delta=if(index==previousIndex)offset-previousOffset
+                        else (index-previousIndex).coerceIn(-3,3)*40
+                    if(delta!=0){
+                        if((delta>0&&movement<0)||(delta<0&&movement>0))movement=0
+                        movement=(movement+delta).coerceIn(-90,90)
+                        if(movement>20){searchVisible=false;movement=0}
+                        if(movement< -20){searchVisible=true;movement=0}
+                    }
+                }else movement=0
+                if(index==0&&offset==0)searchVisible=true
+                previousIndex=index
+                previousOffset=offset
+            }
+    }
+    LaunchedEffect(groupId,normalized){
+        searchVisible=true
+        notesScroll.scrollToItem(0)
     }
     Column(modifier.fillMaxSize().padding(horizontal=14.dp,vertical=12.dp),
         verticalArrangement=Arrangement.spacedBy(11.dp)){
@@ -86,14 +119,20 @@ internal fun NativeNotesPage(vm:HomeViewModel,colors:WorkspaceColors,
                 groupManagerOpen=true;newGroup=true
             }}
         }
-        OutlinedTextField(value=query,onValueChange={query=it},
-            modifier=Modifier.fillMaxWidth(),singleLine=true,
-            leadingIcon={Icon(Icons.Default.Search,null)},
-            label={Text("Поиск по заметкам")},
-            trailingIcon=if(query.isNotEmpty()) ({ IconButton(onClick={query=""}) {
-                Icon(Icons.Default.Close,"Очистить поиск")
-            }}) else null,
-            shape=RoundedCornerShape(15.dp))
+        AnimatedVisibility(visible=searchVisible,
+            enter=expandVertically()+fadeIn(),exit=shrinkVertically()+fadeOut()){
+            OutlinedTextField(value=query,onValueChange={query=it},
+                modifier=Modifier.fillMaxWidth().height(46.dp),singleLine=true,
+                textStyle=androidx.compose.ui.text.TextStyle(fontSize=13.sp),
+                leadingIcon={Icon(Icons.Default.Search,null,
+                    modifier=Modifier.size(18.dp))},
+                placeholder={Text("Поиск по заметкам",fontSize=13.sp)},
+                trailingIcon=if(query.isNotEmpty()) ({ IconButton(onClick={query=""}) {
+                    Icon(Icons.Default.Close,"Очистить поиск",
+                        modifier=Modifier.size(17.dp))
+                }}) else null,
+                shape=RoundedCornerShape(13.dp))
+        }
         state.notesError?.let{Text(it,color=MaterialTheme.colorScheme.error,fontSize=12.sp)}
         if(state.notesLoading && state.notes.isEmpty()){
             Box(Modifier.fillMaxWidth().weight(1f),contentAlignment=Alignment.Center){
@@ -107,7 +146,8 @@ internal fun NativeNotesPage(vm:HomeViewModel,colors:WorkspaceColors,
                     color=colors.secondaryText)
             }
         } else {
-            LazyColumn(Modifier.weight(1f),contentPadding=PaddingValues(bottom=18.dp),
+            LazyColumn(Modifier.weight(1f),state=notesScroll,
+                contentPadding=PaddingValues(bottom=18.dp),
                 verticalArrangement=Arrangement.spacedBy(11.dp)){
                 items(filtered,key={it.id}) {note->
                     val group=groupMap[note.groupId]
