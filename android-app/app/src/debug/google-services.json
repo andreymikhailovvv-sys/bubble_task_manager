@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "671444034565",
+    "project_id": "planirovych",
+    "storage_bucket": "planirovych.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:671444034565:android:5b741a5e9b64b97220a86c",
+        "android_client_info": {
+          "package_name": "ru.planirovych.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAa8-Ff9fAhpm1lbYTJ4XYtlxeZkK1UgH0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:671444034565:android:c7a289254286e2ba20a86c",
+        "android_client_info": {
+          "package_name": "ru.planirovych.app.debug"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAa8-Ff9fAhpm1lbYTJ4XYtlxeZkK1UgH0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
