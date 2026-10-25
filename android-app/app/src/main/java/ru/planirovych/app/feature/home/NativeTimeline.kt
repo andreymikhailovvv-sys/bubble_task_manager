@@ -16,6 +16,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import kotlinx.coroutines.launch
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.CornerRadius
@@ -396,12 +397,9 @@ private fun TimelineDay(day:LocalDate,tasks:List<Task>,allTasks:List<Task>,
     }
 }
 
-/**
- * One-to-one layout mapping of MiniApp.tsx' miniapp-calendar-grid.
- * Seven equal-width days are visible at once. Week and month intentionally
- * share the weekday row, day-number headers, and compact colored entries.
- * No horizontal scroll, zoom controls or sector pills exist in Mini App.
- */
+
+/** Responsive calendar: week is scrollable so text never needs a 7sp font.
+ * Month preserves all seven visible days and offers direct entry to day view. */
 @Composable
 private fun TimelineWeek(
     monday:LocalDate,tasks:List<Task>,allTasks:List<Task>,
@@ -409,26 +407,18 @@ private fun TimelineWeek(
     onOpen:(String)->Unit,onOpenHabit:(String)->Unit,
     openDay:(LocalDate)->Unit
 ){
-    MiniAppCalendarGrid(
-        first=monday,monthMode=false,tasks=tasks,allTasks=allTasks,
-        habits=habits,spheres=spheres,colors=colors,dark=dark,
-        onOpen=onOpen,onOpenHabit=onOpenHabit,openDay=openDay
-    )
+    MiniAppCalendarGrid(monday,false,tasks,allTasks,habits,spheres,
+        colors,dark,onOpen,onOpenHabit,openDay)
 }
-
 @Composable
 private fun TimelineMonth(
     first:LocalDate,tasks:List<Task>,allTasks:List<Task>,
     habits:List<Habit>,spheres:List<Sphere>,colors:WorkspaceColors,dark:Boolean,
     onOpen:(String)->Unit,openDay:(LocalDate)->Unit
 ){
-    MiniAppCalendarGrid(
-        first=first,monthMode=true,tasks=tasks,allTasks=allTasks,
-        habits=habits,spheres=spheres,colors=colors,dark=dark,
-        onOpen=onOpen,onOpenHabit={},openDay=openDay
-    )
+    MiniAppCalendarGrid(first,true,tasks,allTasks,habits,spheres,
+        colors,dark,onOpen,{},openDay)
 }
-
 @Composable
 private fun MiniAppCalendarGrid(
     first:LocalDate,monthMode:Boolean,
@@ -436,44 +426,156 @@ private fun MiniAppCalendarGrid(
     spheres:List<Sphere>,colors:WorkspaceColors,dark:Boolean,
     onOpen:(String)->Unit,onOpenHabit:(String)->Unit,openDay:(LocalDate)->Unit
 ){
-    val labels=listOf("Пн","Вт","Ср","Чт","Пт","Сб","Вс")
     val gridStart=first.minusDays((first.dayOfWeek.value-1).toLong())
-    val rows=if(monthMode)6 else 1
-    val referenceMonth=first.month
-    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(4.dp)){
-        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)){
-            labels.forEach{label->
-                Text(label,
-                    modifier=Modifier.weight(1f).padding(vertical=5.dp),
-                    textAlign=TextAlign.Center,color=colors.secondaryText,
-                    fontSize=10.sp,fontWeight=FontWeight.ExtraBold)
+    if(!monthMode){
+        val days=remember(gridStart,tasks,allTasks,habits,spheres){
+            (0L..6L).map{index->
+                val day=gridStart.plusDays(index)
+                day to timelineEntries(day,tasks,allTasks,habits,spheres)
             }
         }
-        repeat(rows){week->
-            // A single seven-column row, as CSS grid-template-columns: repeat(7, minmax(0,1fr)).
+        ReadableWeekGrid(days,colors,dark,onOpen,onOpenHabit,openDay)
+        return
+    }
+    val labels=listOf("Пн","Вт","Ср","Чт","Пт","Сб","Вс")
+    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(5.dp)){
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)){
+            labels.forEach{label->
+                Text(label,modifier=Modifier.weight(1f).padding(vertical=5.dp),
+                    textAlign=TextAlign.Center,color=colors.secondaryText,
+                    fontSize=11.sp,fontWeight=FontWeight.SemiBold)
+            }
+        }
+        repeat(6){row->
             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max),
-                horizontalArrangement=Arrangement.spacedBy(4.dp),
-                verticalAlignment=Alignment.Top){
-                repeat(7){index->
-                    val day=gridStart.plusDays((week*7+index).toLong())
-                    val dayEntries=remember(day,monthMode,tasks,allTasks,habits,spheres) {
-                        val all=timelineEntries(day,tasks,allTasks,habits,spheres)
-                        if(monthMode)all.filter{it.kind!="Привычка"} else all
+                horizontalArrangement=Arrangement.spacedBy(4.dp)){
+                repeat(7){col->
+                    val date=gridStart.plusDays((row*7+col).toLong())
+                    val entries=remember(date,tasks,allTasks,habits,spheres){
+                        timelineEntries(date,tasks,allTasks,habits,spheres)
+                            .filter{it.kind!="Привычка"}
                     }
-                    CalendarDayCell(
-                        date=day,entries=dayEntries,
-                        outside=monthMode&&day.month!=referenceMonth,
-                        monthMode=monthMode,colors=colors,dark=dark,
-                        modifier=Modifier.weight(1f).fillMaxHeight(),
-                        onDay={openDay(day)},onTask=onOpen,onHabit=onOpenHabit
-                    )
+                    CalendarDayCell(date,entries,date.month!=first.month,true,
+                        colors,dark,Modifier.weight(1f).fillMaxHeight(),
+                        onDay={openDay(date)},onTask=onOpen,onHabit=onOpenHabit)
                 }
             }
         }
     }
 }
 
-/** MiniApp's miniapp-calendar-day and miniapp-calendar-date. */
+@Composable
+private fun ReadableWeekGrid(
+    days:List<Pair<LocalDate,List<TimelineEntry>>>,
+    colors:WorkspaceColors,dark:Boolean,
+    onOpen:(String)->Unit,onHabit:(String)->Unit,openDay:(LocalDate)->Unit
+){
+    val weekScroll=rememberScrollState()
+    val scope=rememberCoroutineScope()
+    val stride=with(LocalDensity.current){160.dp.roundToPx()}
+    val secondary=if(dark)Color(0xFFA9B9D0) else Color(0xFF657792)
+    val border=if(dark)Color(0xFF40506A) else Color(0xFFE1E8F1)
+    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(8.dp)){
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)){
+            days.forEachIndexed{index,(day,_)->
+                val today=day==LocalDate.now()
+                val shape=RoundedCornerShape(12.dp)
+                Column(Modifier.weight(1f).clip(shape)
+                    .background(if(today)if(dark)Color(0xFF31264A)
+                        else Color(0xFFF5F0FF)
+                        else if(dark)Color(0xFF1A283C) else Color.White)
+                    .border(1.dp,if(today)Color(0xFFA58BEC) else border,shape)
+                    .clickable{scope.launch{
+                        weekScroll.animateScrollTo(index*stride)
+                    }}.padding(vertical=7.dp),
+                    horizontalAlignment=Alignment.CenterHorizontally){
+                    Text(day.format(DateTimeFormatter.ofPattern("EE",Locale("ru")))
+                        .replaceFirstChar{it.uppercase()},
+                        color=secondary,fontSize=10.sp)
+                    Spacer(Modifier.height(2.dp))
+                    Box(Modifier.size(27.dp).clip(CircleShape)
+                        .background(if(today)Color(0xFF7C3AED) else Color.Transparent),
+                        contentAlignment=Alignment.Center){
+                        Text(day.dayOfMonth.toString(),
+                            color=if(today)Color.White else colors.text,
+                            fontSize=13.sp,fontWeight=FontWeight.Bold)
+                    }
+                }
+            }
+        }
+        Row(verticalAlignment=Alignment.CenterVertically){
+            Icon(Icons.Default.ChevronLeft,null,tint=secondary,
+                modifier=Modifier.size(14.dp))
+            Text("Листайте дни или выберите дату сверху",fontSize=10.5.sp,
+                color=secondary)
+            Icon(Icons.Default.ChevronRight,null,tint=secondary,
+                modifier=Modifier.size(14.dp))
+        }
+        Row(Modifier.fillMaxWidth().horizontalScroll(weekScroll)
+            .padding(bottom=6.dp),
+            horizontalArrangement=Arrangement.spacedBy(8.dp),
+            verticalAlignment=Alignment.Top){
+            days.forEach{(day,entries)->
+                ReadableWeekColumn(day,entries,colors,dark,onOpen,onHabit,openDay)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReadableWeekColumn(
+    day:LocalDate,entries:List<TimelineEntry>,
+    colors:WorkspaceColors,dark:Boolean,
+    onOpen:(String)->Unit,onHabit:(String)->Unit,openDay:(LocalDate)->Unit
+){
+    val today=day==LocalDate.now()
+    val edge=if(today)Color(0xFFA58BEC).copy(alpha=.7f)
+        else if(dark)Color(0xFF40506A) else Color(0xFFE2E8F2)
+    val muted=if(dark)Color(0xFFAFBDD2) else Color(0xFF6E7E99)
+    val bg=if(dark)Color(0xFF19263A)
+        else if(today)Color(0xFFFBF9FF) else Color(0xFFFCFDFF)
+    val grouped=remember(entries){entries.groupBy{it.time.hour}.toSortedMap()}
+    Column(Modifier.width(152.dp)
+        .clip(RoundedCornerShape(16.dp)).background(bg)
+        .border(1.dp,edge,RoundedCornerShape(16.dp))
+        .padding(horizontal=10.dp,vertical=12.dp),
+        verticalArrangement=Arrangement.spacedBy(11.dp)){
+        Row(Modifier.fillMaxWidth().clickable{openDay(day)},
+            horizontalArrangement=Arrangement.SpaceBetween,
+            verticalAlignment=Alignment.CenterVertically){
+            Text(day.format(DateTimeFormatter.ofPattern("EE, d MMM",Locale("ru")))
+                    .replaceFirstChar{it.uppercase()},
+                fontSize=12.sp,fontWeight=FontWeight.Bold,
+                color=colors.text,maxLines=1)
+            Icon(Icons.Default.ChevronRight,"Открыть день",
+                tint=muted,modifier=Modifier.size(16.dp))
+        }
+        HorizontalDivider(color=edge.copy(alpha=.65f))
+        if(entries.isEmpty()){
+            Text("Нет записей",fontSize=11.sp,color=muted,
+                modifier=Modifier.padding(vertical=9.dp))
+        }else grouped.forEach{(hour,items)->
+            Column(verticalArrangement=Arrangement.spacedBy(5.dp)){
+                Text(String.format(Locale.US,"%02d:00",hour),
+                    color=muted,fontSize=10.5.sp,
+                    fontWeight=FontWeight.SemiBold)
+                items.forEach{entry->
+                    MiniAppCalendarEntry(entry,false,dark,colors){
+                        if(entry.kind=="Привычка")entry.habit?.id?.let(onHabit)
+                        else if(entry.kind=="Напоминание")openDay(day)
+                        else entry.taskId?.let(onOpen)
+                    }
+                }
+            }
+        }
+        Text("Открыть день",fontSize=10.5.sp,
+            color=if(dark)Color(0xFFC4B5FD) else Color(0xFF7C3AED),
+            modifier=Modifier.fillMaxWidth().clickable{openDay(day)}
+                .padding(vertical=3.dp))
+    }
+}
+
+/** Month day: two readable snippets max and an explicit +N day drill-down. */
 @Composable
 private fun CalendarDayCell(
     date:LocalDate,entries:List<TimelineEntry>,
@@ -482,154 +584,98 @@ private fun CalendarDayCell(
     onDay:()->Unit,onTask:(String)->Unit,onHabit:(String)->Unit
 ){
     val today=date==LocalDate.now()
-    val shape=RoundedCornerShape(12.dp)
-    val cellBg=when{
-        today->if(dark)Color(0xFF261F42) else Color(0xFFF5F3FF)
-        dark->Color(0xFF172338)
-        else->Color(0xFFF8FAFC)
+    val shape=RoundedCornerShape(13.dp)
+    val border=when{
+        today->Color(0xFFA58BEC).copy(alpha=.8f)
+        dark->Color(0xFF40506A)
+        else->Color(0xFFE0E7F0)
     }
-    val edge=when{
-        today->if(dark)Color(0xFF8B5CF6) else Color(0xFF9F77D5)
-        dark->Color(0xFF3F5067)
-        else->Color(0xFFCBD5E1)
-    }
-    // Outside-month days remain real interactive dates, just faded.
-    Column(
-        modifier.then(Modifier
-            .alpha(if(outside).42f else 1f)
-            .clip(shape)
-            .background(cellBg)
-            .border(1.dp,edge,shape)
-            .heightIn(min=if(monthMode)104.dp else 144.dp)
-            .padding(horizontal=if(monthMode)3.dp else 2.dp,vertical=5.dp)),
+    val background=if(dark)Color(0xFF19263A)
+        else if(today)Color(0xFFFAF8FF) else Color(0xFFFCFDFF)
+    Column(modifier.clip(shape).background(background)
+        .border(1.dp,border,shape).heightIn(min=135.dp)
+        .padding(horizontal=2.dp,vertical=6.dp),
         horizontalAlignment=Alignment.CenterHorizontally,
-        verticalArrangement=Arrangement.spacedBy(3.dp)
-    ){
-        // In week view, MiniApp shows the short weekday *inside* each cell.
-        Row(
-            Modifier.fillMaxWidth().height(25.dp)
-                .clip(RoundedCornerShape(7.dp)).clickable(onClick=onDay),
-            verticalAlignment=Alignment.CenterVertically,
-            horizontalArrangement=Arrangement.Center
-        ){
-            if(!monthMode){
-                Text(date.format(DateTimeFormatter.ofPattern("EE",Locale("ru"))),
-                    color=colors.secondaryText,fontSize=9.sp,maxLines=1)
-                Spacer(Modifier.width(2.dp))
-            }
-            Box(Modifier.size(24.dp)
-                .clip(CircleShape)
+        verticalArrangement=Arrangement.spacedBy(5.dp)){
+        Box(Modifier.fillMaxWidth().height(30.dp).clickable(onClick=onDay),
+            contentAlignment=Alignment.Center){
+            Box(Modifier.size(28.dp).clip(CircleShape)
                 .background(if(today)Color(0xFF7C3AED) else Color.Transparent),
-                contentAlignment=Alignment.Center
-            ){
+                contentAlignment=Alignment.Center){
                 Text(date.dayOfMonth.toString(),
-                    color=if(today)Color.White else colors.text,
-                    fontSize=12.sp,fontWeight=FontWeight.Bold,
-                    style=TextStyle(platformStyle=PlatformTextStyle(includeFontPadding=false)),
-                    textAlign=TextAlign.Center)
+                    color=when{
+                        today->Color.White
+                        outside->colors.secondaryText.copy(alpha=.7f)
+                        else->colors.text
+                    },fontSize=13.sp,fontWeight=FontWeight.Bold)
             }
         }
-        if(monthMode){
-            val visible=entries.take(3)
-            visible.forEach{entry->
-                MiniAppCalendarEntry(
-                    entry=entry,monthMode=true,dark=dark,
-                    onClick={
-                        if(entry.taskId!=null&&entry.kind!="Напоминание")onTask(entry.taskId)
-                    })
+        entries.take(2).forEach{entry->
+            MiniAppCalendarEntry(entry,true,dark,colors){
+                if(entry.kind=="Напоминание")onDay()
+                else entry.taskId?.let(onTask)?:onDay()
             }
-            if(entries.size>visible.size){
-                Text("Ещё ${entries.size-visible.size}",
-                    modifier=Modifier.fillMaxWidth().padding(start=2.dp,top=1.dp),
-                    color=if(dark)Color(0xFFA78BFA) else Color(0xFF6D28D9),
-                    fontWeight=FontWeight.Bold,fontSize=9.sp,maxLines=1)
-            }
-        }else{
-            // MiniApp calendar groups entries by hour inside each day.
-            val hourGroups=remember(entries) { entries.groupBy{it.time.hour}.toSortedMap() }
-            hourGroups.forEach{(hour,items)->
-                val groupShape=RoundedCornerShape(8.dp)
-                Column(
-                    Modifier.fillMaxWidth()
-                        .clip(groupShape)
-                        .background(if(dark)Color(0xFF142033) else Color(0xFFF1F5F9))
-                        .border(1.dp,if(dark)Color(0xFF415167) else Color(0xFFCBD5E1),
-                            groupShape)
-                        .padding(horizontal=2.dp,vertical=3.dp),
-                    verticalArrangement=Arrangement.spacedBy(3.dp)
-                ){
-                    Text(String.format(Locale.US,"%02d:00",hour),
-                        modifier=Modifier.padding(start=1.dp),
-                        color=colors.secondaryText,fontSize=8.8.sp,
-                        maxLines=1,fontWeight=FontWeight.Bold)
-                    items.forEach{entry->
-                        MiniAppCalendarEntry(entry=entry,monthMode=false,dark=dark,
-                            onClick={
-                                if(entry.kind=="Привычка")entry.habit?.id?.let(onHabit)
-                                else if(entry.kind!="Напоминание")entry.taskId?.let(onTask)
-                            })
-                    }
-                }
-            }
+        }
+        if(entries.size>2){
+            Text("Ещё "+(entries.size-2),
+                color=if(dark)Color(0xFFC4B5FD) else Color(0xFF6D28D9),
+                fontSize=10.sp,fontWeight=FontWeight.Bold,
+                modifier=Modifier.fillMaxWidth().clickable(onClick=onDay)
+                    .padding(vertical=2.dp),
+                textAlign=TextAlign.Center,maxLines=1)
         }
     }
 }
 
-/** MiniApp's miniapp-calendar-entry, miniapp-calendar-event-entry and reminder variant. */
+/** Calm calendar chip; never silently cut text off at its bounds. */
 @Composable
 private fun MiniAppCalendarEntry(
-    entry:TimelineEntry,monthMode:Boolean,dark:Boolean,onClick:()->Unit
+    entry:TimelineEntry,monthMode:Boolean,dark:Boolean,
+    colors:WorkspaceColors,onClick:()->Unit
 ){
-    val isEvent=entry.kind=="Событие"
-    val isReminder=entry.kind=="Напоминание"
-    val isSubtask=entry.kind=="Подзадача"
-    val accent=when{
-        isEvent->Color(0xFFF59E0B)
-        isReminder->Color(0xFF0284C7)
-        else->entry.color
-    }
-    val shape=RoundedCornerShape(5.dp)
-    val background=when{
-        isEvent&&dark->Color(0xFF63401E)
-        isEvent->Color(0xFFFEF3C7)
-        isReminder&&dark->Color(0xFF123B59)
-        isReminder->Color(0xFFE0F2FE)
-        dark->mixCalendarColor(Color(0xFF142135),accent,.22f)
-        else->mixCalendarColor(Color.White,accent,.13f)
-    }
-    val textColor=when{
-        isEvent&&dark->Color(0xFFFDE68A)
-        isEvent->Color(0xFF92400E)
-        dark->Color(0xFFE2E8F0)
-        else->Color(0xFF0F172A)
-    }
-    // Calendar entries keep their sector as a soft background tint.
-    // Events use the same dashed outline in day, week and month views.
+    val subtask=entry.kind=="Подзадача"
+    val event=entry.kind=="Событие"
+    val accent=entry.color
+    val base=if(dark)Color(0xFF202D42) else Color.White
+    val background=mixCalendarColor(base,accent,
+        if(dark).13f else .055f)
+    val ink=if(dark)Color(0xFFEAF1FA) else Color(0xFF233048)
+    val line=if(dark)Color(0xFF45536C) else Color(0xFFE1E8F0)
+    val radius=RoundedCornerShape(if(monthMode)7.dp else 10.dp)
     Row(Modifier.fillMaxWidth()
-        .padding(end=if(isSubtask)2.dp else 0.dp)
-        .heightIn(min=if(isSubtask)18.dp else if(monthMode)19.dp else 20.dp)
-        .clip(shape).background(background)
-        .then(if(isEvent)Modifier.drawBehind {
+        .padding(end=if(subtask&&!monthMode)5.dp else 0.dp)
+        .clip(radius).background(background)
+        .then(if(event)Modifier.drawBehind{
             val stroke=1.dp.toPx()
-            drawRoundRect(color=accent.copy(alpha=.88f),
+            drawRoundRect(color=accent.copy(alpha=.68f),
                 topLeft=Offset(stroke/2,stroke/2),
                 size=Size(size.width-stroke,size.height-stroke),
-                cornerRadius=CornerRadius(5.dp.toPx()),
-                style=Stroke(width=stroke,pathEffect=PathEffect.dashPathEffect(
-                    floatArrayOf(4.dp.toPx(),3.dp.toPx()),0f)))
-        } else Modifier.border(1.dp,accent.copy(alpha=.55f),shape))
-        .clickable(onClick=onClick),
+                cornerRadius=CornerRadius(if(monthMode)7.dp.toPx() else 10.dp.toPx()),
+                style=Stroke(width=stroke,
+                    pathEffect=PathEffect.dashPathEffect(
+                        floatArrayOf(5.dp.toPx(),4.dp.toPx()),0f)))
+        }else Modifier.border(.7.dp,line,radius))
+        .clickable(onClick=onClick)
+        .heightIn(min=if(monthMode)30.dp else if(subtask)38.dp else 43.dp),
         verticalAlignment=Alignment.CenterVertically){
+        Box(Modifier.width(3.dp).height(if(monthMode)21.dp else 30.dp)
+            .clip(RoundedCornerShape(2.dp))
+            .background(accent.copy(alpha=.60f)))
         Text(entry.title,
-            modifier=Modifier.weight(1f).padding(start=3.dp,end=1.dp),
-            color=textColor,
-            fontSize=if(isSubtask)8.3.sp else 9.sp,
-            lineHeight=11.sp,maxLines=1,softWrap=false,
-            overflow=TextOverflow.Clip,
+            modifier=Modifier.weight(1f).padding(
+                start=if(monthMode)3.dp else 6.dp,
+                end=if(monthMode)1.dp else 4.dp,
+                top=4.dp,bottom=4.dp),
+            color=ink,
+            fontSize=if(monthMode)10.sp else if(subtask)11.sp else 11.5.sp,
+            lineHeight=if(monthMode)12.sp else 14.sp,
+            fontWeight=FontWeight.Medium,
+            maxLines=2,softWrap=true,overflow=TextOverflow.Ellipsis,
             textAlign=TextAlign.Start,
             style=TextStyle(platformStyle=PlatformTextStyle(includeFontPadding=false)))
     }
 }
+
 private fun mixCalendarColor(background:Color,foreground:Color,amount:Float):Color =
     Color(
         red=background.red*(1-amount)+foreground.red*amount,
