@@ -389,10 +389,19 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
         viewModelScope.launch{
             try{
                 val triggers=repository.loadTaskMonitoringTriggers(taskId)
+                // Do not hold the trigger display behind the independent status
+                // request: status history can be slower than the quick trigger GET.
+                taskAiMutable.update{
+                    if(it.taskId==taskId)it.copy(monitoringTriggers=triggers)
+                    else it
+                }
+            }catch(_:Throwable){
+                // A transient failure is not evidence that a timer was cancelled.
+            }
+            try{
                 val statuses=repository.loadTaskMonitoringStatuses(taskId)
                 taskAiMutable.update{
-                    if(it.taskId==taskId)it.copy(
-                        monitoringTriggers=triggers,monitoringStatuses=statuses)
+                    if(it.taskId==taskId)it.copy(monitoringStatuses=statuses)
                     else it
                 }
             }catch(_:Throwable){
