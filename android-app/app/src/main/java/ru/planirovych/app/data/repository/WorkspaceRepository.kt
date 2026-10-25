@@ -16,10 +16,12 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
+import android.content.Context
+import ru.planirovych.app.notifications.AndroidNotificationDelivery
 import ru.planirovych.app.core.network.PlanirovychApi
 import ru.planirovych.app.data.model.*
 
-class WorkspaceRepository(private val api: PlanirovychApi) {
+class WorkspaceRepository(private val api: PlanirovychApi,private val context:Context) {
     suspend fun establishSession() = api.me().user
     suspend fun loadWorkspace() = coroutineScope {
         val spheres = async { api.spheres() }; val tasks = async { api.tasks() }; val habits = async { api.habits() }
@@ -110,6 +112,13 @@ class WorkspaceRepository(private val api: PlanirovychApi) {
             telegramReadDraft=item["telegramReadDraft"] as? kotlinx.serialization.json.JsonObject
         )
     }
+    suspend fun registerAndroidPushDevice(installationId:String,token:String)=
+        api.registerAndroidPushDevice(buildJsonObject{
+            put("installationId",installationId);put("token",token)
+        })
+    suspend fun unregisterAndroidPushDevice(installationId:String)=
+        api.unregisterAndroidPushDevice(buildJsonObject{put("installationId",installationId)})
+
     suspend fun loadSystemNotifications():AndroidSystemNotificationFeed =
         api.systemNotifications()
 
@@ -314,9 +323,22 @@ class WorkspaceRepository(private val api: PlanirovychApi) {
             if(groupId==null)put("groupId",JsonNull)else put("groupId",groupId)
         })
     suspend fun deleteNote(id: String) { api.deleteNote(id) }
-    suspend fun login(login: String, password: String) = api.login(LoginRequest(login, password)).user
-    suspend fun register(login: String, password: String, name: String, consent: Boolean) = api.register(RegisterRequest(login, password, name.ifBlank { null }, consent)).user
-    suspend fun logout() { api.logout() }
+    suspend fun login(login: String, password: String):CurrentUser {
+        AndroidNotificationDelivery.clearIdentity(context)
+        val user=api.login(LoginRequest(login,password)).user
+        AndroidNotificationDelivery.enqueueRefresh(context)
+        return user
+    }
+    suspend fun register(login: String, password: String, name: String, consent: Boolean):CurrentUser {
+        AndroidNotificationDelivery.clearIdentity(context)
+        val user=api.register(RegisterRequest(login,password,name.ifBlank { null },consent)).user
+        AndroidNotificationDelivery.enqueueRefresh(context)
+        return user
+    }
+    suspend fun logout() {
+        AndroidNotificationDelivery.unregisterDevice(context)
+        api.logout()
+    }
 }
 
 data class Workspace(val spheres: List<Sphere>, val tasks: List<Task>, val habits: List<Habit>)

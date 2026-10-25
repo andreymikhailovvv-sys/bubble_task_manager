@@ -24,8 +24,7 @@ class PlanirovychFirebaseMessagingService : FirebaseMessagingService() {
     }
 
     override fun onNewToken(token: String) {
-        // Device token registration with our server is implemented in the
-        // next (server-backed) push delivery PR; never log this token.
+        // WorkManager refreshes the server association without logging the token.
         AndroidNotificationDelivery.enqueueRefresh(applicationContext)
     }
 }

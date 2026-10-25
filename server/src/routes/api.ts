@@ -37,6 +37,7 @@ import { creditsToMilli, currentAiCreditsPeriod, getAiCreditWallet, grantBonusCr
 import { isGuestAccount } from '../lib/guest-account.js';
 import { validateTelegramWebAppInitData } from '../lib/telegram-webapp-auth.js';
 import { FixedWindowRateLimiter, type RateLimitDecision } from '../lib/security-rate-limiter.js';
+import { validateAndroidPushRegistration } from '../lib/android-push-payload.js';
 import { CREDIT_PACKS, type CreditPackKey } from '../config/credit-packs.js';
 import { creditPacksResponse, yookassaPaymentsRouter } from './yookassa-payments.js';
 import { buildCreditUsageExcelXml, getCreditUsageStatistics, getMonthlyCreditUsageExport } from '../services/ai-credit-statistics.service.js';
@@ -1572,6 +1573,48 @@ apiRouter.get('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) =>
     });
   }
   res.json({ projects: canonical });
+}));
+
+// An installation can belong to only one account at a time. The application
+// authenticates with the same secure session cookie as the rest of the API.
+apiRouter.post('/system-notifications/android-devices', requireAuth, asyncHandler(async (req, res) => {
+  if (!validateAndroidPushRegistration(req.body)) {
+    res.status(400).json({ error: 'Некорректные параметры устройства' });
+    return;
+  }
+  const { installationId, token } = req.body;
+  const userId = req.user!.id;
+  await prisma.$transaction(async tx => {
+    const current = await tx.androidPushDevice.findUnique({ where: { installationId } });
+    if (current?.userId === userId && current.token === token) {
+      await tx.androidPushDevice.update({
+        where: { id: current.id },
+        data: { lastSeenAt: new Date() }
+      });
+      return;
+    }
+    // Token rotation and account switching must revoke the former registration.
+    await tx.androidPushDevice.deleteMany({
+      where: { OR: [{ installationId }, { token }] }
+    });
+    await tx.androidPushDevice.create({
+      data: { userId, installationId, token }
+    });
+  });
+  res.json({ ok: true });
+}));
+
+apiRouter.delete('/system-notifications/android-devices', requireAuth, asyncHandler(async (req, res) => {
+  const installationId = req.body?.installationId;
+  if (typeof installationId !== 'string' ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(installationId)) {
+    res.status(400).json({ error: 'Некорректный идентификатор установки' });
+    return;
+  }
+  await prisma.androidPushDevice.deleteMany({
+    where: { userId: req.user!.id, installationId }
+  });
+  res.json({ ok: true });
 }));
 
 apiRouter.get('/system-notifications', requireAuth, asyncHandler(async (req, res) => {

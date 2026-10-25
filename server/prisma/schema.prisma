@@ -132,6 +132,7 @@ model User {
   telegramAiMonitorCalls TelegramAiMonitorCall[]
   habits       Habit[]
   systemNotifications SystemNotification[]
+  androidPushDevices AndroidPushDevice[]
   habitCompletions HabitCompletion[]
   consents     UserConsent[]
   aiUsageEvents AiUsageEvent[]
@@ -606,10 +607,28 @@ model SystemNotification {
   content   String
   readAt    DateTime?
   createdAt DateTime @default(now())
+  pushDispatchedAt DateTime?
+  pushClaimedAt DateTime?
+  pushAttempts Int @default(0)
+  pushNextAttemptAt DateTime @default(now())
 
   @@index([userId, createdAt])
   @@index([userId, readAt])
+  @@index([pushDispatchedAt, pushNextAttemptAt])
 }
+model AndroidPushDevice {
+  id             String @id @default(cuid())
+  userId         String
+  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  installationId String @unique
+  token          String @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  lastSeenAt     DateTime @default(now())
+
+  @@index([userId, lastSeenAt])
+}
+
 
 
 model TaskAttachment {

@@ -11,6 +11,11 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
 import androidx.work.*
+import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -31,6 +36,69 @@ private const val SEEN_MAX=250
  */
 object AndroidNotificationDelivery {
     private val mutex=Mutex()
+    private const val PUSH_PREFS="planirovych_android_push_registration"
+
+    private fun installationId(context:Context):String{
+        val prefs=context.getSharedPreferences(PUSH_PREFS,Context.MODE_PRIVATE)
+        val old=prefs.getString("installationId",null)
+        if(!old.isNullOrBlank())return old
+        val created=UUID.randomUUID().toString()
+        prefs.edit().putString("installationId",created).commit()
+        return created
+    }
+
+    private suspend fun fcmToken():String=suspendCancellableCoroutine{continuation->
+        FirebaseMessaging.getInstance().token.addOnCompleteListener{task->
+            if(!continuation.isActive)return@addOnCompleteListener
+            val token=if(task.isSuccessful)task.result else null
+            if(token.isNullOrBlank())
+                continuation.resumeWithException(
+                    task.exception?:IllegalStateException("FCM token unavailable"))
+            else continuation.resume(token)
+        }
+    }
+
+    private suspend fun registerDevice(context:Context,userId:String){
+        val token=fcmToken()
+        val prefs=context.getSharedPreferences(PUSH_PREFS,Context.MODE_PRIVATE)
+        val now=System.currentTimeMillis()
+        if(prefs.getString("registeredUser",null)==userId &&
+            prefs.getString("registeredToken",null)==token &&
+            now-prefs.getLong("registeredAt",0)<30*60_000L)return
+        val app=context.applicationContext as PlanirovychApplication
+        app.repository.registerAndroidPushDevice(installationId(context),token)
+        prefs.edit().putString("registeredUser",userId)
+            .putString("registeredToken",token).putLong("registeredAt",now).apply()
+    }
+
+    /** Revoke server association on logout, even if clearing the auth cookie fails. */
+    suspend fun unregisterDevice(context:Context){
+        mutex.withLock{
+            val prefs=context.getSharedPreferences(PUSH_PREFS,Context.MODE_PRIVATE)
+            val id=prefs.getString("installationId",null)
+            if(!id.isNullOrBlank()){
+                val app=context.applicationContext as PlanirovychApplication
+                runCatching{app.repository.unregisterAndroidPushDevice(id)}
+            }
+            clearIdentityLocked(context)
+        }
+    }
+
+    suspend fun clearIdentity(context:Context)=mutex.withLock{
+        clearIdentityLocked(context)
+    }
+
+    private fun clearIdentityLocked(context:Context){
+        // Called at the start of an account switch. Data-only pushes will be
+        // ignored until the newly authenticated account is successfully synced.
+        context.getSharedPreferences("planirovych_native_notification_ids",Context.MODE_PRIVATE)
+            .edit().remove("user").remove("seen").commit()
+        context.getSharedPreferences(PUSH_PREFS,Context.MODE_PRIVATE)
+            .edit().remove("registeredUser").remove("registeredToken")
+            .remove("registeredAt").commit()
+        context.getSystemService(NotificationManager::class.java).cancelAll()
+    }
+
 
     fun schedule(context:Context){
         val constraints=Constraints.Builder()
@@ -153,6 +221,10 @@ object AndroidNotificationDelivery {
             val bounded=selected.distinct().takeLast(SEEN_MAX)
             prefs.edit().putString("user",account)
                 .putString("seen",JSONArray(bounded).toString()).apply()
+            // Registration runs only after an authenticated successful sync.
+            // Any failure leaves existing delivery and WorkManager intact.
+            runCatching{registerDevice(context,account)}
+
         }
     }
 }
