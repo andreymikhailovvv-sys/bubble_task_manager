@@ -206,16 +206,21 @@ function streamAiRequestWithUploadProgress<Result, Status extends string>(
 
 async function askTaskAssistantStreaming(taskId: string, payload: { clientRequestId?: string; question: string; userMessage?: string; model?: AiChatModel; mode?: ChatMode; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean; interactionContext?: 'chat' | 'focus' | 'smart_postpone'; clientSurface?: 'web' | 'miniapp'; telegramRead?: TelegramReadApproval }, options?: { onStatus?: (status: TaskAiProgressStatus) => void; onUploadProgress?: (percent: number | null) => void }): Promise<TaskAssistantResult> {
   if (payload.attachments?.length && options?.onUploadProgress && typeof XMLHttpRequest !== 'undefined') {
-    return streamAiRequestWithUploadProgress<TaskAssistantResult, TaskAiProgressStatus>(
+    const result = await streamAiRequestWithUploadProgress<TaskAssistantResult, TaskAiProgressStatus>(
       `/api/tasks/${taskId}/ai-chat`,
       { ...payload, clientRequestId: payload.clientRequestId ?? crypto.randomUUID(), userTimeZone: resolveUserTimeZone() }, options
     );
+    // The backend has committed the answer and its pending follow-up.
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('task-monitoring-triggers-updated', { detail: { taskId } }));
+    return result;
   }
   const response = await fetch(`/api/tasks/${taskId}/ai-chat`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' }, body: JSON.stringify({ ...payload, clientRequestId: payload.clientRequestId ?? crypto.randomUUID(), userTimeZone: resolveUserTimeZone() }) });
   if (response.status === 401) unauthorizedHandler?.();
   if (!response.body) throw new Error(response.ok ? 'Поток ответа чата ИИ недоступен' : `HTTP ${response.status}`);
   try {
-    return await readTaskAssistantNdjson(response.body, options?.onStatus);
+    const result = await readTaskAssistantNdjson(response.body, options?.onStatus);
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('task-monitoring-triggers-updated', { detail: { taskId } }));
+    return result;
   } catch (error) {
     if (!response.ok && error instanceof SyntaxError) throw new Error(`HTTP ${response.status}`);
     throw error;
