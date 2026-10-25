@@ -131,14 +131,17 @@ export async function pollTaskMonitoring(now = new Date()) {
         data: { state: 'fired' }
       });
       if (!claimed.count) continue;
-      const hasAnswer = await prisma.taskAiMessage.findFirst({
+      // A dated custom follow-up stays active through ordinary messages and
+      // task edits. Only the generic inactivity fallback is superseded by
+      // recorded replies or progress.
+      const isFallback = trigger.question === MONITORING_FALLBACK_QUESTION;
+      const hasAnswer = isFallback ? await prisma.taskAiMessage.findFirst({
         where: {
           taskId: trigger.taskId, userId: trigger.userId, role: 'user',
           createdAt: { gt: trigger.updatedAt }
         }, select: { id: true }
-      });
-      if (hasAnswer || (trigger.question === MONITORING_FALLBACK_QUESTION &&
-          await hasMonitoringProgressSince(trigger))) {
+      }) : null;
+      if (isFallback && (hasAnswer || await hasMonitoringProgressSince(trigger))) {
         await prisma.taskMonitoringTrigger.update({
           where: { id: trigger.id }, data: { state: 'answered' }
         });
@@ -164,12 +167,13 @@ export async function pollTaskMonitoring(now = new Date()) {
           where: { id: trigger.id }, select: { state: true }
         });
         if (pending?.state !== 'fired') return false;
+        if (!isFallback) return true;
         const answered = await prisma.taskAiMessage.findFirst({
           where: { taskId: trigger.taskId, userId: trigger.userId,
             role: 'user', createdAt: { gt: trigger.updatedAt } },
           select: { id: true }
         });
-        return !answered;
+        return !answered && !await hasMonitoringProgressSince(trigger);
       };
       await deliver({ id: row.id, taskId: trigger.taskId, userId: trigger.userId },
         'Пользователь пока не ответил на вопрос: ' + trigger.question +

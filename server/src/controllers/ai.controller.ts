@@ -309,8 +309,8 @@ export const aiController = {
       const persistedHistory = await aiAssistantService.listTaskDialogForContext({
         userId: req.user!.id, taskId: req.params.id
       });
-      // A human reply must cancel an old trigger before the next AI call,
-      // not minutes later when a potentially slow AI response gets saved.
+      // A human reply supersedes the generic inactivity fallback before
+      // the AI call; a specifically scheduled follow-up must stay pending.
       if (typeof userMessage === 'string' && userMessage.trim()) {
         await cancelPendingMonitoringTriggers(req.user!.id, req.params.id, taskReplyReceivedAt);
       }

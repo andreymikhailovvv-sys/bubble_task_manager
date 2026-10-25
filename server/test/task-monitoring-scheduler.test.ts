@@ -60,7 +60,7 @@ test('trigger tool is available only for opted-in personal tasks and revalidates
   assert.match(route, /\/tasks\/:id\/monitoring\/triggers/);
 });
 
-test('human responses cancel pending triggers, opt-out cancels all pending reminders', async () => {
+test('human responses cancel only fallback reminders; custom triggers persist; opt-out still cancels', async () => {
   const [ai, monitor, task, controller, worker] = await Promise.all([
     file('../src/services/ai-assistant.service.ts'),
     file('../src/services/task-monitoring.service.ts'),
@@ -71,8 +71,11 @@ test('human responses cancel pending triggers, opt-out cancels all pending remin
   assert.match(ai, /cancelPendingMonitoringTriggers\(input.userId, input.taskId, input.replyReceivedAt\)/);
   assert.match(controller, /replyReceivedAt: taskReplyReceivedAt/);
   assert.match(monitor, /updatedAt: \{ lte: receivedAt \}/);
+  assert.match(monitor, /question: MONITORING_FALLBACK_QUESTION/);
   assert.match(task, /input.aiMonitoringEnabled === false \|\| input.status === 'DONE'/);
-  assert.match(worker, /role: 'user', createdAt: \{ gt: trigger.updatedAt \}/);
+  assert.match(worker, /const isFallback = trigger.question === MONITORING_FALLBACK_QUESTION/);
+  assert.match(worker, /const hasAnswer = isFallback/);
+  assert.match(worker, /if \(!isFallback\) return true/);
 });
 
 test('follow-up countdown is visible in task chat on web and mobile', async () => {
@@ -85,6 +88,11 @@ test('follow-up countdown is visible in task chat on web and mobile', async () =
   assert.match(mini, /<TaskMonitoringTriggerChips taskId=\{openedTask.id\}/);
   assert.match(chip, /Триггер запущен/);
   assert.match(chip, /getTaskMonitoringTriggers/);
+  assert.match(chip, /task-monitoring-triggers-updated/);
+  assert.match(chip, /requestRevision/);
+  assert.match(chip, /window.addEventListener\('focus'/);
+  const api = await file('../../client/src/lib/api.ts');
+  assert.match(api, /window.dispatchEvent\(new CustomEvent\('task-monitoring-triggers-updated'/);
 });
 
 

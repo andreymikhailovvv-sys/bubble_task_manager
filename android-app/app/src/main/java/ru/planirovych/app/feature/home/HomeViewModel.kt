@@ -389,10 +389,19 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
         viewModelScope.launch{
             try{
                 val triggers=repository.loadTaskMonitoringTriggers(taskId)
+                // Do not hold the trigger display behind the independent status
+                // request: status history can be slower than the quick trigger GET.
+                taskAiMutable.update{
+                    if(it.taskId==taskId)it.copy(monitoringTriggers=triggers)
+                    else it
+                }
+            }catch(_:Throwable){
+                // A transient failure is not evidence that a timer was cancelled.
+            }
+            try{
                 val statuses=repository.loadTaskMonitoringStatuses(taskId)
                 taskAiMutable.update{
-                    if(it.taskId==taskId)it.copy(
-                        monitoringTriggers=triggers,monitoringStatuses=statuses)
+                    if(it.taskId==taskId)it.copy(monitoringStatuses=statuses)
                     else it
                 }
             }catch(_:Throwable){
@@ -411,10 +420,17 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
         viewModelScope.launch{
             try{
                 val history=repository.loadTaskAiHistory(taskId)
+                val changed = taskAiMutable.value.taskId == taskId &&
+                    taskAiMutable.value.messages != history
                 taskAiMutable.update{
                     if(it.taskId==taskId && !it.busy)it.copy(messages=history,error=null)
                     else it
                 }
+                // A background monitoring reply can arrive during 4-second chat
+                // synchronization. Refresh its trigger as soon as that reply
+                // appears, not on the independent 30-second status poll.
+                if(changed && !taskAiMutable.value.busy)
+                    refreshTaskAiMonitoring(taskId)
             }catch(_:Throwable){/* retain the last known messages on transient errors */}
         }
     }

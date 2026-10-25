@@ -2,6 +2,8 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { requireMonitoredTask } from './task-monitoring.service.js';
 import { signalTaskMonitoringWakeup } from './task-monitoring-wakeup.service.js';
+import { MONITORING_FALLBACK_DELAY_MS, MONITORING_FALLBACK_QUESTION } from './task-monitoring-followup-policy.js';
+export { MONITORING_FALLBACK_DELAY_MS, MONITORING_FALLBACK_QUESTION } from './task-monitoring-followup-policy.js';
 
 export const TASK_MONITOR_FOLLOWUP_TOOL = {
   type: 'function' as const,
@@ -27,8 +29,8 @@ export async function createMonitoringTrigger(userId: string, taskId: string, in
       question.length < 4 || question.length > 500) {
     return { ok: false, code: 'INVALID_TRIGGER_ARGUMENTS' };
   }
-  // One pending follow-up per task. Answering will cancel it, and new
-  // trigger calls replace the pending question/time rather than stack spam.
+  // One pending explicit follow-up per task. Ordinary replies do not
+  // cancel it; new trigger calls replace the pending question/time.
   const pending = await prisma.taskMonitoringTrigger.findFirst({
     where: { taskId, userId, state: 'pending' }, orderBy: { createdAt: 'desc' }
   });
@@ -36,6 +38,10 @@ export async function createMonitoringTrigger(userId: string, taskId: string, in
   const trigger = pending
     ? await prisma.taskMonitoringTrigger.update({ where: { id: pending.id }, data: { dueAt, question } })
     : await prisma.taskMonitoringTrigger.create({ data: { taskId, userId, dueAt, question } });
+  console.info('[TaskMonitoring] explicit trigger persisted', {
+    taskId, triggerId: trigger.id, replaced: Boolean(pending),
+    dueAt: trigger.dueAt.toISOString()
+  });
   signalTaskMonitoringWakeup();
   return { ok: true, triggerId: trigger.id, dueAt: trigger.dueAt.toISOString(), label: 'Триггер запущен' };
 }
@@ -45,9 +51,7 @@ export async function createMonitoringTrigger(userId: string, taskId: string, in
  * The explicit AI/user trigger always wins. One auto follow-up is refreshed
  * after the next AI answer, never stacked beside an existing custom trigger.
  */
-export const MONITORING_FALLBACK_DELAY_MS = 3 * 60 * 60 * 1_000;
-export const MONITORING_FALLBACK_QUESTION =
-  'С последнего сообщения прошло три часа без подтверждённого ответа или прогресса в задаче. Проверь актуальный контекст и кратко напомни пользователю о следующем конкретном действии. Не утверждай, что он ничего не делал вне сервиса.';
+
 
 export async function ensureMonitoringFallbackTrigger(input: {
   userId: string;
