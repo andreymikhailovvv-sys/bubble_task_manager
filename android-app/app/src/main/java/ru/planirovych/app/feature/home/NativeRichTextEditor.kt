@@ -6,6 +6,21 @@ import android.os.Looper
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.content.Context
+import android.util.Base64
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -25,11 +40,38 @@ import androidx.compose.ui.viewinterop.AndroidView
 import org.json.JSONObject
 
 /**
- * Mini App compatible HTML editor: headings, inline styles, ordered/unordered
- * lists and checklists. Never reduce an existing formatted note to plain text.
- * Only a fixed local HTML document receives the Android JS bridge. User HTML
- * passes through an allowlist before insertion and before saving.
+ * Editor with an explicit ready handshake. The initial HTML is embedded into
+ * the local page as UTF-8 base64, so existing content does NOT depend on
+ * WebViewClient.onPageFinished timing. Never emit an empty change on startup.
  */
+private class RichHtmlWebView(context: Context):WebView(context){
+    var initialized=false
+    var applied:String?=null
+    var lastEdited:String?=null
+    var pending:String=""
+    var onEdited:(String)->Unit={}
+    var onReady:()->Unit={}
+    var onFailure:(String)->Unit={}
+    fun setHtml(html:String){
+        pending=html
+        if(initialized && html!=applied && html!=lastEdited){
+            applied=html
+            evaluateJavascript("window.setEditorContent("+JSONObject.quote(html)+");",null)
+        }
+    }
+    fun finishLoading(initial:String){
+        initialized=true
+        applied=initial
+        setHtml(pending)
+        onReady()
+    }
+    fun changed(html:String){
+        if(!initialized)return // JS initialization must never erase source content.
+        lastEdited=html
+        onEdited(html)
+    }
+}
+
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 internal fun NativeRichTextEditor(
@@ -40,54 +82,97 @@ internal fun NativeRichTextEditor(
     editorKey: String = "description"
 ) {
     val latestChange = rememberUpdatedState(onChange)
-    key(editorKey, dark) {
-        AndroidView(
-            modifier = modifier,
-            factory = { context ->
-                WebView(context).apply {
-                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                    isVerticalScrollBarEnabled = false
-                    settings.javaScriptEnabled = true
-                    settings.allowFileAccess = false
-                    settings.allowContentAccess = false
-                    settings.blockNetworkLoads = true
-                    settings.domStorageEnabled = false
-                    settings.setSupportMultipleWindows(false)
-                    addJavascriptInterface(object {
-                        @JavascriptInterface
-                        fun changed(html: String) {
-                            Handler(Looper.getMainLooper()).post {
-                                latestChange.value(html)
+    var loaded by remember(editorKey,dark){mutableStateOf(false)}
+    var timedOut by remember(editorKey,dark){mutableStateOf(false)}
+    LaunchedEffect(editorKey,dark,loaded){
+        if(!loaded){
+            delay(2500)
+            if(!loaded)timedOut=true
+        }
+    }
+    key(editorKey,dark) {
+        Box(modifier){
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { context ->
+                    RichHtmlWebView(context).apply {
+                        setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                        isVerticalScrollBarEnabled = false
+                        settings.javaScriptEnabled = true
+                        settings.allowFileAccess = false
+                        settings.allowContentAccess = false
+                        settings.blockNetworkLoads = true
+                        settings.domStorageEnabled = false
+                        settings.setSupportMultipleWindows(false)
+                        pending=value
+                        onEdited={latestChange.value(it)}
+                        onReady={loaded=true;timedOut=false}
+                        onFailure={message ->
+                            android.util.Log.e("NativeRichEditor","Editor initialization: "+message)
+                            timedOut=true
+                        }
+                        val web=this
+                        addJavascriptInterface(object {
+                            @JavascriptInterface
+                            fun ready() {
+                                web.post { web.finishLoading(value) }
                             }
+                            @JavascriptInterface
+                            fun changed(html: String) {
+                                web.post { web.changed(html) }
+                            }
+                            @JavascriptInterface
+                            fun loadFailed(message:String) {
+                                web.post { web.onFailure(message) }
+                            }
+                        }, "NativeEditor")
+                        webViewClient = object : WebViewClient() {
+                            override fun shouldOverrideUrlLoading(
+                                view: WebView, request: android.webkit.WebResourceRequest
+                            ): Boolean = true
                         }
-                    }, "NativeEditor")
-                    webViewClient = object : WebViewClient() {
-                        override fun onPageFinished(view: WebView, url: String?) {
-                            view.evaluateJavascript("window.setEditorContent(" +
-                                JSONObject.quote(value) + ");", null)
-                        }
-                        override fun shouldOverrideUrlLoading(
-                            view: WebView, url: String
-                        ): Boolean = true
-                        override fun shouldOverrideUrlLoading(
-                            view: WebView,
-                            request: android.webkit.WebResourceRequest
-                        ): Boolean = true
+                        loadDataWithBaseURL(
+                            "https://appassets.androidplatform.net/native-rich-editor/",
+                            editorHtml(dark,value), "text/html", "UTF-8", null)
                     }
-                    loadDataWithBaseURL(null, editorHtml(dark), "text/html", "UTF-8", null)
+                },
+                update = { view ->
+                    view.onEdited={latestChange.value(it)}
+                    view.onReady={loaded=true;timedOut=false}
+                    view.setHtml(value)
+                },
+                onRelease = { view ->
+                    view.removeJavascriptInterface("NativeEditor")
+                    view.stopLoading()
+                    view.destroy()
                 }
-            },
-            update = {},
-            onRelease = { view ->
-                view.removeJavascriptInterface("NativeEditor")
-                view.stopLoading()
-                view.destroy()
+            )
+            if(!loaded){
+                Surface(Modifier.fillMaxSize(),color=if(dark)Color(0xFF18243A) else Color.White){
+                    Column(Modifier.fillMaxSize().padding(16.dp),
+                        verticalArrangement=Arrangement.spacedBy(10.dp)){
+                        if(!timedOut){
+                            CircularProgressIndicator()
+                            Text("Открываем редактор…",
+                                color=if(dark)Color.White else Color(0xFF172238))
+                        }else {
+                            Text("Не удалось загрузить редактор. Исходный текст сохранён.",
+                                color=if(dark)Color(0xFFF1F5F9) else Color(0xFF172238))
+                        }
+                        // Readable fallback instead of an empty white rectangle.
+                        val original=android.text.Html.fromHtml(value,
+                            android.text.Html.FROM_HTML_MODE_COMPACT).toString()
+                        Text(original,maxLines=15,overflow=TextOverflow.Ellipsis,
+                            color=if(dark)Color(0xFFE2E8F0) else Color(0xFF334155))
+                    }
+                }
             }
-        )
+        }
     }
 }
 
-private fun editorHtml(dark: Boolean): String {
+private fun editorHtml(dark: Boolean, initialValue:String): String {
+    val initial=Base64.encodeToString(initialValue.toByteArray(Charsets.UTF_8),Base64.NO_WRAP)
     val bg = if (dark) "#18243a" else "#ffffff"
     val text = if (dark) "#f1f5f9" else "#172238"
     val muted = if (dark) "#a5b4ca" else "#64748b"
@@ -276,6 +361,13 @@ edit.addEventListener('keydown',event=>{
   next.append(checkbox,text);item.after(next);caret(text);report();
 });
 edit.addEventListener('input',report);
+try {
+  const bytes=Uint8Array.from(atob("$initial"),c=>c.charCodeAt(0));
+  window.setEditorContent(new TextDecoder('utf-8').decode(bytes));
+  NativeEditor.ready();
+} catch(error) {
+  try{NativeEditor.loadFailed(String(error));}catch(_ignored){}
+}
 })();
 </script></body></html>
 """.trimIndent()
