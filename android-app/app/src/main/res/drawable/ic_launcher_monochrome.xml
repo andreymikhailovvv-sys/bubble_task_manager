@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- A simplified П monogram for system monochrome/themed launcher icons. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M31,30 H77 V79 H66 V41 H42 V79 H31 Z" />
+</vector>
