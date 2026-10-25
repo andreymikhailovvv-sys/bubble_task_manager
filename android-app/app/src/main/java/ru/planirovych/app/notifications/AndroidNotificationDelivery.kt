@@ -96,6 +96,8 @@ object AndroidNotificationDelivery {
                         flags=Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                         putExtra(MainActivity.EXTRA_NOTIFICATION_TASK_ID,entry.taskId)
                         putExtra(MainActivity.EXTRA_NOTIFICATION_ID,entry.id)
+                        if(entry.eventKey?.startsWith("ai-checkup:")==true)
+                            putExtra(MainActivity.EXTRA_OPEN_GENERAL_AI,true)
                     }
                     val requestCode=(account+":"+entry.id).hashCode()
                     val pending=PendingIntent.getActivity(context,requestCode,

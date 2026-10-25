@@ -40,8 +40,21 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     var createNote by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(initialPage=0,pageCount={4})
     val pagerScope = rememberCoroutineScope()
-    LaunchedEffect(openGeneralAi){
-        if(openGeneralAi)pagerState.scrollToPage(2)
+    val sharedChat by vm.generalAi.collectAsStateWithLifecycle()
+    var quickNavigationHandled by remember(openGeneralAi){mutableStateOf(false)}
+    LaunchedEffect(openGeneralAi,sharedChat.projects){
+        if(openGeneralAi && !quickNavigationHandled){
+            pagerState.scrollToPage(2)
+            // Widget result and scheduled checkup alerts must open Quick Requests,
+            // not whichever project conversation happened to be selected last.
+            val quickProject=sharedChat.projects.firstOrNull{p->
+                p.chats.any{it.id==QUICK_AI_THREAD_ID}
+            }
+            if(quickProject!=null){
+                vm.chooseGeneralAiChat(quickProject.id,QUICK_AI_THREAD_ID)
+                quickNavigationHandled=true
+            }
+        }
     }
     var authMode by remember { mutableStateOf<AuthMode?>(null) }
     var openedTaskId by remember { mutableStateOf<String?>(null) }
