@@ -75,6 +75,7 @@ fun ModernWorkspace(
     search: (String) -> Unit,
     settings: () -> Unit,
     onOpenTask: (String) -> Unit,
+    onOpenTaskAi: (String) -> Unit,
     pagerState: PagerState,
     quickAiMode:String?=null,
     quickAiRequestId:Int=0,
