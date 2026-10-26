@@ -10,6 +10,7 @@ import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
 
 import { TaskMonitoringStatuses } from './components/TaskMonitoringStatuses';
 import { TaskMonitoringTriggerChips } from './components/TaskMonitoringTriggerChips';
+import { TaskRecurrenceConfigurator } from './components/TaskRecurrenceConfigurator';
 import { TaskMonitoringActionBadge } from './components/TaskMonitoringActionBadge';
 import { AiCheckupScheduleSettings } from './components/AiCheckupScheduleSettings';
 import { MiniAppStandaloneNoteEditor } from './components/MiniAppStandaloneNoteEditor';
