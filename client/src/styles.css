@@ -10126,3 +10126,57 @@ body[data-theme='light'] .task-monitor-chat-link,
 }
 body[data-theme='light'] .task-monitor-chat-link:hover,
 .miniapp-light .task-monitor-chat-link:hover { background: #d7e9f2; }
+
+/* A shared, restrained recurrence palette for the desktop task editor and
+   task settings in Mini App/mobile web. No saturated violet selections. */
+.recurrence-configuration,
+.focused-task-editor-shell .recurrence-configuration,
+body[data-theme='light'] .focused-task-editor-shell .recurrence-configuration,
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-configuration {
+  background: color-mix(in srgb, var(--card-bg) 94%, #5d8392) !important;
+  border-color: color-mix(in srgb, var(--panel-border) 80%, #7495a4) !important;
+  color: var(--text-primary);
+}
+.recurrence-configuration .recurrence-choice-button,
+.recurrence-configuration .recurrence-day-button,
+.focused-task-editor-shell .recurrence-choice-button,
+.focused-task-editor-shell .recurrence-day-button,
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-choice-button,
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-day-button,
+body[data-theme='light'] .focused-task-editor-shell .recurrence-choice-button,
+body[data-theme='light'] .focused-task-editor-shell .recurrence-day-button {
+  background: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: color-mix(in srgb, var(--panel-border) 76%, #7996a4) !important;
+  box-shadow: none !important;
+}
+.recurrence-configuration .recurrence-choice-button[aria-pressed='true'],
+.recurrence-configuration .recurrence-day-button[aria-pressed='true'],
+.focused-task-editor-shell .recurrence-choice-button[aria-pressed='true'],
+.focused-task-editor-shell .recurrence-day-button[aria-pressed='true'],
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-choice-button[aria-pressed='true'],
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-day-button[aria-pressed='true'],
+body[data-theme='light'] .focused-task-editor-shell .recurrence-choice-button[aria-pressed='true'],
+body[data-theme='light'] .focused-task-editor-shell .recurrence-day-button[aria-pressed='true'] {
+  background: #355c69 !important;
+  border-color: #658895 !important;
+  color: #f2f8fb !important;
+  box-shadow: none !important;
+}
+.recurrence-configuration .recurrence-time-row,
+.recurrence-configuration .recurrence-month-calendar,
+.recurrence-configuration .recurrence-time-input {
+  background: var(--card-bg);
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--panel-border) 82%, #728d9a);
+}
+.recurrence-configuration .recurrence-add-time-button {
+  background: color-mix(in srgb, var(--card-bg) 87%, #70949f) !important;
+  color: var(--text-primary) !important;
+  border-color: color-mix(in srgb, var(--panel-border) 74%, #70949f) !important;
+}
+.mini-recurrence-configuration {
+  max-height: min(53vh, 440px);
+  overflow: auto;
+  scrollbar-width: thin;
+}
