@@ -494,6 +494,29 @@ export const taskService = {
         }
       }
       const updatedTask = await tx.task.update({ where: { id }, data: patch });
+      // Queue AI follow-up only on a genuine user-completed subtask transition.
+      // This is an atomic DB event, not an AI call inside a task-save request.
+      if (currentTask.parentTaskId && currentTask.status !== 'DONE' &&
+          input.status === 'DONE' && context.source !== 'ai_monitoring') {
+        const monitoredParent = await tx.task.findFirst({
+          where: {
+            id: currentTask.parentTaskId, userId: currentTask.userId,
+            aiMonitoringEnabled: true, parentTaskId: null,
+            collaborationId: null, taskType: 'TASK', status: { not: 'DONE' }
+          }, select: { id: true }
+        });
+        if (monitoredParent && !currentTask.collaborationId) {
+          await tx.taskMonitoringRun.createMany({
+            data: [{
+              userId: currentTask.userId, taskId: monitoredParent.id,
+              sourceTaskId: id,
+              eventKey: 'subtask-completed:' + id + ':' + updatedTask.updatedAt.toISOString(),
+              kind: 'subtask_completed', state: 'scheduled', dueAt: new Date()
+            }],
+            skipDuplicates: true
+          });
+        }
+      }
       if (input.aiMonitoringEnabled === false || input.status === 'DONE') {
         await tx.taskMonitoringTrigger.updateMany({
           where: { taskId: id, state: 'pending' }, data: { state: 'cancelled' }
