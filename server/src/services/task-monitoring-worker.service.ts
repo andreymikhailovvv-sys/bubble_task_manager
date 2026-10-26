@@ -204,6 +204,30 @@ export async function pollTaskMonitoring(now = new Date()) {
         dueAt: job.dueAt.toISOString()
       });
       remaining -= 1;
+      if (job.kind === 'subtask_completed') {
+        const completed = await prisma.task.findFirst({
+          where: { id: job.sourceTaskId, parentTaskId: job.taskId, status: 'DONE', userId: job.userId },
+          select: { title: true }
+        });
+        if (!completed) { await markRun(job.id, 'cancelled'); continue; }
+        const check = async () => Boolean(await prisma.task.findFirst({
+          where: { id: job.sourceTaskId!, parentTaskId: job.taskId, status: 'DONE', userId: job.userId },
+          select: { id: true }
+        }));
+        const remainingTasks = await prisma.task.findMany({
+          where: { parentTaskId: job.taskId, userId: job.userId, status: { not: 'DONE' } },
+          orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
+          take: 8, select: { title: true, dueDate: true }
+        });
+        const nextSteps = remainingTasks.map(row =>
+          row.title + (row.dueDate ? ' (срок ' + row.dueDate.toISOString() + ')' : '')
+        ).join('; ') || 'Открытых подзадач не осталось.';
+        await deliver({ id: job.id, userId: job.userId, taskId: job.taskId },
+          'Пользователь завершил подзадачу «' + completed.title + '». ' +
+          'Оставшиеся шаги: ' + nextSteps + '. Отметь прогресс и предложи следующий шаг.',
+          check, 'subtask_completed');
+        continue;
+      }
       const check = async () => Boolean(
         await deadlineStillCurrent(job.taskId, job.sourceTaskId!, job.dueAt!)
       );
