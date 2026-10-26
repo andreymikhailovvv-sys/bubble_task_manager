@@ -69,7 +69,8 @@ private fun nativeProjectColor(value:String):Color=runCatching{
 internal fun NativeGeneralAiChatPage(
     vm:HomeViewModel,userId:String?,dark:Boolean,
     quickAiMode:String?=null,quickAiRequestId:Int=0,
-    chatVisible:Boolean=true,onExit:()->Unit
+    chatVisible:Boolean=true,onExit:()->Unit,
+    onOpenTaskAi:(String)->Unit={}
 ){
     val state by vm.generalAi.collectAsStateWithLifecycle()
     val c=remember(dark){chatColors(dark)}
