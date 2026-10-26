@@ -2360,8 +2360,9 @@ export const telegramService = {
     // Telegram HTML is escaped; never let the model inject arbitrary markup.
     const alert = formatMonitoringAlert(input.taskTitle, input.answer);
     return sendMessage(owner.telegramChatId,
-      '🔔 <b>' + escapeHtml(alert.headline) + '</b>\n' +
-      escapeHtml(alert.context) + '\n\n' + escapeHtml(alert.body.slice(0, 2400)),
+      '<b>' + escapeHtml(alert.headline) + '</b>\n' +
+      '✔️Мониторинг задачи <i>' + escapeHtml(input.taskTitle.slice(0, 150)) + '</i>\n\n' +
+      escapeHtml(alert.body.slice(0, 2400)),
       { inline_keyboard: [[{
         text: '↩️ Ответить', web_app: { url: buildMiniAppTaskAiUrl(input.taskId) }
       }]] }
