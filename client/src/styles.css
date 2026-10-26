@@ -10127,56 +10127,136 @@ body[data-theme='light'] .task-monitor-chat-link,
 body[data-theme='light'] .task-monitor-chat-link:hover,
 .miniapp-light .task-monitor-chat-link:hover { background: #d7e9f2; }
 
-/* A shared, restrained recurrence palette for the desktop task editor and
-   task settings in Mini App/mobile web. No saturated violet selections. */
+/* Unified soft lavender recurrence controls. Muted purple follows the task
+   editor's existing palette, without saturated violet or unrelated teal. */
 .recurrence-configuration,
 .focused-task-editor-shell .recurrence-configuration,
-body[data-theme='light'] .focused-task-editor-shell .recurrence-configuration,
-body[data-theme='dark'] .focused-task-editor-shell .recurrence-configuration {
-  background: color-mix(in srgb, var(--card-bg) 94%, #5d8392) !important;
-  border-color: color-mix(in srgb, var(--panel-border) 80%, #7495a4) !important;
+body[data-theme='light'] .focused-task-editor-shell .recurrence-configuration {
+  --recurrence-selected: #78609d;
+  --recurrence-selected-border: #8670aa;
+  --recurrence-selected-ink: #ffffff;
+  --recurrence-stroke: #d6c6eb;
+  --recurrence-card: #ffffff;
+  background: #f8f5fc !important;
+  border-color: #e2d5f2 !important;
   color: var(--text-primary);
 }
 .recurrence-configuration .recurrence-choice-button,
 .recurrence-configuration .recurrence-day-button,
 .focused-task-editor-shell .recurrence-choice-button,
 .focused-task-editor-shell .recurrence-day-button,
-body[data-theme='dark'] .focused-task-editor-shell .recurrence-choice-button,
-body[data-theme='dark'] .focused-task-editor-shell .recurrence-day-button,
 body[data-theme='light'] .focused-task-editor-shell .recurrence-choice-button,
 body[data-theme='light'] .focused-task-editor-shell .recurrence-day-button {
-  background: var(--card-bg) !important;
+  background: var(--recurrence-card, #fff) !important;
   color: var(--text-primary) !important;
-  border-color: color-mix(in srgb, var(--panel-border) 76%, #7996a4) !important;
+  border-color: var(--recurrence-stroke, #d6c6eb) !important;
   box-shadow: none !important;
+}
+.recurrence-configuration .recurrence-choice-button:hover:not([aria-pressed='true']),
+.recurrence-configuration .recurrence-day-button:hover:not([aria-pressed='true']) {
+  background: #f0e9fa !important;
+  border-color: #ad98c9 !important;
 }
 .recurrence-configuration .recurrence-choice-button[aria-pressed='true'],
 .recurrence-configuration .recurrence-day-button[aria-pressed='true'],
 .focused-task-editor-shell .recurrence-choice-button[aria-pressed='true'],
 .focused-task-editor-shell .recurrence-day-button[aria-pressed='true'],
-body[data-theme='dark'] .focused-task-editor-shell .recurrence-choice-button[aria-pressed='true'],
-body[data-theme='dark'] .focused-task-editor-shell .recurrence-day-button[aria-pressed='true'],
 body[data-theme='light'] .focused-task-editor-shell .recurrence-choice-button[aria-pressed='true'],
 body[data-theme='light'] .focused-task-editor-shell .recurrence-day-button[aria-pressed='true'] {
-  background: #355c69 !important;
-  border-color: #658895 !important;
-  color: #f2f8fb !important;
+  background: var(--recurrence-selected, #78609d) !important;
+  border-color: var(--recurrence-selected-border, #8670aa) !important;
+  color: var(--recurrence-selected-ink, white) !important;
   box-shadow: none !important;
 }
 .recurrence-configuration .recurrence-time-row,
 .recurrence-configuration .recurrence-month-calendar,
-.recurrence-configuration .recurrence-time-input {
-  background: var(--card-bg);
-  color: var(--text-primary);
-  border-color: color-mix(in srgb, var(--panel-border) 82%, #728d9a);
-}
-.recurrence-configuration .recurrence-add-time-button {
-  background: color-mix(in srgb, var(--card-bg) 87%, #70949f) !important;
+.recurrence-configuration .recurrence-time-input,
+.focused-task-editor-shell .recurrence-time-row,
+.focused-task-editor-shell .recurrence-month-calendar {
+  background: var(--recurrence-card, white) !important;
   color: var(--text-primary) !important;
-  border-color: color-mix(in srgb, var(--panel-border) 74%, #70949f) !important;
+  border-color: var(--recurrence-stroke, #d6c6eb) !important;
+}
+.recurrence-configuration .recurrence-add-time-button,
+.focused-task-editor-shell .recurrence-add-time-button {
+  background: #f1ecf8 !important;
+  color: #564477 !important;
+  border-color: var(--recurrence-stroke, #d6c6eb) !important;
+}
+.recurrence-configuration .recurrence-remove-time-button {
+  border-color: var(--recurrence-stroke, #d6c6eb) !important;
 }
 .mini-recurrence-configuration {
-  max-height: min(53vh, 440px);
-  overflow: auto;
+  max-height: min(43dvh, 350px);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
+}
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-configuration,
+.miniapp-shell:not(.miniapp-light) .recurrence-configuration {
+  --recurrence-selected: #735e9c;
+  --recurrence-selected-border: #927cb8;
+  --recurrence-selected-ink: #f8f5ff;
+  --recurrence-stroke: #57476e;
+  --recurrence-card: #302b43;
+  background: #282239 !important;
+  border-color: #514465 !important;
+  color: #f4efff;
+}
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-choice-button,
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-day-button,
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-time-row,
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-month-calendar,
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-time-input,
+.miniapp-shell:not(.miniapp-light) .recurrence-choice-button,
+.miniapp-shell:not(.miniapp-light) .recurrence-day-button,
+.miniapp-shell:not(.miniapp-light) .recurrence-time-row,
+.miniapp-shell:not(.miniapp-light) .recurrence-month-calendar,
+.miniapp-shell:not(.miniapp-light) .recurrence-time-input {
+  background: var(--recurrence-card, #302b43) !important;
+  border-color: var(--recurrence-stroke, #57476e) !important;
+  color: #f4efff !important;
+}
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-choice-button[aria-pressed='true'],
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-day-button[aria-pressed='true'],
+.miniapp-shell:not(.miniapp-light) .recurrence-choice-button[aria-pressed='true'],
+.miniapp-shell:not(.miniapp-light) .recurrence-day-button[aria-pressed='true'] {
+  background: var(--recurrence-selected, #735e9c) !important;
+  border-color: var(--recurrence-selected-border, #927cb8) !important;
+  color: #f8f5ff !important;
+}
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-add-time-button,
+.miniapp-shell:not(.miniapp-light) .recurrence-add-time-button {
+  background: #3e3553 !important;
+  color: #e6daf8 !important;
+  border-color: #635478 !important;
+}
+/* On the short mobile bottom-sheet the absolutely positioned settings popover
+   was not included in the sheet's intrinsic height and got clipped. Grow the
+   parent while settings are open, then bound both menus to the visible area. */
+@media (max-width: 639px) {
+  .miniapp-slide-backdrop .miniapp-focus-task-panel--settings-open {
+    height: min(90dvh, 790px);
+    max-height: calc(100dvh - 12px);
+  }
+  .miniapp-slide-backdrop .miniapp-focus-task-panel--settings-open > .miniapp-focus-task-scroll-layout,
+  .miniapp-slide-backdrop .miniapp-focus-task-panel--settings-open > .flex {
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+  }
+  .miniapp-web-task-backdrop .miniapp-focus-task-panel--settings-open {
+    height: 100%;
+    max-height: 100%;
+  }
+  .miniapp-focus-task-panel--settings-open .miniapp-task-settings-panel {
+    max-height: min(72dvh, calc(100% - 4.5rem));
+    overscroll-behavior: contain;
+  }
+  .miniapp-focus-task-panel--settings-open .miniapp-create-settings-panel {
+    max-height: min(70dvh, calc(100dvh - 7.5rem));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 }
