@@ -78,6 +78,7 @@ fun generalAiMessage(item:JsonObject):TaskAiChatMessage{
         id=item.aiString("id").ifBlank{null},
         role=item.aiString("role","assistant"),
         content=item.aiString("content"),createdAt=item.aiString("createdAt"),
+        monitoringTaskId=item.aiString("monitoringTaskId").ifBlank{null},
         authorName=item.aiString("authorName").ifBlank{null},
         creditsSpentMilli=(item["creditsSpentMilli"] as? JsonPrimitive)
             ?.contentOrNull?.toLongOrNull(),
