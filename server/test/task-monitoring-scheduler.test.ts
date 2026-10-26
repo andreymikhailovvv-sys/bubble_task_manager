@@ -26,7 +26,10 @@ test('event-driven monitoring saves per-task and subtask deadlines, not a repeat
   assert.match(worker, /startTaskMonitoringWorker\(\)/);
   assert.match(worker, /recoverMonitoredDeadlinesOnBoot\(\)/);
   assert.match(worker, /RECOVERY_INTERVAL_MS/);
-  assert.doesNotMatch(worker, /prisma\.task\.findMany\(/);
+  // A bounded lookup of remaining subtasks is needed after completion;
+  // that is not a global overdue polling scan.
+  assert.match(worker, /parentTaskId: job\.taskId, userId: job\.userId/);
+  assert.match(worker, /take: 8, select: \{ title: true, dueDate: true \}/);
   assert.match(index, /startTaskMonitoringWorker\(\)/);
   assert.doesNotMatch(index, /setInterval\(\(\) => \{\s*void pollTaskMonitoring/);
 });
