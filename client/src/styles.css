@@ -10250,13 +10250,54 @@ body[data-theme='dark'] .focused-task-editor-shell .recurrence-add-time-button,
     height: 100%;
     max-height: 100%;
   }
-  .miniapp-focus-task-panel--settings-open .miniapp-task-settings-panel {
-    max-height: min(72dvh, calc(100% - 4.5rem));
-    overscroll-behavior: contain;
-  }
+  /* Position settings within their own window, not within an oversized
+     94vh scroll box that gets clipped by the parent overflow:hidden. */
+  .miniapp-focus-task-panel--settings-open .miniapp-task-settings-panel,
   .miniapp-focus-task-panel--settings-open .miniapp-create-settings-panel {
-    max-height: min(70dvh, calc(100dvh - 7.5rem));
+    bottom: 0.75rem;
+    height: auto;
+    max-height: none;
+    min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
+  }
+  .miniapp-focus-task-panel--settings-open .miniapp-task-settings-panel {
+    top: 3.5rem;
+  }
+  .miniapp-focus-task-panel--settings-open .miniapp-create-settings-panel {
+    top: 4rem;
+  }
+}
+
+/* Entire task settings card is a single touch-scrolling surface. Nested
+   recurrence overflow used to trap touch swipes and hide lower options. */
+.miniapp-settings-scroll-area {
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none;
+}
+.miniapp-settings-scroll-area::-webkit-scrollbar,
+.miniapp-settings-scroll-area *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+.miniapp-settings-scroll-area .mini-recurrence-configuration {
+  max-height: none;
+  overflow: visible;
+  overscroll-behavior: auto;
+  scrollbar-width: none;
+}
+/* Non-phone and landscape layouts also need a strict visible-area boundary. */
+@media (min-width: 640px) {
+  .miniapp-focus-task-panel--settings-open .miniapp-task-settings-panel,
+  .miniapp-focus-task-panel--settings-open .miniapp-create-settings-panel {
+    top: 4rem;
+    bottom: 0.75rem;
+    max-height: none;
+    min-height: 0;
   }
 }
