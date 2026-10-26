@@ -4,7 +4,7 @@ import { prisma } from '../db/prisma.js';
 import { taskAccessWhere } from '../lib/task-access.js';
 import { notifyCollaborativeSubtaskCompleted, notifyCollaborativeSubtaskCreated } from './collaboration-subtask-notification.service.js';
 import { computeNextSlotRecurrenceDueDate, validateManualRecurrenceSchedule } from './recurrence-slots.service.js';
-import { cancelMonitoringSource, rescheduleMonitoringSource, rescheduleMonitoringTree } from './task-monitoring-schedule.service.js';
+import { cancelMonitoringSource, rescheduleMonitoringSource, rescheduleMonitoringTree, enqueueMonitoringIntroduction, MONITORING_INTRO_KIND } from './task-monitoring-schedule.service.js';
 import { signalTaskMonitoringWakeup } from './task-monitoring-wakeup.service.js';
 
 interface TaskInput {
@@ -300,6 +300,9 @@ export const taskService = {
         collaboration: parent?.collaborationId ? { connect: { id: parent.collaborationId } } : undefined
       }
     });
+    if (created.aiMonitoringEnabled && created.status !== 'DONE') {
+      await enqueueMonitoringIntroduction(prisma, created);
+    }
     if (created.aiMonitoringEnabled || parent?.aiMonitoringEnabled) {
       await rescheduleMonitoringSource(prisma, created.id);
       signalTaskMonitoringWakeup();
@@ -494,6 +497,17 @@ export const taskService = {
         }
       }
       const updatedTask = await tx.task.update({ where: { id }, data: patch });
+      if (!currentTask.aiMonitoringEnabled && updatedTask.aiMonitoringEnabled &&
+          updatedTask.status !== 'DONE') {
+        await enqueueMonitoringIntroduction(tx, updatedTask);
+      }
+      if (currentTask.aiMonitoringEnabled && (!updatedTask.aiMonitoringEnabled ||
+          (updatedTask.status === 'DONE' && !updatedTask.isRecurring))) {
+        await tx.taskMonitoringRun.updateMany({
+          where: { taskId: id, kind: MONITORING_INTRO_KIND, state: 'scheduled' },
+          data: { state: 'cancelled' }
+        });
+      }
       // Queue AI follow-up only on a genuine user-completed subtask transition.
       // This is an atomic DB event, not an AI call inside a task-save request.
       if (currentTask.parentTaskId && currentTask.status !== 'DONE' &&
