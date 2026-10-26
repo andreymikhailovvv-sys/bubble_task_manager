@@ -72,9 +72,28 @@ test('mobile task and create dialogs grow when repeat settings open without exce
   assert.ok(mini.includes("isTaskSettingsOpen ? 'miniapp-focus-task-panel--settings-open' : ''"));
   assert.ok(mini.includes("isCreateTaskSettingsOpen ? 'miniapp-focus-task-panel--settings-open' : ''"));
   assert.match(css, /height: min\(90dvh, 790px\)/);
-  assert.match(css, /max-height: min\(72dvh, calc\(100% - 4\.5rem\)\)/);
-  assert.match(css, /miniapp-create-settings-panel \{/);
-  assert.match(css, /max-height: min\(70dvh, calc\(100dvh - 7\.5rem\)\)/);
+  assert.match(css, /miniapp-focus-task-panel--settings-open \.miniapp-task-settings-panel/);
+  assert.match(css, /miniapp-focus-task-panel--settings-open \.miniapp-create-settings-panel/);
+  assert.match(css, /bottom: 0\.75rem/);
+  assert.match(css, /max-height: none/);
   assert.match(css, /overflow-y: auto/);
+  assert.match(css, /\.miniapp-settings-scroll-area::-webkit-scrollbar/);
+  assert.match(css, /scrollbar-width: none !important/);
+  assert.match(css, /-webkit-overflow-scrolling: touch/);
+  assert.match(css, /\.miniapp-settings-scroll-area \.mini-recurrence-configuration/);
   assert.match(css, /\.miniapp-web-task-backdrop \.miniapp-focus-task-panel--settings-open/);
+});
+
+test('both edit and creation settings scroll as full overlays rather than being clipped', async () => {
+  const mini = await read('../../client/src/MiniApp.tsx');
+  const edit = mini.slice(mini.indexOf('{isTaskSettingsOpen ? ('), mini.indexOf('ref={openedTaskContentsScrollRef}'));
+  assert.ok(edit.includes('miniapp-settings-scroll-area invisible-scrollbar'));
+  const createHeader = mini.indexOf('onClick={() => setIsCreateTaskSettingsOpen((prev) => !prev)}');
+  const createMenu = mini.indexOf('{isCreateTaskSettingsOpen ? (', createHeader);
+  assert.ok(createHeader >= 0 && createMenu > createHeader);
+  const nearMenu = mini.slice(createMenu - 65, createMenu);
+  assert.ok(nearMenu.includes('</div>'), 'creation menu is outside its tiny relative header');
+  const createBody = mini.indexOf('className="min-h-0 flex-1 overflow-y-auto pb-24 pr-1"', createMenu);
+  assert.ok(createBody > createMenu);
+  assert.ok(mini.slice(createMenu, createBody).includes('miniapp-settings-scroll-area invisible-scrollbar'));
 });
