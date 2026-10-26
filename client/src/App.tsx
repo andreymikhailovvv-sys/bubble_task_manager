@@ -7,6 +7,7 @@ import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon'
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
+import { TaskRecurrenceConfigurator } from './components/TaskRecurrenceConfigurator';
 import { TaskMonitoringTriggerChips } from './components/TaskMonitoringTriggerChips';
 import { TaskMonitoringStatuses } from './components/TaskMonitoringStatuses';
 
@@ -7540,20 +7541,23 @@ ${allContext}`,
                   </label>
                   </div>
                   {focusedDraft.isRecurring ? (
-                    <label className="block text-xs">Описание повторения
-                      <textarea
-                        className="form-field mt-1 min-h-16 w-full rounded border p-2 text-sm"
-                        placeholder="Например: каждого 19 числа месяца в 12:00"
-                        value={focusedDraft.recurrenceText ?? ''}
-                        onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), recurrenceText: e.target.value }))}
-                      />
-                      <div className="mt-2 flex items-center gap-2">
-                        <button type="button" className="recurrence-submit-button rounded px-2 py-1 text-xs font-semibold" onClick={() => void applyFocusedRecurrence()} disabled={focusedRecurrenceLoading}>
-                          {focusedRecurrenceLoading ? 'Отправка…' : 'Отправить'}
-                        </button>
-                        <p className="recurrence-summary-text text-[11px]">{focusedRecurrenceSummary ?? focusedDraft.recurrenceSummary ?? ''}</p>
-                      </div>
-                    </label>
+                    <TaskRecurrenceConfigurator
+                      key={focusedTask.id}
+                      value={{ ...focusedDraft, dueDate: focusedDraft.dueDate ?? '' }}
+                      onChange={(patch) => {
+                        setFocusedDraft((previous) => previous ? ({
+                          ...previous,
+                          ...patch,
+                          ...(patch.dueDate !== undefined ? {
+                            dueDate: patch.dueDate || null
+                          } : {})
+                        }) : previous);
+                        setFocusedSaveError(null);
+                      }}
+                      onParseWithAi={() => void applyFocusedRecurrence()}
+                      parsing={focusedRecurrenceLoading}
+                      isEvent={focusedTask.taskType === 'EVENT'}
+                    />
                   ) : null}
                   <div>
                     <p className="mb-1 text-xs">Важность: {focusedDraft.importance ?? 3}</p>
