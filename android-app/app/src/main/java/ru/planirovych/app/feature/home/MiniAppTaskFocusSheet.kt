@@ -389,7 +389,8 @@ fun MiniAppTaskFocusSheet(
         onRecurrenceText={recurrenceText=it;recurrenceError=null},
         onManualRecurrence={rule,summary->
             recurrenceRule=rule;recurrenceText=summary
-            recurrenceSummary=summary;recurrenceUntil=null;dueDate=null
+            recurrenceSummary=summary;recurrenceUntil=null
+            if(recurrenceRule != rule)dueDate=null
             recurrenceError=null
         },
         onParseRecurrence={
