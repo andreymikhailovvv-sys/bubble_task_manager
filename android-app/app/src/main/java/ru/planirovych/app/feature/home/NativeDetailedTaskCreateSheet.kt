@@ -440,6 +440,7 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
                             onPrompt={recurrenceText=it;parsed=null;manualRule=null;manualSummary=null;vm.clearRecurrenceError()},
                             onManual={rule,summary->
                                 manualRule=rule;manualSummary=summary;parsed=null
+                                dueDate=null
                             },
                             onParse={
                                 vm.parseCreationRecurrence(recurrenceText){result->
