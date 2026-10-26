@@ -7,7 +7,7 @@ export type RecurrenceDraftFields = {
   recurrenceJson?: Record<string, unknown> | null;
   recurrenceSummary?: string | null;
   recurrenceUntil?: string | null;
-  dueDate?: string | null;
+  dueDate?: string;
 };
 
 type Props = {
@@ -38,7 +38,7 @@ export function TaskRecurrenceConfigurator({ value, onChange, onParseWithAi, par
         recurrenceText: summary,
         recurrenceSummary: summary,
         recurrenceUntil: null,
-        dueDate: null
+        dueDate: ''
       });
       setError(null);
     } catch (cause) {
