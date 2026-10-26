@@ -20,13 +20,16 @@ test('event-driven monitoring saves per-task and subtask deadlines, not a repeat
   assert.match(schedule, /state: 'cancelled'/);
   assert.match(schedule, /status === 'DONE'/);
   assert.match(schedule, /skipDuplicates: true/);
-  assert.match(worker, /kind: 'overdue', state: 'scheduled', dueAt: \{ lte: now \}/);
+  assert.match(worker, /kind: \{ in: \['overdue', 'subtask_completed'\] \}, state: 'scheduled', dueAt: \{ lte: now \}/);
   assert.match(worker, /deadlineStillCurrent\(/);
   assert.match(worker, /state: 'processing'/);
   assert.match(worker, /startTaskMonitoringWorker\(\)/);
   assert.match(worker, /recoverMonitoredDeadlinesOnBoot\(\)/);
   assert.match(worker, /RECOVERY_INTERVAL_MS/);
-  assert.doesNotMatch(worker, /prisma\.task\.findMany\(/);
+  // A bounded lookup of remaining subtasks is needed after completion;
+  // that is not a global overdue polling scan.
+  assert.match(worker, /parentTaskId: job\.taskId, userId: job\.userId/);
+  assert.match(worker, /take: 8, select: \{ title: true, dueDate: true \}/);
   assert.match(index, /startTaskMonitoringWorker\(\)/);
   assert.doesNotMatch(index, /setInterval\(\(\) => \{\s*void pollTaskMonitoring/);
 });

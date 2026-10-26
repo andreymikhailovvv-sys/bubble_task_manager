@@ -53,7 +53,9 @@ test('browser delivery mirrors the existing system notification feed, not a sepa
   assert.match(browser, /Notification\.requestPermission\(\)/);
   assert.match(browser, /navigator\.locks\?\.request/);
   assert.match(browser, /'btm:browser-system-notifications:seen:' \+ userId/);
-  assert.match(browser, /new Notification\('Планировыч'/);
+  assert.match(browser, /new Notification\(headline/);
+  assert.match(browser, /: 'Планировыч'/);
+  assert.match(browser, /notification\.eventKey\?\.startsWith\('monitoring:'\)/);
   assert.doesNotMatch(browser, /new WebSocket|PushSubscription|subscribePush/);
 });
 

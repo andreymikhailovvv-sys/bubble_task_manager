@@ -24,7 +24,8 @@ data class AiCreditPurchase(
 @Serializable
 data class AiCreditPurchaseStatus(val purchase:AiCreditPurchase)
 @Serializable
-data class AiCreditUsageItem(val key:String="",val label:String="",val creditsMilli:Long=0)
+data class AiCreditUsageItem(val key:String="",val label:String="",val creditsMilli:Long=0,
+    val children:List<AiCreditUsageItem> = emptyList())
 @Serializable
 data class AiCreditUsage(
     val todayCreditsMilli:Long=0,val weekCreditsMilli:Long=0,

@@ -283,7 +283,7 @@ type AskTaskAssistantInput = {
   skipCreditsCharge?: boolean;
   skipEfficiencyBonus?: boolean;
   billingMode?: 'legacy' | 'dynamic';
-  billingFeature?: 'task_chat' | 'overdue_nudge';
+  billingFeature?: 'task_chat' | 'overdue_nudge' | 'task_monitoring';
   onProgress?: (status: TaskAiProgressStatus) => void;
 };
 

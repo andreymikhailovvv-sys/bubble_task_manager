@@ -315,12 +315,22 @@ internal fun NativeAiCreditsDialog(
                                 if(items.isEmpty())Text("Пока нет списаний.",
                                     color=muted(dark),fontSize=12.sp)
                                 items.forEach{item->
-                                    Row(Modifier.fillMaxWidth()){
-                                        Text(item.label,Modifier.weight(1f),
-                                            color=fore(dark),fontSize=12.sp)
-                                        Text(milliLabel(item.creditsMilli),
-                                            color=fore(dark),fontSize=12.sp,
-                                            fontWeight=FontWeight.Bold)
+                                    Column(verticalArrangement=Arrangement.spacedBy(4.dp)){
+                                        Row(Modifier.fillMaxWidth()){
+                                            Text(item.label,Modifier.weight(1f),
+                                                color=fore(dark),fontSize=12.sp)
+                                            Text(milliLabel(item.creditsMilli),
+                                                color=fore(dark),fontSize=12.sp,
+                                                fontWeight=FontWeight.Bold)
+                                        }
+                                        item.children.forEach{child->
+                                            Row(Modifier.fillMaxWidth().padding(start=14.dp)){
+                                                Text(child.label,Modifier.weight(1f),
+                                                    color=muted(dark),fontSize=11.sp)
+                                                Text(milliLabel(child.creditsMilli),
+                                                    color=muted(dark),fontSize=11.sp)
+                                            }
+                                        }
                                     }
                                 }
                             }

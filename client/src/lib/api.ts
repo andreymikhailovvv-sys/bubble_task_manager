@@ -279,7 +279,7 @@ export type CreditPackKey = 'credit_start' | 'credit_pro' | 'credit_max';
 export type CreditPack = { key: CreditPackKey; name: string; creditsAmount: number; price: number; isActive: boolean };
 export type CreditPackLinks = Record<CreditPackKey, string>;
 export type CreditPurchase = { id: string; creditPackKey: CreditPackKey; creditsAmount: number; price: number; status: string; credited: boolean };
-export type CreditUsageBreakdownItem = { key: string; label: string; creditsMilli: number };
+export type CreditUsageBreakdownItem = { key: string; label: string; creditsMilli: number; children?: CreditUsageBreakdownItem[] };
 export type CreditUsageStatistics = {
   todayCreditsMilli: number;
   weekCreditsMilli: number;

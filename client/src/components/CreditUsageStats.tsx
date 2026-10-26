@@ -32,9 +32,17 @@ export function CreditUsageStats({ statistics, loading = false, error = null, co
       {items.length ? (
         <div className="mt-2 space-y-1.5">
           {items.map((item) => (
-            <div key={item.key} className="flex items-center justify-between gap-3 text-sm">
-              <span className="min-w-0 truncate text-secondary">{item.label}</span>
-              <span className="shrink-0 font-semibold tabular-nums text-primary">{formatCreditsMilli(item.creditsMilli)}</span>
+            <div key={item.key} className="space-y-1">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="min-w-0 truncate text-secondary">{item.label}</span>
+                <span className="shrink-0 font-semibold tabular-nums text-primary">{formatCreditsMilli(item.creditsMilli)}</span>
+              </div>
+              {item.children?.map(child => (
+                <div key={child.key} className="ml-3 flex items-center justify-between gap-3 border-l border-slate-500/20 pl-3 text-xs">
+                  <span className="min-w-0 truncate text-muted">{child.label}</span>
+                  <span className="shrink-0 tabular-nums text-secondary">{formatCreditsMilli(child.creditsMilli)}</span>
+                </div>
+              ))}
             </div>
           ))}
         </div>
