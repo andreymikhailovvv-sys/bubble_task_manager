@@ -69,7 +69,8 @@ private fun nativeProjectColor(value:String):Color=runCatching{
 internal fun NativeGeneralAiChatPage(
     vm:HomeViewModel,userId:String?,dark:Boolean,
     quickAiMode:String?=null,quickAiRequestId:Int=0,
-    chatVisible:Boolean=true,onExit:()->Unit
+    chatVisible:Boolean=true,onExit:()->Unit,
+    onOpenTaskAi:(String)->Unit={}
 ){
     val state by vm.generalAi.collectAsStateWithLifecycle()
     val c=remember(dark){chatColors(dark)}
@@ -349,18 +350,32 @@ internal fun NativeGeneralAiChatPage(
                     verticalArrangement=Arrangement.spacedBy(11.dp)){
                     items(messages,key={m->m.id?:
                         m.role+"-"+messages.indexOf(m)} ){message->
-                        TaskChatBubble(message,c,context,
-                            onReply={reply=GeneralReply(message.id.orEmpty(),
-                                message.role,message.content)},
-                            onProposalAction={id,action->
-                                vm.applyGeneralAiProposal(id,action)
-                            },actionBusy=isBusy,
-                            onOpenDocument={id->
-                                vm.generalAiDocumentLink(id){url->
-                                    runCatching{context.startActivity(
-                                        Intent(Intent.ACTION_VIEW,Uri.parse(url)))}
+                        Column(verticalArrangement=Arrangement.spacedBy(5.dp)){
+                            TaskChatBubble(message,c,context,
+                                onReply={reply=GeneralReply(message.id.orEmpty(),
+                                    message.role,message.content)},
+                                onProposalAction={id,action->
+                                    vm.applyGeneralAiProposal(id,action)
+                                },actionBusy=isBusy,
+                                onOpenDocument={id->
+                                    vm.generalAiDocumentLink(id){url->
+                                        runCatching{context.startActivity(
+                                            Intent(Intent.ACTION_VIEW,Uri.parse(url)))}
+                                    }
+                                })
+                            message.monitoringTaskId?.takeIf{
+                                thread?.id==QUICK_AI_THREAD_ID
+                            }?.let{taskId->
+                                OutlinedButton(onClick={onOpenTaskAi(taskId)},
+                                    shape=RoundedCornerShape(12.dp),
+                                    modifier=Modifier.padding(start=6.dp)){
+                                    Icon(Icons.Default.OpenInNew,null,
+                                        modifier=Modifier.size(14.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Ответить в чате задачи",fontSize=11.sp)
                                 }
-                            })
+                            }
+                        }
                     }
                     if(state.pendingMessage!=null)item(key="pending-general-user"){
                         TaskChatBubble(state.pendingMessage!!,c,context,

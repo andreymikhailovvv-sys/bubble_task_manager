@@ -75,6 +75,7 @@ fun ModernWorkspace(
     search: (String) -> Unit,
     settings: () -> Unit,
     onOpenTask: (String) -> Unit,
+    onOpenTaskAi: (String) -> Unit,
     pagerState: PagerState,
     quickAiMode:String?=null,
     quickAiRequestId:Int=0,
@@ -109,7 +110,8 @@ fun ModernWorkspace(
                 NativeGeneralAiChatPage(vm=vm,userId=state.user?.id,dark=dark,
                     quickAiMode=quickAiMode,quickAiRequestId=quickAiRequestId,
                     chatVisible=pagerState.currentPage==2,
-                    onExit={pagerScope.launch{pagerState.animateScrollToPage(0)}})
+                    onExit={pagerScope.launch{pagerState.animateScrollToPage(0)}},
+                    onOpenTaskAi=onOpenTaskAi)
             }
             3 -> NativeNotesPage(vm=vm,colors=colors,dark=dark,modifier=Modifier.fillMaxSize())
             else -> {

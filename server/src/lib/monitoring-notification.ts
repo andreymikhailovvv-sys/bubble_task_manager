@@ -17,7 +17,7 @@ export function monitoringHeadline(answer: string, taskTitle: string): { headlin
 
 export function formatMonitoringAlert(taskTitle: string, answer: string) {
   const { headline, body } = monitoringHeadline(answer, taskTitle);
-  const context = `Мониторинг задачи «${taskTitle.trim().slice(0, 150)}»`;
+  const context = `✔️Мониторинг задачи «${taskTitle.trim().slice(0, 150)}»`;
   return {
     headline,
     context,

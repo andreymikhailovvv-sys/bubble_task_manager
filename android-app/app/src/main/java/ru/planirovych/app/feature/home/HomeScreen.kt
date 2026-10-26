@@ -202,6 +202,12 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                     vm.clearTaskError()
                 },
                 pagerState = pagerState,
+                onOpenTaskAi = { taskId ->
+                    if(state.tasks.any { it.id==taskId && it.parentTaskId==null }) {
+                        openedTaskId=null
+                        taskAiChatId=taskId
+                    }
+                },
                 quickAiMode=quickAiMode,
                 quickAiRequestId=quickAiRequestId,
                 modifier = Modifier.padding(padding),
