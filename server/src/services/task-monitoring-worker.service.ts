@@ -4,7 +4,7 @@ import { aiAssistantService } from './ai-assistant.service.js';
 import { requireMonitoredTask } from './task-monitoring.service.js';
 import { MONITORING_FALLBACK_QUESTION } from './task-monitoring-trigger.service.js';
 import { publishTaskMonitoringReply } from './task-monitoring-delivery.service.js';
-import { recoverMonitoredDeadlinesOnBoot } from './task-monitoring-schedule.service.js';
+import { recoverMonitoredDeadlinesOnBoot, MONITORING_INTRO_KIND, monitoringIntroEventKey } from './task-monitoring-schedule.service.js';
 import { registerTaskMonitoringWakeup } from './task-monitoring-wakeup.service.js';
 
 const MAX_AUTOMATIC_TASK_CALLS_PER_TICK = 8;
@@ -55,7 +55,7 @@ async function hasMonitoringProgressSince(trigger: {
 }
 
 /** Exactly one worker owns the delivery attempt. No implicit retry of paid AI calls. */
-async function deliver(run: Run, question: string, checkCurrent: () => Promise<boolean>, kind: 'trigger' | 'overdue' | 'subtask_completed') {
+async function deliver(run: Run, question: string, checkCurrent: () => Promise<boolean>, kind: 'trigger' | 'overdue' | 'subtask_completed' | 'monitoring_intro') {
   console.info('[TaskMonitoring] AI delivery starting', { runId: run.id, taskId: run.taskId });
   try {
     await requireMonitoredTask(run.userId, run.taskId);
@@ -80,6 +80,9 @@ async function deliver(run: Run, question: string, checkCurrent: () => Promise<b
         'Если в истории пользователь назвал точное время ответа или попросил напомнить через интервал, придерживайся именно этого времени в его часовом поясе. Не заменяй его произвольным часом.',
         'Если время не указано, выбери разумный интервал по дедлайну и следующему конкретному шагу. Не создавай повторяющихся пустых напоминаний и не назначай их, если задача завершена или пользователь отказался.',
         'Для уведомления начни ответ с отдельной первой строки: краткий конкретный призыв к действию или точный вопрос по задаче (до 90 символов). Не начинай с общих слов про мониторинг, напоминания или названия режима. Затем пустая строка и полезный основной текст. Например: Письмо Иванову отправлено? или Получил ответ от поддержки? Пришли его сюда.',
+        ...(kind === 'monitoring_intro' ? [
+          'Это ПЕРВОЕ и единственное вводное сообщение после включения мониторинга для этого цикла. Представь короткий план автономной помощи по задаче. Если есть несколько уже просроченных подзадач, упомяни их одним сообщением, но не пиши отдельное сообщение для каждой. Начни с одной ближайшей по сроку просроченной подзадачи, обозначь одно конкретное следующее действие и предложи помощь. Если просрочек нет, обозначь следующий полезный шаг по задаче. Не объявляй завершение без проверки и не засыпай пользователя напоминаниями.'
+        ] : []),
         ...(kind === 'subtask_completed' ? [
           'Пользователь завершил подзадачу. Отметь этот прогресс одной фразой, затем предложи конкретный следующий шаг из незакрытых подзадач. Если уместно, обнови статус задачи через add_monitoring_status. Не придумывай выполненные действия и не создавай дублирующих статусов.'
         ] : []),
@@ -186,10 +189,10 @@ export async function pollTaskMonitoring(now = new Date()) {
 
     if (remaining <= 0) return;
     const jobs = await prisma.taskMonitoringRun.findMany({
-      where: { kind: { in: ['overdue', 'subtask_completed'] }, state: 'scheduled', dueAt: { lte: now } },
+      where: { kind: { in: ['overdue', 'subtask_completed', MONITORING_INTRO_KIND] }, state: 'scheduled', dueAt: { lte: now } },
       orderBy: [{ dueAt: 'asc' }, { id: 'asc' }],
       take: remaining, select: {
-        id: true, taskId: true, userId: true, sourceTaskId: true, dueAt: true, kind: true
+        id: true, taskId: true, userId: true, sourceTaskId: true, dueAt: true, kind: true, eventKey: true
       }
     });
     for (const job of jobs) {
@@ -204,6 +207,66 @@ export async function pollTaskMonitoring(now = new Date()) {
         dueAt: job.dueAt.toISOString()
       });
       remaining -= 1;
+      if (job.kind === MONITORING_INTRO_KIND) {
+        const root = await prisma.task.findFirst({
+          where: {
+            id: job.taskId, userId: job.userId, aiMonitoringEnabled: true,
+            parentTaskId: null, collaborationId: null,
+            taskType: 'TASK', status: { not: 'DONE' }
+          },
+          select: { id: true, title: true, dueDate: true, aiMonitoringGeneration: true }
+        });
+        if (!root || job.eventKey !== monitoringIntroEventKey(root.id, root.aiMonitoringGeneration)) {
+          await markRun(job.id, 'cancelled');
+          continue;
+        }
+        const check = async () => Boolean(await prisma.task.findFirst({
+          where: {
+            id: root.id, userId: job.userId, aiMonitoringEnabled: true,
+            aiMonitoringGeneration: root.aiMonitoringGeneration,
+            status: { not: 'DONE' }, collaborationId: null
+          }, select: { id: true }
+        }));
+        const nowForIntro = new Date();
+        const overdueWhere = {
+          parentTaskId: root.id, userId: job.userId, status: { not: 'DONE' as const },
+          dueDate: { lt: nowForIntro }
+        };
+        const [overdueCount, overdue, upcoming] = await Promise.all([
+          prisma.task.count({ where: overdueWhere }),
+          prisma.task.findMany({
+            where: overdueWhere,
+            orderBy: [{ dueDate: 'desc' }, { createdAt: 'asc' }],
+            take: 30, select: { title: true, dueDate: true }
+          }),
+          prisma.task.findMany({
+            where: {
+              parentTaskId: root.id, userId: job.userId, status: { not: 'DONE' },
+              OR: [{ dueDate: null }, { dueDate: { gte: nowForIntro } }]
+            },
+            orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
+            take: 15, select: { title: true, dueDate: true }
+          })
+        ]);
+        const formatSteps = (items: typeof overdue) => items.map((item, i) =>
+          (i + 1) + '. ' + item.title +
+          (item.dueDate ? ' (срок UTC: ' + item.dueDate.toISOString() + ')' : '')
+        ).join('\n') || 'Нет';
+        const brief = [
+          'Пользователь только что включил автомониторинг. Это стартовый обзор, отправь ОДИН ответ.',
+          'Основная задача: ' + root.title,
+          'Дедлайн основной задачи: ' + (root.dueDate?.toISOString() ?? 'не установлен'),
+          'Просрочено незакрытых подзадач: ' + overdueCount,
+          'Просроченные подзадачи (сначала ближайшая к текущему моменту):\n' + formatSteps(overdue) +
+            (overdueCount > overdue.length ? '\nИ ещё ' + (overdueCount - overdue.length) + ' просроченных.' : ''),
+          'Другие незакрытые подзадачи:\n' + formatSteps(upcoming),
+          'Если есть просроченные, кратко перечисли их в одном ответе. Работу начинай с первой в списке просроченных; не создавай отдельные сообщения на каждую из них.',
+          'Если просроченных нет, сразу предложи один полезный следующий шаг. Следующие обращения делай по обычной схеме триггеров.'
+        ].join('\n\n');
+        await deliver({ id: job.id, userId: job.userId, taskId: job.taskId },
+          brief, check, 'monitoring_intro');
+        continue;
+      }
       if (job.kind === 'subtask_completed') {
         const completed = await prisma.task.findFirst({
           where: { id: job.sourceTaskId, parentTaskId: job.taskId, status: 'DONE', userId: job.userId },
@@ -250,7 +313,7 @@ async function armNextDeadline() {
   if (timer) { clearTimeout(timer); timer = null; }
   const [run, trigger] = await Promise.all([
     prisma.taskMonitoringRun.findFirst({
-      where: { kind: { in: ['overdue', 'subtask_completed'] }, state: 'scheduled', dueAt: { not: null } },
+      where: { kind: { in: ['overdue', 'subtask_completed', MONITORING_INTRO_KIND] }, state: 'scheduled', dueAt: { not: null } },
       orderBy: { dueAt: 'asc' }, select: { dueAt: true }
     }),
     prisma.taskMonitoringTrigger.findFirst({

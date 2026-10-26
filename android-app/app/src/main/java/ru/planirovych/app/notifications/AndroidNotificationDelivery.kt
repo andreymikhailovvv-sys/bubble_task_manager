@@ -168,15 +168,15 @@ object AndroidNotificationDelivery {
             lines.size>=2 && lines[0].isNotBlank()
         val headline=if(monitoring)lines[0].trim() else "Планировыч"
         val contextLine=if(monitoring)lines[1].trim() else content
-        val expanded=if(monitoring)
-            listOf(contextLine,lines.drop(2).joinToString("\n").trim())
-                .filter{it.isNotBlank()}.joinToString("\n\n")
-            else content
         val notification=Notification.Builder(context,CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_planirovych)
             .setContentTitle(headline)
             .setContentText(contextLine)
-            .setStyle(Notification.BigTextStyle().bigText(expanded))
+            .apply {
+                // Only the headline and monitored-task line belong in native
+                // notifications. The full AI answer remains in the task chat.
+                if(!monitoring)setStyle(Notification.BigTextStyle().bigText(content))
+            }
             .setContentIntent(pending)
             .setAutoCancel(true)
             .setCategory(Notification.CATEGORY_REMINDER)

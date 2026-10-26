@@ -10,7 +10,7 @@ import { formatMonitoringAlert } from '../lib/monitoring-notification.js';
  * prevents duplicate mirrors on retried execution.
  */
 export async function publishTaskMonitoringReply(input: {
-  userId: string; taskId: string; runId: string; kind: 'overdue' | 'trigger' | 'subtask_completed'; answer: string;
+  userId: string; taskId: string; runId: string; kind: 'overdue' | 'trigger' | 'subtask_completed' | 'monitoring_intro'; answer: string;
 }) {
   const task = await requireMonitoredTask(input.userId, input.taskId);
   const answer = input.answer.trim();
