@@ -55,7 +55,7 @@ async function hasMonitoringProgressSince(trigger: {
 }
 
 /** Exactly one worker owns the delivery attempt. No implicit retry of paid AI calls. */
-async function deliver(run: Run, question: string, checkCurrent: () => Promise<boolean>) {
+async function deliver(run: Run, question: string, checkCurrent: () => Promise<boolean>, kind: 'trigger' | 'overdue' | 'subtask_completed') {
   console.info('[TaskMonitoring] AI delivery starting', { runId: run.id, taskId: run.taskId });
   try {
     await requireMonitoredTask(run.userId, run.taskId);
@@ -81,7 +81,7 @@ async function deliver(run: Run, question: string, checkCurrent: () => Promise<b
         'Если время не указано, выбери разумный интервал по дедлайну и следующему конкретному шагу. Не создавай повторяющихся пустых напоминаний и не назначай их, если задача завершена или пользователь отказался.',
         'Не заявляй о внешних действиях без подтверждения.'
       ].join('\n'),
-      mode: 'fast', billingMode: 'dynamic', billingFeature: 'overdue_nudge'
+      mode: 'fast', billingMode: 'dynamic', billingFeature: 'task_monitoring'
     });
     // User can disable monitoring, finish or reschedule the source deadline,
     // or answer a follow-up while the model call is still in progress.
@@ -96,7 +96,7 @@ async function deliver(run: Run, question: string, checkCurrent: () => Promise<b
     // publishes a duplicate quick-chat message or notification.
     await publishTaskMonitoringReply({
       userId: run.userId, taskId: run.taskId, runId: run.id,
-      kind: question.startsWith('Пользователь пока не ответил') ? 'trigger' : 'overdue',
+      kind,
       answer: result.answer
     });
     await markRun(run.id, 'completed');
@@ -177,15 +177,15 @@ export async function pollTaskMonitoring(now = new Date()) {
       };
       await deliver({ id: row.id, taskId: trigger.taskId, userId: trigger.userId },
         'Пользователь пока не ответил на вопрос: ' + trigger.question +
-        '. Вежливо уточни в существующем чате задачи, что осталось сделать.', check);
+        '. Вежливо уточни в существующем чате задачи, что осталось сделать.', check, 'trigger');
     }
 
     if (remaining <= 0) return;
     const jobs = await prisma.taskMonitoringRun.findMany({
-      where: { kind: 'overdue', state: 'scheduled', dueAt: { lte: now } },
+      where: { kind: { in: ['overdue', 'subtask_completed'] }, state: 'scheduled', dueAt: { lte: now } },
       orderBy: [{ dueAt: 'asc' }, { id: 'asc' }],
       take: remaining, select: {
-        id: true, taskId: true, userId: true, sourceTaskId: true, dueAt: true
+        id: true, taskId: true, userId: true, sourceTaskId: true, dueAt: true, kind: true
       }
     });
     for (const job of jobs) {
@@ -207,7 +207,7 @@ export async function pollTaskMonitoring(now = new Date()) {
       if (!source) { await markRun(job.id, 'cancelled'); continue; }
       await deliver({ id: job.id, userId: job.userId, taskId: job.taskId },
         (source.id === job.taskId ? 'Просрочен срок задачи: ' : 'Просрочена подзадача: ') +
-        source.title + '. Дедлайн UTC: ' + job.dueAt.toISOString(), check);
+        source.title + '. Дедлайн UTC: ' + job.dueAt.toISOString(), check, 'overdue');
     }
   } finally {
     running = false;
@@ -222,7 +222,7 @@ async function armNextDeadline() {
   if (timer) { clearTimeout(timer); timer = null; }
   const [run, trigger] = await Promise.all([
     prisma.taskMonitoringRun.findFirst({
-      where: { kind: 'overdue', state: 'scheduled', dueAt: { not: null } },
+      where: { kind: { in: ['overdue', 'subtask_completed'] }, state: 'scheduled', dueAt: { not: null } },
       orderBy: { dueAt: 'asc' }, select: { dueAt: true }
     }),
     prisma.taskMonitoringTrigger.findFirst({
