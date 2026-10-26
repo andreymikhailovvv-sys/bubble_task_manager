@@ -1886,9 +1886,31 @@ ${escapeHtml(habit.icon || '✨')} ${escapeHtml(habit.name)}`);
       return;
     }
 
-    const updated = await prisma.task.updateMany({
-      where: { id: resolvedTaskId, userId, parentTaskId: subtask.parentTaskId },
-      data: { status: 'DONE', telegramNotifiedAt: null }
+    const updated = await prisma.$transaction(async tx => {
+      const result = await tx.task.updateMany({
+        where: { id: resolvedTaskId, userId, parentTaskId: subtask.parentTaskId, status: { not: 'DONE' } },
+        data: { status: 'DONE', telegramNotifiedAt: null }
+      });
+      if (result.count) {
+        const root = await tx.task.findFirst({
+          where: { id: subtask.parentTaskId, userId, aiMonitoringEnabled: true,
+            parentTaskId: null, collaborationId: null, status: { not: 'DONE' }, taskType: 'TASK' },
+          select: { id: true }
+        });
+        if (root) {
+          const changed = await tx.task.findUniqueOrThrow({
+            where: { id: resolvedTaskId }, select: { updatedAt: true }
+          });
+          await tx.taskMonitoringRun.createMany({
+            data: [{
+              taskId: root.id, userId, sourceTaskId: resolvedTaskId,
+              eventKey: 'subtask-completed:' + resolvedTaskId + ':' + changed.updatedAt.toISOString(),
+              kind: 'subtask_completed', state: 'scheduled', dueAt: new Date()
+            }], skipDuplicates: true
+          });
+        }
+      }
+      return result;
     });
     if (updated.count) await refreshMonitoringAfterExternalWrite([resolvedTaskId]);
     if (updated.count) console.info('[Task] status mutation', { source: 'telegram:callback', userId, taskId: resolvedTaskId, parentTaskId: subtask.parentTaskId, afterStatus: 'DONE' });
