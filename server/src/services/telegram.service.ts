@@ -2351,7 +2351,7 @@ export const telegramService = {
       });
     }
   },
-  async notifyMonitoringTaskReply(input: { taskId: string; userId: string; taskTitle: string; answer: string; kind: 'overdue' | 'trigger' | 'subtask_completed' }): Promise<boolean> {
+  async notifyMonitoringTaskReply(input: { taskId: string; userId: string; taskTitle: string; answer: string; kind: 'overdue' | 'trigger' | 'subtask_completed' | 'monitoring_intro' }): Promise<boolean> {
     if (!BOT_TOKEN) return false;
     const owner = await prisma.user.findUnique({
       where: { id: input.userId }, select: { telegramChatId: true }
