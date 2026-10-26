@@ -4213,7 +4213,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           className={`miniapp-slide-backdrop ${isWebRuntime ? 'miniapp-web-task-backdrop' : ''} fixed inset-0 ${isAiChatOpen ? 'z-[120]' : 'z-[90]'} flex items-end bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('task')}`}
           style={isWebRuntime ? { top: webVisualViewport.top, bottom: 'auto', height: webVisualViewport.height } : undefined}
         >
-          <div className="miniapp-slide-panel miniapp-focus-panel miniapp-focus-task-panel relative max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-2xl sm:rounded-[2rem]">
+          <div className={`miniapp-slide-panel miniapp-focus-panel miniapp-focus-task-panel relative max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-2xl sm:rounded-[2rem] ${isTaskSettingsOpen ? 'miniapp-focus-task-panel--settings-open' : ''}`}>
             <div className="miniapp-focus-task-scroll-layout flex max-h-[calc(94vh-2rem)] min-h-0 flex-col sm:max-h-[calc(88vh-2rem)]">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
@@ -5176,7 +5176,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
       {isCreateTaskModalOpen ? (
         <div className={`miniapp-slide-backdrop fixed inset-0 z-50 flex items-end bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('create-task')}`}>
-          <div className="relative miniapp-slide-panel miniapp-focus-panel miniapp-focus-task-panel max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-2xl sm:rounded-[2rem]">
+          <div className={`relative miniapp-slide-panel miniapp-focus-panel miniapp-focus-task-panel max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-2xl sm:rounded-[2rem] ${isCreateTaskSettingsOpen ? 'miniapp-focus-task-panel--settings-open' : ''}`}>
             <div className="flex max-h-[calc(94vh-2rem)] min-h-0 flex-col sm:max-h-[calc(88vh-2rem)]">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">{createEditorType === 'event' ? 'Новое событие' : 'Новая задача'}</p>

@@ -30,7 +30,9 @@ test('miniapp, mobile web and desktop use the same non-AI schedule builder', asy
   assert.match(control, /'MONTHLY'/);
   assert.match(control, /onParseWithAi/);
   assert.match(desktop, /buildManualRecurrence\(period, slots, timeZone\)/);
-  assert.match(styles, /A shared, restrained recurrence palette/);
+  assert.match(styles, /Unified soft lavender recurrence controls/);
+  assert.match(styles, /#78609d/);
+  assert.doesNotMatch(styles.slice(styles.indexOf('Unified soft lavender recurrence controls')), /#355c69/);
 });
 
 test('native Android supports manual JSON schedule both on creation and task edit', async () => {
@@ -48,4 +50,31 @@ test('native Android supports manual JSON schedule both on creation and task edi
   assert.match(focus, /NativeTaskRecurrenceEditor\(/);
   assert.match(focus, /if\(recurring != task\.isRecurring\)put\("isRecurring",recurring\)/);
   assert.match(focus, /put\("recurrenceJson",recurrenceRule\?:JsonNull\)/);
+});
+
+
+test('desktop existing task focus supports the same manual choice and preserves its autosave', async () => {
+  const app = await read('../../client/src/App.tsx');
+  const focus = app.slice(app.indexOf("{isFocusedSettingsOpen ? ("), app.indexOf("focused-task-importance", app.indexOf("{isFocusedSettingsOpen ? (")));
+  assert.ok(focus.includes('TaskRecurrenceConfigurator'));
+  assert.ok(focus.includes('key={focusedTask.id}'));
+  assert.ok(focus.includes('onParseWithAi={() => void applyFocusedRecurrence()}'));
+  assert.ok(focus.includes('setFocusedDraft((previous) => previous ?'));
+  assert.ok(focus.includes('setFocusedSaveError(null)'));
+  assert.match(app, /focusedTaskEditableSnapshot\(normalized, isAiNotificationsDefaultEnabled\)/);
+});
+
+test('mobile task and create dialogs grow when repeat settings open without exceeding viewport', async () => {
+  const [mini, css] = await Promise.all([
+    read('../../client/src/MiniApp.tsx'),
+    read('../../client/src/styles.css')
+  ]);
+  assert.ok(mini.includes("isTaskSettingsOpen ? 'miniapp-focus-task-panel--settings-open' : ''"));
+  assert.ok(mini.includes("isCreateTaskSettingsOpen ? 'miniapp-focus-task-panel--settings-open' : ''"));
+  assert.match(css, /height: min\(90dvh, 790px\)/);
+  assert.match(css, /max-height: min\(72dvh, calc\(100% - 4\.5rem\)\)/);
+  assert.match(css, /miniapp-create-settings-panel \{/);
+  assert.match(css, /max-height: min\(70dvh, calc\(100dvh - 7\.5rem\)\)/);
+  assert.match(css, /overflow-y: auto/);
+  assert.match(css, /\.miniapp-web-task-backdrop \.miniapp-focus-task-panel--settings-open/);
 });
