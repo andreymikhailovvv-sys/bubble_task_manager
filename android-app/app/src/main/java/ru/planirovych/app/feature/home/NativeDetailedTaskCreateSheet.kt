@@ -106,6 +106,8 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
     var recurring by remember{mutableStateOf(false)}
     var recurrenceText by remember{mutableStateOf("")}
     var parsed by remember{mutableStateOf<RecurrenceParseResponse?>(null)}
+    var manualRule by remember(type){mutableStateOf<JsonObject?>(null)}
+    var manualSummary by remember(type){mutableStateOf<String?>(null)}
     var aiNotifications by remember{mutableStateOf(true)}
     var aiMonitoring by remember{mutableStateOf(false)}
     var attachmentLoading by remember { mutableStateOf(false) }
@@ -360,10 +362,11 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
                         else JsonPrimitive(notifyBefore!!))
                     put("importance",importance)
                     put("isRecurring",recurring)
-                    if(recurring&&parsed!=null){
-                        put("recurrenceText",recurrenceText.trim())
-                        put("recurrenceJson",parsed!!.schedule)
-                        put("recurrenceSummary",parsed!!.summary)
+                    if(recurring&&(parsed!=null||manualRule!=null)){
+                        put("recurrenceText",if(parsed!=null)recurrenceText.trim()
+                            else manualSummary.orEmpty())
+                        put("recurrenceJson",parsed?.schedule?:manualRule!!)
+                        put("recurrenceSummary",parsed?.summary?:manualSummary.orEmpty())
                         put("recurrenceUntil",
                             parsed!!.schedule["until"] ?: JsonNull)
                     }
@@ -379,7 +382,7 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
             },modifier=Modifier.fillMaxWidth().padding(bottom=12.dp),
                 shape=CircleShape,
                 enabled=!state.taskBusy&&!attachmentLoading&&title.isNotBlank()&&
-                    (!recurring || parsed!=null)){
+                    (!recurring || parsed!=null || manualRule!=null)){
                 if(state.taskBusy)CircularProgressIndicator(Modifier.size(16.dp),
                     color=Color.White,strokeWidth=2.dp)
                 else Text(if(isEvent)"Создать событие" else "Создать задачу",
@@ -415,7 +418,7 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
                     Row(verticalAlignment=Alignment.CenterVertically){
                         Checkbox(recurring,onCheckedChange={
                             recurring=it
-                            if(!it)parsed=null
+                            if(!it){parsed=null;manualRule=null;manualSummary=null}
                         })
                         Text("Повторять",color=c.text)
                     }
@@ -430,24 +433,23 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
                         }
                     }
                     if(recurring){
-                        OutlinedTextField(value=recurrenceText,onValueChange={
-                            recurrenceText=it;parsed=null;vm.clearRecurrenceError()
-                        },label={Text("Как должно повторяться")},
-                            placeholder={Text("Например: каждый вторник в 17:00")},
-                            modifier=Modifier.fillMaxWidth(),minLines=2,maxLines=4)
-                        Button(onClick={
-                            vm.parseCreationRecurrence(recurrenceText){parsed=it}
-                        },enabled=recurrenceText.isNotBlank()&&!state.recurrenceLoading){
-                            Text(if(state.recurrenceLoading)"Обработка…" else "Применить расписание")
-                        }
-                        parsed?.let{
-                            Text(it.summary,color=c.teal,fontSize=12.sp)
-                        }
-                        state.recurrenceError?.let{
-                            Text(it,color=MaterialTheme.colorScheme.error,fontSize=12.sp)
-                        }
-                        Text("Повторение создаётся только после применения расписания.",
-                            color=c.muted,fontSize=11.sp)
+                        NativeTaskRecurrenceEditor(
+                            rule=manualRule?:parsed?.schedule,
+                            summary=manualSummary?:parsed?.summary,
+                            prompt=recurrenceText,
+                            onPrompt={recurrenceText=it;parsed=null;manualRule=null;manualSummary=null;vm.clearRecurrenceError()},
+                            onManual={rule,summary->
+                                manualRule=rule;manualSummary=summary;parsed=null
+                            },
+                            onParse={
+                                vm.parseCreationRecurrence(recurrenceText){result->
+                                    parsed=result;manualRule=null;manualSummary=null
+                                }
+                            },
+                            parsing=state.recurrenceLoading,
+                            error=state.recurrenceError,
+                            isEvent=isEvent,dark=dark
+                        )
                     }
                 }
             },
