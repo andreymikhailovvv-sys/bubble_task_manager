@@ -4234,7 +4234,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               </div>
 
               {isTaskSettingsOpen ? (
-                <div className="miniapp-task-settings-panel absolute left-4 right-4 top-14 z-50 max-h-[calc(94vh-5rem)] space-y-4 overflow-y-auto rounded-3xl border p-4 shadow-2xl sm:left-auto sm:max-h-[calc(88vh-5rem)] sm:w-[360px]">
+                <div className="miniapp-task-settings-panel miniapp-settings-scroll-area invisible-scrollbar absolute left-4 right-4 top-14 z-50 space-y-4 overflow-y-auto rounded-3xl border p-4 shadow-2xl sm:left-auto sm:w-[360px]">
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="text-sm font-semibold">Настройки {openedTask.taskType === 'EVENT' ? 'события' : 'задачи'}</h3>
                     <button type="button" className="miniapp-focus-icon-button" onClick={() => setIsTaskSettingsOpen(false)} aria-label="Закрыть настройки">
@@ -5187,8 +5187,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <button type="button" onClick={() => closeMiniWindowWithMotion('create-task', () => setIsCreateTaskModalOpen(false))} className="miniapp-focus-icon-button" aria-label="Закрыть окно">
                     <X size={16} />
                   </button>
+                </div>
+              </div>
+
                   {isCreateTaskSettingsOpen ? (
-                    <div className="miniapp-create-settings-panel absolute right-0 top-[calc(100%+0.5rem)] z-[175] w-72 rounded-2xl border p-3 text-sm shadow-2xl">
+                    <div className="miniapp-create-settings-panel miniapp-settings-scroll-area invisible-scrollbar absolute left-4 right-4 top-16 z-[175] min-h-0 overflow-y-auto rounded-2xl border p-3 text-sm shadow-2xl sm:left-auto sm:w-[360px]">
                       <label className="flex items-center gap-2 font-medium">
                         <input
                           type="checkbox"
@@ -5218,8 +5221,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       ) : null}
                     </div>
                   ) : null}
-                </div>
-              </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto pb-24 pr-1">
                 <textarea
