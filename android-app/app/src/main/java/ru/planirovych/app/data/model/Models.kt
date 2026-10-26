@@ -148,6 +148,7 @@ data class TaskAiChatMessage(
     val authorColor:String?=null,
     val recipientName:String?=null,
     val messageKind:String?=null,
+    val monitoringTaskId:String?=null,
     val creditsSpentMilli:Long?=null,
     val webSources:List<Pair<String,String>> = emptyList(),
     val taskProposal: kotlinx.serialization.json.JsonObject? = null,
