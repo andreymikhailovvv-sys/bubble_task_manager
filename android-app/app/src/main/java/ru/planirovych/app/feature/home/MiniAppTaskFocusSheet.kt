@@ -85,6 +85,12 @@ fun MiniAppTaskFocusSheet(
     var importance by remember(task.id){mutableIntStateOf(task.importance.coerceIn(1,5))}
     var notifyMinutes by remember(task.id){mutableStateOf(task.notifyBeforeMinutes)}
     var aiNotifications by remember(task.id){mutableStateOf(task.aiNotificationsEnabled)}
+    var recurring by remember(task.id){mutableStateOf(task.isRecurring)}
+    var recurrenceText by remember(task.id){mutableStateOf(task.recurrenceText.orEmpty())}
+    var recurrenceRule by remember(task.id){mutableStateOf(task.recurrenceJson)}
+    var recurrenceSummary by remember(task.id){mutableStateOf(task.recurrenceSummary)}
+    var recurrenceUntil by remember(task.id){mutableStateOf(task.recurrenceUntil)}
+    var recurrenceError by remember(task.id){mutableStateOf<String?>(null)}
     var showDone by remember(task.id){mutableStateOf(false)}
     var order by remember(task.id){mutableStateOf(FocusOrder.URGENCY)}
     var orderOpen by remember{mutableStateOf(false)}
@@ -116,6 +122,22 @@ fun MiniAppTaskFocusSheet(
                 }
                 if(aiNotifications!=task.aiNotificationsEnabled)
                     put("aiNotificationsEnabled",aiNotifications)
+                if(recurring != task.isRecurring)put("isRecurring",recurring)
+                if(!recurring && task.isRecurring){
+                    put("recurrenceText",JsonNull)
+                    put("recurrenceJson",JsonNull)
+                    put("recurrenceSummary",JsonNull)
+                    put("recurrenceUntil",JsonNull)
+                }else if(recurring){
+                    if(recurrenceText!=task.recurrenceText.orEmpty())
+                        put("recurrenceText",recurrenceText)
+                    if(recurrenceRule!=task.recurrenceJson)
+                        put("recurrenceJson",recurrenceRule?:JsonNull)
+                    if(recurrenceSummary!=task.recurrenceSummary)
+                        put("recurrenceSummary",recurrenceSummary?.let(::JsonPrimitive) ?: JsonNull)
+                    if(recurrenceUntil!=task.recurrenceUntil)
+                        put("recurrenceUntil",recurrenceUntil?.let(::JsonPrimitive) ?: JsonNull)
+                }
             }
             if(changes.isEmpty())after()
             else {
@@ -354,6 +376,34 @@ fun MiniAppTaskFocusSheet(
         onNotify={notifyMinutes=it},
         aiNotifications=aiNotifications,
         onAiNotifications={aiNotifications=it},
+        recurring=recurring,
+        onRecurring={
+            recurring=it
+            if(!it){recurrenceText="";recurrenceRule=null
+                recurrenceSummary=null;recurrenceUntil=null}
+        },
+        recurrenceText=recurrenceText,
+        recurrenceRule=recurrenceRule,
+        recurrenceSummary=recurrenceSummary,
+        recurrenceError=recurrenceError,
+        onRecurrenceText={recurrenceText=it;recurrenceError=null},
+        onManualRecurrence={rule,summary->
+            recurrenceRule=rule;recurrenceText=summary
+            recurrenceSummary=summary;recurrenceUntil=null
+            if(recurrenceRule != rule)dueDate=null
+            recurrenceError=null
+        },
+        onParseRecurrence={
+            vm.parseCreationRecurrence(recurrenceText){result->
+                recurrenceRule=result.schedule
+                recurrenceSummary=result.summary
+                recurrenceUntil=(result.schedule["until"] as? JsonPrimitive)?.contentOrNull
+                dueDate=result.nextDueDate
+                recurrenceError=null
+            }
+        },
+        recurrenceBusy=state.recurrenceLoading,
+        dark=dark,
         importance=importance,
         onImportance={importance=it},
         onClose={settingsOpen=false},
@@ -393,6 +443,17 @@ private fun FocusTaskSettingsDialog(
     onNotify: (Int?) -> Unit,
     aiNotifications: Boolean,
     onAiNotifications: (Boolean) -> Unit,
+    recurring:Boolean,
+    onRecurring:(Boolean)->Unit,
+    recurrenceText:String,
+    recurrenceRule:JsonObject?,
+    recurrenceSummary:String?,
+    recurrenceError:String?,
+    onRecurrenceText:(String)->Unit,
+    onManualRecurrence:(JsonObject,String)->Unit,
+    onParseRecurrence:()->Unit,
+    recurrenceBusy:Boolean,
+    dark:Boolean,
     importance: Int,
     onImportance: (Int) -> Unit,
     onClose: () -> Unit,
@@ -497,15 +558,20 @@ private fun FocusTaskSettingsDialog(
                         }
                     }
                     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                        Checkbox(checked=task.isRecurring,onCheckedChange=null,
+                        Checkbox(checked=recurring,onCheckedChange=onRecurring,
                             modifier=Modifier.size(30.dp))
                         Spacer(Modifier.width(7.dp))
-                        Text("повторять",color=c.text,fontSize=13.sp)
+                        Text("повторять",color=c.text,fontSize=13.sp,
+                            modifier=Modifier.clickable{onRecurring(!recurring)})
                     }
-                    if(task.isRecurring) {
-                        Text("Повторение: "+(task.recurrenceSummary ?: "включено")+
-                            ". Изменить расписание повторений можно в Mini App.",
-                            fontSize=11.sp,color=c.muted,lineHeight=16.sp)
+                    if(recurring){
+                        NativeTaskRecurrenceEditor(
+                            rule=recurrenceRule,summary=recurrenceSummary,
+                            prompt=recurrenceText,onPrompt=onRecurrenceText,
+                            onManual=onManualRecurrence,onParse=onParseRecurrence,
+                            parsing=recurrenceBusy,error=recurrenceError,
+                            isEvent=task.taskType==TaskType.EVENT,dark=dark
+                        )
                     }
                     if(task.taskType!=TaskType.EVENT) {
                         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {

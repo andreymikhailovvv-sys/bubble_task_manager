@@ -10,6 +10,7 @@ import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
 
 import { TaskMonitoringStatuses } from './components/TaskMonitoringStatuses';
 import { TaskMonitoringTriggerChips } from './components/TaskMonitoringTriggerChips';
+import { TaskRecurrenceConfigurator } from './components/TaskRecurrenceConfigurator';
 import { TaskMonitoringActionBadge } from './components/TaskMonitoringActionBadge';
 import { AiCheckupScheduleSettings } from './components/AiCheckupScheduleSettings';
 import { MiniAppStandaloneNoteEditor } from './components/MiniAppStandaloneNoteEditor';
@@ -4297,22 +4298,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       уведомления от ИИ
                     </label> : null}
                     {openedTaskDraft.isRecurring ? (
-                      <div className="rounded-2xl border border-violet-200/70 p-2 text-xs">
-                        <p className="mb-1 text-slate-500">Опишите как должно повторяться {openedTask.taskType === 'EVENT' ? 'событие' : 'задача'}</p>
-                        <textarea
-                          className="miniapp-task-text-field min-h-16 w-full rounded-xl border px-2 py-2 text-sm"
-                          placeholder="Например: каждый вторник в 17:00"
-                          value={openedTaskDraft.recurrenceText ?? ''}
-                          onChange={(event) => onChangeDraft(openedTask.id, { recurrenceText: event.target.value })}
-                        />
-                        <div className="mt-2 flex items-center gap-2">
-                          <button type="button" className="recurrence-send-button rounded px-2 py-1 text-xs font-semibold disabled:opacity-70" onClick={() => void applyTaskRecurrence(openedTask.id)} disabled={taskRecurrenceLoading}>
-                            {taskRecurrenceLoading ? '...' : 'Отправить'}
-                          </button>
-                          <p className="text-[11px] text-emerald-500">{openedTaskDraft.recurrenceSummary ?? ''}</p>
-                        </div>
-                        <p className="mt-1 text-[11px] text-slate-500">{taskRecurrenceNextDueLabel ? `Ближайший срок: ${taskRecurrenceNextDueLabel}` : ''}</p>
-                      </div>
+                      <TaskRecurrenceConfigurator key={openedTask.id} value={openedTaskDraft}
+                        onChange={(patch) => onChangeDraft(openedTask.id, patch)}
+                        onParseWithAi={() => void applyTaskRecurrence(openedTask.id)}
+                        parsing={taskRecurrenceLoading} nextDueLabel={taskRecurrenceNextDueLabel}
+                        isEvent={openedTask.taskType === 'EVENT'} />
                     ) : null}
                   </div>
                   {openedTask.taskType !== 'EVENT' ? <div>
@@ -5220,22 +5210,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                         уведомления от ИИ
                       </label> : null}
                       {createTaskDraft.isRecurring ? (
-                        <div className="mt-3 rounded-2xl border border-violet-200/70 p-2 text-xs">
-                          <p className="mb-1 text-slate-500">Опишите как должно повторяться {createEditorType === 'event' ? 'событие' : 'задача'}</p>
-                          <textarea
-                            className="miniapp-task-text-field min-h-16 w-full rounded-xl border px-2 py-2 text-sm"
-                            placeholder="Например: каждый вторник в 17:00"
-                            value={createTaskDraft.recurrenceText ?? ''}
-                            onChange={(event) => setCreateTaskDraft((prev) => ({ ...prev, recurrenceText: event.target.value }))}
-                          />
-                          <div className="mt-2 flex items-center gap-2">
-                            <button type="button" className="recurrence-send-button rounded px-2 py-1 text-xs font-semibold disabled:opacity-70" onClick={() => void applyCreateTaskRecurrence()} disabled={createTaskRecurrenceLoading}>
-                              {createTaskRecurrenceLoading ? '...' : 'Отправить'}
-                            </button>
-                            <p className="text-[11px] text-emerald-500">{createTaskDraft.recurrenceSummary ?? ''}</p>
-                          </div>
-                          <p className="mt-1 text-[11px] text-slate-500">{createTaskRecurrenceNextDueLabel ? `Ближайший срок: ${createTaskRecurrenceNextDueLabel}` : ''}</p>
-                        </div>
+                        <TaskRecurrenceConfigurator key={createEditorType} value={createTaskDraft}
+                          onChange={(patch) => setCreateTaskDraft((prev) => ({ ...prev, ...patch }))}
+                          onParseWithAi={() => void applyCreateTaskRecurrence()}
+                          parsing={createTaskRecurrenceLoading} nextDueLabel={createTaskRecurrenceNextDueLabel}
+                          isEvent={createEditorType === 'event'} />
                       ) : null}
                     </div>
                   ) : null}
