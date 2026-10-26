@@ -1,4 +1,4 @@
-import { CalendarDays, Check, PanelsTopLeft, Ticket, X } from 'lucide-react';
+import { BellRing, CalendarDays, Check, PanelsTopLeft, Ticket, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -381,9 +381,10 @@ export function DateTimePickerWithApply({
                       <div className="mt-5 space-y-1">
                         {dayTasks.slice(0, 3).map((task) => {
                           const isEvent = task.taskType === 'EVENT';
+                          const isReminder = task.taskType === 'REMINDER';
                           return (
-                            <div key={task.id} className={`timeline-preview-task-pill truncate rounded px-1 py-0.5 text-[9px] leading-tight ${isEvent ? 'timeline-preview-event-pill' : task.isSubtask ? 'timeline-preview-subtask-pill' : 'text-white'}`} style={task.isSubtask ? { borderLeft: `3px solid ${task.sphereColor ?? '#94a3b8'}` } : isEvent ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
-                              {isEvent ? <Ticket size={10} className="mr-1 inline align-[-2px]" /> : null}
+                            <div key={task.id} className={`timeline-preview-task-pill truncate rounded px-1 py-0.5 text-[9px] leading-tight ${isReminder ? 'timeline-preview-reminder-pill' : isEvent ? 'timeline-preview-event-pill' : task.isSubtask ? 'timeline-preview-subtask-pill' : 'text-white'}`} style={task.isSubtask ? { borderLeft: `3px solid ${task.sphereColor ?? '#94a3b8'}` } : (isEvent || isReminder) ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
+                              {isReminder ? <BellRing size={10} className="mr-1 inline align-[-2px]" /> : isEvent ? <Ticket size={10} className="mr-1 inline align-[-2px]" /> : null}
                               {task.title}
                             </div>
                           );
@@ -426,9 +427,10 @@ export function DateTimePickerWithApply({
                             <div className="min-h-4 min-w-0 flex-1 space-y-1 overflow-hidden">
                               {tasks.length === 0 ? <p className="text-xs text-subtle">Свободно</p> : tasks.map((task) => {
                                 const isEvent = task.taskType === 'EVENT';
+                          const isReminder = task.taskType === 'REMINDER';
                                 return (
-                                  <div key={task.id} className={`timeline-preview-task-pill truncate rounded px-1.5 py-0.5 text-[10px] ${isEvent ? 'timeline-preview-event-pill' : task.isSubtask ? 'timeline-preview-subtask-pill' : 'text-white'}`} style={task.isSubtask ? { borderLeft: `3px solid ${task.sphereColor ?? '#94a3b8'}` } : isEvent ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
-                                    {isEvent ? <Ticket size={10} className="mr-1 inline align-[-2px]" /> : null}
+                                  <div key={task.id} className={`timeline-preview-task-pill truncate rounded px-1.5 py-0.5 text-[10px] ${isReminder ? 'timeline-preview-reminder-pill' : isEvent ? 'timeline-preview-event-pill' : task.isSubtask ? 'timeline-preview-subtask-pill' : 'text-white'}`} style={task.isSubtask ? { borderLeft: `3px solid ${task.sphereColor ?? '#94a3b8'}` } : (isEvent || isReminder) ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
+                                    {isReminder ? <BellRing size={10} className="mr-1 inline align-[-2px]" /> : isEvent ? <Ticket size={10} className="mr-1 inline align-[-2px]" /> : null}
                                     {task.title}
                                   </div>
                                 );

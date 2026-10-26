@@ -2343,6 +2343,7 @@ export default function App() {
     const attachmentPreviews = await makeAiAttachmentPreviews(aiPendingFiles);
     const nextDialog = [...previousDialog, { id: clientRequestId, role: 'user' as const, content: userContent, attachmentPreviews, ...(focusedTask.isCollaborative ? { authorName: currentUser?.name || currentUser?.username || 'Вы', authorColor: focusedTask.collaborationColor } : {}) }];
     setAiDialogByTask((prev) => ({ ...prev, [taskId]: nextDialog }));
+    setReplyToAiTask(null);
     setAiDraft('');
     setTaskAiUploadProgress(null);
     setAiError(null);
@@ -2365,7 +2366,6 @@ export default function App() {
         ...prev,
         [taskId]: [...(prev[taskId] ?? nextDialog), { id: crypto.randomUUID(), role: 'assistant', content: `${result.answer}${actionSummary}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined }]
       }));
-      setReplyToAiTask(null);
       try {
         await load();
       } catch (loadError) {
@@ -2729,6 +2729,7 @@ ${allContext}`,
     const clientRequestId = crypto.randomUUID();
     const attachmentPreviews = await makeAiAttachmentPreviews(focusAiPendingFiles);
     setFocusAiMessages((prev) => [...prev, { id: clientRequestId, role: 'user', content: userContent, attachmentPreviews }]);
+    setReplyToFocusAi(null);
     setFocusAiDraft('');
     setFocusAiUploadProgress(null);
     setFocusAiError(null);
@@ -2739,7 +2740,6 @@ ${allContext}`,
     try {
       const result = await askTaskAssistant(currentTask.id, { clientRequestId, question: contextualQuestion, userMessage: userContent, model: focusAiModel, attachments: attachmentsPayload, skipEfficiencyBonus: true }, setFocusAiProgress, setFocusAiUploadProgress);
       setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: result.answer, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined }]);
-      setReplyToFocusAi(null);
       await refreshAiCredits();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось получить ответ ИИ';
@@ -3092,6 +3092,8 @@ ${allContext}`,
     const userContent = serializeAiReply(fileNames.length ? `${question || 'Сообщение с вложением'}\n\n📎 Файлы: ${fileNames.join(', ')}` : question, replyTarget);
     const attachmentPreviews = quick ? [] : await makeAiAttachmentPreviews(aiChatPendingFiles);
     const userMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'user', content: userContent, createdAt: new Date().toISOString(), attachmentPreviews };
+    if (quick) setReplyToQuickAi(null);
+    else setReplyToAiChat(null);
     const history = quick
       ? orderAiChatMessagesChronologically(quickAiChatMessages.filter(message => !message.monitoringTaskId)).slice(-20)
       : (activeAiChat?.messages ?? []);
@@ -3145,8 +3147,6 @@ ${allContext}`,
           }));
         }
       }
-      if (quick) setReplyToQuickAi(null);
-      else setReplyToAiChat(null);
       if (quick) window.requestAnimationFrame(scrollQuickAiChatToBottom);
       if (result.taskDataChanged) await load();
       await refreshAiCredits();
@@ -4767,7 +4767,7 @@ ${allContext}`,
       setTimelineOverdueBulkPostponeLoading(null);
     }
   };
-  const timelinePickerTasks = [...activeTasks, ...subtasks.filter((task) => task.status !== 'DONE')].map((task) => ({
+  const timelinePickerTasks = [...activeTimelineItems, ...subtasks.filter((task) => task.status !== 'DONE')].map((task) => ({
     id: task.id,
     title: task.title,
     dueDate: task.dueDate,
@@ -5851,6 +5851,7 @@ ${allContext}`,
               className="h-full"
               themeMode={effectiveThemeMode}
             tasks={visibleTasks}
+            timelinePreviewTasks={activeTimelineItems}
             spheres={visibleSpheres}
             rankingMode="coefficient"
             subtaskMap={displayedSubtaskMap}
@@ -7117,7 +7118,6 @@ ${allContext}`,
               <div className="mb-3 flex shrink-0 items-start justify-between gap-3 pr-32">
                 <div>
                   <p className="flex items-center gap-2 text-sm font-semibold ai-panel-title"><Bot size={16} /> Помощь ИИ</p>
-                  <p className="mt-1 text-xs text-muted">{focusedTask.title}</p>
                 </div>
                 <TaskMonitoringStatuses taskId={focusedTask.id}
                   enabled={focusedTask.aiMonitoringEnabled === true}
@@ -7931,7 +7931,6 @@ ${allContext}`,
             <div className="mb-3 flex items-center justify-between">
               <div>
                 <p className="flex items-center gap-2 text-base font-semibold ai-panel-title"><Bot size={18} /> Полноэкранный диалог с ИИ</p>
-                <p className="text-xs text-muted">{focusedTask.title}</p>
               </div>
               <div className="flex items-center gap-2">
                 <TaskMonitoringStatuses taskId={focusedTask.id}
