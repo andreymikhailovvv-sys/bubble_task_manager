@@ -163,11 +163,20 @@ object AndroidNotificationDelivery {
         val requestCode=(account+":"+id).hashCode()
         val pending=PendingIntent.getActivity(context,requestCode,destination,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val lines=content.lines()
+        val monitoring=eventKey?.startsWith("monitoring:")==true &&
+            lines.size>=2 && lines[0].isNotBlank()
+        val headline=if(monitoring)lines[0].trim() else "Планировыч"
+        val contextLine=if(monitoring)lines[1].trim() else content
+        val expanded=if(monitoring)
+            listOf(contextLine,lines.drop(2).joinToString("\\n").trim())
+                .filter{it.isNotBlank()}.joinToString("\\n\\n")
+            else content
         val notification=Notification.Builder(context,CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_planirovych)
-            .setContentTitle("Планировыч")
-            .setContentText(content)
-            .setStyle(Notification.BigTextStyle().bigText(content))
+            .setContentTitle(headline)
+            .setContentText(contextLine)
+            .setStyle(Notification.BigTextStyle().bigText(expanded))
             .setContentIntent(pending)
             .setAutoCancel(true)
             .setCategory(Notification.CATEGORY_REMINDER)
