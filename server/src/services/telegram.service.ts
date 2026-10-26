@@ -13,6 +13,7 @@ import { telegramFetch } from '../lib/telegram-fetch.js';
 import { FormData } from 'undici';
 import { AccountRegistrationError, accountRegistrationService, validateAccountLogin, validateAccountPassword } from './account-registration.service.js';
 import { formatCreditsSpent } from './ai-billing-notification.service.js';
+import { formatMonitoringAlert } from '../lib/monitoring-notification.js';
 import { formatTelegramTaskChanges } from '../lib/telegram-task-change-receipt.js';
 
 const TELEGRAM_API = 'https://api.telegram.org';
@@ -2327,18 +2328,17 @@ export const telegramService = {
       });
     }
   },
-  async notifyMonitoringTaskReply(input: { taskId: string; userId: string; taskTitle: string; answer: string; kind: 'overdue' | 'trigger' }): Promise<boolean> {
+  async notifyMonitoringTaskReply(input: { taskId: string; userId: string; taskTitle: string; answer: string; kind: 'overdue' | 'trigger' | 'subtask_completed' }): Promise<boolean> {
     if (!BOT_TOKEN) return false;
     const owner = await prisma.user.findUnique({
       where: { id: input.userId }, select: { telegramChatId: true }
     });
     if (!owner?.telegramChatId) return false;
     // Telegram HTML is escaped; never let the model inject arbitrary markup.
-    const title = escapeHtml(input.taskTitle.slice(0, 150));
-    const answer = escapeHtml(input.answer.trim().slice(0, 2400));
-    const reason = input.kind === 'trigger' ? 'Напоминание по триггеру' : 'Мониторинг просроченного срока';
+    const alert = formatMonitoringAlert(input.taskTitle, input.answer);
     return sendMessage(owner.telegramChatId,
-      '🤖 <b>' + reason + '</b>\n📌 <b>' + title + '</b>\n\n' + answer,
+      '🔔 <b>' + escapeHtml(alert.headline) + '</b>\n' +
+      escapeHtml(alert.context) + '\n\n' + escapeHtml(alert.body.slice(0, 2400)),
       { inline_keyboard: [[{
         text: '↩️ Ответить', web_app: { url: buildMiniAppTaskAiUrl(input.taskId) }
       }]] }
