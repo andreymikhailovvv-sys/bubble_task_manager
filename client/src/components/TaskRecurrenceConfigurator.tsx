@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { buildManualRecurrence, defaultRecurrenceSlots, loadManualRecurrence, recurrenceWeekdays, type RecurrencePeriod, type RecurrenceSlot } from '../lib/recurrenceSchedule';
 
@@ -45,6 +45,14 @@ export function TaskRecurrenceConfigurator({ value, onChange, onParseWithAi, par
       setError(cause instanceof Error ? cause.message : 'Проверьте расписание.');
     }
   };
+  useEffect(() => {
+    // The checkbox enables a complete daily manual rule immediately, even
+    // before the user touches a time field. Existing AI/manual rules are kept.
+    if (!value.recurrenceJson && method === 'manual') commit(period, slots);
+    // This runs once per mounted editor, not on every controlled draft update.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const changePeriod = (nextPeriod: RecurrencePeriod) => {
     const time = slots[0]?.time ?? '09:00';
     const next = nextPeriod === 'DAILY' ? [{ time }]
