@@ -7,6 +7,7 @@ const FEATURE_LABELS: Record<string, string> = {
   ai_chat: 'Общий чат с ИИ',
   ai_chat_planner: 'Планирование в AI-чате',
   task_chat: 'Помощь ИИ в задаче',
+  task_monitoring: 'Автомониторинг',
   general_assistant: 'Быстрые запросы и управление задачами',
   recurrence: 'Настройка повторения',
   generate_subtasks: 'Создание подзадач',
@@ -52,6 +53,7 @@ export type CreditUsageBreakdownItem = {
   key: string;
   label: string;
   creditsMilli: number;
+  children?: CreditUsageBreakdownItem[];
 };
 
 export type CreditUsageDailyItem = {
@@ -202,7 +204,23 @@ export async function getCreditUsageStatistics(userId: string): Promise<CreditUs
     monthCreditsMilli,
     averageDailyCreditsMilli: Math.round(monthCreditsMilli / 30),
     byModel: sortBreakdown(modelTotals, modelLabel),
-    byFeature: sortBreakdown(featureTotals, featureLabel),
+    byFeature: (() => {
+      const taskRequests = featureTotals.get('task_chat') ?? 0;
+      const automated = featureTotals.get('task_monitoring') ?? 0;
+      const combined = taskRequests + automated;
+      const featureRows = new Map(featureTotals);
+      featureRows.delete('task_monitoring');
+      if (combined > 0) featureRows.set('task_chat', combined);
+      return sortBreakdown(featureRows, featureLabel).map(row =>
+        row.key === 'task_chat' ? {
+          ...row,
+          children: [
+            { key: 'task_chat_requests', label: 'Запросы', creditsMilli: taskRequests },
+            { key: 'task_chat_monitoring', label: 'Автомониторинг', creditsMilli: automated }
+          ]
+        } : row
+      );
+    })(),
     daily,
     trackingStartedAt: events[0]?.createdAt.toISOString() ?? null
   };
