@@ -4,6 +4,24 @@ import { signalTaskMonitoringWakeup } from './task-monitoring-wakeup.service.js'
 
 type Db = Prisma.TransactionClient | typeof prisma;
 const MONITOR_KIND = 'overdue';
+export const MONITORING_INTRO_KIND = 'monitoring_intro';
+
+export const monitoringIntroEventKey = (taskId: string, generation: number) =>
+  'monitoring-intro:' + taskId + ':g' + generation;
+
+/** One durable starting conversation per opt-in generation, never per render or edit. */
+export async function enqueueMonitoringIntroduction(
+  db: Db, task: { id: string; userId: string; aiMonitoringGeneration: number }
+) {
+  await db.taskMonitoringRun.createMany({
+    data: [{
+      taskId: task.id, userId: task.userId, sourceTaskId: task.id,
+      eventKey: monitoringIntroEventKey(task.id, task.aiMonitoringGeneration),
+      kind: MONITORING_INTRO_KIND, state: 'scheduled', dueAt: new Date()
+    }],
+    skipDuplicates: true
+  });
+}
 const isActive = (row: { status: string; dueDate: Date | null }) =>
   row.status !== 'DONE' && Boolean(row.dueDate);
 
@@ -35,6 +53,15 @@ export async function rescheduleMonitoringSource(db: Db, sourceId: string) {
   if (!root || !root.aiMonitoringEnabled || root.userId !== source.userId ||
       root.status === 'DONE' || root.collaborationId || root.parentTaskId || root.taskType !== 'TASK' ||
       source.collaborationId) return;
+
+  // On initial opt-in, existing overdue deadlines are discussed collectively
+  // by one introduction. Rebuilding the queue on restart/edits must NOT
+  // resurrect one overdue AI call per already-overdue subtask.
+  const introduction = await db.taskMonitoringRun.findUnique({
+    where: { eventKey: monitoringIntroEventKey(root.id, root.aiMonitoringGeneration) },
+    select: { createdAt: true }
+  });
+  if (introduction && source.dueDate!.getTime() <= introduction.createdAt.getTime()) return;
 
   const eventKey = 'overdue:' + root.id + ':g' + root.aiMonitoringGeneration + ':' + source.id + ':' + source.dueDate!.toISOString();
   // skipDuplicates emits ON CONFLICT DO NOTHING on PostgreSQL and does not
