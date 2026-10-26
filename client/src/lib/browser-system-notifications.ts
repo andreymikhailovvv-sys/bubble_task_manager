@@ -8,6 +8,7 @@ export type BrowserSystemNotification = {
   id: string;
   content: string;
   readAt?: string | null;
+  eventKey?: string;
 };
 
 const SEEN_LIMIT = 150;
@@ -84,8 +85,14 @@ export async function showBrowserSystemNotification(
         browserNotificationPermission() !== 'granted') return false;
     if (!claimNotification(userId, notification.id)) return false;
     try {
-      const instance = new Notification('Планировыч', {
-        body: notification.content,
+      const isMonitoring = notification.eventKey?.startsWith('monitoring:') === true;
+      const [first, second, ...rest] = notification.content.split(/\r?\n/);
+      const headline = isMonitoring && first?.trim() ? first.trim() : 'Планировыч';
+      const body = isMonitoring
+        ? [second?.trim(), rest.join('\n').trim()].filter(Boolean).join('\n\n')
+        : notification.content;
+      const instance = new Notification(headline, {
+        body,
         tag: 'planirovych-system-' + notification.id
       });
       instance.onclick = () => {
