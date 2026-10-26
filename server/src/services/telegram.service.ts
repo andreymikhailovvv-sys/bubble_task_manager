@@ -1886,14 +1886,15 @@ ${escapeHtml(habit.icon || '✨')} ${escapeHtml(habit.name)}`);
       return;
     }
 
+    const parentTaskId = subtask.parentTaskId;
     const updated = await prisma.$transaction(async tx => {
       const result = await tx.task.updateMany({
-        where: { id: resolvedTaskId, userId, parentTaskId: subtask.parentTaskId, status: { not: 'DONE' } },
+        where: { id: resolvedTaskId, userId, parentTaskId, status: { not: 'DONE' } },
         data: { status: 'DONE', telegramNotifiedAt: null }
       });
       if (result.count) {
         const root = await tx.task.findFirst({
-          where: { id: subtask.parentTaskId, userId, aiMonitoringEnabled: true,
+          where: { id: parentTaskId, userId, aiMonitoringEnabled: true,
             parentTaskId: null, collaborationId: null, status: { not: 'DONE' }, taskType: 'TASK' },
           select: { id: true }
         });
