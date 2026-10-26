@@ -20,7 +20,7 @@ test('event-driven monitoring saves per-task and subtask deadlines, not a repeat
   assert.match(schedule, /state: 'cancelled'/);
   assert.match(schedule, /status === 'DONE'/);
   assert.match(schedule, /skipDuplicates: true/);
-  assert.match(worker, /kind: 'overdue', state: 'scheduled', dueAt: \{ lte: now \}/);
+  assert.match(worker, /kind: \{ in: \['overdue', 'subtask_completed'\] \}, state: 'scheduled', dueAt: \{ lte: now \}/);
   assert.match(worker, /deadlineStillCurrent\(/);
   assert.match(worker, /state: 'processing'/);
   assert.match(worker, /startTaskMonitoringWorker\(\)/);
