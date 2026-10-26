@@ -368,7 +368,7 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
                         put("recurrenceJson",parsed?.schedule?:manualRule!!)
                         put("recurrenceSummary",parsed?.summary?:manualSummary.orEmpty())
                         put("recurrenceUntil",
-                            parsed!!.schedule["until"] ?: JsonNull)
+                            parsed?.schedule?.get("until") ?: JsonNull)
                     }
                     put("aiNotificationsEnabled",aiNotifications)
                     if(!isEvent)put("aiMonitoringEnabled",aiMonitoring)
