@@ -134,7 +134,7 @@ fun MiniAppTaskFocusSheet(
                     if(recurrenceRule!=task.recurrenceJson)
                         put("recurrenceJson",recurrenceRule?:JsonNull)
                     if(recurrenceSummary!=task.recurrenceSummary)
-                        put("recurrenceSummary",recurrenceSummary?:JsonNull)
+                        put("recurrenceSummary",recurrenceSummary?.let(::JsonPrimitive) ?: JsonNull)
                     if(recurrenceUntil!=task.recurrenceUntil)
                         put("recurrenceUntil",recurrenceUntil?:JsonNull)
                 }
