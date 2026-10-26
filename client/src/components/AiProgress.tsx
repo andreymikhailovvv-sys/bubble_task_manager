@@ -1,4 +1,4 @@
-import { Image as ImageIcon } from 'lucide-react';
+import { Image as ImageIcon, Sparkles } from 'lucide-react';
 import type { AiChatProgressStatus, TaskAiProgressStatus } from '../lib/api';
 
 const PROGRESS_TEXT: Record<AiChatProgressStatus | TaskAiProgressStatus, string> = {
@@ -16,8 +16,11 @@ export function AiProgress({ status }: { status: AiChatProgressStatus | TaskAiPr
   return (
     <div className="ai-progress-group">
       <div className="miniapp-ai-progress" role="status" aria-live="polite" aria-atomic="true">
-        <span key={status} className="miniapp-ai-progress-text">{PROGRESS_TEXT[status]}</span>
-        <span className="miniapp-ai-progress-dots" aria-hidden="true" />
+        <span className="miniapp-ai-progress-icon" aria-hidden="true"><Sparkles size={19} strokeWidth={2} /></span>
+        <div className="miniapp-ai-progress-details">
+          <span key={status} className="miniapp-ai-progress-text">{PROGRESS_TEXT[status]}</span>
+          <div key={`progress-${status}`} className="miniapp-ai-progress-track" aria-hidden="true"><span /><span /><span /></div>
+        </div>
       </div>
       {(status === 'generating_image' || status === 'editing_image') ? (
         <div className="ai-image-generating-card" role="img" aria-label={status === 'editing_image' ? 'Изображение редактируется' : 'Изображение создаётся'}>

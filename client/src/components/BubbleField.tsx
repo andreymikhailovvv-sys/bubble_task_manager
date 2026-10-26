@@ -12,6 +12,7 @@ import { CustomSelect } from './CustomSelect';
 
 type Props = {
   tasks: Task[];
+  timelinePreviewTasks?: Task[];
   subtaskMap: Record<string, Task[]>;
   spheres: Sphere[];
   mode: 'global' | 'sectors';
@@ -241,6 +242,7 @@ function clamp(value: number, min: number, max: number) {
 
 export function BubbleField({
   tasks,
+  timelinePreviewTasks,
   subtaskMap,
   spheres,
   mode,
@@ -398,13 +400,14 @@ export function BubbleField({
   const getSourceTask = (task: Task) => sourceTaskById.get(task.id) ?? task;
   const timelinePickerTasks = useMemo(
     () => [
-      ...tasks.filter((task) => task.status !== 'DONE'),
+      ...(timelinePreviewTasks ?? tasks).filter((task) => task.status !== 'DONE'),
       ...Object.values(subtaskMap).flat().filter((subtask) => subtask.status !== 'DONE')
     ].map((task) => ({
       id: task.id,
       title: task.title,
       dueDate: task.dueDate,
       isSubtask: Boolean(task.parentTaskId),
+      taskType: task.taskType,
       sphereColor: (() => {
         if (task.parentTaskId) {
           const parentTask = sourceTaskById.get(task.parentTaskId);
@@ -415,7 +418,7 @@ export function BubbleField({
         return sphere?.color ?? '#64748b';
       })()
     })),
-    [sourceTaskById, spheres, subtaskMap, tasks]
+    [sourceTaskById, spheres, subtaskMap, tasks, timelinePreviewTasks]
   );
 
   const bubbles = useMemo(
