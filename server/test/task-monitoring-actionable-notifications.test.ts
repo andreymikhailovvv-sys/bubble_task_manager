@@ -9,8 +9,8 @@ test('monitoring notification leads with the specific action, then the task line
   const alert = formatMonitoringAlert('Письмо Иванову',
     'Письмо Иванову отправлено?\n\nЕсли уже отправил, приложи копию. Если нет, подготовь черновик.');
   assert.equal(alert.headline, 'Письмо Иванову отправлено?');
-  assert.equal(alert.context, 'Мониторинг задачи «Письмо Иванову»');
-  assert.ok(alert.content.startsWith('Письмо Иванову отправлено?\nМониторинг задачи «Письмо Иванову»\n\n'));
+  assert.equal(alert.context, '✔️Мониторинг задачи «Письмо Иванову»');
+  assert.ok(alert.content.startsWith('Письмо Иванову отправлено?\n✔️Мониторинг задачи «Письмо Иванову»\n\n'));
   assert.ok(alert.content.includes('Если уже отправил'));
 });
 
