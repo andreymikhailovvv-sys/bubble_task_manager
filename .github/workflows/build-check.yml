@@ -100,7 +100,7 @@ jobs:
       - name: Verify autonomous monitoring action limits and badges
         run: node --import tsx --test server/test/task-monitoring-actions.test.ts
       - name: Verify monitoring reply delivery across clients and Telegram
-        run: node --import tsx --test server/test/task-monitoring-delivery.test.ts server/test/task-monitoring-actionable-notifications.test.ts
+        run: node --import tsx --test server/test/task-monitoring-delivery.test.ts server/test/task-monitoring-actionable-notifications.test.ts server/test/task-monitoring-introduction.test.ts
       - name: Verify note group pills, unassigned sector, bulk postpone exclusions and web boot splash
         run: node --import tsx --test server/test/web-notes-postpone-bubbles-boot.test.ts
       - name: Verify newest Focus subtasks, AI note editing, chat scrolling and themed calendar
