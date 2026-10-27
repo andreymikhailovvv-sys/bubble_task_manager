@@ -8069,24 +8069,60 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-message-user.miniapp-ai
 }
 
 
-/* Task AI help: Mini App-style composer and drag/drop attachment affordance. */
+/* Task AI help: one outer frame, with messages scrolling beneath a translucent footer. */
+.focused-task-ai-thread-region {
+  margin-right: -1rem;
+  margin-bottom: -1rem;
+  margin-left: -1rem;
+}
+
+.focused-task-ai-panel .chat-thread.focused-task-ai-thread-through,
+.focused-task-ai-expanded-panel > .chat-thread.focused-task-ai-thread-through {
+  border: 0 !important;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
 .focused-task-ai-thread-through {
+  padding-right: 1rem;
   padding-bottom: 10.5rem !important;
+  padding-left: 1rem;
   scroll-padding-bottom: 10.5rem;
+}
+
+.focused-task-ai-expanded-panel > .focused-task-ai-thread-through {
+  margin-right: -1.25rem;
+  margin-bottom: -1.25rem;
+  margin-left: -1.25rem;
+  padding-right: 1.25rem;
+  padding-left: 1.25rem;
 }
 
 .focused-task-ai-composer {
   position: absolute;
-  right: 1rem;
-  bottom: 1rem;
-  left: 1rem;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 28;
+  padding: 0.75rem 1rem 1rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 0 0 2rem 2rem;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.04);
+  backdrop-filter: blur(14px) saturate(1.08);
+  -webkit-backdrop-filter: blur(14px) saturate(1.08);
 }
 
 .focused-task-ai-composer-expanded {
-  right: 1.25rem;
-  bottom: 1.25rem;
-  left: 1.25rem;
+  padding: 0.75rem 1.25rem 1.25rem;
+  border-radius: 0 0 1.5rem 1.5rem;
+}
+
+body[data-theme='dark'] .focused-task-ai-composer {
+  border-top-color: rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.86);
+  box-shadow: 0 -8px 24px rgba(2, 6, 23, 0.12);
 }
 
 .focused-task-ai-attach-button {
