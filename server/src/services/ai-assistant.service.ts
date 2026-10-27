@@ -84,7 +84,10 @@ type OpenAiUserAttachmentMessage = {
 };
 type OpenAiFunctionCall = { type: 'function_call'; call_id: string; name: string; arguments: string };
 type OpenAiFunctionCallOutput = { type: 'function_call_output'; call_id: string; output: string };
-type TaskChatProviderInput = OpenAiTextMessage | OpenAiUserAttachmentMessage | OpenAiFunctionCall | OpenAiFunctionCallOutput;
+// The Responses API lets a subsequent request replay earlier web-search and
+// assistant output items. General chat already does this; task chat must too.
+type OpenAiReplayOutput = { type: 'web_search_call' | 'message' | 'reasoning'; [key: string]: unknown };
+type TaskChatProviderInput = OpenAiTextMessage | OpenAiUserAttachmentMessage | OpenAiFunctionCall | OpenAiFunctionCallOutput | OpenAiReplayOutput;
 
 const nullableStringSchema = { anyOf: [{ type: 'string' }, { type: 'null' }] };
 const nullableNumberSchema = { anyOf: [{ type: 'number' }, { type: 'null' }] };
@@ -260,6 +263,7 @@ export function createTaskChatOpenAiPayload(model: string, messages: TaskChatPro
   return {
     model,
     input: messages.map((message) => {
+      if ('type' in message && (message.type === 'web_search_call' || message.type === 'message' || message.type === 'reasoning')) return message;
       if ('role' in message) return { role: message.role, content: message.content };
       if (message.type === 'function_call') return { type: message.type, call_id: message.call_id, name: message.name, arguments: message.arguments };
       return { type: message.type, call_id: message.call_id, output: message.output };
@@ -2144,6 +2148,7 @@ export const aiAssistantService = {
         const workspaceTools = createTaskChatWorkspaceTools({ userId: input.userId, taskId: input.taskId,
           userTimeZone, autonomousMonitoring, now });
         let forcedWebSearchRetry = false;
+        let correctedSearchDenial = false;
         let telegramSendDraft: TelegramInlineSendDraft | null = null;
         let telegramReadDraft: TelegramReadDraft | null = null;
         const fetchedAttachmentIds = new Set<string>();
@@ -2257,14 +2262,41 @@ export const aiAssistantService = {
               console.info('[AI task web search] retrying false offline disclaimer', { requestId, providerCallIndex });
               continue;
             }
+            if (candidateAnswer && webSearchUsed && !correctedSearchDenial &&
+                modelProviderCallIndex + 1 < TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS &&
+                shouldRetryTaskChatWebSearch(candidateAnswer)) {
+              correctedSearchDenial = true;
+              // Do not pay for a second web search: replay the provider's own
+              // search output and ask it to correct its false capability claim.
+              for (const item of output) {
+                if (!item || typeof item !== 'object') continue;
+                const type = (item as { type?: unknown }).type;
+                if (type === 'web_search_call' || type === 'message' || type === 'reasoning')
+                  providerInput.push(item as OpenAiReplayOutput);
+              }
+              providerInput.push({ role: 'system', content:
+                'В текущем запросе веб-поиск уже был выполнен. Поэтому ответ «нет доступа к интернету» неверен. Используй доступные результаты из предыдущего ответа; если данных недостаточно, честно объясни, чего именно не удалось найти, без утверждения об отсутствии инструмента.' });
+              continue;
+            }
             rawAnswer = candidateAnswer;
             if (!rawAnswer) throw new Error(`OpenAI returned empty response for model "${model}"`);
             console.info('[AI task chat round] completed', { requestId, taskId: input.taskId, userId: input.userId, providerCallIndex, toolCallsExecuted, hadToolCall: false, toolOperation: null, inputTokens: usage?.input_tokens ?? null, outputTokens: usage?.output_tokens ?? null, actualCreditsMilli: roundCost, isForcedFinalRound });
             break;
           }
           if (isForcedFinalRound) throw new Error('TASK_CHAT_CONTEXT_FORCED_FINAL_TOOL_CALL');
+          // Preserve the full output order, as general AI does. In particular,
+          // dropping web_search_call items while replaying a function call can
+          // make the model claim it cannot search, despite an actual paid search.
+          const firstCallId = toolCalls[0].call_id;
+          for (const item of output) {
+            if (!item || typeof item !== 'object') continue;
+            const type = (item as { type?: unknown }).type;
+            if (type === 'web_search_call' || type === 'message' || type === 'reasoning')
+              providerInput.push(item as OpenAiReplayOutput);
+            else if (type === 'function_call' && (item as { call_id?: unknown }).call_id === firstCallId)
+              providerInput.push(item as OpenAiFunctionCall);
+          }
           for (const call of toolCalls.slice(0, 1)) {
-            providerInput.push(call);
             let args: TaskContextLookupArguments;
             try { args = JSON.parse(call.arguments) as TaskContextLookupArguments; } catch {
               providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: false, code: 'INVALID_ARGUMENTS' }) });
