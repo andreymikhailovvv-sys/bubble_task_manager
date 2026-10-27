@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ChevronDown, ChevronRight, Clock3, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, Clock3, Plus, Trash2 } from 'lucide-react';
 import { api, type AiCheckupSchedule, type CurrentUser } from '../lib/api';
 
 function initialSchedules(user: Pick<CurrentUser, 'aiCheckupSchedules' | 'morningAiCheckupTime'> | null): AiCheckupSchedule[] {
@@ -67,27 +67,34 @@ export function AiCheckupScheduleSettings({ user, onUserUpdated, children }: Pro
 
   return (
     <section data-tour="ai-checkup-settings" className="ai-checkup-schedules mt-3 border-t border-[color:var(--panel-border)] pt-3">
-      <button type="button"
-        className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-2 text-left text-primary"
-        aria-expanded={expanded} onClick={() => setExpanded(open => !open)}>
-        <span className="flex items-center gap-2 text-sm font-semibold">ИИ-чекапы
-          {expanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-        </span>
-        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${enabled ? 'bg-emerald-500/15 text-emerald-600' : 'surface-muted text-muted'}`}>
-          {enabled ? 'Включены' : 'Выключены'}
-        </span>
-      </button>
+      <div className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-2 text-primary">
+        <button type="button"
+          className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm font-semibold"
+          aria-expanded={expanded} aria-controls="ai-checkup-schedule-editor"
+          onClick={() => setExpanded(open => !open)}>
+          ИИ-чекапы
+          <ChevronDown size={15} className={`shrink-0 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+        </button>
+        <button type="button" role="switch" aria-checked={enabled}
+          aria-label="Автоматические ИИ-чекапы" disabled={saving || !user}
+          onClick={() => {
+            const next = !enabled;
+            setEnabled(next);
+            commit({ morningAiCheckupEnabled: next });
+          }}
+          className={`task-monitor-mode-switch group inline-flex h-9 w-[90px] shrink-0 items-center rounded-full border p-1 text-[11px] font-semibold transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-400 disabled:cursor-not-allowed disabled:opacity-45 ${enabled
+            ? 'justify-end border-emerald-400/40 bg-emerald-500/15 text-emerald-500'
+            : 'justify-start border-slate-500/25 bg-slate-500/10 text-muted'}`}>
+          {enabled ? <span className="mr-2">Вкл</span> : null}
+          <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full shadow-sm transition-colors duration-200 ${enabled ? 'bg-emerald-500' : 'bg-slate-400'}`} aria-hidden="true">
+            <span className="h-1.5 w-1.5 rounded-full bg-white" />
+          </span>
+          {!enabled ? <span className="ml-2">Выкл</span> : null}
+        </button>
+      </div>
       {expanded ? (
-        <div className="space-y-3 pt-2">
+        <div id="ai-checkup-schedule-editor" className="space-y-3 pt-2">
           <p className="text-xs leading-relaxed text-muted">Настройте время и пожелания отдельно для каждого чекапа. Каждый запуск учитывает инструкции своего расписания и списывает кредиты по фактическим токенам.</p>
-          <label className="flex items-center justify-between gap-2 rounded-xl border border-[color:var(--panel-border)] p-3 text-sm text-primary">
-            <span>Автоматические ИИ-чекапы</span>
-            <input type="checkbox" className="h-4 w-4 accent-emerald-500" checked={enabled} onChange={(event) => {
-              const next = event.target.checked;
-              setEnabled(next);
-              commit({ morningAiCheckupEnabled: next });
-            }} />
-          </label>
           {schedules.map((slot, index) => (
             <div key={slot.id} className="rounded-xl border border-[color:var(--panel-border)] p-3">
               <div className="mb-2 flex items-center justify-between gap-2">

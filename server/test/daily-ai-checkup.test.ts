@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { buildDailyCheckupPayload, buildCheckupProposalRecoveryPayload, formatSmartDailyCheckup, parseDailyCheckupResponse } from '../src/services/daily-ai-checkup.service.js';
+import { completeCheckupScheduleMoves } from '../src/services/daily-ai-checkup-schedule.service.js';
 
 test('morning AI checkup uses private structured JSON, not a server-side template', () => {
   const payload = buildDailyCheckupPayload({ tasks: [{ id: 't1', title: 'Сделать проект' }] }, 'gpt-6-luna');
@@ -39,7 +40,9 @@ test('checkup may propose today, overdue and earlier reschedules, never unknown 
     ]
   }, tasks, tomorrow, now, 'Europe/Moscow');
   assert.deepEqual(result.moves.map(m => m.taskId), ['today', 'later', 'overdue', 'undated']);
-  assert.ok(result.text.includes('🎯 Главные приоритеты'));
+  assert.ok(result.text.includes('📋 Сводка от сервера'));
+  assert.ok(result.text.includes('🤖 Общий блок от ИИ'));
+  assert.ok(result.text.includes('🗓️ Предложенные изменения от ИИ'));
   assert.ok(result.text.startsWith('✨ ИИ-чекап'));
   assert.ok(!result.text.includes('secret'));
 });
@@ -146,4 +149,77 @@ test('checkup keeps user sector instructions and applies them only to matching t
   assert.match(service, /sphereId: true/);
   assert.match(service, /sphereId: t\.sphereId \?\? null/);
   assert.match(service, /instructions: sector\.generalPrompt\?\.trim\(\) \|\| null/);
+});
+
+test('three checkup blocks: exact three-hour deadline window, all-day events, and concise server moves', () => {
+  const now = new Date('2026-10-27T08:00:00Z');
+  const tomorrow = new Date('2026-10-28T00:00:00Z');
+  const items = [
+    { id: 't1', title: 'Собрать письмо', dueDate: '2026-10-27T10:45:00Z', taskType: 'TASK' },
+    { id: 'sub', title: 'Подготовить таблицу', parentTaskId: 't1', dueDate: '2026-10-27T11:00:00Z', taskType: 'TASK' },
+    { id: 't2', title: 'Вечерняя задача', dueDate: '2026-10-27T15:00:00Z', taskType: 'TASK' },
+    { id: 'event', title: 'Конференция', dueDate: '2026-10-27T17:00:00Z', taskType: 'EVENT' },
+    { id: 'reminder', title: 'Позвонить', dueDate: '2026-10-27T07:00:00Z', taskType: 'REMINDER' },
+    { id: 'next', title: 'Завтрашнее событие', dueDate: '2026-10-28T17:00:00Z', taskType: 'EVENT' }
+  ];
+  const report = formatSmartDailyCheckup({ summary: 'Сосредоточьтесь на письме.', moves: [
+    { taskId: 't2', newDueAt: '2026-10-28T12:00:00Z', reason: 'Снизить нагрузку' },
+    { taskId: 'event', newDueAt: '2026-10-28T13:00:00Z', reason: 'Нельзя' }
+  ] }, items, tomorrow, now, 'Europe/Moscow');
+  assert.ok(report.text.includes('Собрать письмо'));
+  assert.ok(report.text.includes('Подготовить таблицу'));
+  assert.ok(report.text.includes('Конференция'));
+  assert.ok(report.text.includes('Позвонить'));
+  assert.ok(!report.text.includes('Вечерняя задача —'));
+  assert.ok(!report.text.includes('Завтрашнее событие'));
+  assert.deepEqual(report.moves.map(x => x.taskId), ['t2']);
+  assert.equal(report.text.split('🤖 Общий блок от ИИ').length, 2);
+  assert.equal(report.text.split('🗓️ Предложенные изменения от ИИ').length, 2);
+});
+
+test('server proposes every overdue task and subtask, distributes dense deadlines into 15-minute slots', () => {
+  const now = new Date('2026-10-27T08:02:00.000Z');
+  const items = [
+    { id: 'high', title: 'Срочная просрочка', dueDate: '2026-10-26T12:00:00Z', taskType: 'TASK', importance: 5 },
+    { id: 'low', title: 'Низкая просрочка', dueDate: '2026-10-26T12:00:00Z', taskType: 'TASK', importance: 2 },
+    { id: 'sub', title: 'Просроченная подзадача', dueDate: '2026-10-27T07:00:00Z', taskType: 'TASK', importance: 4, parentTaskId: 'high' },
+    { id: 'a', title: 'Дело А', dueDate: '2026-10-27T13:00:00Z', taskType: 'TASK' },
+    { id: 'b', title: 'Дело Б', dueDate: '2026-10-27T13:00:00Z', taskType: 'TASK' },
+    { id: 'c', title: 'Дело В', dueDate: '2026-10-27T13:00:00Z', taskType: 'TASK' },
+    { id: 'event', title: 'Событие', dueDate: '2026-10-27T13:45:00Z', taskType: 'EVENT' },
+    { id: 'reminder', title: 'Напоминание', dueDate: '2026-10-26T10:00:00Z', taskType: 'REMINDER' }
+  ];
+  const moves = completeCheckupScheduleMoves([], items, now, 'Europe/Moscow');
+  assert.deepEqual(['high', 'low', 'sub'].every(id => moves.some(m => m.taskId === id)), true);
+  assert.ok(!moves.some(m => m.taskId === 'event' || m.taskId === 'reminder'));
+  const original = new Map(items.map(t => [t.id, t.dueDate]));
+  const scheduled = items.filter(t => t.taskType === 'TASK').map(t =>
+    Date.parse(moves.find(m => m.taskId === t.id)?.newDueAt ?? original.get(t.id)!));
+  for (let i = 0; i < scheduled.length; i++) {
+    for (let j = i + 1; j < scheduled.length; j++) {
+      assert.ok(Math.abs(scheduled[i] - scheduled[j]) >= 15 * 60_000,
+        'all scheduled tasks must be at least 15 minutes apart');
+    }
+  }
+  const nextLocalDate = (iso: string) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Europe/Moscow' });
+  assert.notEqual(nextLocalDate(moves.find(m => m.taskId === 'low')!.newDueAt), nextLocalDate(now.toISOString()));
+  assert.equal(nextLocalDate(moves.find(m => m.taskId === 'high')!.newDueAt), nextLocalDate(now.toISOString()));
+  const unchanged = items.find(t => t.id === 'a')!.dueDate;
+  const allTime = ['a', 'b', 'c'].map(id => Date.parse(moves.find(m => m.taskId === id)?.newDueAt ?? original.get(id)!));
+  assert.ok(allTime.includes(Date.parse(unchanged!)));
+  assert.equal(new Set(allTime).size, 3);
+});
+
+test('checkup includes every overdue subtask without 45-row root-only pagination', async () => {
+  const service = await readFile(new URL('../src/services/daily-ai-checkup.service.ts', import.meta.url), 'utf8');
+  assert.match(service, /const \[tasks, undated, dayEvents, done, events, habits, sectors\]/);
+  assert.match(service, /parentTaskId: true/);
+  assert.match(service, /taskType: 'TASK'/);
+  assert.match(service, /completeCheckupScheduleMoves\(output.moves, compact, now, timeZone\)/);
+  assert.doesNotMatch(service, /orderBy: \[\{ dueDate: 'asc' \}, \{ importance: 'desc' \}],[ ]*take: 45/);
+  const prompt = buildDailyCheckupPayload({ tasks: [], checkupInstructions: 'Мои пожелания' }, 'gpt-6-luna');
+  assert.match(prompt.input[0].content, /400 до 600 символов/);
+  assert.match(prompt.input[0].content, /15 минут/);
+  assert.match(prompt.input[0].content, /подзадач/);
+  assert.deepEqual(prompt.text.format.schema.required, ['summary', 'moves']);
 });
