@@ -10328,3 +10328,54 @@ body[data-theme='dark'] .focused-task-editor-shell .recurrence-add-time-button,
     min-height: 0;
   }
 }
+
+/* Compact AI progress belongs only to the collapsed Quick AI launcher. */
+.ai-chat-launcher .miniapp-ai-progress { gap: .42rem; padding: .1rem 0; }
+.ai-chat-launcher .miniapp-ai-progress-icon { width: 1.65rem; height: 1.65rem; }
+.ai-chat-launcher .miniapp-ai-progress-icon svg { width: 14px; height: 14px; }
+.ai-chat-launcher .miniapp-ai-progress-text { font-size: .7rem; font-weight: 620; line-height: 1.25; }
+.ai-chat-launcher .miniapp-ai-progress-track { margin-top: .28rem; gap: .24rem; }
+.ai-chat-launcher .miniapp-ai-progress-track span { height: 3px; width: 1.5rem; }
+.ai-chat-launcher .miniapp-ai-progress-track span:first-child { width: .42rem; }
+
+/* Light-mode chat attachment tiles must remain legible on any user-message color. */
+body[data-theme='light'] .ai-attachment-tiles-history .ai-attachment-tile-visual,
+.miniapp-shell.miniapp-light .ai-attachment-tiles-history .ai-attachment-tile-visual {
+  background: rgba(248, 250, 252, .96);
+  border-color: rgba(100, 116, 139, .25);
+}
+body[data-theme='light'] .ai-attachment-tiles-history .ai-attachment-tile-file-icon,
+.miniapp-shell.miniapp-light .ai-attachment-tiles-history .ai-attachment-tile-file-icon {
+  color: #334155;
+  filter: none;
+}
+body[data-theme='light'] .ai-attachment-tiles-history .ai-attachment-kind-word .ai-attachment-tile-file-icon,
+.miniapp-shell.miniapp-light .ai-attachment-tiles-history .ai-attachment-kind-word .ai-attachment-tile-file-icon { color: #2563eb; }
+body[data-theme='light'] .ai-attachment-tiles-history .ai-attachment-kind-excel .ai-attachment-tile-file-icon,
+.miniapp-shell.miniapp-light .ai-attachment-tiles-history .ai-attachment-kind-excel .ai-attachment-tile-file-icon { color: #047857; }
+body[data-theme='light'] .ai-attachment-tiles-history .ai-attachment-kind-pdf .ai-attachment-tile-file-icon,
+.miniapp-shell.miniapp-light .ai-attachment-tiles-history .ai-attachment-kind-pdf .ai-attachment-tile-file-icon { color: #b91c1c; }
+body[data-theme='light'] .ai-attachment-tiles-history .ai-attachment-tile-name,
+.miniapp-shell.miniapp-light .ai-attachment-tiles-history .ai-attachment-tile-name {
+  color: var(--text-primary, #334155);
+  opacity: .94;
+}
+.ai-attachment-download-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .25rem;
+  padding: .18rem .4rem;
+  margin-top: .24rem;
+  border-radius: .45rem;
+  border: 1px solid color-mix(in srgb, var(--text-muted, #64748b) 25%, transparent);
+  background: color-mix(in srgb, var(--field-bg, #e2e8f0) 80%, var(--card-bg, #fff));
+  color: var(--text-primary, #334155);
+  font-size: .65rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ai-attachment-download-button:hover {
+  background: color-mix(in srgb, var(--field-bg, #e2e8f0) 60%, var(--text-muted, #64748b) 16%);
+}
+.ai-attachment-download-button:focus-visible { outline: 2px solid var(--text-muted, #64748b); outline-offset: 2px; }

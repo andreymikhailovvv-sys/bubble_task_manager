@@ -167,7 +167,7 @@ export function AiMessageAttachments({ names, previews, messageId }: { names: st
           </span>}
         </div>
         <span className="ai-attachment-tile-name">{name}</span>
-        {messageId ? <button type="button" className="inline-flex items-center justify-center gap-1 rounded-md px-1 py-0.5 text-[10px] text-violet-500 hover:underline" title="Скачать, если файл ещё хранится в чате" onClick={() => void download(i, name)}><Download size={11} /> Скачать</button> : null}
+        {messageId ? <button type="button" className="ai-attachment-download-button" title="Скачать, если файл ещё хранится в чате" onClick={() => void download(i, name)}><Download size={11} /> Скачать</button> : null}
       </div>;
     })}
     {downloadError ? <p role="alert" className="w-full text-xs text-rose-500">{downloadError}</p> : null}
