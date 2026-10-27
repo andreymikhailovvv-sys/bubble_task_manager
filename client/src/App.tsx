@@ -5755,7 +5755,7 @@ ${allContext}`,
               <button type="button" className="profile-modal-close" onClick={closeProfileModal} aria-label="Закрыть настройки профиля"><X size={17} /></button>
             </div>
             <div className="max-h-[min(74vh,650px)] space-y-3 overflow-y-auto pr-1">
-              <section className="rounded-xl border border-violet-400/20 bg-violet-500/5 p-3" aria-label="Хранилище вложений">
+              <section className="profile-attachment-storage rounded-xl border border-[color:var(--panel-border)] bg-[color:var(--muted-bg)] p-3" aria-label="Хранилище вложений">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-semibold text-primary">Вложения</span>
                   <span className="text-xs tabular-nums text-muted">{attachmentStorage ? `${formatStorageMiB(attachmentStorage.usedBytes)} из ${formatStorageMiB(attachmentStorage.limitBytes)}` : 'Загрузка…'}</span>
@@ -5763,7 +5763,7 @@ ${allContext}`,
                 {attachmentStorage ? (
                   <>
                     <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-400/20" role="progressbar" aria-valuenow={Math.min(100, Math.round(100 * attachmentStorage.usedBytes / attachmentStorage.limitBytes))} aria-valuemin={0} aria-valuemax={100}>
-                      <div className={`h-full rounded-full ${attachmentStorage.overLimit ? 'bg-rose-500' : 'bg-violet-500'}`} style={{ width: `${Math.min(100, 100 * attachmentStorage.usedBytes / attachmentStorage.limitBytes)}%` }} />
+                      <div className={`h-full rounded-full ${attachmentStorage.overLimit ? 'bg-rose-500' : 'bg-cyan-600'}`} style={{ width: `${Math.min(100, 100 * attachmentStorage.usedBytes / attachmentStorage.limitBytes)}%` }} />
                     </div>
                     {attachmentStorage.usedBytes >= attachmentStorage.limitBytes ? <p className="mt-1.5 text-xs text-amber-600">Лимит достигнут. Старые файлы сохранены; новые можно загрузить после освобождения места.</p> : null}
                   </>
@@ -5777,10 +5777,10 @@ ${allContext}`,
                     {accountAttachmentsLoading ? <p className="text-xs text-muted">Загрузка вложений…</p> : null}
                     {!accountAttachmentsLoading && accountAttachments.length === 0 ? <p className="text-xs text-muted">Вложений пока нет.</p> : null}
                     {accountAttachments.map((attachment) => (
-                      <div key={attachment.id} className="flex items-center gap-2 rounded-lg border border-violet-400/15 p-2">
+                      <div key={attachment.id} className="flex items-center gap-2 rounded-lg border border-[color:var(--panel-border)] p-2">
                         <div className="min-w-0 flex-1">
                           <p className="break-words text-xs text-primary">{attachment.parentTaskTitle ? `Подзадача «${attachment.taskTitle}» → основная задача «${attachment.parentTaskTitle}»` : `Задача «${attachment.taskTitle}»`}</p>
-                          <a className="mt-1 block break-all text-xs text-violet-500 hover:underline" href={api.getTaskAttachmentDownloadUrl(attachment.taskId, attachment.id)} download={attachment.name}>{attachment.name} · {formatStorageMiB(attachment.size)}</a>
+                          <a className="profile-attachment-file-link mt-1 block break-all text-xs hover:underline" href={api.getTaskAttachmentDownloadUrl(attachment.taskId, attachment.id)} download={attachment.name}>{attachment.name} · {formatStorageMiB(attachment.size)}</a>
                         </div>
                         <button type="button" aria-label={`Удалить вложение ${attachment.name}`} title="Удалить файл" className="shrink-0 rounded-md p-1.5 text-rose-500 hover:bg-rose-500/10" onClick={() => void deleteAccountAttachment(attachment)}><Trash2 size={15}/></button>
                       </div>
@@ -6744,8 +6744,7 @@ ${allContext}`,
                   {filteredUpcomingSubtasksForModal.map((subtask) => (
                     <li
                       key={subtask.id}
-                      className={`upcoming-subtask-row upcoming-subtask-row-sector relative flex min-h-[7rem] items-start gap-3 rounded-2xl border px-4 py-3 ${closingTaskIds.includes(subtask.id) ? 'focused-subtask-row-completing ring-1 ring-emerald-300/70' : ''}`}
-                      style={{ '--upcoming-subtask-sector-color': getSubtaskSphereColor(subtask) } as CSSProperties}
+                      className={`upcoming-subtask-row relative flex min-h-[7rem] items-start gap-3 rounded-2xl border px-4 py-3 ${closingTaskIds.includes(subtask.id) ? 'focused-subtask-row-completing ring-1 ring-emerald-300/70' : ''}`}
                     >
                       <input type="checkbox" className="shrink-0" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
                       {closingTaskIds.includes(subtask.id) ? <Check size={13} className="timeline-task-chip-success shrink-0" /> : null}
@@ -8183,8 +8182,7 @@ ${allContext}`,
               {filteredUpcomingSubtasksForModal.map((subtask) => (
                 <li
                   key={subtask.id}
-                  className="upcoming-subtask-row upcoming-subtask-row-sector flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 transition-all duration-200 hover:-translate-y-[1px]"
-                  style={{ '--upcoming-subtask-sector-color': getSubtaskSphereColor(subtask) } as CSSProperties}
+                  className="upcoming-subtask-row flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 transition-all duration-200 hover:-translate-y-[1px]"
                   onClick={() => setEditorState({ task: subtask })}
                 >
                   <input
