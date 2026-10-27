@@ -116,3 +116,14 @@ test('website AI composers accept clipboard images in focus, task and expanded c
   assert.match(app, /quickAiPendingFiles/);
   assert.match(app, /setQuickAiPendingFiles\(\[\]\)/);
 });
+
+test('web-search citations render numbered links only in a wrapping inline row', async () => {
+  const component = await get('../../client/src/components/WebCitations.tsx');
+  assert.match(component, /Поиск в интернете/);
+  assert.match(component, /flex flex-wrap items-center gap-x-2 gap-y-1/);
+  assert.match(component, /\[\{index \+ 1\}\]/);
+  assert.match(component, /href=\{source\.url\}/);
+  assert.match(component, /aria-label=\{/);
+  assert.doesNotMatch(component, /\{source\.title\}<\/a>/);
+  assert.doesNotMatch(component, /space-y-1/);
+});
