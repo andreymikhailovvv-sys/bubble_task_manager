@@ -6,6 +6,7 @@ import { openAiFetch } from '../lib/openai-fetch.js';
 import { getWebSearchProgressStatus, readOpenAiResponsesStreamWithRecovery, retrieveOpenAiResponse } from './openai-responses-stream.service.js';
 import { supportsReasoningEffort } from '../lib/openai-model-capabilities.js';
 import { askAiChatWithTools, AI_CHAT_OPENAI_TOOLS, AI_CHAT_WEB_SEARCH_TOOL, WEB_SEARCH_CALL_CREDITS_MILLI } from './ai-chat-tools.service.js';
+import { mergeAiWebEvidence } from './ai-web-search-evidence.service.js';
 import { CHAT_TITLE_INSTRUCTION, extractAiChatTitleFromAnswer, normalizeAiChatTitle, shouldSuggestAiChatTitle } from './ai-chat-title.service.js';
 import { analyzeWebSearchCalls, getOpenAiPreflightErrorDiagnostics } from './dynamic-responses-billing.service.js';
 import { prepareTaskProposal, proposalView, type TaskProposalView } from './ai-task-proposal.service.js';
@@ -1839,7 +1840,7 @@ export const aiAssistantService = {
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: 100,
-      select: { id: true, createdAt: true, role: true, content: true, creditsSpentMilli: true, aiTaskProposalId: true, monitoringTaskId: true }
+      select: { id: true, createdAt: true, role: true, content: true, creditsSpentMilli: true, aiTaskProposalId: true, monitoringTaskId: true, webSearchUsed: true, webSources: true, webCitations: true }
     });
     messages.reverse();
 
@@ -1855,6 +1856,11 @@ export const aiAssistantService = {
       content: message.content,
       ...(message.monitoringTaskId ? { monitoringTaskId: message.monitoringTaskId } : {}),
       ...(message.role === 'assistant' && message.aiTaskProposalId ? { taskProposal: byId.get(message.aiTaskProposalId) } : {}),
+      ...(message.role === 'assistant' && message.webSearchUsed ? {
+        webSearchUsed: true,
+        webSources: Array.isArray(message.webSources) ? message.webSources as TaskWebSource[] : [],
+        webCitations: Array.isArray(message.webCitations) ? message.webCitations as TaskWebCitation[] : []
+      } : {}),
       ...(message.role === 'assistant' && message.creditsSpentMilli !== null ? { creditsSpentMilli: message.creditsSpentMilli } : {})
     }));
   },
@@ -1874,10 +1880,10 @@ export const aiAssistantService = {
     });
   },
 
-  appendGeneralDialogAssistantMessage: async (input: { userId: string; content: string; creditsSpentMilli: number; taskProposalId?: string | null }) => {
+  appendGeneralDialogAssistantMessage: async (input: { userId: string; content: string; creditsSpentMilli: number; taskProposalId?: string | null; webSearchUsed?: boolean; webSources?: TaskWebSource[]; webCitations?: TaskWebCitation[] }) => {
     const content = input.content.trim();
     if (!content) return;
-    return prisma.generalAiMessage.create({ data: { userId: input.userId, role: 'assistant', content, creditsSpentMilli: input.creditsSpentMilli, aiTaskProposalId: input.taskProposalId ?? null } });
+    return prisma.generalAiMessage.create({ data: { userId: input.userId, role: 'assistant', content, creditsSpentMilli: input.creditsSpentMilli, aiTaskProposalId: input.taskProposalId ?? null, webSearchUsed: input.webSearchUsed ?? false, ...(input.webSearchUsed ? { webSources: input.webSources ?? [], webCitations: input.webCitations ?? [] } : {}) } });
   },
 
   askTaskAssistant: async (input: AskTaskAssistantInput) => {
@@ -2127,7 +2133,7 @@ export const aiAssistantService = {
     let editedFileCreditsMilli = 0;
     let failedFileEditReason: string | null = null;
     let webSearchUsed = false;
-    const webSources = new Map<string, string>();
+    const webSources: TaskWebSource[] = [];
     const webCitations: TaskWebCitation[] = [];
     let webReservation: WalletReservation | null = null;
     try {
@@ -2196,7 +2202,7 @@ export const aiAssistantService = {
           const payload = createTaskChatOpenAiPayload(model, providerInput, maxOutputTokens, { reasoningEffort: reasoning, allowTools: !isForcedFinalRound, allowWebSearch, monitoringTools: monitoringEnabled, forceWebSearch: forcedWebSearchRetry && allowWebSearch });
           console.info('[AI] Sending OpenAI request', { requestId, providerCallIndex, mode: input.mode ?? 'fast', model, taskId: input.taskId, userId: input.userId });
           const openAiResponse = await openAiFetch('https://api.openai.com/v1/responses', {
-            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` }, body: JSON.stringify({ ...payload, stream: true })
+            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` }, body: JSON.stringify({ ...payload, ...(allowWebSearch ? { include: ['web_search_call.action.sources'] } : {}), stream: true })
           }, { requestId: `${requestId}:response:${providerCallIndex}`, model });
           console.info('[AI] OpenAI response received', { requestId, providerCallIndex, model, status: openAiResponse.status, ok: openAiResponse.ok, latencyMs: Date.now() - startedAt, taskId: input.taskId, userId: input.userId });
           if (!openAiResponse.ok) {
@@ -2227,26 +2233,7 @@ export const aiAssistantService = {
             webSearchUsed = true;
             input.onProgress?.('analyzing_web_results');
           }
-          for (const item of output) {
-            if (!item || typeof item !== 'object') continue;
-            const content = Array.isArray((item as { content?: unknown }).content)
-              ? (item as { content: Array<Record<string, unknown>> }).content : [];
-            for (const part of content) {
-              for (const annotation of Array.isArray(part?.annotations) ? part.annotations as Array<Record<string, unknown>> : []) {
-                if (annotation.type !== 'url_citation' || typeof annotation.url !== 'string') continue;
-                try {
-                  const url = new URL(annotation.url);
-                  if (url.protocol !== 'https:' || url.href.length > 2048) continue;
-                  if (!webSources.has(url.href) && webSources.size < 5) webSources.set(url.href,
-                    typeof annotation.title === 'string' && annotation.title.trim() ? annotation.title.slice(0, 160) : url.hostname);
-                  const sourceIndex = [...webSources.keys()].indexOf(url.href);
-                  if (sourceIndex >= 0 && typeof annotation.start_index === 'number' && typeof annotation.end_index === 'number') {
-                    webCitations.push({ startIndex: annotation.start_index, endIndex: annotation.end_index, sourceIndex });
-                  }
-                } catch { /* Ignore malformed untrusted URLs. */ }
-              }
-            }
-          }
+          if (webSearchUsed) mergeAiWebEvidence(responseJson, webSources, webCitations);
           const toolCalls = output.filter((item): item is OpenAiFunctionCall => Boolean(item && typeof item === 'object' && (item as { type?: unknown }).type === 'function_call' && typeof (item as { call_id?: unknown }).call_id === 'string'));
           const usage = responseJson.usage as { input_tokens?: number; output_tokens?: number } | undefined;
           const roundCost = calculateOpenAiUsageCost(model, responseJson.usage ?? {}).estimatedCreditsMilli;
@@ -2597,7 +2584,7 @@ export const aiAssistantService = {
           : actionAwareAnswer;
         const answer = autonomousMonitoring && taskProposal?.status === 'APPLIED' && actionAwareAnswer.trim()
           ? actionAwareAnswer + '\n\nИзменения в Планировыче применены.' : baseAnswer;
-        const sources: TaskWebSource[] = [...webSources].map(([url, title]) => ({ url, title }));
+        const sources: TaskWebSource[] = webSources;
 
         console.info('[AI] Task assistant request completed', {
           requestId,
@@ -2956,7 +2943,8 @@ export const aiAssistantService = {
         userId: input.userId,
         taskId: input.taskId,
         content: result.answer,
-        creditsSpentMilli: result.billing.creditsSpentMilli
+        creditsSpentMilli: result.billing.creditsSpentMilli,
+        webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations
       });
 
       return {

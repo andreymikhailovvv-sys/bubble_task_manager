@@ -4754,7 +4754,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     onClick={() => { const target = tasks.find(task => task.id === message.monitoringTaskId && !task.parentTaskId); if (target) { setIsAiChatOpen(false); openTaskModal(target); setIsAiDialogOpen(true); } }}>
                     <ArrowUpRight size={12} /> Ответить в чате задачи
                   </button> : null}
-                  {message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} /> : null}
+                  {message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} searched={message.webSearchUsed} /> : null}
                     {message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} onDownload={downloadAiGeneratedDocument} /> : null}
                   {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} /> : null}
                   {message.role === 'assistant' && message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={message.telegramSuggestedReply} /> : null}
@@ -4926,7 +4926,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     onClick={() => { const target = tasks.find(task => task.id === message.monitoringTaskId && !task.parentTaskId); if (target) { setIsAiChatOpen(false); openTaskModal(target); setIsAiDialogOpen(true); } }}>
                     <ArrowUpRight size={12} /> Ответить в чате задачи
                   </button> : null}
-                  {message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} /> : null}
+                  {message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} searched={message.webSearchUsed} /> : null}
                   {message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} onDownload={downloadAiGeneratedDocument} /> : null}
                   {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} /> : null}
                   {message.role === 'assistant' && message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={message.telegramSuggestedReply} /> : null}

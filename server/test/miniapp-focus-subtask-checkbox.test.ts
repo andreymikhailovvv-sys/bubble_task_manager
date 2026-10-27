@@ -43,3 +43,14 @@ test('focus checkbox has accessible checked and unchecked appearance in dark and
   assert.match(css, /\.miniapp-focus-subtask-check-box-done/);
   assert.match(css, /\.miniapp-light \.miniapp-focus-subtask-check-box-done/);
 });
+
+test('light Mini App and Android checkbox accent matches focus icon cyan, without recoloring dark mode', async () => {
+  const [css, android] = await Promise.all([
+    readFile(styles, 'utf8'),
+    readFile(new URL('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/MiniAppTaskFocusSheet.kt', import.meta.url), 'utf8')
+  ]);
+  assert.match(css, /\.miniapp-shell\.miniapp-light \.miniapp-focus-subtask-check-box-done \{\s*border-color: #0891b2;\s*background: #0891b2;/);
+  assert.match(css, /\.miniapp-shell\.miniapp-light \.miniapp-focus-subtask-check-toggle:focus-visible \{ outline-color: #0891b2;/);
+  assert.match(android, /Color\(0xFF0891B2\)/);
+  assert.match(android, /\.border\(1\.5\.dp,if\(c\.teal==Color\(0xFF0891B2\)\)c\.teal else c\.purple/);
+});

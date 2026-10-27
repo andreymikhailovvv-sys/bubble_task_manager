@@ -25,7 +25,7 @@ export const isDynamicTextBillingEnabled = (userId: string) => {
   return allowlist.length === 0 || allowlist.includes(userId);
 };
 
-const PROVIDER_KEYS = ['model', 'input', 'instructions', 'tools', 'tool_choice', 'parallel_tool_calls', 'max_tool_calls', 'reasoning', 'text', 'temperature', 'top_p', 'store'] as const;
+const PROVIDER_KEYS = ['model', 'input', 'instructions', 'tools', 'tool_choice', 'parallel_tool_calls', 'max_tool_calls', 'reasoning', 'text', 'temperature', 'top_p', 'store', 'include'] as const;
 export function createCleanOpenAiResponsesPayload(payload: Record<string, unknown>) {
   return Object.fromEntries(PROVIDER_KEYS.filter((key) => payload[key] !== undefined).map((key) => [key, payload[key]]));
 }
@@ -37,7 +37,7 @@ export function createOpenAiResponsesRequestPayload(cleanPayload: Record<string,
 /** /responses/input_tokens does not accept store or max_tool_calls. Keep
  * store:false on the real /responses request for private quick-share text. */
 export function createOpenAiResponsesTokenCountPayload(cleanPayload: Record<string, unknown>) {
-  const { max_tool_calls: _maxToolCalls, store: _store, ...preflightPayload } = cleanPayload;
+  const { max_tool_calls: _maxToolCalls, store: _store, include: _include, ...preflightPayload } = cleanPayload;
   return preflightPayload;
 }
 

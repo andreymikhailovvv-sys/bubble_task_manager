@@ -539,6 +539,9 @@ model TaskAiConversationMemory {
 }
 
 model GeneralAiMessage {
+  webSearchUsed Boolean @default(false)
+  webSources Json?
+  webCitations Json?
   aiTaskProposalId String?
   monitoringTaskId String?
   monitoringEventKey String? @unique

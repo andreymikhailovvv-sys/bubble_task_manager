@@ -105,6 +105,7 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
             recipientName=item.optString("recipientName"),
             messageKind=item.optString("messageKind"),
             creditsSpentMilli=item.optString("creditsSpentMilli")?.toLongOrNull(),
+            webSearchUsed=(item["webSearchUsed"] as? JsonPrimitive)?.booleanOrNull==true,
             webSources=sources,
             taskProposal=item["taskProposal"] as? kotlinx.serialization.json.JsonObject,
             generatedDocument=item["generatedDocument"] as? kotlinx.serialization.json.JsonObject,
