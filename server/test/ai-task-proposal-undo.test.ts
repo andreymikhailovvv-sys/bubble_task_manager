@@ -13,7 +13,8 @@ test('Telegram text and voice calls force task auto-apply and persist their prop
   assert.match(telegram, /telegram-task:/);
   assert.ok((telegram.match(/autoApplyTaskActions: true/g) ?? []).length >= 3);
   assert.ok((telegram.match(/taskProposalId: result\.taskProposal\?\.id/g) ?? []).length >= 3);
-  assert.match(ai, /autoApply: input\.autoApplyTaskActions === true \? true : undefined/);
+  assert.match(ai, /autoApply: autonomousMonitoring \|\| input\.autoApplyTaskActions === true \? true : undefined/);
+  assert.match(ai, /source: input\.autoApplyTaskActions && !autonomousMonitoring \? 'telegram_bot_task' : 'task_chat'/);
   assert.match(tools, /source: input\.autoApplyTaskActions \? 'telegram_bot' : 'planner'/);
   assert.match(telegram, /recordAppliedTelegramBotTask/);
   assert.match(telegram, /telegram-create:/);
