@@ -10,6 +10,7 @@ import { sphereController } from '../controllers/sphere.controller.js';
 import { taskController } from '../controllers/task.controller.js';
 import { addMonitoringStatus, listMonitoringStatuses, requireMonitoredTask, getMonitoringStatusUnread, markMonitoringStatusesSeen } from '../services/task-monitoring.service.js';
 import { getMonitoringTriggers } from '../services/task-monitoring-trigger.service.js';
+import { monitoringIntroEventKey } from '../services/task-monitoring-schedule.service.js';
 import { taskParticipantMessageController } from '../controllers/task-participant-message.controller.js';
 import { taskCommentController } from '../controllers/task-comment.controller.js';
 import { habitController } from '../controllers/habit.controller.js';
@@ -1750,6 +1751,22 @@ apiRouter.post('/ai-chat', requireAuth, aiController.askAiChat);
 apiRouter.get('/ai-general-chat', requireAuth, aiController.getGeneralAssistantHistory);
 apiRouter.post('/ai-general-chat', requireAuth, aiController.askGeneralAssistant);
 apiRouter.post('/ai-general-chat/undo', requireAuth, aiController.undoGeneralAssistantAction);
+// Lightweight, owner-scoped status of the ONE welcome request for this
+// monitoring generation. Shared by desktop and mobile progress indicators.
+apiRouter.get('/tasks/:id/monitoring/intro-state', requireAuth, asyncHandler(async (req, res) => {
+  try {
+    const task = await requireMonitoredTask(req.user!.id, req.params.id);
+    const run = await prisma.taskMonitoringRun.findUnique({
+      where: { eventKey: monitoringIntroEventKey(task.id, task.aiMonitoringGeneration) },
+      select: { state: true }
+    });
+    res.set('Cache-Control', 'private, no-store').json({
+      state: run?.state === 'scheduled' || run?.state === 'processing' ? run.state : null
+    });
+  } catch {
+    res.status(404).json({ error: 'Автомониторинг недоступен' });
+  }
+}));
 apiRouter.get('/tasks/:id/monitoring/diagnostics', requireAuth, asyncHandler(async (req, res) => {
   try {
     const task = await requireMonitoredTask(req.user!.id, req.params.id);

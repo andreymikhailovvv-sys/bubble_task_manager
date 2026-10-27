@@ -57,7 +57,7 @@ test('bounded and empty results avoid massive dropdowns', () => {
   const tasks=Array.from({length:30},(_,i)=>row('task'+i,'Задача '+i,'Каталог'));
   const r=searchWorkspace(tasks,[],[],'задача',4);
   assert.equal(r.task.length,4);
-  assert.deepEqual(searchWorkspace(tasks,[],[],'  '),{task:[],subtask:[],note:[]});
+  assert.deepEqual(searchWorkspace(tasks,[],[],'  '),{task:[],subtask:[],note:[],closed:[]});
 });
 
 test('top search filters workspace as before and opens corresponding editors', async () => {
@@ -155,4 +155,20 @@ test('верхний поиск компактнее в Telegram и мобиль
   // Keep >= 16px on the focused input to avoid iOS Safari zooming.
   assert.match(styles, /\.miniapp-shell \.miniapp-global-search-field input \{[\s\S]*?font-size: 16px;/);
   assert.match(styles, /\.miniapp-shell \.miniapp-global-search-field input::placeholder \{\s*font-size: 13px;/);
+});
+
+test('completed matches stay searchable but render last in a separate group, rich task HTML is text-only', async () => {
+  const rows = [
+    { ...row('open', 'Маршрут ВДНХ', '&lt;h2&gt;Важный маршрут&lt;/h2&gt;&lt;li&gt;Подготовить стенд&lt;/li&gt;'), status: 'TODO' },
+    { ...row('done', 'Маршрут готов', '<h2>Завершено</h2><li>Подготовить отчёт</li>'), status: 'DONE' }
+  ] as Task[];
+  const subs = [{ ...row('subdone','Маршрутный план','<li>Пункт 1</li>','open'), status: 'DONE' }] as Task[];
+  const results = searchWorkspace(rows, subs, [], 'маршрут');
+  assert.deepEqual(results.task.map(item => item.id), ['open']);
+  assert.deepEqual(results.closed.map(item => item.id), ['done', 'subdone']);
+  assert.doesNotMatch(results.task[0].preview, /<\/?(?:h2|li)>/);
+  assert.match(results.task[0].preview, /Важный маршрут/);
+  const component = await readFile(new URL('../../client/src/components/WorkspaceGlobalSearch.tsx', import.meta.url), 'utf8');
+  assert.match(component, /Завершённые задачи, подзадачи и события/);
+  assert.match(component, /\.\.\.results\.closed/);
 });

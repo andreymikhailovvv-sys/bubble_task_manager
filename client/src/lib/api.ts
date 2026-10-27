@@ -522,6 +522,7 @@ export const api = {
   deleteSphere: (id: string) => request<{ ok: true }>(`/api/spheres/${id}`, { method: 'DELETE' }),
   getTasks: () => request<Task[]>('/api/tasks'),
   createTask: (payload: Partial<Task>) => request<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(payload) }),
+  getTaskMonitoringIntroState: (id: string) => request<{ state: 'scheduled' | 'processing' | null }>(`/api/tasks/${encodeURIComponent(id)}/monitoring/intro-state`),
   getTaskMonitoringTriggers: (id: string) => request<TaskMonitoringTrigger[]>(`/api/tasks/${id}/monitoring/triggers`),
   getTaskMonitoringStatuses: (id: string) => request<TaskMonitoringStatus[]>(`/api/tasks/${id}/monitoring/statuses`),
   getTaskMonitoringUnread: (id: string) => request<{ unreadCount: number }>(`/api/tasks/${id}/monitoring/statuses/unread`),

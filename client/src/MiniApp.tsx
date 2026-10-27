@@ -9,6 +9,7 @@ import { TaskAiEmptyState } from './components/TaskAiEmptyState';
 import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
 
 import { TaskMonitoringStatuses } from './components/TaskMonitoringStatuses';
+import { TaskMonitoringIntroProgress } from './components/TaskMonitoringIntroProgress';
 import { TaskMonitoringTriggerChips } from './components/TaskMonitoringTriggerChips';
 import { TaskRecurrenceConfigurator } from './components/TaskRecurrenceConfigurator';
 import { TaskMonitoringActionBadge } from './components/TaskMonitoringActionBadge';
@@ -4765,7 +4766,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 </div>
                 ))}
                 {openedTask.aiMonitoringEnabled ? <TaskMonitoringTriggerChips taskId={openedTask.id} enabled /> : null}
-                {aiLoadingTaskId === openedTask.id ? <TaskAiProgress status={aiProgressByTask[openedTask.id] ?? 'analyzing_request'} /> : null}
+                {aiLoadingTaskId === openedTask.id ? <TaskAiProgress status={aiProgressByTask[openedTask.id] ?? 'analyzing_request'} /> : openedTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={openedTask.id} /> : null}
                 <div className="miniapp-ai-chat-bottom-spacer h-24" aria-hidden="true" />
               </div>
             </div>

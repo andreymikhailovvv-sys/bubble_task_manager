@@ -5,14 +5,15 @@
  */
 export function monitoringHeadline(answer: string, taskTitle: string): { headline: string; body: string } {
   const cleaned = answer.trim().replace(/^\s{0,3}#{1,3}\s+/, '').replace(/^\*\*(.*?)\*\*/, '$1');
-  const lines = cleaned.split(/\r?\n/);
-  const first = (lines[0] ?? '').trim().replace(/^["«]|["»]$/g, '');
-  const suitable = first.length >= 8 && first.length <= 125 &&
-    !/^мониторинг|^напоминание по триггеру|^задача:/i.test(first) &&
-    lines.length > 1;
-  const headline = suitable ? first : `Пора вернуться к задаче «${taskTitle.slice(0, 65)}»`;
-  const body = suitable ? lines.slice(1).join('\n').trim() : answer.trim();
-  return { headline: headline.slice(0, 125), body: body.slice(0, 4200) };
+  const firstBreak = cleaned.indexOf('\n');
+  const firstParagraph = (firstBreak >= 0 ? cleaned.slice(0, firstBreak) : cleaned).trim();
+  // The model owns the headline. If it responds in a single paragraph,
+  // extract its own first sentence. Never invent repetitive server headlines.
+  const sentence = firstParagraph.match(/^.{8,125}?[.!?](?=\s|$)/u)?.[0];
+  const candidate = sentence ?? firstParagraph;
+  const headline = candidate.slice(0, 125).trim().replace(/^["«]|["»]$/g, '');
+  const remainder = cleaned.slice(firstBreak >= 0 ? firstBreak + 1 : sentence ? sentence.length : candidate.length).trim();
+  return { headline: headline || taskTitle.slice(0, 125), body: remainder.slice(0, 4200) };
 }
 
 export function formatMonitoringAlert(taskTitle: string, answer: string) {

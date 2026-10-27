@@ -99,3 +99,20 @@ test('light-user-message attachment icons and filenames are white, miniapp expan
   assert.match(styles, /-webkit-tap-highlight-color: transparent !important;/);
   assert.match(collapse, /setExpanded\(\(value\) => !value\)/);
 });
+
+test('website AI composers accept clipboard images in focus, task and expanded chat without blocking text', async () => {
+  const [app, expanded, clipboard] = await Promise.all([
+    get('../../client/src/App.tsx'),
+    get('../../client/src/components/ExpandedAiChat.tsx'),
+    get('../../client/src/lib/aiClipboard.ts')
+  ]);
+  assert.match(clipboard, /item\.kind !== 'file'/);
+  assert.match(clipboard, /new File\(\[file\], filename/);
+  assert.match(clipboard, /png\|jpeg\|webp\|gif/);
+  assert.match(expanded, /onPaste=\{\(event\) => \{/);
+  assert.match(expanded, /onAddFiles\(files\)/);
+  assert.match(app, /addFocusedAiFiles\(files\)/);
+  assert.match(app, /addFocusAiClipboardImages\(files\)/);
+  assert.match(app, /quickAiPendingFiles/);
+  assert.match(app, /setQuickAiPendingFiles\(\[\]\)/);
+});

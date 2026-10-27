@@ -63,7 +63,8 @@ test('monitoring unread events light up the round Quick AI launcher without dupl
     read('../src/services/task-monitoring-delivery.service.ts')
   ]);
   assert.match(delivery, /systemNotification\.create\(/);
-  assert.match(app, /visibleNotifications = result\.notifications\.filter\(notification => !notification\.eventKey\?\.startsWith\('monitoring:'\)\)/);
+  assert.match(app, /const visibleNotifications = result.notifications;/);
+  assert.match(app, /systemNotifications\.filter\(notification => !notification\.eventKey\?\.startsWith\('monitoring:'\)\)/);
   assert.match(app, /setUnreadSystemNotificationCount\(result\.notifications\.filter\(notification => notification\.readAt == null\)\.length\)/);
   assert.match(app, /unreadSystemNotificationCount > 0 \? <span/);
   assert.match(app, /markSystemNotificationsRead\(\)/);
