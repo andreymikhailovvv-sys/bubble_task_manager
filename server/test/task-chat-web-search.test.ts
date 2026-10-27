@@ -46,11 +46,27 @@ test('task web search uses reserved credits with separate usage event and source
   const source = await readFile(new URL('../src/services/ai-assistant.service.ts', import.meta.url), 'utf8');
   assert.match(source, /webReservation = await reserveAiCreditsMilli\(input\.userId, WEB_SEARCH_CALL_CREDITS_MILLI\)/);
   assert.match(source, /const webSearchAnalysis = analyzeWebSearchCalls\(responseJson\)/);
-  assert.match(source, /!webSearchUsed && !isForcedFinalRound && modelProviderCallIndex === 0/);
+  assert.match(source, /!webSearchUsed && !isForcedFinalRound/);
+  assert.doesNotMatch(source, /!isForcedFinalRound && modelProviderCallIndex === 0/);
   assert.match(source, /settleAiCreditReservation\(webReservation, WEB_SEARCH_CALL_CREDITS_MILLI\)/);
   assert.match(source, /feature: 'web_search'/);
   assert.match(source, /refundWalletReservation\(webReservation\)/);
   assert.match(source, /webSources: sources, webCitations/);
   assert.match(source, /getWebSearchProgressStatus\(event\.type\)/);
   assert.match(source, /readOpenAiResponsesStreamWithRecovery\(openAiResponse\.body/);
+});
+
+
+test('automatic monitoring keeps web search after a first non-search tool and exposes note tools only when enabled', () => {
+  const messages = [{ role: 'user' as const, content: 'Подготовь исследование и заметку' }];
+  const monitored = createTaskChatOpenAiPayload('gpt-6-luna', messages, 512, {
+    allowWebSearch: true, monitoringTools: true, monitoringNoteTools: true
+  });
+  const names = monitored.tools?.filter(tool => tool.type === 'function').map(tool => 'name' in tool ? tool.name : '');
+  assert.ok(names?.includes('create_note'));
+  assert.ok(names?.includes('read_note'));
+  assert.ok(names?.includes('update_note'));
+  assert.equal(monitored.tools?.filter(tool => tool.type === 'web_search').length, 1);
+  const normal = createTaskChatOpenAiPayload('gpt-6-luna', messages, 512, { allowWebSearch: true });
+  assert.equal(normal.tools?.some(tool => 'name' in tool && tool.name === 'update_note'), false);
 });

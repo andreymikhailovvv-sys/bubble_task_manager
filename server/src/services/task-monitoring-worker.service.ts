@@ -76,6 +76,7 @@ async function deliver(run: Run, question: string, checkCurrent: () => Promise<b
         statuses.map(item => item.createdAt.toISOString() + ': ' + item.label).join('\n') || 'Статусов ещё нет.',
         'Сначала попытайся реально продвинуть задачу: подготовь полезные материалы, варианты, проект сообщения или план. Не ограничивайся вопросом «сделал ли пользователь».',
         'Если не хватает информации, уточни КОНКРЕТНЫЕ данные, объясни зачем они нужны и подготовь доступную часть работы.',
+        'Если для продвижения задачи нужны актуальные внешние факты, используй web_search прежде чем назначать следующий контакт. Поиск доступен в автоматическом режиме наравне с чатом задачи. Создание изображений и работа с сохранёнными файлами также доступны. Для заметок используй search_notes/read_note перед update_note; создание и изменение заметки допустимо только если это прямо помогает задаче.',
         'После содержательного ответа обычно устанавливай set_task_monitoring_trigger на следующий полезный контакт, чтобы задача не потерялась. Особенно если ты предложил варианты, спросил данные или ждёшь действия пользователя.',
         'Если в истории пользователь назвал точное время ответа или попросил напомнить через интервал, придерживайся именно этого времени в его часовом поясе. Не заменяй его произвольным часом.',
         'Если время не указано, выбери разумный интервал по дедлайну и следующему конкретному шагу. Не создавай повторяющихся пустых напоминаний и не назначай их, если задача завершена или пользователь отказался.',
@@ -88,7 +89,7 @@ async function deliver(run: Run, question: string, checkCurrent: () => Promise<b
         ] : []),
         'Не заявляй о внешних действиях без подтверждения.'
       ].join('\n'),
-      mode: 'fast', billingMode: 'dynamic', billingFeature: 'task_monitoring'
+      mode: 'fast', billingMode: 'dynamic', billingFeature: 'task_monitoring', autoApplyTaskActions: true
     });
     // User can disable monitoring, finish or reschedule the source deadline,
     // or answer a follow-up while the model call is still in progress.
@@ -96,7 +97,9 @@ async function deliver(run: Run, question: string, checkCurrent: () => Promise<b
     if (!await checkCurrent()) { await markRun(run.id, 'cancelled'); return; }
     await aiAssistantService.appendTaskDialogAssistantMessage({
       userId: run.userId, taskId: run.taskId,
-      content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli
+      content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli,
+      webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations,
+      generatedDocumentId: result.generatedDocument?.id, taskProposalId: result.taskProposal?.id
     });
     // At this point the task conversation is the source of truth.
     // The fan-out uses an idempotent event key so a network retry never

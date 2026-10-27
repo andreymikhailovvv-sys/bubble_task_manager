@@ -5,13 +5,14 @@ import { FormData } from 'undici';
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { getWebSearchProgressStatus, readOpenAiResponsesStreamWithRecovery, retrieveOpenAiResponse } from './openai-responses-stream.service.js';
 import { supportsReasoningEffort } from '../lib/openai-model-capabilities.js';
-import { askAiChatWithTools, AI_CHAT_WEB_SEARCH_TOOL, WEB_SEARCH_CALL_CREDITS_MILLI } from './ai-chat-tools.service.js';
+import { askAiChatWithTools, AI_CHAT_OPENAI_TOOLS, AI_CHAT_WEB_SEARCH_TOOL, WEB_SEARCH_CALL_CREDITS_MILLI } from './ai-chat-tools.service.js';
 import { CHAT_TITLE_INSTRUCTION, extractAiChatTitleFromAnswer, normalizeAiChatTitle, shouldSuggestAiChatTitle } from './ai-chat-title.service.js';
 import { analyzeWebSearchCalls, getOpenAiPreflightErrorDiagnostics } from './dynamic-responses-billing.service.js';
 import { prepareTaskProposal, proposalView, type TaskProposalView } from './ai-task-proposal.service.js';
 import { TELEGRAM_REQUEST_READ_TOOL, prepareTelegramAiReadRequest, type TelegramReadDraft } from './telegram-ai-read-consent.service.js';
 import { TELEGRAM_PREPARE_SEND_TOOL, prepareTelegramInlineSendDraft, type TelegramInlineSendDraft } from './telegram-inline-send-draft.service.js';
-import { requiresNoteCreation } from './ai-create-note.service.js';
+import { requiresNoteCreation, aiPersonalNotesService } from './ai-create-note.service.js';
+import { personalNotesToolsService } from './personal-notes-tools.service.js';
 import { selectRequiredPersonalLookup } from './ai-personal-search-intent.js';
 import type { AiChatProgressStatus } from './ai-chat-progress.js';
 import { estimateAiChatTokens, formatAiChatMemory, prepareAiChatSmartContext } from './ai-chat-memory.service.js';
@@ -21,7 +22,7 @@ import { buildTaskChatContext, isTaskChatContextV2Enabled, type TaskChatContextD
 import { formatTaskChatMemory, isTaskChatMemoryEnabled, resolveTaskChatActiveHistoryLimits, TASK_CHAT_MEMORY_TARGET_MAX_MESSAGES, TASK_CHAT_MEMORY_TARGET_TOKEN_BUDGET, TASK_CHAT_MEMORY_TRIGGER_MAX_MESSAGES, TASK_CHAT_MEMORY_TRIGGER_TOKEN_BUDGET, updateTaskChatMemoryIfNeeded, type TaskChatContextMessage } from './task-chat-memory.service.js';
 import { TASK_MONITOR_FOLLOWUP_TOOL, createMonitoringTrigger, ensureMonitoringFallbackTrigger } from './task-monitoring-trigger.service.js';
 import { TASK_MONITOR_ACTION_TOOLS, executeTaskMonitoringAction } from './task-monitoring-actions.service.js';
-import { cancelPendingMonitoringTriggers } from './task-monitoring.service.js';
+import { cancelPendingMonitoringTriggers, requireMonitoredTask } from './task-monitoring.service.js';
 import { executeTaskContextLookup, TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS, TASK_CHAT_CONTEXT_MAX_TOOL_CALLS, TASK_CHAT_STORED_FILE_FETCH_LIMIT, TASK_CONTEXT_LOOKUP_TOOL, type TaskContextLookupArguments } from './task-chat-context-lookup.service.js';
 import type { TaskAiProgressStatus } from './task-ai-progress.js';
 import { taskService, computeNextRecurringDueDate } from './task.service.js';
@@ -245,7 +246,15 @@ export const TASK_ASSISTANT_RESPONSE_FORMAT = {
   }
 };
 
-export function createTaskChatOpenAiPayload(model: string, messages: TaskChatProviderInput[], maxOutputTokens?: number, options?: { reasoningEffort?: string; allowTools?: boolean; allowWebSearch?: boolean; monitoringTools?: boolean }) {
+export const MONITORING_NOTE_TOOLS = AI_CHAT_OPENAI_TOOLS
+  .filter(tool => ['search_notes', 'read_note', 'create_note', 'update_note'].includes(tool.name))
+  .map(tool => ({ ...tool, description: tool.name === 'create_note'
+    ? 'Создай самостоятельную заметку только если это помогает выполнить мониторируемую задачу. В этом автоматическом режиме операция применяется сразу, без чипа подтверждения. Название и текст должны быть конкретными, не создавай дубликатов.'
+    : tool.name === 'update_note'
+      ? 'Измени существующую заметку только если это непосредственно помогает мониторируемой задаче. Обязательно сначала найди её через search_notes и прочитай через read_note. Для append сохраняй старый текст, для replace передай полный новый текст. Изменение в этом автоматическом режиме применяется сразу.'
+      : tool.description }));
+
+export function createTaskChatOpenAiPayload(model: string, messages: TaskChatProviderInput[], maxOutputTokens?: number, options?: { reasoningEffort?: string; allowTools?: boolean; allowWebSearch?: boolean; monitoringTools?: boolean; monitoringNoteTools?: boolean }) {
   const allowTools = options?.allowTools !== false;
   const allowWebSearch = allowTools && options?.allowWebSearch === true;
   return {
@@ -256,7 +265,7 @@ export function createTaskChatOpenAiPayload(model: string, messages: TaskChatPro
       return { type: message.type, call_id: message.call_id, output: message.output };
     }),
     text: { format: TASK_ASSISTANT_RESPONSE_FORMAT },
-    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL, AI_IMAGE_TOOL, AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, TELEGRAM_PREPARE_SEND_TOOL, TELEGRAM_REQUEST_READ_TOOL, ...(options?.monitoringTools ? [TASK_MONITOR_FOLLOWUP_TOOL, ...TASK_MONITOR_ACTION_TOOLS] : []), ...(allowWebSearch ? [AI_CHAT_WEB_SEARCH_TOOL] : [])], tool_choice: 'auto', parallel_tool_calls: false, ...(allowWebSearch ? { max_tool_calls: 1 } : {}) } : { tool_choice: 'none' }),
+    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL, AI_IMAGE_TOOL, AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, TELEGRAM_PREPARE_SEND_TOOL, TELEGRAM_REQUEST_READ_TOOL, ...(options?.monitoringTools ? [TASK_MONITOR_FOLLOWUP_TOOL, ...TASK_MONITOR_ACTION_TOOLS] : []), ...(options?.monitoringNoteTools ? MONITORING_NOTE_TOOLS : []), ...(allowWebSearch ? [AI_CHAT_WEB_SEARCH_TOOL] : [])], tool_choice: 'auto', parallel_tool_calls: false, ...(allowWebSearch ? { max_tool_calls: 1 } : {}) } : { tool_choice: 'none' }),
     ...(options?.reasoningEffort ? { reasoning: { effort: options.reasoningEffort } } : {}),
     ...(maxOutputTokens === undefined ? {} : { max_output_tokens: maxOutputTokens })
   };
@@ -1923,6 +1932,7 @@ export const aiAssistantService = {
 
     const monitoringEnabled = task.aiMonitoringEnabled === true && task.userId === input.userId &&
       !task.parentTaskId && !task.collaborationId && task.taskType === 'TASK';
+    const autonomousMonitoring = monitoringEnabled && input.billingFeature === 'task_monitoring';
     const monitoringStatuses = monitoringEnabled
       ? await prisma.taskMonitoringStatus.findMany({
           where: { taskId: task.id, userId: input.userId },
@@ -2039,7 +2049,8 @@ export const aiAssistantService = {
           'Почти после каждого содержательного ответа поддерживай дальнейшее сопровождение задачи инструментом set_task_monitoring_trigger: назначь уместный следующий контакт. Не оставляй задачу без следующего шага после предложений, подбора вариантов, черновика или уточняющего вопроса. Исключения: задача завершена, пользователь прямо попросил не напоминать или напоминание явно неуместно.',
           'Если пользователь просит «напомни через…», «вернусь через…», «сделаю к…», «проверю завтра в…», то ОБЯЗАТЕЛЬНО установи триггер на указанное время по часовому поясу пользователя, переведи в delayMinutes от текущего времени. При интервале короче поддерживаемых 5 минут установи минимальные 5 минут и честно укажи ограничение. Не заменяй точное пожелание произвольным напоминанием через час.',
           'Если время не названо, выбирай интервал исходя из срочности задачи, дедлайна и объёма оставшейся работы (обычно от часа до суток). Вопрос триггера должен касаться конкретного незавершённого действия, а не быть пустым «ну что?». Можно обновить уже ожидающий триггер вместо множества повторов.',
-          'Дополнительные инструменты при включённом режиме: create_monitoring_subtask для необходимого шага с реалистичным дедлайном, change_monitoring_importance при обоснованном изменении приоритета, add_monitoring_status для проверенного результата. Не создавай лишних подзадач, не утверждай о выполнении внешних действий без подтверждения. В обычных задачах эти инструменты недоступны.'
+          'Дополнительные инструменты при включённом режиме: create_monitoring_subtask для необходимого шага с реалистичным дедлайном, change_monitoring_importance при обоснованном изменении приоритета, add_monitoring_status для проверенного результата. Не создавай лишних подзадач, не утверждай о выполнении внешних действий без подтверждения. В обычных задачах эти инструменты недоступны.',
+          'Веб-поиск, создание изображений и чтение/редактирование файлов доступны при соблюдении обычных лимитов и доступа к файлам. Не говори, что у тебя нет интернета, если инструмент web_search есть в текущем запросе. Сначала получи внешние факты через web_search и только после этого формируй итог и планируй следующий контакт.'
         ].join(' ') }] : []),
       ...(fileCatalogText ? [{ role: 'user' as const, content: fileCatalogText }] : []),
       ...(monitoringStatuses.length ? [{ role: 'user' as const, content:
@@ -2110,6 +2121,10 @@ export const aiAssistantService = {
     let editedFileCreditsMilli = 0;
     let failedFileEditReason: string | null = null;
     let webSearchUsed = false;
+    let monitoringNotesChanged = false;
+    let monitoringNoteWrites = 0;
+    const resolvedMonitoringNoteIds = new Set<string>();
+    const readMonitoringNoteVersions = new Map<string, string>();
     const webSources = new Map<string, string>();
     const webCitations: TaskWebCitation[] = [];
     let webReservation: WalletReservation | null = null;
@@ -2133,14 +2148,14 @@ export const aiAssistantService = {
         for (let modelProviderCallIndex = 0; modelProviderCallIndex < TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS && providerCallIndex < TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS; modelProviderCallIndex += 1) {
           providerCallIndex += 1;
           const isForcedFinalRound = toolCallsExecuted >= TASK_CHAT_CONTEXT_MAX_TOOL_CALLS;
-          const allowWebSearch = Boolean(webReservation) && !webSearchUsed && !isForcedFinalRound && modelProviderCallIndex === 0;
+          const allowWebSearch = Boolean(webReservation) && !webSearchUsed && !isForcedFinalRound;
           if (isForcedFinalRound) {
             input.onProgress?.('forming_answer');
             providerInput.push({ role: 'system', content: 'Лимит получения дополнительных данных исчерпан. Сформируй лучший возможный финальный ответ на основе уже полученного контекста. Не запрашивай дополнительные tools.' });
           }
           const startedAt = Date.now();
           const reasoning = supportsReasoningEffort(model) ? reasoningEffort : undefined;
-          const preflightPayload = createTaskChatOpenAiPayload(model, providerInput, undefined, { reasoningEffort: reasoning, allowTools: !isForcedFinalRound, allowWebSearch, monitoringTools: monitoringEnabled });
+          const preflightPayload = createTaskChatOpenAiPayload(model, providerInput, undefined, { reasoningEffort: reasoning, allowTools: !isForcedFinalRound, allowWebSearch, monitoringTools: monitoringEnabled, monitoringNoteTools: autonomousMonitoring });
           let maxOutputTokens: number | undefined;
           let dynamicReservation: WalletReservation | null = null;
           if (dynamicBilling && !input.skipCreditsCharge) {
@@ -2167,7 +2182,7 @@ export const aiAssistantService = {
             maxOutputTokens = Math.min(TASK_CHAT_MAX_OUTPUT_TOKENS, calculateAffordableOutputTokens(model, inputTokens, dynamicReservation.totalMilli - desired.inputCreditsMilli));
             if (maxOutputTokens < TASK_CHAT_MIN_OUTPUT_TOKENS) throw new Error('Недостаточно AI кредитов');
           }
-          const payload = createTaskChatOpenAiPayload(model, providerInput, maxOutputTokens, { reasoningEffort: reasoning, allowTools: !isForcedFinalRound, allowWebSearch, monitoringTools: monitoringEnabled });
+          const payload = createTaskChatOpenAiPayload(model, providerInput, maxOutputTokens, { reasoningEffort: reasoning, allowTools: !isForcedFinalRound, allowWebSearch, monitoringTools: monitoringEnabled, monitoringNoteTools: autonomousMonitoring });
           console.info('[AI] Sending OpenAI request', { requestId, providerCallIndex, mode: input.mode ?? 'fast', model, taskId: input.taskId, userId: input.userId });
           const openAiResponse = await openAiFetch('https://api.openai.com/v1/responses', {
             method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` }, body: JSON.stringify({ ...payload, stream: true })
@@ -2237,6 +2252,50 @@ export const aiAssistantService = {
             try { args = JSON.parse(call.arguments) as TaskContextLookupArguments; } catch {
               providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: false, code: 'INVALID_ARGUMENTS' }) });
               console.info('[AI task chat round] completed', { requestId, taskId: input.taskId, userId: input.userId, providerCallIndex, toolCallsExecuted, hadToolCall: true, toolOperation: null, inputTokens: usage?.input_tokens ?? null, outputTokens: usage?.output_tokens ?? null, actualCreditsMilli: roundCost, isForcedFinalRound });
+              continue;
+            }
+            if (MONITORING_NOTE_TOOLS.some(tool => tool.name === call.name)) {
+              toolCallsExecuted += 1;
+              let result: unknown = { ok: false, code: 'MONITORING_DISABLED' };
+              try {
+                if (autonomousMonitoring) {
+                  const noteArgs = args as Record<string, unknown>;
+                  if (call.name === 'search_notes') {
+                    const matches = await personalNotesToolsService.search(input.userId, noteArgs);
+                    matches.results.forEach(note => resolvedMonitoringNoteIds.add(note.id));
+                    result = { ok: true, ...matches };
+                  } else if (call.name === 'read_note') {
+                    const id = noteArgs.id;
+                    if (typeof id !== 'string' || !resolvedMonitoringNoteIds.has(id)) {
+                      result = { ok: false, code: 'NOTE_NOT_RESOLVED' };
+                    } else {
+                      const note = await personalNotesToolsService.read(input.userId, id);
+                      if (note) readMonitoringNoteVersions.set(id, note.updatedAt);
+                      result = note ? { ok: true, note } : { ok: false, code: 'NOTE_NOT_FOUND' };
+                    }
+                  } else if (monitoringNoteWrites >= 1) {
+                    result = { ok: false, code: 'MONITORING_NOTE_WRITE_LIMIT', message: 'Не более одного изменения заметки за одно автоматическое обращение.' };
+                  } else if (call.name === 'create_note') {
+                    await requireMonitoredTask(input.userId, input.taskId);
+                    result = await aiPersonalNotesService.create(input.userId, noteArgs);
+                    if ((result as { ok?: boolean }).ok) { monitoringNoteWrites++; monitoringNotesChanged = true; }
+                  } else if (call.name === 'update_note') {
+                    const id = noteArgs.id;
+                    const version = typeof id === 'string' ? readMonitoringNoteVersions.get(id) : undefined;
+                    if (!version) result = { ok: false, code: 'NOTE_NOT_READ', message: 'Сначала найди заметку и прочитай через read_note.' };
+                    else {
+                      await requireMonitoredTask(input.userId, input.taskId);
+                      result = await aiPersonalNotesService.update(input.userId, noteArgs, version);
+                      if ((result as { ok?: boolean }).ok) { monitoringNoteWrites++; monitoringNotesChanged = true; }
+                    }
+                  }
+                }
+              } catch (error) {
+                result = { ok: false, code: 'MONITORING_NOTE_FAILED',
+                  message: error instanceof Error ? error.message.slice(0, 300) : 'Ошибка заметки' };
+              }
+              providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(result) });
+              input.onProgress?.('forming_answer');
               continue;
             }
             if (TASK_MONITOR_ACTION_TOOLS.some(tool => tool.name === call.name)) {
@@ -2483,9 +2542,9 @@ export const aiAssistantService = {
         const taskProposal = parsed.actions.length
           ? await prepareTaskProposal({
               userId: input.userId, requestId: input.currentMessageId ?? requestId,
-              source: input.autoApplyTaskActions ? 'telegram_bot_task' : 'task_chat', taskId: input.taskId,
+              source: input.autoApplyTaskActions && !autonomousMonitoring ? 'telegram_bot_task' : 'task_chat', taskId: input.taskId,
               actions: parsed.actions as unknown as Record<string, unknown>[],
-              autoApply: input.autoApplyTaskActions === true ? true : undefined,
+              autoApply: autonomousMonitoring || input.autoApplyTaskActions === true ? true : undefined,
               userTimeZone: input.userTimeZone
             })
           : null;
@@ -2546,7 +2605,7 @@ export const aiAssistantService = {
           webReservation = null;
         }
         console.info('[AI] AI operation completed successfully', { requestId, model, userId: input.userId });
-        return { model, answer, actionReports, taskProposal, generatedDocument, telegramSendDraft, telegramReadDraft, webSearchUsed, webSources: sources, webCitations, taskDataChanged: appliedActionsCount > 0, billing: { mode: dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli } };
+        return { model, answer, actionReports, taskProposal, generatedDocument, telegramSendDraft, telegramReadDraft, webSearchUsed, webSources: sources, webCitations, taskDataChanged: appliedActionsCount > 0 || monitoringNotesChanged, billing: { mode: dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli } };
       } catch (error) {
         if (pendingDynamicReservation) await refundWalletReservation(pendingDynamicReservation).catch(() => undefined);
         await Promise.all(dynamicCalls.map((call) => refundWalletReservation(call.reservation).catch(() => undefined)));
