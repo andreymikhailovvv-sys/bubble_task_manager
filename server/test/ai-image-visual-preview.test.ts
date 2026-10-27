@@ -57,3 +57,45 @@ test('image previews use short-lived signed links while downloads retain existin
     assert.match(source, /AiProgress/);
   }
 });
+
+test('generated image bubble has no footer or filename, and download is an image-corner icon', async () => {
+  const [card, styles] = await Promise.all([
+    get('../../client/src/components/AiGeneratedImageCard.tsx'),
+    get('../../client/src/styles.css')
+  ]);
+  assert.doesNotMatch(card, /<figcaption/);
+  assert.doesNotMatch(card, /ai-generated-image-name/);
+  assert.match(card, /<Download size=\{18\} aria-hidden="true" \/>/);
+  assert.match(card, /aria-label=\{\`Скачать \$\{document\.fileName\}\`\}/);
+  assert.match(styles, /\.ai-generated-image-preview img \{\s*display: block;\s*width: 100%;\s*height: auto;/);
+  assert.match(styles, /\.ai-generated-image-preview \.ai-generated-image-download \{\s*position: absolute;\s*bottom:/);
+  assert.match(styles, /\.ai-generated-image-card \{\s*display: block;[\s\S]*?border: 0;/);
+});
+
+test('general chat file drag clears when files leave main or window, without tinting task drop frame', async () => {
+  const [expanded, css] = await Promise.all([
+    get('../../client/src/components/ExpandedAiChat.tsx'),
+    get('../../client/src/styles.css')
+  ]);
+  assert.match(expanded, /onWindowDragOver/);
+  assert.match(expanded, /window\.addEventListener\('drop', clearDropState, true\)/);
+  assert.match(expanded, /window\.addEventListener\('dragend', clearDropState, true\)/);
+  assert.match(expanded, /window\.removeEventListener\('dragleave', onWindowDragLeave, true\)/);
+  assert.match(expanded, /event\.dataTransfer\.types/);
+  assert.match(css, /\.ai-chat-expanded-main \.ai-chat-drop-overlay \{/);
+  assert.match(css, /backdrop-filter: blur\(12px\)/);
+  assert.match(css, /body\[data-theme='light'\] \.focused-task-ai-drop-overlay \{\s*color: var\(--text-primary\)/);
+});
+
+test('light-user-message attachment icons and filenames are white, miniapp expander stays transparent on touch', async () => {
+  const [css, collapse] = await Promise.all([
+    get('../../client/src/styles.css'),
+    get('../../client/src/components/CollapsibleUserMessage.tsx')
+  ]);
+  const styles = css.slice(css.lastIndexOf('/* A light-theme user message has a saturated blue bubble.'));
+  assert.match(styles, /\.ai-attachment-tiles-history \.ai-attachment-tile-file-icon,[\s\S]*?color: #fff !important;/);
+  assert.match(styles, /\.ai-attachment-tiles-history \.ai-attachment-tile-name,[\s\S]*?color: #fff !important;/);
+  assert.match(styles, /\.miniapp-ai-chat-message \.collapsible-user-message-toggle:active/);
+  assert.match(styles, /-webkit-tap-highlight-color: transparent !important;/);
+  assert.match(collapse, /setExpanded\(\(value\) => !value\)/);
+});

@@ -44,6 +44,7 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [headerHidden, setHeaderHidden] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const mainRef = useRef<HTMLElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const threadContentRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -106,6 +107,32 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
     return () => observer.disconnect();
   }, []);
 
+  // File drags can leave a chat without firing a dragleave on its main node
+  // (particularly when crossing nested children or the browser boundary).
+  // Track the window as well so the drop affordance never sticks.
+  useEffect(() => {
+    const clearDropState = () => setDragActive(false);
+    const onWindowDragOver = (event: DragEvent) => {
+      if (!mainRef.current?.contains(event.target as Node)) clearDropState();
+    };
+    const onWindowDragLeave = (event: DragEvent) => {
+      if (!event.relatedTarget) {
+        const { clientX: x, clientY: y } = event;
+        if (x <= 0 || y <= 0 || x >= window.innerWidth || y >= window.innerHeight) clearDropState();
+      }
+    };
+    window.addEventListener('dragover', onWindowDragOver, true);
+    window.addEventListener('dragleave', onWindowDragLeave, true);
+    window.addEventListener('drop', clearDropState, true);
+    window.addEventListener('dragend', clearDropState, true);
+    return () => {
+      window.removeEventListener('dragover', onWindowDragOver, true);
+      window.removeEventListener('dragleave', onWindowDragLeave, true);
+      window.removeEventListener('drop', clearDropState, true);
+      window.removeEventListener('dragend', clearDropState, true);
+    };
+  }, []);
+
   const handleScroll = useCallback(() => {
     if (scrollFrameRef.current !== null) return;
     scrollFrameRef.current = requestAnimationFrame(() => {
@@ -150,7 +177,24 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
           <div className="mt-2 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Чаты</p><button className="surface-muted rounded-full p-1.5 disabled:opacity-25" disabled={activeProject?.id === 'telegram-ai-assistant-project'} onClick={onCreateChat} title="Создать чат"><Plus size={14} /></button></div>
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">{activeProject?.chats.map((chat) => <div key={chat.id} onContextMenu={(event) => { if (chat.id !== quickChatId && !chat.id.startsWith('telegram-ai-assistant:')) onContextMenu(event, 'chat', chat.id); }} className={`ai-chat-sidebar-thread group/chat flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm ${chat.id === activeChat?.id ? 'border-cyan-300 bg-cyan-500/20 text-primary' : 'surface-muted text-muted'}`}><button className="min-w-0 flex-1 text-left" onClick={() => onSelectChat(chat.id)}><span className="block truncate font-medium">{chat.title}</span><span className="block truncate text-[11px] text-subtle">{chat.id === quickChatId ? 'Чат по умолчанию' : `${chat.messages.length} сообщ.`}</span></button><button className="rounded-full p-1 opacity-50 hover:bg-rose-500/15 hover:text-rose-400 disabled:opacity-20" disabled={chat.id === quickChatId || chat.id.startsWith('telegram-ai-assistant:') || (activeProject?.chats.length ?? 0) <= 1} onClick={() => onDeleteChat(chat.id)} title="Удалить чат"><Trash2 size={13} /></button></div>)}</div>
         </aside>
-        <section className="ai-chat-expanded-main" onDragOver={(event) => { event.preventDefault(); setDragActive(true); }} onDragLeave={(event) => { if (event.currentTarget === event.target) setDragActive(false); }} onDrop={(event) => { event.preventDefault(); setDragActive(false); onAddFiles(Array.from(event.dataTransfer.files)); }}>
+        <section ref={mainRef} className="ai-chat-expanded-main"
+          onDragOver={(event) => {
+            if (!Array.from(event.dataTransfer.types).includes('Files')) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'copy';
+            setDragActive(true);
+          }}
+          onDragLeave={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            if (event.clientX <= rect.left || event.clientX >= rect.right ||
+                event.clientY <= rect.top || event.clientY >= rect.bottom) setDragActive(false);
+          }}
+          onDrop={(event) => {
+            if (!event.dataTransfer.files.length) { setDragActive(false); return; }
+            event.preventDefault();
+            setDragActive(false);
+            onAddFiles(Array.from(event.dataTransfer.files));
+          }}>
           <header className={`ai-chat-expanded-header ${headerHidden ? 'is-hidden' : ''}`}>
             <button className={`ai-chat-header-button ${sidebarCollapsed ? '' : 'is-invisible'}`} onClick={() => setSidebarCollapsed(false)} aria-label="Показать панель проектов"><PanelLeftOpen size={18} /></button>
             <div className="min-w-0 flex-1"><div className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-semibold text-violet-700"><Sparkles size={13} /> Чат с ИИ</div><h2 className="mt-1 truncate text-xl font-bold text-primary">{activeChat?.title ?? 'Новый чат'}</h2><p className="truncate text-xs text-muted">{activeChat?.id === quickChatId ? 'Развернутая версия быстрых запросов к ИИ' : 'ИИ поможет с вопросами, задачами и расписанием'}</p></div>
