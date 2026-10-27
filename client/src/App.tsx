@@ -4487,11 +4487,6 @@ ${allContext}`,
 
   const sphereById = new Map(spheres.map((sphere) => [sphere.id, sphere]));
   const taskById = new Map(tasks.map((task) => [task.id, task]));
-  const getSubtaskSphereColor = (subtask: Task) => {
-    const parentTask = subtask.parentTaskId ? taskById.get(subtask.parentTaskId) : null;
-    const sphereId = parentTask?.sphereId ?? subtask.sphereId;
-    return (sphereId ? sphereById.get(sphereId)?.color : null) ?? '#64748b';
-  };
   const aiTaskReferenceTasks = tasks;
   const getTimelineTaskViewModel = (task: Task) => {
     const taskSubtasks = displayedSubtaskMap[task.id] ?? [];
