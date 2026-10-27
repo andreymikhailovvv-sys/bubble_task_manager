@@ -45,7 +45,7 @@ test('general chat, task chat and focus path use the same image tool and downloa
   assert.match(tools, /AI_IMAGE_TOOL/);
   assert.match(tools, /await generateAiImage/);
   assert.match(tools, /imageCreditsSpentMilli/);
-  assert.ok(assistant.includes('tools: [TASK_CONTEXT_LOOKUP_TOOL, AI_IMAGE_TOOL, AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, TELEGRAM_PREPARE_SEND_TOOL, TELEGRAM_REQUEST_READ_TOOL'), 'Shared AI image tool remains in task chat tool list');
+  assert.ok(assistant.includes('tools: [TASK_CONTEXT_LOOKUP_TOOL, ...AI_CHAT_OPENAI_TOOLS'), 'Task chat imports all shared AI tools, including image generation');
   assert.match(assistant, /await generateAiImage/);
   assert.match(assistant, /generatedDocument = generatedImage\?\.document \?\? editedFileDocument/);
   assert.match(assistant, /creditsSpentMilli = \(generatedImage\?\.creditsSpentMilli \?\? 0\) \+ editedFileCreditsMilli/);

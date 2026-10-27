@@ -57,16 +57,30 @@ test('task web search uses reserved credits with separate usage event and source
 });
 
 
-test('automatic monitoring keeps web search after a first non-search tool and exposes note tools only when enabled', () => {
-  const messages = [{ role: 'user' as const, content: 'Подготовь исследование и заметку' }];
-  const monitored = createTaskChatOpenAiPayload('gpt-6-luna', messages, 512, {
-    allowWebSearch: true, monitoringTools: true, monitoringNoteTools: true
-  });
-  const names = monitored.tools?.filter(tool => tool.type === 'function').map(tool => 'name' in tool ? tool.name : '');
-  assert.ok(names?.includes('create_note'));
-  assert.ok(names?.includes('read_note'));
-  assert.ok(names?.includes('update_note'));
-  assert.equal(monitored.tools?.filter(tool => tool.type === 'web_search').length, 1);
+test('interactive task chat and monitoring both receive the shared assistant tool catalog', () => {
+  const messages = [{ role: 'user' as const, content: 'Найди актуальные цены и создай заметку' }];
   const normal = createTaskChatOpenAiPayload('gpt-6-luna', messages, 512, { allowWebSearch: true });
-  assert.equal(normal.tools?.some(tool => 'name' in tool && tool.name === 'update_note'), false);
+  const monitored = createTaskChatOpenAiPayload('gpt-6-luna', messages, 512, { allowWebSearch: true, monitoringTools: true });
+  const names = (payload: typeof monitored) =>
+    payload.tools?.filter(tool => tool.type === 'function').map(tool => 'name' in tool ? tool.name : '') ?? [];
+  const required = ['create_note', 'update_note', 'search_notes', 'search_workspace', 'search_tasks',
+    'list_tasks', 'get_task', 'task_action', 'task_actions', 'generate_image',
+    'read_file', 'edit_file', 'create_word_document', 'create_excel_workbook'];
+  for (const name of required) {
+    assert.ok(names(normal).includes(name), 'interactive task chat: ' + name);
+    assert.ok(names(monitored).includes(name), 'monitoring: ' + name);
+  }
+  assert.equal(normal.tools?.filter(tool => tool.type === 'web_search').length, 1);
+  assert.equal(monitored.tools?.filter(tool => tool.type === 'web_search').length, 1);
+  assert.ok(names(monitored).includes('set_task_monitoring_trigger'));
+  const forced = createTaskChatOpenAiPayload('gpt-6-luna', messages, 512, { allowWebSearch: true, forceWebSearch: true });
+  assert.deepEqual(forced.tool_choice, { type: 'web_search' });
+});
+
+test('model false-offline answers are detected for a real web retry', async () => {
+  const { shouldRetryTaskChatWebSearch } = await import('../src/services/ai-assistant.service.js');
+  assert.equal(shouldRetryTaskChatWebSearch('У меня нет доступа к интернету, поэтому не могу проверить.'), true);
+  assert.equal(shouldRetryTaskChatWebSearch('Не могу искать информацию в интернете.'), true);
+  assert.equal(shouldRetryTaskChatWebSearch('Веб-поиск недоступен для меня.'), true);
+  assert.equal(shouldRetryTaskChatWebSearch('Вот результаты поиска и источники.'), false);
 });

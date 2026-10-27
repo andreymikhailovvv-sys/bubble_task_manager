@@ -27,7 +27,8 @@ test('monitored AI prioritizes actual help and proactively follows up at request
     read('../src/services/task-monitoring-trigger.service.ts')
   ]);
   assert.match(ai, /Действуй инициативно/);
-  assert.match(ai, /Почти после каждого содержательного ответа/);
+  assert.match(ai, /СНАЧАЛА выполни полезную работу/);
+  assert.match(ai, /После содержательного ответа поддерживай дальнейшее сопровождение/);
   assert.match(ai, /ОБЯЗАТЕЛЬНО установи триггер/);
   assert.match(ai, /Не заменяй точное пожелание произвольным напоминанием/);
   assert.match(worker, /подготовь полезные материалы, варианты/);

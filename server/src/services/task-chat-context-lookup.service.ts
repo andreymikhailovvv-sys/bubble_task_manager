@@ -1,6 +1,7 @@
 import { prisma } from '../db/prisma.js';
 
-export const TASK_CHAT_CONTEXT_MAX_TOOL_CALLS = 3;
+// Include the shared assistant's five tool steps plus monitoring follow-ups/research.
+export const TASK_CHAT_CONTEXT_MAX_TOOL_CALLS = 8;
 export const TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS = TASK_CHAT_CONTEXT_MAX_TOOL_CALLS + 1;
 export const TASK_CHAT_STORED_FILE_FETCH_LIMIT = 2;
 
