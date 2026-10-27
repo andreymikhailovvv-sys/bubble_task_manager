@@ -10,6 +10,7 @@ export type WorkspaceSearchHit = {
   context?: string;
   score: number;
 };
+export type WorkspaceSearchResults = Record<WorkspaceSearchKind, WorkspaceSearchHit[]> & { closed: WorkspaceSearchHit[] };
 
 export const normalizeWorkspaceQuery = (value: string) =>
   value.normalize('NFKC').toLocaleLowerCase('ru-RU').replace(/ё/g, 'е').trim();
@@ -49,7 +50,7 @@ const decodeHtml = (value: string) => value.replace(/&#x([\da-f]+);/gi, (_match,
   ({amp:'&',lt:'<',gt:'>',quot:'"',apos:"'",nbsp:' '} as Record<string,string>)[key.toLowerCase()] ?? ' ');
 
 /** Indexed text only. The result is always rendered as React text, never HTML. */
-export const noteSearchText = (html: string) => decodeHtml(html
+export const noteSearchText = (html: string) => decodeHtml(decodeHtml(html)
   .replace(/<(script|style|iframe|object|svg|math)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ')
   .replace(/<\s*(br|\/p|\/div|\/li|\/h[1-6]|\/ul|\/ol)\b[^>]*>/gi, ' ')
   .replace(/<[^>]*>/g, ' ')).replace(/\s+/g,' ').trim();
@@ -75,9 +76,12 @@ type SearchRow = { id: string; kind: WorkspaceSearchKind; title: string; descrip
 export function scoreWorkspaceRow(row: SearchRow, query: string): WorkspaceSearchHit | null {
   const terms = simplify(query).split(' ').filter(Boolean).slice(0, 10);
   if (!terms.length) return null;
-  const title = simplify(row.title);
-  const body = simplify(row.description);
-  const context = simplify(row.context ?? '');
+  const cleanTitle = noteSearchText(row.title);
+  const cleanBody = noteSearchText(row.description);
+  const cleanContext = noteSearchText(row.context ?? '');
+  const title = simplify(cleanTitle);
+  const body = simplify(cleanBody);
+  const context = simplify(cleanContext);
   const matched = terms.map(term => {
     const variants = termVariants(term);
     // Prefer an exact-layout match over a converted match.
@@ -97,9 +101,9 @@ export function scoreWorkspaceRow(row: SearchRow, query: string): WorkspaceSearc
   const firstFound = hitTerms.map(entry => entry.bodyIndex).filter(idx => idx >= 0).sort((a,b)=>a-b)[0];
   const start = firstFound === undefined ? 0 : Math.max(0, firstFound - 55);
   return {
-    id: row.id, kind: row.kind, title: row.title || 'Без названия', context: row.context,
-    preview: (start ? '…' : '') + row.description.slice(start, start + 190)
-      + (start + 190 < row.description.length ? '…' : ''),
+    id: row.id, kind: row.kind, title: cleanTitle || 'Без названия', context: cleanContext,
+    preview: (start ? '…' : '') + cleanBody.slice(start, start + 190)
+      + (start + 190 < cleanBody.length ? '…' : ''),
     score
   };
 }
@@ -110,8 +114,8 @@ export function searchWorkspace(
   notes: StandaloneNote[],
   query: string,
   limitPerKind = 5
-): Record<WorkspaceSearchKind, WorkspaceSearchHit[]> {
-  const empty = { task: [] as WorkspaceSearchHit[], subtask: [] as WorkspaceSearchHit[], note: [] as WorkspaceSearchHit[] };
+): WorkspaceSearchResults {
+  const empty: WorkspaceSearchResults = { task: [], subtask: [], note: [], closed: [] };
   if (!simplify(query)) return empty;
   const parentNames = new Map(tasks.map(task => [task.id, task.title]));
   const search = (rows: SearchRow[]) => rows
@@ -119,17 +123,25 @@ export function searchWorkspace(
     .filter((row): row is WorkspaceSearchHit => row !== null)
     .sort((a,b) => b.score - a.score || a.title.localeCompare(b.title, 'ru'))
     .slice(0, limitPerKind);
+  const taskRow = (task: Task): SearchRow => ({
+    id: task.id, kind: 'task', title: task.title, description: task.description ?? ''
+  });
+  const subtaskRow = (task: Task): SearchRow => ({
+    id: task.id, kind: 'subtask', title: task.title, description: task.description ?? '',
+    context: task.parentTaskId ? parentNames.get(task.parentTaskId) ?? '' : ''
+  });
+  const activeTasks = tasks.filter(task => !task.parentTaskId && task.status !== 'DONE');
+  const closedTasks = tasks.filter(task => !task.parentTaskId && task.status === 'DONE');
+  const activeSubtasks = subtasks.filter(task => task.status !== 'DONE');
+  const closedSubtasks = subtasks.filter(task => task.status === 'DONE');
   return {
-    task: search(tasks.filter(task => !task.parentTaskId).map(task => ({
-      id: task.id, kind: 'task' as const, title: task.title, description: task.description ?? ''
-    }))),
-    subtask: search(subtasks.map(task => ({
-      id: task.id, kind: 'subtask' as const, title: task.title, description: task.description ?? '',
-      context: task.parentTaskId ? parentNames.get(task.parentTaskId) ?? '' : ''
-    }))),
+    task: search(activeTasks.map(taskRow)),
+    subtask: search(activeSubtasks.map(subtaskRow)),
     note: search(notes.map(note => ({
       id: note.id, kind: 'note' as const, title: note.title || 'Без названия',
       description: noteSearchText(note.content)
-    })))
+    }))),
+    closed: search([...closedTasks.map(taskRow), ...closedSubtasks.map(subtaskRow)])
+
   };
 }

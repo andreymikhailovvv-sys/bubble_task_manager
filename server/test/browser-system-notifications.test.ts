@@ -62,3 +62,12 @@ test('browser delivery mirrors the existing system notification feed, not a sepa
 test('browser notification module does not use Notification API in unsupported server environment', () => {
   assert.equal(browserNotificationPermission(), 'unsupported');
 });
+
+test('monitoring notifications are no longer hidden from the system toast and browser channel', async () => {
+  const app = await readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8');
+  assert.equal((app.match(/const visibleNotifications = result\.notifications;/g) ?? []).length, 2);
+  assert.match(app, /const newNotifications = visibleNotifications\.filter/);
+  assert.match(app, /deliverBrowserSystemNotifications\(newNotifications\)/);
+  assert.match(app, /setSystemNotificationToast\(newestUnseen\)/);
+  assert.match(app, /systemNotifications\.filter\(notification => !notification\.eventKey\?\.startsWith\('monitoring:'\)\)/);
+});

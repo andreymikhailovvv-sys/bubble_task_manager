@@ -115,6 +115,9 @@ export function TaskMonitoringStatuses({ taskId, enabled, allowed = true, onTask
       const task = await api.updateTask(taskId, { aiMonitoringEnabled: next });
       setMonitorEnabled(task.aiMonitoringEnabled === true);
       onTaskUpdated?.(task);
+      if (task.aiMonitoringEnabled === true && !monitorEnabled) {
+        window.dispatchEvent(new CustomEvent('planirovych:monitoring-intro-start', { detail: { taskId } }));
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Не удалось изменить автомониторинг.');
     } finally { setSaving(false); }

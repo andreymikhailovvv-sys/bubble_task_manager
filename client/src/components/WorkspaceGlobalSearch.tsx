@@ -122,7 +122,7 @@ export function WorkspaceGlobalSearch({
   // every keystroke. Search scoring stays lightweight even with many notes.
   const indexedNotes = useMemo(() => notes.map(note => ({ ...note, content: noteSearchText(note.content) })), [notes]);
   const results = useMemo(() => searchWorkspace(tasks, subtasks, indexedNotes, value), [tasks, subtasks, indexedNotes, value]);
-  const entries = useMemo(() => sections.flatMap(({kind}) => results[kind]), [results]);
+  const entries = useMemo(() => [...sections.flatMap(({kind}) => results[kind]), ...results.closed], [results]);
   useEffect(() => setFocusedIndex(0), [value]);
   const selectResult = (item: WorkspaceSearchHit) => {
     setOpen(false);
@@ -204,6 +204,25 @@ export function WorkspaceGlobalSearch({
                 </div>
               );
             })}
+            {results.closed.length > 0 ? (
+              <div className="workspace-global-search-section workspace-global-search-section-closed mt-3 border-t border-[color:var(--panel-border)] pt-2">
+                <p className="workspace-global-search-section-title flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+                  <ListChecks size={14} aria-hidden="true"/>Завершённые задачи, подзадачи и события
+                </p>
+                {results.closed.map((item, offset) => {
+                  const index = entries.length - results.closed.length + offset;
+                  return <button key={item.kind + item.id} type="button" role="option"
+                    aria-selected={focusedIndex === index}
+                    className={'workspace-global-search-hit flex w-full flex-col gap-1 rounded-xl px-3 py-2.5 text-left opacity-75 ' + (focusedIndex === index ? 'workspace-global-search-hit-active' : '')}
+                    onMouseEnter={() => setFocusedIndex(index)}
+                    onClick={() => selectResult(item)}>
+                    <span className="truncate text-sm font-semibold text-primary">{item.title}</span>
+                    {item.context ? <span className="truncate text-[11px] text-muted">В задаче: {item.context}</span> : null}
+                    {item.preview ? <span className="workspace-global-search-preview text-xs text-muted">{item.preview}</span> : null}
+                  </button>;
+                })}
+              </div>
+            ) : null}
             {entries.length === 0 ? (
               <div className="flex flex-col items-center gap-2 px-4 py-6 text-center text-sm text-muted">
                 {loadingNotes ? <LoaderCircle className="animate-spin" size={19} /> : <Search size={20}/>}

@@ -14,11 +14,12 @@ test('monitoring notification leads with the specific action, then the task line
   assert.ok(alert.content.includes('Если уже отправил'));
 });
 
-test('a model that fails the header format still gets a task-related fallback title', () => {
-  const fallback = monitoringHeadline('Мониторинг по задаче. Нужно проверить результат.',
+test('monitoring title is always derived from the actual model message, not a server template', () => {
+  const fallback = monitoringHeadline('Подрядчик подтвердил макет до 16:00. Передайте материалы в печать.',
     'Ответ поддержки');
-  assert.match(fallback.headline, /Ответ поддержки/);
-  assert.equal(fallback.body, 'Мониторинг по задаче. Нужно проверить результат.');
+  assert.match(fallback.headline, /Подрядчик подтвердил макет до 16:00/);
+  assert.doesNotMatch(fallback.headline, /Пора вернуться к задаче/);
+  assert.match(fallback.body, /Передайте материалы/);
 });
 
 test('autonomous subtask completion is persisted in the existing event queue, and is not triggered by model edits', async () => {

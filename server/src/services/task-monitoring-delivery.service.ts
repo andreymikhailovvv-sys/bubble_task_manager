@@ -29,9 +29,10 @@ export async function publishTaskMonitoringReply(input: {
     }],
     skipDuplicates: true
   });
-  // Badge-only event: the client counts it as unread, but deliberately
-  // excludes monitoring:* from the system-notification message timeline.
-  // Keep this idempotent when a partial delivery is retried.
+  // Separate persisted system notification drives the left-hand toast and
+  // background browser alert. The Quick AI timeline omits this duplicate
+  // event because the full monitoring reply already exists there.
+  // Keep idempotent when partial delivery is retried.
   try {
     await prisma.systemNotification.create({
       data: {

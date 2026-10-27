@@ -64,3 +64,21 @@ test('native Android shows only title and task label; Telegram uses checked labe
   assert.match(notify, /✔️Мониторинг задачи <i>/);
   assert.doesNotMatch(notify, /🔔/);
 });
+
+test('monitoring intro state is exposed owner-scoped and reflected as real AI progress in task chats', async () => {
+  const [routes, api, popup, web, mini, indicator] = await Promise.all([
+    read('../src/routes/api.ts'), read('../../client/src/lib/api.ts'),
+    read('../../client/src/components/TaskMonitoringStatuses.tsx'),
+    read('../../client/src/App.tsx'), read('../../client/src/MiniApp.tsx'),
+    read('../../client/src/components/TaskMonitoringIntroProgress.tsx')
+  ]);
+  assert.match(routes, /requireMonitoredTask\(req\.user!\.id, req\.params\.id\)/);
+  assert.match(routes, /monitoringIntroEventKey\(task\.id, task\.aiMonitoringGeneration\)/);
+  assert.match(routes, /intro-state/);
+  assert.match(api, /getTaskMonitoringIntroState/);
+  assert.match(popup, /planirovych:monitoring-intro-start/);
+  assert.equal((web.match(/<TaskMonitoringIntroProgress taskId=\{focusedTask\.id\}/g) ?? []).length, 2);
+  assert.match(mini, /<TaskMonitoringIntroProgress taskId=\{openedTask\.id\}/);
+  assert.match(indicator, /api\.getTaskMonitoringIntroState\(taskId\)/);
+  assert.match(indicator, /'analyzing_request' : 'forming_answer'/);
+});
