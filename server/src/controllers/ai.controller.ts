@@ -154,7 +154,7 @@ export const aiController = {
       traceResult = result;
       if (isQuickChat) {
         if (!telegramContinuation) await aiAssistantService.appendGeneralDialogMessages({ userId: req.user!.id, messages: [{ role: 'user', content: question }] });
-        await aiAssistantService.appendGeneralDialogAssistantMessage({ userId: req.user!.id, content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli, taskProposalId: result.taskProposal?.id });
+        await aiAssistantService.appendGeneralDialogAssistantMessage({ userId: req.user!.id, content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli, taskProposalId: result.taskProposal?.id, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations });
       }
       const { diagnostics: _diagnostics, workflowDiagnostics: _workflowDiagnostics, ...publicResult } = result;
       await completeAiChatRequest(requestClaim ?? { kind: 'untracked' }, publicResult);

@@ -84,3 +84,56 @@ test('model false-offline answers are detected for a real web retry', async () =
   assert.equal(shouldRetryTaskChatWebSearch('Веб-поиск недоступен для меня.'), true);
   assert.equal(shouldRetryTaskChatWebSearch('Вот результаты поиска и источники.'), false);
 });
+
+test('real web search exposes consulted URLs even when model inserts no citations', async () => {
+  const { extractAiWebEvidence, mergeAiWebEvidence } = await import('../src/services/ai-web-search-evidence.service.js');
+  const first = { output: [
+    { type: 'web_search_call', action: { type: 'search', sources: [
+      { type: 'url', url: 'https://example.com/a', title: 'Первый источник' },
+      { type: 'url', url: 'https://example.org/b' },
+      { url: 'javascript:alert(1)', title: 'Unsafe' }
+    ] } }
+  ] };
+  assert.deepEqual(extractAiWebEvidence(first).sources, [
+    { url: 'https://example.com/a', title: 'Первый источник' },
+    { url: 'https://example.org/b', title: 'example.org' }
+  ]);
+  const sources: Array<{ title: string; url: string }> = [];
+  const citations: Array<{ startIndex: number; endIndex: number; sourceIndex: number }> = [];
+  mergeAiWebEvidence(first, sources, citations);
+  mergeAiWebEvidence({ output: [{ type: 'message', content: [{
+    annotations: [{ type: 'url_citation', url: 'https://example.com/a', title: 'Первый источник',
+      start_index: 5, end_index: 14 }]
+  }] }] }, sources, citations);
+  assert.equal(sources.length, 2, 'deduplicate pages across multiple model rounds');
+  assert.deepEqual(citations, [{ startIndex: 5, endIndex: 14, sourceIndex: 0 }]);
+});
+
+test('provider requests include web search consulted URLs but token preflight does not', async () => {
+  const { createCleanOpenAiResponsesPayload, createOpenAiResponsesTokenCountPayload } =
+    await import('../src/services/dynamic-responses-billing.service.js');
+  const real = createCleanOpenAiResponsesPayload({
+    model: 'gpt-6-luna', input: 'hello', include: ['web_search_call.action.sources']
+  });
+  assert.deepEqual(real.include, ['web_search_call.action.sources']);
+  assert.equal('include' in createOpenAiResponsesTokenCountPayload(real), false);
+  const [task, general, controller, schema, migration, widget, android] = await Promise.all([
+    readFile(new URL('../src/services/ai-assistant.service.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/services/ai-chat-tools.service.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/controllers/ai.controller.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../prisma/schema.prisma', import.meta.url), 'utf8'),
+    readFile(new URL('../prisma/migrations/20261027153000_general_ai_web_search_evidence/migration.sql', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/components/WebCitations.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeTaskAiChat.kt', import.meta.url), 'utf8')
+  ]);
+  assert.match(task, /mergeAiWebEvidence\(responseJson, webSources, webCitations\)/);
+  assert.match(general, /mergeAiWebEvidence\(response, webSources, webCitations\)/);
+  assert.match(general, /web_search_call\.action\.sources/);
+  assert.match(task, /web_search_call\.action\.sources/);
+  assert.match(controller, /webSources: result\.webSources/);
+  assert.match(schema, /model GeneralAiMessage \{[\s\S]*?webSearchUsed Boolean/);
+  assert.match(migration, /ALTER TABLE "GeneralAiMessage"/);
+  assert.match(widget, /Поиск в интернете/);
+  assert.match(widget, /searched = false/);
+  assert.match(android, /Поиск в интернете/);
+});

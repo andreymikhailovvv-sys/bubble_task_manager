@@ -82,6 +82,7 @@ fun generalAiMessage(item:JsonObject):TaskAiChatMessage{
         authorName=item.aiString("authorName").ifBlank{null},
         creditsSpentMilli=(item["creditsSpentMilli"] as? JsonPrimitive)
             ?.contentOrNull?.toLongOrNull(),
+        webSearchUsed=(item["webSearchUsed"] as? JsonPrimitive)?.booleanOrNull==true,
         webSources=sources,taskProposal=item["taskProposal"] as? JsonObject,
         generatedDocument=item["generatedDocument"] as? JsonObject,
         telegramSendDraft=item["telegramSendDraft"] as? JsonObject,

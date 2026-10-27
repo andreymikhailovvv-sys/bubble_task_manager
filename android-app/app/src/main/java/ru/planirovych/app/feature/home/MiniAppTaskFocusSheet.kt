@@ -635,8 +635,8 @@ private fun FocusTaskSettingsDialog(
             Box(Modifier.size(33.dp).clickable(enabled=!busy,onClick=onToggle),
                 contentAlignment=Alignment.Center){
                 Box(Modifier.size(20.dp).clip(RoundedCornerShape(6.dp))
-                    .border(1.5.dp,c.purple,RoundedCornerShape(6.dp))
-                    .background(if(task.status==TaskStatus.DONE)c.purple else c.purple.copy(alpha=.06f)),
+                    .border(1.5.dp,if(c.teal==Color(0xFF0891B2))c.teal else c.purple,RoundedCornerShape(6.dp))
+                    .background(if(task.status==TaskStatus.DONE)(if(c.teal==Color(0xFF0891B2))c.teal else c.purple) else (if(c.teal==Color(0xFF0891B2))c.teal else c.purple).copy(alpha=.06f)),
                     contentAlignment=Alignment.Center){
                     if(task.status==TaskStatus.DONE)Icon(Icons.Default.Check,null,
                         tint=Color.White,modifier=Modifier.size(15.dp))

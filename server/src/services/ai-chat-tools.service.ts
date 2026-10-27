@@ -1,4 +1,5 @@
 import { openAiFetch } from '../lib/openai-fetch.js';
+import { mergeAiWebEvidence } from './ai-web-search-evidence.service.js';
 import { prepareTaskProposal } from './ai-task-proposal.service.js';
 import { normalizePlannerDueDate } from './planner-due-date.service.js';
 import { plannerToolsService, PLANNER_OPERATIONS, PLANNER_BATCH_OPERATIONS, type PlannerActionInput, type PlannerBatchActionInput, type PlannerSearchInput, type PlannerListInput } from './planner-tools.service.js';
@@ -317,7 +318,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
       emitProgress(progress);
     }
   };
-  const webSources: WebSource[] = []; const webCitations: WebCitation[] = []; const sourceByUrl = new Map<string, number>();
+  const webSources: WebSource[] = []; const webCitations: WebCitation[] = [];
   if (webSearchAvailable) {
     try { webReservation = await reserveAiCreditsMilli(input.userId, WEB_SEARCH_CALL_CREDITS_MILLI); }
     catch (error) { if (error instanceof Error && error.message === 'Недостаточно AI кредитов') webSearchAvailable = false; else throw error; }
@@ -350,7 +351,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         const toolChoice = requiredLookup
           ? { type: 'function' as const, name: requiredLookup }
           : 'auto' as const;
-        const providerPayload = { model: input.model, input: requestInput, ...(isForcedFinalRound ? { tool_choice: 'none' } : { tools, tool_choice: toolChoice, parallel_tool_calls: false, ...(includeWebSearch ? { max_tool_calls: 1 } : {}) }) };
+        const providerPayload = { model: input.model, input: requestInput, ...(isForcedFinalRound ? { tool_choice: 'none' } : { tools, tool_choice: toolChoice, parallel_tool_calls: false, ...(includeWebSearch ? { max_tool_calls: 1, include: ['web_search_call.action.sources'] } : {}) }) };
         if (input.dynamicBilling) {
           let call: DynamicResponsesCall;
           try { call = await runDynamicResponsesCall({ userId: input.userId, actionId: requestId, providerCallIndex, feature: 'ai_chat', apiKey: input.apiKey, payload: providerPayload, stream: true, onProviderEvent: observeProviderEvent }); }
@@ -374,17 +375,10 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           }
           if (call.webSearchCallsActual > 0 && !webSearchUsed) {
             webSearchUsed = true; toolOperations.push('web_search');
-            for (const item of response.output ?? []) for (const part of Array.isArray(item.content) ? item.content : []) {
-              if (!part || typeof part !== 'object') continue;
-              for (const annotation of Array.isArray((part as { annotations?: unknown }).annotations) ? (part as { annotations: Array<Record<string, unknown>> }).annotations : []) {
-                if (annotation.type !== 'url_citation' || typeof annotation.url !== 'string') continue;
-                let sourceIndex = sourceByUrl.get(annotation.url);
-                if (sourceIndex === undefined) { sourceIndex = webSources.length; sourceByUrl.set(annotation.url, sourceIndex); webSources.push({ url: annotation.url, title: typeof annotation.title === 'string' && annotation.title.trim() ? annotation.title.trim() : annotation.url }); }
-                if (typeof annotation.start_index === 'number' && typeof annotation.end_index === 'number') webCitations.push({ startIndex: annotation.start_index, endIndex: annotation.end_index, sourceIndex });
-              }
-            }
+            mergeAiWebEvidence(response, webSources, webCitations);
             console.info('[AI web search] completed', { requestId, model: input.model, providerCallIndex, sourceCount: webSources.length, searchActionsRaw: call.webSearchSearchItemsRaw, uniqueSearchCalls: call.webSearchCallsActual - call.webSearchCallsWithoutId, searchCallsWithoutId: call.webSearchCallsWithoutId, duplicateSearchItems: call.webSearchDuplicateItems, billedSearchCalls: 1, fixedCreditsMilliBilled: WEB_SEARCH_CALL_CREDITS_MILLI, providerWebSearchCreditsMilli: call.webSearchCreditsMilliProvider });
           }
+          if (webSearchUsed && call.webSearchCallsActual === 0) mergeAiWebEvidence(response, webSources, webCitations);
           console.info('[AI chat round] completed', { requestId, userId: input.userId, model: input.model, providerCallIndex, hadToolCall: response.output?.some((item) => item.type === 'function_call') ?? false, toolOperation: response.output?.find((item) => item.type === 'function_call')?.name ?? null, inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens, actualCreditsMilli: call.actualCreditsMilli, isForcedFinalRound });
           return response;
         }

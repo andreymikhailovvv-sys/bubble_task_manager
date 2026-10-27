@@ -10379,3 +10379,18 @@ body[data-theme='light'] .ai-attachment-tiles-history .ai-attachment-tile-name,
   background: color-mix(in srgb, var(--field-bg, #e2e8f0) 60%, var(--text-muted, #64748b) 16%);
 }
 .ai-attachment-download-button:focus-visible { outline: 2px solid var(--text-muted, #64748b); outline-offset: 2px; }
+
+/* Mobile focus subtask completion matches the light-theme cyan focus controls.
+   Mini App and mobile browser share the same focus panel. Dark mode unchanged. */
+.miniapp-shell.miniapp-light .miniapp-focus-subtask-check-toggle:hover { background: rgba(8, 145, 178, .09); }
+.miniapp-shell.miniapp-light .miniapp-focus-subtask-check-toggle:focus-visible { outline-color: #0891b2; }
+.miniapp-shell.miniapp-light .miniapp-focus-subtask-check-box {
+  border-color: #0891b2;
+  background: rgba(8, 145, 178, .055);
+  color: #0891b2;
+}
+.miniapp-shell.miniapp-light .miniapp-focus-subtask-check-box-done {
+  border-color: #0891b2;
+  background: #0891b2;
+  color: #ffffff;
+}

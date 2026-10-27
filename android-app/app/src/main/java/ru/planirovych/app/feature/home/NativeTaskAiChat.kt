@@ -640,15 +640,31 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                     if(message.messageKind=="MONITOR_ACTION"){
                         Text("Действие автомониторинга",color=c.secondary,fontSize=10.sp)
                     }
-                    message.webSources.take(5).forEach{(title,url)->
-                        Row(Modifier.fillMaxWidth().clickable{
-                            runCatching{context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(url)))}
-                        },verticalAlignment=Alignment.CenterVertically){
-                            Icon(Icons.Default.OpenInNew,null,tint=c.accent,
-                                modifier=Modifier.size(12.dp))
-                            Spacer(Modifier.width(5.dp))
-                            Text(title,color=c.accent,maxLines=1,
-                                overflow=TextOverflow.Ellipsis,fontSize=11.sp)
+                    if(!isUser && (message.webSearchUsed || message.webSources.isNotEmpty())){
+                        HorizontalDivider(color=c.border.copy(alpha=.5f))
+                        Row(verticalAlignment=Alignment.CenterVertically,
+                            horizontalArrangement=Arrangement.spacedBy(5.dp)){
+                            Icon(Icons.Default.Public,null,tint=c.secondary,
+                                modifier=Modifier.size(13.dp))
+                            Text("Поиск в интернете",color=c.assistantText,
+                                fontSize=11.sp,fontWeight=FontWeight.SemiBold)
+                        }
+                        if(message.webSources.isEmpty()){
+                            Text("Поиск выполнен, но сервис не передал ссылки на источники.",
+                                color=c.secondary,fontSize=11.sp,lineHeight=15.sp)
+                        }
+                        message.webSources.take(10).forEachIndexed{index,(title,url)->
+                            if(url.startsWith("https://",ignoreCase=true)){
+                                Row(Modifier.fillMaxWidth().clickable{
+                                    runCatching{context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(url)))}
+                                },verticalAlignment=Alignment.CenterVertically){
+                                    Icon(Icons.Default.OpenInNew,null,tint=c.accent,
+                                        modifier=Modifier.size(12.dp))
+                                    Spacer(Modifier.width(5.dp))
+                                    Text("[${index+1}] "+title,color=c.accent,maxLines=2,
+                                        overflow=TextOverflow.Ellipsis,fontSize=11.sp)
+                                }
+                            }
                         }
                     }
                     message.taskProposal?.let{proposal->
