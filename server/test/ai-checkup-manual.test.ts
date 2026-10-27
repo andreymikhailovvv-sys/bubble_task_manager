@@ -109,3 +109,14 @@ test('several independent checkups can run on one local day without duplicate sl
   assert.match(client, /Добавить чекап/);
   assert.match(client, /Пожелания к этому чекапу/);
 });
+
+test('checkup settings have a collapsed downward chevron and independent monitoring-style switch', async () => {
+  const component = await source('../../client/src/components/AiCheckupScheduleSettings.tsx');
+  assert.match(component, /<ChevronDown size=\{15\}/);
+  assert.match(component, /rotate-180/);
+  assert.doesNotMatch(component, /ChevronRight/);
+  assert.match(component, /role="switch" aria-checked=\{enabled\}/);
+  assert.match(component, /task-monitor-mode-switch/);
+  assert.match(component, /commit\(\{ morningAiCheckupEnabled: next \}\)/);
+  assert.doesNotMatch(component, /type="checkbox"/);
+});
