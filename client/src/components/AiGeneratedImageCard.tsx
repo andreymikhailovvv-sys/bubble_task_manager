@@ -54,12 +54,7 @@ export function AiGeneratedImageCard({ document, onDownload }: Props) {
     return () => { active = false; observer?.disconnect(); };
   }, [document.id]);
 
-  const downloadLabel = (
-    <>
-      <Download size={15} aria-hidden="true" />
-      <span>Скачать</span>
-    </>
-  );
+  const downloadLabel = <Download size={18} aria-hidden="true" />;
   return (
     <figure className="ai-generated-image-card">
       <div ref={previewRef} className="ai-generated-image-preview">
@@ -80,19 +75,16 @@ export function AiGeneratedImageCard({ document, onDownload }: Props) {
         ) : (
           <div className="ai-generated-image-loading" role="status" aria-label="Загружаю превью изображения" />
         )}
-      </div>
-      <figcaption className="ai-generated-image-footer">
-        <span className="ai-generated-image-name" title={document.fileName}>{document.fileName}</span>
         {onDownload ? (
-          <button className="ai-generated-image-download" type="button" onClick={() => void onDownload(document)} title={`Скачать ${document.fileName}`}>
+          <button className="ai-generated-image-download" type="button" onClick={() => void onDownload(document)} aria-label={`Скачать ${document.fileName}`} title="Скачать изображение">
             {downloadLabel}
           </button>
         ) : (
-          <a className="ai-generated-image-download" href={api.getAiGeneratedDocumentDownloadUrl(document.id)} download={document.fileName} title={`Скачать ${document.fileName}`}>
+          <a className="ai-generated-image-download" href={api.getAiGeneratedDocumentDownloadUrl(document.id)} download={document.fileName} aria-label={`Скачать ${document.fileName}`} title="Скачать изображение">
             {downloadLabel}
           </a>
         )}
-      </figcaption>
+      </div>
     </figure>
   );
 }
