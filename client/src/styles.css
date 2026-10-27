@@ -470,10 +470,6 @@ body {
   background: rgba(255, 255, 255, 0.86);
 }
 
-.upcoming-subtask-row-sector {
-  box-shadow: inset 4px 0 0 var(--upcoming-subtask-sector-color, #64748b);
-}
-
 .upcoming-subtask-icon-action,
 .upcoming-subtask-date-action > .date-time-trigger {
   display: inline-flex;
@@ -10509,4 +10505,41 @@ body[data-theme='light'] :is(.ai-chat-message-user, .quick-ai-chat-message-user,
   -webkit-tap-highlight-color: transparent !important;
   appearance: none;
   -webkit-appearance: none;
+}
+
+/* Attachment storage is intentionally neutral in both profile themes. */
+.profile-attachment-storage {
+  background: color-mix(in srgb, var(--card-bg) 84%, var(--muted-bg)) !important;
+  border-color: color-mix(in srgb, var(--panel-border) 88%, transparent) !important;
+}
+.profile-attachment-file-link { color: #0891b2; }
+.profile-attachment-file-link:hover { color: #0e7490; }
+body[data-theme='dark'] .profile-attachment-file-link { color: #67e8f9; }
+body[data-theme='dark'] .profile-attachment-file-link:hover { color: #a5f3fc; }
+
+/* Upcoming subtasks share the quiet surfaces of desktop task list cards:
+   no sector stripe, no saturated background, consistent radius and shadow. */
+.upcoming-subtasks-list .upcoming-subtask-row {
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 1.25rem;
+  border-color: rgba(110, 133, 164, .29);
+  background: linear-gradient(145deg, rgba(26, 40, 61, .98), rgba(20, 34, 55, .98));
+  box-shadow: 0 9px 24px rgba(2, 6, 23, .17), inset 0 1px 0 rgba(255, 255, 255, .045);
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+.upcoming-subtasks-list .upcoming-subtask-row:hover {
+  border-color: rgba(147, 164, 190, .48);
+  background: linear-gradient(145deg, rgba(30, 45, 68, .99), rgba(24, 38, 59, .98));
+  box-shadow: 0 12px 26px rgba(2, 6, 23, .21);
+}
+body[data-theme='light'] .upcoming-subtasks-list .upcoming-subtask-row,
+body[data-theme='light'] .upcoming-subtasks-list .upcoming-subtask-row:hover {
+  border-color: rgba(216, 226, 239, .9);
+  background: #ffffff;
+  box-shadow: 0 8px 22px rgba(25, 48, 84, .07);
+}
+body[data-theme='light'] .upcoming-subtasks-list .upcoming-subtask-row:hover {
+  border-color: rgba(186, 202, 226, .9);
+  box-shadow: 0 12px 26px rgba(25, 48, 84, .1);
 }

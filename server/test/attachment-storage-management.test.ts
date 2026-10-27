@@ -97,3 +97,20 @@ test('события прикрепляют файлы через существ
   assert.match(mini, /api\.createTaskAttachment\(createdTask\.id, await fileToAttachmentPayload\(file\)\)/);
   assert.match(service, /taskAccessWhere\(userId\)/);
 });
+
+test('profile storage is calm and attachment filenames are teal; upcoming cards match list mode without sector stripes', async () => {
+  const [app, css] = await Promise.all([
+    readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8')
+  ]);
+  assert.match(app, /profile-attachment-storage rounded-xl border/);
+  assert.match(app, /profile-attachment-file-link mt-1/);
+  assert.match(css, /\.profile-attachment-storage \{/);
+  assert.match(css, /\.profile-attachment-file-link \{ color: #0891b2; \}/);
+  assert.match(css, /body\[data-theme='dark'\] \.profile-attachment-file-link \{ color: #67e8f9; \}/);
+  assert.doesNotMatch(app, /border-violet-400\/20 bg-violet-500\/5 p-3" aria-label="Хранилище вложений"/);
+  assert.doesNotMatch(app, /upcoming-subtask-row-sector/);
+  assert.doesNotMatch(css, /\.upcoming-subtask-row-sector/);
+  assert.match(css, /\.upcoming-subtasks-list \.upcoming-subtask-row \{[\s\S]*?border-radius: 1\.25rem;[\s\S]*?box-shadow:/);
+  assert.match(css, /body\[data-theme='light'\] \.upcoming-subtasks-list \.upcoming-subtask-row/);
+});
