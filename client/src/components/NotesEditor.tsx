@@ -11,6 +11,8 @@ type Props = {
   onChange: (value: string) => void;
   onClose: () => void;
   miniAppSheet?: boolean;
+  /** Telegram system controls clearance; undefined outside Telegram. */
+  telegramSafeTop?: number;
   heading?: string;
   titleEditor?: ReactNode;
 };
@@ -139,7 +141,7 @@ function createChecklistItem(line: string) {
   return item;
 }
 
-export function NotesEditor({ value, onChange, onClose, miniAppSheet = false, heading = 'Заметки', titleEditor }: Props) {
+export function NotesEditor({ value, onChange, onClose, miniAppSheet = false, telegramSafeTop, heading = 'Заметки', titleEditor }: Props) {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const savedRangeRef = useRef<Range | null>(null);
   const [hasSelection, setHasSelection] = useState(false);
@@ -392,7 +394,9 @@ export function NotesEditor({ value, onChange, onClose, miniAppSheet = false, he
   };
 
   return createPortal((
-    <div className={`notes-editor-backdrop fixed inset-0 z-[2147483646] flex items-center justify-center p-4 ${miniAppSheet ? 'miniapp-notes-editor-backdrop' : ''}`} onClick={onClose}>
+    <div className={`notes-editor-backdrop fixed inset-0 z-[2147483646] flex items-center justify-center p-4 ${miniAppSheet ? 'miniapp-notes-editor-backdrop' : ''} ${telegramSafeTop !== undefined ? 'miniapp-telegram-safe-editor-backdrop' : ''}`}
+      style={telegramSafeTop !== undefined ? ({ '--telegram-editor-top': `${Math.max(96, telegramSafeTop + 12)}px` } as React.CSSProperties) : undefined}
+      onClick={onClose}>
       <section className={`notes-editor-panel relative flex h-[min(82vh,680px)] w-full max-w-4xl flex-col rounded-3xl border shadow-2xl ${miniAppSheet ? 'miniapp-notes-editor-panel' : ''}`} onClick={(event) => event.stopPropagation()}>
         <button type="button" className="notes-editor-close absolute right-3 top-3 rounded-full p-2" onClick={onClose} title="Закрыть заметки" aria-label="Закрыть заметки">
           <X size={18} />
