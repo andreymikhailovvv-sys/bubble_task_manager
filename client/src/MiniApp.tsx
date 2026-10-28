@@ -693,7 +693,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     events.forEach(event => webApp.onEvent?.(event, syncViewport));
     webApp.ready?.();
     webApp.expand?.();
-    // Prevent Telegram from capturing the first vertical gesture as sheet drag.
+    // Prevent Telegram claiming the first swipe as a native sheet gesture.
     webApp.disableVerticalSwipes?.();
     try {
       if (!webApp.isFullscreen) webApp.requestFullscreen?.();
@@ -3140,7 +3140,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     setActiveAiChatId(chat.id);
   };
 
-  // Create a separate thread in the personal project, leaving Quick AI history intact.
+  // A fresh thread in the personal project; the permanent Quick AI history stays intact.
   const createQuickAiChatThread = () => {
     const personal = aiChatProjects[0];
     if (!personal) return;
@@ -3672,7 +3672,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     !isCreateTaskModalOpen && !isHabitModalOpen && !isAiDialogOpen;
 
   const taskMonitoringControl = openedTask ? (
-    <TaskMonitoringStatuses taskId={openedTask.id}
+              <TaskMonitoringStatuses taskId={openedTask.id}
                 enabled={openedTask.aiMonitoringEnabled === true}
                 allowed={openedTask.taskType === 'TASK' && !openedTask.parentTaskId && !openedTask.isCollaborative}
                 onTaskUpdated={(updated) => {
@@ -3686,580 +3686,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     aiMonitoringEnabled: updated.aiMonitoringEnabled
                   };
                 }} />
-              <button type="button" onClick={() => closeMiniWindowWithMotion('task-ai', () => setIsAiDialogOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть диалог с ИИ"><X size={18} /></button>
-              <select value={selectedAiChatModel} onChange={(event) => setSelectedAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap w-40 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель помощи ИИ">
-                {AI_CHAT_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-            </div>
-            <div className="miniapp-ai-chat-thread-wrap relative min-h-0 flex-1">
-              <div ref={fullscreenAiDialogContainerRef} onScroll={(event) => updateAiChatHeaderVisibility(event.currentTarget.scrollTop, taskAiChatScrollTopRef, setIsTaskAiChatHeaderHidden)} className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
-                {openedTaskAiDialog.length === 0 ? (
-                  <TaskAiEmptyState variant="miniapp" />
-                ) : null}
-                {openedTaskAiDialog.map((message, index) => (
-                  <div key={`mini-ai-full-${index}`} className={`ai-message-forward-group w-fit max-w-[88%] ${message.role === 'user' ? 'ml-auto' : 'mr-auto'}`}><div className={`miniapp-ai-chat-message miniapp-ai-chat-message-task w-full rounded-3xl px-4 py-3 ${message.role === 'user' ? `miniapp-ai-chat-message-user rounded-br-lg ${message.authorColor ? 'miniapp-ai-chat-message-authored' : ''}` : 'miniapp-ai-chat-message-assistant rounded-bl-lg'}`} style={message.role === 'user' && message.authorColor ? ({ '--message-author-color': message.authorColor } as CSSProperties) : undefined}>
-                    <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}{message.messageKind === 'HUMAN' && message.recipientName ? ` → ${message.recipientName}` : ''}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
-                    <div className="text-sm leading-relaxed">{message.messageKind === 'MONITOR_ACTION' ? <TaskMonitoringActionBadge content={message.content} /> : message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}</div>
-                    {message.monitoringTaskId ? <button type="button"
-                    className="task-monitor-chat-link mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold"
-                    onClick={() => { const target = tasks.find(task => task.id === message.monitoringTaskId && !task.parentTaskId); if (target) { setIsAiChatOpen(false); openTaskModal(target); setIsAiDialogOpen(true); } }}>
-                    <ArrowUpRight size={12} /> Ответить в чате задачи
-                  </button> : null}
-                  {message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} searched={message.webSearchUsed} /> : null}
-                    {message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} onDownload={downloadAiGeneratedDocument} /> : null}
-                  {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} /> : null}
-                  {message.role === 'assistant' && message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={message.telegramSuggestedReply} /> : null}
-                  {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={continueTelegramReadTask} /> : null}
-                  {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
-                  </div>
-                  <div className="ai-message-forward-actions"><AiReplyAction message={message} onReply={(target) => { setReplyToTask(target); if (openedTask) setAiRecipientByTaskId(prev => ({ ...prev, [openedTask.id]: 'ai' })); }} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={openedTask?.sphereId ?? null} /></div>
-                </div>
-                ))}
-                {openedTask.aiMonitoringEnabled ? <TaskMonitoringTriggerChips taskId={openedTask.id} enabled /> : null}
-                {aiLoadingTaskId === openedTask.id ? <TaskAiProgress status={aiProgressByTask[openedTask.id] ?? 'analyzing_request'} /> : openedTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={openedTask.id} /> : null}
-                <div className="miniapp-ai-chat-bottom-spacer h-24" aria-hidden="true" />
-              </div>
-            </div>
-            <div className="miniapp-ai-chat-composer absolute inset-x-0 bottom-0 z-20 p-3">
-              <input
-                ref={aiAttachmentInputRef}
-                type="file"
-                accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif"
-                multiple
-                className="hidden"
-                onChange={handleAiFileSelect}
-              />
-              <div
-                className="miniapp-task-ai-recipient-interaction"
-                onFocusCapture={() => setIsTaskAiRecipientPickerVisible(true)}
-                onBlurCapture={(event) => {
-                  const nextTarget = event.relatedTarget;
-                  if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
-                  setIsTaskAiRecipientPickerVisible(false);
-                  setIsTaskAiRecipientMenuOpen(false);
-                }}
-              >
-              {isTaskAiRecipientPickerVisible && openedTask.isCollaborative && openedTask.collaborationMembers?.length ? (
-                <div className="relative mb-2 flex justify-end miniapp-task-ai-recipient-reveal">
-                  <button type="button" className="miniapp-task-ai-recipient-trigger inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold" onClick={() => setIsTaskAiRecipientMenuOpen((open) => !open)}>
-                    <span className="miniapp-task-ai-recipient-label">Получатель:</span>
-                    <span>{openedTask.collaborationMembers.find((member) => member.userId === getTaskAiRecipientId(openedTask))?.name ?? 'ИИ'}</span>
-                    <ChevronDown size={12} />
-                  </button>
-                  {isTaskAiRecipientMenuOpen ? (
-                    <div className="miniapp-task-ai-recipient-menu absolute bottom-full right-0 z-40 mb-1 min-w-48 rounded-xl border p-1.5 shadow-2xl">
-                      <button type="button" className={`miniapp-task-ai-recipient-item block w-full rounded-lg px-3 py-2 text-left text-xs ${getTaskAiRecipientId(openedTask) === 'ai' ? 'miniapp-task-ai-recipient-item-active' : ''}`} onClick={() => { setAiRecipientByTaskId((prev) => ({ ...prev, [openedTask.id]: 'ai' })); setIsTaskAiRecipientMenuOpen(false); }}>ИИ</button>
-                      {openedTask.collaborationMembers.filter((member) => member.userId !== currentUser?.id).map((member) => (
-                        <button key={member.userId} type="button" className={`miniapp-task-ai-recipient-item flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs ${getTaskAiRecipientId(openedTask) === member.userId ? 'miniapp-task-ai-recipient-item-active' : ''}`} onClick={() => { setAiRecipientByTaskId((prev) => ({ ...prev, [openedTask.id]: member.userId })); setIsTaskAiRecipientMenuOpen(false); }}>
-                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: member.color }} />
-                          <span className="truncate">{member.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-              {replyToTask ? <AiReplyPreview target={replyToTask} onDismiss={() => setReplyToTask(null)} /> : null}
-              <AiAttachmentTiles files={aiPendingFiles} onRemove={(file) => setAiPendingFiles((prev) => prev.filter((item) => item !== file))} busy={aiLoadingTaskId === openedTask.id} uploadProgress={taskAiUploadProgress} />
-              <div className="miniapp-ai-chat-composer-card miniapp-ai-chat-composer-card-task flex items-end gap-2 rounded-3xl border p-2">
-                <MiniAiChatComposer
-                  ref={taskAiComposerRef}
-                  variant="task"
-                  initialDraft={taskAiDraftValueRef.current}
-                  onDraftChange={(value) => { taskAiDraftValueRef.current = value; }}
-                  onSend={() => { void sendAiMessage(); }}
-                  onAttach={() => aiAttachmentInputRef.current?.click()}
-                  isSending={aiLoadingTaskId === openedTask.id}
-                  hasPendingFiles={aiPendingFiles.length > 0}
-                  attachDisabled={getTaskAiRecipientId(openedTask) !== 'ai'}
-                  attachTitle={getTaskAiRecipientId(openedTask) === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'}
-                />
-              </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      <div className={`miniapp-quick-create fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2 ${isQuickCreateOpen ? 'is-open' : ''} ${isAiChatOpen || isStandaloneNotesOpen ? 'miniapp-quick-create-hidden' : ''}`}>
-        <div className="miniapp-quick-create-actions flex flex-col items-end gap-2" aria-hidden={!isQuickCreateOpen}>
-          <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={() => { setIsQuickCreateOpen(false); openCreateTaskModal(undefined, 'event'); }} className="miniapp-quick-create-action miniapp-quick-create-event inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
-            <span>Добавить событие</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><CalendarDays size={18} /></span>
-          </button>
-          <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} disabled={creatingStandaloneNote}
-            onClick={() => {
-              if (creatingStandaloneNote) return;
-              setIsQuickCreateOpen(false);
-              setCreatingStandaloneNote(true);
-              void api.createStandaloneNote().then((note) => {
-                setNewStandaloneNote(note);
-              }).catch((cause: unknown) => {
-                setError(cause instanceof Error ? cause.message : 'Не удалось создать заметку.');
-              }).finally(() => setCreatingStandaloneNote(false));
-            }}
-            className="miniapp-quick-create-action miniapp-quick-create-note inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
-            <span>{creatingStandaloneNote ? 'Создаём заметку…' : 'Добавить заметку'}</span>
-            <span className="flex h-9 w-9 items-center justify-center rounded-full"><StickyNote size={18} /></span>
-          </button>
-          <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={() => { setIsQuickCreateOpen(false); openCreateTaskModal(); }} className="miniapp-quick-create-action miniapp-quick-create-task inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
-            <span>Добавить задачу</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><Plus size={19} /></span>
-          </button>
-          <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={createQuickAiChatThread} className="miniapp-quick-create-action miniapp-quick-create-ai inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
-            <span>Создать чат с ИИ</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><Bot size={18} /></span>
-          </button>
-        </div>
-        <button type="button" onClick={() => setIsQuickCreateOpen((prev) => !prev)} className="miniapp-ai-chat-launcher flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-2xl shadow-violet-950/40 ring-2 ring-white/20 active:scale-95" aria-expanded={isQuickCreateOpen} aria-label={isQuickCreateOpen ? 'Закрыть меню добавления' : 'Открыть меню добавления'}>
-          <Plus size={25} strokeWidth={2.4} />
-        </button>
-      </div>
-
-      {newStandaloneNote ? (
-        <MiniAppStandaloneNoteEditor key={newStandaloneNote.id} telegramSafeTop={isTelegramRuntime ? telegramViewport.top : undefined} note={newStandaloneNote}
-          onClose={() => setNewStandaloneNote(null)} />
-      ) : null}
-
-      {isAiChatOpen ? (
-        <div className={`miniapp-ai-chat-backdrop miniapp-ai-chat-backdrop-general miniapp-slide-backdrop fixed inset-0 z-[70] bg-slate-950/75 p-0 ${getMiniWindowMotionClass('ai-chat')}`}>
-          <div className={`miniapp-ai-chat-panel miniapp-ai-chat-panel-general miniapp-slide-panel ${isGeneralAiChatHeaderHidden ? "miniapp-ai-header-collapsed" : ""} mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100`}>
-            <div className={`miniapp-ai-chat-header miniapp-ai-chat-header-general flex items-start justify-between gap-2 p-3 ${useTelegramCompactChatHeader ? 'miniapp-ai-chat-header-telegram' : ''} ${isGeneralAiChatHeaderHidden ? 'miniapp-ai-chat-header-hidden' : ''}`}>
-               <button type="button" onClick={() => setIsAiChatMenuOpen(true)} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Меню чатов и проектов"><Menu size={18} /></button>
-               <div className={`min-w-0 flex-1 ${useTelegramCompactChatHeader ? 'miniapp-ai-chat-inline-heading' : ''}`}>
-                 <p className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700"><Sparkles size={13} /> Чат с ИИ</p>
-                 <div className={useTelegramCompactChatHeader ? 'miniapp-ai-chat-inline-title' : 'mt-2 flex min-w-0 items-center gap-2'}>
-                   {useTelegramCompactChatHeader ? (
-                    <button type="button" className="miniapp-ai-chat-title-trigger" aria-label="Выбрать чат" aria-expanded={telegramChatPicker === 'chats'} aria-haspopup="menu"
-                      onClick={() => { setIsGeneralAiChatHeaderHidden(false); setTelegramChatPicker(prev => prev === 'chats' ? null : 'chats'); }}>
-                      <span className="truncate">{activeAiChat?.title ?? 'Новый чат'}</span><ChevronDown size={13} aria-hidden="true" />
-                    </button>
-                  ) : <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary" title={activeAiChat?.title ?? 'Новый чат'}>{activeAiChat?.title ?? 'Новый чат'}</h2>}
-                   {!useTelegramCompactChatHeader ? (<div className="miniapp-ai-chat-project-chip inline-flex max-w-[46%] shrink-0 items-center gap-1.5 rounded-2xl border px-2 py-1 text-[11px] font-semibold shadow-sm" style={{ '--project-color': activeAiChatProject?.color ?? '#8b5cf6' } as CSSProperties}>
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-xl bg-white/20 text-sm">{activeAiChatProject?.icon === 'telegram' ? <svg role="img" aria-label="Telegram" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M21.94 4.17a1.46 1.46 0 0 0-1.7-.23L2.1 11.1a1.18 1.18 0 0 0 .12 2.24l4.68 1.45 1.77 5.3a1.15 1.15 0 0 0 1.9.47l2.9-2.88 4.68 3.46a1.3 1.3 0 0 0 2.03-.76l2.18-14.6a1.52 1.52 0 0 0-.42-1.61Zm-3.88 3.9-8.2 7.47-.32 2.63-1.28-3.83 9.8-6.27Z"/></svg> : activeAiChatProject?.icon}</span>
-                    <span className="truncate">{activeAiChatProject?.title ?? 'Проект'}</span>
-                  </div>) : null}
-                 </div>
-               </div>
-               <button type="button" onClick={() => closeMiniWindowWithMotion('ai-chat', () => setIsAiChatOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть чат с ИИ"><X size={18} /></button>
-               <select value={generalAiChatModel} onChange={(event) => changeGeneralAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap w-40 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель чата">
-                 {AI_CHAT_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-               </select>
-             </div>
-             {useTelegramCompactChatHeader ? (
-               <div className="miniapp-ai-chat-telegram-project" aria-label="Текущий проект чата">
-                 <button type="button" onClick={() => setTelegramChatPicker(prev => prev === "projects" ? null : "projects")} aria-label="Выбрать проект" aria-haspopup="menu" aria-expanded={telegramChatPicker === "projects"} className="miniapp-ai-chat-project-chip miniapp-telegram-project-trigger inline-flex max-w-[46%] shrink-0 items-center gap-1.5 rounded-2xl border px-2 py-1 text-[11px] font-semibold shadow-sm" style={{ '--project-color': activeAiChatProject?.color ?? '#8b5cf6' } as CSSProperties}>
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-xl bg-white/20 text-sm">{activeAiChatProject?.icon === 'telegram' ? <svg role="img" aria-label="Telegram" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M21.94 4.17a1.46 1.46 0 0 0-1.7-.23L2.1 11.1a1.18 1.18 0 0 0 .12 2.24l4.68 1.45 1.77 5.3a1.15 1.15 0 0 0 1.9.47l2.9-2.88 4.68 3.46a1.3 1.3 0 0 0 2.03-.76l2.18-14.6a1.52 1.52 0 0 0-.42-1.61Zm-3.88 3.9-8.2 7.47-.32 2.63-1.28-3.83 9.8-6.27Z"/></svg> : activeAiChatProject?.icon}</span>
-                    <span className="truncate">{activeAiChatProject?.title ?? 'Проект'}</span><ChevronDown size={13} aria-hidden="true"/>
-                  </button>
-               </div>
-             ) : null}
-             {useTelegramCompactChatHeader && telegramChatPicker ? (
-              <div className="miniapp-telegram-picker-layer">
-                <button type="button" className="miniapp-telegram-picker-dismiss" onClick={() => setTelegramChatPicker(null)} aria-label="Закрыть список"/>
-                <div role="menu" aria-label={telegramChatPicker === 'chats' ? 'Выбрать чат' : 'Выбрать проект'} className={`miniapp-telegram-picker miniapp-telegram-picker-${telegramChatPicker}`}>
-                  <p className="miniapp-telegram-picker-heading">{telegramChatPicker === 'chats' ? 'Чаты' : 'Проекты'}</p>
-                  {telegramChatPicker === 'chats' ? (activeAiChatProject?.chats ?? []).map(chat => (
-                    <button key={chat.id} type="button" role="menuitemradio" aria-checked={activeAiChat?.id === chat.id} className="miniapp-telegram-picker-option"
-                      onClick={() => { setActiveAiChatId(chat.id); setTelegramChatPicker(null); }}>
-                      <MessageCircle size={16} aria-hidden="true"/><span className="truncate">{chat.title}</span>
-                      {activeAiChat?.id === chat.id ? <Check size={16} aria-hidden="true"/> : null}
-                    </button>
-                  )) : aiChatProjects.map(project => (
-                    <button key={project.id} type="button" role="menuitemradio" aria-checked={activeAiChatProject?.id === project.id} className="miniapp-telegram-picker-option"
-                      onClick={() => { setActiveAiChatProjectId(project.id); setActiveAiChatId(project.chats[0]?.id ?? ''); setTelegramChatPicker(null); }}>
-                      <span className="miniapp-telegram-picker-project-icon" style={{backgroundColor: project.color}}>{project.icon === 'telegram' ? <svg role="img" aria-label="Telegram" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M21.94 4.17a1.46 1.46 0 0 0-1.7-.23L2.1 11.1a1.18 1.18 0 0 0 .12 2.24l4.68 1.45 1.77 5.3a1.15 1.15 0 0 0 1.9.47l2.9-2.88 4.68 3.46a1.3 1.3 0 0 0 2.03-.76l2.18-14.6a1.52 1.52 0 0 0-.42-1.61Zm-3.88 3.9-8.2 7.47-.32 2.63-1.28-3.83 9.8-6.27Z"/></svg> : project.icon}</span>
-                      <span className="truncate">{project.title}</span>{activeAiChatProject?.id === project.id ? <Check size={16} aria-hidden="true"/> : null}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-             <div className="miniapp-ai-chat-thread-wrap relative min-h-0 flex-1">
-              <div ref={aiChatDialogContainerRef} onScroll={(event) => {
-                const container = event.currentTarget;
-                generalAiChatNearBottomRef.current =
-                  container.scrollHeight - container.scrollTop - container.clientHeight < 120;
-                if (!generalAiChatUserScrollEnabledRef.current) {
-                  generalAiChatScrollTopRef.current = container.scrollTop;
-                  return;
-                }
-                updateAiChatHeaderVisibility(container.scrollTop, generalAiChatScrollTopRef, setIsGeneralAiChatHeaderHidden);
-              }}
-                onWheel={() => { generalAiChatUserScrollEnabledRef.current = true; }}
-                onTouchMove={() => { generalAiChatUserScrollEnabledRef.current = true; }}
-                onKeyDown={(event) => {
-                  if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' '].includes(event.key)) generalAiChatUserScrollEnabledRef.current = true;
-                }}
-                className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
-              {linkedCheckupProposal && activeAiChat?.id === QUICK_AI_CHAT_ID &&
-                 !visibleAiChatMessages.some(message => message.taskProposal?.id === linkedCheckupProposal.id) ? (
-                <div className="max-w-[95%] rounded-2xl border border-[color:var(--panel-border)] p-3">
-                  <p className="mb-2 text-sm font-semibold">Изменения из ИИ-чекапа</p>
-                  <AiTaskProposalCard proposal={linkedCheckupProposal} />
-                </div>
-              ) : null}
-              {visibleAiChatMessages.length === 0 ? (
-                <div className="miniapp-ai-chat-empty" role="status">
-                  <span className="miniapp-ai-chat-empty-icon" aria-hidden="true"><Sparkles size={34} strokeWidth={1.8} /></span>
-                  <strong>ИИ готов помочь</strong>
-                  <p>Задайте вопрос, обсудите идею или попросите составить план.</p>
-                </div>
-              ) : null}
-              {visibleAiChatMessages.map((message) => (
-                <div key={message.id} className={`ai-message-forward-group w-fit max-w-[88%] ${message.role === 'user' ? 'ml-auto' : 'mr-auto'}`}><div className={`miniapp-ai-chat-message miniapp-ai-chat-message-general w-full rounded-3xl px-4 py-3 ${message.role === 'user' ? 'miniapp-ai-chat-message-user rounded-br-lg' : 'miniapp-ai-chat-message-assistant rounded-bl-lg'}`}>
-                  <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`mini-chat-${message.id}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `mini-chat-${message.id}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `mini-chat-${message.id}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
-                  <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}</div>
-                  {message.monitoringTaskId && activeAiChat?.id === QUICK_AI_CHAT_ID ? <button type="button" className="task-monitor-chat-link mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold"
-                    onClick={() => { const target = tasks.find(task => task.id === message.monitoringTaskId && !task.parentTaskId); if (target) { setIsAiChatOpen(false); openTaskModal(target); setIsAiDialogOpen(true); } }}>
-                    <ArrowUpRight size={12} /> Ответить в чате задачи
-                  </button> : null}
-                  {message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} searched={message.webSearchUsed} /> : null}
-                  {message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} onDownload={downloadAiGeneratedDocument} /> : null}
-                  {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} /> : null}
-                  {message.role === 'assistant' && message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={message.telegramSuggestedReply} /> : null}
-                  {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={continueTelegramReadAiChat} /> : null}
-                  {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
-                  </div>
-                  <div className="ai-message-forward-actions"><AiReplyAction message={message} onReply={setReplyToGeneral} /><TelegramMessageQuickShare text={message.content} compact /></div>
-                </div>
-              ))}
-              {aiChatLoading ? <AiProgress status={aiChatProgress} /> : null}
-              {aiChatError ? <p className="text-sm text-rose-300">{aiChatError}</p> : null}
-              <div className="miniapp-ai-chat-bottom-spacer h-24" aria-hidden="true" />
-              </div>
-            </div>
-            <div className="miniapp-ai-chat-composer absolute inset-x-0 bottom-0 z-20 p-3">
-              {replyToGeneral ? <AiReplyPreview target={replyToGeneral} onDismiss={() => setReplyToGeneral(null)} /> : null}
-              <AiAttachmentTiles files={aiChatPendingFiles} onRemove={(file) => setAiChatPendingFiles((prev) => prev.filter((item) => item !== file))} busy={aiChatLoading} uploadProgress={aiChatUploadProgress} />
-              <div className="miniapp-ai-chat-composer-card miniapp-ai-chat-composer-card-general flex items-end gap-2 rounded-3xl border p-2">
-                <input ref={aiChatFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleAiChatFileSelect} />
-                <MiniAiChatComposer
-                  ref={aiChatComposerRef}
-                  variant="general"
-                  initialDraft={aiChatDraftValueRef.current}
-                  onDraftChange={(value) => { aiChatDraftValueRef.current = value; }}
-                  onSend={() => { void sendAiChatQuestion(); }}
-                  onAttach={() => aiChatFileInputRef.current?.click()}
-                  isSending={aiChatLoading}
-                  hasPendingFiles={aiChatPendingFiles.length > 0}
-                />
-              </div>
-            </div>
-          </div>
-          <div
-            className={`miniapp-ai-chat-menu-backdrop absolute inset-0 z-[75] bg-slate-950/70 transition-opacity duration-300 ease-out ${isAiChatMenuOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'}`}
-            onClick={() => setIsAiChatMenuOpen(false)}
-            aria-hidden={!isAiChatMenuOpen}
-          >
-            <aside
-              className={`miniapp-ai-chat-menu h-full w-[86vw] max-w-sm overflow-y-auto border-r border-slate-800 bg-slate-900 p-3 shadow-2xl transition-transform duration-300 ease-out ${isAiChatMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-xl font-bold tracking-tight text-primary">Проекты и чаты</h3>
-                <button type="button" className="miniapp-ai-chat-menu-close rounded-2xl border p-2" onClick={() => setIsAiChatMenuOpen(false)}><X size={16} /></button>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.2em] text-violet-300">Проекты</p><button type="button" className="miniapp-ai-chat-menu-add miniapp-ai-chat-menu-add-project rounded-2xl p-2 text-white" onClick={() => openAiChatProjectDialog()}><Plus size={16} /></button></div>
-                {aiChatProjects.map((project) => (
-                  <div key={project.id} className={`miniapp-ai-chat-menu-card rounded-3xl border p-2.5 shadow-sm ${project.id === activeAiChatProject?.id ? 'miniapp-ai-chat-menu-card-active-project' : ''}`} style={{ '--project-color': project.color } as CSSProperties}>
-                    <button type="button" className="flex w-full items-center gap-2 text-left" onClick={() => { setActiveAiChatProjectId(project.id); setActiveAiChatId(project.chats[0]?.id ?? ''); }}><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-base miniapp-ai-chat-menu-project-icon" style={{ backgroundColor: project.color }}>{project.icon === 'telegram' ? <svg role="img" aria-label="Telegram" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M21.94 4.17a1.46 1.46 0 0 0-1.7-.23L2.1 11.1a1.18 1.18 0 0 0 .12 2.24l4.68 1.45 1.77 5.3a1.15 1.15 0 0 0 1.9.47l2.9-2.88 4.68 3.46a1.3 1.3 0 0 0 2.03-.76l2.18-14.6a1.52 1.52 0 0 0-.42-1.61Zm-3.88 3.9-8.2 7.47-.32 2.63-1.28-3.83 9.8-6.27Z"/></svg> : project.icon}</span><span className="min-w-0 flex-1 truncate text-sm font-bold miniapp-ai-chat-menu-title">{project.title}</span></button>
-                    <div className="mt-2 flex gap-2"><button type="button" className="miniapp-ai-chat-menu-action inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold" disabled={project.id === aiChatProjects[0]?.id || project.id === 'telegram-ai-assistant-project'} onClick={() => openAiChatProjectDialog(project.id)}><Settings size={12} /> Настроить</button><button type="button" disabled={project.id === aiChatProjects[0]?.id || project.id === 'telegram-ai-assistant-project' || aiChatProjects.length <= 1} className="miniapp-ai-chat-menu-action miniapp-ai-chat-menu-action-danger inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold disabled:opacity-40" onClick={() => deleteAiChatProject(project.id)}><Trash2 size={12} /> Удалить</button></div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 space-y-2">
-                <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Чаты</p><button type="button" className="miniapp-ai-chat-menu-add miniapp-ai-chat-menu-add-chat rounded-2xl p-2 text-white" onClick={createAiChatThread} disabled={activeAiChatProject?.id === 'telegram-ai-assistant-project'}><Plus size={16} /></button></div>
-                {(activeAiChatProject?.chats ?? []).map((chat) => (
-                  <div key={chat.id} className={`miniapp-ai-chat-menu-card rounded-3xl border p-2.5 shadow-sm ${chat.id === activeAiChat?.id ? 'miniapp-ai-chat-menu-card-active-chat' : ''}`}>
-                    <button type="button" className="w-full text-left" onClick={() => { setActiveAiChatId(chat.id); setIsAiChatMenuOpen(false); }}><span className="block truncate text-sm font-bold miniapp-ai-chat-menu-title">{chat.title}</span><span className="miniapp-ai-chat-menu-subtitle text-[11px]">{chat.messages.length} сообщ.</span></button>
-                    <div className="mt-2 flex gap-2"><button type="button" className="miniapp-ai-chat-menu-action rounded-xl border px-2.5 py-1.5 text-xs font-semibold" disabled={chat.id === QUICK_AI_CHAT_ID || chat.id.startsWith('telegram-ai-assistant:')} onClick={() => { setRenamingAiChatId(chat.id); setAiChatRenameDraft(chat.title); }}>Переименовать</button><button type="button" disabled={chat.id === QUICK_AI_CHAT_ID || chat.id.startsWith('telegram-ai-assistant:') || (activeAiChatProject?.chats.length ?? 0) <= 1} className="miniapp-ai-chat-menu-action miniapp-ai-chat-menu-action-danger rounded-xl border px-2.5 py-1.5 text-xs font-semibold disabled:opacity-40" onClick={() => deleteAiChatThread(chat.id)}>Удалить</button></div>
-                  </div>
-                ))}
-              </div>
-            </aside>
-          </div>
-        </div>
-      ) : null}
-
-      {isAiChatProjectDialogOpen ? (
-        <div className={`miniapp-slide-backdrop fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 p-4 ${getMiniWindowMotionClass('ai-project')}`} onClick={() => closeMiniWindowWithMotion('ai-project', () => setIsAiChatProjectDialogOpen(false))}>
-          <div className="miniapp-slide-panel w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-4 text-slate-100 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-300">{aiChatProjectDraft.mode === 'edit' ? 'Настройка проекта' : 'Новый проект'}</p>
-                <h3 className="mt-1 text-lg font-semibold">Проект чата</h3>
-              </div>
-              <button type="button" className="rounded-md border border-slate-700 p-1.5" onClick={() => closeMiniWindowWithMotion('ai-project', () => setIsAiChatProjectDialogOpen(false))}><X size={16} /></button>
-            </div>
-            <label className="mt-4 block text-xs font-semibold text-slate-400">Название</label>
-            <input value={aiChatProjectDraft.title} onChange={(event) => setAiChatProjectDraft((prev) => ({ ...prev, title: event.target.value }))} className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm" placeholder="Название проекта" autoFocus />
-            <label className="mt-4 block text-xs font-semibold text-slate-400">Цвет</label>
-            <div className="mt-2 flex flex-wrap gap-1.5">{MINI_AI_PROJECT_COLORS.map((color) => <button key={color} type="button" className={`h-8 w-8 rounded-full border-2 ${aiChatProjectDraft.color === color ? 'border-white' : 'border-transparent'}`} style={{ backgroundColor: color }} onClick={() => setAiChatProjectDraft((prev) => ({ ...prev, color }))} />)}</div>
-            <label className="mt-4 block text-xs font-semibold text-slate-400">Иконка</label>
-            <div className="mt-2 grid grid-cols-6 gap-1.5">{MINI_AI_PROJECT_ICONS.map((icon) => <button key={icon} type="button" className={`rounded-lg border py-1.5 text-lg ${aiChatProjectDraft.icon === icon ? 'border-violet-400 bg-violet-500/20' : 'border-slate-700 bg-slate-950'}`} onClick={() => setAiChatProjectDraft((prev) => ({ ...prev, icon }))}>{icon}</button>)}</div>
-            <div className="mt-5 flex justify-end gap-2">
-              <button type="button" className="rounded-md border border-slate-700 px-3 py-2 text-sm" onClick={() => closeMiniWindowWithMotion('ai-project', () => setIsAiChatProjectDialogOpen(false))}>Отмена</button>
-              <button type="button" className="rounded-md bg-violet-600 px-3 py-2 text-sm font-semibold" onClick={saveAiChatProject}>{aiChatProjectDraft.mode === 'edit' ? 'Сохранить' : 'Создать'}</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {renamingAiChatId ? (
-        <div className={`miniapp-slide-backdrop fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 p-4 ${getMiniWindowMotionClass('ai-rename')}`}>
-          <div className="miniapp-slide-panel w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-4 text-slate-100">
-            <h3 className="font-semibold">Переименовать чат</h3>
-            <input value={aiChatRenameDraft} onChange={(event) => setAiChatRenameDraft(event.target.value)} className="mt-3 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm" autoFocus />
-            <div className="mt-4 flex justify-end gap-2"><button type="button" className="rounded-md border border-slate-700 px-3 py-2 text-sm" onClick={() => closeMiniWindowWithMotion('ai-rename', () => setRenamingAiChatId(null))}>Отмена</button><button type="button" className="rounded-md bg-cyan-600 px-3 py-2 text-sm font-semibold text-white" onClick={saveAiChatRename}>Сохранить</button></div>
-          </div>
-        </div>
-      ) : null}
-
-      {isHabitModalOpen && !editingHabitId ? (
-        <div className={`miniapp-slide-backdrop fixed inset-0 z-[95] flex items-end bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('habit')}`}>
-          <section className="miniapp-slide-panel miniapp-focus-panel miniapp-habit-modal-panel miniapp-habit-create-panel relative max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-xl sm:rounded-[2rem]" role="dialog" aria-modal="true" aria-label="Создание привычки">
-            <div className="flex max-h-[calc(94vh-2rem)] min-h-0 flex-col sm:max-h-[calc(88vh-2rem)]">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">Новая привычка</p>
-                  <p className="mt-1 text-xs text-slate-400">Выберите параметры и создайте привычку.</p>
-                </div>
-                <button type="button" onClick={() => closeMiniWindowWithMotion('habit', closeHabitModal)} disabled={savingHabit} className="miniapp-focus-icon-button" aria-label="Закрыть создание привычки" title="Закрыть">
-                  <X size={16} />
-                </button>
-              </div>
-              <div className="miniapp-habit-create-content min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto pb-4 pr-1">
-              <div className="grid grid-cols-[68px_minmax(0,1fr)] items-center gap-3">
-                <div
-                  className="miniapp-habit-circle relative inline-flex h-[68px] w-[68px] items-center justify-center rounded-full border"
-                  style={{ '--habit-color': habitDraft.color, '--habit-progress': '0%' } as CSSProperties}
-                >
-                  <span className="miniapp-habit-circle-core absolute inset-[6px] rounded-full" />
-                  <span className="relative z-10 text-2xl">{habitDraft.icon}</span>
-                </div>
-                <div className="min-w-0 space-y-2">
-                  <label className="block text-xs text-slate-300">Название привычки</label>
-                  <input
-                    value={habitDraft.name}
-                    onChange={(event) => setHabitDraft((prev) => ({ ...prev, name: event.target.value }))}
-                    placeholder="Например, вода или зарядка"
-                    className="miniapp-habit-editor-name w-full min-w-0 rounded-xl border px-3 py-2 text-sm font-semibold"
-                  />
-                  <div className="miniapp-habit-editor-completion space-y-2 rounded-xl border px-3 py-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-slate-300">Выполнено</span>
-                      <span className="text-xs font-semibold text-slate-100">{habitModalCompleted} из {parseHabitTargetCount(habitDraft.targetCount)}</span>
-                    </div>
-                    <div className="grid grid-cols-[32px_minmax(0,1fr)_32px] items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => editingHabit ? void uncompleteHabit(editingHabit) : undefined}
-                        className="miniapp-habit-counter-button inline-flex h-8 w-8 items-center justify-center rounded-full border disabled:opacity-50"
-                        disabled={!editingHabit || habitModalCompleted <= 0 || isHabitCompletionActionPending}
-                        aria-label="Снять отметку повтора"
-                      >
-                        <Minus size={14} strokeWidth={2.4} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => editingHabit ? void completeHabit(editingHabit) : undefined}
-                        className="miniapp-habit-complete-button inline-flex h-9 items-center justify-center rounded-lg px-4 text-sm font-semibold text-white disabled:opacity-50"
-                        disabled={!editingHabit || habitModalCompleted >= parseHabitTargetCount(habitDraft.targetCount) || isHabitCompletionActionPending}
-                      >
-                        Выполнить
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => editingHabit ? void completeHabit(editingHabit) : undefined}
-                        className="miniapp-habit-counter-button miniapp-habit-counter-button-positive inline-flex h-8 w-8 items-center justify-center rounded-full border disabled:opacity-50"
-                        disabled={!editingHabit || habitModalCompleted >= parseHabitTargetCount(habitDraft.targetCount) || isHabitCompletionActionPending}
-                        aria-label="Отметить повтор"
-                      >
-                        <Plus size={14} strokeWidth={2.4} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-
-                {renderHabitSettingsFields()}
-              </div>
-              <div className="miniapp-habit-create-bottom miniapp-habit-editor-bottom mt-3 pt-3">
-                {error ? <p role="alert" className="mb-2 rounded-xl border border-rose-400/50 bg-rose-500/10 px-3 py-2 text-xs text-rose-500">{error}</p> : null}
-                <button type="button" onClick={() => void saveHabit()} disabled={savingHabit} className="miniapp-habit-editor-save w-full rounded-2xl px-4 py-3 text-sm font-semibold disabled:opacity-50">
-                  {savingHabit ? 'Создаём…' : 'Создать привычку'}
-                </button>
-              </div>
-            </div>
-          </section>
-        </div>
-      ) : null}
-
-      {isHabitModalOpen && editingHabit ? (
-        <div className={`miniapp-slide-backdrop fixed inset-0 z-[95] flex items-end bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('habit')}`}>
-          <section className="miniapp-slide-panel miniapp-focus-panel miniapp-habit-modal-panel miniapp-habit-editor-panel relative max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-xl sm:rounded-[2rem]" role="dialog" aria-modal="true" aria-label="Редактирование привычки">
-            <div className="flex max-h-[calc(94vh-2rem)] min-h-0 flex-col sm:max-h-[calc(88vh-2rem)]">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">Привычка</p>
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={() => setIsHabitSettingsOpen((open) => !open)} className="miniapp-focus-icon-button" title="Настройки привычки" aria-label="Настройки привычки" aria-expanded={isHabitSettingsOpen} aria-controls="miniapp-habit-edit-settings">
-                    <Settings size={16} />
-                  </button>
-                  <button type="button" onClick={closeHabitEditor} disabled={savingHabit} className="miniapp-focus-icon-button" title="Сохранить и закрыть" aria-label="Сохранить и закрыть окно">
-                    {savingHabit ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />}
-                  </button>
-                </div>
-              </div>
-              {isHabitSettingsOpen ? (
-                <div id="miniapp-habit-edit-settings" className="miniapp-task-settings-panel miniapp-habit-settings-panel absolute left-3 right-3 top-14 z-[75] max-h-[calc(94vh-6rem)] overflow-y-auto rounded-3xl border p-4 shadow-2xl sm:left-auto sm:right-4 sm:w-[370px] sm:max-h-[calc(88vh-6rem)]">
-                  <div className="mb-4 flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold">Настройки привычки</h3>
-                    <button type="button" onClick={() => setIsHabitSettingsOpen(false)} className="miniapp-focus-icon-button" aria-label="Закрыть настройки"><X size={14}/></button>
-                  </div>
-                  {renderHabitSettingsFields()}
-                  <div className="mt-4 grid gap-2 border-t pt-4">
-                    <div className="grid grid-cols-2 gap-2">
-                      <button type="button" disabled={finishingHabitId === editingHabit.id} onClick={() => void finishHabit(editingHabit.id)} className="miniapp-habit-editor-secondary rounded-xl border px-3 py-2.5 text-xs font-semibold disabled:opacity-50">{finishingHabitId === editingHabit.id ? 'Завершаем…' : 'Завершить привычку'}</button>
-                      <button type="button" disabled={deletingHabitId === editingHabit.id} onClick={() => void deleteHabit(editingHabit.id)} className="miniapp-habit-editor-danger rounded-xl border px-3 py-2.5 text-xs font-semibold disabled:opacity-50">{deletingHabitId === editingHabit.id ? 'Удаляем…' : 'Удалить привычку'}</button>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-              <div className="miniapp-habit-editor-content min-h-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden pr-1">
-                <div className="grid grid-cols-[68px_minmax(0,1fr)] items-center gap-3">
-                  <div className="miniapp-habit-circle relative inline-flex h-[68px] w-[68px] items-center justify-center rounded-full border" style={{ '--habit-color': habitDraft.color, '--habit-progress': `${Math.round((habitModalCompleted / Math.max(1, parseHabitTargetCount(habitDraft.targetCount))) * 100)}%` } as CSSProperties}>
-                    <span className="miniapp-habit-circle-core absolute inset-[6px] rounded-full" />
-                    <span className="relative z-10 text-2xl">{habitDraft.icon}</span>
-                  </div>
-                  <div className="min-w-0 space-y-2">
-                    <label className="block text-xs text-slate-300">Название привычки</label>
-                    <input value={habitDraft.name} onChange={(event) => setHabitDraft((prev) => ({ ...prev, name: event.target.value }))} placeholder="Название привычки" className="miniapp-habit-editor-name w-full rounded-xl border px-3 py-2 text-sm font-semibold" aria-label="Название привычки" />
-                    <div className="miniapp-habit-editor-completion rounded-xl border px-3 py-2">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <span className="text-xs text-slate-300">Сегодня выполнено</span>
-                        <span className="text-xs font-semibold text-slate-100">{habitModalCompleted} из {parseHabitTargetCount(habitDraft.targetCount)}</span>
-                      </div>
-                      <div className="grid grid-cols-[32px_minmax(0,1fr)_32px] items-center gap-2">
-                        <button type="button" onClick={() => void uncompleteHabit(editingHabit)} className="miniapp-habit-counter-button inline-flex h-8 w-8 items-center justify-center rounded-full border disabled:opacity-50" disabled={habitModalCompleted <= 0 || isHabitCompletionActionPending} aria-label="Снять отметку повтора"><Minus size={14}/></button>
-                        <button type="button" onClick={() => void completeHabit(editingHabit)} className="miniapp-habit-complete-button inline-flex h-9 items-center justify-center rounded-lg px-2 text-sm font-semibold text-white disabled:opacity-50" disabled={habitModalCompleted >= parseHabitTargetCount(habitDraft.targetCount) || isHabitCompletionActionPending}>Выполнить</button>
-                        <button type="button" onClick={() => void completeHabit(editingHabit)} className="miniapp-habit-counter-button miniapp-habit-counter-button-positive inline-flex h-8 w-8 items-center justify-center rounded-full border disabled:opacity-50" disabled={habitModalCompleted >= parseHabitTargetCount(habitDraft.targetCount) || isHabitCompletionActionPending} aria-label="Отметить повтор"><Plus size={14}/></button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <MiniAppHabitTracker habit={editingHabit} onHabitChanged={(updated) => {
-                  setHabits((current) => updated.isAutoCompleted
-                    ? current.filter((item) => item.id !== updated.id)
-                    : current.map((item) => item.id === updated.id ? updated : item));
-                }} />
-              </div>
-              {error ? <p role="alert" className="mt-3 rounded-xl border border-rose-400/50 bg-rose-500/10 px-3 py-2 text-xs text-rose-500">{error}</p> : null}
-            </div>
-          </section>
-        </div>
-      ) : null}
-
-      {isCreateTaskModalOpen ? (
-        <div className={`miniapp-slide-backdrop fixed inset-0 z-50 flex items-end bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('create-task')}`}>
-          <div className={`relative miniapp-slide-panel miniapp-focus-panel miniapp-focus-task-panel max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-2xl sm:rounded-[2rem] ${isCreateTaskSettingsOpen ? 'miniapp-focus-task-panel--settings-open' : ''}`}>
-            <div className="flex max-h-[calc(94vh-2rem)] min-h-0 flex-col sm:max-h-[calc(88vh-2rem)]">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">{createEditorType === 'event' ? 'Новое событие' : 'Новая задача'}</p>
-                <div className="relative flex items-center gap-2">
-                  <button type="button" onClick={() => setIsCreateTaskSettingsOpen((prev) => !prev)} className="miniapp-focus-icon-button" aria-label={createEditorType === 'event' ? 'Настройки нового события' : 'Настройки новой задачи'} aria-expanded={isCreateTaskSettingsOpen}>
-                    <Settings size={16} />
-                  </button>
-                  <button type="button" onClick={() => closeMiniWindowWithMotion('create-task', () => setIsCreateTaskModalOpen(false))} className="miniapp-focus-icon-button" aria-label="Закрыть окно">
-                    <X size={16} />
-                  </button>
-                </div>
-              </div>
-
-                  {isCreateTaskSettingsOpen ? (
-                    <div className="miniapp-create-settings-panel miniapp-settings-scroll-area invisible-scrollbar absolute left-4 right-4 top-16 z-[175] min-h-0 overflow-y-auto rounded-2xl border p-3 text-sm shadow-2xl sm:left-auto sm:w-[360px]">
-                      <label className="flex items-center gap-2 font-medium">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(createTaskDraft.isRecurring)}
-                          onChange={(event) => {
-                            const enabled = event.target.checked;
-                            setCreateTaskDraft((prev) => enabled ? { ...prev, isRecurring: true, recurrenceText: prev.recurrenceText || '' } : { ...prev, isRecurring: false, recurrenceText: null, recurrenceJson: null, recurrenceSummary: null, recurrenceUntil: null });
-                            if (!enabled) setCreateTaskRecurrenceNextDueLabel(null);
-                          }}
-                        />
-                        повторять
-                      </label>
-                      {createEditorType === 'task' ? <label className="mt-3 flex items-center gap-2 font-medium">
-                        <input
-                          type="checkbox"
-                          checked={createTaskDraft.aiNotificationsEnabled ?? true}
-                          onChange={(event) => setCreateTaskDraft((prev) => ({ ...prev, aiNotificationsEnabled: event.target.checked }))}
-                        />
-                        уведомления от ИИ
-                      </label> : null}
-                      {createTaskDraft.isRecurring ? (
-                        <TaskRecurrenceConfigurator key={createEditorType} value={createTaskDraft}
-                          onChange={(patch) => setCreateTaskDraft((prev) => ({ ...prev, ...patch }))}
-                          onParseWithAi={() => void applyCreateTaskRecurrence()}
-                          parsing={createTaskRecurrenceLoading} nextDueLabel={createTaskRecurrenceNextDueLabel}
-                          isEvent={createEditorType === 'event'} />
-                      ) : null}
-                    </div>
-                  ) : null}
-
-              <div className="min-h-0 flex-1 overflow-y-auto pb-24 pr-1">
-                <textarea
-                  autoFocus
-                  value={createTaskDraft.title}
-                  onChange={(event) => setCreateTaskDraft((prev) => ({ ...prev, title: event.target.value }))}
-                  className="miniapp-focus-title-input invisible-scrollbar min-h-[4.5rem] w-full resize-none border-0 bg-transparent p-0 text-3xl font-bold leading-tight outline-none"
-                  rows={2}
-                  placeholder={createEditorType === 'event' ? 'Введите название события' : 'Введите название'}
-                />
-                {createEditorType === 'event' ? (
-                  <input
-                    value={createTaskDraft.location ?? ''}
-                    onChange={(event) => setCreateTaskDraft((prev) => ({ ...prev, location: event.target.value }))}
-                    className="miniapp-task-text-field mt-2 w-full rounded-2xl border px-3 py-2.5 text-sm"
-                    placeholder="Место события"
-                    autoComplete="street-address"
-                  />
-                ) : null}
-                <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-violet-500">
-                  <DateTimePickerWithApply
-                    value={fromInputDateTime(createTaskDraft.dueDate)}
-                    onChange={(nextValue) => setCreateTaskDraft((prev) => ({ ...prev, dueDate: toInputDateTime(nextValue) }))}
-                    timelineTasks={timelinePickerTasks}
-                    iconOnly detachedPopup buttonClassName="miniapp-focus-icon-button"
-                  />
-                  <span>{createTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(createTaskDraft.dueDate)}` : 'До дедлайна: выберите дату'}</span>
-                </div>
-                <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
-                  <textarea
-                    value={createTaskDraft.description}
-                    onChange={(event) => setCreateTaskDraft((prev) => ({ ...prev, description: event.target.value }))}
-                    className="miniapp-focus-description-input invisible-scrollbar min-h-32 w-full resize-none border-0 bg-transparent text-sm leading-6 outline-none placeholder:text-slate-400"
-                    placeholder="Введите описание"
-                  />
-                </div>
-                {createEditorType === 'event' ? (
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <label className="miniapp-focus-icon-button inline-flex cursor-pointer items-center justify-center" title="Добавить вложения к событию" aria-label="Добавить вложения к событию">
-                      <Paperclip size={15} />
-                      <input type="file" className="sr-only" multiple accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt"
-                        onChange={(event) => {
-                          const files = Array.from(event.target.files ?? []);
-                          event.target.value = '';
-                          if (!files.length) return;
-                          if (files.some((file) => !(/\.(pdf|docx|xlsx?|png|jpe?g|webp|gif|txt)$/i.test(file.name) || SUPPORTED_AI_FILE_TYPES.has(file.type)))) {
-                            setError('Поддерживаются PDF, DOCX, XLS/XLSX, TXT и изображения.'); return;
-                          }
-                          if (files.some((file) => file.size > MAX_AI_ATTACHMENT_SIZE || file.size === 0)) {
-                            setError('Файл должен быть от 1 байта до 8 МБ.'); return;
-                          }
-                          setError(null);
-                          setCreateTaskPendingFiles((previous) => [...previous, ...files]);
-                        }} />
   ) : null;
 
   if (loading) {
@@ -5458,6 +4884,580 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 </>
               ) : <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary">Помощь ИИ</h2>
               {!isTelegramRuntime ? taskMonitoringControl : null}
+              <button type="button" onClick={() => closeMiniWindowWithMotion('task-ai', () => setIsAiDialogOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть диалог с ИИ"><X size={18} /></button>
+              <select value={selectedAiChatModel} onChange={(event) => setSelectedAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap w-40 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель помощи ИИ">
+                {AI_CHAT_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </div>
+            <div className="miniapp-ai-chat-thread-wrap relative min-h-0 flex-1">
+              <div ref={fullscreenAiDialogContainerRef} onScroll={(event) => updateAiChatHeaderVisibility(event.currentTarget.scrollTop, taskAiChatScrollTopRef, setIsTaskAiChatHeaderHidden)} className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
+                {openedTaskAiDialog.length === 0 ? (
+                  <TaskAiEmptyState variant="miniapp" />
+                ) : null}
+                {openedTaskAiDialog.map((message, index) => (
+                  <div key={`mini-ai-full-${index}`} className={`ai-message-forward-group w-fit max-w-[88%] ${message.role === 'user' ? 'ml-auto' : 'mr-auto'}`}><div className={`miniapp-ai-chat-message miniapp-ai-chat-message-task w-full rounded-3xl px-4 py-3 ${message.role === 'user' ? `miniapp-ai-chat-message-user rounded-br-lg ${message.authorColor ? 'miniapp-ai-chat-message-authored' : ''}` : 'miniapp-ai-chat-message-assistant rounded-bl-lg'}`} style={message.role === 'user' && message.authorColor ? ({ '--message-author-color': message.authorColor } as CSSProperties) : undefined}>
+                    <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}{message.messageKind === 'HUMAN' && message.recipientName ? ` → ${message.recipientName}` : ''}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
+                    <div className="text-sm leading-relaxed">{message.messageKind === 'MONITOR_ACTION' ? <TaskMonitoringActionBadge content={message.content} /> : message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}</div>
+                    {message.monitoringTaskId ? <button type="button"
+                    className="task-monitor-chat-link mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold"
+                    onClick={() => { const target = tasks.find(task => task.id === message.monitoringTaskId && !task.parentTaskId); if (target) { setIsAiChatOpen(false); openTaskModal(target); setIsAiDialogOpen(true); } }}>
+                    <ArrowUpRight size={12} /> Ответить в чате задачи
+                  </button> : null}
+                  {message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} searched={message.webSearchUsed} /> : null}
+                    {message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} onDownload={downloadAiGeneratedDocument} /> : null}
+                  {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} /> : null}
+                  {message.role === 'assistant' && message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={message.telegramSuggestedReply} /> : null}
+                  {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={continueTelegramReadTask} /> : null}
+                  {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
+                  </div>
+                  <div className="ai-message-forward-actions"><AiReplyAction message={message} onReply={(target) => { setReplyToTask(target); if (openedTask) setAiRecipientByTaskId(prev => ({ ...prev, [openedTask.id]: 'ai' })); }} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={openedTask?.sphereId ?? null} /></div>
+                </div>
+                ))}
+                {openedTask.aiMonitoringEnabled ? <TaskMonitoringTriggerChips taskId={openedTask.id} enabled /> : null}
+                {aiLoadingTaskId === openedTask.id ? <TaskAiProgress status={aiProgressByTask[openedTask.id] ?? 'analyzing_request'} /> : openedTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={openedTask.id} /> : null}
+                <div className="miniapp-ai-chat-bottom-spacer h-24" aria-hidden="true" />
+              </div>
+            </div>
+            <div className="miniapp-ai-chat-composer absolute inset-x-0 bottom-0 z-20 p-3">
+              <input
+                ref={aiAttachmentInputRef}
+                type="file"
+                accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif"
+                multiple
+                className="hidden"
+                onChange={handleAiFileSelect}
+              />
+              <div
+                className="miniapp-task-ai-recipient-interaction"
+                onFocusCapture={() => setIsTaskAiRecipientPickerVisible(true)}
+                onBlurCapture={(event) => {
+                  const nextTarget = event.relatedTarget;
+                  if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+                  setIsTaskAiRecipientPickerVisible(false);
+                  setIsTaskAiRecipientMenuOpen(false);
+                }}
+              >
+              {isTaskAiRecipientPickerVisible && openedTask.isCollaborative && openedTask.collaborationMembers?.length ? (
+                <div className="relative mb-2 flex justify-end miniapp-task-ai-recipient-reveal">
+                  <button type="button" className="miniapp-task-ai-recipient-trigger inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold" onClick={() => setIsTaskAiRecipientMenuOpen((open) => !open)}>
+                    <span className="miniapp-task-ai-recipient-label">Получатель:</span>
+                    <span>{openedTask.collaborationMembers.find((member) => member.userId === getTaskAiRecipientId(openedTask))?.name ?? 'ИИ'}</span>
+                    <ChevronDown size={12} />
+                  </button>
+                  {isTaskAiRecipientMenuOpen ? (
+                    <div className="miniapp-task-ai-recipient-menu absolute bottom-full right-0 z-40 mb-1 min-w-48 rounded-xl border p-1.5 shadow-2xl">
+                      <button type="button" className={`miniapp-task-ai-recipient-item block w-full rounded-lg px-3 py-2 text-left text-xs ${getTaskAiRecipientId(openedTask) === 'ai' ? 'miniapp-task-ai-recipient-item-active' : ''}`} onClick={() => { setAiRecipientByTaskId((prev) => ({ ...prev, [openedTask.id]: 'ai' })); setIsTaskAiRecipientMenuOpen(false); }}>ИИ</button>
+                      {openedTask.collaborationMembers.filter((member) => member.userId !== currentUser?.id).map((member) => (
+                        <button key={member.userId} type="button" className={`miniapp-task-ai-recipient-item flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs ${getTaskAiRecipientId(openedTask) === member.userId ? 'miniapp-task-ai-recipient-item-active' : ''}`} onClick={() => { setAiRecipientByTaskId((prev) => ({ ...prev, [openedTask.id]: member.userId })); setIsTaskAiRecipientMenuOpen(false); }}>
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: member.color }} />
+                          <span className="truncate">{member.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              {replyToTask ? <AiReplyPreview target={replyToTask} onDismiss={() => setReplyToTask(null)} /> : null}
+              <AiAttachmentTiles files={aiPendingFiles} onRemove={(file) => setAiPendingFiles((prev) => prev.filter((item) => item !== file))} busy={aiLoadingTaskId === openedTask.id} uploadProgress={taskAiUploadProgress} />
+              <div className="miniapp-ai-chat-composer-card miniapp-ai-chat-composer-card-task flex items-end gap-2 rounded-3xl border p-2">
+                <MiniAiChatComposer
+                  ref={taskAiComposerRef}
+                  variant="task"
+                  initialDraft={taskAiDraftValueRef.current}
+                  onDraftChange={(value) => { taskAiDraftValueRef.current = value; }}
+                  onSend={() => { void sendAiMessage(); }}
+                  onAttach={() => aiAttachmentInputRef.current?.click()}
+                  isSending={aiLoadingTaskId === openedTask.id}
+                  hasPendingFiles={aiPendingFiles.length > 0}
+                  attachDisabled={getTaskAiRecipientId(openedTask) !== 'ai'}
+                  attachTitle={getTaskAiRecipientId(openedTask) === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'}
+                />
+              </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className={`miniapp-quick-create fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2 ${isQuickCreateOpen ? 'is-open' : ''} ${isAiChatOpen || isStandaloneNotesOpen ? 'miniapp-quick-create-hidden' : ''}`}>
+        <div className="miniapp-quick-create-actions flex flex-col items-end gap-2" aria-hidden={!isQuickCreateOpen}>
+          <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={() => { setIsQuickCreateOpen(false); openCreateTaskModal(undefined, 'event'); }} className="miniapp-quick-create-action miniapp-quick-create-event inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
+            <span>Добавить событие</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><CalendarDays size={18} /></span>
+          </button>
+          <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} disabled={creatingStandaloneNote}
+            onClick={() => {
+              if (creatingStandaloneNote) return;
+              setIsQuickCreateOpen(false);
+              setCreatingStandaloneNote(true);
+              void api.createStandaloneNote().then((note) => {
+                setNewStandaloneNote(note);
+              }).catch((cause: unknown) => {
+                setError(cause instanceof Error ? cause.message : 'Не удалось создать заметку.');
+              }).finally(() => setCreatingStandaloneNote(false));
+            }}
+            className="miniapp-quick-create-action miniapp-quick-create-note inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
+            <span>{creatingStandaloneNote ? 'Создаём заметку…' : 'Добавить заметку'}</span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-full"><StickyNote size={18} /></span>
+          </button>
+          <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={() => { setIsQuickCreateOpen(false); openCreateTaskModal(); }} className="miniapp-quick-create-action miniapp-quick-create-task inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
+            <span>Добавить задачу</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><Plus size={19} /></span>
+          </button>
+          <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={createQuickAiChatThread} className="miniapp-quick-create-action miniapp-quick-create-ai inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
+            <span>Создать чат с ИИ</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><Bot size={18} /></span>
+          </button>
+        </div>
+        <button type="button" onClick={() => setIsQuickCreateOpen((prev) => !prev)} className="miniapp-ai-chat-launcher flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-2xl shadow-violet-950/40 ring-2 ring-white/20 active:scale-95" aria-expanded={isQuickCreateOpen} aria-label={isQuickCreateOpen ? 'Закрыть меню добавления' : 'Открыть меню добавления'}>
+          <Plus size={25} strokeWidth={2.4} />
+        </button>
+      </div>
+
+      {newStandaloneNote ? (
+        <MiniAppStandaloneNoteEditor key={newStandaloneNote.id} telegramSafeTop={isTelegramRuntime ? telegramViewport.top : undefined} note={newStandaloneNote}
+          onClose={() => setNewStandaloneNote(null)} />
+      ) : null}
+
+      {isAiChatOpen ? (
+        <div className={`miniapp-ai-chat-backdrop miniapp-ai-chat-backdrop-general miniapp-slide-backdrop fixed inset-0 z-[70] bg-slate-950/75 p-0 ${getMiniWindowMotionClass('ai-chat')}`}>
+          <div className={`miniapp-ai-chat-panel miniapp-ai-chat-panel-general miniapp-slide-panel ${isGeneralAiChatHeaderHidden ? "miniapp-ai-header-collapsed" : ""} mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100`}>
+            <div className={`miniapp-ai-chat-header miniapp-ai-chat-header-general flex items-start justify-between gap-2 p-3 ${useTelegramCompactChatHeader ? 'miniapp-ai-chat-header-telegram' : ''} ${isGeneralAiChatHeaderHidden ? 'miniapp-ai-chat-header-hidden' : ''}`}>
+               <button type="button" onClick={() => setIsAiChatMenuOpen(true)} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Меню чатов и проектов"><Menu size={18} /></button>
+               <div className={`min-w-0 flex-1 ${useTelegramCompactChatHeader ? 'miniapp-ai-chat-inline-heading' : ''}`}>
+                 <p className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700"><Sparkles size={13} /> Чат с ИИ</p>
+                 <div className={useTelegramCompactChatHeader ? 'miniapp-ai-chat-inline-title' : 'mt-2 flex min-w-0 items-center gap-2'}>
+                   {useTelegramCompactChatHeader ? (
+                    <button type="button" className="miniapp-ai-chat-title-trigger" aria-label="Выбрать чат" aria-expanded={telegramChatPicker === 'chats'} aria-haspopup="menu"
+                      onClick={() => { setIsGeneralAiChatHeaderHidden(false); setTelegramChatPicker(prev => prev === 'chats' ? null : 'chats'); }}>
+                      <span className="truncate">{activeAiChat?.title ?? 'Новый чат'}</span><ChevronDown size={13} aria-hidden="true" />
+                    </button>
+                  ) : <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary" title={activeAiChat?.title ?? 'Новый чат'}>{activeAiChat?.title ?? 'Новый чат'}</h2>}
+                   {!useTelegramCompactChatHeader ? (<div className="miniapp-ai-chat-project-chip inline-flex max-w-[46%] shrink-0 items-center gap-1.5 rounded-2xl border px-2 py-1 text-[11px] font-semibold shadow-sm" style={{ '--project-color': activeAiChatProject?.color ?? '#8b5cf6' } as CSSProperties}>
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-xl bg-white/20 text-sm">{activeAiChatProject?.icon === 'telegram' ? <svg role="img" aria-label="Telegram" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M21.94 4.17a1.46 1.46 0 0 0-1.7-.23L2.1 11.1a1.18 1.18 0 0 0 .12 2.24l4.68 1.45 1.77 5.3a1.15 1.15 0 0 0 1.9.47l2.9-2.88 4.68 3.46a1.3 1.3 0 0 0 2.03-.76l2.18-14.6a1.52 1.52 0 0 0-.42-1.61Zm-3.88 3.9-8.2 7.47-.32 2.63-1.28-3.83 9.8-6.27Z"/></svg> : activeAiChatProject?.icon}</span>
+                    <span className="truncate">{activeAiChatProject?.title ?? 'Проект'}</span>
+                  </div>) : null}
+                 </div>
+               </div>
+               <button type="button" onClick={() => closeMiniWindowWithMotion('ai-chat', () => setIsAiChatOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть чат с ИИ"><X size={18} /></button>
+               <select value={generalAiChatModel} onChange={(event) => changeGeneralAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap w-40 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель чата">
+                 {AI_CHAT_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+               </select>
+             </div>
+             {useTelegramCompactChatHeader ? (
+               <div className="miniapp-ai-chat-telegram-project" aria-label="Текущий проект чата">
+                 <button type="button" onClick={() => setTelegramChatPicker(prev => prev === "projects" ? null : "projects")} aria-label="Выбрать проект" aria-haspopup="menu" aria-expanded={telegramChatPicker === "projects"} className="miniapp-ai-chat-project-chip miniapp-telegram-project-trigger inline-flex max-w-[46%] shrink-0 items-center gap-1.5 rounded-2xl border px-2 py-1 text-[11px] font-semibold shadow-sm" style={{ '--project-color': activeAiChatProject?.color ?? '#8b5cf6' } as CSSProperties}>
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-xl bg-white/20 text-sm">{activeAiChatProject?.icon === 'telegram' ? <svg role="img" aria-label="Telegram" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M21.94 4.17a1.46 1.46 0 0 0-1.7-.23L2.1 11.1a1.18 1.18 0 0 0 .12 2.24l4.68 1.45 1.77 5.3a1.15 1.15 0 0 0 1.9.47l2.9-2.88 4.68 3.46a1.3 1.3 0 0 0 2.03-.76l2.18-14.6a1.52 1.52 0 0 0-.42-1.61Zm-3.88 3.9-8.2 7.47-.32 2.63-1.28-3.83 9.8-6.27Z"/></svg> : activeAiChatProject?.icon}</span>
+                    <span className="truncate">{activeAiChatProject?.title ?? 'Проект'}</span><ChevronDown size={13} aria-hidden="true"/>
+                  </button>
+               </div>
+             ) : null}
+             {useTelegramCompactChatHeader && telegramChatPicker ? (
+              <div className="miniapp-telegram-picker-layer">
+                <button type="button" className="miniapp-telegram-picker-dismiss" onClick={() => setTelegramChatPicker(null)} aria-label="Закрыть список"/>
+                <div role="menu" aria-label={telegramChatPicker === 'chats' ? 'Выбрать чат' : 'Выбрать проект'} className={`miniapp-telegram-picker miniapp-telegram-picker-${telegramChatPicker}`}>
+                  <p className="miniapp-telegram-picker-heading">{telegramChatPicker === 'chats' ? 'Чаты' : 'Проекты'}</p>
+                  {telegramChatPicker === 'chats' ? (activeAiChatProject?.chats ?? []).map(chat => (
+                    <button key={chat.id} type="button" role="menuitemradio" aria-checked={activeAiChat?.id === chat.id} className="miniapp-telegram-picker-option"
+                      onClick={() => { setActiveAiChatId(chat.id); setTelegramChatPicker(null); }}>
+                      <MessageCircle size={16} aria-hidden="true"/><span className="truncate">{chat.title}</span>
+                      {activeAiChat?.id === chat.id ? <Check size={16} aria-hidden="true"/> : null}
+                    </button>
+                  )) : aiChatProjects.map(project => (
+                    <button key={project.id} type="button" role="menuitemradio" aria-checked={activeAiChatProject?.id === project.id} className="miniapp-telegram-picker-option"
+                      onClick={() => { setActiveAiChatProjectId(project.id); setActiveAiChatId(project.chats[0]?.id ?? ''); setTelegramChatPicker(null); }}>
+                      <span className="miniapp-telegram-picker-project-icon" style={{backgroundColor: project.color}}>{project.icon === 'telegram' ? <svg role="img" aria-label="Telegram" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M21.94 4.17a1.46 1.46 0 0 0-1.7-.23L2.1 11.1a1.18 1.18 0 0 0 .12 2.24l4.68 1.45 1.77 5.3a1.15 1.15 0 0 0 1.9.47l2.9-2.88 4.68 3.46a1.3 1.3 0 0 0 2.03-.76l2.18-14.6a1.52 1.52 0 0 0-.42-1.61Zm-3.88 3.9-8.2 7.47-.32 2.63-1.28-3.83 9.8-6.27Z"/></svg> : project.icon}</span>
+                      <span className="truncate">{project.title}</span>{activeAiChatProject?.id === project.id ? <Check size={16} aria-hidden="true"/> : null}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+             <div className="miniapp-ai-chat-thread-wrap relative min-h-0 flex-1">
+              <div ref={aiChatDialogContainerRef} onScroll={(event) => {
+                const container = event.currentTarget;
+                generalAiChatNearBottomRef.current =
+                  container.scrollHeight - container.scrollTop - container.clientHeight < 120;
+                if (!generalAiChatUserScrollEnabledRef.current) {
+                  generalAiChatScrollTopRef.current = container.scrollTop;
+                  return;
+                }
+                updateAiChatHeaderVisibility(container.scrollTop, generalAiChatScrollTopRef, setIsGeneralAiChatHeaderHidden);
+              }}
+                onWheel={() => { generalAiChatUserScrollEnabledRef.current = true; }}
+                onTouchMove={() => { generalAiChatUserScrollEnabledRef.current = true; }}
+                onKeyDown={(event) => {
+                  if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' '].includes(event.key)) generalAiChatUserScrollEnabledRef.current = true;
+                }}
+                className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
+              {linkedCheckupProposal && activeAiChat?.id === QUICK_AI_CHAT_ID &&
+                 !visibleAiChatMessages.some(message => message.taskProposal?.id === linkedCheckupProposal.id) ? (
+                <div className="max-w-[95%] rounded-2xl border border-[color:var(--panel-border)] p-3">
+                  <p className="mb-2 text-sm font-semibold">Изменения из ИИ-чекапа</p>
+                  <AiTaskProposalCard proposal={linkedCheckupProposal} />
+                </div>
+              ) : null}
+              {visibleAiChatMessages.length === 0 ? (
+                <div className="miniapp-ai-chat-empty" role="status">
+                  <span className="miniapp-ai-chat-empty-icon" aria-hidden="true"><Sparkles size={34} strokeWidth={1.8} /></span>
+                  <strong>ИИ готов помочь</strong>
+                  <p>Задайте вопрос, обсудите идею или попросите составить план.</p>
+                </div>
+              ) : null}
+              {visibleAiChatMessages.map((message) => (
+                <div key={message.id} className={`ai-message-forward-group w-fit max-w-[88%] ${message.role === 'user' ? 'ml-auto' : 'mr-auto'}`}><div className={`miniapp-ai-chat-message miniapp-ai-chat-message-general w-full rounded-3xl px-4 py-3 ${message.role === 'user' ? 'miniapp-ai-chat-message-user rounded-br-lg' : 'miniapp-ai-chat-message-assistant rounded-bl-lg'}`}>
+                  <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`mini-chat-${message.id}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `mini-chat-${message.id}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `mini-chat-${message.id}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
+                  <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}</div>
+                  {message.monitoringTaskId && activeAiChat?.id === QUICK_AI_CHAT_ID ? <button type="button" className="task-monitor-chat-link mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold"
+                    onClick={() => { const target = tasks.find(task => task.id === message.monitoringTaskId && !task.parentTaskId); if (target) { setIsAiChatOpen(false); openTaskModal(target); setIsAiDialogOpen(true); } }}>
+                    <ArrowUpRight size={12} /> Ответить в чате задачи
+                  </button> : null}
+                  {message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} searched={message.webSearchUsed} /> : null}
+                  {message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} onDownload={downloadAiGeneratedDocument} /> : null}
+                  {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} /> : null}
+                  {message.role === 'assistant' && message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={message.telegramSuggestedReply} /> : null}
+                  {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={continueTelegramReadAiChat} /> : null}
+                  {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
+                  </div>
+                  <div className="ai-message-forward-actions"><AiReplyAction message={message} onReply={setReplyToGeneral} /><TelegramMessageQuickShare text={message.content} compact /></div>
+                </div>
+              ))}
+              {aiChatLoading ? <AiProgress status={aiChatProgress} /> : null}
+              {aiChatError ? <p className="text-sm text-rose-300">{aiChatError}</p> : null}
+              <div className="miniapp-ai-chat-bottom-spacer h-24" aria-hidden="true" />
+              </div>
+            </div>
+            <div className="miniapp-ai-chat-composer absolute inset-x-0 bottom-0 z-20 p-3">
+              {replyToGeneral ? <AiReplyPreview target={replyToGeneral} onDismiss={() => setReplyToGeneral(null)} /> : null}
+              <AiAttachmentTiles files={aiChatPendingFiles} onRemove={(file) => setAiChatPendingFiles((prev) => prev.filter((item) => item !== file))} busy={aiChatLoading} uploadProgress={aiChatUploadProgress} />
+              <div className="miniapp-ai-chat-composer-card miniapp-ai-chat-composer-card-general flex items-end gap-2 rounded-3xl border p-2">
+                <input ref={aiChatFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleAiChatFileSelect} />
+                <MiniAiChatComposer
+                  ref={aiChatComposerRef}
+                  variant="general"
+                  initialDraft={aiChatDraftValueRef.current}
+                  onDraftChange={(value) => { aiChatDraftValueRef.current = value; }}
+                  onSend={() => { void sendAiChatQuestion(); }}
+                  onAttach={() => aiChatFileInputRef.current?.click()}
+                  isSending={aiChatLoading}
+                  hasPendingFiles={aiChatPendingFiles.length > 0}
+                />
+              </div>
+            </div>
+          </div>
+          <div
+            className={`miniapp-ai-chat-menu-backdrop absolute inset-0 z-[75] bg-slate-950/70 transition-opacity duration-300 ease-out ${isAiChatMenuOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'}`}
+            onClick={() => setIsAiChatMenuOpen(false)}
+            aria-hidden={!isAiChatMenuOpen}
+          >
+            <aside
+              className={`miniapp-ai-chat-menu h-full w-[86vw] max-w-sm overflow-y-auto border-r border-slate-800 bg-slate-900 p-3 shadow-2xl transition-transform duration-300 ease-out ${isAiChatMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-xl font-bold tracking-tight text-primary">Проекты и чаты</h3>
+                <button type="button" className="miniapp-ai-chat-menu-close rounded-2xl border p-2" onClick={() => setIsAiChatMenuOpen(false)}><X size={16} /></button>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.2em] text-violet-300">Проекты</p><button type="button" className="miniapp-ai-chat-menu-add miniapp-ai-chat-menu-add-project rounded-2xl p-2 text-white" onClick={() => openAiChatProjectDialog()}><Plus size={16} /></button></div>
+                {aiChatProjects.map((project) => (
+                  <div key={project.id} className={`miniapp-ai-chat-menu-card rounded-3xl border p-2.5 shadow-sm ${project.id === activeAiChatProject?.id ? 'miniapp-ai-chat-menu-card-active-project' : ''}`} style={{ '--project-color': project.color } as CSSProperties}>
+                    <button type="button" className="flex w-full items-center gap-2 text-left" onClick={() => { setActiveAiChatProjectId(project.id); setActiveAiChatId(project.chats[0]?.id ?? ''); }}><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-base miniapp-ai-chat-menu-project-icon" style={{ backgroundColor: project.color }}>{project.icon === 'telegram' ? <svg role="img" aria-label="Telegram" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M21.94 4.17a1.46 1.46 0 0 0-1.7-.23L2.1 11.1a1.18 1.18 0 0 0 .12 2.24l4.68 1.45 1.77 5.3a1.15 1.15 0 0 0 1.9.47l2.9-2.88 4.68 3.46a1.3 1.3 0 0 0 2.03-.76l2.18-14.6a1.52 1.52 0 0 0-.42-1.61Zm-3.88 3.9-8.2 7.47-.32 2.63-1.28-3.83 9.8-6.27Z"/></svg> : project.icon}</span><span className="min-w-0 flex-1 truncate text-sm font-bold miniapp-ai-chat-menu-title">{project.title}</span></button>
+                    <div className="mt-2 flex gap-2"><button type="button" className="miniapp-ai-chat-menu-action inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold" disabled={project.id === aiChatProjects[0]?.id || project.id === 'telegram-ai-assistant-project'} onClick={() => openAiChatProjectDialog(project.id)}><Settings size={12} /> Настроить</button><button type="button" disabled={project.id === aiChatProjects[0]?.id || project.id === 'telegram-ai-assistant-project' || aiChatProjects.length <= 1} className="miniapp-ai-chat-menu-action miniapp-ai-chat-menu-action-danger inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold disabled:opacity-40" onClick={() => deleteAiChatProject(project.id)}><Trash2 size={12} /> Удалить</button></div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Чаты</p><button type="button" className="miniapp-ai-chat-menu-add miniapp-ai-chat-menu-add-chat rounded-2xl p-2 text-white" onClick={createAiChatThread} disabled={activeAiChatProject?.id === 'telegram-ai-assistant-project'}><Plus size={16} /></button></div>
+                {(activeAiChatProject?.chats ?? []).map((chat) => (
+                  <div key={chat.id} className={`miniapp-ai-chat-menu-card rounded-3xl border p-2.5 shadow-sm ${chat.id === activeAiChat?.id ? 'miniapp-ai-chat-menu-card-active-chat' : ''}`}>
+                    <button type="button" className="w-full text-left" onClick={() => { setActiveAiChatId(chat.id); setIsAiChatMenuOpen(false); }}><span className="block truncate text-sm font-bold miniapp-ai-chat-menu-title">{chat.title}</span><span className="miniapp-ai-chat-menu-subtitle text-[11px]">{chat.messages.length} сообщ.</span></button>
+                    <div className="mt-2 flex gap-2"><button type="button" className="miniapp-ai-chat-menu-action rounded-xl border px-2.5 py-1.5 text-xs font-semibold" disabled={chat.id === QUICK_AI_CHAT_ID || chat.id.startsWith('telegram-ai-assistant:')} onClick={() => { setRenamingAiChatId(chat.id); setAiChatRenameDraft(chat.title); }}>Переименовать</button><button type="button" disabled={chat.id === QUICK_AI_CHAT_ID || chat.id.startsWith('telegram-ai-assistant:') || (activeAiChatProject?.chats.length ?? 0) <= 1} className="miniapp-ai-chat-menu-action miniapp-ai-chat-menu-action-danger rounded-xl border px-2.5 py-1.5 text-xs font-semibold disabled:opacity-40" onClick={() => deleteAiChatThread(chat.id)}>Удалить</button></div>
+                  </div>
+                ))}
+              </div>
+            </aside>
+          </div>
+        </div>
+      ) : null}
+
+      {isAiChatProjectDialogOpen ? (
+        <div className={`miniapp-slide-backdrop fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 p-4 ${getMiniWindowMotionClass('ai-project')}`} onClick={() => closeMiniWindowWithMotion('ai-project', () => setIsAiChatProjectDialogOpen(false))}>
+          <div className="miniapp-slide-panel w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-4 text-slate-100 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-300">{aiChatProjectDraft.mode === 'edit' ? 'Настройка проекта' : 'Новый проект'}</p>
+                <h3 className="mt-1 text-lg font-semibold">Проект чата</h3>
+              </div>
+              <button type="button" className="rounded-md border border-slate-700 p-1.5" onClick={() => closeMiniWindowWithMotion('ai-project', () => setIsAiChatProjectDialogOpen(false))}><X size={16} /></button>
+            </div>
+            <label className="mt-4 block text-xs font-semibold text-slate-400">Название</label>
+            <input value={aiChatProjectDraft.title} onChange={(event) => setAiChatProjectDraft((prev) => ({ ...prev, title: event.target.value }))} className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm" placeholder="Название проекта" autoFocus />
+            <label className="mt-4 block text-xs font-semibold text-slate-400">Цвет</label>
+            <div className="mt-2 flex flex-wrap gap-1.5">{MINI_AI_PROJECT_COLORS.map((color) => <button key={color} type="button" className={`h-8 w-8 rounded-full border-2 ${aiChatProjectDraft.color === color ? 'border-white' : 'border-transparent'}`} style={{ backgroundColor: color }} onClick={() => setAiChatProjectDraft((prev) => ({ ...prev, color }))} />)}</div>
+            <label className="mt-4 block text-xs font-semibold text-slate-400">Иконка</label>
+            <div className="mt-2 grid grid-cols-6 gap-1.5">{MINI_AI_PROJECT_ICONS.map((icon) => <button key={icon} type="button" className={`rounded-lg border py-1.5 text-lg ${aiChatProjectDraft.icon === icon ? 'border-violet-400 bg-violet-500/20' : 'border-slate-700 bg-slate-950'}`} onClick={() => setAiChatProjectDraft((prev) => ({ ...prev, icon }))}>{icon}</button>)}</div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" className="rounded-md border border-slate-700 px-3 py-2 text-sm" onClick={() => closeMiniWindowWithMotion('ai-project', () => setIsAiChatProjectDialogOpen(false))}>Отмена</button>
+              <button type="button" className="rounded-md bg-violet-600 px-3 py-2 text-sm font-semibold" onClick={saveAiChatProject}>{aiChatProjectDraft.mode === 'edit' ? 'Сохранить' : 'Создать'}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {renamingAiChatId ? (
+        <div className={`miniapp-slide-backdrop fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 p-4 ${getMiniWindowMotionClass('ai-rename')}`}>
+          <div className="miniapp-slide-panel w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-4 text-slate-100">
+            <h3 className="font-semibold">Переименовать чат</h3>
+            <input value={aiChatRenameDraft} onChange={(event) => setAiChatRenameDraft(event.target.value)} className="mt-3 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm" autoFocus />
+            <div className="mt-4 flex justify-end gap-2"><button type="button" className="rounded-md border border-slate-700 px-3 py-2 text-sm" onClick={() => closeMiniWindowWithMotion('ai-rename', () => setRenamingAiChatId(null))}>Отмена</button><button type="button" className="rounded-md bg-cyan-600 px-3 py-2 text-sm font-semibold text-white" onClick={saveAiChatRename}>Сохранить</button></div>
+          </div>
+        </div>
+      ) : null}
+
+      {isHabitModalOpen && !editingHabitId ? (
+        <div className={`miniapp-slide-backdrop fixed inset-0 z-[95] flex items-end bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('habit')}`}>
+          <section className="miniapp-slide-panel miniapp-focus-panel miniapp-habit-modal-panel miniapp-habit-create-panel relative max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-xl sm:rounded-[2rem]" role="dialog" aria-modal="true" aria-label="Создание привычки">
+            <div className="flex max-h-[calc(94vh-2rem)] min-h-0 flex-col sm:max-h-[calc(88vh-2rem)]">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">Новая привычка</p>
+                  <p className="mt-1 text-xs text-slate-400">Выберите параметры и создайте привычку.</p>
+                </div>
+                <button type="button" onClick={() => closeMiniWindowWithMotion('habit', closeHabitModal)} disabled={savingHabit} className="miniapp-focus-icon-button" aria-label="Закрыть создание привычки" title="Закрыть">
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="miniapp-habit-create-content min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto pb-4 pr-1">
+              <div className="grid grid-cols-[68px_minmax(0,1fr)] items-center gap-3">
+                <div
+                  className="miniapp-habit-circle relative inline-flex h-[68px] w-[68px] items-center justify-center rounded-full border"
+                  style={{ '--habit-color': habitDraft.color, '--habit-progress': '0%' } as CSSProperties}
+                >
+                  <span className="miniapp-habit-circle-core absolute inset-[6px] rounded-full" />
+                  <span className="relative z-10 text-2xl">{habitDraft.icon}</span>
+                </div>
+                <div className="min-w-0 space-y-2">
+                  <label className="block text-xs text-slate-300">Название привычки</label>
+                  <input
+                    value={habitDraft.name}
+                    onChange={(event) => setHabitDraft((prev) => ({ ...prev, name: event.target.value }))}
+                    placeholder="Например, вода или зарядка"
+                    className="miniapp-habit-editor-name w-full min-w-0 rounded-xl border px-3 py-2 text-sm font-semibold"
+                  />
+                  <div className="miniapp-habit-editor-completion space-y-2 rounded-xl border px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-slate-300">Выполнено</span>
+                      <span className="text-xs font-semibold text-slate-100">{habitModalCompleted} из {parseHabitTargetCount(habitDraft.targetCount)}</span>
+                    </div>
+                    <div className="grid grid-cols-[32px_minmax(0,1fr)_32px] items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => editingHabit ? void uncompleteHabit(editingHabit) : undefined}
+                        className="miniapp-habit-counter-button inline-flex h-8 w-8 items-center justify-center rounded-full border disabled:opacity-50"
+                        disabled={!editingHabit || habitModalCompleted <= 0 || isHabitCompletionActionPending}
+                        aria-label="Снять отметку повтора"
+                      >
+                        <Minus size={14} strokeWidth={2.4} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => editingHabit ? void completeHabit(editingHabit) : undefined}
+                        className="miniapp-habit-complete-button inline-flex h-9 items-center justify-center rounded-lg px-4 text-sm font-semibold text-white disabled:opacity-50"
+                        disabled={!editingHabit || habitModalCompleted >= parseHabitTargetCount(habitDraft.targetCount) || isHabitCompletionActionPending}
+                      >
+                        Выполнить
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => editingHabit ? void completeHabit(editingHabit) : undefined}
+                        className="miniapp-habit-counter-button miniapp-habit-counter-button-positive inline-flex h-8 w-8 items-center justify-center rounded-full border disabled:opacity-50"
+                        disabled={!editingHabit || habitModalCompleted >= parseHabitTargetCount(habitDraft.targetCount) || isHabitCompletionActionPending}
+                        aria-label="Отметить повтор"
+                      >
+                        <Plus size={14} strokeWidth={2.4} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+
+                {renderHabitSettingsFields()}
+              </div>
+              <div className="miniapp-habit-create-bottom miniapp-habit-editor-bottom mt-3 pt-3">
+                {error ? <p role="alert" className="mb-2 rounded-xl border border-rose-400/50 bg-rose-500/10 px-3 py-2 text-xs text-rose-500">{error}</p> : null}
+                <button type="button" onClick={() => void saveHabit()} disabled={savingHabit} className="miniapp-habit-editor-save w-full rounded-2xl px-4 py-3 text-sm font-semibold disabled:opacity-50">
+                  {savingHabit ? 'Создаём…' : 'Создать привычку'}
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {isHabitModalOpen && editingHabit ? (
+        <div className={`miniapp-slide-backdrop fixed inset-0 z-[95] flex items-end bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('habit')}`}>
+          <section className="miniapp-slide-panel miniapp-focus-panel miniapp-habit-modal-panel miniapp-habit-editor-panel relative max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-xl sm:rounded-[2rem]" role="dialog" aria-modal="true" aria-label="Редактирование привычки">
+            <div className="flex max-h-[calc(94vh-2rem)] min-h-0 flex-col sm:max-h-[calc(88vh-2rem)]">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">Привычка</p>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => setIsHabitSettingsOpen((open) => !open)} className="miniapp-focus-icon-button" title="Настройки привычки" aria-label="Настройки привычки" aria-expanded={isHabitSettingsOpen} aria-controls="miniapp-habit-edit-settings">
+                    <Settings size={16} />
+                  </button>
+                  <button type="button" onClick={closeHabitEditor} disabled={savingHabit} className="miniapp-focus-icon-button" title="Сохранить и закрыть" aria-label="Сохранить и закрыть окно">
+                    {savingHabit ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />}
+                  </button>
+                </div>
+              </div>
+              {isHabitSettingsOpen ? (
+                <div id="miniapp-habit-edit-settings" className="miniapp-task-settings-panel miniapp-habit-settings-panel absolute left-3 right-3 top-14 z-[75] max-h-[calc(94vh-6rem)] overflow-y-auto rounded-3xl border p-4 shadow-2xl sm:left-auto sm:right-4 sm:w-[370px] sm:max-h-[calc(88vh-6rem)]">
+                  <div className="mb-4 flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold">Настройки привычки</h3>
+                    <button type="button" onClick={() => setIsHabitSettingsOpen(false)} className="miniapp-focus-icon-button" aria-label="Закрыть настройки"><X size={14}/></button>
+                  </div>
+                  {renderHabitSettingsFields()}
+                  <div className="mt-4 grid gap-2 border-t pt-4">
+                    <div className="grid grid-cols-2 gap-2">
+                      <button type="button" disabled={finishingHabitId === editingHabit.id} onClick={() => void finishHabit(editingHabit.id)} className="miniapp-habit-editor-secondary rounded-xl border px-3 py-2.5 text-xs font-semibold disabled:opacity-50">{finishingHabitId === editingHabit.id ? 'Завершаем…' : 'Завершить привычку'}</button>
+                      <button type="button" disabled={deletingHabitId === editingHabit.id} onClick={() => void deleteHabit(editingHabit.id)} className="miniapp-habit-editor-danger rounded-xl border px-3 py-2.5 text-xs font-semibold disabled:opacity-50">{deletingHabitId === editingHabit.id ? 'Удаляем…' : 'Удалить привычку'}</button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+              <div className="miniapp-habit-editor-content min-h-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden pr-1">
+                <div className="grid grid-cols-[68px_minmax(0,1fr)] items-center gap-3">
+                  <div className="miniapp-habit-circle relative inline-flex h-[68px] w-[68px] items-center justify-center rounded-full border" style={{ '--habit-color': habitDraft.color, '--habit-progress': `${Math.round((habitModalCompleted / Math.max(1, parseHabitTargetCount(habitDraft.targetCount))) * 100)}%` } as CSSProperties}>
+                    <span className="miniapp-habit-circle-core absolute inset-[6px] rounded-full" />
+                    <span className="relative z-10 text-2xl">{habitDraft.icon}</span>
+                  </div>
+                  <div className="min-w-0 space-y-2">
+                    <label className="block text-xs text-slate-300">Название привычки</label>
+                    <input value={habitDraft.name} onChange={(event) => setHabitDraft((prev) => ({ ...prev, name: event.target.value }))} placeholder="Название привычки" className="miniapp-habit-editor-name w-full rounded-xl border px-3 py-2 text-sm font-semibold" aria-label="Название привычки" />
+                    <div className="miniapp-habit-editor-completion rounded-xl border px-3 py-2">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <span className="text-xs text-slate-300">Сегодня выполнено</span>
+                        <span className="text-xs font-semibold text-slate-100">{habitModalCompleted} из {parseHabitTargetCount(habitDraft.targetCount)}</span>
+                      </div>
+                      <div className="grid grid-cols-[32px_minmax(0,1fr)_32px] items-center gap-2">
+                        <button type="button" onClick={() => void uncompleteHabit(editingHabit)} className="miniapp-habit-counter-button inline-flex h-8 w-8 items-center justify-center rounded-full border disabled:opacity-50" disabled={habitModalCompleted <= 0 || isHabitCompletionActionPending} aria-label="Снять отметку повтора"><Minus size={14}/></button>
+                        <button type="button" onClick={() => void completeHabit(editingHabit)} className="miniapp-habit-complete-button inline-flex h-9 items-center justify-center rounded-lg px-2 text-sm font-semibold text-white disabled:opacity-50" disabled={habitModalCompleted >= parseHabitTargetCount(habitDraft.targetCount) || isHabitCompletionActionPending}>Выполнить</button>
+                        <button type="button" onClick={() => void completeHabit(editingHabit)} className="miniapp-habit-counter-button miniapp-habit-counter-button-positive inline-flex h-8 w-8 items-center justify-center rounded-full border disabled:opacity-50" disabled={habitModalCompleted >= parseHabitTargetCount(habitDraft.targetCount) || isHabitCompletionActionPending} aria-label="Отметить повтор"><Plus size={14}/></button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <MiniAppHabitTracker habit={editingHabit} onHabitChanged={(updated) => {
+                  setHabits((current) => updated.isAutoCompleted
+                    ? current.filter((item) => item.id !== updated.id)
+                    : current.map((item) => item.id === updated.id ? updated : item));
+                }} />
+              </div>
+              {error ? <p role="alert" className="mt-3 rounded-xl border border-rose-400/50 bg-rose-500/10 px-3 py-2 text-xs text-rose-500">{error}</p> : null}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {isCreateTaskModalOpen ? (
+        <div className={`miniapp-slide-backdrop fixed inset-0 z-50 flex items-end bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('create-task')}`}>
+          <div className={`relative miniapp-slide-panel miniapp-focus-panel miniapp-focus-task-panel max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-2xl sm:rounded-[2rem] ${isCreateTaskSettingsOpen ? 'miniapp-focus-task-panel--settings-open' : ''}`}>
+            <div className="flex max-h-[calc(94vh-2rem)] min-h-0 flex-col sm:max-h-[calc(88vh-2rem)]">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">{createEditorType === 'event' ? 'Новое событие' : 'Новая задача'}</p>
+                <div className="relative flex items-center gap-2">
+                  <button type="button" onClick={() => setIsCreateTaskSettingsOpen((prev) => !prev)} className="miniapp-focus-icon-button" aria-label={createEditorType === 'event' ? 'Настройки нового события' : 'Настройки новой задачи'} aria-expanded={isCreateTaskSettingsOpen}>
+                    <Settings size={16} />
+                  </button>
+                  <button type="button" onClick={() => closeMiniWindowWithMotion('create-task', () => setIsCreateTaskModalOpen(false))} className="miniapp-focus-icon-button" aria-label="Закрыть окно">
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+
+                  {isCreateTaskSettingsOpen ? (
+                    <div className="miniapp-create-settings-panel miniapp-settings-scroll-area invisible-scrollbar absolute left-4 right-4 top-16 z-[175] min-h-0 overflow-y-auto rounded-2xl border p-3 text-sm shadow-2xl sm:left-auto sm:w-[360px]">
+                      <label className="flex items-center gap-2 font-medium">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(createTaskDraft.isRecurring)}
+                          onChange={(event) => {
+                            const enabled = event.target.checked;
+                            setCreateTaskDraft((prev) => enabled ? { ...prev, isRecurring: true, recurrenceText: prev.recurrenceText || '' } : { ...prev, isRecurring: false, recurrenceText: null, recurrenceJson: null, recurrenceSummary: null, recurrenceUntil: null });
+                            if (!enabled) setCreateTaskRecurrenceNextDueLabel(null);
+                          }}
+                        />
+                        повторять
+                      </label>
+                      {createEditorType === 'task' ? <label className="mt-3 flex items-center gap-2 font-medium">
+                        <input
+                          type="checkbox"
+                          checked={createTaskDraft.aiNotificationsEnabled ?? true}
+                          onChange={(event) => setCreateTaskDraft((prev) => ({ ...prev, aiNotificationsEnabled: event.target.checked }))}
+                        />
+                        уведомления от ИИ
+                      </label> : null}
+                      {createTaskDraft.isRecurring ? (
+                        <TaskRecurrenceConfigurator key={createEditorType} value={createTaskDraft}
+                          onChange={(patch) => setCreateTaskDraft((prev) => ({ ...prev, ...patch }))}
+                          onParseWithAi={() => void applyCreateTaskRecurrence()}
+                          parsing={createTaskRecurrenceLoading} nextDueLabel={createTaskRecurrenceNextDueLabel}
+                          isEvent={createEditorType === 'event'} />
+                      ) : null}
+                    </div>
+                  ) : null}
+
+              <div className="min-h-0 flex-1 overflow-y-auto pb-24 pr-1">
+                <textarea
+                  autoFocus
+                  value={createTaskDraft.title}
+                  onChange={(event) => setCreateTaskDraft((prev) => ({ ...prev, title: event.target.value }))}
+                  className="miniapp-focus-title-input invisible-scrollbar min-h-[4.5rem] w-full resize-none border-0 bg-transparent p-0 text-3xl font-bold leading-tight outline-none"
+                  rows={2}
+                  placeholder={createEditorType === 'event' ? 'Введите название события' : 'Введите название'}
+                />
+                {createEditorType === 'event' ? (
+                  <input
+                    value={createTaskDraft.location ?? ''}
+                    onChange={(event) => setCreateTaskDraft((prev) => ({ ...prev, location: event.target.value }))}
+                    className="miniapp-task-text-field mt-2 w-full rounded-2xl border px-3 py-2.5 text-sm"
+                    placeholder="Место события"
+                    autoComplete="street-address"
+                  />
+                ) : null}
+                <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-violet-500">
+                  <DateTimePickerWithApply
+                    value={fromInputDateTime(createTaskDraft.dueDate)}
+                    onChange={(nextValue) => setCreateTaskDraft((prev) => ({ ...prev, dueDate: toInputDateTime(nextValue) }))}
+                    timelineTasks={timelinePickerTasks}
+                    iconOnly detachedPopup buttonClassName="miniapp-focus-icon-button"
+                  />
+                  <span>{createTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(createTaskDraft.dueDate)}` : 'До дедлайна: выберите дату'}</span>
+                </div>
+                <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
+                  <textarea
+                    value={createTaskDraft.description}
+                    onChange={(event) => setCreateTaskDraft((prev) => ({ ...prev, description: event.target.value }))}
+                    className="miniapp-focus-description-input invisible-scrollbar min-h-32 w-full resize-none border-0 bg-transparent text-sm leading-6 outline-none placeholder:text-slate-400"
+                    placeholder="Введите описание"
+                  />
+                </div>
+                {createEditorType === 'event' ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <label className="miniapp-focus-icon-button inline-flex cursor-pointer items-center justify-center" title="Добавить вложения к событию" aria-label="Добавить вложения к событию">
+                      <Paperclip size={15} />
+                      <input type="file" className="sr-only" multiple accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt"
+                        onChange={(event) => {
+                          const files = Array.from(event.target.files ?? []);
+                          event.target.value = '';
+                          if (!files.length) return;
+                          if (files.some((file) => !(/\.(pdf|docx|xlsx?|png|jpe?g|webp|gif|txt)$/i.test(file.name) || SUPPORTED_AI_FILE_TYPES.has(file.type)))) {
+                            setError('Поддерживаются PDF, DOCX, XLS/XLSX, TXT и изображения.'); return;
+                          }
+                          if (files.some((file) => file.size > MAX_AI_ATTACHMENT_SIZE || file.size === 0)) {
+                            setError('Файл должен быть от 1 байта до 8 МБ.'); return;
+                          }
+                          setError(null);
+                          setCreateTaskPendingFiles((previous) => [...previous, ...files]);
+                        }} />
                     </label>
                     {createTaskPendingFiles.map((file, index) => (
                       <span key={index} className="miniapp-focus-attachment-pill inline-flex max-w-[210px] items-center gap-1 rounded-xl border px-2 py-1 text-[11px]">
