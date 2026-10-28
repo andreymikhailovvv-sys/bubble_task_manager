@@ -11351,3 +11351,78 @@ body[data-theme='light'] .miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-
     pointer-events: none;
   }
 }
+
+/* Telegram fullscreen polish: place the left-side menu's title and content
+   below the system status and Telegram Close/menu controls. */
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-menu {
+  box-sizing: border-box;
+  padding-top: calc(var(--miniapp-top-inset, 0px) + .7rem) !important;
+  padding-left: 1.1rem !important;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-menu > div:first-child {
+  margin-left: .3rem;
+}
+
+/* Custom project and chat menus, a small compositor-friendly entrance.
+   No animation of height, shadows, or other expensive layout properties. */
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-telegram-picker {
+  transform-origin: 50% 0;
+  animation: miniapp-telegram-picker-appear .16s cubic-bezier(.2, .8, .3, 1) both;
+}
+@keyframes miniapp-telegram-picker-appear {
+  from { opacity: 0; transform: translateY(-6px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .miniapp-shell.miniapp-telegram-fullscreen .miniapp-telegram-picker {
+    animation: none;
+  }
+}
+
+/* Same native Telegram SVG as the existing project sidebar, not a text plane. */
+.miniapp-telegram-picker-project-icon svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  color: #fff;
+  flex: 0 0 auto;
+}
+
+/* The attachment control must not reuse the light theme's pale surface. */
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-panel-general .miniapp-ai-chat-attach {
+  background: #263750 !important;
+  color: #d2ddeb !important;
+  box-shadow: inset 0 0 0 1px rgba(131, 151, 185, .48) !important;
+}
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-panel-general .miniapp-ai-chat-attach:active {
+  background: #304761 !important;
+}
+
+/* Telegram's native button focus can leave a full-width rectangular flash.
+   Use semantic keyboard-accessible div controls in Telegram only and remove
+   native button appearance entirely. Keep violet text/icon as active marker. */
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-bottom-navigation-item {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-bottom-navigation-item:is(:hover, :focus, :active, :focus-visible) {
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+.miniapp-shell.miniapp-telegram-fullscreen.miniapp-light .miniapp-bottom-navigation-item.is-active .miniapp-bottom-navigation-icon {
+  background: transparent !important;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-bottom-navigation-item:focus-visible .miniapp-bottom-navigation-icon {
+  outline: 2px solid #8b5cf6;
+  outline-offset: 2px;
+}
