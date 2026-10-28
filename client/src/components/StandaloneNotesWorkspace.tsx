@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Maximize2, Plus, Search, Settings2, StickyNote, Tags, Trash2, X } from 'lucide-react';
 import { api, type StandaloneNote, type StandaloneNoteGroup } from '../lib/api';
@@ -6,14 +6,14 @@ import { noteHtmlToPlainText, noteValueToEditorHtml } from '../lib/notes';
 import { NotesEditor } from './NotesEditor';
 import { StandaloneNoteGroupManager, noteGroupStyle } from './StandaloneNoteGroupManager';
 
-type Props = { userId: string; requestedNote?: { id: string; serial: number } | null; mode?: 'widget' | 'mobile'; onClose?: () => void };
+type Props = { userId: string; requestedNote?: { id: string; serial: number } | null; mode?: 'widget' | 'mobile'; onClose?: () => void; mobileSafeAreaTop?: number; mobileSafeAreaBottom?: number };
 const sortNotes = (items: StandaloneNote[]) =>
   [...items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id));
 const titleOf = (note: StandaloneNote) => note.title.trim() || 'Без названия';
 const summaryOf = (note: StandaloneNote) => noteHtmlToPlainText(note.content).replace(/\s+/g, ' ').trim();
 const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : 'Не удалось сохранить заметку.';
 
-export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget', onClose }: Props) {
+export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget', onClose, mobileSafeAreaTop = 0, mobileSafeAreaBottom = 0 }: Props) {
   const [notes, setNotes] = useState<StandaloneNote[]>([]);
   const [groups, setGroups] = useState<StandaloneNoteGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
@@ -323,7 +323,9 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
         ) : null}
       </section> : null}
       {boardOpen ? createPortal(
-        <div className={`standalone-notes-backdrop fixed inset-0 z-[245] flex items-center justify-center p-3 sm:p-6 ${mode === 'mobile' ? 'standalone-notes-mobile' : ''}`} onMouseDown={(event) => {
+        <div className={`standalone-notes-backdrop fixed inset-0 z-[245] flex items-center justify-center p-3 sm:p-6 ${mode === 'mobile' ? 'standalone-notes-mobile' : ''}`}
+          style={mode === 'mobile' ? ({ '--miniapp-top-inset': `${mobileSafeAreaTop}px`, '--miniapp-bottom-inset': `${mobileSafeAreaBottom}px` } as CSSProperties) : undefined}
+          onMouseDown={(event) => {
           if (event.target === event.currentTarget && !editing) closeBoard();
         }}>
           <section className="standalone-notes-board flex h-[min(87dvh,880px)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border shadow-2xl" role="dialog" aria-modal="true" aria-label="Все заметки">

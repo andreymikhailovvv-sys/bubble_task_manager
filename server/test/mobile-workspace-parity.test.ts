@@ -55,7 +55,7 @@ test('workspace tools remain below dialogs and the credits popover on both compa
   const openRule = css.match(/\.miniapp-workspace-tools\.is-filter-menu-open \{([^}]+)\}/)?.[1] ?? '';
   const normalLayer = Number(toolbarRule.match(/z-index:\s*(\d+)/)?.[1]);
   const openLayer = Number(openRule.match(/z-index:\s*(\d+)/)?.[1]);
-  const headerLayer = Number(mini.match(/sticky top-0 z-(\d+)(?: miniapp-premium-topbar)? rounded-xl/)?.[1]);
+  const headerLayer = Number(mini.match(/relative z-(\d+) miniapp-premium-topbar rounded-xl/)?.[1]);
   const createTaskLayer = Number(mini.match(/miniapp-slide-backdrop fixed inset-0 z-(\d+) flex items-end/)?.[1]);
   assert.equal(normalLayer, 1);
   assert.ok(normalLayer < openLayer && openLayer < headerLayer);
@@ -136,6 +136,26 @@ test('Telegram fullscreen uses safe insets and bottom tabs replace the old displ
   assert.match(styles, /\.miniapp-workspace-tools-compact/);
   assert.match(mini, /miniapp-premium-timeline/);
   assert.match(mini, /miniapp-premium-habits/);
+});
+
+test('fullscreen search and all four tabs respect safe areas and keep the shared navigation', async () => {
+  const [mini, styles, notes] = await Promise.all([
+    read('../../client/src/MiniApp.tsx'),
+    read('../../client/src/styles.css'),
+    read('../../client/src/components/StandaloneNotesWorkspace.tsx')
+  ]);
+  assert.match(mini, /className="relative z-30 miniapp-premium-topbar/);
+  assert.doesNotMatch(mini, /sticky top-0 z-30 miniapp-premium-topbar/);
+  assert.match(mini, /isAiChatOpen && !isStandaloneNotesOpen \? 'is-active'/);
+  assert.match(mini, /isStandaloneNotesOpen \? 'is-active'/);
+  assert.match(mini, /setIsAiChatOpen\(false\); setIsStandaloneNotesOpen\(false\)/);
+  assert.match(mini, /mobileSafeAreaTop=\{telegramViewport\.top\}/);
+  assert.match(notes, /style=\{mode === 'mobile' \?/);
+  assert.match(styles, /\.miniapp-shell \.miniapp-bottom-navigation \{\s*z-index: 260/);
+  assert.match(styles, /\.miniapp-shell \.miniapp-ai-chat-backdrop-general \{\s*top: var\(--miniapp-top-inset/);
+  assert.match(styles, /\.miniapp-shell \.miniapp-ai-chat-panel-general \.miniapp-ai-chat-header-general \{\s*position: relative/);
+  assert.match(styles, /\.standalone-notes-mobile \{\s*top: var\(--miniapp-top-inset/);
+  assert.match(styles, /\.standalone-notes-mobile \.standalone-notes-board \{\s*height: 100%/);
 });
 
 test('compact task cards use themed sector badges rather than left color bars and retain task actions', async () => {
