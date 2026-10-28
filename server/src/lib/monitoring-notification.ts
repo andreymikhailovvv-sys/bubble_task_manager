@@ -25,9 +25,13 @@ export function monitoringHeadline(answer: string, taskTitle: string): { headlin
   const firstSentence = explicit || breakAt >= 0 ? null : plain.match(/^.{8,}?[.!?](?=\s|$)/u)?.[0];
   const candidate = firstSentence ?? plain;
   const headline = shortenHeadline(candidate) || shortenHeadline(taskTitle);
+  // On malformed old single-line replies, preserve overflow in the chat.
+  const overflow = !explicit && breakAt < 0 && !firstSentence && candidate.length > MAX_HEADLINE_LENGTH
+    ? candidate.slice(headline.endsWith('…') ? headline.length - 1 : headline.length)
+    : '';
   const body = (breakAt >= 0
     ? cleaned.slice(breakAt + 1)
-    : firstSentence ? plain.slice(firstSentence.length) : '')
+    : firstSentence ? plain.slice(firstSentence.length) : overflow)
     .trim().replace(/^СООБЩЕНИЕ\s*[:：]\s*/i, '');
   return { headline, body: body.slice(0, 4200) };
 }
