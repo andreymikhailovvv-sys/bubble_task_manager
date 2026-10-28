@@ -1,5 +1,5 @@
 import { Bold, CheckSquare, Heading1, Heading2, Italic, ListChecks, ListOrdered, List as ListIcon, Strikethrough, Underline, X } from 'lucide-react';
-import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { linkifyNoteHtml, noteValueToEditorHtml } from '../lib/notes';
 
@@ -395,7 +395,7 @@ export function NotesEditor({ value, onChange, onClose, miniAppSheet = false, te
 
   return createPortal((
     <div className={`notes-editor-backdrop fixed inset-0 z-[2147483646] flex items-center justify-center p-4 ${miniAppSheet ? 'miniapp-notes-editor-backdrop' : ''} ${telegramSafeTop !== undefined ? 'miniapp-telegram-safe-editor-backdrop' : ''}`}
-      style={telegramSafeTop !== undefined ? ({ '--telegram-editor-top': `${Math.max(96, telegramSafeTop + 12)}px` } as React.CSSProperties) : undefined}
+      style={telegramSafeTop !== undefined ? ({ '--telegram-editor-top': `${Math.max(96, telegramSafeTop + 12)}px` } as CSSProperties) : undefined}
       onClick={onClose}>
       <section className={`notes-editor-panel relative flex h-[min(82vh,680px)] w-full max-w-4xl flex-col rounded-3xl border shadow-2xl ${miniAppSheet ? 'miniapp-notes-editor-panel' : ''}`} onClick={(event) => event.stopPropagation()}>
         <button type="button" className="notes-editor-close absolute right-3 top-3 rounded-full p-2" onClick={onClose} title="Закрыть заметки" aria-label="Закрыть заметки">
