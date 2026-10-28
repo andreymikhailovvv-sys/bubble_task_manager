@@ -11426,3 +11426,141 @@ body[data-theme='light'] .miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-
   outline: 2px solid #8b5cf6;
   outline-offset: 2px;
 }
+
+
+/* Telegram Mini App: keep scrolling native to our viewport from the very first
+   touch; Telegram's own vertical-sheet gesture is disabled via WebApp SDK. */
+.miniapp-shell.miniapp-telegram-fullscreen {
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+/* Task AI uses the same full-bleed translucent upper layer as general AI.
+   Messages move behind the system strip rather than leaving a blank band. */
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-backdrop-task {
+  padding-top: 0 !important;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-task {
+  border-top: 0 !important;
+  padding-top: 0;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-task::before {
+  content: "";
+  position: absolute;
+  z-index: 19;
+  inset: 0 0 auto;
+  height: calc(var(--miniapp-top-inset, 0px) + 3.65rem);
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(18, 29, 50, .65), rgba(16, 29, 48, .28) 65%, transparent);
+}
+.miniapp-shell.miniapp-telegram-fullscreen.miniapp-light .miniapp-ai-chat-panel-task::before {
+  background: linear-gradient(to bottom, rgba(43, 60, 91, .4), rgba(246, 249, 255, .28) 65%, transparent);
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-task .miniapp-ai-chat-header-telegram-task {
+  top: var(--miniapp-top-inset, 0px);
+  height: 3.65rem;
+  min-height: 0;
+  padding: .45rem .75rem !important;
+  background: rgba(16, 29, 48, .79) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 0 !important;
+  gap: .4rem;
+}
+.miniapp-shell.miniapp-telegram-fullscreen.miniapp-light .miniapp-ai-chat-panel-task .miniapp-ai-chat-header-telegram-task {
+  background: rgba(246, 249, 255, .83) !important;
+}
+.miniapp-ai-chat-header-telegram-task .miniapp-task-ai-label {
+  font-size: .64rem;
+  letter-spacing: .01em;
+  white-space: nowrap;
+}
+.miniapp-ai-chat-header-telegram-task .miniapp-task-ai-title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-task .miniapp-ai-chat-header-telegram-task + .miniapp-ai-chat-thread-wrap {
+  --miniapp-ai-header-height: 3.65rem;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-header-telegram-task + .miniapp-ai-chat-thread-wrap .miniapp-ai-chat-thread {
+  padding-top: calc(var(--miniapp-top-inset, 0px) + 3.65rem + .75rem);
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-task-ai-monitor-telegram {
+  position: absolute;
+  z-index: 38;
+  top: max(3.2rem, calc(var(--miniapp-top-inset, 0px) - 4.75rem));
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 48vw;
+  white-space: nowrap;
+}
+.miniapp-task-ai-monitor-telegram .task-monitor-button {
+  max-width: 48vw;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: .68rem;
+  padding: .4rem .65rem;
+}
+
+/* Selected project/chat retains a violet background, not violet lettering. */
+.miniapp-shell.miniapp-telegram-fullscreen.miniapp-light .miniapp-telegram-picker-option[aria-checked="true"],
+body[data-theme='light'] .miniapp-shell.miniapp-telegram-fullscreen .miniapp-telegram-picker-option[aria-checked="true"] {
+  color: #1e293b !important;
+  background: rgba(139, 92, 246, .11);
+}
+.miniapp-shell.miniapp-telegram-fullscreen.miniapp-light .miniapp-telegram-picker-option[aria-checked="true"] svg:last-child {
+  color: #64748b;
+}
+
+/* Telegram native top controls stay untouched: our sheets never enter them. */
+@media (max-width: 639px) {
+  .miniapp-shell.miniapp-telegram-fullscreen .miniapp-telegram-task-backdrop {
+    box-sizing: border-box;
+    padding-top: max(5.8rem, var(--miniapp-top-inset, 0px)) !important;
+  }
+  .miniapp-shell.miniapp-telegram-fullscreen .miniapp-telegram-task-backdrop .miniapp-focus-task-panel {
+    max-height: calc(100dvh - max(5.8rem, var(--miniapp-top-inset, 0px)));
+  }
+  .miniapp-shell.miniapp-telegram-fullscreen .miniapp-telegram-task-backdrop .miniapp-focus-task-scroll-layout {
+    max-height: 100%;
+  }
+  .miniapp-telegram-safe-editor-backdrop.miniapp-notes-editor-backdrop {
+    box-sizing: border-box;
+    padding-top: var(--telegram-editor-top, 96px) !important;
+  }
+  .miniapp-telegram-safe-editor-backdrop .miniapp-notes-editor-panel {
+    height: min(92dvh, calc(100dvh - var(--telegram-editor-top, 96px)));
+    max-height: calc(100dvh - var(--telegram-editor-top, 96px));
+  }
+
+  /* In Telegram only, the notes list fills the top safe-area behind a glass
+     header. ResizeObserver supplies actual header height as filters collapse. */
+  .standalone-notes-mobile.standalone-notes-telegram {
+    padding-top: 0 !important;
+  }
+  .standalone-notes-telegram .standalone-notes-board {
+    position: relative;
+    min-height: 0;
+  }
+  .standalone-notes-telegram .standalone-notes-board-header {
+    position: absolute;
+    z-index: 7;
+    top: var(--miniapp-top-inset, 0px);
+    left: 0;
+    right: 0;
+    background: rgba(15, 23, 42, .88);
+  }
+  body[data-theme='light'] .standalone-notes-telegram .standalone-notes-board-header {
+    background: rgba(255, 255, 255, .86) !important;
+  }
+  .standalone-notes-telegram .standalone-notes-scroll-area {
+    height: 100%;
+    flex: 1 1 auto;
+    padding-top: calc(var(--miniapp-top-inset, 0px) + var(--notes-telegram-header-height, 0px) + .7rem) !important;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
