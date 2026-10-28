@@ -884,6 +884,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [logoutSubmitting, setLogoutSubmitting] = useState(false);
   const [isEfficiencyDetailsOpen, setIsEfficiencyDetailsOpen] = useState(false);
   const [isAiChatMenuOpen, setIsAiChatMenuOpen] = useState(false);
+  const [telegramChatPicker, setTelegramChatPicker] = useState<'chats' | 'projects' | null>(null);
   const aiChatDraftValueRef = useRef('');
   const aiChatComposerRef = useRef<MiniAiChatComposerHandle | null>(null);
   const [aiChatPendingFiles, setAiChatPendingFiles] = useState<File[]>([]);
@@ -911,7 +912,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const aiChatProjectsPollingRef = useRef(false);
   const [activeAiChatProjectId, setActiveAiChatProjectId] = useState(() => aiChatProjects[0]?.id ?? '');
   const [activeAiChatId, setActiveAiChatId] = useState(() => QUICK_AI_CHAT_ID);
-  useEffect(() => { setReplyToGeneral(null); }, [activeAiChatId]);
+  useEffect(() => { setReplyToGeneral(null); setTelegramChatPicker(null); }, [activeAiChatId, activeAiChatProjectId]);
+  useEffect(() => {
+    if (isAiChatOpen || isStandaloneNotesOpen) setIsSearchBarFloating(false);
+  }, [isAiChatOpen, isStandaloneNotesOpen]);
   const aiChatDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiChatScrollTopRef = useRef(0);
   // Auto-scrolling to the newest message must not masquerade as a swipe and
@@ -3636,6 +3640,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     : undefined;
   const fullscreenClass = isTelegramRuntime && telegramViewport.fullscreen ? 'miniapp-telegram-fullscreen' : '';
   const useTelegramCompactChatHeader = isTelegramRuntime && telegramViewport.fullscreen;
+  const showTelegramBrand = useTelegramCompactChatHeader && !isAiChatOpen && !openedTaskId && !openedSubtaskId &&
+    !isCreateTaskModalOpen && !isHabitModalOpen && !isAiDialogOpen;
 
   if (loading) {
     return <main style={telegramViewportStyle} className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 text-sm ${fullscreenClass} ${isWebRuntime ? 'miniapp-web-runtime' : ''} ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}>Загружаем Планировыч…</main>;
@@ -3649,6 +3655,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         setIsEfficiencyDetailsOpen(false);
         setIsSettingsOpen(false);
         setIsCreditPurchaseOpen(false);
+        if (isAiChatOpen || isStandaloneNotesOpen) {
+          setIsSearchBarFloating(false);
+          return;
+        }
         const nextTop = event.currentTarget.scrollTop;
         const previousTop = lastMainScrollTopRef.current;
         const delta = nextTop - previousTop;
@@ -3694,6 +3704,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       }}
       className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 ${fullscreenClass} ${isWebRuntime ? 'miniapp-web-runtime' : ''} ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}
     >
+      {showTelegramBrand ? <div className="miniapp-telegram-service-title" aria-label="Планировыч AI">✦ Планировыч AI</div> : null}
       {reportPromptTask ? (
         <TaskCompletionReportDialog
           onDownload={startAiGeneratedDocumentDownload}
@@ -3795,7 +3806,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       <div className="mx-auto max-w-2xl space-y-4">
         <div ref={searchBarSlotRef} className="miniapp-premium-topbar-slot"
           style={isSearchBarFloating ? { minHeight: floatingSearchBarHeight || undefined } : undefined}>
-        <section ref={searchBarPanelRef} className={`relative z-30 miniapp-premium-topbar rounded-xl border border-slate-700 bg-slate-900/95 p-2.5 backdrop-blur ${isSearchBarFloating && (isHeaderVisible || isGlobalSearchOpen) ? 'miniapp-premium-topbar-floating' : ''}`}>
+        <section ref={searchBarPanelRef} className={`relative z-30 miniapp-premium-topbar rounded-xl border border-slate-700 bg-slate-900/95 p-2.5 backdrop-blur ${!isAiChatOpen && !isStandaloneNotesOpen && isSearchBarFloating && (isHeaderVisible || isGlobalSearchOpen) ? 'miniapp-premium-topbar-floating' : ''}`}>
           <div className="flex items-center gap-2">
             <WorkspaceGlobalSearch
               mobile
@@ -4968,13 +4979,18 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
       {isAiChatOpen ? (
         <div className={`miniapp-ai-chat-backdrop miniapp-ai-chat-backdrop-general miniapp-slide-backdrop fixed inset-0 z-[70] bg-slate-950/75 p-0 ${getMiniWindowMotionClass('ai-chat')}`}>
-          <div className="miniapp-ai-chat-panel miniapp-ai-chat-panel-general miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100">
+          <div className={`miniapp-ai-chat-panel miniapp-ai-chat-panel-general miniapp-slide-panel ${isGeneralAiChatHeaderHidden ? "miniapp-ai-header-collapsed" : ""} mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100`}>
             <div className={`miniapp-ai-chat-header miniapp-ai-chat-header-general flex items-start justify-between gap-2 p-3 ${useTelegramCompactChatHeader ? 'miniapp-ai-chat-header-telegram' : ''} ${isGeneralAiChatHeaderHidden ? 'miniapp-ai-chat-header-hidden' : ''}`}>
                <button type="button" onClick={() => setIsAiChatMenuOpen(true)} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Меню чатов и проектов"><Menu size={18} /></button>
                <div className={`min-w-0 flex-1 ${useTelegramCompactChatHeader ? 'miniapp-ai-chat-inline-heading' : ''}`}>
                  <p className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700"><Sparkles size={13} /> Чат с ИИ</p>
                  <div className={useTelegramCompactChatHeader ? 'miniapp-ai-chat-inline-title' : 'mt-2 flex min-w-0 items-center gap-2'}>
-                   <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary" title={activeAiChat?.title ?? 'Новый чат'}>{activeAiChat?.title ?? 'Новый чат'}</h2>
+                   {useTelegramCompactChatHeader ? (
+                    <button type="button" className="miniapp-ai-chat-title-trigger" aria-label="Выбрать чат" aria-expanded={telegramChatPicker === 'chats'} aria-haspopup="menu"
+                      onClick={() => { setIsGeneralAiChatHeaderHidden(false); setTelegramChatPicker(prev => prev === 'chats' ? null : 'chats'); }}>
+                      <span className="truncate">{activeAiChat?.title ?? 'Новый чат'}</span><ChevronDown size={13} aria-hidden="true" />
+                    </button>
+                  ) : <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary" title={activeAiChat?.title ?? 'Новый чат'}>{activeAiChat?.title ?? 'Новый чат'}</h2>}
                    {!useTelegramCompactChatHeader ? (<div className="miniapp-ai-chat-project-chip inline-flex max-w-[46%] shrink-0 items-center gap-1.5 rounded-2xl border px-2 py-1 text-[11px] font-semibold shadow-sm" style={{ '--project-color': activeAiChatProject?.color ?? '#8b5cf6' } as CSSProperties}>
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-xl bg-white/20 text-sm">{activeAiChatProject?.icon === 'telegram' ? <svg role="img" aria-label="Telegram" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M21.94 4.17a1.46 1.46 0 0 0-1.7-.23L2.1 11.1a1.18 1.18 0 0 0 .12 2.24l4.68 1.45 1.77 5.3a1.15 1.15 0 0 0 1.9.47l2.9-2.88 4.68 3.46a1.3 1.3 0 0 0 2.03-.76l2.18-14.6a1.52 1.52 0 0 0-.42-1.61Zm-3.88 3.9-8.2 7.47-.32 2.63-1.28-3.83 9.8-6.27Z"/></svg> : activeAiChatProject?.icon}</span>
                     <span className="truncate">{activeAiChatProject?.title ?? 'Проект'}</span>
@@ -4988,12 +5004,33 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
              </div>
              {useTelegramCompactChatHeader ? (
                <div className="miniapp-ai-chat-telegram-project" aria-label="Текущий проект чата">
-                 <div className="miniapp-ai-chat-project-chip inline-flex max-w-[46%] shrink-0 items-center gap-1.5 rounded-2xl border px-2 py-1 text-[11px] font-semibold shadow-sm" style={{ '--project-color': activeAiChatProject?.color ?? '#8b5cf6' } as CSSProperties}>
+                 <button type="button" onClick={() => setTelegramChatPicker(prev => prev === "projects" ? null : "projects")} aria-label="Выбрать проект" aria-haspopup="menu" aria-expanded={telegramChatPicker === "projects"} className="miniapp-ai-chat-project-chip miniapp-telegram-project-trigger inline-flex max-w-[46%] shrink-0 items-center gap-1.5 rounded-2xl border px-2 py-1 text-[11px] font-semibold shadow-sm" style={{ '--project-color': activeAiChatProject?.color ?? '#8b5cf6' } as CSSProperties}>
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-xl bg-white/20 text-sm">{activeAiChatProject?.icon === 'telegram' ? <svg role="img" aria-label="Telegram" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M21.94 4.17a1.46 1.46 0 0 0-1.7-.23L2.1 11.1a1.18 1.18 0 0 0 .12 2.24l4.68 1.45 1.77 5.3a1.15 1.15 0 0 0 1.9.47l2.9-2.88 4.68 3.46a1.3 1.3 0 0 0 2.03-.76l2.18-14.6a1.52 1.52 0 0 0-.42-1.61Zm-3.88 3.9-8.2 7.47-.32 2.63-1.28-3.83 9.8-6.27Z"/></svg> : activeAiChatProject?.icon}</span>
-                    <span className="truncate">{activeAiChatProject?.title ?? 'Проект'}</span>
-                  </div>
+                    <span className="truncate">{activeAiChatProject?.title ?? 'Проект'}</span><ChevronDown size={13} aria-hidden="true"/>
+                  </button>
                </div>
              ) : null}
+             {useTelegramCompactChatHeader && telegramChatPicker ? (
+              <div className="miniapp-telegram-picker-layer">
+                <button type="button" className="miniapp-telegram-picker-dismiss" onClick={() => setTelegramChatPicker(null)} aria-label="Закрыть список"/>
+                <div role="menu" aria-label={telegramChatPicker === 'chats' ? 'Выбрать чат' : 'Выбрать проект'} className={`miniapp-telegram-picker miniapp-telegram-picker-${telegramChatPicker}`}>
+                  <p className="miniapp-telegram-picker-heading">{telegramChatPicker === 'chats' ? 'Чаты' : 'Проекты'}</p>
+                  {telegramChatPicker === 'chats' ? (activeAiChatProject?.chats ?? []).map(chat => (
+                    <button key={chat.id} type="button" role="menuitemradio" aria-checked={activeAiChat?.id === chat.id} className="miniapp-telegram-picker-option"
+                      onClick={() => { setActiveAiChatId(chat.id); setTelegramChatPicker(null); }}>
+                      <MessageCircle size={16} aria-hidden="true"/><span className="truncate">{chat.title}</span>
+                      {activeAiChat?.id === chat.id ? <Check size={16} aria-hidden="true"/> : null}
+                    </button>
+                  )) : aiChatProjects.map(project => (
+                    <button key={project.id} type="button" role="menuitemradio" aria-checked={activeAiChatProject?.id === project.id} className="miniapp-telegram-picker-option"
+                      onClick={() => { setActiveAiChatProjectId(project.id); setActiveAiChatId(project.chats[0]?.id ?? ''); setTelegramChatPicker(null); }}>
+                      <span className="miniapp-telegram-picker-project-icon" style={{backgroundColor: project.color}}>{project.icon === 'telegram' ? '✈' : project.icon}</span>
+                      <span className="truncate">{project.title}</span>{activeAiChatProject?.id === project.id ? <Check size={16} aria-hidden="true"/> : null}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
              <div className="miniapp-ai-chat-thread-wrap relative min-h-0 flex-1">
               <div ref={aiChatDialogContainerRef} onScroll={(event) => {
                 const container = event.currentTarget;

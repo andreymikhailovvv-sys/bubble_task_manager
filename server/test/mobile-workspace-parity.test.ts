@@ -208,6 +208,31 @@ test('Telegram fullscreen chat compact header and scroll-aware notes preserve mo
   assert.match(mini, /event\.currentTarget\.blur\(\)/);
 });
 
+test('Telegram native selectors and safe-area colors do not alter mobile web chat', async () => {
+  const [mini, notes, css] = await Promise.all([
+    read('../../client/src/MiniApp.tsx'),
+    read('../../client/src/components/StandaloneNotesWorkspace.tsx'),
+    read('../../client/src/styles.css')
+  ]);
+  assert.match(mini, /telegramChatPicker/);
+  assert.match(mini, /role="menuitemradio"/);
+  assert.match(mini, /setActiveAiChatId\(chat.id\)/);
+  assert.match(mini, /setActiveAiChatProjectId\(project.id\)/);
+  assert.match(mini, /miniapp-ai-chat-title-trigger/);
+  assert.match(mini, /miniapp-telegram-project-trigger/);
+  assert.match(mini, /useTelegramCompactChatHeader && telegramChatPicker/);
+  assert.match(mini, /!useTelegramCompactChatHeader \? \(/);
+  assert.match(mini, /showTelegramBrand/);
+  assert.match(mini, /isAiChatOpen \|\| isStandaloneNotesOpen\) setIsSearchBarFloating\(false\)/);
+  assert.match(css, /\.miniapp-telegram-picker-option/);
+  assert.match(css, /\.miniapp-shell\.miniapp-telegram-fullscreen::before/);
+  assert.match(css, /\.miniapp-ai-chat-panel-general\.miniapp-ai-header-collapsed/);
+  assert.match(css, /backdrop-filter: none !important/);
+  assert.match(notes, /notesLastToggleAtRef/);
+  assert.match(notes, /standalone-notes-telegram-brand/);
+  assert.match(css, /\.standalone-notes-telegram-brand/);
+});
+
 test('fullscreen search and all four tabs respect safe areas and keep the shared navigation', async () => {
   const [mini, styles, notes] = await Promise.all([
     read('../../client/src/MiniApp.tsx'),

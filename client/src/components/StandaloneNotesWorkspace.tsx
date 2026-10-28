@@ -21,6 +21,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
   const [notesFiltersVisible, setNotesFiltersVisible] = useState(true);
   const notesLastScrollTopRef = useRef(0);
   const notesScrollIntentRef = useRef(0);
+  const notesLastToggleAtRef = useRef(0);
   const handleNotesScroll = (event: UIEvent<HTMLDivElement>) => {
     if (!telegramMiniApp) return;
     const top = event.currentTarget.scrollTop;
@@ -31,14 +32,18 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
       setNotesFiltersVisible(true);
       return;
     }
-    if (delta === 0) return;
+    // Collapsing filters changes the scrollable height. Ignore that brief
+    // layout adjustment rather than treating it as a reverse swipe.
+    if (delta === 0 || performance.now() - notesLastToggleAtRef.current < 160) return;
     const intent = notesScrollIntentRef.current;
     notesScrollIntentRef.current = Math.sign(intent) === Math.sign(delta) ? intent + delta : delta;
     if (notesScrollIntentRef.current > 24) {
       setNotesFiltersVisible(false);
+      notesLastToggleAtRef.current = performance.now();
       notesScrollIntentRef.current = 0;
     } else if (notesScrollIntentRef.current < -16) {
       setNotesFiltersVisible(true);
+      notesLastToggleAtRef.current = performance.now();
       notesScrollIntentRef.current = 0;
     }
   };
@@ -352,6 +357,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
           onMouseDown={(event) => {
           if (event.target === event.currentTarget && !editing) closeBoard();
         }}>
+          {telegramMiniApp ? <div className="standalone-notes-telegram-brand" aria-label="Планировыч AI">✦ Планировыч AI</div> : null}
           <section className="standalone-notes-board flex h-[min(87dvh,880px)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border shadow-2xl" role="dialog" aria-modal="true" aria-label="Все заметки">
             <div className={`standalone-notes-board-header flex flex-col gap-2 border-b p-4 sm:px-6 ${telegramMiniApp && !notesFiltersVisible ? 'standalone-notes-header-compact' : ''}`}>
               <div className="flex items-start justify-between gap-3">
