@@ -54,16 +54,20 @@ export function TaskMonitoringStatuses({ taskId, enabled, allowed = true, onTask
     if (!button) return;
     const bounds = button.getBoundingClientRect();
     const width = Math.min(MAX_WIDTH, window.innerWidth - 2 * GUTTER);
+    const telegramRoot = button.closest<HTMLElement>('.miniapp-telegram-fullscreen');
+    // The popover is portaled to <body>; keep it below Telegram's native controls.
+    const telegramInset = telegramRoot ? Number.parseFloat(getComputedStyle(telegramRoot).getPropertyValue('--miniapp-top-inset')) || 0 : 0;
+    const topGuard = telegramRoot ? Math.max(96, telegramInset + 12) : GUTTER;
     const below = Math.max(0, window.innerHeight - bounds.bottom - GAP - GUTTER);
-    const above = Math.max(0, bounds.top - GAP - GUTTER);
+    const above = Math.max(0, bounds.top - GAP - topGuard);
     const useAbove = below < 280 && above > below;
     const maxHeight = Math.min(MAX_HEIGHT, useAbove ? above : below);
     const left = Math.max(GUTTER, Math.min(bounds.right - width, window.innerWidth - width - GUTTER));
     const top = useAbove
-      ? Math.max(GUTTER, bounds.top - GAP - maxHeight)
-      : Math.min(bounds.bottom + GAP, window.innerHeight - GUTTER - maxHeight);
+      ? Math.max(topGuard, bounds.top - GAP - maxHeight)
+      : Math.max(topGuard, Math.min(bounds.bottom + GAP, window.innerHeight - GUTTER - maxHeight));
     setLayout({
-      left, top, width, maxHeight,
+      left, top, width, maxHeight: Math.max(96, Math.min(maxHeight, window.innerHeight - top - GUTTER)),
       theme: button.closest('.miniapp-light') || document.body.dataset.theme === 'light' ? 'light' : 'dark'
     });
   }, []);

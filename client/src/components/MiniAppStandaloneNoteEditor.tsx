@@ -3,9 +3,9 @@ import type { StandaloneNote } from '../lib/api';
 import { api } from '../lib/api';
 import { NotesEditor } from './NotesEditor';
 
-type Props = { note: StandaloneNote; onClose: () => void };
+type Props = { note: StandaloneNote; onClose: () => void; telegramSafeTop?: number };
 
-export function MiniAppStandaloneNoteEditor({ note, onClose }: Props) {
+export function MiniAppStandaloneNoteEditor({ note, onClose, telegramSafeTop }: Props) {
   const [draft, setDraft] = useState(note);
   const [error, setError] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
@@ -72,6 +72,7 @@ export function MiniAppStandaloneNoteEditor({ note, onClose }: Props) {
       onChange={(content) => change({ content })}
       onClose={() => { void close(); }}
       miniAppSheet
+      telegramSafeTop={telegramSafeTop}
       heading="Новая заметка"
       titleEditor={
         <div className="space-y-2">

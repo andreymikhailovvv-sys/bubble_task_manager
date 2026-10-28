@@ -69,6 +69,7 @@ type TelegramWebApp = {
   ready?: () => void;
   expand?: () => void;
   requestFullscreen?: () => void;
+  disableVerticalSwipes?: () => void;
   isFullscreen?: boolean;
   safeAreaInset?: { top?: number; bottom?: number };
   contentSafeAreaInset?: { top?: number; bottom?: number };
@@ -692,6 +693,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     events.forEach(event => webApp.onEvent?.(event, syncViewport));
     webApp.ready?.();
     webApp.expand?.();
+    // Prevent Telegram claiming the first swipe as a native sheet gesture.
+    webApp.disableVerticalSwipes?.();
     try {
       if (!webApp.isFullscreen) webApp.requestFullscreen?.();
     } catch {
@@ -3137,6 +3140,21 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     setActiveAiChatId(chat.id);
   };
 
+  // A fresh thread in the personal project; the permanent Quick AI history stays intact.
+  const createQuickAiChatThread = () => {
+    const personal = aiChatProjects[0];
+    if (!personal) return;
+    const chat: MiniAiChatThread = { id: crypto.randomUUID(), title: `Чат ${personal.chats.length + 1}`, messages: [] };
+    setAiChatProjects(prev => prev.map(project => project.id === personal.id
+      ? { ...project, chats: [chat, ...project.chats] } : project));
+    setActiveAiChatProjectId(personal.id);
+    setActiveAiChatId(chat.id);
+    setIsQuickCreateOpen(false);
+    setClosingMiniWindow(null);
+    setIsAiChatMenuOpen(false);
+    setIsAiChatOpen(true);
+  };
+
   const saveAiChatRename = () => {
     if (!renamingAiChatId || !activeAiChatProject || renamingAiChatId.startsWith('telegram-ai-assistant:')) return;
     const title = aiChatRenameDraft.trim() || 'Новый чат';
@@ -3653,6 +3671,23 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const showTelegramBrand = useTelegramCompactChatHeader && !isAiChatOpen && !openedTaskId && !openedSubtaskId &&
     !isCreateTaskModalOpen && !isHabitModalOpen && !isAiDialogOpen;
 
+  const taskMonitoringControl = openedTask ? (
+              <TaskMonitoringStatuses taskId={openedTask.id}
+                enabled={openedTask.aiMonitoringEnabled === true}
+                allowed={openedTask.taskType === 'TASK' && !openedTask.parentTaskId && !openedTask.isCollaborative}
+                onTaskUpdated={(updated) => {
+                  setTasks(previous => previous.map(task => task.id === updated.id ? updated : task));
+                  setDraftByTaskId(previous => ({
+                    ...previous,
+                    [updated.id]: { ...(previous[updated.id] ?? taskToMiniDraft(updated)), aiMonitoringEnabled: updated.aiMonitoringEnabled }
+                  }));
+                  taskDraftOriginalByIdRef.current[updated.id] = {
+                    ...(taskDraftOriginalByIdRef.current[updated.id] ?? taskToMiniDraft(updated)),
+                    aiMonitoringEnabled: updated.aiMonitoringEnabled
+                  };
+                }} />
+  ) : null;
+
   if (loading) {
     return <main style={telegramViewportStyle} className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 text-sm ${fullscreenClass} ${isWebRuntime ? 'miniapp-web-runtime' : ''} ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}>Загружаем Планировыч…</main>;
   }
@@ -3730,10 +3765,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       ) : null}
       {isSettingsOpen ? createPortal(
         <div className="settings-modal-backdrop fixed inset-0 z-[320] flex items-center justify-center overflow-hidden bg-slate-950/65 p-3 backdrop-blur-sm sm:p-6"
+          style={isTelegramRuntime ? { top: Math.max(96, telegramViewport.top + 12) } : undefined}
           onMouseDown={(event) => { if (event.target === event.currentTarget) setIsSettingsOpen(false); }}
           onTouchMove={(event) => event.stopPropagation()}>
           <section data-miniapp-popover="settings" data-settings-modal role="dialog" aria-modal="true" aria-label="Настройки Планировыча"
-            className={['settings-modal-shell surface-popover miniapp-settings-popover relative flex h-[min(88dvh,780px)] w-full max-w-lg flex-col overflow-hidden rounded-3xl border shadow-2xl', isLightTheme ? 'miniapp-light' : ''].join(' ')}
+            className={['settings-modal-shell surface-popover miniapp-settings-popover relative flex h-[min(88dvh,780px)] max-h-full w-full max-w-lg flex-col overflow-hidden rounded-3xl border shadow-2xl', isLightTheme ? 'miniapp-light' : ''].join(' ')}
             data-theme={isLightTheme ? 'light' : 'dark'}>
             <div className="flex shrink-0 items-center justify-between border-b border-[color:var(--panel-border)] px-5 py-4 sm:px-6">
               <h2 className="text-xl font-bold text-primary">Настройки Планировыча</h2>
@@ -4330,7 +4366,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
       {openedTask && openedTaskDraft ? (
         <div
-          className={`miniapp-slide-backdrop ${isWebRuntime ? 'miniapp-web-task-backdrop' : ''} fixed inset-0 ${isAiChatOpen ? 'z-[120]' : 'z-[90]'} flex items-end bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('task')}`}
+          className={`miniapp-slide-backdrop ${isWebRuntime ? 'miniapp-web-task-backdrop' : ''} ${isTelegramRuntime ? 'miniapp-telegram-task-backdrop' : ''} fixed inset-0 ${isAiChatOpen ? 'z-[120]' : 'z-[90]'} flex items-end bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('task')}`}
           style={isWebRuntime ? { top: webVisualViewport.top, bottom: 'auto', height: webVisualViewport.height } : undefined}
         >
           <div className={`miniapp-slide-panel miniapp-focus-panel miniapp-focus-task-panel relative max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-2xl sm:rounded-[2rem] ${isTaskSettingsOpen ? 'miniapp-focus-task-panel--settings-open' : ''}`}>
@@ -4515,7 +4551,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     ))}
                   </div>
                 ) : null}
-                {isTaskNotesEditorOpen ? <NotesEditor miniAppSheet value={openedTaskDraft.description} onChange={(description) => onChangeDraft(openedTask.id, { description })} onClose={() => setIsTaskNotesEditorOpen(false)} /> : null}
+                {isTaskNotesEditorOpen ? <NotesEditor miniAppSheet telegramSafeTop={isTelegramRuntime ? telegramViewport.top : undefined} value={openedTaskDraft.description} onChange={(description) => onChangeDraft(openedTask.id, { description })} onClose={() => setIsTaskNotesEditorOpen(false)} /> : null}
 
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   <button type="button" onClick={() => void completeTask(openedTask.id)} disabled={completingId === openedTask.id} className="miniapp-focus-success-button">
@@ -4760,7 +4796,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 </div>
               ))}
             </div>
-            {isSubtaskNotesEditorOpen ? <NotesEditor miniAppSheet value={openedSubtaskDraft.description} onChange={(description) => changeSubtaskDraft({ description })} onClose={() => setIsSubtaskNotesEditorOpen(false)} /> : null}
+            {isSubtaskNotesEditorOpen ? <NotesEditor miniAppSheet telegramSafeTop={isTelegramRuntime ? telegramViewport.top : undefined} value={openedSubtaskDraft.description} onChange={(description) => changeSubtaskDraft({ description })} onClose={() => setIsSubtaskNotesEditorOpen(false)} /> : null}
             {isCreatingNewSubtask && openedTask ? (
               <button type="button" onClick={() => void createSubtask(openedTask)} disabled={creatingSubtaskForId === openedTask.id} className="miniapp-focus-success-button mt-4 w-full">
                 {creatingSubtaskForId === openedTask.id ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} {creatingSubtaskForId === openedTask.id ? 'Создаём…' : 'Создать подзадачу'}
@@ -4839,22 +4875,15 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       {openedTask && isAiDialogOpen ? (
         <div className={`miniapp-ai-chat-backdrop miniapp-ai-chat-backdrop-task miniapp-slide-backdrop fixed inset-0 ${isAiChatOpen ? 'z-[130]' : 'z-[110]'} bg-slate-950/75 p-0 ${getMiniWindowMotionClass('task-ai')}`}>
           <div className="miniapp-ai-chat-panel miniapp-ai-chat-panel-task miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100">
-            <div className={`miniapp-ai-chat-header miniapp-ai-chat-header-task flex items-center justify-between gap-2 p-3 ${isTaskAiChatHeaderHidden ? 'miniapp-ai-chat-header-hidden' : ''}`}>
-              <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary">Помощь ИИ</h2>
-              <TaskMonitoringStatuses taskId={openedTask.id}
-                enabled={openedTask.aiMonitoringEnabled === true}
-                allowed={openedTask.taskType === 'TASK' && !openedTask.parentTaskId && !openedTask.isCollaborative}
-                onTaskUpdated={(updated) => {
-                  setTasks(previous => previous.map(task => task.id === updated.id ? updated : task));
-                  setDraftByTaskId(previous => ({
-                    ...previous,
-                    [updated.id]: { ...(previous[updated.id] ?? taskToMiniDraft(updated)), aiMonitoringEnabled: updated.aiMonitoringEnabled }
-                  }));
-                  taskDraftOriginalByIdRef.current[updated.id] = {
-                    ...(taskDraftOriginalByIdRef.current[updated.id] ?? taskToMiniDraft(updated)),
-                    aiMonitoringEnabled: updated.aiMonitoringEnabled
-                  };
-                }} />
+            {useTelegramCompactChatHeader ? <div className="miniapp-task-ai-monitor-telegram">{taskMonitoringControl}</div> : null}
+            <div className={`miniapp-ai-chat-header miniapp-ai-chat-header-task ${isTelegramRuntime ? 'miniapp-ai-chat-header-telegram-task' : ''} flex items-center justify-between gap-2 p-3 ${isTaskAiChatHeaderHidden ? 'miniapp-ai-chat-header-hidden' : ''}`}>
+              {isTelegramRuntime ? (
+                <>
+                  <span className="miniapp-task-ai-label inline-flex shrink-0 items-center gap-1 rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-semibold text-violet-700"><Sparkles size={12} /> Помощь ИИ</span>
+                  <span className="miniapp-task-ai-title min-w-0 flex-1 truncate text-sm font-semibold text-primary" title={openedTask.title}>{openedTask.title}</span>
+                </>
+              ) : <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary">Помощь ИИ</h2>}
+              {!useTelegramCompactChatHeader ? taskMonitoringControl : null}
               <button type="button" onClick={() => closeMiniWindowWithMotion('task-ai', () => setIsAiDialogOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть диалог с ИИ"><X size={18} /></button>
               <select value={selectedAiChatModel} onChange={(event) => setSelectedAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap w-40 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель помощи ИИ">
                 {AI_CHAT_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -4955,9 +4984,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={() => { setIsQuickCreateOpen(false); openCreateTaskModal(undefined, 'event'); }} className="miniapp-quick-create-action miniapp-quick-create-event inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
             <span>Добавить событие</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><CalendarDays size={18} /></span>
           </button>
-          <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={() => { setIsQuickCreateOpen(false); openCreateTaskModal(); }} className="miniapp-quick-create-action miniapp-quick-create-task inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
-            <span>Добавить задачу</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><Plus size={19} /></span>
-          </button>
           <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} disabled={creatingStandaloneNote}
             onClick={() => {
               if (creatingStandaloneNote) return;
@@ -4973,8 +4999,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             <span>{creatingStandaloneNote ? 'Создаём заметку…' : 'Добавить заметку'}</span>
             <span className="flex h-9 w-9 items-center justify-center rounded-full"><StickyNote size={18} /></span>
           </button>
-          <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={() => { setIsQuickCreateOpen(false); setClosingMiniWindow(null); setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); setIsAiChatMenuOpen(false); }} className="miniapp-quick-create-action miniapp-quick-create-ai inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
-            <span>Чат с ИИ</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><Bot size={18} /></span>
+          <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={() => { setIsQuickCreateOpen(false); openCreateTaskModal(); }} className="miniapp-quick-create-action miniapp-quick-create-task inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
+            <span>Добавить задачу</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><Plus size={19} /></span>
+          </button>
+          <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={createQuickAiChatThread} className="miniapp-quick-create-action miniapp-quick-create-ai inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
+            <span>Создать чат с ИИ</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><Bot size={18} /></span>
           </button>
         </div>
         <button type="button" onClick={() => setIsQuickCreateOpen((prev) => !prev)} className="miniapp-ai-chat-launcher flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-2xl shadow-violet-950/40 ring-2 ring-white/20 active:scale-95" aria-expanded={isQuickCreateOpen} aria-label={isQuickCreateOpen ? 'Закрыть меню добавления' : 'Открыть меню добавления'}>
@@ -4983,7 +5012,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       </div>
 
       {newStandaloneNote ? (
-        <MiniAppStandaloneNoteEditor key={newStandaloneNote.id} note={newStandaloneNote}
+        <MiniAppStandaloneNoteEditor key={newStandaloneNote.id} telegramSafeTop={isTelegramRuntime ? telegramViewport.top : undefined} note={newStandaloneNote}
           onClose={() => setNewStandaloneNote(null)} />
       ) : null}
 

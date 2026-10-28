@@ -9,14 +9,18 @@ test('new standalone notes are valid without a task or sector', () => {
     { title: 'Встреча', content: '<h1>План</h1>' });
 });
 
-test('Mini App quick-create menu offers standalone notes below tasks and reuses rich editor', async () => {
+test('Mini App quick-create menu orders event, note, task, then creates a new AI thread', async () => {
   const [mini, editor] = await Promise.all([
     readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../client/src/components/MiniAppStandaloneNoteEditor.tsx', import.meta.url), 'utf8')
   ]);
   const quick = mini.slice(mini.indexOf('miniapp-quick-create fixed'), mini.indexOf('miniapp-ai-chat-backdrop', mini.indexOf('miniapp-quick-create fixed')));
-  assert.ok(quick.indexOf('Добавить задачу') < quick.indexOf('Добавить заметку'));
-  assert.ok(quick.indexOf('Добавить заметку') < quick.indexOf('Чат с ИИ'));
+  assert.ok(quick.indexOf('Добавить событие') < quick.indexOf('Добавить заметку'));
+  assert.ok(quick.indexOf('Добавить заметку') < quick.indexOf('Добавить задачу'));
+  assert.ok(quick.indexOf('Добавить задачу') < quick.indexOf('Создать чат с ИИ'));
+  assert.match(quick, /onClick=\{createQuickAiChatThread\}/);
+  assert.match(mini, /const createQuickAiChatThread = \(\) => \{/);
+  assert.match(mini, /setActiveAiChatId\(chat\.id\)/);
   assert.match(quick, /api\.createStandaloneNote\(\)/);
   assert.match(quick, /<MiniAppStandaloneNoteEditor/);
   assert.match(editor, /<NotesEditor/);
