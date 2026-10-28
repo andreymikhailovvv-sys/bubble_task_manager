@@ -10729,11 +10729,11 @@ body[data-theme='light'] .upcoming-subtasks-list .upcoming-subtask-row:hover {
   top: 0;
   bottom: calc(4.6rem + var(--miniapp-bottom-inset, env(safe-area-inset-bottom, 0px)));
   padding-top: 0 !important;
-  background: var(--chat-thread-bg, #0f172a) !important;
+  background: #0f172a !important;
 }
 body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-backdrop-general.fixed,
 .miniapp-shell.miniapp-light .miniapp-ai-chat-backdrop-general.fixed {
-  background: var(--chat-thread-bg, #f8fafc) !important;
+  background: #f5f8ff !important;
 }
 .miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-backdrop-general {
   padding-top: 0 !important;
@@ -10771,9 +10771,12 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-backdrop-general.fixed,
     top: 0;
     bottom: calc(4.6rem + var(--miniapp-bottom-inset, env(safe-area-inset-bottom, 0px)));
     padding: var(--miniapp-top-inset, 0px) 0 0 !important;
-    background: var(--panel-bg, #ffffff) !important;
+    background: #0f172a !important;
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
+  }
+  body[data-theme='light'] .standalone-notes-mobile {
+    background: #f8fafc !important;
   }
   .standalone-notes-mobile .standalone-notes-board {
     height: 100%;
