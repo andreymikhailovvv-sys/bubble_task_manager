@@ -134,8 +134,34 @@ test('Telegram fullscreen uses safe insets and bottom tabs replace the old displ
   assert.match(styles, /\.miniapp-shell\.miniapp-telegram-fullscreen/);
   assert.match(styles, /\.miniapp-bottom-navigation/);
   assert.match(styles, /\.miniapp-workspace-tools-compact/);
-  assert.match(mini, /miniapp-premium-timeline/);
+  assert.match(mini, /miniapp-timeline-independent-blocks/);
   assert.match(mini, /miniapp-premium-habits/);
+});
+
+test('timeline has independent layout blocks while keeping original controls and date grid', async () => {
+  const [mini, styles, actions] = await Promise.all([
+    read('../../client/src/MiniApp.tsx'),
+    read('../../client/src/styles.css'),
+    read('../../client/src/components/MiniWorkspaceTools.tsx')
+  ]);
+  const start = mini.indexOf('<section className="miniapp-timeline-section miniapp-timeline-independent-blocks">');
+  const end = mini.indexOf('className={`miniapp-calendar-grid miniapp-calendar-grid-', start);
+  assert.ok(start >= 0 && end > start, 'timeline layout should precede the unchanged calendar grid');
+  const timeline = mini.slice(start, end);
+  assert.match(timeline, /miniapp-timeline-actions-panel/);
+  assert.match(timeline, /miniapp-timeline-view-panel/);
+  assert.match(timeline, /miniapp-timeline-period-panel/);
+  assert.doesNotMatch(timeline, /miniapp-premium-timeline|miniapp-workspace-toolbar-card/);
+  assert.match(timeline, /<MiniWorkspaceTools/);
+  assert.match(timeline, /timelineView === view/);
+  assert.match(timeline, /moveTimelinePeriod\(-1\)/);
+  assert.match(timeline, /moveTimelinePeriod\(1\)/);
+  assert.match(actions, /<Clock3 size=\{16\}/);
+  assert.match(actions, /<Sparkles size=\{16\}/);
+  assert.match(actions, /<ListFilter size=\{16\}/);
+  assert.match(styles, /\.miniapp-shell \.miniapp-timeline-section\.miniapp-timeline-independent-blocks/);
+  assert.match(styles, /\.miniapp-timeline-independent-blocks > \.miniapp-timeline-actions-panel/);
+  assert.match(styles, /\.miniapp-timeline-view-panel/);
 });
 
 test('fullscreen search and all four tabs respect safe areas and keep the shared navigation', async () => {
