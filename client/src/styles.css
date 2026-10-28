@@ -10907,3 +10907,54 @@ body[data-theme='light'] .miniapp-shell button.miniapp-bottom-navigation-item:is
   width: 100%;
   max-width: none;
 }
+
+/* Telegram Fullscreen polish: the timeline starts below the global search,
+   while its already-designed controls and calendar cells stay untouched. */
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-timeline-section.miniapp-timeline-independent-blocks {
+  margin-top: .75rem;
+}
+
+/* The AI thread occupies the entire screen behind Telegram's top controls.
+   Only a translucent, blurred scrim covers that safe-area: messages continue
+   scrolling underneath it instead of stopping at its lower edge. */
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-general {
+  padding-top: 0;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-general::before {
+  content: "";
+  position: absolute;
+  z-index: 19;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: calc(var(--miniapp-top-inset, 0px) + .35rem);
+  pointer-events: none;
+  background: rgba(11, 18, 34, .8);
+  backdrop-filter: blur(12px) saturate(110%);
+  -webkit-backdrop-filter: blur(12px) saturate(110%);
+}
+.miniapp-shell.miniapp-telegram-fullscreen.miniapp-light .miniapp-ai-chat-panel-general::before,
+body[data-theme='light'] .miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-general::before {
+  background: rgba(245, 248, 255, .74);
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-general .miniapp-ai-chat-header-general {
+  background: rgba(11, 18, 34, .8) !important;
+  backdrop-filter: blur(14px) saturate(110%);
+  -webkit-backdrop-filter: blur(14px) saturate(110%);
+}
+.miniapp-shell.miniapp-telegram-fullscreen.miniapp-light .miniapp-ai-chat-panel-general .miniapp-ai-chat-header-general,
+body[data-theme='light'] .miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-general .miniapp-ai-chat-header-general {
+  background: rgba(255, 255, 255, .8) !important;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-general .miniapp-ai-chat-header-general + .miniapp-ai-chat-thread-wrap .miniapp-ai-chat-thread {
+  padding-top: calc(var(--miniapp-top-inset, 0px) + var(--miniapp-ai-header-height) + .75rem);
+}
+
+/* Notes render in a portal outside .miniapp-shell. Fill the entire safe-area
+   above the notes board with pure white in the light theme, without shifting
+   its header or changing the existing bottom tabs. */
+@media (max-width: 639px) {
+  body[data-theme='light'] .standalone-notes-mobile {
+    background: #fff !important;
+  }
+}

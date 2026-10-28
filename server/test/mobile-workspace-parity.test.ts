@@ -164,6 +164,23 @@ test('timeline has independent layout blocks while keeping original controls and
   assert.match(styles, /\.miniapp-timeline-view-panel/);
 });
 
+test('timeline, AI chat and notes fullscreen surfaces have safe top treatment', async () => {
+  const [mini, styles, notes] = await Promise.all([
+    read('../../client/src/MiniApp.tsx'),
+    read('../../client/src/styles.css'),
+    read('../../client/src/components/StandaloneNotesWorkspace.tsx')
+  ]);
+  assert.match(styles, /\.miniapp-shell\.miniapp-telegram-fullscreen \.miniapp-timeline-section\.miniapp-timeline-independent-blocks \{\s*margin-top: \.75rem;/);
+  assert.match(styles, /\.miniapp-shell\.miniapp-telegram-fullscreen \.miniapp-ai-chat-panel-general \{\s*padding-top: 0;/);
+  assert.match(styles, /\.miniapp-ai-chat-panel-general::before \{[\s\S]*?pointer-events: none;/);
+  assert.match(styles, /height: calc\(var\(--miniapp-top-inset, 0px\) \+ \.35rem\)/);
+  assert.match(styles, /\.miniapp-ai-chat-header-general \{\s*background: rgba\(11, 18, 34, \.8\)/);
+  assert.match(styles, /padding-top: calc\(var\(--miniapp-top-inset, 0px\) \+ var\(--miniapp-ai-header-height\) \+ \.75rem\)/);
+  assert.match(mini, /updateAiChatHeaderVisibility\(container\.scrollTop/);
+  assert.match(styles, /body\[data-theme='light'\] \.standalone-notes-mobile \{\s*background: #fff !important;/);
+  assert.match(notes, /mobileSafeAreaTop\?: number/);
+});
+
 test('fullscreen search and all four tabs respect safe areas and keep the shared navigation', async () => {
   const [mini, styles, notes] = await Promise.all([
     read('../../client/src/MiniApp.tsx'),
