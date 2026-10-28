@@ -10700,10 +10700,13 @@ body[data-theme='light'] .upcoming-subtasks-list .upcoming-subtask-row:hover {
   .miniapp-shell .miniapp-workspace-tools-compact .miniapp-workspace-actions { gap: .3rem; }
 }
 
-/* Fullscreen layout follow-up: don't apply the Telegram top safe inset twice.
-   The main scroll area already has top padding; the search bar is not sticky. */
-.miniapp-shell.miniapp-telegram-fullscreen .miniapp-premium-topbar {
+/* The toolbar starts in page flow, then sticks within Telegram's safe area
+   only while the user scrolls upwards. No doubled top padding at page start. */
+.miniapp-shell .miniapp-premium-topbar {
   top: 0;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-premium-topbar {
+  top: var(--miniapp-top-inset, 0px);
 }
 
 /* This is shared navigation across the four primary views, not an overlay
@@ -10723,9 +10726,14 @@ body[data-theme='light'] .upcoming-subtasks-list .upcoming-subtask-row:hover {
 /* The general AI chat is a tab: Telegram owns the top safe area and the
    planner owns the bottom navigation. Only the chat thread scrolls. */
 .miniapp-shell .miniapp-ai-chat-backdrop-general {
-  top: var(--miniapp-top-inset, 0px);
+  top: 0;
   bottom: calc(4.6rem + var(--miniapp-bottom-inset, env(safe-area-inset-bottom, 0px)));
   padding-top: 0 !important;
+  background: #0f172a !important;
+}
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-backdrop-general.fixed,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-backdrop-general.fixed {
+  background: #f5f8ff !important;
 }
 .miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-backdrop-general {
   padding-top: 0 !important;
@@ -10733,20 +10741,24 @@ body[data-theme='light'] .upcoming-subtasks-list .upcoming-subtask-row:hover {
 .miniapp-shell .miniapp-ai-chat-panel-general {
   min-height: 0;
   height: 100%;
+  padding-top: var(--miniapp-top-inset, 0px);
 }
 .miniapp-shell .miniapp-ai-chat-panel-general .miniapp-ai-chat-header-general {
-  position: relative;
-  flex-shrink: 0;
-  top: auto;
-  right: auto;
-  left: auto;
+  position: absolute;
+  top: var(--miniapp-top-inset, 0px);
+  right: 0;
+  left: 0;
   padding-top: .65rem !important;
-  transform: none;
-  opacity: 1;
-  pointer-events: auto;
+}
+/* The existing scroll-direction handler toggles this class. Keep it effective
+   on the general-chat header rather than forcing it permanently visible. */
+.miniapp-shell .miniapp-ai-chat-panel-general .miniapp-ai-chat-header-general.miniapp-ai-chat-header-hidden {
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
 }
 .miniapp-shell .miniapp-ai-chat-panel-general .miniapp-ai-chat-header-general + .miniapp-ai-chat-thread-wrap .miniapp-ai-chat-thread {
-  padding-top: 2.6rem;
+  padding-top: calc(var(--miniapp-ai-header-height) + .75rem);
 }
 .miniapp-shell .miniapp-ai-chat-panel-general .miniapp-ai-chat-composer {
   bottom: 0;
@@ -10756,9 +10768,15 @@ body[data-theme='light'] .upcoming-subtasks-list .upcoming-subtask-row:hover {
    passed explicitly and their board occupies only the space ABOVE the tabs. */
 @media (max-width: 639px) {
   .standalone-notes-mobile {
-    top: var(--miniapp-top-inset, 0px);
+    top: 0;
     bottom: calc(4.6rem + var(--miniapp-bottom-inset, env(safe-area-inset-bottom, 0px)));
-    padding: 0;
+    padding: var(--miniapp-top-inset, 0px) 0 0 !important;
+    background: #0f172a !important;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  body[data-theme='light'] .standalone-notes-mobile {
+    background: #f8fafc !important;
   }
   .standalone-notes-mobile .standalone-notes-board {
     height: 100%;
@@ -10782,4 +10800,30 @@ body:has(.standalone-notes-mobile input:focus, .standalone-notes-mobile textarea
   body:has(.standalone-notes-mobile input:focus, .standalone-notes-mobile textarea:focus) .standalone-notes-mobile {
     bottom: 0;
   }
+}
+
+/* Touch browsers may keep :hover/:focus on the last tapped tab.
+   Override generic button-hover rules without suppressing the active icon. */
+.miniapp-shell button.miniapp-bottom-navigation-item,
+.miniapp-shell button.miniapp-bottom-navigation-item:is(:hover, :active, :focus),
+body[data-theme='light'] .miniapp-shell button.miniapp-bottom-navigation-item:is(:hover, :active, :focus),
+.miniapp-shell.miniapp-light button.miniapp-bottom-navigation-item:is(:hover, :active, :focus) {
+  background: transparent !important;
+  box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.miniapp-shell .miniapp-bottom-navigation-item:focus:not(:focus-visible) {
+  outline: none;
+}
+.miniapp-shell .miniapp-bottom-navigation-item:focus-visible {
+  outline: none;
+}
+.miniapp-shell .miniapp-bottom-navigation-item:focus-visible .miniapp-bottom-navigation-icon {
+  outline: 2px solid #8b5cf6;
+  outline-offset: 2px;
+}
+.miniapp-shell .miniapp-bottom-navigation-item:active .miniapp-bottom-navigation-icon {
+  background: rgba(139, 92, 246, .24);
+  transform: scale(.96);
 }
