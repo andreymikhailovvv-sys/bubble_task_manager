@@ -20,13 +20,13 @@ test('explicit headline takes precedence over body text, even when the reply has
   const alert = formatMonitoringAlert('Проект', 'ЗАГОЛОВОК: Нужна дата встречи.\n\nПервый абзац с пояснениями. Второй абзац.');
   assert.equal(alert.headline, 'Нужна дата встречи.');
   assert.equal(alert.body, 'Первый абзац с пояснениями. Второй абзац.');
-  assert.equal(alert.content.split('\\n').length, 2);
+  assert.equal(alert.content.split('\n').length, 2);
 });
 
 test('model headlines are clipped at 90 characters and malformed legacy prose cannot flood alerts', () => {
   const alert = formatMonitoringAlert('Проект', 'Это очень длинное предложение об анализе и подготовке множества разных материалов для большого события и дальнейшего планирования без точки');
   assert.ok(alert.headline.length <= 90);
-  assert.equal(alert.content.split('\\n').length, 2);
+  assert.equal(alert.content.split('\n').length, 2);
 });
 
 test('monitoring title is always derived from the actual model message, not a server template', () => {
