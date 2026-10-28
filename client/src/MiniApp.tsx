@@ -4283,25 +4283,25 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       <nav className={`miniapp-bottom-navigation ${openedTaskId || openedSubtaskId || isCreateTaskModalOpen || isHabitModalOpen || isAiDialogOpen ? 'miniapp-bottom-navigation-hidden' : ''}`} aria-label="Разделы Планировыча">
         <button type="button" className={`miniapp-bottom-navigation-item ${!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'list' ? 'is-active' : ''}`}
           aria-current={!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'list' ? 'page' : undefined}
-          onClick={() => { setIsAiChatOpen(false); setIsStandaloneNotesOpen(false); setIsAiChatMenuOpen(false); setDisplayMode('list'); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); }}>
+          onClick={(event) => { setIsAiChatOpen(false); setIsStandaloneNotesOpen(false); setIsAiChatMenuOpen(false); setDisplayMode('list'); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); event.currentTarget.blur(); }}>
           <span className="miniapp-bottom-navigation-icon"><List size={20} strokeWidth={2} /></span>
           <span>Список</span>
         </button>
         <button type="button" className={`miniapp-bottom-navigation-item ${!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'timeline' ? 'is-active' : ''}`}
           aria-current={!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'timeline' ? 'page' : undefined}
-          onClick={() => { setIsAiChatOpen(false); setIsStandaloneNotesOpen(false); setIsAiChatMenuOpen(false); setDisplayMode('timeline'); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); }}>
+          onClick={(event) => { setIsAiChatOpen(false); setIsStandaloneNotesOpen(false); setIsAiChatMenuOpen(false); setDisplayMode('timeline'); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); event.currentTarget.blur(); }}>
           <span className="miniapp-bottom-navigation-icon"><CalendarDays size={20} strokeWidth={2} /></span>
           <span>Таймлайн</span>
         </button>
         <button type="button" className={`miniapp-bottom-navigation-item ${isAiChatOpen && !isStandaloneNotesOpen ? 'is-active' : ''}`}
           aria-current={isAiChatOpen && !isStandaloneNotesOpen ? 'page' : undefined}
-          onClick={() => { setIsStandaloneNotesOpen(false); setIsQuickCreateOpen(false); setIsAiChatMenuOpen(false); setClosingMiniWindow(null); setIsAiChatOpen(true); }}>
+          onClick={(event) => { setIsStandaloneNotesOpen(false); setIsQuickCreateOpen(false); setIsAiChatMenuOpen(false); setClosingMiniWindow(null); setIsAiChatOpen(true); event.currentTarget.blur(); }}>
           <span className="miniapp-bottom-navigation-icon"><Bot size={20} strokeWidth={2} /></span>
           <span>Чат с ИИ</span>
         </button>
         <button type="button" className={`miniapp-bottom-navigation-item ${isStandaloneNotesOpen ? 'is-active' : ''}`}
           aria-current={isStandaloneNotesOpen ? 'page' : undefined}
-          onClick={() => { setIsAiChatOpen(false); setIsAiChatMenuOpen(false); setIsQuickCreateOpen(false); setRequestedStandaloneNote(null); setIsStandaloneNotesOpen(true); }}>
+          onClick={(event) => { setIsAiChatOpen(false); setIsAiChatMenuOpen(false); setIsQuickCreateOpen(false); setRequestedStandaloneNote(null); setIsStandaloneNotesOpen(true); event.currentTarget.blur(); }}>
           <span className="miniapp-bottom-navigation-icon"><StickyNote size={20} strokeWidth={2} /></span>
           <span>Заметки</span>
         </button>
