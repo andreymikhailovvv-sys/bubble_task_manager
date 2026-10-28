@@ -4047,8 +4047,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           </div>
         ) : (
 
-          <section className="miniapp-timeline-section miniapp-premium-timeline -mx-4 border-y border-slate-700 bg-slate-900 px-3 py-3 sm:mx-0 sm:rounded-xl sm:border">
-            <div className="miniapp-workspace-toolbar-card miniapp-workspace-timeline-toolbar">
+          <section className="miniapp-timeline-section miniapp-timeline-independent-blocks">
+            <div className="miniapp-workspace-timeline-toolbar miniapp-timeline-actions-panel">
             <MiniWorkspaceTools
               mode={displayMode}
               timeFilter={timeFilter}
@@ -4067,12 +4067,14 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             />
             </div>
             <div className="miniapp-timeline-navigation">
+              <div className="miniapp-timeline-view-panel">
               <div className="miniapp-timeline-view-switch" role="group" aria-label="Масштаб таймлайна">
                 {([['day', 'День'], ['week', 'Неделя'], ['month', 'Месяц']] as const).map(([view, label]) => (
                   <button key={view} type="button" className={timelineView === view ? 'is-active' : ''} onClick={() => setTimelineView(view)} aria-pressed={timelineView === view}>{label}</button>
                 ))}
               </div>
-              <div className="miniapp-timeline-period-toolbar">
+              </div>
+              <div className="miniapp-timeline-period-toolbar miniapp-timeline-period-panel">
               <div className="miniapp-timeline-date-nav">
                 <button type="button" onClick={() => moveTimelinePeriod(-1)} className="miniapp-timeline-date-arrow" aria-label="Предыдущий период" title="Предыдущий период"><ChevronLeft size={17} /></button>
                 <div className="miniapp-timeline-date-current" aria-live="polite">
