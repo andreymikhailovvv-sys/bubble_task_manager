@@ -61,8 +61,9 @@ test('native Android shows only title and task label; Telegram uses checked labe
   const notify = telegram.slice(telegram.indexOf('async notifyMonitoringTaskReply('),
     telegram.indexOf('async notifyOverdueTaskAiMessage('));
   assert.match(notify, /'<b>' \+ escapeHtml\(alert\.headline\)/);
-  assert.match(notify, /✔️Мониторинг задачи <i>/);
+  assert.match(notify, /✅Мониторинг задачи <i>/);
   assert.doesNotMatch(notify, /🔔/);
+  assert.doesNotMatch(notify, /escapeHtml\(alert\.body/);
 });
 
 test('monitoring intro state is exposed owner-scoped and reflected as real AI progress in task chats', async () => {
