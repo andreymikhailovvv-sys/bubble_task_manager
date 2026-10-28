@@ -340,3 +340,31 @@ test('desktop list cards match the premium sector-chip design without red overdu
   assert.match(css, /body\[data-theme='light'\] \.list-mode-canvas \.list-task-item-premium\.list-task-item-overdue,[\s\S]*?background: #ffffff !important/);
   assert.match(css, /\.list-mode-canvas \.list-task-item-premium \.list-task-deadline-overdue \{[\s\S]*?color: #fb7185/);
 });
+
+
+test('Telegram focus task has a bounded scroll viewport without covering native controls', async () => {
+  const [mini, css] = await Promise.all([
+    read('../../client/src/MiniApp.tsx'),
+    read('../../client/src/styles.css')
+  ]);
+  assert.match(mini, /miniapp-telegram-task-backdrop/);
+  assert.match(mini, /ref=\{openedTaskContentsScrollRef\} className="min-h-0 flex-1 overflow-y-auto/);
+  const focusPanel = css.match(/\.miniapp-shell\.miniapp-telegram-fullscreen \.miniapp-telegram-task-backdrop \.miniapp-focus-task-panel \{([^}]+)\}/)?.[1] ?? '';
+  assert.match(focusPanel, /height:\s*calc\(100dvh - max\(5\.8rem, var\(--miniapp-top-inset/);
+  const layout = css.match(/\.miniapp-shell\.miniapp-telegram-fullscreen \.miniapp-telegram-task-backdrop \.miniapp-focus-task-scroll-layout \{([^}]+)\}/)?.[1] ?? '';
+  assert.match(layout, /height:\s*100%/);
+  assert.match(layout, /min-height:\s*0/);
+  assert.match(css, /miniapp-focus-task-scroll-layout > \[class\*="overflow-y-auto"\] \{[\s\S]*?-webkit-overflow-scrolling:\s*touch/);
+});
+
+test('AI bottom tab opens Quick Requests and scrolls to its end even on repeated taps', async () => {
+  const mini = await read('../../client/src/MiniApp.tsx');
+  const nav = mini.slice(mini.indexOf('aria-label="Разделы Планировыча"'), mini.indexOf('      </nav>', mini.indexOf('aria-label="Разделы Планировыча"')));
+  const tab = nav.slice(nav.indexOf('aria-current={isAiChatOpen'), nav.indexOf('<span>Чат с ИИ</span>'));
+  assert.match(tab, /setActiveAiChatProjectId\(quickProject\?\.id/);
+  assert.match(tab, /setActiveAiChatId\(QUICK_AI_CHAT_ID\)/);
+  assert.match(tab, /setQuickAiTabNavigationSerial\(serial => serial \+ 1\)/);
+  assert.match(tab, /generalAiChatNearBottomRef\.current = true/);
+  assert.match(mini, /useLayoutEffect\(\(\) => \{\s*if \(!quickAiTabNavigationSerial/);
+  assert.match(mini, /const alignQuickThreadToBottom = \(\) => \{[\s\S]*?thread\.scrollTop = thread\.scrollHeight/);
+});
