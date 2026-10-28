@@ -26,6 +26,7 @@ test('explicit headline takes precedence over body text, even when the reply has
 test('model headlines are clipped at 90 characters and malformed legacy prose cannot flood alerts', () => {
   const alert = formatMonitoringAlert('Проект', 'Это очень длинное предложение об анализе и подготовке множества разных материалов для большого события и дальнейшего планирования без точки');
   assert.ok(alert.headline.length <= 90);
+  assert.ok(alert.body.length > 0, 'legacy overflow stays in the full chat reply');
   assert.equal(alert.content.split('\n').length, 2);
 });
 
