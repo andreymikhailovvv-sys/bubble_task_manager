@@ -11330,3 +11330,24 @@ body[data-theme='light'] .miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-
 .miniapp-shell.miniapp-light .miniapp-bottom-navigation-item.is-active .miniapp-bottom-navigation-icon {
   background: transparent !important;
 }
+
+@media (max-width:639px) {
+  .standalone-notes-mobile.standalone-notes-telegram .standalone-notes-telegram-brand {
+    position: absolute;
+    top: max(3.2rem, calc(var(--miniapp-top-inset, 0px) - 4.75rem));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 16;
+    max-width: 42vw;
+    padding: .55rem .85rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #9250f4, #7134dd);
+    color: #fff;
+    font-size: .79rem;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+  }
+}
