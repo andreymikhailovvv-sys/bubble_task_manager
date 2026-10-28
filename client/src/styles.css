@@ -10699,3 +10699,87 @@ body[data-theme='light'] .upcoming-subtasks-list .upcoming-subtask-row:hover {
   .miniapp-shell .miniapp-bottom-navigation-item { font-size: .61rem; }
   .miniapp-shell .miniapp-workspace-tools-compact .miniapp-workspace-actions { gap: .3rem; }
 }
+
+/* Fullscreen layout follow-up: don't apply the Telegram top safe inset twice.
+   The main scroll area already has top padding; the search bar is not sticky. */
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-premium-topbar {
+  top: 0;
+}
+
+/* This is shared navigation across the four primary views, not an overlay
+   that disappears behind the old AI/notes full-screen sheets. */
+.miniapp-shell .miniapp-bottom-navigation {
+  z-index: 260;
+}
+.miniapp-shell .miniapp-bottom-navigation.miniapp-bottom-navigation-hidden,
+.miniapp-shell .miniapp-quick-create.miniapp-quick-create-hidden {
+  display: none;
+}
+.miniapp-shell:has(.miniapp-slide-backdrop:not(.miniapp-ai-chat-backdrop-general)) .miniapp-bottom-navigation,
+.miniapp-shell:has(.miniapp-slide-backdrop:not(.miniapp-ai-chat-backdrop-general)) .miniapp-quick-create {
+  display: none;
+}
+
+/* The general AI chat is a tab: Telegram owns the top safe area and the
+   planner owns the bottom navigation. Only the chat thread scrolls. */
+.miniapp-shell .miniapp-ai-chat-backdrop-general {
+  top: var(--miniapp-top-inset, 0px);
+  bottom: calc(4.6rem + var(--miniapp-bottom-inset, env(safe-area-inset-bottom, 0px)));
+  padding-top: 0 !important;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-backdrop-general {
+  padding-top: 0 !important;
+}
+.miniapp-shell .miniapp-ai-chat-panel-general {
+  min-height: 0;
+  height: 100%;
+}
+.miniapp-shell .miniapp-ai-chat-panel-general .miniapp-ai-chat-header-general {
+  position: relative;
+  flex-shrink: 0;
+  top: auto;
+  right: auto;
+  left: auto;
+  padding-top: .65rem !important;
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+}
+.miniapp-shell .miniapp-ai-chat-panel-general .miniapp-ai-chat-header-general + .miniapp-ai-chat-thread-wrap .miniapp-ai-chat-thread {
+  padding-top: 2.6rem;
+}
+.miniapp-shell .miniapp-ai-chat-panel-general .miniapp-ai-chat-composer {
+  bottom: 0;
+}
+
+/* Notes are portaled to the document body, so their safe-area variables are
+   passed explicitly and their board occupies only the space ABOVE the tabs. */
+@media (max-width: 639px) {
+  .standalone-notes-mobile {
+    top: var(--miniapp-top-inset, 0px);
+    bottom: calc(4.6rem + var(--miniapp-bottom-inset, env(safe-area-inset-bottom, 0px)));
+    padding: 0;
+  }
+  .standalone-notes-mobile .standalone-notes-board {
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+  }
+  .standalone-notes-mobile .standalone-notes-board-header {
+    padding-top: .85rem;
+  }
+}
+
+/* When the keyboard is open, give the editor the space formerly used by
+   navigation. Notes inputs are outside the main root (React portal). */
+.miniapp-shell:has(input:focus, textarea:focus, [contenteditable="true"]:focus) .miniapp-ai-chat-backdrop-general {
+  bottom: 0;
+}
+body:has(.standalone-notes-mobile input:focus, .standalone-notes-mobile textarea:focus) .miniapp-bottom-navigation {
+  display: none;
+}
+@media (max-width: 639px) {
+  body:has(.standalone-notes-mobile input:focus, .standalone-notes-mobile textarea:focus) .standalone-notes-mobile {
+    bottom: 0;
+  }
+}
