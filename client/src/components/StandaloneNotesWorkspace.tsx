@@ -6,18 +6,42 @@ import { noteHtmlToPlainText, noteValueToEditorHtml } from '../lib/notes';
 import { NotesEditor } from './NotesEditor';
 import { StandaloneNoteGroupManager, noteGroupStyle } from './StandaloneNoteGroupManager';
 
-type Props = { userId: string; requestedNote?: { id: string; serial: number } | null; mode?: 'widget' | 'mobile'; onClose?: () => void; mobileSafeAreaTop?: number; mobileSafeAreaBottom?: number };
+type Props = { userId: string; requestedNote?: { id: string; serial: number } | null; mode?: 'widget' | 'mobile'; onClose?: () => void; mobileSafeAreaTop?: number; mobileSafeAreaBottom?: number; telegramMiniApp?: boolean };
 const sortNotes = (items: StandaloneNote[]) =>
   [...items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id));
 const titleOf = (note: StandaloneNote) => note.title.trim() || 'Без названия';
 const summaryOf = (note: StandaloneNote) => noteHtmlToPlainText(note.content).replace(/\s+/g, ' ').trim();
 const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : 'Не удалось сохранить заметку.';
 
-export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget', onClose, mobileSafeAreaTop = 0, mobileSafeAreaBottom = 0 }: Props) {
+export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget', onClose, mobileSafeAreaTop = 0, mobileSafeAreaBottom = 0, telegramMiniApp = false }: Props) {
   const [notes, setNotes] = useState<StandaloneNote[]>([]);
   const [groups, setGroups] = useState<StandaloneNoteGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [notesFiltersVisible, setNotesFiltersVisible] = useState(true);
+  const notesLastScrollTopRef = useRef(0);
+  const notesScrollIntentRef = useRef(0);
+  const handleNotesScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    if (!telegramMiniApp) return;
+    const top = event.currentTarget.scrollTop;
+    const delta = top - notesLastScrollTopRef.current;
+    notesLastScrollTopRef.current = top;
+    if (top <= 12) {
+      notesScrollIntentRef.current = 0;
+      setNotesFiltersVisible(true);
+      return;
+    }
+    if (delta === 0) return;
+    const intent = notesScrollIntentRef.current;
+    notesScrollIntentRef.current = Math.sign(intent) === Math.sign(delta) ? intent + delta : delta;
+    if (notesScrollIntentRef.current > 24) {
+      setNotesFiltersVisible(false);
+      notesScrollIntentRef.current = 0;
+    } else if (notesScrollIntentRef.current < -16) {
+      setNotesFiltersVisible(true);
+      notesScrollIntentRef.current = 0;
+    }
+  };
   const [groupManager, setGroupManager] = useState<'new' | 'manage' | null>(null);
   const [groupCreateForNoteId, setGroupCreateForNoteId] = useState<string | null>(null);
   const [groupPicker, setGroupPicker] = useState<{ noteId: string; top: number; left: number } | null>(null);
@@ -323,7 +347,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
         ) : null}
       </section> : null}
       {boardOpen ? createPortal(
-        <div className={`standalone-notes-backdrop fixed inset-0 z-[245] flex items-center justify-center p-3 sm:p-6 ${mode === 'mobile' ? 'standalone-notes-mobile' : ''}`}
+        <div className={`standalone-notes-backdrop fixed inset-0 z-[245] flex items-center justify-center p-3 sm:p-6 ${mode === 'mobile' ? 'standalone-notes-mobile' : ''} ${telegramMiniApp ? 'standalone-notes-telegram' : ''}`}
           style={mode === 'mobile' ? ({ '--miniapp-top-inset': `${mobileSafeAreaTop}px`, '--miniapp-bottom-inset': `${mobileSafeAreaBottom}px` } as CSSProperties) : undefined}
           onMouseDown={(event) => {
           if (event.target === event.currentTarget && !editing) closeBoard();
@@ -340,7 +364,8 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
                   <button type="button" className="standalone-notes-icon-button rounded-xl border p-2" onClick={closeBoard} aria-label="Закрыть список заметок"><X size={18} /></button>
                 </div>
               </div>
-              <div className="standalone-notes-board-filters flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+              <div className={`standalone-notes-board-filters flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 ${telegramMiniApp && !notesFiltersVisible ? 'standalone-notes-filters-collapsed' : ''}`}
+                onFocusCapture={() => { if (telegramMiniApp) setNotesFiltersVisible(true); }}>
                 <nav className="standalone-group-filter flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto pb-1" aria-label="Группы заметок">
                 <button type="button" className="standalone-group-chip standalone-group-manage" title="Редактировать группы"
                   aria-label="Редактировать группы" onClick={() => openGroupManager('manage')}><Settings2 size={15} /><span className="sr-only">Управление группами</span></button>
@@ -369,7 +394,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
               </div>
             </div>
             {error ? <p role="alert" className="standalone-notes-error mx-4 mt-3 rounded-lg px-3 py-2 text-sm sm:mx-6">{error}</p> : null}
-            <div className="standalone-notes-scroll-area min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+            <div className="standalone-notes-scroll-area min-h-0 flex-1 overflow-y-auto p-4 sm:p-6" onScroll={handleNotesScroll}>
               {filteredNotes.length === 0 ? (
                 <div className="standalone-notes-empty rounded-2xl border p-8 text-center text-muted">
                   <StickyNote className="mx-auto mb-3 opacity-70" size={32} />
