@@ -19,6 +19,8 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [notesFiltersVisible, setNotesFiltersVisible] = useState(true);
+  const notesHeaderRef = useRef<HTMLDivElement | null>(null);
+  const [notesHeaderHeight, setNotesHeaderHeight] = useState(0);
   const notesLastScrollTopRef = useRef(0);
   const notesScrollIntentRef = useRef(0);
   const notesLastToggleAtRef = useRef(0);
@@ -54,6 +56,19 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
   const [creating, setCreating] = useState(false);
   const [boardOpen, setBoardOpen] = useState(mode === 'mobile');
   const [editing, setEditing] = useState<StandaloneNote | null>(null);
+  useEffect(() => {
+    if (!telegramMiniApp || !boardOpen) return;
+    const header = notesHeaderRef.current;
+    if (!header) return;
+    const update = () => setNotesHeaderHeight(previous => {
+      const next = Math.ceil(header.getBoundingClientRect().height);
+      return previous === next ? previous : next;
+    });
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, [telegramMiniApp, boardOpen]);
   const [error, setError] = useState<string | null>(null);
 
   // Only one editor is open at a time. Serialize its writes so slower network
@@ -358,8 +373,9 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
           if (event.target === event.currentTarget && !editing) closeBoard();
         }}>
           {telegramMiniApp ? <div className="standalone-notes-telegram-brand" aria-label="Планировыч AI">✦ Планировыч AI</div> : null}
-          <section className="standalone-notes-board flex h-[min(87dvh,880px)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border shadow-2xl" role="dialog" aria-modal="true" aria-label="Все заметки">
-            <div className={`standalone-notes-board-header flex flex-col gap-2 border-b p-4 sm:px-6 ${telegramMiniApp && !notesFiltersVisible ? 'standalone-notes-header-compact' : ''}`}>
+          <section className="standalone-notes-board flex h-[min(87dvh,880px)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border shadow-2xl" role="dialog" aria-modal="true" aria-label="Все заметки"
+            style={telegramMiniApp ? ({ '--notes-telegram-header-height': `${notesHeaderHeight}px` } as CSSProperties) : undefined}>
+            <div ref={notesHeaderRef} className={`standalone-notes-board-header flex flex-col gap-2 border-b p-4 sm:px-6 ${telegramMiniApp && !notesFiltersVisible ? 'standalone-notes-header-compact' : ''}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="standalone-note-accent text-xs font-semibold uppercase tracking-widest">Личные записи</p>
@@ -474,6 +490,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
       {editing ? (
         <NotesEditor
           key={editing.id}
+          telegramSafeTop={telegramMiniApp ? mobileSafeAreaTop : undefined}
           value={editing.content}
           onChange={(content) => changeDraft({ content })}
           onClose={() => { void closeEditor(); }}
