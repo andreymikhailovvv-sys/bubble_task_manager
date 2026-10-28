@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type UIEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Maximize2, Plus, Search, Settings2, StickyNote, Tags, Trash2, X } from 'lucide-react';
 import { api, type StandaloneNote, type StandaloneNoteGroup } from '../lib/api';
@@ -21,7 +21,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
   const [notesFiltersVisible, setNotesFiltersVisible] = useState(true);
   const notesLastScrollTopRef = useRef(0);
   const notesScrollIntentRef = useRef(0);
-  const handleNotesScroll = (event: React.UIEvent<HTMLDivElement>) => {
+  const handleNotesScroll = (event: UIEvent<HTMLDivElement>) => {
     if (!telegramMiniApp) return;
     const top = event.currentTarget.scrollTop;
     const delta = top - notesLastScrollTopRef.current;
