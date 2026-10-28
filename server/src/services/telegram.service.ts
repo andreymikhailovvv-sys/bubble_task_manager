@@ -2361,8 +2361,7 @@ export const telegramService = {
     const alert = formatMonitoringAlert(input.taskTitle, input.answer);
     return sendMessage(owner.telegramChatId,
       '<b>' + escapeHtml(alert.headline) + '</b>\n' +
-      '✔️Мониторинг задачи <i>' + escapeHtml(input.taskTitle.slice(0, 150)) + '</i>\n\n' +
-      escapeHtml(alert.body.slice(0, 2400)),
+      '✅Мониторинг задачи <i>«' + escapeHtml(input.taskTitle.trim().slice(0, 150)) + '»</i>',
       { inline_keyboard: [[{
         text: '↩️ Ответить', web_app: { url: buildMiniAppTaskAiUrl(input.taskId) }
       }]] }
