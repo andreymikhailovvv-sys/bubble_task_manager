@@ -138,6 +138,26 @@ test('Telegram fullscreen uses safe insets and bottom tabs replace the old displ
   assert.match(mini, /miniapp-premium-habits/);
 });
 
+test('fullscreen search and all four tabs respect safe areas and keep the shared navigation', async () => {
+  const [mini, styles, notes] = await Promise.all([
+    read('../../client/src/MiniApp.tsx'),
+    read('../../client/src/styles.css'),
+    read('../../client/src/components/StandaloneNotesWorkspace.tsx')
+  ]);
+  assert.match(mini, /className="relative z-30 miniapp-premium-topbar/);
+  assert.doesNotMatch(mini, /sticky top-0 z-30 miniapp-premium-topbar/);
+  assert.match(mini, /isAiChatOpen && !isStandaloneNotesOpen \? 'is-active'/);
+  assert.match(mini, /isStandaloneNotesOpen \? 'is-active'/);
+  assert.match(mini, /setIsAiChatOpen\(false\); setIsStandaloneNotesOpen\(false\)/);
+  assert.match(mini, /mobileSafeAreaTop=\{telegramViewport\.top\}/);
+  assert.match(notes, /style=\{mode === 'mobile' \?/);
+  assert.match(styles, /\.miniapp-shell \.miniapp-bottom-navigation \{\s*z-index: 260/);
+  assert.match(styles, /\.miniapp-shell \.miniapp-ai-chat-backdrop-general \{\s*top: var\(--miniapp-top-inset/);
+  assert.match(styles, /\.miniapp-shell \.miniapp-ai-chat-panel-general \.miniapp-ai-chat-header-general \{\s*position: relative/);
+  assert.match(styles, /\.standalone-notes-mobile \{\s*top: var\(--miniapp-top-inset/);
+  assert.match(styles, /\.standalone-notes-mobile \.standalone-notes-board \{\s*height: 100%/);
+});
+
 test('compact task cards use themed sector badges rather than left color bars and retain task actions', async () => {
   const [mini, styles] = await Promise.all([
     read('../../client/src/MiniApp.tsx'),
