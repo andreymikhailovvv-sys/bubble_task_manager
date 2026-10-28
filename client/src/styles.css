@@ -11521,11 +11521,23 @@ body[data-theme='light'] .miniapp-shell.miniapp-telegram-fullscreen .miniapp-tel
     box-sizing: border-box;
     padding-top: max(5.8rem, var(--miniapp-top-inset, 0px)) !important;
   }
+  /* A max-height alone clips the growing flex content rather than giving
+     the subtasks a scroll viewport. Use a definite height below Telegram's bar. */
   .miniapp-shell.miniapp-telegram-fullscreen .miniapp-telegram-task-backdrop .miniapp-focus-task-panel {
+    box-sizing: border-box;
+    height: calc(100dvh - max(5.8rem, var(--miniapp-top-inset, 0px)));
     max-height: calc(100dvh - max(5.8rem, var(--miniapp-top-inset, 0px)));
   }
   .miniapp-shell.miniapp-telegram-fullscreen .miniapp-telegram-task-backdrop .miniapp-focus-task-scroll-layout {
+    height: 100%;
     max-height: 100%;
+    min-height: 0;
+  }
+  .miniapp-shell.miniapp-telegram-fullscreen .miniapp-telegram-task-backdrop .miniapp-focus-task-scroll-layout > [class*="overflow-y-auto"] {
+    min-height: 0;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
   }
   .miniapp-telegram-safe-editor-backdrop.miniapp-notes-editor-backdrop {
     box-sizing: border-box;
