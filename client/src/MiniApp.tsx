@@ -3635,6 +3635,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     ? { '--miniapp-top-inset': `${telegramViewport.top}px`, '--miniapp-bottom-inset': `${telegramViewport.bottom}px` } as CSSProperties
     : undefined;
   const fullscreenClass = isTelegramRuntime && telegramViewport.fullscreen ? 'miniapp-telegram-fullscreen' : '';
+  const useTelegramCompactChatHeader = isTelegramRuntime && telegramViewport.fullscreen;
 
   if (loading) {
     return <main style={telegramViewportStyle} className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 text-sm ${fullscreenClass} ${isWebRuntime ? 'miniapp-web-runtime' : ''} ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}>Загружаем Планировыч…</main>;
@@ -4282,25 +4283,25 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       <nav className={`miniapp-bottom-navigation ${openedTaskId || openedSubtaskId || isCreateTaskModalOpen || isHabitModalOpen || isAiDialogOpen ? 'miniapp-bottom-navigation-hidden' : ''}`} aria-label="Разделы Планировыча">
         <button type="button" className={`miniapp-bottom-navigation-item ${!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'list' ? 'is-active' : ''}`}
           aria-current={!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'list' ? 'page' : undefined}
-          onClick={() => { setIsAiChatOpen(false); setIsStandaloneNotesOpen(false); setIsAiChatMenuOpen(false); setDisplayMode('list'); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); }}>
+          onClick={(event) => { setIsAiChatOpen(false); setIsStandaloneNotesOpen(false); setIsAiChatMenuOpen(false); setDisplayMode('list'); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); event.currentTarget.blur(); }}>
           <span className="miniapp-bottom-navigation-icon"><List size={20} strokeWidth={2} /></span>
           <span>Список</span>
         </button>
         <button type="button" className={`miniapp-bottom-navigation-item ${!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'timeline' ? 'is-active' : ''}`}
           aria-current={!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'timeline' ? 'page' : undefined}
-          onClick={() => { setIsAiChatOpen(false); setIsStandaloneNotesOpen(false); setIsAiChatMenuOpen(false); setDisplayMode('timeline'); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); }}>
+          onClick={(event) => { setIsAiChatOpen(false); setIsStandaloneNotesOpen(false); setIsAiChatMenuOpen(false); setDisplayMode('timeline'); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); event.currentTarget.blur(); }}>
           <span className="miniapp-bottom-navigation-icon"><CalendarDays size={20} strokeWidth={2} /></span>
           <span>Таймлайн</span>
         </button>
         <button type="button" className={`miniapp-bottom-navigation-item ${isAiChatOpen && !isStandaloneNotesOpen ? 'is-active' : ''}`}
           aria-current={isAiChatOpen && !isStandaloneNotesOpen ? 'page' : undefined}
-          onClick={() => { setIsStandaloneNotesOpen(false); setIsQuickCreateOpen(false); setIsAiChatMenuOpen(false); setClosingMiniWindow(null); setIsAiChatOpen(true); }}>
+          onClick={(event) => { setIsStandaloneNotesOpen(false); setIsQuickCreateOpen(false); setIsAiChatMenuOpen(false); setClosingMiniWindow(null); setIsAiChatOpen(true); event.currentTarget.blur(); }}>
           <span className="miniapp-bottom-navigation-icon"><Bot size={20} strokeWidth={2} /></span>
           <span>Чат с ИИ</span>
         </button>
         <button type="button" className={`miniapp-bottom-navigation-item ${isStandaloneNotesOpen ? 'is-active' : ''}`}
           aria-current={isStandaloneNotesOpen ? 'page' : undefined}
-          onClick={() => { setIsAiChatOpen(false); setIsAiChatMenuOpen(false); setIsQuickCreateOpen(false); setRequestedStandaloneNote(null); setIsStandaloneNotesOpen(true); }}>
+          onClick={(event) => { setIsAiChatOpen(false); setIsAiChatMenuOpen(false); setIsQuickCreateOpen(false); setRequestedStandaloneNote(null); setIsStandaloneNotesOpen(true); event.currentTarget.blur(); }}>
           <span className="miniapp-bottom-navigation-icon"><StickyNote size={20} strokeWidth={2} /></span>
           <span>Заметки</span>
         </button>
@@ -4968,24 +4969,32 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       {isAiChatOpen ? (
         <div className={`miniapp-ai-chat-backdrop miniapp-ai-chat-backdrop-general miniapp-slide-backdrop fixed inset-0 z-[70] bg-slate-950/75 p-0 ${getMiniWindowMotionClass('ai-chat')}`}>
           <div className="miniapp-ai-chat-panel miniapp-ai-chat-panel-general miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100">
-            <div className={`miniapp-ai-chat-header miniapp-ai-chat-header-general flex items-start justify-between gap-2 p-3 ${isGeneralAiChatHeaderHidden ? 'miniapp-ai-chat-header-hidden' : ''}`}>
-              <button type="button" onClick={() => setIsAiChatMenuOpen(true)} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Меню чатов и проектов"><Menu size={18} /></button>
-              <div className="min-w-0 flex-1">
-                <p className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700"><Sparkles size={13} /> Чат с ИИ</p>
-                <div className="mt-2 flex min-w-0 items-center gap-2">
-                  <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary">{activeAiChat?.title ?? 'Новый чат'}</h2>
-                  <div className="miniapp-ai-chat-project-chip inline-flex max-w-[46%] shrink-0 items-center gap-1.5 rounded-2xl border px-2 py-1 text-[11px] font-semibold shadow-sm" style={{ '--project-color': activeAiChatProject?.color ?? '#8b5cf6' } as CSSProperties}>
+            <div className={`miniapp-ai-chat-header miniapp-ai-chat-header-general flex items-start justify-between gap-2 p-3 ${useTelegramCompactChatHeader ? 'miniapp-ai-chat-header-telegram' : ''} ${isGeneralAiChatHeaderHidden ? 'miniapp-ai-chat-header-hidden' : ''}`}>
+               <button type="button" onClick={() => setIsAiChatMenuOpen(true)} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Меню чатов и проектов"><Menu size={18} /></button>
+               <div className={`min-w-0 flex-1 ${useTelegramCompactChatHeader ? 'miniapp-ai-chat-inline-heading' : ''}`}>
+                 <p className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700"><Sparkles size={13} /> Чат с ИИ</p>
+                 <div className={useTelegramCompactChatHeader ? 'miniapp-ai-chat-inline-title' : 'mt-2 flex min-w-0 items-center gap-2'}>
+                   <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary" title={activeAiChat?.title ?? 'Новый чат'}>{activeAiChat?.title ?? 'Новый чат'}</h2>
+                   {!useTelegramCompactChatHeader ? (<div className="miniapp-ai-chat-project-chip inline-flex max-w-[46%] shrink-0 items-center gap-1.5 rounded-2xl border px-2 py-1 text-[11px] font-semibold shadow-sm" style={{ '--project-color': activeAiChatProject?.color ?? '#8b5cf6' } as CSSProperties}>
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-xl bg-white/20 text-sm">{activeAiChatProject?.icon === 'telegram' ? <svg role="img" aria-label="Telegram" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M21.94 4.17a1.46 1.46 0 0 0-1.7-.23L2.1 11.1a1.18 1.18 0 0 0 .12 2.24l4.68 1.45 1.77 5.3a1.15 1.15 0 0 0 1.9.47l2.9-2.88 4.68 3.46a1.3 1.3 0 0 0 2.03-.76l2.18-14.6a1.52 1.52 0 0 0-.42-1.61Zm-3.88 3.9-8.2 7.47-.32 2.63-1.28-3.83 9.8-6.27Z"/></svg> : activeAiChatProject?.icon}</span>
+                    <span className="truncate">{activeAiChatProject?.title ?? 'Проект'}</span>
+                  </div>) : null}
+                 </div>
+               </div>
+               <button type="button" onClick={() => closeMiniWindowWithMotion('ai-chat', () => setIsAiChatOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть чат с ИИ"><X size={18} /></button>
+               <select value={generalAiChatModel} onChange={(event) => changeGeneralAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap w-40 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель чата">
+                 {AI_CHAT_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+               </select>
+             </div>
+             {useTelegramCompactChatHeader ? (
+               <div className="miniapp-ai-chat-telegram-project" aria-label="Текущий проект чата">
+                 <div className="miniapp-ai-chat-project-chip inline-flex max-w-[46%] shrink-0 items-center gap-1.5 rounded-2xl border px-2 py-1 text-[11px] font-semibold shadow-sm" style={{ '--project-color': activeAiChatProject?.color ?? '#8b5cf6' } as CSSProperties}>
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-xl bg-white/20 text-sm">{activeAiChatProject?.icon === 'telegram' ? <svg role="img" aria-label="Telegram" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M21.94 4.17a1.46 1.46 0 0 0-1.7-.23L2.1 11.1a1.18 1.18 0 0 0 .12 2.24l4.68 1.45 1.77 5.3a1.15 1.15 0 0 0 1.9.47l2.9-2.88 4.68 3.46a1.3 1.3 0 0 0 2.03-.76l2.18-14.6a1.52 1.52 0 0 0-.42-1.61Zm-3.88 3.9-8.2 7.47-.32 2.63-1.28-3.83 9.8-6.27Z"/></svg> : activeAiChatProject?.icon}</span>
                     <span className="truncate">{activeAiChatProject?.title ?? 'Проект'}</span>
                   </div>
-                </div>
-              </div>
-              <button type="button" onClick={() => closeMiniWindowWithMotion('ai-chat', () => setIsAiChatOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть чат с ИИ"><X size={18} /></button>
-              <select value={generalAiChatModel} onChange={(event) => changeGeneralAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap w-40 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель чата">
-                {AI_CHAT_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-            </div>
-            <div className="miniapp-ai-chat-thread-wrap relative min-h-0 flex-1">
+               </div>
+             ) : null}
+             <div className="miniapp-ai-chat-thread-wrap relative min-h-0 flex-1">
               <div ref={aiChatDialogContainerRef} onScroll={(event) => {
                 const container = event.currentTarget;
                 generalAiChatNearBottomRef.current =
@@ -5517,6 +5526,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         <StandaloneNotesWorkspace key={currentUser.id} userId={currentUser.id}
           requestedNote={requestedStandaloneNote}
           mobileSafeAreaTop={telegramViewport.top} mobileSafeAreaBottom={telegramViewport.bottom}
+          telegramMiniApp={isTelegramRuntime}
           mode="mobile" onClose={() => { setIsStandaloneNotesOpen(false); setRequestedStandaloneNote(null); }} />
       ) : null}
 

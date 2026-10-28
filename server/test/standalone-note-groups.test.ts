@@ -104,7 +104,7 @@ test('group assignment is included in server responses and reflected immediately
 
 test('notes window orders header, groups, and card actions correctly', async () => {
   const board = await readFile(new URL('../../client/src/components/StandaloneNotesWorkspace.tsx', import.meta.url), 'utf8');
-  const boardStart = board.indexOf('className="standalone-notes-board-header');
+  const boardStart = board.indexOf('standalone-notes-board-header flex flex-col');
   const boardEnd = board.indexOf('{error ? <p role="alert"', boardStart);
   const header = board.slice(boardStart, boardEnd);
   assert.ok(boardStart > 0 && boardEnd > boardStart);

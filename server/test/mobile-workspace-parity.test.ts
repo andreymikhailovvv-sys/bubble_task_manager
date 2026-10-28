@@ -181,6 +181,33 @@ test('timeline, AI chat and notes fullscreen surfaces have safe top treatment', 
   assert.match(notes, /mobileSafeAreaTop\?: number/);
 });
 
+test('Telegram fullscreen chat compact header and scroll-aware notes preserve mobile web', async () => {
+  const [mini, css, notes] = await Promise.all([
+    read('../../client/src/MiniApp.tsx'),
+    read('../../client/src/styles.css'),
+    read('../../client/src/components/StandaloneNotesWorkspace.tsx')
+  ]);
+  assert.match(mini, /useTelegramCompactChatHeader = isTelegramRuntime && telegramViewport\.fullscreen/);
+  assert.match(mini, /miniapp-ai-chat-header-telegram/);
+  assert.match(mini, /miniapp-ai-chat-inline-heading/);
+  assert.match(mini, /miniapp-ai-chat-inline-title/);
+  assert.match(mini, /miniapp-ai-chat-telegram-project/);
+  assert.match(mini, /!useTelegramCompactChatHeader \? \(/);
+  assert.match(css, /\.miniapp-ai-chat-panel-general::before \{\s*height: calc\(var\(--miniapp-top-inset, 0px\) \+ 3\.65rem\)/);
+  assert.match(css, /\.miniapp-ai-chat-header-general\.miniapp-ai-chat-header-telegram/);
+  assert.match(css, /\.miniapp-ai-chat-inline-title h2/);
+  assert.match(css, /\.miniapp-ai-chat-telegram-project \{/);
+  assert.match(mini, /telegramMiniApp=\{isTelegramRuntime\}/);
+  assert.match(notes, /if \(!telegramMiniApp\) return;/);
+  assert.match(notes, /notesFiltersVisible/);
+  assert.match(notes, /onScroll=\{handleNotesScroll\}/);
+  assert.match(notes, /standalone-notes-filters-collapsed/);
+  assert.match(css, /\.standalone-notes-telegram \.standalone-notes-board-filters\.standalone-notes-filters-collapsed/);
+  assert.match(css, /body\[data-theme='light'\] \.standalone-notes-mobile\.standalone-notes-telegram/);
+  assert.match(css, /\.miniapp-bottom-navigation-item\.is-active \.miniapp-bottom-navigation-icon/);
+  assert.match(mini, /event\.currentTarget\.blur\(\)/);
+});
+
 test('fullscreen search and all four tabs respect safe areas and keep the shared navigation', async () => {
   const [mini, styles, notes] = await Promise.all([
     read('../../client/src/MiniApp.tsx'),

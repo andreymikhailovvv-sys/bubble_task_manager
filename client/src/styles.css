@@ -10958,3 +10958,161 @@ body[data-theme='light'] .miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-
     background: #fff !important;
   }
 }
+
+/* Mini App fullscreen: one continuous translucent area behind Telegram's
+   system controls and the compact chat header, without a horizontal seam. */
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-general {
+  --telegram-ai-top-surface: rgba(11, 18, 34, .78);
+  --miniapp-ai-header-height: 3.65rem;
+  border-top: 0 !important;
+}
+.miniapp-shell.miniapp-telegram-fullscreen.miniapp-light .miniapp-ai-chat-panel-general,
+body[data-theme='light'] .miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-general {
+  --telegram-ai-top-surface: rgba(245, 248, 255, .76);
+}
+/* The overlay is a single continuous sheet, rather than two overlapping
+   semi-transparent backgrounds at the safe-area/header boundary. */
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-general::before {
+  height: calc(var(--miniapp-top-inset, 0px) + 3.65rem);
+  z-index: 19;
+  background: var(--telegram-ai-top-surface) !important;
+  backdrop-filter: blur(12px) saturate(110%);
+  -webkit-backdrop-filter: blur(12px) saturate(110%);
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-general .miniapp-ai-chat-header-general {
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-general .miniapp-ai-chat-header-general.miniapp-ai-chat-header-telegram {
+  top: var(--miniapp-top-inset, 0px);
+  height: 3.65rem;
+  min-height: 0;
+  padding: .45rem .75rem !important;
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-header-telegram > .miniapp-ai-chat-icon-button {
+  flex: 0 0 auto;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-inline-heading {
+  display: flex;
+  flex: 1 1 0%;
+  align-items: center;
+  min-width: 0;
+  gap: .4rem;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-inline-heading > p {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: .28rem .42rem;
+  font-size: .61rem;
+  letter-spacing: .035em;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-inline-heading > p svg {
+  flex-shrink: 0;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-inline-title {
+  min-width: 0;
+  flex: 1 1 0%;
+  display: flex;
+  align-items: center;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-inline-title h2 {
+  font-size: clamp(.79rem, 3.2vw, 1rem);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Telegram provides its own Close/menu controls in the upper strip.
+   The project chip lives between them, independent of the scrolling header. */
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-telegram-project {
+  position: absolute;
+  z-index: 24;
+  top: max(3.2rem, calc(var(--miniapp-top-inset, 0px) - 4.75rem));
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(43vw, 13rem);
+  pointer-events: none;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-telegram-project .miniapp-ai-chat-project-chip {
+  max-width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+  padding: .3rem .6rem;
+  border-radius: 1.1rem;
+  box-sizing: border-box;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-telegram-project .miniapp-ai-chat-project-chip > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-header-telegram + .miniapp-ai-chat-telegram-project + .miniapp-ai-chat-thread-wrap {
+  --miniapp-ai-header-height: 3.65rem;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-header-telegram + .miniapp-ai-chat-telegram-project + .miniapp-ai-chat-thread-wrap .miniapp-ai-chat-thread {
+  padding-top: calc(var(--miniapp-top-inset, 0px) + 3.65rem + .75rem);
+}
+/* Telegram-only notes: the upper safe-area and notes header are a single
+   continuous surface, while filters collapse with the inner notes list scroll. */
+@media (max-width: 639px) {
+  .standalone-notes-mobile.standalone-notes-telegram {
+    background: #0f172a !important;
+  }
+  body[data-theme='light'] .standalone-notes-mobile.standalone-notes-telegram {
+    background: #fff !important;
+  }
+  .standalone-notes-telegram .standalone-notes-board {
+    border-top: 0 !important;
+    box-shadow: none;
+  }
+  body[data-theme='light'] .standalone-notes-telegram .standalone-notes-board,
+  body[data-theme='light'] .standalone-notes-telegram .standalone-notes-board-header {
+    background: #fff !important;
+  }
+  .standalone-notes-telegram .standalone-notes-board-filters {
+    max-height: 14rem;
+    opacity: 1;
+    overflow: hidden;
+    transition: max-height .2s ease, opacity .16s ease;
+  }
+  .standalone-notes-telegram .standalone-notes-board-filters.standalone-notes-filters-collapsed {
+    max-height: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .standalone-notes-telegram .standalone-notes-board-header.standalone-notes-header-compact {
+    gap: 0;
+  }
+}
+/* Mobile WebViews retain touch focus and hover for the active navigation
+   button. Keep purple icon/text as the active indicator, with no persistent
+   filled rectangle or capsule after the press. */
+body[data-theme='light'] .miniapp-shell button.miniapp-bottom-navigation-item,
+body[data-theme='light'] .miniapp-shell button.miniapp-bottom-navigation-item:is(:hover, :focus, :active),
+.miniapp-shell.miniapp-light button.miniapp-bottom-navigation-item,
+.miniapp-shell.miniapp-light button.miniapp-bottom-navigation-item:is(:hover, :focus, :active) {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+body[data-theme='light'] .miniapp-shell .miniapp-bottom-navigation-item.is-active .miniapp-bottom-navigation-icon,
+.miniapp-shell.miniapp-light .miniapp-bottom-navigation-item.is-active .miniapp-bottom-navigation-icon,
+body[data-theme='light'] .miniapp-shell .miniapp-bottom-navigation-item.is-active:focus .miniapp-bottom-navigation-icon,
+.miniapp-shell.miniapp-light .miniapp-bottom-navigation-item.is-active:focus .miniapp-bottom-navigation-icon {
+  background: transparent !important;
+}
+body[data-theme='light'] .miniapp-shell .miniapp-bottom-navigation-item:active .miniapp-bottom-navigation-icon,
+.miniapp-shell.miniapp-light .miniapp-bottom-navigation-item:active .miniapp-bottom-navigation-icon {
+  background: rgba(139, 92, 246, .13) !important;
+}
