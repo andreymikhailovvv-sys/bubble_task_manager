@@ -3640,6 +3640,16 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     : undefined;
   const fullscreenClass = isTelegramRuntime && telegramViewport.fullscreen ? 'miniapp-telegram-fullscreen' : '';
   const useTelegramCompactChatHeader = isTelegramRuntime && telegramViewport.fullscreen;
+  // Telegram WebView can retain a native pressed/focus rectangle on buttons
+  // after navigation. An accessible non-native control avoids that artifact;
+  // browser/mobile-web continues using its native button.
+  const MiniNavigationControl = isTelegramRuntime ? 'div' : 'button';
+  const handleMiniNavigationKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (isTelegramRuntime && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      event.currentTarget.click();
+    }
+  };
   const showTelegramBrand = useTelegramCompactChatHeader && !isAiChatOpen && !openedTaskId && !openedSubtaskId &&
     !isCreateTaskModalOpen && !isHabitModalOpen && !isAiDialogOpen;
 
@@ -4292,30 +4302,30 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       </div>
 
       <nav className={`miniapp-bottom-navigation ${openedTaskId || openedSubtaskId || isCreateTaskModalOpen || isHabitModalOpen || isAiDialogOpen ? 'miniapp-bottom-navigation-hidden' : ''}`} aria-label="Разделы Планировыча">
-        <button type="button" className={`miniapp-bottom-navigation-item ${!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'list' ? 'is-active' : ''}`}
+        <MiniNavigationControl role={isTelegramRuntime ? 'button' : undefined} tabIndex={isTelegramRuntime ? 0 : undefined} onKeyDown={handleMiniNavigationKeyDown} className={`miniapp-bottom-navigation-item ${!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'list' ? 'is-active' : ''}`}
           aria-current={!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'list' ? 'page' : undefined}
           onClick={(event) => { setIsAiChatOpen(false); setIsStandaloneNotesOpen(false); setIsAiChatMenuOpen(false); setDisplayMode('list'); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); event.currentTarget.blur(); }}>
           <span className="miniapp-bottom-navigation-icon"><List size={20} strokeWidth={2} /></span>
           <span>Список</span>
-        </button>
-        <button type="button" className={`miniapp-bottom-navigation-item ${!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'timeline' ? 'is-active' : ''}`}
+        </MiniNavigationControl>
+        <MiniNavigationControl role={isTelegramRuntime ? 'button' : undefined} tabIndex={isTelegramRuntime ? 0 : undefined} onKeyDown={handleMiniNavigationKeyDown} className={`miniapp-bottom-navigation-item ${!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'timeline' ? 'is-active' : ''}`}
           aria-current={!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'timeline' ? 'page' : undefined}
           onClick={(event) => { setIsAiChatOpen(false); setIsStandaloneNotesOpen(false); setIsAiChatMenuOpen(false); setDisplayMode('timeline'); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); event.currentTarget.blur(); }}>
           <span className="miniapp-bottom-navigation-icon"><CalendarDays size={20} strokeWidth={2} /></span>
           <span>Таймлайн</span>
-        </button>
-        <button type="button" className={`miniapp-bottom-navigation-item ${isAiChatOpen && !isStandaloneNotesOpen ? 'is-active' : ''}`}
+        </MiniNavigationControl>
+        <MiniNavigationControl role={isTelegramRuntime ? 'button' : undefined} tabIndex={isTelegramRuntime ? 0 : undefined} onKeyDown={handleMiniNavigationKeyDown} className={`miniapp-bottom-navigation-item ${isAiChatOpen && !isStandaloneNotesOpen ? 'is-active' : ''}`}
           aria-current={isAiChatOpen && !isStandaloneNotesOpen ? 'page' : undefined}
           onClick={(event) => { setIsStandaloneNotesOpen(false); setIsQuickCreateOpen(false); setIsAiChatMenuOpen(false); setClosingMiniWindow(null); setIsAiChatOpen(true); event.currentTarget.blur(); }}>
           <span className="miniapp-bottom-navigation-icon"><Bot size={20} strokeWidth={2} /></span>
           <span>Чат с ИИ</span>
-        </button>
-        <button type="button" className={`miniapp-bottom-navigation-item ${isStandaloneNotesOpen ? 'is-active' : ''}`}
+        </MiniNavigationControl>
+        <MiniNavigationControl role={isTelegramRuntime ? 'button' : undefined} tabIndex={isTelegramRuntime ? 0 : undefined} onKeyDown={handleMiniNavigationKeyDown} className={`miniapp-bottom-navigation-item ${isStandaloneNotesOpen ? 'is-active' : ''}`}
           aria-current={isStandaloneNotesOpen ? 'page' : undefined}
           onClick={(event) => { setIsAiChatOpen(false); setIsAiChatMenuOpen(false); setIsQuickCreateOpen(false); setRequestedStandaloneNote(null); setIsStandaloneNotesOpen(true); event.currentTarget.blur(); }}>
           <span className="miniapp-bottom-navigation-icon"><StickyNote size={20} strokeWidth={2} /></span>
           <span>Заметки</span>
-        </button>
+        </MiniNavigationControl>
       </nav>
 
       {openedTask && openedTaskDraft ? (
@@ -5024,7 +5034,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   )) : aiChatProjects.map(project => (
                     <button key={project.id} type="button" role="menuitemradio" aria-checked={activeAiChatProject?.id === project.id} className="miniapp-telegram-picker-option"
                       onClick={() => { setActiveAiChatProjectId(project.id); setActiveAiChatId(project.chats[0]?.id ?? ''); setTelegramChatPicker(null); }}>
-                      <span className="miniapp-telegram-picker-project-icon" style={{backgroundColor: project.color}}>{project.icon === 'telegram' ? '✈' : project.icon}</span>
+                      <span className="miniapp-telegram-picker-project-icon" style={{backgroundColor: project.color}}>{project.icon === 'telegram' ? <svg role="img" aria-label="Telegram" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M21.94 4.17a1.46 1.46 0 0 0-1.7-.23L2.1 11.1a1.18 1.18 0 0 0 .12 2.24l4.68 1.45 1.77 5.3a1.15 1.15 0 0 0 1.9.47l2.9-2.88 4.68 3.46a1.3 1.3 0 0 0 2.03-.76l2.18-14.6a1.52 1.52 0 0 0-.42-1.61Zm-3.88 3.9-8.2 7.47-.32 2.63-1.28-3.83 9.8-6.27Z"/></svg> : project.icon}</span>
                       <span className="truncate">{project.title}</span>{activeAiChatProject?.id === project.id ? <Check size={16} aria-hidden="true"/> : null}
                     </button>
                   ))}
