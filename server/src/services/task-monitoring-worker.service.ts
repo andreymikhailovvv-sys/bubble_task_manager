@@ -4,6 +4,7 @@ import { aiAssistantService } from './ai-assistant.service.js';
 import { requireMonitoredTask } from './task-monitoring.service.js';
 import { MONITORING_FALLBACK_QUESTION } from './task-monitoring-trigger.service.js';
 import { publishTaskMonitoringReply } from './task-monitoring-delivery.service.js';
+import { formatMonitoringAlert } from '../lib/monitoring-notification.js';
 import { recoverMonitoredDeadlinesOnBoot, MONITORING_INTRO_KIND, monitoringIntroEventKey } from './task-monitoring-schedule.service.js';
 import { registerTaskMonitoringWakeup } from './task-monitoring-wakeup.service.js';
 
@@ -76,11 +77,11 @@ async function deliver(run: Run, question: string, checkCurrent: () => Promise<b
         statuses.map(item => item.createdAt.toISOString() + ': ' + item.label).join('\n') || 'Статусов ещё нет.',
         'Сначала попытайся реально продвинуть задачу: подготовь полезные материалы, варианты, проект сообщения или план. Не ограничивайся вопросом «сделал ли пользователь».',
         'Если не хватает информации, уточни КОНКРЕТНЫЕ данные, объясни зачем они нужны и подготовь доступную часть работы.',
-        'ПЕРВЫМ ДЕЛОМ сделай полезную работу: при необходимости найди актуальные сведения через web_search, создай материалы, обнови заметки или задачи. Триггер следующего контакта планируй в конце, после инструментов исследования и действий. Не заявляй, что в автоматическом режиме нет интернета: у него тот же набор инструментов, что у обычного ИИ по задаче.',
+        'В первую очередь сделай доступную полезную работу: создай материалы, обнови заметки или задачи, если это уместно. Веб-поиск через web_search МОЖЕШЬ использовать, только если для конкретного следующего шага необходимы актуальные внешние факты; для работы с историей задачи, подготовки текста или обсуждения он не нужен. Не выполняй поиск просто из-за включённого мониторинга. Триггер следующего контакта планируй после действительно нужных действий.',
         'После содержательного ответа обычно устанавливай set_task_monitoring_trigger на следующий полезный контакт, чтобы задача не потерялась. Особенно если ты предложил варианты, спросил данные или ждёшь действия пользователя.',
         'Если в истории пользователь назвал точное время ответа или попросил напомнить через интервал, придерживайся именно этого времени в его часовом поясе. Не заменяй его произвольным часом.',
         'Если время не указано, выбери разумный интервал по дедлайну и следующему конкретному шагу. Не создавай повторяющихся пустых напоминаний и не назначай их, если задача завершена или пользователь отказался.',
-        'Для каждого уведомления САМОСТОЯТЕЛЬНО сформулируй заголовок в ПЕРВОЙ строке (одним осмысленным предложением до 90 символов): кратко и конкретно, какой результат получен, что изменилось или какого решения ждёшь от пользователя. Заголовки должны быть разными по смыслу для разных событий, чтобы пользователь отличал их среди множества уведомлений. Никогда не пиши шаблонное «Вернёмся к задаче», «Пора проверить задачу», «Мониторинг задачи» и подобные общие строки. Затем пустая строка и информативный основной текст. Пример: «От подрядчика нужен макет до 16:00» либо «Подготовлены три варианта маршрута выставки».',
+        'В финальном ответе ПЕРВАЯ строка строго: «ЗАГОЛОВОК: <одно конкретное предложение длиной до 90 символов>». Этот заголовок увидят в уведомлении, поэтому сразу сообщи самый важный результат, изменение или один главный вопрос, без вводных слов и шаблонных фраз. Не добавляй Markdown, кавычки или текст перед префиксом «ЗАГОЛОВОК:». Затем пустая строка и полный полезный ответ для чата. Сервер извлечёт заголовок отдельно и не отправит полный ответ в уведомлении. Примеры первой строки: «ЗАГОЛОВОК: Нужен макет подрядчика до 16:00» и «ЗАГОЛОВОК: Готовы три варианта маршрута выставки».',
         ...(kind === 'monitoring_intro' ? [
           'Это ПЕРВОЕ и единственное вводное сообщение после включения мониторинга для этого цикла. Представь короткий план автономной помощи по задаче. Если есть несколько уже просроченных подзадач, упомяни их одним сообщением, но не пиши отдельное сообщение для каждой. Начни с одной ближайшей по сроку просроченной подзадачи, обозначь одно конкретное следующее действие и предложи помощь. Если просрочек нет, обозначь следующий полезный шаг по задаче. Не объявляй завершение без проверки и не засыпай пользователя напоминаниями.'
         ] : []),
@@ -93,11 +94,12 @@ async function deliver(run: Run, question: string, checkCurrent: () => Promise<b
     });
     // User can disable monitoring, finish or reschedule the source deadline,
     // or answer a follow-up while the model call is still in progress.
-    await requireMonitoredTask(run.userId, run.taskId);
+    const currentTask = await requireMonitoredTask(run.userId, run.taskId);
+    const visibleAnswer = formatMonitoringAlert(currentTask.title, result.answer).message;
     if (!await checkCurrent()) { await markRun(run.id, 'cancelled'); return; }
     await aiAssistantService.appendTaskDialogAssistantMessage({
       userId: run.userId, taskId: run.taskId,
-      content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli,
+      content: visibleAnswer, creditsSpentMilli: result.billing.creditsSpentMilli,
       webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations,
       generatedDocumentId: result.generatedDocument?.id, taskProposalId: result.taskProposal?.id
     });
@@ -107,7 +109,7 @@ async function deliver(run: Run, question: string, checkCurrent: () => Promise<b
     await publishTaskMonitoringReply({
       userId: run.userId, taskId: run.taskId, runId: run.id,
       kind,
-      answer: result.answer
+      answer: visibleAnswer
     });
     await markRun(run.id, 'completed');
     console.info('[TaskMonitoring] AI delivery completed', { runId: run.id, taskId: run.taskId });
