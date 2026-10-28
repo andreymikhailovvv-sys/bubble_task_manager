@@ -11116,3 +11116,217 @@ body[data-theme='light'] .miniapp-shell .miniapp-bottom-navigation-item:active .
 .miniapp-shell.miniapp-light .miniapp-bottom-navigation-item:active .miniapp-bottom-navigation-icon {
   background: rgba(139, 92, 246, .13) !important;
 }
+
+/* Telegram Mini App: modest upper contrast for white Android system icons.
+   No live backdrop-filter: fixed gradient does not need repainting on scroll. */
+.miniapp-shell.miniapp-telegram-fullscreen::before {
+  content: "";
+  position: fixed;
+  z-index: 38;
+  pointer-events: none;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5.2rem;
+  background: linear-gradient(to bottom, rgba(37, 50, 79, .42), rgba(62, 79, 113, .17) 57%, transparent);
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-telegram-service-title {
+  position: fixed;
+  z-index: 55;
+  top: max(3.2rem, calc(var(--miniapp-top-inset, 0px) - 4.75rem));
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 42vw;
+  padding: .55rem .85rem;
+  border-radius: 999px;
+  color: #fff;
+  font-size: .79rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  background: linear-gradient(135deg, #9250f4, #7134dd);
+  box-shadow: 0 4px 12px rgba(92, 50, 170, .12);
+}
+/* Chat header is a separate lightly translucent surface. Its backdrop is
+   ordinary color rather than an expensive real-time blur layer. The upper
+   safe-area scrim ends at the header and shrinks when the header hides. */
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-general::before {
+  height: var(--miniapp-top-inset, 0px);
+  background: linear-gradient(to bottom,
+    rgba(18, 29, 50, .56), rgba(21, 35, 60, .32) 53%, rgba(22, 32, 48, .08)) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transition: none;
+}
+.miniapp-shell.miniapp-telegram-fullscreen.miniapp-light .miniapp-ai-chat-panel-general::before,
+body[data-theme='light'] .miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-general::before {
+  background: linear-gradient(to bottom,
+    rgba(43, 60, 91, .50), rgba(170, 200, 230, .24) 53%, rgba(245, 248, 255, .1)) !important;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-general .miniapp-ai-chat-header-telegram {
+  background: rgba(16, 29, 48, .91) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.miniapp-shell.miniapp-telegram-fullscreen.miniapp-light .miniapp-ai-chat-panel-general .miniapp-ai-chat-header-telegram,
+body[data-theme='light'] .miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-general .miniapp-ai-chat-header-telegram {
+  background: rgba(246, 249, 255, .94) !important;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-general.miniapp-ai-header-collapsed .miniapp-ai-chat-header-telegram {
+  background: transparent !important;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-general .miniapp-ai-chat-header-telegram::before {
+  content: "";
+  position: absolute;
+  top: -.65rem;
+  left: 0;
+  right: 0;
+  height: .65rem;
+  background: linear-gradient(to bottom, transparent, rgba(16, 29, 48, .91));
+  pointer-events: none;
+}
+.miniapp-shell.miniapp-telegram-fullscreen.miniapp-light .miniapp-ai-chat-panel-general .miniapp-ai-chat-header-telegram::before,
+body[data-theme='light'] .miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-general .miniapp-ai-chat-header-telegram::before {
+  background: linear-gradient(to bottom, transparent, rgba(246, 249, 255, .94));
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-general.miniapp-ai-header-collapsed .miniapp-ai-chat-header-telegram::before {
+  display: none;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-telegram-project {
+  z-index: 27;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-telegram-project .miniapp-telegram-project-trigger {
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-title-trigger {
+  display: flex;
+  flex: 1 1 0%;
+  min-width: 0;
+  align-items: center;
+  gap: .2rem;
+  padding: .3rem .1rem;
+  border-radius: .55rem;
+  color: var(--text-primary, #e2e8f0);
+  font-size: clamp(.78rem, 3vw, .95rem);
+  font-weight: 650;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-title-trigger > span {
+  min-width: 0;
+  flex: 1;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-title-trigger > svg { flex: 0 0 auto; }
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-telegram-picker-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  pointer-events: none;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-telegram-picker-dismiss {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  background: transparent;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-telegram-picker {
+  position: absolute;
+  left: .75rem;
+  right: .75rem;
+  top: calc(var(--miniapp-top-inset, 0px) + 3.9rem);
+  max-height: min(45dvh, 19rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 1.1rem;
+  padding: .4rem;
+  pointer-events: auto;
+  border: 1px solid rgba(160, 172, 200, .24);
+  background: #172139;
+  color: #f8fafc;
+  box-shadow: 0 14px 30px rgba(6, 12, 28, .20);
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-telegram-picker-projects {
+  top: max(5.8rem, calc(var(--miniapp-top-inset, 0px) - 1.3rem));
+}
+.miniapp-shell.miniapp-telegram-fullscreen.miniapp-light .miniapp-telegram-picker {
+  background: #fff;
+  color: #1e293b;
+  border-color: #dce4f1;
+}
+.miniapp-telegram-picker-heading {
+  padding: .5rem .65rem;
+  color: #94a3b8;
+  font-size: .72rem;
+  font-weight: 750;
+}
+.miniapp-telegram-picker-option {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: .65rem;
+  padding: .7rem .65rem;
+  border-radius: .75rem;
+  text-align: left;
+  font-size: .84rem;
+  min-width: 0;
+}
+.miniapp-telegram-picker-option > span.truncate { flex: 1 1 0%; min-width: 0; }
+.miniapp-telegram-picker-option[aria-checked="true"] { color: #a78bfa; background: rgba(139, 92, 246, .1); }
+.miniapp-telegram-picker-option:active { background: rgba(139, 92, 246, .15); }
+.miniapp-telegram-picker-project-icon {
+  display: flex; flex: 0 0 1.7rem; width: 1.7rem; height: 1.7rem;
+  align-items: center; justify-content: center; border-radius: .55rem;
+  font-size: .88rem;
+}
+/* No sticky/floating search from the underlying list when overlay tabs open. */
+.miniapp-shell:has(.miniapp-ai-chat-backdrop-general) .miniapp-premium-topbar-floating {
+  display: none;
+}
+/* Restrained paint work during chat scroll: keep the gradient, remove
+   repeated shadow/blur calculations on rapidly moving message bubbles. */
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-message-general {
+  box-shadow: none;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-general .miniapp-ai-chat-composer-card-general {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+/* Notes: one gradient on the safe-area. Avoid height animation reflows that
+   trigger feedback loops in the notes scroll listener. */
+@media (max-width:639px) {
+  .standalone-notes-mobile.standalone-notes-telegram::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: var(--miniapp-top-inset, 0px);
+    pointer-events: none;
+    z-index: 8;
+    background: linear-gradient(to bottom, rgba(27, 41, 65, .36), transparent);
+  }
+  .standalone-notes-telegram .standalone-notes-board-filters {
+    transition: opacity .12s ease !important;
+  }
+  .standalone-notes-telegram .standalone-notes-board-filters.standalone-notes-filters-collapsed {
+    display: none;
+  }
+}
+/* A selected tab is indicated solely by violet icon and label. The
+   rectangular touch-focus background must never stick after navigation. */
+.miniapp-shell.miniapp-light .miniapp-bottom-navigation-item,
+.miniapp-shell.miniapp-light .miniapp-bottom-navigation-item:is(:hover, :active, :focus, :focus-visible) {
+  background: none !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+.miniapp-shell.miniapp-light .miniapp-bottom-navigation-item.is-active .miniapp-bottom-navigation-icon {
+  background: transparent !important;
+}
