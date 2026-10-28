@@ -233,6 +233,29 @@ test('Telegram native selectors and safe-area colors do not alter mobile web cha
   assert.match(css, /\.standalone-notes-telegram-brand/);
 });
 
+test('Telegram project picker, navigation and attachment theme refinements remain isolated', async () => {
+  const [mini, css] = await Promise.all([
+    read('../../client/src/MiniApp.tsx'),
+    read('../../client/src/styles.css')
+  ]);
+  // Project icons use the SVG already rendered in the full-size sidebar.
+  assert.match(mini, /miniapp-telegram-picker-project-icon[^\n]*project\.icon === 'telegram' \? <svg/);
+  assert.doesNotMatch(mini, /project\.icon === 'telegram' \? '✈'/);
+  // Telegram WebView uses focus-safe accessible controls; mobile web remains a button.
+  assert.match(mini, /MiniNavigationControl = isTelegramRuntime \? 'div' : 'button'/);
+  assert.match(mini, /handleMiniNavigationKeyDown/);
+  assert.equal((mini.match(/<MiniNavigationControl role=/g) ?? []).length, 4);
+  assert.match(css, /\.miniapp-shell\.miniapp-telegram-fullscreen \.miniapp-bottom-navigation-item \{/);
+  assert.match(css, /-webkit-tap-highlight-color: transparent !important/);
+  // Miniapp side menu is below Telegram system controls.
+  assert.match(css, /\.miniapp-shell\.miniapp-telegram-fullscreen \.miniapp-ai-chat-menu \{[\s\S]*?padding-top: calc\(var\(--miniapp-top-inset, 0px\) \+ \.7rem\)/);
+  // Menus transition with transforms rather than animating layout height.
+  assert.match(css, /@keyframes miniapp-telegram-picker-appear/);
+  assert.match(css, /prefers-reduced-motion: reduce/);
+  // General chat attach button is themed independently of light mode.
+  assert.match(css, /\.miniapp-shell:not\(\.miniapp-light\) \.miniapp-ai-chat-panel-general \.miniapp-ai-chat-attach \{/);
+});
+
 test('fullscreen search and all four tabs respect safe areas and keep the shared navigation', async () => {
   const [mini, styles, notes] = await Promise.all([
     read('../../client/src/MiniApp.tsx'),
