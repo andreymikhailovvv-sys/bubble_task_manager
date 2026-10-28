@@ -55,7 +55,7 @@ test('workspace tools remain below dialogs and the credits popover on both compa
   const openRule = css.match(/\.miniapp-workspace-tools\.is-filter-menu-open \{([^}]+)\}/)?.[1] ?? '';
   const normalLayer = Number(toolbarRule.match(/z-index:\s*(\d+)/)?.[1]);
   const openLayer = Number(openRule.match(/z-index:\s*(\d+)/)?.[1]);
-  const headerLayer = Number(mini.match(/relative z-(\d+) miniapp-premium-topbar rounded-xl/)?.[1]);
+  const headerLayer = Number(mini.match(/sticky z-(\d+) miniapp-premium-topbar rounded-xl/)?.[1]);
   const createTaskLayer = Number(mini.match(/miniapp-slide-backdrop fixed inset-0 z-(\d+) flex items-end/)?.[1]);
   assert.equal(normalLayer, 1);
   assert.ok(normalLayer < openLayer && openLayer < headerLayer);
