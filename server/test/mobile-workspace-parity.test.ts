@@ -144,17 +144,22 @@ test('fullscreen search and all four tabs respect safe areas and keep the shared
     read('../../client/src/styles.css'),
     read('../../client/src/components/StandaloneNotesWorkspace.tsx')
   ]);
-  assert.match(mini, /className="relative z-30 miniapp-premium-topbar/);
-  assert.doesNotMatch(mini, /sticky top-0 z-30 miniapp-premium-topbar/);
+  assert.match(mini, /sticky z-30 miniapp-premium-topbar/);
+  assert.match(mini, /isHeaderVisible \|\| isGlobalSearchOpen/);
+  assert.doesNotMatch(mini, /className="relative z-30 miniapp-premium-topbar/);
   assert.match(mini, /isAiChatOpen && !isStandaloneNotesOpen \? 'is-active'/);
   assert.match(mini, /isStandaloneNotesOpen \? 'is-active'/);
   assert.match(mini, /setIsAiChatOpen\(false\); setIsStandaloneNotesOpen\(false\)/);
   assert.match(mini, /mobileSafeAreaTop=\{telegramViewport\.top\}/);
   assert.match(notes, /style=\{mode === 'mobile' \?/);
   assert.match(styles, /\.miniapp-shell \.miniapp-bottom-navigation \{\s*z-index: 260/);
-  assert.match(styles, /\.miniapp-shell \.miniapp-ai-chat-backdrop-general \{\s*top: var\(--miniapp-top-inset/);
-  assert.match(styles, /\.miniapp-shell \.miniapp-ai-chat-panel-general \.miniapp-ai-chat-header-general \{\s*position: relative/);
-  assert.match(styles, /\.standalone-notes-mobile \{\s*top: var\(--miniapp-top-inset/);
+  assert.match(styles, /\.miniapp-shell \.miniapp-ai-chat-backdrop-general \{\s*top: 0;/);
+  assert.match(styles, /\.miniapp-shell \.miniapp-ai-chat-panel-general \.miniapp-ai-chat-header-general \{\s*position: absolute/);
+  assert.match(styles, /\.miniapp-ai-chat-header-general\.miniapp-ai-chat-header-hidden/);
+  assert.match(styles, /\.standalone-notes-mobile \{\s*top: 0;/);
+  assert.match(styles, /background: #f5f8ff !important/);
+  assert.match(styles, /background: #f8fafc !important/);
+  assert.match(styles, /miniapp-bottom-navigation-item:is\(:hover, :active, :focus\)/);
   assert.match(styles, /\.standalone-notes-mobile \.standalone-notes-board \{\s*height: 100%/);
 });
 
