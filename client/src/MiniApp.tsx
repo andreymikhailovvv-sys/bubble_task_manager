@@ -737,7 +737,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [timelineNow, setTimelineNow] = useState(() => new Date());
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [timelineView, setTimelineView] = useState<TimelineView>('month');
-  const [isHeaderVisible, setIsHeaderVisible] = useState(true);
+  const [, setIsHeaderVisible] = useState(true);
   const [openedTaskId, setOpenedTaskId] = useState<string | null>(null);
   const [openedSubtaskId, setOpenedSubtaskId] = useState<string | null>(null);
   const openedTaskContentsScrollRef = useRef<HTMLDivElement | null>(null);
