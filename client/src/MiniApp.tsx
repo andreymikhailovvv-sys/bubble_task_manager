@@ -1,5 +1,5 @@
 import { prepareAiChatImageFile } from './lib/ai-image-upload';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, MessageCircle, Minus, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, StickyNote, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, stripAiChatProjectDisplayPreviews, type CreditPack, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus, type StandaloneNote } from './lib/api';
@@ -3644,7 +3644,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   // after navigation. An accessible non-native control avoids that artifact;
   // browser/mobile-web continues using its native button.
   const MiniNavigationControl = isTelegramRuntime ? 'div' : 'button';
-  const handleMiniNavigationKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+  const handleMiniNavigationKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
     if (isTelegramRuntime && (event.key === 'Enter' || event.key === ' ')) {
       event.preventDefault();
       event.currentTarget.click();
