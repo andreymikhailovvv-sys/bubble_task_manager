@@ -10590,7 +10590,7 @@ body[data-theme='light'] .upcoming-subtasks-list .upcoming-subtask-row:hover {
   padding-top: calc(1rem + var(--miniapp-top-inset, env(safe-area-inset-top, 0px))) !important;
 }
 .miniapp-shell.miniapp-telegram-fullscreen .miniapp-premium-topbar {
-  top: var(--miniapp-top-inset, 0px);
+  top: auto;
 }
 .miniapp-shell.miniapp-telegram-fullscreen .miniapp-slide-backdrop {
   padding-top: var(--miniapp-top-inset, 0px);
@@ -10700,13 +10700,26 @@ body[data-theme='light'] .upcoming-subtasks-list .upcoming-subtask-row:hover {
   .miniapp-shell .miniapp-workspace-tools-compact .miniapp-workspace-actions { gap: .3rem; }
 }
 
-/* The toolbar starts in page flow, then sticks within Telegram's safe area
-   only while the user scrolls upwards. No doubled top padding at page start. */
-.miniapp-shell .miniapp-premium-topbar {
-  top: 0;
+/* Search always starts at its natural position above habits/timeline.
+   Once it has completely scrolled away, upward scroll temporarily promotes
+   the SAME toolbar to a fixed overlay without moving the other content. */
+.miniapp-shell .miniapp-premium-topbar-slot { position: relative; }
+.miniapp-shell .miniapp-premium-topbar { top: auto; }
+.miniapp-shell .miniapp-premium-topbar-floating,
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-premium-topbar-floating {
+  position: fixed;
+  top: calc(var(--miniapp-top-inset, 0px) + .5rem);
+  left: 50%;
+  right: auto;
+  width: calc(100vw - 2rem);
+  max-width: 42rem;
+  z-index: 120;
+  transform: translateX(-50%);
+  animation: miniapp-search-float-in .17s ease-out both;
 }
-.miniapp-shell.miniapp-telegram-fullscreen .miniapp-premium-topbar {
-  top: var(--miniapp-top-inset, 0px);
+@keyframes miniapp-search-float-in {
+  from { opacity: 0; transform: translate(-50%, -.65rem); }
+  to { opacity: 1; transform: translate(-50%, 0); }
 }
 
 /* This is shared navigation across the four primary views, not an overlay

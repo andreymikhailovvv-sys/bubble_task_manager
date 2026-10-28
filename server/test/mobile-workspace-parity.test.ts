@@ -55,7 +55,7 @@ test('workspace tools remain below dialogs and the credits popover on both compa
   const openRule = css.match(/\.miniapp-workspace-tools\.is-filter-menu-open \{([^}]+)\}/)?.[1] ?? '';
   const normalLayer = Number(toolbarRule.match(/z-index:\s*(\d+)/)?.[1]);
   const openLayer = Number(openRule.match(/z-index:\s*(\d+)/)?.[1]);
-  const headerLayer = Number(mini.match(/sticky z-(\d+) miniapp-premium-topbar rounded-xl/)?.[1]);
+  const headerLayer = Number(mini.match(/relative z-(\d+) miniapp-premium-topbar rounded-xl/)?.[1]);
   const createTaskLayer = Number(mini.match(/miniapp-slide-backdrop fixed inset-0 z-(\d+) flex items-end/)?.[1]);
   assert.equal(normalLayer, 1);
   assert.ok(normalLayer < openLayer && openLayer < headerLayer);
@@ -144,9 +144,15 @@ test('fullscreen search and all four tabs respect safe areas and keep the shared
     read('../../client/src/styles.css'),
     read('../../client/src/components/StandaloneNotesWorkspace.tsx')
   ]);
-  assert.match(mini, /sticky z-30 miniapp-premium-topbar/);
-  assert.match(mini, /isHeaderVisible \|\| isGlobalSearchOpen/);
-  assert.doesNotMatch(mini, /className="relative z-30 miniapp-premium-topbar/);
+  assert.match(mini, /ref=\{searchBarSlotRef\} className="miniapp-premium-topbar-slot"/);
+  assert.match(mini, /section ref=\{searchBarPanelRef\} className=\{\`relative z-30 miniapp-premium-topbar/);
+  assert.match(mini, /isSearchBarFloating && \(isHeaderVisible \|\| isGlobalSearchOpen\)/);
+  assert.match(mini, /originalSearchIsPastTop/);
+  assert.match(mini, /setIsSearchBarFloating\(false\)/);
+  assert.match(mini, /setIsSearchBarFloating\(true\)/);
+  assert.match(styles, /\.miniapp-shell \.miniapp-premium-topbar-floating,[\s\S]*?position: fixed/);
+  assert.match(styles, /top: calc\(var\(--miniapp-top-inset, 0px\) \+ \.5rem\)/);
+  assert.doesNotMatch(mini, /sticky z-30 miniapp-premium-topbar/);
   assert.match(mini, /isAiChatOpen && !isStandaloneNotesOpen \? 'is-active'/);
   assert.match(mini, /isStandaloneNotesOpen \? 'is-active'/);
   assert.match(mini, /setIsAiChatOpen\(false\); setIsStandaloneNotesOpen\(false\)/);

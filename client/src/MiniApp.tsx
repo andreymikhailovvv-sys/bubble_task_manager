@@ -738,6 +738,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [timelineView, setTimelineView] = useState<TimelineView>('month');
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
+  // The original search toolbar stays in document flow. Only a later upward
+  // scroll can turn that same toolbar into a floating, safe-area-aware panel.
+  const [isSearchBarFloating, setIsSearchBarFloating] = useState(false);
+  const [floatingSearchBarHeight, setFloatingSearchBarHeight] = useState(0);
   const [openedTaskId, setOpenedTaskId] = useState<string | null>(null);
   const [openedSubtaskId, setOpenedSubtaskId] = useState<string | null>(null);
   const openedTaskContentsScrollRef = useRef<HTMLDivElement | null>(null);
@@ -816,6 +820,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const taskAiChatScrollTopRef = useRef(0);
   const [isTaskAiChatHeaderHidden, setIsTaskAiChatHeaderHidden] = useState(false);
   const mainScrollRef = useRef<HTMLElement | null>(null);
+  const searchBarSlotRef = useRef<HTMLDivElement | null>(null);
+  const searchBarPanelRef = useRef<HTMLElement | null>(null);
+  const mainScrollIntentRef = useRef(0);
   const timelineGridRef = useRef<HTMLDivElement | null>(null);
   const lastMainScrollTopRef = useRef(0);
   const taskAiDraftValueRef = useRef('');
@@ -3642,16 +3649,42 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         setIsSettingsOpen(false);
         setIsCreditPurchaseOpen(false);
         const nextTop = event.currentTarget.scrollTop;
-        if (isGlobalSearchOpen) {
+        const previousTop = lastMainScrollTopRef.current;
+        const delta = nextTop - previousTop;
+        lastMainScrollTopRef.current = nextTop;
+
+        // Never position the initial search bar using sticky: Telegram's
+        // fullscreen top inset otherwise shifts it over the habits card.
+        const slotBottom = searchBarSlotRef.current?.getBoundingClientRect().bottom ?? Infinity;
+        const originalSearchIsPastTop = slotBottom < (telegramViewport.fullscreen ? telegramViewport.top : 0) + 2;
+        if (nextTop <= 8 || !originalSearchIsPastTop) {
+          mainScrollIntentRef.current = 0;
           setIsHeaderVisible(true);
-          lastMainScrollTopRef.current = nextTop;
+          setIsSearchBarFloating(false);
           return;
         }
-        const prevTop = lastMainScrollTopRef.current;
-        if (nextTop <= 8) setIsHeaderVisible(true);
-        else if (nextTop > prevTop + 6) setIsHeaderVisible(false);
-        else if (nextTop < prevTop - 6) setIsHeaderVisible(true);
-        lastMainScrollTopRef.current = nextTop;
+
+        if (isGlobalSearchOpen) {
+          setIsHeaderVisible(true);
+          setFloatingSearchBarHeight(searchBarPanelRef.current?.offsetHeight ?? 0);
+          setIsSearchBarFloating(true);
+          return;
+        }
+
+        // Accumulate small touch scroll events so reverse scrolling triggers
+        // reliably even when each individual event is shorter than 6px.
+        if (delta === 0) return;
+        const previousIntent = mainScrollIntentRef.current;
+        mainScrollIntentRef.current = Math.sign(previousIntent) === Math.sign(delta)
+          ? previousIntent + delta : delta;
+        if (mainScrollIntentRef.current <= -10) {
+          setFloatingSearchBarHeight(searchBarPanelRef.current?.offsetHeight ?? 0);
+          setIsHeaderVisible(true);
+          setIsSearchBarFloating(true);
+        } else if (mainScrollIntentRef.current >= 10) {
+          setIsHeaderVisible(false);
+          setIsSearchBarFloating(false);
+        }
       }}
       onTouchMove={() => {
         setIsEfficiencyDetailsOpen(false);
@@ -3759,7 +3792,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         </div>, document.body
       ) : null}
       <div className="mx-auto max-w-2xl space-y-4">
-        <section className={`sticky z-30 miniapp-premium-topbar rounded-xl border border-slate-700 bg-slate-900/95 p-2.5 backdrop-blur transition-transform duration-200 ${isHeaderVisible || isGlobalSearchOpen ? 'translate-y-0' : '-translate-y-[130%]'}`}>
+        <div ref={searchBarSlotRef} className="miniapp-premium-topbar-slot"
+          style={isSearchBarFloating ? { minHeight: floatingSearchBarHeight || undefined } : undefined}>
+        <section ref={searchBarPanelRef} className={`relative z-30 miniapp-premium-topbar rounded-xl border border-slate-700 bg-slate-900/95 p-2.5 backdrop-blur ${isSearchBarFloating && (isHeaderVisible || isGlobalSearchOpen) ? 'miniapp-premium-topbar-floating' : ''}`}>
           <div className="flex items-center gap-2">
             <WorkspaceGlobalSearch
               mobile
@@ -3852,6 +3887,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             </div>
           </div>
         </section>
+        </div>
 
         {error ? (
           <div className="rounded-xl border border-rose-500/60 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</div>
