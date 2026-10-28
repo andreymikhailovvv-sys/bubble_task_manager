@@ -737,7 +737,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [timelineNow, setTimelineNow] = useState(() => new Date());
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [timelineView, setTimelineView] = useState<TimelineView>('month');
-  const [, setIsHeaderVisible] = useState(true);
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [openedTaskId, setOpenedTaskId] = useState<string | null>(null);
   const [openedSubtaskId, setOpenedSubtaskId] = useState<string | null>(null);
   const openedTaskContentsScrollRef = useRef<HTMLDivElement | null>(null);
@@ -3759,7 +3759,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         </div>, document.body
       ) : null}
       <div className="mx-auto max-w-2xl space-y-4">
-        <section className="relative z-30 miniapp-premium-topbar rounded-xl border border-slate-700 bg-slate-900/95 p-2.5 backdrop-blur">
+        <section className={`sticky z-30 miniapp-premium-topbar rounded-xl border border-slate-700 bg-slate-900/95 p-2.5 backdrop-blur transition-transform duration-200 ${isHeaderVisible || isGlobalSearchOpen ? 'translate-y-0' : '-translate-y-[130%]'}`}>
           <div className="flex items-center gap-2">
             <WorkspaceGlobalSearch
               mobile
