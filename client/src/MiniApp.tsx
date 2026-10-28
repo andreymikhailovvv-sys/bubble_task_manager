@@ -4875,7 +4875,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       {openedTask && isAiDialogOpen ? (
         <div className={`miniapp-ai-chat-backdrop miniapp-ai-chat-backdrop-task miniapp-slide-backdrop fixed inset-0 ${isAiChatOpen ? 'z-[130]' : 'z-[110]'} bg-slate-950/75 p-0 ${getMiniWindowMotionClass('task-ai')}`}>
           <div className="miniapp-ai-chat-panel miniapp-ai-chat-panel-task miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100">
-            {isTelegramRuntime ? <div className="miniapp-task-ai-monitor-telegram">{taskMonitoringControl}</div> : null}
+            {useTelegramCompactChatHeader ? <div className="miniapp-task-ai-monitor-telegram">{taskMonitoringControl}</div> : null}
             <div className={`miniapp-ai-chat-header miniapp-ai-chat-header-task ${isTelegramRuntime ? 'miniapp-ai-chat-header-telegram-task' : ''} flex items-center justify-between gap-2 p-3 ${isTaskAiChatHeaderHidden ? 'miniapp-ai-chat-header-hidden' : ''}`}>
               {isTelegramRuntime ? (
                 <>
@@ -4883,7 +4883,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <span className="miniapp-task-ai-title min-w-0 flex-1 truncate text-sm font-semibold text-primary" title={openedTask.title}>{openedTask.title}</span>
                 </>
               ) : <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary">Помощь ИИ</h2>}
-              {!isTelegramRuntime ? taskMonitoringControl : null}
+              {!useTelegramCompactChatHeader ? taskMonitoringControl : null}
               <button type="button" onClick={() => closeMiniWindowWithMotion('task-ai', () => setIsAiDialogOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть диалог с ИИ"><X size={18} /></button>
               <select value={selectedAiChatModel} onChange={(event) => setSelectedAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap w-40 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель помощи ИИ">
                 {AI_CHAT_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
