@@ -3759,7 +3759,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         </div>, document.body
       ) : null}
       <div className="mx-auto max-w-2xl space-y-4">
-        <section className={`sticky top-0 z-30 miniapp-premium-topbar rounded-xl border border-slate-700 bg-slate-900/95 p-2.5 backdrop-blur transition-transform duration-200 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-[130%]'}`}>
+        <section className="relative z-30 miniapp-premium-topbar rounded-xl border border-slate-700 bg-slate-900/95 p-2.5 backdrop-blur">
           <div className="flex items-center gap-2">
             <WorkspaceGlobalSearch
               mobile
@@ -4241,26 +4241,28 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         )}
       </div>
 
-      <nav className="miniapp-bottom-navigation" aria-label="Разделы Планировыча">
-        <button type="button" className={`miniapp-bottom-navigation-item ${displayMode === 'list' ? 'is-active' : ''}`}
-          aria-current={displayMode === 'list' ? 'page' : undefined}
-          onClick={() => { setDisplayMode('list'); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); }}>
+      <nav className={`miniapp-bottom-navigation ${openedTaskId || openedSubtaskId || isCreateTaskModalOpen || isHabitModalOpen || isAiDialogOpen ? 'miniapp-bottom-navigation-hidden' : ''}`} aria-label="Разделы Планировыча">
+        <button type="button" className={`miniapp-bottom-navigation-item ${!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'list' ? 'is-active' : ''}`}
+          aria-current={!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'list' ? 'page' : undefined}
+          onClick={() => { setIsAiChatOpen(false); setIsStandaloneNotesOpen(false); setIsAiChatMenuOpen(false); setDisplayMode('list'); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); }}>
           <span className="miniapp-bottom-navigation-icon"><List size={20} strokeWidth={2} /></span>
           <span>Список</span>
         </button>
-        <button type="button" className={`miniapp-bottom-navigation-item ${displayMode === 'timeline' ? 'is-active' : ''}`}
-          aria-current={displayMode === 'timeline' ? 'page' : undefined}
-          onClick={() => { setDisplayMode('timeline'); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); }}>
+        <button type="button" className={`miniapp-bottom-navigation-item ${!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'timeline' ? 'is-active' : ''}`}
+          aria-current={!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'timeline' ? 'page' : undefined}
+          onClick={() => { setIsAiChatOpen(false); setIsStandaloneNotesOpen(false); setIsAiChatMenuOpen(false); setDisplayMode('timeline'); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); }}>
           <span className="miniapp-bottom-navigation-icon"><CalendarDays size={20} strokeWidth={2} /></span>
           <span>Таймлайн</span>
         </button>
-        <button type="button" className="miniapp-bottom-navigation-item"
-          onClick={() => { setIsQuickCreateOpen(false); setIsAiChatMenuOpen(false); setClosingMiniWindow(null); setIsAiChatOpen(true); }}>
+        <button type="button" className={`miniapp-bottom-navigation-item ${isAiChatOpen && !isStandaloneNotesOpen ? 'is-active' : ''}`}
+          aria-current={isAiChatOpen && !isStandaloneNotesOpen ? 'page' : undefined}
+          onClick={() => { setIsStandaloneNotesOpen(false); setIsQuickCreateOpen(false); setIsAiChatMenuOpen(false); setClosingMiniWindow(null); setIsAiChatOpen(true); }}>
           <span className="miniapp-bottom-navigation-icon"><Bot size={20} strokeWidth={2} /></span>
           <span>Чат с ИИ</span>
         </button>
-        <button type="button" className="miniapp-bottom-navigation-item"
-          onClick={() => { setIsQuickCreateOpen(false); setRequestedStandaloneNote(null); setIsStandaloneNotesOpen(true); }}>
+        <button type="button" className={`miniapp-bottom-navigation-item ${isStandaloneNotesOpen ? 'is-active' : ''}`}
+          aria-current={isStandaloneNotesOpen ? 'page' : undefined}
+          onClick={() => { setIsAiChatOpen(false); setIsAiChatMenuOpen(false); setIsQuickCreateOpen(false); setRequestedStandaloneNote(null); setIsStandaloneNotesOpen(true); }}>
           <span className="miniapp-bottom-navigation-icon"><StickyNote size={20} strokeWidth={2} /></span>
           <span>Заметки</span>
         </button>
@@ -4888,7 +4890,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         </div>
       ) : null}
 
-      <div className={`miniapp-quick-create fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2 ${isQuickCreateOpen ? 'is-open' : ''}`}>
+      <div className={`miniapp-quick-create fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2 ${isQuickCreateOpen ? 'is-open' : ''} ${isAiChatOpen || isStandaloneNotesOpen ? 'miniapp-quick-create-hidden' : ''}`}>
         <div className="miniapp-quick-create-actions flex flex-col items-end gap-2" aria-hidden={!isQuickCreateOpen}>
           <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={() => { setIsQuickCreateOpen(false); openCreateTaskModal(undefined, 'event'); }} className="miniapp-quick-create-action miniapp-quick-create-event inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
             <span>Добавить событие</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><CalendarDays size={18} /></span>
@@ -5476,6 +5478,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       {isStandaloneNotesOpen && currentUser ? (
         <StandaloneNotesWorkspace key={currentUser.id} userId={currentUser.id}
           requestedNote={requestedStandaloneNote}
+          mobileSafeAreaTop={telegramViewport.top} mobileSafeAreaBottom={telegramViewport.bottom}
           mode="mobile" onClose={() => { setIsStandaloneNotesOpen(false); setRequestedStandaloneNote(null); }} />
       ) : null}
 
