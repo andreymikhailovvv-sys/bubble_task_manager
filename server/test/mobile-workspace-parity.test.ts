@@ -22,14 +22,17 @@ test('Telegram Mini App and compact mobile browser render the same workspace com
   assert.deepEqual([old, fresh].sort(urgentFocusSubtaskFirst).map(item => item.id), ['fresh', 'old']);
 });
 
-test('one toolbar on both list and timeline offers notes, disabled optimize and accessible filters', async () => {
+test('compact toolbar retains postponed actions and accessible filters; notes move to the bottom navigation', async () => {
   const [mini, toolbar, styles] = await Promise.all([
     read('../../client/src/MiniApp.tsx'),
     read('../../client/src/components/MiniWorkspaceTools.tsx'),
     read('../../client/src/styles.css')
   ]);
   assert.equal((mini.match(/<MiniWorkspaceTools/g) ?? []).length, 2);
-  assert.match(toolbar, /aria-label="Открыть заметки"/);
+  assert.match(toolbar, /miniapp-workspace-tools-compact/);
+  assert.doesNotMatch(toolbar, /miniapp-workspace-tool-notes|onNotesOpen/);
+  assert.match(mini, /miniapp-bottom-navigation/);
+  assert.match(mini, /<span>Заметки<\/span>/);
   assert.match(toolbar, /disabled aria-disabled="true"/);
   assert.match(toolbar, /aria-label="Фильтры задач"/);
   assert.match(toolbar, /aria-expanded=\{open\}/);
@@ -39,7 +42,6 @@ test('one toolbar on both list and timeline offers notes, disabled optimize and 
   assert.match(toolbar, /onPointerDown/);
   assert.match(toolbar, /onEscape/);
   assert.match(styles, /\.miniapp-workspace-filter-panel/);
-  assert.match(styles, /body\[data-theme='light'\] \.miniapp-shell \.miniapp-workspace-tool/);
   assert.doesNotMatch(mini, /isListSphereFilterOpen/);
 });
 
@@ -63,19 +65,18 @@ test('workspace tools remain below dialogs and the credits popover on both compa
   assert.match(toolbar, /miniapp-workspace-filter-panel absolute right-0[^"]*z-\[180\]/);
 });
 
-test('notes and filters are neutral; disabled optimize uses rose in both themes', async () => {
+test('compact toolbar retains themed controls and bottom navigation in both themes', async () => {
   const [toolbar, css] = await Promise.all([
     read('../../client/src/components/MiniWorkspaceTools.tsx'),
     read('../../client/src/styles.css')
   ]);
-  assert.match(toolbar, /miniapp-workspace-tool-notes/);
   assert.match(toolbar, /miniapp-workspace-tool-filter/);
   assert.match(toolbar, /miniapp-workspace-tool-optimize/);
   assert.match(toolbar, /disabled aria-disabled="true"/);
   assert.match(css, /\.miniapp-workspace-tool \{[^}]*background: rgba\(100, 116, 139, \.16\);[^}]*color: #cbd5e1;/);
   assert.match(css, /\.miniapp-workspace-tool-optimize \{[^}]*background: rgba\(244, 63, 94, \.15\);[^}]*color: #fda4af;/);
-  assert.match(css, /body\[data-theme='light'\] \.miniapp-shell \.miniapp-workspace-tool,\s*\.miniapp-shell\.miniapp-light \.miniapp-workspace-tool \{[^}]*color: #475569;/);
-  assert.match(css, /body\[data-theme='light'\] \.miniapp-shell \.miniapp-workspace-tool-optimize,\s*\.miniapp-shell\.miniapp-light \.miniapp-workspace-tool-optimize \{[^}]*color: #be123c;/);
+  assert.match(css, /\.miniapp-shell\.miniapp-light \.miniapp-bottom-navigation/);
+  assert.match(css, /\.miniapp-shell \.miniapp-workspace-tools-compact/);
 });
 
 test('compact and Telegram notes share web CRUD, grouping, autosave and rich-text editor', async () => {
@@ -108,26 +109,31 @@ test('fresh mobile browser navigations receive current app HTML rather than cach
 });
 
 
-test('compact premium toolbar keeps symmetric mode/filter and note/postpone/optimize rows in both displays', async () => {
+test('Telegram fullscreen uses safe insets and bottom tabs replace the old display switch', async () => {
   const [mini, tools, styles] = await Promise.all([
     read('../../client/src/MiniApp.tsx'),
     read('../../client/src/components/MiniWorkspaceTools.tsx'),
     read('../../client/src/styles.css')
   ]);
   assert.equal((mini.match(/<MiniWorkspaceTools/g) ?? []).length, 2);
-  assert.equal((mini.match(/onDisplayModeChange=\{setDisplayMode\}/g) ?? []).length, 2);
   assert.equal((mini.match(/onPostpone=\{\(\) => void postponeAllOverdueToToday\(\)\}/g) ?? []).length, 2);
-  const topStart = tools.indexOf('className="miniapp-workspace-primary"');
-  const filterStart = tools.indexOf('ref={rootRef}', topStart);
-  const bottomStart = tools.indexOf('className="miniapp-workspace-actions"', filterStart);
-  assert.ok(topStart > 0 && filterStart > topStart && bottomStart > filterStart);
-  assert.match(tools.slice(topStart, filterStart), /Режим отображения/);
-  assert.match(tools.slice(filterStart, bottomStart), /Фильтры задач/);
-  assert.match(tools.slice(bottomStart), /Заметки/);
-  assert.match(tools.slice(bottomStart), /Отложить/);
-  assert.match(tools.slice(bottomStart), /Оптимизировать/);
-  assert.match(styles, /\.miniapp-shell \.miniapp-workspace-primary \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\) 2\.7rem/);
-  assert.match(styles, /\.miniapp-shell \.miniapp-workspace-actions \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1\.05fr\) minmax\(0, 1\.48fr\)/);
+  assert.doesNotMatch(tools, /display-mode-toggle-group|onDisplayModeChange/);
+  assert.match(mini, /webApp\.requestFullscreen\?\.\(\)/);
+  assert.match(mini, /safeAreaChanged/);
+  assert.match(mini, /contentSafeAreaChanged/);
+  assert.match(mini, /const fullscreenClass = isTelegramRuntime/);
+  assert.match(mini, /aria-label="Разделы Планировыча"/);
+  assert.match(mini, /<span>Список<\/span>/);
+  assert.match(mini, /<span>Таймлайн<\/span>/);
+  assert.match(mini, /<span>Чат с ИИ<\/span>/);
+  assert.match(mini, /<span>Заметки<\/span>/);
+  assert.match(mini, /setDisplayMode\('list'\)/);
+  assert.match(mini, /setDisplayMode\('timeline'\)/);
+  assert.match(mini, /setIsAiChatOpen\(true\)/);
+  assert.match(mini, /setIsStandaloneNotesOpen\(true\)/);
+  assert.match(styles, /\.miniapp-shell\.miniapp-telegram-fullscreen/);
+  assert.match(styles, /\.miniapp-bottom-navigation/);
+  assert.match(styles, /\.miniapp-workspace-tools-compact/);
   assert.match(mini, /miniapp-premium-timeline/);
   assert.match(mini, /miniapp-premium-habits/);
 });

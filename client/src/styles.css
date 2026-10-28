@@ -10579,3 +10579,123 @@ body[data-theme='light'] .upcoming-subtasks-list .upcoming-subtask-row:hover {
   border-color: rgba(186, 202, 226, .9);
   box-shadow: 0 12px 26px rgba(25, 48, 84, .1);
 }
+
+/* Telegram fullscreen and Android-like bottom navigation.
+   Shared tabs also work in the browser mobile view; fullscreen is Telegram-only. */
+.miniapp-shell {
+  height: 100dvh;
+  padding-bottom: calc(6.15rem + var(--miniapp-bottom-inset, env(safe-area-inset-bottom, 0px))) !important;
+}
+.miniapp-shell.miniapp-telegram-fullscreen {
+  padding-top: calc(1rem + var(--miniapp-top-inset, env(safe-area-inset-top, 0px))) !important;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-premium-topbar {
+  top: var(--miniapp-top-inset, 0px);
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-slide-backdrop {
+  padding-top: var(--miniapp-top-inset, 0px);
+}
+.miniapp-shell .miniapp-bottom-navigation {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 35;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .2rem;
+  padding: .6rem .65rem calc(.5rem + var(--miniapp-bottom-inset, env(safe-area-inset-bottom, 0px)));
+  border-top: 1px solid rgba(148, 163, 184, .2);
+  background: rgba(15, 23, 42, .88);
+  box-shadow: 0 -8px 24px rgba(2, 6, 23, .09);
+  backdrop-filter: blur(16px) saturate(1.08);
+  -webkit-backdrop-filter: blur(16px) saturate(1.08);
+}
+.miniapp-shell.miniapp-light .miniapp-bottom-navigation {
+  border-top-color: rgba(203, 213, 225, .75);
+  background: rgba(255, 255, 255, .9);
+  box-shadow: 0 -8px 24px rgba(30, 41, 59, .045);
+}
+.miniapp-shell .miniapp-bottom-navigation-item {
+  display: flex;
+  min-width: 0;
+  min-height: 3.5rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .22rem;
+  padding: .1rem 0;
+  color: #a5b4c9;
+  font-size: .68rem;
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+.miniapp-shell.miniapp-light .miniapp-bottom-navigation-item { color: #64748b; }
+.miniapp-shell .miniapp-bottom-navigation-icon {
+  display: flex;
+  width: 3.4rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1.2rem;
+  transition: background-color .15s ease, color .15s ease;
+}
+.miniapp-shell .miniapp-bottom-navigation-item.is-active { color: #c4b5fd; }
+.miniapp-shell .miniapp-bottom-navigation-item.is-active .miniapp-bottom-navigation-icon {
+  background: rgba(139, 92, 246, .2);
+}
+.miniapp-shell.miniapp-light .miniapp-bottom-navigation-item.is-active { color: #6d28d9; }
+.miniapp-shell.miniapp-light .miniapp-bottom-navigation-item.is-active .miniapp-bottom-navigation-icon {
+  background: rgba(139, 92, 246, .15);
+}
+.miniapp-shell .miniapp-bottom-navigation-item:focus-visible {
+  outline: 2px solid #8b5cf6;
+  outline-offset: -2px;
+  border-radius: 1rem;
+}
+.miniapp-shell .miniapp-quick-create {
+  bottom: calc(5.55rem + var(--miniapp-bottom-inset, env(safe-area-inset-bottom, 0px)));
+}
+/* Keep keyboard focus and app controls unobstructed. */
+.miniapp-shell:has(input:focus, textarea:focus, [contenteditable="true"]:focus) .miniapp-bottom-navigation {
+  display: none;
+}
+.miniapp-shell .miniapp-workspace-toolbar-card { padding: .65rem; }
+.miniapp-shell .miniapp-workspace-tools-compact { gap: 0; }
+.miniapp-shell .miniapp-workspace-tools-compact .miniapp-workspace-actions {
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: .5rem;
+}
+.miniapp-shell .miniapp-workspace-tools-compact .miniapp-workspace-filter-anchor { min-width: 0; }
+.miniapp-shell .miniapp-workspace-tools-compact .miniapp-workspace-filter-anchor > .miniapp-workspace-tool-filter {
+  display: inline-flex;
+  width: 100%;
+  height: 2.7rem;
+  min-height: 2.7rem;
+  align-items: center;
+  justify-content: center;
+  gap: .3rem;
+  padding: 0 .25rem;
+  border-radius: .88rem;
+  font-size: .73rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.miniapp-shell .miniapp-workspace-tools-compact .miniapp-workspace-filter-panel {
+  right: 0;
+  max-width: calc(100vw - 2rem);
+}
+.miniapp-shell .miniapp-workspace-tools-compact .miniapp-workspace-actions > button,
+.miniapp-shell .miniapp-workspace-tools-compact .miniapp-workspace-filter-anchor > button {
+  font-size: clamp(.65rem, 2.8vw, .77rem);
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-header {
+  padding-top: calc(.75rem + var(--miniapp-top-inset, 0px));
+}
+@media (max-width: 360px) {
+  .miniapp-shell .miniapp-bottom-navigation { gap: 0; padding-right: .3rem; padding-left: .3rem; }
+  .miniapp-shell .miniapp-bottom-navigation-item { font-size: .61rem; }
+  .miniapp-shell .miniapp-workspace-tools-compact .miniapp-workspace-actions { gap: .3rem; }
+}

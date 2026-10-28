@@ -68,6 +68,12 @@ type TelegramWebApp = {
   platform?: string;
   ready?: () => void;
   expand?: () => void;
+  requestFullscreen?: () => void;
+  isFullscreen?: boolean;
+  safeAreaInset?: { top?: number; bottom?: number };
+  contentSafeAreaInset?: { top?: number; bottom?: number };
+  onEvent?: (event: string, callback: () => void) => void;
+  offEvent?: (event: string, callback: () => void) => void;
   openLink?: (url: string) => void;
   downloadFile?: (params: { url: string; file_name: string }, callback?: (accepted: boolean) => void) => void;
 };
@@ -670,6 +676,30 @@ function compareByDueDate(a: Task, b: Task) {
 export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const isTelegramRuntime = runtime === 'telegram';
   const isWebRuntime = runtime === 'web';
+  const [telegramViewport, setTelegramViewport] = useState({ fullscreen: false, top: 0, bottom: 0 });
+  useEffect(() => {
+    if (!isTelegramRuntime) return;
+    const webApp = (window as TelegramWindow).Telegram?.WebApp;
+    if (!webApp) return;
+    const syncViewport = () => {
+      const fullscreen = webApp.isFullscreen === true;
+      const top = fullscreen ? Math.max(0, (webApp.safeAreaInset?.top ?? 0) + (webApp.contentSafeAreaInset?.top ?? 0)) : 0;
+      const bottom = fullscreen ? Math.max(0, (webApp.safeAreaInset?.bottom ?? 0) + (webApp.contentSafeAreaInset?.bottom ?? 0)) : 0;
+      setTelegramViewport(previous => previous.fullscreen === fullscreen && previous.top === top && previous.bottom === bottom
+        ? previous : { fullscreen, top, bottom });
+    };
+    const events = ['fullscreenChanged', 'fullscreenFailed', 'safeAreaChanged', 'contentSafeAreaChanged', 'viewportChanged'];
+    events.forEach(event => webApp.onEvent?.(event, syncViewport));
+    webApp.ready?.();
+    webApp.expand?.();
+    try {
+      if (!webApp.isFullscreen) webApp.requestFullscreen?.();
+    } catch {
+      // Older Telegram clients continue in their normal expanded view.
+    }
+    syncViewport();
+    return () => events.forEach(event => webApp.offEvent?.(event, syncViewport));
+  }, [isTelegramRuntime]);
   const clientSurface = isTelegramRuntime ? 'miniapp' : 'web';
   const [webVisualViewport, setWebVisualViewport] = useState(() => ({
     top: window.visualViewport?.offsetTop ?? 0,
@@ -3594,12 +3624,18 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     return () => { window.removeEventListener('focus', checkPending); document.removeEventListener('visibilitychange', checkPending); };
   }, [creditPurchase.check, creditPurchase.pendingPurchaseId]);
 
+  const telegramViewportStyle = isTelegramRuntime
+    ? { '--miniapp-top-inset': `${telegramViewport.top}px`, '--miniapp-bottom-inset': `${telegramViewport.bottom}px` } as CSSProperties
+    : undefined;
+  const fullscreenClass = isTelegramRuntime && telegramViewport.fullscreen ? 'miniapp-telegram-fullscreen' : '';
+
   if (loading) {
-    return <main className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 text-sm ${isWebRuntime ? 'miniapp-web-runtime' : ''} ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}>Загружаем Планировыч…</main>;
+    return <main style={telegramViewportStyle} className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 text-sm ${fullscreenClass} ${isWebRuntime ? 'miniapp-web-runtime' : ''} ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}>Загружаем Планировыч…</main>;
   }
 
   return (
     <main
+      style={telegramViewportStyle}
       ref={mainScrollRef}
       onScroll={(event) => {
         setIsEfficiencyDetailsOpen(false);
@@ -3622,7 +3658,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         setIsSettingsOpen(false);
         setIsCreditPurchaseOpen(false);
       }}
-      className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 ${isWebRuntime ? 'miniapp-web-runtime' : ''} ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}
+      className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 ${fullscreenClass} ${isWebRuntime ? 'miniapp-web-runtime' : ''} ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}
     >
       {reportPromptTask ? (
         <TaskCompletionReportDialog
@@ -3893,8 +3929,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               onToggleSphere={toggleListSphereSelection}
               timelineSphereId={sphereFilter}
               onTimelineSphereChange={setSphereFilter}
-              onNotesOpen={() => { setRequestedStandaloneNote(null); setIsStandaloneNotesOpen(true); }}
-              onDisplayModeChange={setDisplayMode}
               onPostpone={() => void postponeAllOverdueToToday()}
               postponing={isPostponingOverdue}
               canPostpone={overdueTasks.length > 0}
@@ -3991,8 +4025,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               onToggleSphere={toggleListSphereSelection}
               timelineSphereId={sphereFilter}
               onTimelineSphereChange={setSphereFilter}
-              onNotesOpen={() => { setRequestedStandaloneNote(null); setIsStandaloneNotesOpen(true); }}
-              onDisplayModeChange={setDisplayMode}
               onPostpone={() => void postponeAllOverdueToToday()}
               postponing={isPostponingOverdue}
               canPostpone={overdueTasks.length > 0}
@@ -4208,6 +4240,31 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           </section>
         )}
       </div>
+
+      <nav className="miniapp-bottom-navigation" aria-label="Разделы Планировыча">
+        <button type="button" className={`miniapp-bottom-navigation-item ${displayMode === 'list' ? 'is-active' : ''}`}
+          aria-current={displayMode === 'list' ? 'page' : undefined}
+          onClick={() => { setDisplayMode('list'); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); }}>
+          <span className="miniapp-bottom-navigation-icon"><List size={20} strokeWidth={2} /></span>
+          <span>Список</span>
+        </button>
+        <button type="button" className={`miniapp-bottom-navigation-item ${displayMode === 'timeline' ? 'is-active' : ''}`}
+          aria-current={displayMode === 'timeline' ? 'page' : undefined}
+          onClick={() => { setDisplayMode('timeline'); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); }}>
+          <span className="miniapp-bottom-navigation-icon"><CalendarDays size={20} strokeWidth={2} /></span>
+          <span>Таймлайн</span>
+        </button>
+        <button type="button" className="miniapp-bottom-navigation-item"
+          onClick={() => { setIsQuickCreateOpen(false); setIsAiChatMenuOpen(false); setClosingMiniWindow(null); setIsAiChatOpen(true); }}>
+          <span className="miniapp-bottom-navigation-icon"><Bot size={20} strokeWidth={2} /></span>
+          <span>Чат с ИИ</span>
+        </button>
+        <button type="button" className="miniapp-bottom-navigation-item"
+          onClick={() => { setIsQuickCreateOpen(false); setRequestedStandaloneNote(null); setIsStandaloneNotesOpen(true); }}>
+          <span className="miniapp-bottom-navigation-icon"><StickyNote size={20} strokeWidth={2} /></span>
+          <span>Заметки</span>
+        </button>
+      </nav>
 
       {openedTask && openedTaskDraft ? (
         <div
