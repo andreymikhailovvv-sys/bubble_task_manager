@@ -915,6 +915,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const aiChatProjectsPollingRef = useRef(false);
   const [activeAiChatProjectId, setActiveAiChatProjectId] = useState(() => aiChatProjects[0]?.id ?? '');
   const [activeAiChatId, setActiveAiChatId] = useState(() => QUICK_AI_CHAT_ID);
+  // A tap on the AI bottom tab must re-open Quick Requests and align its thread,
+  // including when the same tab is tapped while already open.
+  const [quickAiTabNavigationSerial, setQuickAiTabNavigationSerial] = useState(0);
   useEffect(() => { setReplyToGeneral(null); setTelegramChatPicker(null); }, [activeAiChatId, activeAiChatProjectId]);
   useEffect(() => {
     if (isAiChatOpen || isStandaloneNotesOpen) setIsSearchBarFloating(false);
@@ -2913,6 +2916,20 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     generalAiChatScrollTopRef.current = container.scrollTop;
   }, [visibleAiChatMessages.length, aiChatLoading, aiChatProgress, isAiChatOpen, activeAiChatId]);
 
+  useLayoutEffect(() => {
+    if (!quickAiTabNavigationSerial || !isAiChatOpen || activeAiChatId !== QUICK_AI_CHAT_ID) return;
+    const alignQuickThreadToBottom = () => {
+      const thread = aiChatDialogContainerRef.current;
+      if (!thread) return;
+      thread.scrollTop = thread.scrollHeight;
+      generalAiChatScrollTopRef.current = thread.scrollTop;
+    };
+    alignQuickThreadToBottom();
+    // Allow the newly selected chat's DOM and its attachment previews to settle.
+    const frame = window.requestAnimationFrame(alignQuickThreadToBottom);
+    return () => window.cancelAnimationFrame(frame);
+  }, [quickAiTabNavigationSerial, isAiChatOpen, activeAiChatId]);
+
   useEffect(() => {
     if (!isAiChatOpen) return;
     generalAiChatUserScrollEnabledRef.current = false;
@@ -4352,7 +4369,21 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         </MiniNavigationControl>
         <MiniNavigationControl role={isTelegramRuntime ? 'button' : undefined} tabIndex={isTelegramRuntime ? 0 : undefined} onKeyDown={handleMiniNavigationKeyDown} className={`miniapp-bottom-navigation-item ${isAiChatOpen && !isStandaloneNotesOpen ? 'is-active' : ''}`}
           aria-current={isAiChatOpen && !isStandaloneNotesOpen ? 'page' : undefined}
-          onClick={(event) => { setIsStandaloneNotesOpen(false); setIsQuickCreateOpen(false); setIsAiChatMenuOpen(false); setClosingMiniWindow(null); setIsAiChatOpen(true); event.currentTarget.blur(); }}>
+          onClick={(event) => {
+            const quickProject = aiChatProjects.find(project => project.chats.some(chat => chat.id === QUICK_AI_CHAT_ID));
+            generalAiChatNearBottomRef.current = true;
+            generalAiChatUserScrollEnabledRef.current = false;
+            setActiveAiChatProjectId(quickProject?.id ?? aiChatProjects[0]?.id ?? '');
+            setActiveAiChatId(QUICK_AI_CHAT_ID);
+            setQuickAiTabNavigationSerial(serial => serial + 1);
+            setTelegramChatPicker(null);
+            setIsStandaloneNotesOpen(false);
+            setIsQuickCreateOpen(false);
+            setIsAiChatMenuOpen(false);
+            setClosingMiniWindow(null);
+            setIsAiChatOpen(true);
+            event.currentTarget.blur();
+          }}>
           <span className="miniapp-bottom-navigation-icon"><Bot size={20} strokeWidth={2} /></span>
           <span>Чат с ИИ</span>
         </MiniNavigationControl>
