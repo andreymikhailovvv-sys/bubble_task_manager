@@ -4882,7 +4882,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <span className="miniapp-task-ai-label inline-flex shrink-0 items-center gap-1 rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-semibold text-violet-700"><Sparkles size={12} /> Помощь ИИ</span>
                   <span className="miniapp-task-ai-title min-w-0 flex-1 truncate text-sm font-semibold text-primary" title={openedTask.title}>{openedTask.title}</span>
                 </>
-              ) : <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary">Помощь ИИ</h2>
+              ) : <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary">Помощь ИИ</h2>}
               {!isTelegramRuntime ? taskMonitoringControl : null}
               <button type="button" onClick={() => closeMiniWindowWithMotion('task-ai', () => setIsAiDialogOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть диалог с ИИ"><X size={18} /></button>
               <select value={selectedAiChatModel} onChange={(event) => setSelectedAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap w-40 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель помощи ИИ">
