@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { CalendarDays, Check, ChevronDown, Clock3, List, ListFilter, Loader2, Sparkles, StickyNote } from 'lucide-react';
+import { Check, ChevronDown, Clock3, ListFilter, Loader2, Sparkles } from 'lucide-react';
 import type { Sphere } from '../lib/types';
 
 type TimeFilter = 'all' | 'today' | 'tomorrow' | 'week' | 'month';
@@ -25,8 +25,6 @@ type Props = {
   onToggleSphere: (id: string) => void;
   timelineSphereId: string;
   onTimelineSphereChange: (id: string) => void;
-  onNotesOpen: () => void;
-  onDisplayModeChange: (mode: 'list' | 'timeline') => void;
   onPostpone: () => void;
   postponing: boolean;
   canPostpone: boolean;
@@ -39,8 +37,8 @@ type Props = {
 export function MiniWorkspaceTools({
   mode, timeFilter, onTimeFilterChange, sortMode, onSortChange,
   spheres, selectedSphereIds, onSelectAllSpheres, onToggleSphere,
-  timelineSphereId, onTimelineSphereChange, onNotesOpen,
-  onDisplayModeChange, onPostpone, postponing, canPostpone
+  timelineSphereId, onTimelineSphereChange,
+  onPostpone, postponing, canPostpone
 }: Props) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -67,28 +65,28 @@ export function MiniWorkspaceTools({
     : timelineSphereId !== 'all');
 
   return (
-    <div className={`miniapp-workspace-tools ${open ? 'is-filter-menu-open' : ''}`}>
-      <div className="miniapp-workspace-primary">
-        <div className="display-mode-toggle-group miniapp-workspace-display-mode" role="group" aria-label="Режим отображения">
-          <button type="button" className={`display-mode-toggle-button ${mode === 'list' ? 'display-mode-toggle-button-active' : ''}`}
-            aria-pressed={mode === 'list'} onClick={() => onDisplayModeChange('list')}>
-            <List size={16} aria-hidden="true" /><span>Список</span>
-          </button>
-          <button type="button" className={`display-mode-toggle-button ${mode === 'timeline' ? 'display-mode-toggle-button-active' : ''}`}
-            aria-pressed={mode === 'timeline'} onClick={() => onDisplayModeChange('timeline')}>
-            <CalendarDays size={16} aria-hidden="true" /><span>Таймлайн</span>
-          </button>
-        </div>
-        <div ref={rootRef} className="miniapp-workspace-filter-anchor relative justify-self-end">
-        <button type="button"
-          className={`miniapp-workspace-tool miniapp-workspace-tool-filter ${hasFilters ? 'is-filtered' : ''}`}
-          onClick={() => setOpen(value => !value)}
-          aria-label="Фильтры задач" aria-controls="miniapp-workspace-filter-panel"
-          aria-expanded={open} aria-haspopup="dialog">
-          <ListFilter size={17} aria-hidden="true" />
-          {hasFilters ? <span className="miniapp-workspace-filter-dot" aria-hidden="true" /> : null}
-          <span className="sr-only">Фильтры задач</span>
+    <div className={`miniapp-workspace-tools miniapp-workspace-tools-compact ${open ? 'is-filter-menu-open' : ''}`}>
+      <div className="miniapp-workspace-actions">
+        <button type="button" className="miniapp-postpone-button miniapp-workspace-tool-postpone"
+          onClick={onPostpone} disabled={postponing || !canPostpone}
+          title="Перенести просроченные задачи на сегодня на это же время"
+          aria-label="Перенести просроченные задачи на сегодня на это же время">
+          {postponing ? <Loader2 size={16} className="animate-spin" /> : <Clock3 size={16} />}
+          <span>Отложить</span>
         </button>
+        <button type="button" className="miniapp-workspace-tool miniapp-workspace-tool-optimize"
+          disabled aria-disabled="true" title="Оптимизация пока недоступна">
+          <Sparkles size={16} aria-hidden="true" /><span>Оптимизировать</span>
+        </button>
+        <div ref={rootRef} className="miniapp-workspace-filter-anchor relative">
+          <button type="button" className={`miniapp-workspace-tool miniapp-workspace-tool-filter ${hasFilters ? 'is-filtered' : ''}`}
+            onClick={() => setOpen(value => !value)}
+            aria-label="Фильтры задач" aria-controls="miniapp-workspace-filter-panel"
+            aria-expanded={open} aria-haspopup="dialog">
+            <ListFilter size={16} aria-hidden="true" />
+            <span>Фильтры</span>
+            {hasFilters ? <span className="miniapp-workspace-filter-dot" aria-hidden="true" /> : null}
+          </button>
         {open ? (
           <div id="miniapp-workspace-filter-panel" role="dialog" aria-label="Фильтры задач"
             className="miniapp-workspace-filter-panel absolute right-0 top-[calc(100%+8px)] z-[180] w-[min(19rem,calc(100vw-32px))] rounded-2xl border p-3 shadow-2xl">
@@ -147,24 +145,7 @@ export function MiniWorkspaceTools({
             </label>}
           </div>
         ) : null}
-      </div>
-      </div>
-      <div className="miniapp-workspace-actions">
-        <button type="button" className="miniapp-workspace-tool miniapp-workspace-tool-notes"
-          onClick={onNotesOpen} aria-label="Открыть заметки">
-          <StickyNote size={16} aria-hidden="true" /><span>Заметки</span>
-        </button>
-        <button type="button" className="miniapp-postpone-button miniapp-workspace-tool-postpone"
-          onClick={onPostpone} disabled={postponing || !canPostpone}
-          title="Перенести просроченные задачи на сегодня на это же время"
-          aria-label="Перенести просроченные задачи на сегодня на это же время">
-          {postponing ? <Loader2 size={15} className="animate-spin" /> : <Clock3 size={15} />}
-          <span>Отложить</span>
-        </button>
-        <button type="button" className="miniapp-workspace-tool miniapp-workspace-tool-optimize"
-          disabled aria-disabled="true" title="Оптимизация пока недоступна">
-          <Sparkles size={16} aria-hidden="true" /><span>Оптимизировать</span>
-        </button>
+        </div>
       </div>
     </div>
   );
