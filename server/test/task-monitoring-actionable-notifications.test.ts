@@ -5,13 +5,29 @@ import { formatMonitoringAlert, monitoringHeadline } from '../src/lib/monitoring
 
 const read = (file: string) => readFile(new URL(file, import.meta.url), 'utf8');
 
-test('monitoring notification leads with the specific action, then the task line and body', () => {
+test('monitoring notification shows two lines, while chats retain the full AI answer', () => {
   const alert = formatMonitoringAlert('Письмо Иванову',
-    'Письмо Иванову отправлено?\n\nЕсли уже отправил, приложи копию. Если нет, подготовь черновик.');
+    'ЗАГОЛОВОК: Письмо Иванову отправлено?\n\nЕсли уже отправил, приложи копию. Если нет, подготовь черновик.');
   assert.equal(alert.headline, 'Письмо Иванову отправлено?');
-  assert.equal(alert.context, '✔️Мониторинг задачи «Письмо Иванову»');
-  assert.ok(alert.content.startsWith('Письмо Иванову отправлено?\n✔️Мониторинг задачи «Письмо Иванову»\n\n'));
-  assert.ok(alert.content.includes('Если уже отправил'));
+  assert.equal(alert.context, '✅Мониторинг задачи «Письмо Иванову»');
+  assert.equal(alert.content, 'Письмо Иванову отправлено?\n✅Мониторинг задачи «Письмо Иванову»');
+  assert.equal(alert.message, 'Письмо Иванову отправлено?\n\nЕсли уже отправил, приложи копию. Если нет, подготовь черновик.');
+  assert.doesNotMatch(alert.content, /Если уже отправил/);
+  assert.doesNotMatch(alert.message, /ЗАГОЛОВОК:/);
+});
+
+test('explicit headline takes precedence over body text, even when the reply has other sentences', () => {
+  const alert = formatMonitoringAlert('Проект', 'ЗАГОЛОВОК: Нужна дата встречи.\n\nПервый абзац с пояснениями. Второй абзац.');
+  assert.equal(alert.headline, 'Нужна дата встречи.');
+  assert.equal(alert.body, 'Первый абзац с пояснениями. Второй абзац.');
+  assert.equal(alert.content.split('\n').length, 2);
+});
+
+test('model headlines are clipped at 90 characters and malformed legacy prose cannot flood alerts', () => {
+  const alert = formatMonitoringAlert('Проект', 'Это очень длинное предложение об анализе и подготовке множества разных материалов для большого события и дальнейшего планирования без точки');
+  assert.ok(alert.headline.length <= 90);
+  assert.ok(alert.body.length > 0, 'legacy overflow stays in the full chat reply');
+  assert.equal(alert.content.split('\n').length, 2);
 });
 
 test('monitoring title is always derived from the actual model message, not a server template', () => {
@@ -37,6 +53,9 @@ test('autonomous subtask completion is persisted in the existing event queue, an
   assert.match(worker, /add_monitoring_status/);
   assert.match(worker, /billingFeature: 'task_monitoring'/);
   assert.match(delivery, /formatMonitoringAlert\(title, answer\)/);
+  assert.match(delivery, /const display = alert\.message/);
+  assert.match(delivery, /content: alert\.content/);
+  assert.match(worker, /content: visibleAnswer/);
 });
 
 test('browser and Android folded notifications use the headline and the task identifier', async () => {
@@ -52,6 +71,8 @@ test('browser and Android folded notifications use the headline and the task ide
   assert.match(native, /setContentText\(contextLine\)/);
   assert.match(telegram, /escapeHtml\(alert\.headline\)/);
   assert.match(push, /content: \[\.\.\.event\.content\]/);
+  assert.match(browser, /const \[first, second\] = notification\.content\.split/);
+  assert.doesNotMatch(telegram.slice(telegram.indexOf('async notifyMonitoringTaskReply('), telegram.indexOf('async notifyOverdueTaskAiMessage(')), /alert\.body/);
 });
 
 test('autonomous charges are counted under task AI without counting child totals twice', async () => {

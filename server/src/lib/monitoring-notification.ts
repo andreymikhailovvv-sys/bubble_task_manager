@@ -1,28 +1,51 @@
 /**
- * One plain-text format shared by Quick AI, Telegram, Android and browser.
- * The first line must be actionable when the model follows the prompt.
- * Legacy prose still produces a neutral, task-specific headline.
+ * Monitoring messages keep the complete AI answer in chats. All notification
+ * channels receive only two lines: the model's actionable headline and task.
+ * The explicit prefix makes parsing deterministic; older first-line answers
+ * are still supported for already-generated messages.
  */
+const MAX_HEADLINE_LENGTH = 90;
+
+function shortenHeadline(value: string): string {
+  const normalized = value.replace(/\s+/g, ' ').trim().replace(/^["«]|["»]$/g, '');
+  if (normalized.length <= MAX_HEADLINE_LENGTH) return normalized;
+  const clipped = normalized.slice(0, MAX_HEADLINE_LENGTH - 1);
+  const wordBoundary = clipped.lastIndexOf(' ');
+  return (wordBoundary > 30 ? clipped.slice(0, wordBoundary) : clipped).trimEnd() + '…';
+}
+
 export function monitoringHeadline(answer: string, taskTitle: string): { headline: string; body: string } {
-  const cleaned = answer.trim().replace(/^\s{0,3}#{1,3}\s+/, '').replace(/^\*\*(.*?)\*\*/, '$1');
-  const firstBreak = cleaned.indexOf('\n');
-  const firstParagraph = (firstBreak >= 0 ? cleaned.slice(0, firstBreak) : cleaned).trim();
-  // The model owns the headline. If it responds in a single paragraph,
-  // extract its own first sentence. Never invent repetitive server headlines.
-  const sentence = firstParagraph.match(/^.{8,125}?[.!?](?=\s|$)/u)?.[0];
-  const candidate = sentence ?? firstParagraph;
-  const headline = candidate.slice(0, 125).trim().replace(/^["«]|["»]$/g, '');
-  const remainder = cleaned.slice(firstBreak >= 0 ? firstBreak + 1 : sentence ? sentence.length : candidate.length).trim();
-  return { headline: headline || taskTitle.slice(0, 125), body: remainder.slice(0, 4200) };
+  const cleaned = answer.trim().replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
+  const breakAt = cleaned.indexOf('\n');
+  const firstLine = (breakAt >= 0 ? cleaned.slice(0, breakAt) : cleaned)
+    .trim().replace(/^#{1,3}\s+/, '').replace(/^\*\*(.*?)\*\*$/, '$1');
+  const explicit = firstLine.match(/^(?:ЗАГОЛОВОК|HEADLINE)\s*[:：]\s*(.*)$/i);
+  const plain = explicit ? explicit[1].trim() : firstLine;
+  // Legacy single-paragraph answers: extract the first actual sentence.
+  const firstSentence = explicit || breakAt >= 0 ? null : plain.match(/^.{8,}?[.!?](?=\s|$)/u)?.[0];
+  const candidate = firstSentence ?? plain;
+  const headline = shortenHeadline(candidate) || shortenHeadline(taskTitle);
+  // On malformed old single-line replies, preserve overflow in the chat.
+  const overflow = !explicit && breakAt < 0 && !firstSentence && candidate.length > MAX_HEADLINE_LENGTH
+    ? candidate.slice(headline.endsWith('…') ? headline.length - 1 : headline.length)
+    : '';
+  const body = (breakAt >= 0
+    ? cleaned.slice(breakAt + 1)
+    : firstSentence ? plain.slice(firstSentence.length) : overflow)
+    .trim().replace(/^СООБЩЕНИЕ\s*[:：]\s*/i, '');
+  return { headline, body: body.slice(0, 4200) };
 }
 
 export function formatMonitoringAlert(taskTitle: string, answer: string) {
   const { headline, body } = monitoringHeadline(answer, taskTitle);
-  const context = `✔️Мониторинг задачи «${taskTitle.trim().slice(0, 150)}»`;
+  const context = `✅Мониторинг задачи «${taskTitle.trim().slice(0, 150)}»`;
   return {
     headline,
     context,
     body,
-    content: [headline, context, '', body].filter((part, i) => Boolean(part) || i === 2).join('\n')
+    // Persisted system notification, browser OS alert, Android and Telegram.
+    content: [headline, context].join('\n'),
+    // Full message appears only in the task and Quick AI conversations.
+    message: [headline, body].filter(Boolean).join('\n\n')
   };
 }

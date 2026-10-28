@@ -399,7 +399,7 @@ type TaskAiMessage = ChatMessage & { id: string };
 function SystemNotificationContent({ notification, tasks, onOpenTask, onOpenTaskAi }: { notification: SystemNotification; tasks: Task[]; onOpenTask: (task: Task) => void; onOpenTaskAi: (task: Task) => void }) {
   const task = notification.taskId ? tasks.find((item) => item.id === notification.taskId) : undefined;
   if (notification.eventKey?.startsWith('monitoring:') && task) {
-    return <>🤖 ИИ по задаче <strong>{task.title}</strong> прислал сообщение.{' '}
+    return <><span className="whitespace-pre-line">{notification.content.split(/\r?\n/).slice(0, 2).join('\n')}</span>{' '}
       <button type="button" className="system-notification-task-button rounded-full bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white"
         onClick={() => onOpenTaskAi(task)}>Ответить в чате задачи <ArrowUpRight size={12} className="inline" /></button>
     </>;
@@ -8381,8 +8381,17 @@ ${allContext}`,
 
       {systemNotificationToast ? createPortal((
         <button key={systemNotificationToast.id} type="button" className="system-notification-toast fixed bottom-8 left-6 z-[2147483647] w-[min(22rem,calc(100vw-3rem))] rounded-2xl border px-4 py-3 text-left text-sm shadow-2xl backdrop-blur" onClick={() => { setSystemNotificationToast(null); openSystemNotification(systemNotificationToast); }}>
-          <span className="system-notification-label mb-1 block text-[10px] font-bold uppercase tracking-[0.16em]">⚙️ Системное уведомление</span>
-          <span className="leading-snug">{systemNotificationToast.content}</span>
+          {systemNotificationToast.eventKey?.startsWith('monitoring:') ? (
+            <>
+              <span className="block font-semibold leading-snug">{systemNotificationToast.content.split(/\r?\n/)[0]?.trim()}</span>
+              <span className="mt-1 block text-xs leading-snug text-muted">{systemNotificationToast.content.split(/\r?\n/)[1]?.trim()}</span>
+            </>
+          ) : (
+            <>
+              <span className="system-notification-label mb-1 block text-[10px] font-bold uppercase tracking-[0.16em]">⚙️ Системное уведомление</span>
+              <span className="leading-snug">{systemNotificationToast.content}</span>
+            </>
+          )}
         </button>
       ), document.body) : null}
 

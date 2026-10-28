@@ -86,11 +86,11 @@ export async function showBrowserSystemNotification(
     if (!claimNotification(userId, notification.id)) return false;
     try {
       const isMonitoring = notification.eventKey?.startsWith('monitoring:') === true;
-      const [first, second, ...rest] = notification.content.split(/\r?\n/);
+      // Legacy monitoring rows may include the entire AI message after line 2.
+      // OS notifications must never display that third line or later text.
+      const [first, second] = notification.content.split(/\r?\n/);
       const headline = isMonitoring && first?.trim() ? first.trim() : 'Планировыч';
-      const body = isMonitoring
-        ? [second?.trim(), rest.join('\n').trim()].filter(Boolean).join('\n\n')
-        : notification.content;
+      const body = isMonitoring ? (second?.trim() || '') : notification.content;
       const instance = new Notification(headline, {
         body,
         tag: 'planirovych-system-' + notification.id
