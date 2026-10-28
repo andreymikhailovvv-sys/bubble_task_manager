@@ -10589,6 +10589,12 @@ body[data-theme='light'] .upcoming-subtasks-list .upcoming-subtask-row:hover {
 .miniapp-shell.miniapp-telegram-fullscreen {
   padding-top: calc(1rem + var(--miniapp-top-inset, env(safe-area-inset-top, 0px))) !important;
 }
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-premium-topbar {
+  top: var(--miniapp-top-inset, 0px);
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-slide-backdrop {
+  padding-top: var(--miniapp-top-inset, 0px);
+}
 .miniapp-shell .miniapp-bottom-navigation {
   position: fixed;
   right: 0;
