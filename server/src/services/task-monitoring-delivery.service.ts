@@ -18,7 +18,7 @@ export async function publishTaskMonitoringReply(input: {
   const eventKey = 'monitoring:' + input.runId;
   const title = task.title.trim().slice(0, 150);
   const alert = formatMonitoringAlert(title, answer);
-  const display = alert.content;
+  const display = alert.message;
   // Exactly one visible message belongs to Quick AI. A separate unread
   // notification row is badge-only and never rendered as a second bubble.
   const mirrored = await prisma.generalAiMessage.createMany({
@@ -37,7 +37,7 @@ export async function publishTaskMonitoringReply(input: {
     await prisma.systemNotification.create({
       data: {
         userId: input.userId, taskId: task.id, eventKey,
-        content: alert.content.slice(0, 1500)
+        content: alert.content
       }
     });
   } catch (error) {
