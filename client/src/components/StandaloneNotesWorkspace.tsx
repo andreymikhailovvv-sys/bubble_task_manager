@@ -353,7 +353,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
           if (event.target === event.currentTarget && !editing) closeBoard();
         }}>
           <section className="standalone-notes-board flex h-[min(87dvh,880px)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border shadow-2xl" role="dialog" aria-modal="true" aria-label="Все заметки">
-            <div className="standalone-notes-board-header flex flex-col gap-2 border-b p-4 sm:px-6">
+            <div className={`standalone-notes-board-header flex flex-col gap-2 border-b p-4 sm:px-6 ${telegramMiniApp && !notesFiltersVisible ? 'standalone-notes-header-compact' : ''}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="standalone-note-accent text-xs font-semibold uppercase tracking-widest">Личные записи</p>
