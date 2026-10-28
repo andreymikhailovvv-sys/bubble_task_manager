@@ -4979,7 +4979,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
       {isAiChatOpen ? (
         <div className={`miniapp-ai-chat-backdrop miniapp-ai-chat-backdrop-general miniapp-slide-backdrop fixed inset-0 z-[70] bg-slate-950/75 p-0 ${getMiniWindowMotionClass('ai-chat')}`}>
-          <div className={`miniapp-ai-chat-panel miniapp-ai-chat-panel-general miniapp-slide-panel ${isGeneralAiChatHeaderHidden ? "miniapp-ai-header-collapsed" : ""} mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100">
+          <div className={`miniapp-ai-chat-panel miniapp-ai-chat-panel-general miniapp-slide-panel ${isGeneralAiChatHeaderHidden ? "miniapp-ai-header-collapsed" : ""} mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100`}>
             <div className={`miniapp-ai-chat-header miniapp-ai-chat-header-general flex items-start justify-between gap-2 p-3 ${useTelegramCompactChatHeader ? 'miniapp-ai-chat-header-telegram' : ''} ${isGeneralAiChatHeaderHidden ? 'miniapp-ai-chat-header-hidden' : ''}`}>
                <button type="button" onClick={() => setIsAiChatMenuOpen(true)} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Меню чатов и проектов"><Menu size={18} /></button>
                <div className={`min-w-0 flex-1 ${useTelegramCompactChatHeader ? 'miniapp-ai-chat-inline-heading' : ''}`}>
