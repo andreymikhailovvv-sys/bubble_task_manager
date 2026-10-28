@@ -491,6 +491,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
         <NotesEditor
           key={editing.id}
           telegramSafeTop={telegramMiniApp ? mobileSafeAreaTop : undefined}
+          miniAppSheet={telegramMiniApp}
           value={editing.content}
           onChange={(content) => changeDraft({ content })}
           onClose={() => { void closeEditor(); }}
