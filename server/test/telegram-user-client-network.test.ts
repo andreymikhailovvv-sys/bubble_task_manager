@@ -127,6 +127,55 @@ test('hex and base64url MTProxy secrets produce the same canonical hex value', (
   assert.equal(padded.proxy?.secret, 'dd' + '12'.repeat(16));
 });
 
+test('FakeTLS accepts teleproto-compatible suffixes without forcing dotted ASCII hostnames', () => {
+  const base = {
+    TELEGRAM_USER_MTPROXY_HOST: '45.157.38.42',
+    TELEGRAM_USER_MTPROXY_PORT: '443',
+    TELEGRAM_PROXY_URL: 'socks5://example.invalid:1080'
+  };
+  for (const suffix of ['localhost', 'internal_proxy', 'пример.рф']) {
+    const bytes = Buffer.concat([
+      Buffer.from([0xee]), Buffer.alloc(16, 0xa1), Buffer.from(suffix, 'utf8')
+    ]);
+    const output = telegramUserClientNetworkOptions({
+      ...base, TELEGRAM_USER_MTPROXY_SECRET: bytes.toString('base64url')
+    });
+    assert.equal(output.proxy?.secret, bytes.toString('hex'));
+    assert.equal(telegramMtprotoTransport({ ...base, TELEGRAM_USER_MTPROXY_SECRET: bytes.toString('base64url') }), 'mtproxy');
+  }
+});
+
+test('standard Base64 and URL-safe Telegram secrets are equivalent', () => {
+  const bytes = Buffer.concat([
+    Buffer.from([0xee]), Buffer.alloc(16, 0xfa), Buffer.from('example.org')
+  ]);
+  const env = { TELEGRAM_USER_MTPROXY_HOST: '45.157.38.42', TELEGRAM_USER_MTPROXY_PORT: '443' };
+  const standard = telegramUserClientNetworkOptions({ ...env, TELEGRAM_USER_MTPROXY_SECRET: bytes.toString('base64') });
+  const urlsafe = telegramUserClientNetworkOptions({ ...env, TELEGRAM_USER_MTPROXY_SECRET: bytes.toString('base64url') });
+  assert.deepEqual(standard.proxy, urlsafe.proxy);
+});
+
+test('MTProxy configuration diagnostics expose only safe reasons, never private secrets', () => {
+  const blank = { TELEGRAM_USER_MTPROXY_HOST: '45.157.38.42' };
+  assert.throws(
+    () => telegramUserClientNetworkOptions(blank),
+    (error: unknown) => error instanceof TelegramUserProxyConfigurationError &&
+      error.reason === 'missing_fields' && classifyTelegramUserNetworkError(error) === 'proxy_configuration' &&
+      !error.message.includes('45.157.38.42')
+  );
+  const invalid = {
+    TELEGRAM_USER_MTPROXY_HOST: '45.157.38.42',
+    TELEGRAM_USER_MTPROXY_PORT: '443',
+    TELEGRAM_USER_MTPROXY_SECRET: 'secret=private_value'
+  };
+  assert.throws(
+    () => telegramUserClientNetworkOptions(invalid),
+    (error: unknown) => error instanceof TelegramUserProxyConfigurationError &&
+      error.reason === 'invalid_secret_encoding' &&
+      !error.message.includes('private_value')
+  );
+});
+
 test('invalid or incomplete MTProxy config never silently falls back to old Telegram proxy', () => {
   const legacy = { TELEGRAM_PROXY_URL: 'socks5://example.invalid:1080' };
   for (const overrides of [
