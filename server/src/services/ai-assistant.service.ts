@@ -271,7 +271,7 @@ export function createTaskChatOpenAiPayload(model: string, messages: TaskChatPro
       return { type: message.type, call_id: message.call_id, output: message.output };
     }),
     text: { format: TASK_ASSISTANT_RESPONSE_FORMAT },
-    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL, TASK_CHAT_HISTORY_LOOKUP_TOOL, ...AI_CHAT_OPENAI_TOOLS, ...(options?.monitoringTools ? [TASK_MONITOR_FOLLOWUP_TOOL, ...TASK_MONITOR_ACTION_TOOLS] : []), ...(allowWebSearch ? [AI_CHAT_WEB_SEARCH_TOOL] : [])], tool_choice: options?.forceWebSearch && allowWebSearch ? { type: 'web_search' as const } : 'auto', parallel_tool_calls: false, ...(allowWebSearch ? { max_tool_calls: 1 } : {}) } : { tool_choice: 'none' }),
+    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL, ...AI_CHAT_OPENAI_TOOLS, TASK_CHAT_HISTORY_LOOKUP_TOOL, ...(options?.monitoringTools ? [TASK_MONITOR_FOLLOWUP_TOOL, ...TASK_MONITOR_ACTION_TOOLS] : []), ...(allowWebSearch ? [AI_CHAT_WEB_SEARCH_TOOL] : [])], tool_choice: options?.forceWebSearch && allowWebSearch ? { type: 'web_search' as const } : 'auto', parallel_tool_calls: false, ...(allowWebSearch ? { max_tool_calls: 1 } : {}) } : { tool_choice: 'none' }),
     ...(options?.reasoningEffort ? { reasoning: { effort: options.reasoningEffort } } : {}),
     ...(maxOutputTokens === undefined ? {} : { max_output_tokens: maxOutputTokens })
   };
