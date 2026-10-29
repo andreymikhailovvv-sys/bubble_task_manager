@@ -90,3 +90,40 @@ test('monitoring panel uses an accessible pill switch instead of a checkbox', as
   assert.match(controls, /Выкл/);
   assert.doesNotMatch(controls, /type="checkbox"/);
 });
+
+
+test('focus help header is one compact row with matching teal bot and task monitoring before expand', async () => {
+  const [app, css] = await Promise.all([read('../../client/src/App.tsx'), read('../../client/src/styles.css')]);
+  const focus = app.slice(app.indexOf('<aside data-tour="feature-focus-ai"'), app.indexOf('      {isFocusModeOpen && isFocusAiExpanded'));
+  const header = focus.slice(0, focus.indexOf('focused-task-ai-thread-region'));
+  assert.match(header, /focus-task-ai-header flex shrink-0 items-center/);
+  assert.match(header, /focus-task-ai-bot-icon/);
+  assert.match(css, /\.focus-task-ai-bot-icon \{\s*color: color-mix\(in srgb, var\(--accent\) 80%, var\(--text-primary\)\)/);
+  assert.match(header, /<TaskMonitoringStatuses taskId=\{focusActiveTask\.id\}/);
+  assert.ok(header.indexOf('Помощь ИИ') < header.indexOf('TaskMonitoringStatuses'));
+  assert.ok(header.indexOf('TaskMonitoringStatuses') < header.indexOf('setIsFocusAiExpanded(true)'));
+  assert.doesNotMatch(header, /title=\{focusActiveTask\.title\}/);
+});
+
+test('fullscreen task and focus dialogs share spaced header, red clear pill and aligned composer', async () => {
+  const [app, css] = await Promise.all([read('../../client/src/App.tsx'), read('../../client/src/styles.css')]);
+  const focusFull = app.slice(app.indexOf('      {isFocusModeOpen && isFocusAiExpanded'), app.indexOf('      {focusRemainingSeconds > 0'));
+  const taskFull = app.slice(app.indexOf('      {focusedTask && isAiExpanded'), app.indexOf('      {isCollaborationSettingsOpen'));
+  for (const panel of [focusFull, taskFull]) {
+    assert.match(panel, /task-ai-fullscreen-header mb-3 flex/);
+    assert.match(panel, /task-ai-fullscreen-monitor shrink-0/);
+    assert.match(panel, /task-ai-clear-dialog-button/);
+    assert.match(panel, /task-ai-fullscreen-window-actions/);
+    assert.match(panel, /focused-task-ai-expanded-panel/);
+    assert.match(panel, /focused-task-ai-thread-through/);
+    assert.match(panel, /focused-task-ai-composer focused-task-ai-composer-expanded/);
+  }
+  assert.match(focusFull, /clearTaskAiDialog\(focusActiveTask\.id\)/);
+  assert.match(focusFull, /setIsFocusAiSearchOpen/);
+  assert.match(focusFull, /title=\{focusActiveTask\.title\}/);
+  assert.match(css, /\.task-ai-clear-dialog-button:active:not\(:disabled\)/);
+  assert.match(css, /\.task-ai-fullscreen-monitor \{\s*margin-right:/);
+  assert.match(css, /\.focus-shared-task-ai-panel \.chat-thread\.focused-task-ai-thread-through::-webkit-scrollbar \{\s*display: none;/);
+  assert.match(css, /\.focus-shared-task-ai-panel \.focused-task-ai-composer \{[\s\S]*?background: #fff !important;/);
+  assert.match(css, /body\[data-theme='dark'\] \.focus-mode-shell \.focus-shared-task-ai-panel \.focused-task-ai-composer \{\s*background: #0f172a !important;/);
+});
