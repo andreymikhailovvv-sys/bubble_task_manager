@@ -77,7 +77,10 @@ export function TaskMonitoringTriggerChips({ taskId }: { taskId: string }) {
     const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
     const top = rect.bottom + 132 > window.innerHeight && rect.top > 144
       ? rect.top - 132 : rect.bottom + 8;
-    const isLight = Boolean(element.closest('.miniapp-light')) || document.body.dataset.theme === 'light';
+    const mobileRoot = element.closest('.miniapp-shell');
+    const isLight = mobileRoot
+      ? mobileRoot.classList.contains('miniapp-light')
+      : document.body.dataset.theme === 'light';
     setTooltip({ id, left, top, theme: isLight ? 'light' : 'dark' });
   };
   if (triggers.length === 0) return null;
