@@ -46,11 +46,11 @@ function mtproxyConfig(env: NodeJS.ProcessEnv) {
   if (!host || !portValue || !secretValue) {
     throw new TelegramUserProxyConfigurationError('missing_fields');
   }
-  if (host.length > 253 || /[:/@\\s?#]/.test(host) ||
-      (!net.isIP(host) && !/^(?=.{1,253}$)[a-z0-9-]+(?:\\.[a-z0-9-]+)*$/i.test(host))) {
+  if (host.length > 253 || /[:/@\s?#]/.test(host) ||
+      (!net.isIP(host) && !/^(?=.{1,253}$)[a-z0-9-]+(?:\.[a-z0-9-]+)*$/i.test(host))) {
     throw new TelegramUserProxyConfigurationError('invalid_host');
   }
-  if (!/^\\d{1,5}$/.test(portValue) || Number(portValue) < 1 || Number(portValue) > 65535) {
+  if (!/^\d{1,5}$/.test(portValue) || Number(portValue) < 1 || Number(portValue) > 65535) {
     throw new TelegramUserProxyConfigurationError('invalid_port');
   }
   const port = Number(portValue);
