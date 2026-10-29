@@ -235,7 +235,6 @@ type FocusBonusType = 'ai' | 'subtask' | 'task' | 'time';
 type FocusBonusEvent = { id: string; type: FocusBonusType; delta: number; totalDelta: number; message: string; atMs: number };
 const FOCUS_BONUS_MULTIPLIERS = { task: 2, subtask: 2 } as const;
 const FOCUS_TIME_BONUS_INTERVAL_SECONDS = 5 * 60;
-const FOCUS_TASK_SWITCH_AI_DELAY_MS = 4_000;
 const EFFICIENCY_BONUSES = {
   doneTask: 4,
   doneSubtask: 1.2,
@@ -843,11 +842,9 @@ export default function App() {
   const [focusRemainingSeconds, setFocusRemainingSeconds] = useState(25 * 60);
   const [isFocusTimerRunning, setIsFocusTimerRunning] = useState(false);
   const [focusAiDraft, setFocusAiDraft] = useState('');
-  const [focusAiMessages, setFocusAiMessages] = useState<TaskAiMessage[]>([]);
   const [focusAiLoading, setFocusAiLoading] = useState(false);
   const [focusAiProgress, setFocusAiProgress] = useState<TaskAiProgressStatus | null>(null);
   const [focusAiError, setFocusAiError] = useState<string | null>(null);
-  const [focusAiModel, setFocusAiModel] = useState<AiChatModel>('gpt-5.4-mini');
   const [focusAiPendingFiles, setFocusAiPendingFiles] = useState<File[]>([]);
   const [focusAiUploadProgress, setFocusAiUploadProgress] = useState<number | null>(null);
   const [isFocusAiExpanded, setIsFocusAiExpanded] = useState(false);
@@ -1204,7 +1201,6 @@ export default function App() {
   const focusAiExpandedFileInputRef = useRef<HTMLInputElement | null>(null);
   const previousFocusActiveTaskIdRef = useRef<string | null>(null);
   const focusTaskSwitchAiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const focusAiLoadingRef = useRef(false);
   const awardedFocusTimeIntervalsRef = useRef(0);
   const expandedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
@@ -2288,10 +2284,6 @@ export default function App() {
 
 
   useEffect(() => {
-    focusAiLoadingRef.current = focusAiLoading;
-  }, [focusAiLoading]);
-
-  useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
       if (focusAiDialogContainerRef.current) {
         focusAiDialogContainerRef.current.scrollTop = focusAiDialogContainerRef.current.scrollHeight;
@@ -2609,7 +2601,6 @@ export default function App() {
     if (selected.length < FOCUS_MIN_TASKS) return;
     setFocusSelectedTaskIds(selected);
     setFocusActiveIndex(0);
-    setFocusAiMessages([]);
     setFocusAiError(null);
     setFocusSessionInitialDoneSubtaskIds(new Set(subtasks.filter((task) => task.status === 'DONE').map((task) => task.id)));
     setFocusSessionAiRequestCount(0);
