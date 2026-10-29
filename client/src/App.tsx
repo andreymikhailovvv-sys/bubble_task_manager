@@ -94,7 +94,7 @@ const focusedTaskEditableSnapshot = (task: Partial<Task>, defaultAiNotifications
 
 const AI_CHAT_MODEL_OPTIONS: Array<{ value: AiChatModel; label: string }> = [
   { value: 'gpt-6-luna', label: 'GPT-6 Luna' },
-  { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
+  { value: 'gpt-6.1-terra', label: 'GPT-6.1 Terra' },
   { value: 'gpt-6.1-sol', label: 'GPT-6.1 Sol' }
 ];
 
@@ -1688,7 +1688,7 @@ export default function App() {
           : model === 'gpt-5.4'
             ? 'gpt-6.1-sol'
             : model === 'smart'
-              ? 'gpt-5.4-mini'
+              ? 'gpt-6.1-terra'
               : model
       ])) as Record<string, AiChatModel>);
     } catch {
@@ -1935,7 +1935,7 @@ export default function App() {
   const focusActiveTask = focusTasks[focusActiveIndex] ?? focusTasks[0] ?? null;
   const focusTaskAiDialog = focusActiveTask ? (aiDialogByTask[focusActiveTask.id] ?? []) : [];
   const focusTaskAiModel: AiChatModel = focusActiveTask
-    ? (aiModelByTask[focusActiveTask.id] ?? 'gpt-5.4-mini') : 'gpt-5.4-mini';
+    ? (aiModelByTask[focusActiveTask.id] ?? 'gpt-6.1-terra') : 'gpt-6.1-terra';
 
   // Fetch the SAME persistent conversation as regular task help. Switching
   // focus task never reuses an unrelated task's AI response or model.
@@ -2033,7 +2033,7 @@ export default function App() {
     () => (focusedTask ? aiDialogByTask[focusedTask.id] ?? [] : []),
     [aiDialogByTask, focusedTask]
   );
-  const focusedAiModel: AiChatModel = focusedTask ? (aiModelByTask[focusedTask.id] ?? 'gpt-5.4-mini') : 'gpt-5.4-mini';
+  const focusedAiModel: AiChatModel = focusedTask ? (aiModelByTask[focusedTask.id] ?? 'gpt-6.1-terra') : 'gpt-6.1-terra';
   const filteredFocusedAiDialog = useMemo(() => {
     if (!isFocusedAiSearchOpen) return focusedAiDialog;
     const query = focusedAiSearchQuery.trim().toLowerCase();
@@ -2801,7 +2801,7 @@ export default function App() {
     try {
       const result = await askTaskAssistant(taskId, {
         clientRequestId: id, question: serializeAiReply(question || visibleText, replyToFocusAi),
-        userMessage: userContent, model: aiModelByTask[taskId] ?? 'gpt-5.4-mini',
+        userMessage: userContent, model: aiModelByTask[taskId] ?? 'gpt-6.1-terra',
         attachments: attachmentsPayload, skipEfficiencyBonus: true
       }, status => {
         setFocusAiProgress(status);
@@ -3459,7 +3459,7 @@ export default function App() {
         question: 'Продолжи исходный запрос по разрешённой пользователем переписке Telegram.',
         userMessage: '',
         telegramRead: approval,
-        model: focus ? (aiModelByTask[taskId] ?? 'gpt-5.4-mini') : focusedAiModel,
+        model: focus ? (aiModelByTask[taskId] ?? 'gpt-6.1-terra') : focusedAiModel,
         clientSurface: 'web',
         skipEfficiencyBonus: focus
       }, { onStatus: status => {
