@@ -237,9 +237,9 @@ test('DOCX не заменяет видимый текст через поля W
 });
 
 test('AI DOCX reading sees excursion-lecture headings after paragraph 100', () => {
-  const blocks = Array.from({ length: 125 }, (_, index) => ({
+  const blocks = Array.from({ length: 120 }, (_, index) => ({
     type: 'paragraph' as const,
-    text: index === 120
+    text: index === 115
       ? 'Экскурсия-лекция «Космос и косметика»: вводный раздел'
       : 'Тематическая экскурсия: раздел ' + (index + 1)
   }));
