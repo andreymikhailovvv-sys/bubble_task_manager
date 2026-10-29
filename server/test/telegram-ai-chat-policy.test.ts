@@ -33,7 +33,7 @@ test('Telegram assistant has independent participation, summary and task setting
   assert.deepEqual(TELEGRAM_AI_INTERVALS, [0, 5, 10, 30, 180, 360, 1440]);
   assert.deepEqual(TELEGRAM_AI_SUMMARY_INTERVALS, [-1, 0, 5, 10, 30, 180, 360, 1440]);
   assert.equal(v.monitorModel, 'gpt-6-luna');
-  assert.deepEqual(TELEGRAM_AI_MONITOR_MODELS, ['gpt-6-luna', 'gpt-5.4-mini', 'gpt-6.1-sol']);
+  assert.deepEqual(TELEGRAM_AI_MONITOR_MODELS, ['gpt-6-luna', 'gpt-6.1-terra', 'gpt-6.1-sol']);
   assert.equal(v.dailyCreditLimitMilli, 50_000);
   assert.deepEqual(TELEGRAM_AI_DAILY_CREDIT_TIERS_MILLI, [
     50_000, 100_000, 250_000, 500_000, 1_000_000, 2_500_000, 5_000_000, null
