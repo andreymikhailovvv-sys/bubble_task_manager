@@ -10,7 +10,7 @@ import { runDynamicResponsesCall, settleDynamicResponsesCall, refundDynamicRespo
 export type CheckupMove = { taskId: string; newDueAt: string; reason: string };
 export type SmartDailyCheckup = { text: string; creditsSpentMilli: number; moves: CheckupMove[] };
 const MODEL = process.env.OPENAI_MODEL_DAILY_CHECKUP?.trim() || 'gpt-6-luna';
-const RECOVERY_MODEL = 'gpt-5.4-mini';
+const RECOVERY_MODEL = 'gpt-6.1-terra';
 
 const moveSchema = {
   type: 'object', additionalProperties: false,
