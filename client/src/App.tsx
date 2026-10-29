@@ -235,7 +235,6 @@ type FocusBonusType = 'ai' | 'subtask' | 'task' | 'time';
 type FocusBonusEvent = { id: string; type: FocusBonusType; delta: number; totalDelta: number; message: string; atMs: number };
 const FOCUS_BONUS_MULTIPLIERS = { task: 2, subtask: 2 } as const;
 const FOCUS_TIME_BONUS_INTERVAL_SECONDS = 5 * 60;
-const FOCUS_TASK_SWITCH_AI_DELAY_MS = 4_000;
 const EFFICIENCY_BONUSES = {
   doneTask: 4,
   doneSubtask: 1.2,
@@ -843,11 +842,9 @@ export default function App() {
   const [focusRemainingSeconds, setFocusRemainingSeconds] = useState(25 * 60);
   const [isFocusTimerRunning, setIsFocusTimerRunning] = useState(false);
   const [focusAiDraft, setFocusAiDraft] = useState('');
-  const [focusAiMessages, setFocusAiMessages] = useState<TaskAiMessage[]>([]);
   const [focusAiLoading, setFocusAiLoading] = useState(false);
   const [focusAiProgress, setFocusAiProgress] = useState<TaskAiProgressStatus | null>(null);
   const [focusAiError, setFocusAiError] = useState<string | null>(null);
-  const [focusAiModel, setFocusAiModel] = useState<AiChatModel>('gpt-5.4-mini');
   const [focusAiPendingFiles, setFocusAiPendingFiles] = useState<File[]>([]);
   const [focusAiUploadProgress, setFocusAiUploadProgress] = useState<number | null>(null);
   const [isFocusAiExpanded, setIsFocusAiExpanded] = useState(false);
@@ -1204,7 +1201,6 @@ export default function App() {
   const focusAiExpandedFileInputRef = useRef<HTMLInputElement | null>(null);
   const previousFocusActiveTaskIdRef = useRef<string | null>(null);
   const focusTaskSwitchAiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const focusAiLoadingRef = useRef(false);
   const awardedFocusTimeIntervalsRef = useRef(0);
   const expandedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
@@ -1226,6 +1222,7 @@ export default function App() {
   const focusedAutosaveSignatureRef = useRef<string | null>(null);
   const overdueNudgeAttemptAtByTaskRef = useRef<Record<string, number>>({});
   const loadedAiHistoryTaskIdsRef = useRef<Set<string>>(new Set());
+  const taskAiClearRevisionRef = useRef<Record<string, number>>({});
   const loadRequestIdRef = useRef(0);
   const [overdueTick, setOverdueTick] = useState(0);
 
@@ -1705,8 +1702,9 @@ export default function App() {
     let isCancelled = false;
     const loadAiTaskHistory = async () => {
       try {
+        const revision = taskAiClearRevisionRef.current[focusedTaskId] ?? 0;
         const result = await api.getTaskAssistantHistory(focusedTaskId);
-        if (isCancelled) return;
+        if (isCancelled || revision !== (taskAiClearRevisionRef.current[focusedTaskId] ?? 0)) return;
         loadedAiHistoryTaskIdsRef.current.add(focusedTaskId);
         setAiDialogByTask((prev) => {
           const localMessages = prev[focusedTaskId] ?? [];
@@ -1735,7 +1733,9 @@ export default function App() {
     if (!currentUser || !focusedTaskId) return;
     const intervalId = window.setInterval(async () => {
       try {
+        const revision = taskAiClearRevisionRef.current[focusedTaskId] ?? 0;
         const result = await api.getTaskAssistantHistory(focusedTaskId);
+        if (revision !== (taskAiClearRevisionRef.current[focusedTaskId] ?? 0)) return;
         setAiDialogByTask((prev) => {
           const localMessages = prev[focusedTaskId] ?? [];
           const serverMessages = result.messages;
@@ -1916,6 +1916,35 @@ export default function App() {
     [focusSelectedTaskIds, rootTasks]
   );
   const focusActiveTask = focusTasks[focusActiveIndex] ?? focusTasks[0] ?? null;
+  const focusTaskAiDialog = focusActiveTask ? (aiDialogByTask[focusActiveTask.id] ?? []) : [];
+  const focusTaskAiModel: AiChatModel = focusActiveTask
+    ? (aiModelByTask[focusActiveTask.id] ?? 'gpt-5.4-mini') : 'gpt-5.4-mini';
+
+  // Fetch the SAME persistent conversation as regular task help. Switching
+  // focus task never reuses an unrelated task's AI response or model.
+  useEffect(() => {
+    if (!currentUser || !isFocusModeOpen || !focusActiveTask) return;
+    const taskId = focusActiveTask.id;
+    let alive = true;
+    const sync = async () => {
+      if (aiLoadingTaskId === taskId) return;
+      try {
+        const revision = taskAiClearRevisionRef.current[taskId] ?? 0;
+        const { messages } = await api.getTaskAssistantHistory(taskId);
+        if (!alive || revision !== (taskAiClearRevisionRef.current[taskId] ?? 0)) return;
+        loadedAiHistoryTaskIdsRef.current.add(taskId);
+        setAiDialogByTask(prev => {
+          const local = prev[taskId] ?? [];
+          if (aiLoadingTaskId === taskId) return prev;
+          const next = normalizeTaskAiMessages(messages);
+          return areTaskAiMessagesEqual(local, next) ? prev : { ...prev, [taskId]: next };
+        });
+      } catch (error) { console.warn('[Focus] task AI history refresh failed', error); }
+    };
+    void sync();
+    const interval = window.setInterval(() => void sync(), 2500);
+    return () => { alive = false; window.clearInterval(interval); };
+  }, [currentUser?.id, isFocusModeOpen, focusActiveTask?.id, aiLoadingTaskId, focusAiLoading]);
   const focusCompletedSubtasksCount = useMemo(
     () => subtasks.filter((task) => task.status === 'DONE' && !focusSessionInitialDoneSubtaskIds.has(task.id)).length,
     [focusSessionInitialDoneSubtaskIds, subtasks]
@@ -2260,10 +2289,6 @@ export default function App() {
 
 
   useEffect(() => {
-    focusAiLoadingRef.current = focusAiLoading;
-  }, [focusAiLoading]);
-
-  useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
       if (focusAiDialogContainerRef.current) {
         focusAiDialogContainerRef.current.scrollTop = focusAiDialogContainerRef.current.scrollHeight;
@@ -2273,29 +2298,17 @@ export default function App() {
       }
     });
     return () => window.cancelAnimationFrame(frameId);
-  }, [focusAiMessages, focusAiLoading, focusAiProgress, isFocusModeOpen, isFocusAiExpanded]);
+  }, [focusActiveTask?.id, focusTaskAiDialog.length, focusAiLoading, focusAiProgress, isFocusModeOpen, isFocusAiExpanded]);
 
   useEffect(() => {
-    if (focusTaskSwitchAiTimeoutRef.current) {
-      clearTimeout(focusTaskSwitchAiTimeoutRef.current);
-      focusTaskSwitchAiTimeoutRef.current = null;
-    }
-    if (!isFocusModeOpen || !focusActiveTask || !isFocusTimerRunning) return;
-    const previousTaskId = previousFocusActiveTaskIdRef.current;
-    previousFocusActiveTaskIdRef.current = focusActiveTask.id;
-    if (!previousTaskId || previousTaskId === focusActiveTask.id) return;
-    focusTaskSwitchAiTimeoutRef.current = setTimeout(() => {
-      focusTaskSwitchAiTimeoutRef.current = null;
-      if (focusAiLoadingRef.current) return;
-      void sendFocusAiQuestion({ questionOverride: 'Пользователь переключился на эту задачу. Дай ближайшие конкретные действия именно по ней.', userContentOverride: 'Подсказать ближайшие действия по новой задаче' });
-    }, FOCUS_TASK_SWITCH_AI_DELAY_MS);
-    return () => {
-      if (focusTaskSwitchAiTimeoutRef.current) {
-        clearTimeout(focusTaskSwitchAiTimeoutRef.current);
-        focusTaskSwitchAiTimeoutRef.current = null;
-      }
-    };
-  }, [focusActiveTask?.id, isFocusModeOpen, isFocusTimerRunning]);
+    // Switching tasks only changes the selected task and its existing dialog.
+    // Never manufacture a new AI message merely because focus selection moved.
+    if (isFocusModeOpen && focusActiveTask) previousFocusActiveTaskIdRef.current = focusActiveTask.id;
+    setReplyToFocusAi(null);
+    setFocusAiDraft('');
+    setFocusAiPendingFiles([]);
+    setFocusAiError(null);
+  }, [isFocusModeOpen, focusActiveTask?.id]);
 
   const sendFocusedAiQuestion = async (options?: {
     questionOverride?: string;
@@ -2526,15 +2539,22 @@ export default function App() {
     setAiPendingFiles((prev) => prev.filter((file) => file.name !== fileName));
   };
 
-  const clearFocusedAiDialog = () => {
-    if (!focusedTask) return;
-    setAiDialogByTask((prev) => {
-      if (!(focusedTask.id in prev)) return prev;
-      const next = { ...prev };
-      delete next[focusedTask.id];
-      return next;
-    });
-    setAiError(null);
+  const [clearingTaskAiId, setClearingTaskAiId] = useState<string | null>(null);
+  const clearFocusedAiDialog = async () => {
+    if (!focusedTask || aiLoadingTaskId === focusedTask.id || clearingTaskAiId) return;
+    if (!window.confirm('Очистить историю переписки с ИИ по этой задаче? Действие необратимо.')) return;
+    const taskId = focusedTask.id;
+    setClearingTaskAiId(taskId);
+    taskAiClearRevisionRef.current[taskId] = (taskAiClearRevisionRef.current[taskId] ?? 0) + 1;
+    try {
+      await api.clearTaskAssistantHistory(taskId);
+      loadedAiHistoryTaskIdsRef.current.delete(taskId);
+      setAiDialogByTask(prev => ({ ...prev, [taskId]: [] }));
+      setReplyToAiTask(null);
+      setAiError(null);
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : 'Не удалось очистить диалог.');
+    } finally { setClearingTaskAiId(null); }
   };
 
   const formatFocusTime = (seconds: number) => {
@@ -2587,7 +2607,6 @@ export default function App() {
     if (selected.length < FOCUS_MIN_TASKS) return;
     setFocusSelectedTaskIds(selected);
     setFocusActiveIndex(0);
-    setFocusAiMessages([]);
     setFocusAiError(null);
     setFocusSessionInitialDoneSubtaskIds(new Set(subtasks.filter((task) => task.status === 'DONE').map((task) => task.id)));
     setFocusSessionAiRequestCount(0);
@@ -2701,59 +2720,95 @@ export default function App() {
     });
   };
 
-  const sendFocusAiQuestion = async (options?: { questionOverride?: string; userContentOverride?: string; allowBeforeTimerStateUpdate?: boolean }) => {
-    const currentTask = focusActiveTask;
+  // Focus is only another view of the selected task's existing AI chat.
+  // No separate model history or multi-task prompt is generated here.
+  const sendFocusAiQuestion = async (options?: {
+    questionOverride?: string; userContentOverride?: string; allowBeforeTimerStateUpdate?: boolean;
+  }) => {
+    const task = focusActiveTask;
+    if (!task || focusAiLoading || aiLoadingTaskId === task.id) return;
     const question = (options?.questionOverride ?? focusAiDraft).trim();
-    if (!currentTask || focusAiLoading || (!isFocusTimerRunning && !options?.allowBeforeTimerStateUpdate)) return;
     if (!question && focusAiPendingFiles.length === 0) return;
-
-    let attachmentsPayload: ChatAttachmentPayload[] = [];
-    try {
-      attachmentsPayload = await Promise.all(focusAiPendingFiles.map((file) => fileToAttachmentPayload(file, true)));
-    } catch (error) {
-      setFocusAiError(error instanceof Error ? error.message : 'Не удалось прочитать приложенный файл');
+    const taskId = task.id;
+    // Collaborative focus chat uses the task's existing recipient selector,
+    // just like Help AI. Never send a message addressed to a person to AI.
+    const recipientUserId = getTaskAiRecipientId(task);
+    if (recipientUserId !== 'ai') {
+      if (focusAiPendingFiles.length > 0) {
+        setFocusAiError('Вложения доступны только для сообщений ИИ.');
+        return;
+      }
+      setFocusAiLoading(true);
+      try {
+        const sent = await api.sendTaskParticipantMessage(taskId, { recipientUserId, content: question }) as TaskAiMessage;
+        setAiDialogByTask(prev => ({ ...prev, [taskId]: [...(prev[taskId] ?? []), sent] }));
+        setFocusAiDraft('');
+        setFocusAiError(null);
+      } catch (error) {
+        setFocusAiError(error instanceof Error ? error.message : 'Не удалось отправить сообщение участнику');
+      } finally { setFocusAiLoading(false); }
       return;
     }
-
-    const fileNames = focusAiPendingFiles.map((file) => file.name);
-    const visibleUserContent = options?.userContentOverride?.trim() || question || 'Сообщение с вложением';
-    const userContent = serializeAiReply(fileNames.length > 0 ? `${visibleUserContent}\n\n📎 Файлы: ${fileNames.join(', ')}` : visibleUserContent, options?.questionOverride ? null : replyToFocusAi);
-    const allContext = focusTasks.map(buildFocusTaskContext).join('\n\n---\n\n');
-    const contextualQuestion = [
-      'Ты работаешь в режиме концентрации. Помогай только по выбранным задачам и учитывай, какая задача выбрана сейчас.',
-      'Закрытые подзадачи намеренно не включены в контекст. Не планируй работу по закрытым подзадачам и не восстанавливай их по истории диалога.',
-      'Если в ответе говоришь о конкретной задаче или подзадаче, сразу после её названия добавляй служебную метку [[task_ref=ID]] из контекста. Не придумывай ID.',
-      'Не пиши технические ID как обычный текст — только внутри метки [[task_ref=...]].',
-      `Текущая выбранная задача: [${currentTask.id}] ${currentTask.title}`,
-      `Контекст всех задач:
-${allContext}`,
-      `Запрос пользователя: ${serializeAiReply(question || visibleUserContent, options?.questionOverride ? null : replyToFocusAi)}`
-    ].join('\n\n');
-    const clientRequestId = crypto.randomUUID();
+    let attachmentsPayload: ChatAttachmentPayload[] = [];
+    try {
+      attachmentsPayload = await Promise.all(focusAiPendingFiles.map(file => fileToAttachmentPayload(file, true)));
+    } catch (error) {
+      setFocusAiError(error instanceof Error ? error.message : 'Не удалось прочитать файл');
+      return;
+    }
+    const fileNames = focusAiPendingFiles.map(file => file.name);
+    const visibleText = options?.userContentOverride?.trim() || question || 'Сообщение с вложением';
+    const userContent = serializeAiReply(fileNames.length
+      ? `${visibleText}\n\n📎 Файлы: ${fileNames.join(', ')}` : visibleText, replyToFocusAi);
+    const id = crypto.randomUUID();
     const attachmentPreviews = await makeAiAttachmentPreviews(focusAiPendingFiles);
-    setFocusAiMessages((prev) => [...prev, { id: clientRequestId, role: 'user', content: userContent, attachmentPreviews }]);
+    setAiDialogByTask(prev => ({ ...prev, [taskId]: [...(prev[taskId] ?? []),
+      { id, role: 'user', content: userContent, attachmentPreviews }] }));
     setReplyToFocusAi(null);
     setFocusAiDraft('');
-    setFocusAiUploadProgress(null);
     setFocusAiError(null);
+    setFocusAiPendingFiles([]);
     setFocusAiLoading(true);
-    setFocusAiPendingFiles([]); // Remove completed outgoing attachment tiles before response.
+    setAiLoadingTaskId(taskId);
     setFocusAiProgress('analyzing_request');
-    setFocusSessionAiRequestCount((count) => count + 1);
+    setAiProgressByTask(prev => ({ ...prev, [taskId]: 'analyzing_request' }));
+    setFocusSessionAiRequestCount(count => count + 1);
     try {
-      const result = await askTaskAssistant(currentTask.id, { clientRequestId, question: contextualQuestion, userMessage: userContent, model: focusAiModel, attachments: attachmentsPayload, skipEfficiencyBonus: true }, setFocusAiProgress, setFocusAiUploadProgress);
-      setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: result.answer, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined }]);
+      const result = await askTaskAssistant(taskId, {
+        clientRequestId: id, question: serializeAiReply(question || visibleText, replyToFocusAi),
+        userMessage: userContent, model: aiModelByTask[taskId] ?? 'gpt-5.4-mini',
+        attachments: attachmentsPayload, skipEfficiencyBonus: true
+      }, status => {
+        setFocusAiProgress(status);
+        setAiProgressByTask(prev => ({ ...prev, [taskId]: status }));
+      }, setFocusAiUploadProgress);
+      setAiDialogByTask(prev => ({ ...prev, [taskId]: [...(prev[taskId] ?? []), {
+        id: crypto.randomUUID(), role: 'assistant', content: result.answer,
+        creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed,
+        webSources: result.webSources, webCitations: result.webCitations,
+        generatedDocument: result.generatedDocument ?? undefined,
+        telegramSendDraft: result.telegramSendDraft ?? undefined,
+        taskProposal: result.taskProposal ?? undefined,
+        telegramReadDraft: result.telegramReadDraft ?? undefined
+      }] }));
       await refreshAiCredits();
+      await load();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось получить ответ ИИ';
-      setFocusAiError(message);
-      setFocusAiDraft((current) => current.trim() ? current : question);
-      setFocusAiPendingFiles((current) => current.length ? current : focusAiPendingFiles);
-      setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: message }]);
+      if (previousFocusActiveTaskIdRef.current === taskId) {
+        setFocusAiError(message);
+        setFocusAiDraft(previous => previous.trim() ? previous : question);
+        // Retain uploads for retry only while this same task stays active.
+        setFocusAiPendingFiles((current) => current.length ? current : focusAiPendingFiles);
+      }
+      setAiDialogByTask(prev => ({ ...prev, [taskId]: [...(prev[taskId] ?? []),
+        { id: crypto.randomUUID(), role: 'assistant', content: message }] }));
     } finally {
       setFocusAiLoading(false);
-      setFocusAiUploadProgress(null);
+      setAiLoadingTaskId(null);
       setFocusAiProgress(null);
+      setFocusAiUploadProgress(null);
+      setAiProgressByTask(prev => { const next = { ...prev }; delete next[taskId]; return next; });
     }
   };
 
@@ -2799,9 +2854,7 @@ ${allContext}`,
     setIsFocusSessionFinished(false);
     if (focusActiveTask) previousFocusActiveTaskIdRef.current = focusActiveTask.id;
     setIsFocusTimerRunning(true);
-    if (focusAiMessages.length === 0 && focusActiveTask) {
-      void sendFocusAiQuestion({ questionOverride: 'Предложи первые необходимые шаги для старта работы прямо сейчас.', userContentOverride: 'Предложить первые шаги для старта', allowBeforeTimerStateUpdate: true });
-    }
+
   };
 
   const activeAiChatProject = aiChatProjects.find((project) => project.id === activeAiChatProjectId) ?? aiChatProjects[0];
@@ -3378,7 +3431,7 @@ ${allContext}`,
         question: 'Продолжи исходный запрос по разрешённой пользователем переписке Telegram.',
         userMessage: '',
         telegramRead: approval,
-        model: focus ? focusAiModel : focusedAiModel,
+        model: focus ? (aiModelByTask[taskId] ?? 'gpt-5.4-mini') : focusedAiModel,
         clientSurface: 'web',
         skipEfficiencyBonus: focus
       }, { onStatus: status => {
@@ -3393,8 +3446,7 @@ ${allContext}`,
         telegramSendDraft: result.telegramSendDraft ?? undefined,
         taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined
       };
-      if (focus) setFocusAiMessages(prev => [...prev, response]);
-      else setAiDialogByTask(prev => ({ ...prev, [taskId]: [...(prev[taskId] ?? []), response] }));
+      setAiDialogByTask(prev => ({ ...prev, [taskId]: [...(prev[taskId] ?? []), response] }));
       await refreshAiCredits();
       if (result.taskDataChanged) await load();
     } finally {
@@ -5482,27 +5534,38 @@ ${allContext}`,
               <button className="focus-stack-arrow absolute bottom-[4.25rem] z-10" onClick={() => switchFocusTask(1)}><ChevronDown size={22} /></button>
               <div className="focus-card-peek -mt-1">{focusTasks[(focusActiveIndex + 1) % focusTasks.length]?.title}</div>
             </main>
-            <aside data-tour="feature-focus-ai" className="ai-chat-lightweight focus-ai-panel relative flex min-h-0 flex-col rounded-3xl border p-4">
+            <aside data-tour="feature-focus-ai" className="ai-chat-lightweight focused-task-ai-panel focus-ai-panel focus-shared-task-ai-panel relative flex min-h-0 flex-col overflow-hidden rounded-3xl border p-4">
               <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2"><Bot size={18} className="text-violet-600" /><h3 className="font-semibold text-primary">ИИ в контексте фокуса</h3></div>
+                <div className="min-w-0 flex items-center gap-2"><Bot size={18} className="shrink-0 text-violet-600" /><h3 className="truncate font-semibold ai-panel-title">Помощь ИИ</h3></div>
                 <div className="flex items-center gap-1.5">
                   <button className="focused-task-ai-icon-button" onClick={() => setIsFocusAiExpanded(true)} title="Открыть полноразмерный диалог"><Maximize2 size={15} /></button>
                   <button className="focused-task-ai-icon-button" onClick={() => setIsFocusModeOpen(false)} title="Закрыть режим концентрации" aria-label="Закрыть режим концентрации"><X size={15} /></button>
                 </div>
               </div>
-              <div className="relative mt-3 min-h-0 flex-1">
-                <AiModelChip value={focusAiModel} onChange={setFocusAiModel} ariaLabel="Выбрать модель ИИ для режима концентрации" className="absolute left-1/2 top-px z-20 -translate-x-1/2" />
-                <div ref={focusAiDialogContainerRef} className="chat-thread h-full min-h-0 space-y-3 overflow-y-auto rounded-2xl border p-3 pt-12">
-                  {focusAiMessages.map((message) => <div key={message.id} className={`ai-message-forward-group w-fit max-w-[92%] ${message.role === 'assistant' ? 'mr-auto' : 'ml-auto'}`}><div className={`chat-message w-full rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant' : 'chat-message-user'}`}><div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.messageKind === 'MONITOR_ACTION' ? <TaskMonitoringActionBadge content={message.content} /> : message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}{message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} searched={message.webSearchUsed} /> : null}{message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
+              <div className="mb-2 mt-2 flex shrink-0 items-center justify-between gap-2">
+                <span className="min-w-0 truncate text-xs text-muted" title={focusActiveTask.title}>{focusActiveTask.title}</span>
+                <TaskMonitoringStatuses taskId={focusActiveTask.id}
+                  enabled={focusActiveTask.aiMonitoringEnabled === true}
+                  allowed={focusActiveTask.taskType === 'TASK' && !focusActiveTask.parentTaskId && !focusActiveTask.isCollaborative}
+                  onTaskUpdated={updated => setTasks(prev => prev.map(task => task.id === updated.id ? updated : task))} />
+              </div>
+              <div className="focused-task-ai-thread-region relative mt-2 min-h-0 flex-1">
+                <AiModelChip value={focusTaskAiModel} onChange={model => setAiModelByTask(prev => ({ ...prev, [focusActiveTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-px z-20 -translate-x-1/2" />
+                <div ref={focusAiDialogContainerRef} className="chat-thread focused-task-ai-thread-through h-full min-h-0 space-y-3 overflow-y-auto rounded-xl p-3 pt-12">
+                  {focusTaskAiDialog.map((message) => <div key={message.id} className={`ai-message-forward-group w-fit max-w-[92%] ${message.role === 'assistant' ? 'mr-auto' : 'ml-auto'}`}><div className={`chat-message w-full rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant' : 'chat-message-user'}`}><div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.messageKind === 'MONITOR_ACTION' ? <TaskMonitoringActionBadge content={message.content} /> : message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}{message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} searched={message.webSearchUsed} /> : null}{message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusActiveTask!.id, true)} /> : null}
                     </div><div className="ai-message-forward-actions"><AiReplyAction message={message} onReply={(target) => setReplyToFocusAi(target)} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={focusActiveTask?.sphereId ?? null} /></div></div>)}
-                  {focusAiLoading && focusAiProgress ? <TaskAiProgress status={focusAiProgress} /> : null}
+                  {focusActiveTask.aiMonitoringEnabled ? <TaskMonitoringTriggerChips taskId={focusActiveTask.id} enabled /> : null}
+                  {aiLoadingTaskId === focusActiveTask.id && focusAiProgress ? <TaskAiProgress status={focusAiProgress} /> : focusActiveTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={focusActiveTask.id} /> : null}
                 </div>
               </div>
+              <div className="focused-task-ai-composer">
               {focusAiError ? <p className="mt-2 text-xs text-rose-500">{focusAiError}</p> : null}
               {replyToFocusAi ? <AiReplyPreview target={replyToFocusAi} onDismiss={() => setReplyToFocusAi(null)} /> : null}
+              {renderTaskAiRecipientPicker(focusActiveTask)}
 <AiAttachmentTiles files={focusAiPendingFiles} onRemove={(file) => removeFocusAiPendingFile(file.name)} busy={focusAiLoading} uploadProgress={focusAiUploadProgress} />
-              <div className="ai-chat-composer mt-3 flex items-end gap-2 rounded-3xl border p-2"><AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); addFocusAiClipboardImages(files); } }} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder={isFocusTimerRunning ? 'Напишите сообщение…' : 'Запустите таймер, чтобы писать ИИ'} disabled={!isFocusTimerRunning || focusAiLoading} /><input ref={focusAiFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} /><button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={!isFocusTimerRunning || focusAiLoading} onClick={() => focusAiFileInputRef.current?.click()}><Paperclip size={16} /></button><button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg disabled:opacity-50" title="Отправить" disabled={!isFocusTimerRunning || focusAiLoading || (!focusAiDraft.trim() && focusAiPendingFiles.length === 0)} onClick={() => void sendFocusAiQuestion()}>{focusAiLoading ? <Loader2 className="animate-spin" size={16} /> : <SendHorizontal size={16} />}</button></div>
+              <div className="ai-chat-composer mt-3 flex items-end gap-2 rounded-3xl border p-2"><AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); addFocusAiClipboardImages(files); } }} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder="Напишите сообщение…" disabled={focusAiLoading} /><input ref={focusAiFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} /><button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={focusAiLoading} onClick={() => focusAiFileInputRef.current?.click()}><Paperclip size={16} /></button><button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg disabled:opacity-50" title="Отправить" disabled={focusAiLoading || (!focusAiDraft.trim() && focusAiPendingFiles.length === 0)} onClick={() => void sendFocusAiQuestion()}>{aiLoadingTaskId === focusActiveTask.id ? <Loader2 className="animate-spin" size={16} /> : <SendHorizontal size={16} />}</button></div>
+              </div>
             </aside>
           </div>
         </div>
@@ -5513,30 +5576,36 @@ ${allContext}`,
           <div className="ai-chat-lightweight ai-chat-lightweight-panel dialog-surface relative flex h-[90vh] w-full max-w-4xl flex-col rounded-3xl border p-5" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
-                <p className="flex items-center gap-2 text-base font-semibold ai-panel-title"><Bot size={18} /> Полноразмерный диалог режима концентрации</p>
+                <p className="flex items-center gap-2 text-base font-semibold ai-panel-title"><Bot size={18} /> Полноэкранный диалог с ИИ</p>
                 <p className="text-xs text-muted">Текущая задача: {focusActiveTask.title}</p>
               </div>
               <div className="flex items-center gap-1.5">
-                <button className="focused-task-ai-icon-button" onClick={() => setIsFocusAiExpanded(false)} title="Закрыть"><X size={16} /></button>
+                <TaskMonitoringStatuses taskId={focusActiveTask.id}
+                   enabled={focusActiveTask.aiMonitoringEnabled === true}
+                   allowed={focusActiveTask.taskType === 'TASK' && !focusActiveTask.parentTaskId && !focusActiveTask.isCollaborative}
+                   onTaskUpdated={updated => setTasks(prev => prev.map(task => task.id === updated.id ? updated : task))} />
+                 <button className="focused-task-ai-icon-button" onClick={() => setIsFocusAiExpanded(false)} title="Закрыть"><X size={16} /></button>
               </div>
             </div>
             <div className="relative min-h-0 flex-1">
-              <AiModelChip value={focusAiModel} onChange={setFocusAiModel} ariaLabel="Выбрать модель ИИ для режима концентрации" className="absolute left-1/2 top-px z-20 -translate-x-1/2" />
+              <AiModelChip value={focusTaskAiModel} onChange={model => setAiModelByTask(prev => ({ ...prev, [focusActiveTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-px z-20 -translate-x-1/2" />
               <div ref={focusAiExpandedDialogContainerRef} className="chat-thread h-full min-h-0 space-y-3 overflow-y-auto rounded-2xl border p-4 pt-12">
-                {focusAiMessages.map((message) => <div key={message.id} className={`ai-message-forward-group w-fit max-w-[82%] ${message.role === 'assistant' ? 'mr-auto' : 'ml-auto'}`}><div className={`chat-message w-full rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant' : 'chat-message-user'}`}><div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-expanded-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-expanded-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.messageKind === 'MONITOR_ACTION' ? <TaskMonitoringActionBadge content={message.content} /> : message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={(task) => { setIsFocusAiExpanded(false); openTaskReferenceFromAi(task); }} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}{message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} searched={message.webSearchUsed} /> : null}{message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
+                {focusTaskAiDialog.map((message) => <div key={message.id} className={`ai-message-forward-group w-fit max-w-[82%] ${message.role === 'assistant' ? 'mr-auto' : 'ml-auto'}`}><div className={`chat-message w-full rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant' : 'chat-message-user'}`}><div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-expanded-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-expanded-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.messageKind === 'MONITOR_ACTION' ? <TaskMonitoringActionBadge content={message.content} /> : message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={(task) => { setIsFocusAiExpanded(false); openTaskReferenceFromAi(task); }} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}{message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} searched={message.webSearchUsed} /> : null}{message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusActiveTask!.id, true)} /> : null}
                     </div><div className="ai-message-forward-actions"><AiReplyAction message={message} onReply={(target) => setReplyToFocusAi(target)} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={focusActiveTask?.sphereId ?? null} /></div></div>)}
-                {focusAiLoading && focusAiProgress ? <TaskAiProgress status={focusAiProgress} /> : null}
+                {focusActiveTask.aiMonitoringEnabled ? <TaskMonitoringTriggerChips taskId={focusActiveTask.id} enabled /> : null}
+                {aiLoadingTaskId === focusActiveTask.id && focusAiProgress ? <TaskAiProgress status={focusAiProgress} /> : focusActiveTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={focusActiveTask.id} /> : null}
               </div>
             </div>
             {focusAiError ? <p className="mt-2 text-xs text-rose-500">{focusAiError}</p> : null}
             {replyToFocusAi ? <AiReplyPreview target={replyToFocusAi} onDismiss={() => setReplyToFocusAi(null)} /> : null}
+              {renderTaskAiRecipientPicker(focusActiveTask)}
             {focusAiPendingFiles.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5">{focusAiPendingFiles.map((file) => <button key={file.name} type="button" className="rounded-full bg-violet-100 px-2 py-1 text-[11px] text-violet-700" onClick={() => removeFocusAiPendingFile(file.name)}>📎 {file.name} ×</button>)}</div> : null}
             <div className="ai-chat-composer mt-3 flex items-center gap-2 rounded-3xl border p-2">
-              <AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); addFocusAiClipboardImages(files); } }} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder={isFocusTimerRunning ? 'Напишите сообщение…' : 'Запустите таймер, чтобы писать ИИ'} disabled={!isFocusTimerRunning || focusAiLoading} />
+              <AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); addFocusAiClipboardImages(files); } }} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder="Напишите сообщение…" disabled={focusAiLoading} />
               <input ref={focusAiExpandedFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} />
-              <button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={!isFocusTimerRunning || focusAiLoading} onClick={() => focusAiExpandedFileInputRef.current?.click()}><Paperclip size={16} /></button>
-              <button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg disabled:opacity-50" title="Отправить" disabled={!isFocusTimerRunning || focusAiLoading || (!focusAiDraft.trim() && focusAiPendingFiles.length === 0)} onClick={() => void sendFocusAiQuestion()}>{focusAiLoading ? <Loader2 className="animate-spin" size={16} /> : <SendHorizontal size={16} />}</button>
+              <button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={focusAiLoading} onClick={() => focusAiExpandedFileInputRef.current?.click()}><Paperclip size={16} /></button>
+              <button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg disabled:opacity-50" title="Отправить" disabled={focusAiLoading || (!focusAiDraft.trim() && focusAiPendingFiles.length === 0)} onClick={() => void sendFocusAiQuestion()}>{aiLoadingTaskId === focusActiveTask.id ? <Loader2 className="animate-spin" size={16} /> : <SendHorizontal size={16} />}</button>
             </div>
           </div>
         </div>
@@ -7951,6 +8020,7 @@ ${allContext}`,
             <div className="mb-3 flex items-center justify-between">
               <div>
                 <p className="flex items-center gap-2 text-base font-semibold ai-panel-title"><Bot size={18} /> Полноэкранный диалог с ИИ</p>
+                 <p className="mt-1 max-w-[42ch] truncate text-xs text-muted" title={focusedTask.title}>{focusedTask.title}</p>
               </div>
               <div className="flex items-center gap-2">
                 <TaskMonitoringStatuses taskId={focusedTask.id}
@@ -7961,12 +8031,12 @@ ${allContext}`,
                     setFocusedDraft(previous => previous ? { ...previous, aiMonitoringEnabled: updated.aiMonitoringEnabled } : previous);
                   }} />
                 <button
-                  className="rounded bg-rose-700/80 px-2 py-1.5 text-xs text-rose-100 hover:bg-rose-700"
-                  onClick={clearFocusedAiDialog}
-                  title="Очистить историю диалога по этой задаче"
-                >
-                  Очистить диалог
-                </button>
+                  className="focused-task-ai-icon-button inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-medium"
+                   onClick={() => void clearFocusedAiDialog()}
+                   disabled={clearingTaskAiId === focusedTask.id || aiLoadingTaskId === focusedTask.id}
+                   title="Очистить историю диалога по этой задаче"
+                 ><Trash2 size={13} /> {clearingTaskAiId === focusedTask.id ? 'Очищаю…' : 'Очистить'}
+                 </button>
                 <div className="flex items-center gap-1.5">
                   <button
                     className={`focused-task-ai-icon-button ${isFocusedAiSearchOpen ? 'focused-task-ai-icon-button-active' : ''}`}

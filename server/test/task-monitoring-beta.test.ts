@@ -50,7 +50,7 @@ test('same AI-chat monitoring panel exists on desktop, Telegram and mobile web',
   assert.match(statuses, /getTaskMonitoringUnread/);
   assert.match(statuses, /markTaskMonitoringSeen/);
   assert.match(statuses, /task-monitor-unread/);
-  assert.equal((desktop.match(/<TaskMonitoringStatuses/g) ?? []).length, 2);
+  assert.equal((desktop.match(/<TaskMonitoringStatuses/g) ?? []).length, 4);
   assert.match(mini, /<TaskMonitoringStatuses taskId=\{openedTask.id\}/);
   assert.match(types, /aiMonitoringEnabled\?: boolean/);
 });

@@ -87,7 +87,7 @@ test('follow-up countdown is visible in task chat on web and mobile', async () =
     file('../../client/src/MiniApp.tsx'),
     file('../../client/src/components/TaskMonitoringTriggerChips.tsx')
   ]);
-  assert.equal((web.match(/<TaskMonitoringTriggerChips/g) ?? []).length, 2);
+  assert.equal((web.match(/<TaskMonitoringTriggerChips/g) ?? []).length, 4);
   assert.match(mini, /<TaskMonitoringTriggerChips taskId=\{openedTask.id\}/);
   assert.match(chip, /Триггер запущен/);
   assert.match(chip, /getTaskMonitoringTriggers/);

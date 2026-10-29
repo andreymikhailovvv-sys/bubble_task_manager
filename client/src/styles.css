@@ -11642,3 +11642,34 @@ body[data-theme='light'] .miniapp-shell.miniapp-telegram-fullscreen .miniapp-tel
     gap: 0;
   }
 }
+
+
+/* Focus mirrors the established task Help AI panel, sized for focus grid. */
+.focus-mode-shell .focus-shared-task-ai-panel {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding-bottom: 0 !important;
+}
+.focus-mode-shell .focus-shared-task-ai-panel .focused-task-ai-thread-region {
+  min-width: 0;
+  margin-bottom: 0;
+}
+.focus-mode-shell .focus-shared-task-ai-panel .focused-task-ai-composer {
+  padding: .65rem .8rem .85rem;
+}
+.focus-mode-shell .focus-shared-task-ai-panel .chat-thread.focused-task-ai-thread-through {
+  padding-bottom: 11rem !important;
+}
+.focus-mode-shell .focus-shared-task-ai-panel .task-ai-composer,
+.focus-mode-shell .focus-shared-task-ai-panel .ai-chat-composer {
+  margin-top: .35rem;
+}
+@media (max-width: 1150px) {
+  .focus-mode-shell .focus-shared-task-ai-panel .task-monitor-button {
+    max-width: 11rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
