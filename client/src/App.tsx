@@ -842,6 +842,8 @@ export default function App() {
   const [focusRemainingSeconds, setFocusRemainingSeconds] = useState(25 * 60);
   const [isFocusTimerRunning, setIsFocusTimerRunning] = useState(false);
   const [focusAiDraft, setFocusAiDraft] = useState('');
+  const [isFocusAiSearchOpen, setIsFocusAiSearchOpen] = useState(false);
+  const [focusAiSearchQuery, setFocusAiSearchQuery] = useState('');
   const [focusAiLoading, setFocusAiLoading] = useState(false);
   const [focusAiProgress, setFocusAiProgress] = useState<TaskAiProgressStatus | null>(null);
   const [focusAiError, setFocusAiError] = useState<string | null>(null);
@@ -2308,6 +2310,8 @@ export default function App() {
     setFocusAiDraft('');
     setFocusAiPendingFiles([]);
     setFocusAiError(null);
+    setIsFocusAiSearchOpen(false);
+    setFocusAiSearchQuery('');
   }, [isFocusModeOpen, focusActiveTask?.id]);
 
   const sendFocusedAiQuestion = async (options?: {
@@ -2540,10 +2544,9 @@ export default function App() {
   };
 
   const [clearingTaskAiId, setClearingTaskAiId] = useState<string | null>(null);
-  const clearFocusedAiDialog = async () => {
-    if (!focusedTask || aiLoadingTaskId === focusedTask.id || clearingTaskAiId) return;
+  const clearTaskAiDialog = async (taskId: string) => {
+    if (!taskId || aiLoadingTaskId === taskId || clearingTaskAiId) return;
     if (!window.confirm('Очистить историю переписки с ИИ по этой задаче? Действие необратимо.')) return;
-    const taskId = focusedTask.id;
     setClearingTaskAiId(taskId);
     taskAiClearRevisionRef.current[taskId] = (taskAiClearRevisionRef.current[taskId] ?? 0) + 1;
     try {
@@ -2551,10 +2554,17 @@ export default function App() {
       loadedAiHistoryTaskIdsRef.current.delete(taskId);
       setAiDialogByTask(prev => ({ ...prev, [taskId]: [] }));
       setReplyToAiTask(null);
+      setReplyToFocusAi(null);
       setAiError(null);
+      setFocusAiError(null);
     } catch (error) {
-      setAiError(error instanceof Error ? error.message : 'Не удалось очистить диалог.');
+      const message = error instanceof Error ? error.message : 'Не удалось очистить диалог.';
+      setAiError(message);
+      setFocusAiError(message);
     } finally { setClearingTaskAiId(null); }
+  };
+  const clearFocusedAiDialog = async () => {
+    if (focusedTask) await clearTaskAiDialog(focusedTask.id);
   };
 
   const formatFocusTime = (seconds: number) => {
@@ -5535,19 +5545,16 @@ export default function App() {
               <div className="focus-card-peek -mt-1">{focusTasks[(focusActiveIndex + 1) % focusTasks.length]?.title}</div>
             </main>
             <aside data-tour="feature-focus-ai" className="ai-chat-lightweight focused-task-ai-panel focus-ai-panel focus-shared-task-ai-panel relative flex min-h-0 flex-col overflow-hidden rounded-3xl border p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex items-center gap-2"><Bot size={18} className="shrink-0 text-violet-600" /><h3 className="truncate font-semibold ai-panel-title">Помощь ИИ</h3></div>
-                <div className="flex items-center gap-1.5">
-                  <button className="focused-task-ai-icon-button" onClick={() => setIsFocusAiExpanded(true)} title="Открыть полноразмерный диалог"><Maximize2 size={15} /></button>
-                  <button className="focused-task-ai-icon-button" onClick={() => setIsFocusModeOpen(false)} title="Закрыть режим концентрации" aria-label="Закрыть режим концентрации"><X size={15} /></button>
+              <div className="focus-task-ai-header flex shrink-0 items-center justify-between gap-3">
+                <div className="min-w-0 flex shrink-0 items-center gap-2"><Bot size={18} className="focus-task-ai-bot-icon shrink-0" /><h3 className="truncate font-semibold ai-panel-title">Помощь ИИ</h3></div>
+                <div className="focus-task-ai-header-actions flex min-w-0 items-center justify-end gap-2">
+                  <TaskMonitoringStatuses taskId={focusActiveTask.id}
+                    enabled={focusActiveTask.aiMonitoringEnabled === true}
+                    allowed={focusActiveTask.taskType === 'TASK' && !focusActiveTask.parentTaskId && !focusActiveTask.isCollaborative}
+                    onTaskUpdated={updated => setTasks(prev => prev.map(task => task.id === updated.id ? updated : task))} />
+                  <button type="button" className="focused-task-ai-icon-button shrink-0" onClick={() => setIsFocusAiExpanded(true)} title="Открыть полноразмерный диалог"><Maximize2 size={15} /></button>
+                  <button type="button" className="focused-task-ai-icon-button shrink-0" onClick={() => setIsFocusModeOpen(false)} title="Закрыть режим концентрации" aria-label="Закрыть режим концентрации"><X size={15} /></button>
                 </div>
-              </div>
-              <div className="mb-2 mt-2 flex shrink-0 items-center justify-between gap-2">
-                <span className="min-w-0 truncate text-xs text-muted" title={focusActiveTask.title}>{focusActiveTask.title}</span>
-                <TaskMonitoringStatuses taskId={focusActiveTask.id}
-                  enabled={focusActiveTask.aiMonitoringEnabled === true}
-                  allowed={focusActiveTask.taskType === 'TASK' && !focusActiveTask.parentTaskId && !focusActiveTask.isCollaborative}
-                  onTaskUpdated={updated => setTasks(prev => prev.map(task => task.id === updated.id ? updated : task))} />
               </div>
               <div className="focused-task-ai-thread-region relative mt-2 min-h-0 flex-1">
                 <AiModelChip value={focusTaskAiModel} onChange={model => setAiModelByTask(prev => ({ ...prev, [focusActiveTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-px z-20 -translate-x-1/2" />
@@ -5573,30 +5580,50 @@ export default function App() {
 
       {isFocusModeOpen && isFocusAiExpanded && focusActiveTask ? (
         <div className="fixed inset-0 z-[151] flex items-center justify-center bg-slate-950/70 p-4" onClick={() => setIsFocusAiExpanded(false)}>
-          <div className="ai-chat-lightweight ai-chat-lightweight-panel dialog-surface relative flex h-[90vh] w-full max-w-4xl flex-col rounded-3xl border p-5" onClick={(event) => event.stopPropagation()}>
-            <div className="mb-3 flex items-start justify-between gap-3">
-              <div>
+          <div className="ai-chat-lightweight ai-chat-lightweight-panel app-card focused-task-ai-expanded-panel focus-task-ai-expanded-panel relative flex h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border p-5" onClick={(event) => event.stopPropagation()}>
+            <div className="task-ai-fullscreen-header mb-3 flex min-w-0 items-center justify-between gap-4">
+              <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-2 text-base font-semibold ai-panel-title"><Bot size={18} /> Полноэкранный диалог с ИИ</p>
-                <p className="text-xs text-muted">Текущая задача: {focusActiveTask.title}</p>
+                <p className="mt-1 max-w-[42ch] truncate text-xs text-muted" title={focusActiveTask.title}>{focusActiveTask.title}</p>
               </div>
-              <div className="flex items-center gap-1.5">
-                <TaskMonitoringStatuses taskId={focusActiveTask.id}
-                   enabled={focusActiveTask.aiMonitoringEnabled === true}
-                   allowed={focusActiveTask.taskType === 'TASK' && !focusActiveTask.parentTaskId && !focusActiveTask.isCollaborative}
-                   onTaskUpdated={updated => setTasks(prev => prev.map(task => task.id === updated.id ? updated : task))} />
-                 <button className="focused-task-ai-icon-button" onClick={() => setIsFocusAiExpanded(false)} title="Закрыть"><X size={16} /></button>
+              <div className="task-ai-fullscreen-actions flex shrink-0 flex-wrap items-center justify-end gap-3">
+                <div className="task-ai-fullscreen-monitor shrink-0">
+                  <TaskMonitoringStatuses taskId={focusActiveTask.id}
+                    enabled={focusActiveTask.aiMonitoringEnabled === true}
+                    allowed={focusActiveTask.taskType === 'TASK' && !focusActiveTask.parentTaskId && !focusActiveTask.isCollaborative}
+                    onTaskUpdated={updated => setTasks(prev => prev.map(task => task.id === updated.id ? updated : task))} />
+                </div>
+                <button type="button" className="task-ai-clear-dialog-button"
+                  onClick={() => void clearTaskAiDialog(focusActiveTask.id)}
+                  disabled={clearingTaskAiId === focusActiveTask.id || aiLoadingTaskId === focusActiveTask.id}
+                  title="Очистить историю диалога по этой задаче"
+                ><Trash2 size={14} /> {clearingTaskAiId === focusActiveTask.id ? 'Очищаю…' : 'Очистить'}</button>
+                <div className="task-ai-fullscreen-window-actions flex items-center gap-2">
+                  <button type="button" className={`focused-task-ai-icon-button ${isFocusAiSearchOpen ? 'focused-task-ai-icon-button-active' : ''}`}
+                    onClick={() => setIsFocusAiSearchOpen(prev => !prev)} title="Поиск по диалогу"><Search size={14} /></button>
+                  <button type="button" className="focused-task-ai-icon-button" onClick={() => setIsFocusAiExpanded(false)} title="Свернуть"><Minimize2 size={14} /></button>
+                  <button type="button" className="focused-task-ai-icon-button" onClick={() => { setIsFocusAiExpanded(false); setIsFocusModeOpen(false); }} title="Закрыть"><X size={14} /></button>
+                </div>
               </div>
             </div>
-            <div className="relative min-h-0 flex-1">
-              <AiModelChip value={focusTaskAiModel} onChange={model => setAiModelByTask(prev => ({ ...prev, [focusActiveTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-px z-20 -translate-x-1/2" />
-              <div ref={focusAiExpandedDialogContainerRef} className="chat-thread h-full min-h-0 space-y-3 overflow-y-auto rounded-2xl border p-4 pt-12">
-                {focusTaskAiDialog.map((message) => <div key={message.id} className={`ai-message-forward-group w-fit max-w-[82%] ${message.role === 'assistant' ? 'mr-auto' : 'ml-auto'}`}><div className={`chat-message w-full rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant' : 'chat-message-user'}`}><div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-expanded-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-expanded-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.messageKind === 'MONITOR_ACTION' ? <TaskMonitoringActionBadge content={message.content} /> : message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={(task) => { setIsFocusAiExpanded(false); openTaskReferenceFromAi(task); }} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}{message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} searched={message.webSearchUsed} /> : null}{message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
+            <AiModelChip value={focusTaskAiModel} onChange={model => setAiModelByTask(prev => ({ ...prev, [focusActiveTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" />
+            <div ref={focusAiExpandedDialogContainerRef} className="chat-thread focused-task-ai-thread-through min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl p-4 pt-12">
+              {isFocusAiSearchOpen ? (
+                <label className="surface-input sticky top-0 z-10 flex items-center gap-1 rounded-lg border px-2 py-1 text-xs text-muted">
+                  <Search size={12} />
+                  <input className="w-full bg-transparent text-xs text-primary placeholder:text-subtle focus:outline-none"
+                    placeholder="Поиск по сообщениям" value={focusAiSearchQuery}
+                    onChange={event => setFocusAiSearchQuery(event.target.value)} />
+                </label>
+              ) : null}
+                {focusTaskAiDialog.filter(message => !isFocusAiSearchOpen || !focusAiSearchQuery.trim() ||
+                  message.content.toLowerCase().includes(focusAiSearchQuery.trim().toLowerCase())).map((message) => <div key={message.id} className={`ai-message-forward-group w-fit max-w-[82%] ${message.role === 'assistant' ? 'mr-auto' : 'ml-auto'}`}><div className={`chat-message w-full rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant' : 'chat-message-user'}`}><div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-expanded-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-expanded-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.messageKind === 'MONITOR_ACTION' ? <TaskMonitoringActionBadge content={message.content} /> : message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={(task) => { setIsFocusAiExpanded(false); openTaskReferenceFromAi(task); }} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}{message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} searched={message.webSearchUsed} /> : null}{message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusActiveTask!.id, true)} /> : null}
                     </div><div className="ai-message-forward-actions"><AiReplyAction message={message} onReply={(target) => setReplyToFocusAi(target)} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={focusActiveTask?.sphereId ?? null} /></div></div>)}
                 {focusActiveTask.aiMonitoringEnabled ? <TaskMonitoringTriggerChips taskId={focusActiveTask.id} enabled /> : null}
                 {aiLoadingTaskId === focusActiveTask.id && focusAiProgress ? <TaskAiProgress status={focusAiProgress} /> : focusActiveTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={focusActiveTask.id} /> : null}
-              </div>
             </div>
+            <div className="focused-task-ai-composer focused-task-ai-composer-expanded">
             {focusAiError ? <p className="mt-2 text-xs text-rose-500">{focusAiError}</p> : null}
             {replyToFocusAi ? <AiReplyPreview target={replyToFocusAi} onDismiss={() => setReplyToFocusAi(null)} /> : null}
               {renderTaskAiRecipientPicker(focusActiveTask)}
@@ -5607,10 +5634,10 @@ export default function App() {
               <button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={focusAiLoading} onClick={() => focusAiExpandedFileInputRef.current?.click()}><Paperclip size={16} /></button>
               <button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg disabled:opacity-50" title="Отправить" disabled={focusAiLoading || (!focusAiDraft.trim() && focusAiPendingFiles.length === 0)} onClick={() => void sendFocusAiQuestion()}>{aiLoadingTaskId === focusActiveTask.id ? <Loader2 className="animate-spin" size={16} /> : <SendHorizontal size={16} />}</button>
             </div>
+            </div>
           </div>
         </div>
       ) : null}
-
 
       {focusRemainingSeconds > 0 && focusRemainingSeconds < focusTimerMinutes * 60 && !isFocusSessionFinished && !isFocusModeOpen ? (
         <button className="focus-floating-timer fixed bottom-6 z-[90] flex h-20 w-20 flex-col items-center justify-center rounded-full text-white shadow-2xl" onClick={() => setIsFocusModeOpen(true)}>
@@ -8017,40 +8044,31 @@ export default function App() {
             onDrop={(event) => { event.preventDefault(); setIsFocusedAiDragActive(false); addFocusedAiFiles(Array.from(event.dataTransfer.files ?? [])); }}
           >
             {isFocusedAiDragActive ? <div className="focused-task-ai-drop-overlay"><Paperclip size={24} /><span>Перетащите файлы, чтобы прикрепить</span></div> : null}
-            <div className="mb-3 flex items-center justify-between">
-              <div>
+            <div className="task-ai-fullscreen-header mb-3 flex min-w-0 items-center justify-between gap-4">
+              <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-2 text-base font-semibold ai-panel-title"><Bot size={18} /> Полноэкранный диалог с ИИ</p>
-                 <p className="mt-1 max-w-[42ch] truncate text-xs text-muted" title={focusedTask.title}>{focusedTask.title}</p>
+                <p className="mt-1 max-w-[42ch] truncate text-xs text-muted" title={focusedTask.title}>{focusedTask.title}</p>
               </div>
-              <div className="flex items-center gap-2">
-                <TaskMonitoringStatuses taskId={focusedTask.id}
-                  enabled={focusedTask.aiMonitoringEnabled === true}
-                  allowed={focusedTask.taskType === 'TASK' && !focusedTask.parentTaskId && !focusedTask.isCollaborative}
-                  onTaskUpdated={(updated) => {
-                    setTasks(previous => previous.map(task => task.id === updated.id ? updated : task));
-                    setFocusedDraft(previous => previous ? { ...previous, aiMonitoringEnabled: updated.aiMonitoringEnabled } : previous);
-                  }} />
-                <button
-                  className="focused-task-ai-icon-button inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-medium"
-                   onClick={() => void clearFocusedAiDialog()}
-                   disabled={clearingTaskAiId === focusedTask.id || aiLoadingTaskId === focusedTask.id}
-                   title="Очистить историю диалога по этой задаче"
-                 ><Trash2 size={13} /> {clearingTaskAiId === focusedTask.id ? 'Очищаю…' : 'Очистить'}
-                 </button>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    className={`focused-task-ai-icon-button ${isFocusedAiSearchOpen ? 'focused-task-ai-icon-button-active' : ''}`}
-                    onClick={() => setIsFocusedAiSearchOpen((prev) => !prev)}
-                    title="Поиск по диалогу"
-                  >
-                    <Search size={14} />
-                  </button>
-                  <button className="focused-task-ai-icon-button" onClick={() => setIsAiExpanded(false)} title="Свернуть">
-                    <Minimize2 size={14} />
-                  </button>
-                  <button className="focused-task-ai-icon-button" onClick={() => { setIsAiExpanded(false); void closeFocusedTask(); }} title="Закрыть">
-                    <X size={14} />
-                  </button>
+              <div className="task-ai-fullscreen-actions flex shrink-0 flex-wrap items-center justify-end gap-3">
+                <div className="task-ai-fullscreen-monitor shrink-0">
+                  <TaskMonitoringStatuses taskId={focusedTask.id}
+                    enabled={focusedTask.aiMonitoringEnabled === true}
+                    allowed={focusedTask.taskType === 'TASK' && !focusedTask.parentTaskId && !focusedTask.isCollaborative}
+                    onTaskUpdated={(updated) => {
+                      setTasks(previous => previous.map(task => task.id === updated.id ? updated : task));
+                      setFocusedDraft(previous => previous ? { ...previous, aiMonitoringEnabled: updated.aiMonitoringEnabled } : previous);
+                    }} />
+                </div>
+                <button type="button" className="task-ai-clear-dialog-button"
+                  onClick={() => void clearFocusedAiDialog()}
+                  disabled={clearingTaskAiId === focusedTask.id || aiLoadingTaskId === focusedTask.id}
+                  title="Очистить историю диалога по этой задаче"
+                ><Trash2 size={14} /> {clearingTaskAiId === focusedTask.id ? 'Очищаю…' : 'Очистить'}</button>
+                <div className="task-ai-fullscreen-window-actions flex items-center gap-2">
+                  <button type="button" className={`focused-task-ai-icon-button ${isFocusedAiSearchOpen ? 'focused-task-ai-icon-button-active' : ''}`}
+                    onClick={() => setIsFocusedAiSearchOpen(prev => !prev)} title="Поиск по диалогу"><Search size={14} /></button>
+                  <button type="button" className="focused-task-ai-icon-button" onClick={() => setIsAiExpanded(false)} title="Свернуть"><Minimize2 size={14} /></button>
+                  <button type="button" className="focused-task-ai-icon-button" onClick={() => { setIsAiExpanded(false); void closeFocusedTask(); }} title="Закрыть"><X size={14} /></button>
                 </div>
               </div>
             </div>
