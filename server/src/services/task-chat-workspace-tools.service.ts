@@ -1,4 +1,4 @@
-import { plannerToolsService, PLANNER_OPERATIONS, PLANNER_BATCH_OPERATIONS, type PlannerActionInput, type PlannerBatchActionInput, type PlannerSearchInput, type PlannerListInput } from './planner-tools.service.js';
+import { plannerToolsService, authorizePlannerActionReferences, PLANNER_OPERATIONS, PLANNER_BATCH_OPERATIONS, type PlannerActionInput, type PlannerBatchActionInput, type PlannerSearchInput, type PlannerListInput } from './planner-tools.service.js';
 import { personalNotesToolsService, mergeTaskAndNoteSearchResults, validateNoteSearchInput } from './personal-notes-tools.service.js';
 import { validateAiCreateNoteArgs, validateAiUpdateNoteArgs } from './ai-create-note.service.js';
 import { normalizePlannerDueDate } from './planner-due-date.service.js';
@@ -23,7 +23,8 @@ export function createTaskChatWorkspaceTools(input: {
 }) {
   const resolvedNoteIds = new Set<string>();
   const readNoteVersions = new Map<string, string>();
-  const resolvedItemIds = new Set<string>();
+  // This task has already been checked for user access by task chat.
+  const resolvedItemIds = new Set<string>([input.taskId]);
   const resolvedSphereIds = new Set<string>();
   const noteUpdates = new Set<string>();
   const actions: Record<string, unknown>[] = [];
@@ -113,6 +114,10 @@ export function createTaskChatWorkspaceTools(input: {
               ? !PLANNER_OPERATIONS.includes(action.operation)
               : !PLANNER_BATCH_OPERATIONS.includes(action.operation as typeof PLANNER_BATCH_OPERATIONS[number])))
           return { ok: false, code: 'INVALID_TASK_ACTION' };
+        for (const action of batch) {
+          const invalid = await authorizePlannerActionReferences(input.userId, action, resolvedItemIds, resolvedSphereIds, plannerToolsService.getItem);
+          if (invalid) return invalid;
+        }
         actions.push(...batch.map(action => ({ ...action })));
         return { ok: true, status: 'prepared', requestedCount: batch.length, message: input.autonomousMonitoring
           ? 'Операция подготовлена к автоприменению с проверкой прав и актуальности данных.'
