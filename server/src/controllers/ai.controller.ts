@@ -261,6 +261,13 @@ export const aiController = {
       sendAiError(res, error);
     }
   },
+  clearTaskAssistantHistory: async (req: Request, res: Response) => {
+    try {
+      const result = await aiAssistantService.clearTaskDialog({ userId: req.user!.id, taskId: req.params.id });
+      if (!result.ok) { res.status(403).json({ error: 'Очистить общий диалог может только владелец задачи.' }); return; }
+      res.set('Cache-Control', 'private, no-store').json({ ok: true });
+    } catch (error) { sendAiError(res, error); }
+  },
   getTaskAssistantHistory: async (req: Request, res: Response) => {
     try {
       const messages = await aiAssistantService.listTaskDialog({
