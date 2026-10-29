@@ -3954,7 +3954,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <div className="mt-4 space-y-2">
                     <div className="efficiency-detail-row"><span>Задачи</span><b>+{formatRatingDelta(currentUser?.efficiencyTaskScore ?? 0)} рейтинга</b></div>
                     <div className="efficiency-detail-row"><span>Привычки</span><b>+{formatRatingDelta(currentUser?.efficiencyHabitScore ?? 0)} рейтинга</b></div>
-                    <div className="efficiency-detail-row"><span>Работа с ИИ</span><b>+{formatRatingDelta(currentUser?.efficiencyAiScore ?? 0)} рейтинга</b></div>
+                    <div className="efficiency-detail-row"><span>Работа с ИИ <span className="block text-[10px] font-normal text-muted">+0,1 за запрос · +0,3 за ИИ-инструмент</span></span><b>+{formatRatingDelta(currentUser?.efficiencyAiScore ?? 0)} рейтинга</b></div>
                     <div className="efficiency-detail-row efficiency-detail-row-focus"><span>Режим концентрации (х2)</span><b>+{formatRatingDelta(currentUser?.efficiencyFocusScore ?? 0)} рейтинга</b></div>
                   </div>
                 </div>
