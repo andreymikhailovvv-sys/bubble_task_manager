@@ -3,6 +3,7 @@ import net from 'node:net';
 import test from 'node:test';
 import {
   telegramUserClientNetworkOptions,
+  telegramMtprotoTransport,
   TelegramUserProxyConfigurationError,
   classifyTelegramUserNetworkError
 } from '../src/lib/telegram-user-client-network.js';
@@ -93,4 +94,52 @@ test('safe error categories do not reflect arbitrary error text', () => {
   assert.equal(classifyTelegramUserNetworkError(new Error('Telegram proxy CONNECT rejected')), 'proxy_rejected');
   assert.equal(classifyTelegramUserNetworkError(new Error('Connection timed out after 10s')), 'network_timeout');
   assert.equal(classifyTelegramUserNetworkError(new Error('secret=1234567')), 'other');
+});
+
+test('dedicated MTProxy FakeTLS base64url secret overrides even a failing Polish SOCKS5 proxy', () => {
+  const bytes = Buffer.concat([Buffer.from([0xee]), Buffer.alloc(16, 0xa1), Buffer.from('example.org')]);
+  const encoded = bytes.toString('base64url');
+  const env = {
+    TELEGRAM_USER_MTPROXY_HOST: '45.157.38.42',
+    TELEGRAM_USER_MTPROXY_PORT: '443',
+    TELEGRAM_USER_MTPROXY_SECRET: encoded,
+    TELEGRAM_USER_PROXY_URL: 'socks5://example.invalid:1080',
+    TELEGRAM_PROXY_URL: 'http://example.invalid:3128'
+  };
+  const options = telegramUserClientNetworkOptions(env);
+  assert.equal(telegramMtprotoTransport(env), 'mtproxy');
+  assert.equal(options.networkSocket, undefined);
+  assert.deepEqual(options.proxy, {
+    MTProxy: true, ip: '45.157.38.42', port: 443, secret: bytes.toString('hex')
+  });
+  assert.notEqual((options.proxy as {secret: string}).secret, encoded);
+});
+
+test('hex and base64url MTProxy secrets produce the same canonical hex value', () => {
+  const bytes = Buffer.concat([Buffer.from([0xee]), Buffer.alloc(16, 0x12), Buffer.from('example.com')]);
+  const base = { TELEGRAM_USER_MTPROXY_HOST: 'proxy.example.com', TELEGRAM_USER_MTPROXY_PORT: '443' };
+  const fromHex = telegramUserClientNetworkOptions({ ...base, TELEGRAM_USER_MTPROXY_SECRET: bytes.toString('hex') });
+  const fromUrl = telegramUserClientNetworkOptions({ ...base, TELEGRAM_USER_MTPROXY_SECRET: bytes.toString('base64url') });
+  assert.deepEqual(fromHex.proxy, fromUrl.proxy);
+  const classic = telegramUserClientNetworkOptions({ ...base, TELEGRAM_USER_MTPROXY_SECRET: '12'.repeat(16) });
+  assert.equal(classic.proxy?.secret, '12'.repeat(16));
+  const padded = telegramUserClientNetworkOptions({ ...base, TELEGRAM_USER_MTPROXY_SECRET: 'dd' + '12'.repeat(16) });
+  assert.equal(padded.proxy?.secret, 'dd' + '12'.repeat(16));
+});
+
+test('invalid or incomplete MTProxy config never silently falls back to old Telegram proxy', () => {
+  const legacy = { TELEGRAM_PROXY_URL: 'socks5://example.invalid:1080' };
+  for (const overrides of [
+    { TELEGRAM_USER_MTPROXY_HOST: '45.157.38.42' },
+    { TELEGRAM_USER_MTPROXY_PORT: '443', TELEGRAM_USER_MTPROXY_SECRET: '12'.repeat(16) },
+    { TELEGRAM_USER_MTPROXY_HOST: 'https://example.com', TELEGRAM_USER_MTPROXY_PORT: '443', TELEGRAM_USER_MTPROXY_SECRET: '12'.repeat(16) },
+    { TELEGRAM_USER_MTPROXY_HOST: 'example.com', TELEGRAM_USER_MTPROXY_PORT: '0', TELEGRAM_USER_MTPROXY_SECRET: '12'.repeat(16) },
+    { TELEGRAM_USER_MTPROXY_HOST: 'example.com', TELEGRAM_USER_MTPROXY_PORT: '443', TELEGRAM_USER_MTPROXY_SECRET: 't.me/proxy?server=example.com' },
+    { TELEGRAM_USER_MTPROXY_HOST: 'example.com', TELEGRAM_USER_MTPROXY_PORT: '443', TELEGRAM_USER_MTPROXY_SECRET: 'ee1234' }
+  ]) {
+    const env = { ...legacy, ...overrides };
+    assert.throws(() => telegramUserClientNetworkOptions(env), TelegramUserProxyConfigurationError);
+    assert.throws(() => telegramMtprotoTransport(env), TelegramUserProxyConfigurationError);
+  }
+  assert.equal(telegramMtprotoTransport(legacy), 'socks5');
 });
