@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { prisma } from '../src/db/prisma.js';
-import { createMonitoringTrigger, getMonitoringTriggers, MAX_TASK_FOLLOWUPS } from '../src/services/task-monitoring-trigger.service.js';
+import { createMonitoringTrigger, getMonitoringTriggers, MAX_TASK_FOLLOWUPS, MONITORING_FALLBACK_QUESTION } from '../src/services/task-monitoring-trigger.service.js';
 import { createTaskChatOpenAiPayload } from '../src/services/ai-assistant.service.js';
 
 const read = (path: string) => readFile(new URL(path, import.meta.url), 'utf8');
@@ -22,7 +22,7 @@ test('three independent ordinary-chat actions keep their identities and deadline
     taskClient.findFirst = async () => ({
       id: taskId, userId, status: 'TODO', taskType: 'TASK', aiMonitoringEnabled: false
     });
-    triggerClient.findMany = async () => rows.slice();
+    triggerClient.findMany = async () => rows.filter(row => row.state === 'pending');
     (prisma as unknown as { $transaction: unknown }).$transaction = async (
       callback: (client: unknown) => Promise<unknown>, options: { isolationLevel: string }
     ) => {
@@ -30,6 +30,11 @@ test('three independent ordinary-chat actions keep their identities and deadline
       serializableCalls++;
       return callback({
         taskMonitoringTrigger: {
+          updateMany: async ({ where, data }: { where: { question: string }; data: { state: string } }) => {
+            const matches = rows.filter(row => row.state === 'pending' && row.question === where.question);
+            matches.forEach(row => { row.state = data.state; });
+            return { count: matches.length };
+          },
           count: async () => rows.filter(row => row.state === 'pending').length,
           create: async ({ data }: { data: Omit<(typeof rows)[number], 'id' | 'state'> }) => {
             const row = { ...data, id: String(rows.length + 1), state: 'pending' };
@@ -68,9 +73,25 @@ test('three independent ordinary-chat actions keep their identities and deadline
     assert.equal(rows.length, 3);
     assert.equal(serializableCalls, 4);
 
+    // A generic safety-net check-in yields its slot to a concrete action,
+    // but the other two named reminders are never changed.
+    rows[0].question = MONITORING_FALLBACK_QUESTION;
+    const newAction = await createMonitoringTrigger(userId, taskId, {
+      delayMinutes: 85,
+      title: 'Проверить документы',
+      description: 'Уточнить получение пакета документов',
+      question: 'Спросить, получил ли адресат документы'
+    });
+    assert.equal(newAction.ok, true);
+    assert.equal(rows[0].state, 'replaced');
+    assert.equal(rows[1].state, 'pending');
+    assert.equal(rows[2].state, 'pending');
+    assert.equal(rows.filter(row => row.state === 'pending').length, 3);
+    assert.equal(serializableCalls, 5);
+
     const visible = await getMonitoringTriggers(userId, taskId);
     assert.equal(visible.length, 3);
-    assert.equal(visible[0].description, rows[0].description);
+    assert.equal(visible[2].description, rows[3].description);
   } finally {
     taskClient.findFirst = originalOwner;
     triggerClient.findMany = originalList;
