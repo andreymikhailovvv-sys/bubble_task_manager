@@ -26,6 +26,7 @@ const FEATURE_LABELS: Record<string, string> = {
 
 const MODEL_LABELS: Record<string, string> = {
   'gpt-6.1-sol': 'GPT-6.1 Sol',
+  'gpt-6.1-terra': 'GPT-6.1 Terra',
   'gpt-6-luna': 'GPT-6 Luna',
   'gpt-5.4-mini': 'GPT-5.4 Mini',
   'gpt-5-mini': 'GPT-5 Mini',
