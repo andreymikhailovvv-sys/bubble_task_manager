@@ -294,7 +294,8 @@ internal fun NativeGeneralAiChatPage(
                             verticalAlignment=Alignment.CenterVertically){
                             Text(when(model){
                                 "gpt-6-luna"->"Luna"
-                                "gpt-5.4-mini"->"Mini"
+                                "gpt-6.1-terra"->"Terra"
+                                "gpt-5.4-mini"->"Terra"
                                 else->"Sol"
                             },fontSize=10.sp,color=c.text,
                                 fontWeight=FontWeight.SemiBold)
@@ -304,7 +305,7 @@ internal fun NativeGeneralAiChatPage(
                         DropdownMenu(expanded=modelMenu,
                             onDismissRequest={modelMenu=false}){
                             listOf("gpt-6-luna" to "GPT-6 Luna",
-                                "gpt-5.4-mini" to "GPT-5.4 mini",
+                                "gpt-6.1-terra" to "GPT-6.1 Terra",
                                 "gpt-6.1-sol" to "GPT-6.1 Sol").forEach{(key,label)->
                                 DropdownMenuItem(text={Text(label)},
                                     onClick={
