@@ -913,8 +913,22 @@ export default function App() {
   const [timelineOptimizeLoading, setTimelineOptimizeLoading] = useState(false);
   const [timelineHoverCard, setTimelineHoverCard] = useState<{ taskId: string; top: number; left: number } | null>(null);
   const [isTimelineOverdueModalOpen, setIsTimelineOverdueModalOpen] = useState(false);
-  const [isTimelineOverdueModalCollapsedForDrag, setIsTimelineOverdueModalCollapsedForDrag] = useState(false);
   const [timelineOverdueBulkPostponeLoading, setTimelineOverdueBulkPostponeLoading] = useState<null | 'normal' | 'ai'>(null);
+  useEffect(() => {
+    if (!isTimelineOverdueModalOpen) return;
+    const closeOutside = (event: MouseEvent) => {
+      if (!overduePopoverRef.current?.contains(event.target as Node)) setIsTimelineOverdueModalOpen(false);
+    };
+    const closeEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsTimelineOverdueModalOpen(false);
+    };
+    document.addEventListener('mousedown', closeOutside);
+    document.addEventListener('keydown', closeEscape);
+    return () => {
+      document.removeEventListener('mousedown', closeOutside);
+      document.removeEventListener('keydown', closeEscape);
+    };
+  }, [isTimelineOverdueModalOpen]);
   const [timelineOptimizePreviewEnabledByMode, setTimelineOptimizePreviewEnabledByMode] = useState<Record<'day'|'week'|'month', boolean>>({ day: false, week: false, month: false });
   const [timelineOptimizeStateByMode, setTimelineOptimizeStateByMode] = useState<Record<'day'|'week'|'month',{ plan: Array<{ taskId: string; dueDate: string | null }>; summary: string }>>({ day:{plan:[],summary:''}, week:{plan:[],summary:''}, month:{plan:[],summary:''} });
 
@@ -1220,6 +1234,7 @@ export default function App() {
   const focusedDueDateInputRef = useRef<HTMLInputElement | null>(null);
   const settingsMenuRef = useRef<HTMLDivElement | null>(null);
   const efficiencyDetailsRef = useRef<HTMLDivElement | null>(null);
+  const overduePopoverRef = useRef<HTMLDivElement | null>(null);
   const focusedAutosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusedAutosaveSignatureRef = useRef<string | null>(null);
   const overdueNudgeAttemptAtByTaskRef = useRef<Record<string, number>>({});
@@ -2803,6 +2818,9 @@ export default function App() {
       }] }));
       await refreshAiCredits();
       await load();
+      // Regular +0.1 is awarded on the server. The active timer adds the
+      // second +0.1 in the focus bucket and shows the existing timer toast.
+      if (isFocusBonusEligible(taskId)) pushFocusBonusMessage('ai', 0.1);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось получить ответ ИИ';
       if (previousFocusActiveTaskIdRef.current === taskId) {
@@ -5353,11 +5371,56 @@ export default function App() {
             <svg width="54" height="54" viewBox="0 0 72 72" role="img" aria-label="Рейтинг эффективности" className="efficiency-orb-icon"><defs><linearGradient id="effOrbFill" x1="10" y1="10" x2="62" y2="62"><stop offset="0%" stopColor="#38bdf8" /><stop offset="45%" stopColor="#8b5cf6" /><stop offset="100%" stopColor="#f472b6" /></linearGradient><linearGradient id="effOrbRing" x1="12" y1="58" x2="60" y2="14"><stop offset="0%" stopColor="#22d3ee" /><stop offset="55%" stopColor="#a78bfa" /><stop offset="100%" stopColor="#fb7185" /></linearGradient></defs><circle cx="36" cy="36" r="25" fill="url(#effOrbFill)" opacity="0.18" /><circle cx="36" cy="36" r="26" fill="none" stroke="rgba(148,163,184,0.28)" strokeWidth="5" /><circle cx="36" cy="36" r="26" fill="none" stroke="url(#effOrbRing)" strokeWidth="5" strokeLinecap="round" pathLength={100} strokeDasharray={`${efficiencyScore} 100`} transform="rotate(-90 36 36)" /><path d="M36 17l5.4 12.1 13.1 1.4-9.8 8.8 2.8 12.9L36 45.5l-11.5 6.7 2.8-12.9-9.8-8.8 13.1-1.4L36 17z" fill="url(#effOrbFill)" /></svg>
           </button>
           {isEfficiencyDetailsOpen ? (
-            <div data-tour="feature-rating" className="efficiency-details-popover efficiency-details-popover-modern absolute left-1/2 top-[calc(100%+8px)] z-40 w-80 -translate-x-1/2 rounded-[1.6rem] border p-4 text-xs shadow-2xl backdrop-blur"><div className="text-center"><div className="efficiency-score-hero tabular-nums">{formattedEfficiencyScore}/100</div><p className="mt-1 text-sm font-semibold text-primary">{efficiencyGradeMessage}</p></div><div className="mt-4 space-y-2"><div className="efficiency-detail-row"><span>Задачи</span><b>+{formatRatingDelta(efficiencyTaskRating)} рейтинга</b></div><div className="efficiency-detail-row"><span>Привычки</span><b>+{formatRatingDelta(efficiencyHabitRating)} рейтинга</b></div><div className="efficiency-detail-row"><span>Работа с ИИ</span><b>+{formatRatingDelta(efficiencyAiRating)} рейтинга</b></div><div className="efficiency-detail-row efficiency-detail-row-focus"><span>Режим концентрации (х2)</span><b>+{formatRatingDelta(efficiencyFocusRating)} рейтинга</b></div></div></div>
+            <div data-tour="feature-rating" className="efficiency-details-popover efficiency-details-popover-modern absolute left-1/2 top-[calc(100%+8px)] z-40 w-80 -translate-x-1/2 rounded-[1.6rem] border p-4 text-xs shadow-2xl backdrop-blur"><div className="text-center"><div className="efficiency-score-hero tabular-nums">{formattedEfficiencyScore}/100</div><p className="mt-1 text-sm font-semibold text-primary">{efficiencyGradeMessage}</p></div><div className="mt-4 space-y-2"><div className="efficiency-detail-row"><span>Задачи</span><b>+{formatRatingDelta(efficiencyTaskRating)} рейтинга</b></div><div className="efficiency-detail-row"><span>Привычки</span><b>+{formatRatingDelta(efficiencyHabitRating)} рейтинга</b></div><div className="efficiency-detail-row"><span>Работа с ИИ <span className="block text-[10px] font-normal text-muted">+0,1 за запрос · +0,3 за ИИ-инструмент</span></span><b>+{formatRatingDelta(efficiencyAiRating)} рейтинга</b></div><div className="efficiency-detail-row efficiency-detail-row-focus"><span>Режим концентрации (х2)</span><b>+{formatRatingDelta(efficiencyFocusRating)} рейтинга</b></div></div></div>
           ) : null}
         </div>
 
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          <div className="topbar-overdue-wrap relative shrink-0" ref={overduePopoverRef}>
+            <button type="button"
+              className="topbar-action-button topbar-overdue-trigger inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold"
+              onClick={() => setIsTimelineOverdueModalOpen(open => !open)}
+              aria-expanded={isTimelineOverdueModalOpen}
+              aria-controls="topbar-overdue-list"
+              title="Управление просроченными задачами во всех режимах"
+            >
+              <Clock3 size={15} />
+              <span>Просроченные</span>
+              <span className="topbar-overdue-counter rounded-full px-1.5 py-0.5 text-[11px] tabular-nums">{timelineOverdueTasks.length}</span>
+              <ChevronDown size={13} className={isTimelineOverdueModalOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
+            </button>
+            {isTimelineOverdueModalOpen ? (
+              <section id="topbar-overdue-list" className="timeline-overdue-panel topbar-overdue-popover absolute right-0 top-[calc(100%+10px)] z-[85] w-[min(640px,calc(100vw-32px))] rounded-2xl border p-3 shadow-2xl" aria-label="Просроченные задачи">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="text-sm font-semibold text-primary">Просроченные задачи</h4>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" className="secondary-button rounded-lg px-2 py-1.5 text-xs disabled:opacity-60"
+                      onClick={() => void postponeAllOverdueToToday()}
+                      disabled={timelineOverdueBulkPostponeLoading !== null}
+                      title="Перенести на сегодня, сохранив время">
+                      {timelineOverdueBulkPostponeLoading === 'normal' ? <Loader2 size={12} className="animate-spin" /> : 'Отложить'}
+                    </button>
+                    <button type="button" className="inline-flex items-center gap-1 rounded-lg border border-pink-300/50 bg-pink-600/80 px-2 py-1.5 text-xs text-white disabled:opacity-60"
+                      onClick={() => void postponeAllOverdueByAi()}
+                      disabled={timelineOverdueBulkPostponeLoading !== null}
+                      title="Найти ближайшее свободное время с помощью ИИ, списываются кредиты">
+                      {timelineOverdueBulkPostponeLoading === 'ai' ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                      Отложить (ИИ)
+                    </button>
+                    <button type="button" className="surface-muted rounded-lg px-2 py-1.5 text-xs" onClick={() => setIsTimelineOverdueModalOpen(false)} aria-label="Закрыть просроченные задачи"><X size={13}/></button>
+                  </div>
+                </div>
+                <div className="max-h-[min(360px,55vh)] space-y-2 overflow-y-auto pr-1">
+                  {timelineOverdueTasks.map(task => renderTimelineTaskChip(task, {
+                    isSubtask: Boolean(task.parentTaskId),
+                    disableEffects: true, disableHoverCard: true,
+                    parentTaskTitle: task.parentTaskId ? (taskById.get(task.parentTaskId)?.title ?? 'Без основной задачи') : undefined
+                  }))}
+                  {timelineOverdueTasks.length === 0 ? <p className="py-3 text-center text-sm text-subtle">Просроченных задач нет</p> : null}
+                </div>
+              </section>
+            ) : null}
+          </div>
           <button data-tour="feature-focus-button" type="button" onClick={openFocusSetup} className="focus-mode-button topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-violet-300" title="Режим фокуса с ИИ"><Bot size={16} /> Фокус</button>
           <button data-tour="credits" type="button" onClick={() => { if (currentUser?.isGuest) { setAuthError(null); setAuthModalMode('register'); } else { setCreditModalView('purchase'); setIsSubscriptionModalOpen(true); } }} className="light-credit-badge topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400" title={currentUser?.isGuest ? 'Зарегистрируйтесь, чтобы получить 100 ИИ-кредитов' : 'Посмотреть подписки и увеличить ИИ-кредиты'}><Coins size={15} /><span>Кредиты: {currentUser?.aiCredits ?? 0}</span></button>
           <div className="add-menu-wrap relative" onMouseEnter={() => setIsAddMenuOpen(true)} onMouseLeave={() => { if (!isTourAddMenuOpen) setIsAddMenuOpen(false); }}>
@@ -6237,19 +6300,7 @@ export default function App() {
                   </div>
                   <h3 className="timeline-title max-w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-center text-sm font-semibold capitalize tracking-tight shadow-inner sm:text-base">{timelineViewData.title}</h3>
                   <div className="flex flex-wrap items-center justify-end gap-2">
-                    <button
-                      type="button"
-                      className="timeline-nav-button inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs"
-                      onClick={() => {
-                        setIsTimelineToolbarHidden(false);
-                        setIsTimelineOverdueModalOpen((prev) => !prev);
-                        setIsTimelineOverdueModalCollapsedForDrag(false);
-                      }}
-                      title="Просроченные задачи"
-                    >
-                      Просроченные задачи
-                      <span className="rounded bg-rose-600/80 px-1.5 py-0.5 text-[10px] font-semibold text-white">{timelineOverdueTasks.length}</span>
-                    </button>
+
                     <button type="button" className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs ${isTimelineOptimizePreviewEnabled ? 'border-cyan-300 bg-cyan-700/60 text-cyan-50' : currentOptimizeState.plan.length>0 ? 'timeline-nav-button' : 'timeline-nav-button opacity-50'}`} disabled={currentOptimizeState.plan.length===0} onClick={() => setTimelineOptimizePreviewEnabledByMode((prev)=>({ ...prev, [timelineViewMode]: !prev[timelineViewMode] }))} title="Показать/скрыть ИИ-расклад"><Eye size={14} /></button>
                     <button type="button" className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs ${isTimelineOptimizePreviewEnabled ? 'border-emerald-300 bg-emerald-700/70 text-emerald-50' : 'timeline-nav-button opacity-50'}`} disabled={!isTimelineOptimizePreviewEnabled} title="Принять ИИ-оптимизацию" onClick={async () => { await api.applyTimelineOptimization({ plan: currentOptimizeState.plan }); setTimelineOptimizePreviewEnabledByMode((prev)=>({ ...prev, [timelineViewMode]: false })); setTimelineOptimizeStateByMode((prev)=>({ ...prev, [timelineViewMode]: { plan: [], summary: '' } })); await load(); }}><Check size={14} /></button>
                     <button type="button" className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs ${isTimelineOptimizePreviewEnabled ? 'border-rose-300 bg-rose-700/70 text-rose-50' : 'timeline-nav-button opacity-50'}`} disabled={!isTimelineOptimizePreviewEnabled} title="Отменить ИИ-оптимизацию" onClick={() => { setTimelineOptimizePreviewEnabledByMode((prev)=>({ ...prev, [timelineViewMode]: false })); setTimelineOptimizeStateByMode((prev)=>({ ...prev, [timelineViewMode]: { plan: [], summary: '' } })); }}><X size={14} /></button>
@@ -6277,47 +6328,7 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-                {isTimelineOverdueModalOpen ? (
-                  <div className="relative mt-2">
-                    <section className={`timeline-overdue-panel w-full rounded-2xl border p-3 transition-all ${isTimelineOverdueModalCollapsedForDrag ? 'pointer-events-none scale-95 opacity-0' : 'opacity-100'}`}>
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-semibold text-primary">Просроченные задачи</h4>
-                          <button
-                            className="secondary-button rounded px-2 py-1 text-xs disabled:opacity-60"
-                            onClick={() => void postponeAllOverdueToToday()}
-                            disabled={timelineOverdueBulkPostponeLoading !== null}
-                            title="Переносит задачи на сегодня на это же время"
-                            aria-label="Перенести просроченные задачи на сегодня на это же время"
-                          >
-                            {timelineOverdueBulkPostponeLoading === 'normal' ? <Loader2 size={12} className="animate-spin" /> : 'Отложить'}
-                          </button>
-                          <button
-                            className="inline-flex items-center gap-1 rounded border border-pink-300/60 bg-pink-600/80 px-2 py-1 text-xs text-white disabled:opacity-60"
-                            onClick={() => void postponeAllOverdueByAi()}
-                            disabled={timelineOverdueBulkPostponeLoading !== null}
-                            title="Откладывает на ближайшее доступное окно, используя ИИ (снимает кредиты)"
-                            aria-label="Отложить просроченные задачи с помощью ИИ на ближайшее доступное окно"
-                          >
-                            {timelineOverdueBulkPostponeLoading === 'ai' ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Отложить (ИИ)
 
-                          </button>
-                        </div>
-                        <button className="surface-muted rounded px-2 py-1 text-xs" onClick={() => setIsTimelineOverdueModalOpen(false)}>Свернуть</button>
-                      </div>
-                      <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-                        {timelineOverdueTasks.map((task) => renderTimelineTaskChip(task, {
-                          isSubtask: Boolean(task.parentTaskId),
-                          disableEffects: true,
-                          forceDraggable: true,
-                          parentTaskTitle: task.parentTaskId ? (taskById.get(task.parentTaskId)?.title ?? 'Без основной задачи') : undefined,
-                          onDragStart: () => setIsTimelineOverdueModalCollapsedForDrag(true)
-                        }))}
-                        {timelineOverdueTasks.length === 0 ? <p className="text-sm text-subtle">Просроченных задач нет</p> : null}
-                      </div>
-                    </section>
-                  </div>
-                ) : null}
               </section>
 
               {timelineViewData.tasksInRange.length === 0 ? (
