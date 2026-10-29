@@ -1384,7 +1384,7 @@ export const aiAssistantService = {
     if (!question) throw new TypeError('Question is required');
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY is not configured');
-    const model = AI_CHAT_MODEL_BY_OPTION[input.model ?? 'gpt-6.1-terra'] ?? AI_CHAT_MODEL_MINI;
+    const model = AI_CHAT_MODEL_BY_OPTION[input.model ?? 'gpt-6.1-terra'] ?? AI_CHAT_MODEL_TERRA;
     const actionRequestId = input.requestId ?? randomUUID();
     const operation = async () => {
       const now = new Date();
