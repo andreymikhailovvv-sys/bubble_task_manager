@@ -1,12 +1,13 @@
 import type { AiChatModel } from './types';
 
 export const DEFAULT_QUICK_AI_CHAT_MODEL: AiChatModel = 'gpt-6-luna';
-export const DEFAULT_WEB_PROJECT_CHAT_MODEL: AiChatModel = 'gpt-5.4-mini';
+export const DEFAULT_WEB_PROJECT_CHAT_MODEL: AiChatModel = 'gpt-6.1-terra';
 export const DEFAULT_MOBILE_PROJECT_CHAT_MODEL: AiChatModel = 'gpt-6-luna';
 
 /** Stored per conversation in the shared project JSON, not in a global UI state. */
 export function readSavedAiChatModel(value: unknown): AiChatModel | null {
-  return value === 'gpt-6-luna' || value === 'gpt-5.4-mini' || value === 'gpt-6.1-sol' ? value : null;
+  if (value === 'gpt-5.4-mini') return 'gpt-6.1-terra';
+  return value === 'gpt-6-luna' || value === 'gpt-6.1-terra' || value === 'gpt-6.1-sol' ? value : null;
 }
 
 export function preferRecentChatModel<T extends { model?: unknown; modelChangedAt?: unknown }>(
@@ -19,5 +20,5 @@ export function preferRecentChatModel<T extends { model?: unknown; modelChangedA
   if (oldModel && (!newModel || (Number.isFinite(oldTime) && oldTime > (Number.isFinite(newTime) ? newTime : 0)))) {
     return { ...incoming, model: oldModel, modelChangedAt: saved?.modelChangedAt };
   }
-  return incoming;
+  return { ...incoming, ...(newModel ? { model: newModel } : {}) };
 }
