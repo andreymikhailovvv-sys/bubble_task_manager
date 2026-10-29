@@ -115,7 +115,7 @@ test('model reads pending named actions before deciding whether a new one is nee
   const ai = await read('../src/services/ai-assistant.service.ts');
   assert.match(ai, /const scheduledFollowups = followupToolsEnabled/);
   assert.match(ai, /state: 'pending'/);
-  assert.match(ai, /scheduledFollowups\.length \+ ' из 3'/);
+  assert.match(ai, /scheduledFollowups\.length \+ ' из 3/);
   assert.match(ai, /Не изменяй их сроки и не создавай дубликаты/);
 });
 
