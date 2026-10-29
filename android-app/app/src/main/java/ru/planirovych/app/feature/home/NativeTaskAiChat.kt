@@ -146,7 +146,7 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
     val error=if(ui.taskId==task.id)ui.error else null
     val modelOptions=listOf(
         "gpt-6-luna" to "GPT-6 Luna",
-        "gpt-5.4-mini" to "GPT-5.4 mini",
+        "gpt-6.1-terra" to "GPT-6.1 Terra",
         "gpt-6.1-sol" to "GPT-6.1 Sol"
     )
     LaunchedEffect(task.id){
@@ -341,7 +341,8 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                             horizontalArrangement=Arrangement.spacedBy(3.dp)){
                             Text(when(model){
                                 "gpt-6-luna" -> "Luna"
-                                "gpt-5.4-mini" -> "Mini"
+                                "gpt-6.1-terra" -> "Terra"
+                                "gpt-5.4-mini" -> "Terra"
                                 else -> "Sol"
                             },color=c.text,fontSize=11.sp,fontWeight=FontWeight.SemiBold)
                             Icon(Icons.Default.ExpandMore,null,

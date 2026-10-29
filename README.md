@@ -36,8 +36,10 @@ AI_CHAT_PLANNER_TOOLS_ENABLED=false
 # OPENAI_PROXY_PASSWORD=proxy_password
 # Опционально: переопределить модель (по умолчанию gpt-6-luna, быстрый режим)
 # OPENAI_MODEL=gpt-6-luna
-# Опционально: модель для режима "Полный ответ" (по умолчанию gpt-5.4-mini)
-# OPENAI_MODEL_FULL=gpt-5.4-mini
+# Опционально: модель для режима "Полный ответ" (по умолчанию gpt-6.1-terra)
+# OPENAI_MODEL_FULL=gpt-6.1-terra
+# Средняя модель (необязательно; прежний OPENAI_MODEL_AI_CHAT_MINI распознается)
+# OPENAI_MODEL_AI_CHAT_TERRA=gpt-6.1-terra
 # Telegram bot
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 # Опциональный исходящий прокси только для Telegram Bot API

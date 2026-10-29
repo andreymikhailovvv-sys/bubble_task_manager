@@ -1,5 +1,6 @@
 const REASONING_EFFORT_MODELS = new Set([
   'gpt-6-luna',
+  'gpt-6.1-terra',
   'gpt-5.4-mini',
   'gpt-6.1-sol',
   'gpt-5-mini',

@@ -1,3 +1,4 @@
+import { normalizeSelectableAiChatModel } from '../lib/ai-chat-model.js';
 import { randomUUID } from 'node:crypto';
 import { Prisma, type TelegramAiChatPolicy, type TelegramAiMonitorCall } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
@@ -437,8 +438,9 @@ async function processClaim(claimed: Claimed) {
       dueDate: item.dueDate?.toISOString() ?? null
     }))
   };
+  const selectedProviderModel = normalizeSelectableAiChatModel(current.monitorModel) ?? 'gpt-6-luna';
   const payload = buildMonitorPayload(
-    bounded, instructions, taskMode, current.monitorModel, rules, summaryEnabled, plannerContext
+    bounded, instructions, taskMode, selectedProviderModel, rules, summaryEnabled, plannerContext
   );
   const desired = await countMonitorInputTokens(payload);
   if (desired <= 0) throw new Error('Invalid monitor maximum cost');
@@ -449,7 +451,7 @@ async function processClaim(claimed: Claimed) {
     await prisma.telegramAiMonitorCall.update({ where: { id: callId }, data: { state: 'STARTED' } });
     const result = await analyzeMonitorMessages({
       userId: policy.userId, requestId: callId, messages: bounded, instructions,
-      taskMode, model: current.monitorModel, autoReplyRules: rules, summaryEnabled, plannerContext
+      taskMode, model: selectedProviderModel, autoReplyRules: rules, summaryEnabled, plannerContext
     });
     const settlement = await settleAiCreditReservation(reservation, result.actualMilli);
     billed = true;
@@ -458,7 +460,7 @@ async function processClaim(claimed: Claimed) {
     if (settlement.chargedMilli > 0) {
       await recordAiCreditCharge({
         userId: policy.userId, requestId: callId + ':charge', actionId: callId,
-        providerCallIndex: 1, feature: TELEGRAM_MONITOR_FEATURE, model: current.monitorModel,
+        providerCallIndex: 1, feature: TELEGRAM_MONITOR_FEATURE, model: selectedProviderModel,
         creditsSpentMilli: settlement.chargedMilli
       });
     }

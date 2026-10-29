@@ -63,6 +63,7 @@ test('не прибавляет reasoning tokens поверх output tokens', ()
 for (const [model, expectedNanoUsd] of [
   ['gpt-6-luna', 600_000n],
   ['gpt-6.1-sol', 12_000_000n],
+  ['gpt-6.1-terra', 6_000_000n],
   ['gpt-5.4-mini', 5_250_000n],
   ['gpt-5-mini', 2_250_000n],
   ['gpt-5-nano', 450_000n]
@@ -78,6 +79,17 @@ test('применяет long-context pricing GPT-6 только выше 272000
   const long = calculateOpenAiUsageCost('gpt-6.1-sol', { input_tokens: 272_001 });
   assert.equal(short.providerCostNanoUsd, 544_000_000n);
   assert.equal(long.providerCostNanoUsd, 1_088_004_000n);
+});
+
+test('GPT-6.1 Terra pricing includes cache writes and long-context rates', () => {
+  const mixed = calculateOpenAiUsageCost('gpt-6.1-terra', {
+    input_tokens: 2_000, output_tokens: 1_000,
+    input_tokens_details: { cached_tokens: 1_000, cache_write_tokens: 500 }
+  });
+  assert.equal(mixed.providerCostNanoUsd, 6_175_000n);
+  assert.equal(mixed.pricingFallback, false);
+  assert.equal(calculateOpenAiUsageCost('gpt-6.1-terra', { input_tokens: 272_000 }).providerCostNanoUsd, 272_000_000n);
+  assert.equal(calculateOpenAiUsageCost('gpt-6.1-terra', { input_tokens: 272_001 }).providerCostNanoUsd, 544_002_000n);
 });
 
 test('округляет перевод nanoUSD в millicredits вверх', () => {

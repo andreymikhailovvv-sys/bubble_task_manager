@@ -106,6 +106,7 @@ export function buildMonitorPayload(messages: MonitorMessage[], instructions: st
   }
   return {
     model,
+    ...(model === 'gpt-6.1-terra' ? { reasoning: { effort: 'low' as const } } : {}),
     store: false,
     tool_choice: 'none' as const,
     // Extra output capacity only when the owner explicitly enabled auto-replies.

@@ -14,7 +14,7 @@ const AI_FRAGMENT_CHARS = 3000;
 const MAX_REWRITE_ATTEMPTS_PER_FRAGMENT = 2;
 // If a model returns only reasoning/incomplete output, use a separate,
 // established text model for one recovery attempt rather than blaming the user.
-const REWRITE_RECOVERY_MODEL = 'gpt-5.4-mini';
+const REWRITE_RECOVERY_MODEL = 'gpt-6.1-terra';
 export const TELEGRAM_PART_CHARS = 4000;
 
 export function validateQuickText(input: unknown): string {

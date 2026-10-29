@@ -81,7 +81,7 @@ test('task chat использует строгий Structured Output с фик�
   assert.equal(TASK_ASSISTANT_RESPONSE_FORMAT.schema.additionalProperties, false);
   assert.deepEqual(TASK_ASSISTANT_RESPONSE_FORMAT.schema.required, ['answer', 'actions', 'document']);
 
-  const payload = createTaskChatOpenAiPayload('gpt-5.4-mini', [{ role: 'user', content: 'Проверь текст' }]);
+  const payload = createTaskChatOpenAiPayload('gpt-6.1-terra', [{ role: 'user', content: 'Проверь текст' }]);
   assert.deepEqual(payload.text, { format: TASK_ASSISTANT_RESPONSE_FORMAT });
 });
 
