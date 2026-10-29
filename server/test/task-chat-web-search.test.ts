@@ -7,12 +7,12 @@ import { analyzeWebSearchCalls } from '../src/services/dynamic-responses-billing
 
 test('task chat exposes one optional web search and never on forced final round', () => {
   const messages = [{ role: 'user' as const, content: 'Какая погода?' }];
-  const enabled = createTaskChatOpenAiPayload('gpt-5.4-mini', messages, 300, { allowWebSearch: true });
+  const enabled = createTaskChatOpenAiPayload('gpt-6.1-terra', messages, 300, { allowWebSearch: true });
   assert.deepEqual(enabled.tools?.at(-1), AI_CHAT_WEB_SEARCH_TOOL);
   assert.equal(enabled.max_tool_calls, 1);
-  const ordinary = createTaskChatOpenAiPayload('gpt-5.4-mini', messages);
+  const ordinary = createTaskChatOpenAiPayload('gpt-6.1-terra', messages);
   assert.equal(ordinary.tools?.some(item => item.type === 'web_search'), false);
-  const forced = createTaskChatOpenAiPayload('gpt-5.4-mini', messages, undefined, { allowTools: false, allowWebSearch: true });
+  const forced = createTaskChatOpenAiPayload('gpt-6.1-terra', messages, undefined, { allowTools: false, allowWebSearch: true });
   assert.equal('tools' in forced, false);
 });
 
