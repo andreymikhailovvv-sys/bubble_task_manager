@@ -20,8 +20,13 @@ export type TelegramMtprotoStage = TelegramSocks5Stage |
 export type TelegramMtprotoStageObserver = (stage: TelegramMtprotoStage) => void;
 const MAX_CONNECT_HEADER_BYTES = 8192;
 
+export type TelegramProxyConfigReason =
+  'missing_fields' | 'invalid_host' | 'invalid_port' | 'invalid_secret_encoding' |
+  'invalid_secret_format' | 'legacy_proxy';
+
 export class TelegramUserProxyConfigurationError extends Error {
-  constructor() {
+  constructor(public readonly reason: TelegramProxyConfigReason = 'legacy_proxy') {
+    // Do not embed the proxy address, URL, or secret in errors or logs.
     super('Invalid Telegram MTProto proxy configuration');
   }
 }
@@ -37,34 +42,44 @@ function mtproxyConfig(env: NodeJS.ProcessEnv) {
   const secretValue = env.TELEGRAM_USER_MTPROXY_SECRET?.trim() || '';
   if (!host && !portValue && !secretValue) return null;
 
-  // Partial configurations must fail closed, not silently use the old Telegram proxy.
-  if (!host || !/^\d{1,5}$/.test(portValue) || !secretValue ||
-      host.length > 253 || /[:/@\s?#]/.test(host) ||
-      (!net.isIP(host) && !/^(?=.{1,253}$)[a-z0-9-]+(?:\.[a-z0-9-]+)*$/i.test(host))) {
-    throw new TelegramUserProxyConfigurationError();
+  // Incomplete MTProxy configuration must never fall through to the old proxy.
+  if (!host || !portValue || !secretValue) {
+    throw new TelegramUserProxyConfigurationError('missing_fields');
+  }
+  if (host.length > 253 || /[:/@\\s?#]/.test(host) ||
+      (!net.isIP(host) && !/^(?=.{1,253}$)[a-z0-9-]+(?:\\.[a-z0-9-]+)*$/i.test(host))) {
+    throw new TelegramUserProxyConfigurationError('invalid_host');
+  }
+  if (!/^\\d{1,5}$/.test(portValue) || Number(portValue) < 1 || Number(portValue) > 65535) {
+    throw new TelegramUserProxyConfigurationError('invalid_port');
   }
   const port = Number(portValue);
-  if (port < 1 || port > 65535) throw new TelegramUserProxyConfigurationError();
 
   let secret: Buffer;
   if (/^(?:[a-f0-9]{2})+$/i.test(secretValue)) {
     secret = Buffer.from(secretValue, 'hex');
-  } else if (/^[A-Za-z0-9_-]+={0,2}$/.test(secretValue)) {
-    const unpadded = secretValue.replace(/=+$/, '');
-    secret = Buffer.from(unpadded, 'base64url');
-    if (secret.toString('base64url') !== unpadded) throw new TelegramUserProxyConfigurationError();
+  } else if (/^[A-Za-z0-9+/_-]+={0,2}$/.test(secretValue)) {
+    // Telegram deep links use base64url, whereas some vendors use standard Base64.
+    // Both decode to the same bytes. Reject lossy/partial decoding.
+    const raw = secretValue.replace(/=+$/, '');
+    const canonical = raw.replace(/-/g, '+').replace(/_/g, '/');
+    secret = Buffer.from(canonical, 'base64');
+    if (secret.toString('base64').replace(/=+$/, '') !== canonical) {
+      throw new TelegramUserProxyConfigurationError('invalid_secret_encoding');
+    }
   } else {
-    throw new TelegramUserProxyConfigurationError();
+    throw new TelegramUserProxyConfigurationError('invalid_secret_encoding');
   }
 
+  // Match the actual teleproto 1.230.0 parseProxySecret implementation. It accepts
+  // any non-empty UTF-8 suffix for ee FakeTLS, not just dotted ASCII hostnames.
+  // The previous extra domain regex rejected some valid Telegram proxy secrets
+  // before a network connection was attempted.
   const isClassic = secret.length === 16;
   const isPadded = secret.length === 17 && secret[0] === 0xdd;
-  const fakeTlsDomain = secret.subarray(17);
-  const isFakeTls = secret.length >= 19 && secret.length <= 270 && secret[0] === 0xee &&
-    /^[a-z0-9.-]+$/i.test(fakeTlsDomain.toString('ascii')) &&
-    fakeTlsDomain.toString('ascii').includes('.');
+  const isFakeTls = secret.length > 17 && secret[0] === 0xee;
   if (!isClassic && !isPadded && !isFakeTls) {
-    throw new TelegramUserProxyConfigurationError();
+    throw new TelegramUserProxyConfigurationError('invalid_secret_format');
   }
   return { MTProxy: true as const, ip: host, port, secret: secret.toString('hex') };
 }
@@ -345,7 +360,8 @@ export function telegramUserClientNetworkOptions(
   return { networkSocket: Socket, proxy: undefined };
 }
 
-export function classifyTelegramUserNetworkError(error: unknown): 'proxy_rejected' | 'proxy_timeout' | 'network_timeout' | 'network_unavailable' | 'other' {
+export function classifyTelegramUserNetworkError(error: unknown): 'proxy_configuration' | 'proxy_rejected' | 'proxy_timeout' | 'network_timeout' | 'network_unavailable' | 'other' {
+  if (error instanceof TelegramUserProxyConfigurationError) return 'proxy_configuration';
   const message = error instanceof Error ? error.message : '';
   if (/proxy CONNECT rejected|SOCKS5 (?:connect rejected|authentication failed|authentication method rejected)/.test(message)) return 'proxy_rejected';
   if (/proxy CONNECT timeout|SOCKS5 (?:connection timeout|TLS timeout)/.test(message)) return 'proxy_timeout';
