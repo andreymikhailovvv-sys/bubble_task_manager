@@ -198,7 +198,7 @@ test('Telegram fullscreen chat compact header and scroll-aware notes preserve mo
   assert.match(css, /\.miniapp-ai-chat-inline-title h2/);
   assert.match(css, /\.miniapp-ai-chat-telegram-project \{/);
   assert.match(mini, /telegramMiniApp=\{isTelegramRuntime\}/);
-  assert.match(notes, /if \(!telegramMiniApp\) return;/);
+  assert.match(notes, /if \(mode !== 'mobile'\) return;/);
   assert.match(notes, /notesFiltersVisible/);
   assert.match(notes, /onScroll=\{handleNotesScroll\}/);
   assert.match(notes, /standalone-notes-filters-collapsed/);
@@ -367,4 +367,29 @@ test('AI bottom tab opens Quick Requests and scrolls to its end even on repeated
   assert.match(tab, /generalAiChatNearBottomRef\.current = true/);
   assert.match(mini, /useLayoutEffect\(\(\) => \{\s*if \(!quickAiTabNavigationSerial/);
   assert.match(mini, /const alignQuickThreadToBottom = \(\) => \{[\s\S]*?thread\.scrollTop = thread\.scrollHeight/);
+});
+
+
+test('mobile browser timeline spacing, touch-safe navigation, and folding notes filters are isolated from Telegram', async () => {
+  const [mini, css, notes] = await Promise.all([
+    read('../../client/src/MiniApp.tsx'),
+    read('../../client/src/styles.css'),
+    read('../../client/src/components/StandaloneNotesWorkspace.tsx')
+  ]);
+  assert.match(mini, /isWebRuntime \? 'miniapp-web-runtime' : ''/);
+  assert.match(mini, /telegramMiniApp=\{isTelegramRuntime\}/);
+  const timeline = css.match(/\.miniapp-shell\.miniapp-web-runtime \.miniapp-timeline-section\.miniapp-timeline-independent-blocks \{([^}]+)\}/)?.[1] ?? '';
+  assert.match(timeline, /margin-top:\s*1\.15rem/);
+  assert.match(timeline, /gap:\s*1\.05rem/);
+  assert.match(css, /\.miniapp-shell\.miniapp-web-runtime \.miniapp-timeline-independent-blocks \.miniapp-timeline-navigation \{\s*gap:\s*1rem;/);
+  const touchButton = css.match(/\.miniapp-shell\.miniapp-web-runtime button\.miniapp-bottom-navigation-item:is\(:hover, :focus, :focus-visible, :active\) \{([^}]+)\}/)?.[1] ?? '';
+  assert.match(touchButton, /-webkit-tap-highlight-color:\s*transparent !important/);
+  assert.match(touchButton, /background:\s*transparent !important/);
+  assert.match(touchButton, /user-select:\s*none/);
+  assert.match(css, /\.miniapp-shell\.miniapp-web-runtime button\.miniapp-bottom-navigation-item:focus-visible \.miniapp-bottom-navigation-icon \{\s*outline:\s*2px solid/);
+  assert.match(notes, /if \(mode !== 'mobile'\) return;/);
+  assert.match(notes, /standalone-notes-web-collapsible/);
+  assert.match(notes, /mode === 'mobile' && !notesFiltersVisible \? 'standalone-notes-filters-collapsed'/);
+  assert.match(css, /\.standalone-notes-mobile\.standalone-notes-web-collapsible \.standalone-notes-board-filters\.standalone-notes-filters-collapsed \{\s*display:\s*none;/);
+  assert.match(css, /\.standalone-notes-telegram \.standalone-notes-board-filters\.standalone-notes-filters-collapsed/);
 });

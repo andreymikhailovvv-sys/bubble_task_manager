@@ -25,7 +25,9 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
   const notesScrollIntentRef = useRef(0);
   const notesLastToggleAtRef = useRef(0);
   const handleNotesScroll = (event: UIEvent<HTMLDivElement>) => {
-    if (!telegramMiniApp) return;
+    // Mobile browser notes collapse the same filter strip as Telegram notes.
+    // Desktop/widget notes retain their static toolbar.
+    if (mode !== 'mobile') return;
     const top = event.currentTarget.scrollTop;
     const delta = top - notesLastScrollTopRef.current;
     notesLastScrollTopRef.current = top;
@@ -367,7 +369,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
         ) : null}
       </section> : null}
       {boardOpen ? createPortal(
-        <div className={`standalone-notes-backdrop fixed inset-0 z-[245] flex items-center justify-center p-3 sm:p-6 ${mode === 'mobile' ? 'standalone-notes-mobile' : ''} ${telegramMiniApp ? 'standalone-notes-telegram' : ''}`}
+        <div className={`standalone-notes-backdrop fixed inset-0 z-[245] flex items-center justify-center p-3 sm:p-6 ${mode === 'mobile' ? 'standalone-notes-mobile' : ''} ${telegramMiniApp ? 'standalone-notes-telegram' : ''} ${mode === 'mobile' && !telegramMiniApp ? 'standalone-notes-web-collapsible' : ''}`}
           style={mode === 'mobile' ? ({ '--miniapp-top-inset': `${mobileSafeAreaTop}px`, '--miniapp-bottom-inset': `${mobileSafeAreaBottom}px` } as CSSProperties) : undefined}
           onMouseDown={(event) => {
           if (event.target === event.currentTarget && !editing) closeBoard();
@@ -375,7 +377,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
           {telegramMiniApp ? <div className="standalone-notes-telegram-brand" aria-label="Планировыч AI">✦ Планировыч AI</div> : null}
           <section className="standalone-notes-board flex h-[min(87dvh,880px)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border shadow-2xl" role="dialog" aria-modal="true" aria-label="Все заметки"
             style={telegramMiniApp ? ({ '--notes-telegram-header-height': `${notesHeaderHeight}px` } as CSSProperties) : undefined}>
-            <div ref={notesHeaderRef} className={`standalone-notes-board-header flex flex-col gap-2 border-b p-4 sm:px-6 ${telegramMiniApp && !notesFiltersVisible ? 'standalone-notes-header-compact' : ''}`}>
+            <div ref={notesHeaderRef} className={`standalone-notes-board-header flex flex-col gap-2 border-b p-4 sm:px-6 ${mode === 'mobile' && !notesFiltersVisible ? 'standalone-notes-header-compact' : ''}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="standalone-note-accent text-xs font-semibold uppercase tracking-widest">Личные записи</p>
@@ -386,8 +388,8 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
                   <button type="button" className="standalone-notes-icon-button rounded-xl border p-2" onClick={closeBoard} aria-label="Закрыть список заметок"><X size={18} /></button>
                 </div>
               </div>
-              <div className={`standalone-notes-board-filters flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 ${telegramMiniApp && !notesFiltersVisible ? 'standalone-notes-filters-collapsed' : ''}`}
-                onFocusCapture={() => { if (telegramMiniApp) setNotesFiltersVisible(true); }}>
+              <div className={`standalone-notes-board-filters flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 ${mode === 'mobile' && !notesFiltersVisible ? 'standalone-notes-filters-collapsed' : ''}`}
+                onFocusCapture={() => { if (mode === 'mobile') setNotesFiltersVisible(true); }}>
                 <nav className="standalone-group-filter flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto pb-1" aria-label="Группы заметок">
                 <button type="button" className="standalone-group-chip standalone-group-manage" title="Редактировать группы"
                   aria-label="Редактировать группы" onClick={() => openGroupManager('manage')}><Settings2 size={15} /><span className="sr-only">Управление группами</span></button>

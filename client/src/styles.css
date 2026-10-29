@@ -11576,3 +11576,69 @@ body[data-theme='light'] .miniapp-shell.miniapp-telegram-fullscreen .miniapp-tel
     -webkit-overflow-scrolling: touch;
   }
 }
+
+
+/* Mobile browser only. Keep the search toolbar, timeline actions, view
+   selector and period switch visually separated; Telegram's layout stays put. */
+@media (max-width: 639px) {
+  .miniapp-shell.miniapp-web-runtime .miniapp-timeline-section.miniapp-timeline-independent-blocks {
+    margin-top: 1.15rem;
+    gap: 1.05rem;
+  }
+  .miniapp-shell.miniapp-web-runtime .miniapp-timeline-independent-blocks .miniapp-timeline-navigation {
+    gap: 1rem;
+  }
+  .miniapp-shell.miniapp-web-runtime .miniapp-timeline-actions-panel .miniapp-workspace-tools-compact .miniapp-workspace-actions {
+    gap: .65rem;
+  }
+
+  /* Chrome for Android can retain a native rectangular touch/highlight state
+     even after React changes the selected tab. Preserve the violet text/icon
+     indicator, but never paint a filled rectangular button surface. */
+  .miniapp-shell.miniapp-web-runtime button.miniapp-bottom-navigation-item,
+  .miniapp-shell.miniapp-web-runtime button.miniapp-bottom-navigation-item:is(:hover, :focus, :focus-visible, :active) {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    background: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    outline: 0 !important;
+  }
+  .miniapp-shell.miniapp-web-runtime button.miniapp-bottom-navigation-item *,
+  .miniapp-shell.miniapp-web-runtime button.miniapp-bottom-navigation-item *::selection {
+    -webkit-tap-highlight-color: transparent !important;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .miniapp-shell.miniapp-web-runtime button.miniapp-bottom-navigation-item .miniapp-bottom-navigation-icon,
+  .miniapp-shell.miniapp-web-runtime button.miniapp-bottom-navigation-item:is(:hover, :active, :focus) .miniapp-bottom-navigation-icon {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  /* A visible indicator remains for physical-keyboard navigation. */
+  .miniapp-shell.miniapp-web-runtime button.miniapp-bottom-navigation-item:focus-visible .miniapp-bottom-navigation-icon {
+    outline: 2px solid #8b5cf6;
+    outline-offset: 2px;
+  }
+
+  /* Notes in the mobile website now collapse their groups/search strip on
+     downward scroll and reveal it on upward scroll, without touching the
+     Telegram-specific full-bleed notes layout or desktop editor. */
+  .standalone-notes-mobile.standalone-notes-web-collapsible .standalone-notes-board-filters {
+    max-height: 14rem;
+    overflow: hidden;
+    opacity: 1;
+  }
+  .standalone-notes-mobile.standalone-notes-web-collapsible .standalone-notes-board-filters.standalone-notes-filters-collapsed {
+    display: none;
+    pointer-events: none;
+  }
+  .standalone-notes-mobile.standalone-notes-web-collapsible .standalone-notes-board-header.standalone-notes-header-compact {
+    gap: 0;
+  }
+}
