@@ -14,7 +14,7 @@ type ProxyConfig = {
 } | (TelegramSocks5Proxy & { protocol: 'socks5' });
 
 const CONNECT_TIMEOUT_MS = 10_000;
-export type TelegramMtprotoTransport = 'direct' | 'socks5' | 'http_connect';
+export type TelegramMtprotoTransport = 'direct' | 'socks5' | 'http_connect' | 'mtproxy';
 export type TelegramMtprotoStage = TelegramSocks5Stage |
   'http_proxy_connected' | 'proxy_tunnel_ready' | 'mtproto_first_bytes';
 export type TelegramMtprotoStageObserver = (stage: TelegramMtprotoStage) => void;
@@ -24,6 +24,49 @@ export class TelegramUserProxyConfigurationError extends Error {
   constructor() {
     super('Invalid Telegram MTProto proxy configuration');
   }
+}
+
+/**
+ * MTProxy is a Telegram-only transport, not an HTTP or SOCKS5 forward proxy.
+ * The user's t.me/proxy secret may be hex or Telegram's base64url variant.
+ * Never log its value, the full link, or the derived bytes.
+ */
+function mtproxyConfig(env: NodeJS.ProcessEnv) {
+  const host = env.TELEGRAM_USER_MTPROXY_HOST?.trim() || '';
+  const portValue = env.TELEGRAM_USER_MTPROXY_PORT?.trim() || '';
+  const secretValue = env.TELEGRAM_USER_MTPROXY_SECRET?.trim() || '';
+  if (!host && !portValue && !secretValue) return null;
+
+  // Partial configurations must fail closed, not silently use the old Telegram proxy.
+  if (!host || !/^\d{1,5}$/.test(portValue) || !secretValue ||
+      host.length > 253 || /[:/@\s?#]/.test(host) ||
+      (!net.isIP(host) && !/^(?=.{1,253}$)[a-z0-9-]+(?:\.[a-z0-9-]+)*$/i.test(host))) {
+    throw new TelegramUserProxyConfigurationError();
+  }
+  const port = Number(portValue);
+  if (port < 1 || port > 65535) throw new TelegramUserProxyConfigurationError();
+
+  let secret: Buffer;
+  if (/^(?:[a-f0-9]{2})+$/i.test(secretValue)) {
+    secret = Buffer.from(secretValue, 'hex');
+  } else if (/^[A-Za-z0-9_-]+={0,2}$/.test(secretValue)) {
+    const unpadded = secretValue.replace(/=+$/, '');
+    secret = Buffer.from(unpadded, 'base64url');
+    if (secret.toString('base64url') !== unpadded) throw new TelegramUserProxyConfigurationError();
+  } else {
+    throw new TelegramUserProxyConfigurationError();
+  }
+
+  const isClassic = secret.length === 16;
+  const isPadded = secret.length === 17 && secret[0] === 0xdd;
+  const fakeTlsDomain = secret.subarray(17);
+  const isFakeTls = secret.length >= 19 && secret.length <= 270 && secret[0] === 0xee &&
+    /^[a-z0-9.-]+$/i.test(fakeTlsDomain.toString('ascii')) &&
+    fakeTlsDomain.toString('ascii').includes('.');
+  if (!isClassic && !isPadded && !isFakeTls) {
+    throw new TelegramUserProxyConfigurationError();
+  }
+  return { MTProxy: true as const, ip: host, port, secret: secret.toString('hex') };
 }
 
 function proxyConfig(env: NodeJS.ProcessEnv): ProxyConfig | null {
@@ -280,6 +323,7 @@ export class HttpConnectTelegramSocket {
 /** One SocketFactory per TelegramClient; credentials remain server-side. */
 /** Returns only the transport class, never the address or credentials. */
 export function telegramMtprotoTransport(env: NodeJS.ProcessEnv = process.env): TelegramMtprotoTransport {
+  if (mtproxyConfig(env)) return 'mtproxy';
   const config = proxyConfig(env);
   return config ? config.protocol === 'socks5' ? 'socks5' : 'http_connect' : 'direct';
 }
@@ -288,15 +332,17 @@ export function telegramUserClientNetworkOptions(
   env: NodeJS.ProcessEnv = process.env,
   onStage?: TelegramMtprotoStageObserver
 ) {
+  const mtproxy = mtproxyConfig(env);
+  if (mtproxy) return { networkSocket: undefined, proxy: mtproxy };
   const config = proxyConfig(env);
-  if (!config) return {};
+  if (!config) return { networkSocket: undefined, proxy: undefined };
   const activeConfig: ProxyConfig = config;
   const Socket = class extends HttpConnectTelegramSocket {
     constructor(_ignoredProxy?: unknown, keepAliveInterval?: number) {
       super(activeConfig, keepAliveInterval, onStage);
     }
   };
-  return { networkSocket: Socket };
+  return { networkSocket: Socket, proxy: undefined };
 }
 
 export function classifyTelegramUserNetworkError(error: unknown): 'proxy_rejected' | 'proxy_timeout' | 'network_timeout' | 'network_unavailable' | 'other' {
