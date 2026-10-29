@@ -351,7 +351,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         const toolChoice = requiredLookup
           ? { type: 'function' as const, name: requiredLookup }
           : 'auto' as const;
-        const providerPayload = { model: input.model, input: requestInput, ...(isForcedFinalRound ? { tool_choice: 'none' } : { tools, tool_choice: toolChoice, parallel_tool_calls: false, ...(includeWebSearch ? { max_tool_calls: 1, include: ['web_search_call.action.sources'] } : {}) }) };
+        const providerPayload = { model: input.model, input: requestInput, ...(input.model === 'gpt-6.1-terra' ? { reasoning: { effort: 'low' as const } } : {}), ...(isForcedFinalRound ? { tool_choice: 'none' } : { tools, tool_choice: toolChoice, parallel_tool_calls: false, ...(includeWebSearch ? { max_tool_calls: 1, include: ['web_search_call.action.sources'] } : {}) }) };
         if (input.dynamicBilling) {
           let call: DynamicResponsesCall;
           try { call = await runDynamicResponsesCall({ userId: input.userId, actionId: requestId, providerCallIndex, feature: 'ai_chat', apiKey: input.apiKey, payload: providerPayload, stream: true, onProviderEvent: observeProviderEvent }); }
