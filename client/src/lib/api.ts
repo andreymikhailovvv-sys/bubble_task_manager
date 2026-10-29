@@ -576,6 +576,8 @@ export const api = {
 
   getTaskAssistantHistory: (taskId: string) =>
     request<{ messages: ChatMessage[] }>(`/api/tasks/${taskId}/ai-chat?userTimeZone=${encodeURIComponent(resolveUserTimeZone())}`),
+  clearTaskAssistantHistory: (taskId: string) =>
+    request<{ ok: true }>(`/api/tasks/${taskId}/ai-chat`, { method: 'DELETE' }),
   askTaskAssistant: (taskId: string, payload: { clientRequestId?: string; question: string; userMessage?: string; model?: AiChatModel; mode?: ChatMode; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean; interactionContext?: 'chat' | 'focus' | 'smart_postpone'; clientSurface?: 'web' | 'miniapp' }) =>
     request<TaskAssistantResult>(`/api/tasks/${taskId}/ai-chat`, {
       method: 'POST',
