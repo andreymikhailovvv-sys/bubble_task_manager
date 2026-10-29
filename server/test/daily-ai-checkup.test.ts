@@ -173,8 +173,10 @@ test('three checkup blocks: exact three-hour deadline window, all-day events, an
   assert.ok(!report.text.includes('Вечерняя задача —'));
   assert.ok(!report.text.includes('Завтрашнее событие'));
   assert.deepEqual(report.moves.map(x => x.taskId), ['t2']);
-  assert.equal(report.text.split('🤖 Общий блок от ИИ').length, 2);
-  assert.equal(report.text.split('🗓️ Предложенные изменения от ИИ').length, 2);
+  assert.equal(report.text.split('📋 Ближайшие задачи').length, 2);
+  assert.equal(report.text.split('💡 Рекомендации').length, 2);
+  assert.doesNotMatch(report.text, /Сводка от сервера|Общий блок от ИИ|Предложенные изменения от ИИ/);
+  assert.doesNotMatch(report.text, /перенос на 28/);
 });
 
 test('server proposes every overdue task and subtask, distributes dense deadlines into 15-minute slots', () => {
@@ -216,10 +218,59 @@ test('checkup includes every overdue subtask without 45-row root-only pagination
   assert.match(service, /parentTaskId: true/);
   assert.match(service, /taskType: 'TASK'/);
   assert.match(service, /completeCheckupScheduleMoves\(output.moves, compact, now, timeZone\)/);
+  assert.match(service, /resolveAiCheckupSchedules\(user.aiCheckupSchedules, user.morningAiCheckupTime\)/);
+  assert.match(service, /checkupSchedules: configuredCheckups.map/);
   assert.doesNotMatch(service, /orderBy: \[\{ dueDate: 'asc' \}, \{ importance: 'desc' \}],[ ]*take: 45/);
   const prompt = buildDailyCheckupPayload({ tasks: [], checkupInstructions: 'Мои пожелания' }, 'gpt-6-luna');
   assert.match(prompt.input[0].content, /400 до 600 символов/);
+  assert.match(prompt.input[0].content, /СЛЕДУЙ/);
+  assert.match(prompt.input[0].content, /НЕ переноси автоматически вечерние задачи на утро/);
   assert.match(prompt.input[0].content, /15 минут/);
   assert.match(prompt.input[0].content, /подзадач/);
   assert.deepEqual(prompt.text.format.schema.required, ['summary', 'moves']);
+});
+
+test('server preserves overdue tasks original evening and daytime hours, respects model preferences', () => {
+  const now = new Date('2026-10-27T08:00:00Z'); // 11:00 Europe/Moscow
+  const items = [
+    { id: 'evening', title: 'Личное вечером', dueDate: '2026-10-26T18:00:00Z', taskType: 'TASK', importance: 2 },
+    { id: 'day', title: 'Рабочее днём', dueDate: '2026-10-26T11:00:00Z', taskType: 'TASK', importance: 5 },
+    { id: 'strict', title: 'Перенос ИИ', dueDate: '2026-10-26T15:00:00Z', taskType: 'TASK', importance: 3 }
+  ];
+  const requested = '2026-10-29T17:00:00.000Z';
+  const moves = completeCheckupScheduleMoves([
+    { taskId: 'strict', newDueAt: requested, reason: 'Пожелание пользователя' }
+  ], items, now, 'Europe/Moscow');
+  const time = (id: string) => {
+    const move = moves.find(x => x.taskId === id);
+    assert.ok(move, id);
+    return new Date(move.newDueAt).toLocaleTimeString('en-GB', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', hour12: false });
+  };
+  assert.equal(time('evening'), '21:00');
+  assert.equal(time('day'), '14:00');
+  assert.equal(moves.find(x => x.taskId === 'strict')?.newDueAt, requested);
+});
+
+test('saved checkup field instructions and sectors are priorities in both AI passes', () => {
+  const input = {
+    date: '2026-10-29T16:00:00Z', timeZone: 'Europe/Moscow',
+    checkupInstructions: 'Не ставь созвоны позже 18:00',
+    checkupSchedules: [{ time: '10:00', instructions: 'Оцени рабочие задачи' }, { time: '20:00', instructions: 'Личные дела вечером' }],
+    sectors: [{ id: 'personal', name: 'Личные', instructions: 'Личное после работы' }],
+    tasks: [{ id: 't1', title: 'Встреча', sphereId: 'personal', dueDate: '2026-10-28T17:00:00Z' }]
+  };
+  for (const payload of [
+    buildDailyCheckupPayload(input, 'gpt-6-luna'),
+    buildCheckupProposalRecoveryPayload(input, { summary: 'Расписание' }, 'gpt-6-luna')
+  ]) {
+    const system = payload.input[0].content;
+    const user = payload.input[1].content;
+    assert.match(system, /checkupSchedules/);
+    assert.match(system, /checkupInstructions/);
+    assert.match(system, /sectors/);
+    assert.match(system, /время суток/);
+    assert.match(user, /Личные дела вечером/);
+    assert.match(user, /Личное после работы/);
+    assert.match(user, /Не ставь созвоны позже 18:00/);
+  }
 });
