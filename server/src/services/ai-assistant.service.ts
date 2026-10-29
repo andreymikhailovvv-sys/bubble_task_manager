@@ -1676,6 +1676,19 @@ export const aiAssistantService = {
     };
   },
 
+  clearTaskDialog: async (input: { userId: string; taskId: string }) => {
+    // Clearing a shared conversation affects every collaborator: only the
+    // task owner may do it. Reset compacted AI memory as well, otherwise the
+    // old dialog would reappear as context on the next request.
+    const task = await prisma.task.findFirst({ where: { id: input.taskId, userId: input.userId }, select: { id: true } });
+    if (!task) return { ok: false as const, code: 'NOT_OWNER' as const };
+    await prisma.$transaction([
+      prisma.taskAiMessage.deleteMany({ where: { taskId: input.taskId } }),
+      prisma.taskAiConversationMemory.deleteMany({ where: { taskId: input.taskId } })
+    ]);
+    return { ok: true as const };
+  },
+
   listTaskDialog: async (input: { userId: string; taskId: string }): Promise<ChatMessage[]> => {
     const dialogTask = await prisma.task.findFirstOrThrow({
       where: { id: input.taskId, AND: [taskAccessWhere(input.userId)] },
