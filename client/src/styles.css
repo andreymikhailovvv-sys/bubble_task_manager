@@ -11673,3 +11673,123 @@ body[data-theme='light'] .miniapp-shell.miniapp-telegram-fullscreen .miniapp-tel
     white-space: nowrap;
   }
 }
+
+
+/* Consistent task-dialog actions in normal and focus fullscreen views. */
+.task-ai-fullscreen-header {
+  min-width: 0;
+}
+.task-ai-fullscreen-actions {
+  gap: .9rem;
+}
+.task-ai-fullscreen-monitor {
+  margin-right: .45rem;
+}
+.task-ai-fullscreen-window-actions {
+  padding-left: .15rem;
+}
+.task-ai-clear-dialog-button {
+  display: inline-flex;
+  min-height: 2.2rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: .42rem;
+  padding: .42rem .85rem;
+  border: 1px solid rgba(225, 29, 72, .27);
+  border-radius: .85rem;
+  background: rgba(244, 63, 94, .11);
+  color: #be123c;
+  font-size: .76rem;
+  font-weight: 600;
+  line-height: 1.2;
+  box-shadow: 0 2px 8px rgba(190, 24, 93, .055);
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color .16s ease, border-color .16s ease, transform .13s ease, box-shadow .16s ease;
+}
+.task-ai-clear-dialog-button:hover:not(:disabled) {
+  border-color: rgba(225, 29, 72, .4);
+  background: rgba(244, 63, 94, .19);
+  box-shadow: 0 3px 10px rgba(190, 24, 93, .1);
+}
+.task-ai-clear-dialog-button:active:not(:disabled) {
+  transform: scale(.965);
+  background: rgba(225, 29, 72, .25);
+  box-shadow: 0 1px 3px rgba(190, 24, 93, .08);
+}
+.task-ai-clear-dialog-button:focus-visible {
+  outline: 2px solid #e11d48;
+  outline-offset: 2px;
+}
+.task-ai-clear-dialog-button:disabled { opacity: .5; cursor: not-allowed; }
+body[data-theme='dark'] .task-ai-clear-dialog-button {
+  border-color: rgba(251, 113, 133, .38);
+  background: rgba(225, 29, 72, .18);
+  color: #fda4af;
+}
+body[data-theme='dark'] .task-ai-clear-dialog-button:hover:not(:disabled) {
+  background: rgba(225, 29, 72, .28);
+}
+body[data-theme='dark'] .task-ai-clear-dialog-button:active:not(:disabled) {
+  background: rgba(225, 29, 72, .36);
+}
+
+/* Compact task help inside Focus: no second header row or phantom bottom gaps. */
+.focus-mode-shell .focus-shared-task-ai-panel .focus-task-ai-header {
+  min-height: 2.1rem;
+  flex-shrink: 0;
+}
+.focus-mode-shell .focus-shared-task-ai-panel .focus-task-ai-bot-icon {
+  color: color-mix(in srgb, var(--accent) 80%, var(--text-primary));
+}
+.focus-mode-shell .focus-shared-task-ai-panel .focus-task-ai-header-actions {
+  flex-shrink: 1;
+  gap: .4rem;
+}
+.focus-mode-shell .focus-shared-task-ai-panel .focus-task-ai-header-actions .task-monitor-status-anchor {
+  min-width: 0;
+}
+.focus-mode-shell .focus-shared-task-ai-panel .focus-task-ai-header-actions .task-monitor-button {
+  white-space: nowrap;
+  padding: .4rem .62rem;
+}
+.focus-mode-shell .focus-shared-task-ai-panel .focused-task-ai-thread-region {
+  margin-top: .3rem;
+}
+.focus-mode-shell .focus-shared-task-ai-panel .chat-thread.focused-task-ai-thread-through {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.focus-mode-shell .focus-shared-task-ai-panel .chat-thread.focused-task-ai-thread-through::-webkit-scrollbar {
+  display: none;
+}
+/* Matching opaque panel/footer backgrounds eliminate visible message corners
+   and prevent the scrollbar from showing through the bottom overlay. */
+.focus-mode-shell .focus-shared-task-ai-panel .focused-task-ai-composer {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  margin: 0;
+  padding: .7rem .85rem .9rem;
+  border-radius: 0 0 1.45rem 1.45rem;
+  background: #fff !important;
+  background-clip: padding-box;
+  box-shadow: 0 -9px 24px rgba(15, 23, 42, .09);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+body[data-theme='dark'] .focus-mode-shell .focus-shared-task-ai-panel .focused-task-ai-composer {
+  background: #0f172a !important;
+  box-shadow: 0 -9px 24px rgba(2, 6, 23, .45);
+}
+@media (max-width: 1300px) {
+  .focus-mode-shell .focus-shared-task-ai-panel .focus-task-ai-header-actions .task-monitor-button span {
+    display: none;
+  }
+}
+@media (max-width: 900px) {
+  .task-ai-fullscreen-header { align-items: flex-start; }
+  .task-ai-fullscreen-actions { gap: .5rem; }
+  .task-ai-fullscreen-monitor { margin-right: .15rem; }
+}
