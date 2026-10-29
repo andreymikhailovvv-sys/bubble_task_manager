@@ -4955,7 +4955,6 @@ export default function App() {
 
     try {
       await api.updateTask(taskId, { dueDate: nextDueDateIso });
-      setIsTimelineOverdueModalCollapsedForDrag(false);
     } catch {
       setTasks((prev) => prev.map((item) => (
         item.id === taskId
@@ -4963,7 +4962,6 @@ export default function App() {
           : item
       )));
       await load();
-      setIsTimelineOverdueModalCollapsedForDrag(false);
     }
   };
 
