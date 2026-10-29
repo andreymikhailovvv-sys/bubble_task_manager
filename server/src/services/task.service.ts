@@ -531,7 +531,10 @@ export const taskService = {
           });
         }
       }
-      if (input.aiMonitoringEnabled === false || input.status === 'DONE') {
+      // Disabling autonomous monitoring must not erase independent one-time
+      // reminders created in ordinary task chat. Completing a task still
+      // cancels every pending scheduled action for that task.
+      if (input.status === 'DONE' && !updatedTask.isRecurring) {
         await tx.taskMonitoringTrigger.updateMany({
           where: { taskId: id, state: 'pending' }, data: { state: 'cancelled' }
         });
