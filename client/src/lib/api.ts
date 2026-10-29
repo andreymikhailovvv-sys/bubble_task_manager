@@ -346,7 +346,7 @@ export type TelegramAiChatSettings = {
   summaryInstructions: string;
   suggestWhen: string;
   suggestHow: string;
-  monitorModel: 'gpt-6-luna' | 'gpt-5.4-mini' | 'gpt-6.1-sol';
+  monitorModel: 'gpt-6-luna' | 'gpt-6.1-terra' | 'gpt-6.1-sol';
   autoReplyWhen: string;
   autoReplyHow: string;
   notifyImportant: boolean;
