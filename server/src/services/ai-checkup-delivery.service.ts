@@ -50,8 +50,10 @@ export async function createAiCheckup(input: {
   // Never present AI-recommended changes as though they can be applied when
   // a server-side ownership/snapshot error prevented creation of the chip.
   const reportText = checkup.moves.length && !proposalId
-    ? checkup.text + '\n\n⚠️ Предложения сформированы, но карточку подтверждения не удалось сохранить. Изменения не применены.'
-    : checkup.text;
+    ? checkup.text + '\n\n⚠️ Не удалось показать карточку предложенных изменений. Ничего не изменено.'
+    : proposalId
+      ? checkup.text + '\n\n📌 Я предложил изменения в расписании. Они собраны в карточке ниже: проверьте их и выберите, применять ли.'
+      : checkup.text;
 
   // Persist first, before reporting success or attempting Telegram delivery.
   const stored = await aiAssistantService.appendGeneralDialogAssistantMessage({
