@@ -11908,3 +11908,20 @@ body[data-theme='dark'] .task-followup-chip[data-tone='2'],
 @media (prefers-reduced-motion: reduce) {
   .task-followup-tooltip { animation: none; }
 }
+
+/* Embedded Mini App theme may differ from the surrounding desktop body. */
+.miniapp-shell.miniapp-light .task-followup-chip {
+  --followup-color: #0f766e;
+  --followup-bg: rgba(13, 148, 136, .10);
+  --followup-border: rgba(13, 148, 136, .25);
+}
+.miniapp-shell.miniapp-light .task-followup-chip[data-tone='1'] {
+  --followup-color: #7351a9;
+  --followup-bg: rgba(130, 93, 184, .095);
+  --followup-border: rgba(130, 93, 184, .26);
+}
+.miniapp-shell.miniapp-light .task-followup-chip[data-tone='2'] {
+  --followup-color: #986827;
+  --followup-bg: rgba(169, 116, 43, .095);
+  --followup-border: rgba(169, 116, 43, .27);
+}
