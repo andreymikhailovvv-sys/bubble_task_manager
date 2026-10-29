@@ -14,7 +14,7 @@ const sample = {
 
 test('Telegram monitor models are separate from chat reply selection and billing preflight', () => {
   const messages = [{ id: 7, date: 1730000000, speaker: 'Bob', text: 'Привет', truncated: false, hasMedia: false }];
-  for (const model of ['gpt-6-luna', 'gpt-5.4-mini', 'gpt-6.1-sol']) {
+  for (const model of ['gpt-6-luna', 'gpt-6.1-terra', 'gpt-6.1-sol']) {
     const payload = buildMonitorPayload(messages, '', 'SUGGEST', model);
     assert.equal(payload.model, model);
     assert.equal(payload.store, false);
