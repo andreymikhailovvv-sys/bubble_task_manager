@@ -254,6 +254,9 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
 
     suspend fun loadTaskMonitoringTriggers(id:String):List<TaskMonitoringTrigger> =
         api.taskMonitoringTriggers(id)
+    suspend fun cancelTaskMonitoringTrigger(taskId:String,triggerId:String) {
+        api.cancelTaskMonitoringTrigger(taskId,triggerId)
+    }
     suspend fun loadTaskMonitoringStatuses(id:String):List<TaskMonitoringStatus> =
         api.taskMonitoringStatuses(id)
 
