@@ -38,9 +38,9 @@ function mtproxyConfig(env: NodeJS.ProcessEnv) {
   if (!host && !portValue && !secretValue) return null;
 
   // Partial configurations must fail closed, not silently use the old Telegram proxy.
-  if (!host || !/^\\d{1,5}$/.test(portValue) || !secretValue ||
-      host.length > 253 || /[:/@\\s?#]/.test(host) ||
-      (!net.isIP(host) && !/^(?=.{1,253}$)[a-z0-9-]+(?:\\.[a-z0-9-]+)*$/i.test(host))) {
+  if (!host || !/^\d{1,5}$/.test(portValue) || !secretValue ||
+      host.length > 253 || /[:/@\s?#]/.test(host) ||
+      (!net.isIP(host) && !/^(?=.{1,253}$)[a-z0-9-]+(?:\.[a-z0-9-]+)*$/i.test(host))) {
     throw new TelegramUserProxyConfigurationError();
   }
   const port = Number(portValue);
