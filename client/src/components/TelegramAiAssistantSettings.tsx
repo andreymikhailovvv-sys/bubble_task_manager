@@ -512,6 +512,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                   )}
                   <details key={`${selectedId}-conversation`} className="telegram-ai-settings-section telegram-ai-settings-section--conversation" aria-label="Настройки участия в переписке">
                     <summary className="telegram-ai-settings-section__header">
+                      <span className="telegram-ai-settings-section__number" aria-hidden="true">1</span>
                       <span className="telegram-ai-settings-section__header-copy">
                         <span className="telegram-ai-settings-section__title">Участие в переписке</span>
                         <span className="telegram-ai-settings-section__description">Когда ассистент предлагает ответы или отправляет их автоматически</span>
@@ -574,6 +575,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                   </details>
                   <details key={`${selectedId}-tasks`} className="telegram-ai-settings-section telegram-ai-settings-section--tasks" aria-label="Настройки добавления задач">
                     <summary className="telegram-ai-settings-section__header">
+                      <span className="telegram-ai-settings-section__number" aria-hidden="true">2</span>
                       <span className="telegram-ai-settings-section__header-copy">
                         <span className="telegram-ai-settings-section__title">Добавление задач</span>
                         <span className="telegram-ai-settings-section__description">Предложения, автосоздание и частота проверки новых поручений</span>
@@ -612,6 +614,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                   </details>
                   <details key={`${selectedId}-summaries`} className="telegram-ai-settings-section telegram-ai-settings-section--summaries" aria-label="Настройки сводок">
                     <summary className="telegram-ai-settings-section__header">
+                      <span className="telegram-ai-settings-section__number" aria-hidden="true">3</span>
                       <span className="telegram-ai-settings-section__header-copy">
                         <span className="telegram-ai-settings-section__title">Частота сводок</span>
                         <span className="telegram-ai-settings-section__description">Когда собирать итоги переписки и что в них включать</span>
@@ -636,6 +639,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                   </details>
                   <details key={`${selectedId}-general`} className="telegram-ai-settings-section telegram-ai-settings-section--general" aria-label="Общие параметры ассистента">
                     <summary className="telegram-ai-settings-section__header">
+                      <span className="telegram-ai-settings-section__number" aria-hidden="true">4</span>
                       <span className="telegram-ai-settings-section__header-copy">
                         <span className="telegram-ai-settings-section__title">Общие параметры</span>
                         <span className="telegram-ai-settings-section__description">Модель ИИ, дневной предел кредитов и уведомления</span>

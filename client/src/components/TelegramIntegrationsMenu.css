@@ -316,9 +316,8 @@ body[data-theme='light'] .telegram-integrations-modal {
   .telegram-ai-custom-input { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* Neutral accordion cards. Only their narrow left indicator has a section color. */
+/* Neutral accordion cards with consistent numeric markers in both themes. */
 .telegram-ai-settings-section {
-  --section-accent: #74afe1;
   display: block;
   padding: 0;
   min-width: 0;
@@ -327,13 +326,6 @@ body[data-theme='light'] .telegram-integrations-modal {
   background: var(--integration-surface);
   color: var(--integration-text);
 }
-.telegram-ai-settings-section--tasks { --section-accent: #ae9acb; }
-.telegram-ai-settings-section--summaries { --section-accent: #79bba9; }
-.telegram-ai-settings-section--general { --section-accent: #c2a67f; }
-body[data-theme='light'] .telegram-ai-settings-section--conversation { --section-accent: #3c7cae; }
-body[data-theme='light'] .telegram-ai-settings-section--tasks { --section-accent: #8465a7; }
-body[data-theme='light'] .telegram-ai-settings-section--summaries { --section-accent: #398b7f; }
-body[data-theme='light'] .telegram-ai-settings-section--general { --section-accent: #9c7643; }
 .telegram-ai-settings-section__header {
   display: flex;
   align-items: center;
@@ -343,7 +335,6 @@ body[data-theme='light'] .telegram-ai-settings-section--general { --section-acce
   padding: 14px 18px;
   list-style: none;
   cursor: pointer;
-  box-shadow: inset 3px 0 0 var(--section-accent);
 }
 .telegram-ai-settings-section__header::-webkit-details-marker { display: none; }
 .telegram-ai-settings-section__header:focus-visible {
@@ -351,7 +342,24 @@ body[data-theme='light'] .telegram-ai-settings-section--general { --section-acce
   outline-offset: -3px;
 }
 .telegram-ai-settings-section__header:hover { background: rgba(141, 160, 185, .075); }
+.telegram-ai-settings-section__number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--integration-border);
+  border-radius: 50%;
+  background: var(--integration-bg);
+  color: var(--integration-muted);
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
 .telegram-ai-settings-section__header-copy {
+  flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -466,6 +474,7 @@ body[data-theme='light'] .telegram-ai-monitor-status--paused .integration-menu__
 @media (max-width: 480px) {
   .telegram-ai-settings-section { border-radius: 15px; }
   .telegram-ai-settings-section__header { min-height: 68px; padding: 12px 14px; }
+  .telegram-ai-settings-section__number { flex-basis: 28px; width: 28px; height: 28px; }
   .telegram-ai-settings-section__content { padding: 14px 12px; gap: 14px; }
 }
 @media (prefers-reduced-motion: reduce) {
