@@ -63,7 +63,7 @@ import { CollapsibleUserMessage } from './components/CollapsibleUserMessage';
 import { CreditUsageStats } from './components/CreditUsageStats';
 import { AiGeneratedDocumentButton } from './components/AiGeneratedDocumentButton';
 import { loadTaskAiRecipientSelection, saveTaskAiRecipientSelection } from './lib/taskAiRecipientStorage';
-import { changedDraftFields, mergeRemoteDraftFields } from './lib/taskDraftSync';
+import { changedDraftFields, mergeRemoteDraftFields, taskEditorEditableSnapshot } from './lib/taskDraftSync';
 
 const MAX_SPHERES = 8;
 
@@ -3729,9 +3729,18 @@ ${allContext}`,
     const score = calcScore(normalized.importance, normalized.urgency);
 
     if (editorState?.task?.id) {
-      const { status: ignoredEditorStatus, ...editableNormalized } = normalized;
-      void ignoredEditorStatus;
-      await api.updateTask(editorState.task.id, { ...editableNormalized, taskType: isEventPayload ? 'EVENT' : 'TASK', aiNotificationsEnabled: isEventPayload ? false : normalized.aiNotificationsEnabled, priorityScore: score });
+      // A classic TaskEditor sends only the user's changed fields. Never
+      // reintroduce defaults or spread the stale task object here: that used
+      // to silently undo AI-applied deadline and description changes.
+      const patch = taskEditorEditableSnapshot(payload);
+      if (Object.keys(patch).length > 0) {
+        const priorityChanged = patch.importance !== undefined || patch.urgency !== undefined;
+        await api.updateTask(editorState.task.id, {
+          ...patch,
+          ...(priorityChanged ? { priorityScore: calcScore(patch.importance ?? editorState.task.importance, patch.urgency ?? editorState.task.urgency) } : {}),
+          ...(isEventPayload && patch.aiNotificationsEnabled !== undefined ? { aiNotificationsEnabled: false } : {})
+        });
+      }
     } else {
       const createdTask = await api.createTask({ ...normalized, taskType: isEventPayload ? 'EVENT' : 'TASK', aiNotificationsEnabled: isEventPayload ? false : normalized.aiNotificationsEnabled, priorityScore: score });
       if (!isEventPayload && draftSubtasks.length > 0) {
@@ -3766,17 +3775,17 @@ ${allContext}`,
 
   const autosaveEditorTask = async (payload: Partial<Task>) => {
     if (!editorState?.task?.id) return;
-    const normalized = {
-      ...payload,
-      importance: payload.importance ?? 3,
-      urgency: payload.urgency ?? 3,
-      status: payload.status ?? 'TODO'
-    };
-    const isEventPayload = (payload.taskType ?? editorState?.task?.taskType) === 'EVENT';
-    const score = calcScore(normalized.importance, normalized.urgency);
-    const { status: ignoredEditorStatus, ...editableNormalized } = normalized;
-    void ignoredEditorStatus;
-    await api.updateTask(editorState.task.id, { ...editableNormalized, taskType: isEventPayload ? 'EVENT' : 'TASK', aiNotificationsEnabled: isEventPayload ? false : normalized.aiNotificationsEnabled, priorityScore: score });
+    // The form may be open while an AI changes this task. Patch only fields
+    // explicitly edited locally; never send its old description or due date.
+    const patch = taskEditorEditableSnapshot(payload);
+    if (Object.keys(patch).length === 0) return;
+    const isEventPayload = editorState.task.taskType === 'EVENT';
+    const priorityChanged = patch.importance !== undefined || patch.urgency !== undefined;
+    await api.updateTask(editorState.task.id, {
+      ...patch,
+      ...(priorityChanged ? { priorityScore: calcScore(patch.importance ?? editorState.task.importance, patch.urgency ?? editorState.task.urgency) } : {}),
+      ...(isEventPayload && patch.aiNotificationsEnabled !== undefined ? { aiNotificationsEnabled: false } : {})
+    });
   };
 
   const createTaskFromAi = async (payload: { prompt: string; sphereId?: string | null; autoAssignSphere?: boolean; attachments: ChatAttachmentPayload[] }) => {
