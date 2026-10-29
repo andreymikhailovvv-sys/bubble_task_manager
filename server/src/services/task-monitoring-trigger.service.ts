@@ -45,6 +45,13 @@ export async function createMonitoringTrigger(userId: string, taskId: string, in
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const result = await prisma.$transaction(async tx => {
+        // An automatic, generic safety-net check-in is not an explicit user
+        // instruction. Make room for a named AI action without disturbing
+        // any independently scheduled custom reminders.
+        await tx.taskMonitoringTrigger.updateMany({
+          where: { taskId, userId, state: 'pending', question: MONITORING_FALLBACK_QUESTION },
+          data: { state: 'replaced' }
+        });
         const pending = await tx.taskMonitoringTrigger.count({
           where: { taskId, userId, state: 'pending' }
         });
