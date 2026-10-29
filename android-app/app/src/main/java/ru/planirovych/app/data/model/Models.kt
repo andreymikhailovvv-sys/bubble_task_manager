@@ -170,6 +170,8 @@ data class TaskMonitoringTrigger(
     val id:String,
     val dueAt:String,
     val question:String="",
+    val title:String?=null,
+    val description:String?=null,
     val state:String=""
 )
 @Serializable

@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { aiAssistantService } from './ai-assistant.service.js';
-import { requireMonitoredTask } from './task-monitoring.service.js';
+import { requireMonitoredTask, requireMonitoringOwner } from './task-monitoring.service.js';
 import { MONITORING_FALLBACK_QUESTION } from './task-monitoring-trigger.service.js';
 import { publishTaskMonitoringReply } from './task-monitoring-delivery.service.js';
 import { formatMonitoringAlert } from '../lib/monitoring-notification.js';
@@ -59,8 +59,11 @@ async function hasMonitoringProgressSince(trigger: {
 async function deliver(run: Run, question: string, checkCurrent: () => Promise<boolean>, kind: 'trigger' | 'overdue' | 'subtask_completed' | 'monitoring_intro') {
   console.info('[TaskMonitoring] AI delivery starting', { runId: run.id, taskId: run.taskId });
   try {
-    await requireMonitoredTask(run.userId, run.taskId);
-    if (!await checkCurrent()) { await markRun(run.id, 'cancelled'); return; }
+    const taskAtStart = kind === 'trigger'
+      ? await requireMonitoringOwner(run.userId, run.taskId)
+      : await requireMonitoredTask(run.userId, run.taskId);
+    const monitoringEnabled = taskAtStart.aiMonitoringEnabled === true;
+    if (taskAtStart.status === 'DONE' || !await checkCurrent()) { await markRun(run.id, 'cancelled'); return; }
     const history = await aiAssistantService.listTaskDialogForContext({
       userId: run.userId, taskId: run.taskId
     });
@@ -72,13 +75,17 @@ async function deliver(run: Run, question: string, checkCurrent: () => Promise<b
     const result = await aiAssistantService.askTaskAssistant({
       userId: run.userId, taskId: run.taskId, history,
       question: [
-        'Это автоматический запрос сервера в рамках ВКЛЮЧЁННОГО beta-мониторинга задачи.',
+        monitoringEnabled
+          ? 'Это автоматический запрос сервера в рамках включённого автомониторинга задачи.'
+          : 'Это запланированное пользователем или ИИ разовое действие в обычном чате задачи. Автомониторинг выключен. Выполни конкретную инструкцию, не запускай непрерывное сопровождение и не назначай новые контакты без необходимости.',
         question, 'История статусов:',
         statuses.map(item => item.createdAt.toISOString() + ': ' + item.label).join('\n') || 'Статусов ещё нет.',
         'Сначала попытайся реально продвинуть задачу: подготовь полезные материалы, варианты, проект сообщения или план. Не ограничивайся вопросом «сделал ли пользователь».',
         'Если не хватает информации, уточни КОНКРЕТНЫЕ данные, объясни зачем они нужны и подготовь доступную часть работы.',
-        'В первую очередь сделай доступную полезную работу: создай материалы, обнови заметки или задачи, если это уместно. Веб-поиск через web_search МОЖЕШЬ использовать, только если для конкретного следующего шага необходимы актуальные внешние факты; для работы с историей задачи, подготовки текста или обсуждения он не нужен. Не выполняй поиск просто из-за включённого мониторинга. Триггер следующего контакта планируй после действительно нужных действий.',
-        'После содержательного ответа обычно устанавливай set_task_monitoring_trigger на следующий полезный контакт, чтобы задача не потерялась. Особенно если ты предложил варианты, спросил данные или ждёшь действия пользователя.',
+        'В первую очередь сделай доступную полезную работу: создай материалы, обнови заметки или задачи, если это уместно. Веб-поиск через web_search МОЖЕШЬ использовать только для актуальных внешних фактов. Не делай формальных запросов ради самого запроса.',
+        ...(monitoringEnabled ? [
+          'Поддерживай минимум одно запланированное полезное действие, если нет подходящего ожидающего. Не сдвигай сроки и не дублируй уже назначенные напоминания. Используй set_task_monitoring_trigger только когда действительно нужен новый контакт.'
+        ] : []),
         'Если в истории пользователь назвал точное время ответа или попросил напомнить через интервал, придерживайся именно этого времени в его часовом поясе. Не заменяй его произвольным часом.',
         'Если время не указано, выбери разумный интервал по дедлайну и следующему конкретному шагу. Не создавай повторяющихся пустых напоминаний и не назначай их, если задача завершена или пользователь отказался.',
         'В финальном ответе ПЕРВАЯ строка строго: «ЗАГОЛОВОК: <одно конкретное предложение длиной до 90 символов>». Этот заголовок увидят в уведомлении, поэтому сразу сообщи самый важный результат, изменение или один главный вопрос, без вводных слов и шаблонных фраз. Не добавляй Markdown, кавычки или текст перед префиксом «ЗАГОЛОВОК:». Затем пустая строка и полный полезный ответ для чата. Сервер извлечёт заголовок отдельно и не отправит полный ответ в уведомлении. Примеры первой строки: «ЗАГОЛОВОК: Нужен макет подрядчика до 16:00» и «ЗАГОЛОВОК: Готовы три варианта маршрута выставки».',
@@ -90,12 +97,16 @@ async function deliver(run: Run, question: string, checkCurrent: () => Promise<b
         ] : []),
         'Не заявляй о внешних действиях без подтверждения.'
       ].join('\n'),
-      mode: 'fast', billingMode: 'dynamic', billingFeature: 'task_monitoring', autoApplyTaskActions: true
+      mode: 'fast', billingMode: 'dynamic',
+      billingFeature: monitoringEnabled ? 'task_monitoring' : 'task_chat',
+      autoApplyTaskActions: monitoringEnabled
     });
     // User can disable monitoring, finish or reschedule the source deadline,
     // or answer a follow-up while the model call is still in progress.
-    const currentTask = await requireMonitoredTask(run.userId, run.taskId);
-    const visibleAnswer = formatMonitoringAlert(currentTask.title, result.answer).message;
+    const currentTask = kind === 'trigger'
+      ? await requireMonitoringOwner(run.userId, run.taskId)
+      : await requireMonitoredTask(run.userId, run.taskId);
+    const visibleAnswer = formatMonitoringAlert(currentTask.title, result.answer, currentTask.aiMonitoringEnabled).message;
     if (!await checkCurrent()) { await markRun(run.id, 'cancelled'); return; }
     await aiAssistantService.appendTaskDialogAssistantMessage({
       userId: run.userId, taskId: run.taskId,
@@ -131,7 +142,7 @@ export async function pollTaskMonitoring(now = new Date()) {
     const triggers = await prisma.taskMonitoringTrigger.findMany({
       where: {
         state: 'pending', dueAt: { lte: now },
-        task: { aiMonitoringEnabled: true, parentTaskId: null,
+        task: { parentTaskId: null,
           collaborationId: null, taskType: 'TASK', status: { not: 'DONE' } }
       },
       orderBy: { dueAt: 'asc' }, take: remaining
@@ -188,8 +199,10 @@ export async function pollTaskMonitoring(now = new Date()) {
         return !answered && !await hasMonitoringProgressSince(trigger);
       };
       await deliver({ id: row.id, taskId: trigger.taskId, userId: trigger.userId },
-        'Пользователь пока не ответил на вопрос: ' + trigger.question +
-        '. Вежливо уточни в существующем чате задачи, что осталось сделать.', check, 'trigger');
+        'Сработало отдельное запланированное действие «' + (trigger.title || 'Уточнить по задаче') +
+        '». Контекст: ' + (trigger.description || trigger.question) +
+        '. Исполни именно эту инструкцию: ' + trigger.question +
+        '. Ответь по существу в существующем чате задачи. Не объединяй это с другими назначенными действиями.', check, 'trigger');
     }
 
     if (remaining <= 0) return;
@@ -323,7 +336,7 @@ async function armNextDeadline() {
     }),
     prisma.taskMonitoringTrigger.findFirst({
       where: { state: 'pending', task: {
-        aiMonitoringEnabled: true, parentTaskId: null, collaborationId: null,
+        parentTaskId: null, collaborationId: null,
         taskType: 'TASK', status: { not: 'DONE' }
       } }, orderBy: { dueAt: 'asc' },
       select: { dueAt: true }

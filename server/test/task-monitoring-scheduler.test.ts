@@ -49,21 +49,23 @@ test('task mutations schedule/cancel deadlines for both main tasks and subtasks'
   assert.match(trigger, /signalTaskMonitoringWakeup\(\)/);
 });
 
-test('trigger tool is available only for opted-in personal tasks and revalidates on server', async () => {
+test('one-time follow-up tool works for owned normal tasks and monitoring actions remain gated', async () => {
   const [ai, trigger, route] = await Promise.all([
     file('../src/services/ai-assistant.service.ts'),
     file('../src/services/task-monitoring-trigger.service.ts'),
     file('../src/routes/api.ts')
   ]);
-  assert.match(ai, /monitoringTools: monitoringEnabled/);
+  assert.match(ai, /monitoringTools: monitoringEnabled, followupTools: followupToolsEnabled/);
   assert.match(ai, /task.aiMonitoringEnabled === true && task.userId === input.userId/);
   assert.match(ai, /call.name === 'set_task_monitoring_trigger'/);
-  assert.match(trigger, /requireMonitoredTask\(userId, taskId\)/);
+  assert.match(trigger, /requireMonitoringOwner\(userId, taskId\)/);
   assert.match(trigger, /minimum: 5, maximum: 10080/);
+  assert.match(trigger, /MAX_TASK_FOLLOWUPS = 3/);
+  assert.match(trigger, /TransactionIsolationLevel.Serializable/);
   assert.match(route, /\/tasks\/:id\/monitoring\/triggers/);
 });
 
-test('human responses cancel only fallback reminders; custom triggers persist; opt-out still cancels', async () => {
+test('human replies cancel only fallback; opt-out preserves regular reminders while completion cancels', async () => {
   const [ai, monitor, task, controller, worker] = await Promise.all([
     file('../src/services/ai-assistant.service.ts'),
     file('../src/services/task-monitoring.service.ts'),
@@ -75,7 +77,8 @@ test('human responses cancel only fallback reminders; custom triggers persist; o
   assert.match(controller, /replyReceivedAt: taskReplyReceivedAt/);
   assert.match(monitor, /updatedAt: \{ lte: receivedAt \}/);
   assert.match(monitor, /question: MONITORING_FALLBACK_QUESTION/);
-  assert.match(task, /input.aiMonitoringEnabled === false \|\| input.status === 'DONE'/);
+  assert.match(task, /input.status === 'DONE' && !updatedTask.isRecurring/);
+  assert.doesNotMatch(task, /input.aiMonitoringEnabled === false \|\| input.status === 'DONE'/);
   assert.match(worker, /const isFallback = trigger.question === MONITORING_FALLBACK_QUESTION/);
   assert.match(worker, /const hasAnswer = isFallback/);
   assert.match(worker, /if \(!isFallback\) return true/);
@@ -89,7 +92,10 @@ test('follow-up countdown is visible in task chat on web and mobile', async () =
   ]);
   assert.equal((web.match(/<TaskMonitoringTriggerChips/g) ?? []).length, 4);
   assert.match(mini, /<TaskMonitoringTriggerChips taskId=\{openedTask.id\}/);
-  assert.match(chip, /Триггер запущен/);
+  assert.doesNotMatch(chip, /Триггер запущен/);
+  assert.match(chip, /trigger.title \|\| 'Уточнить по задаче'/);
+  assert.match(chip, /createPortal\(/);
+  assert.match(chip, /data-tone=\{index % 3\}/);
   assert.match(chip, /getTaskMonitoringTriggers/);
   assert.match(chip, /task-monitoring-triggers-updated/);
   assert.match(chip, /requestRevision/);

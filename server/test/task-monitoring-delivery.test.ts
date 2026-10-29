@@ -12,7 +12,7 @@ test('automatic monitoring replies fan out to task chat, Quick AI and Telegram w
   ]);
   assert.match(worker, /appendTaskDialogAssistantMessage/);
   assert.match(worker, /publishTaskMonitoringReply/);
-  assert.match(delivery, /requireMonitoredTask\(input.userId, input.taskId\)/);
+  assert.match(delivery, /requireMonitoringOwner\(input.userId, input.taskId\)/);
   assert.doesNotMatch(delivery, /systemNotification\.createMany/);
   assert.match(delivery, /eventKey = 'monitoring:' \+ input.runId/);
   assert.match(delivery, /skipDuplicates: true/);

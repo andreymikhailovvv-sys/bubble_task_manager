@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
-import { requireMonitoredTask } from './task-monitoring.service.js';
+import { requireMonitoringOwner } from './task-monitoring.service.js';
 import { telegramService } from './telegram.service.js';
 import { formatMonitoringAlert } from '../lib/monitoring-notification.js';
 
@@ -12,12 +12,13 @@ import { formatMonitoringAlert } from '../lib/monitoring-notification.js';
 export async function publishTaskMonitoringReply(input: {
   userId: string; taskId: string; runId: string; kind: 'overdue' | 'trigger' | 'subtask_completed' | 'monitoring_intro'; answer: string;
 }) {
-  const task = await requireMonitoredTask(input.userId, input.taskId);
+  // Scheduled one-time actions also deliver with autonomous monitoring disabled.
+  const task = await requireMonitoringOwner(input.userId, input.taskId);
   const answer = input.answer.trim();
   if (!answer) return;
   const eventKey = 'monitoring:' + input.runId;
   const title = task.title.trim().slice(0, 150);
-  const alert = formatMonitoringAlert(title, answer);
+  const alert = formatMonitoringAlert(title, answer, task.aiMonitoringEnabled);
   const display = alert.message;
   // Exactly one visible message belongs to Quick AI. A separate unread
   // notification row is badge-only and never rendered as a second bubble.
@@ -52,7 +53,8 @@ export async function publishTaskMonitoringReply(input: {
   // from receiving their persisted messages.
   try {
     await telegramService.notifyMonitoringTaskReply({
-      userId: input.userId, taskId: task.id, taskTitle: title, answer, kind: input.kind
+      userId: input.userId, taskId: task.id, taskTitle: title, answer, kind: input.kind,
+      monitoringEnabled: task.aiMonitoringEnabled
     });
   } catch (error) {
     console.warn('[TaskMonitoring] Telegram monitoring delivery failed', {

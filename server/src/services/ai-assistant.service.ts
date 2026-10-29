@@ -259,7 +259,7 @@ export function shouldRetryTaskChatWebSearch(answer: string): boolean {
     || /(?:веб[- ]?поиск|поиск\s+в\s+интернете)[^.!?\n]{0,75}(?:недоступен|отключ[её]н|не предусмотрен)/iu.test(answer);
 }
 
-export function createTaskChatOpenAiPayload(model: string, messages: TaskChatProviderInput[], maxOutputTokens?: number, options?: { reasoningEffort?: string; allowTools?: boolean; allowWebSearch?: boolean; monitoringTools?: boolean; forceWebSearch?: boolean }) {
+export function createTaskChatOpenAiPayload(model: string, messages: TaskChatProviderInput[], maxOutputTokens?: number, options?: { reasoningEffort?: string; allowTools?: boolean; allowWebSearch?: boolean; monitoringTools?: boolean; followupTools?: boolean; forceWebSearch?: boolean }) {
   const allowTools = options?.allowTools !== false;
   const allowWebSearch = allowTools && options?.allowWebSearch === true;
   return {
@@ -271,7 +271,7 @@ export function createTaskChatOpenAiPayload(model: string, messages: TaskChatPro
       return { type: message.type, call_id: message.call_id, output: message.output };
     }),
     text: { format: TASK_ASSISTANT_RESPONSE_FORMAT },
-    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL, ...AI_CHAT_OPENAI_TOOLS, TASK_CHAT_HISTORY_LOOKUP_TOOL, ...(options?.monitoringTools ? [TASK_MONITOR_FOLLOWUP_TOOL, ...TASK_MONITOR_ACTION_TOOLS] : []), ...(allowWebSearch ? [AI_CHAT_WEB_SEARCH_TOOL] : [])], tool_choice: options?.forceWebSearch && allowWebSearch ? { type: 'web_search' as const } : 'auto', parallel_tool_calls: false, ...(allowWebSearch ? { max_tool_calls: 1 } : {}) } : { tool_choice: 'none' }),
+    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL, ...AI_CHAT_OPENAI_TOOLS, TASK_CHAT_HISTORY_LOOKUP_TOOL, ...(options?.followupTools || options?.monitoringTools ? [TASK_MONITOR_FOLLOWUP_TOOL] : []), ...(options?.monitoringTools ? TASK_MONITOR_ACTION_TOOLS : []), ...(allowWebSearch ? [AI_CHAT_WEB_SEARCH_TOOL] : [])], tool_choice: options?.forceWebSearch && allowWebSearch ? { type: 'web_search' as const } : 'auto', parallel_tool_calls: false, ...(allowWebSearch ? { max_tool_calls: 1 } : {}) } : { tool_choice: 'none' }),
     ...(options?.reasoningEffort ? { reasoning: { effort: options.reasoningEffort } } : {}),
     ...(maxOutputTokens === undefined ? {} : { max_output_tokens: maxOutputTokens })
   };
@@ -1956,12 +1956,21 @@ export const aiAssistantService = {
 
     const monitoringEnabled = task.aiMonitoringEnabled === true && task.userId === input.userId &&
       !task.parentTaskId && !task.collaborationId && task.taskType === 'TASK';
+    const followupToolsEnabled = task.userId === input.userId && !task.parentTaskId &&
+      !task.collaborationId && task.taskType === 'TASK' && task.status !== 'DONE';
     const autonomousMonitoring = monitoringEnabled && input.billingFeature === 'task_monitoring';
     const monitoringStatuses = monitoringEnabled
       ? await prisma.taskMonitoringStatus.findMany({
           where: { taskId: task.id, userId: input.userId },
           orderBy: { createdAt: 'desc' }, take: 12,
           select: { label: true, detail: true, createdAt: true }
+        })
+      : [];
+    const scheduledFollowups = followupToolsEnabled
+      ? await prisma.taskMonitoringTrigger.findMany({
+          where: { taskId: task.id, userId: input.userId, state: 'pending' },
+          orderBy: { dueAt: 'asc' }, take: 3,
+          select: { title: true, description: true, question: true, dueAt: true }
         })
       : [];
     const useContextV2 = isTaskChatContextV2Enabled(input.userId);
@@ -2100,19 +2109,31 @@ export const aiAssistantService = {
         ].join('\n')
       },
       { role: 'user', content: `Контекст задачи:\n${taskContext}` },
+      ...(followupToolsEnabled ? [{ role: 'system' as const, content:
+        'В этом чате доступен инструмент set_task_monitoring_trigger: самостоятельное одноразовое отложенное действие ИИ. Он доступен и без автомониторинга. По просьбе пользователя или при очевидной пользе назначай напоминание, уточнение ответа, подготовку черновика или следующий контакт. Укажи title (короткое понятное действие), description (что именно и зачем ты сделаешь), question (точную инструкцию на момент запуска) и delayMinutes. До трёх независимых напоминаний; новая установка НЕ меняет прежние. Если лимит достигнут, сообщи об этом. В обычном режиме нет обязательства назначать напоминания после каждого ответа. Не обещай выполнить отправку писем или другие внешние действия, если соответствующий инструмент не доступен.' }] : []),
       ...(monitoringEnabled ? [{ role: 'system' as const,
         content: [
           'Владелец явно включил beta-автомониторинг этой задачи. Действуй инициативно как помощник, который ведёт задачу к выполнению, а не просто спрашивает «уже сделал?».',
           'В первую очередь оцени, какую полезную часть работы можешь сделать СЕЙЧАС: исследовать варианты, подготовить текст, составить план, найти решения, проанализировать ограничения. Сделай доступное и покажи результат. Если нужна информация пользователя, конкретно спроси её, объясни для чего, и по возможности подготовь всё остальное заранее.',
           'СНАЧАЛА сделай доступную полезную работу по задаче: анализ, подготовка материалов, чтение или создание файлов, когда это необходимо. Веб-поиск не обязателен: используй его только при реальной потребности в актуальных внешних данных. Только ПОСЛЕ необходимых действий назначь следующий контакт через set_task_monitoring_trigger. Не подменяй полезную работу триггером.',
-          'После содержательного ответа поддерживай дальнейшее сопровождение задачи инструментом set_task_monitoring_trigger: назначь уместный следующий контакт. Не оставляй задачу без следующего шага после предложений, подбора вариантов, черновика или уточняющего вопроса. Исключения: задача завершена, пользователь прямо попросил не напоминать или напоминание явно неуместно.',
-          'Если пользователь просит «напомни через…», «вернусь через…», «сделаю к…», «проверю завтра в…», то ОБЯЗАТЕЛЬНО установи триггер на указанное время по часовому поясу пользователя, переведи в delayMinutes от текущего времени. При интервале короче поддерживаемых 5 минут установи минимальные 5 минут и честно укажи ограничение. Не заменяй точное пожелание произвольным напоминанием через час.',
-          'Если время не названо, выбирай интервал исходя из срочности задачи, дедлайна и объёма оставшейся работы (обычно от часа до суток). Вопрос триггера должен касаться конкретного незавершённого действия, а не быть пустым «ну что?». Можно обновить уже ожидающий триггер вместо множества повторов.',
+          'При включённом автомониторинге поддерживай минимум одно актуальное ожидающее отложенное действие через set_task_monitoring_trigger, если задача активна и пользователь не отказался от контактов. Если уже есть подходящий запланированный контакт, НЕ обновляй его при каждом сообщении и не создавай дублей. Сначала сделай реальную полезную работу.',
+          'Если пользователь просит «напомни через…», «вернусь через…», «сделаю к…», «проверю завтра в…», то ОБЯЗАТЕЛЬНО назначь отложенное действие на указанное время по часовому поясу пользователя, переведи в delayMinutes от текущего времени. Минимум 5 минут, максимум 7 дней; не заменяй точное пожелание произвольным интервалом.',
+          'Если время не названо, выбирай интервал исходя из срочности задачи и дедлайна (обычно от часа до суток). Каждое действие должно иметь осмысленное название, описание и инструкцию. В задаче максимум три независимых действия, никогда не подменяй уже запланированное другим.',
           'Дополнительные инструменты при включённом режиме: create_monitoring_subtask для необходимого шага с реалистичным дедлайном, change_monitoring_importance при обоснованном изменении приоритета, add_monitoring_status для проверенного результата. Не создавай лишних подзадач, не утверждай о выполнении внешних действий без подтверждения. В обычных задачах эти инструменты недоступны.',
           'Веб-поиск, создание изображений и чтение/редактирование файлов доступны при соблюдении обычных лимитов и доступа к файлам. Если web_search доступен, МОЖЕШЬ использовать его, когда ответ зависит от свежих внешних фактов. Не запускай поиск без необходимости и не заявляй об отсутствии интернета, когда инструмент доступен.'
         ].join(' ') }] : []),
       ...(fileCatalogText ? [{ role: 'user' as const, content: fileCatalogText }] : []),
       ...(referenceEvidence ? [{ role: 'user' as const, content: referenceEvidence }] : []),
+      ...(followupToolsEnabled ? [{ role: 'system' as const, content:
+        scheduledFollowups.length
+          ? 'Уже запланированные независимые действия (' + scheduledFollowups.length + ' из 3):\\n' +
+            scheduledFollowups.map(item =>
+              (item.title || 'Уточнить по задаче') + ' | ' + item.dueAt.toISOString() +
+              ' | ' + (item.description || item.question)
+            ).join('\\n') +
+            '. Не изменяй их сроки и не создавай дубликаты. Новое назначай только для отличающейся самостоятельной потребности.'
+          : 'У этой задачи пока нет запланированных действий. В обычном режиме они необязательны; при автомониторинге поддерживай хотя бы одно осмысленное ожидающее действие.'
+      }] : []),
       ...(monitoringStatuses.length ? [{ role: 'user' as const, content:
         'История статусов задачи (от последнего к первому):\\n' +
         monitoringStatuses.map(status => status.createdAt.toISOString() + ' — ' + status.label +
@@ -2219,7 +2240,7 @@ export const aiAssistantService = {
           }
           const startedAt = Date.now();
           const reasoning = supportsReasoningEffort(model) ? reasoningEffort : undefined;
-          const preflightPayload = createTaskChatOpenAiPayload(model, providerInput, undefined, { reasoningEffort: reasoning, allowTools: !isForcedFinalRound, allowWebSearch, monitoringTools: monitoringEnabled, forceWebSearch: forcedWebSearchRetry && allowWebSearch });
+          const preflightPayload = createTaskChatOpenAiPayload(model, providerInput, undefined, { reasoningEffort: reasoning, allowTools: !isForcedFinalRound, allowWebSearch, monitoringTools: monitoringEnabled, followupTools: followupToolsEnabled, forceWebSearch: forcedWebSearchRetry && allowWebSearch });
           let maxOutputTokens: number | undefined;
           let dynamicReservation: WalletReservation | null = null;
           if (dynamicBilling && !input.skipCreditsCharge) {
@@ -2246,7 +2267,7 @@ export const aiAssistantService = {
             maxOutputTokens = Math.min(TASK_CHAT_MAX_OUTPUT_TOKENS, calculateAffordableOutputTokens(model, inputTokens, dynamicReservation.totalMilli - desired.inputCreditsMilli));
             if (maxOutputTokens < TASK_CHAT_MIN_OUTPUT_TOKENS) throw new Error('Недостаточно AI кредитов');
           }
-          const payload = createTaskChatOpenAiPayload(model, providerInput, maxOutputTokens, { reasoningEffort: reasoning, allowTools: !isForcedFinalRound, allowWebSearch, monitoringTools: monitoringEnabled, forceWebSearch: forcedWebSearchRetry && allowWebSearch });
+          const payload = createTaskChatOpenAiPayload(model, providerInput, maxOutputTokens, { reasoningEffort: reasoning, allowTools: !isForcedFinalRound, allowWebSearch, monitoringTools: monitoringEnabled, followupTools: followupToolsEnabled, forceWebSearch: forcedWebSearchRetry && allowWebSearch });
           console.info('[AI] Sending OpenAI request', { requestId, providerCallIndex, mode: input.mode ?? 'fast', model, taskId: input.taskId, userId: input.userId });
           const openAiResponse = await openAiFetch('https://api.openai.com/v1/responses', {
             method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` }, body: JSON.stringify({ ...payload, ...(allowWebSearch ? { include: ['web_search_call.action.sources'] } : {}), stream: true })
@@ -2388,9 +2409,9 @@ export const aiAssistantService = {
             }
             if (call.name === 'set_task_monitoring_trigger') {
               toolCallsExecuted += 1;
-              const trigger = monitoringEnabled
+              const trigger = followupToolsEnabled
                 ? await createMonitoringTrigger(input.userId, input.taskId, args)
-                : { ok: false, code: 'MONITORING_DISABLED' };
+                : { ok: false, code: 'FOLLOWUP_NOT_AVAILABLE' };
               providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(trigger) });
               input.onProgress?.('forming_answer');
               continue;

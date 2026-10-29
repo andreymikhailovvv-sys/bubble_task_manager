@@ -134,7 +134,8 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
     var queuedFiles by remember(task.id){mutableStateOf<List<TaskAiFile>>(emptyList())}
     var queuedReply by remember(task.id){mutableStateOf<ReplyTarget?>(null)}
     val busy=ui.taskId==task.id && ui.busy
-    val triggers=if(ui.taskId==task.id && task.aiMonitoringEnabled)
+    // Scheduled AI actions are independent of autonomous monitoring.
+    val triggers=if(ui.taskId==task.id)
         ui.monitoringTriggers else emptyList()
     val monitoringStatuses=if(ui.taskId==task.id)
         ui.monitoringStatuses else emptyList()
@@ -914,32 +915,71 @@ private fun NativeMonitoringStatusChips(
 private fun NativeMonitoringTriggerChips(
     triggers:List<TaskMonitoringTrigger>,now:Long,c:TaskChatColors
 ){
-    Column(verticalArrangement=Arrangement.spacedBy(6.dp)){
-        triggers.forEach{trigger->
+    val dark=c.bg==Color(0xFF0D1628)
+    Column(verticalArrangement=Arrangement.spacedBy(7.dp)){
+        triggers.take(3).forEachIndexed{index,trigger->
             val due=runCatching{
                 java.time.Instant.parse(trigger.dueAt).toEpochMilli()
-            }.recoverCatching {
+            }.recoverCatching{
                 java.time.OffsetDateTime.parse(trigger.dueAt).toInstant().toEpochMilli()
             }.getOrDefault(now)
-            val seconds=((due-now+999)/1000).coerceAtLeast(0)
-            val timeText=when {
-                seconds>=3600->(seconds/3600).toString()+" ч "+
-                    ((seconds%3600+59)/60).toString()+" мин"
-                seconds>=60->((seconds+59)/60).toString()+" мин"
+            val minutes=((due-now+59_999)/60_000).coerceAtLeast(0)
+            val timeText=when{
+                minutes>=60->(minutes/60).toString()+" ч"+
+                    (if(minutes%60>0)" "+(minutes%60).toString()+" мин" else "")
+                minutes>0->minutes.toString()+" мин"
                 else->"скоро"
             }
+            val accent=when(index){
+                0->if(dark)Color(0xFF5CC3BA)else Color(0xFF0F766E)
+                1->if(dark)Color(0xFFB9A0DD)else Color(0xFF7351A9)
+                else->if(dark)Color(0xFFD7AE74)else Color(0xFF986827)
+            }
+            val title=trigger.title?.takeIf{it.isNotBlank()}?: "Уточнить по задаче"
+            var detailsOpen by remember(trigger.id){mutableStateOf(false)}
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.Start){
-                Row(Modifier.clip(CircleShape)
-                    .background(c.accent.copy(alpha=.09f))
-                    .border(1.dp,c.accent.copy(alpha=.22f),CircleShape)
-                    .padding(horizontal=11.dp,vertical=7.dp),
-                    horizontalArrangement=Arrangement.spacedBy(6.dp),
-                    verticalAlignment=Alignment.CenterVertically){
-                    Icon(Icons.Default.Schedule,null,tint=c.accent,
-                        modifier=Modifier.size(13.dp))
-                    Text("Триггер запущен · "+timeText,
-                        color=c.accent,fontSize=11.sp,
-                        fontWeight=FontWeight.SemiBold,maxLines=1)
+                Box{
+                    Row(
+                        Modifier.clip(CircleShape)
+                            .background(accent.copy(alpha=if(dark).14f else .09f))
+                            .border(1.dp,accent.copy(alpha=.27f),CircleShape)
+                            .clickable{detailsOpen=true}
+                            .padding(horizontal=11.dp,vertical=7.dp),
+                        horizontalArrangement=Arrangement.spacedBy(6.dp),
+                        verticalAlignment=Alignment.CenterVertically
+                    ){
+                        Icon(Icons.Default.Schedule,null,tint=accent,
+                            modifier=Modifier.size(13.dp))
+                        Text(title,modifier=Modifier.widthIn(max=195.dp),
+                            color=accent,fontSize=11.sp,
+                            fontWeight=FontWeight.SemiBold,maxLines=1,
+                            overflow=TextOverflow.Ellipsis)
+                        Text("· "+timeText,color=accent.copy(alpha=.82f),
+                            fontSize=11.sp,maxLines=1)
+                    }
+                    DropdownMenu(
+                        expanded=detailsOpen,onDismissRequest={detailsOpen=false},
+                        modifier=Modifier.widthIn(max=305.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(c.panel)
+                    ){
+                        Column(Modifier.padding(horizontal=14.dp,vertical=10.dp)){
+                            Text(title,color=c.text,fontSize=13.sp,
+                                fontWeight=FontWeight.SemiBold)
+                            Spacer(Modifier.height(6.dp))
+                            Text(trigger.description?.takeIf{it.isNotBlank()}
+                                ?:trigger.question,color=c.secondary,
+                                fontSize=12.sp,lineHeight=17.sp)
+                            Spacer(Modifier.height(7.dp))
+                            Text("Запланировано на "+
+                                runCatching{
+                                    java.time.Instant.ofEpochMilli(due)
+                                        .atZone(java.time.ZoneId.systemDefault())
+                                        .format(java.time.format.DateTimeFormatter.ofPattern("d MMM, HH:mm",Locale("ru")))
+                                }.getOrDefault(trigger.dueAt),
+                                color=c.secondary.copy(alpha=.8f),fontSize=10.sp)
+                        }
+                    }
                 }
             }
         }

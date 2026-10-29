@@ -11835,3 +11835,93 @@ body[data-theme='dark'] .focus-mode-shell .focus-shared-task-ai-panel .focused-t
   .task-ai-fullscreen-actions { gap: .5rem; }
   .task-ai-fullscreen-monitor { margin-right: .15rem; }
 }
+
+/* Independently scheduled one-time AI actions, with low-saturation accents. */
+.task-followups { position: relative; z-index: 1; }
+.task-followup-chip {
+  --followup-color: #0f766e;
+  --followup-bg: rgba(13, 148, 136, .10);
+  --followup-border: rgba(13, 148, 136, .25);
+  max-width: min(100%, 23rem);
+  border-color: var(--followup-border);
+  background: var(--followup-bg);
+  color: var(--followup-color);
+  outline: none;
+  cursor: default;
+  transition: background-color .16s ease, border-color .16s ease;
+}
+.task-followup-chip[data-tone='1'] {
+  --followup-color: #7351a9;
+  --followup-bg: rgba(130, 93, 184, .095);
+  --followup-border: rgba(130, 93, 184, .26);
+}
+.task-followup-chip[data-tone='2'] {
+  --followup-color: #986827;
+  --followup-bg: rgba(169, 116, 43, .095);
+  --followup-border: rgba(169, 116, 43, .27);
+}
+.task-followup-chip:hover, .task-followup-chip:focus-visible {
+  background: color-mix(in srgb, var(--followup-bg) 75%, var(--followup-color) 9%);
+  border-color: var(--followup-color);
+}
+.task-followup-time { opacity: .77; font-variant-numeric: tabular-nums; }
+body[data-theme='dark'] .task-followup-chip,
+.miniapp-shell:not(.miniapp-light) .task-followup-chip {
+  --followup-color: #5cc3ba;
+  --followup-bg: rgba(54, 155, 145, .15);
+  --followup-border: rgba(91, 195, 186, .29);
+}
+body[data-theme='dark'] .task-followup-chip[data-tone='1'],
+.miniapp-shell:not(.miniapp-light) .task-followup-chip[data-tone='1'] {
+  --followup-color: #b9a0dd;
+  --followup-bg: rgba(160, 124, 203, .16);
+  --followup-border: rgba(176, 146, 215, .28);
+}
+body[data-theme='dark'] .task-followup-chip[data-tone='2'],
+.miniapp-shell:not(.miniapp-light) .task-followup-chip[data-tone='2'] {
+  --followup-color: #d7ae74;
+  --followup-bg: rgba(191, 139, 71, .15);
+  --followup-border: rgba(210, 164, 99, .28);
+}
+.task-followup-tooltip {
+  pointer-events: none;
+  background: rgba(255, 255, 255, .97);
+  color: #243247;
+  border-color: rgba(148, 163, 184, .28);
+  box-shadow: 0 12px 35px rgba(15, 23, 42, .16);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  animation: task-followup-tooltip-appear .14s ease both;
+}
+.task-followup-tooltip[data-status-theme='dark'] {
+  background: rgba(24, 34, 52, .97);
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, .24);
+  box-shadow: 0 16px 38px rgba(2, 6, 23, .43);
+}
+.task-followup-tooltip-due { color: #64748b; }
+.task-followup-tooltip[data-status-theme='dark'] .task-followup-tooltip-due { color: #94a3b8; }
+@keyframes task-followup-tooltip-appear {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .task-followup-tooltip { animation: none; }
+}
+
+/* Embedded Mini App theme may differ from the surrounding desktop body. */
+.miniapp-shell.miniapp-light .task-followup-chip {
+  --followup-color: #0f766e;
+  --followup-bg: rgba(13, 148, 136, .10);
+  --followup-border: rgba(13, 148, 136, .25);
+}
+.miniapp-shell.miniapp-light .task-followup-chip[data-tone='1'] {
+  --followup-color: #7351a9;
+  --followup-bg: rgba(130, 93, 184, .095);
+  --followup-border: rgba(130, 93, 184, .26);
+}
+.miniapp-shell.miniapp-light .task-followup-chip[data-tone='2'] {
+  --followup-color: #986827;
+  --followup-bg: rgba(169, 116, 43, .095);
+  --followup-border: rgba(169, 116, 43, .27);
+}

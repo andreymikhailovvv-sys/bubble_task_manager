@@ -51,8 +51,8 @@ test('autonomous subtask completion is persisted in the existing event queue, an
   assert.match(worker, /kind: \{ in: \['overdue', 'subtask_completed', MONITORING_INTRO_KIND\] \}/);
   assert.match(worker, /job\.kind === 'subtask_completed'/);
   assert.match(worker, /add_monitoring_status/);
-  assert.match(worker, /billingFeature: 'task_monitoring'/);
-  assert.match(delivery, /formatMonitoringAlert\(title, answer\)/);
+  assert.match(worker, /billingFeature: monitoringEnabled \? 'task_monitoring' : 'task_chat'/);
+  assert.match(delivery, /formatMonitoringAlert\(title, answer, task.aiMonitoringEnabled\)/);
   assert.match(delivery, /const display = alert\.message/);
   assert.match(delivery, /content: alert\.content/);
   assert.match(worker, /content: visibleAnswer/);

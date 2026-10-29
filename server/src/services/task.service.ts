@@ -6,6 +6,7 @@ import { notifyCollaborativeSubtaskCompleted, notifyCollaborativeSubtaskCreated 
 import { computeNextSlotRecurrenceDueDate, validateManualRecurrenceSchedule } from './recurrence-slots.service.js';
 import { cancelMonitoringSource, rescheduleMonitoringSource, rescheduleMonitoringTree, enqueueMonitoringIntroduction, MONITORING_INTRO_KIND } from './task-monitoring-schedule.service.js';
 import { signalTaskMonitoringWakeup } from './task-monitoring-wakeup.service.js';
+import { MONITORING_FALLBACK_QUESTION } from './task-monitoring-followup-policy.js';
 
 interface TaskInput {
   title?: string;
@@ -531,7 +532,16 @@ export const taskService = {
           });
         }
       }
-      if (input.aiMonitoringEnabled === false || input.status === 'DONE') {
+      // Opting out removes only the generic check-in automatically created by
+      // monitoring. Named one-time reminders retain their independent meaning.
+      if (input.aiMonitoringEnabled === false) {
+        await tx.taskMonitoringTrigger.updateMany({
+          where: { taskId: id, state: 'pending', question: MONITORING_FALLBACK_QUESTION },
+          data: { state: 'cancelled' }
+        });
+      }
+      // Completing a task cancels all remaining reminders, regardless of mode.
+      if (input.status === 'DONE' && !updatedTask.isRecurring) {
         await tx.taskMonitoringTrigger.updateMany({
           where: { taskId: id, state: 'pending' }, data: { state: 'cancelled' }
         });

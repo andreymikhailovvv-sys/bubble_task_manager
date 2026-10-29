@@ -53,16 +53,15 @@ test('server fallback waits three hours and never replaces a custom AI trigger',
     assert.ok(created[0].dueAt.getTime() >= before + MONITORING_FALLBACK_DELAY_MS);
     assert.ok(created[0].dueAt.getTime() <= after + MONITORING_FALLBACK_DELAY_MS);
 
-    // A newer assistant reply, without a new AI trigger, resets the same
-    // fallback rather than creating more and more pending reminders.
-    assert.equal(await ensureMonitoringFallbackTrigger({ userId, taskId, assistantCreatedAt }), 'refreshed');
+    // Repeated assistant replies must neither refresh a deadline nor add a duplicate.
+    assert.equal(await ensureMonitoringFallbackTrigger({ userId, taskId, assistantCreatedAt }), 'already-scheduled');
     assert.equal(created.length, 1);
-    assert.equal(updated.length, 1);
+    assert.equal(updated.length, 0);
 
-    // A custom trigger from the model or user must remain authoritative.
+    // Custom AI actions are also preserved unchanged.
     pending = { id: 'custom-1', question: 'Проверить готовность к встрече в 19:00' };
-    assert.equal(await ensureMonitoringFallbackTrigger({ userId, taskId, assistantCreatedAt }), 'custom-trigger');
-    assert.equal(updated.length, 1);
+    assert.equal(await ensureMonitoringFallbackTrigger({ userId, taskId, assistantCreatedAt }), 'already-scheduled');
+    assert.equal(updated.length, 0);
 
     pending = null;
     userReplied = true;
