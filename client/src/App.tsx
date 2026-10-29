@@ -5536,10 +5536,12 @@ export default function App() {
                   {focusAiLoading && focusAiProgress ? <TaskAiProgress status={focusAiProgress} /> : focusActiveTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={focusActiveTask.id} /> : null}
                 </div>
               </div>
+              <div className="focused-task-ai-composer">
               {focusAiError ? <p className="mt-2 text-xs text-rose-500">{focusAiError}</p> : null}
               {replyToFocusAi ? <AiReplyPreview target={replyToFocusAi} onDismiss={() => setReplyToFocusAi(null)} /> : null}
 <AiAttachmentTiles files={focusAiPendingFiles} onRemove={(file) => removeFocusAiPendingFile(file.name)} busy={focusAiLoading} uploadProgress={focusAiUploadProgress} />
               <div className="ai-chat-composer mt-3 flex items-end gap-2 rounded-3xl border p-2"><AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); addFocusAiClipboardImages(files); } }} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder="Напишите сообщение…" disabled={focusAiLoading} /><input ref={focusAiFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} /><button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={focusAiLoading} onClick={() => focusAiFileInputRef.current?.click()}><Paperclip size={16} /></button><button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg disabled:opacity-50" title="Отправить" disabled={focusAiLoading || (!focusAiDraft.trim() && focusAiPendingFiles.length === 0)} onClick={() => void sendFocusAiQuestion()}>{focusAiLoading ? <Loader2 className="animate-spin" size={16} /> : <SendHorizontal size={16} />}</button></div>
+              </div>
             </aside>
           </div>
         </div>
