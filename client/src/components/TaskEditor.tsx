@@ -28,7 +28,7 @@ import type { ChatAttachmentPayload, Sphere, Task, TaskAttachment } from "../lib
 import { DateTimePickerWithApply } from "./DateTimePickerWithApply";
 import { AiAttachmentTiles } from "./AiAttachmentTiles";
 import { api } from "../lib/api";
-import { taskEditorChangedFields, taskEditorEditableSnapshot } from "../lib/taskDraftSync";
+import { taskEditorChangedFields, taskEditorEditableSnapshot, mergeRemoteDraftFields, TASK_EDITOR_EDIT_KEYS } from "../lib/taskDraftSync";
 import { LinkifiedText } from "./LinkifiedText";
 import { TaskDescriptionInput } from "./TaskDescriptionInput";
 import { ResizableDescriptionSurface } from "./ResizableDescriptionSurface";
@@ -404,6 +404,20 @@ export function TaskEditor({
   }, [form.location, isEventEditor]);
 
   useEffect(() => {
+    // A task may be changed by AI while this editor is open. Refresh fields
+    // that are still clean, but never overwrite a user's unsaved text.
+    if (task?.id && activeEditorTaskIdRef.current === task.id && autosaveSignatureRef.current) {
+      const baseline = JSON.parse(autosaveSignatureRef.current) as Partial<Task>;
+      const remote = taskEditorEditableSnapshot(task);
+      if (JSON.stringify(baseline) !== JSON.stringify(remote)) {
+        setForm((local) => ({
+          ...local,
+          ...mergeRemoteDraftFields(baseline, taskEditorEditableSnapshot(local), remote, TASK_EDITOR_EDIT_KEYS)
+        }));
+        autosaveSignatureRef.current = JSON.stringify(remote);
+      }
+      return;
+    }
     const nextForm: Partial<Task> = task ?? {
       importance: 3,
       sphereId: initialSphereId ?? null,
@@ -422,8 +436,8 @@ export function TaskEditor({
     } else if ([0, 15, 30, 60, 180].includes(nextForm.notifyBeforeMinutes ?? 0)) {
       setNotifyPreset(String(nextForm.notifyBeforeMinutes ?? 0));
     } else {
+      // Preserve non-preset server values until the user explicitly edits them.
       setNotifyPreset("0");
-      setForm((prev) => ({ ...prev, notifyBeforeMinutes: 0 }));
     }
     setCreateMode("manual");
     setAiPrompt("");
