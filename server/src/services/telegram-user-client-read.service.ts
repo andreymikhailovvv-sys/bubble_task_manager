@@ -8,7 +8,8 @@ import { decryptTelegramAppCredentials } from '../lib/telegram-user-app-credenti
 import { decryptTelegramUserSession } from '../lib/telegram-user-client-crypto.js';
 import {
   telegramUserClientNetworkOptions, telegramMtprotoTransport, classifyTelegramUserNetworkError,
-  type TelegramMtprotoStage, type TelegramMtprotoTransport
+  type TelegramMtprotoStage, type TelegramMtprotoTransport,
+  TelegramUserProxyConfigurationError
 } from '../lib/telegram-user-client-network.js';
 import { FixedWindowRateLimiter } from '../lib/security-rate-limiter.js';
 import { TelegramUserClientError } from './telegram-user-client-auth.service.js';
@@ -203,18 +204,23 @@ async function validOwner(userId: string) {
 type ReadOwner = Awaited<ReturnType<typeof validOwner>>;
 
 type TelegramReadDiagnostic = {
-  phase: 'client_connect' | 'identity_check' | 'read_request' | 'finished';
+  phase: 'decrypt_credentials' | 'decrypt_session' | 'proxy_config' | 'client_connect' | 'identity_check' | 'read_request' | 'finished';
   transport: TelegramMtprotoTransport | 'unknown';
   tunnelStage: TelegramMtprotoStage | 'not_started';
 };
 
 async function openReadClient(owner: ReadOwner, diagnostic: TelegramReadDiagnostic) {
+  diagnostic.phase = 'decrypt_credentials';
   const credentials = decryptTelegramAppCredentials(owner.userId, owner.encryptedApiCredentials);
+  diagnostic.phase = 'decrypt_session';
   const session = decryptTelegramUserSession(owner.encryptedSession, owner.userId);
+  diagnostic.phase = 'proxy_config';
+  const options = telegramUserClientNetworkOptions(process.env, (stage) => { diagnostic.tunnelStage = stage; });
   diagnostic.transport = telegramMtprotoTransport();
+  diagnostic.phase = 'client_connect';
   const client = new TelegramClient(new StringSession(session), credentials.apiId, credentials.apiHash, {
     connectionRetries: 1,
-    ...telegramUserClientNetworkOptions(process.env, (stage) => { diagnostic.tunnelStage = stage; })
+    ...options
   });
   try {
     await client.connect();
@@ -273,9 +279,12 @@ async function withReadClient<T>(userId: string, kind: 'list' | 'history' | 'mon
       if (error instanceof TelegramUserClientError) throw error;
       console.warn('[TelegramUserClient] Telegram read failed', {
         kind, category: classifyTelegramUserNetworkError(error),
-        phase: diagnostic.phase, transport: diagnostic.transport, tunnelStage: diagnostic.tunnelStage
+        phase: diagnostic.phase, transport: diagnostic.transport, tunnelStage: diagnostic.tunnelStage,
+        ...(error instanceof TelegramUserProxyConfigurationError ? { configurationReason: error.reason } : {})
       });
-      throw new TelegramUserClientError(503, 'Не удалось получить данные Telegram. Повторите позже');
+      throw new TelegramUserClientError(503, error instanceof TelegramUserProxyConfigurationError
+        ? 'Неверно настроен MTProxy на сервере. Проверьте адрес, порт и полный секрет.'
+        : 'Не удалось получить данные Telegram. Повторите позже');
     } finally {
       if (client) try { await client.disconnect(); } catch { /* best effort */ }
     }
