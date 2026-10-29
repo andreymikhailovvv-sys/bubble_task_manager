@@ -32,3 +32,31 @@ export function mergeRemoteDraftFields<T extends object>(
   }
   return next;
 }
+
+/** Only these editable fields may be persisted by the classic web TaskEditor.
+ * Never send the entire Task object: it includes stale server/AI-owned fields.
+ * Status is deliberately excluded; completion has its own explicit action.
+ */
+import type { Task } from './types';
+
+export const TASK_EDITOR_EDIT_KEYS = [
+  'title', 'description', 'dueDate', 'location', 'sphereId',
+  'importance', 'urgency', 'notifyBeforeMinutes',
+  'isRecurring', 'recurrenceText', 'recurrenceJson', 'recurrenceSummary', 'recurrenceUntil',
+  'aiNotificationsEnabled', 'aiMonitoringEnabled'
+] as const satisfies readonly (keyof Task)[];
+
+export function taskEditorEditableSnapshot(task: Partial<Task>): Partial<Task> {
+  const snapshot: Partial<Task> = {};
+  for (const key of TASK_EDITOR_EDIT_KEYS) {
+    // A missing key must never be interpreted as an instruction to erase it.
+    if (task[key] !== undefined) (snapshot as Record<string, unknown>)[key] = task[key];
+  }
+  return snapshot;
+}
+
+export function taskEditorChangedFields(baseline: Partial<Task>, draft: Partial<Task>): Partial<Task> {
+  const patch = changedDraftFields(baseline, taskEditorEditableSnapshot(draft), TASK_EDITOR_EDIT_KEYS);
+  // Only explicit editable values are valid PATCH fields.
+  return Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined)) as Partial<Task>;
+}
