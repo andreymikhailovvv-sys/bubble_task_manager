@@ -4649,7 +4649,6 @@ export default function App() {
         onDragEndCapture={() => {
           setDraggedTimelineTaskId(null);
           setActiveTimelineDropSlot(null);
-          setIsTimelineOverdueModalCollapsedForDrag(false);
         }}
         onMouseEnter={(event) => {
           if (draggedTimelineTaskId !== null || options?.disableHoverCard || isReminderChip) return;
