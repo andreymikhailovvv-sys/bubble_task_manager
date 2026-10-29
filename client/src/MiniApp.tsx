@@ -221,7 +221,7 @@ function normalizeMiniAiChatProjects(rawProjects: Array<Partial<MiniAiChatProjec
 }
 const AI_CHAT_MODEL_OPTIONS: Array<{ value: AiChatModel; label: string }> = [
   { value: 'gpt-6-luna', label: 'GPT-6 Luna' },
-  { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
+  { value: 'gpt-6.1-terra', label: 'GPT-6.1 Terra' },
   { value: 'gpt-6.1-sol', label: 'GPT-6.1 Sol' }
 ];
 const MINI_AI_PROJECT_COLORS = ['#8b5cf6', '#06b6d4', '#22c55e', '#f97316', '#ec4899', '#6366f1', '#14b8a6', '#f43f5e'];
