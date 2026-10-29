@@ -270,7 +270,18 @@ export function DateTimePickerWithApply({
           type="time"
           className="form-field w-full rounded border px-2 py-1.5 text-sm"
           value={draftTime}
-          onChange={(event) => setDraftTime(event.target.value)}
+          onChange={(event) => {
+            const nextTime = event.target.value;
+            const previousTime = draftTime;
+            setDraftTime(nextTime);
+            // Chromium's native two-column time picker stays open after a
+            // minute is chosen. Blur only after the minute column changes,
+            // not on the first hour click, so the user can finish choosing.
+            if (previousTime && nextTime && previousTime.slice(3, 5) !== nextTime.slice(3, 5)) {
+              const input = event.currentTarget;
+              window.requestAnimationFrame(() => input.blur());
+            }
+          }}
         />
         <button
           type="button"

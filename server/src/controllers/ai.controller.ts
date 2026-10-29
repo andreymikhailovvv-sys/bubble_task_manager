@@ -2,6 +2,7 @@ import { consumeTelegramAiReadRequest } from '../services/telegram-ai-read-conse
 import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
 import { Request, Response } from 'express';
 import { aiAssistantService, type AiChatContextDiagnostics } from '../services/ai-assistant.service.js';
+import { grantAiChatRequestRating } from '../services/ai-request-rating.service.js';
 import { cancelPendingMonitoringTriggers } from '../services/task-monitoring.service.js';
 import { telegramService } from '../services/telegram.service.js';
 import { prisma } from '../db/prisma.js';
@@ -158,6 +159,10 @@ export const aiController = {
       }
       const { diagnostics: _diagnostics, workflowDiagnostics: _workflowDiagnostics, ...publicResult } = result;
       await completeAiChatRequest(requestClaim ?? { kind: 'untracked' }, publicResult);
+      // A completed user request counts once. Replays return above this point.
+      await grantAiChatRequestRating(req.user!.id, 'general:' + (requestClaim?.kind === 'new'
+        ? req.body.clientRequestId : requestId)).catch(error =>
+          console.error('[Efficiency] general AI chat bonus failed', error));
       if (streaming) { writeStreamEvent({ type: 'result', result: publicResult }); res.end(); } else res.json(publicResult);
     } catch (error) {
       traceError = error;
@@ -225,6 +230,8 @@ export const aiController = {
         messages: [{ role: 'user', content: question.trim() }]
       });
       await aiAssistantService.appendGeneralDialogAssistantMessage({ userId: req.user!.id, content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli, taskProposalId: result.taskProposal?.id });
+      await grantAiChatRequestRating(req.user!.id, 'legacy:' + randomUUID()).catch(error =>
+        console.error('[Efficiency] legacy AI chat bonus failed', error));
       res.json(result);
     } catch (error) {
       sendAiError(res, error);
@@ -409,6 +416,9 @@ export const aiController = {
 
       // Complete only after persisted user and assistant dialog messages.
       await completeAiChatRequest(taskRequestClaim ?? { kind: 'untracked' }, result);
+      await grantAiChatRequestRating(req.user!.id, 'task:' + (taskRequestClaim?.kind === 'new'
+        ? req.body.clientRequestId : traceRequestId)).catch(error =>
+          console.error('[Efficiency] task AI chat bonus failed', error));
       if (streaming) {
         writeStreamEvent({ type: 'result', result });
         res.end();

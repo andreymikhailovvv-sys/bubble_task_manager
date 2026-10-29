@@ -11925,3 +11925,33 @@ body[data-theme='dark'] .task-followup-chip[data-tone='2'],
   --followup-bg: rgba(169, 116, 43, .095);
   --followup-border: rgba(169, 116, 43, .27);
 }
+
+/* Global overdue control: available from bubbles, list and timeline modes. */
+.topbar-overdue-wrap { isolation: isolate; }
+.topbar-overdue-trigger {
+  color: var(--text-primary);
+  border-color: var(--panel-border);
+  background: color-mix(in srgb, var(--timeline-toolbar-bg) 84%, transparent);
+}
+.topbar-overdue-trigger:hover,
+.topbar-overdue-trigger[aria-expanded="true"] {
+  border-color: color-mix(in srgb, #fb7185 40%, var(--panel-border));
+  background: color-mix(in srgb, #fb7185 7%, var(--timeline-toolbar-bg));
+}
+.topbar-overdue-counter {
+  color: #fda4af;
+  background: rgba(225, 29, 72, .15);
+}
+body[data-theme='light'] .topbar-overdue-counter {
+  color: #be123c;
+  background: rgba(225, 29, 72, .09);
+}
+.topbar-overdue-popover {
+  background: var(--timeline-toolbar-bg);
+  border-color: var(--timeline-panel-border);
+  box-shadow: 0 20px 46px rgba(2,6,23,.24);
+}
+@media (max-width: 1023px) {
+  .topbar-overdue-trigger { padding-inline: 8px; font-size: 12px; }
+  .topbar-overdue-popover { right: -8px; }
+}
