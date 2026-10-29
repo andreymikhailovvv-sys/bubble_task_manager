@@ -1916,6 +1916,34 @@ export default function App() {
     [focusSelectedTaskIds, rootTasks]
   );
   const focusActiveTask = focusTasks[focusActiveIndex] ?? focusTasks[0] ?? null;
+  const focusTaskAiDialog = focusActiveTask ? (aiDialogByTask[focusActiveTask.id] ?? []) : [];
+  const focusTaskAiModel: AiChatModel = focusActiveTask
+    ? (aiModelByTask[focusActiveTask.id] ?? 'gpt-5.4-mini') : 'gpt-5.4-mini';
+
+  // Fetch the SAME persistent conversation as regular task help. Switching
+  // focus task never reuses an unrelated task's AI response or model.
+  useEffect(() => {
+    if (!currentUser || !isFocusModeOpen || !focusActiveTask) return;
+    const taskId = focusActiveTask.id;
+    let alive = true;
+    const sync = async () => {
+      if (aiLoadingTaskId === taskId) return;
+      try {
+        const { messages } = await api.getTaskAssistantHistory(taskId);
+        if (!alive) return;
+        loadedAiHistoryTaskIdsRef.current.add(taskId);
+        setAiDialogByTask(prev => {
+          const local = prev[taskId] ?? [];
+          if (focusAiLoading || aiLoadingTaskId === taskId) return prev;
+          const next = normalizeTaskAiMessages(messages);
+          return areTaskAiMessagesEqual(local, next) ? prev : { ...prev, [taskId]: next };
+        });
+      } catch (error) { console.warn('[Focus] task AI history refresh failed', error); }
+    };
+    void sync();
+    const interval = window.setInterval(() => void sync(), 2500);
+    return () => { alive = false; window.clearInterval(interval); };
+  }, [currentUser?.id, isFocusModeOpen, focusActiveTask?.id, aiLoadingTaskId, focusAiLoading]);
   const focusCompletedSubtasksCount = useMemo(
     () => subtasks.filter((task) => task.status === 'DONE' && !focusSessionInitialDoneSubtaskIds.has(task.id)).length,
     [focusSessionInitialDoneSubtaskIds, subtasks]
@@ -2273,7 +2301,7 @@ export default function App() {
       }
     });
     return () => window.cancelAnimationFrame(frameId);
-  }, [focusAiMessages, focusAiLoading, focusAiProgress, isFocusModeOpen, isFocusAiExpanded]);
+  }, [focusActiveTask?.id, focusTaskAiDialog.length, focusAiLoading, focusAiProgress, isFocusModeOpen, isFocusAiExpanded]);
 
   useEffect(() => {
     // Switching tasks only changes the selected task and its existing dialog.
@@ -3383,7 +3411,7 @@ export default function App() {
         question: 'Продолжи исходный запрос по разрешённой пользователем переписке Telegram.',
         userMessage: '',
         telegramRead: approval,
-        model: focus ? focusAiModel : focusedAiModel,
+        model: focus ? (aiModelByTask[taskId] ?? 'gpt-5.4-mini') : focusedAiModel,
         clientSurface: 'web',
         skipEfficiencyBonus: focus
       }, { onStatus: status => {
@@ -3398,8 +3426,7 @@ export default function App() {
         telegramSendDraft: result.telegramSendDraft ?? undefined,
         taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined
       };
-      if (focus) setFocusAiMessages(prev => [...prev, response]);
-      else setAiDialogByTask(prev => ({ ...prev, [taskId]: [...(prev[taskId] ?? []), response] }));
+      setAiDialogByTask(prev => ({ ...prev, [taskId]: [...(prev[taskId] ?? []), response] }));
       await refreshAiCredits();
       if (result.taskDataChanged) await load();
     } finally {
