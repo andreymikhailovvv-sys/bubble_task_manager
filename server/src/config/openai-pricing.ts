@@ -1,5 +1,5 @@
 // Token prices, transcription and hosted web_search pricing verified 2026-10-06.
-export const OPENAI_PRICING_VERSION = 'openai-gpt61-transcription-and-web-search-2026-10-06';
+export const OPENAI_PRICING_VERSION = 'openai-gpt61-terra-transcription-and-web-search-2026-10-30';
 export const OPENAI_WEB_SEARCH_COST_NANO_USD = 10_000_000n;
 
 export type OpenAiTokenRates = {
@@ -25,6 +25,11 @@ export const OPENAI_STANDARD_PRICING: Readonly<Record<string, OpenAiModelPricing
     short: rates(2.00, 0.10, 2.50, 10.00),
     long: rates(4.00, 0.20, 5.00, 15.00)
   },
+  'gpt-6.1-terra': {
+    short: rates(1.00, 0.05, 1.25, 5.00),
+    long: rates(2.00, 0.10, 2.50, 7.50)
+  },
+  // Keep Mini pricing for historical invoices and explicitly configured legacy calls.
   'gpt-5.4-mini': { short: rates(0.75, 0.075, null, 4.50) },
   'gpt-5-mini': { short: rates(0.25, 0.025, null, 2.00) },
   'gpt-5-nano': { short: rates(0.05, 0.005, null, 0.40) },
