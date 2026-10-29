@@ -105,7 +105,7 @@ test('one-time follow-up delivery does not require autonomous monitoring', async
   assert.match(task, /if \(input.status === 'DONE' && !updatedTask.isRecurring\)/);
   assert.match(alert, /Напоминание по задаче/);
   assert.match(chip, /role="tooltip"/);
-  assert.match(chip, /trigger.description \|\| selected.question/);
+  assert.match(chip, /selected.description \|\| selected.question/);
   assert.match(styles, /task-followup-chip\[data-tone='2'\]/);
   assert.match(styles, /task-followup-tooltip\[data-status-theme='dark'\]/);
 });
