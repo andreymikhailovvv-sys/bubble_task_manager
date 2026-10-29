@@ -650,7 +650,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                       value={draft.monitorModel}
                       onChange={e => update('monitorModel', e.target.value as TelegramAiChatSettings['monitorModel'])}>
                       <option value="gpt-6-luna">GPT-6 Luna</option>
-                      <option value="gpt-5.4-mini">GPT-5.4 Mini</option>
+                      <option value="gpt-6.1-terra">GPT-6.1 Terra</option>
                       <option value="gpt-6.1-sol">GPT-6.1 Sol</option>
                     </select>
                   </label>
