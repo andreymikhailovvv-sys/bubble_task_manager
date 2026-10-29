@@ -2351,17 +2351,18 @@ export const telegramService = {
       });
     }
   },
-  async notifyMonitoringTaskReply(input: { taskId: string; userId: string; taskTitle: string; answer: string; kind: 'overdue' | 'trigger' | 'subtask_completed' | 'monitoring_intro' }): Promise<boolean> {
+  async notifyMonitoringTaskReply(input: { taskId: string; userId: string; taskTitle: string; answer: string; kind: 'overdue' | 'trigger' | 'subtask_completed' | 'monitoring_intro'; monitoringEnabled?: boolean }): Promise<boolean> {
     if (!BOT_TOKEN) return false;
     const owner = await prisma.user.findUnique({
       where: { id: input.userId }, select: { telegramChatId: true }
     });
     if (!owner?.telegramChatId) return false;
     // Telegram HTML is escaped; never let the model inject arbitrary markup.
-    const alert = formatMonitoringAlert(input.taskTitle, input.answer);
+    const alert = formatMonitoringAlert(input.taskTitle, input.answer, input.monitoringEnabled !== false);
     return sendMessage(owner.telegramChatId,
       '<b>' + escapeHtml(alert.headline) + '</b>\n' +
-      '✅Мониторинг задачи <i>«' + escapeHtml(input.taskTitle.trim().slice(0, 150)) + '»</i>',
+      (input.monitoringEnabled === false ? '⏰Напоминание по задаче <i>«' : '✅Мониторинг задачи <i>«') +
+       escapeHtml(input.taskTitle.trim().slice(0, 150)) + '»</i>',
       { inline_keyboard: [[{
         text: '↩️ Ответить', web_app: { url: buildMiniAppTaskAiUrl(input.taskId) }
       }]] }
