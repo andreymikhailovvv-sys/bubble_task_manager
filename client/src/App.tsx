@@ -5556,7 +5556,11 @@ export default function App() {
                 <p className="text-xs text-muted">Текущая задача: {focusActiveTask.title}</p>
               </div>
               <div className="flex items-center gap-1.5">
-                <button className="focused-task-ai-icon-button" onClick={() => setIsFocusAiExpanded(false)} title="Закрыть"><X size={16} /></button>
+                <TaskMonitoringStatuses taskId={focusActiveTask.id}
+                   enabled={focusActiveTask.aiMonitoringEnabled === true}
+                   allowed={focusActiveTask.taskType === 'TASK' && !focusActiveTask.parentTaskId && !focusActiveTask.isCollaborative}
+                   onTaskUpdated={updated => setTasks(prev => prev.map(task => task.id === updated.id ? updated : task))} />
+                 <button className="focused-task-ai-icon-button" onClick={() => setIsFocusAiExpanded(false)} title="Закрыть"><X size={16} /></button>
               </div>
             </div>
             <div className="relative min-h-0 flex-1">
