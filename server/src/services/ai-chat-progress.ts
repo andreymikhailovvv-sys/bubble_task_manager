@@ -11,6 +11,7 @@ export type AiChatProgressStatus =
   | 'analyzing_retrieved_context'
   | 'applying_changes'
   | 'reading_attachment'
+  | `reading_attachment:${string}`
   | 'searching_web'
   | 'analyzing_web_results'
   | 'forming_answer'
