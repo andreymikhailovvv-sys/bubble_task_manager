@@ -10,7 +10,7 @@ test('autonomous edits are advertised exclusively in opted-in task chats', async
   ]);
   assert.match(ai, /monitoringTools: monitoringEnabled/);
   assert.match(ai, /monitoringTools \? TASK_MONITOR_ACTION_TOOLS/);
-  assert.match(ai, /followupTools \|\| options\?\.monitoringTools \? \[TASK_MONITOR_FOLLOWUP_TOOL\]/);
+  assert.match(ai, /followupTools \|\| options\?\.monitoringTools \? \[TASK_MONITOR_FOLLOWUP_TOOL, TASK_MONITOR_CANCEL_FOLLOWUP_TOOL\]/);
   assert.match(ai, /monitoringActionsExecuted <= 3/);
   assert.match(actions, /requireMonitoredTask\(input.userId, input.taskId\)/);
   assert.match(actions, /eventKey = 'monitor-action:' \+ input.requestId \+ ':' \+ input.callId/);

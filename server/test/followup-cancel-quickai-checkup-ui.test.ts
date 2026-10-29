@@ -83,3 +83,18 @@ test('checkup proposal details appear in the confirmation card, not repeated in 
   assert.match(delivery, /!proposalId/);
   assert.match(delivery, /Ничего не изменено/);
 });
+
+test('native Android follow-up chips support the same scoped cancellation', async () => {
+  const [api, repository, viewModel, chat] = await Promise.all([
+    read('../../android-app/app/src/main/java/ru/planirovych/app/core/network/PlanirovychApi.kt'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/data/repository/WorkspaceRepository.kt'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/HomeViewModel.kt'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeTaskAiChat.kt')
+  ]);
+  assert.match(api, /@DELETE\("api\/tasks\/\{id\}\/monitoring\/triggers\/\{triggerId\}"\)/);
+  assert.match(repository, /api\.cancelTaskMonitoringTrigger\(taskId,triggerId\)/);
+  assert.match(viewModel, /fun cancelTaskAiMonitoringTrigger\(/);
+  assert.match(viewModel, /monitoringTriggers\.filter\{trigger->trigger\.id!=triggerId\}/);
+  assert.match(chat, /vm\.cancelTaskAiMonitoringTrigger\(task\.id,triggerId\)/);
+  assert.match(chat, /contentDescription="Отменить: "\+title/);
+});
