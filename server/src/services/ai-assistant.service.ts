@@ -2409,8 +2409,9 @@ export const aiAssistantService = {
             }
             if (call.name === 'cancel_task_monitoring_trigger') {
               toolCallsExecuted += 1;
+              const cancelArgs = args as unknown as { triggerId?: unknown };
               const cancellation = followupToolsEnabled
-                ? await cancelMonitoringTrigger(input.userId, input.taskId, typeof args.triggerId === 'string' ? args.triggerId : '')
+                ? await cancelMonitoringTrigger(input.userId, input.taskId, typeof cancelArgs.triggerId === 'string' ? cancelArgs.triggerId : '')
                 : { ok: false, code: 'FOLLOWUP_NOT_AVAILABLE' };
               providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(cancellation) });
               input.onProgress?.('forming_answer');
