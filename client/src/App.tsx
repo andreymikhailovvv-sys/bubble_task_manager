@@ -2730,6 +2730,25 @@ export default function App() {
     const question = (options?.questionOverride ?? focusAiDraft).trim();
     if (!question && focusAiPendingFiles.length === 0) return;
     const taskId = task.id;
+    // Collaborative focus chat uses the task's existing recipient selector,
+    // just like Help AI. Never send a message addressed to a person to AI.
+    const recipientUserId = getTaskAiRecipientId(task);
+    if (recipientUserId !== 'ai') {
+      if (focusAiPendingFiles.length > 0) {
+        setFocusAiError('Вложения доступны только для сообщений ИИ.');
+        return;
+      }
+      setFocusAiLoading(true);
+      try {
+        const sent = await api.sendTaskParticipantMessage(taskId, { recipientUserId, content: question }) as TaskAiMessage;
+        setAiDialogByTask(prev => ({ ...prev, [taskId]: [...(prev[taskId] ?? []), sent] }));
+        setFocusAiDraft('');
+        setFocusAiError(null);
+      } catch (error) {
+        setFocusAiError(error instanceof Error ? error.message : 'Не удалось отправить сообщение участнику');
+      } finally { setFocusAiLoading(false); }
+      return;
+    }
     let attachmentsPayload: ChatAttachmentPayload[] = [];
     try {
       attachmentsPayload = await Promise.all(focusAiPendingFiles.map(file => fileToAttachmentPayload(file, true)));
@@ -5539,6 +5558,7 @@ export default function App() {
               <div className="focused-task-ai-composer">
               {focusAiError ? <p className="mt-2 text-xs text-rose-500">{focusAiError}</p> : null}
               {replyToFocusAi ? <AiReplyPreview target={replyToFocusAi} onDismiss={() => setReplyToFocusAi(null)} /> : null}
+              {renderTaskAiRecipientPicker(focusActiveTask)}
 <AiAttachmentTiles files={focusAiPendingFiles} onRemove={(file) => removeFocusAiPendingFile(file.name)} busy={focusAiLoading} uploadProgress={focusAiUploadProgress} />
               <div className="ai-chat-composer mt-3 flex items-end gap-2 rounded-3xl border p-2"><AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); addFocusAiClipboardImages(files); } }} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder="Напишите сообщение…" disabled={focusAiLoading} /><input ref={focusAiFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} /><button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={focusAiLoading} onClick={() => focusAiFileInputRef.current?.click()}><Paperclip size={16} /></button><button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg disabled:opacity-50" title="Отправить" disabled={focusAiLoading || (!focusAiDraft.trim() && focusAiPendingFiles.length === 0)} onClick={() => void sendFocusAiQuestion()}>{focusAiLoading ? <Loader2 className="animate-spin" size={16} /> : <SendHorizontal size={16} />}</button></div>
               </div>
@@ -5575,6 +5595,7 @@ export default function App() {
             </div>
             {focusAiError ? <p className="mt-2 text-xs text-rose-500">{focusAiError}</p> : null}
             {replyToFocusAi ? <AiReplyPreview target={replyToFocusAi} onDismiss={() => setReplyToFocusAi(null)} /> : null}
+              {renderTaskAiRecipientPicker(focusActiveTask)}
             {focusAiPendingFiles.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5">{focusAiPendingFiles.map((file) => <button key={file.name} type="button" className="rounded-full bg-violet-100 px-2 py-1 text-[11px] text-violet-700" onClick={() => removeFocusAiPendingFile(file.name)}>📎 {file.name} ×</button>)}</div> : null}
             <div className="ai-chat-composer mt-3 flex items-center gap-2 rounded-3xl border p-2">
               <AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); addFocusAiClipboardImages(files); } }} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder="Напишите сообщение…" disabled={focusAiLoading} />
