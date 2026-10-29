@@ -189,7 +189,6 @@ test('Telegram assistant live monitor status colors and closed settings work in 
   assert.match(ui, /<ChevronDown size=\{19\}/);
   for (const key of ['conversation', 'tasks', 'summaries', 'general']) {
     assert.ok(ui.includes('telegram-ai-settings-section--' + key), key);
-    assert.match(css, new RegExp('telegram-ai-settings-section--' + key));
   }
   for (const state of ['active', 'paused']) {
     assert.match(css, new RegExp('telegram-ai-monitor-status--' + state));
@@ -201,13 +200,23 @@ test('Telegram assistant live monitor status colors and closed settings work in 
   assert.match(ui, /telegram-ai-slider-setting--dense/);
 });
 
-test('Telegram assistant colored accordion surfaces use standard theme colors except for left accent bars', () => {
+test('Telegram assistant accordion headers show neutral 1–4 circles without colored left bars', () => {
+  const ui = readFileSync(new URL('../../client/src/components/TelegramAiAssistantSettings.tsx', import.meta.url), 'utf8');
+  for (const [index, key] of ['conversation', 'tasks', 'summaries', 'general'].entries()) {
+    const number = index + 1;
+    const header = ui.split('telegram-ai-settings-section--' + key)[1];
+    assert.ok(header?.includes('telegram-ai-settings-section__number" aria-hidden="true">' + number + '</span>'), key + ': missing neutral section number');
+  }
+  assert.equal((ui.match(/className="telegram-ai-settings-section__number"/g) ?? []).length, 4);
   const css = readFileSync(new URL('../../client/src/components/TelegramIntegrationsMenu.css', import.meta.url), 'utf8');
   const section = css.slice(css.indexOf('/* Neutral accordion cards.'), css.indexOf('/* Color is reserved for the live state panel'));
   assert.match(section, /background: var\(--integration-surface\)/);
   assert.match(section, /border-color: var\(--integration-border\)/);
   assert.match(section, /color: var\(--integration-text\)/);
-  assert.match(section, /box-shadow: inset 3px 0 0 var\(--section-accent\)/);
+  assert.match(section, /\.telegram-ai-settings-section__number \\{/);
+  assert.match(section, /border-radius: 50%/);
+  assert.match(section, /background: var\\(--integration-bg\\)/);
+  assert.doesNotMatch(section, /--section-accent|inset 3px 0 0/);
   assert.match(section, /color: var\(--integration-muted\)/);
   assert.doesNotMatch(section, /--section-(?:surface|border|caption)/);
   assert.doesNotMatch(section, /color: var\(--section-accent\)/);
