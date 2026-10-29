@@ -91,7 +91,7 @@ test('события прикрепляют файлы через существ
   assert.match(editor, /!task.parentTaskId && !isEventEditor/);
   assert.match(editor, /isSubtask \|\| isEventEditor/);
   assert.match(editor, /setPendingEventFiles/);
-  assert.match(editor, /onSave\(form, draftSubtasks, eventAttachments\)/);
+  assert.match(editor, /onSave\(isEditing \? taskEditorChangedFields\(baseline, form\) : form, draftSubtasks, eventAttachments\)/);
   assert.match(web, /api\.createTaskAttachment\(createdTask\.id, file\)/);
   assert.match(mini, /createTaskPendingFiles/);
   assert.match(mini, /api\.createTaskAttachment\(createdTask\.id, await fileToAttachmentPayload\(file\)\)/);

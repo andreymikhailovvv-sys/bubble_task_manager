@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { changedDraftFields, mergeRemoteDraftFields } from '../../client/src/lib/taskDraftSync.js';
+import { changedDraftFields, mergeRemoteDraftFields, taskEditorEditableSnapshot, taskEditorChangedFields } from '../../client/src/lib/taskDraftSync.js';
 
 test('closing unchanged stale task drafts must not overwrite server AI changes', () => {
   const original = { title: 'Старая задача', dueDate: null, description: 'Черновик' };
@@ -103,3 +103,38 @@ test('task update logs distinguish browser mutations from internal tools', async
   assert.match(service, /updatedFields: Object\.keys\(input\)/);
 });
 
+
+test('classic web TaskEditor never sends a stale full task snapshot after AI changes', async () => {
+  const original = {
+    id: 'subtask', title: 'Опубликовать анонс', description: 'Старое описание',
+    dueDate: '2026-10-29T08:45:00.000Z', importance: 3, urgency: 3, status: 'TODO' as const,
+    priorityScore: 3, parentTaskId: 'parent'
+  };
+  const updatedByAi = {
+    ...original, description: 'Новый анонс от ИИ', dueDate: '2026-11-02T08:00:00.000Z'
+  };
+  const unchangedEditor = { ...original };
+  assert.deepEqual(taskEditorChangedFields(taskEditorEditableSnapshot(original), unchangedEditor), {});
+  // The user manually touches importance, with the other fields still stale in
+  // the editor. Only importance may be sent to the server.
+  const localEditor = { ...original, importance: 4 };
+  const patch = taskEditorChangedFields(taskEditorEditableSnapshot(original), localEditor);
+  assert.deepEqual(patch, { importance: 4 });
+  assert.deepEqual({ ...updatedByAi, ...patch }, { ...updatedByAi, importance: 4 });
+  assert.deepEqual(taskEditorChangedFields(taskEditorEditableSnapshot(original), { ...original, status: 'DONE' }), {});
+});
+
+test('classic editor and its parent callbacks use only dirty patches on autosave and X', async () => {
+  const editor = await readFile(new URL('../../client/src/components/TaskEditor.tsx', import.meta.url), 'utf8');
+  const app = await readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8');
+  assert.match(editor, /taskEditorChangedFields\(baseline, form\)/);
+  assert.match(editor, /applyEditorAutosavePatch\(patch\)/);
+  assert.match(editor, /autosaveInFlightRef/);
+  assert.doesNotMatch(editor, /onAutoSave\(normalized\)/);
+  assert.doesNotMatch(editor, /await onSave\(form, draftSubtasks\)/);
+  const classic = app.slice(app.indexOf('  const persistTask = async ('), app.indexOf('  const createTaskFromAi = async'));
+  assert.match(classic, /const patch = taskEditorEditableSnapshot\(payload\)/);
+  assert.doesNotMatch(classic, /editableNormalized/);
+  assert.doesNotMatch(classic, /api\.updateTask\(editorState\.task\.id, \{ \.\.\.normalized/);
+  assert.match(classic, /if \(Object\.keys\(patch\)\.length === 0\) return/);
+});
