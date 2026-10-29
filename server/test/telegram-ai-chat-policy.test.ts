@@ -209,13 +209,13 @@ test('Telegram assistant accordion headers show neutral 1–4 circles without co
   }
   assert.equal((ui.match(/className="telegram-ai-settings-section__number"/g) ?? []).length, 4);
   const css = readFileSync(new URL('../../client/src/components/TelegramIntegrationsMenu.css', import.meta.url), 'utf8');
-  const section = css.slice(css.indexOf('/* Neutral accordion cards.'), css.indexOf('/* Color is reserved for the live state panel'));
+  const section = css.slice(css.indexOf('/* Neutral accordion cards with'), css.indexOf('/* Color is reserved for the live state panel'));
   assert.match(section, /background: var\(--integration-surface\)/);
   assert.match(section, /border-color: var\(--integration-border\)/);
   assert.match(section, /color: var\(--integration-text\)/);
-  assert.match(section, /\.telegram-ai-settings-section__number \\{/);
+  assert.match(section, /\.telegram-ai-settings-section__number \{/);
   assert.match(section, /border-radius: 50%/);
-  assert.match(section, /background: var\\(--integration-bg\\)/);
+  assert.match(section, /background: var\(--integration-bg\)/);
   assert.doesNotMatch(section, /--section-accent|inset 3px 0 0/);
   assert.match(section, /color: var\(--integration-muted\)/);
   assert.doesNotMatch(section, /--section-(?:surface|border|caption)/);
