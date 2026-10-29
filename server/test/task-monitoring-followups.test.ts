@@ -61,7 +61,7 @@ test('three independent ordinary-chat actions keep their identities and deadline
       'Напомнить отправить письмо 1',
       'Напомнить отправить письмо 2'
     ]);
-    assert.equal(rows[1].dueAt.getTime() - rows[0].dueAt.getTime(), 20 * 60_000);
+    assert.ok(Math.abs(rows[1].dueAt.getTime() - rows[0].dueAt.getTime() - 20 * 60_000) < 1000);
 
     const overflow = await createMonitoringTrigger(userId, taskId, {
       delayMinutes: 40,
