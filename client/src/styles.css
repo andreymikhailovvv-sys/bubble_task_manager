@@ -1003,12 +1003,12 @@ body[data-theme='light'] .backdrop-blur-sm {
   }
 
   body[data-theme='dark'] .bubble-task-info-panel {
-    border-color: rgba(103, 232, 249, 0.22);
+    border-color: rgba(100, 132, 165, 0.34);
     background:
-      radial-gradient(circle at 12% 0%, rgba(34, 211, 238, 0.1), transparent 34%),
-      linear-gradient(145deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 0.97));
+      radial-gradient(circle at 12% 0%, rgba(56, 189, 248, 0.065), transparent 42%),
+      linear-gradient(145deg, #1c3049, #14243a 58%, #111e32);
     color: var(--text-primary);
-    box-shadow: 0 24px 64px rgba(2, 6, 23, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    box-shadow: 0 20px 52px rgba(2, 6, 23, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.055);
   }
 
   body[data-theme='dark'] .bubble-task-info-eyebrow {
@@ -4250,8 +4250,8 @@ body[data-theme='light'] .telegram-qr-modal-expiry {
 
 body[data-theme='dark'] .focus-setup-modal,
 body[data-theme='dark'] .focus-mode-shell {
-  background: radial-gradient(circle at 18% 12%, rgba(124, 58, 237, 0.28), transparent 32%), linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 0.96) 58%, rgba(30, 27, 75, 0.94));
-  border-color: rgba(139, 92, 246, 0.46);
+  background: radial-gradient(circle at 18% 12%, rgba(124, 58, 237, 0.19), transparent 32%), linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(12, 20, 35, 0.97) 58%, rgba(24, 30, 53, 0.96));
+  border-color: rgba(100, 116, 139, 0.42);
   color: #f8fafc;
   box-shadow: 0 28px 90px rgba(2, 6, 23, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
@@ -4285,7 +4285,7 @@ body[data-theme='dark'] .focus-side-panel,
 body[data-theme='dark'] .focus-ai-panel,
 body[data-theme='dark'] .focus-main-card {
   background: rgba(15, 23, 42, 0.84);
-  border-color: rgba(109, 40, 217, 0.48);
+  border-color: rgba(100, 116, 139, 0.38);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 18px 46px rgba(2, 6, 23, 0.42);
 }
 
@@ -5172,7 +5172,7 @@ body[data-theme='light'] .miniapp-shell .miniapp-postpone-button {
 body[data-theme='dark'] .focused-task-editor-shell,
 body[data-theme='dark'] .focused-task-editor-shell .focus-main-card,
 body[data-theme='dark'] .focused-task-ai-panel {
-  border-color: rgba(109, 40, 217, 0.48) !important;
+  border-color: rgba(100, 116, 139, 0.42) !important;
   background: rgba(15, 23, 42, 0.985) !important;
   color: var(--text-primary) !important;
   box-shadow: 0 28px 90px rgba(2, 6, 23, 0.82) !important;
@@ -5216,7 +5216,7 @@ body[data-theme='dark'] .focus-mode-shell .placeholder\:text-slate-400::placehol
 body[data-theme='dark'] .focused-task-pill-select,
 body[data-theme='dark'] .focused-task-icon-button,
 body[data-theme='dark'] .focused-task-add-subtask-button {
-  border-color: rgba(139, 92, 246, 0.5) !important;
+  border-color: rgba(100, 116, 139, 0.46) !important;
   background: rgba(30, 41, 59, 0.88) !important;
   color: #ddd6fe !important;
 }
@@ -5286,7 +5286,7 @@ body[data-theme='dark'] .focused-task-editor-shell .bg-slate-50\/70 {
 }
 
 body[data-theme='dark'] .focused-task-subtasks {
-  border-top-color: rgba(139, 92, 246, 0.36) !important;
+  border-top-color: rgba(100, 116, 139, 0.3) !important;
 }
 
 body[data-theme='dark'] .focused-subtask-row,
@@ -5300,7 +5300,7 @@ body[data-theme='dark'] .focused-task-editor-shell .focused-subtask-row {
 
 body[data-theme='dark'] .focused-task-sector-button,
 body[data-theme='dark'] .focused-task-pill-select {
-  border-color: rgba(139, 92, 246, 0.56) !important;
+  border-color: rgba(100, 116, 139, 0.46) !important;
   background: rgba(30, 41, 59, 0.95) !important;
   color: #ddd6fe !important;
 }
@@ -5310,7 +5310,7 @@ body[data-theme='dark'] .task-edit-notify-menu,
 body[data-theme='dark'] .task-edit-sector-menu.custom-select-menu-detached,
 body[data-theme='dark'] .task-edit-notify-menu.custom-select-menu-detached,
 body[data-theme='dark'] .focus-sector-dropdown-menu {
-  border-color: rgba(139, 92, 246, 0.5) !important;
+  border-color: rgba(100, 116, 139, 0.42) !important;
   background: rgba(15, 23, 42, 0.99) !important;
   color: var(--text-primary) !important;
   box-shadow: 0 22px 60px rgba(2, 6, 23, 0.72) !important;
@@ -11947,9 +11947,16 @@ body[data-theme='light'] .topbar-overdue-counter {
   background: rgba(225, 29, 72, .09);
 }
 .topbar-overdue-popover {
-  background: var(--timeline-toolbar-bg);
-  border-color: var(--timeline-panel-border);
-  box-shadow: 0 20px 46px rgba(2,6,23,.24);
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  box-shadow: 0 22px 50px rgba(2,6,23,.24);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+body[data-theme='dark'] .topbar-overdue-popover {
+  background: #19283e;
+  border-color: rgba(100, 116, 139, .45);
+  box-shadow: 0 24px 58px rgba(2, 6, 23, .54);
 }
 @media (max-width: 1023px) {
   .topbar-overdue-trigger { padding-inline: 8px; font-size: 12px; }
@@ -12007,4 +12014,42 @@ body[data-theme='light'] .topbar-overdue-counter {
 }
 .miniapp-shell.miniapp-light .miniapp-timeline-event-card > p:not(.miniapp-timeline-card-title) {
   color: #a16207;
+}
+
+/* Dark focus surfaces: use the same restrained slate outline throughout
+   task focus, the classic task/subtask editor, and their utility controls.
+   Colored action buttons and selected importance levels stay untouched. */
+body[data-theme='dark'] :is(.focus-mode-shell, .focused-task-editor-shell) {
+  --focus-utility-border: rgba(100, 116, 139, .44);
+  --focus-utility-hover-border: rgba(148, 163, 184, .55);
+}
+body[data-theme='dark'] :is(.focus-mode-shell, .focused-task-editor-shell) :is(
+  .focused-task-title-edit-button,
+  .focused-task-inline-subtask-button,
+  .focused-task-calendar-like-button,
+  .focused-task-icon-button,
+  .focused-task-add-subtask-button,
+  .focused-task-sector-button,
+  .focused-task-pill-select,
+  .focus-timer-select-trigger,
+  .focus-sector-dropdown-button
+) {
+  border-color: var(--focus-utility-border) !important;
+}
+body[data-theme='dark'] :is(.focus-mode-shell, .focused-task-editor-shell) :is(
+  .focused-task-title-edit-button,
+  .focused-task-inline-subtask-button,
+  .focused-task-calendar-like-button,
+  .focused-task-icon-button,
+  .focused-task-add-subtask-button,
+  .focused-task-sector-button,
+  .focused-task-pill-select,
+  .focus-timer-select-trigger,
+  .focus-sector-dropdown-button
+):hover {
+  border-color: var(--focus-utility-hover-border) !important;
+}
+body[data-theme='dark'] .focus-mode-shell .focus-timer-select-menu,
+body[data-theme='dark'] .focus-mode-shell .focus-sector-dropdown-menu {
+  border-color: rgba(100, 116, 139, .44) !important;
 }
