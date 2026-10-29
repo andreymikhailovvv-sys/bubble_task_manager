@@ -1,3 +1,4 @@
+import { normalizeSelectableAiChatModel } from './ai-chat-model.js';
 /**
  * Merge chat messages by stable ID when website and Mini App save the same
  * project snapshot. The incoming project/chat list remains authoritative for
@@ -49,9 +50,8 @@ export function mergeChatProjectSnapshots(previous: unknown, incoming: unknown):
       // A stale mobile/web snapshot must not reset the selected model in a
       // conversation changed by another device. Message merge is independent.
       const savedChat = previousChats.get(chat.id);
-      const allowedModels = new Set(['gpt-6-luna', 'gpt-5.4-mini', 'gpt-6.1-sol']);
-      const incomingModel = allowedModels.has(String(chat.model)) ? chat.model : undefined;
-      const savedModel = allowedModels.has(String(savedChat?.model)) ? savedChat?.model : undefined;
+      const incomingModel = normalizeSelectableAiChatModel(chat.model);
+      const savedModel = normalizeSelectableAiChatModel(savedChat?.model);
       const incomingStamp = typeof chat.modelChangedAt === 'string' ? Date.parse(chat.modelChangedAt) : NaN;
       const savedStamp = typeof savedChat?.modelChangedAt === 'string' ? Date.parse(savedChat.modelChangedAt) : NaN;
       const takeSaved = savedModel !== undefined && (!incomingModel ||
