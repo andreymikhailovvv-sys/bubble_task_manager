@@ -11955,3 +11955,56 @@ body[data-theme='light'] .topbar-overdue-counter {
   .topbar-overdue-trigger { padding-inline: 8px; font-size: 12px; }
   .topbar-overdue-popover { right: -8px; }
 }
+
+
+/* Match the 28px neutral attachment/comment indicators used in desktop task focus. */
+.miniapp-shell .miniapp-focus-subtask-row .task-card-meta-indicator {
+  display: inline-flex;
+  flex: 0 0 1.75rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  min-width: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  color: #94a3b8;
+  line-height: 1;
+}
+.miniapp-shell .miniapp-focus-subtask-row .task-card-meta-indicator svg {
+  flex-shrink: 0;
+  stroke-width: 1.85;
+}
+.miniapp-shell.miniapp-light .miniapp-focus-subtask-row .task-card-meta-indicator {
+  color: #64748b;
+}
+.miniapp-shell .miniapp-focus-subtask-row .task-card-meta-action:hover,
+.miniapp-shell .miniapp-focus-subtask-row .task-card-meta-action:focus-visible {
+  background: rgba(139, 92, 246, .12);
+  color: #c4b5fd;
+}
+.miniapp-shell.miniapp-light .miniapp-focus-subtask-row .task-card-meta-action:hover,
+.miniapp-shell.miniapp-light .miniapp-focus-subtask-row .task-card-meta-action:focus-visible {
+  color: #6d28d9;
+}
+/* The Mini App root does not use the obsolete .miniapp-dark class.
+   Give event titles and secondary timestamps explicit readable colors. */
+.miniapp-shell:not(.miniapp-light) .miniapp-timeline-event-card {
+  color: #fde68a;
+  background-image: linear-gradient(135deg, rgba(251, 191, 36, .095), rgba(249, 115, 22, .055));
+}
+.miniapp-shell:not(.miniapp-light) .miniapp-timeline-event-card .miniapp-timeline-card-title {
+  color: #fde68a;
+}
+.miniapp-shell:not(.miniapp-light) .miniapp-timeline-event-card > p:not(.miniapp-timeline-card-title) {
+  color: #fcd9a0;
+}
+.miniapp-shell.miniapp-light .miniapp-timeline-event-card,
+.miniapp-shell.miniapp-light .miniapp-timeline-event-card .miniapp-timeline-card-title {
+  color: #92400e;
+}
+.miniapp-shell.miniapp-light .miniapp-timeline-event-card > p:not(.miniapp-timeline-card-title) {
+  color: #a16207;
+}
