@@ -1222,6 +1222,7 @@ export default function App() {
   const focusedAutosaveSignatureRef = useRef<string | null>(null);
   const overdueNudgeAttemptAtByTaskRef = useRef<Record<string, number>>({});
   const loadedAiHistoryTaskIdsRef = useRef<Set<string>>(new Set());
+  const taskAiClearRevisionRef = useRef<Record<string, number>>({});
   const loadRequestIdRef = useRef(0);
   const [overdueTick, setOverdueTick] = useState(0);
 
@@ -1701,8 +1702,9 @@ export default function App() {
     let isCancelled = false;
     const loadAiTaskHistory = async () => {
       try {
+        const revision = taskAiClearRevisionRef.current[focusedTaskId] ?? 0;
         const result = await api.getTaskAssistantHistory(focusedTaskId);
-        if (isCancelled) return;
+        if (isCancelled || revision !== (taskAiClearRevisionRef.current[focusedTaskId] ?? 0)) return;
         loadedAiHistoryTaskIdsRef.current.add(focusedTaskId);
         setAiDialogByTask((prev) => {
           const localMessages = prev[focusedTaskId] ?? [];
@@ -1731,7 +1733,9 @@ export default function App() {
     if (!currentUser || !focusedTaskId) return;
     const intervalId = window.setInterval(async () => {
       try {
+        const revision = taskAiClearRevisionRef.current[focusedTaskId] ?? 0;
         const result = await api.getTaskAssistantHistory(focusedTaskId);
+        if (revision !== (taskAiClearRevisionRef.current[focusedTaskId] ?? 0)) return;
         setAiDialogByTask((prev) => {
           const localMessages = prev[focusedTaskId] ?? [];
           const serverMessages = result.messages;
@@ -1925,8 +1929,9 @@ export default function App() {
     const sync = async () => {
       if (aiLoadingTaskId === taskId) return;
       try {
+        const revision = taskAiClearRevisionRef.current[taskId] ?? 0;
         const { messages } = await api.getTaskAssistantHistory(taskId);
-        if (!alive) return;
+        if (!alive || revision !== (taskAiClearRevisionRef.current[taskId] ?? 0)) return;
         loadedAiHistoryTaskIdsRef.current.add(taskId);
         setAiDialogByTask(prev => {
           const local = prev[taskId] ?? [];
@@ -2540,6 +2545,7 @@ export default function App() {
     if (!window.confirm('Очистить историю переписки с ИИ по этой задаче? Действие необратимо.')) return;
     const taskId = focusedTask.id;
     setClearingTaskAiId(taskId);
+    taskAiClearRevisionRef.current[taskId] = (taskAiClearRevisionRef.current[taskId] ?? 0) + 1;
     try {
       await api.clearTaskAssistantHistory(taskId);
       loadedAiHistoryTaskIdsRef.current.delete(taskId);
