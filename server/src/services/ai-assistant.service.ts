@@ -2565,6 +2565,10 @@ export const aiAssistantService = {
               userId: input.userId, requestId: input.currentMessageId ?? requestId,
               source: input.autoApplyTaskActions && !autonomousMonitoring ? 'telegram_bot_task' : 'task_chat', taskId: input.taskId,
               actions: requestedActions,
+              // Tool calls prove which task IDs were read and authorized.
+              // Preserve this exact set in the durable proposal for approval.
+              resolvedItemIds: [...workspaceTools.resolvedItemIds],
+              resolvedSphereIds: [...workspaceTools.resolvedSphereIds],
               autoApply: autonomousMonitoring || input.autoApplyTaskActions === true ? true : undefined,
               userTimeZone: input.userTimeZone
             })

@@ -286,6 +286,7 @@ export async function applyTaskProposal(userId: string, id: string, selectedIndi
     const createdIds: string[] = [];
     const createdNoteIds: string[] = [];
     if (row.source === 'planner' || row.source === 'daily_checkup' || row.source === 'telegram_bot' ||
+        row.source === 'task_chat' || row.source === 'telegram_bot_task' ||
         (row.source === 'telegram_assistant' && actions.every(a => 'operation' in a))) {
       if (row.source === 'telegram_assistant' && row.autoApplied &&
           actions.some(a => !['create_task', 'create_event', 'create_reminder', 'create_subtask'].includes(String(a.operation)))) {
@@ -293,6 +294,21 @@ export async function applyTaskProposal(userId: string, id: string, selectedIndi
       }
       const ids = (row.resolvedIds ?? {}) as { items?: string[]; spheres?: string[] };
       for (const action of actions) {
+        // Task chat can mix its legacy JSON actions (type) with planner tools
+        // actions (operation). Dispatch PER ACTION, never by the source of the
+        // whole proposal; otherwise operation-only actions reach the legacy
+        // handler with action.type=undefined and fail after approval.
+        if ((row.source === 'task_chat' || row.source === 'telegram_bot_task') &&
+            typeof action.operation !== 'string') {
+          const { applyTaskChatProposalActions } = await import('./ai-assistant.service.js');
+          const result = await applyTaskChatProposalActions({
+            userId, taskId: row.taskId!, actions: [action], userTimeZone: row.userTimeZone
+          });
+          if (!result.ok) throw new Error(result.error ?? 'Не удалось изменить задачу.');
+          reports.push(...result.reports);
+          createdIds.push(...result.createdIds);
+          continue;
+        }
         if (isCreateNoteAction(action)) {
           const result = await aiPersonalNotesService.create(userId, action);
           if (!result.ok) throw new Error(result.message);
@@ -322,14 +338,6 @@ export async function applyTaskProposal(userId: string, id: string, selectedIndi
         userId, actions, userTimeZone: row.userTimeZone
       });
       if (!result.ok) throw new Error(result.error ?? 'Не удалось применить изменения.');
-      reports.push(...result.reports);
-      createdIds.push(...result.createdIds);
-    } else if ((row.source === 'task_chat' || row.source === 'telegram_bot_task')) {
-      const { applyTaskChatProposalActions } = await import('./ai-assistant.service.js');
-      const result = await applyTaskChatProposalActions({
-        userId, taskId: row.taskId!, actions, userTimeZone: row.userTimeZone
-      });
-      if (!result.ok) throw new Error(result.error ?? 'Не удалось изменить задачу.');
       reports.push(...result.reports);
       createdIds.push(...result.createdIds);
     } else if (row.source === 'telegram_assistant') {

@@ -2,7 +2,7 @@ import { openAiFetch } from '../lib/openai-fetch.js';
 import { mergeAiWebEvidence } from './ai-web-search-evidence.service.js';
 import { prepareTaskProposal } from './ai-task-proposal.service.js';
 import { normalizePlannerDueDate } from './planner-due-date.service.js';
-import { plannerToolsService, PLANNER_OPERATIONS, PLANNER_BATCH_OPERATIONS, type PlannerActionInput, type PlannerBatchActionInput, type PlannerSearchInput, type PlannerListInput } from './planner-tools.service.js';
+import { plannerToolsService, authorizePlannerActionReferences, PLANNER_OPERATIONS, PLANNER_BATCH_OPERATIONS, type PlannerActionInput, type PlannerBatchActionInput, type PlannerSearchInput, type PlannerListInput } from './planner-tools.service.js';
 import { personalNotesToolsService, mergeTaskAndNoteSearchResults, validateNoteSearchInput } from './personal-notes-tools.service.js';
 import { validateAiCreateNoteArgs, validateAiUpdateNoteArgs } from './ai-create-note.service.js';
 import type { NoteProposalAction, CreateNoteProposalAction } from './ai-task-proposal.service.js';
@@ -562,6 +562,8 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
             return { ok: false, code: 'TOO_MANY_ACTIONS', message: 'Лимит предложений изменений исчерпан.' };
           }
           if (!PLANNER_OPERATIONS.includes(action.operation)) return { ok: false, code: 'INVALID_ACTION' };
+          const invalid = await authorizePlannerActionReferences(input.userId, action, resolvedItemIds, resolvedSphereIds, plannerToolsService.getItem);
+          if (invalid) return invalid;
           preparedTaskActions.push(action);
           return { ok: true, status: 'prepared', message: 'Изменение подготовлено, но ещё не применено. Его покажет карточка подтверждения.' };
         }
@@ -578,6 +580,12 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
             ...action, dueDate: normalizePlannerDueDate(action.dueDate, input.userTimeZone, dateResolutionNow),
             parentTaskId: null, title: null, description: null, location: null
           } as PlannerActionInput));
+          // Validate the *whole* batch before staging any operation, otherwise
+          // the user can receive a proposal with a guaranteed failure halfway.
+          for (const action of actions) {
+            const invalid = await authorizePlannerActionReferences(input.userId, action, resolvedItemIds, resolvedSphereIds, plannerToolsService.getItem);
+            if (invalid) return invalid;
+          }
           preparedTaskActions.push(...actions);
           batchActionsRequested += actions.length;
           return { ok: true, status: 'prepared', requestedCount: actions.length, message: 'Пакет подготовлен и ожидает подтверждения.' };

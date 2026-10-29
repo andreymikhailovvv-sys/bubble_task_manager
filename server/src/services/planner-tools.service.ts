@@ -140,6 +140,32 @@ export function validatePlannerActionResolution(action: PlannerActionInput, reso
   return null;
 }
 
+/**
+ * A model may reuse an exact task ID obtained earlier in the conversation.
+ * Verify that ID against the current user's access before admitting it into
+ * this request's resolved set; never trust the ID on its own. Validation runs
+ * BEFORE any approval card is stored, rather than failing after consent.
+ */
+export async function authorizePlannerActionReferences(
+  userId: string,
+  action: PlannerActionInput,
+  resolvedItemIds: Set<string>,
+  resolvedSphereIds: Set<string>,
+  lookup: (userId: string, id: string) => Promise<{ id: string; parentTaskId: string | null } | null>
+) {
+  const targetId = action.operation === 'create_subtask'
+    ? action.parentTaskId
+    : ['create_task', 'create_event', 'create_reminder'].includes(action.operation) ? null : action.itemId;
+  if (typeof targetId === 'string' && targetId && !resolvedItemIds.has(targetId)) {
+    const target = await lookup(userId, targetId);
+    // A subtask cannot become a parent of another subtask.
+    if (target && (action.operation !== 'create_subtask' || target.parentTaskId === null)) {
+      resolvedItemIds.add(target.id);
+    }
+  }
+  return validatePlannerActionResolution(action, resolvedItemIds, resolvedSphereIds);
+}
+
 export function createPlannerToolsService(db: any = prisma, mutations: Pick<typeof taskService, 'create' | 'update' | 'remove'> = taskService) {
   const search = async (userId: string, input: PlannerSearchInput) => {
     const dueFrom = input.dueFrom && validIsoDate(input.dueFrom) ? new Date(input.dueFrom) : undefined;
