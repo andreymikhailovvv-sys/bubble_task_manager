@@ -31,9 +31,9 @@ test('monitored AI prioritizes actual help and proactively follows up at request
   assert.match(ai, /Веб-поиск не обязателен/);
   assert.match(worker, /Веб-поиск через web_search МОЖЕШЬ использовать/);
   assert.match(worker, /ЗАГОЛОВОК:/);
-  assert.match(ai, /После содержательного ответа поддерживай дальнейшее сопровождение/);
+  assert.match(ai, /При включённом автомониторинге поддерживай минимум одно/);
   assert.match(ai, /ОБЯЗАТЕЛЬНО назначь отложенное действие/);
-  assert.match(ai, /Не заменяй точное пожелание произвольным напоминанием/);
+  assert.match(ai, /не заменяй точное пожелание произвольным интервалом/);
   assert.match(worker, /подготовь полезные материалы, варианты/);
   assert.match(worker, /Поддерживай минимум одно запланированное полезное действие/);
   assert.match(tool, /MUST honor explicit user reminder dates/);
