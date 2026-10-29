@@ -424,7 +424,13 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           request_telegram_chat_read: 'forming_answer'
         };
         const progress = progressByTool[name];
-        if (progress) emitProgress(progress);
+        if (progress) {
+          if (name === 'read_file') {
+            const fileId = (value as { fileId?: unknown } | null)?.fileId;
+            const entry = input.fileTools?.catalog.items.find(item => item.fileId === fileId);
+            emitProgress(entry ? `reading_attachment:${entry.fileName}` : 'reading_attachment');
+          } else emitProgress(progress);
+        }
         console.info('[AI chat tool] call', { requestId, userId: input.userId, providerCallIndex: providerCallCount, toolCallIndex: round, operation: name });
         if (!value || typeof value !== 'object' || Array.isArray(value)) return { ok: false, code: 'INVALID_ARGUMENTS', message: 'Аргументы tool должны быть объектом.' };
         if (name === 'request_telegram_chat_read') {

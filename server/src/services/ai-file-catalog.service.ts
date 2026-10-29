@@ -242,3 +242,44 @@ export function formatAiFileCatalog(catalog: AiFileCatalog): string {
     'Если пользователь не указал однозначный файл, уточни его. Каталог не выбирает файл по умолчанию. Для визуального чтения используй read_file; не запускай генератор картинки для правки текстовых документов.'
   ].join('\n');
 }
+
+/**
+ * Read a uniquely named, previously uploaded textual reference when the user
+ * explicitly refers to it. The catalog is metadata only; the caller must
+ * resolve the selected ID through the normal owner-scoped file-read service.
+ * Never guess between two differently named matching documents.
+ */
+export function selectExplicitTaskReferenceFile(question: string, catalog: AiFileCatalog): AiFileCatalogItem | null {
+  const eligible = catalog.items.filter(item =>
+    /\.(?:docx?|xlsx?|txt)$/i.test(item.fileName) &&
+    ['current_upload', 'task_attachment', 'chat_upload', 'generated_document'].includes(item.source));
+  if (!eligible.length) return null;
+  const normalize = (value: string) => value.toLocaleLowerCase('ru-RU').replace(/ё/g, 'е');
+  const stems = (text: string) => [...new Set((normalize(text).match(/[\p{L}\p{N}]+/gu) ?? [])
+    .filter(word => word.length >= 4)
+    .map(word => word.length >= 6 ? word.slice(0, 6) : word.slice(0, 4)))];
+  const q = normalize(question);
+  const qStems = new Set(stems(question));
+  const ranked = eligible.map(item => {
+    const title = item.fileName.replace(/\.(?:docx?|xlsx?|txt)$/i, '');
+    const matchCount = stems(title).filter(stem => qStems.has(stem)).length;
+    // A newly provided *single* document is an explicit reference when the
+    // request says to read the attached file, even without naming it.
+    const current = item.source === 'current_upload';
+    const newDocumentReference = current && eligible.filter(file => file.source === 'current_upload').length === 1 &&
+      /(?:прикрепл[её]нн|приложенн|загруженн|в этом файле|в документе|по файлу|посмотри файл|прочитай файл)/iu.test(q);
+    const score = matchCount >= 2 ? matchCount : newDocumentReference ? 2 : 0;
+    return { item, score };
+  }).filter(result => result.score >= 2).sort((a, b) => b.score - a.score ||
+    Number(b.item.source === 'current_upload') - Number(a.item.source === 'current_upload') ||
+    Number(b.item.source === 'chat_upload') - Number(a.item.source === 'chat_upload') ||
+    (b.item.createdAt ?? '').localeCompare(a.item.createdAt ?? ''));
+  if (!ranked.length) return null;
+  // Different documents with the same score are ambiguous, regardless of
+  // how recently the AI saw either one.
+  const best = ranked[0];
+  const equivalentName = (name: string) => normalize(name).replace(/\s*\(\d+\)(?=\.(?:docx?|xlsx?|txt)$)/i, '').replace(/[^\p{L}\p{N}]+/gu, '');
+  if (ranked.some(other => other.score === best.score &&
+      equivalentName(other.item.fileName) !== equivalentName(best.item.fileName))) return null;
+  return best.item;
+}

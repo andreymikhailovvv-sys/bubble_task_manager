@@ -146,9 +146,12 @@ export async function executeAiFileTool(input: FileToolContext, operation: 'read
     }
     if (format) {
       try {
-        const preview = getOfficeDocumentPreview(bytes, format);
+        const preview = getOfficeDocumentPreview(bytes, format, {
+          maxCharacters: maxReadCharacters, maxParagraphs: 1_000, maxSheetRows: 300
+        });
         return { response: { ok: true, fileName: metadata.fileName, fileId: args.fileId,
-          format, text: preview.text.slice(0, maxReadCharacters), truncated: preview.text.length > maxReadCharacters } };
+          format, text: preview.text.slice(0, maxReadCharacters),
+          truncated: preview.truncated === true || preview.text.length > maxReadCharacters } };
       } catch {
         return { response: { ok: false, code: 'UNREADABLE_FILE', message: 'Не удалось прочитать этот Word/Excel-файл.' } };
       }
