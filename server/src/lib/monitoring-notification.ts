@@ -36,9 +36,9 @@ export function monitoringHeadline(answer: string, taskTitle: string): { headlin
   return { headline, body: body.slice(0, 4200) };
 }
 
-export function formatMonitoringAlert(taskTitle: string, answer: string) {
+export function formatMonitoringAlert(taskTitle: string, answer: string, monitoringEnabled = true) {
   const { headline, body } = monitoringHeadline(answer, taskTitle);
-  const context = `✅Мониторинг задачи «${taskTitle.trim().slice(0, 150)}»`;
+  const context = `${monitoringEnabled ? '✅Мониторинг задачи' : '⏰Напоминание по задаче'} «${taskTitle.trim().slice(0, 150)}»`;
   return {
     headline,
     context,
