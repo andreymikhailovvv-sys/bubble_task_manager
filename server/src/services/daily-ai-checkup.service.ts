@@ -94,7 +94,7 @@ export function parseDailyCheckupResponse(response: Record<string, unknown>): Re
 }
 
 const short = (s: unknown, max = 330) => typeof s === 'string' ? s.trim().slice(0, max) : '';
-/** First and third blocks use trusted server facts; only middle prose comes from AI. */
+/** The user sees two sections: factual upcoming items and AI recommendations. */
 export function formatSmartDailyCheckup(response: Record<string, unknown>,
   tasks: CheckupScheduleItem[], _tomorrow: Date, now: Date, timeZone: string) {
   const byId = new Map(tasks.map(t => [t.id, t]));
@@ -113,7 +113,7 @@ export function formatSmartDailyCheckup(response: Record<string, unknown>,
     ...(soon.length ? soon.map(t => '• ' + t.title + ' — ' + fmt(new Date(t.dueDate!))) : ['• Нет задач со сроком в ближайшие 3 часа.']),
     'События и напоминания на сегодня:',
     ...(dayEvents.length ? dayEvents.map(t => '• ' + t.title + ' — ' + fmt(new Date(t.dueDate!))) : ['• Нет.'])];
-  const summary = short(response.summary, 600).replace(/\\s+/g, ' ').trim();
+  const summary = short(response.summary, 600).replace(/\s+/g, ' ').trim();
   lines.push('', '💡 Рекомендации', summary || 'Нет дополнительных рекомендаций для текущего чекапа.');
   const moves: CheckupMove[] = [];
   for (const x of (Array.isArray(response.moves) ? response.moves : [])) {
