@@ -1976,18 +1976,38 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
   const deleteTask = async (taskId: string, scope?: 'me' | 'all') => {
     const task = tasks.find((item) => item.id === taskId);
-    if (task?.isCollaborative && task.collaborationOwner && !scope) {
+    // Only collaborative ROOT tasks offer personal-vs-everyone removal.
+    // Subtasks are shared objects, so that choice never applied to them.
+    if (task?.isCollaborative && task.collaborationOwner && !task.parentTaskId && !scope) {
       setCollaborationAction({ task, action: 'delete' });
       return;
     }
+    if (deletingId === taskId) return;
     setDeletingId(taskId);
     setError(null);
     try {
       await api.deleteTask(taskId, scope ?? 'me');
+      // The server has confirmed the deletion. Remove the row immediately,
+      // rather than leaving the deleted subtask visible until a full reload.
+      setTasks((current) => current.filter((item) => item.id !== taskId && item.parentTaskId !== taskId));
+      setDraftByTaskId((current) => {
+        const next = { ...current };
+        delete next[taskId];
+        return next;
+      });
+      delete taskDraftOriginalByIdRef.current[taskId];
+      if (openedSubtaskId === taskId) {
+        // Close ONLY the subtask editor, preserving the parent's focus sheet.
+        setOpenedSubtaskId(null);
+        setIsSubtaskNotesEditorOpen(false);
+        setSubtaskAttachments([]);
+        setIsCalendarExportOpen(false);
+        setCalendarExportTaskId(null);
+      }
       if (openedTaskId === taskId) {
         closeTaskModal();
       }
-      await loadData();
+      await loadData({ refreshPlannerOnly: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось удалить задачу');
     } finally {
@@ -4700,12 +4720,21 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                             </button>
                             <button type="button" onClick={() => openSubtaskModal(subtask)} className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-left">
                               <span className={`min-w-0 flex-1 truncate font-medium ${subtask.status === 'DONE' ? 'opacity-60 line-through' : ''}`}>{subtask.title}</span>
-                              {(subtask.attachmentCount ?? 0) > 0 ? <Paperclip size={13} className="shrink-0 text-violet-400" aria-label="Есть вложения" /> : null}
+                              {(subtask.attachmentCount ?? 0) > 0 ? (
+                                <span className="task-card-meta-indicator" title={`Вложений: ${subtask.attachmentCount}`} aria-label={`Вложений: ${subtask.attachmentCount}`}>
+                                  <Paperclip size={15} />
+                                </span>
+                              ) : null}
                               {subtask.dueDate ? <span className={`shrink-0 text-xs font-semibold ${isOverdue(subtask) ? 'text-rose-500' : 'text-violet-500'}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                               {openedTask.isCollaborative && subtask.creatorName ? <span className="miniapp-collaboration-author shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }} title={subtask.creatorName}>{getCreatorInitial(subtask.creatorName)}</span> : null}
                             </button>
                             {openedTask.isCollaborative ? (
-                              <button type="button" onClick={() => void openTaskComments(subtask)} className="relative inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-violet-400/40 text-violet-500" aria-label="Открыть комментарии" title="Комментарии">
+                              <button type="button" onClick={() => void openTaskComments(subtask)}
+                                className="task-card-meta-indicator task-card-meta-action relative"
+                                aria-label="Открыть комментарии"
+                                title={(subtask.unreadCommentCount ?? 0) > 0
+                                  ? `Непрочитанных комментариев: ${subtask.unreadCommentCount}`
+                                  : (subtask.commentCount ?? 0) > 0 ? `Комментариев: ${subtask.commentCount}` : 'Открыть комментарии'}>
                                 <MessageCircle size={15} />
                                 {(subtask.unreadCommentCount ?? 0) > 0 ? <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-violet-600 px-1 text-center text-[9px] font-bold leading-4 text-white">{(subtask.unreadCommentCount ?? 0) > 99 ? '99+' : subtask.unreadCommentCount}</span> : null}
                               </button>
