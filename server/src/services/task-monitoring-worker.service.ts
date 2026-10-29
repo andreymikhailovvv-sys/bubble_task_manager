@@ -106,7 +106,7 @@ async function deliver(run: Run, question: string, checkCurrent: () => Promise<b
     const currentTask = kind === 'trigger'
       ? await requireMonitoringOwner(run.userId, run.taskId)
       : await requireMonitoredTask(run.userId, run.taskId);
-    const visibleAnswer = formatMonitoringAlert(currentTask.title, result.answer).message;
+    const visibleAnswer = formatMonitoringAlert(currentTask.title, result.answer, currentTask.aiMonitoringEnabled).message;
     if (!await checkCurrent()) { await markRun(run.id, 'cancelled'); return; }
     await aiAssistantService.appendTaskDialogAssistantMessage({
       userId: run.userId, taskId: run.taskId,
