@@ -2526,15 +2526,21 @@ export default function App() {
     setAiPendingFiles((prev) => prev.filter((file) => file.name !== fileName));
   };
 
-  const clearFocusedAiDialog = () => {
-    if (!focusedTask) return;
-    setAiDialogByTask((prev) => {
-      if (!(focusedTask.id in prev)) return prev;
-      const next = { ...prev };
-      delete next[focusedTask.id];
-      return next;
-    });
-    setAiError(null);
+  const [clearingTaskAiId, setClearingTaskAiId] = useState<string | null>(null);
+  const clearFocusedAiDialog = async () => {
+    if (!focusedTask || aiLoadingTaskId === focusedTask.id || clearingTaskAiId) return;
+    if (!window.confirm('Очистить историю переписки с ИИ по этой задаче? Действие необратимо.')) return;
+    const taskId = focusedTask.id;
+    setClearingTaskAiId(taskId);
+    try {
+      await api.clearTaskAssistantHistory(taskId);
+      loadedAiHistoryTaskIdsRef.current.delete(taskId);
+      setAiDialogByTask(prev => ({ ...prev, [taskId]: [] }));
+      setReplyToAiTask(null);
+      setAiError(null);
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : 'Не удалось очистить диалог.');
+    } finally { setClearingTaskAiId(null); }
   };
 
   const formatFocusTime = (seconds: number) => {
@@ -7951,6 +7957,7 @@ ${allContext}`,
             <div className="mb-3 flex items-center justify-between">
               <div>
                 <p className="flex items-center gap-2 text-base font-semibold ai-panel-title"><Bot size={18} /> Полноэкранный диалог с ИИ</p>
+                 <p className="mt-1 max-w-[42ch] truncate text-xs text-muted" title={focusedTask.title}>{focusedTask.title}</p>
               </div>
               <div className="flex items-center gap-2">
                 <TaskMonitoringStatuses taskId={focusedTask.id}
@@ -7961,12 +7968,12 @@ ${allContext}`,
                     setFocusedDraft(previous => previous ? { ...previous, aiMonitoringEnabled: updated.aiMonitoringEnabled } : previous);
                   }} />
                 <button
-                  className="rounded bg-rose-700/80 px-2 py-1.5 text-xs text-rose-100 hover:bg-rose-700"
-                  onClick={clearFocusedAiDialog}
-                  title="Очистить историю диалога по этой задаче"
-                >
-                  Очистить диалог
-                </button>
+                  className="focused-task-ai-icon-button inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-medium"
+                   onClick={() => void clearFocusedAiDialog()}
+                   disabled={clearingTaskAiId === focusedTask.id || aiLoadingTaskId === focusedTask.id}
+                   title="Очистить историю диалога по этой задаче"
+                 ><Trash2 size={13} /> {clearingTaskAiId === focusedTask.id ? 'Очищаю…' : 'Очистить'}
+                 </button>
                 <div className="flex items-center gap-1.5">
                   <button
                     className={`focused-task-ai-icon-button ${isFocusedAiSearchOpen ? 'focused-task-ai-icon-button-active' : ''}`}
