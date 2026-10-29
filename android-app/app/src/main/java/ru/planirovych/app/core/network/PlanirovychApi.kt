@@ -71,6 +71,9 @@ interface PlanirovychApi {
     suspend fun streamTaskAi(@Path("id") taskId:String,@Body payload:JsonObject):ResponseBody
     @GET("api/tasks/{id}/monitoring/triggers")
     suspend fun taskMonitoringTriggers(@Path("id") taskId:String):List<TaskMonitoringTrigger>
+    @DELETE("api/tasks/{id}/monitoring/triggers/{triggerId}")
+    suspend fun cancelTaskMonitoringTrigger(@Path("id") taskId:String,
+        @Path("triggerId") triggerId:String):JsonObject
     @GET("api/tasks/{id}/monitoring/statuses")
     suspend fun taskMonitoringStatuses(@Path("id") taskId:String):List<TaskMonitoringStatus>
 
