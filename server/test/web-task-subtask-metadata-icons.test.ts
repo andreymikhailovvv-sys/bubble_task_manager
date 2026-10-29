@@ -46,7 +46,7 @@ test('attachments only show when server-provided count is positive, no extra fet
   assert.doesNotMatch(component, /api\./);
 });
 
-test('indicator styling stays theme aware and does not alter Mini App', async () => {
+test('metadata indicator styling is theme aware and now shared with Mini App focus', async () => {
   assert.match(stylesheet, /\.task-card-meta-indicator \{/);
   assert.match(stylesheet, /color: var\(--text-muted\)/);
   assert.match(stylesheet, /\.task-card-meta-action:hover \{/);
@@ -54,5 +54,7 @@ test('indicator styling stays theme aware and does not alter Mini App', async ()
   assert.match(stylesheet, /body\[data-theme='dark'\][\s\S]*?--text-muted:/);
   assert.match(stylesheet, /body\[data-theme='light'\][\s\S]*?--text-muted:/);
   const miniAppSource = await readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8');
-  assert.doesNotMatch(miniAppSource, /task-card-meta-indicator/);
+  assert.match(miniAppSource, /task-card-meta-indicator/);
+  assert.match(miniAppSource, /task-card-meta-indicator task-card-meta-action relative/);
+  assert.match(stylesheet, /\.miniapp-shell\.miniapp-light \.miniapp-focus-subtask-row \.task-card-meta-indicator/);
 });
