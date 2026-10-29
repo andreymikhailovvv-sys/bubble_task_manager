@@ -524,6 +524,8 @@ export const api = {
   createTask: (payload: Partial<Task>) => request<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(payload) }),
   getTaskMonitoringIntroState: (id: string) => request<{ state: 'scheduled' | 'processing' | null }>(`/api/tasks/${encodeURIComponent(id)}/monitoring/intro-state`),
   getTaskMonitoringTriggers: (id: string) => request<TaskMonitoringTrigger[]>(`/api/tasks/${id}/monitoring/triggers`),
+  cancelTaskMonitoringTrigger: (taskId: string, triggerId: string) =>
+    request<{ ok: true; triggerId: string; state: string }>(`/api/tasks/${encodeURIComponent(taskId)}/monitoring/triggers/${encodeURIComponent(triggerId)}`, { method: 'DELETE' }),
   getTaskMonitoringStatuses: (id: string) => request<TaskMonitoringStatus[]>(`/api/tasks/${id}/monitoring/statuses`),
   getTaskMonitoringUnread: (id: string) => request<{ unreadCount: number }>(`/api/tasks/${id}/monitoring/statuses/unread`),
   markTaskMonitoringSeen: (id: string) =>
