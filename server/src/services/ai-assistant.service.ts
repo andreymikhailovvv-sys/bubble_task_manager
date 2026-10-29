@@ -2424,7 +2424,7 @@ export const aiAssistantService = {
                 (item.mimeType.toLowerCase().startsWith('image/') || /\.(?:png|jpe?g|webp)$/i.test(item.fileName)));
               if (call.name === 'edit_file') input.onProgress?.(editingImage ? 'editing_image' : 'editing_document');
               if (call.name === 'read_file') {
-                const entry = fileCatalog.items.find(item => item.fileId === (args as { fileId?: unknown }).fileId);
+                const entry = fileCatalog.items.find(item => item.fileId === (args as unknown as { fileId?: unknown }).fileId);
                 input.onProgress?.(entry ? `reading_file:${entry.fileName}` : 'reading_file');
               }
               try {
