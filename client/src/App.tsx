@@ -2276,26 +2276,14 @@ export default function App() {
   }, [focusAiMessages, focusAiLoading, focusAiProgress, isFocusModeOpen, isFocusAiExpanded]);
 
   useEffect(() => {
-    if (focusTaskSwitchAiTimeoutRef.current) {
-      clearTimeout(focusTaskSwitchAiTimeoutRef.current);
-      focusTaskSwitchAiTimeoutRef.current = null;
-    }
-    if (!isFocusModeOpen || !focusActiveTask || !isFocusTimerRunning) return;
-    const previousTaskId = previousFocusActiveTaskIdRef.current;
-    previousFocusActiveTaskIdRef.current = focusActiveTask.id;
-    if (!previousTaskId || previousTaskId === focusActiveTask.id) return;
-    focusTaskSwitchAiTimeoutRef.current = setTimeout(() => {
-      focusTaskSwitchAiTimeoutRef.current = null;
-      if (focusAiLoadingRef.current) return;
-      void sendFocusAiQuestion({ questionOverride: 'Пользователь переключился на эту задачу. Дай ближайшие конкретные действия именно по ней.', userContentOverride: 'Подсказать ближайшие действия по новой задаче' });
-    }, FOCUS_TASK_SWITCH_AI_DELAY_MS);
-    return () => {
-      if (focusTaskSwitchAiTimeoutRef.current) {
-        clearTimeout(focusTaskSwitchAiTimeoutRef.current);
-        focusTaskSwitchAiTimeoutRef.current = null;
-      }
-    };
-  }, [focusActiveTask?.id, isFocusModeOpen, isFocusTimerRunning]);
+    // Switching tasks only changes the selected task and its existing dialog.
+    // Never manufacture a new AI message merely because focus selection moved.
+    if (isFocusModeOpen && focusActiveTask) previousFocusActiveTaskIdRef.current = focusActiveTask.id;
+    setReplyToFocusAi(null);
+    setFocusAiDraft('');
+    setFocusAiPendingFiles([]);
+    setFocusAiError(null);
+  }, [isFocusModeOpen, focusActiveTask?.id]);
 
   const sendFocusedAiQuestion = async (options?: {
     questionOverride?: string;
@@ -2707,59 +2695,72 @@ export default function App() {
     });
   };
 
-  const sendFocusAiQuestion = async (options?: { questionOverride?: string; userContentOverride?: string; allowBeforeTimerStateUpdate?: boolean }) => {
-    const currentTask = focusActiveTask;
+  // Focus is only another view of the selected task's existing AI chat.
+  // No separate model history or multi-task prompt is generated here.
+  const sendFocusAiQuestion = async (options?: {
+    questionOverride?: string; userContentOverride?: string; allowBeforeTimerStateUpdate?: boolean;
+  }) => {
+    const task = focusActiveTask;
+    if (!task || focusAiLoading || aiLoadingTaskId === task.id) return;
     const question = (options?.questionOverride ?? focusAiDraft).trim();
-    if (!currentTask || focusAiLoading || (!isFocusTimerRunning && !options?.allowBeforeTimerStateUpdate)) return;
     if (!question && focusAiPendingFiles.length === 0) return;
-
+    const taskId = task.id;
     let attachmentsPayload: ChatAttachmentPayload[] = [];
     try {
-      attachmentsPayload = await Promise.all(focusAiPendingFiles.map((file) => fileToAttachmentPayload(file, true)));
+      attachmentsPayload = await Promise.all(focusAiPendingFiles.map(file => fileToAttachmentPayload(file, true)));
     } catch (error) {
-      setFocusAiError(error instanceof Error ? error.message : 'Не удалось прочитать приложенный файл');
+      setFocusAiError(error instanceof Error ? error.message : 'Не удалось прочитать файл');
       return;
     }
-
-    const fileNames = focusAiPendingFiles.map((file) => file.name);
-    const visibleUserContent = options?.userContentOverride?.trim() || question || 'Сообщение с вложением';
-    const userContent = serializeAiReply(fileNames.length > 0 ? `${visibleUserContent}\n\n📎 Файлы: ${fileNames.join(', ')}` : visibleUserContent, options?.questionOverride ? null : replyToFocusAi);
-    const allContext = focusTasks.map(buildFocusTaskContext).join('\n\n---\n\n');
-    const contextualQuestion = [
-      'Ты работаешь в режиме концентрации. Помогай только по выбранным задачам и учитывай, какая задача выбрана сейчас.',
-      'Закрытые подзадачи намеренно не включены в контекст. Не планируй работу по закрытым подзадачам и не восстанавливай их по истории диалога.',
-      'Если в ответе говоришь о конкретной задаче или подзадаче, сразу после её названия добавляй служебную метку [[task_ref=ID]] из контекста. Не придумывай ID.',
-      'Не пиши технические ID как обычный текст — только внутри метки [[task_ref=...]].',
-      `Текущая выбранная задача: [${currentTask.id}] ${currentTask.title}`,
-      `Контекст всех задач:
-${allContext}`,
-      `Запрос пользователя: ${serializeAiReply(question || visibleUserContent, options?.questionOverride ? null : replyToFocusAi)}`
-    ].join('\n\n');
-    const clientRequestId = crypto.randomUUID();
+    const fileNames = focusAiPendingFiles.map(file => file.name);
+    const visibleText = options?.userContentOverride?.trim() || question || 'Сообщение с вложением';
+    const userContent = serializeAiReply(fileNames.length
+      ? `${visibleText}\n\n📎 Файлы: ${fileNames.join(', ')}` : visibleText, replyToFocusAi);
+    const id = crypto.randomUUID();
     const attachmentPreviews = await makeAiAttachmentPreviews(focusAiPendingFiles);
-    setFocusAiMessages((prev) => [...prev, { id: clientRequestId, role: 'user', content: userContent, attachmentPreviews }]);
+    setAiDialogByTask(prev => ({ ...prev, [taskId]: [...(prev[taskId] ?? []),
+      { id, role: 'user', content: userContent, attachmentPreviews }] }));
     setReplyToFocusAi(null);
     setFocusAiDraft('');
-    setFocusAiUploadProgress(null);
     setFocusAiError(null);
+    setFocusAiPendingFiles([]);
     setFocusAiLoading(true);
-    setFocusAiPendingFiles([]); // Remove completed outgoing attachment tiles before response.
+    setAiLoadingTaskId(taskId);
     setFocusAiProgress('analyzing_request');
-    setFocusSessionAiRequestCount((count) => count + 1);
+    setAiProgressByTask(prev => ({ ...prev, [taskId]: 'analyzing_request' }));
+    setFocusSessionAiRequestCount(count => count + 1);
     try {
-      const result = await askTaskAssistant(currentTask.id, { clientRequestId, question: contextualQuestion, userMessage: userContent, model: focusAiModel, attachments: attachmentsPayload, skipEfficiencyBonus: true }, setFocusAiProgress, setFocusAiUploadProgress);
-      setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: result.answer, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined }]);
+      const result = await askTaskAssistant(taskId, {
+        clientRequestId: id, question: serializeAiReply(question || visibleText, replyToFocusAi),
+        userMessage: userContent, model: aiModelByTask[taskId] ?? 'gpt-5.4-mini',
+        attachments: attachmentsPayload, skipEfficiencyBonus: true
+      }, status => {
+        setFocusAiProgress(status);
+        setAiProgressByTask(prev => ({ ...prev, [taskId]: status }));
+      }, setFocusAiUploadProgress);
+      setAiDialogByTask(prev => ({ ...prev, [taskId]: [...(prev[taskId] ?? []), {
+        id: crypto.randomUUID(), role: 'assistant', content: result.answer,
+        creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed,
+        webSources: result.webSources, webCitations: result.webCitations,
+        generatedDocument: result.generatedDocument ?? undefined,
+        telegramSendDraft: result.telegramSendDraft ?? undefined,
+        taskProposal: result.taskProposal ?? undefined,
+        telegramReadDraft: result.telegramReadDraft ?? undefined
+      }] }));
       await refreshAiCredits();
+      await load();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось получить ответ ИИ';
       setFocusAiError(message);
-      setFocusAiDraft((current) => current.trim() ? current : question);
-      setFocusAiPendingFiles((current) => current.length ? current : focusAiPendingFiles);
-      setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: message }]);
+      setFocusAiDraft(previous => previous.trim() ? previous : question);
+      setAiDialogByTask(prev => ({ ...prev, [taskId]: [...(prev[taskId] ?? []),
+        { id: crypto.randomUUID(), role: 'assistant', content: message }] }));
     } finally {
       setFocusAiLoading(false);
-      setFocusAiUploadProgress(null);
+      setAiLoadingTaskId(null);
       setFocusAiProgress(null);
+      setFocusAiUploadProgress(null);
+      setAiProgressByTask(prev => { const next = { ...prev }; delete next[taskId]; return next; });
     }
   };
 
@@ -2805,9 +2806,7 @@ ${allContext}`,
     setIsFocusSessionFinished(false);
     if (focusActiveTask) previousFocusActiveTaskIdRef.current = focusActiveTask.id;
     setIsFocusTimerRunning(true);
-    if (focusAiMessages.length === 0 && focusActiveTask) {
-      void sendFocusAiQuestion({ questionOverride: 'Предложи первые необходимые шаги для старта работы прямо сейчас.', userContentOverride: 'Предложить первые шаги для старта', allowBeforeTimerStateUpdate: true });
-    }
+
   };
 
   const activeAiChatProject = aiChatProjects.find((project) => project.id === activeAiChatProjectId) ?? aiChatProjects[0];
