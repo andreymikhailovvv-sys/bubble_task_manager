@@ -5632,14 +5632,6 @@ export default function App() {
         </div>
       ) : null}
 
-
-tion()}>{aiLoadingTaskId === focusActiveTask.id ? <Loader2 className="animate-spin" size={16} /> : <SendHorizontal size={16} />}</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-
       {focusRemainingSeconds > 0 && focusRemainingSeconds < focusTimerMinutes * 60 && !isFocusSessionFinished && !isFocusModeOpen ? (
         <button className="focus-floating-timer fixed bottom-6 z-[90] flex h-20 w-20 flex-col items-center justify-center rounded-full text-white shadow-2xl" onClick={() => setIsFocusModeOpen(true)}>
           <span className="text-xs">Фокус</span><span className="font-bold tabular-nums">{formatFocusTime(focusRemainingSeconds)}</span>
