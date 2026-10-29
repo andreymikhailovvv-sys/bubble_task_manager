@@ -47,7 +47,7 @@ test('task-chat settings have a single monitoring entry with badges on all clien
     read('../../client/src/components/TaskMonitoringStatuses.tsx'),
     read('../../client/src/styles.css')
   ]);
-  assert.equal((app.match(/<TaskMonitoringStatuses/g) ?? []).length, 2);
+  assert.equal((app.match(/<TaskMonitoringStatuses/g) ?? []).length, 4);
   assert.equal((mini.match(/<TaskMonitoringStatuses/g) ?? []).length, 1);
   assert.doesNotMatch(editor, /<TaskMonitoringControls/);
   assert.doesNotMatch(app, /<TaskMonitoringControls/);
@@ -77,7 +77,7 @@ test('expanded task chat has monitoring control to the left of clear button, not
   const app = await read('../../client/src/App.tsx');
   const expanded = app.slice(app.indexOf('focused-task-ai-expanded-panel relative'), app.indexOf('<AiModelChip value={focusedAiModel}', app.indexOf('focused-task-ai-expanded-panel relative')));
   assert.match(expanded, /<TaskMonitoringStatuses taskId=\{focusedTask\.id\}/);
-  assert.ok(expanded.indexOf('<TaskMonitoringStatuses taskId={focusedTask.id}') < expanded.indexOf('onClick={clearFocusedAiDialog}'));
+  assert.ok(expanded.indexOf('<TaskMonitoringStatuses taskId={focusedTask.id}') < expanded.indexOf('onClick={() => void clearFocusedAiDialog()}'));
   assert.doesNotMatch(expanded, /absolute right-5 top-16/);
 });
 
