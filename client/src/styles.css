@@ -8089,6 +8089,36 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-message-user.miniapp-ai
   padding-bottom: 10.5rem !important;
   padding-left: 1rem;
   scroll-padding-bottom: 10.5rem;
+  /* Compact task Help AI, Focus Help AI and both fullscreen dialogs. */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, .7) transparent;
+}
+body[data-theme='dark'] .focused-task-ai-thread-through {
+  scrollbar-color: rgba(148, 163, 184, .72) transparent;
+}
+.focused-task-ai-thread-through::-webkit-scrollbar {
+  width: 9px;
+}
+.focused-task-ai-thread-through::-webkit-scrollbar-track {
+  background: transparent;
+}
+.focused-task-ai-thread-through::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, .7);
+  background-clip: padding-box;
+}
+body[data-theme='dark'] .focused-task-ai-thread-through::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, .72);
+  background-clip: padding-box;
+}
+.focused-task-ai-thread-through::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, .9);
+  background-clip: padding-box;
+}
+body[data-theme='dark'] .focused-task-ai-thread-through::-webkit-scrollbar-thumb:hover {
+  background: rgba(203, 213, 225, .9);
+  background-clip: padding-box;
 }
 
 .focused-task-ai-expanded-panel > .focused-task-ai-thread-through {
@@ -8100,18 +8130,42 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-message-user.miniapp-ai
 }
 
 .focused-task-ai-composer {
+  --task-ai-footer-rgb: 255, 255, 255;
   position: absolute;
   right: 0;
   bottom: 0;
   left: 0;
   z-index: 28;
+  isolation: isolate;
   padding: 0.75rem 1rem 1rem;
   border-top: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 0 0 2rem 2rem;
-  background: rgba(255, 255, 255, 0.86);
+  /* Continuous translucent surface with a subtly clearer scrollbar edge. */
+  background: linear-gradient(to right,
+    rgba(var(--task-ai-footer-rgb), .88) 0%,
+    rgba(var(--task-ai-footer-rgb), .88) calc(100% - 3.25rem),
+    rgba(var(--task-ai-footer-rgb), .62) 100%);
   box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.04);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  /* Let the user grab the native thumb through the right edge of the footer. */
+  pointer-events: none;
+}
+.focused-task-ai-composer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
   backdrop-filter: blur(14px) saturate(1.08);
   -webkit-backdrop-filter: blur(14px) saturate(1.08);
+  /* Fade the blur to zero at the rightmost scrollbar gutter. */
+  mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 3.25rem), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 3.25rem), transparent 100%);
+}
+.focused-task-ai-composer > * {
+  pointer-events: auto;
 }
 
 .focused-task-ai-composer-expanded {
@@ -8120,8 +8174,8 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-message-user.miniapp-ai
 }
 
 body[data-theme='dark'] .focused-task-ai-composer {
+  --task-ai-footer-rgb: 15, 23, 42;
   border-top-color: rgba(148, 163, 184, 0.16);
-  background: rgba(15, 23, 42, 0.86);
   box-shadow: 0 -8px 24px rgba(2, 6, 23, 0.12);
 }
 
@@ -11756,15 +11810,7 @@ body[data-theme='dark'] .task-ai-clear-dialog-button:active:not(:disabled) {
 .focus-mode-shell .focus-shared-task-ai-panel .focused-task-ai-thread-region {
   margin-top: .3rem;
 }
-.focus-mode-shell .focus-shared-task-ai-panel .chat-thread.focused-task-ai-thread-through {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.focus-mode-shell .focus-shared-task-ai-panel .chat-thread.focused-task-ai-thread-through::-webkit-scrollbar {
-  display: none;
-}
-/* Matching opaque panel/footer backgrounds eliminate visible message corners
-   and prevent the scrollbar from showing through the bottom overlay. */
+/* The Focus panel also keeps its native track under the seamless composer. */
 .focus-mode-shell .focus-shared-task-ai-panel .focused-task-ai-composer {
   right: 0;
   bottom: 0;
@@ -11773,14 +11819,10 @@ body[data-theme='dark'] .task-ai-clear-dialog-button:active:not(:disabled) {
   margin: 0;
   padding: .7rem .85rem .9rem;
   border-radius: 0 0 1.45rem 1.45rem;
-  background: #fff !important;
   background-clip: padding-box;
   box-shadow: 0 -9px 24px rgba(15, 23, 42, .09);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 body[data-theme='dark'] .focus-mode-shell .focus-shared-task-ai-panel .focused-task-ai-composer {
-  background: #0f172a !important;
   box-shadow: 0 -9px 24px rgba(2, 6, 23, .45);
 }
 @media (max-width: 1300px) {
