@@ -28,6 +28,7 @@ import type { ChatAttachmentPayload, Sphere, Task, TaskAttachment } from "../lib
 import { DateTimePickerWithApply } from "./DateTimePickerWithApply";
 import { AiAttachmentTiles } from "./AiAttachmentTiles";
 import { api } from "../lib/api";
+import { taskEditorChangedFields, taskEditorEditableSnapshot } from "../lib/taskDraftSync";
 import { LinkifiedText } from "./LinkifiedText";
 import { TaskDescriptionInput } from "./TaskDescriptionInput";
 import { ResizableDescriptionSurface } from "./ResizableDescriptionSurface";
@@ -358,6 +359,8 @@ export function TaskEditor({
   const titleInputRef = useRef<HTMLTextAreaElement | null>(null);
   const autosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autosaveSignatureRef = useRef<string | null>(null);
+  const autosaveInFlightRef = useRef<Promise<void> | null>(null);
+  const activeEditorTaskIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const query = (form.location ?? "").trim();
@@ -460,68 +463,53 @@ export function TaskEditor({
       titleInput.focus();
       titleInput.select();
     });
+    activeEditorTaskIdRef.current = task?.id ?? null;
     autosaveSignatureRef.current = task
-      ? JSON.stringify({
-          title: task.title ?? "",
-          description: task.description ?? "",
-          sphereId: task.sphereId ?? null,
-          dueDate: task.dueDate ?? null,
-          notifyBeforeMinutes: task.notifyBeforeMinutes ?? null,
-          isRecurring: task.isRecurring ?? false,
-          recurrenceText: task.recurrenceText ?? null,
-          recurrenceJson: task.recurrenceJson ?? null,
-          recurrenceSummary: task.recurrenceSummary ?? null,
-          recurrenceUntil: task.recurrenceUntil ?? null,
-          importance: task.importance ?? 3,
-          urgency: task.urgency ?? 3,
-          status: task.status ?? "TODO",
-          aiNotificationsEnabled:
-            task.aiNotificationsEnabled ?? defaultAiNotificationsEnabled,
-          aiMonitoringEnabled: task.aiMonitoringEnabled ?? false,
-        })
+      ? JSON.stringify(taskEditorEditableSnapshot(task))
       : null;
   }, [task, initialSphereId, defaultAiNotificationsEnabled, isEventEditor]);
 
+  // Serialize targeted PATCH requests so an older, slower autosave cannot
+  // arrive after a more recent save and put back the prior description.
+  const applyEditorAutosavePatch = async (patch: Partial<Task>) => {
+    if (!onAutoSave || Object.keys(patch).length === 0) return;
+    const taskIdAtStart = task?.id ?? null;
+    const previous = autosaveInFlightRef.current;
+    const job = (async () => {
+      if (previous) await previous;
+      await onAutoSave(patch);
+      if (activeEditorTaskIdRef.current !== taskIdAtStart) return;
+      const baseline = autosaveSignatureRef.current
+        ? JSON.parse(autosaveSignatureRef.current) as Partial<Task>
+        : {};
+      autosaveSignatureRef.current = JSON.stringify({ ...baseline, ...patch });
+    })();
+    autosaveInFlightRef.current = job;
+    try { await job; }
+    finally {
+      if (autosaveInFlightRef.current === job) autosaveInFlightRef.current = null;
+    }
+  };
+
   useEffect(() => {
-    if (!isEditing || !task?.id || !onAutoSave) return;
-    const normalized = {
-      ...form,
-      importance: form.importance ?? 3,
-      urgency: form.urgency ?? 3,
-      status: form.status ?? "TODO",
-    };
-    const nextSignature = JSON.stringify({
-      title: normalized.title ?? "",
-      description: normalized.description ?? "",
-      sphereId: normalized.sphereId ?? null,
-      dueDate: normalized.dueDate ?? null,
-      notifyBeforeMinutes: normalized.notifyBeforeMinutes ?? null,
-      isRecurring: normalized.isRecurring ?? false,
-      recurrenceText: normalized.recurrenceText ?? null,
-      recurrenceJson: normalized.recurrenceJson ?? null,
-      recurrenceSummary: normalized.recurrenceSummary ?? null,
-      recurrenceUntil: normalized.recurrenceUntil ?? null,
-      importance: normalized.importance,
-      urgency: normalized.urgency,
-      status: normalized.status,
-      aiNotificationsEnabled:
-        normalized.aiNotificationsEnabled ?? defaultAiNotificationsEnabled,
-    });
-    if (autosaveSignatureRef.current === nextSignature) return;
+    if (!isEditing || !task?.id || !onAutoSave || !autosaveSignatureRef.current) return;
+    const baseline = JSON.parse(autosaveSignatureRef.current) as Partial<Task>;
+    const patch = taskEditorChangedFields(baseline, form);
     if (autosaveTimeoutRef.current) {
       clearTimeout(autosaveTimeoutRef.current);
+      autosaveTimeoutRef.current = null;
     }
+    if (Object.keys(patch).length === 0) return;
     autosaveTimeoutRef.current = setTimeout(() => {
-      void onAutoSave(normalized).then(() => {
-        autosaveSignatureRef.current = nextSignature;
+      void applyEditorAutosavePatch(patch).catch((error) => {
+        console.error('[Task] classic editor autosave failed', error);
+        setAiError(error instanceof Error ? error.message : 'Не удалось сохранить изменения задачи');
       });
     }, 700);
     return () => {
-      if (autosaveTimeoutRef.current) {
-        clearTimeout(autosaveTimeoutRef.current);
-      }
+      if (autosaveTimeoutRef.current) clearTimeout(autosaveTimeoutRef.current);
     };
-  }, [form, isEditing, onAutoSave, task?.id, defaultAiNotificationsEnabled]);
+  }, [form, isEditing, onAutoSave, task?.id]);
 
   const selectedImportance = form.importance ?? 3;
   const isSubtask = Boolean(form.parentTaskId);
@@ -788,7 +776,11 @@ export function TaskEditor({
       autosaveTimeoutRef.current = null;
     }
     if (isEditing) {
-      await onSave(form, draftSubtasks);
+      if (autosaveInFlightRef.current) await autosaveInFlightRef.current;
+      const baseline = autosaveSignatureRef.current
+        ? JSON.parse(autosaveSignatureRef.current) as Partial<Task>
+        : taskEditorEditableSnapshot(task ?? {});
+      await onSave(taskEditorChangedFields(baseline, form), draftSubtasks);
       return;
     }
     onCancel();
@@ -800,7 +792,11 @@ export function TaskEditor({
       clearTimeout(autosaveTimeoutRef.current);
       autosaveTimeoutRef.current = null;
     }
-    await onAutoSave(form);
+    if (autosaveInFlightRef.current) await autosaveInFlightRef.current;
+    const baseline = autosaveSignatureRef.current
+      ? JSON.parse(autosaveSignatureRef.current) as Partial<Task>
+      : taskEditorEditableSnapshot(task ?? {});
+    await applyEditorAutosavePatch(taskEditorChangedFields(baseline, form));
     return true;
   };
 
@@ -820,7 +816,11 @@ export function TaskEditor({
       const eventAttachments = isEventEditor && pendingEventFiles.length
         ? await Promise.all(pendingEventFiles.map((file) => fileToAttachmentPayload(file)))
         : [];
-      await onSave(form, draftSubtasks, eventAttachments);
+      if (isEditing && autosaveInFlightRef.current) await autosaveInFlightRef.current;
+      const baseline = autosaveSignatureRef.current
+        ? JSON.parse(autosaveSignatureRef.current) as Partial<Task>
+        : taskEditorEditableSnapshot(task ?? {});
+      await onSave(isEditing ? taskEditorChangedFields(baseline, form) : form, draftSubtasks, eventAttachments);
     } catch (error) {
       setAiError(error instanceof Error ? error.message : 'Не удалось сохранить событие с вложениями');
     }
