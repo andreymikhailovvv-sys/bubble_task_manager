@@ -70,13 +70,13 @@ test('formatter объясняет приоритет task context и не пе�
 });
 
 test('V3 budgets и output limit зафиксированы безопасными значениями', () => {
-  assert.equal(TASK_CHAT_MEMORY_TARGET_TOKEN_BUDGET, 6_000);
-  assert.equal(TASK_CHAT_MEMORY_TARGET_MAX_MESSAGES, 20);
-  assert.equal(TASK_CHAT_MEMORY_TRIGGER_TOKEN_BUDGET, 8_000);
-  assert.equal(TASK_CHAT_MEMORY_TRIGGER_MAX_MESSAGES, 30);
-  assert.equal(TASK_CHAT_ATTACHMENT_HISTORY_TOKEN_BUDGET_V2, 3_000);
-  assert.equal(TASK_CHAT_ATTACHMENT_HISTORY_MAX_MESSAGES_V2, 6);
-  assert.ok(TASK_CHAT_MEMORY_MAX_OUTPUT_TOKENS >= 1_600 && TASK_CHAT_MEMORY_MAX_OUTPUT_TOKENS <= 1_800);
+  assert.equal(TASK_CHAT_MEMORY_TARGET_TOKEN_BUDGET, 10_500);
+  assert.equal(TASK_CHAT_MEMORY_TARGET_MAX_MESSAGES, 36);
+  assert.equal(TASK_CHAT_MEMORY_TRIGGER_TOKEN_BUDGET, 14_500);
+  assert.equal(TASK_CHAT_MEMORY_TRIGGER_MAX_MESSAGES, 54);
+  assert.equal(TASK_CHAT_ATTACHMENT_HISTORY_TOKEN_BUDGET_V2, 5_400);
+  assert.equal(TASK_CHAT_ATTACHMENT_HISTORY_MAX_MESSAGES_V2, 12);
+  assert.ok(TASK_CHAT_MEMORY_MAX_OUTPUT_TOKENS >= 2_700 && TASK_CHAT_MEMORY_MAX_OUTPUT_TOKENS <= 3_000);
 });
 
 test('хвост от 22 до 30 коротких сообщений не запускает compaction', () => {
@@ -113,15 +113,15 @@ test('attachment ограничивает только provider window, а сл�
   assert.deepEqual(normalProvider.messages.map((message) => message.content), history.map((message) => message.content));
 });
 
-test('31-е сообщение запускает compaction по messages и target оставляет не больше 20', () => {
-  const history = messages(31);
+test('55-е сообщение запускает compaction по messages и target оставляет не больше 36', () => {
+  const history = messages(55);
   assert.deepEqual(evaluateTaskChatMemoryTrigger(history).triggerReason, 'messages');
   const target = selectRecentTaskChatHistory(history, { tokenBudget: TASK_CHAT_MEMORY_TARGET_TOKEN_BUDGET, maxMessages: TASK_CHAT_MEMORY_TARGET_MAX_MESSAGES });
-  assert.equal(target.messages.length, 20);
+  assert.equal(target.messages.length, 36);
 });
 
-test('token trigger работает до 30 сообщений и target возвращается к 6000 tokens', () => {
-  const history = messages(24, 1_014); // 24 * ceil(1014 / 3) = 8112
+test('token trigger работает до 54 сообщений и target возвращается к 10500 tokens', () => {
+  const history = messages(24, 1_830); // 24 * ceil(1830 / 3) = 14640
   assert.deepEqual(evaluateTaskChatMemoryTrigger(history).triggerReason, 'tokens');
   const target = selectRecentTaskChatHistory(history, { tokenBudget: TASK_CHAT_MEMORY_TARGET_TOKEN_BUDGET, maxMessages: TASK_CHAT_MEMORY_TARGET_MAX_MESSAGES });
   assert.ok(target.estimatedTokens <= TASK_CHAT_MEMORY_TARGET_TOKEN_BUDGET);
