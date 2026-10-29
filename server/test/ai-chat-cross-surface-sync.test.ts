@@ -209,6 +209,13 @@ test('project model belongs to one chat, survives stale device saves and quick c
   assert.equal(newer[0].chats[0].model,'gpt-5.4-mini');
 });
 
+test('legacy Mini selection is upgraded to Terra when a project snapshot is merged', () => {
+  const merged = mergeChatProjectSnapshots([], [{ id: 'p', chats: [
+    { id: 'legacy', title: 'Legacy', model: 'gpt-5.4-mini', messages: [] }
+  ] }]);
+  assert.equal(merged[0].chats?.[0].model, 'gpt-6.1-terra');
+});
+
 test('web and mobile AI chat model is stored on the chosen thread, not one global selection', () => {
   const app = source('../../client/src/App.tsx');
   const mini = source('../../client/src/MiniApp.tsx');
