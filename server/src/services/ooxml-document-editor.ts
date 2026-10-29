@@ -201,11 +201,22 @@ function editExcel(files:OoxmlEntry[],edits:OfficeEdit[]){
   }
 }
 
-export function getOfficeDocumentPreview(buffer:Buffer, format:OfficeFormat){
+export function getOfficeDocumentPreview(buffer:Buffer, format:OfficeFormat, options: {
+  maxCharacters?: number; maxParagraphs?: number; maxSheetRows?: number;
+} = {}){
+  // Default UI preview remains short. AI reads may opt into a larger, bounded
+  // extraction so sections after paragraph 100 are not falsely reported absent.
+  const maxCharacters = Math.max(1, Math.min(100_000, options.maxCharacters ?? 16_000));
+  const maxParagraphs = Math.max(1, Math.min(2_000, options.maxParagraphs ?? 100));
+  const maxSheetRows = Math.max(1, Math.min(1_000, options.maxSheetRows ?? 35));
   const files=readOoxmlArchive(buffer);
   if(format==='docx'){
     const xml=get(files,'word/document.xml').data.toString('utf8');
-    return {format, text:paragraphs(xml).slice(0,100).map((p,i)=>(i+1)+'. '+p).join('\n').slice(0,16000)};
+    const allParagraphs = paragraphs(xml);
+    const selected = allParagraphs.slice(0, maxParagraphs);
+    const combined = selected.map((p,i)=>(i+1)+'. '+p).join('\n');
+    return { format, text: combined.slice(0, maxCharacters),
+      truncated: selected.length < allParagraphs.length || combined.length > maxCharacters };
   }
   const sheets=sheetPaths(files);
   const shared=files.find(e=>e.name==='xl/sharedStrings.xml')?.data.toString('utf8') ?? '';
@@ -215,7 +226,7 @@ export function getOfficeDocumentPreview(buffer:Buffer, format:OfficeFormat){
   for(const [name,path] of sheets){
     const xml=get(files,path).data.toString('utf8');
     result.push('Лист: '+name);
-    for(const row of [...xml.matchAll(/<row\b[^>]*>[\s\S]*?<\/row>/g)].slice(0,35)){
+    for(const row of [...xml.matchAll(/<row\b[^>]*>[\s\S]*?<\/row>/g)].slice(0,maxSheetRows)){
       const cells=[...row[0].matchAll(/<c\b[^>]*\br="([A-Z]+\d+)"[^>]*(?:\/>|>[\s\S]*?<\/c>)/g)];
       const values=cells.slice(0,18).map(c=>{
         const type=attrs(c[0].match(/^<c\b[^>]*>/)?.[0] ?? '').t;
@@ -228,7 +239,7 @@ export function getOfficeDocumentPreview(buffer:Buffer, format:OfficeFormat){
       if(values.length)result.push(values.join(' | '));
     }
   }
-  return {format,text:result.join('\n').slice(0,16000)};
+  return {format,text:result.join('\n').slice(0,maxCharacters)};
 }
 
 export function applyOfficeEdits(buffer:Buffer, format:OfficeFormat, edits:OfficeEdit[]):Buffer{
