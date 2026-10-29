@@ -138,6 +138,7 @@ model User {
   aiUsageEvents AiUsageEvent[]
   aiCreditReservationRecords AiCreditReservationRecord[]
   aiChatRequests AiChatRequest[]
+  aiRequestRatingGrants AiRequestRatingGrant[]
   aiChatConversationMemories AiChatConversationMemory[]
   creditPurchases CreditPurchase[]
   collaborativeTaskMembers CollaborativeTaskMember[]
@@ -252,6 +253,18 @@ model AiChatRequest {
 
   @@unique([userId, clientRequestId])
   @@index([status, createdAt])
+}
+
+// One successfully completed user AI request grants one +0.1 rating event.
+model AiRequestRatingGrant {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestKey String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, requestKey])
+  @@index([createdAt])
 }
 
 model AiCreditReservationRecord {
