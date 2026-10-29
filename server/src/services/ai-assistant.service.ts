@@ -1480,7 +1480,6 @@ export const aiAssistantService = {
         ...(memoryBlock ? [{ role: 'system' as const, content: memoryBlock }] : []),
         ...providerHistory,
         ...(fileCatalogText ? [{ role: 'user' as const, content: fileCatalogText }] : []),
-      ...(referenceEvidence ? [{ role: 'user' as const, content: referenceEvidence }] : []),
         { role: 'user', content: question },
         ...(attachmentsMessage ? [attachmentsMessage] : [])
       ];
@@ -2017,6 +2016,7 @@ export const aiAssistantService = {
     const quotedFiles = extractAiReplyFileReferences(input.question);
     const fileCatalog = await loadAiFileCatalog({ userId: input.userId, taskId: input.taskId, currentUploads: input.attachments, currentMessageId: input.currentMessageId, quotedMessageId: quotedFiles.messageId, quotedDocumentId: quotedFiles.documentId, quotedAttachmentNames: quotedFiles.attachmentNames });
     const fileCatalogText = formatAiFileCatalog(fileCatalog);
+    const requestId = randomUUID();
     // A precise reference to a previously uploaded text document is not
     // equivalent to its contents being in the provider context. For uniquely
     // identified references, read server-side before asking the model, with
@@ -2099,6 +2099,7 @@ export const aiAssistantService = {
           'Веб-поиск, создание изображений и чтение/редактирование файлов доступны при соблюдении обычных лимитов и доступа к файлам. Если web_search доступен, МОЖЕШЬ использовать его, когда ответ зависит от свежих внешних фактов. Не запускай поиск без необходимости и не заявляй об отсутствии интернета, когда инструмент доступен.'
         ].join(' ') }] : []),
       ...(fileCatalogText ? [{ role: 'user' as const, content: fileCatalogText }] : []),
+      ...(referenceEvidence ? [{ role: 'user' as const, content: referenceEvidence }] : []),
       ...(monitoringStatuses.length ? [{ role: 'user' as const, content:
         'История статусов задачи (от последнего к первому):\\n' +
         monitoringStatuses.map(status => status.createdAt.toISOString() + ' — ' + status.label +
@@ -2109,7 +2110,6 @@ export const aiAssistantService = {
       { role: 'user', content: question }
     ];
 
-    const requestId = randomUUID();
     console.info('[AI file catalog] prepared', { requestId, surface: 'task', count: fileCatalog.items.length, truncated: fileCatalog.truncated, sources: fileCatalog.items.reduce((acc, item) => ({ ...acc, [item.source]: (acc[item.source] ?? 0) + 1 }), {} as Record<string, number>) });
     const contextDiagnostics: TaskChatContextDiagnostics | null = contextV2?.diagnostics ?? null;
     if (contextDiagnostics) {
