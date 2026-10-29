@@ -1829,6 +1829,7 @@ apiRouter.post('/tasks/:id/monitoring/statuses', requireAuth, taskProposalSameOr
   }
 }));
 apiRouter.get('/tasks/:id/ai-chat', requireAuth, aiController.getTaskAssistantHistory);
+apiRouter.delete('/tasks/:id/ai-chat', requireAuth, aiController.clearTaskAssistantHistory);
 apiRouter.post('/tasks/:id/ai-chat', requireAuth, aiController.askTaskAssistant);
 apiRouter.post('/tasks/:id/ai-chat/messages', requireAuth, aiController.appendTaskAssistantMessages);
 apiRouter.post('/tasks/:id/participant-messages', requireAuth, asyncHandler(taskParticipantMessageController.send));
