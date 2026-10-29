@@ -111,6 +111,14 @@ test('ordinary task chat exposes only the follow-up tool, not autonomous monitor
   assert.ok(!names.includes('add_monitoring_status'));
 });
 
+test('model reads pending named actions before deciding whether a new one is needed', async () => {
+  const ai = await read('../src/services/ai-assistant.service.ts');
+  assert.match(ai, /const scheduledFollowups = followupToolsEnabled/);
+  assert.match(ai, /state: 'pending'/);
+  assert.match(ai, /scheduledFollowups\.length \+ ' из 3'/);
+  assert.match(ai, /Не изменяй их сроки и не создавай дубликаты/);
+});
+
 test('one-time follow-up delivery does not require autonomous monitoring', async () => {
   const [worker, delivery, task, alert, chip, styles] = await Promise.all([
     read('../src/services/task-monitoring-worker.service.ts'),
