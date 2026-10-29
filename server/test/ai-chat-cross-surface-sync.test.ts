@@ -206,7 +206,7 @@ test('project model belongs to one chat, survives stale device saves and quick c
   assert.equal(older[0].chats[0].model,'gpt-6.1-sol');
   const newer = reconcileAiChatProjectOutline(older,[{id:'p',title:'Личный проект',color:'#888',icon:'✨',
     chats:[{id:'a',title:'Разработка',model:'gpt-5.4-mini',modelChangedAt:'2026-10-21T13:00:00Z'}]}]);
-  assert.equal(newer[0].chats[0].model,'gpt-5.4-mini');
+  assert.equal(newer[0].chats[0].model,'gpt-6.1-terra');
 });
 
 test('legacy Mini selection is upgraded to Terra when a project snapshot is merged', () => {
