@@ -1,3 +1,4 @@
+import { normalizeSelectableAiChatModel } from '../lib/ai-chat-model.js';
 import { prisma } from '../db/prisma.js';
 import { FixedWindowRateLimiter } from '../lib/security-rate-limiter.js';
 import { parseTelegramSendTargetId } from './telegram-send-targets.service.js';
@@ -17,7 +18,7 @@ export const TELEGRAM_AI_SUMMARY_INTERVALS = [-1, 0, 5, 10, 30, 180, 360, 1440] 
 export const TELEGRAM_AI_CUSTOM_MAX_MINUTES = 5_256_000; // up to ten 365-day years
 export const TELEGRAM_AI_CUSTOM_MAX_MONTHS = 120;
 export const TELEGRAM_AI_CUSTOM_MAX_CREDIT_MILLI = 100_000_000; // 100,000 credits
-export const TELEGRAM_AI_MONITOR_MODELS = ['gpt-6-luna', 'gpt-5.4-mini', 'gpt-6.1-sol'] as const;
+export const TELEGRAM_AI_MONITOR_MODELS = ['gpt-6-luna', 'gpt-6.1-terra', 'gpt-6.1-sol'] as const;
 // Exact values exposed by the fixed-step budget slider. NULL = no daily cap.
 export const TELEGRAM_AI_DAILY_CREDIT_TIERS_MILLI = [
   50_000, 100_000, 250_000, 500_000, 1_000_000, 2_500_000, 5_000_000, null
@@ -150,7 +151,7 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
     summaryInstructions: typeof p.summaryInstructions === 'string' ? p.summaryInstructions.trim() : '',
     suggestWhen: typeof p.suggestWhen === 'string' ? p.suggestWhen.trim() : '',
     suggestHow: typeof p.suggestHow === 'string' ? p.suggestHow.trim() : '',
-    monitorModel: oneOf(p.monitorModel, TELEGRAM_AI_MONITOR_MODELS, 'модель мониторинга'),
+    monitorModel: oneOf(normalizeSelectableAiChatModel(p.monitorModel), TELEGRAM_AI_MONITOR_MODELS, 'модель мониторинга'),
     autoReplyWhen: typeof p.autoReplyWhen === 'string' ? p.autoReplyWhen.trim() : '',
     autoReplyHow: typeof p.autoReplyHow === 'string' ? p.autoReplyHow.trim() : '',
     notifyImportant: p.notifyImportant,
@@ -177,7 +178,9 @@ export const telegramAiChatPolicyService = {
     const dayKey = monitorDayKey(new Date(), owner?.timeZone);
     return {
       policies: policies.map(policy => ({
-        ...policy, spentTodayMilli: policy.creditDayKey === dayKey ? policy.dailySpentMilli : 0,
+        ...policy,
+        monitorModel: normalizeSelectableAiChatModel(policy.monitorModel) ?? 'gpt-6-luna',
+        spentTodayMilli: policy.creditDayKey === dayKey ? policy.dailySpentMilli : 0,
         reservedTodayMilli: policy.creditDayKey === dayKey ? policy.dailyReservedMilli : 0
       })),
       activationAvailable: true, maximumChats: MAX_CHATS
