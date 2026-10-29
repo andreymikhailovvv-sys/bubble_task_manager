@@ -123,7 +123,32 @@ test('fullscreen task and focus dialogs share spaced header, red clear pill and 
   assert.match(focusFull, /title=\{focusActiveTask\.title\}/);
   assert.match(css, /\.task-ai-clear-dialog-button:active:not\(:disabled\)/);
   assert.match(css, /\.task-ai-fullscreen-monitor \{\s*margin-right:/);
-  assert.match(css, /\.focus-shared-task-ai-panel \.chat-thread\.focused-task-ai-thread-through::-webkit-scrollbar \{\s*display: none;/);
-  assert.match(css, /\.focus-shared-task-ai-panel \.focused-task-ai-composer \{[\s\S]*?background: #fff !important;/);
-  assert.match(css, /body\[data-theme='dark'\] \.focus-mode-shell \.focus-shared-task-ai-panel \.focused-task-ai-composer \{\s*background: #0f172a !important;/);
+  assert.match(css, /\.focused-task-ai-thread-through \{[\s\S]*?scrollbar-width: thin;/);
+  assert.match(css, /\.focused-task-ai-composer \{[\s\S]*?pointer-events: none;/);
+  assert.match(css, /\.focused-task-ai-composer > \* \{\s*pointer-events: auto;/);
+  assert.match(css, /body\[data-theme='dark'\] \.focused-task-ai-composer \{\s*--task-ai-footer-rgb: 15, 23, 42;/);
+  assert.doesNotMatch(css, /\.focus-mode-shell \.focus-shared-task-ai-panel \.chat-thread\.focused-task-ai-thread-through \{\s*scrollbar-width: none;/);
+  assert.doesNotMatch(css, /\.focus-mode-shell \.focus-shared-task-ai-panel \.focused-task-ai-composer \{[^}]*background: #fff !important;/);
+});
+
+
+test('all four task Help AI views preserve draggable scrolling beneath a translucent footer', async () => {
+  const [app, css] = await Promise.all([read('../../client/src/App.tsx'), read('../../client/src/styles.css')]);
+  const sections = [
+    app.slice(app.indexOf('<aside data-tour="feature-focus-ai"'), app.indexOf('      {isFocusModeOpen && isFocusAiExpanded')),
+    app.slice(app.indexOf('      {isFocusModeOpen && isFocusAiExpanded'), app.indexOf('      {focusRemainingSeconds > 0')),
+    app.slice(app.indexOf('data-tour="ai-task-help"'), app.indexOf('      {focusedTask && isAiExpanded')),
+    app.slice(app.indexOf('      {focusedTask && isAiExpanded'), app.indexOf('      {isCollaborationSettingsOpen'))
+  ];
+  for (const section of sections) {
+    assert.match(section, /className="chat-thread focused-task-ai-thread-through[^"]*overflow-y-auto/);
+    assert.match(section, /className="focused-task-ai-composer(?: focused-task-ai-composer-expanded)?"/);
+  }
+  assert.match(css, /\.focused-task-ai-thread-through::-webkit-scrollbar \{\s*width: 9px;/);
+  assert.match(css, /\.focused-task-ai-composer \{[\s\S]*?background: linear-gradient\(to right,/);
+  assert.match(css, /\.focused-task-ai-composer::before \{[\s\S]*?mask-image: linear-gradient\(to right,/);
+  assert.match(css, /\.focused-task-ai-composer \{[\s\S]*?pointer-events: none;/);
+  assert.match(css, /\.focused-task-ai-composer > \* \{\s*pointer-events: auto;/);
+  assert.doesNotMatch(css, /\.focus-mode-shell \.focus-shared-task-ai-panel \.chat-thread\.focused-task-ai-thread-through \{\s*scrollbar-width: none;/);
+  assert.doesNotMatch(css, /\.focus-mode-shell \.focus-shared-task-ai-panel \.focused-task-ai-composer \{[^}]*background: #fff !important;/);
 });
