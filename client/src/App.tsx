@@ -2797,6 +2797,9 @@ export default function App() {
       const message = error instanceof Error ? error.message : 'Не удалось получить ответ ИИ';
       setFocusAiError(message);
       setFocusAiDraft(previous => previous.trim() ? previous : question);
+      // Keep uploads for a user-triggered retry; failed requests must not
+      // silently discard images or documents.
+      setFocusAiPendingFiles((current) => current.length ? current : focusAiPendingFiles);
       setAiDialogByTask(prev => ({ ...prev, [taskId]: [...(prev[taskId] ?? []),
         { id: crypto.randomUUID(), role: 'assistant', content: message }] }));
     } finally {
