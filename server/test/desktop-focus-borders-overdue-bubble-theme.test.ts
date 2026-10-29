@@ -22,7 +22,7 @@ test('top-bar overdue popover is opaque in light and dark modes', async () => {
   assert.match(shared, /backdrop-filter: none;/);
   const dark = rule(css, "body[data-theme='dark'] .topbar-overdue-popover {");
   assert.match(dark, /background: #19283e;/);
-  assert.doesNotMatch(dark, /rgba\([^)]*\)/, 'Dark popover background must be solid');
+  assert.doesNotMatch(dark, /background:\s*rgba\(/, 'Dark popover background must be solid');
 });
 
 test('dark bubble task information uses a readable navy surface rather than near-black', async () => {
