@@ -1,7 +1,7 @@
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, ChatMode, GeneratedDocument, Habit, Sphere, Task, TaskAttachment, TaskComment, WebCitation, WebSource, TelegramInlineSendDraft, TelegramReadDraft, TelegramReadApproval } from './types';
 
 export type TaskMonitoringStatus = { id: string; label: string; detail?: string | null; createdAt: string };
-export type TaskMonitoringTrigger = { id: string; dueAt: string; question: string; state: string };
+export type TaskMonitoringTrigger = { id: string; dueAt: string; title: string | null; description: string | null; question: string; state: string };
 
 export type ApiError = Error & { status?: number; code?: string };
 export type AiCheckupSchedule = { id: string; time: string; instructions: string };
