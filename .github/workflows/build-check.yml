@@ -93,6 +93,8 @@ jobs:
         run: node --import tsx --test server/test/mobile-workspace-parity.test.ts
       - name: Verify idempotent AI chat rating, time selection and global overdue toolbar
         run: node --import tsx --test server/test/ai-request-rating.test.ts
+      - name: Verify user-controlled trigger cancellation, Quick AI newline and checkup cards
+        run: node --import tsx --test server/test/followup-cancel-quickai-checkup-ui.test.ts
       - name: Verify opt-in task monitoring isolation and status UI
         run: node --import tsx --test server/test/task-monitoring-beta.test.ts
       - name: Verify monitoring chat controls, follow-ups and deduplicated delivery
