@@ -1966,6 +1966,13 @@ export const aiAssistantService = {
           select: { label: true, detail: true, createdAt: true }
         })
       : [];
+    const scheduledFollowups = followupToolsEnabled
+      ? await prisma.taskMonitoringTrigger.findMany({
+          where: { taskId: task.id, userId: input.userId, state: 'pending' },
+          orderBy: { dueAt: 'asc' }, take: 3,
+          select: { title: true, description: true, question: true, dueAt: true }
+        })
+      : [];
     const useContextV2 = isTaskChatContextV2Enabled(input.userId);
     const history = useContextV2 ? input.history : normalizeHistory(input.history);
     const question = input.question.trim();
@@ -2117,6 +2124,16 @@ export const aiAssistantService = {
         ].join(' ') }] : []),
       ...(fileCatalogText ? [{ role: 'user' as const, content: fileCatalogText }] : []),
       ...(referenceEvidence ? [{ role: 'user' as const, content: referenceEvidence }] : []),
+      ...(followupToolsEnabled ? [{ role: 'system' as const, content:
+        scheduledFollowups.length
+          ? 'Уже запланированные независимые действия (' + scheduledFollowups.length + ' из 3):\\n' +
+            scheduledFollowups.map(item =>
+              (item.title || 'Уточнить по задаче') + ' | ' + item.dueAt.toISOString() +
+              ' | ' + (item.description || item.question)
+            ).join('\\n') +
+            '. Не изменяй их сроки и не создавай дубликаты. Новое назначай только для отличающейся самостоятельной потребности.'
+          : 'У этой задачи пока нет запланированных действий. В обычном режиме они необязательны; при автомониторинге поддерживай хотя бы одно осмысленное ожидающее действие.'
+      }] : []),
       ...(monitoringStatuses.length ? [{ role: 'user' as const, content:
         'История статусов задачи (от последнего к первому):\\n' +
         monitoringStatuses.map(status => status.createdAt.toISOString() + ' — ' + status.label +
