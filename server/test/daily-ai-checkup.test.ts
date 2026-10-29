@@ -40,9 +40,11 @@ test('checkup may propose today, overdue and earlier reschedules, never unknown 
     ]
   }, tasks, tomorrow, now, 'Europe/Moscow');
   assert.deepEqual(result.moves.map(m => m.taskId), ['today', 'later', 'overdue', 'undated']);
-  assert.ok(result.text.includes('📋 Сводка от сервера'));
-  assert.ok(result.text.includes('🤖 Общий блок от ИИ'));
-  assert.ok(result.text.includes('🗓️ Предложенные изменения от ИИ'));
+  assert.ok(result.text.includes('📋 Ближайшие задачи'));
+  assert.ok(result.text.includes('💡 Рекомендации'));
+  assert.ok(!result.text.includes('📋 Сводка от сервера'));
+  assert.ok(!result.text.includes('🤖 Общий блок от ИИ'));
+  assert.ok(!result.text.includes('🗓️ Предложенные изменения от ИИ'));
   assert.ok(result.text.startsWith('✨ ИИ-чекап'));
   assert.ok(!result.text.includes('secret'));
 });
@@ -107,7 +109,8 @@ test('checkup does not arbitrarily discard a useful action list after twelve row
 test('manual checkup does not silently disguise failed approval-card creation as no suggestions', async () => {
   const delivery = await readFile(new URL('../src/services/ai-checkup-delivery.service.ts', import.meta.url), 'utf8');
   assert.match(delivery, /const reportText = checkup.moves.length && !proposalId/);
-  assert.match(delivery, /Предложения сформированы, но карточку подтверждения не удалось сохранить/);
+  assert.match(delivery, /Не удалось показать карточку предложенных изменений/);
+  assert.match(delivery, /Они собраны в карточке ниже/);
   assert.match(delivery, /proposedActions: checkup.moves.length/);
 });
 
