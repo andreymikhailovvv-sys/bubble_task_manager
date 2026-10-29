@@ -12053,3 +12053,12 @@ body[data-theme='dark'] .focus-mode-shell .focus-timer-select-menu,
 body[data-theme='dark'] .focus-mode-shell .focus-sector-dropdown-menu {
   border-color: rgba(100, 116, 139, .44) !important;
 }
+
+/* Small, quiet per-follow-up dismiss control. Keyboard and touch accessible. */
+.task-followup-cancel { color: inherit; opacity: .64; cursor: pointer; }
+.task-followup-cancel:hover, .task-followup-cancel:focus-visible {
+  opacity: 1; background: color-mix(in srgb, var(--followup-color) 13%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--followup-color) 35%, transparent);
+  outline-offset: 1px;
+}
+.task-followup-cancel:disabled { opacity: .4; cursor: wait; }

@@ -24,6 +24,36 @@ export const TASK_MONITOR_FOLLOWUP_TOOL = {
   strict: false
 };
 
+
+export const TASK_MONITOR_CANCEL_FOLLOWUP_TOOL = {
+  type: 'function' as const,
+  name: 'cancel_task_monitoring_trigger',
+  description: 'Cancel ONE specific pending task reminder or deferred AI action by its triggerId. Use this BEFORE scheduling a replacement when the user asks to move or change an existing reminder. Other scheduled actions must remain untouched. Read the current pending trigger IDs from context.',
+  parameters: {
+    type: 'object', additionalProperties: false,
+    properties: {
+      triggerId: { type: 'string', description: 'Exact ID of the pending action to cancel, taken from the current list.' }
+    },
+    required: ['triggerId']
+  },
+  strict: false
+};
+
+/** Cancel only a pending action belonging to this user and task. */
+export async function cancelMonitoringTrigger(userId: string, taskId: string, triggerId: string) {
+  await requireMonitoringOwner(userId, taskId);
+  if (!triggerId || triggerId.length > 128 || !/^[a-zA-Z0-9_-]+$/.test(triggerId)) {
+    return { ok: false as const, code: 'INVALID_TRIGGER_ID' };
+  }
+  const cancelled = await prisma.taskMonitoringTrigger.updateMany({
+    where: { id: triggerId, taskId, userId, state: 'pending' },
+    data: { state: 'cancelled' }
+  });
+  if (!cancelled.count) return { ok: false as const, code: 'FOLLOWUP_NOT_FOUND' };
+  signalTaskMonitoringWakeup();
+  return { ok: true as const, triggerId, state: 'cancelled' as const };
+}
+
 const trim = (value: unknown) => typeof value === 'string' ? value.trim() : '';
 
 export async function createMonitoringTrigger(userId: string, taskId: string, input: unknown) {

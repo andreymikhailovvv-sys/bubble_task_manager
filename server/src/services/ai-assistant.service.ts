@@ -21,7 +21,7 @@ import { isDynamicTextBillingEnabled, refundDynamicResponsesCall, runDynamicResp
 import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordAiCreditCharge, recordOpenAiTranscriptionUsage, recordOpenAiUsageShadow, type OpenAiTranscriptionUsage } from './ai-usage-metering.service.js';
 import { buildTaskChatContext, isTaskChatContextV2Enabled, type TaskChatContextDiagnostics } from './task-chat-context.service.js';
 import { formatTaskChatMemory, isTaskChatMemoryEnabled, resolveTaskChatActiveHistoryLimits, TASK_CHAT_MEMORY_TARGET_MAX_MESSAGES, TASK_CHAT_MEMORY_TARGET_TOKEN_BUDGET, TASK_CHAT_MEMORY_TRIGGER_MAX_MESSAGES, TASK_CHAT_MEMORY_TRIGGER_TOKEN_BUDGET, updateTaskChatMemoryIfNeeded, type TaskChatContextMessage } from './task-chat-memory.service.js';
-import { TASK_MONITOR_FOLLOWUP_TOOL, createMonitoringTrigger, ensureMonitoringFallbackTrigger } from './task-monitoring-trigger.service.js';
+import { TASK_MONITOR_FOLLOWUP_TOOL, TASK_MONITOR_CANCEL_FOLLOWUP_TOOL, createMonitoringTrigger, cancelMonitoringTrigger, ensureMonitoringFallbackTrigger } from './task-monitoring-trigger.service.js';
 import { TASK_MONITOR_ACTION_TOOLS, executeTaskMonitoringAction } from './task-monitoring-actions.service.js';
 import { cancelPendingMonitoringTriggers, requireMonitoredTask } from './task-monitoring.service.js';
 import { executeTaskContextLookup, TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS, TASK_CHAT_CONTEXT_MAX_TOOL_CALLS, TASK_CHAT_STORED_FILE_FETCH_LIMIT, TASK_CONTEXT_LOOKUP_TOOL, type TaskContextLookupArguments } from './task-chat-context-lookup.service.js';
@@ -271,7 +271,7 @@ export function createTaskChatOpenAiPayload(model: string, messages: TaskChatPro
       return { type: message.type, call_id: message.call_id, output: message.output };
     }),
     text: { format: TASK_ASSISTANT_RESPONSE_FORMAT },
-    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL, ...AI_CHAT_OPENAI_TOOLS, TASK_CHAT_HISTORY_LOOKUP_TOOL, ...(options?.followupTools || options?.monitoringTools ? [TASK_MONITOR_FOLLOWUP_TOOL] : []), ...(options?.monitoringTools ? TASK_MONITOR_ACTION_TOOLS : []), ...(allowWebSearch ? [AI_CHAT_WEB_SEARCH_TOOL] : [])], tool_choice: options?.forceWebSearch && allowWebSearch ? { type: 'web_search' as const } : 'auto', parallel_tool_calls: false, ...(allowWebSearch ? { max_tool_calls: 1 } : {}) } : { tool_choice: 'none' }),
+    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL, ...AI_CHAT_OPENAI_TOOLS, TASK_CHAT_HISTORY_LOOKUP_TOOL, ...(options?.followupTools || options?.monitoringTools ? [TASK_MONITOR_FOLLOWUP_TOOL, TASK_MONITOR_CANCEL_FOLLOWUP_TOOL] : []), ...(options?.monitoringTools ? TASK_MONITOR_ACTION_TOOLS : []), ...(allowWebSearch ? [AI_CHAT_WEB_SEARCH_TOOL] : [])], tool_choice: options?.forceWebSearch && allowWebSearch ? { type: 'web_search' as const } : 'auto', parallel_tool_calls: false, ...(allowWebSearch ? { max_tool_calls: 1 } : {}) } : { tool_choice: 'none' }),
     ...(options?.reasoningEffort ? { reasoning: { effort: options.reasoningEffort } } : {}),
     ...(maxOutputTokens === undefined ? {} : { max_output_tokens: maxOutputTokens })
   };
@@ -1970,7 +1970,7 @@ export const aiAssistantService = {
       ? await prisma.taskMonitoringTrigger.findMany({
           where: { taskId: task.id, userId: input.userId, state: 'pending' },
           orderBy: { dueAt: 'asc' }, take: 3,
-          select: { title: true, description: true, question: true, dueAt: true }
+          select: { id: true, title: true, description: true, question: true, dueAt: true }
         })
       : [];
     const useContextV2 = isTaskChatContextV2Enabled(input.userId);
@@ -2110,7 +2110,7 @@ export const aiAssistantService = {
       },
       { role: 'user', content: `Контекст задачи:\n${taskContext}` },
       ...(followupToolsEnabled ? [{ role: 'system' as const, content:
-        'В этом чате доступен инструмент set_task_monitoring_trigger: самостоятельное одноразовое отложенное действие ИИ. Он доступен и без автомониторинга. По просьбе пользователя или при очевидной пользе назначай напоминание, уточнение ответа, подготовку черновика или следующий контакт. Укажи title (короткое понятное действие), description (что именно и зачем ты сделаешь), question (точную инструкцию на момент запуска) и delayMinutes. До трёх независимых напоминаний; новая установка НЕ меняет прежние. Если лимит достигнут, сообщи об этом. В обычном режиме нет обязательства назначать напоминания после каждого ответа. Не обещай выполнить отправку писем или другие внешние действия, если соответствующий инструмент не доступен.' }] : []),
+        'В этом чате доступны инструменты set_task_monitoring_trigger (создать одноразовое отложенное действие) и cancel_task_monitoring_trigger (отменить конкретное действие по triggerId). Они работают и без автомониторинга. Перед планированием прочитай перечень активных триггеров ниже: там указаны их точные ID, сроки, названия и действия. Пользователь может отменять любые свои запланированные напоминания. Если пользователь просит перенести время или изменить существующее уведомление/напоминание/просьбу, НАЙДИ относящийся к нему триггер, СНАЧАЛА отмени его через cancel_task_monitoring_trigger с точным ID, затем создай новый через set_task_monitoring_trigger на нужное время. Не создавай второй триггер поверх старого. Если совпадение неоднозначно, уточни, какой именно нужно перенести, а не отменяй чужое действие. Не отменяй остальные независимые триггеры. При создании укажи title, description, question и delayMinutes, учитывая часовой пояс пользователя. До трёх одновременных действий. В обычном режиме нет обязательства назначать их после каждого ответа. Не обещай внешние действия без соответствующих инструментов.' }] : []),
       ...(monitoringEnabled ? [{ role: 'system' as const,
         content: [
           'Владелец явно включил beta-автомониторинг этой задачи. Действуй инициативно как помощник, который ведёт задачу к выполнению, а не просто спрашивает «уже сделал?».',
@@ -2118,7 +2118,7 @@ export const aiAssistantService = {
           'СНАЧАЛА сделай доступную полезную работу по задаче: анализ, подготовка материалов, чтение или создание файлов, когда это необходимо. Веб-поиск не обязателен: используй его только при реальной потребности в актуальных внешних данных. Только ПОСЛЕ необходимых действий назначь следующий контакт через set_task_monitoring_trigger. Не подменяй полезную работу триггером.',
           'При включённом автомониторинге поддерживай минимум одно актуальное ожидающее отложенное действие через set_task_monitoring_trigger, если задача активна и пользователь не отказался от контактов. Если уже есть подходящий запланированный контакт, НЕ обновляй его при каждом сообщении и не создавай дублей. Сначала сделай реальную полезную работу.',
           'Если пользователь просит «напомни через…», «вернусь через…», «сделаю к…», «проверю завтра в…», то ОБЯЗАТЕЛЬНО назначь отложенное действие на указанное время по часовому поясу пользователя, переведи в delayMinutes от текущего времени. Минимум 5 минут, максимум 7 дней; не заменяй точное пожелание произвольным интервалом.',
-          'Если время не названо, выбирай интервал исходя из срочности задачи и дедлайна (обычно от часа до суток). Каждое действие должно иметь осмысленное название, описание и инструкцию. В задаче максимум три независимых действия, никогда не подменяй уже запланированное другим.',
+          'Если время не названо, выбирай интервал исходя из срочности задачи и дедлайна (обычно от часа до суток). Каждое действие должно иметь осмысленное название, описание и инструкцию. В задаче максимум три независимых действия. НЕ трогай чужие запланированные действия, но при прямой просьбе пользователя изменить срок конкретного триггера сначала отмени именно его, затем создай замену.',
           'Дополнительные инструменты при включённом режиме: create_monitoring_subtask для необходимого шага с реалистичным дедлайном, change_monitoring_importance при обоснованном изменении приоритета, add_monitoring_status для проверенного результата. Не создавай лишних подзадач, не утверждай о выполнении внешних действий без подтверждения. В обычных задачах эти инструменты недоступны.',
           'Веб-поиск, создание изображений и чтение/редактирование файлов доступны при соблюдении обычных лимитов и доступа к файлам. Если web_search доступен, МОЖЕШЬ использовать его, когда ответ зависит от свежих внешних фактов. Не запускай поиск без необходимости и не заявляй об отсутствии интернета, когда инструмент доступен.'
         ].join(' ') }] : []),
@@ -2128,10 +2128,10 @@ export const aiAssistantService = {
         scheduledFollowups.length
           ? 'Уже запланированные независимые действия (' + scheduledFollowups.length + ' из 3):\\n' +
             scheduledFollowups.map(item =>
-              (item.title || 'Уточнить по задаче') + ' | ' + item.dueAt.toISOString() +
+              'triggerId=' + item.id + ' | ' + (item.title || 'Уточнить по задаче') + ' | ' + item.dueAt.toISOString() +
               ' | ' + (item.description || item.question)
             ).join('\\n') +
-            '. Не изменяй их сроки и не создавай дубликаты. Новое назначай только для отличающейся самостоятельной потребности.'
+            '. Не изменяй их сроки самовольно и не создавай дубликаты. По просьбе пользователя о переносе конкретного действия сначала отмени его по triggerId через cancel_task_monitoring_trigger, затем создай новое на нужное время.'
           : 'У этой задачи пока нет запланированных действий. В обычном режиме они необязательны; при автомониторинге поддерживай хотя бы одно осмысленное ожидающее действие.'
       }] : []),
       ...(monitoringStatuses.length ? [{ role: 'user' as const, content:
@@ -2404,6 +2404,15 @@ export const aiAssistantService = {
                 })
                 : { ok: false, code: monitoringEnabled ? 'ACTION_LIMIT_REACHED' : 'MONITORING_DISABLED' };
               providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(action) });
+              input.onProgress?.('forming_answer');
+              continue;
+            }
+            if (call.name === 'cancel_task_monitoring_trigger') {
+              toolCallsExecuted += 1;
+              const cancellation = followupToolsEnabled
+                ? await cancelMonitoringTrigger(input.userId, input.taskId, typeof args.triggerId === 'string' ? args.triggerId : '')
+                : { ok: false, code: 'FOLLOWUP_NOT_AVAILABLE' };
+              providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(cancellation) });
               input.onProgress?.('forming_answer');
               continue;
             }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Clock3 } from 'lucide-react';
+import { Clock3, X, Loader2 } from 'lucide-react';
 import { api, type TaskMonitoringTrigger } from '../lib/api';
 
 type Tooltip = { id: string; left: number; top: number; theme: 'light' | 'dark' };
@@ -17,11 +17,13 @@ export function TaskMonitoringTriggerChips({ taskId }: { taskId: string }) {
   const [triggers, setTriggers] = useState<TaskMonitoringTrigger[]>([]);
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
   const tooltipId = useRef(`task-followup-detail-${Math.random().toString(36).slice(2)}`);
 
   useEffect(() => {
     setTriggers([]);
     setTooltip(null);
+    setCancellingId(null);
     let alive = true;
     let requestRevision = 0;
     const load = async () => {
@@ -83,6 +85,20 @@ export function TaskMonitoringTriggerChips({ taskId }: { taskId: string }) {
       : document.body.dataset.theme === 'light';
     setTooltip({ id, left, top, theme: isLight ? 'light' : 'dark' });
   };
+  const cancel = async (triggerId: string) => {
+    if (cancellingId) return;
+    setCancellingId(triggerId);
+    try {
+      await api.cancelTaskMonitoringTrigger(taskId, triggerId);
+      setTooltip(null);
+      setTriggers(current => current.filter(item => item.id !== triggerId));
+      window.dispatchEvent(new CustomEvent('task-monitoring-triggers-updated', { detail: { taskId } }));
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Не удалось убрать напоминание');
+    } finally {
+      setCancellingId(null);
+    }
+  };
   if (triggers.length === 0) return null;
   const selected = triggers.find(item => item.id === tooltip?.id);
   return <>
@@ -101,6 +117,15 @@ export function TaskMonitoringTriggerChips({ taskId }: { taskId: string }) {
           <Clock3 size={13} className="shrink-0" aria-hidden="true" />
           <span className="min-w-0 truncate">{trigger.title || 'Уточнить по задаче'}</span>
           <span className="task-followup-time shrink-0">· {formatRemaining(trigger.dueAt, now)}</span>
+          <button type="button" className="task-followup-cancel ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+            title={`Отменить: ${trigger.title || 'запланированное действие'}`}
+            aria-label={`Отменить: ${trigger.title || 'запланированное действие'}`}
+            disabled={cancellingId !== null}
+            onMouseEnter={event => { event.stopPropagation(); setTooltip(null); }}
+            onFocus={event => { event.stopPropagation(); setTooltip(null); }}
+            onClick={event => { event.stopPropagation(); void cancel(trigger.id); }}>
+            {cancellingId === trigger.id ? <Loader2 size={12} className="animate-spin" /> : <X size={12} aria-hidden="true" />}
+          </button>
         </span>
       ))}
     </div>

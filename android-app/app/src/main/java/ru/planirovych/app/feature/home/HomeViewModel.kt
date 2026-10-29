@@ -384,6 +384,26 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
             }
         }
     }
+    fun cancelTaskAiMonitoringTrigger(taskId:String,triggerId:String,onFinished:()->Unit){
+        if(taskAiMutable.value.taskId!=taskId){onFinished();return}
+        viewModelScope.launch{
+            try{
+                repository.cancelTaskMonitoringTrigger(taskId,triggerId)
+                taskAiMutable.update{
+                    if(it.taskId==taskId)it.copy(
+                        monitoringTriggers=it.monitoringTriggers.filter{trigger->trigger.id!=triggerId})
+                    else it
+                }
+                refreshTaskAiMonitoring(taskId)
+            }catch(error:Throwable){
+                taskAiMutable.update{
+                    if(it.taskId==taskId)it.copy(error=error.userMessage())else it
+                }
+            }finally{
+                onFinished()
+            }
+        }
+    }
     fun refreshTaskAiMonitoring(taskId:String){
         if(taskAiMutable.value.taskId!=taskId)return
         viewModelScope.launch{

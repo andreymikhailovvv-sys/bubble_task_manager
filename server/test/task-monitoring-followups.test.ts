@@ -106,6 +106,7 @@ test('ordinary task chat exposes only the follow-up tool, not autonomous monitor
   });
   const names = (ordinary.tools ?? []).filter(tool => tool.type === 'function').map(tool => tool.name);
   assert.ok(names.includes('set_task_monitoring_trigger'));
+  assert.ok(names.includes('cancel_task_monitoring_trigger'));
   assert.ok(!names.includes('create_monitoring_subtask'));
   assert.ok(!names.includes('change_monitoring_importance'));
   assert.ok(!names.includes('add_monitoring_status'));
@@ -116,7 +117,9 @@ test('model reads pending named actions before deciding whether a new one is nee
   assert.match(ai, /const scheduledFollowups = followupToolsEnabled/);
   assert.match(ai, /state: 'pending'/);
   assert.match(ai, /scheduledFollowups\.length \+ ' из 3/);
-  assert.match(ai, /Не изменяй их сроки и не создавай дубликаты/);
+  assert.match(ai, /Не изменяй их сроки самовольно и не создавай дубликаты/);
+  assert.match(ai, /'triggerId=' \+ item.id/);
+  assert.match(ai, /cancel_task_monitoring_trigger/);
 });
 
 test('one-time follow-up delivery does not require autonomous monitoring', async () => {

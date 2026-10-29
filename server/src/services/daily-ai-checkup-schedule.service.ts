@@ -38,6 +38,38 @@ export function tomorrowMorningUtc(now: Date, timeZone: string) {
   return Math.max(nextQuarter(now.getTime()), estimate);
 }
 
+/** Resolve the same local hour on a chosen calendar day (DST aware). */
+function utcAtLocalClock(day: { year: number; month: number; day: number }, hour: number, minute: number, timeZone: string) {
+  const desired = Date.UTC(day.year, day.month - 1, day.day, hour, minute, 0);
+  let estimate = desired;
+  for (let i = 0; i < 4; i++) {
+    const actual = localParts(new Date(estimate), timeZone);
+    const observed = Date.UTC(actual.year, actual.month - 1, actual.day, actual.hour, actual.minute, 0);
+    estimate += desired - observed;
+  }
+  return estimate;
+}
+
+/** Preserve the task's observed time-of-day rather than defaulting to 09:00.
+ * Urgent overdue items can use today if their previous local hour is still ahead;
+ * other overdue tasks use tomorrow at their previous local hour.
+ */
+function originalClockFallback(due: number, now: Date, timeZone: string, urgent: boolean) {
+  const original = localParts(new Date(due), timeZone);
+  const localToday = localParts(now, timeZone);
+  const date = urgent
+    ? localToday
+    : localParts(new Date(tomorrowMorningUtc(now, timeZone)), timeZone);
+  let desired = utcAtLocalClock(date, original.hour, original.minute, timeZone);
+  if (desired <= now.getTime()) {
+    const nextDay = new Date(Date.UTC(date.year, date.month - 1, date.day + 1));
+    desired = utcAtLocalClock({
+      year: nextDay.getUTCFullYear(), month: nextDay.getUTCMonth() + 1, day: nextDay.getUTCDate()
+    }, original.hour, original.minute, timeZone);
+  }
+  return nextQuarter(desired - 1);
+}
+
 function isMoveable(item: CheckupScheduleItem) {
   return !item.taskType || item.taskType === 'TASK';
 }
@@ -68,20 +100,17 @@ export function completeCheckupScheduleMoves(
       (b.urgency ?? 3) - (a.urgency ?? 3) || first - second;
     return first - second || (b.importance ?? 3) - (a.importance ?? 3) || a.id.localeCompare(b.id);
   });
-  const tomorrowMorning = tomorrowMorningUtc(now, timeZone);
   for (const item of active) {
     const due = item.dueDate ? Date.parse(item.dueDate) : NaN;
     const late = Number.isFinite(due) && due < deadline;
     const preferred = suggestions.get(item.id);
     if (!Number.isFinite(due) && !preferred) continue;
     const highPriority = (item.importance ?? 3) >= 4 || (item.urgency ?? 3) >= 4;
-    let target = late
-      ? (highPriority ? nextQuarter(deadline) : tomorrowMorning)
-      : (preferred ? Date.parse(preferred.newDueAt) : due);
-    // High-priority overdue work belongs in the nearest slots; lower-priority
-    // overdue work belongs tomorrow. An AI suggestion cannot override this rule.
-    if (late && highPriority) target = nextQuarter(deadline);
-    if (late && !highPriority) target = tomorrowMorning;
+    // Trust a valid AI suggestion first: it has the user's sector instructions
+    // and their observed working/personal hours. Server fallback uses the
+    // ORIGINAL local hour instead of a hard-coded morning slot.
+    let target = preferred ? Date.parse(preferred.newDueAt)
+      : late ? originalClockFallback(due, now, timeZone, highPriority) : due;
     const mustMove = late || Boolean(preferred);
     if (mustMove) target = nextQuarter(target - 1);
     if (target <= deadline) target = nextQuarter(deadline);
@@ -98,12 +127,12 @@ export function completeCheckupScheduleMoves(
     }
     reserved.push(target);
     if (Number.isFinite(due) && target === due) continue;
-    // A same-day collision is fixed as a 15-minute proposal. A low-priority
-    // overdue task can be spilled later as the tomorrow queue fills.
+    // Resolve actual 15-minute conflicts without overriding AI sector-specific scheduling.
     selected.set(item.id, {
       taskId: item.id, newDueAt: new Date(target).toISOString(),
-      reason: late ? (highPriority ? 'Просрочено: ближайшее свободное время' : 'Просрочено: перенести на завтра') :
-        (preferred?.reason?.trim().slice(0, 140) || (Number.isFinite(due) ? 'Устранить пересечение: интервал 15 минут' : 'Выделить время в расписании'))
+      reason: preferred?.reason?.trim().slice(0, 140) ||
+        (late ? 'Просрочено: сохранить привычное время суток' :
+          Number.isFinite(due) ? 'Устранить пересечение: интервал 15 минут' : 'Выделить время в расписании')
     });
   }
   return [...selected.values()];

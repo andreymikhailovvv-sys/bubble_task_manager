@@ -140,6 +140,7 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
     val monitoringStatuses=if(ui.taskId==task.id)
         ui.monitoringStatuses else emptyList()
     var monitoringPanelOpen by remember(task.id){mutableStateOf(false)}
+    var cancellingTriggerId by remember(task.id){mutableStateOf<String?>(null)}
     var currentTime by remember(task.id){mutableLongStateOf(System.currentTimeMillis())}
     val messages=if(ui.taskId==task.id)ui.messages else emptyList()
     val error=if(ui.taskId==task.id)ui.error else null
@@ -428,7 +429,14 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                             NativeMonitoringStatusChips(monitoringStatuses,c)
                         }
                         if(triggers.isNotEmpty())item(key="monitoring-active-triggers"){
-                            NativeMonitoringTriggerChips(triggers,currentTime,c)
+                            NativeMonitoringTriggerChips(triggers,currentTime,c,cancellingTriggerId){triggerId->
+                                if(cancellingTriggerId==null){
+                                    cancellingTriggerId=triggerId
+                                    vm.cancelTaskAiMonitoringTrigger(task.id,triggerId){
+                                        cancellingTriggerId=null
+                                    }
+                                }
+                            }
                         }
                         if(busy&&sendingDisplay!=null)item(key="pending-user"){
                             TaskChatBubble(TaskAiChatMessage(role="user",
@@ -913,7 +921,8 @@ private fun NativeMonitoringStatusChips(
 }
 @Composable
 private fun NativeMonitoringTriggerChips(
-    triggers:List<TaskMonitoringTrigger>,now:Long,c:TaskChatColors
+    triggers:List<TaskMonitoringTrigger>,now:Long,c:TaskChatColors,
+    cancellingTriggerId:String?,onCancel:(String)->Unit
 ){
     val dark=c.bg==Color(0xFF0D1628)
     Column(verticalArrangement=Arrangement.spacedBy(7.dp)){
@@ -956,6 +965,23 @@ private fun NativeMonitoringTriggerChips(
                             overflow=TextOverflow.Ellipsis)
                         Text("· "+timeText,color=accent.copy(alpha=.82f),
                             fontSize=11.sp,maxLines=1)
+                        IconButton(
+                            onClick={detailsOpen=false;onCancel(trigger.id)},
+                            enabled=cancellingTriggerId==null,
+                            modifier=Modifier.size(20.dp)
+                        ){
+                            if(cancellingTriggerId==trigger.id){
+                                CircularProgressIndicator(
+                                    modifier=Modifier.size(11.dp),
+                                    strokeWidth=1.5.dp,color=accent
+                                )
+                            }else{
+                                Icon(Icons.Default.Close,
+                                    contentDescription="Отменить: "+title,
+                                    modifier=Modifier.size(12.dp),
+                                    tint=accent.copy(alpha=.73f))
+                            }
+                        }
                     }
                     DropdownMenu(
                         expanded=detailsOpen,onDismissRequest={detailsOpen=false},
