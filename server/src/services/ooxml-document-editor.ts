@@ -223,10 +223,13 @@ export function getOfficeDocumentPreview(buffer:Buffer, format:OfficeFormat, opt
   const sharedValues=[...shared.matchAll(/<si(?:\s[^>]*)?>[\s\S]*?<\/si>/g)].map(m=>
     [...m[0].matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g)].map(x=>unesc(x[1])).join(''));
   const result:string[]=[];
+  let truncated = false;
   for(const [name,path] of sheets){
     const xml=get(files,path).data.toString('utf8');
     result.push('Лист: '+name);
-    for(const row of [...xml.matchAll(/<row\b[^>]*>[\s\S]*?<\/row>/g)].slice(0,maxSheetRows)){
+    const rows = [...xml.matchAll(/<row\b[^>]*>[\s\S]*?<\/row>/g)];
+    if (rows.length > maxSheetRows) truncated = true;
+    for(const row of rows.slice(0,maxSheetRows)){
       const cells=[...row[0].matchAll(/<c\b[^>]*\br="([A-Z]+\d+)"[^>]*(?:\/>|>[\s\S]*?<\/c>)/g)];
       const values=cells.slice(0,18).map(c=>{
         const type=attrs(c[0].match(/^<c\b[^>]*>/)?.[0] ?? '').t;
@@ -239,7 +242,8 @@ export function getOfficeDocumentPreview(buffer:Buffer, format:OfficeFormat, opt
       if(values.length)result.push(values.join(' | '));
     }
   }
-  return {format,text:result.join('\n').slice(0,maxCharacters)};
+  const combined = result.join('\n');
+  return { format, text: combined.slice(0, maxCharacters), truncated: truncated || combined.length > maxCharacters };
 }
 
 export function applyOfficeEdits(buffer:Buffer, format:OfficeFormat, edits:OfficeEdit[]):Buffer{
