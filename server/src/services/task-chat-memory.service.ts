@@ -5,14 +5,14 @@ import { openAiFetch } from '../lib/openai-fetch.js';
 import { recordOpenAiUsageShadow, type OpenAiUsage } from './ai-usage-metering.service.js';
 import { estimateTaskChatTokens, selectRecentTaskChatHistory } from './task-chat-context.service.js';
 
-export const TASK_CHAT_MEMORY_TARGET_TOKEN_BUDGET = 6_000;
-export const TASK_CHAT_MEMORY_TARGET_MAX_MESSAGES = 20;
-export const TASK_CHAT_MEMORY_TRIGGER_TOKEN_BUDGET = 8_000;
-export const TASK_CHAT_MEMORY_TRIGGER_MAX_MESSAGES = 30;
-export const TASK_CHAT_ATTACHMENT_HISTORY_TOKEN_BUDGET_V2 = 3_000;
-export const TASK_CHAT_ATTACHMENT_HISTORY_MAX_MESSAGES_V2 = 6;
-export const TASK_CHAT_MEMORY_MAX_OUTPUT_TOKENS = 1_700;
-export const TASK_CHAT_MEMORY_MAX_ESTIMATED_TOKENS = 1_200;
+export const TASK_CHAT_MEMORY_TARGET_TOKEN_BUDGET = 10_500;
+export const TASK_CHAT_MEMORY_TARGET_MAX_MESSAGES = 36;
+export const TASK_CHAT_MEMORY_TRIGGER_TOKEN_BUDGET = 14_500;
+export const TASK_CHAT_MEMORY_TRIGGER_MAX_MESSAGES = 54;
+export const TASK_CHAT_ATTACHMENT_HISTORY_TOKEN_BUDGET_V2 = 5_400;
+export const TASK_CHAT_ATTACHMENT_HISTORY_MAX_MESSAGES_V2 = 12;
+export const TASK_CHAT_MEMORY_MAX_OUTPUT_TOKENS = 2_900;
+export const TASK_CHAT_MEMORY_MAX_ESTIMATED_TOKENS = 2_100;
 
 export function resolveTaskChatActiveHistoryLimits(hasAttachments: boolean) {
   return hasAttachments
@@ -50,7 +50,7 @@ const EMPTY_MEMORY: TaskChatMemorySummary = { goal: '', decisions: [], important
 const ARRAY_KEYS = ['decisions', 'importantFacts', 'constraints', 'userPreferences', 'openQuestions'] as const;
 const MAX_GOAL_LENGTH = 500;
 const MAX_ITEM_LENGTH = 300;
-const MAX_ITEMS_PER_SECTION = 12;
+const MAX_ITEMS_PER_SECTION = 20;
 
 function positiveInteger(value: string | undefined, fallback: number) {
   const parsed = Number.parseInt(value ?? '', 10);
