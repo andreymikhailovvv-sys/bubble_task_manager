@@ -235,3 +235,19 @@ test('DOCX не заменяет видимый текст через поля W
     );
   }
 });
+
+test('AI DOCX reading sees excursion-lecture headings after paragraph 100', () => {
+  const blocks = Array.from({ length: 125 }, (_, index) => ({
+    type: 'paragraph' as const,
+    text: index === 120
+      ? 'Экскурсия-лекция «Космос и косметика»: вводный раздел'
+      : 'Тематическая экскурсия: раздел ' + (index + 1)
+  }));
+  const buffer = buildWordDocumentBuffer({ fileName: 'plan.docx', blocks }).buffer;
+  const uiPreview = getOfficeDocumentPreview(buffer, 'docx');
+  assert.equal(uiPreview.text.includes('Космос и косметика'), false, 'normal short preview must remain unchanged');
+  assert.equal(uiPreview.truncated, true);
+  const aiReading = getOfficeDocumentPreview(buffer, 'docx', { maxCharacters: 42_000, maxParagraphs: 1_000 });
+  assert.match(aiReading.text, /Экскурсия-лекция «Космос и косметика»/);
+  assert.equal(aiReading.truncated, false);
+});
