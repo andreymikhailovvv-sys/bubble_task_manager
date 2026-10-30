@@ -1937,7 +1937,7 @@ export default function App() {
   const focusActiveTask = focusTasks[focusActiveIndex] ?? focusTasks[0] ?? null;
   const focusTaskAiDialog = focusActiveTask ? (aiDialogByTask[focusActiveTask.id] ?? []) : [];
   const focusTaskAiModel: AiChatModel = focusActiveTask
-    ? (aiModelByTask[focusActiveTask.id] ?? 'gpt-6.1-terra') : 'gpt-6.1-terra';
+    ? (focusActiveTask.aiMonitoringEnabled ? (focusActiveTask.aiMonitoringModel ?? 'gpt-6.1-terra') : (aiModelByTask[focusActiveTask.id] ?? 'gpt-6.1-terra')) : 'gpt-6.1-terra';
 
   // Fetch the SAME persistent conversation as regular task help. Switching
   // focus task never reuses an unrelated task's AI response or model.
@@ -2035,7 +2035,7 @@ export default function App() {
     () => (focusedTask ? aiDialogByTask[focusedTask.id] ?? [] : []),
     [aiDialogByTask, focusedTask]
   );
-  const focusedAiModel: AiChatModel = focusedTask ? (aiModelByTask[focusedTask.id] ?? 'gpt-6.1-terra') : 'gpt-6.1-terra';
+  const focusedAiModel: AiChatModel = focusedTask ? (focusedTask.aiMonitoringEnabled ? (focusedTask.aiMonitoringModel ?? 'gpt-6.1-terra') : (aiModelByTask[focusedTask.id] ?? 'gpt-6.1-terra')) : 'gpt-6.1-terra';
   const filteredFocusedAiDialog = useMemo(() => {
     if (!isFocusedAiSearchOpen) return focusedAiDialog;
     const query = focusedAiSearchQuery.trim().toLowerCase();
@@ -2803,7 +2803,7 @@ export default function App() {
     try {
       const result = await askTaskAssistant(taskId, {
         clientRequestId: id, question: serializeAiReply(question || visibleText, replyToFocusAi),
-        userMessage: userContent, model: aiModelByTask[taskId] ?? 'gpt-6.1-terra',
+        userMessage: userContent, model: focusActiveTask?.aiMonitoringEnabled ? (focusActiveTask.aiMonitoringModel ?? 'gpt-6.1-terra') : (aiModelByTask[taskId] ?? 'gpt-6.1-terra'),
         attachments: attachmentsPayload, skipEfficiencyBonus: true
       }, status => {
         setFocusAiProgress(status);
@@ -5620,7 +5620,7 @@ export default function App() {
                 </div>
               </div>
               <div className="focused-task-ai-thread-region relative mt-2 min-h-0 flex-1">
-                <AiModelChip value={focusTaskAiModel} onChange={model => setAiModelByTask(prev => ({ ...prev, [focusActiveTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-px z-20 -translate-x-1/2" />
+                {!focusActiveTask.aiMonitoringEnabled ? <AiModelChip value={focusTaskAiModel} onChange={model => setAiModelByTask(prev => ({ ...prev, [focusActiveTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-px z-20 -translate-x-1/2" /> : <span className="absolute left-1/2 top-px z-20 -translate-x-1/2 rounded-b-xl bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-500" title="Модель изменяется в настройках автомониторинга">{focusTaskAiModel}</span>}
                 <div ref={focusAiDialogContainerRef} className="chat-thread focused-task-ai-thread-through h-full min-h-0 space-y-3 overflow-y-auto rounded-xl p-3 pt-12">
                   {focusTaskAiDialog.map((message) => <div key={message.id} className={`ai-message-forward-group w-fit max-w-[92%] ${message.role === 'assistant' ? 'mr-auto' : 'ml-auto'}`}><div className={`chat-message w-full rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant' : 'chat-message-user'}`}><div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.messageKind === 'MONITOR_ACTION' ? <TaskMonitoringActionBadge content={message.content} /> : message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}{message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} searched={message.webSearchUsed} /> : null}{message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusActiveTask!.id, true)} /> : null}
@@ -5670,7 +5670,7 @@ export default function App() {
                 </div>
               </div>
             </div>
-            <AiModelChip value={focusTaskAiModel} onChange={model => setAiModelByTask(prev => ({ ...prev, [focusActiveTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" />
+            {!focusActiveTask.aiMonitoringEnabled ? <AiModelChip value={focusTaskAiModel} onChange={model => setAiModelByTask(prev => ({ ...prev, [focusActiveTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" /> : <span className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2 rounded-b-xl bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-500" title="Модель изменяется в настройках автомониторинга">{focusTaskAiModel}</span>}
             <div ref={focusAiExpandedDialogContainerRef} className="chat-thread focused-task-ai-thread-through min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl p-4 pt-12">
               {isFocusAiSearchOpen ? (
                 <label className="surface-input sticky top-0 z-10 flex items-center gap-1 rounded-lg border px-2 py-1 text-xs text-muted">
@@ -7256,7 +7256,7 @@ export default function App() {
                   }} />
               </div>
               <div className="focused-task-ai-thread-region relative mb-2 min-h-0 flex-1">
-                <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-0 z-20 -translate-x-1/2" />
+                {!focusedTask.aiMonitoringEnabled ? <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-0 z-20 -translate-x-1/2" /> : <span className="absolute left-1/2 top-0 z-20 -translate-x-1/2 rounded-b-xl bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-500" title="Модель изменяется в настройках автомониторинга">{focusedAiModel}</span>}
                 <div ref={focusedAiDialogContainerRef} className="chat-thread focused-task-ai-thread-through h-full min-h-0 space-y-2 overflow-y-auto rounded-xl p-3 pt-12">
                 {isFocusedAiSearchOpen ? (
                   <label className="surface-input sticky top-0 z-10 flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] text-muted">
@@ -8087,7 +8087,7 @@ export default function App() {
                 </div>
               </div>
             </div>
-            <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" />
+            {!focusedTask.aiMonitoringEnabled ? <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" /> : <span className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2 rounded-b-xl bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-500" title="Модель изменяется в настройках автомониторинга">{focusedAiModel}</span>}
             <div ref={expandedAiDialogContainerRef} className="chat-thread focused-task-ai-thread-through min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl p-4 pt-12">
               {isFocusedAiSearchOpen ? (
                 <label className="surface-input sticky top-0 z-10 flex items-center gap-1 rounded-lg border px-2 py-1 text-[12px] text-muted">
