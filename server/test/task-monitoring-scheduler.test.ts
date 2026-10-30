@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 const file = (p: string) => readFile(new URL(p, import.meta.url), 'utf8');
 
-test('event-driven monitoring saves per-task and subtask deadlines, not a repeating overdue scan', async () => {
+test('monitoring trigger clock cancels legacy overdue runs and does not schedule deadlines', async () => {
   const [worker, schedule, schema, migration, index] = await Promise.all([
     file('../src/services/task-monitoring-worker.service.ts'),
     file('../src/services/task-monitoring-schedule.service.ts'),
@@ -16,9 +16,10 @@ test('event-driven monitoring saves per-task and subtask deadlines, not a repeat
   assert.match(schema, /@@index\(\[state, dueAt\]\)/);
   assert.match(migration, /TaskMonitoringRun_state_dueAt_idx/);
   assert.match(schedule, /aiMonitoringEnabled: true/);
-  assert.match(schedule, /'overdue:' \+ root.id \+ ':g' \+ root.aiMonitoringGeneration \+ ':' \+ source.id \+ ':' \+ source.dueDate!\.toISOString\(\)/);
+  assert.doesNotMatch(schedule, /'overdue:' \+ root.id/);
+  assert.match(schedule, /await db.taskMonitoringRun.updateMany/);
   assert.match(schedule, /state: 'cancelled'/);
-  assert.match(schedule, /status === 'DONE'/);
+  assert.match(schedule, /sourceTaskId: sourceId, kind: MONITOR_KIND, state: 'scheduled'/);
   assert.match(schedule, /skipDuplicates: true/);
   assert.match(worker, /kind: \{ in: \['overdue', 'subtask_completed', MONITORING_INTRO_KIND\] \}, state: 'scheduled', dueAt: \{ lte: now \}/);
   assert.match(worker, /deadlineStillCurrent\(/);
@@ -34,7 +35,7 @@ test('event-driven monitoring saves per-task and subtask deadlines, not a repeat
   assert.doesNotMatch(index, /setInterval\(\(\) => \{\s*void pollTaskMonitoring/);
 });
 
-test('task mutations schedule/cancel deadlines for both main tasks and subtasks', async () => {
+test('task mutations cancel legacy deadlines, preserve trigger ownership', async () => {
   const [task, schedule, trigger] = await Promise.all([
     file('../src/services/task.service.ts'),
     file('../src/services/task-monitoring-schedule.service.ts'),
@@ -45,7 +46,7 @@ test('task mutations schedule/cancel deadlines for both main tasks and subtasks'
   assert.match(task, /await rescheduleMonitoringTree\(tx, id\)/);
   assert.match(task, /await cancelMonitoringSource\(prisma, id\)/);
   assert.match(schedule, /where: \{ sourceTaskId: sourceId, kind: MONITOR_KIND, state: 'scheduled' \}/);
-  assert.match(schedule, /root\.status === 'DONE' \|\| root\.collaborationId/);
+  assert.match(schedule, /No deadline events in monitoring mode/);
   assert.match(trigger, /signalTaskMonitoringWakeup\(\)/);
 });
 
@@ -123,7 +124,7 @@ test('Telegram snoozes, AI bulk moves and undo actions update persisted monitore
 });
 
 
-test('a new opt-in session can rearm the same overdue deadline, without duplicates from ordinary saves', async () => {
+test('new opt-in sessions use one introduction per generation and never rearm deadlines', async () => {
   const [task, schedule, schema, migration, worker, route] = await Promise.all([
     file('../src/services/task.service.ts'),
     file('../src/services/task-monitoring-schedule.service.ts'),
@@ -136,7 +137,7 @@ test('a new opt-in session can rearm the same overdue deadline, without duplicat
   assert.match(migration, /ADD COLUMN "aiMonitoringGeneration" INTEGER NOT NULL DEFAULT 0/);
   assert.match(task, /input.aiMonitoringEnabled === true && !currentTask.aiMonitoringEnabled/);
   assert.match(task, /patch.aiMonitoringGeneration = \{ increment: 1 \}/);
-  assert.match(schedule, /':g' \+ root.aiMonitoringGeneration/);
+  assert.match(schedule, /'monitoring-intro:' \+ taskId \+ ':g' \+ generation/);
   assert.match(worker, /\[TaskMonitoring\] event worker started/);
   assert.match(worker, /\[TaskMonitoring\] deadline claimed/);
   assert.match(worker, /void pollTaskMonitoring\(\)\.catch\(error =>\s*console.error\('\[TaskMonitoring\] immediate dispatch failed'/);

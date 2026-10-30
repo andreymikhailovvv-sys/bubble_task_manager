@@ -9,6 +9,8 @@ import { TaskAiEmptyState } from './components/TaskAiEmptyState';
 import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
 
 import { TaskMonitoringStatuses } from './components/TaskMonitoringStatuses';
+import { projectMonitoringTimeline, timelineProjectionKey } from './lib/monitoringTimeline';
+import { TaskMonitoringBadge } from './components/TaskMonitoringBadge';
 import { TaskMonitoringIntroProgress } from './components/TaskMonitoringIntroProgress';
 import { TaskMonitoringTriggerChips } from './components/TaskMonitoringTriggerChips';
 import { TaskRecurrenceConfigurator } from './components/TaskRecurrenceConfigurator';
@@ -1517,7 +1519,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       })
       .sort((a, b) => a.reminderTime.localeCompare(b.reminderTime));
 
-    const todayTasks = timelineFilteredTasks
+    const todayTasks = projectMonitoringTimeline(timelineFilteredTasks)
       .filter((task) => {
         if (!task.dueDate) return false;
         const dueDate = new Date(task.dueDate);
@@ -1601,7 +1603,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       date.setDate(periodStart.getDate() + index);
       const nextDate = new Date(date);
       nextDate.setDate(date.getDate() + 1);
-      const dateTasks = timelineFilteredTasks.filter((task) => {
+      const dateTasks = projectMonitoringTimeline(timelineFilteredTasks).filter((task) => {
         if (!task.dueDate) return false;
         const due = new Date(task.dueDate);
         return !Number.isNaN(due.getTime()) && due >= date && due < nextDate;
@@ -1687,7 +1689,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       let offset = 4 + (quarter % TIMELINE_QUARTERS_PER_HOUR === 0 ? TIMELINE_HOUR_EDGE_PADDING : 0);
       for (let index = 0; index < sorted.length; index += 1) {
         const top = timelineToday.quarterTops[quarter] + offset;
-        placements.set(sorted[index].id, { top });
+        placements.set(timelineProjectionKey(sorted[index]), { top });
         offset += (sorted[index].parentTaskId ? TIMELINE_SUBTASK_CARD_HEIGHT : TIMELINE_CARD_HEIGHT) + TIMELINE_CARD_GAP;
       }
     }
@@ -3581,8 +3583,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         clientRequestId,
         question: serializeAiReply(question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.', replyToTask),
         userMessage,
-        mode: selectedAiChatModel === 'gpt-6.1-sol' ? 'smart' : 'fast',
-        model: selectedAiChatModel,
+        mode: (openedTask.aiMonitoringEnabled ? openedTask.aiMonitoringModel : selectedAiChatModel) === 'gpt-6.1-sol' ? 'smart' : 'fast',
+        model: openedTask.aiMonitoringEnabled ? (openedTask.aiMonitoringModel ?? 'gpt-6.1-terra') : selectedAiChatModel,
         clientSurface,
         attachments: attachmentsPayload
       }, { onStatus: (status) => setAiProgressByTask((current) => ({ ...current, [openedTask.id]: status })), onUploadProgress: setTaskAiUploadProgress });
@@ -3708,9 +3710,16 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const showTelegramBrand = useTelegramCompactChatHeader && !isAiChatOpen && !openedTaskId && !openedSubtaskId &&
     !isCreateTaskModalOpen && !isHabitModalOpen && !isAiDialogOpen;
 
+  useEffect(() => {
+    const onTriggerChange = () => { void loadData({ refreshPlannerOnly: true }); };
+    window.addEventListener('task-monitoring-triggers-updated', onTriggerChange);
+    return () => window.removeEventListener('task-monitoring-triggers-updated', onTriggerChange);
+  }, []);
+
   const taskMonitoringControl = openedTask ? (
               <TaskMonitoringStatuses taskId={openedTask.id}
-                enabled={openedTask.aiMonitoringEnabled === true}
+                model={openedTask.aiMonitoringModel}
+                 enabled={openedTask.aiMonitoringEnabled === true}
                 allowed={openedTask.taskType === 'TASK' && !openedTask.parentTaskId && !openedTask.isCollaborative}
                 onTaskUpdated={(updated) => {
                   setTasks(previous => previous.map(task => task.id === updated.id ? updated : task));
@@ -4098,10 +4107,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                         <span className="miniapp-task-sector-dot h-1.5 w-1.5 shrink-0 rounded-full" aria-hidden="true" />
                         <span className="truncate">{taskSphereLabel}</span>
                       </span>
-                      <h3 className="miniapp-task-title truncate font-semibold">{task.title}</h3>
+                      <h3 className="miniapp-task-title flex min-w-0 items-center gap-1 font-semibold"><span className="min-w-0 truncate">{task.title}</span>{task.aiMonitoringEnabled ? <TaskMonitoringBadge /> : null}</h3>
                       {listSortMode === 'importance' ? (
                         <>
-                          <p className={`mt-1 text-xs font-medium ${hasOverdueState ? 'miniapp-overdue-label' : 'text-sky-200'}`}>{formatRemaining(task.dueDate)}</p>
+                          <p className={`mt-1 text-xs font-medium ${hasOverdueState ? 'miniapp-overdue-label' : 'text-sky-200'}`}>{task.aiMonitoringEnabled ? 'По триггерам' : formatRemaining(task.dueDate)}</p>
                           <span
                             className="miniapp-importance-rating mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold"
                             style={{ backgroundColor: importanceBadgeColor }}
@@ -4115,10 +4124,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                         <>
                           <p className="miniapp-task-date mt-1 inline-flex items-center gap-1.5 text-xs">
                             <CalendarDays size={13} aria-hidden="true" />
-                            {isEvent ? 'Событие' : 'Дедлайн'}: {formatDueDate(task.dueDate)}
+                            {task.aiMonitoringEnabled ? 'Автомониторинг · по триггерам' : `${isEvent ? 'Событие' : 'Дедлайн'}: ${formatDueDate(task.dueDate)}`}
                           </p>
                           <p className={`miniapp-task-time mt-1 flex items-center gap-1.5 text-xs font-semibold ${hasOverdueState ? 'miniapp-overdue-label' : ''}`}>
-                            <Clock3 size={13} aria-hidden="true" />{formatRemaining(task.dueDate)}
+                            <Clock3 size={13} aria-hidden="true" />{task.aiMonitoringEnabled ? `${task.monitoringTriggers?.length ?? 0} активных триггеров` : formatRemaining(task.dueDate)}
                           </p>
                         </>
                       )}
@@ -4248,16 +4257,16 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   const taskQuarter = (taskHour * TIMELINE_QUARTERS_PER_HOUR) + Math.floor(dueDate.getMinutes() / 15);
                   const isEvent = task.taskType === 'EVENT';
                   const isReminder = task.taskType === 'REMINDER';
-                  const hasOverdueState = !isEvent && !isReminder && isOverdue(task);
+                  const hasOverdueState = !task.aiMonitoringEnabled && !isEvent && !isReminder && isOverdue(task);
                   const isSubtask = Boolean(task.parentTaskId);
                   const parentTask = task.parentTaskId ? (taskById.get(task.parentTaskId) ?? null) : null;
                   const taskForSectorColor = parentTask ?? task;
                   const sphereColor = taskForSectorColor.sphereId ? spheres.find((item) => item.id === taskForSectorColor.sphereId)?.color ?? null : null;
-                  const placement = timelineTaskPlacements.get(task.id) ?? { top: timelineToday.quarterTops[taskQuarter] + 4 };
+                  const placement = timelineTaskPlacements.get(timelineProjectionKey(task)) ?? { top: timelineToday.quarterTops[taskQuarter] + 4 };
                   return (
                     <button
                       type="button"
-                      key={task.id}
+                      key={timelineProjectionKey(task)}
                       className={`miniapp-timeline-task-card absolute border px-2 py-1 text-left ${hasOverdueState ? 'miniapp-task-overdue' : ''} ${isSubtask ? 'miniapp-timeline-subtask-card' : ''} ${isEvent ? 'miniapp-timeline-event-card' : ''} ${isReminder ? 'miniapp-timeline-reminder-card' : ''}`}
                       style={{
                         top: `${placement.top}px`,
@@ -4285,14 +4294,14 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       onClick={() => {
                         if (isReminder) return;
                         if (isSubtask) {
-                          openSubtaskModal(task);
+                          openSubtaskModal(taskById.get(task.id) ?? task);
                           return;
                         }
-                        openTaskModal(task);
+                        openTaskModal(taskById.get(task.id) ?? task);
                       }}
                     >
-                      <p className={`miniapp-timeline-card-title font-semibold ${isSubtask ? 'text-xs leading-4' : 'text-sm'}`}>{isReminder ? '🔔 ' : ''}{task.title}</p>
-                      <p className={`${isSubtask ? 'text-[10px] leading-3' : 'text-xs'} ${hasOverdueState ? 'miniapp-overdue-label font-medium' : 'text-slate-300'}`}>{hasOverdueState ? formatRemaining(task.dueDate) : `${isReminder ? 'Напоминание · ' : isEvent ? 'Событие · ' : isSubtask ? 'Подзадача · ' : ''}${formatDueDate(task.dueDate)}`}</p>
+                      <p className={`miniapp-timeline-card-title flex min-w-0 items-center gap-1 font-semibold ${isSubtask ? 'text-xs leading-4' : 'text-sm'}`}><span className="min-w-0 truncate">{isReminder ? '🔔 ' : ''}{task.title}</span>{task.aiMonitoringEnabled ? <TaskMonitoringBadge /> : null}</p>
+                      <p className={`${isSubtask ? 'text-[10px] leading-3' : 'text-xs'} ${hasOverdueState ? 'miniapp-overdue-label font-medium' : 'text-slate-300'}`}>{task.aiMonitoringEnabled ? `Триггер · ${new Date(task.dueDate as string).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}` : hasOverdueState ? formatRemaining(task.dueDate) : `${isReminder ? 'Напоминание · ' : isEvent ? 'Событие · ' : isSubtask ? 'Подзадача · ' : ''}${formatDueDate(task.dueDate)}`}</p>
                     </button>
                   );
                 })}
@@ -4338,7 +4347,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   const isToday = dateKey === toDateKey(timelineNow);
                   const isOutsideMonth = timelineView === 'month' && date.getMonth() !== timelineAnchorDate.getMonth();
                   const taskEntries = [
-                    ...dayTasks.map((task) => ({ id: task.id, time: new Date(task.dueDate as string).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }), title: task.title, color: task.taskType === 'REMINDER' ? '#0284c7' : task.taskType === 'EVENT' ? '#f59e0b' : (spheres.find((sphere) => sphere.id === (taskById.get(task.parentTaskId ?? '') ?? task).sphereId)?.color ?? '#38bdf8'), task })),
+                    ...dayTasks.map((task) => ({ id: timelineProjectionKey(task), time: new Date(task.dueDate as string).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }), title: task.title, color: task.taskType === 'REMINDER' ? '#0284c7' : task.taskType === 'EVENT' ? '#f59e0b' : (spheres.find((sphere) => sphere.id === (taskById.get(task.parentTaskId ?? '') ?? task).sphereId)?.color ?? '#38bdf8'), task })),
                   ];
                   const habitEntries = dayHabits.map(({ habit, reminderTime }) => ({ id: `habit-${habit.id}-${reminderTime}`, time: reminderTime, title: `${habit.icon} ${habit.name}`, color: habit.color, habit }));
                   const entries = [...taskEntries, ...(timelineView === 'month' ? [] : habitEntries)].sort((a, b) => a.time.localeCompare(b.time));
@@ -4357,7 +4366,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                           <div key={group.hour || 'month'} className={timelineView === 'week' ? 'miniapp-calendar-hour-group' : undefined}>
                             {timelineView === 'week' ? <span className="miniapp-calendar-hour-label">{group.hour}:00</span> : null}
                             {group.entries.map((entry) => (
-                              <button key={entry.id} type="button" className={`miniapp-calendar-entry ${'task' in entry && entry.task.taskType === 'EVENT' ? 'miniapp-calendar-event-entry' : ''} ${'task' in entry && entry.task.taskType === 'REMINDER' ? 'miniapp-calendar-reminder-entry' : ''}`} style={{ '--calendar-entry-color': entry.color } as CSSProperties} onClick={() => 'task' in entry ? (entry.task.taskType === 'REMINDER' ? undefined : entry.task.parentTaskId ? openSubtaskModal(entry.task) : openTaskModal(entry.task)) : openEditHabitModal(entry.habit)}>
+                              <button key={entry.id} type="button" className={`miniapp-calendar-entry ${'task' in entry && entry.task.taskType === 'EVENT' ? 'miniapp-calendar-event-entry' : ''} ${'task' in entry && entry.task.taskType === 'REMINDER' ? 'miniapp-calendar-reminder-entry' : ''}`} style={{ '--calendar-entry-color': entry.color } as CSSProperties} onClick={() => 'task' in entry ? (entry.task.taskType === 'REMINDER' ? undefined : entry.task.parentTaskId ? openSubtaskModal(taskById.get(entry.task.id) ?? entry.task) : openTaskModal(taskById.get(entry.task.id) ?? entry.task)) : openEditHabitModal(entry.habit)}>
                                 <span className="miniapp-calendar-entry-title">{entry.title}</span>
                               </button>
                             ))}
@@ -4549,15 +4558,13 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   />
                 ) : null}
                 <div className={`${taskTitleRows === 1 ? '-mt-[0.15rem]' : 'mt-2'} flex items-center gap-2 text-sm font-semibold ${isOverdue({ ...openedTask, dueDate: fromInputDateTime(openedTaskDraft.dueDate) }) ? 'text-rose-500' : 'text-violet-500'}`}>
-                  <DateTimePickerWithApply
+                  {openedTask.aiMonitoringEnabled ? <TaskMonitoringBadge /> : <DateTimePickerWithApply
                     value={fromInputDateTime(openedTaskDraft.dueDate)}
                     onChange={(nextValue) => onChangeDraft(openedTask.id, { dueDate: toInputDateTime(nextValue) })}
                     timelineTasks={timelinePickerTasks}
-                    iconOnly
-                    detachedPopup
-                    buttonClassName="miniapp-focus-icon-button"
-                  />
-                  <span>{openedTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(openedTaskDraft.dueDate)}` : 'Дедлайн не задан'}</span>
+                    iconOnly detachedPopup buttonClassName="miniapp-focus-icon-button"
+                  />}
+                  <span>{openedTask.aiMonitoringEnabled ? 'Время определяется триггерами' : openedTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(openedTaskDraft.dueDate)}` : 'Дедлайн не задан'}</span>
                 </div>
                 <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
                   <TaskDescriptionInput
@@ -4805,8 +4812,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               placeholder="Название подзадачи"
             />
             <div className="mt-2 flex items-center gap-2 text-xs font-semibold text-violet-500">
-              <DateTimePickerWithApply value={fromInputDateTime(openedSubtaskDraft.dueDate)} onChange={(nextValue) => changeSubtaskDraft({ dueDate: toInputDateTime(nextValue) })} timelineTasks={timelinePickerTasks} iconOnly detachedPopup buttonClassName="miniapp-focus-icon-button" />
-              <span>{openedSubtaskDraft.dueDate ? formatSubtaskRelativeDeadline(fromInputDateTime(openedSubtaskDraft.dueDate)) : 'Срок не задан'}</span>
+              {openedSubtaskParent?.aiMonitoringEnabled ? <TaskMonitoringBadge /> : <DateTimePickerWithApply value={fromInputDateTime(openedSubtaskDraft.dueDate)} onChange={(nextValue) => changeSubtaskDraft({ dueDate: toInputDateTime(nextValue) })} timelineTasks={timelinePickerTasks} iconOnly detachedPopup buttonClassName="miniapp-focus-icon-button" />}
+              <span>{openedSubtaskParent?.aiMonitoringEnabled ? 'Время определяется триггерами' : openedSubtaskDraft.dueDate ? formatSubtaskRelativeDeadline(fromInputDateTime(openedSubtaskDraft.dueDate)) : 'Срок не задан'}</span>
             </div>
             <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
               <TaskDescriptionInput
@@ -4945,9 +4952,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               ) : <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary">Помощь ИИ</h2>}
               {!useTelegramCompactChatHeader ? taskMonitoringControl : null}
               <button type="button" onClick={() => closeMiniWindowWithMotion('task-ai', () => setIsAiDialogOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть диалог с ИИ"><X size={18} /></button>
-              <select value={selectedAiChatModel} onChange={(event) => setSelectedAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap w-40 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель помощи ИИ">
+              {openedTask.aiMonitoringEnabled ? <span title="Модель изменяется только в настройках автомониторинга" className="miniapp-ai-chat-model-cap w-40 truncate rounded-b-xl bg-emerald-500/15 px-3 py-1.5 text-center text-xs font-semibold text-emerald-500">{AI_CHAT_MODEL_OPTIONS.find(item => item.value === openedTask.aiMonitoringModel)?.label ?? 'GPT-6.1 Terra'}</span> : <select value={selectedAiChatModel} onChange={(event) => setSelectedAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap w-40 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель помощи ИИ">
                 {AI_CHAT_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
+              </select>}
             </div>
             <div className="miniapp-ai-chat-thread-wrap relative min-h-0 flex-1">
               <div ref={fullscreenAiDialogContainerRef} onScroll={(event) => updateAiChatHeaderVisibility(event.currentTarget.scrollTop, taskAiChatScrollTopRef, setIsTaskAiChatHeaderHidden)} className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">

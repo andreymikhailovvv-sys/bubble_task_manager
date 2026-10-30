@@ -128,6 +128,7 @@ function getSubtaskDeadlineBoost(dueDate?: string | null) {
 }
 
 export function getTaskCoefficient(task: Task, subtaskMap: Record<string, Task[]> = {}) {
+  if (task.aiMonitoringEnabled) return 1.0;
   const subtaskBoost = (subtaskMap[task.id] ?? []).reduce((acc, subtask) => {
     if (subtask.status === 'DONE') return acc;
     return acc + getSubtaskDeadlineBoost(subtask.dueDate);

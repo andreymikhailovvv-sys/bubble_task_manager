@@ -25,6 +25,7 @@ interface TaskInput {
   recurrenceUntil?: string | Date | null;
   aiNotificationsEnabled?: boolean;
   aiMonitoringEnabled?: boolean;
+  aiMonitoringModel?: 'gpt-6-luna' | 'gpt-6.1-terra' | 'gpt-6.1-sol';
   taskType?: 'TASK' | 'EVENT' | 'REMINDER';
   location?: string | null;
   collaborationScope?: 'me' | 'all';
@@ -200,6 +201,19 @@ export const taskService = {
       rootCommentStats.set(item.parentTaskId, current);
     }
 
+    const monitoredRootIds = visibleItems.filter(task => task.aiMonitoringEnabled && !task.parentTaskId && task.userId === userId).map(task => task.id);
+    const pendingTriggers = monitoredRootIds.length ? await prisma.taskMonitoringTrigger.findMany({
+      where: { taskId: { in: monitoredRootIds }, userId, state: 'pending' },
+      orderBy: [{ dueAt: 'asc' }, { id: 'asc' }],
+      select: { id: true, taskId: true, title: true, dueAt: true }
+    }) : [];
+    const triggersByRoot = new Map<string, Array<{ id: string; title: string | null; dueAt: string }>>();
+    for (const trigger of pendingTriggers) {
+      const entries = triggersByRoot.get(trigger.taskId) ?? [];
+      entries.push({ id: trigger.id, title: trigger.title, dueAt: trigger.dueAt.toISOString() });
+      triggersByRoot.set(trigger.taskId, entries);
+    }
+
     return visibleItems.map(({ user, collaboration, ...task }) => {
       const ownMembership = collaboration?.members.find((member) => member.userId === userId);
       const creatorMembership = collaboration?.members.find((member) => member.userId === task.userId);
@@ -208,6 +222,7 @@ export const taskService = {
         : (rootCommentStats.get(task.id) ?? { total: 0, unread: 0 });
       return ({
       ...task,
+      monitoringTriggers: task.aiMonitoringEnabled ? (triggersByRoot.get(task.id) ?? []) : [],
       attachmentCount: attachmentsByTaskId.get(task.id) ?? 0,
       commentCount: taskCommentStats.total,
       unreadCommentCount: taskCommentStats.unread,
@@ -273,6 +288,12 @@ export const taskService = {
     if (input.sphereId) {
       await prisma.sphere.findFirstOrThrow({ where: { id: input.sphereId, userId } });
     }
+    if (input.aiMonitoringModel !== undefined &&
+        !['gpt-6-luna', 'gpt-6.1-terra', 'gpt-6.1-sol'].includes(input.aiMonitoringModel)) {
+      throw new TypeError('Недопустимая модель автомониторинга.');
+    }
+    const newMonitoringEnabled = !isSubtask && !isEvent && !isReminder && !parent?.collaborationId && input.aiMonitoringEnabled === true;
+    const inheritsMonitoring = parent?.aiMonitoringEnabled === true;
     const created = await prisma.task.create({
       data: {
         title: input.title,
@@ -286,7 +307,7 @@ export const taskService = {
         urgency,
         priorityScore: calcScore(importance, urgency),
         status: input.status ?? 'TODO',
-        dueDate: resolvedDueDate,
+        dueDate: newMonitoringEnabled || inheritsMonitoring ? null : resolvedDueDate,
         notifyBeforeMinutes: input.notifyBeforeMinutes !== undefined ? toNotifyBeforeMinutes(input.notifyBeforeMinutes) : 0
         ,
         isRecurring: isSubtask ? false : (input.isRecurring ?? false),
@@ -295,7 +316,8 @@ export const taskService = {
         recurrenceSummary: isSubtask ? null : (input.recurrenceSummary ?? null),
         recurrenceUntil: isSubtask ? null : (input.recurrenceUntil !== undefined ? toDueDate(input.recurrenceUntil) : null),
         aiNotificationsEnabled: (isEvent || isReminder) ? false : (input.aiNotificationsEnabled ?? true),
-        aiMonitoringEnabled: !isSubtask && !isEvent && !isReminder && !parent?.collaborationId && input.aiMonitoringEnabled === true,
+        aiMonitoringEnabled: newMonitoringEnabled,
+        aiMonitoringModel: input.aiMonitoringModel ?? 'gpt-6.1-terra',
         aiMonitoringGeneration: !isSubtask && !isEvent && !isReminder && !parent?.collaborationId && input.aiMonitoringEnabled === true ? 1 : 0,
         
         collaboration: parent?.collaborationId ? { connect: { id: parent.collaborationId } } : undefined
@@ -327,6 +349,24 @@ export const taskService = {
       throw new TypeError('Мониторинг beta доступен только для личных основных задач.');
     }
 
+    const monitoredParent = currentTask.parentTaskId
+      ? await prisma.task.findUnique({
+          where: { id: currentTask.parentTaskId },
+          select: { aiMonitoringEnabled: true }
+        })
+      : null;
+    const monitoringWillBeEnabled = input.aiMonitoringEnabled === true ||
+      (currentTask.aiMonitoringEnabled && input.aiMonitoringEnabled !== false) ||
+      monitoredParent?.aiMonitoringEnabled === true;
+    if (monitoringWillBeEnabled && input.dueDate != null) {
+      throw new TypeError('В режиме автомониторинга даты задачи и подзадач заменены триггерами.');
+    }
+    if (input.aiMonitoringModel !== undefined &&
+        (currentTask.userId !== userId || currentTask.collaborationId || currentTask.parentTaskId ||
+         !['gpt-6-luna', 'gpt-6.1-terra', 'gpt-6.1-sol'].includes(input.aiMonitoringModel))) {
+      throw new TypeError('Недопустимая модель автомониторинга.');
+    }
+
     // Validate referenced objects *before* any member status or task changes.
     // Own-sector assignments remain legal for each member of a shared task.
     if (input.sphereId) {
@@ -349,6 +389,7 @@ export const taskService = {
     }
 
     const patch: Prisma.TaskUpdateInput = {};
+    if (input.aiMonitoringModel !== undefined) patch.aiMonitoringModel = input.aiMonitoringModel;
     if (input.aiMonitoringEnabled !== undefined) {
       patch.aiMonitoringEnabled = input.aiMonitoringEnabled === true;
       if (input.aiMonitoringEnabled === true && !currentTask.aiMonitoringEnabled) {
@@ -473,6 +514,13 @@ export const taskService = {
       patch.dueDate = computeNextRecurringDueDate(schedule ?? {}, new Date());
     }
 
+    // A monitored task never has a conventional deadline, including one inferred
+    // from its recurrence schedule. The trigger clock is stored separately.
+    if (monitoringWillBeEnabled) {
+      patch.dueDate = null;
+      patch.telegramNotifiedAt = null;
+    }
+
     const shouldNotifyForeignSubtaskCompletion = Boolean(
       currentTask.parentTaskId
       && currentTask.collaborationId
@@ -498,6 +546,13 @@ export const taskService = {
         }
       }
       const updatedTask = await tx.task.update({ where: { id }, data: patch });
+      if (!currentTask.aiMonitoringEnabled && updatedTask.aiMonitoringEnabled) {
+        // Existing children lose their legacy deadlines when monitoring is enabled.
+        await tx.task.updateMany({
+          where: { parentTaskId: id },
+          data: { dueDate: null, telegramNotifiedAt: null }
+        });
+      }
       if (!currentTask.aiMonitoringEnabled && updatedTask.aiMonitoringEnabled &&
           updatedTask.status !== 'DONE') {
         await enqueueMonitoringIntroduction(tx, updatedTask);
@@ -512,7 +567,7 @@ export const taskService = {
       // Queue AI follow-up only on a genuine user-completed subtask transition.
       // This is an atomic DB event, not an AI call inside a task-save request.
       if (currentTask.parentTaskId && currentTask.status !== 'DONE' &&
-          input.status === 'DONE' && context.source !== 'ai_monitoring') {
+          input.status === 'DONE' && context.source !== 'ai_monitoring' && !monitoredParent?.aiMonitoringEnabled) {
         const monitoredParent = await tx.task.findFirst({
           where: {
             id: currentTask.parentTaskId, userId: currentTask.userId,
@@ -534,6 +589,13 @@ export const taskService = {
       }
       // Opting out removes only the generic check-in automatically created by
       // monitoring. Named one-time reminders retain their independent meaning.
+      if (input.aiMonitoringEnabled === true || input.aiMonitoringEnabled === false) {
+        // Remove obsolete deadline-based queue entries, including subtask entries.
+        await tx.taskMonitoringRun.updateMany({
+          where: { taskId: id, kind: 'overdue', state: 'scheduled' },
+          data: { state: 'cancelled' }
+        });
+      }
       if (input.aiMonitoringEnabled === false) {
         await tx.taskMonitoringTrigger.updateMany({
           where: { taskId: id, state: 'pending', question: MONITORING_FALLBACK_QUESTION },
@@ -564,7 +626,7 @@ export const taskService = {
       }
       console.info('[Task] update', { userId, taskId: id, source: context.source ?? 'internal', requestId: context.requestId ?? null, requestedStatus: input.status ?? null, updatedFields: Object.keys(input).filter((key) => input[key as keyof TaskInput] !== undefined), beforeStatus: currentTask.status, afterStatus: updatedTask.status, beforeDueDate: currentTask.dueDate?.toISOString() ?? null, afterDueDate: updatedTask.dueDate?.toISOString() ?? null, parentTaskId: currentTask.parentTaskId });
 
-      if (input.status === 'DONE' && updatedTask.isRecurring && !updatedTask.parentTaskId && !isCollaborativeRoot) {
+      if (input.status === 'DONE' && updatedTask.isRecurring && !updatedTask.parentTaskId && !isCollaborativeRoot && !updatedTask.aiMonitoringEnabled) {
         const schedule = updatedTask.recurrenceJson as unknown as RecurrenceSchedule | null;
         const baseline = updatedTask.dueDate ?? new Date();
         const nextDue = computeNextRecurringDueDate(schedule ?? {}, baseline);

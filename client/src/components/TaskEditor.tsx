@@ -26,6 +26,7 @@ import {
 } from "react";
 import type { ChatAttachmentPayload, Sphere, Task, TaskAttachment } from "../lib/types";
 import { DateTimePickerWithApply } from "./DateTimePickerWithApply";
+import { TaskMonitoringBadge } from "./TaskMonitoringBadge";
 import { AiAttachmentTiles } from "./AiAttachmentTiles";
 import { api } from "../lib/api";
 import { taskEditorChangedFields, taskEditorEditableSnapshot, mergeRemoteDraftFields, TASK_EDITOR_EDIT_KEYS } from "../lib/taskDraftSync";
@@ -62,6 +63,7 @@ type Props = {
   onComplete?: () => Promise<void>;
   onPrepareReport?: () => void;
   parentTaskTitle?: string | null;
+  monitoringParent?: boolean;
   onOpenParentTask?: () => void;
   defaultAiNotificationsEnabled: boolean;
   editorType?: "task" | "event";
@@ -308,6 +310,7 @@ export function TaskEditor({
   onComplete,
   onPrepareReport,
   parentTaskTitle,
+  monitoringParent = false,
   onOpenParentTask,
   defaultAiNotificationsEnabled,
   timelineTasks = [],
@@ -676,7 +679,7 @@ export function TaskEditor({
   const visibleSubtasks = subtasks
     .filter((subtask) => subtask.status !== "DONE")
     .slice(0, 5);
-  const deadlineLabel = form.dueDate
+  const deadlineLabel = (task?.aiMonitoringEnabled || monitoringParent) ? "Время определяется триггерами" : form.dueDate
     ? `До дедлайна: ${formatDeadlineLeft(form.dueDate)}`
     : "Дедлайн не задан";
 
@@ -1033,8 +1036,9 @@ export function TaskEditor({
                 </div>
               ) : null}
               <div className="focused-task-deadline-row mt-1 flex items-center gap-2 text-sm font-medium text-violet-500">
+                {task?.aiMonitoringEnabled || monitoringParent ? <TaskMonitoringBadge /> : null}
                 <span>{deadlineLabel}</span>
-                <DateTimePickerWithApply
+                {!task?.aiMonitoringEnabled && !monitoringParent ? <DateTimePickerWithApply
                   value={form.dueDate}
                   onChange={(nextValue) =>
                     setForm((p) => ({ ...p, dueDate: nextValue }))
@@ -1043,7 +1047,7 @@ export function TaskEditor({
                   iconOnly
                   detachedPopup
                   buttonClassName="focused-task-icon-button"
-                />
+                /> : null}
               </div>
               <ResizableDescriptionSurface className="focused-task-description-surface mt-3 rounded-2xl bg-slate-50/70 p-3">
                 {isEditing && !isSubtask && !isEventEditor ? (

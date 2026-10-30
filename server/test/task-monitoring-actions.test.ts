@@ -17,10 +17,10 @@ test('autonomous edits are advertised exclusively in opted-in task chats', async
   assert.match(actions, /PrismaClientKnownRequestError/);
 });
 
-test('monitoring subtasks have future due dates and cannot be created as speculative duplicates', async () => {
+test('monitoring subtasks have no deadlines and remain protected from duplicate creation', async () => {
   const actions = await read('../src/services/task-monitoring-actions.service.ts');
-  assert.match(actions, /dueDate.getTime\(\) < Date.now\(\) \+ 60_000/);
-  assert.match(actions, /90 \* 86400_000/);
+  assert.match(actions, /dueDate: null, sphereId: task.sphereId/);
+  assert.doesNotMatch(actions, /dueDate.getTime\(\) < Date.now\(\) \+ 60_000/);
   assert.match(actions, /parentTaskId: task.id/);
   assert.match(actions, /skippedDuplicate: true/);
 });

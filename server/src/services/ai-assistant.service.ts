@@ -1963,6 +1963,7 @@ export const aiAssistantService = {
     const followupToolsEnabled = task.userId === input.userId && !task.parentTaskId &&
       !task.collaborationId && task.taskType === 'TASK' && task.status !== 'DONE';
     const autonomousMonitoring = monitoringEnabled && input.billingFeature === 'task_monitoring';
+    const lockedMonitoringModel = monitoringEnabled ? task.aiMonitoringModel as AiChatModel : input.model;
     const monitoringStatuses = monitoringEnabled
       ? await prisma.taskMonitoringStatus.findMany({
           where: { taskId: task.id, userId: input.userId },
@@ -2001,6 +2002,10 @@ export const aiAssistantService = {
       'Для любых вычислений времени используй часовой пояс пользователя из контекста.',
       'Если ответ содержит сравнение или табличные данные, оформляй их как корректную Markdown-таблицу с заголовками, строкой разделителей | --- | и строками значений. Не заключай таблицу в блок кода.',
       'Через actions можно менять только текущую задачу и её подзадачи, а также создавать самостоятельные напоминания create_reminder.',
+      ...(monitoringEnabled ? [
+        'РЕЖИМ АВТОМОНИТОРИНГА: у задачи и подзадач нет дедлайнов. Не создавай, не редактируй и не переноси dueDate ни одним action, включая create_subtask, update_task, reschedule_task, update_subtask и reschedule_subtask.',
+        'Любые будущие даты действий планируй через set_task_monitoring_trigger. При переносе сначала отмени старый триггер через cancel_task_monitoring_trigger и создай новый. Учитывай список активных триггеров.'
+      ] : []),
       'Когда пользователь просит «напомни», «сделай напоминание» или «поставь напоминание», создай самостоятельный объект типа НАПОМИНАНИЕ через action.type=create_reminder с title, description и dueDate в локальном часовом поясе пользователя. НЕ создавай подзадачу и не меняй текущую задачу. Если дата или время неясны, уточни их до создания.',
       'Прямой приказ пользователя изменить данные задачи уже является явным подтверждением. Команды вроде «сделай», «добавь», «создай», «измени», «обнови/обновляй», «перенеси», «переименуй», «скопируй», «удали» нужно выполнять в этом же ответе без дополнительного вопроса-подтверждения.',
       'Отдельное подтверждение нужно только когда ты сам предложил изменение, которого пользователь ещё явно не просил выполнить. Короткие ответы «да», «делай», «обновляй», «выполняй», «подтверждаю» после твоего предложения считаются подтверждением.',
@@ -2053,7 +2058,7 @@ export const aiAssistantService = {
       input.onProgress?.(`reading_file:${explicitReference.fileName}`);
       const evidence = await executeAiFileTool({
         userId: input.userId, taskId: input.taskId, catalog: fileCatalog,
-        uploads: input.attachments, model: input.model ?? 'gpt-6.1-terra',
+        uploads: input.attachments, model: lockedMonitoringModel ?? 'gpt-6.1-terra',
         apiKey, actionId: requestId, dynamicBilling: input.billingMode === 'dynamic'
       }, 'read', { fileId: explicitReference.fileId });
       if (evidence.response.ok && typeof evidence.response.text === 'string') {
@@ -2175,9 +2180,11 @@ export const aiAssistantService = {
       });
     }
     const reasoningEffort = resolveReasoningEffort(input.mode);
-    const modelCandidates = isSmartPostponeRequest
-      ? Array.from(new Set([OTHER_AI_MODEL, ...resolveModelCandidates(input.mode, hasAttachments, input.model)].filter(Boolean)))
-      : resolveModelCandidates(input.mode, hasAttachments, input.model);
+    const modelCandidates = monitoringEnabled
+      ? resolveModelCandidates(input.mode, hasAttachments, lockedMonitoringModel)
+      : isSmartPostponeRequest
+        ? Array.from(new Set([OTHER_AI_MODEL, ...resolveModelCandidates(input.mode, hasAttachments, lockedMonitoringModel)].filter(Boolean)))
+        : resolveModelCandidates(input.mode, hasAttachments, lockedMonitoringModel);
 
     console.info('[AI] Starting OpenAI request', {
       requestId,
@@ -3405,8 +3412,9 @@ export async function applyTaskChatProposalActions(input: {
 }): Promise<{ ok: boolean; reports: string[]; createdIds: string[]; error?: string }> {
   const task = await prisma.task.findFirstOrThrow({
     where: { id: input.taskId, AND: [taskAccessWhere(input.userId)] },
-    select: { id: true, title: true, parentTaskId: true, collaborationId: true, importance: true, urgency: true }
+    select: { id: true, title: true, parentTaskId: true, collaborationId: true, importance: true, urgency: true, aiMonitoringEnabled: true }
   });
+  const monitoringEnabled = task.aiMonitoringEnabled;
   const parsed = { actions: input.actions as GeneralAssistantAction[] };
   const requestId = 'approved-task-proposal';
   const model = 'stored-proposal';
@@ -3423,6 +3431,15 @@ export async function applyTaskChatProposalActions(input: {
               userId: input.userId,
               action
             });
+            if (monitoringEnabled && (
+              action.type === 'reschedule_task' ||
+              action.type === 'reschedule_subtask' ||
+              (action.type === 'update_task' && action.dueDate != null) ||
+              (action.type === 'update_subtask' && action.dueDate != null)
+            )) {
+              actionReports.push('В автомониторинге сроки управляются только триггерами. Действие с дедлайном отклонено.');
+              continue;
+            }
             if (action.type === 'reschedule_task') {
               if (action.taskId !== task.id) {
                 actionReports.push('Перенос задачи пропущен: action.taskId не совпадает с текущей задачей.');
@@ -3526,7 +3543,7 @@ export async function applyTaskChatProposalActions(input: {
                 actionReports.push('Создание подзадачи пропущено: parentTaskId не совпадает с текущей задачей.');
                 continue;
               }
-              const dueDate = action.dueDate ? new Date(action.dueDate) : null;
+              const dueDate = monitoringEnabled ? null : action.dueDate ? new Date(action.dueDate) : null;
               const subtask = await prisma.task.create({
                 data: { title: action.title.slice(0, 180), description: (action.description ?? '').slice(0, 2000), userId: input.userId, parentTaskId: task.id, sphereId: null, collaborationId: task.collaborationId, importance: 3, urgency: 3, priorityScore: 3, status: 'TODO', dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null, notifyBeforeMinutes: 0 }
               });

@@ -52,7 +52,7 @@ test('task-chat settings have a single monitoring entry with badges on all clien
   assert.doesNotMatch(editor, /<TaskMonitoringControls/);
   assert.doesNotMatch(app, /<TaskMonitoringControls/);
   assert.doesNotMatch(mini, /<TaskMonitoringControls/);
-  assert.match(popup, /api\.updateTask\(taskId, \{ aiMonitoringEnabled: next \}\)/);
+  assert.match(popup, /api\.updateTask\(taskId, \{ aiMonitoringEnabled: next, aiMonitoringModel: monitorModel \}\)/);
   assert.match(popup, /task-monitor-unread/);
   assert.match(popup, /getTaskMonitoringUnread/);
   assert.match(popup, /markTaskMonitoringSeen/);

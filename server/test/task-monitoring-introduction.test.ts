@@ -29,21 +29,21 @@ test('initial introduction is scheduled on enabling, not on every task edit or r
   assert.match(task, /!currentTask\.aiMonitoringEnabled && updatedTask\.aiMonitoringEnabled/);
   assert.match(task, /enqueueMonitoringIntroduction\(tx, updatedTask\)/);
   assert.match(task, /kind: MONITORING_INTRO_KIND, state: 'scheduled'/);
-  assert.match(schedule, /source\.dueDate!\.getTime\(\) <= introduction\.createdAt\.getTime\(\)/);
-  assert.match(schedule, /monitoringIntroEventKey\(root\.id, root\.aiMonitoringGeneration\)/);
+  assert.match(schedule, /No deadline events in monitoring mode/);
+  assert.match(schedule, /monitoringIntroEventKey\(task\.id, task\.aiMonitoringGeneration\)/);
   assert.match(worker, /job\.kind === MONITORING_INTRO_KIND/);
   assert.match(worker, /monitoringIntroEventKey\(root\.id, root\.aiMonitoringGeneration\)/);
-  assert.match(worker, /overdueCount > overdue\.length/);
+  assert.match(worker, /У задачи и подзадач нет обычных дедлайнов/);
   assert.match(worker, /'monitoring_intro'\)/);
 });
 
-test('only one AI run discusses multiple existing overdue subtasks and moves to one next step', async () => {
+test('only one AI run summarizes unfinished subtasks and picks a next step without deadlines', async () => {
   const worker = await read('../src/services/task-monitoring-worker.service.ts');
   const intro = worker.slice(worker.indexOf('if (job.kind === MONITORING_INTRO_KIND)'),
     worker.indexOf("if (job.kind === 'subtask_completed')"));
-  assert.match(intro, /prisma\.task\.count\(/);
-  assert.match(intro, /orderBy: \[\{ dueDate: 'desc' \}/);
-  assert.match(intro, /'Просрочено незакрытых подзадач: '/);
+  assert.match(intro, /prisma\.task\.findMany\(/);
+  assert.match(intro, /orderBy: \[\{ createdAt: 'asc' \}/);
+  assert.match(intro, /'Незавершённые подзадачи:/);
   assert.match(intro, /'Пользователь только что включил автомониторинг/);
   assert.equal((intro.match(/await deliver\(/g) ?? []).length, 1);
   assert.match(intro, /continue;/);

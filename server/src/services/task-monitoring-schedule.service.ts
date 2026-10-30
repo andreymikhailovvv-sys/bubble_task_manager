@@ -22,67 +22,13 @@ export async function enqueueMonitoringIntroduction(
     skipDuplicates: true
   });
 }
-const isActive = (row: { status: string; dueDate: Date | null }) =>
-  row.status !== 'DONE' && Boolean(row.dueDate);
-
-/**
- * Rebuild the ONE future deadline for this task or subtask. A shared/chat/task
- * update never receives an AI tool merely because a deadline exists.
- * Call inside the same transaction as a task edit whenever possible.
+/** No deadline events in monitoring mode. Trigger dueAt is the only scheduled clock.
+ * Cancel legacy queued overdue jobs on task changes and boot recovery.
  */
 export async function rescheduleMonitoringSource(db: Db, sourceId: string) {
-  const source = await db.task.findUnique({
-    where: { id: sourceId },
-    select: { id: true, userId: true, parentTaskId: true, taskType: true,
-      status: true, dueDate: true, title: true, collaborationId: true }
-  });
   await db.taskMonitoringRun.updateMany({
     where: { sourceTaskId: sourceId, kind: MONITOR_KIND, state: 'scheduled' },
     data: { state: 'cancelled' }
-  });
-  if (!source || !isActive(source) || source.taskType !== 'TASK') return;
-  const root = source.parentTaskId
-    ? await db.task.findUnique({
-        where: { id: source.parentTaskId },
-        select: { id: true, userId: true, aiMonitoringEnabled: true, aiMonitoringGeneration: true, status: true, collaborationId: true, parentTaskId: true, taskType: true }
-      })
-    : await db.task.findUnique({
-        where: { id: source.id },
-        select: { id: true, userId: true, aiMonitoringEnabled: true, aiMonitoringGeneration: true, status: true, collaborationId: true, parentTaskId: true, taskType: true }
-      });
-  if (!root || !root.aiMonitoringEnabled || root.userId !== source.userId ||
-      root.status === 'DONE' || root.collaborationId || root.parentTaskId || root.taskType !== 'TASK' ||
-      source.collaborationId) return;
-
-  // On initial opt-in, existing overdue deadlines are discussed collectively
-  // by one introduction. Rebuilding the queue on restart/edits must NOT
-  // resurrect one overdue AI call per already-overdue subtask.
-  const introduction = await db.taskMonitoringRun.findUnique({
-    where: { eventKey: monitoringIntroEventKey(root.id, root.aiMonitoringGeneration) },
-    select: { createdAt: true }
-  });
-  if (introduction && source.dueDate!.getTime() <= introduction.createdAt.getTime()) return;
-
-  const eventKey = 'overdue:' + root.id + ':g' + root.aiMonitoringGeneration + ':' + source.id + ':' + source.dueDate!.toISOString();
-  // skipDuplicates emits ON CONFLICT DO NOTHING on PostgreSQL and does not
-  // poison a surrounding task-edit transaction if the event already exists.
-  await db.taskMonitoringRun.createMany({
-    data: [{
-      taskId: root.id, userId: root.userId, sourceTaskId: source.id,
-      eventKey, kind: MONITOR_KIND, dueAt: source.dueDate, state: 'scheduled'
-    }],
-    skipDuplicates: true
-  });
-  console.info('[TaskMonitoring] event queued', {
-    rootId: root.id, sourceId: source.id,
-    generation: root.aiMonitoringGeneration,
-    dueAt: source.dueDate!.toISOString()
-  });
-  // Only cancelled deliveries can be restored. Completed/processing events
-  // are never retried at the same timestamp, avoiding duplicate AI charges.
-  await db.taskMonitoringRun.updateMany({
-    where: { eventKey, state: 'cancelled' },
-    data: { state: 'scheduled', dueAt: source.dueDate }
   });
 }
 

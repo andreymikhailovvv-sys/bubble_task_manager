@@ -22,6 +22,10 @@ export type Task = {
   recurrenceUntil?: string | null;
   aiNotificationsEnabled?: boolean;
   aiMonitoringEnabled?: boolean;
+  aiMonitoringModel?: AiChatModel;
+  monitoringTriggers?: Array<{ id: string; dueAt: string; title?: string | null }>;
+  /** Timeline-only projection of a pending monitoring trigger. */
+  monitoringTriggerId?: string;
   importance: number;
   urgency: number;
   priorityScore: number;
