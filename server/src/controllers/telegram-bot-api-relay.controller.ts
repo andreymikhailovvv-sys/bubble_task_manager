@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { diagnoseTelegramRelayAtStartup } from '../services/telegram-relay-diagnostics.service.js';
 import { type Request, type Response } from 'express';
 
 const SECRET_HEADER = 'x-telegram-outbound-relay-secret';
@@ -181,3 +182,14 @@ export const createTelegramBotApiRelayController = (fetchImplementation: typeof 
 });
 
 export const telegramBotApiRelayController = createTelegramBotApiRelayController();
+
+// This controller is loaded by the server router on Render. Run one read-only
+// startup check without adding a scheduler, webhook registration or new route.
+if (process.env.TELEGRAM_RELAY_ENABLED?.trim().toLowerCase() === 'true' ||
+    process.env.TELEGRAM_BOT_API_RELAY_ENABLED?.trim().toLowerCase() === 'true') {
+  setTimeout(() => {
+    void diagnoseTelegramRelayAtStartup().catch(() => {
+      console.error('[TelegramIngressDiagnostic] startup checks failed unexpectedly');
+    });
+  }, 2_000).unref();
+}
