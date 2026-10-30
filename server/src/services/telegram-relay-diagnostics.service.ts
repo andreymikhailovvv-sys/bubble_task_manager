@@ -90,6 +90,7 @@ export async function diagnoseTelegramRelayAtStartup(fetchImplementation: typeof
       console.info('[TelegramIngressDiagnostic] main bot webhook info', {
         apiOk: data.ok === true,
         webhookHost,
+        botId: token?.split(':')[0] ?? null,
         webhookPathKind,
         pendingUpdates: data.result?.pending_update_count ?? null,
         lastErrorAt: data.result?.last_error_date ?? null
