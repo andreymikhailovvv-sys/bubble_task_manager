@@ -2,6 +2,19 @@ import type { AiChatModel } from './types';
 
 export const DEFAULT_QUICK_AI_CHAT_MODEL: AiChatModel = 'gpt-6-luna';
 export const DEFAULT_TASK_AI_CHAT_MODEL: AiChatModel = 'gpt-6-luna';
+
+/** First opt-in for older tasks: ignore the obsolete Terra database default.
+ * Never change an active or previously configured monitoring session.
+ */
+export function initialTaskMonitoringModel(
+  enabled: boolean,
+  generation: number | undefined,
+  savedModel: AiChatModel | undefined
+): AiChatModel {
+  return enabled || (generation ?? 0) > 0
+    ? (savedModel ?? DEFAULT_TASK_AI_CHAT_MODEL)
+    : DEFAULT_TASK_AI_CHAT_MODEL;
+}
 export const DEFAULT_WEB_PROJECT_CHAT_MODEL: AiChatModel = 'gpt-6.1-terra';
 export const DEFAULT_MOBILE_PROJECT_CHAT_MODEL: AiChatModel = 'gpt-6-luna';
 
