@@ -2180,9 +2180,11 @@ export const aiAssistantService = {
       });
     }
     const reasoningEffort = resolveReasoningEffort(input.mode);
-    const modelCandidates = isSmartPostponeRequest
-      ? Array.from(new Set([OTHER_AI_MODEL, ...resolveModelCandidates(input.mode, hasAttachments, lockedMonitoringModel)].filter(Boolean)))
-      : resolveModelCandidates(input.mode, hasAttachments, lockedMonitoringModel);
+    const modelCandidates = monitoringEnabled
+      ? resolveModelCandidates(input.mode, hasAttachments, lockedMonitoringModel)
+      : isSmartPostponeRequest
+        ? Array.from(new Set([OTHER_AI_MODEL, ...resolveModelCandidates(input.mode, hasAttachments, lockedMonitoringModel)].filter(Boolean)))
+        : resolveModelCandidates(input.mode, hasAttachments, lockedMonitoringModel);
 
     console.info('[AI] Starting OpenAI request', {
       requestId,
