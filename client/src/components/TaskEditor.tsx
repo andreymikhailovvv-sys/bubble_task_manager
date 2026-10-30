@@ -679,7 +679,7 @@ export function TaskEditor({
   const visibleSubtasks = subtasks
     .filter((subtask) => subtask.status !== "DONE")
     .slice(0, 5);
-  const deadlineLabel = (task?.aiMonitoringEnabled || monitoringParent) ? "Время определяется триггерами" : form.dueDate
+  const deadlineLabel = (task?.aiMonitoringEnabled || monitoringParent) ? "На усмотрение ИИ" : form.dueDate
     ? `До дедлайна: ${formatDeadlineLeft(form.dueDate)}`
     : "Дедлайн не задан";
 
