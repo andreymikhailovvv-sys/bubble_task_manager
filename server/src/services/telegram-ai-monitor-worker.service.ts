@@ -384,9 +384,6 @@ async function importHistoricalContext(claimed: Claimed) {
 async function processClaim(claimed: Claimed) {
   const { policy } = claimed;
   await ownedLease(claimed);
-  if (claimed.policy.historyImportCursor !== null && claimed.policy.historyAccessEnabled) {
-    await importHistoricalContext(claimed);
-  }
   const now = new Date();
   const dueInteraction = policy.mode !== 'OBSERVE' &&
     policy.nextInteractionAt != null && policy.nextInteractionAt <= now;
@@ -395,6 +392,12 @@ async function processClaim(claimed: Claimed) {
   // Tasks have their own user-selected frequency. Reply proposals, auto-replies,
   // and summaries never pull task analysis forward ahead of this timer.
   const dueTasks = telegramTaskScanDue(policy, now);
+  // Live messages have priority over historical import. A failed/expensive
+  // import must never prevent scheduled replies, task checks or new summaries.
+  if (!dueInteraction && !dueSummary && !dueTasks &&
+      policy.historyImportCursor !== null && policy.historyAccessEnabled) {
+    await importHistoricalContext(claimed);
+  }
 
   const lastInteraction = policy.lastInteractionMessageId ?? policy.lastSeenMessageId ?? 0;
   const lastSummary = policy.lastSummaryMessageId ?? policy.lastSeenMessageId ?? 0;
