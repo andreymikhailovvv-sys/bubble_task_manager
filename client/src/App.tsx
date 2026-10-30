@@ -102,10 +102,14 @@ const AI_CHAT_MODEL_OPTIONS: Array<{ value: AiChatModel; label: string }> = [
 
 const AI_CHAT_MODEL_SELECT_OPTIONS = AI_CHAT_MODEL_OPTIONS.map(({ value, label }) => ({ value, label }));
 
-function AiModelChip({ value, onChange, ariaLabel, className = '' }: { value: AiChatModel; onChange: (value: AiChatModel) => void; ariaLabel: string; className?: string }) {
+function AiModelChip({ value, onChange, ariaLabel, className = '', disabled = false }: { value: AiChatModel; onChange: (value: AiChatModel) => void; ariaLabel: string; className?: string; disabled?: boolean }) {
   return (
     <div className={`ai-chat-model-cap w-40 ${className}`}>
-      <CustomSelect value={value} options={AI_CHAT_MODEL_SELECT_OPTIONS} onChange={(next) => onChange(next as AiChatModel)} className="w-full" buttonClassName="ai-chat-model-cap-button rounded-b-xl rounded-t-none border px-3 py-1.5 text-xs font-semibold text-primary shadow-sm backdrop-blur hover:brightness-105" menuClassName="ai-chat-model-cap-menu surface-popover text-primary" ariaLabel={ariaLabel} />
+      {disabled ? <button type="button" disabled title="Модель изменяется только в настройках автомониторинга" aria-label={`${ariaLabel}: закреплена настройками автомониторинга`}
+        className="ai-chat-model-cap-button flex w-full items-center justify-between gap-1 rounded-b-xl rounded-t-none border px-3 py-1.5 text-xs font-semibold text-primary shadow-sm backdrop-blur">
+        <span className="truncate">{AI_CHAT_MODEL_OPTIONS.find(option => option.value === value)?.label ?? 'GPT-6 Luna'}</span>
+        <ChevronDown size={13} className="shrink-0 opacity-35" />
+      </button> : <CustomSelect value={value} options={AI_CHAT_MODEL_SELECT_OPTIONS} onChange={(next) => onChange(next as AiChatModel)} className="w-full" buttonClassName="ai-chat-model-cap-button rounded-b-xl rounded-t-none border px-3 py-1.5 text-xs font-semibold text-primary shadow-sm backdrop-blur hover:brightness-105" menuClassName="ai-chat-model-cap-menu surface-popover text-primary" ariaLabel={ariaLabel} />}
     </div>
   );
 }
@@ -4631,7 +4635,7 @@ export default function App() {
         } ${draggedTimelineTaskId === task.id ? 'opacity-60' : ''} ${isCompletingInTimeline || isCompletingOutsideTimeline ? 'ring-1 ring-emerald-300/70' : ''}`}
         data-timeline-task-id={task.id}
         style={{
-          borderColor: isReminderChip ? '#0284c7' : isEventChip ? '#f59e0b' : isSubtaskChip ? 'rgba(148,163,184,0.75)' : (hasOverdueState ? 'rgba(251,113,133,0.85)' : sphereColor),
+          borderColor: isReminderChip ? (effectiveThemeMode === 'light' ? '#0369a1' : '#0284c7') : isEventChip ? '#f59e0b' : isSubtaskChip ? 'rgba(148,163,184,0.75)' : (hasOverdueState ? 'rgba(251,113,133,0.85)' : sphereColor),
           backgroundColor: isReminderChip
             ? (effectiveThemeMode === 'light' ? 'rgba(224,242,254,0.97)' : 'rgba(3,105,161,0.32)')
             : isEventChip
@@ -4641,6 +4645,7 @@ export default function App() {
             : hasOverdueState
               ? (effectiveThemeMode === 'light' ? 'rgba(255,228,230,0.92)' : 'rgba(136,19,55,0.45)')
               : hexToRgba(sphereColor, effectiveThemeMode === 'light' ? 0.16 : 0.34) ?? (effectiveThemeMode === 'light' ? 'rgba(241,245,249,0.92)' : 'rgba(100,116,139,0.34)'),
+          color: isReminderChip ? (effectiveThemeMode === 'light' ? '#0c4a6e' : '#e0f2fe') : undefined,
           boxShadow: disableEffects
             ? undefined
             : (!isEventChip && !isReminderChip && hasOverdueState)
@@ -4694,7 +4699,7 @@ export default function App() {
           ) : null}
           {timelinePostponeLoadingTaskId === task.id ? <Loader2 size={12} className="timeline-task-chip-accent shrink-0 animate-spin" /> : null}
           {isEventChip ? <Ticket size={12} className="shrink-0 text-amber-600" /> : null}
-          {isReminderChip ? <BellRing size={12} className="shrink-0 text-sky-500" /> : null}
+          {isReminderChip ? <BellRing size={13} strokeWidth={2.3} className="timeline-reminder-icon shrink-0" /> : null}
           {isSubtaskChip ? <span className="h-4 w-1 shrink-0 rounded-sm" style={{ backgroundColor: parentSphereColor }} /> : null}
           <span className={`truncate transition-all duration-300 ${isCompletingInTimeline || isCompletingOutsideTimeline ? 'timeline-task-chip-completed line-through decoration-2' : ''}`}>
             {isReminderChip ? task.title : <LinkifiedText text={task.title} stopPropagationOnLinkClick />}
@@ -5415,7 +5420,7 @@ export default function App() {
                     <button type="button" className="surface-muted rounded-lg px-2 py-1.5 text-xs" onClick={() => setIsTimelineOverdueModalOpen(false)} aria-label="Закрыть просроченные задачи"><X size={13}/></button>
                   </div>
                 </div>
-                <div className="max-h-[min(360px,55vh)] space-y-2 overflow-y-auto pr-1">
+                <div className="topbar-overdue-items max-h-[min(360px,55vh)] space-y-1 overflow-y-auto pr-1">
                   {timelineOverdueTasks.map(task => renderTimelineTaskChip(task, {
                     isSubtask: Boolean(task.parentTaskId),
                     disableEffects: true, disableHoverCard: true,
@@ -5524,7 +5529,7 @@ export default function App() {
               <motion.article key={focusActiveTask.id} initial={{ opacity: 0, y: 44, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="focus-main-card flex min-h-0 w-full max-w-2xl flex-1 flex-col overflow-hidden rounded-[2rem] border p-6 shadow-xl">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Текущая задача</p>
                 <div className="mt-2 flex items-start justify-between gap-3"><button type="button" className="text-left text-3xl font-bold text-slate-950 hover:underline" onClick={() => { setFocusedTaskId(focusActiveTask.id); setIsFocusedNotesEditorOpen(false); }}>{focusActiveTask.title}</button><button type="button" className="success-button shrink-0 rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => void completeTask(focusActiveTask)}>Выполнить</button></div>
-                <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-violet-500">{focusActiveTask.aiMonitoringEnabled ? <><TaskMonitoringBadge /> На усмотрение ИИ</> : (focusActiveTask.dueDate ? `До дедлайна: ${formatSubtaskRelativeDeadline(focusActiveTask.dueDate)}` : 'Дедлайн не задан')}</p>
+                <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-violet-500">{focusActiveTask.aiMonitoringEnabled ? <><span>Дедлайн:</span><TaskMonitoringBadge /> На усмотрение ИИ</> : (focusActiveTask.dueDate ? `До дедлайна: ${formatSubtaskRelativeDeadline(focusActiveTask.dueDate)}` : 'Дедлайн не задан')}</p>
                 <div className="mt-3 flex min-h-0 items-start">
                   <p className="focus-task-description min-w-0 flex-1 whitespace-pre-wrap text-sm leading-6 text-muted">{noteHtmlToPlainText(focusActiveTask.description ?? '', { trimEnd: true }) || 'Описание не заполнено.'}</p>
                 </div>
@@ -5627,7 +5632,7 @@ export default function App() {
                 </div>
               </div>
               <div className="focused-task-ai-thread-region relative mt-2 min-h-0 flex-1">
-                {!focusActiveTask.aiMonitoringEnabled ? <AiModelChip value={focusTaskAiModel} onChange={model => setAiModelByTask(prev => ({ ...prev, [focusActiveTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-px z-20 -translate-x-1/2" /> : <span className="absolute left-1/2 top-px z-20 -translate-x-1/2 rounded-b-xl bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-500" title="Модель изменяется в настройках автомониторинга">{focusTaskAiModel}</span>}
+                {!focusActiveTask.aiMonitoringEnabled ? <AiModelChip value={focusTaskAiModel} onChange={model => setAiModelByTask(prev => ({ ...prev, [focusActiveTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-px z-20 -translate-x-1/2" /> : <AiModelChip disabled value={focusTaskAiModel} onChange={() => undefined} ariaLabel="Модель ИИ для задачи" className="absolute left-1/2 top-px z-20 -translate-x-1/2" />}
                 <div ref={focusAiDialogContainerRef} className="chat-thread focused-task-ai-thread-through h-full min-h-0 space-y-3 overflow-y-auto rounded-xl p-3 pt-12">
                   {focusTaskAiDialog.map((message) => <div key={message.id} className={`ai-message-forward-group w-fit max-w-[92%] ${message.role === 'assistant' ? 'mr-auto' : 'ml-auto'}`}><div className={`chat-message w-full rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant' : 'chat-message-user'}`}><div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.messageKind === 'MONITOR_ACTION' ? <TaskMonitoringActionBadge content={message.content} /> : message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}{message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} searched={message.webSearchUsed} /> : null}{message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusActiveTask!.id, true)} /> : null}
@@ -5678,7 +5683,7 @@ export default function App() {
                 </div>
               </div>
             </div>
-            {!focusActiveTask.aiMonitoringEnabled ? <AiModelChip value={focusTaskAiModel} onChange={model => setAiModelByTask(prev => ({ ...prev, [focusActiveTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" /> : <span className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2 rounded-b-xl bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-500" title="Модель изменяется в настройках автомониторинга">{focusTaskAiModel}</span>}
+            {!focusActiveTask.aiMonitoringEnabled ? <AiModelChip value={focusTaskAiModel} onChange={model => setAiModelByTask(prev => ({ ...prev, [focusActiveTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" /> : <AiModelChip disabled value={focusTaskAiModel} onChange={() => undefined} ariaLabel="Модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" />}
             <div ref={focusAiExpandedDialogContainerRef} className="chat-thread focused-task-ai-thread-through min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl p-4 pt-12">
               {isFocusAiSearchOpen ? (
                 <label className="surface-input sticky top-0 z-10 flex items-center gap-1 rounded-lg border px-2 py-1 text-xs text-muted">
@@ -6156,7 +6161,7 @@ export default function App() {
                         </p>
                       ) : null}
                       <p className={`list-task-deadline mt-1 inline-flex min-w-0 items-center gap-1.5 text-[11px] ${hasOverdueState ? 'list-task-deadline-overdue' : 'text-subtle'}`}>
-                        {task.aiMonitoringEnabled ? <><TaskMonitoringBadge /><span className="min-w-0 truncate">На усмотрение ИИ</span></> : <><CalendarDays size={13} className="shrink-0" aria-hidden="true" /><span className="min-w-0 truncate">Дедлайн: {formatTaskDueDate(task.dueDate)}{task.dueDate ? ` · ${formatDeadlineLeft(task.dueDate)}` : ''}</span></>}
+                        {task.aiMonitoringEnabled ? <><TaskMonitoringBadge /><span className="min-w-0 truncate">Дедлайн: На усмотрение ИИ</span></> : <><CalendarDays size={13} className="shrink-0" aria-hidden="true" /><span className="min-w-0 truncate">Дедлайн: {formatTaskDueDate(task.dueDate)}{task.dueDate ? ` · ${formatDeadlineLeft(task.dueDate)}` : ''}</span></>}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
@@ -7265,7 +7270,7 @@ export default function App() {
                   }} />
               </div>
               <div className="focused-task-ai-thread-region relative mb-2 min-h-0 flex-1">
-                {!focusedTask.aiMonitoringEnabled ? <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-0 z-20 -translate-x-1/2" /> : <span className="absolute left-1/2 top-0 z-20 -translate-x-1/2 rounded-b-xl bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-500" title="Модель изменяется в настройках автомониторинга">{focusedAiModel}</span>}
+                {!focusedTask.aiMonitoringEnabled ? <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-0 z-20 -translate-x-1/2" /> : <AiModelChip disabled value={focusedAiModel} onChange={() => undefined} ariaLabel="Модель ИИ для задачи" className="absolute left-1/2 top-0 z-20 -translate-x-1/2" />}
                 <div ref={focusedAiDialogContainerRef} className="chat-thread focused-task-ai-thread-through h-full min-h-0 space-y-2 overflow-y-auto rounded-xl p-3 pt-12">
                 {isFocusedAiSearchOpen ? (
                   <label className="surface-input sticky top-0 z-10 flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] text-muted">
@@ -7504,7 +7509,7 @@ export default function App() {
                     </div>
                   </div>
                   <div className="focused-task-deadline-row mt-3 flex items-center gap-2 text-sm font-medium text-violet-500">
-                    {focusedTask.aiMonitoringEnabled ? <><TaskMonitoringBadge /> <span>На усмотрение ИИ</span></> : <>
+                    {focusedTask.aiMonitoringEnabled ? <><span>Дедлайн:</span><TaskMonitoringBadge /><span>На усмотрение ИИ</span></> : <>
                       <span>{focusedDraft.dueDate ? `До дедлайна: ${formatDeadlineLeft(focusedDraft.dueDate)}` : 'Дедлайн не задан'}</span>
                       <DateTimePickerWithApply
                         value={focusedDraft.dueDate}
@@ -8097,7 +8102,7 @@ export default function App() {
                 </div>
               </div>
             </div>
-            {!focusedTask.aiMonitoringEnabled ? <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" /> : <span className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2 rounded-b-xl bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-500" title="Модель изменяется в настройках автомониторинга">{focusedAiModel}</span>}
+            {!focusedTask.aiMonitoringEnabled ? <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" /> : <AiModelChip disabled value={focusedAiModel} onChange={() => undefined} ariaLabel="Модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" />}
             <div ref={expandedAiDialogContainerRef} className="chat-thread focused-task-ai-thread-through min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl p-4 pt-12">
               {isFocusedAiSearchOpen ? (
                 <label className="surface-input sticky top-0 z-10 flex items-center gap-1 rounded-lg border px-2 py-1 text-[12px] text-muted">

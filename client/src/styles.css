@@ -8545,55 +8545,65 @@ body[data-theme='dark'] .ai-generated-document-icon,
   color: #ddd6fe !important;
 }
 
-/* Markdown tables in assistant messages: shared across web and Telegram Mini App. */
+/* Restrained, accessible AI tables across desktop, mobile web and Telegram Mini App. */
 .ai-markdown-table-scroll {
-  border-color: rgba(100, 116, 139, 0.48);
-  background: rgba(15, 23, 42, 0.46);
-  color: #f1f5f9;
+  border-color: rgba(148, 163, 184, 0.27);
+  background: #172233;
+  color: #e2e8f0;
+  box-shadow: 0 1px 3px rgba(2, 6, 23, 0.10);
   overscroll-behavior-x: contain;
 }
 .ai-markdown-table {
   min-width: max-content;
-  line-height: 1.5;
+  width: 100%;
+  border-collapse: collapse;
+  line-height: 1.55;
+  font-variant-numeric: tabular-nums;
 }
 .ai-markdown-table th,
 .ai-markdown-table td {
-  padding: 0.55rem 0.75rem;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.19);
+  padding: 0.57rem 0.78rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  border-right: 1px solid rgba(148, 163, 184, 0.18);
   white-space: pre-wrap;
   vertical-align: top;
 }
 .ai-markdown-table th {
-  background: rgba(99, 102, 241, 0.22);
-  color: #e0e7ff;
-  font-weight: 700;
+  background: #253246;
+  color: #f1f5f9;
+  font-weight: 650;
 }
-.ai-markdown-table tbody tr:nth-child(even) {
-  background: rgba(148, 163, 184, 0.08);
-}
-.ai-markdown-table tbody tr:last-child td {
-  border-bottom: 0;
-}
+.ai-markdown-table th:last-child,
+.ai-markdown-table td:last-child { border-right: 0; }
+.ai-markdown-table tbody tr:nth-child(even) { background: rgba(148, 163, 184, 0.07); }
+.ai-markdown-table tbody tr:hover { background: rgba(148, 163, 184, 0.12); }
+.ai-markdown-table tbody tr:last-child td { border-bottom: 0; }
+
 body[data-theme='light'] .ai-markdown-table-scroll,
 .miniapp-shell.miniapp-light .ai-markdown-table-scroll {
-  border-color: rgba(148, 163, 184, 0.46);
-  background: rgba(255, 255, 255, 0.92);
-  color: #0f172a;
+  border-color: #cbd5e1;
+  background: #ffffff;
+  color: #1e293b;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.055);
 }
 body[data-theme='light'] .ai-markdown-table th,
 .miniapp-shell.miniapp-light .ai-markdown-table th {
-  background: #e0e7ff;
-  color: #312e81;
+  background: #edf2f7;
+  color: #334155;
 }
 body[data-theme='light'] .ai-markdown-table th,
 body[data-theme='light'] .ai-markdown-table td,
 .miniapp-shell.miniapp-light .ai-markdown-table th,
 .miniapp-shell.miniapp-light .ai-markdown-table td {
-  border-bottom-color: rgba(148, 163, 184, 0.3);
+  border-bottom-color: #d8e0e9;
+  border-right-color: #e2e8f0;
 }
 body[data-theme='light'] .ai-markdown-table tbody tr:nth-child(even),
-.miniapp-shell.miniapp-light .ai-markdown-table tbody tr:nth-child(even) {
-  background: rgba(226, 232, 240, 0.45);
+.miniapp-shell.miniapp-light .ai-markdown-table tbody tr:nth-child(even) { background: #f8fafc; }
+body[data-theme='light'] .ai-markdown-table tbody tr:hover,
+.miniapp-shell.miniapp-light .ai-markdown-table tbody tr:hover { background: #f1f5f9; }
+@media (max-width: 720px) {
+  .ai-markdown-table th, .ai-markdown-table td { padding: 0.5rem 0.6rem; }
 }
 
 /* Keep destructive/completion actions visible in the subtask editor when its title wraps. */
@@ -12062,3 +12072,67 @@ body[data-theme='dark'] .focus-mode-shell .focus-sector-dropdown-menu {
   outline-offset: 1px;
 }
 .task-followup-cancel:disabled { opacity: .4; cursor: wait; }
+
+/* Locked monitoring model: same surface and text as the regular selector,
+   but native disabled semantics make the option non-interactive. */
+.ai-chat-model-cap-button:disabled {
+  color: var(--text-primary) !important;
+  cursor: not-allowed;
+  opacity: 0.86;
+  filter: none !important;
+}
+.miniapp-ai-chat-select.miniapp-ai-chat-model-cap:disabled {
+  cursor: not-allowed;
+  opacity: 0.84 !important;
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor;
+}
+.miniapp-shell.miniapp-light .miniapp-ai-chat-select.miniapp-ai-chat-model-cap:disabled,
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-select.miniapp-ai-chat-model-cap:disabled {
+  color: #334155 !important;
+  -webkit-text-fill-color: #334155;
+}
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-select.miniapp-ai-chat-model-cap:disabled {
+  color: #e2e8f0 !important;
+  -webkit-text-fill-color: #e2e8f0;
+}
+
+/* Light-mode reminder timeline: dark navy text and distinct bell against pale blue. */
+body[data-theme='light'] .timeline-reminder-chip,
+.theme-light .timeline-reminder-chip {
+  color: #0c4a6e !important;
+  background-image: none;
+  text-shadow: none;
+  border-color: #0369a1 !important;
+  border-left: 4px solid #0369a1 !important;
+  box-shadow: none;
+}
+body[data-theme='light'] .timeline-reminder-chip .timeline-reminder-icon,
+.theme-light .timeline-reminder-chip .timeline-reminder-icon { color: #0369a1 !important; }
+body[data-theme='light'] .timeline-reminder-chip .timeline-task-chip-meta,
+.theme-light .timeline-reminder-chip .timeline-task-chip-meta { color: #155e75 !important; }
+body[data-theme='dark'] .timeline-reminder-chip .timeline-reminder-icon,
+.theme-dark .timeline-reminder-chip .timeline-reminder-icon { color: #7dd3fc; }
+.miniapp-shell.miniapp-light .miniapp-timeline-reminder-card,
+body[data-theme='light'] .miniapp-shell .miniapp-timeline-reminder-card {
+  color: #0c4a6e !important;
+  background: #f0f9ff !important;
+  box-shadow: none !important;
+}
+.miniapp-shell.miniapp-light .miniapp-timeline-reminder-card .miniapp-timeline-card-title,
+.miniapp-shell.miniapp-light .miniapp-timeline-reminder-card p,
+body[data-theme='light'] .miniapp-shell .miniapp-timeline-reminder-card .miniapp-timeline-card-title,
+body[data-theme='light'] .miniapp-shell .miniapp-timeline-reminder-card p { color: #0c4a6e !important; }
+
+/* Global overdue dropdown is a single panel with quiet, clearly separated rows. */
+.topbar-overdue-popover { box-shadow: 0 12px 30px rgba(15,23,42,.13); }
+body[data-theme='dark'] .topbar-overdue-popover { box-shadow: 0 14px 34px rgba(2,6,23,.34); }
+.topbar-overdue-popover .topbar-overdue-items { padding: 2px 1px; }
+.topbar-overdue-popover .timeline-task-chip {
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+  border-radius: 0.6rem;
+  min-height: 2rem;
+}
+.topbar-overdue-popover .timeline-task-chip:hover { filter: none !important; }

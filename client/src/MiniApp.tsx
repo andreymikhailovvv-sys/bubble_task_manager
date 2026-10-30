@@ -4958,9 +4958,12 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               ) : <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary">Помощь ИИ</h2>}
               {!useTelegramCompactChatHeader ? taskMonitoringControl : null}
               <button type="button" onClick={() => closeMiniWindowWithMotion('task-ai', () => setIsAiDialogOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть диалог с ИИ"><X size={18} /></button>
-              {openedTask.aiMonitoringEnabled ? <span title="Модель изменяется только в настройках автомониторинга" className="miniapp-ai-chat-model-cap w-40 truncate rounded-b-xl bg-emerald-500/15 px-3 py-1.5 text-center text-xs font-semibold text-emerald-500">{AI_CHAT_MODEL_OPTIONS.find(item => item.value === openedTask.aiMonitoringModel)?.label ?? 'GPT-6 Luna'}</span> : <select value={selectedAiChatModel} onChange={(event) => { const model = event.target.value as AiChatModel; taskChatModelByIdRef.current[openedTask.id] = model; setSelectedAiChatModel(model); }} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap w-40 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель помощи ИИ">
+              <select disabled={openedTask.aiMonitoringEnabled} title={openedTask.aiMonitoringEnabled ? 'Модель изменяется только в настройках автомониторинга' : 'Выбрать модель ИИ'} value={openedTask.aiMonitoringEnabled ? (openedTask.aiMonitoringModel ?? DEFAULT_TASK_AI_CHAT_MODEL) : selectedAiChatModel}
+                onChange={(event) => { if (openedTask.aiMonitoringEnabled) return; const model = event.target.value as AiChatModel; taskChatModelByIdRef.current[openedTask.id] = model; setSelectedAiChatModel(model); }}
+                className="miniapp-ai-chat-select miniapp-ai-chat-model-cap w-40 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold"
+                aria-label={openedTask.aiMonitoringEnabled ? 'Модель ИИ закреплена настройками автомониторинга' : 'Выбрать модель помощи ИИ'}>
                 {AI_CHAT_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>}
+              </select>
             </div>
             <div className="miniapp-ai-chat-thread-wrap relative min-h-0 flex-1">
               <div ref={fullscreenAiDialogContainerRef} onScroll={(event) => updateAiChatHeaderVisibility(event.currentTarget.scrollTop, taskAiChatScrollTopRef, setIsTaskAiChatHeaderHidden)} className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
