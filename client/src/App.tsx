@@ -6145,7 +6145,6 @@ export default function App() {
                         <span className={`min-w-0 flex-1 truncate text-base font-semibold ${task.status === 'DONE' || isClosingTask ? 'timeline-task-chip-completed text-subtle line-through opacity-70 decoration-2' : 'text-primary'}`}>
                           <LinkifiedText text={task.title} stopPropagationOnLinkClick />
                         </span>
-                        {task.aiMonitoringEnabled ? <TaskMonitoringBadge /> : null}
                         {task.isRecurring ? <span title="Повторяющаяся задача"><Repeat size={13} className="list-task-repeat-icon shrink-0" /></span> : null}
                         {hasAiNotificationState ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={14} className="list-task-ai-icon shrink-0" /></span> : null}
                       </div>
