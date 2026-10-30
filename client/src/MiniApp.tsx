@@ -4294,10 +4294,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       onClick={() => {
                         if (isReminder) return;
                         if (isSubtask) {
-                          openSubtaskModal(task);
+                          openSubtaskModal(taskById.get(task.id) ?? task);
                           return;
                         }
-                        openTaskModal(task);
+                        openTaskModal(taskById.get(task.id) ?? task);
                       }}
                     >
                       <p className={`miniapp-timeline-card-title flex min-w-0 items-center gap-1 font-semibold ${isSubtask ? 'text-xs leading-4' : 'text-sm'}`}><span className="min-w-0 truncate">{isReminder ? '🔔 ' : ''}{task.title}</span>{task.aiMonitoringEnabled ? <TaskMonitoringBadge /> : null}</p>
@@ -4366,7 +4366,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                           <div key={group.hour || 'month'} className={timelineView === 'week' ? 'miniapp-calendar-hour-group' : undefined}>
                             {timelineView === 'week' ? <span className="miniapp-calendar-hour-label">{group.hour}:00</span> : null}
                             {group.entries.map((entry) => (
-                              <button key={entry.id} type="button" className={`miniapp-calendar-entry ${'task' in entry && entry.task.taskType === 'EVENT' ? 'miniapp-calendar-event-entry' : ''} ${'task' in entry && entry.task.taskType === 'REMINDER' ? 'miniapp-calendar-reminder-entry' : ''}`} style={{ '--calendar-entry-color': entry.color } as CSSProperties} onClick={() => 'task' in entry ? (entry.task.taskType === 'REMINDER' ? undefined : entry.task.parentTaskId ? openSubtaskModal(entry.task) : openTaskModal(entry.task)) : openEditHabitModal(entry.habit)}>
+                              <button key={entry.id} type="button" className={`miniapp-calendar-entry ${'task' in entry && entry.task.taskType === 'EVENT' ? 'miniapp-calendar-event-entry' : ''} ${'task' in entry && entry.task.taskType === 'REMINDER' ? 'miniapp-calendar-reminder-entry' : ''}`} style={{ '--calendar-entry-color': entry.color } as CSSProperties} onClick={() => 'task' in entry ? (entry.task.taskType === 'REMINDER' ? undefined : entry.task.parentTaskId ? openSubtaskModal(taskById.get(entry.task.id) ?? entry.task) : openTaskModal(taskById.get(entry.task.id) ?? entry.task)) : openEditHabitModal(entry.habit)}>
                                 <span className="miniapp-calendar-entry-title">{entry.title}</span>
                               </button>
                             ))}
