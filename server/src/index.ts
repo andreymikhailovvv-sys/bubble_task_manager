@@ -30,6 +30,7 @@ const __dirname = path.dirname(__filename);
 const DEFAULT_CORS_ORIGINS = [
   'https://planirovych.ru',
   'https://www.planirovych.ru',
+  'https://work.planirovych.ru',
   'https://bubble-task-manager.onrender.com'
 ];
 const URL_ENV_KEYS = ['APP_URL', 'PUBLIC_APP_URL', 'CLIENT_URL', 'CORS_ORIGIN'] as const;
@@ -56,6 +57,10 @@ app.use(cors((req, callback) => {
     }
   });
 }));
+app.use((req, res, next) => {
+  if (req.hostname.toLowerCase() === 'work.planirovych.ru') res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+  next();
+});
 app.use(express.json({ limit: requestBodyLimit }));
 app.use(express.urlencoded({ extended: true, limit: requestBodyLimit }));
 app.use(cookieParser());
