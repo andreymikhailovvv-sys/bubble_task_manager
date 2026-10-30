@@ -63,6 +63,7 @@ type Props = {
   onComplete?: () => Promise<void>;
   onPrepareReport?: () => void;
   parentTaskTitle?: string | null;
+  monitoringParent?: boolean;
   onOpenParentTask?: () => void;
   defaultAiNotificationsEnabled: boolean;
   editorType?: "task" | "event";
@@ -309,6 +310,7 @@ export function TaskEditor({
   onComplete,
   onPrepareReport,
   parentTaskTitle,
+  monitoringParent = false,
   onOpenParentTask,
   defaultAiNotificationsEnabled,
   timelineTasks = [],
@@ -677,7 +679,7 @@ export function TaskEditor({
   const visibleSubtasks = subtasks
     .filter((subtask) => subtask.status !== "DONE")
     .slice(0, 5);
-  const deadlineLabel = task?.aiMonitoringEnabled ? "Время определяется триггерами" : form.dueDate
+  const deadlineLabel = (task?.aiMonitoringEnabled || monitoringParent) ? "Время определяется триггерами" : form.dueDate
     ? `До дедлайна: ${formatDeadlineLeft(form.dueDate)}`
     : "Дедлайн не задан";
 
@@ -1034,9 +1036,9 @@ export function TaskEditor({
                 </div>
               ) : null}
               <div className="focused-task-deadline-row mt-1 flex items-center gap-2 text-sm font-medium text-violet-500">
-                {task?.aiMonitoringEnabled ? <TaskMonitoringBadge /> : null}
+                {task?.aiMonitoringEnabled || monitoringParent ? <TaskMonitoringBadge /> : null}
                 <span>{deadlineLabel}</span>
-                {!task?.aiMonitoringEnabled ? <DateTimePickerWithApply
+                {!task?.aiMonitoringEnabled && !monitoringParent ? <DateTimePickerWithApply
                   value={form.dueDate}
                   onChange={(nextValue) =>
                     setForm((p) => ({ ...p, dueDate: nextValue }))
