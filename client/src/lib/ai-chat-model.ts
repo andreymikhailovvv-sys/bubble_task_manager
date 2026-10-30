@@ -1,6 +1,7 @@
 import type { AiChatModel } from './types';
 
 export const DEFAULT_QUICK_AI_CHAT_MODEL: AiChatModel = 'gpt-6-luna';
+export const DEFAULT_TASK_AI_CHAT_MODEL: AiChatModel = 'gpt-6-luna';
 export const DEFAULT_WEB_PROJECT_CHAT_MODEL: AiChatModel = 'gpt-6.1-terra';
 export const DEFAULT_MOBILE_PROJECT_CHAT_MODEL: AiChatModel = 'gpt-6-luna';
 
