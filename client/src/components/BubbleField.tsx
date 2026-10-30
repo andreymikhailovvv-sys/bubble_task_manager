@@ -1063,8 +1063,8 @@ export function BubbleField({
                               <LinkifiedText text={subtask.title} stopPropagationOnLinkClick />
                             </div>
                             <div className="mt-1 flex min-w-0 items-center justify-between gap-2 text-[10px] text-muted">
-                              <span className="min-w-0 flex-1 whitespace-normal break-words leading-snug">Срок: {formatDueDate(subtask.dueDate)}</span>
-                              <InlineDateTimePickerIcon
+                              <span className="min-w-0 flex-1 whitespace-normal break-words leading-snug">{hoveredBubble.task.aiMonitoringEnabled ? 'Сроком управляют триггеры' : `Срок: ${formatDueDate(subtask.dueDate)}`}</span>
+                              {!hoveredBubble.task.aiMonitoringEnabled ? <InlineDateTimePickerIcon
                                 value={subtask.dueDate}
                                 title="Изменить срок подзадачи"
                                 className="shrink-0"
@@ -1072,7 +1072,7 @@ export function BubbleField({
                                 timelineTasks={timelinePickerTasks}
                                 onOpenChange={handleNativeCalendarOpenChange}
                                 onChange={(dueDate) => onUpdateSubtaskDueDate(subtask, dueDate)}
-                              />
+                              /> : null}
                             </div>
                           </div>
                         </div>
