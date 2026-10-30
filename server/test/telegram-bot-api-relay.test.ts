@@ -171,6 +171,8 @@ test('preserves Telegram errors and returns 502 when upstream connection fails',
 
 test('Timeweb validates outgoing envelopes before including the token in the authenticated relay request', async () => {
   setup();
+  // On Timeweb the configured bot is the main bot, not Render's legacy bot.
+  process.env.TELEGRAM_BOT_TOKEN = TEST_TOKEN;
   const apiEnvelope = await buildTelegramBotApiRelayEnvelope(
     `https://api.telegram.org/bot${TEST_TOKEN}/sendMessage`, {
       method: 'POST', body: JSON.stringify({ chat_id: 42, text: 'hello' })
