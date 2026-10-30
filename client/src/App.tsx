@@ -1346,6 +1346,12 @@ export default function App() {
     setHabits(habitData);
   }
 
+  useEffect(() => {
+    const onTriggerChange = () => { void load(); };
+    window.addEventListener('task-monitoring-triggers-updated', onTriggerChange);
+    return () => window.removeEventListener('task-monitoring-triggers-updated', onTriggerChange);
+  }, []);
+
   const updateUserSettings = async (
     payload: { timeZone?: string; morningAiCheckupEnabled?: boolean; morningAiCheckupTime?: string; browserNotificationsEnabled?: boolean; offerTaskCompletionReport?: boolean },
     savingKey: 'timeZone' | 'checkupEnabled' | 'checkupTime' | 'browserNotifications' | 'taskReport'
