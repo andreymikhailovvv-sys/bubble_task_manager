@@ -7,10 +7,10 @@ import { taskService } from './task.service.js';
 export const TASK_MONITOR_ACTION_TOOLS = [
   {
     type: 'function' as const, name: 'create_monitoring_subtask',
-    description: 'Create one concrete, needed subtask under the monitored task with a realistic deadline. Only for actions the user still needs to do, not speculative duplicates.',
+    description: 'Create a useful subtask without a deadline. In monitoring mode only triggers schedule future actions; never set a task or subtask due date.',
     parameters: { type: 'object', additionalProperties: false,
-      properties: { title: { type: 'string' }, description: { type: 'string' }, dueAt: { type: 'string', description: 'Future ISO 8601 datetime with timezone' } },
-      required: ['title', 'description', 'dueAt'] }, strict: false
+      properties: { title: { type: 'string' }, description: { type: 'string' } },
+      required: ['title', 'description'] }, strict: false
   },
   {
     type: 'function' as const, name: 'change_monitoring_importance',
@@ -39,18 +39,15 @@ export async function executeTaskMonitoringAction(input: {
     ? input.args as Record<string, unknown> : {};
   if (!TASK_MONITOR_ACTION_TOOLS.some(tool => tool.name === input.name)) return { ok: false, code: 'UNKNOWN_ACTION' };
   // Validate all data before reserving a unique action slot.
-  let prepared: { title: string; description: string; dueDate: Date } | null = null;
+  let prepared: { title: string; description: string } | null = null;
   let priority: { value: number; reason: string } | null = null;
   if (input.name === 'create_monitoring_subtask') {
     const title = typeof args.title === 'string' ? args.title.trim() : '';
     const description = typeof args.description === 'string' ? args.description.trim() : '';
-    const dueDate = new Date(typeof args.dueAt === 'string' ? args.dueAt : '');
-    if (title.length < 3 || title.length > 160 || description.length > 1200 ||
-      !Number.isFinite(dueDate.getTime()) || dueDate.getTime() < Date.now() + 60_000 ||
-      dueDate.getTime() > Date.now() + 90 * 86400_000) return { ok: false, code: 'INVALID_SUBTASK' };
+    if (title.length < 3 || title.length > 160 || description.length > 1200) return { ok: false, code: 'INVALID_SUBTASK' };
     const existing = await prisma.task.findFirst({ where: { parentTaskId: task.id, userId: input.userId, status: { not: 'DONE' }, title }, select: { id: true } });
     if (existing) return { ok: true, existingSubtaskId: existing.id, skippedDuplicate: true };
-    prepared = { title, description, dueDate };
+    prepared = { title, description };
   }
   if (input.name === 'change_monitoring_importance') {
     const importance = args.importance;
@@ -83,11 +80,11 @@ export async function executeTaskMonitoringAction(input: {
     if (prepared) {
       const created = await taskService.create(input.userId, {
         title: prepared.title, description: prepared.description,
-        dueDate: prepared.dueDate, sphereId: task.sphereId,
+        dueDate: null, sphereId: task.sphereId,
         parentTaskId: task.id, importance: task.importance
       });
-      result = { ok: true, subtaskId: created.id, dueAt: prepared.dueDate.toISOString() };
-      announcement = 'ИИ добавил подзадачу «' + prepared.title + '» со сроком ' + prepared.dueDate.toLocaleString('ru-RU') + '.';
+      result = { ok: true, subtaskId: created.id };
+      announcement = 'ИИ добавил подзадачу «' + prepared.title + '».';
     } else if (priority) {
       const before = task.importance;
       const updated = await taskService.update(task.id, input.userId, { importance: priority.value }, { source: 'ai_monitoring', requestId: input.requestId });
