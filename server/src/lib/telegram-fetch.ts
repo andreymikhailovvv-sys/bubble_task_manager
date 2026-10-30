@@ -132,7 +132,7 @@ function outboundRelayConfig(): { url: string; secret: string } | null {
 }
 
 export async function buildTelegramBotApiRelayEnvelope(input: TelegramFetchInput, init?: TelegramFetchInit) {
-  const target = new URL(typeof input === 'string' || input instanceof URL ? String(input) : input.url);
+  const target = new URL(typeof input === 'string' ? input : ('url' in input ? input.url : String(input)));
   const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
   if (target.origin !== 'https://api.telegram.org' || !botToken ||
       target.search || target.hash || target.username || target.password) {
