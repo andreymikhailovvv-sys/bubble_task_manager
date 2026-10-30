@@ -4726,7 +4726,7 @@ export default function App() {
           <p className="font-semibold text-primary">{task.title}</p>
           <p className="mt-1 min-w-0 max-w-full whitespace-pre-wrap break-words text-muted [overflow-wrap:anywhere]"><LinkifiedText text={(() => { const plain = noteHtmlToPlainText(task.description ?? '', { trimEnd: true }); return plain.length > 240 ? `${plain.slice(0, 240)}...` : plain; })()} fallback="Без описания" stopPropagationOnLinkClick /></p>
           {isSubtaskChip && options?.parentTaskTitle ? <p className="mt-1 text-muted">Основная задача: {options.parentTaskTitle}</p> : null}
-          <p className="mt-1 text-muted">{task.aiMonitoringEnabled ? <span className="inline-flex items-center gap-1"><TaskMonitoringBadge /> По триггерам</span> : <>Дедлайн: {formatTaskDueDate(task.dueDate)} · {formatDeadlineLeft(task.dueDate)}</>}</p>
+          <p className="mt-1 text-muted">{task.aiMonitoringEnabled ? <span className="inline-flex items-center gap-1"><TaskMonitoringBadge /> На усмотрение ИИ</span> : <>Дедлайн: {formatTaskDueDate(task.dueDate)} · {formatDeadlineLeft(task.dueDate)}</>}</p>
           {isEventChip ? <p className="mt-1 text-muted">Место: {task.location?.trim() || 'Не указано'}</p> : null}
           {isEventChip ? null : isSubtaskChip ? (
             <div className="timeline-hover-card-section mt-2 border-t pt-2">
@@ -4749,7 +4749,7 @@ export default function App() {
                   {previewSubtasks.map((subtask) => (
                     <li key={subtask.id} className="rounded border border-[color:var(--timeline-grid-border)] bg-[color:var(--muted-bg)] px-2 py-1 text-muted">
                       <span className="block whitespace-normal break-words leading-snug">• {subtask.title}</span>
-                      <span className="mt-0.5 block whitespace-normal break-words text-[10px] text-subtle">{subtask.dueDate ? `Срок: ${formatTaskDueDate(subtask.dueDate)} · ${formatDeadlineLeft(subtask.dueDate)}` : 'Срок не задан'}</span>
+                      <span className="mt-0.5 block whitespace-normal break-words text-[10px] text-subtle">{task.aiMonitoringEnabled ? 'На усмотрение ИИ' : subtask.dueDate ? `Срок: ${formatTaskDueDate(subtask.dueDate)} · ${formatDeadlineLeft(subtask.dueDate)}` : 'Срок не задан'}</span>
                     </li>
                   ))}
                 </ul>
@@ -5524,7 +5524,7 @@ export default function App() {
               <motion.article key={focusActiveTask.id} initial={{ opacity: 0, y: 44, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="focus-main-card flex min-h-0 w-full max-w-2xl flex-1 flex-col overflow-hidden rounded-[2rem] border p-6 shadow-xl">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Текущая задача</p>
                 <div className="mt-2 flex items-start justify-between gap-3"><button type="button" className="text-left text-3xl font-bold text-slate-950 hover:underline" onClick={() => { setFocusedTaskId(focusActiveTask.id); setIsFocusedNotesEditorOpen(false); }}>{focusActiveTask.title}</button><button type="button" className="success-button shrink-0 rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => void completeTask(focusActiveTask)}>Выполнить</button></div>
-                <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-violet-500">{focusActiveTask.aiMonitoringEnabled ? <><TaskMonitoringBadge /> Время по триггерам</> : (focusActiveTask.dueDate ? `До дедлайна: ${formatSubtaskRelativeDeadline(focusActiveTask.dueDate)}` : 'Дедлайн не задан')}</p>
+                <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-violet-500">{focusActiveTask.aiMonitoringEnabled ? <><TaskMonitoringBadge /> На усмотрение ИИ</> : (focusActiveTask.dueDate ? `До дедлайна: ${formatSubtaskRelativeDeadline(focusActiveTask.dueDate)}` : 'Дедлайн не задан')}</p>
                 <div className="mt-3 flex min-h-0 items-start">
                   <p className="focus-task-description min-w-0 flex-1 whitespace-pre-wrap text-sm leading-6 text-muted">{noteHtmlToPlainText(focusActiveTask.description ?? '', { trimEnd: true }) || 'Описание не заполнено.'}</p>
                 </div>
@@ -6154,7 +6154,7 @@ export default function App() {
                         </p>
                       ) : null}
                       <p className={`list-task-deadline mt-1 inline-flex min-w-0 items-center gap-1.5 text-[11px] ${hasOverdueState ? 'list-task-deadline-overdue' : 'text-subtle'}`}>
-                        {task.aiMonitoringEnabled ? <><TaskMonitoringBadge /><span className="min-w-0 truncate">Время по триггерам</span></> : <><CalendarDays size={13} className="shrink-0" aria-hidden="true" /><span className="min-w-0 truncate">Дедлайн: {formatTaskDueDate(task.dueDate)}{task.dueDate ? ` · ${formatDeadlineLeft(task.dueDate)}` : ''}</span></>}
+                        {task.aiMonitoringEnabled ? <><TaskMonitoringBadge /><span className="min-w-0 truncate">На усмотрение ИИ</span></> : <><CalendarDays size={13} className="shrink-0" aria-hidden="true" /><span className="min-w-0 truncate">Дедлайн: {formatTaskDueDate(task.dueDate)}{task.dueDate ? ` · ${formatDeadlineLeft(task.dueDate)}` : ''}</span></>}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
@@ -6869,7 +6869,7 @@ export default function App() {
                         <p className={`upcoming-subtask-title text-sm font-semibold text-primary ${subtask.status === 'DONE' || closingTaskIds.includes(subtask.id) ? 'timeline-task-chip-completed line-through opacity-60 decoration-2' : ''}`}><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
                         <div className="upcoming-subtask-description mt-1 text-xs text-muted"><LinkifiedText text={noteHtmlToPlainText(subtask.description ?? '', { trimEnd: true })} fallback="Без описания" stopPropagationOnLinkClick /></div>
                         <p className="upcoming-subtask-deadline mt-1 text-[11px] text-subtle">
-                          Дедлайн: {formatTaskDueDate(subtask.dueDate)}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
+                          {taskById.get(subtask.parentTaskId ?? '')?.aiMonitoringEnabled ? 'На усмотрение ИИ' : <>Дедлайн: {formatTaskDueDate(subtask.dueDate)}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}</>}
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
@@ -7501,7 +7501,7 @@ export default function App() {
                     </div>
                   </div>
                   <div className="focused-task-deadline-row mt-3 flex items-center gap-2 text-sm font-medium text-violet-500">
-                    {focusedTask.aiMonitoringEnabled ? <><TaskMonitoringBadge /> <span>Время определяется триггерами</span></> : <>
+                    {focusedTask.aiMonitoringEnabled ? <><TaskMonitoringBadge /> <span>На усмотрение ИИ</span></> : <>
                       <span>{focusedDraft.dueDate ? `До дедлайна: ${formatDeadlineLeft(focusedDraft.dueDate)}` : 'Дедлайн не задан'}</span>
                       <DateTimePickerWithApply
                         value={focusedDraft.dueDate}
