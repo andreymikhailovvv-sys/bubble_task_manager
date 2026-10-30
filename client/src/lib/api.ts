@@ -383,6 +383,8 @@ export type TelegramAiChatPolicy = TelegramAiChatSettings & {
   chatKind: 'user' | 'group' | 'supergroup';
   chatTitle: string;
   isEnabled: boolean;
+  historyImportCursor: number | null;
+  historyImportedCount: number;
   spentTodayMilli: number;
   reservedTodayMilli: number;
   totalSpentMilli: number;
