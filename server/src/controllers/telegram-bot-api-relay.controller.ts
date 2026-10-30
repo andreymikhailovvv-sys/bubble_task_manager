@@ -70,17 +70,22 @@ export const createTelegramBotApiRelayController = (fetchImplementation: typeof 
       return;
     }
     const secret = process.env.TELEGRAM_BOT_API_RELAY_SECRET?.trim();
-    // Render may run a different bot for its own inbound webhook. The egress
-    // relay must use the Timeweb bot's token, never Render's own bot token.
-    // Fail closed rather than silently sending messages as the wrong bot.
-    const botToken = process.env.TELEGRAM_BOT_API_RELAY_BOT_TOKEN?.trim();
-    if (!validSecret(secret) || !botToken || !/^\d+:[A-Za-z0-9_-]+$/.test(botToken)) {
-      console.error('[TelegramBotApiRelay] enabled but not configured');
-      res.status(503).json({ error: 'Telegram outbound relay is not configured' });
+    if (!validSecret(secret)) {
+      console.error('[TelegramBotApiRelay] relay shared secret missing or invalid');
+      res.status(503).json({ error: 'Telegram outbound relay shared secret is not configured' });
       return;
     }
     if (!authorized(secret, req.get(SECRET_HEADER))) {
       res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    // The authenticated Timeweb caller supplies its own bot token over HTTPS.
+    // Render's legacy Telegram bot and its TELEGRAM_BOT_TOKEN stay untouched.
+    // A missing/invalid token is an explicit client error, not a fallback.
+    const botToken: unknown = req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>).botToken : undefined;
+    if (typeof botToken !== 'string' || !/^\d+:[A-Za-z0-9_-]+$/.test(botToken)) {
+      res.status(400).json({ error: 'Invalid outgoing Telegram bot token' });
       return;
     }
 
