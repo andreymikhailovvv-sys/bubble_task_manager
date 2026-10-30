@@ -35,7 +35,7 @@ test('quick desktop and mini general chat default to Luna, other web chats keep 
   assert.ok(app.includes("quickAiChatModel, setQuickAiChatModel] = useState<AiChatModel>('gpt-6-luna')"));
   assert.ok(app.includes("readSavedAiChatModel(activeAiChat?.model) ?? DEFAULT_WEB_PROJECT_CHAT_MODEL"));
   assert.ok(app.includes("activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatModel : activeProjectChatModel"));
-  assert.ok(mini.includes("selectedAiChatModel, setSelectedAiChatModel] = useState<AiChatModel>('gpt-6-luna')"));
+  assert.ok(mini.includes("selectedAiChatModel, setSelectedAiChatModel] = useState<AiChatModel>(DEFAULT_TASK_AI_CHAT_MODEL)"));
 });
 
 test('general and task AI chats create a dedicated reminder instead of tasks or subtasks', async () => {
