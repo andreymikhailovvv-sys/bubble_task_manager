@@ -830,7 +830,7 @@ export function BubbleField({
                   <div className="grid grid-cols-2 gap-3 text-base">
                     <div className="bubble-info-badge rounded-[1.2rem] border p-3">
                       <p className="text-subtle">Дедлайн</p>
-                      <p className="mt-1 font-semibold text-primary">{hoveredBubble.task.aiMonitoringEnabled ? <span className="inline-flex items-center gap-1"><TaskMonitoringBadge /> По триггерам</span> : formatDueDate(hoveredBubble.task.dueDate)}</p>
+                      <p className="mt-1 font-semibold text-primary">{hoveredBubble.task.aiMonitoringEnabled ? <span className="inline-flex items-center gap-1"><TaskMonitoringBadge /> На усмотрение ИИ</span> : formatDueDate(hoveredBubble.task.dueDate)}</p>
                     </div>
                     <div className="bubble-info-badge rounded-[1.2rem] border p-3">
                       <p className="text-subtle">{hoveredBubble.task.aiMonitoringEnabled ? 'Следующие действия' : 'Осталось'}</p>
@@ -876,7 +876,7 @@ export function BubbleField({
                         return (
                           <li key={subtask.id} className={`bubble-subtask-preview rounded-[1rem] border px-2 py-1.5 ${glowClass}`}>
                             <span className="bubble-subtask-preview-title break-words" title={subtask.title}>{subtask.title}</span>
-                            <span className="bubble-subtask-preview-date mt-0.5 block truncate text-sm text-subtle">Срок: {formatDueDate(subtask.dueDate)}</span>
+                            <span className="bubble-subtask-preview-date mt-0.5 block truncate text-sm text-subtle">{hoveredBubble.task.aiMonitoringEnabled ? 'На усмотрение ИИ' : `Срок: ${formatDueDate(subtask.dueDate)}`}</span>
                           </li>
                         );
                       })}
@@ -940,7 +940,7 @@ export function BubbleField({
                 <div className="bubble-tooltip-card rounded-xl border p-3 text-xs">
                   <p className="mb-1 font-semibold break-words"><LinkifiedText text={hoveredBubble.task.title} stopPropagationOnLinkClick /></p>
                   <p className="mb-2 text-muted" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}><LinkifiedText text={noteHtmlToPlainText(hoveredBubble.task.description ?? '', { trimEnd: true })} fallback="Без описания" stopPropagationOnLinkClick /></p>
-                  <p className="text-muted">{hoveredBubble.task.aiMonitoringEnabled ? 'Автомониторинг · по триггерам' : `Срок: ${formatDueDate(hoveredBubble.task.dueDate)}`}</p>
+                  <p className="text-muted">{hoveredBubble.task.aiMonitoringEnabled ? 'На усмотрение ИИ' : `Срок: ${formatDueDate(hoveredBubble.task.dueDate)}`}</p>
                   <p className="inline-flex items-center gap-1 text-muted">
                     {smartPostponeTaskId === hoveredBubble.task.id ? <LoaderCircle size={12} className="animate-spin text-cyan-200" /> : null}
                     {hoveredBubble.task.aiMonitoringEnabled ? <TaskMonitoringBadge /> : formatDeadlineLeft(hoveredBubble.task.dueDate)}
@@ -1063,7 +1063,7 @@ export function BubbleField({
                               <LinkifiedText text={subtask.title} stopPropagationOnLinkClick />
                             </div>
                             <div className="mt-1 flex min-w-0 items-center justify-between gap-2 text-[10px] text-muted">
-                              <span className="min-w-0 flex-1 whitespace-normal break-words leading-snug">{hoveredBubble.task.aiMonitoringEnabled ? 'Сроком управляют триггеры' : `Срок: ${formatDueDate(subtask.dueDate)}`}</span>
+                              <span className="min-w-0 flex-1 whitespace-normal break-words leading-snug">{hoveredBubble.task.aiMonitoringEnabled ? 'На усмотрение ИИ' : `Срок: ${formatDueDate(subtask.dueDate)}`}</span>
                               {!hoveredBubble.task.aiMonitoringEnabled ? <InlineDateTimePickerIcon
                                 value={subtask.dueDate}
                                 title="Изменить срок подзадачи"

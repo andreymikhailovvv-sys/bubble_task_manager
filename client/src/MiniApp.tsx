@@ -4110,7 +4110,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       <h3 className="miniapp-task-title flex min-w-0 items-center gap-1 font-semibold"><span className="min-w-0 truncate">{task.title}</span>{task.aiMonitoringEnabled ? <TaskMonitoringBadge /> : null}</h3>
                       {listSortMode === 'importance' ? (
                         <>
-                          <p className={`mt-1 text-xs font-medium ${hasOverdueState ? 'miniapp-overdue-label' : 'text-sky-200'}`}>{task.aiMonitoringEnabled ? 'По триггерам' : formatRemaining(task.dueDate)}</p>
+                          <p className={`mt-1 text-xs font-medium ${hasOverdueState ? 'miniapp-overdue-label' : 'text-sky-200'}`}>{task.aiMonitoringEnabled ? 'На усмотрение ИИ' : formatRemaining(task.dueDate)}</p>
                           <span
                             className="miniapp-importance-rating mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold"
                             style={{ backgroundColor: importanceBadgeColor }}
@@ -4124,7 +4124,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                         <>
                           <p className="miniapp-task-date mt-1 inline-flex items-center gap-1.5 text-xs">
                             <CalendarDays size={13} aria-hidden="true" />
-                            {task.aiMonitoringEnabled ? 'Автомониторинг · по триггерам' : `${isEvent ? 'Событие' : 'Дедлайн'}: ${formatDueDate(task.dueDate)}`}
+                            {task.aiMonitoringEnabled ? 'На усмотрение ИИ' : `${isEvent ? 'Событие' : 'Дедлайн'}: ${formatDueDate(task.dueDate)}`}
                           </p>
                           <p className={`miniapp-task-time mt-1 flex items-center gap-1.5 text-xs font-semibold ${hasOverdueState ? 'miniapp-overdue-label' : ''}`}>
                             <Clock3 size={13} aria-hidden="true" />{task.aiMonitoringEnabled ? `${task.monitoringTriggers?.length ?? 0} активных триггеров` : formatRemaining(task.dueDate)}
@@ -4564,7 +4564,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     timelineTasks={timelinePickerTasks}
                     iconOnly detachedPopup buttonClassName="miniapp-focus-icon-button"
                   />}
-                  <span>{openedTask.aiMonitoringEnabled ? 'Время определяется триггерами' : openedTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(openedTaskDraft.dueDate)}` : 'Дедлайн не задан'}</span>
+                  <span>{openedTask.aiMonitoringEnabled ? 'На усмотрение ИИ' : openedTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(openedTaskDraft.dueDate)}` : 'Дедлайн не задан'}</span>
                 </div>
                 <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
                   <TaskDescriptionInput
@@ -4813,7 +4813,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             />
             <div className="mt-2 flex items-center gap-2 text-xs font-semibold text-violet-500">
               {openedSubtaskParent?.aiMonitoringEnabled ? <TaskMonitoringBadge /> : <DateTimePickerWithApply value={fromInputDateTime(openedSubtaskDraft.dueDate)} onChange={(nextValue) => changeSubtaskDraft({ dueDate: toInputDateTime(nextValue) })} timelineTasks={timelinePickerTasks} iconOnly detachedPopup buttonClassName="miniapp-focus-icon-button" />}
-              <span>{openedSubtaskParent?.aiMonitoringEnabled ? 'Время определяется триггерами' : openedSubtaskDraft.dueDate ? formatSubtaskRelativeDeadline(fromInputDateTime(openedSubtaskDraft.dueDate)) : 'Срок не задан'}</span>
+              <span>{openedSubtaskParent?.aiMonitoringEnabled ? 'На усмотрение ИИ' : openedSubtaskDraft.dueDate ? formatSubtaskRelativeDeadline(fromInputDateTime(openedSubtaskDraft.dueDate)) : 'Срок не задан'}</span>
             </div>
             <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
               <TaskDescriptionInput
