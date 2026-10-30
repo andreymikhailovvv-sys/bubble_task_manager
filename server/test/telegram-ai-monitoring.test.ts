@@ -111,10 +111,11 @@ test('AUTO reply proposal requires a valid bounded response and an incoming Tele
   assert.equal(classifyMonitorAutoReply(make({ shouldReply: true, messageId: '13', text: 'Ответ' })), 'invalid_proposal');
 });
 
-test('auto-replies remain off without two explicit per-chat instructions', () => {
+test('auto-replies support missing optional instructions with safe model defaults', () => {
   const base = { ...DEFAULT_TELEGRAM_AI_CHAT_SETTINGS, mode: 'AUTO' as const };
-  assert.throws(() => validateTelegramAiChatSettings(base));
-  assert.throws(() => validateTelegramAiChatSettings({ ...base, autoReplyWhen: 'Когда зовут' }));
+  assert.equal(validateTelegramAiChatSettings(base).mode, 'AUTO');
+  assert.equal(validateTelegramAiChatSettings({ ...base, autoReplyWhen: 'Когда зовут' }).autoReplyHow, '');
+  assert.equal(validateTelegramAiChatSettings({ ...base, autoReplyWhen: '', autoReplyHow: '' }).mode, 'AUTO');
   const valid = validateTelegramAiChatSettings({
     ...base, autoReplyWhen: '  Меня тегают @alex  ', autoReplyHow: '  Кратко и вежливо  '
   });
@@ -172,7 +173,7 @@ test('independent interaction, summary and task schedules preserve non-overlappi
   assert.match(worker, /lastInteractionMessageId: maxId/);
   assert.match(worker, /lastSummaryMessageId: maxId/);
   assert.match(worker, /lastTaskMessageId: maxId/);
-  assert.match(worker, /nextMonitorWakeup\(\[nextInteractionAt, nextSummaryAt, nextTaskAt\]\)/);
+  assert.match(worker, /nextMonitorWakeup\(\[\s*nextInteractionAt, nextSummaryAt, nextTaskAt,/);
   assert.match(worker, /current\.summaryInstructions/);
   assert.match(worker, /current\.suggestWhen/);
   assert.match(worker, /publishTelegramAiReplySuggestion/);
