@@ -677,7 +677,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                         onChange={e => update('historyAccessEnabled', e.target.checked)} className="mt-1"/>
                       <span><span className="block font-semibold">Дать доступ ассистенту к переписке</span>
                         <span className="integration-menu__muted mt-1 block text-xs">
-                          Использовать сообщения до подключения ассистента как контекст. История не вызывает автоответов и создания задач. Загрузка и анализ расходуют кредиты.
+                          Использовать сообщения до подключения ассистента как контекст. История не вызывает автоответов и создания задач. Старые вложения не загружаются. Анализ текста расходует кредиты.
                         </span>
                       </span>
                     </label>
