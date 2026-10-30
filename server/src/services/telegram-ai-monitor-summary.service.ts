@@ -114,7 +114,7 @@ export function buildMonitorPayload(messages: MonitorMessage[], instructions: st
     store: false,
     tool_choice: 'none' as const,
     // Extra output capacity only when the owner explicitly enabled auto-replies.
-    max_output_tokens: taskMode !== 'NONE' ? 2900 : autoReplyRules ? 1650 : TELEGRAM_MONITOR_OUTPUT_TOKENS,
+    max_output_tokens: historicalContextOnly ? 2100 : taskMode !== 'NONE' ? 2900 : autoReplyRules ? 1650 : TELEGRAM_MONITOR_OUTPUT_TOKENS,
     text: { format: TEXT_FORMAT },
     input: [
       { role: 'system' as const, content: [
