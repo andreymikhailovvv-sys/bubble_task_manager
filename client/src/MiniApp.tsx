@@ -3583,8 +3583,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         clientRequestId,
         question: serializeAiReply(question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.', replyToTask),
         userMessage,
-        mode: selectedAiChatModel === 'gpt-6.1-sol' ? 'smart' : 'fast',
-        model: selectedAiChatModel,
+        mode: (openedTask.aiMonitoringEnabled ? openedTask.aiMonitoringModel : selectedAiChatModel) === 'gpt-6.1-sol' ? 'smart' : 'fast',
+        model: openedTask.aiMonitoringEnabled ? (openedTask.aiMonitoringModel ?? 'gpt-6.1-terra') : selectedAiChatModel,
         clientSurface,
         attachments: attachmentsPayload
       }, { onStatus: (status) => setAiProgressByTask((current) => ({ ...current, [openedTask.id]: status })), onUploadProgress: setTaskAiUploadProgress });
@@ -3712,7 +3712,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
   const taskMonitoringControl = openedTask ? (
               <TaskMonitoringStatuses taskId={openedTask.id}
-                enabled={openedTask.aiMonitoringEnabled === true}
+                model={openedTask.aiMonitoringModel}
+                 enabled={openedTask.aiMonitoringEnabled === true}
                 allowed={openedTask.taskType === 'TASK' && !openedTask.parentTaskId && !openedTask.isCollaborative}
                 onTaskUpdated={(updated) => {
                   setTasks(previous => previous.map(task => task.id === updated.id ? updated : task));
@@ -4945,9 +4946,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               ) : <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary">Помощь ИИ</h2>}
               {!useTelegramCompactChatHeader ? taskMonitoringControl : null}
               <button type="button" onClick={() => closeMiniWindowWithMotion('task-ai', () => setIsAiDialogOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть диалог с ИИ"><X size={18} /></button>
-              <select value={selectedAiChatModel} onChange={(event) => setSelectedAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap w-40 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель помощи ИИ">
+              {openedTask.aiMonitoringEnabled ? <span title="Модель изменяется только в настройках автомониторинга" className="miniapp-ai-chat-model-cap w-40 truncate rounded-b-xl bg-emerald-500/15 px-3 py-1.5 text-center text-xs font-semibold text-emerald-500">{AI_CHAT_MODEL_OPTIONS.find(item => item.value === openedTask.aiMonitoringModel)?.label ?? 'GPT-6.1 Terra'}</span> : <select value={selectedAiChatModel} onChange={(event) => setSelectedAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap w-40 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель помощи ИИ">
                 {AI_CHAT_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
+              </select>}
             </div>
             <div className="miniapp-ai-chat-thread-wrap relative min-h-0 flex-1">
               <div ref={fullscreenAiDialogContainerRef} onScroll={(event) => updateAiChatHeaderVisibility(event.currentTarget.scrollTop, taskAiChatScrollTopRef, setIsTaskAiChatHeaderHidden)} className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
