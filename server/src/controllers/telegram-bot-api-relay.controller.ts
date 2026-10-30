@@ -70,7 +70,10 @@ export const createTelegramBotApiRelayController = (fetchImplementation: typeof 
       return;
     }
     const secret = process.env.TELEGRAM_BOT_API_RELAY_SECRET?.trim();
-    const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
+    // Render may run a different bot for its own inbound webhook. The egress
+    // relay must use the Timeweb bot's token, never Render's own bot token.
+    // Fail closed rather than silently sending messages as the wrong bot.
+    const botToken = process.env.TELEGRAM_BOT_API_RELAY_BOT_TOKEN?.trim();
     if (!validSecret(secret) || !botToken || !/^\d+:[A-Za-z0-9_-]+$/.test(botToken)) {
       console.error('[TelegramBotApiRelay] enabled but not configured');
       res.status(503).json({ error: 'Telegram outbound relay is not configured' });
