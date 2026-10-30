@@ -110,6 +110,7 @@ function initializeProxy(): void {
 // falling back to a blocked proxy can duplicate side-effecting requests.
 const OUTBOUND_RELAY_TIMEOUT_MS = 90_000; // Allow Render free-tier cold starts.
 const MAX_RELAY_UPLOAD_BYTES = 8 * 1024 * 1024;
+let outboundBotIdentityLogged = false;
 
 function outboundRelayConfig(): { url: string; secret: string } | null {
   const urlValue = process.env.TELEGRAM_BOT_API_RELAY_URL?.trim();
@@ -178,6 +179,13 @@ export async function buildTelegramBotApiRelayEnvelope(input: TelegramFetchInput
 export async function telegramFetch(input: TelegramFetchInput, init?: TelegramFetchInit) {
   const outboundRelay = outboundRelayConfig();
   if (outboundRelay) {
+    if (!outboundBotIdentityLogged) {
+      outboundBotIdentityLogged = true;
+      const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
+      console.info('[TelegramBotApiRelayClient] configured main bot', {
+        botId: token?.match(/^(\d+):/)?.[1] ?? null
+      });
+    }
     const envelope = await buildTelegramBotApiRelayEnvelope(input, init);
     const operation = envelope.kind === 'file' ? 'file' : envelope.method;
     console.info('[TelegramBotApiRelayClient] sending', { operation, transport: 'render_https' });
