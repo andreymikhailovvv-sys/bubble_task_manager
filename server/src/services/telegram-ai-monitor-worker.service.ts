@@ -87,19 +87,28 @@ export const telegramAiMonitorControl = {
     // The result is not sent to an AI. It only supplies an initial checkpoint.
     if (policy.mode === 'AUTO') {
       const access = await telegramUserChatCapability(userId);
-      if (!access.sendEnabled || !policy.autoReplyWhen.trim() || !policy.autoReplyHow.trim()) {
-        throw new TelegramUserClientError(403, 'Для автоответов необходимы обе инструкции и разрешённая отправка Telegram');
+      if (!access.sendEnabled) {
+        throw new TelegramUserClientError(403, 'Для автоответов необходима разрешённая отправка Telegram');
       }
     }
     // Explicit owner activation must wait in the interactive queue, not compete as a background poll.
     const history = await telegramUserClientRead.aiHistory(userId, chatId, 10);
     const maxId = Math.max(0, ...history.messages.map(item => item.id));
+    // Restarting with unchanged preferences does not silently charge for the same import again.
+    const needHistoryImport = policy.historyAccessEnabled &&
+      (policy.historyImportCursor !== null || !policy.historyContextSummary.trim());
+    const importCursor = needHistoryImport
+      ? (policy.historyImportCursor ?? maxId + 1) : null;
+    const importRemaining = policy.historyImportCursor !== null
+      ? policy.historyImportRemaining : policy.historyMessageLimit;
     await permission(userId);
     const current = await prisma.telegramAiChatPolicy.updateMany({
       where: { id: policy.id, userId, isEnabled: false, monitorRevision: policy.monitorRevision },
       data: {
         isEnabled: true, monitorRevision: { increment: 1 },
         lastSeenMessageId: maxId, lastCheckedAt: new Date(),
+        historyImportCursor: importCursor,
+        historyImportRemaining: needHistoryImport ? importRemaining : null,
         lastInteractionMessageId: maxId, lastSummaryMessageId: maxId, lastTaskMessageId: maxId,
         nextInteractionAt: policy.mode === 'OBSERVE' ? null : policy.mode === 'SUGGEST'
           ? telegramMonitorNextAt(policy.interactionIntervalMinutes, null)
@@ -108,6 +117,7 @@ export const telegramAiMonitorControl = {
           : telegramMonitorNextAt(policy.summaryIntervalMinutes, policy.summaryIntervalMonths),
         nextTaskAt: policy.taskMode === 'NONE' ? null : telegramMonitorNextAt(policy.taskIntervalMinutes, policy.taskIntervalMonths),
         nextCheckAt: nextMonitorWakeup([
+          importCursor !== null ? new Date() : null,
           policy.mode === 'OBSERVE' ? null : policy.mode === 'SUGGEST'
             ? telegramMonitorNextAt(policy.interactionIntervalMinutes, null)
             : telegramMonitorNextAt(policy.autoReplyIntervalMinutes, policy.autoReplyIntervalMonths),
