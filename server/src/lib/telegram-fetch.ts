@@ -179,20 +179,30 @@ export async function telegramFetch(input: TelegramFetchInput, init?: TelegramFe
   const outboundRelay = outboundRelayConfig();
   if (outboundRelay) {
     const envelope = await buildTelegramBotApiRelayEnvelope(input, init);
-    return fetch(outboundRelay.url, {
+    const operation = envelope.kind === 'file' ? 'file' : envelope.method;
+    console.info('[TelegramBotApiRelayClient] sending', { operation, transport: 'render_https' });
+    const response = await fetch(outboundRelay.url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-telegram-outbound-relay-secret': outboundRelay.secret
       },
-      // The trusted Render gateway needs this bot's token to call Telegram.
-      // Transmit it only inside the authenticated, TLS-protected request body;
-      // Render must not substitute its own legacy bot's token.
-      body: JSON.stringify({ ...envelope, botToken: process.env.TELEGRAM_BOT_TOKEN?.trim() }),
+      // Only the operation and its payload cross the relay. The bot token
+      // remains in the dedicated Render environment secret.
+      body: JSON.stringify(envelope),
       // Use undici's normal HTTPS verification and avoid user-supplied proxies.
       signal: init?.signal ?? AbortSignal.timeout(OUTBOUND_RELAY_TIMEOUT_MS),
       redirect: 'error'
     });
+    if (!response.ok) {
+      // Never log the raw response body, URL, headers or bot credentials.
+      console.warn('[TelegramBotApiRelayClient] failed', {
+        operation, status: response.status, transport: 'render_https'
+      });
+    } else {
+      console.info('[TelegramBotApiRelayClient] completed', { operation, status: response.status });
+    }
+    return response;
   }
   initializeProxy();
   return fetch(input, proxyAgent ? { ...init, dispatcher: proxyAgent } : init);
