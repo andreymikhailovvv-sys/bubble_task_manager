@@ -12,27 +12,31 @@ COPY package.json package-lock.json ./
 COPY client/package.json ./client/package.json
 COPY server/package.json ./server/package.json
 
-# A failed npm ci must never be treated as successful, even when npm itself
-# prints "Exit handler never called!". Retry transient registry failures but
-# do not proceed to build unless the required binaries were actually installed.
-RUN set -eu; \
+# Keep npm's package cache between BuildKit builds, and emit installation
+# progress to the build log. Timeweb's builder has a 28-minute hard limit:
+# bound each attempt to 5 minutes so a stalled registry/download cannot hang
+# silently until buildctl kills the entire deployment.
+# A failed or partial npm ci must never be treated as success.
+RUN --mount=type=cache,target=/root/.npm \
+  set -eu; \
   attempt=1; \
   while [ "$attempt" -le 3 ]; do \
-    echo "Installing dependencies (attempt $attempt/3)"; \
-    if npm ci --include=dev --no-audit --no-fund --prefer-offline \
-        --fetch-retries=2 --fetch-retry-mintimeout=10000 \
-        --fetch-retry-maxtimeout=60000 --fetch-timeout=180000 \
-        > /tmp/npm-ci.log 2>&1; then \
+    echo "Installing dependencies (attempt $attempt/3; max 300 seconds)"; \
+    if timeout --signal=TERM --kill-after=10s 300s \
+        npm ci --include=dev --no-audit --no-fund --prefer-offline \
+        --fetch-retries=1 --fetch-retry-mintimeout=5000 \
+        --fetch-retry-maxtimeout=15000 --fetch-timeout=60000 \
+        --loglevel=info; then \
       if [ -x node_modules/.bin/tsc ] \
           && [ -x node_modules/.bin/vite ] \
           && [ -x node_modules/.bin/prisma ]; then \
-        cat /tmp/npm-ci.log; \
-        rm -f /tmp/npm-ci.log; \
+        echo "Dependencies installed; required build tools present"; \
         break; \
       fi; \
-      echo "npm ci completed but TypeScript/Vite/Prisma binaries are missing" >&2; \
+      echo "npm ci reported success but TypeScript/Vite/Prisma binaries are missing" >&2; \
+    else \
+      echo "npm ci failed or exceeded the 300-second limit on attempt $attempt" >&2; \
     fi; \
-    cat /tmp/npm-ci.log; \
     if [ "$attempt" -eq 3 ]; then \
       echo "npm ci failed after 3 attempts; refusing to build with incomplete dependencies" >&2; \
       exit 1; \
