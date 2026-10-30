@@ -1603,7 +1603,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       date.setDate(periodStart.getDate() + index);
       const nextDate = new Date(date);
       nextDate.setDate(date.getDate() + 1);
-      const dateTasks = timelineFilteredTasks.filter((task) => {
+      const dateTasks = projectMonitoringTimeline(timelineFilteredTasks).filter((task) => {
         if (!task.dueDate) return false;
         const due = new Date(task.dueDate);
         return !Number.isNaN(due.getTime()) && due >= date && due < nextDate;
@@ -1689,7 +1689,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       let offset = 4 + (quarter % TIMELINE_QUARTERS_PER_HOUR === 0 ? TIMELINE_HOUR_EDGE_PADDING : 0);
       for (let index = 0; index < sorted.length; index += 1) {
         const top = timelineToday.quarterTops[quarter] + offset;
-        placements.set(sorted[index].id, { top });
+        placements.set(timelineProjectionKey(sorted[index]), { top });
         offset += (sorted[index].parentTaskId ? TIMELINE_SUBTASK_CARD_HEIGHT : TIMELINE_CARD_HEIGHT) + TIMELINE_CARD_GAP;
       }
     }
@@ -4250,16 +4250,16 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   const taskQuarter = (taskHour * TIMELINE_QUARTERS_PER_HOUR) + Math.floor(dueDate.getMinutes() / 15);
                   const isEvent = task.taskType === 'EVENT';
                   const isReminder = task.taskType === 'REMINDER';
-                  const hasOverdueState = !isEvent && !isReminder && isOverdue(task);
+                  const hasOverdueState = !task.aiMonitoringEnabled && !isEvent && !isReminder && isOverdue(task);
                   const isSubtask = Boolean(task.parentTaskId);
                   const parentTask = task.parentTaskId ? (taskById.get(task.parentTaskId) ?? null) : null;
                   const taskForSectorColor = parentTask ?? task;
                   const sphereColor = taskForSectorColor.sphereId ? spheres.find((item) => item.id === taskForSectorColor.sphereId)?.color ?? null : null;
-                  const placement = timelineTaskPlacements.get(task.id) ?? { top: timelineToday.quarterTops[taskQuarter] + 4 };
+                  const placement = timelineTaskPlacements.get(timelineProjectionKey(task)) ?? { top: timelineToday.quarterTops[taskQuarter] + 4 };
                   return (
                     <button
                       type="button"
-                      key={task.id}
+                      key={timelineProjectionKey(task)}
                       className={`miniapp-timeline-task-card absolute border px-2 py-1 text-left ${hasOverdueState ? 'miniapp-task-overdue' : ''} ${isSubtask ? 'miniapp-timeline-subtask-card' : ''} ${isEvent ? 'miniapp-timeline-event-card' : ''} ${isReminder ? 'miniapp-timeline-reminder-card' : ''}`}
                       style={{
                         top: `${placement.top}px`,
@@ -4340,7 +4340,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   const isToday = dateKey === toDateKey(timelineNow);
                   const isOutsideMonth = timelineView === 'month' && date.getMonth() !== timelineAnchorDate.getMonth();
                   const taskEntries = [
-                    ...dayTasks.map((task) => ({ id: task.id, time: new Date(task.dueDate as string).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }), title: task.title, color: task.taskType === 'REMINDER' ? '#0284c7' : task.taskType === 'EVENT' ? '#f59e0b' : (spheres.find((sphere) => sphere.id === (taskById.get(task.parentTaskId ?? '') ?? task).sphereId)?.color ?? '#38bdf8'), task })),
+                    ...dayTasks.map((task) => ({ id: timelineProjectionKey(task), time: new Date(task.dueDate as string).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }), title: task.title, color: task.taskType === 'REMINDER' ? '#0284c7' : task.taskType === 'EVENT' ? '#f59e0b' : (spheres.find((sphere) => sphere.id === (taskById.get(task.parentTaskId ?? '') ?? task).sphereId)?.color ?? '#38bdf8'), task })),
                   ];
                   const habitEntries = dayHabits.map(({ habit, reminderTime }) => ({ id: `habit-${habit.id}-${reminderTime}`, time: reminderTime, title: `${habit.icon} ${habit.name}`, color: habit.color, habit }));
                   const entries = [...taskEntries, ...(timelineView === 'month' ? [] : habitEntries)].sort((a, b) => a.time.localeCompare(b.time));
