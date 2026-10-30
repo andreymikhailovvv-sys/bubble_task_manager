@@ -33,10 +33,10 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'
 
 ## Rollout order
 
-**Important:** Deploy the same commit to **Render and Timeweb**. Older Render
-relay versions expect a separate environment variable for the Telegram token;
-older Timeweb senders do not include a token in the authenticated request.
-Deploy Render first and Timeweb second. There are **no new environment variables**.
+**Important:** Deploy this commit to both **Render and Timeweb**, Render first,
+Timeweb second. The new Render relay rejects bot tokens in the request body.
+The Timeweb sender no longer includes one. Use the already existing dedicated
+token variable on Render; no new keys are required.
 
 1. Merge and deploy to **Render first**, keeping the existing `TELEGRAM_BOT_API_RELAY_ENABLED=true` and `TELEGRAM_BOT_API_RELAY_SECRET` values, then wait for a healthy service. An unauthenticated direct request
    to `/api/telegram-bot-api-relay` must return **401**, not 200.
@@ -74,3 +74,9 @@ the incoming webhook relay.
   a complete AI request after a failed final delivery; that is a separate
   idempotency issue and should be addressed in a future fix.
 - Do not log the shared secret, the Telegram token or message contents.
+
+## Ingress diagnostics
+
+On Render startup, two read-only checks run once: a deliberately invalid update sent to the configured Timeweb webhook (HTTP 400 means authorized, HTTP 401 means incoming secret mismatch), and Telegram getWebhookInfo for the main bot. Check [TelegramIngressDiagnostic] logs for the registered webhook host, path type, pending updates and last error time. Neither check sends a message or changes webhook registration.
+
+On Timeweb, [TelegramWebhook] logs whether the incoming header is missing or mismatched, without exposing its value. [TelegramBotApiRelay] on Render distinguishes missing and invalid secrets/token values via an explicit reason. Outgoing notifications alone do not prove the incoming webhook works.
