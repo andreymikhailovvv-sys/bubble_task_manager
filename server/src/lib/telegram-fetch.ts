@@ -110,6 +110,7 @@ function initializeProxy(): void {
 // falling back to a blocked proxy can duplicate side-effecting requests.
 const OUTBOUND_RELAY_TIMEOUT_MS = 90_000; // Allow Render free-tier cold starts.
 const MAX_RELAY_UPLOAD_BYTES = 8 * 1024 * 1024;
+let outboundBotIdentityLogged = false;
 
 function outboundRelayConfig(): { url: string; secret: string } | null {
   const urlValue = process.env.TELEGRAM_BOT_API_RELAY_URL?.trim();
@@ -178,21 +179,38 @@ export async function buildTelegramBotApiRelayEnvelope(input: TelegramFetchInput
 export async function telegramFetch(input: TelegramFetchInput, init?: TelegramFetchInit) {
   const outboundRelay = outboundRelayConfig();
   if (outboundRelay) {
+    if (!outboundBotIdentityLogged) {
+      outboundBotIdentityLogged = true;
+      const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
+      console.info('[TelegramBotApiRelayClient] configured main bot', {
+        botId: token?.match(/^(\d+):/)?.[1] ?? null
+      });
+    }
     const envelope = await buildTelegramBotApiRelayEnvelope(input, init);
-    return fetch(outboundRelay.url, {
+    const operation = envelope.kind === 'file' ? 'file' : envelope.method;
+    console.info('[TelegramBotApiRelayClient] sending', { operation, transport: 'render_https' });
+    const response = await fetch(outboundRelay.url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-telegram-outbound-relay-secret': outboundRelay.secret
       },
-      // The trusted Render gateway needs this bot's token to call Telegram.
-      // Transmit it only inside the authenticated, TLS-protected request body;
-      // Render must not substitute its own legacy bot's token.
-      body: JSON.stringify({ ...envelope, botToken: process.env.TELEGRAM_BOT_TOKEN?.trim() }),
+      // Only the operation and its payload cross the relay. The bot token
+      // remains in the dedicated Render environment secret.
+      body: JSON.stringify(envelope),
       // Use undici's normal HTTPS verification and avoid user-supplied proxies.
       signal: init?.signal ?? AbortSignal.timeout(OUTBOUND_RELAY_TIMEOUT_MS),
       redirect: 'error'
     });
+    if (!response.ok) {
+      // Never log the raw response body, URL, headers or bot credentials.
+      console.warn('[TelegramBotApiRelayClient] failed', {
+        operation, status: response.status, transport: 'render_https'
+      });
+    } else {
+      console.info('[TelegramBotApiRelayClient] completed', { operation, status: response.status });
+    }
+    return response;
   }
   initializeProxy();
   return fetch(input, proxyAgent ? { ...init, dispatcher: proxyAgent } : init);

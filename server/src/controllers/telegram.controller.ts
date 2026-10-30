@@ -29,7 +29,14 @@ export const createTelegramController = ({
     }
 
     if (!service.isWebhookAuthorized(req.headers as Record<string, unknown>)) {
-      console.warn(`[TelegramWebhook] rejected updateId=${updateId}: invalid webhook secret`);
+      const provided = req.headers['x-telegram-bot-api-secret-token'];
+      const expected = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
+      console.warn(`[TelegramWebhook] rejected updateId=${updateId}: invalid webhook secret`, {
+        reason: typeof provided !== 'string' ? 'secret_header_missing' : 'secret_mismatch',
+        secretHeaderPresent: typeof provided === 'string',
+        receivedLength: typeof provided === 'string' ? provided.length : null,
+        expectedLength: expected?.length ?? null
+      });
       res.status(401).json({ error: 'Invalid webhook secret' });
       return;
     }

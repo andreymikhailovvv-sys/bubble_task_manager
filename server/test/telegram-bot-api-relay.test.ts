@@ -9,7 +9,7 @@ import { buildTelegramBotApiRelayEnvelope } from '../src/lib/telegram-fetch.js';
 const TEST_TOKEN = '123456:fakeBotTokenForTesting';
 const LEGACY_RENDER_BOT_TOKEN = '654321:deprecatedRenderBotForTesting';
 const TEST_SECRET = 'telegram_render_outbound_relay_secret_testing_32';
-const VARIABLES = ['TELEGRAM_BOT_API_RELAY_ENABLED', 'TELEGRAM_BOT_API_RELAY_SECRET', 'TELEGRAM_BOT_TOKEN'] as const;
+const VARIABLES = ['TELEGRAM_BOT_API_RELAY_ENABLED', 'TELEGRAM_BOT_API_RELAY_SECRET', 'TELEGRAM_BOT_API_RELAY_BOT_TOKEN', 'TELEGRAM_BOT_TOKEN'] as const;
 const saved = Object.fromEntries(VARIABLES.map(key => [key, process.env[key]]));
 
 test.afterEach(() => {
@@ -24,15 +24,15 @@ function setup() {
   process.env.TELEGRAM_BOT_API_RELAY_ENABLED = 'true';
   process.env.TELEGRAM_BOT_API_RELAY_SECRET = TEST_SECRET;
   process.env.TELEGRAM_BOT_TOKEN = LEGACY_RENDER_BOT_TOKEN;
+  process.env.TELEGRAM_BOT_API_RELAY_BOT_TOKEN = TEST_TOKEN;
 }
-function request(body: unknown, secret: string | undefined = TEST_SECRET, botToken: string | null = TEST_TOKEN) {
+function request(body: unknown, secret: string | undefined = TEST_SECRET) {
   return {
-    body: body && typeof body === 'object'
-      ? { ...body, ...(botToken === null ? {} : { botToken }) }
-      : body,
+    body,
     get: (name: string) => name === 'x-telegram-outbound-relay-secret' ? secret : undefined
   };
 }
+
 function response() {
   const out: { status: number; payload?: unknown; headers: Record<string, string> } = { status: 0, headers: {} };
   return {
@@ -64,8 +64,14 @@ test('fails closed with missing configuration and wrong relay credentials', asyn
   assert.equal(first.out.status, 503);
   process.env.TELEGRAM_BOT_API_RELAY_SECRET = TEST_SECRET;
   const noOutboundToken = response();
-  await controller.forward(request({ kind: 'api', method: 'getFile', payload: {} }, TEST_SECRET, null) as never, noOutboundToken.res as never);
-  assert.equal(noOutboundToken.out.status, 400, 'must not fall back to legacy Render bot token');
+  delete process.env.TELEGRAM_BOT_API_RELAY_BOT_TOKEN;
+  await controller.forward(request({ kind: 'api', method: 'getFile', payload: {} }) as never, noOutboundToken.res as never);
+  assert.equal(noOutboundToken.out.status, 503, 'never use the legacy Render bot token');
+  assert.deepEqual(noOutboundToken.out.payload, { error: 'Outbound relay not configured', reason: 'outbound_bot_token_missing' });
+  process.env.TELEGRAM_BOT_API_RELAY_BOT_TOKEN = TEST_TOKEN;
+  const forbiddenToken = response();
+  await controller.forward(request({ kind: 'api', method: 'getFile', payload: {}, botToken: TEST_TOKEN }) as never, forbiddenToken.res as never);
+  assert.equal(forbiddenToken.out.status, 400);
   const second = response();
   await controller.forward(request({ kind: 'api', method: 'getFile', payload: {} }, 'wrong') as never, second.res as never);
   assert.equal(second.out.status, 401);
@@ -169,7 +175,7 @@ test('preserves Telegram errors and returns 502 when upstream connection fails',
   assert.equal(unavailableResponse.out.status, 502);
 });
 
-test('Timeweb validates outgoing envelopes before including the token in the authenticated relay request', async () => {
+test('Timeweb validates outgoing envelopes without sending bot token to Render', async () => {
   setup();
   // On Timeweb the configured bot is the main bot, not Render's legacy bot.
   process.env.TELEGRAM_BOT_TOKEN = TEST_TOKEN;
@@ -179,8 +185,8 @@ test('Timeweb validates outgoing envelopes before including the token in the aut
     });
   assert.deepEqual(apiEnvelope, { kind: 'api', method: 'sendMessage', payload: { chat_id: 42, text: 'hello' } });
   assert.ok(!JSON.stringify(apiEnvelope).includes(TEST_TOKEN));
-  const relayPayload = { ...apiEnvelope, botToken: TEST_TOKEN };
-  assert.equal(relayPayload.botToken, TEST_TOKEN);
+  const relayPayload = { ...apiEnvelope };
+  assert.ok(!JSON.stringify(relayPayload).includes(TEST_TOKEN));
   assert.deepEqual(parseBotApiRelayEnvelope(relayPayload), apiEnvelope);
 
   const fileEnvelope = await buildTelegramBotApiRelayEnvelope(
