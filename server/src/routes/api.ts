@@ -37,6 +37,7 @@ import { AccountRegistrationError, PERSONAL_DATA_CONSENT_VERSION, accountRegistr
 import { deductEfficiencyPenalty, EFFICIENCY_BUCKET_ORDER, type EfficiencyBucketKey, type EfficiencyBucketScores } from '../services/efficiency-rating.service.js';
 import { creditsToMilli, currentAiCreditsPeriod, getAiCreditWallet, grantBonusCreditsMilli, grantBonusCreditsMilliInTransaction } from '../services/ai-credit-wallet.service.js';
 import { isGuestAccount } from '../lib/guest-account.js';
+import { isBusinessAdmin } from '../lib/business-admin-access.js';
 import { validateTelegramWebAppInitData } from '../lib/telegram-webapp-auth.js';
 import { FixedWindowRateLimiter, type RateLimitDecision } from '../lib/security-rate-limiter.js';
 import { validateAndroidPushRegistration } from '../lib/android-push-payload.js';
@@ -379,6 +380,29 @@ const ensureDeviceUser = async (req: any, res: any) => {
 };
 
 apiRouter.get('/health', (_, res) => res.json({ ok: true, service: 'bubble-task-manager', date: new Date().toISOString() }));
+
+// Separate Work bootstrap gate: never reuse the global admin password.
+apiRouter.get('/business/bootstrap', requireAuth, asyncHandler(async (req, res) => {
+  res.setHeader('Cache-Control', 'private, no-store');
+  const allowlist = process.env.BUSINESS_ADMIN_USER_IDS?.trim();
+  if (!allowlist) {
+    res.status(503).json({ error: 'Бизнес-панель пока не настроена' });
+    return;
+  }
+  if (!isBusinessAdmin(req.user?.id, allowlist)) {
+    res.status(403).json({ error: 'Нет доступа к бизнес-панели' });
+    return;
+  }
+  const user = await prisma.user.findUnique({
+    where: { id: req.user!.id },
+    select: { id: true, name: true, username: true, email: true, deviceId: true, passwordHash: true, googleSub: true, telegramChatId: true }
+  });
+  if (!user || isGuestAccount(user)) {
+    res.status(403).json({ error: 'Нет доступа к бизнес-панели' });
+    return;
+  }
+  res.json({ user: { id: user.id, name: user.name, username: user.username }, status: 'initial-shell' });
+}));
 
 apiRouter.post('/client-errors', async (req, res) => {
   const source = typeof req.body?.source === 'string' ? req.body.source : 'unknown';

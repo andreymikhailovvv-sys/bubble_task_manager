@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import MiniApp from './MiniApp';
 import AdminPage from './AdminPage';
+const BusinessApp = React.lazy(() => import('./BusinessApp'));
 import PublicPages from './PublicPages';
 import CookieBanner from './components/CookieBanner';
 import TelegramAuthPage from './TelegramAuthPage';
@@ -68,6 +69,9 @@ window.addEventListener('unhandledrejection', (event) => {
   });
 });
 
+const isWorkHost = window.location.hostname.toLowerCase() === 'work.planirovych.ru';
+const isWorkPreview = import.meta.env.DEV && ['localhost','127.0.0.1'].includes(window.location.hostname) && window.location.pathname === '/business-preview';
+const isBusinessRoute = isWorkHost || isWorkPreview;
 const isMiniAppRoute = window.location.pathname.startsWith('/miniapp');
 const isTelegramAuthRoute = window.location.pathname === '/telegram-auth';
 const isAdminRoute = window.location.pathname === '/admin556215';
@@ -83,8 +87,10 @@ const isCompactWorkspaceViewport = window.matchMedia('(max-width: 1024px)').matc
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <AppErrorBoundary>
-      {isAdminRoute
-        ? <AdminPage />
+      {isBusinessRoute
+        ? <React.Suspense fallback={<main className="min-h-screen bg-slate-950 p-8 text-slate-200">Загружаем Планировыч Work…</main>}><BusinessApp /></React.Suspense>
+        : isAdminRoute
+          ? <AdminPage />
         : isTelegramAuthRoute
           ? <TelegramAuthPage />
         : isMiniAppRoute
@@ -94,7 +100,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             : isCompactWorkspaceViewport
               ? <MiniApp runtime="web" />
               : <App />}
-      {!isMiniAppRoute && !isTelegramAuthRoute && !isAdminRoute ? <CookieBanner /> : null}
+      {!isBusinessRoute && !isMiniAppRoute && !isTelegramAuthRoute && !isAdminRoute ? <CookieBanner /> : null}
     </AppErrorBoundary>
   </React.StrictMode>
 );
