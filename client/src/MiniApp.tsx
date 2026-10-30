@@ -4117,10 +4117,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                         <>
                           <p className="miniapp-task-date mt-1 inline-flex items-center gap-1.5 text-xs">
                             <CalendarDays size={13} aria-hidden="true" />
-                            {isEvent ? 'Событие' : 'Дедлайн'}: {formatDueDate(task.dueDate)}
+                            {task.aiMonitoringEnabled ? 'Автомониторинг · по триггерам' : `${isEvent ? 'Событие' : 'Дедлайн'}: ${formatDueDate(task.dueDate)}`}
                           </p>
                           <p className={`miniapp-task-time mt-1 flex items-center gap-1.5 text-xs font-semibold ${hasOverdueState ? 'miniapp-overdue-label' : ''}`}>
-                            <Clock3 size={13} aria-hidden="true" />{formatRemaining(task.dueDate)}
+                            <Clock3 size={13} aria-hidden="true" />{task.aiMonitoringEnabled ? `${task.monitoringTriggers?.length ?? 0} активных триггеров` : formatRemaining(task.dueDate)}
                           </p>
                         </>
                       )}
