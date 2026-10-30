@@ -4677,7 +4677,7 @@ export default function App() {
         }}
         onClick={() => {
           if (options?.disableOpenOnClick || isReminderChip) return;
-          openTaskWithFocusGuard(task);
+          openTaskWithFocusGuard(taskById.get(task.id) ?? task);
         }}
         onContextMenu={(event) => {
           if (isReminderChip || task.aiMonitoringEnabled) { event.preventDefault(); return; }
