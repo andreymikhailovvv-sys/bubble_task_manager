@@ -55,7 +55,7 @@ import { TelegramIntegrationsMenu } from './components/TelegramIntegrationsMenu'
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
 import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike, orderAiChatMessagesChronologically } from './lib/ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
-import { DEFAULT_QUICK_AI_CHAT_MODEL, DEFAULT_WEB_PROJECT_CHAT_MODEL, readSavedAiChatModel } from './lib/ai-chat-model';
+import { DEFAULT_QUICK_AI_CHAT_MODEL, DEFAULT_TASK_AI_CHAT_MODEL, DEFAULT_WEB_PROJECT_CHAT_MODEL, readSavedAiChatModel } from './lib/ai-chat-model';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
 import { TelegramAiReplySuggestionCard } from './components/TelegramAiReplySuggestionCard';
 import { TelegramReadConsentCard } from './components/TelegramReadConsentCard';
@@ -1943,7 +1943,7 @@ export default function App() {
   const focusActiveTask = focusTasks[focusActiveIndex] ?? focusTasks[0] ?? null;
   const focusTaskAiDialog = focusActiveTask ? (aiDialogByTask[focusActiveTask.id] ?? []) : [];
   const focusTaskAiModel: AiChatModel = focusActiveTask
-    ? (focusActiveTask.aiMonitoringEnabled ? (focusActiveTask.aiMonitoringModel ?? 'gpt-6.1-terra') : (aiModelByTask[focusActiveTask.id] ?? 'gpt-6.1-terra')) : 'gpt-6.1-terra';
+    ? (focusActiveTask.aiMonitoringEnabled ? (focusActiveTask.aiMonitoringModel ?? DEFAULT_TASK_AI_CHAT_MODEL) : (aiModelByTask[focusActiveTask.id] ?? DEFAULT_TASK_AI_CHAT_MODEL)) : DEFAULT_TASK_AI_CHAT_MODEL;
 
   // Fetch the SAME persistent conversation as regular task help. Switching
   // focus task never reuses an unrelated task's AI response or model.
@@ -2041,7 +2041,7 @@ export default function App() {
     () => (focusedTask ? aiDialogByTask[focusedTask.id] ?? [] : []),
     [aiDialogByTask, focusedTask]
   );
-  const focusedAiModel: AiChatModel = focusedTask ? (focusedTask.aiMonitoringEnabled ? (focusedTask.aiMonitoringModel ?? 'gpt-6.1-terra') : (aiModelByTask[focusedTask.id] ?? 'gpt-6.1-terra')) : 'gpt-6.1-terra';
+  const focusedAiModel: AiChatModel = focusedTask ? (focusedTask.aiMonitoringEnabled ? (focusedTask.aiMonitoringModel ?? DEFAULT_TASK_AI_CHAT_MODEL) : (aiModelByTask[focusedTask.id] ?? DEFAULT_TASK_AI_CHAT_MODEL)) : DEFAULT_TASK_AI_CHAT_MODEL;
   const filteredFocusedAiDialog = useMemo(() => {
     if (!isFocusedAiSearchOpen) return focusedAiDialog;
     const query = focusedAiSearchQuery.trim().toLowerCase();
@@ -2809,7 +2809,7 @@ export default function App() {
     try {
       const result = await askTaskAssistant(taskId, {
         clientRequestId: id, question: serializeAiReply(question || visibleText, replyToFocusAi),
-        userMessage: userContent, model: focusActiveTask?.aiMonitoringEnabled ? (focusActiveTask.aiMonitoringModel ?? 'gpt-6.1-terra') : (aiModelByTask[taskId] ?? 'gpt-6.1-terra'),
+        userMessage: userContent, model: focusActiveTask?.aiMonitoringEnabled ? (focusActiveTask.aiMonitoringModel ?? DEFAULT_TASK_AI_CHAT_MODEL) : (aiModelByTask[taskId] ?? DEFAULT_TASK_AI_CHAT_MODEL),
         attachments: attachmentsPayload, skipEfficiencyBonus: true
       }, status => {
         setFocusAiProgress(status);
@@ -3467,7 +3467,7 @@ export default function App() {
         question: 'Продолжи исходный запрос по разрешённой пользователем переписке Telegram.',
         userMessage: '',
         telegramRead: approval,
-        model: focus ? (aiModelByTask[taskId] ?? 'gpt-6.1-terra') : focusedAiModel,
+        model: focus ? (focusActiveTask?.aiMonitoringEnabled ? (focusActiveTask.aiMonitoringModel ?? DEFAULT_TASK_AI_CHAT_MODEL) : (aiModelByTask[taskId] ?? DEFAULT_TASK_AI_CHAT_MODEL)) : focusedAiModel,
         clientSurface: 'web',
         skipEfficiencyBonus: focus
       }, { onStatus: status => {
@@ -5618,6 +5618,7 @@ export default function App() {
                 <div className="focus-task-ai-header-actions flex min-w-0 items-center justify-end gap-2">
                   <TaskMonitoringStatuses taskId={focusActiveTask.id}
                     model={focusActiveTask.aiMonitoringModel}
+                    generation={focusActiveTask.aiMonitoringGeneration}
                     enabled={focusActiveTask.aiMonitoringEnabled === true}
                     allowed={focusActiveTask.taskType === 'TASK' && !focusActiveTask.parentTaskId && !focusActiveTask.isCollaborative}
                     onTaskUpdated={updated => setTasks(prev => prev.map(task => task.id === updated.id ? updated : task))} />
@@ -5659,6 +5660,7 @@ export default function App() {
                 <div className="task-ai-fullscreen-monitor shrink-0">
                   <TaskMonitoringStatuses taskId={focusActiveTask.id}
                     model={focusActiveTask.aiMonitoringModel}
+                    generation={focusActiveTask.aiMonitoringGeneration}
                     enabled={focusActiveTask.aiMonitoringEnabled === true}
                     allowed={focusActiveTask.taskType === 'TASK' && !focusActiveTask.parentTaskId && !focusActiveTask.isCollaborative}
                     onTaskUpdated={updated => setTasks(prev => prev.map(task => task.id === updated.id ? updated : task))} />
@@ -7254,6 +7256,7 @@ export default function App() {
                 </div>
                 <TaskMonitoringStatuses taskId={focusedTask.id}
                   model={focusedTask.aiMonitoringModel}
+                  generation={focusedTask.aiMonitoringGeneration}
                   enabled={focusedTask.aiMonitoringEnabled === true}
                   allowed={focusedTask.taskType === 'TASK' && !focusedTask.parentTaskId && !focusedTask.isCollaborative}
                   onTaskUpdated={(updated) => {
@@ -8073,6 +8076,7 @@ export default function App() {
                 <div className="task-ai-fullscreen-monitor shrink-0">
                   <TaskMonitoringStatuses taskId={focusedTask.id}
                     model={focusedTask.aiMonitoringModel}
+                  generation={focusedTask.aiMonitoringGeneration}
                     enabled={focusedTask.aiMonitoringEnabled === true}
                     allowed={focusedTask.taskType === 'TASK' && !focusedTask.parentTaskId && !focusedTask.isCollaborative}
                     onTaskUpdated={(updated) => {
