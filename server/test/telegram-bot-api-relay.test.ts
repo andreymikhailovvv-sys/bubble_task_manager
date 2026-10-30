@@ -7,8 +7,9 @@ import {
 import { buildTelegramBotApiRelayEnvelope } from '../src/lib/telegram-fetch.js';
 
 const TEST_TOKEN = '123456:fakeBotTokenForTesting';
+const LEGACY_RENDER_BOT_TOKEN = '654321:deprecatedRenderBotForTesting';
 const TEST_SECRET = 'telegram_render_outbound_relay_secret_testing_32';
-const VARIABLES = ['TELEGRAM_BOT_API_RELAY_ENABLED', 'TELEGRAM_BOT_API_RELAY_SECRET', 'TELEGRAM_BOT_TOKEN'] as const;
+const VARIABLES = ['TELEGRAM_BOT_API_RELAY_ENABLED', 'TELEGRAM_BOT_API_RELAY_SECRET', 'TELEGRAM_BOT_API_RELAY_BOT_TOKEN', 'TELEGRAM_BOT_TOKEN'] as const;
 const saved = Object.fromEntries(VARIABLES.map(key => [key, process.env[key]]));
 
 test.afterEach(() => {
@@ -22,7 +23,8 @@ test.afterEach(() => {
 function setup() {
   process.env.TELEGRAM_BOT_API_RELAY_ENABLED = 'true';
   process.env.TELEGRAM_BOT_API_RELAY_SECRET = TEST_SECRET;
-  process.env.TELEGRAM_BOT_TOKEN = TEST_TOKEN;
+  process.env.TELEGRAM_BOT_TOKEN = LEGACY_RENDER_BOT_TOKEN;
+  process.env.TELEGRAM_BOT_API_RELAY_BOT_TOKEN = TEST_TOKEN;
 }
 function request(body: unknown, secret: string | undefined = TEST_SECRET) {
   return {
@@ -60,6 +62,11 @@ test('fails closed with missing configuration and wrong relay credentials', asyn
   await controller.forward(request({ kind: 'api', method: 'getFile', payload: {} }) as never, first.res as never);
   assert.equal(first.out.status, 503);
   process.env.TELEGRAM_BOT_API_RELAY_SECRET = TEST_SECRET;
+  delete process.env.TELEGRAM_BOT_API_RELAY_BOT_TOKEN;
+  const noOutboundToken = response();
+  await controller.forward(request({ kind: 'api', method: 'getFile', payload: {} }) as never, noOutboundToken.res as never);
+  assert.equal(noOutboundToken.out.status, 503, 'must not fall back to legacy Render bot token');
+  process.env.TELEGRAM_BOT_API_RELAY_BOT_TOKEN = TEST_TOKEN;
   const second = response();
   await controller.forward(request({ kind: 'api', method: 'getFile', payload: {} }, 'wrong') as never, second.res as never);
   assert.equal(second.out.status, 401);
@@ -82,7 +89,7 @@ test('rejects disallowed methods, URL traversal, and malformed payloads', async 
   assert.equal(out.status, 400);
 });
 
-test('forwards a whitelisted sendMessage with the Render bot token, preserving response', async () => {
+test('forwards sendMessage with the dedicated Timeweb bot token, never the legacy Render bot token', async () => {
   setup();
   let url = '';
   let init: RequestInit | undefined;
@@ -97,6 +104,7 @@ test('forwards a whitelisted sendMessage with the Render bot token, preserving r
   await createTelegramBotApiRelayController(mock as typeof fetch)
     .forward(request({ kind: 'api', method: 'sendMessage', payload: { chat_id: 42, text: 'hi' } }) as never, res as never);
   assert.equal(url, `https://api.telegram.org/bot${TEST_TOKEN}/sendMessage`);
+  assert.ok(!url.includes(LEGACY_RENDER_BOT_TOKEN));
   assert.equal(init?.method, 'POST');
   assert.equal(JSON.parse(String(init?.body)).text, 'hi');
   assert.equal(out.status, 200);
