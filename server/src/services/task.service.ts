@@ -317,7 +317,7 @@ export const taskService = {
         recurrenceUntil: isSubtask ? null : (input.recurrenceUntil !== undefined ? toDueDate(input.recurrenceUntil) : null),
         aiNotificationsEnabled: (isEvent || isReminder) ? false : (input.aiNotificationsEnabled ?? true),
         aiMonitoringEnabled: newMonitoringEnabled,
-        aiMonitoringModel: input.aiMonitoringModel ?? 'gpt-6.1-terra',
+        aiMonitoringModel: input.aiMonitoringModel ?? 'gpt-6-luna',
         aiMonitoringGeneration: !isSubtask && !isEvent && !isReminder && !parent?.collaborationId && input.aiMonitoringEnabled === true ? 1 : 0,
         
         collaboration: parent?.collaborationId ? { connect: { id: parent.collaborationId } } : undefined
@@ -389,7 +389,14 @@ export const taskService = {
     }
 
     const patch: Prisma.TaskUpdateInput = {};
-    if (input.aiMonitoringModel !== undefined) patch.aiMonitoringModel = input.aiMonitoringModel;
+    if (input.aiMonitoringModel !== undefined) {
+      patch.aiMonitoringModel = input.aiMonitoringModel;
+    } else if (input.aiMonitoringEnabled === true && !currentTask.aiMonitoringEnabled && currentTask.aiMonitoringGeneration === 0) {
+      // Pre-existing unmonitored tasks may carry Terra from the old database default.
+      // Treat that legacy value as unset on their first opt-in, without touching
+      // previous monitoring sessions or explicit model changes.
+      patch.aiMonitoringModel = 'gpt-6-luna';
+    }
     if (input.aiMonitoringEnabled !== undefined) {
       patch.aiMonitoringEnabled = input.aiMonitoringEnabled === true;
       if (input.aiMonitoringEnabled === true && !currentTask.aiMonitoringEnabled) {
