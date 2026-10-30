@@ -41,6 +41,8 @@ test('Telegram assistant has independent participation, summary and task setting
   const oldClientPayload = { ...DEFAULT_TELEGRAM_AI_CHAT_SETTINGS } as Partial<typeof DEFAULT_TELEGRAM_AI_CHAT_SETTINGS>;
   delete oldClientPayload.taskIntervalMinutes;
   assert.equal(validateTelegramAiChatSettings(oldClientPayload).taskIntervalMinutes, 30);
+  delete oldClientPayload.historyAccessEnabled;
+  assert.equal(validateTelegramAiChatSettings(oldClientPayload).historyAccessEnabled, false);
   const migrationTaskFrequency = readFileSync(new URL('../prisma/migrations/20261019123000_telegram_ai_task_interval_minutes/migration.sql', import.meta.url), 'utf8');
   assert.match(migrationTaskFrequency, /ADD COLUMN "taskIntervalMinutes" INTEGER NOT NULL DEFAULT 30/);
   assert.deepEqual(TELEGRAM_AI_INTERVALS, [0, 5, 10, 30, 180, 360, 1440]);
