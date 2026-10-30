@@ -8,6 +8,33 @@ export type TelegramSocks5Proxy = {
 };
 
 const CONNECT_TIMEOUT_MS = 10_000;
+
+/** RFC 1928 §6: the CONNECT reply's REP byte. No proxy credentials or destinations. */
+const SOCKS5_REPLY_REASONS: Readonly<Record<number, string>> = {
+  0x01: 'general_socks_server_failure',
+  0x02: 'connection_not_allowed_by_ruleset',
+  0x03: 'network_unreachable',
+  0x04: 'host_unreachable',
+  0x05: 'connection_refused',
+  0x06: 'ttl_expired',
+  0x07: 'command_not_supported',
+  0x08: 'address_type_not_supported'
+};
+
+export class TelegramSocks5ConnectRejectedError extends Error {
+  readonly stage = 'connect_reply';
+  readonly replyCode: number;
+  readonly replyReason: string;
+
+  constructor(replyCode: number) {
+    const reason = SOCKS5_REPLY_REASONS[replyCode] ?? 'unassigned_reply_code';
+    const hex = `0x${replyCode.toString(16).padStart(2, '0')}`;
+    super(`Telegram SOCKS5 connect rejected: stage=connect_reply REP=${hex} reason=${reason}`);
+    this.name = 'TelegramSocks5ConnectRejectedError';
+    this.replyCode = replyCode;
+    this.replyReason = reason;
+  }
+}
 /** Safe progress signals; never include hosts, proxy credentials or Telegram data. */
 export type TelegramSocks5Stage =
   'proxy_tcp_connected' | 'proxy_greeting_ok' | 'proxy_authenticated' | 'proxy_tunnel_ready';
@@ -133,8 +160,11 @@ export async function connectTelegramSocks5(
         Buffer.from([password.length]), password
       ]));
       const reply = await readExactly(2);
-      if (reply[0] !== 0x01 || reply[1] !== 0x00) {
-        throw new Error('Telegram SOCKS5 authentication failed');
+      if (reply[0] !== 0x01) {
+        throw new Error('Telegram SOCKS5 invalid authentication reply: stage=auth_reply');
+      }
+      if (reply[1] !== 0x00) {
+        throw new Error(`Telegram SOCKS5 authentication failed: stage=auth_reply status=0x${reply[1].toString(16).padStart(2, '0')}`);
       }
     }
     if (needsAuth) onStage?.('proxy_authenticated');
@@ -142,8 +172,13 @@ export async function connectTelegramSocks5(
     port.writeUInt16BE(destinationPort);
     socket.write(Buffer.concat([Buffer.from([0x05, 0x01, 0x00]), address, port]));
     const response = await readExactly(4);
-    if (response[0] !== 0x05 || response[2] !== 0x00 || response[1] !== 0x00) {
-      throw new Error('Telegram SOCKS5 connect rejected');
+    if (response[0] !== 0x05 || response[2] !== 0x00) {
+      throw new Error('Telegram SOCKS5 invalid CONNECT response: stage=connect_reply');
+    }
+    if (response[1] !== 0x00) {
+      // Keep the original error prefix so existing network-error classification
+      // and retry behavior are unchanged. Only expose RFC 1928's safe REP code.
+      throw new TelegramSocks5ConnectRejectedError(response[1]);
     }
     if (response[3] === 0x01) await readExactly(4);
     else if (response[3] === 0x04) await readExactly(16);
