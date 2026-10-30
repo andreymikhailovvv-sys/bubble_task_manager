@@ -4100,7 +4100,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                         <span className="miniapp-task-sector-dot h-1.5 w-1.5 shrink-0 rounded-full" aria-hidden="true" />
                         <span className="truncate">{taskSphereLabel}</span>
                       </span>
-                      <h3 className="miniapp-task-title truncate font-semibold">{task.title}</h3>
+                      <h3 className="miniapp-task-title flex min-w-0 items-center gap-1 font-semibold"><span className="min-w-0 truncate">{task.title}</span>{task.aiMonitoringEnabled ? <TaskMonitoringBadge /> : null}</h3>
                       {listSortMode === 'importance' ? (
                         <>
                           <p className={`mt-1 text-xs font-medium ${hasOverdueState ? 'miniapp-overdue-label' : 'text-sky-200'}`}>{formatRemaining(task.dueDate)}</p>
@@ -4293,7 +4293,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                         openTaskModal(task);
                       }}
                     >
-                      <p className={`miniapp-timeline-card-title font-semibold ${isSubtask ? 'text-xs leading-4' : 'text-sm'}`}>{isReminder ? '🔔 ' : ''}{task.title}</p>
+                      <p className={`miniapp-timeline-card-title flex min-w-0 items-center gap-1 font-semibold ${isSubtask ? 'text-xs leading-4' : 'text-sm'}`}><span className="min-w-0 truncate">{isReminder ? '🔔 ' : ''}{task.title}</span>{task.aiMonitoringEnabled ? <TaskMonitoringBadge /> : null}</p>
                       <p className={`${isSubtask ? 'text-[10px] leading-3' : 'text-xs'} ${hasOverdueState ? 'miniapp-overdue-label font-medium' : 'text-slate-300'}`}>{hasOverdueState ? formatRemaining(task.dueDate) : `${isReminder ? 'Напоминание · ' : isEvent ? 'Событие · ' : isSubtask ? 'Подзадача · ' : ''}${formatDueDate(task.dueDate)}`}</p>
                     </button>
                   );
