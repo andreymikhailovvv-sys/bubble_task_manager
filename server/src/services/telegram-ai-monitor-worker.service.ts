@@ -289,9 +289,104 @@ async function reserveForCall(claimed: Claimed, desired: number, dayKey: string)
 }
 
 
+
+/**
+ * Historical messages are read only for the owner-authorized chat.
+ * One page per monitor claim; large chats resume from a database cursor.
+ * The model returns a compact context only: no Telegram sends, task mutations,
+ * automatic notifications or storage of raw historical message bodies.
+ */
+async function importHistoricalContext(claimed: Claimed) {
+  const policy = await ownedLease(claimed);
+  const cursor = policy.historyImportCursor;
+  if (cursor === null || !policy.historyAccessEnabled) return;
+  const remaining = policy.historyImportRemaining;
+  const requested = remaining === null ? 100 : Math.min(100, Math.max(10, remaining));
+  const page = await telegramUserClientRead.aiHistory(policy.userId, policy.chatId, requested, true, undefined, cursor);
+  const messages = remaining === null ? page.messages : page.messages.slice(-remaining);
+  const nextRemaining = remaining === null ? null : Math.max(0, remaining - messages.length);
+  const complete = page.messages.length < requested || (nextRemaining !== null && nextRemaining === 0);
+  const nextCursor = complete || !messages.length ? null : Math.min(...messages.map(message => message.id));
+  let contextSummary = policy.historyContextSummary;
+
+  if (messages.some(message => message.text.trim())) {
+    // Preserve the recent context while walking backwards through older pages.
+    // The previous page's compact memory is untrusted context, never instructions.
+    const input = messages.map(message => ({ ...message, text: message.text.slice(0, 650) }));
+    const model = normalizeSelectableAiChatModel(policy.monitorModel) ?? 'gpt-6-luna';
+    const payload = buildMonitorPayload(
+      input, '', 'NONE', model, undefined, true, undefined,
+      contextSummary, true
+    );
+    const desired = await countMonitorInputTokens(payload);
+    if (desired <= 0) throw new Error('Invalid historical context maximum cost');
+    const user = await prisma.user.findUnique({ where: { id: policy.userId }, select: { timeZone: true } });
+    const dayKey = monitorDayKey(new Date(), user?.timeZone);
+    const { reservation, callId } = await reserveForCall(claimed, desired, dayKey);
+    let billed = false;
+    try {
+      await ownedLease(claimed);
+      await prisma.telegramAiMonitorCall.update({ where: { id: callId }, data: { state: 'STARTED' } });
+      const result = await analyzeMonitorMessages({
+        userId: policy.userId, requestId: callId, messages: input, instructions: '',
+        taskMode: 'NONE', model, summaryEnabled: true,
+        historyContext: contextSummary, historicalContextOnly: true
+      });
+      const settlement = await settleAiCreditReservation(reservation, result.actualMilli);
+      billed = true;
+      const call = await prisma.telegramAiMonitorCall.findUnique({ where: { id: callId } });
+      if (call) await completeCall(call, settlement.chargedMilli);
+      if (settlement.chargedMilli > 0) {
+        await recordAiCreditCharge({
+          userId: policy.userId, requestId: callId + ':charge', actionId: callId,
+          providerCallIndex: 1, feature: TELEGRAM_MONITOR_FEATURE, model,
+          creditsSpentMilli: settlement.chargedMilli
+        });
+      }
+      const summary = result.summary;
+      contextSummary = [
+        summary.summary,
+        ...summary.decisions.map(x => 'Решение: ' + x),
+        ...summary.obligations.map(x => 'Обязательство: ' + x),
+        ...summary.openQuestions.map(x => 'Вопрос: ' + x),
+        ...summary.risks.map(x => 'Риск: ' + x)
+      ].filter(Boolean).join('\n').slice(0, 4500);
+    } catch (error) {
+      if (!billed) {
+        await refundAiCreditReservation(reservation);
+        const call = await prisma.telegramAiMonitorCall.findUnique({ where: { id: callId } });
+        if (call) await completeCall(call, 0);
+      }
+      throw error;
+    }
+  }
+  await ownedLease(claimed);
+  await prisma.telegramAiChatPolicy.updateMany({
+    where: {
+      id: policy.id, userId: policy.userId, isEnabled: true,
+      leaseToken: claimed.token, monitorRevision: policy.monitorRevision,
+      historyImportCursor: cursor
+    },
+    data: {
+      historyContextSummary: contextSummary,
+      historyImportCursor: nextCursor,
+      historyImportRemaining: nextRemaining,
+      historyImportedCount: { increment: messages.length },
+      nextCheckAt: nextMonitorWakeup([
+        nextCursor !== null ? new Date(Date.now() + 60_000) : null,
+        policy.nextInteractionAt, policy.nextSummaryAt, policy.nextTaskAt,
+        policy.summaryRequested ? new Date() : null
+      ])
+    }
+  });
+}
+
 async function processClaim(claimed: Claimed) {
   const { policy } = claimed;
   await ownedLease(claimed);
+  if (claimed.policy.historyImportCursor !== null && claimed.policy.historyAccessEnabled) {
+    await importHistoricalContext(claimed);
+  }
   const now = new Date();
   const dueInteraction = policy.mode !== 'OBSERVE' &&
     policy.nextInteractionAt != null && policy.nextInteractionAt <= now;
@@ -311,9 +406,10 @@ async function processClaim(claimed: Claimed) {
   ];
   if (!cutoffs.length) {
     // Old/disabled policies have no active timer. Avoid a continuously due row.
+    const updated = await ownedLease(claimed);
     await prisma.telegramAiChatPolicy.updateMany({
       where: { id: policy.id, isEnabled: true, leaseToken: claimed.token, monitorRevision: policy.monitorRevision },
-      data: { nextCheckAt: null, summaryRequested: false }
+      data: { nextCheckAt: updated.historyImportCursor !== null ? updated.nextCheckAt : null, summaryRequested: false }
     });
     return;
   }
@@ -389,7 +485,10 @@ async function processClaim(claimed: Claimed) {
       } : {}),
       ...(dueSummary ? { lastSummaryMessageId: maxId, nextSummaryAt, summaryRequested: false } : {}),
       ...(dueTasks ? { lastTaskMessageId: maxId, nextTaskAt } : {}),
-      nextCheckAt: nextMonitorWakeup([nextInteractionAt, nextSummaryAt, nextTaskAt])
+      nextCheckAt: nextMonitorWakeup([
+        nextInteractionAt, nextSummaryAt, nextTaskAt,
+        current.historyImportCursor !== null ? new Date(Date.now() + 60_000) : null
+      ])
     }
   });
   if (!update.count) throw new TelegramUserClientError(409, 'Мониторинг остановлен');
@@ -403,13 +502,13 @@ async function processClaim(claimed: Claimed) {
     ...(current.reviewAttachments ? {} : { hasMedia: false, media: undefined, mediaNote: undefined })
   }));
   const eligibleIds = eligibleForReply.map(message => message.id);
-  const rules = dueInteraction && !interactionDeferred && eligibleIds.length && current.mode === 'AUTO' &&
-    current.autoReplyWhen.trim() && current.autoReplyHow.trim()
-      ? { when: current.autoReplyWhen, how: current.autoReplyHow, kind: 'AUTO' as const,
+  const rules = dueInteraction && !interactionDeferred && eligibleIds.length && current.mode === 'AUTO'
+      ? { when: current.autoReplyWhen.trim() || 'Решай самостоятельно, стоит ли отвечать на новое прямое обращение. Не отвечай на сообщения без понятного запроса.',
+          how: current.autoReplyHow.trim() || 'Отвечай кратко, нейтрально, без непроверенных обещаний.', kind: 'AUTO' as const,
           eligibleMessageIds: eligibleIds }
-      : dueInteraction && eligibleIds.length && current.mode === 'SUGGEST' &&
-        current.suggestWhen.trim() && current.suggestHow.trim()
-        ? { when: current.suggestWhen, how: current.suggestHow, kind: 'SUGGEST' as const,
+      : dueInteraction && eligibleIds.length && current.mode === 'SUGGEST'
+        ? { when: current.suggestWhen.trim() || 'Предлагай ответ, если новое сообщение требует реакции владельца.',
+            how: current.suggestHow.trim() || 'Краткий нейтральный ответ от лица владельца.', kind: 'SUGGEST' as const,
             eligibleMessageIds: eligibleIds }
         : undefined;
 
@@ -450,7 +549,8 @@ async function processClaim(claimed: Claimed) {
   };
   const selectedProviderModel = normalizeSelectableAiChatModel(current.monitorModel) ?? 'gpt-6-luna';
   const payload = buildMonitorPayload(
-    bounded, instructions, taskMode, selectedProviderModel, rules, summaryEnabled, plannerContext
+    bounded, instructions, taskMode, selectedProviderModel, rules, summaryEnabled, plannerContext,
+    current.historyAccessEnabled ? current.historyContextSummary : undefined
   );
   const desired = await countMonitorInputTokens(payload);
   if (desired <= 0) throw new Error('Invalid monitor maximum cost');
@@ -461,7 +561,8 @@ async function processClaim(claimed: Claimed) {
     await prisma.telegramAiMonitorCall.update({ where: { id: callId }, data: { state: 'STARTED' } });
     const result = await analyzeMonitorMessages({
       userId: policy.userId, requestId: callId, messages: bounded, instructions,
-      taskMode, model: selectedProviderModel, autoReplyRules: rules, summaryEnabled, plannerContext
+      taskMode, model: selectedProviderModel, autoReplyRules: rules, summaryEnabled, plannerContext,
+      historyContext: current.historyAccessEnabled ? current.historyContextSummary : undefined
     });
     const settlement = await settleAiCreditReservation(reservation, result.actualMilli);
     billed = true;
