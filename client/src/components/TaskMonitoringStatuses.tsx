@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Radar, Plus, X } from 'lucide-react';
 import { api, type TaskMonitoringStatus } from '../lib/api';
-import type { Task } from '../lib/types';
+import type { AiChatModel, Task } from '../lib/types';
 import { TaskMonitoringControls } from './TaskMonitoringControls';
 
 type Layout = { left: number; top: number; width: number; maxHeight: number; theme: 'light' | 'dark' };
@@ -12,14 +12,16 @@ const MAX_WIDTH = 390;
 const MAX_HEIGHT = 555;
 
 /** A task-owned monitoring panel anchored to the AI-chat title, shared across clients. */
-export function TaskMonitoringStatuses({ taskId, enabled, allowed = true, onTaskUpdated }: {
+export function TaskMonitoringStatuses({ taskId, enabled, model = 'gpt-6.1-terra', allowed = true, onTaskUpdated }: {
   taskId: string;
   enabled: boolean;
+  model?: AiChatModel;
   allowed?: boolean;
   onTaskUpdated?: (task: Task) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [monitorEnabled, setMonitorEnabled] = useState(enabled);
+  const [monitorModel, setMonitorModel] = useState<AiChatModel>(model);
   const [saving, setSaving] = useState(false);
   const [unread, setUnread] = useState(0);
   const [items, setItems] = useState<TaskMonitoringStatus[]>([]);
@@ -32,6 +34,7 @@ export function TaskMonitoringStatuses({ taskId, enabled, allowed = true, onTask
   const popoverId = useId();
 
   useEffect(() => { setMonitorEnabled(enabled); }, [enabled]);
+  useEffect(() => { setMonitorModel(model); }, [model]);
   useEffect(() => {
     setOpen(false); setUnread(0); setItems([]); setDraft(''); setError(''); setLayout(null);
   }, [taskId]);
@@ -116,14 +119,27 @@ export function TaskMonitoringStatuses({ taskId, enabled, allowed = true, onTask
     if (!allowed || saving) return;
     setSaving(true); setError('');
     try {
-      const task = await api.updateTask(taskId, { aiMonitoringEnabled: next });
+      const task = await api.updateTask(taskId, { aiMonitoringEnabled: next, aiMonitoringModel: monitorModel });
       setMonitorEnabled(task.aiMonitoringEnabled === true);
+      setMonitorModel(task.aiMonitoringModel ?? monitorModel);
       onTaskUpdated?.(task);
       if (task.aiMonitoringEnabled === true && !monitorEnabled) {
         window.dispatchEvent(new CustomEvent('planirovych:monitoring-intro-start', { detail: { taskId } }));
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Не удалось изменить автомониторинг.');
+    } finally { setSaving(false); }
+  };
+
+  const updateMonitoringModel = async (next: AiChatModel) => {
+    if (!allowed || saving || next === monitorModel) return;
+    setSaving(true); setError('');
+    try {
+      const task = await api.updateTask(taskId, { aiMonitoringModel: next });
+      setMonitorModel(task.aiMonitoringModel ?? next);
+      onTaskUpdated?.(task);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось изменить модель автомониторинга.');
     } finally { setSaving(false); }
   };
 
@@ -162,7 +178,7 @@ export function TaskMonitoringStatuses({ taskId, enabled, allowed = true, onTask
             className="rounded-lg p-1.5 text-muted"><X size={16} /></button>
         </div>
         <div className="task-monitor-panel-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
-          <TaskMonitoringControls enabled={monitorEnabled} onChange={value => void toggle(value)} taskId={taskId}
+          <TaskMonitoringControls enabled={monitorEnabled} model={monitorModel} onModelChange={value => void updateMonitoringModel(value)} onChange={value => void toggle(value)} taskId={taskId}
             allowed={allowed && !saving} />
           {saving ? <p role="status" className="mt-2 text-xs text-muted">Сохраняем режим…</p> : null}
           <div className="mt-4 border-t border-[color:var(--panel-border)] pt-3">
