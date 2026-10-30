@@ -2058,7 +2058,7 @@ export const aiAssistantService = {
       input.onProgress?.(`reading_file:${explicitReference.fileName}`);
       const evidence = await executeAiFileTool({
         userId: input.userId, taskId: input.taskId, catalog: fileCatalog,
-        uploads: input.attachments, model: lockedMonitoringModel ?? 'gpt-6.1-terra',
+        uploads: input.attachments, model: lockedMonitoringModel ?? 'gpt-6-luna',
         apiKey, actionId: requestId, dynamicBilling: input.billingMode === 'dynamic'
       }, 'read', { fileId: explicitReference.fileId });
       if (evidence.response.ok && typeof evidence.response.text === 'string') {

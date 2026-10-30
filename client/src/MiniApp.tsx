@@ -51,7 +51,7 @@ import { AiReplyAction, AiReplyPreview, AiReplyMessageBody, serializeAiReply, ty
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
 import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, mergeTelegramManagedMessages, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike, orderAiChatMessagesChronologically } from './lib/ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
-import { DEFAULT_MOBILE_PROJECT_CHAT_MODEL, DEFAULT_QUICK_AI_CHAT_MODEL, readSavedAiChatModel } from './lib/ai-chat-model';
+import { DEFAULT_MOBILE_PROJECT_CHAT_MODEL, DEFAULT_QUICK_AI_CHAT_MODEL, DEFAULT_TASK_AI_CHAT_MODEL, readSavedAiChatModel } from './lib/ai-chat-model';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
 import { TelegramAiReplySuggestionCard } from './components/TelegramAiReplySuggestionCard';
 import { TelegramReadConsentCard } from './components/TelegramReadConsentCard';
@@ -894,7 +894,12 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const aiChatComposerRef = useRef<MiniAiChatComposerHandle | null>(null);
   const [aiChatPendingFiles, setAiChatPendingFiles] = useState<File[]>([]);
   const [aiChatUploadProgress, setAiChatUploadProgress] = useState<number | null>(null);
-  const [selectedAiChatModel, setSelectedAiChatModel] = useState<AiChatModel>('gpt-6-luna');
+  const [selectedAiChatModel, setSelectedAiChatModel] = useState<AiChatModel>(DEFAULT_TASK_AI_CHAT_MODEL);
+  // Preserve manual choices per task, without carrying Terra into newly created tasks.
+  const taskChatModelByIdRef = useRef<Record<string, AiChatModel>>({});
+  useEffect(() => {
+    if (openedTaskId) setSelectedAiChatModel(taskChatModelByIdRef.current[openedTaskId] ?? DEFAULT_TASK_AI_CHAT_MODEL);
+  }, [openedTaskId]);
   const [quickAiChatModel, setQuickAiChatModel] = useState<AiChatModel>(DEFAULT_QUICK_AI_CHAT_MODEL);
   const [aiChatLoading, setAiChatLoading] = useState(false);
   const [aiChatProgress, setAiChatProgress] = useState<AiChatProgressStatus>('analyzing_request');
@@ -3584,7 +3589,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         question: serializeAiReply(question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.', replyToTask),
         userMessage,
         mode: (openedTask.aiMonitoringEnabled ? openedTask.aiMonitoringModel : selectedAiChatModel) === 'gpt-6.1-sol' ? 'smart' : 'fast',
-        model: openedTask.aiMonitoringEnabled ? (openedTask.aiMonitoringModel ?? 'gpt-6.1-terra') : selectedAiChatModel,
+        model: openedTask.aiMonitoringEnabled ? (openedTask.aiMonitoringModel ?? DEFAULT_TASK_AI_CHAT_MODEL) : selectedAiChatModel,
         clientSurface,
         attachments: attachmentsPayload
       }, { onStatus: (status) => setAiProgressByTask((current) => ({ ...current, [openedTask.id]: status })), onUploadProgress: setTaskAiUploadProgress });
@@ -3719,6 +3724,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const taskMonitoringControl = openedTask ? (
               <TaskMonitoringStatuses taskId={openedTask.id}
                 model={openedTask.aiMonitoringModel}
+                 generation={openedTask.aiMonitoringGeneration}
                  enabled={openedTask.aiMonitoringEnabled === true}
                 allowed={openedTask.taskType === 'TASK' && !openedTask.parentTaskId && !openedTask.isCollaborative}
                 onTaskUpdated={(updated) => {
@@ -4952,7 +4958,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               ) : <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary">Помощь ИИ</h2>}
               {!useTelegramCompactChatHeader ? taskMonitoringControl : null}
               <button type="button" onClick={() => closeMiniWindowWithMotion('task-ai', () => setIsAiDialogOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть диалог с ИИ"><X size={18} /></button>
-              {openedTask.aiMonitoringEnabled ? <span title="Модель изменяется только в настройках автомониторинга" className="miniapp-ai-chat-model-cap w-40 truncate rounded-b-xl bg-emerald-500/15 px-3 py-1.5 text-center text-xs font-semibold text-emerald-500">{AI_CHAT_MODEL_OPTIONS.find(item => item.value === openedTask.aiMonitoringModel)?.label ?? 'GPT-6.1 Terra'}</span> : <select value={selectedAiChatModel} onChange={(event) => setSelectedAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap w-40 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель помощи ИИ">
+              {openedTask.aiMonitoringEnabled ? <span title="Модель изменяется только в настройках автомониторинга" className="miniapp-ai-chat-model-cap w-40 truncate rounded-b-xl bg-emerald-500/15 px-3 py-1.5 text-center text-xs font-semibold text-emerald-500">{AI_CHAT_MODEL_OPTIONS.find(item => item.value === openedTask.aiMonitoringModel)?.label ?? 'GPT-6 Luna'}</span> : <select value={selectedAiChatModel} onChange={(event) => { const model = event.target.value as AiChatModel; taskChatModelByIdRef.current[openedTask.id] = model; setSelectedAiChatModel(model); }} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap w-40 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель помощи ИИ">
                 {AI_CHAT_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>}
             </div>

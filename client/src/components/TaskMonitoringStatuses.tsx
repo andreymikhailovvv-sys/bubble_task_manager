@@ -4,6 +4,7 @@ import { ChevronDown, Radar, Plus, X } from 'lucide-react';
 import { api, type TaskMonitoringStatus } from '../lib/api';
 import type { AiChatModel, Task } from '../lib/types';
 import { TaskMonitoringControls } from './TaskMonitoringControls';
+import { DEFAULT_TASK_AI_CHAT_MODEL, initialTaskMonitoringModel } from '../lib/ai-chat-model';
 
 type Layout = { left: number; top: number; width: number; maxHeight: number; theme: 'light' | 'dark' };
 const GUTTER = 12;
@@ -12,16 +13,17 @@ const MAX_WIDTH = 390;
 const MAX_HEIGHT = 555;
 
 /** A task-owned monitoring panel anchored to the AI-chat title, shared across clients. */
-export function TaskMonitoringStatuses({ taskId, enabled, model = 'gpt-6.1-terra', allowed = true, onTaskUpdated }: {
+export function TaskMonitoringStatuses({ taskId, enabled, model = DEFAULT_TASK_AI_CHAT_MODEL, generation = 0, allowed = true, onTaskUpdated }: {
   taskId: string;
   enabled: boolean;
   model?: AiChatModel;
+  generation?: number;
   allowed?: boolean;
   onTaskUpdated?: (task: Task) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [monitorEnabled, setMonitorEnabled] = useState(enabled);
-  const [monitorModel, setMonitorModel] = useState<AiChatModel>(model);
+  const [monitorModel, setMonitorModel] = useState<AiChatModel>(() => initialTaskMonitoringModel(enabled, generation, model));
   const [saving, setSaving] = useState(false);
   const [unread, setUnread] = useState(0);
   const [items, setItems] = useState<TaskMonitoringStatus[]>([]);
@@ -34,7 +36,14 @@ export function TaskMonitoringStatuses({ taskId, enabled, model = 'gpt-6.1-terra
   const popoverId = useId();
 
   useEffect(() => { setMonitorEnabled(enabled); }, [enabled]);
-  useEffect(() => { setMonitorModel(model); }, [model]);
+  // Existing disabled tasks can still contain Terra from the old DB default.
+  // A fresh first opt-in shows Luna, while previous monitoring model choices stay.
+  useEffect(() => {
+    setMonitorModel(initialTaskMonitoringModel(enabled, generation, model));
+  }, [taskId]);
+  useEffect(() => {
+    if (enabled || generation > 0) setMonitorModel(model);
+  }, [model, enabled, generation]);
   useEffect(() => {
     setOpen(false); setUnread(0); setItems([]); setDraft(''); setError(''); setLayout(null);
   }, [taskId]);

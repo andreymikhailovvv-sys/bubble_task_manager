@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ChevronDown, Coins, HelpCircle, Lightbulb } from 'lucide-react';
 import type { AiChatModel } from '../lib/types';
+import { DEFAULT_TASK_AI_CHAT_MODEL } from '../lib/ai-chat-model';
 
 const MONITOR_MODELS: Array<{ value: AiChatModel; label: string; description: string; intellect: number; cost: number }> = [
   { value: 'gpt-6-luna', label: '6 Luna', description: 'Экономичная, отлично подходит для рутинных задач', intellect: 1, cost: 1 },
@@ -8,7 +9,7 @@ const MONITOR_MODELS: Array<{ value: AiChatModel; label: string; description: st
   { value: 'gpt-6.1-sol', label: '6.1 Sol', description: 'Самая мощная на сегодня модель', intellect: 3, cost: 3 }
 ];
 
-export function TaskMonitoringControls({ enabled, onChange, taskId, allowed = true, model = 'gpt-6.1-terra', onModelChange }: {
+export function TaskMonitoringControls({ enabled, onChange, taskId, allowed = true, model = DEFAULT_TASK_AI_CHAT_MODEL, onModelChange }: {
   enabled: boolean;
   onChange: (enabled: boolean) => void;
   taskId?: string;

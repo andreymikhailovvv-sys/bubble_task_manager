@@ -343,7 +343,7 @@ model Task {
   overdueAiNotifiedAt DateTime?
   aiNotificationsEnabled Boolean @default(true)
   aiMonitoringEnabled Boolean @default(false)
-  aiMonitoringModel String @default("gpt-6.1-terra")
+  aiMonitoringModel String @default("gpt-6-luna")
   aiMonitoringStatusSeenAt DateTime?
   aiMonitoringGeneration Int @default(0)
   monitoringStatuses TaskMonitoringStatus[]
