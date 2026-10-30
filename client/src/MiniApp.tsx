@@ -4294,7 +4294,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       }}
                     >
                       <p className={`miniapp-timeline-card-title flex min-w-0 items-center gap-1 font-semibold ${isSubtask ? 'text-xs leading-4' : 'text-sm'}`}><span className="min-w-0 truncate">{isReminder ? '🔔 ' : ''}{task.title}</span>{task.aiMonitoringEnabled ? <TaskMonitoringBadge /> : null}</p>
-                      <p className={`${isSubtask ? 'text-[10px] leading-3' : 'text-xs'} ${hasOverdueState ? 'miniapp-overdue-label font-medium' : 'text-slate-300'}`}>{hasOverdueState ? formatRemaining(task.dueDate) : `${isReminder ? 'Напоминание · ' : isEvent ? 'Событие · ' : isSubtask ? 'Подзадача · ' : ''}${formatDueDate(task.dueDate)}`}</p>
+                      <p className={`${isSubtask ? 'text-[10px] leading-3' : 'text-xs'} ${hasOverdueState ? 'miniapp-overdue-label font-medium' : 'text-slate-300'}`}>{task.aiMonitoringEnabled ? `Триггер · ${new Date(task.dueDate as string).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}` : hasOverdueState ? formatRemaining(task.dueDate) : `${isReminder ? 'Напоминание · ' : isEvent ? 'Событие · ' : isSubtask ? 'Подзадача · ' : ''}${formatDueDate(task.dueDate)}`}</p>
                     </button>
                   );
                 })}
