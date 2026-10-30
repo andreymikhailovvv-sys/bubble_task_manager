@@ -23,6 +23,7 @@ import { aiGeneratedDocumentController } from '../controllers/ai-generated-docum
 import { generateTaskCompletionReport } from '../services/task-completion-report.service.js';
 import { telegramController } from '../controllers/telegram.controller.js';
 import { telegramRelayController } from '../controllers/telegram-relay.controller.js';
+import { telegramBotApiRelayController } from '../controllers/telegram-bot-api-relay.controller.js';
 import { telegramService } from '../services/telegram.service.js';
 import { isGoogleAuthEnabled, passport } from '../auth/passport.js';
 import { createGoogleOAuthState, verifyGoogleOAuthState, googleOAuthStateCookieOptions, GOOGLE_OAUTH_STATE_COOKIE_NAME, GoogleEmailConflictError, GoogleEmailNotVerifiedError } from '../lib/google-oauth-security.js';
@@ -1851,4 +1852,6 @@ apiRouter.post('/timeline/ai-optimize/apply', requireAuth, aiController.applyTim
 apiRouter.post('/timeline/overdue-postpone-ai', requireAuth, aiController.postponeOverdueWithAi);
 
 apiRouter.post('/telegram-relay', telegramRelayController.webhook);
+// Render-only outbound egress. Disabled by default on Timeweb and other deployments.
+apiRouter.post('/telegram-bot-api-relay', telegramBotApiRelayController.forward);
 apiRouter.post('/telegram/webhook', asyncHandler(telegramController.webhook));
