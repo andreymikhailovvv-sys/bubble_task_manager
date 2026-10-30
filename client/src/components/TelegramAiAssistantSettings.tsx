@@ -695,6 +695,10 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                       <span className="integration-menu__muted mt-1 block text-xs font-normal">
                         Вся переписка загружается постепенно и сжимается в контекстную сводку, поэтому для больших чатов обработка займёт несколько проверок.
                       </span>
+                      {selected?.historyAccessEnabled && <span className="integration-menu__muted mt-2 block text-xs" role="status">
+                        История: обработано {selected.historyImportedCount} сообщений.
+                        {selected.historyImportCursor !== null ? ' Импорт продолжается.' : ' Импорт завершён.'}
+                      </span>}
                     </label>}
                   </div>
                   <div className="flex flex-wrap items-center gap-2 pt-1">
