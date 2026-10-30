@@ -10,9 +10,9 @@ disabled by default, and does not affect the personal MTProto assistant.
 **Render** (existing `bubble-task-manager` service, connected to Telegram):
 - `TELEGRAM_BOT_API_RELAY_ENABLED=true`
 - `TELEGRAM_BOT_API_RELAY_SECRET=<a random shared secret of 32-256 A-Za-z0-9_- chars>`
-- No additional bot-token environment variable is required on Render.
+- `TELEGRAM_BOT_API_RELAY_BOT_TOKEN` is required and holds the main bot token from Timeweb (reuse the variable previously created).
 - Keep Render's existing `TELEGRAM_BOT_TOKEN` **unchanged** if it belongs to a different or legacy Telegram bot. The outgoing relay **never** uses it.
-- If previously set, `TELEGRAM_BOT_API_RELAY_BOT_TOKEN` is now ignored and can be deleted from Render **after successful rollout**.
+- Do not delete the dedicated token variable. Render's unrelated legacy bot token must remain unchanged.
 - Keep current incoming webhook vars `TELEGRAM_RELAY_ENABLED`,
   `TELEGRAM_RELAY_SOURCE_SECRET`, `TELEGRAM_RELAY_TARGET_SECRET`,
   `TELEGRAM_RELAY_TARGET_URL` unchanged.
@@ -58,13 +58,8 @@ the incoming webhook relay.
 
 - Separate high-entropy shared secret, checked in constant time.
 - Receiver rejects all unauthenticated calls; disabled by default.
-- The authenticated Timeweb caller sends its configured `TELEGRAM_BOT_TOKEN`
-  **inside the HTTPS JSON request body**. The receiver uses this token only to
-  build fixed `https://api.telegram.org` URLs for allowlisted operations, and
-  never uses Render's legacy bot token.
-- Receiver returns **400** for a missing/malformed bot token, **401** for an
-  unauthorized caller, and **503** if Render's shared relay secret is missing
-  or incorrectly configured. No fallback to another bot.
+- The caller never sends its bot token to Render. The receiver uses its dedicated `TELEGRAM_BOT_API_RELAY_BOT_TOKEN` environment variable for outgoing Telegram requests.
+- Receiver returns **400** when the request contains a bot token, **401** for unauthorized callers, and **503** with a specific reason if the shared secret or dedicated bot token is missing/invalid. No fallback to another bot.
 - No additional outgoing bot process or scheduler is launched. If two
   deployments independently run notification workers using shared data, those
   workers must still be managed separately to avoid duplicate sends.
