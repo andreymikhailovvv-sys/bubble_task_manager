@@ -159,7 +159,8 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
     autoReplyHow: typeof p.autoReplyHow === 'string' ? p.autoReplyHow.trim() : '',
     notifyImportant: p.notifyImportant,
     reviewAttachments: p.reviewAttachments !== false,
-    historyAccessEnabled: p.historyAccessEnabled !== false,
+    // Older clients lacking the new checkbox must never implicitly grant retroactive access.
+    historyAccessEnabled: p.historyAccessEnabled === true,
     historyMessageLimit: p.historyMessageLimit === undefined ? 50 : p.historyMessageLimit as 10 | 30 | 50 | 100 | null,
     dailyCreditLimitMilli: validateTelegramCreditLimit(p.dailyCreditLimitMilli)
   };
