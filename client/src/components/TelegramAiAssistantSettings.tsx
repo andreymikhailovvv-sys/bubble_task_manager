@@ -32,7 +32,9 @@ const DEFAULTS: TelegramAiChatSettings = {
   autoReplyWhen: '',
   autoReplyHow: '',
   notifyImportant: true,
-  reviewAttachments: true
+  reviewAttachments: true,
+  historyAccessEnabled: true,
+  historyMessageLimit: 50
 };
 const kindName = (kind: string) => kind === 'user' ? 'Личный чат' : kind === 'group' ? 'Группа' : 'Супергруппа';
 
@@ -286,7 +288,9 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
        autoReplyWhen: existing.autoReplyWhen ?? '',
       autoReplyHow: existing.autoReplyHow ?? '',
       notifyImportant: existing.notifyImportant,
-      reviewAttachments: existing.reviewAttachments !== false
+      reviewAttachments: existing.reviewAttachments !== false,
+      historyAccessEnabled: existing.historyAccessEnabled !== false,
+      historyMessageLimit: existing.historyMessageLimit ?? (existing.historyMessageLimit === null ? null : 50)
     } : { ...DEFAULTS });
     setError('');
     setNotice('');
@@ -358,14 +362,6 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
 
   const save = async () => {
     if (!selectedId || busy) return;
-    if (draft.mode === 'SUGGEST' && (!draft.suggestWhen.trim() || !draft.suggestHow.trim())) {
-      setError('Заполните оба поля для предложений ответов');
-      return;
-    }
-    if (draft.mode === 'AUTO' && (!draft.autoReplyWhen.trim() || !draft.autoReplyHow.trim())) {
-      setError('Заполните оба поля для автоответов');
-      return;
-    }
     setBusy(true); setError(''); setNotice('');
     try {
       // The explicit Save/Add click also grants monitoring consent. Do not
@@ -489,7 +485,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                           void api.telegramAssistantPolicies().then(data => setPolicies(data.policies)).catch(() => setError('Не удалось обновить данные'));
                         }} className="telegram-integrations-modal__secondary rounded-lg border px-3 py-2 text-xs">Обновить статус</button>
                       </div>
-                      {!selected.isEnabled && <p className="integration-menu__muted text-xs">При сохранении настроек ассистент получит разрешение проверять новые сообщения этого конкретного чата и передавать их OpenAI для анализа. При обычной проверке старые сообщения автоматически не анализируются; кнопка «Обновить сводку» отдельно анализирует ограниченный фрагмент истории, включая поддерживаемые вложения.</p>}
+                      {!selected.isEnabled && <p className="integration-menu__muted text-xs">При сохранении настроек ассистент получит разрешение проверять новые сообщения этого конкретного чата и передавать их OpenAI для анализа. Если включён доступ к истории, ассистент сначала импортирует выбранный объём прошлой переписки как контекст, а затем проверяет новые сообщения. Кнопка «Обновить сводку» отдельно анализирует ограниченный фрагмент истории, включая поддерживаемые вложения.</p>}
                       {selected.lastSummary && (
                         <details className="telegram-ai-monitor-summary rounded-xl border p-3">
                           <summary className="cursor-pointer text-sm font-semibold">Последняя сводка {selected.lastSummaryAt ? '· ' + new Date(selected.lastSummaryAt).toLocaleString('ru-RU') : ''}</summary>
@@ -527,16 +523,16 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                   {draft.mode === 'SUGGEST' && (
                     <div className="telegram-ai-monitor-status space-y-3 rounded-2xl border p-3">
                       <p className="text-sm font-semibold">Правила предложений ответов</p>
-                      <p className="integration-menu__muted text-xs">Ассистент предложит текст в соответствующем чате проекта «Телеграм ассистент». Без вашего нажатия «Отправить» сообщение в Telegram не уйдёт.</p>
+                      <p className="integration-menu__muted text-xs">Ассистент предложит текст в соответствующем чате проекта «Телеграм ассистент». Без вашего нажатия «Отправить» сообщение в Telegram не уйдёт. Поля ниже необязательны: при пустых полях ассистент сам выбирает подходящие случаи и нейтральный формат ответа.</p>
                       {!capability?.sendEnabled && <p className="telegram-integrations-modal__warning text-xs">Чтобы отправлять одобренные предложения, необходимо разрешить отправку Telegram в интеграциях.</p>}
                       <label className="block text-sm font-semibold">В каких случаях предлагать ответы
-                        <textarea rows={3} maxLength={2000} required value={draft.suggestWhen}
+                        <textarea rows={3} maxLength={2000} value={draft.suggestWhen}
                           onChange={event => update('suggestWhen', event.target.value)}
                           placeholder="Например: когда меня спрашивают о сроках или упоминают через @мой_ник."
                           className="telegram-integrations-modal__input mt-2 w-full resize-y rounded-xl border px-3 py-2 text-sm font-normal"/>
                       </label>
                       <label className="block text-sm font-semibold">Формат предлагаемых ответов
-                        <textarea rows={3} maxLength={2000} required value={draft.suggestHow}
+                        <textarea rows={3} maxLength={2000} value={draft.suggestHow}
                           onChange={event => update('suggestHow', event.target.value)}
                           placeholder="Например: коротко и вежливо от моего лица, без непроверенных обещаний."
                           className="telegram-integrations-modal__input mt-2 w-full resize-y rounded-xl border px-3 py-2 text-sm font-normal"/>
@@ -550,16 +546,16 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                   {draft.mode === 'AUTO' && (
                     <div className="telegram-ai-monitor-status space-y-3 rounded-2xl border p-3">
                       <p className="text-sm font-semibold">Правила автоматических ответов</p>
-                      <p className="integration-menu__muted text-xs">Ответы отправляются от вашего имени в эту переписку только при выполнении заданных условий, без дополнительного подтверждения каждого сообщения. Укажите условия максимально конкретно.</p>
+                      <p className="integration-menu__muted text-xs">Ответы отправляются от вашего имени в эту переписку только при выполнении заданных условий, без дополнительного подтверждения каждого сообщения. Условия и формат необязательны: при пустых полях ассистент самостоятельно определяет уместность и формулировку ответа.</p>
                       {!capability?.sendEnabled && <p className="telegram-integrations-modal__warning text-xs">Отправка Telegram недоступна. Проверьте разрешение на отправку в интеграциях и настройки сервера.</p>}
                       <label className="block text-sm font-semibold">В каких случаях ассистент отвечает
-                        <textarea rows={3} maxLength={2000} required value={draft.autoReplyWhen}
+                        <textarea rows={3} maxLength={2000} value={draft.autoReplyWhen}
                           onChange={event => update('autoReplyWhen', event.target.value)}
                           placeholder={'Например: отвечай, когда меня упоминают через @мой_ник и задают вопрос; или когда обсуждают сроки по проекту.'}
                           className="telegram-integrations-modal__input mt-2 w-full resize-y rounded-xl border px-3 py-2 text-sm font-normal"/>
                       </label>
                       <label className="block text-sm font-semibold">Что именно должен отвечать ассистент
-                        <textarea rows={3} maxLength={2000} required value={draft.autoReplyHow}
+                        <textarea rows={3} maxLength={2000} value={draft.autoReplyHow}
                           onChange={event => update('autoReplyHow', event.target.value)}
                           placeholder="Например: отвечай кратко и дружелюбно от моего лица; если спрашивают о сроках, сообщай, что я уточню их позже. Ничего не обещай без подтверждения."
                           className="telegram-integrations-modal__input mt-2 w-full resize-y rounded-xl border px-3 py-2 text-sm font-normal"/>
@@ -675,8 +671,34 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                   </label>
                     </div>
                   </details>
+                  <div className="telegram-ai-monitor-status space-y-3 rounded-2xl border p-3" role="group" aria-label="Доступ к истории переписки">
+                    <label className="flex items-start gap-2 text-sm">
+                      <input type="checkbox" checked={draft.historyAccessEnabled}
+                        onChange={e => update('historyAccessEnabled', e.target.checked)} className="mt-1"/>
+                      <span><span className="block font-semibold">Дать доступ ассистенту к переписке</span>
+                        <span className="integration-menu__muted mt-1 block text-xs">
+                          Использовать сообщения до подключения ассистента как контекст. История не вызывает автоответов и создания задач. Загрузка и анализ расходуют кредиты.
+                        </span>
+                      </span>
+                    </label>
+                    {draft.historyAccessEnabled && <label className="block text-sm font-semibold">
+                      Сколько последних сообщений использовать
+                      <select className="telegram-integrations-modal__input mt-2 w-full rounded-xl border px-3 py-2 text-sm font-normal"
+                        value={draft.historyMessageLimit === null ? 'all' : String(draft.historyMessageLimit)}
+                        onChange={e => update('historyMessageLimit', e.target.value === 'all' ? null : Number(e.target.value) as 10 | 30 | 50 | 100)}>
+                        <option value="10">10 сообщений</option>
+                        <option value="30">30 сообщений</option>
+                        <option value="50">50 сообщений</option>
+                        <option value="100">100 сообщений</option>
+                        <option value="all">Вся переписка</option>
+                      </select>
+                      <span className="integration-menu__muted mt-1 block text-xs font-normal">
+                        Вся переписка загружается постепенно и сжимается в контекстную сводку, поэтому для больших чатов обработка займёт несколько проверок.
+                      </span>
+                    </label>}
+                  </div>
                   <div className="flex flex-wrap items-center gap-2 pt-1">
-                    <button type="button" disabled={busy || !canConfigure || (draft.mode === 'AUTO' && (!capability?.sendEnabled || !draft.autoReplyWhen.trim() || !draft.autoReplyHow.trim())) || (draft.mode === 'SUGGEST' && (!draft.suggestWhen.trim() || !draft.suggestHow.trim()))}
+                    <button type="button" disabled={busy || !canConfigure || (draft.mode === 'AUTO' && !capability?.sendEnabled)}
                       onClick={() => void save()}
                       className="integration-menu__action rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50">
                       {busy ? 'Сохраняем…' : selected ? 'Сохранить изменения' : 'Добавить переписку'}
