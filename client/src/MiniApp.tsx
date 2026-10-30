@@ -4103,7 +4103,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       <h3 className="miniapp-task-title flex min-w-0 items-center gap-1 font-semibold"><span className="min-w-0 truncate">{task.title}</span>{task.aiMonitoringEnabled ? <TaskMonitoringBadge /> : null}</h3>
                       {listSortMode === 'importance' ? (
                         <>
-                          <p className={`mt-1 text-xs font-medium ${hasOverdueState ? 'miniapp-overdue-label' : 'text-sky-200'}`}>{formatRemaining(task.dueDate)}</p>
+                          <p className={`mt-1 text-xs font-medium ${hasOverdueState ? 'miniapp-overdue-label' : 'text-sky-200'}`}>{task.aiMonitoringEnabled ? 'По триггерам' : formatRemaining(task.dueDate)}</p>
                           <span
                             className="miniapp-importance-rating mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold"
                             style={{ backgroundColor: importanceBadgeColor }}
