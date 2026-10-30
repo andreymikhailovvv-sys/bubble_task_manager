@@ -9,6 +9,8 @@ import { TaskAiEmptyState } from './components/TaskAiEmptyState';
 import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
 
 import { TaskMonitoringStatuses } from './components/TaskMonitoringStatuses';
+import { projectMonitoringTimeline, timelineProjectionKey } from './lib/monitoringTimeline';
+import { TaskMonitoringBadge } from './components/TaskMonitoringBadge';
 import { TaskMonitoringIntroProgress } from './components/TaskMonitoringIntroProgress';
 import { TaskMonitoringTriggerChips } from './components/TaskMonitoringTriggerChips';
 import { TaskRecurrenceConfigurator } from './components/TaskRecurrenceConfigurator';
@@ -1517,7 +1519,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       })
       .sort((a, b) => a.reminderTime.localeCompare(b.reminderTime));
 
-    const todayTasks = timelineFilteredTasks
+    const todayTasks = projectMonitoringTimeline(timelineFilteredTasks)
       .filter((task) => {
         if (!task.dueDate) return false;
         const dueDate = new Date(task.dueDate);
