@@ -3410,8 +3410,9 @@ export async function applyTaskChatProposalActions(input: {
 }): Promise<{ ok: boolean; reports: string[]; createdIds: string[]; error?: string }> {
   const task = await prisma.task.findFirstOrThrow({
     where: { id: input.taskId, AND: [taskAccessWhere(input.userId)] },
-    select: { id: true, title: true, parentTaskId: true, collaborationId: true, importance: true, urgency: true }
+    select: { id: true, title: true, parentTaskId: true, collaborationId: true, importance: true, urgency: true, aiMonitoringEnabled: true }
   });
+  const monitoringEnabled = task.aiMonitoringEnabled;
   const parsed = { actions: input.actions as GeneralAssistantAction[] };
   const requestId = 'approved-task-proposal';
   const model = 'stored-proposal';
