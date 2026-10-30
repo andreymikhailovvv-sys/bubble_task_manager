@@ -141,7 +141,7 @@ test('reconstructs photo multipart from validated base64, keeping binary intact'
   await createTelegramBotApiRelayController(mock as typeof fetch)
     .forward(request(body) as never, res as never);
   assert.equal(out.status, 200);
-  assert.deepEqual([...photo ?? []], [1, 2, 3, 4]);
+  assert.deepEqual([...(photo ?? [])], [1, 2, 3, 4]);
 });
 
 test('preserves Telegram errors and returns 502 when upstream connection fails', async () => {
