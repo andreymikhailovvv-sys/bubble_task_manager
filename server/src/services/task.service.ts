@@ -288,6 +288,10 @@ export const taskService = {
     if (input.sphereId) {
       await prisma.sphere.findFirstOrThrow({ where: { id: input.sphereId, userId } });
     }
+    if (input.aiMonitoringModel !== undefined &&
+        !['gpt-6-luna', 'gpt-6.1-terra', 'gpt-6.1-sol'].includes(input.aiMonitoringModel)) {
+      throw new TypeError('Недопустимая модель автомониторинга.');
+    }
     const newMonitoringEnabled = !isSubtask && !isEvent && !isReminder && !parent?.collaborationId && input.aiMonitoringEnabled === true;
     const inheritsMonitoring = parent?.aiMonitoringEnabled === true;
     const created = await prisma.task.create({
