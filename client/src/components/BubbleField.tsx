@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
+import { TaskMonitoringBadge } from './TaskMonitoringBadge';
 import { CalendarDays, ChevronRight, Coins, Gauge, LoaderCircle, MessageCircle, Plus, Repeat, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
@@ -829,11 +830,11 @@ export function BubbleField({
                   <div className="grid grid-cols-2 gap-3 text-base">
                     <div className="bubble-info-badge rounded-[1.2rem] border p-3">
                       <p className="text-subtle">Дедлайн</p>
-                      <p className="mt-1 font-semibold text-primary">{hoveredBubble.task.aiMonitoringEnabled ? '🟢 A · Время задают триггеры' : formatDueDate(hoveredBubble.task.dueDate)}</p>
+                      <p className="mt-1 font-semibold text-primary">{hoveredBubble.task.aiMonitoringEnabled ? <span className="inline-flex items-center gap-1"><TaskMonitoringBadge /> По триггерам</span> : formatDueDate(hoveredBubble.task.dueDate)}</p>
                     </div>
                     <div className="bubble-info-badge rounded-[1.2rem] border p-3">
-                      <p className="text-subtle">Осталось</p>
-                      <p className="mt-1 font-semibold text-primary">{formatDeadlineLeft(hoveredBubble.task.dueDate)}</p>
+                      <p className="text-subtle">{hoveredBubble.task.aiMonitoringEnabled ? 'Следующие действия' : 'Осталось'}</p>
+                      <p className="mt-1 font-semibold text-primary">{hoveredBubble.task.aiMonitoringEnabled ? `${hoveredBubble.task.monitoringTriggers?.length ?? 0} триггеров` : formatDeadlineLeft(hoveredBubble.task.dueDate)}</p>
                     </div>
                     <div className="bubble-info-badge rounded-[1.2rem] border p-3" style={getInfoBadgeStyle(IMPORTANCE_BUBBLE_COLORS[hoveredBubble.task.importance] ?? '#64748b', isLightTheme)}>
                       <p className="text-subtle">Важность</p>
@@ -942,7 +943,7 @@ export function BubbleField({
                   <p className="text-muted">{hoveredBubble.task.aiMonitoringEnabled ? 'Автомониторинг · по триггерам' : `Срок: ${formatDueDate(hoveredBubble.task.dueDate)}`}</p>
                   <p className="inline-flex items-center gap-1 text-muted">
                     {smartPostponeTaskId === hoveredBubble.task.id ? <LoaderCircle size={12} className="animate-spin text-cyan-200" /> : null}
-                    {formatDeadlineLeft(hoveredBubble.task.dueDate)}
+                    {hoveredBubble.task.aiMonitoringEnabled ? <TaskMonitoringBadge /> : formatDeadlineLeft(hoveredBubble.task.dueDate)}
                   </p>
                   <div className="mt-1 flex items-center gap-2">
                     <p className="text-[11px] text-muted">Коэффициент важности</p>
@@ -968,7 +969,7 @@ export function BubbleField({
                       </button>
                       <div className="ml-auto flex items-center gap-2">
                         <div className="flex items-center">
-                          <CustomSelect
+                          {!hoveredBubble.task.aiMonitoringEnabled ? <CustomSelect
                             className="w-[136px]"
                             value=""
                             onChange={(value) => {
@@ -978,7 +979,7 @@ export function BubbleField({
                             options={[{ value: '', label: 'Отложить' }, { value: '15m', label: 'На 15 мин' }, { value: '30m', label: 'На 30 мин' }, { value: '1h', label: 'На час' }, { value: '3h', label: 'На 3 часа' }, { value: 'tomorrow', label: 'На завтра' }, { value: 'smart', label: '✦ Ближайшее окно (◍ 1)' }]}
                             buttonClassName="h-7 px-2 py-1 text-[11px]"
                             ariaLabel="Отложить задачу"
-                          />
+                          /> : null}
                         </div>
                         <div className="flex items-center gap-1">
                           <button type="button" className="surface-muted rounded px-2 py-1 text-[11px] font-semibold text-primary hover:brightness-110" onClick={(event) => {
