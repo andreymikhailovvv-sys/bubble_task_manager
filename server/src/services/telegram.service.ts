@@ -2169,6 +2169,8 @@ export const telegramService = {
     const tasks = await prisma.task.findMany({
       where: {
         taskType: { not: 'REMINDER' },
+        aiMonitoringEnabled: false,
+        AND: [{ OR: [{ parentTaskId: null }, { parentTask: { aiMonitoringEnabled: false } }] }],
         dueDate: { not: null },
         OR: [
           { status: { not: 'DONE' }, notifyBeforeMinutes: { not: null } },
