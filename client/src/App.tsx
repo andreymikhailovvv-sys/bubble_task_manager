@@ -8309,7 +8309,7 @@ export default function App() {
                     <p className="upcoming-subtask-title text-sm font-medium text-primary"><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
                     <p className="upcoming-subtask-description mt-1 text-xs text-muted"><LinkifiedText text={noteHtmlToPlainText(subtask.description ?? '', { trimEnd: true })} fallback="Без описания" stopPropagationOnLinkClick /></p>
                     <p className="upcoming-subtask-deadline mt-1 text-[11px] text-subtle">
-                      Дедлайн: {formatTaskDueDate(subtask.dueDate)}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
+                      {taskById.get(subtask.parentTaskId ?? '')?.aiMonitoringEnabled ? 'На усмотрение ИИ' : <>Дедлайн: {formatTaskDueDate(subtask.dueDate)}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}</>}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
