@@ -4551,15 +4551,13 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   />
                 ) : null}
                 <div className={`${taskTitleRows === 1 ? '-mt-[0.15rem]' : 'mt-2'} flex items-center gap-2 text-sm font-semibold ${isOverdue({ ...openedTask, dueDate: fromInputDateTime(openedTaskDraft.dueDate) }) ? 'text-rose-500' : 'text-violet-500'}`}>
-                  <DateTimePickerWithApply
+                  {openedTask.aiMonitoringEnabled ? <TaskMonitoringBadge /> : <DateTimePickerWithApply
                     value={fromInputDateTime(openedTaskDraft.dueDate)}
                     onChange={(nextValue) => onChangeDraft(openedTask.id, { dueDate: toInputDateTime(nextValue) })}
                     timelineTasks={timelinePickerTasks}
-                    iconOnly
-                    detachedPopup
-                    buttonClassName="miniapp-focus-icon-button"
-                  />
-                  <span>{openedTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(openedTaskDraft.dueDate)}` : 'Дедлайн не задан'}</span>
+                    iconOnly detachedPopup buttonClassName="miniapp-focus-icon-button"
+                  />}
+                  <span>{openedTask.aiMonitoringEnabled ? 'Время определяется триггерами' : openedTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(openedTaskDraft.dueDate)}` : 'Дедлайн не задан'}</span>
                 </div>
                 <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
                   <TaskDescriptionInput
@@ -4807,8 +4805,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               placeholder="Название подзадачи"
             />
             <div className="mt-2 flex items-center gap-2 text-xs font-semibold text-violet-500">
-              <DateTimePickerWithApply value={fromInputDateTime(openedSubtaskDraft.dueDate)} onChange={(nextValue) => changeSubtaskDraft({ dueDate: toInputDateTime(nextValue) })} timelineTasks={timelinePickerTasks} iconOnly detachedPopup buttonClassName="miniapp-focus-icon-button" />
-              <span>{openedSubtaskDraft.dueDate ? formatSubtaskRelativeDeadline(fromInputDateTime(openedSubtaskDraft.dueDate)) : 'Срок не задан'}</span>
+              {openedSubtaskParent?.aiMonitoringEnabled ? <TaskMonitoringBadge /> : <DateTimePickerWithApply value={fromInputDateTime(openedSubtaskDraft.dueDate)} onChange={(nextValue) => changeSubtaskDraft({ dueDate: toInputDateTime(nextValue) })} timelineTasks={timelinePickerTasks} iconOnly detachedPopup buttonClassName="miniapp-focus-icon-button" />}
+              <span>{openedSubtaskParent?.aiMonitoringEnabled ? 'Время определяется триггерами' : openedSubtaskDraft.dueDate ? formatSubtaskRelativeDeadline(fromInputDateTime(openedSubtaskDraft.dueDate)) : 'Срок не задан'}</span>
             </div>
             <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
               <TaskDescriptionInput
