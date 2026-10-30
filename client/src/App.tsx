@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, CalendarPlus, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Clock3, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Menu, MessageCircle, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, BellRing, Trash2, UserRound, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
+import { TaskMonitoringBadge } from './components/TaskMonitoringBadge';
+import { projectMonitoringTimeline, timelineProjectionKey } from './lib/monitoringTimeline';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
@@ -714,7 +716,7 @@ function buildTimelineViewData(
   const rangeEnd = timelineViewMode === 'day' ? dayEnd : timelineViewMode === 'week' ? weekEnd : monthGridEnd;
 
   const tasksWithoutDate: Task[] = [];
-  const datedTasks = listTasks
+  const datedTasks = projectMonitoringTimeline(listTasks)
     .map((task) => {
       if (!task.dueDate) {
         tasksWithoutDate.push(task);
@@ -4579,7 +4581,7 @@ export default function App() {
   const aiTaskReferenceTasks = tasks;
   const getTimelineTaskViewModel = (task: Task) => {
     const taskSubtasks = displayedSubtaskMap[task.id] ?? [];
-    const hasOverdueState = task.status !== 'DONE' && isOverdue(task);
+    const hasOverdueState = !task.aiMonitoringEnabled && task.status !== 'DONE' && isOverdue(task);
     const taskSphere = task.sphereId ? (sphereById.get(task.sphereId) ?? null) : null;
     const sphereColor = taskSphere?.color ?? '#64748b';
     return {
@@ -4609,12 +4611,12 @@ export default function App() {
     const isCompletingInTimeline = timelineCompletionAnimationIds.includes(task.id);
     const isCompletingOutsideTimeline = displayMode !== 'timeline' && closingTaskIds.includes(task.id);
     const disableEffects = Boolean(options?.disableEffects);
-    const canDragTask = task.status !== 'DONE' && Boolean(task.dueDate);
+    const canDragTask = !task.aiMonitoringEnabled && task.status !== 'DONE' && Boolean(task.dueDate);
     const isHoverCardVisible = draggedTimelineTaskId === null && !options?.disableHoverCard && timelineHoverCard?.taskId === task.id;
     return (
       <motion.button
         layout
-        key={task.id}
+        key={timelineProjectionKey(task)}
         type="button"
         draggable={canDragTask}
         transition={{ type: 'spring', stiffness: 380, damping: 32 }}
@@ -4672,7 +4674,7 @@ export default function App() {
           openTaskWithFocusGuard(task);
         }}
         onContextMenu={(event) => {
-          if (isReminderChip) { event.preventDefault(); return; }
+          if (isReminderChip || task.aiMonitoringEnabled) { event.preventDefault(); return; }
           event.preventDefault();
           event.stopPropagation();
           setTimelineHoverCard((prev) => (prev?.taskId === task.id ? null : prev));
@@ -4701,7 +4703,7 @@ export default function App() {
           {task.isRecurring ? <span title="Повторяющееся событие/задача"><Repeat size={12} className="timeline-task-chip-accent shrink-0" /></span> : null}
           {isEventChip && task.location ? <span className="timeline-task-chip-meta ml-1 truncate">· {task.location}</span> : null}
         </span>
-        {!isEventChip && !isReminderChip && !isSubtaskChip ? <div className="flex items-center gap-1"><span className="timeline-task-count-badge rounded-full border px-1.5 py-0.5 text-[10px]">{taskSubtasks.length}</span></div> : null}
+        <div className="ml-auto flex shrink-0 items-center gap-1">{task.aiMonitoringEnabled && !isSubtaskChip ? <TaskMonitoringBadge /> : null}{!isEventChip && !isReminderChip && !isSubtaskChip ? <span className="timeline-task-count-badge rounded-full border px-1.5 py-0.5 text-[10px]">{taskSubtasks.length}</span> : null}</div>
         {isCompletingInTimeline || isCompletingOutsideTimeline ? (
           <motion.span
             initial={{ scaleX: 0 }}
@@ -4718,7 +4720,7 @@ export default function App() {
           <p className="font-semibold text-primary">{task.title}</p>
           <p className="mt-1 min-w-0 max-w-full whitespace-pre-wrap break-words text-muted [overflow-wrap:anywhere]"><LinkifiedText text={(() => { const plain = noteHtmlToPlainText(task.description ?? '', { trimEnd: true }); return plain.length > 240 ? `${plain.slice(0, 240)}...` : plain; })()} fallback="Без описания" stopPropagationOnLinkClick /></p>
           {isSubtaskChip && options?.parentTaskTitle ? <p className="mt-1 text-muted">Основная задача: {options.parentTaskTitle}</p> : null}
-          <p className="mt-1 text-muted">Дедлайн: {formatTaskDueDate(task.dueDate)} · {formatDeadlineLeft(task.dueDate)}</p>
+          <p className="mt-1 text-muted">{task.aiMonitoringEnabled ? <span className="inline-flex items-center gap-1"><TaskMonitoringBadge /> По триггерам</span> : <>Дедлайн: {formatTaskDueDate(task.dueDate)} · {formatDeadlineLeft(task.dueDate)}</>}</p>
           {isEventChip ? <p className="mt-1 text-muted">Место: {task.location?.trim() || 'Не указано'}</p> : null}
           {isEventChip ? null : isSubtaskChip ? (
             <div className="timeline-hover-card-section mt-2 border-t pt-2">
@@ -5516,7 +5518,7 @@ export default function App() {
               <motion.article key={focusActiveTask.id} initial={{ opacity: 0, y: 44, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="focus-main-card flex min-h-0 w-full max-w-2xl flex-1 flex-col overflow-hidden rounded-[2rem] border p-6 shadow-xl">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Текущая задача</p>
                 <div className="mt-2 flex items-start justify-between gap-3"><button type="button" className="text-left text-3xl font-bold text-slate-950 hover:underline" onClick={() => { setFocusedTaskId(focusActiveTask.id); setIsFocusedNotesEditorOpen(false); }}>{focusActiveTask.title}</button><button type="button" className="success-button shrink-0 rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => void completeTask(focusActiveTask)}>Выполнить</button></div>
-                <p className="mt-1 text-sm font-medium text-violet-500">{focusActiveTask.dueDate ? `До дедлайна: ${formatSubtaskRelativeDeadline(focusActiveTask.dueDate)}` : 'Дедлайн не задан'}</p>
+                <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-violet-500">{focusActiveTask.aiMonitoringEnabled ? <><TaskMonitoringBadge /> Время по триггерам</> : (focusActiveTask.dueDate ? `До дедлайна: ${formatSubtaskRelativeDeadline(focusActiveTask.dueDate)}` : 'Дедлайн не задан')}</p>
                 <div className="mt-3 flex min-h-0 items-start">
                   <p className="focus-task-description min-w-0 flex-1 whitespace-pre-wrap text-sm leading-6 text-muted">{noteHtmlToPlainText(focusActiveTask.description ?? '', { trimEnd: true }) || 'Описание не заполнено.'}</p>
                 </div>
@@ -5609,6 +5611,7 @@ export default function App() {
                 <div className="min-w-0 flex shrink-0 items-center gap-2"><Bot size={18} className="focus-task-ai-bot-icon shrink-0" /><h3 className="truncate font-semibold ai-panel-title">Помощь ИИ</h3></div>
                 <div className="focus-task-ai-header-actions flex min-w-0 items-center justify-end gap-2">
                   <TaskMonitoringStatuses taskId={focusActiveTask.id}
+                    model={focusActiveTask.aiMonitoringModel}
                     enabled={focusActiveTask.aiMonitoringEnabled === true}
                     allowed={focusActiveTask.taskType === 'TASK' && !focusActiveTask.parentTaskId && !focusActiveTask.isCollaborative}
                     onTaskUpdated={updated => setTasks(prev => prev.map(task => task.id === updated.id ? updated : task))} />
@@ -5649,6 +5652,7 @@ export default function App() {
               <div className="task-ai-fullscreen-actions flex shrink-0 flex-wrap items-center justify-end gap-3">
                 <div className="task-ai-fullscreen-monitor shrink-0">
                   <TaskMonitoringStatuses taskId={focusActiveTask.id}
+                    model={focusActiveTask.aiMonitoringModel}
                     enabled={focusActiveTask.aiMonitoringEnabled === true}
                     allowed={focusActiveTask.taskType === 'TASK' && !focusActiveTask.parentTaskId && !focusActiveTask.isCollaborative}
                     onTaskUpdated={updated => setTasks(prev => prev.map(task => task.id === updated.id ? updated : task))} />
@@ -6135,6 +6139,7 @@ export default function App() {
                         <span className={`min-w-0 flex-1 truncate text-base font-semibold ${task.status === 'DONE' || isClosingTask ? 'timeline-task-chip-completed text-subtle line-through opacity-70 decoration-2' : 'text-primary'}`}>
                           <LinkifiedText text={task.title} stopPropagationOnLinkClick />
                         </span>
+                        {task.aiMonitoringEnabled ? <TaskMonitoringBadge /> : null}
                         {task.isRecurring ? <span title="Повторяющаяся задача"><Repeat size={13} className="list-task-repeat-icon shrink-0" /></span> : null}
                         {hasAiNotificationState ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={14} className="list-task-ai-icon shrink-0" /></span> : null}
                       </div>
@@ -6144,8 +6149,7 @@ export default function App() {
                         </p>
                       ) : null}
                       <p className={`list-task-deadline mt-1 inline-flex min-w-0 items-center gap-1.5 text-[11px] ${hasOverdueState ? 'list-task-deadline-overdue' : 'text-subtle'}`}>
-                        <CalendarDays size={13} className="shrink-0" aria-hidden="true" />
-                        <span className="min-w-0 truncate">Дедлайн: {formatTaskDueDate(task.dueDate)}{task.dueDate ? ` · ${formatDeadlineLeft(task.dueDate)}` : ''}</span>
+                        {task.aiMonitoringEnabled ? <><TaskMonitoringBadge /><span className="min-w-0 truncate">Время по триггерам</span></> : <><CalendarDays size={13} className="shrink-0" aria-hidden="true" /><span className="min-w-0 truncate">Дедлайн: {formatTaskDueDate(task.dueDate)}{task.dueDate ? ` · ${formatDeadlineLeft(task.dueDate)}` : ''}</span></>}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
@@ -7243,6 +7247,7 @@ export default function App() {
                   <p className="flex items-center gap-2 text-sm font-semibold ai-panel-title"><Bot size={16} /> Помощь ИИ</p>
                 </div>
                 <TaskMonitoringStatuses taskId={focusedTask.id}
+                  model={focusedTask.aiMonitoringModel}
                   enabled={focusedTask.aiMonitoringEnabled === true}
                   allowed={focusedTask.taskType === 'TASK' && !focusedTask.parentTaskId && !focusedTask.isCollaborative}
                   onTaskUpdated={(updated) => {
@@ -7490,15 +7495,16 @@ export default function App() {
                     </div>
                   </div>
                   <div className="focused-task-deadline-row mt-3 flex items-center gap-2 text-sm font-medium text-violet-500">
-                    <span>{focusedDraft.dueDate ? `До дедлайна: ${formatDeadlineLeft(focusedDraft.dueDate)}` : 'Дедлайн не задан'}</span>
-                    <DateTimePickerWithApply
-                      value={focusedDraft.dueDate}
-                      timelineTasks={timelinePickerTasks}
-                      detachedPopup
-                      iconOnly
-                      buttonClassName="focused-task-icon-button"
-                      onChange={(nextValue) => setFocusedDraft((p) => ({ ...(p ?? {}), dueDate: nextValue }))}
-                    />
+                    {focusedTask.aiMonitoringEnabled ? <><TaskMonitoringBadge /> <span>Время определяется триггерами</span></> : <>
+                      <span>{focusedDraft.dueDate ? `До дедлайна: ${formatDeadlineLeft(focusedDraft.dueDate)}` : 'Дедлайн не задан'}</span>
+                      <DateTimePickerWithApply
+                        value={focusedDraft.dueDate}
+                        timelineTasks={timelinePickerTasks}
+                        detachedPopup iconOnly
+                        buttonClassName="focused-task-icon-button"
+                        onChange={(nextValue) => setFocusedDraft((p) => ({ ...(p ?? {}), dueDate: nextValue }))}
+                      />
+                    </>}
                   </div>
                   <ResizableDescriptionSurface className="focused-task-description-surface mt-3 rounded-2xl p-3">
                     <TaskDescriptionInput
@@ -7826,7 +7832,7 @@ export default function App() {
                     <button type="button" className="primary-button rounded-lg px-2.5 py-1.5 text-xs font-semibold" onClick={() => void addFocusedSubtask()}>
                       Добавить
                     </button>
-                    <DateTimePickerWithApply
+                    {!focusedTask.aiMonitoringEnabled ? <DateTimePickerWithApply
                       value={focusedSubtaskDueDate}
                       title="Выбрать дату и время подзадачи"
                       detachedPopup
@@ -7835,7 +7841,7 @@ export default function App() {
                       timelineTasks={timelinePickerTasks}
                       buttonClassName="focused-task-inline-subtask-button"
                       onChange={(dueDate) => setFocusedSubtaskDueDate(dueDate)}
-                    />
+                    /> : null}
                     <button
                       type="button"
                       className="secondary-button rounded-lg px-2.5 py-1.5 text-xs font-semibold"
@@ -8060,6 +8066,7 @@ export default function App() {
               <div className="task-ai-fullscreen-actions flex shrink-0 flex-wrap items-center justify-end gap-3">
                 <div className="task-ai-fullscreen-monitor shrink-0">
                   <TaskMonitoringStatuses taskId={focusedTask.id}
+                    model={focusedTask.aiMonitoringModel}
                     enabled={focusedTask.aiMonitoringEnabled === true}
                     allowed={focusedTask.taskType === 'TASK' && !focusedTask.parentTaskId && !focusedTask.isCollaborative}
                     onTaskUpdated={(updated) => {
