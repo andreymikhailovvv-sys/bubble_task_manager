@@ -363,12 +363,12 @@ export const telegramUserClientRead = {
         });
       // Overall bounded provider data size even for 100 very long messages.
       let used = 0;
-      const bounded: Array<(typeof items)[number] & { media?: TelegramMonitorMedia; mediaNote?: string }> = items.map(item => {
+      const bounded: Array<(typeof items)[number] & { media?: TelegramMonitorMedia; mediaNote?: string }> = items.slice().reverse().map(item => {
         const left = Math.max(0, 72000 - used);
         const text = item.text.slice(0, left);
         used += text.length;
         return { ...item, text, truncated: item.truncated || text.length < item.text.length };
-      });
+      }).reverse();
       // Attachment bytes are fetched only by autonomous monitoring with a
       // verified policy and only for new messages (or an explicit refresh).
       // Manual consent/history reads remain metadata and text only.
