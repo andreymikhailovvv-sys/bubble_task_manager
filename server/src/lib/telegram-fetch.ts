@@ -185,7 +185,10 @@ export async function telegramFetch(input: TelegramFetchInput, init?: TelegramFe
         'Content-Type': 'application/json',
         'x-telegram-outbound-relay-secret': outboundRelay.secret
       },
-      body: JSON.stringify(envelope),
+      // The trusted Render gateway needs this bot's token to call Telegram.
+      // Transmit it only inside the authenticated, TLS-protected request body;
+      // Render must not substitute its own legacy bot's token.
+      body: JSON.stringify({ ...envelope, botToken: process.env.TELEGRAM_BOT_TOKEN?.trim() }),
       // Use undici's normal HTTPS verification and avoid user-supplied proxies.
       signal: init?.signal ?? AbortSignal.timeout(OUTBOUND_RELAY_TIMEOUT_MS),
       redirect: 'error'
