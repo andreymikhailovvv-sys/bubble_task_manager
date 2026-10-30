@@ -74,6 +74,7 @@ async function deliver(run: Run, question: string, checkCurrent: () => Promise<b
     });
     const result = await aiAssistantService.askTaskAssistant({
       userId: run.userId, taskId: run.taskId, history,
+      ...(monitoringEnabled ? { model: taskAtStart.aiMonitoringModel as 'gpt-6-luna' | 'gpt-6.1-terra' | 'gpt-6.1-sol' } : {}),
       question: [
         monitoringEnabled
           ? 'Это автоматический запрос сервера в рамках включённого автомониторинга задачи.'
@@ -117,11 +118,14 @@ async function deliver(run: Run, question: string, checkCurrent: () => Promise<b
     // At this point the task conversation is the source of truth.
     // The fan-out uses an idempotent event key so a network retry never
     // publishes a duplicate quick-chat message or notification.
-    await publishTaskMonitoringReply({
-      userId: run.userId, taskId: run.taskId, runId: run.id,
-      kind,
-      answer: visibleAnswer
-    });
+    // Only actual trigger executions may create external notifications.
+    // Introductory analysis remains in task chat without a push notification.
+    if (kind === 'trigger') {
+      await publishTaskMonitoringReply({
+        userId: run.userId, taskId: run.taskId, runId: run.id,
+        kind, answer: visibleAnswer
+      });
+    }
     await markRun(run.id, 'completed');
     console.info('[TaskMonitoring] AI delivery completed', { runId: run.id, taskId: run.taskId });
   } catch (error) {
@@ -215,6 +219,11 @@ export async function pollTaskMonitoring(now = new Date()) {
     });
     for (const job of jobs) {
       if (!job.sourceTaskId || !job.dueAt) continue;
+      if (job.kind !== MONITORING_INTRO_KIND) {
+        // Legacy deadline/subtask jobs from older deployments must never fire.
+        await markRun(job.id, 'cancelled');
+        continue;
+      }
       const claimed = await prisma.taskMonitoringRun.updateMany({
         where: { id: job.id, state: 'scheduled', dueAt: job.dueAt },
         data: { state: 'processing' }
