@@ -1673,6 +1673,12 @@ const handleCallback = async (update: TelegramUpdate) => {
       return;
     }
 
+    if (task.aiMonitoringEnabled || (task.parentTaskId && await prisma.task.findFirst({
+      where: { id: task.parentTaskId, aiMonitoringEnabled: true }, select: { id: true }
+    }))) {
+      await answerCallback(callback.id, 'Время задачи управляется триггерами автомониторинга');
+      return;
+    }
     const baseTime = task.dueDate && task.dueDate.getTime() > Date.now() ? task.dueDate : new Date();
     const dueDate = new Date(baseTime.getTime() + minutes * 60_000);
 
@@ -1718,6 +1724,10 @@ const handleCallback = async (update: TelegramUpdate) => {
       return;
     }
 
+    if (await prisma.task.findFirst({ where: { id: subtask.parentTaskId, aiMonitoringEnabled: true }, select: { id: true } })) {
+      await answerCallback(callback.id, 'Время подзадачи управляется триггерами');
+      return;
+    }
     const baseTime = subtask.dueDate && subtask.dueDate.getTime() > Date.now() ? subtask.dueDate : new Date();
     const dueDate = new Date(baseTime.getTime() + minutes * 60_000);
     await prisma.task.update({
