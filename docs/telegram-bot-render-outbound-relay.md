@@ -10,8 +10,9 @@ disabled by default, and does not affect the personal MTProto assistant.
 **Render** (existing `bubble-task-manager` service, connected to Telegram):
 - `TELEGRAM_BOT_API_RELAY_ENABLED=true`
 - `TELEGRAM_BOT_API_RELAY_SECRET=<a random shared secret of 32-256 A-Za-z0-9_- chars>`
-- `TELEGRAM_BOT_API_RELAY_BOT_TOKEN=<the main Planirovych bot token copied from Timeweb's TELEGRAM_BOT_TOKEN>`
+- No additional bot-token environment variable is required on Render.
 - Keep Render's existing `TELEGRAM_BOT_TOKEN` **unchanged** if it belongs to a different or legacy Telegram bot. The outgoing relay **never** uses it.
+- If previously set, `TELEGRAM_BOT_API_RELAY_BOT_TOKEN` is now ignored and can be deleted from Render **after successful rollout**.
 - Keep current incoming webhook vars `TELEGRAM_RELAY_ENABLED`,
   `TELEGRAM_RELAY_SOURCE_SECRET`, `TELEGRAM_RELAY_TARGET_SECRET`,
   `TELEGRAM_RELAY_TARGET_URL` unchanged.
@@ -32,8 +33,12 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'
 
 ## Rollout order
 
-1. Merge and deploy to **Render first**, enable the outbound relay environment
-   variables (including `TELEGRAM_BOT_API_RELAY_BOT_TOKEN`), and wait for a healthy service. An unauthenticated direct request
+**Important:** Deploy the same commit to **Render and Timeweb**. Older Render
+relay versions expect a separate environment variable for the Telegram token;
+older Timeweb senders do not include a token in the authenticated request.
+Deploy Render first and Timeweb second. There are **no new environment variables**.
+
+1. Merge and deploy to **Render first**, keeping the existing `TELEGRAM_BOT_API_RELAY_ENABLED=true` and `TELEGRAM_BOT_API_RELAY_SECRET` values, then wait for a healthy service. An unauthenticated direct request
    to `/api/telegram-bot-api-relay` must return **401**, not 200.
 2. Deploy the same code to **Timeweb** while leaving the outgoing relay URL
    unset. Existing bot routing remains unchanged.
@@ -53,13 +58,16 @@ the incoming webhook relay.
 
 - Separate high-entropy shared secret, checked in constant time.
 - Receiver rejects all unauthenticated calls; disabled by default.
-- Receiver constructs fixed `https://api.telegram.org` URLs using the **dedicated
-  Timeweb bot token**, never from request input or Render's legacy bot token.
-- Missing or invalid dedicated token causes a 503 response (no fallback to another bot).
-- This extra token is used only for outgoing API calls; it does not register a
-  Telegram webhook or enable a second scheduler. If two deployments independently
-  run notification workers using shared data, those workers must still be managed
-  separately to avoid duplicate sends.
+- The authenticated Timeweb caller sends its configured `TELEGRAM_BOT_TOKEN`
+  **inside the HTTPS JSON request body**. The receiver uses this token only to
+  build fixed `https://api.telegram.org` URLs for allowlisted operations, and
+  never uses Render's legacy bot token.
+- Receiver returns **400** for a missing/malformed bot token, **401** for an
+  unauthorized caller, and **503** if Render's shared relay secret is missing
+  or incorrectly configured. No fallback to another bot.
+- No additional outgoing bot process or scheduler is launched. If two
+  deployments independently run notification workers using shared data, those
+  workers must still be managed separately to avoid duplicate sends.
 - Only `sendMessage`, `sendPhoto`, `editMessageText`,
   `editMessageReplyMarkup`, `answerCallbackQuery`, `getFile`,
   and narrowly validated file download paths are accepted.

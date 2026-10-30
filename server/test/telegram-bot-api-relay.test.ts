@@ -9,7 +9,7 @@ import { buildTelegramBotApiRelayEnvelope } from '../src/lib/telegram-fetch.js';
 const TEST_TOKEN = '123456:fakeBotTokenForTesting';
 const LEGACY_RENDER_BOT_TOKEN = '654321:deprecatedRenderBotForTesting';
 const TEST_SECRET = 'telegram_render_outbound_relay_secret_testing_32';
-const VARIABLES = ['TELEGRAM_BOT_API_RELAY_ENABLED', 'TELEGRAM_BOT_API_RELAY_SECRET', 'TELEGRAM_BOT_API_RELAY_BOT_TOKEN', 'TELEGRAM_BOT_TOKEN'] as const;
+const VARIABLES = ['TELEGRAM_BOT_API_RELAY_ENABLED', 'TELEGRAM_BOT_API_RELAY_SECRET', 'TELEGRAM_BOT_TOKEN'] as const;
 const saved = Object.fromEntries(VARIABLES.map(key => [key, process.env[key]]));
 
 test.afterEach(() => {
@@ -24,11 +24,12 @@ function setup() {
   process.env.TELEGRAM_BOT_API_RELAY_ENABLED = 'true';
   process.env.TELEGRAM_BOT_API_RELAY_SECRET = TEST_SECRET;
   process.env.TELEGRAM_BOT_TOKEN = LEGACY_RENDER_BOT_TOKEN;
-  process.env.TELEGRAM_BOT_API_RELAY_BOT_TOKEN = TEST_TOKEN;
 }
-function request(body: unknown, secret: string | undefined = TEST_SECRET) {
+function request(body: unknown, secret: string | undefined = TEST_SECRET, botToken: string | null = TEST_TOKEN) {
   return {
-    body,
+    body: body && typeof body === 'object'
+      ? { ...body, ...(botToken === null ? {} : { botToken }) }
+      : body,
     get: (name: string) => name === 'x-telegram-outbound-relay-secret' ? secret : undefined
   };
 }
@@ -62,11 +63,9 @@ test('fails closed with missing configuration and wrong relay credentials', asyn
   await controller.forward(request({ kind: 'api', method: 'getFile', payload: {} }) as never, first.res as never);
   assert.equal(first.out.status, 503);
   process.env.TELEGRAM_BOT_API_RELAY_SECRET = TEST_SECRET;
-  delete process.env.TELEGRAM_BOT_API_RELAY_BOT_TOKEN;
   const noOutboundToken = response();
-  await controller.forward(request({ kind: 'api', method: 'getFile', payload: {} }) as never, noOutboundToken.res as never);
-  assert.equal(noOutboundToken.out.status, 503, 'must not fall back to legacy Render bot token');
-  process.env.TELEGRAM_BOT_API_RELAY_BOT_TOKEN = TEST_TOKEN;
+  await controller.forward(request({ kind: 'api', method: 'getFile', payload: {} }, TEST_SECRET, null) as never, noOutboundToken.res as never);
+  assert.equal(noOutboundToken.out.status, 400, 'must not fall back to legacy Render bot token');
   const second = response();
   await controller.forward(request({ kind: 'api', method: 'getFile', payload: {} }, 'wrong') as never, second.res as never);
   assert.equal(second.out.status, 401);
@@ -170,14 +169,19 @@ test('preserves Telegram errors and returns 502 when upstream connection fails',
   assert.equal(unavailableResponse.out.status, 502);
 });
 
-test('Timeweb builds envelopes without revealing its bot token to Render', async () => {
+test('Timeweb validates outgoing envelopes before including the token in the authenticated relay request', async () => {
   setup();
+  // On Timeweb the configured bot is the main bot, not Render's legacy bot.
+  process.env.TELEGRAM_BOT_TOKEN = TEST_TOKEN;
   const apiEnvelope = await buildTelegramBotApiRelayEnvelope(
     `https://api.telegram.org/bot${TEST_TOKEN}/sendMessage`, {
       method: 'POST', body: JSON.stringify({ chat_id: 42, text: 'hello' })
     });
   assert.deepEqual(apiEnvelope, { kind: 'api', method: 'sendMessage', payload: { chat_id: 42, text: 'hello' } });
   assert.ok(!JSON.stringify(apiEnvelope).includes(TEST_TOKEN));
+  const relayPayload = { ...apiEnvelope, botToken: TEST_TOKEN };
+  assert.equal(relayPayload.botToken, TEST_TOKEN);
+  assert.deepEqual(parseBotApiRelayEnvelope(relayPayload), apiEnvelope);
 
   const fileEnvelope = await buildTelegramBotApiRelayEnvelope(
     `https://api.telegram.org/file/bot${TEST_TOKEN}/voice/file_1.oga`);
