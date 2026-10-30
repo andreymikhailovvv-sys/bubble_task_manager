@@ -71,21 +71,33 @@ export const createTelegramBotApiRelayController = (fetchImplementation: typeof 
     }
     const secret = process.env.TELEGRAM_BOT_API_RELAY_SECRET?.trim();
     if (!validSecret(secret)) {
-      console.error('[TelegramBotApiRelay] relay shared secret missing or invalid');
-      res.status(503).json({ error: 'Telegram outbound relay shared secret is not configured' });
+      const reason = !secret ? 'shared_secret_missing' : 'shared_secret_invalid_format';
+      console.error('[TelegramBotApiRelay] configuration error', { reason });
+      res.status(503).json({ error: 'Outbound relay not configured', reason });
       return;
     }
     if (!authorized(secret, req.get(SECRET_HEADER))) {
-      res.status(401).json({ error: 'Unauthorized' });
+      console.warn('[TelegramBotApiRelay] request rejected', {
+        reason: 'relay_auth_failed',
+        secretHeaderPresent: Boolean(req.get(SECRET_HEADER))
+      });
+      res.status(401).json({ error: 'Unauthorized', reason: 'relay_auth_failed' });
       return;
     }
 
-    // The authenticated Timeweb caller supplies its own bot token over HTTPS.
-    // Render's legacy Telegram bot and its TELEGRAM_BOT_TOKEN stay untouched.
-    // A missing/invalid token is an explicit client error, not a fallback.
-    const botToken: unknown = req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>).botToken : undefined;
-    if (typeof botToken !== 'string' || !/^\d+:[A-Za-z0-9_-]+$/.test(botToken)) {
-      res.status(400).json({ error: 'Invalid outgoing Telegram bot token' });
+    // Only the dedicated Timeweb bot token, stored as a Render environment
+    // secret, is permitted. Never use the unrelated legacy TELEGRAM_BOT_TOKEN
+    // and never accept Telegram tokens inside the HTTP payload.
+    if (req.body && typeof req.body === 'object' && 'botToken' in req.body) {
+      console.warn('[TelegramBotApiRelay] request rejected', { reason: 'bot_token_in_payload' });
+      res.status(400).json({ error: 'Bot token must not be sent in request body', reason: 'bot_token_in_payload' });
+      return;
+    }
+    const botToken = process.env.TELEGRAM_BOT_API_RELAY_BOT_TOKEN?.trim();
+    if (!botToken || !/^\d+:[A-Za-z0-9_-]+$/.test(botToken)) {
+      const reason = !botToken ? 'outbound_bot_token_missing' : 'outbound_bot_token_invalid_format';
+      console.error('[TelegramBotApiRelay] configuration error', { reason });
+      res.status(503).json({ error: 'Outbound relay not configured', reason });
       return;
     }
 
