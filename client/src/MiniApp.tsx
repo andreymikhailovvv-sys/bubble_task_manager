@@ -3710,6 +3710,12 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const showTelegramBrand = useTelegramCompactChatHeader && !isAiChatOpen && !openedTaskId && !openedSubtaskId &&
     !isCreateTaskModalOpen && !isHabitModalOpen && !isAiDialogOpen;
 
+  useEffect(() => {
+    const onTriggerChange = () => { void loadData({ refreshPlannerOnly: true }); };
+    window.addEventListener('task-monitoring-triggers-updated', onTriggerChange);
+    return () => window.removeEventListener('task-monitoring-triggers-updated', onTriggerChange);
+  }, []);
+
   const taskMonitoringControl = openedTask ? (
               <TaskMonitoringStatuses taskId={openedTask.id}
                 model={openedTask.aiMonitoringModel}
