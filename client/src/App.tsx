@@ -7085,6 +7085,7 @@ export default function App() {
           editorType={editorState.task?.taskType === 'EVENT' ? 'event' : 'task'}
           onGenerateWithAi={createTaskFromAi}
           parentTaskTitle={editorState.task?.parentTaskId ? (taskById.get(editorState.task.parentTaskId)?.title ?? null) : null}
+           monitoringParent={editorState.task?.parentTaskId ? taskById.get(editorState.task.parentTaskId)?.aiMonitoringEnabled === true : false}
           onOpenParentTask={editorState.task?.parentTaskId ? () => {
             setEditorState(null);
             setFocusedTaskId(editorState.task!.parentTaskId!);
