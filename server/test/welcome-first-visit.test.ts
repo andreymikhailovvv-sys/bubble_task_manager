@@ -104,7 +104,7 @@ test('Work has its own boot splash with required branding and a React dismissal'
   const main = await readFile(new URL('../../client/src/main.tsx', import.meta.url), 'utf8');
   assert.match(rootHtml, /work-workspace-preload/);
   const workHtml = await readFile(new URL('../../client/work.html', import.meta.url), 'utf8');
-  assert.match(workHtml, /Планировыч\\.Work/);
+  assert.match(workHtml, /Планировыч\.Work/);
   assert.match(rootHtml, /Твоя компания под контролем/);
   assert.match(rootHtml, /Загрузка не завершилась/);
   assert.match(businessApp, /classList\.remove\('work-workspace-preload'\)/);
