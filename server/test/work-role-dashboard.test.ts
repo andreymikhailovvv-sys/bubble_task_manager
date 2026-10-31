@@ -69,6 +69,7 @@ test('employee quick chat segregates messages and AI context by membership and t
   assert.match(route,/workAiHistory\(req\.params\.organizationId,null,member\.id\)/);
   assert.match(quick,/workQuickAiAsk/);
   assert.match(quick,/dashboard\.projects\.map/);
-  assert.match(quick,/taskId=\{activeTask\}/);
+  assert.match(quick,/ExpandedAiChat/);
+  assert.match(quick,/selectedChatId/);
   assert.match(workProject,/WorkTaskFocusDialog/);
 });

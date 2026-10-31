@@ -29,6 +29,8 @@ jobs:
         run: npm ci --include=dev --no-audit --no-fund
       - name: Compile web client and API server
         run: npm run build
+      - name: Verify shared original chat and Focus components in Work
+        run: node --import tsx --test server/test/work-reuse-personal-ui.test.ts
       - name: Verify role-specific Work dashboard and shared task access
         run: node --import tsx --test server/test/work-role-dashboard.test.ts
       - name: Verify Work AI company wallet, monitoring and admin grants
