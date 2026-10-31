@@ -76,136 +76,131 @@ function AccessPage({ access, onAccess, onLogout }: { access: Access; onAccess: 
   </div>;
 }
 function BusinessAppShell({initialUser}:{initialUser?:CurrentUser}) {
-  const [access, setAccess] = useState<Access>(initialUser?{phase:'ready',user:initialUser}:{phase:'loading'});
-  const [section, setSection] = useState<Section>('overview');
-  const [activeOrganizationId, setActiveOrganizationId] = useState<string | null>(() => {
-    const match = window.location.pathname.match(/^\/organizations\/([^/]+)\/?$/);
-    return match ? decodeURIComponent(match[1]) : null;
+  const [access,setAccess]=useState<Access>(initialUser?{phase:'ready',user:initialUser}:{phase:'loading'});
+  const [section,setSection]=useState<Section>('overview');
+  const [activeOrganizationId,setActiveOrganizationId]=useState<string|null>(()=>{
+    const match=window.location.pathname.match(/^\/organizations\/([^/]+)\/?$/);
+    return match?decodeURIComponent(match[1]):null;
   });
-  const [signingOut, setSigningOut] = useState(false);
-  const [organizations, setOrganizations] = useState<WorkOrganization[]>([]);
-  const [organizationName, setOrganizationName] = useState('');
-  const [organizationsLoading, setOrganizationsLoading] = useState(false);
-  const [organizationSaving, setOrganizationSaving] = useState(false);
-  const [organizationError, setOrganizationError] = useState('');
-  useEffect(() => {
-    // React has committed the actual Work page (including its login/checking state).
-    // Only now dismiss the host-specific HTML splash, even before bootstrap responds.
+  const [companyCardOpen,setCompanyCardOpen]=useState(false);
+  const [signingOut,setSigningOut]=useState(false);
+  const [organizations,setOrganizations]=useState<WorkOrganization[]>([]);
+  const [organizationName,setOrganizationName]=useState('');
+  const [organizationsLoading,setOrganizationsLoading]=useState(true);
+  const [organizationSaving,setOrganizationSaving]=useState(false);
+  const [organizationError,setOrganizationError]=useState('');
+  useEffect(()=>{
     document.documentElement.classList.remove('work-workspace-preload');
-    document.title = 'Планировыч Work · Корпоративная платформа';
-    let mounted = true;
-    if (!initialUser) void checkAccess().then(result => { if (mounted) setAccess(result); });
-    return () => { mounted = false; };
-  }, []);
-  useEffect(() => {
-    const handleNavigation = () => {
-      const match = window.location.pathname.match(/^\/organizations\/([^/]+)\/?$/);
-      setActiveOrganizationId(match ? decodeURIComponent(match[1]) : null);
-      setSection('overview');
+    document.title='Планировыч.Work · Рабочее пространство';
+    let mounted=true;
+    if(!initialUser)void checkAccess().then(result=>{if(mounted)setAccess(result);});
+    return()=>{mounted=false;};
+  },[]);
+  useEffect(()=>{
+    const navigate=()=>{
+      const match=window.location.pathname.match(/^\/organizations\/([^/]+)\/?$/);
+      setActiveOrganizationId(match?decodeURIComponent(match[1]):null);
+      setCompanyCardOpen(false);setSection('overview');
     };
-    window.addEventListener('popstate', handleNavigation);
-    return () => window.removeEventListener('popstate', handleNavigation);
-  }, []);
-  useEffect(() => {
-    if (access.phase !== 'ready') {
-      setOrganizations([]);
-      return;
-    }
-    let active = true;
-    setOrganizationsLoading(true);
-    setOrganizationError('');
-    void api.listWorkOrganizations()
-      .then(result => { if (active) setOrganizations(result.organizations); })
-      .catch(error => { if (active) setOrganizationError(error instanceof Error ? error.message : 'Не удалось загрузить организации.'); })
-      .finally(() => { if (active) setOrganizationsLoading(false); });
-    return () => { active = false; };
-  }, [access.phase]);
-
-  async function createOrganization(event: FormEvent<HTMLFormElement>) {
+    window.addEventListener('popstate',navigate);
+    return()=>window.removeEventListener('popstate',navigate);
+  },[]);
+  useEffect(()=>{
+    if(access.phase!=='ready'){setOrganizations([]);return;}
+    let live=true;setOrganizationsLoading(true);setOrganizationError('');
+    void api.listWorkOrganizations().then(result=>{
+      if(!live)return;
+      const list=result.organizations;
+      setOrganizations(list);
+      setActiveOrganizationId(previous=>{
+        const active=list.some(org=>org.id===previous)?previous:list[0]?.id||null;
+        if(active&&window.location.pathname!==('/organizations/'+encodeURIComponent(active)))
+          window.history.replaceState({},'','/organizations/'+encodeURIComponent(active));
+        return active;
+      });
+    }).catch(error=>{if(live)setOrganizationError(error instanceof Error?error.message:'Не удалось загрузить организации');})
+      .finally(()=>{if(live)setOrganizationsLoading(false);});
+    return()=>{live=false;};
+  },[access.phase]);
+  function selectOrganization(id:string){
+    if(!organizations.some(org=>org.id===id))return;
+    window.history.pushState({},'','/organizations/'+encodeURIComponent(id));
+    setActiveOrganizationId(id);setCompanyCardOpen(false);
+  }
+  async function createOrganization(event:FormEvent<HTMLFormElement>){
     event.preventDefault();
-    if (organizationSaving || !organizationName.trim()) return;
-    setOrganizationSaving(true);
-    setOrganizationError('');
-    try {
-      const { organization } = await api.createWorkOrganization(organizationName);
-      setOrganizations(previous => [...previous, organization]);
-      setOrganizationName('');
-      openOrganization(organization.id);
-    } catch (error) {
-      setOrganizationError(error instanceof Error ? error.message : 'Не удалось создать организацию.');
-    } finally {
-      setOrganizationSaving(false);
-    }
+    if(organizationSaving||organizationName.trim().length<2)return;
+    setOrganizationSaving(true);setOrganizationError('');
+    try{
+      const {organization}=await api.createWorkOrganization(organizationName);
+      setOrganizations(previous=>[...previous,organization]);setOrganizationName('');
+      window.history.pushState({},'','/organizations/'+encodeURIComponent(organization.id));
+      setActiveOrganizationId(organization.id);
+    }catch(error){setOrganizationError(error instanceof Error?error.message:'Не удалось создать организацию');}
+    finally{setOrganizationSaving(false);}
   }
-
-  function openOrganization(id: string) {
-    window.history.pushState({}, '', '/organizations/' + encodeURIComponent(id));
-    setActiveOrganizationId(id);
-    setSection('overview');
-  }
-  function backToOrganizations() {
-    window.history.pushState({}, '', '/');
-    setActiveOrganizationId(null);
-    setSection('overview');
-    void api.listWorkOrganizations().then(result=>setOrganizations(result.organizations))
-      .catch(error=>setOrganizationError(error instanceof Error ? error.message : 'Не удалось обновить организации.'));
-  }
-  async function logout() {
+  async function logout(){
     setSigningOut(true);
-    try { await api.logout(); setAccess({phase:'login'}); }
-    catch { setAccess({phase:'error', message:'Не удалось завершить сеанс.'}); }
-    finally { setSigningOut(false); }
+    try{await api.logout();setAccess({phase:'login'});}
+    catch{setAccess({phase:'error',message:'Не удалось завершить сеанс'});}
+    finally{setSigningOut(false);}
   }
-  if (access.phase !== 'ready' || !access.user) return <AccessPage access={access} onAccess={setAccess} onLogout={()=>{ void logout(); }}/>;
-  const active = sections.find(item=>item.id===section) || sections[0];
-  const name = access.user.name || access.user.username || 'Администратор';
-  const ActiveIcon = active.icon;
+  if(access.phase!=='ready'||!access.user)
+    return <AccessPage access={access} onAccess={setAccess} onLogout={()=>{void logout();}}/>;
+  const active=sections.find(item=>item.id===section)||sections[0];
+  const name=access.user.name||access.user.username||'Пользователь';
+  const chosen=organizations.find(org=>org.id===activeOrganizationId);
   return <div className="work-root work-shell">
     <aside className="work-sidebar">
       <Brand/>
       <div className="work-side-caption">РАБОЧЕЕ ПРОСТРАНСТВО</div>
-      <button type="button" className="work-org work-org-selector" onClick={backToOrganizations} title="К списку организаций"><BriefcaseBusiness size={20}/><span><strong>{organizations.find(org=>org.id===activeOrganizationId)?.name || 'Планировыч Work'}</strong><small>{activeOrganizationId?'Перейти ко всем компаниям':'Корпоративная платформа'}</small></span><ChevronRight size={16}/></button>
-      <nav aria-label="Разделы Планировыч Work">{sections.map(item=>{const Icon=item.icon;return <button type="button" key={item.id} className={section===item.id?'work-nav selected':'work-nav'} onClick={()=>setSection(item.id)} aria-current={section===item.id?'page':undefined}><Icon size={18}/>{item.title}</button>;})}</nav>
-      <div className="work-side-footer"><span><ShieldCheck size={15}/> Закрытая версия</span><a href="https://planirovych.ru/">Личный Планировыч <ArrowRight size={14}/></a></div>
+      <button type="button" className="work-org work-org-selector" onClick={()=>{setSection('overview');setCompanyCardOpen(false);}}
+        title="Выбрать организацию"><BriefcaseBusiness size={20}/><span><strong>{chosen?.name||'Планировыч.Work'}</strong>
+        <small>Выбор компании в «Обзоре»</small></span><ChevronRight size={16}/></button>
+      <nav aria-label="Разделы Планировыч Work">{sections.map(item=>{
+        const Icon=item.icon;
+        return <button type="button" key={item.id} className={section===item.id?'work-nav selected':'work-nav'}
+          onClick={()=>{setSection(item.id);setCompanyCardOpen(false);}}
+          aria-current={section===item.id?'page':undefined}><Icon size={18}/>{item.title}</button>;
+      })}</nav>
+      <div className="work-side-footer"><span><ShieldCheck size={15}/> Корпоративное пространство</span>
+        <a href="https://planirovych.ru/">Личный Планировыч <ArrowRight size={14}/></a></div>
     </aside>
     <div className="work-body">
-      <header className="work-topbar"><div>Планировыч Work <ChevronRight size={14}/><strong>{active.title}</strong></div><div className="work-user"><span>{name.charAt(0).toUpperCase()}</span><strong>{name}</strong><button type="button" onClick={()=>{void logout();}} disabled={signingOut} title="Выйти" aria-label="Выйти"><LogOut size={17}/></button></div></header>
+      <header className="work-topbar"><div>Планировыч.Work <ChevronRight size={14}/><strong>{active.title}</strong></div>
+        <div className="work-user"><span>{name.charAt(0).toUpperCase()}</span><strong>{name}</strong>
+          <button type="button" onClick={()=>{void logout();}} disabled={signingOut} title="Выйти" aria-label="Выйти"><LogOut size={17}/></button></div>
+      </header>
       <main className="work-content">
-        {activeOrganizationId
-          ? <WorkCompanyView id={activeOrganizationId} section={section} currentUserId={access.user.id} onBack={backToOrganizations}
-            onRenamed={changed=>setOrganizations(previous=>previous.map(org=>org.id===changed.id?changed:org))}/>
-          : <>
-        <div className="work-kicker">КОРПОРАТИВНОЕ ПРОСТРАНСТВО</div><h1>{section==='overview'?'Рабочая панель':active.title}</h1><p className="work-lead">{section==='overview'?'Новая основа Планировыча для командной работы и управления бизнесом.':active.summary}</p>
-        {section==='overview' ? <>
-          <section className="work-hero">
-            <div className="work-hero-copy"><div className="work-kicker"><Sparkles size={15}/> ПЛАНИРОВЫЧ WORK</div><h2>Бизнес-процессы.<br/><span>Под контролем.</span></h2><p>Сначала надёжная архитектура, затем команды, проекты, гибкая конфигурация и интеллектуальный диспетчер.</p><div className="work-status"><i/> Корпоративная версия в разработке</div></div>
-            <div className="work-orbit" aria-hidden="true"><div className="work-ring ring-outer"/><div className="work-ring ring-inner"/><div className="work-core"><Layers3 size={35}/></div></div>
-          </section>
-          <section className="work-organizations" aria-label="Мои организации">
-            <div className="work-org-heading">
-              <div><div className="work-section-label">КОРПОРАТИВНОЕ ЯДРО</div><h2>Организации</h2><p>Создайте первое рабочее пространство компании. Личные задачи остаются отдельно.</p></div>
-              <span className="work-org-counter">{organizations.length} {organizations.length === 1 ? 'организация' : 'организаций'}</span>
-            </div>
-            {organizationsLoading ? <div className="work-org-message" role="status">Загружаем организации…</div>
-              : organizations.length > 0 ? <div className="work-org-list">
-                {organizations.map(org => <button type="button" className="work-org-row work-org-open" key={org.id} onClick={()=>openOrganization(org.id)}><div className="work-org-row-icon"><BriefcaseBusiness size={19}/></div><div><strong>{org.name}</strong><small>Открыть кабинет компании</small></div><span>{org.role === 'OWNER' ? 'Владелец' : org.role}</span><ChevronRight size={17}/></button>)}
-              </div> : <div className="work-org-message">Пока нет организаций. Создайте первую для проверки корпоративного ядра.</div>}
-            <form onSubmit={createOrganization} className="work-org-create">
-              <label htmlFor="work-org-name">Название новой организации</label>
-              <div><input id="work-org-name" value={organizationName} maxLength={100} onChange={e=>setOrganizationName(e.target.value)} placeholder="Например, Компания Альфа" required disabled={organizationSaving}/>
-                <button type="submit" disabled={organizationSaving || organizationName.trim().length < 2}>{organizationSaving ? 'Создаём…' : 'Создать организацию'} <ArrowRight size={16}/></button></div>
+        {section==='overview'&&organizations.length>0&&<div className="work-org-picker">
+          <div><span>АКТИВНАЯ ОРГАНИЗАЦИЯ</span><strong>{chosen?.name||'Выберите компанию'}</strong></div>
+          <label htmlFor="work-active-org">Переключить компанию
+            <select id="work-active-org" value={activeOrganizationId||''}
+              onChange={event=>selectOrganization(event.target.value)}>
+              {organizations.map(org=><option key={org.id} value={org.id}>{org.name}</option>)}
+            </select>
+          </label>
+        </div>}
+        {organizationsLoading?<div className="work-company-state" role="status">Загружаем организации…</div>
+          :activeOrganizationId&&chosen?
+          <WorkCompanyView key={activeOrganizationId} id={activeOrganizationId} section={section}
+            showCompanyCard={companyCardOpen} onOpenCompanyCard={()=>setCompanyCardOpen(true)}
+            onOpenProjects={()=>{setSection('projects');setCompanyCardOpen(false);}}
+            currentUserId={access.user.id} onBack={()=>setCompanyCardOpen(false)}
+            onRenamed={updated=>setOrganizations(prev=>prev.map(org=>org.id===updated.id?updated:org))}/>
+          :<section className="work-company-panel">
+            <h1>Организации</h1>
+            <p>{organizations.length?'Не удалось выбрать компанию.':'Создайте первую организацию или получите приглашение от администратора.'}</p>
+            <form className="work-org-create" onSubmit={createOrganization}>
+              <label htmlFor="work-org-name">Название организации</label>
+              <div><input id="work-org-name" maxLength={100} minLength={2} required
+                placeholder="Название компании" value={organizationName} onChange={e=>setOrganizationName(e.target.value)}/>
+                <button disabled={organizationSaving||organizationName.trim().length<2}>
+                  {organizationSaving?'Создаём…':'Создать организацию'} <ArrowRight size={16}/></button></div>
             </form>
-            {organizationError && <p className="work-org-error" role="alert">{organizationError}</p>}
-          </section>
-          <div className="work-section-label">НАПРАВЛЕНИЯ РАЗРАБОТКИ</div>
-          <div className="work-cards">
-            <article><div className="work-card-icon purple"><FolderKanban size={22}/></div><h3>Проекты и задачи</h3><p>Поручения, сроки, совместная работа и приёмка результатов.</p><small>Запланировано</small></article>
-            <article><div className="work-card-icon teal"><UsersRound size={22}/></div><h3>Команда</h3><p>Сотрудники, отделы, рабочие пространства и права доступа.</p><small>Запланировано</small></article>
-            <article><div className="work-card-icon orange"><Bot size={22}/></div><h3>ИИ-диспетчер</h3><p>Контроль процессов, аналитика и действия с подтверждением.</p><small>Запланировано</small></article>
-          </div>
-          <div className="work-bottom-note"><CheckCircle2 size={19}/><div><strong>Точка старта готова</strong><span>Следующим этапом станут организации, роли и корпоративная модель данных.</span></div><b>Этап 1</b></div>
-        </> : <section className="work-placeholder"><div><ActiveIcon size={30}/></div><h2>Сначала откройте компанию</h2><p>Выберите организацию на вкладке «Обзор», чтобы управлять её сотрудниками и настройками. Корпоративные проекты и ИИ появятся в следующих этапах.</p><button type="button" className="work-primary" onClick={()=>setSection('overview')}>Перейти к организациям</button></section>}
-        </>}
+            {organizationError&&<p className="work-org-error" role="alert">{organizationError}</p>}
+          </section>}
+        {organizationError&&chosen&&<p className="work-org-error" role="alert">{organizationError}</p>}
       </main>
     </div>
   </div>;
