@@ -276,7 +276,7 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
         <Bot size={35}/><h3>ИИ готов помочь</h3>
         <p>Спросите об активных проектах, задачах сотрудников или рисках компании.</p>
       </div>}
-      {history.map(item=><div key={item.id} className="ai-message-forward-group">
+      {history.map(item=><div key={item.id} className={`ai-message-forward-group flex flex-col ${item.role==='assistant'?'items-start':'items-end'}`}>
         <div className={'work-ai-message '+(item.role==='assistant'?'assistant':'user')}>
         <small>{labelFor(item)}{item.recipient?' → '+(item.recipient.user.name||item.recipient.user.username||'Участник'):''} · {new Date(item.createdAt).toLocaleString('ru-RU')}</small>
         <div><WorkAiMessageBody content={item.content}/></div>
