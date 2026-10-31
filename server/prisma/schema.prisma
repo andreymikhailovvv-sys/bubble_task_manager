@@ -16,11 +16,42 @@ enum OrganizationRole {
 }
 
 model Organization {
-  id        String               @id @default(cuid())
-  name      String
-  members   OrganizationMember[]
-  createdAt DateTime             @default(now())
-  updatedAt DateTime             @updatedAt
+  id          String                   @id @default(cuid())
+  name        String
+  members     OrganizationMember[]
+  departments OrganizationDepartment[]
+  invitations OrganizationInvitation[]
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+}
+
+model OrganizationDepartment {
+  id             String               @id @default(cuid())
+  organizationId String
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  members        OrganizationMember[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@unique([organizationId, name])
+  @@index([organizationId, createdAt])
+}
+
+model OrganizationInvitation {
+  id             String           @id @default(cuid())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tokenHash      String           @unique
+  role           OrganizationRole @default(MEMBER)
+  createdById    String
+  createdBy      User             @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt      DateTime         @default(now())
+  expiresAt      DateTime
+  usedAt         DateTime?
+  revokedAt      DateTime?
+
+  @@index([organizationId, expiresAt])
 }
 
 model OrganizationMember {
@@ -30,6 +61,8 @@ model OrganizationMember {
   userId         String
   user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   role           OrganizationRole @default(MEMBER)
+  departmentId   String?
+  department     OrganizationDepartment? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
@@ -173,6 +206,7 @@ model User {
   creditPurchases CreditPurchase[]
   collaborativeTaskMembers CollaborativeTaskMember[]
   organizationMemberships OrganizationMember[]
+  organizationInvitations OrganizationInvitation[]
   taskComments TaskComment[] @relation("TaskCommentAuthor")
   taskActivityEvents TaskActivityEvent[] @relation("TaskActivityActor")
   taskCommentReadStates TaskCommentReadState[]
