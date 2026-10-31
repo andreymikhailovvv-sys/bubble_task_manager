@@ -351,6 +351,9 @@ export type TelegramAiChatSettings = {
   autoReplyHow: string;
   notifyImportant: boolean;
   reviewAttachments: boolean;
+  historyAccessEnabled: boolean;
+  /** Number of prior messages to use as context; null means the entire history, imported in batches. */
+  historyMessageLimit: 10 | 30 | 50 | 100 | null;
   /** NULL disables the per-chat daily cap; it never bypasses the wallet balance. */
   dailyCreditLimitMilli: number | null;
 };
@@ -380,6 +383,8 @@ export type TelegramAiChatPolicy = TelegramAiChatSettings & {
   chatKind: 'user' | 'group' | 'supergroup';
   chatTitle: string;
   isEnabled: boolean;
+  historyImportCursor: number | null;
+  historyImportedCount: number;
   spentTodayMilli: number;
   reservedTodayMilli: number;
   totalSpentMilli: number;

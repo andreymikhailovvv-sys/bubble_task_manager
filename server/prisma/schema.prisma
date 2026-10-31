@@ -1027,6 +1027,15 @@ model TelegramAiChatPolicy {
   autoReplyHow           String   @default("") @db.Text
   notifyImportant         Boolean  @default(true)
   reviewAttachments       Boolean  @default(true)
+  historyAccessEnabled    Boolean  @default(true)
+  // NULL grants the entire history; it is imported incrementally.
+  historyMessageLimit     Int?     @default(50)
+  // No raw historical Telegram messages persist here, only a compact context.
+  historyContextSummary   String   @default("") @db.Text
+  // Next page is read before this message ID; NULL means import complete/disabled.
+  historyImportCursor     Int?
+  historyImportRemaining  Int?
+  historyImportedCount    Int      @default(0)
   // NULL means no per-chat DAILY cap. Global wallet balance always applies.
   dailyCreditLimitMilli   Int?     @default(50000)
   isEnabled               Boolean  @default(false)

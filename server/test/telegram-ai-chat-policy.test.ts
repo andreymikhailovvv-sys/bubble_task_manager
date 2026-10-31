@@ -15,6 +15,19 @@ test('Telegram assistant has independent participation, summary and task setting
   assert.equal(v.taskMode, 'SUGGEST');
   assert.equal(v.taskIntervalMinutes, 30);
   assert.equal(v.taskCreationWhen, '');
+  assert.equal(v.historyAccessEnabled, true);
+  assert.equal(v.historyMessageLimit, 50);
+  for (const count of [10, 30, 50, 100, null]) {
+    const parsed = validateTelegramAiChatSettings({ ...v, historyMessageLimit: count });
+    assert.equal(parsed.historyMessageLimit, count);
+  }
+  assert.equal(validateTelegramAiChatSettings({ ...v, historyAccessEnabled: false }).historyAccessEnabled, false);
+  for (const mode of ['SUGGEST', 'AUTO'] as const) {
+    const empty = validateTelegramAiChatSettings({ ...v, mode });
+    assert.equal(empty.mode, mode);
+    assert.equal(empty.suggestWhen, '');
+    assert.equal(empty.autoReplyWhen, '');
+  }
   assert.equal(validateTelegramAiChatSettings({ ...DEFAULT_TELEGRAM_AI_CHAT_SETTINGS,
     taskCreationWhen: 'Только по конкретным просьбам' }).taskCreationWhen,
     'Только по конкретным просьбам');
@@ -28,6 +41,8 @@ test('Telegram assistant has independent participation, summary and task setting
   const oldClientPayload = { ...DEFAULT_TELEGRAM_AI_CHAT_SETTINGS } as Partial<typeof DEFAULT_TELEGRAM_AI_CHAT_SETTINGS>;
   delete oldClientPayload.taskIntervalMinutes;
   assert.equal(validateTelegramAiChatSettings(oldClientPayload).taskIntervalMinutes, 30);
+  delete oldClientPayload.historyAccessEnabled;
+  assert.equal(validateTelegramAiChatSettings(oldClientPayload).historyAccessEnabled, false);
   const migrationTaskFrequency = readFileSync(new URL('../prisma/migrations/20261019123000_telegram_ai_task_interval_minutes/migration.sql', import.meta.url), 'utf8');
   assert.match(migrationTaskFrequency, /ADD COLUMN "taskIntervalMinutes" INTEGER NOT NULL DEFAULT 30/);
   assert.deepEqual(TELEGRAM_AI_INTERVALS, [0, 5, 10, 30, 180, 360, 1440]);
@@ -98,8 +113,11 @@ test('Telegram assistant rejects arbitrary budgets, intervals and extra automati
     { ...valid, dailyCreditLimitMilli: 100_000_001 },
     { ...valid, dailyCreditLimitMilli: 10.5 },
     { ...valid, summaryInstructions: 'x'.repeat(2001) },
-    { ...valid, mode: 'SUGGEST' },
-    { ...valid, mode: 'AUTO' },
+    { ...valid, historyAccessEnabled: 'yes' },
+    { ...valid, historyMessageLimit: 20 },
+    { ...valid, historyMessageLimit: 0 },
+    { ...valid, historyMessageLimit: -1 },
+    { ...valid, historyMessageLimit: 'all' },
     { ...valid, notifyImportant: 'true' }
   ]) assert.throws(() => validateTelegramAiChatSettings(body));
 });
@@ -139,6 +157,9 @@ test('web interface separates participation frequency and summary configuration'
   assert.doesNotMatch(ui, /summaryFrequency|analysisLevel|maxMessagesPerCheck|monthlyCreditLimitMilli|suggestTasks/);
   assert.match(ui, /<input type="checkbox" checked=\{draft.notifyImportant\}/);
   assert.doesNotMatch(ui, />Инструкции ассистенту</);
+  assert.match(ui, /Дать доступ ассистенту к переписке/);
+  assert.match(ui, /value="all">Вся переписка/);
+  assert.doesNotMatch(ui, /required value=\{draft\.(suggestWhen|suggestHow|autoReplyWhen|autoReplyHow)\}/);
   assert.doesNotMatch(ui, /title="Интенсивность проверки"/);
 });
 

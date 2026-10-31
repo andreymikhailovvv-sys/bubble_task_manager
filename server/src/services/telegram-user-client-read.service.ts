@@ -312,11 +312,14 @@ export const telegramUserClientRead = {
       };
     });
   },
-  async aiHistory(userId: string, dialogId: unknown, count: number, monitoring = false, mediaAfterId?: number) {
+  async aiHistory(userId: string, dialogId: unknown, count: number, monitoring = false, mediaAfterId?: number, beforeId?: number) {
     // This entry point is deliberately NOT an LLM tool. Invoke only from
     // the consent-consuming endpoint, after a real browser click.
     if (![10, 20, 30, 50, 100].includes(count)) {
       throw new TelegramUserClientError(400, 'Выберите 10, 20, 30, 50 или 100 сообщений');
+    }
+    if (beforeId !== undefined && (!Number.isSafeInteger(beforeId) || beforeId < 1)) {
+      throw new TelegramUserClientError(400, 'Недопустимая позиция чтения истории Telegram');
     }
     if (typeof dialogId !== 'string' || dialogId.length > 60) {
       throw new TelegramUserClientError(400, 'Неверный Telegram-чат');
@@ -328,7 +331,9 @@ export const telegramUserClientRead = {
       const target = telegramSendTargetFromDialog(row, owner.accountId);
       if (!target) throw new TelegramUserClientError(404, 'Этот чат недоступен для чтения');
       // No markAsRead, no downloads, no files, no logging of message bodies.
-      const messages = await client.getMessages(row.inputEntity, { limit: count });
+      const messages = await client.getMessages(row.inputEntity, {
+        limit: count, ...(beforeId !== undefined ? { offsetId: beforeId } : {})
+      });
       const participants = new Map<string, number>();
       const rawMessages = messages
         .filter((message): message is Api.Message => message instanceof Api.Message)
@@ -358,12 +363,12 @@ export const telegramUserClientRead = {
         });
       // Overall bounded provider data size even for 100 very long messages.
       let used = 0;
-      const bounded: Array<(typeof items)[number] & { media?: TelegramMonitorMedia; mediaNote?: string }> = items.map(item => {
+      const bounded: Array<(typeof items)[number] & { media?: TelegramMonitorMedia; mediaNote?: string }> = items.slice().reverse().map(item => {
         const left = Math.max(0, 72000 - used);
         const text = item.text.slice(0, left);
         used += text.length;
         return { ...item, text, truncated: item.truncated || text.length < item.text.length };
-      });
+      }).reverse();
       // Attachment bytes are fetched only by autonomous monitoring with a
       // verified policy and only for new messages (or an explicit refresh).
       // Manual consent/history reads remain metadata and text only.

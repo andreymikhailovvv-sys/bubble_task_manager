@@ -1037,7 +1037,9 @@ export function TaskEditor({
               ) : null}
               <div className="focused-task-deadline-row mt-1 flex items-center gap-2 text-sm font-medium text-violet-500">
                 {task?.aiMonitoringEnabled || monitoringParent ? <TaskMonitoringBadge /> : null}
-                <span>{deadlineLabel}</span>
+                {task?.aiMonitoringEnabled || monitoringParent ? (
+                  <span><span className="text-violet-500">Deadline:</span>{' '}<span className="text-primary">На усмотрение ИИ</span></span>
+                ) : <span>{deadlineLabel}</span>}
                 {!task?.aiMonitoringEnabled && !monitoringParent ? <DateTimePickerWithApply
                   value={form.dueDate}
                   onChange={(nextValue) =>

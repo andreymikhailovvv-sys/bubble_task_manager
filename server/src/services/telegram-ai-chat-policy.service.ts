@@ -43,6 +43,8 @@ export type TelegramAiChatSettings = {
   autoReplyHow: string;
   notifyImportant: boolean;
   reviewAttachments: boolean;
+  historyAccessEnabled: boolean;
+  historyMessageLimit: 10 | 30 | 50 | 100 | null;
   dailyCreditLimitMilli: number | null;
 };
 
@@ -65,6 +67,8 @@ export const DEFAULT_TELEGRAM_AI_CHAT_SETTINGS: TelegramAiChatSettings = {
   autoReplyHow: '',
   notifyImportant: true,
   reviewAttachments: true,
+  historyAccessEnabled: true,
+  historyMessageLimit: 50,
   dailyCreditLimitMilli: 50_000
 };
 
@@ -117,13 +121,12 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
       throw new TelegramUserClientError(400, 'Инструкции участия в переписке и сводок должны быть текстом до 2000 символов');
     }
   }
-  if (p.mode === 'SUGGEST' && (!(p.suggestWhen as string | undefined)?.trim() ||
-    !(p.suggestHow as string | undefined)?.trim())) {
-    throw new TelegramUserClientError(400, 'Для предложений ответов заполните оба поля');
+  if (p.historyAccessEnabled !== undefined && typeof p.historyAccessEnabled !== 'boolean') {
+    throw new TelegramUserClientError(400, 'Разрешение чтения истории должно быть логическим значением');
   }
-  if (p.mode === 'AUTO' && (!(p.autoReplyWhen as string | undefined)?.trim() ||
-    !(p.autoReplyHow as string | undefined)?.trim())) {
-    throw new TelegramUserClientError(400, 'Для автоответов заполните оба поля: когда отвечать и как отвечать');
+  if (p.historyMessageLimit !== undefined && p.historyMessageLimit !== null &&
+      ![10, 30, 50, 100].includes(p.historyMessageLimit as number)) {
+    throw new TelegramUserClientError(400, 'Выберите 10, 30, 50, 100 сообщений или всю переписку');
   }
   if (p.reviewAttachments !== undefined && typeof p.reviewAttachments !== 'boolean') {
     throw new TelegramUserClientError(400, 'Настройка просмотра вложений должна быть логическим значением');
@@ -156,6 +159,9 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
     autoReplyHow: typeof p.autoReplyHow === 'string' ? p.autoReplyHow.trim() : '',
     notifyImportant: p.notifyImportant,
     reviewAttachments: p.reviewAttachments !== false,
+    // Older clients lacking the new checkbox must never implicitly grant retroactive access.
+    historyAccessEnabled: p.historyAccessEnabled === true,
+    historyMessageLimit: p.historyMessageLimit === undefined ? 50 : p.historyMessageLimit as 10 | 30 | 50 | 100 | null,
     dailyCreditLimitMilli: validateTelegramCreditLimit(p.dailyCreditLimitMilli)
   };
 }
@@ -210,7 +216,7 @@ export const telegramAiChatPolicyService = {
     }
     const current = await prisma.telegramAiChatPolicy.findUnique({
       where: { userId_chatId: { userId, chatId } },
-      select: { id: true }
+      select: { id: true, historyAccessEnabled: true, historyMessageLimit: true }
     });
     if (!current) {
       const count = await prisma.telegramAiChatPolicy.count({ where: { userId } });
@@ -222,16 +228,23 @@ export const telegramAiChatPolicyService = {
     if (!fresh.connected || !fresh.readEnabled || (settings.mode === 'AUTO' && !fresh.sendEnabled)) {
       throw new TelegramUserClientError(403, 'Telegram был отключён во время сохранения');
     }
+    const historySettingsChanged = !current || current.historyAccessEnabled !== settings.historyAccessEnabled ||
+      current.historyMessageLimit !== settings.historyMessageLimit;
     const policy = await prisma.telegramAiChatPolicy.upsert({
       where: { userId_chatId: { userId, chatId } },
       create: {
         userId, chatId, chatKind: target.kind, chatTitle: target.name,
         ...settings,
-        isEnabled: false
+        historyContextSummary: '', historyImportCursor: null, historyImportRemaining: null,
+        historyImportedCount: 0, isEnabled: false
       },
       update: {
         chatKind: target.kind, chatTitle: target.name,
         ...settings,
+        ...(historySettingsChanged ? {
+          historyContextSummary: '', historyImportCursor: null, historyImportRemaining: null,
+          historyImportedCount: 0
+        } : {}),
         isEnabled: false, monitorRevision: { increment: 1 },
         leaseToken: null, leasedUntil: null, nextCheckAt: null,
         summaryRequested: false
