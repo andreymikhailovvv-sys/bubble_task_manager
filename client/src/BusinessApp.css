@@ -41,3 +41,78 @@
 .work-org-create button:disabled { opacity:.5; cursor:not-allowed; }
 .work-org-error { margin-top:12px;color:#f9b1bb;font-size:12px; }
 @media(max-width:600px) { .work-organizations{padding:17px} .work-org-heading{align-items:flex-start;flex-direction:column} .work-org-create>div{flex-direction:column} .work-org-create button{min-height:43px} }
+
+
+/* Work organization management: isolated from personal planner styles. */
+.work-company { display:grid;gap:24px; }
+.work-company-back { width:max-content;display:flex;align-items:center;gap:8px;border:0;background:transparent;color:#b4a6ed;font-size:12px;padding:2px 0; }
+.work-company-back:hover { color:#f2efff; }
+.work-company-header { display:flex;align-items:center;gap:19px;min-width:0; }
+.work-company-header h1 { margin:8px 0 5px;font-size:clamp(25px,3vw,36px);overflow-wrap:anywhere; }
+.work-company-logo { display:grid;place-items:center;width:68px;height:68px;flex:none;border:1px solid #66628d;border-radius:19px;background:linear-gradient(135deg,#504c81,#23465b);color:#ded5ff; }
+.work-company-stats { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px; }
+.work-company-stats article { background:#152138;border:1px solid #36455d;border-radius:16px;padding:24px;display:grid;gap:8px; }
+.work-company-stats svg { color:#b2a7eb; }.work-company-stats strong { font-size:30px;line-height:1.15; }.work-company-stats span { color:#99a9c1;font-size:12px; }
+.work-company-panel { border-radius:18px;border:1px solid #35445e;background:#142035;padding:26px;min-width:0; }
+.work-company-panel h2 { font-size:19px;letter-spacing:-.02em;font-weight:720; }
+.work-company-panel>p,.work-company-panel-title p { color:#9eafc7;font-size:12px;line-height:1.7;margin-top:8px; }
+.work-company-panel-title { display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:22px; }
+.work-company-panel-title>span { background:#3c4770;border:1px solid #64648e;color:#e2dbff;font-size:11px;border-radius:20px;padding:6px 12px;white-space:nowrap; }
+.work-company-panel-title>svg { color:#a99ae1; }
+.work-company-tags { display:flex;flex-wrap:wrap;gap:9px;margin-top:24px; }
+.work-company-tags>span { display:flex;gap:7px;align-items:center;border:1px solid #3c635f;border-radius:30px;color:#9fd9ce;font-size:11px;padding:7px 11px; }
+.work-company-error { display:flex;align-items:center;gap:12px;justify-content:space-between;background:#462d3b;border:1px solid #915168;color:#ffd2d9;padding:13px 15px;border-radius:11px;font-size:12px; }
+.work-company-error button { color:#f7d3da;text-decoration:underline;background:transparent;border:0; }
+.work-company-state { padding:55px 20px;text-align:center;color:#b4c0d2; }
+.work-company-state button { margin-top:20px;border:1px solid #8276b5;background:#444070;color:#fff;border-radius:9px;padding:10px 14px; }
+.work-members { display:grid;gap:9px; }
+.work-member { display:flex;gap:12px;align-items:center;padding:14px;border:1px solid #33445c;border-radius:13px;background:#1a2940;min-width:0; }
+.work-member-avatar { display:grid;place-items:center;width:41px;height:41px;flex:none;border-radius:12px;color:#e1d8fc;background:#62589970;font-weight:750; }
+.work-member-name { min-width:110px;flex:1;overflow-wrap:anywhere; }
+.work-member-name strong { display:block;font-size:12px;font-weight:700; }.work-member-name strong small { font-size:10px;color:#afa1e7; }
+.work-member-name>span { display:block;font-size:10px;color:#8d9eb9;margin-top:5px; }
+.work-field { display:grid;gap:5px;min-width:110px; }
+.work-field>span { font-size:10px;color:#90a0bc; }
+.work-field select,.work-company-form select { color:#e8edff;background:#0d182b;border:1px solid #465976;border-radius:8px;padding:10px;font-size:11px;max-width:190px;min-width:0; }
+.work-field select:disabled { opacity:.65; }
+.work-icon-danger { color:#d7a0a9;display:grid;place-items:center;border:0;background:transparent;padding:10px; }
+.work-icon-danger:hover { color:#ffe1e4; }
+.work-departments { display:grid;gap:9px; }
+.work-department { display:flex;align-items:center;justify-content:space-between;gap:15px;border:1px solid #33445c;background:#1a2940;border-radius:10px;padding:12px 14px; }
+.work-department>span { display:flex;align-items:center;gap:9px;min-width:0;font-size:12px; }
+.work-department>span svg { color:#a69add; }
+.work-department>span strong { overflow-wrap:anywhere; }
+.work-department>span small { font-size:10px;color:#8797af; }
+.work-department-actions { display:flex;gap:12px;flex:none; }
+.work-department-actions button,.work-invitation-row button,.work-dept-edit button { border:0;background:transparent;color:#c4b8ef;font-size:11px; }
+.work-department-actions button:last-child { color:#e7a8b7; }
+.work-dept-edit { display:flex;gap:9px;width:100%; }
+.work-dept-edit input { min-width:0;flex:1;background:#0d182b;color:#fff;border:1px solid #465976;border-radius:8px;padding:9px; }
+.work-company-form { display:grid;gap:10px;margin-top:22px; }
+.work-company-form label { font-size:12px;font-weight:650;color:#d5ddef; }
+.work-company-form>div,.work-invite-created>div { display:flex;gap:10px;min-width:0; }
+.work-company-form input,.work-invite-created input { border:1px solid #465976;background:#0d182b;border-radius:10px;padding:12px 13px;color:#e9efff;font-size:12px;min-width:0;flex:1; }
+.work-company-form input::placeholder { color:#7c8da9; }
+.work-company-form button,.work-invite-created button { display:flex;align-items:center;justify-content:center;gap:7px;flex:none;background:#615da5;color:white;border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:12px; }
+.work-muted { color:#899bb6;font-size:12px;padding:10px 0; }
+.work-invite-created { margin-top:20px;padding:17px;border:1px solid #648681;background:#163d4055;border-radius:12px; }
+.work-invite-created p { font-size:11px;color:#a8ded5;margin-bottom:11px; }
+.work-subtitle { margin-top:24px;font-size:12px;color:#d8dff1;font-weight:700; }
+.work-invitation-row { display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid #34435b;font-size:11px;color:#b3c0d6; }
+.work-invitation-row button { color:#e7a8b7; }
+.work-company-details { margin-top:26px;border-top:1px solid #36455b;padding-top:18px;display:grid;gap:12px;font-size:12px; }
+.work-company-details>div { display:flex;justify-content:space-between;gap:15px;color:#9caec7;overflow-wrap:anywhere; }
+.work-company-details code { font-size:11px;color:#d9d0fa; }
+.work-company-details strong { color:#e2eaff; }
+.work-company-upcoming { min-height:250px;display:flex;flex-direction:column;justify-content:center; }
+.work-join { display:grid;place-items:center;padding:25px; }
+.work-join-card { width:min(100%,475px);padding:34px;border-radius:22px;border:1px solid #4c5179;background:linear-gradient(150deg,#1d2944,#10192b); }
+.work-join-card h1 { font-size:26px;font-weight:760;letter-spacing:-.035em;margin:20px 0 10px; }
+.work-join-card h2 { font-size:21px;color:#d3c9ff;margin-bottom:8px; }
+.work-join-card p { font-size:13px;line-height:1.65;color:#a9b8d0;margin:12px 0; }
+.work-join-card .work-join-notice { color:#bdd9de;margin-top:22px; }
+.work-join-card .work-primary { width:100%; }
+.work-join-card .work-company-error { color:#ffb7c2; }
+.work-join-home { display:flex;align-items:center;gap:8px;justify-content:center;margin-top:25px;font-size:12px;color:#bcb0f1; }
+@media(max-width:1100px){.work-member{flex-wrap:wrap}.work-member-name{flex-basis:calc(100% - 65px)}.work-field{flex:1}.work-icon-danger{margin-left:auto}}
+@media(max-width:630px){.work-company-stats{grid-template-columns:1fr}.work-company-stats article{padding:17px}.work-company-panel{padding:18px}.work-member{gap:9px;padding:11px}.work-member-name{flex-basis:calc(100% - 60px)}.work-field{flex:1 1 145px}.work-field select{width:100%;max-width:none}.work-company-form>div,.work-invite-created>div{flex-direction:column}.work-company-form select{max-width:none}.work-department{align-items:flex-start;flex-wrap:wrap}.work-department>span{flex-wrap:wrap}.work-department-actions{margin-left:auto}.work-company-header{align-items:flex-start}.work-company-logo{width:48px;height:48px;border-radius:14px}.work-join-card{padding:24px}}
