@@ -55,6 +55,7 @@ import { FocusedSubtaskComposer } from './components/FocusedSubtaskComposer';
 import { AiModelChip } from './components/AiModelChip';
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
 import { AiReplyAction, AiReplyPreview, AiReplyMessageBody, serializeAiReply, type AiReplyTarget } from './components/AiMessageReply';
+import { TaskAiRecipientPicker } from './components/TaskAiRecipientPicker';
 import { TelegramIntegrationsMenu } from './components/TelegramIntegrationsMenu';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
 import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike, orderAiChatMessagesChronologically } from './lib/ai-chat-reconciliation';
@@ -4126,53 +4127,14 @@ export default function App() {
 
   const renderTaskAiRecipientPicker = (task: Task) => {
     if (!task.isCollaborative || !task.collaborationMembers?.length) return null;
-    const selectedUserId = getTaskAiRecipientId(task);
-    const selectedMember = task.collaborationMembers.find((member) => member.userId === selectedUserId);
-    return (
-      <div className="relative mb-1 flex justify-end">
-        <button
-          type="button"
-          className="task-ai-recipient-trigger inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold"
-          onClick={() => setIsAiRecipientMenuOpen((open) => !open)}
-          aria-haspopup="menu"
-          aria-expanded={isAiRecipientMenuOpen}
-        >
-          <span className="task-ai-recipient-label">Получатель:</span>
-          <span>{selectedMember?.name ?? 'ИИ'}</span>
-          <ChevronDown size={12} />
-        </button>
-        {isAiRecipientMenuOpen ? (
-          <div className="task-ai-recipient-menu absolute bottom-full right-0 z-30 mb-1 min-w-48 rounded-xl border p-1.5 shadow-2xl" role="menu">
-            <button
-              type="button"
-              className={`task-ai-recipient-item block w-full rounded-lg px-3 py-2 text-left text-xs ${selectedUserId === 'ai' ? 'task-ai-recipient-item-active' : ''}`}
-              onClick={() => {
-                setAiRecipientByTaskId((prev) => ({ ...prev, [task.id]: 'ai' }));
-                setIsAiRecipientMenuOpen(false);
-              }}
-            >
-              ИИ
-            </button>
-            {task.collaborationMembers.filter((member) => member.userId !== currentUser?.id).map((member) => (
-              <button
-                key={member.userId}
-                type="button"
-                className={`task-ai-recipient-item flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs ${selectedUserId === member.userId ? 'task-ai-recipient-item-active' : ''}`}
-                onClick={() => {
-                  setAiRecipientByTaskId((prev) => ({ ...prev, [task.id]: member.userId }));
-                  setIsAiRecipientMenuOpen(false);
-                }}
-              >
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: member.color }} />
-                <span className="truncate">{member.name}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </div>
-    );
+    return <TaskAiRecipientPicker
+      value={getTaskAiRecipientId(task)}
+      onChange={memberId=>setAiRecipientByTaskId(prev=>({...prev,[task.id]:memberId}))}
+      members={task.collaborationMembers.filter(member=>member.userId!==currentUser?.id).map(member=>({
+        id:member.userId,name:member.name,color:member.color
+      }))}
+    />;
   };
-
   const renderWorkspaceCommentIndicator = (task: Task, compact = false) => {
     const total = task.commentCount ?? 0;
     if (total <= 0) return null;
