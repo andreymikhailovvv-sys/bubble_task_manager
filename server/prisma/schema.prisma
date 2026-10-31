@@ -70,6 +70,8 @@ model OrganizationWorkSubtask {
   taskId         String
   task           OrganizationWorkTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
   title          String
+  description    String? @db.Text
+  importance     Int @default(3)
   isDone         Boolean @default(false)
   dueAt          DateTime?
   sortOrder      Int @default(0)
