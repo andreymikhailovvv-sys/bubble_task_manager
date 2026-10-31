@@ -57,11 +57,28 @@ model OrganizationWorkTask {
   aiMonitoringRevision Int              @default(0)
   aiMonitoringJobs OrganizationAiMonitoringJob[]
   aiMessages OrganizationAiMessage[]
+  subtasks OrganizationWorkSubtask[]
 
   @@index([projectId, status, createdAt])
   @@index([assignedMemberId, status])
   @@index([createdByMemberId, status])
   @@index([dueAt])
+}
+
+model OrganizationWorkSubtask {
+  id             String @id @default(cuid())
+  taskId         String
+  task           OrganizationWorkTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  title          String
+  isDone         Boolean @default(false)
+  dueAt          DateTime?
+  sortOrder      Int @default(0)
+  createdByMemberId String?
+  creator        OrganizationMember? @relation("WorkSubtaskCreator",fields:[createdByMemberId],references:[id],onDelete:SetNull)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  @@index([taskId,sortOrder,createdAt])
+  @@index([createdByMemberId])
 }
 
 model OrganizationAiReservation {
@@ -194,6 +211,7 @@ model OrganizationMember {
   department     OrganizationDepartment? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   assignedWorkTasks OrganizationWorkTask[] @relation("WorkTaskAssignee")
   createdWorkTasks OrganizationWorkTask[] @relation("WorkTaskCreator")
+  createdWorkSubtasks OrganizationWorkSubtask[] @relation("WorkSubtaskCreator")
   createdWorkProjects OrganizationProject[] @relation("WorkProjectCreator")
   quickWorkMessages OrganizationAiMessage[] @relation("WorkQuickAiMember")
   createdAt      DateTime         @default(now())

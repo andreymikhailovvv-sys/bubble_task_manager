@@ -309,3 +309,76 @@
   .work-root .focused-task-editor-shell{padding:16px}
   .work-root .focused-task-modal-backdrop{padding:6px}
 }
+
+
+/* Keep global personal theme tokens on Work dialogs, not the Work dashboard.
+   styles.css uses body[data-theme] main as a personal-app background; its
+   selector otherwise paints an unintended black square over Work Overview. */
+body[data-theme] .work-root main.work-content{background:transparent!important;background-image:none!important;background-size:auto!important}
+.work-root .work-overview{background:transparent}
+
+
+/* Unified Focus Task layout, faithful to the personal planner compact controls. */
+.work-root .focused-task-editor-shell{background:#101a2c;color:#e7edf9}
+.work-root .focused-task-modal-layout{overflow:visible;align-items:stretch}
+.work-root .focused-task-title-input{font-size:clamp(1.45rem,2.4vw,2rem);line-height:1.18;color:#f1f4fb!important}
+.work-root .work-focus-heading{min-height:24px}
+.work-root .work-shared-task-badge{font-size:10px;font-weight:600;letter-spacing:.025em;padding:4px 11px;line-height:1.2}
+.work-root .work-focus-toolbar{align-items:center;height:34px;top:14px;right:16px;gap:5px}
+.work-root .work-focus-toolbar>.focused-task-icon-button,
+.work-root .work-focus-toolbar .date-time-trigger,
+.work-root .work-focus-ai-controls>.focused-task-ai-icon-button{
+ width:32px;height:32px;min-height:32px;padding:7px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%
+}
+.work-root .work-focus-toolbar button:disabled{opacity:.35}
+.work-root .work-focus-content{overflow-x:hidden;scrollbar-width:thin}
+.work-root .work-focus-description-card{background:#172439;border:1px solid #2c415a;max-height:170px;overflow-y:auto}
+.work-root .work-focus-description-card>button{font-size:13px;line-height:1.65}
+.work-root .work-focus-participants{display:grid;gap:7px;background:#172336;border-color:#53617a}
+.work-root .work-focus-participants>span{font-size:11px}
+.work-root .work-focus-subtask-section{min-height:170px}
+.work-root .work-focus-subtasks-header .focused-task-icon-button{width:30px;height:30px;display:grid;place-items:center;padding:6px;border:1px solid #435571;border-radius:50%}
+.work-root .work-focus-subtasks-list{min-height:80px;max-height:none;scrollbar-width:thin}
+.work-root .work-focus-subtask-row{background:#1a273e;border:1px solid #26374f;min-height:49px}
+.work-root .work-focus-subtask-row>input[type=checkbox]{width:15px;height:15px;flex:none;accent-color:#6cbaaa}
+.work-root .work-subtask-actions button{padding:5px;color:#7bbdd0}
+.work-root .work-subtask-actions .date-time-trigger{width:27px;height:27px;padding:4px}
+.work-root .work-subtask-add-form{background:#172439;border-color:#344961}
+.work-root .work-focus-settings{max-height:min(450px,70vh);overflow-y:auto;background:#1b2941;border-color:#53627e;box-shadow:0 22px 60px #0008}
+.work-root .work-focus-settings select{font-size:12px}
+.work-root .work-focus-ai-toolbar{display:flex;justify-content:space-between;align-items:center;gap:8px;height:38px;min-height:38px;margin:0 0 10px}
+.work-root .work-focus-ai-toolbar>p{white-space:nowrap;font-size:13px;font-weight:700}
+.work-root .work-focus-ai-controls{display:flex;align-items:center;gap:4px}
+.work-root .work-focus-monitor-pill{display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;
+ padding:6px 9px;border:1px solid #525e79;background:#25334c;color:#a9b7cd;border-radius:20px;font-size:10px;font-weight:650;min-height:29px}
+.work-root .work-focus-monitor-pill.enabled{color:#afe0c8;border-color:#29966c;background:#14614550}
+.work-root .work-focus-monitor-pill:disabled{opacity:.65}
+.work-root .work-focus-monitor-triggers{position:absolute;top:55px;right:12px;left:12px;z-index:40;
+ background:#1b2940;border:1px solid #506082;border-radius:15px;padding:13px;box-shadow:0 18px 45px #000b;
+ max-height:370px;overflow-y:auto}
+.work-root .work-focus-monitor-trigger-head{display:flex;justify-content:space-between;gap:12px;font-size:12px;margin-bottom:10px}
+.work-root .work-focus-monitor-trigger-head button{color:#aebcd1}
+.work-root .work-personal-task-ai .ai-chat-model-cap{width:134px!important;max-width:134px}
+.work-root .work-personal-task-ai .ai-chat-model-cap-button{font-size:11px;padding:5px 9px;min-height:29px}
+.work-root .work-personal-task-ai .focused-task-ai-thread-through{padding-top:42px}
+.work-root .work-personal-task-ai .focused-task-ai-composer{margin-top:auto}
+.work-root .work-personal-task-ai .ai-chat-composer{padding:5px!important}
+.work-root .work-personal-task-ai .ai-chat-composer textarea{font-size:12px;min-height:38px}
+.work-root .work-personal-task-ai .ai-chat-composer>button{width:39px;height:39px}
+.work-root .focused-task-ai-expanded-panel{overflow:hidden}
+.work-root .focused-task-ai-expanded-panel .ai-chat-model-cap{width:140px!important}
+.work-root .focused-task-ai-expanded-panel .focused-task-ai-composer{margin-top:auto}
+.work-root .focused-task-ai-expanded-panel .focused-task-ai-composer .focused-task-ai-composer{padding:0;border:0}
+.work-root .work-focus-ai-toolbar .focused-task-ai-icon-button{flex:none}
+@media(max-width:1180px){
+ .work-root .work-focus-ai-toolbar{gap:4px}
+ .work-root .work-focus-monitor-pill{font-size:0;padding:6px}
+ .work-root .work-focus-monitor-pill svg{width:15px;height:15px}
+}
+@media(max-width:1023px){
+ .work-root .focused-task-editor-shell{overflow-y:auto;min-height:450px}
+ .work-root .work-focus-content{min-height:360px}
+ .work-root .work-focus-subtask-section{min-height:240px}
+ .work-root .focused-task-ai-panel{min-height:420px}
+ .work-root .work-focus-monitor-pill{font-size:10px}
+}

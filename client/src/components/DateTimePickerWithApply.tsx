@@ -12,6 +12,7 @@ type Props = {
   popupAlign?: 'left' | 'right';
   iconOnly?: boolean;
   detachedPopup?: boolean;
+  popupZIndex?: number;
   detachedOffset?: number;
   onChange: (value: string | null) => void | Promise<void>;
   onOpenChange?: (isOpen: boolean) => void;
@@ -56,6 +57,7 @@ export function DateTimePickerWithApply({
   popupAlign = 'left',
   iconOnly = false,
   detachedPopup = false,
+  popupZIndex,
   detachedOffset = 10,
   onChange,
   onOpenChange,
@@ -255,7 +257,7 @@ export function DateTimePickerWithApply({
       className={`date-time-popover z-[190] w-72 rounded-xl border p-3 shadow-2xl ${
         detachedPopup ? 'fixed' : `absolute ${popupPositionClass} mt-2`
       }`}
-      style={detachedPopup && detachedPosition ? { top: detachedPosition.top, left: detachedPosition.left } : undefined}
+      style={detachedPopup && detachedPosition ? { top: detachedPosition.top, left: detachedPosition.left, ...(popupZIndex!==undefined?{zIndex:popupZIndex}:{}) } : undefined}
       onClick={(event) => event.stopPropagation()}
     >
       <p className="mb-2 text-xs text-muted">Выбор даты и времени</p>

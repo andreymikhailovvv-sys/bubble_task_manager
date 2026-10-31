@@ -1,6 +1,7 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {Loader2,SendHorizontal} from 'lucide-react';
 import {AutoGrowingTextarea} from './components/AutoGrowingTextarea';
+import {AiProgress} from './components/AiProgress';
 import {ExpandedAiChat,type ExpandedAiChatProject} from './components/ExpandedAiChat';
 import {QuickAiLauncherFrame} from './components/QuickAiLauncherFrame';
 import {api,type WorkDashboard,type WorkAiMessage,type WorkAiCredits} from './lib/api';
@@ -25,6 +26,7 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
   const [loading,setLoading]=useState(false);
   const [fetching,setFetching]=useState(true);
   const [error,setError]=useState('');
+  const [aiProgress,setAiProgress]=useState<'searching_tasks'|'forming_answer'>('searching_tasks');
   const messagesRef=useRef<HTMLDivElement|null>(null);
   const allowed=dashboard.role!=='VIEWER';
   const admin=['OWNER','ADMIN'].includes(dashboard.role);
@@ -78,6 +80,11 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
   const activeChat=activeProject.chats.find(t=>t.id===selectedChatId)||activeProject.chats[0];
   const visible=selectedChatId===QUICK?quickMessages:taskMessages;
   const errorText=(e:unknown)=>e instanceof Error?e.message:'ИИ не ответил';
+  useEffect(()=>{
+    if(!loading){setAiProgress('searching_tasks');return;}
+    const timeout=window.setTimeout(()=>setAiProgress('forming_answer'),1400);
+    return()=>window.clearTimeout(timeout);
+  },[loading]);
   const send=async(question:string,quick:boolean)=>{
     const q=question.trim();if(!q||loading||!allowed)return;
     setLoading(true);setError('');
@@ -121,7 +128,7 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
                 </div>
               </div>)}
               {!quickMessages.length&&<p className="text-subtle">Быстрый вопрос по проектам и задачам выбранной компании.</p>}
-              {loading&&<p className="text-subtle"><Loader2 size={14} className="inline animate-spin"/> Думаю…</p>}
+              {loading&&<AiProgress status={aiProgress}/>}
             </div>
           </div>
           {error&&<p role="alert" className="text-xs text-rose-300">{error}</p>}
@@ -168,7 +175,7 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
         </div>
       </div>)}
       status={error?<p role="alert" className="text-sm text-rose-400">{error}</p>:
-        loading?<p className="text-sm text-muted">Формируем ответ…</p>:
+        loading?<AiProgress status={aiProgress}/>:
         credits?<p className="text-[11px] text-muted">Баланс организации: {(credits.aiCreditsMilli/1000).toFixed(3)} кр.</p>:null}
       onClose={()=>setExpanded(false)}
       onCreateProject={()=>undefined}
