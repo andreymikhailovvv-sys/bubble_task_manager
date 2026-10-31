@@ -68,6 +68,7 @@ model OrganizationMember {
 
   @@unique([organizationId, userId])
   @@index([userId, organizationId])
+  @@index([departmentId])
 }
 
 enum TaskStatus {
