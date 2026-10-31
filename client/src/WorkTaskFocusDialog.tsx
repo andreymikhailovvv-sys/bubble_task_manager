@@ -8,6 +8,7 @@ import WorkAiPanel from './WorkAiPanel';
 import {FocusedSubtaskComposer} from './components/FocusedSubtaskComposer';
 import {InlineDateTimePickerIcon} from './components/InlineDateTimePickerIcon';
 import WorkSubtaskDetailDialog from './WorkSubtaskDetailDialog';
+import WorkSubtaskCommentsDialog from './WorkSubtaskCommentsDialog';
 import {MessageCircle} from 'lucide-react';
 import './styles.css';
 
@@ -37,6 +38,7 @@ export default function WorkTaskFocusDialog({organizationId,task,workspace,curre
   const [editSubtaskId,setEditSubtaskId]=useState<string|null>(null);
   const [editSubtaskTitle,setEditSubtaskTitle]=useState('');
   const [subtaskDetail,setSubtaskDetail]=useState<WorkSubtask|null>(null);
+  const [subtaskComments,setSubtaskComments]=useState<WorkSubtask|null>(null);
   const role=workspace.organization.role;
   const manager=['OWNER','ADMIN','MANAGER'].includes(role);
   const member=workspace.members.find(m=>m.userId===currentUserId);
@@ -227,7 +229,7 @@ export default function WorkTaskFocusDialog({organizationId,task,workspace,curre
                     <button type="button" className={`min-w-0 flex-1 truncate text-left text-sm ${st.isDone?'line-through opacity-60':''}`}
                        onClick={()=>setSubtaskDetail(st)}>{st.title}</button>
                      <button type="button" className="task-card-meta-indicator task-card-meta-action relative shrink-0"
-                       title="Открыть комментарии подзадачи" onClick={()=>setSubtaskDetail(st)}><MessageCircle size={15}/>
+                       title="Открыть комментарии подзадачи" onClick={()=>setSubtaskComments(st)}><MessageCircle size={15}/>
                        {Boolean(st.commentCount)&&<span className="ml-1 text-[10px]">{st.commentCount}</span>}</button>
                      {st.createdByMemberId&&<span className="work-subtask-author shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
                         title={'Добавил: '+memberName(st.createdByMemberId)}>
@@ -249,9 +251,15 @@ export default function WorkTaskFocusDialog({organizationId,task,workspace,curre
     {subtaskDetail&&<WorkSubtaskDetailDialog
       key={subtaskDetail.id} organizationId={organizationId} projectId={current.projectId}
       taskId={current.id} subtask={subtaskDetail} workspace={workspace}
-      selfMemberId={member?.id||null} onClose={()=>setSubtaskDetail(null)}
+      selfMemberId={member?.id||null} parentTaskTitle={current.title} onClose={()=>setSubtaskDetail(null)}
       onUpdated={updated=>{setSubtasks(prev=>prev.map(st=>st.id===updated.id?updated:st));setSubtaskDetail(updated);}}
       onDeleted={id=>setSubtasks(prev=>prev.filter(st=>st.id!==id))}
+    />}
+    {subtaskComments&&<WorkSubtaskCommentsDialog
+      key={subtaskComments.id} organizationId={organizationId} projectId={current.projectId}
+      taskId={current.id} subtask={subtaskComments} workspace={workspace}
+      onClose={()=>setSubtaskComments(null)}
+      onCountChange={count=>setSubtasks(prev=>prev.map(st=>st.id===subtaskComments.id?{...st,commentCount:count}:st))}
     />}
   </FocusedTaskWindowFrame>;
 }
