@@ -29,6 +29,8 @@ jobs:
         run: npm ci --include=dev --no-audit --no-fund
       - name: Compile web client and API server
         run: npm run build
+      - name: Verify Work AI approval-only corporate change tools
+        run: node --import tsx --test server/test/work-ai-change-proposals.test.ts
       - name: Verify shared Work subtask discussion, recipients and dispatcher UI
         run: node --import tsx --test server/test/work-collaboration-ui.test.ts
       - name: Verify Work focus, subtasks and company AI context fixes
