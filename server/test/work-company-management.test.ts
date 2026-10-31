@@ -86,5 +86,6 @@ test('organization changes are additive and never rewrite personal data',async()
   assert.match(client,/Сотрудники/);
   assert.match(client,/Приглашения/);
   assert.match(client,/Подразделения/);
-  assert.match(work,/onClick=\{\(\)=>openOrganization\(org\.id\)\}/);
+  assert.match(work,/onChange=\{event=>selectOrganization\(event\.target\.value\)\}/);
+  assert.match(work,/onOpenCompanyCard=\{\(\)=>setCompanyCardOpen\(true\)\}/);
 });
