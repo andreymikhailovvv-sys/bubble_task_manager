@@ -38,6 +38,7 @@ import { deductEfficiencyPenalty, EFFICIENCY_BUCKET_ORDER, type EfficiencyBucket
 import { creditsToMilli, currentAiCreditsPeriod, getAiCreditWallet, grantBonusCreditsMilli, grantBonusCreditsMilliInTransaction } from '../services/ai-credit-wallet.service.js';
 import { isGuestAccount } from '../lib/guest-account.js';
 import { isBusinessAdmin } from '../lib/business-admin-access.js';
+import { businessOrganizationsRouter } from './business-organizations.js';
 import { validateTelegramWebAppInitData } from '../lib/telegram-webapp-auth.js';
 import { FixedWindowRateLimiter, type RateLimitDecision } from '../lib/security-rate-limiter.js';
 import { validateAndroidPushRegistration } from '../lib/android-push-payload.js';
@@ -59,6 +60,7 @@ import { rewriteNotesQuickText } from '../services/telegram-quick-share-ai.servi
 import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
 
 export const apiRouter = Router();
+apiRouter.use('/business/organizations', businessOrganizationsRouter);
 apiRouter.use('/payments/yookassa', yookassaPaymentsRouter);
 const ADMIN_PANEL_PASSWORD_ENV = 'ADMIN_PANEL_PASSWORD';
 const SUBSCRIPTION_PLAN_KEYS = ['start', 'pro', 'max'] as const;

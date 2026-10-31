@@ -7,6 +7,36 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  MANAGER
+  MEMBER
+  VIEWER
+}
+
+model Organization {
+  id        String               @id @default(cuid())
+  name      String
+  members   OrganizationMember[]
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+}
+
+model OrganizationMember {
+  id             String           @id @default(cuid())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           OrganizationRole @default(MEMBER)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([organizationId, userId])
+  @@index([userId, organizationId])
+}
+
 enum TaskStatus {
   TODO
   IN_PROGRESS
@@ -142,6 +172,7 @@ model User {
   aiChatConversationMemories AiChatConversationMemory[]
   creditPurchases CreditPurchase[]
   collaborativeTaskMembers CollaborativeTaskMember[]
+  organizationMemberships OrganizationMember[]
   taskComments TaskComment[] @relation("TaskCommentAuthor")
   taskActivityEvents TaskActivityEvent[] @relation("TaskActivityActor")
   taskCommentReadStates TaskCommentReadState[]

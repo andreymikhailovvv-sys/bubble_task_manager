@@ -465,7 +465,11 @@ export type StandaloneNote = {
   updatedAt: string;
 };
 
+export type WorkOrganization = { id: string; name: string; role: 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER' | 'VIEWER'; createdAt: string; updatedAt: string };
+
 export const api = {
+  listWorkOrganizations: () => request<{ organizations: WorkOrganization[] }>('/api/business/organizations'),
+  createWorkOrganization: (name: string) => request<{ organization: WorkOrganization }>('/api/business/organizations', { method: 'POST', body: JSON.stringify({ name }) }),
   getMe: () => request<{ user: CurrentUser }>('/api/auth/me'),
   getAiChatProjects: <T>() => request<{ projects: T[] | null }>('/api/ai-chat/projects'),
   getAiChatThreadMessages: (projectId: string, chatId: string) => request<{ messages: ChatMessage[]; projectsOutline: import('./ai-chat-reconciliation').AiChatProjectOutline[] }>(`/api/ai-chat/projects/${encodeURIComponent(projectId)}/chats/${encodeURIComponent(chatId)}/messages`),
