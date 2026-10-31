@@ -949,7 +949,7 @@ export function TaskEditor({
                   title="Добавить файл"
                 >
                   <Paperclip size={15} />
-                </button>}
+                </button>
                 <AiAttachmentTiles files={aiPendingFiles} onRemove={(file) =>
                   setAiPendingFiles((prev) => prev.filter((item) => item !== file))
                 } busy={isGeneratingByAi} />
@@ -1084,7 +1084,7 @@ export function TaskEditor({
                   title="Добавить файл"
                 >
                   <Paperclip size={15} />
-                </button>
+                </button>}
                 <AiAttachmentTiles files={isEventEditor ? pendingEventFiles : aiPendingFiles} onRemove={(file) =>
                   isEventEditor ? setPendingEventFiles((prev) => prev.filter((item) => item !== file)) : setAiPendingFiles((prev) => prev.filter((item) => item !== file))
                 } busy={isGeneratingByAi} />
