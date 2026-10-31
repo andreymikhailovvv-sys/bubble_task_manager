@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { ArrowRight, Bot, BriefcaseBusiness, CheckCircle2, ChevronRight, FolderKanban, LayoutDashboard, Layers3, LoaderCircle, LockKeyhole, LogOut, Settings2, ShieldCheck, Sparkles, UsersRound } from 'lucide-react';
-import { api, type CurrentUser } from './lib/api';
+import { api, type CurrentUser, type WorkOrganization } from './lib/api';
 import './BusinessApp.css';
 
 type Section = 'overview' | 'projects' | 'team' | 'ai' | 'settings';
@@ -77,6 +77,11 @@ export default function BusinessApp() {
   const [access, setAccess] = useState<Access>({ phase: 'loading' });
   const [section, setSection] = useState<Section>('overview');
   const [signingOut, setSigningOut] = useState(false);
+  const [organizations, setOrganizations] = useState<WorkOrganization[]>([]);
+  const [organizationName, setOrganizationName] = useState('');
+  const [organizationsLoading, setOrganizationsLoading] = useState(false);
+  const [organizationSaving, setOrganizationSaving] = useState(false);
+  const [organizationError, setOrganizationError] = useState('');
   useEffect(() => {
     // React has committed the actual Work page (including its login/checking state).
     // Only now dismiss the host-specific HTML splash, even before bootstrap responds.
@@ -86,6 +91,37 @@ export default function BusinessApp() {
     void checkAccess().then(result => { if (mounted) setAccess(result); });
     return () => { mounted = false; };
   }, []);
+  useEffect(() => {
+    if (access.phase !== 'ready') {
+      setOrganizations([]);
+      return;
+    }
+    let active = true;
+    setOrganizationsLoading(true);
+    setOrganizationError('');
+    void api.listWorkOrganizations()
+      .then(result => { if (active) setOrganizations(result.organizations); })
+      .catch(error => { if (active) setOrganizationError(error instanceof Error ? error.message : 'Не удалось загрузить организации.'); })
+      .finally(() => { if (active) setOrganizationsLoading(false); });
+    return () => { active = false; };
+  }, [access.phase]);
+
+  async function createOrganization(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (organizationSaving || !organizationName.trim()) return;
+    setOrganizationSaving(true);
+    setOrganizationError('');
+    try {
+      const { organization } = await api.createWorkOrganization(organizationName);
+      setOrganizations(previous => [...previous, organization]);
+      setOrganizationName('');
+    } catch (error) {
+      setOrganizationError(error instanceof Error ? error.message : 'Не удалось создать организацию.');
+    } finally {
+      setOrganizationSaving(false);
+    }
+  }
+
   async function logout() {
     setSigningOut(true);
     try { await api.logout(); setAccess({phase:'login'}); }
@@ -112,6 +148,22 @@ export default function BusinessApp() {
           <section className="work-hero">
             <div className="work-hero-copy"><div className="work-kicker"><Sparkles size={15}/> ПЛАНИРОВЫЧ WORK</div><h2>Бизнес-процессы.<br/><span>Под контролем.</span></h2><p>Сначала надёжная архитектура, затем команды, проекты, гибкая конфигурация и интеллектуальный диспетчер.</p><div className="work-status"><i/> Корпоративная версия в разработке</div></div>
             <div className="work-orbit" aria-hidden="true"><div className="work-ring ring-outer"/><div className="work-ring ring-inner"/><div className="work-core"><Layers3 size={35}/></div></div>
+          </section>
+          <section className="work-organizations" aria-label="Мои организации">
+            <div className="work-org-heading">
+              <div><div className="work-section-label">КОРПОРАТИВНОЕ ЯДРО</div><h2>Организации</h2><p>Создайте первое рабочее пространство компании. Личные задачи остаются отдельно.</p></div>
+              <span className="work-org-counter">{organizations.length} {organizations.length === 1 ? 'организация' : 'организаций'}</span>
+            </div>
+            {organizationsLoading ? <div className="work-org-message" role="status">Загружаем организации…</div>
+              : organizations.length > 0 ? <div className="work-org-list">
+                {organizations.map(org => <div className="work-org-row" key={org.id}><div className="work-org-row-icon"><BriefcaseBusiness size={19}/></div><div><strong>{org.name}</strong><small>Идентификатор: {org.id}</small></div><span>{org.role === 'OWNER' ? 'Владелец' : org.role}</span></div>)}
+              </div> : <div className="work-org-message">Пока нет организаций. Создайте первую для проверки корпоративного ядра.</div>}
+            <form onSubmit={createOrganization} className="work-org-create">
+              <label htmlFor="work-org-name">Название новой организации</label>
+              <div><input id="work-org-name" value={organizationName} maxLength={100} onChange={e=>setOrganizationName(e.target.value)} placeholder="Например, Компания Альфа" required disabled={organizationSaving}/>
+                <button type="submit" disabled={organizationSaving || organizationName.trim().length < 2}>{organizationSaving ? 'Создаём…' : 'Создать организацию'} <ArrowRight size={16}/></button></div>
+            </form>
+            {organizationError && <p className="work-org-error" role="alert">{organizationError}</p>}
           </section>
           <div className="work-section-label">НАПРАВЛЕНИЯ РАЗРАБОТКИ</div>
           <div className="work-cards">
