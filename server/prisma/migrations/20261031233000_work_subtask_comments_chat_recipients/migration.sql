@@ -21,7 +21,7 @@ ALTER TABLE "OrganizationWorkSubtaskComment" ADD CONSTRAINT "OrganizationWorkSub
   FOREIGN KEY ("parentCommentId") REFERENCES "OrganizationWorkSubtaskComment"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "OrganizationAiMessage" ADD COLUMN "senderMemberId" TEXT;
 ALTER TABLE "OrganizationAiMessage" ADD COLUMN "recipientMemberId" TEXT;
-CREATE INDEX "OrganizationAiMessage_organizationId_taskId_recipientMemberId_createdAt_idx"
+CREATE INDEX "WorkAiMessage_recipient_task_created_idx"
   ON "OrganizationAiMessage"("organizationId","taskId","recipientMemberId","createdAt");
 ALTER TABLE "OrganizationAiMessage" ADD CONSTRAINT "OrganizationAiMessage_senderMemberId_fkey"
   FOREIGN KEY ("senderMemberId") REFERENCES "OrganizationMember"("id") ON DELETE SET NULL ON UPDATE CASCADE;
