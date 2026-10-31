@@ -49,6 +49,9 @@ import { formatCreditsSpent } from './lib/credits';
 import { AI_TOUR_STEPS, FEATURE_TOUR_STEPS, TASK_TOUR_STEPS, WORKSPACE_TOUR_STEPS, TourOverlay, type AiTourStep, type FeatureTourStep, type TaskTourStep, type WorkspaceTourStep } from './components/TourOverlay';
 import { useCreditPurchase } from './lib/useCreditPurchase';
 import { ExpandedAiChat } from './components/ExpandedAiChat';
+import { QuickAiLauncherFrame } from './components/QuickAiLauncherFrame';
+import { FocusedTaskWindowFrame } from './components/FocusedTaskWindowFrame';
+import { AiModelChip } from './components/AiModelChip';
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
 import { AiReplyAction, AiReplyPreview, AiReplyMessageBody, serializeAiReply, type AiReplyTarget } from './components/AiMessageReply';
 import { TelegramIntegrationsMenu } from './components/TelegramIntegrationsMenu';
@@ -102,17 +105,6 @@ const AI_CHAT_MODEL_OPTIONS: Array<{ value: AiChatModel; label: string }> = [
 
 const AI_CHAT_MODEL_SELECT_OPTIONS = AI_CHAT_MODEL_OPTIONS.map(({ value, label }) => ({ value, label }));
 
-function AiModelChip({ value, onChange, ariaLabel, className = '', disabled = false }: { value: AiChatModel; onChange: (value: AiChatModel) => void; ariaLabel: string; className?: string; disabled?: boolean }) {
-  return (
-    <div className={`ai-chat-model-cap w-40 ${className}`}>
-      {disabled ? <button type="button" disabled title="Модель изменяется только в настройках автомониторинга" aria-label={`${ariaLabel}: закреплена настройками автомониторинга`}
-        className="ai-chat-model-cap-button flex w-full items-center justify-between gap-1 rounded-b-xl rounded-t-none border px-3 py-1.5 text-xs font-semibold text-primary shadow-sm backdrop-blur">
-        <span className="truncate">{AI_CHAT_MODEL_OPTIONS.find(option => option.value === value)?.label ?? 'GPT-6 Luna'}</span>
-        <ChevronDown size={13} className="shrink-0 opacity-35" />
-      </button> : <CustomSelect value={value} options={AI_CHAT_MODEL_SELECT_OPTIONS} onChange={(next) => onChange(next as AiChatModel)} className="w-full" buttonClassName="ai-chat-model-cap-button rounded-b-xl rounded-t-none border px-3 py-1.5 text-xs font-semibold text-primary shadow-sm backdrop-blur hover:brightness-105" menuClassName="ai-chat-model-cap-menu surface-popover text-primary" ariaLabel={ariaLabel} />}
-    </div>
-  );
-}
 
 const SUBSCRIPTION_PLANS: Array<{ key: keyof SubscriptionLinks; name: string; price: string; badge: string; features: string[] }> = [
   { key: 'start', name: 'Старт', price: '299 ₽/мес', badge: 'Для регулярного старта', features: ['3 000 ИИ-кредитов в месяц', 'Память диалогов: до 100 сообщений'] },
@@ -7130,8 +7122,7 @@ export default function App() {
       /> : null}
 
       {focusedTask && focusedDraft && !(isFocusModeOpen && isFocusedNotesEditorOpen) ? (
-        <div className={`focused-task-modal-backdrop fixed inset-0 ${isAiChatOpen ? 'z-[180]' : isFocusModeOpen ? 'z-[150]' : 'z-40'} flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm`}>
-          <div className="focused-task-modal-layout flex w-full max-w-[1380px] items-stretch justify-center gap-3">
+        <FocusedTaskWindowFrame aiChatOpen={isAiChatOpen} focusModeOpen={isFocusModeOpen}>
 
         {timelineCreateMenu ? (
           <div
@@ -7919,7 +7910,6 @@ export default function App() {
               </div>
             </div>
             </aside>
-          </div>
           {isAiSubtasksPromptOpen ? (
             <div
               className="modal-backdrop fixed inset-0 z-[80] flex items-center justify-center p-4 backdrop-blur-sm"
@@ -8059,7 +8049,7 @@ export default function App() {
               </aside>
             </div>
           ) : null}
-        </div>
+        </FocusedTaskWindowFrame>
       ) : null}
 
       {focusedTask && isAiExpanded ? (
@@ -8387,10 +8377,9 @@ export default function App() {
       ) : null}
       {isTimelineOptimizeModalOpen ? (<div className="modal-backdrop fixed inset-0 z-[120] flex items-center justify-center p-4 backdrop-blur-sm"><div className="dialog-surface w-full max-w-lg rounded-2xl border p-4"><h3 className="text-lg font-semibold text-primary">Оптимизация таймлайна ИИ</h3><p className="mt-1 text-sm text-muted">Добавьте пожелания к перераспределению задач <span className="inline-flex items-center gap-1 text-rose-300">(1 <Coins size={12} />)</span>.</p><textarea className="form-field mt-3 min-h-28 w-full rounded-lg border p-2 text-sm" value={timelineOptimizeNote} onChange={(e)=>setTimelineOptimizeNote(e.target.value)} /><div className="mt-3 flex justify-end gap-2"><button className="surface-muted rounded px-3 py-2 text-sm" onClick={()=>setIsTimelineOptimizeModalOpen(false)}>Отмена</button><button className="rounded bg-rose-600 px-3 py-2 text-sm text-white" onClick={()=>void handleOptimizeTimeline()} disabled={timelineOptimizeLoading}>Оптимизировать</button></div></div></div>) : null}
 
-      <div
-        className={`ai-chat-launcher group fixed bottom-8 right-6 z-[95] lg:right-[360px] ${focusedTask ? 'ai-chat-launcher-task-open' : ''}`}
-        onMouseEnter={() => { setQuickAiPreviewHovered(true); scheduleQuickAiChatScrollToBottom(); markSystemNotificationsRead(); }}
-        onMouseLeave={() => setQuickAiPreviewHovered(false)}
+      <QuickAiLauncherFrame
+        taskOpen={Boolean(focusedTask)}
+        onHoverChange={hovered => { setQuickAiPreviewHovered(hovered); if(hovered){ scheduleQuickAiChatScrollToBottom(); markSystemNotificationsRead(); } }}
         onFocus={scheduleQuickAiChatScrollToBottom}
       >
         <div className={`absolute bottom-14 right-0 w-80 transition duration-200 ${forceQuickAiPreviewOpen ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none translate-y-2 opacity-0 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100'}`}>
@@ -8441,7 +8430,7 @@ export default function App() {
           {unreadSystemNotificationCount > 0 ? <span className="absolute -left-1 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-rose-500 px-1 text-[10px] font-bold leading-none text-white shadow-lg">{unreadSystemNotificationCount > 99 ? '99+' : unreadSystemNotificationCount}</span> : null}
           ✦
         </button>
-      </div>
+      </QuickAiLauncherFrame>
 
       {isCollaborationSettingsOpen && focusedTask?.isCollaborative ? (
         <div className="modal-backdrop fixed inset-0 z-[175] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsCollaborationSettingsOpen(false)}>
