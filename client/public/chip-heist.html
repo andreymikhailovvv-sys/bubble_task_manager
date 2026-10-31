@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#070c1a" />
+  <meta name="description" content="Chip Heist: браузерная мультяшная аркада про Пинки, Брейна и похищение микрочипов. Три уровня, боссы и очки." />
+  <title>CHIP HEIST: Операция «Микросхема»</title>
+  <link rel="stylesheet" href="/chip-heist/game.css" />
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="/chip-heist.html" aria-label="Chip Heist — главная">
+        <span class="brand-icon" aria-hidden="true">⌁</span>
+        <span><strong>CHIP HEIST</strong><small>ОПЕРАЦИЯ «МИКРОСХЕМА»</small></span>
+      </a>
+      <div class="top-actions">
+        <span class="top-score">РЕКОРД <strong id="highScore">0</strong></span>
+        <button id="soundButton" class="icon-btn" type="button" aria-label="Включить звук" title="Звук">♪ <span id="soundLabel">ВЫКЛ</span></button>
+        <button id="fullscreenButton" class="icon-btn" type="button" aria-label="На весь экран" title="На весь экран">⛶</button>
+      </div>
+    </header>
+
+    <main>
+      <div class="game-frame" id="gameFrame">
+        <canvas id="game" width="960" height="540" tabindex="0" aria-label="Браузерная аркада Chip Heist. Управление: A и D — движение, W — прыжок, пробел — электромагнитный импульс, E — действие, P — пауза."></canvas>
+        <div class="scanlines" aria-hidden="true"></div>
+        <div class="announcement" id="announcement" role="status" aria-live="polite"></div>
+        <div class="overlay" id="overlay">
+          <div class="panel" id="overlayPanel">
+            <div class="eyebrow" id="overlayEyebrow">СЕКРЕТНО · МИССИЯ 001</div>
+            <div class="panel-mark" aria-hidden="true">◈</div>
+            <h1 id="overlayTitle">ОПЕРАЦИЯ<br /><em>МИКРОСХЕМА</em></h1>
+            <p id="overlayText">Пинки и Брейн пробрались на фабрику TSMC на Тайване. Заберите чипы и чертежи, ускользните от Тома и Джерри, переживите атаку вертолёта и остановите последнюю красную кнопку.</p>
+            <div class="mission-cards" id="missionCards">
+              <div><b>01</b><span>ФАБРИКА TSMC</span></div>
+              <div><b>02</b><span>ВЕРТОЛЁТ</span></div>
+              <div><b>03</b><span>КРАСНАЯ КНОПКА</span></div>
+            </div>
+            <button id="primaryButton" class="start-btn" type="button">НАЧАТЬ ОПЕРАЦИЮ <span aria-hidden="true">→</span></button>
+            <p class="hint" id="overlayHint">A / D — бежать · W / ↑ — прыгать · ПРОБЕЛ / J — ЭМИ · E — действие · P — пауза</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="bottom-bar">
+        <p><span class="online-dot"></span> ЛОКАЛЬНАЯ АРКАДА <span class="sep">/</span> ПРОГРЕСС И РЕКОРД СОХРАНЯЮТСЯ В ЭТОМ БРАУЗЕРЕ</p>
+        <button id="pauseButton" class="secondary-btn" type="button">Ⅱ ПАУЗА</button>
+      </div>
+
+      <div class="touch-controls" id="touchControls" aria-label="Сенсорное управление">
+        <div class="touch-group">
+          <button class="touch-key" data-hold="left" aria-label="Движение влево">◀</button>
+          <button class="touch-key" data-hold="right" aria-label="Движение вправо">▶</button>
+        </div>
+        <div class="touch-group">
+          <button class="touch-key touch-jump" data-press="jump" aria-label="Прыжок">↑<small>ПРЫЖОК</small></button>
+          <button class="touch-key touch-fire" data-hold="fire" aria-label="Электромагнитный импульс">✦<small>ЭМИ</small></button>
+          <button class="touch-key touch-use" data-press="use" aria-label="Действие">E<small>ДЕЙСТВИЕ</small></button>
+        </div>
+      </div>
+    </main>
+    <footer class="footnote">Пародийная фантастическая игра. Все события вымышлены. Не связана с TSMC, правообладателями персонажей или изображёнными политиками.</footer>
+  </div>
+  <script type="module" src="/chip-heist/game.js"></script>
+</body>
+</html>
