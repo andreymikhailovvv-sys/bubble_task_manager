@@ -95,7 +95,7 @@ workProjectsRouter.get('/:organizationId/dashboard',asyncHandler(async(req,res)=
         {tasks:{some:{createdByMemberId:member.id}}}
       ]})},
       select:{id:true,name:true,description:true,isArchived:true,createdAt:true,
-        _count:{select:{tasks:true}}},
+        _count:{select:{tasks:management?true:{where:accessFilter}}}},
       orderBy:{createdAt:'desc'},take:100
     }),
     prisma.organizationWorkTask.findMany({
@@ -125,7 +125,7 @@ workProjectsRouter.get('/:organizationId/projects',asyncHandler(async(req,res)=>
   const rows=await prisma.organizationProject.findMany({
     where:{organizationId:req.params.organizationId,...(managerAccess?{}:{OR:[{tasks:{some:{assignedMemberId:member.id}}},{tasks:{some:{createdByMemberId:member.id}}},{createdByMemberId:member.id}]})},
     select:{id:true,name:true,description:true,isArchived:true,createdAt:true,updatedAt:true,
-      _count:{select:{tasks:true}}},
+      _count:{select:{tasks:managerAccess?true:{where:{OR:[{assignedMemberId:member.id},{createdByMemberId:member.id}]}}}}},
     orderBy:{createdAt:'desc'},take:201
   });
   res.json({projects:rows.slice(0,200).map(({_count,...project})=>({...project,taskCount:_count.tasks})),
