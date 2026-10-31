@@ -18,11 +18,13 @@ test('desktop task AI shows buttons and opens targets in four views', async () =
 });
 
 test('desktop task references open above expanded general chat and notification buttons fit their labels', async () => {
-  const [source, styles] = await Promise.all([
+  const [source, styles,frame] = await Promise.all([
     readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8')
+    readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/components/FocusedTaskWindowFrame.tsx', import.meta.url), 'utf8')
   ]);
-  assert.ok(source.includes("isAiChatOpen ? 'z-[180]' : isFocusModeOpen ? 'z-[150]' : 'z-40'"));
+  assert.match(source,/<FocusedTaskWindowFrame aiChatOpen=\{isAiChatOpen\} focusModeOpen=\{isFocusModeOpen\}>/);
+  assert.ok(frame.includes("aiChatOpen ? 'z-[180]' : focusModeOpen ? 'z-[150]' : 'z-40'"));
   assert.match(styles, /\.system-notification-task-button\s*\{[^}]*width:\s*auto;/s);
   assert.doesNotMatch(styles, /\.system-notification-task-button\s*\{[^}]*width:\s*12\.5rem;/s);
 });
