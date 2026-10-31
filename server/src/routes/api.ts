@@ -39,6 +39,8 @@ import { creditsToMilli, currentAiCreditsPeriod, getAiCreditWallet, grantBonusCr
 import { isGuestAccount } from '../lib/guest-account.js';
 import { isBusinessAdmin } from '../lib/business-admin-access.js';
 import { businessOrganizationsRouter } from './business-organizations.js';
+import { workCompanyRouter } from './business-company-management.js';
+import { workInvitationRouter } from './business-invitations.js';
 import { validateTelegramWebAppInitData } from '../lib/telegram-webapp-auth.js';
 import { FixedWindowRateLimiter, type RateLimitDecision } from '../lib/security-rate-limiter.js';
 import { validateAndroidPushRegistration } from '../lib/android-push-payload.js';
@@ -60,6 +62,8 @@ import { rewriteNotesQuickText } from '../services/telegram-quick-share-ai.servi
 import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
 
 export const apiRouter = Router();
+apiRouter.use('/business/invitations', workInvitationRouter);
+apiRouter.use('/business/organizations', workCompanyRouter);
 apiRouter.use('/business/organizations', businessOrganizationsRouter);
 apiRouter.use('/payments/yookassa', yookassaPaymentsRouter);
 const ADMIN_PANEL_PASSWORD_ENV = 'ADMIN_PANEL_PASSWORD';
@@ -387,14 +391,6 @@ apiRouter.get('/health', (_, res) => res.json({ ok: true, service: 'bubble-task-
 apiRouter.get('/business/bootstrap', requireAuth, asyncHandler(async (req, res) => {
   res.setHeader('Cache-Control', 'private, no-store');
   const allowlist = process.env.BUSINESS_ADMIN_USER_IDS?.trim();
-  if (!allowlist) {
-    res.status(503).json({ error: 'Бизнес-панель пока не настроена' });
-    return;
-  }
-  if (!isBusinessAdmin(req.user?.id, allowlist)) {
-    res.status(403).json({ error: 'Нет доступа к бизнес-панели' });
-    return;
-  }
   const user = await prisma.user.findUnique({
     where: { id: req.user!.id },
     select: { id: true, name: true, username: true, email: true, deviceId: true, passwordHash: true, googleSub: true, telegramChatId: true }
@@ -403,7 +399,18 @@ apiRouter.get('/business/bootstrap', requireAuth, asyncHandler(async (req, res) 
     res.status(403).json({ error: 'Нет доступа к бизнес-панели' });
     return;
   }
-  res.json({ user: { id: user.id, name: user.name, username: user.username }, status: 'initial-shell' });
+  // An invited company member may enter Work without being a platform admin.
+  // The allowlist continues to protect the creation of new organizations.
+  if (!isBusinessAdmin(user.id, allowlist)) {
+    const membership = await prisma.organizationMember.findFirst({
+      where: { userId: user.id }, select: { id: true }
+    });
+    if (!membership) {
+      res.status(allowlist ? 403 : 503).json({ error: allowlist ? 'Нет доступа к бизнес-панели' : 'Бизнес-панель пока не настроена' });
+      return;
+    }
+  }
+  res.json({ user: { id: user.id, name: user.name, username: user.username }, status: 'company-shell' });
 }));
 
 apiRouter.post('/client-errors', async (req, res) => {
