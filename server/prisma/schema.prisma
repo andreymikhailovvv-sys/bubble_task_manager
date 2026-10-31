@@ -147,7 +147,7 @@ model OrganizationAiMessage {
 
   @@index([organizationId, taskId, createdAt])
   @@index([organizationId, memberId, createdAt])
-  @@index([organizationId, taskId, recipientMemberId, createdAt])
+  @@index([organizationId, taskId, recipientMemberId, createdAt], map: "WorkAiMessage_recipient_task_created_idx")
 }
 
 model OrganizationAiMonitoringJob {
