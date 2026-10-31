@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#070c1a" />
-  <meta name="description" content="Chip Heist: браузерная мультяшная аркада про Пинки, Брейна и похищение микрочипов. Три уровня, боссы и очки." />
+  <meta name="description" content="Chip Heist: браузерная мультяшная аркада про Пинки, Брейна и похищение микрочипов. Четыре уровня, лабиринт, несколько видов оружия и боссы." />
   <title>CHIP HEIST: Операция «Микросхема»</title>
   <link rel="stylesheet" href="/chip-heist/game.css" />
 </head>
@@ -32,20 +32,20 @@
             <div class="eyebrow" id="overlayEyebrow">СЕКРЕТНО · МИССИЯ 001</div>
             <div class="panel-mark" aria-hidden="true">◈</div>
             <h1 id="overlayTitle">ОПЕРАЦИЯ<br /><em>МИКРОСХЕМА</em></h1>
-            <p id="overlayText">Пинки и Брейн пробрались на фабрику TSMC на Тайване. Заберите чипы и чертежи, ускользните от Тома и Джерри, переживите атаку вертолёта и остановите последнюю красную кнопку.</p>
+            <p id="overlayText">Управляйте Пинки, пока Брейн прикрывает вас гранатами. Украдите чипы на фабрике, отбейтесь от вертолёта, пройдите лабиринт дата-центра и остановите красную кнопку.</p>
             <div class="mission-cards" id="missionCards">
               <div><b>01</b><span>ФАБРИКА TSMC</span></div>
               <div><b>02</b><span>ВЕРТОЛЁТ</span></div>
-              <div><b>03</b><span>КРАСНАЯ КНОПКА</span></div>
+              <div><b>03</b><span>ДАТА-ЦЕНТР</span></div><div><b>04</b><span>КРАСНАЯ КНОПКА</span></div>
             </div>
             <button id="primaryButton" class="start-btn" type="button">НАЧАТЬ ОПЕРАЦИЮ <span aria-hidden="true">→</span></button>
-            <p class="hint" id="overlayHint">A / D — бежать · W / ↑ — прыгать · ПРОБЕЛ / J — ЭМИ · E — действие · P — пауза</p>
+            <p class="hint" id="overlayHint">A / D — бег · W — прыжок (в лабиринте движение вверх) · МЫШЬ — прицел и огонь · 1/2 — оружие · E — действие · P — пауза</p>
           </div>
         </div>
       </div>
 
       <div class="bottom-bar">
-        <p><span class="online-dot"></span> ЛОКАЛЬНАЯ АРКАДА <span class="sep">/</span> ПРОГРЕСС И РЕКОРД СОХРАНЯЮТСЯ В ЭТОМ БРАУЗЕРЕ</p>
+        <p><span class="online-dot"></span> ЛОКАЛЬНАЯ АРКАДА <span class="sep">/</span> ПРОГРЕСС И РЕКОРД СОХРАНЯЮТСЯ В ЭТОМ БРАУЗЕРЕ · 4 УРОВНЯ</p>
         <button id="pauseButton" class="secondary-btn" type="button">Ⅱ ПАУЗА</button>
       </div>
 
@@ -55,14 +55,14 @@
           <button class="touch-key" data-hold="right" aria-label="Движение вправо">▶</button>
         </div>
         <div class="touch-group">
-          <button class="touch-key touch-jump" data-press="jump" aria-label="Прыжок">↑<small>ПРЫЖОК</small></button>
+          <button class="touch-key touch-jump" data-hold="up" aria-label="Вверх или прыжок">↑<small>ВВЕРХ</small></button><button class="touch-key" data-hold="down" aria-label="Вниз">↓</button>
           <button class="touch-key touch-fire" data-hold="fire" aria-label="Электромагнитный импульс">✦<small>ЭМИ</small></button>
-          <button class="touch-key touch-use" data-press="use" aria-label="Действие">E<small>ДЕЙСТВИЕ</small></button>
+          <button class="touch-key touch-use" data-press="use" aria-label="Действие">E<small>ВЗЯТЬ</small></button><button class="touch-key touch-swap" data-press="swap" aria-label="Сменить оружие">⇄<small>ОРУЖИЕ</small></button>
         </div>
       </div>
     </main>
     <footer class="footnote">Пародийная фантастическая игра. Все события вымышлены. Не связана с TSMC, правообладателями персонажей или изображёнными политиками.</footer>
   </div>
-  <script type="module" src="/chip-heist/game.js"></script>
+  <script type="module" src="/chip-heist/game-v2.js"></script>
 </body>
 </html>
