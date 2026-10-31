@@ -26,7 +26,7 @@ type Actor = { id:string; role:string };
 const text = (value:unknown, max=240) => typeof value==='string' ? value.trim().slice(0,max+1) : '';
 const key = (value:unknown) => typeof value==='string' && /^[a-zA-Z0-9_-]{1,32}$/.test(value) ? value : '';
 const defined = (v:unknown) => v!==undefined && v!==null;
-const fail = (reason:string):never => { throw new Error(reason); };
+function fail(reason:string):never { throw new Error(reason); }
 const date = (value:unknown):Date => {
   if(typeof value!=='string'||!/(Z|[+-]\d{2}:\d{2})$/i.test(value))return fail('Срок должен содержать дату, время и часовой пояс');
   const parsed=new Date(value);
