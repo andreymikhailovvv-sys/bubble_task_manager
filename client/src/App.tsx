@@ -50,6 +50,7 @@ import { AI_TOUR_STEPS, FEATURE_TOUR_STEPS, TASK_TOUR_STEPS, WORKSPACE_TOUR_STEP
 import { useCreditPurchase } from './lib/useCreditPurchase';
 import { ExpandedAiChat } from './components/ExpandedAiChat';
 import { QuickAiLauncherFrame } from './components/QuickAiLauncherFrame';
+import { FocusedTaskWindowFrame } from './components/FocusedTaskWindowFrame';
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
 import { AiReplyAction, AiReplyPreview, AiReplyMessageBody, serializeAiReply, type AiReplyTarget } from './components/AiMessageReply';
 import { TelegramIntegrationsMenu } from './components/TelegramIntegrationsMenu';
@@ -7131,8 +7132,7 @@ export default function App() {
       /> : null}
 
       {focusedTask && focusedDraft && !(isFocusModeOpen && isFocusedNotesEditorOpen) ? (
-        <div className={`focused-task-modal-backdrop fixed inset-0 ${isAiChatOpen ? 'z-[180]' : isFocusModeOpen ? 'z-[150]' : 'z-40'} flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm`}>
-          <div className="focused-task-modal-layout flex w-full max-w-[1380px] items-stretch justify-center gap-3">
+        <FocusedTaskWindowFrame aiChatOpen={isAiChatOpen} focusModeOpen={isFocusModeOpen}>
 
         {timelineCreateMenu ? (
           <div
@@ -8060,7 +8060,7 @@ export default function App() {
               </aside>
             </div>
           ) : null}
-        </div>
+        </FocusedTaskWindowFrame>
       ) : null}
 
       {focusedTask && isAiExpanded ? (
