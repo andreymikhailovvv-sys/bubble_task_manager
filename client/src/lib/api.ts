@@ -481,11 +481,16 @@ export type WorkProject = { id: string; name: string; description: string | null
 export type WorkTaskStatus = 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE';
 export type WorkTaskPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL';
 export type WorkCompanyTask = { id: string; projectId: string; title: string; description: string | null; status: WorkTaskStatus; priority: WorkTaskPriority; dueAt: string | null; assignedMemberId: string | null; createdByMemberId: string | null; createdAt: string; updatedAt: string };
-export type WorkSubtask = {id:string;taskId:string;title:string;isDone:boolean;dueAt:string|null;sortOrder:number;createdByMemberId:string|null;createdAt:string;updatedAt:string};
+export type WorkSubtask = {id:string;taskId:string;title:string;isDone:boolean;dueAt:string|null;sortOrder:number;createdByMemberId:string|null;commentCount?:number;createdAt:string;updatedAt:string};
 export type WorkDashboardTask = WorkCompanyTask & { project: {id:string;name:string}; assignee: {user: {name:string|null;username:string|null}} | null };
 export type WorkDashboard = { role:WorkRole; memberId:string;projects:WorkProject[];tasks:WorkDashboardTask[];stats:{projects:number;tasks:number;open:number;overdue:number};hasMoreTasks:boolean };
 export type WorkAiCredits = { aiCreditsMilli: number; spentMilli: number; aiModel: string };
-export type WorkAiMessage = { id: string; role: string; content: string; createdAt: string };
+export type WorkAiMessage = { id:string;role:string;content:string;createdAt:string;
+  senderMemberId?:string|null;recipientMemberId?:string|null;
+  sender?:{role:string;user:{name:string|null;username:string|null}}|null;
+  recipient?:{user:{name:string|null;username:string|null}}|null; };
+export type WorkSubtaskComment = {id:string;subtaskId?:string;content:string;authorMemberId:string;parentCommentId:string|null;createdAt:string;
+ author:{role:string;user:{name:string|null;username:string|null}}};
 export type WorkAiJob = { id:string; dueAt:string; instruction:string; state:string; createdAt:string };
 export type AdminWorkOrganization = { id:string;name:string;aiCreditsMilli:number;aiModel:string;membersCount:number;projectsCount:number;createdAt:string };
 export type AdminWorkCreditHistory = { id:string;kind:string;deltaMilli:number;createdAt:string };
@@ -508,6 +513,10 @@ export const api = {
   workMonitoringSet: (id:string,taskId:string,enabled:boolean)=>request<{enabled:boolean;revision:number}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/tasks/${encodeURIComponent(taskId)}/monitoring`,{method:'PATCH',body:JSON.stringify({enabled})}),
   workMonitoringAddTrigger: (id:string,taskId:string,dueAt:string,instruction:string)=>request<{job:WorkAiJob}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/tasks/${encodeURIComponent(taskId)}/triggers`,{method:'POST',body:JSON.stringify({dueAt,instruction})}),
   workMonitoringCancelTrigger: (id:string,taskId:string,jobId:string)=>request<{ok:boolean}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/tasks/${encodeURIComponent(taskId)}/triggers/${encodeURIComponent(jobId)}`,{method:'DELETE'}),
+  workSubtaskComments: (org:string,project:string,task:string,subtask:string)=>request<{comments:WorkSubtaskComment[];hasMore:boolean}>(`/api/business/organizations/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}/tasks/${encodeURIComponent(task)}/subtasks/${encodeURIComponent(subtask)}/comments`),
+  workPostSubtaskComment: (org:string,project:string,task:string,subtask:string,content:string,parentCommentId:string|null)=>request<{comment:WorkSubtaskComment}>(`/api/business/organizations/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}/tasks/${encodeURIComponent(task)}/subtasks/${encodeURIComponent(subtask)}/comments`,{method:'POST',body:JSON.stringify({content,parentCommentId})}),
+  workDeleteSubtaskComment: (org:string,project:string,task:string,subtask:string,comment:string)=>request<{ok:boolean}>(`/api/business/organizations/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}/tasks/${encodeURIComponent(task)}/subtasks/${encodeURIComponent(subtask)}/comments/${encodeURIComponent(comment)}`,{method:'DELETE'}),
+  workSendParticipantMessage: (org:string,task:string,recipientMemberId:string,content:string)=>request<{message:WorkAiMessage}>(`/api/business/organizations/${encodeURIComponent(org)}/ai/tasks/${encodeURIComponent(task)}/human-messages`,{method:'POST',body:JSON.stringify({recipientMemberId,content})}),
   workListSubtasks: (org:string,project:string,task:string)=>request<{subtasks:WorkSubtask[];hasMore:boolean}>(`/api/business/organizations/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}/tasks/${encodeURIComponent(task)}/subtasks`),
   workAddSubtask: (org:string,project:string,task:string,title:string,dueAt:string|null)=>request<{subtask:WorkSubtask}>(`/api/business/organizations/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}/tasks/${encodeURIComponent(task)}/subtasks`,{method:'POST',body:JSON.stringify({title,dueAt})}),
   workUpdateSubtask: (org:string,project:string,task:string,subtask:string,changes:Partial<Pick<WorkSubtask,'title'|'dueAt'|'isDone'>>)=>request<{subtask:WorkSubtask}>(`/api/business/organizations/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}/tasks/${encodeURIComponent(task)}/subtasks/${encodeURIComponent(subtask)}`,{method:'PATCH',body:JSON.stringify(changes)}),

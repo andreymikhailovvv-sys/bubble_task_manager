@@ -77,8 +77,24 @@ model OrganizationWorkSubtask {
   creator        OrganizationMember? @relation("WorkSubtaskCreator",fields:[createdByMemberId],references:[id],onDelete:SetNull)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  comments OrganizationWorkSubtaskComment[]
   @@index([taskId,sortOrder,createdAt])
   @@index([createdByMemberId])
+}
+
+model OrganizationWorkSubtaskComment {
+  id String @id @default(cuid())
+  subtaskId String
+  subtask OrganizationWorkSubtask @relation(fields:[subtaskId],references:[id],onDelete:Cascade)
+  authorMemberId String
+  author OrganizationMember @relation("WorkSubtaskCommentAuthor",fields:[authorMemberId],references:[id],onDelete:Cascade)
+  parentCommentId String?
+  parentComment OrganizationWorkSubtaskComment? @relation("WorkCommentReplies",fields:[parentCommentId],references:[id],onDelete:SetNull)
+  replies OrganizationWorkSubtaskComment[] @relation("WorkCommentReplies")
+  content String @db.Text
+  createdAt DateTime @default(now())
+  @@index([subtaskId,createdAt])
+  @@index([parentCommentId])
 }
 
 model OrganizationAiReservation {
@@ -122,11 +138,16 @@ model OrganizationAiMessage {
   role           String
   memberId       String?
   member         OrganizationMember? @relation("WorkQuickAiMember",fields:[memberId],references:[id],onDelete:Cascade)
+  senderMemberId String?
+  sender OrganizationMember? @relation("WorkChatSender",fields:[senderMemberId],references:[id],onDelete:SetNull)
+  recipientMemberId String?
+  recipient OrganizationMember? @relation("WorkChatRecipient",fields:[recipientMemberId],references:[id],onDelete:SetNull)
   content        String               @db.Text
   createdAt      DateTime             @default(now())
 
   @@index([organizationId, taskId, createdAt])
   @@index([organizationId, memberId, createdAt])
+  @@index([organizationId, taskId, recipientMemberId, createdAt], map: "WorkAiMessage_recipient_task_created_idx")
 }
 
 model OrganizationAiMonitoringJob {
@@ -212,6 +233,9 @@ model OrganizationMember {
   assignedWorkTasks OrganizationWorkTask[] @relation("WorkTaskAssignee")
   createdWorkTasks OrganizationWorkTask[] @relation("WorkTaskCreator")
   createdWorkSubtasks OrganizationWorkSubtask[] @relation("WorkSubtaskCreator")
+  workSubtaskComments OrganizationWorkSubtaskComment[] @relation("WorkSubtaskCommentAuthor")
+  sentWorkMessages OrganizationAiMessage[] @relation("WorkChatSender")
+  receivedWorkMessages OrganizationAiMessage[] @relation("WorkChatRecipient")
   createdWorkProjects OrganizationProject[] @relation("WorkProjectCreator")
   quickWorkMessages OrganizationAiMessage[] @relation("WorkQuickAiMember")
   createdAt      DateTime         @default(now())

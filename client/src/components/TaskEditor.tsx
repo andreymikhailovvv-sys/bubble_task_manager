@@ -32,6 +32,7 @@ import { api } from "../lib/api";
 import { taskEditorChangedFields, taskEditorEditableSnapshot, mergeRemoteDraftFields, TASK_EDITOR_EDIT_KEYS } from "../lib/taskDraftSync";
 import { LinkifiedText } from "./LinkifiedText";
 import { TaskDescriptionInput } from "./TaskDescriptionInput";
+import { TaskEditorFrame } from "./TaskEditorFrame";
 import { ResizableDescriptionSurface } from "./ResizableDescriptionSurface";
 import { measureTitleTextareaRows } from "../lib/titleTextareaRows";
 import { NotesEditor as TaskNotesEditor } from "./NotesEditor";
@@ -873,14 +874,8 @@ export function TaskEditor({
 
   return (
     <>
-    <div
-      className="modal-backdrop fixed inset-0 z-[180] flex items-center justify-center p-3 backdrop-blur-sm"
-      onClick={() => void closeEditor()}
-    >
-      <aside
-        className={`task-edit-shell focused-task-editor-shell relative ${isEventEditor ? "h-[min(590px,calc(100vh-24px))]" : isSubtask ? (titleRows === 3 ? "h-[min(630px,calc(100dvh-24px))]" : "h-[min(560px,calc(100dvh-24px))]") : "h-[min(760px,calc(100dvh-24px))]"} w-full max-w-3xl overflow-hidden rounded-[2.3rem] border bg-white p-5 shadow-2xl`}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <TaskEditorFrame onClose={() => void closeEditor()}
+      className={`task-edit-shell focused-task-editor-shell relative ${isEventEditor ? "h-[min(590px,calc(100vh-24px))]" : isSubtask ? (titleRows === 3 ? "h-[min(630px,calc(100dvh-24px))]" : "h-[min(560px,calc(100dvh-24px))]") : "h-[min(760px,calc(100dvh-24px))]"} w-full max-w-3xl overflow-hidden rounded-[2.3rem] border bg-white p-5 shadow-2xl`}>
         <button
           type="button"
           className="focused-task-icon-button focused-task-calendar-like-button absolute right-5 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full transition"
@@ -1524,8 +1519,7 @@ export function TaskEditor({
             </div>
           ) : null}
         </main>
-      </aside>
-    </div>
+    </TaskEditorFrame>
     {isEditing && task?.id ? <CalendarExportDialog item={{ id: task.id, title: form.title ?? task.title, description: form.description, location: form.location, dueDate: form.dueDate }} isOpen={isCalendarExportOpen} onClose={() => setIsCalendarExportOpen(false)} onSaveBeforeExport={flushEditorAutosave} openExternalUrl={(url) => window.open(url, '_blank', 'noopener,noreferrer')} timeZone={timeZone} timelineTasks={timelineTasks} /> : null}
     </>
   );

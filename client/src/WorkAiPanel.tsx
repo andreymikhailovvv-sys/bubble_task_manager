@@ -1,16 +1,19 @@
-import {useEffect,useState,type FormEvent} from 'react';
+import {useEffect,useRef,useState,type FormEvent} from 'react';
 import {Bot, Send, RefreshCw, Radar, Plus, X, Wallet, Search, Maximize2, Minimize2, SendHorizontal, Loader2, Check, Copy, ChevronDown} from 'lucide-react';
 import {AiModelChip} from './components/AiModelChip';
 import {AutoGrowingTextarea} from './components/AutoGrowingTextarea';
 import {TaskAiEmptyState} from './components/TaskAiEmptyState';
 import {AiProgress} from './components/AiProgress';
+import {WorkAiMessageBody} from './components/WorkAiMessageBody';
+import {AiReplyPreview,serializeAiReply,type AiReplyTarget} from './components/AiMessageReply';
 import type {AiChatModel} from './lib/types';
-import {api,type WorkAiMessage,type WorkAiJob,type WorkAiCredits} from './lib/api';
+import {api,type WorkAiMessage,type WorkAiJob,type WorkAiCredits,type WorkWorkspace} from './lib/api';
 const models=[['gpt-6-luna','Luna'],['gpt-6.1-terra','Terra'],['gpt-6.1-sol','Sol']] as const;
 const displayCredits=(milli:number)=> (milli/1000).toLocaleString('ru-RU',{minimumFractionDigits:0,maximumFractionDigits:3});
 const errText=(e:unknown)=>e instanceof Error?e.message:'Не удалось выполнить запрос';
-export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel,personalFocus=false,onCloseFocus}:
-  {organizationId:string;taskId?:string;canManage:boolean;canSetModel?:boolean;personalFocus?:boolean;onCloseFocus?:()=>void}){
+export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel,personalFocus=false,onCloseFocus,workspace,currentUserId,participantMemberIds}:
+  {organizationId:string;taskId?:string;canManage:boolean;canSetModel?:boolean;personalFocus?:boolean;onCloseFocus?:()=>void;
+  workspace?:WorkWorkspace;currentUserId?:string;participantMemberIds?:Array<string|null>}){
   const [history,setHistory]=useState<WorkAiMessage[]>([]);
   const [credits,setCredits]=useState<WorkAiCredits|null>(null);
   const [text,setText]=useState('');
@@ -24,6 +27,10 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
   const [loading,setLoading]=useState(true);
   const [progress,setProgress]=useState<'searching_tasks'|'forming_answer'>('searching_tasks');
   const [showTriggers,setShowTriggers]=useState(false);
+  const [recipient,setRecipient]=useState('ai');
+  const [replyTo,setReplyTo]=useState<AiReplyTarget|null>(null);
+  const bottomRef=useRef<HTMLDivElement|null>(null);
+  useEffect(()=>{bottomRef.current?.scrollIntoView({block:'end'});},[history.length]);
   const load=async()=>{
     const [messages,balance]=await Promise.all([
       api.workAiHistory(organizationId,taskId),
@@ -59,11 +66,16 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
   const send=async(event:FormEvent)=>{
     event.preventDefault();
     if(!text.trim()||busy)return;
-    const question=text.trim();
+    const question=serializeAiReply(text.trim(),replyTo);
     setBusy(true);setError('');
     try{
-      const result=await api.workAiAsk(organizationId,question,taskId);
-      setCredits(result.credits);setText('');
+      if(taskId&&recipient!=='ai'){
+        await api.workSendParticipantMessage(organizationId,taskId,recipient,question);
+      }else{
+        const result=await api.workAiAsk(organizationId,question,taskId);
+        setCredits(result.credits);
+      }
+      setText('');setReplyTo(null);
       const messages=await api.workAiHistory(organizationId,taskId);
       setHistory(messages.messages);
     }catch(e){setError(errText(e));}finally{setBusy(false);}
@@ -104,6 +116,28 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
     const event={preventDefault:()=>undefined} as FormEvent;
     void send(event);
   };
+  const selfMember=workspace?.members.find(m=>m.userId===currentUserId);
+  const potentialRecipients=taskId&&workspace?workspace.members.filter(member=>
+    member.id!==selfMember?.id&&participantMemberIds?.includes(member.id)):[];
+  const recipientControl=taskId&&workspace&&potentialRecipients.length?<div className="task-ai-recipient-interaction relative mb-1 flex justify-end">
+    <label className="task-ai-recipient-trigger inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold">
+      <span className="task-ai-recipient-label">Получатель:</span>
+      <select className="bg-transparent text-primary outline-none" value={recipient}
+        onChange={e=>setRecipient(e.target.value)}>
+        <option value="ai">ИИ</option>
+        {potentialRecipients.map(member=><option key={member.id} value={member.id}>
+          {member.name||member.username||'Участник'}
+        </option>)}
+      </select>
+    </label>
+  </div>:null;
+  const labelFor=(m:WorkAiMessage)=>m.role==='assistant'?'ИИ':m.role==='human'?
+    (m.sender?.user.name||m.sender?.user.username||'Участник') : m.role==='system'?'Мониторинг':
+    (m.sender?.user.name||m.sender?.user.username||'Вы');
+  const replyAction=(m:WorkAiMessage)=><button type="button" className="ai-message-reply-trigger" title="Ответить"
+    onClick={()=>setReplyTo({id:m.id,role:m.role==='assistant'?'assistant':'user',content:m.content,fileNames:[]})}>
+    <SendHorizontal size={13}/>
+  </button>;
   if(personalFocus){
     const modelAvailable=credits&&(['gpt-6-luna','gpt-6.1-terra','gpt-6.1-sol'].includes(credits.aiModel));
     const modelControl=(extraClass='')=>modelAvailable?<AiModelChip
@@ -128,16 +162,18 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
         <div className={`chat-message w-full rounded-2xl px-4 py-3 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role==='assistant'?'chat-message-assistant':'chat-message-user'}`}>
           <div className="mb-1 flex items-center justify-between">
             <p className="chat-message-label text-[11px] font-semibold uppercase tracking-wide">
-              {message.role==='assistant'?'ИИ':message.role==='system'?'Мониторинг':'Вы'}</p>
+              {labelFor(message)}{message.recipient?' → '+(message.recipient.user.name||message.recipient.user.username||'Участник'):''}</p>
             {message.role==='assistant'&&<button type="button" className="chat-message-copy transition" title="Копировать"
               onClick={()=>{void navigator.clipboard.writeText(message.content);}}><Copy size={12}/></button>}
           </div>
-          <div>{message.content}</div>
+          <div><WorkAiMessageBody content={message.content}/></div>
         </div>
-      </div>)}
+      <div className="ai-message-forward-actions">{replyAction(message)}</div></div>)}
       {busy&&<AiProgress status={progress}/>}
     </>;
     const composer=<div className="focused-task-ai-composer">
+      {replyTo&&<AiReplyPreview target={replyTo} onDismiss={()=>setReplyTo(null)}/>}
+      {recipientControl}
       {error&&<p role="alert" className="mb-2 shrink-0 text-xs text-rose-300">{error}</p>}
       <div className="ai-chat-composer flex items-center gap-2 rounded-3xl border p-2">
         <AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0"
@@ -213,47 +249,62 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
       </div>}
     </div>;
   }
-  return <section className="work-ai-panel">
-    <div className="work-ai-heading"><div><h2><Bot size={20}/>{taskId?'Помощь ИИ по задаче':'ИИ-диспетчер компании'}</h2>
-      <p>ИИ использует только корпоративные проекты и поручения, не личные данные сотрудников.</p></div>
-      <button type="button" title="Обновить" aria-label="Обновить историю" onClick={()=>{void load().catch(e=>setError(errText(e)));}} disabled={busy}><RefreshCw size={17}/></button>
-    </div>
-    <div className="work-ai-wallet"><Wallet size={17}/><span>Баланс организации:</span>
-      <strong>{credits?displayCredits(credits.aiCreditsMilli):'…'} кредитов</strong>
-      {credits&&<small>Потрачено: {displayCredits(credits.spentMilli)}</small>}
-    </div>
-    {canSetModel&&credits&&<label className="work-ai-model">Модель компании<select value={credits.aiModel} disabled={busy} onChange={e=>{
-      void api.workAiSetModel(organizationId,e.target.value).then(()=>load()).catch(err=>setError(errText(err)));
-    }}>{models.map(([id,title])=><option value={id} key={id}>{title}</option>)}</select></label>}
-    {error&&<p className="work-ai-error" role="alert">{error}</p>}
-    {loading?<p className="work-muted">Загружаем диалог…</p>:<div className="work-ai-history" aria-live="polite">
-      {!history.length&&<div className="work-muted">Диалог пока пуст. Запросите сводку по проекту, проверьте риски или уточните следующий шаг.</div>}
-      {history.map(item=><div key={item.id} className={'work-ai-message '+(item.role==='assistant'?'assistant':'user')}>
-        <small>{item.role==='assistant'?'ИИ':item.role==='system'?'Автомониторинг':'Вы'} · {new Date(item.createdAt).toLocaleString('ru-RU')}</small>
-        <div>{item.content}</div>
-      </div>)}
-    </div>}
-    <form className="work-ai-compose" onSubmit={send}>
-      <textarea value={text} onChange={e=>setText(e.target.value)} maxLength={3000} rows={3}
-        placeholder={taskId?'Спроси ИИ о ходе выполнения задачи…':'Например: какие проекты требуют внимания сегодня?'}
-        required disabled={busy}/>
-      <button type="submit" disabled={busy||!text.trim()}><Send size={16}/>{busy?'Формируем ответ…':'Отправить'}</button>
-    </form>
-    {taskId&&<div className="work-ai-monitor">
-      <div className="work-ai-monitor-head"><strong><Radar size={18}/>Автомониторинг</strong>
-        {canManage&&<button type="button" onClick={()=>{void toggle();}} disabled={monitorBusy} className={monitoring?'work-on':'work-off'}>{monitoring?'Включён':'Выключен'}</button>}
-        {!canManage&&<span>{monitoring?'Включён':'Выключен'}</span>}
+  return <section className={`work-ai-panel ${taskId?'work-ai-task-page':'work-ai-dispatcher'}`}>
+    <header className="work-ai-dispatcher-header">
+      <div className="work-ai-dispatcher-title"><Bot size={19}/><h2>{taskId?'Помощь ИИ по задаче':'ИИ-диспетчер компании'}</h2></div>
+      <div className="work-ai-dispatcher-actions">
+        {credits&&<div className="work-ai-dispatcher-wallet" title="Баланс организации. Точный баланс учитывается сервером" aria-label="Баланс организации">
+          <Wallet size={16}/><span>{Math.floor(credits.aiCreditsMilli/1000).toLocaleString('ru-RU')} кр.</span>
+        </div>}
+        {credits&&<label className="work-ai-dispatcher-model" aria-label="Выбранная модель ИИ">
+          <select value={credits.aiModel} disabled={!canSetModel||busy} onChange={e=>{
+            void api.workAiSetModel(organizationId,e.target.value).then(()=>load()).catch(err=>setError(errText(err)));
+          }}>{models.map(([id,title])=><option value={id} key={id}>{title}</option>)}</select>
+        </label>}
+        <button type="button" title="Обновить историю" aria-label="Обновить историю" disabled={busy}
+          onClick={()=>void load().catch(e=>setError(errText(e)))}><RefreshCw size={16}/></button>
       </div>
-      <p>При наступлении срока или времени триггера сервер запросит анализ ИИ и запишет его в этот диалог. Кредиты списываются с баланса организации.</p>
+    </header>
+    {error&&<p className="work-ai-error" role="alert">{error}</p>}
+    <div className="work-ai-dispatcher-thread work-ai-history" aria-live="polite">
+      {loading&&<p className="work-muted">Загружаем диалог…</p>}
+      {!loading&&!history.length&&<div className="work-ai-dispatcher-empty">
+        <Bot size={35}/><h3>ИИ готов помочь</h3>
+        <p>Спросите об активных проектах, задачах сотрудников или рисках компании.</p>
+      </div>}
+      {history.map(item=><div key={item.id} className={'work-ai-message '+(item.role==='assistant'?'assistant':'user')}>
+        <small>{labelFor(item)}{item.recipient?' → '+(item.recipient.user.name||item.recipient.user.username||'Участник'):''} · {new Date(item.createdAt).toLocaleString('ru-RU')}</small>
+        <div><WorkAiMessageBody content={item.content}/></div>
+        <div className="ai-message-forward-actions">{replyAction(item)}</div>
+      </div>)}
+      {busy&&<AiProgress status={progress}/>}
+      <div ref={bottomRef}/>
+    </div>
+    <div className="work-ai-dispatcher-bottom">
+      {replyTo&&<AiReplyPreview target={replyTo} onDismiss={()=>setReplyTo(null)}/>}
+      {recipientControl}
+      <form className="ai-chat-composer work-ai-dispatcher-composer flex items-center gap-2 rounded-3xl border p-2"
+        onSubmit={send}>
+        <AutoGrowingTextarea className="form-field min-h-11 min-w-0 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm"
+          value={text} onChange={e=>setText(e.target.value)} maxLength={3000} disabled={busy}
+          placeholder={taskId?'Напишите сообщение…':'Спросите о работе компании…'}
+          onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();sendQuestion();}}}/>
+        <button type="submit" disabled={busy||!text.trim()} title="Отправить" aria-label="Отправить">
+          {busy?<Loader2 size={17} className="animate-spin"/>:<SendHorizontal size={18}/>}
+        </button>
+      </form>
+    </div>
+    {taskId&&<div className="work-ai-monitor">
+      <div className="work-ai-monitor-head"><strong><Radar size={17}/> Автомониторинг</strong>
+        {canManage&&<button type="button" onClick={()=>void toggle()} disabled={monitorBusy} className={monitoring?'work-on':'work-off'}>{monitoring?'Включён':'Выключен'}</button>}</div>
       {monitoring&&canManage&&<form onSubmit={addTrigger} className="work-ai-trigger-form">
         <label>Время проверки<input type="datetime-local" required value={dueAt} onChange={e=>setDueAt(e.target.value)}/></label>
-        <label>Инструкция для ИИ<input value={instruction} onChange={e=>setInstruction(e.target.value)} required minLength={5} maxLength={700} placeholder="Что проверить?"/></label>
-        <button disabled={monitorBusy||instruction.trim().length<5||!dueAt}><Plus size={15}/>Добавить триггер</button>
+        <label>Инструкция<input value={instruction} onChange={e=>setInstruction(e.target.value)} minLength={5} maxLength={700} required/></label>
+        <button disabled={monitorBusy||!dueAt||instruction.trim().length<5}><Plus size={14}/> Добавить</button>
       </form>}
-      <div className="work-ai-jobs">{jobs.map(job=><div key={job.id} className="work-ai-job">
-        <span><strong>{job.instruction}</strong><small>{new Date(job.dueAt).toLocaleString('ru-RU')} · {job.state}</small></span>
-        {job.state==='PENDING'&&job.id&&job.instruction&&canManage&&
-         <button type="button" onClick={()=>{void cancel(job.id);}} disabled={monitorBusy||!job.instruction} title="Отменить триггер"><X size={14}/></button>}
+      <div className="work-ai-jobs">{jobs.filter(job=>job.state==='PENDING').map(job=><div key={job.id} className="work-ai-job">
+        <span>{job.instruction} · {new Date(job.dueAt).toLocaleString('ru-RU')}</span>
+        {canManage&&<button onClick={()=>void cancel(job.id)} title="Отменить"><X size={14}/></button>}
       </div>)}</div>
     </div>}
   </section>;

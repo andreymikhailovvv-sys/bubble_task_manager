@@ -311,10 +311,10 @@ workProjectsRouter.get('/:organizationId/projects/:projectId/tasks/:taskId/subta
     where:{taskId:req.params.taskId},
     orderBy:[{sortOrder:'asc'},{createdAt:'asc'}],
     select:{id:true,taskId:true,title:true,isDone:true,dueAt:true,
-      sortOrder:true,createdByMemberId:true,createdAt:true,updatedAt:true},
+      sortOrder:true,createdByMemberId:true,createdAt:true,updatedAt:true,_count:{select:{comments:true}}},
     take:251
   });
-  res.json({subtasks:rows.slice(0,250),hasMore:rows.length>250});
+  res.json({subtasks:rows.slice(0,250).map(({_count,...task})=>({...task,commentCount:_count.comments})),hasMore:rows.length>250});
 }));
 workProjectsRouter.post('/:organizationId/projects/:projectId/tasks/:taskId/subtasks',asyncHandler(async(req,res)=>{
   const access=await subtaskAccess(req,res,true);if(!access)return;
@@ -371,5 +371,55 @@ workProjectsRouter.delete('/:organizationId/projects/:projectId/tasks/:taskId/su
       ...(!access.manager?{createdByMemberId:access.member.id}:{})}
   });
   if(!count.count){res.status(404).json({error:'Подзадача не найдена либо нет прав на удаление'});return;}
+  res.json({ok:true});
+}));
+
+/* Work collaboration: participants can discuss subtasks. Author identity is
+ * taken from authenticated membership, never from a client-supplied ID. */
+workProjectsRouter.get('/:organizationId/projects/:projectId/tasks/:taskId/subtasks/:subtaskId/comments',asyncHandler(async(req,res)=>{
+  const access=await subtaskAccess(req,res);if(!access)return;
+  const subtask=await prisma.organizationWorkSubtask.findFirst({
+    where:{id:req.params.subtaskId,taskId:access.task.id},select:{id:true}
+  });
+  if(!subtask){res.status(404).json({error:'Подзадача не найдена'});return;}
+  const rows=await prisma.organizationWorkSubtaskComment.findMany({
+    where:{subtaskId:subtask.id},orderBy:{createdAt:'asc'},take:201,
+    select:{id:true,content:true,authorMemberId:true,parentCommentId:true,createdAt:true,
+      author:{select:{role:true,user:{select:{name:true,username:true}}}}}
+  });
+  res.json({comments:rows.slice(0,200),hasMore:rows.length>200});
+}));
+workProjectsRouter.post('/:organizationId/projects/:projectId/tasks/:taskId/subtasks/:subtaskId/comments',asyncHandler(async(req,res)=>{
+  const access=await subtaskAccess(req,res,true);if(!access)return;
+  const content=req.body?.content;
+  if(typeof content!=='string'||!content.trim()||content.length>4000){
+    res.status(400).json({error:'Комментарий должен содержать 1–4000 символов'});return;
+  }
+  const subtask=await prisma.organizationWorkSubtask.findFirst({
+    where:{id:req.params.subtaskId,taskId:access.task.id},select:{id:true}
+  });
+  if(!subtask){res.status(404).json({error:'Подзадача не найдена'});return;}
+  const parentId=req.body?.parentCommentId??null;
+  if(parentId!==null){
+    if(typeof parentId!=='string'||parentId.length>128||!await prisma.organizationWorkSubtaskComment.findFirst({
+      where:{id:parentId,subtaskId:subtask.id},select:{id:true}
+    })){res.status(400).json({error:'Ответ должен ссылаться на комментарий этой подзадачи'});return;}
+  }
+  const comment=await prisma.organizationWorkSubtaskComment.create({
+    data:{subtaskId:subtask.id,authorMemberId:access.member.id,
+      content:content.trim(),parentCommentId:parentId},
+    select:{id:true,content:true,authorMemberId:true,parentCommentId:true,createdAt:true,
+      author:{select:{role:true,user:{select:{name:true,username:true}}}}}
+  });
+  res.status(201).json({comment});
+}));
+workProjectsRouter.delete('/:organizationId/projects/:projectId/tasks/:taskId/subtasks/:subtaskId/comments/:commentId',asyncHandler(async(req,res)=>{
+  const access=await subtaskAccess(req,res,true);if(!access)return;
+  const deleted=await prisma.organizationWorkSubtaskComment.deleteMany({
+    where:{id:req.params.commentId,subtaskId:req.params.subtaskId,
+      subtask:{taskId:access.task.id},
+      ...(!access.manager?{authorMemberId:access.member.id}:{})}
+  });
+  if(!deleted.count){res.status(404).json({error:'Комментарий не найден либо нет прав'});return;}
   res.json({ok:true});
 }));

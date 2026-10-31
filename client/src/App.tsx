@@ -51,6 +51,7 @@ import { useCreditPurchase } from './lib/useCreditPurchase';
 import { ExpandedAiChat } from './components/ExpandedAiChat';
 import { QuickAiLauncherFrame } from './components/QuickAiLauncherFrame';
 import { FocusedTaskWindowFrame } from './components/FocusedTaskWindowFrame';
+import { FocusedSubtaskComposer } from './components/FocusedSubtaskComposer';
 import { AiModelChip } from './components/AiModelChip';
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
 import { AiReplyAction, AiReplyPreview, AiReplyMessageBody, serializeAiReply, type AiReplyTarget } from './components/AiMessageReply';
@@ -7819,47 +7820,15 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-                {isAddingFocusedSubtask ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      ref={focusedSubtaskTitleInputRef}
-                      className="form-field min-w-0 flex-1 rounded-lg border px-2 py-1.5 text-xs"
-                      placeholder="Название доп задачи"
-                      value={focusedSubtaskTitle}
-                      onChange={(event) => setFocusedSubtaskTitle(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault();
-                          void addFocusedSubtask();
-                        }
-                      }}
-                    />
-                    <button type="button" className="primary-button rounded-lg px-2.5 py-1.5 text-xs font-semibold" onClick={() => void addFocusedSubtask()}>
-                      Добавить
-                    </button>
-                    {!focusedTask.aiMonitoringEnabled ? <DateTimePickerWithApply
-                      value={focusedSubtaskDueDate}
-                      title="Выбрать дату и время подзадачи"
-                      detachedPopup
-                      iconOnly
-                      popupAlign="right"
-                      timelineTasks={timelinePickerTasks}
-                      buttonClassName="focused-task-inline-subtask-button"
-                      onChange={(dueDate) => setFocusedSubtaskDueDate(dueDate)}
-                    /> : null}
-                    <button
-                      type="button"
-                      className="secondary-button rounded-lg px-2.5 py-1.5 text-xs font-semibold"
-                      onClick={() => {
-                        setIsAddingFocusedSubtask(false);
-                        setFocusedSubtaskTitle('');
-                        setFocusedSubtaskDueDate(null);
-                      }}
-                    >
-                      Отмена
-                    </button>
-                  </div>
-                ) : null}
+                {isAddingFocusedSubtask ? <FocusedSubtaskComposer
+                  inputRef={focusedSubtaskTitleInputRef}
+                  title={focusedSubtaskTitle} dueAt={focusedSubtaskDueDate}
+                  onTitleChange={setFocusedSubtaskTitle} onDueChange={setFocusedSubtaskDueDate}
+                  onAdd={()=>void addFocusedSubtask()}
+                  onCancel={()=>{setIsAddingFocusedSubtask(false);setFocusedSubtaskTitle('');setFocusedSubtaskDueDate(null);}}
+                  monitoringEnabled={focusedTask.aiMonitoringEnabled}
+                  timelineTasks={timelinePickerTasks}
+                />:null}
                 <Reorder.Group
                   axis="y"
                   values={hideClosedFocusedSubtasks ? getFocusedSubtaskItems(focusedTask.id).filter((task) => task.status !== 'DONE' || (task.unreadCommentCount ?? 0) > 0) : getFocusedSubtaskItems(focusedTask.id)}

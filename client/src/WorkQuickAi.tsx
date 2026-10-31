@@ -2,6 +2,7 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import {Loader2,SendHorizontal} from 'lucide-react';
 import {AutoGrowingTextarea} from './components/AutoGrowingTextarea';
 import {AiProgress} from './components/AiProgress';
+import {WorkAiMessageBody} from './components/WorkAiMessageBody';
 import {ExpandedAiChat,type ExpandedAiChatProject} from './components/ExpandedAiChat';
 import {QuickAiLauncherFrame} from './components/QuickAiLauncherFrame';
 import {api,type WorkDashboard,type WorkAiMessage,type WorkAiCredits} from './lib/api';
@@ -124,7 +125,7 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
             <div className="space-y-2">
               {quickMessages.slice(-20).map(item=><div key={item.id} className={`ai-message-forward-group w-fit max-w-[calc(100%-2rem)] ${item.role==='user'?'ml-auto':'mr-auto'}`}>
                 <div className={`quick-ai-chat-message w-full rounded-2xl px-3 py-2 shadow-sm ${item.role==='user'?'quick-ai-chat-message-user':'quick-ai-chat-message-assistant'}`}>
-                  <b>{item.role==='user'?'Вы':'ИИ'}:</b> {item.content}
+                  <b>{item.role==='user'?'Вы':'ИИ'}:</b> <WorkAiMessageBody content={item.content}/>
                 </div>
               </div>)}
               {!quickMessages.length&&<p className="text-subtle">Быстрый вопрос по проектам и задачам выбранной компании.</p>}
@@ -171,7 +172,7 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
         <div className={`chat-message w-full rounded-xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] ${item.role==='assistant'?'chat-message-assistant':'chat-message-user'}`}>
           <div className="mb-1 flex items-center justify-between">
             <p className="chat-message-label text-[11px] font-semibold uppercase tracking-wide">{item.role==='assistant'?'ИИ':item.role==='system'?'Мониторинг':'Вы'}</p>
-          </div><div>{item.content}</div>
+          </div><div><WorkAiMessageBody content={item.content}/></div>
         </div>
       </div>)}
       status={error?<p role="alert" className="text-sm text-rose-400">{error}</p>:

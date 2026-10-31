@@ -382,3 +382,72 @@ body[data-theme] .work-root main.work-content{background:transparent!important;b
  .work-root .focused-task-ai-panel{min-height:420px}
  .work-root .work-focus-monitor-pill{font-size:10px}
 }
+
+
+/* Work dispatcher uses the original general-AI chat visual language. Its
+   transcript scrolls internally without changing the page height. */
+.work-root .work-ai-dispatcher{
+ height:min(760px,calc(100dvh - 215px));min-height:490px;max-height:calc(100dvh - 135px);
+ display:flex;flex-direction:column;gap:0;padding:0;overflow:hidden;
+ background:linear-gradient(160deg,#151f34,#0d1729);border:1px solid #3b4e6d;border-radius:22px;
+ box-shadow:0 20px 60px #01061040;
+}
+.work-root .work-ai-dispatcher-header{
+ display:flex;flex:none;align-items:center;justify-content:space-between;gap:16px;
+ min-height:62px;padding:11px 18px;background:#1b2a44;border-bottom:1px solid #334560;
+}
+.work-root .work-ai-dispatcher-title{display:flex;align-items:center;gap:10px;min-width:0;color:#a8dbea}
+.work-root .work-ai-dispatcher-title h2{font-size:15px;font-weight:700;white-space:nowrap;color:#e7edf9}
+.work-root .work-ai-dispatcher-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap}
+.work-root .work-ai-dispatcher-actions>button{display:grid;place-items:center;width:33px;height:33px;border:1px solid #475674;border-radius:50%;background:#22324d;color:#b8cde2}
+.work-root .work-ai-dispatcher-wallet{display:flex;align-items:center;gap:7px;font-size:12px;color:#c0e3e2;
+ background:#153c46a8;border:1px solid #426b77;padding:7px 11px;border-radius:10px;white-space:nowrap}
+.work-root .work-ai-dispatcher-model select{
+ color:#e7edff;font-size:12px;background:#22314b;border:1px solid #475a75;border-radius:10px;padding:9px 10px;min-height:34px
+}
+.work-root .work-ai-dispatcher-thread{display:flex;flex-direction:column;gap:11px;align-content:initial;
+ flex:1 1 auto;min-height:0;max-height:none!important;overflow-y:auto;overscroll-behavior:contain;
+ padding:19px 22px;background:#0c172c;border:0;border-radius:0;scrollbar-width:thin;
+}
+.work-root .work-ai-dispatcher-thread .work-ai-message{
+ flex:0 0 auto;max-width:min(84%,760px);border:1px solid #384b69;background:#233552;
+ border-radius:17px;padding:14px 16px;font-size:13px;line-height:1.65;white-space:normal;min-width:0;
+}
+.work-root .work-ai-dispatcher-thread .work-ai-message.user{align-self:flex-end;background:#463b70;border-color:#675794}
+.work-root .work-ai-dispatcher-thread .work-ai-message.assistant{align-self:flex-start}
+.work-root .work-ai-dispatcher-thread .work-ai-message>div{min-width:0}
+.work-root .work-ai-dispatcher-thread .work-ai-message .ai-code-block{max-width:100%}
+.work-root .work-ai-dispatcher-thread .work-ai-message .ai-markdown-table-scroll{max-width:100%}
+.work-root .work-ai-dispatcher-empty{display:flex;align-items:center;justify-content:center;flex:1;flex-direction:column;
+ gap:12px;text-align:center;color:#a6b5d1;min-height:170px}
+.work-root .work-ai-dispatcher-empty h3{font-size:17px;font-weight:700;color:#ecedff}
+.work-root .work-ai-dispatcher-empty p{font-size:12px;max-width:370px;line-height:1.65}
+.work-root .work-ai-dispatcher-bottom{flex:none;border-top:1px solid #38465d;padding:13px 16px 17px;background:#152137}
+.work-root .work-ai-dispatcher-composer{display:flex;align-items:center;background:#222d42;border:1px solid #3e526d;min-height:58px}
+.work-root .work-ai-dispatcher-composer textarea{resize:none;min-height:39px;color:#eaf0ff;font-size:13px}
+.work-root .work-ai-dispatcher-composer>button{display:grid;place-items:center;
+ width:42px;height:42px;flex:none;border:none;border-radius:50%;color:white;background:#613eab}
+.work-root .work-ai-dispatcher-composer>button:disabled{opacity:.45}
+.work-root .work-ai-dispatcher .ai-reply-preview{margin-bottom:7px}
+.work-root .work-ai-task-page{max-height:710px;overflow:hidden;display:flex;flex-direction:column}
+.work-root .work-ai-task-page .work-ai-dispatcher-thread{max-height:none;min-height:190px}
+.work-root .work-ai-task-page .work-ai-monitor{max-height:160px;overflow-y:auto;padding:8px 17px}
+.work-root .work-subtask-editor{background:#111b2e;color:#e8edf9}
+.work-root .work-subtask-editor .task-edit-card{background:transparent!important;background-image:none!important}
+.work-root .work-subtask-editor .task-edit-title-input{font-size:23px;color:#eaf0ff!important}
+.work-root .work-subtask-editor .work-subtask-comments{border-color:#3a4d69}
+.work-root .work-subtask-editor .work-subtask-comment{border-color:#364861;background:#1b2a42}
+.work-root .work-subtask-editor .work-subtask-quote{border-color:#7563a9;background:#30304b}
+.work-root .work-subtask-editor .task-editor-scroll-content{min-height:0}
+.work-root .work-subtask-author{background:#5d5593;color:#f3edff;max-width:175px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.work-root .work-focus-subtask-row .task-card-meta-action{padding:4px;color:#70bace}
+.work-root .work-focus-settings .work-focus-participants{border-color:#536382;background:#202e48}
+@media(max-width:700px){
+ .work-root .work-ai-dispatcher{height:calc(100dvh - 185px);min-height:350px}
+ .work-root .work-ai-dispatcher-header{flex-wrap:wrap;gap:9px}
+ .work-root .work-ai-dispatcher-title h2{font-size:13px}
+ .work-root .work-ai-dispatcher-thread{padding:12px}
+ .work-root .work-ai-dispatcher-thread .work-ai-message{max-width:95%;padding:11px}
+ .work-root .work-ai-dispatcher-bottom{padding:10px}
+ .work-root .work-subtask-author{max-width:85px}
+}

@@ -111,7 +111,7 @@ export async function askCompanyAi(input:{
     const billed=await settleCompanyCredits(reservation.id,providerUsage??null,'completed');
     await prisma.$transaction(async tx=>{
       await tx.organizationAiMessage.create({
-        data:{organizationId,taskId:taskId??null,memberId:quickMemberId,role:input.feature==='task_monitoring'?'system':'user',content:question}
+        data:{organizationId,taskId:taskId??null,memberId:quickMemberId,role:input.feature==='task_monitoring'?'system':'user',senderMemberId:taskId?currentMember?.id??null:null,content:question}
       });
       await tx.organizationAiMessage.create({
         data:{organizationId,taskId:taskId??null,memberId:quickMemberId,role:'assistant',content:answer.slice(0,24000)}
@@ -129,6 +129,9 @@ export async function askCompanyAi(input:{
 export async function workAiHistory(organizationId:string,taskId?:string|null,memberId:string|null=null){
   return prisma.organizationAiMessage.findMany({
     where:{organizationId,taskId:taskId??null,memberId},
-    select:{id:true,role:true,content:true,createdAt:true},orderBy:{createdAt:'asc'},take:250
+    select:{id:true,role:true,content:true,createdAt:true,
+      senderMemberId:true,recipientMemberId:true,
+      sender:{select:{role:true,user:{select:{name:true,username:true}}}},
+      recipient:{select:{user:{select:{name:true,username:true}}}}},orderBy:{createdAt:'asc'},take:250
   });
 }
