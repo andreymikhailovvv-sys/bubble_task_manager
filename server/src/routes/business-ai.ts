@@ -20,10 +20,10 @@ async function scopedTask(req:any,res:any,member:{id:string;role:string}){
   if(!req.params.taskId)return null;
   const task=await prisma.organizationWorkTask.findFirst({
     where:{id:req.params.taskId,project:{organizationId:req.params.organizationId}},
-    select:{id:true,assignedMemberId:true,aiMonitoringEnabled:true,status:true}
+    select:{id:true,assignedMemberId:true,createdByMemberId:true,aiMonitoringEnabled:true,status:true}
   });
   if(!task){res.status(404).json({error:'Задача не найдена'});return null;}
-  if(!manager(member.role)&&task.assignedMemberId!==member.id){
+  if(member.role==='VIEWER'||(!manager(member.role)&&task.assignedMemberId!==member.id&&task.createdByMemberId!==member.id)){
     res.status(403).json({error:'Нет доступа к ИИ этой задачи'});return null;
   }
   return task;
@@ -41,6 +41,28 @@ workAiRouter.patch('/:organizationId/ai/model',asyncHandler(async(req,res)=>{
   }
   await prisma.organization.update({where:{id:req.params.organizationId},data:{aiModel:value}});
   res.json({model:value});
+}));
+// Quick requests have a private thread per member. Never expose the
+// company-wide dispatcher or unrelated project tasks to ordinary employees.
+workAiRouter.get('/:organizationId/ai/quick/history',asyncHandler(async(req,res)=>{
+  const member=await check(req,res);if(!member)return;
+  if(member.role==='VIEWER'){res.status(403).json({error:'Только чтение'});return;}
+  res.json({messages:await workAiHistory(req.params.organizationId,null,member.id)});
+}));
+workAiRouter.post('/:organizationId/ai/quick/chat',asyncHandler(async(req,res)=>{
+  const member=await check(req,res);if(!member)return;
+  if(member.role==='VIEWER'){res.status(403).json({error:'Только чтение'});return;}
+  if(typeof req.body?.question!=='string'||!req.body.question.trim()||
+    req.body.question.length>MAX_WORK_AI_QUESTION){
+    res.status(400).json({error:'Некорректный вопрос'});return;
+  }
+  try{
+    res.json(await askCompanyAi({organizationId:req.params.organizationId,
+      userId:req.user!.id,question:req.body.question,feature:'quick_chat'}));
+  }catch(error){
+    if(error instanceof CompanyInsufficientCreditsError){res.status(402).json({error:error.message});return;}
+    throw error;
+  }
 }));
 workAiRouter.get('/:organizationId/ai/history',asyncHandler(async(req,res)=>{
   const member=await check(req,res);if(!member)return;
