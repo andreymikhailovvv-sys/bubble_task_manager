@@ -6966,7 +6966,7 @@ export default function App() {
         title={subtaskCommentPanel.task.title} comments={subtaskComments}
         loading={subtaskCommentsLoading} replyTo={subtaskCommentReplyTo}
         draft={subtaskCommentDraft} onDraftChange={setSubtaskCommentDraft}
-        onReply={comment=>{setSubtaskCommentReplyTo(comment);setSubtaskCommentPanel(current=>current?{...current,compose:true}:current);}}
+        onReply={comment=>{setSubtaskCommentReplyTo(subtaskComments.find(item=>item.id===comment.id)??null);setSubtaskCommentPanel(current=>current?{...current,compose:true}:current);}}
         onDismissReply={()=>setSubtaskCommentReplyTo(null)}
         onSend={()=>void sendSubtaskComment()} onClose={()=>setSubtaskCommentPanel(null)}
         error={subtaskCommentError} sending={subtaskCommentSending}
