@@ -695,7 +695,10 @@ soundButton.addEventListener('click', () => {
 });
 fullscreenButton.addEventListener('click', () => {
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  else if (frameEl.requestFullscreen) frameEl.requestFullscreen().catch(() => {});
+  else {
+    const target = window.matchMedia('(pointer: coarse)').matches ? document.querySelector('main') : frameEl;
+    if (target && target.requestFullscreen) target.requestFullscreen().catch(() => {});
+  }
 });
 primaryButton.onclick = startNewGame;
 enterStage(1);
