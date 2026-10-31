@@ -284,3 +284,92 @@ workProjectsRouter.delete('/:organizationId/projects/:projectId/tasks/:taskId',a
   if(!deleted.count){res.status(404).json({error:'Задача не найдена'});return;}
   res.json({ok:true});
 }));
+
+/* Company subtasks use the same parent task/checkbox semantics as personal
+   subtasks, but never access the personal Task table. */
+async function subtaskAccess(req:Request,res:Response,write=false){
+  const member=await memberFor(req,res);
+  if(!member)return null;
+  const manager=canManageOrganization(member.role)||member.role==='MANAGER';
+  const task=await prisma.organizationWorkTask.findFirst({
+    where:{id:req.params.taskId,projectId:req.params.projectId,
+      project:{organizationId:req.params.organizationId}},
+    select:{id:true,assignedMemberId:true,createdByMemberId:true,
+      project:{select:{isArchived:true}}}
+  });
+  if(!task){res.status(404).json({error:'Задача не найдена'});return null;}
+  const participant=task.assignedMemberId===member.id||task.createdByMemberId===member.id;
+  if(!manager&&!participant){res.status(403).json({error:'Нет доступа к поручению'});return null;}
+  if(write&&(task.project.isArchived||(!manager&&member.role!=='MEMBER'))){
+    res.status(403).json({error:'Нет прав изменения подзадач'});return null;
+  }
+  return {member,task,manager};
+}
+workProjectsRouter.get('/:organizationId/projects/:projectId/tasks/:taskId/subtasks',asyncHandler(async(req,res)=>{
+  if(!await subtaskAccess(req,res))return;
+  const rows=await prisma.organizationWorkSubtask.findMany({
+    where:{taskId:req.params.taskId},
+    orderBy:[{sortOrder:'asc'},{createdAt:'asc'}],
+    select:{id:true,taskId:true,title:true,isDone:true,dueAt:true,
+      sortOrder:true,createdByMemberId:true,createdAt:true,updatedAt:true},
+    take:251
+  });
+  res.json({subtasks:rows.slice(0,250),hasMore:rows.length>250});
+}));
+workProjectsRouter.post('/:organizationId/projects/:projectId/tasks/:taskId/subtasks',asyncHandler(async(req,res)=>{
+  const access=await subtaskAccess(req,res,true);if(!access)return;
+  const title=validName(req.body?.title,240),dueAt=parseDueAt(req.body?.dueAt??null);
+  if(!title||dueAt===undefined){res.status(400).json({error:'Название: 2–240 символов, срок должен быть корректным'});return;}
+  const count=await prisma.organizationWorkSubtask.count({where:{taskId:access.task.id}});
+  if(count>=250){res.status(409).json({error:'Лимит 250 подзадач'});return;}
+  const subtask=await prisma.organizationWorkSubtask.create({
+    data:{taskId:access.task.id,title,dueAt,sortOrder:count,
+      createdByMemberId:access.member.id}
+  });
+  res.status(201).json({subtask});
+}));
+workProjectsRouter.patch('/:organizationId/projects/:projectId/tasks/:taskId/subtasks/:subtaskId',asyncHandler(async(req,res)=>{
+  const access=await subtaskAccess(req,res,true);if(!access)return;
+  const current=await prisma.organizationWorkSubtask.findFirst({
+    where:{id:req.params.subtaskId,taskId:access.task.id}
+  });
+  if(!current){res.status(404).json({error:'Подзадача не найдена'});return;}
+  const changes=req.body||{},keys=Object.keys(changes);
+  if(!keys.length||keys.some(key=>!['title','dueAt','isDone'].includes(key))){
+    res.status(400).json({error:'Некорректные изменения'});return;
+  }
+  if(!access.manager&&keys.some(key=>key!=='isDone')&&current.createdByMemberId!==access.member.id){
+    res.status(403).json({error:'Сотрудник может изменять название и срок только созданной им подзадачи'});return;
+  }
+  const data:{title?:string;dueAt?:Date|null;isDone?:boolean}={};
+  if(keys.includes('title')){
+    const title=validName(changes.title,240);
+    if(!title){res.status(400).json({error:'Название: 2–240 символов'});return;}
+    data.title=title;
+  }
+  if(keys.includes('dueAt')){
+    const dueAt=parseDueAt(changes.dueAt);
+    if(dueAt===undefined){res.status(400).json({error:'Некорректный срок'});return;}
+    data.dueAt=dueAt;
+  }
+  if(keys.includes('isDone')){
+    if(typeof changes.isDone!=='boolean'){res.status(400).json({error:'isDone должен быть boolean'});return;}
+    data.isDone=changes.isDone;
+  }
+  const changed=await prisma.organizationWorkSubtask.updateMany({
+    where:{id:current.id,taskId:access.task.id,
+      ...(!access.manager&&keys.some(key=>key!=='isDone')?{createdByMemberId:access.member.id}:{})},
+    data
+  });
+  if(!changed.count){res.status(409).json({error:'Доступ к подзадаче изменился'});return;}
+  res.json({subtask:await prisma.organizationWorkSubtask.findUniqueOrThrow({where:{id:current.id}})});
+}));
+workProjectsRouter.delete('/:organizationId/projects/:projectId/tasks/:taskId/subtasks/:subtaskId',asyncHandler(async(req,res)=>{
+  const access=await subtaskAccess(req,res,true);if(!access)return;
+  const count=await prisma.organizationWorkSubtask.deleteMany({
+    where:{id:req.params.subtaskId,taskId:access.task.id,
+      ...(!access.manager?{createdByMemberId:access.member.id}:{})}
+  });
+  if(!count.count){res.status(404).json({error:'Подзадача не найдена либо нет прав на удаление'});return;}
+  res.json({ok:true});
+}));
