@@ -116,7 +116,7 @@ export default function WorkTaskFocusDialog({organizationId,task,workspace,curre
     <aside data-tour="ai-task-help"
       className="ai-chat-lightweight app-side-panel focused-task-ai-panel focused-task-modal-panel-height relative order-2 hidden min-h-0 w-[450px] shrink-0 flex-col overflow-hidden rounded-[2rem] border p-4 lg:flex">
       {role!=='VIEWER'?<WorkAiPanel key={current.id} organizationId={organizationId} taskId={current.id}
-        canManage={manager} canSetModel={role==='OWNER'||role==='ADMIN'} personalFocus onCloseFocus={onClose} workspace={workspace} currentUserId={currentUserId}/>:
+        canManage={manager} canSetModel={role==='OWNER'||role==='ADMIN'} personalFocus onCloseFocus={onClose} workspace={workspace} currentUserId={currentUserId} participantMemberIds={[current.createdByMemberId,current.assignedMemberId]}/>:
         <><p className="text-sm text-muted">Наблюдатель не может отправлять запросы ИИ.</p>
           <button className="focused-task-ai-icon-button absolute right-4 top-4" onClick={onClose} aria-label="Закрыть окно"><X size={16}/></button></>}
     </aside>
