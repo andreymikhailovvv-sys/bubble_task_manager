@@ -83,6 +83,35 @@ workAiRouter.post('/:organizationId/ai/chat',asyncHandler(async(req,res)=>{
     throw error;
   }
 }));
+// Human participant messages bypass provider usage and company wallet.
+// Recipient must be the task creator or the current assignee, not an
+// arbitrary organization member.
+workAiRouter.post('/:organizationId/ai/tasks/:taskId/human-messages',asyncHandler(async(req,res)=>{
+  const member=await check(req,res);if(!member)return;
+  const task=await scopedTask(req,res,member);if(!task)return;
+  const recipientId=req.body?.recipientMemberId;
+  const content=req.body?.content;
+  if(typeof content!=='string'||!content.trim()||content.length>4000){
+    res.status(400).json({error:'Сообщение должно содержать 1–4000 символов'});return;
+  }
+  if(typeof recipientId!=='string'||recipientId===member.id||
+     ![task.assignedMemberId,task.createdByMemberId].includes(recipientId)){
+    res.status(400).json({error:'Получатель должен быть участником этой задачи'});return;
+  }
+  const recipient=await prisma.organizationMember.findFirst({
+    where:{id:recipientId,organizationId:req.params.organizationId},select:{id:true}
+  });
+  if(!recipient){res.status(404).json({error:'Получатель не найден'});return;}
+  const message=await prisma.organizationAiMessage.create({data:{
+    organizationId:req.params.organizationId,taskId:task.id,role:'human',
+    senderMemberId:member.id,recipientMemberId:recipient.id,content:content.trim()
+  },select:{id:true,role:true,content:true,createdAt:true,
+    senderMemberId:true,recipientMemberId:true,
+    sender:{select:{role:true,user:{select:{name:true,username:true}}}},
+    recipient:{select:{user:{select:{name:true,username:true}}}}}
+  }});
+  res.status(201).json({message});
+}));
 workAiRouter.get('/:organizationId/ai/tasks/:taskId/history',asyncHandler(async(req,res)=>{
   const member=await check(req,res);if(!member)return;
   if(!await scopedTask(req,res,member))return;
