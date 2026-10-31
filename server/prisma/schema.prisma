@@ -29,10 +29,13 @@ model OrganizationProject {
   description    String?              @db.Text
   isArchived     Boolean              @default(false)
   tasks          OrganizationWorkTask[]
+  createdByMemberId String?
+  createdByMember OrganizationMember? @relation("WorkProjectCreator",fields:[createdByMemberId],references:[id],onDelete:SetNull)
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
 
   @@index([organizationId, isArchived, createdAt])
+  @@index([createdByMemberId])
 }
 
 model OrganizationWorkTask {
@@ -45,7 +48,9 @@ model OrganizationWorkTask {
   priority         WorkTaskPriority    @default(NORMAL)
   dueAt            DateTime?
   assignedMemberId String?
-  assignee         OrganizationMember? @relation(fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  assignee         OrganizationMember? @relation("WorkTaskAssignee",fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  createdByMemberId String?
+  creator          OrganizationMember? @relation("WorkTaskCreator",fields:[createdByMemberId],references:[id],onDelete:SetNull)
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
   aiMonitoringEnabled Boolean          @default(false)
@@ -55,6 +60,7 @@ model OrganizationWorkTask {
 
   @@index([projectId, status, createdAt])
   @@index([assignedMemberId, status])
+  @@index([createdByMemberId, status])
   @@index([dueAt])
 }
 
@@ -97,10 +103,13 @@ model OrganizationAiMessage {
   taskId         String?
   task           OrganizationWorkTask? @relation(fields: [taskId], references: [id], onDelete: Cascade)
   role           String
+  memberId       String?
+  member         OrganizationMember? @relation("WorkQuickAiMember",fields:[memberId],references:[id],onDelete:Cascade)
   content        String               @db.Text
   createdAt      DateTime             @default(now())
 
   @@index([organizationId, taskId, createdAt])
+  @@index([organizationId, memberId, createdAt])
 }
 
 model OrganizationAiMonitoringJob {
@@ -183,7 +192,10 @@ model OrganizationMember {
   role           OrganizationRole @default(MEMBER)
   departmentId   String?
   department     OrganizationDepartment? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  assignedWorkTasks OrganizationWorkTask[]
+  assignedWorkTasks OrganizationWorkTask[] @relation("WorkTaskAssignee")
+  createdWorkTasks OrganizationWorkTask[] @relation("WorkTaskCreator")
+  createdWorkProjects OrganizationProject[] @relation("WorkProjectCreator")
+  quickWorkMessages OrganizationAiMessage[] @relation("WorkQuickAiMember")
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 

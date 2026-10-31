@@ -79,12 +79,53 @@ workProjectsRouter.use((req,res,next)=>{
   next();
 });
 
+// Role-specific overview: manager views company-wide tasks; employees only tasks
+// in which they are an assignee or the creator. Project and task IDs never leak
+// from another organization.
+workProjectsRouter.get('/:organizationId/dashboard',asyncHandler(async(req,res)=>{
+  const member=await memberFor(req,res);
+  if(!member)return;
+  const organizationId=req.params.organizationId;
+  const management=canManageOrganization(member.role)||member.role==='MANAGER';
+  const accessFilter=management?{}:{OR:[{assignedMemberId:member.id},{createdByMemberId:member.id}]};
+  const [projects,taskRows,taskCount,overdueCount,openCount]=await Promise.all([
+    prisma.organizationProject.findMany({
+      where:{organizationId,isArchived:false,...(management?{}:{OR:[
+        {createdByMemberId:member.id},{tasks:{some:{assignedMemberId:member.id}}},
+        {tasks:{some:{createdByMemberId:member.id}}}
+      ]})},
+      select:{id:true,name:true,description:true,isArchived:true,createdAt:true,
+        _count:{select:{tasks:management?true:{where:accessFilter}}}},
+      orderBy:{createdAt:'desc'},take:100
+    }),
+    prisma.organizationWorkTask.findMany({
+      where:{project:{organizationId,isArchived:false},...accessFilter},
+      select:{id:true,title:true,description:true,status:true,priority:true,dueAt:true,
+        assignedMemberId:true,createdByMemberId:true,projectId:true,updatedAt:true,
+        project:{select:{id:true,name:true}},
+        assignee:{select:{user:{select:{name:true,username:true}}}} },
+      orderBy:[{dueAt:'asc'},{createdAt:'desc'}],take:200
+    }),
+    prisma.organizationWorkTask.count({where:{project:{organizationId,isArchived:false},...accessFilter}}),
+    prisma.organizationWorkTask.count({where:{project:{organizationId,isArchived:false},...accessFilter,
+      status:{not:'DONE'},dueAt:{lt:new Date()}}}),
+    prisma.organizationWorkTask.count({where:{project:{organizationId,isArchived:false},...accessFilter,
+      status:{not:'DONE'}}})
+  ]);
+  res.json({role:member.role,memberId:member.id,
+    projects:projects.map(({_count,...project})=>({...project,taskCount:_count.tasks})),
+    tasks:taskRows,stats:{projects:projects.length,tasks:taskCount,open:openCount,overdue:overdueCount},
+    hasMoreTasks:taskCount>taskRows.length});
+}));
+
 workProjectsRouter.get('/:organizationId/projects',asyncHandler(async(req,res)=>{
-  if (!await memberFor(req,res)) return;
+  const member=await memberFor(req,res);
+  if (!member) return;
+  const managerAccess=canManageOrganization(member.role)||member.role==='MANAGER';
   const rows=await prisma.organizationProject.findMany({
-    where:{organizationId:req.params.organizationId},
+    where:{organizationId:req.params.organizationId,...(managerAccess?{}:{OR:[{tasks:{some:{assignedMemberId:member.id}}},{tasks:{some:{createdByMemberId:member.id}}},{createdByMemberId:member.id}]})},
     select:{id:true,name:true,description:true,isArchived:true,createdAt:true,updatedAt:true,
-      _count:{select:{tasks:true}}},
+      _count:{select:{tasks:managerAccess?true:{where:{OR:[{assignedMemberId:member.id},{createdByMemberId:member.id}]}}}}},
     orderBy:{createdAt:'desc'},take:201
   });
   res.json({projects:rows.slice(0,200).map(({_count,...project})=>({...project,taskCount:_count.tasks})),
@@ -92,13 +133,14 @@ workProjectsRouter.get('/:organizationId/projects',asyncHandler(async(req,res)=>
 }));
 
 workProjectsRouter.post('/:organizationId/projects',asyncHandler(async(req,res)=>{
-  if (!await managerFor(req,res)) return;
+  const actor=await managerFor(req,res);
+  if (!actor) return;
   const name=validName(req.body?.name,120);
   if (!name || (req.body?.description!==undefined&&!validDescription(req.body.description))) {
     res.status(400).json({error:'Название: 2–120 символов; описание: до 20 000 символов'});return;
   }
   const project=await prisma.organizationProject.create({
-    data:{organizationId:req.params.organizationId,name,description:req.body.description??null},
+    data:{organizationId:req.params.organizationId,name,description:req.body.description??null,createdByMemberId:actor.id},
     select:{id:true,name:true,description:true,isArchived:true,createdAt:true,updatedAt:true}
   });
   res.status(201).json({project:{...project,taskCount:0}});
@@ -131,19 +173,22 @@ workProjectsRouter.patch('/:organizationId/projects/:projectId',asyncHandler(asy
 }));
 
 workProjectsRouter.get('/:organizationId/projects/:projectId/tasks',asyncHandler(async(req,res)=>{
-  if (!await memberFor(req,res)) return;
+  const actor=await memberFor(req,res);
+  if (!actor) return;
   if (!await projectFor(req,res)) return;
+  const fullAccess=canManageOrganization(actor.role)||actor.role==='MANAGER';
   const tasks=await prisma.organizationWorkTask.findMany({
-    where:{projectId:req.params.projectId,project:{organizationId:req.params.organizationId}},
+    where:{projectId:req.params.projectId,project:{organizationId:req.params.organizationId},...(fullAccess?{}:{OR:[{assignedMemberId:actor.id},{createdByMemberId:actor.id}]})},
     select:{id:true,projectId:true,title:true,description:true,status:true,priority:true,
-      dueAt:true,assignedMemberId:true,createdAt:true,updatedAt:true},
+      dueAt:true,assignedMemberId:true,createdByMemberId:true,createdAt:true,updatedAt:true},
     orderBy:{createdAt:'asc'},take:501
   });
   res.json({tasks:tasks.slice(0,500),hasMore:tasks.length>500});
 }));
 
 workProjectsRouter.post('/:organizationId/projects/:projectId/tasks',asyncHandler(async(req,res)=>{
-  if (!await managerFor(req,res)) return;
+  const actor=await managerFor(req,res);
+  if (!actor) return;
   const project=await projectFor(req,res);
   if (!project) return;
   if (project.isArchived) {res.status(409).json({error:'Архивный проект нельзя изменять'});return;}
@@ -160,7 +205,7 @@ workProjectsRouter.post('/:organizationId/projects/:projectId/tasks',asyncHandle
   try{
     const task=await prisma.organizationWorkTask.create({
       data:{projectId:project.id,title,description:req.body?.description??null,
-        priority,status,dueAt,assignedMemberId:assigned.memberId}
+        priority,status,dueAt,assignedMemberId:assigned.memberId,createdByMemberId:actor.id}
     });
     res.status(201).json({task});
   }catch(error){if(!rejectConflicts(error,res))throw error;}
@@ -175,7 +220,7 @@ workProjectsRouter.patch('/:organizationId/projects/:projectId/tasks/:taskId',as
   const manager=canManageOrganization(member.role)||member.role==='MANAGER';
   const task=await prisma.organizationWorkTask.findFirst({
     where:{id:req.params.taskId,projectId:project.id,project:{organizationId:req.params.organizationId}},
-    select:{id:true,assignedMemberId:true}
+    select:{id:true,assignedMemberId:true,createdByMemberId:true}
   });
   if (!task){res.status(404).json({error:'Задача не найдена'});return;}
   const changes=req.body||{};
@@ -183,7 +228,7 @@ workProjectsRouter.patch('/:organizationId/projects/:projectId/tasks/:taskId',as
   if (!keys.length || keys.some(key=>!['title','description','status','priority','dueAt','assignedMemberId'].includes(key))) {
     res.status(400).json({error:'Некорректный набор изменений'});return;
   }
-  if (!manager && (member.role!=='MEMBER'||task.assignedMemberId!==member.id||keys.some(key=>key!=='status'))) {
+  if (!manager && (member.role!=='MEMBER'||(task.assignedMemberId!==member.id&&task.createdByMemberId!==member.id)||keys.some(key=>key!=='status'))) {
     res.status(403).json({error:'Можно менять только статус назначенной вам задачи'});return;
   }
   const data:{title?:string;description?:string|null;status?:WorkTaskStatus;priority?:WorkTaskPriority;
@@ -217,7 +262,7 @@ workProjectsRouter.patch('/:organizationId/projects/:projectId/tasks/:taskId',as
   }
   try{
     const changed=await prisma.organizationWorkTask.updateMany({
-      where:{id:task.id,projectId:project.id,...(!manager?{assignedMemberId:member.id}:{})},
+      where:{id:task.id,projectId:project.id,...(!manager?{OR:[{assignedMemberId:member.id},{createdByMemberId:member.id}]}:{})},
       data
     });
     if(!changed.count){res.status(409).json({error:'Назначение изменилось. Обновите задачи'});return;}
