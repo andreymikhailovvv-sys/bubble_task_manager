@@ -54,7 +54,7 @@ const details = (a:WorkChangeAction):string[] => [
 
 export const workChangesTool = {
   type:'function', name:'prepare_work_changes', strict:false,
-  description:'Подготовь список корпоративных изменений, НИЧЕГО не выполняя. Изменения применяются только после нажатия человеком «Принять». Используй только реальные ID из контекста. Когда пользователь просит создать проект с поручениями, дай create_project с projectKey, затем create_task с тем же projectKey; для подзадач используй taskKey от create_task. Для изменения существующего проекта/поручения укажи их настоящие ID. Не угадывай идентификаторы, даты, сотрудников и сроки. Если данных недостаточно, задай вопрос обычным ответом. Для сотрудников допускаются только update_task (поле status) и update_subtask (поле isDone) в собственных поручениях. Не вызывай инструмент для информационных запросов.',
+  description:'Подготовь список корпоративных изменений, НИЧЕГО не выполняя. Изменения применяются только после нажатия человеком «Принять». Используй только реальные ID из контекста. Для обычного нового проекта или поручения projectKey/taskKey необязательны: сервер присвоит их сам. Только если в одном запросе создаются несколько новых проектов/поручений и нужно связать их с дочерними элементами, используй одинаковый projectKey/taskKey в ссылках. Не проси пользователя назвать эти ключи. Для изменения существующего проекта/поручения укажи их настоящие ID. Не угадывай идентификаторы, даты, сотрудников и сроки. Если данных недостаточно, задай вопрос обычным ответом. Для сотрудников допускаются только update_task (поле status) и update_subtask (поле isDone) в собственных поручениях. Не вызывай инструмент для информационных запросов.',
   parameters:{
     type:'object',additionalProperties:false,required:['actions'],
     properties:{actions:{type:'array',items:{
@@ -74,7 +74,7 @@ export const workChangesTool = {
 export function parseWorkChanges(input:unknown):WorkChangeAction[] {
   const actions=(input as {actions?:unknown})?.actions;
   if(!Array.isArray(actions)||actions.length<1||actions.length>12)throw new Error('Допустимо от 1 до 12 изменений за запрос');
-  return actions.map((raw:unknown)=>{
+  const parsed:WorkChangeAction[]=actions.map((raw:unknown)=>{
     if(!raw||typeof raw!=='object'||Array.isArray(raw))return fail('Некорректная операция');
     const a=raw as Record<string,unknown>;
     if(!OPS.includes(a.op as Operation))return fail('Недопустимое действие');
@@ -102,6 +102,34 @@ export function parseWorkChanges(input:unknown):WorkChangeAction[] {
     if(out.status&&!STATUSES.includes(out.status))return fail('Недопустимый статус');
     return out;
   });
+  // projectKey/taskKey identify *new* objects within one tool call.
+  // They are not user data and must never be required for a standalone task.
+  // Reserve AI-supplied keys first so generated keys cannot collide.
+  const used=new Set(parsed.flatMap(a=>[a.projectKey,a.taskKey]).filter((k):k is string=>Boolean(k)));
+  const generated=(kind:'project'|'task',index:number)=>{
+    let suffix=0;
+    let id='';
+    do { id='internal_'+kind+'_'+index+(suffix?'_'+suffix:''); suffix++; }
+    while(used.has(id));
+    used.add(id);
+    return id;
+  };
+  const priorProjects:string[]=[];
+  const priorTasks:string[]=[];
+  parsed.forEach((a,index)=>{
+    if(a.op==='create_project'){
+      a.projectKey ||= generated('project',index);
+      priorProjects.push(a.projectKey);
+    } else if(a.op==='create_task'){
+      // An unambiguous newly created parent needs no invented AI reference.
+      if(!a.projectId&&!a.projectKey&&priorProjects.length===1)a.projectKey=priorProjects[0];
+      a.taskKey ||= generated('task',index);
+      priorTasks.push(a.taskKey);
+    } else if(a.op==='create_subtask'&&!a.taskId&&!a.taskKey&&priorTasks.length===1){
+      a.taskKey=priorTasks[0];
+    }
+  });
+  return parsed;
 }
 function allowed(a:WorkChangeAction,actor:Actor){
   if(MANAGERS.has(actor.role))return;
