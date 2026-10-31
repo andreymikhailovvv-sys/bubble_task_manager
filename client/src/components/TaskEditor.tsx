@@ -65,6 +65,9 @@ type Props = {
   onPrepareReport?: () => void;
   parentTaskTitle?: string | null;
   monitoringParent?: boolean;
+  /** External corporate subtask uses this real personal editor but never personal Task endpoints. */
+  externalSubtask?: boolean;
+  externalReadOnly?: boolean;
   onOpenParentTask?: () => void;
   defaultAiNotificationsEnabled: boolean;
   editorType?: "task" | "event";
@@ -312,6 +315,8 @@ export function TaskEditor({
   onPrepareReport,
   parentTaskTitle,
   monitoringParent = false,
+  externalSubtask = false,
+  externalReadOnly = false,
   onOpenParentTask,
   defaultAiNotificationsEnabled,
   timelineTasks = [],
@@ -538,13 +543,13 @@ export function TaskEditor({
 
   useEffect(() => {
     setEditorAttachments([]);
-    if (!task?.id || (!task.parentTaskId && !isEventEditor)) return;
+    if (externalSubtask || !task?.id || (!task.parentTaskId && !isEventEditor)) return;
     let isCancelled = false;
     void api.getTaskAttachments(task.id).then((attachments) => {
       if (!isCancelled) setEditorAttachments(attachments);
     });
     return () => { isCancelled = true; };
-  }, [task?.id, task?.parentTaskId, isEventEditor]);
+  }, [task?.id, task?.parentTaskId, isEventEditor, externalSubtask]);
 
   useLayoutEffect(() => {
     const textarea = titleInputRef.current;
@@ -875,7 +880,7 @@ export function TaskEditor({
   return (
     <>
     <TaskEditorFrame onClose={() => void closeEditor()}
-      className={`task-edit-shell focused-task-editor-shell relative ${isEventEditor ? "h-[min(590px,calc(100vh-24px))]" : isSubtask ? (titleRows === 3 ? "h-[min(630px,calc(100dvh-24px))]" : "h-[min(560px,calc(100dvh-24px))]") : "h-[min(760px,calc(100dvh-24px))]"} w-full max-w-3xl overflow-hidden rounded-[2.3rem] border bg-white p-5 shadow-2xl`}>
+      className={`task-edit-shell focused-task-editor-shell relative ${externalSubtask ? "work-subtask-original-editor" : ""} ${externalReadOnly ? "work-subtask-readonly" : ""} ${isEventEditor ? "h-[min(590px,calc(100vh-24px))]" : isSubtask ? (titleRows === 3 ? "h-[min(630px,calc(100dvh-24px))]" : "h-[min(560px,calc(100dvh-24px))]") : "h-[min(760px,calc(100dvh-24px))]"} w-full max-w-3xl overflow-hidden rounded-[2.3rem] border bg-white p-5 shadow-2xl`}>
         <button
           type="button"
           className="focused-task-icon-button focused-task-calendar-like-button absolute right-5 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full transition"
@@ -944,7 +949,7 @@ export function TaskEditor({
                   title="Добавить файл"
                 >
                   <Paperclip size={15} />
-                </button>
+                </button>}
                 <AiAttachmentTiles files={aiPendingFiles} onRemove={(file) =>
                   setAiPendingFiles((prev) => prev.filter((item) => item !== file))
                 } busy={isGeneratingByAi} />
@@ -996,6 +1001,7 @@ export function TaskEditor({
                   }
                   rows={titleRows}
                   value={form.title ?? ""}
+                  disabled={externalReadOnly}
                   onChange={(e) => {
                     setTitleError(null);
                     setForm((p) => ({ ...p, title: e.target.value }));
@@ -1035,7 +1041,7 @@ export function TaskEditor({
                 {task?.aiMonitoringEnabled || monitoringParent ? (
                   <span><span className="text-violet-500">Deadline:</span>{' '}<span className="text-primary">На усмотрение ИИ</span></span>
                 ) : <span>{deadlineLabel}</span>}
-                {!task?.aiMonitoringEnabled && !monitoringParent ? <DateTimePickerWithApply
+                {!externalReadOnly && !task?.aiMonitoringEnabled && !monitoringParent ? <DateTimePickerWithApply
                   value={form.dueDate}
                   onChange={(nextValue) =>
                     setForm((p) => ({ ...p, dueDate: nextValue }))
@@ -1056,7 +1062,7 @@ export function TaskEditor({
                     className="subtask-description-inline invisible-scrollbar h-full min-h-0 w-full flex-1 resize-none overflow-y-auto border-0 bg-transparent text-sm leading-6 text-muted outline-none placeholder:text-slate-400"
                     placeholder="Введите описание"
                     value={descriptionValue}
-                    onChange={updateDescription}
+                    onChange={externalReadOnly ? () => undefined : updateDescription}
                   />
                 )}
               </ResizableDescriptionSurface>
@@ -1065,11 +1071,12 @@ export function TaskEditor({
                   type="button"
                   className="focused-task-icon-button focused-task-calendar-like-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
                   onClick={() => setIsNotesEditorOpen(true)}
+                  disabled={externalReadOnly}
                   title="Редактировать описание"
                 >
                   <Edit3 size={15} />
                 </button>
-                <button
+                {!externalSubtask&&<button
                   type="button"
                   className="focused-task-icon-button focused-task-calendar-like-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
                   onClick={() => (isSubtask || isEventEditor ? editorAttachmentInputRef : aiAttachmentInputRef).current?.click()}
@@ -1082,7 +1089,7 @@ export function TaskEditor({
                   isEventEditor ? setPendingEventFiles((prev) => prev.filter((item) => item !== file)) : setAiPendingFiles((prev) => prev.filter((item) => item !== file))
                 } busy={isGeneratingByAi} />
 
-                {(isSubtask || isEventEditor) && task?.id ? editorAttachments.map((attachment) => (
+                {!externalSubtask && (isSubtask || isEventEditor) && task?.id ? editorAttachments.map((attachment) => (
                   <div key={attachment.id} className="task-attachment-pill inline-flex max-w-[220px] items-center gap-1 rounded-full border px-2 py-1 text-[11px]">
                     <a className="inline-flex min-w-0 items-center gap-1" href={api.getTaskAttachmentDownloadUrl(task!.id, attachment.id)} download={attachment.name}><Paperclip size={11} /><span className="truncate">{attachment.name}</span></a>
                     <button type="button" className="task-attachment-remove rounded-md p-0.5" aria-label={`Удалить ${attachment.name}`} onClick={() => void removeEditorAttachment(attachment.id)}><X size={11} /></button>
@@ -1110,7 +1117,7 @@ export function TaskEditor({
                   </span>
                 </button>
               ) : null}
-              {isNotesEditorOpen ? (
+              {isNotesEditorOpen && !externalReadOnly ? (
                 <TaskNotesEditor
                   value={descriptionValue}
                   onChange={updateDescription}
@@ -1149,6 +1156,7 @@ export function TaskEditor({
                       <button
                         key={level}
                         className={`importance-choice-button task-edit-importance rounded-xl border px-2 py-2 text-sm font-semibold transition ${IMPORTANCE_STYLES[level]} ${selectedImportance === level ? "importance-choice-button-active ring-2" : "opacity-80 hover:opacity-100"}`}
+                        disabled={externalReadOnly}
                         onClick={() =>
                           setForm((p) => ({ ...p, importance: level }))
                         }
@@ -1520,7 +1528,7 @@ export function TaskEditor({
           ) : null}
         </main>
     </TaskEditorFrame>
-    {isEditing && task?.id ? <CalendarExportDialog item={{ id: task.id, title: form.title ?? task.title, description: form.description, location: form.location, dueDate: form.dueDate }} isOpen={isCalendarExportOpen} onClose={() => setIsCalendarExportOpen(false)} onSaveBeforeExport={flushEditorAutosave} openExternalUrl={(url) => window.open(url, '_blank', 'noopener,noreferrer')} timeZone={timeZone} timelineTasks={timelineTasks} /> : null}
+    {!externalSubtask && isEditing && task?.id ? <CalendarExportDialog item={{ id: task.id, title: form.title ?? task.title, description: form.description, location: form.location, dueDate: form.dueDate }} isOpen={isCalendarExportOpen} onClose={() => setIsCalendarExportOpen(false)} onSaveBeforeExport={flushEditorAutosave} openExternalUrl={(url) => window.open(url, '_blank', 'noopener,noreferrer')} timeZone={timeZone} timelineTasks={timelineTasks} /> : null}
     </>
   );
 }
