@@ -2,6 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { ArrowRight, Bot, BriefcaseBusiness, CheckCircle2, ChevronRight, FolderKanban, LayoutDashboard, Layers3, LoaderCircle, LockKeyhole, LogOut, Settings2, ShieldCheck, Sparkles, UsersRound } from 'lucide-react';
 import { api, type CurrentUser, type WorkOrganization } from './lib/api';
 import './BusinessApp.css';
+import WorkCompanyView from './WorkCompanyView';
+import WorkInvitationJoin from './WorkInvitationJoin';
 
 type Section = 'overview' | 'projects' | 'team' | 'ai' | 'settings';
 type Phase = 'loading' | 'login' | 'ready' | 'forbidden' | 'setup' | 'error';
@@ -73,9 +75,13 @@ function AccessPage({ access, onAccess, onLogout }: { access: Access; onAccess: 
     </div>
   </div>;
 }
-export default function BusinessApp() {
+function BusinessAppShell() {
   const [access, setAccess] = useState<Access>({ phase: 'loading' });
   const [section, setSection] = useState<Section>('overview');
+  const [activeOrganizationId, setActiveOrganizationId] = useState<string | null>(() => {
+    const match = window.location.pathname.match(/^\/organizations\/([^/]+)\/?$/);
+    return match ? decodeURIComponent(match[1]) : null;
+  });
   const [signingOut, setSigningOut] = useState(false);
   const [organizations, setOrganizations] = useState<WorkOrganization[]>([]);
   const [organizationName, setOrganizationName] = useState('');
@@ -90,6 +96,15 @@ export default function BusinessApp() {
     let mounted = true;
     void checkAccess().then(result => { if (mounted) setAccess(result); });
     return () => { mounted = false; };
+  }, []);
+  useEffect(() => {
+    const handleNavigation = () => {
+      const match = window.location.pathname.match(/^\/organizations\/([^/]+)\/?$/);
+      setActiveOrganizationId(match ? decodeURIComponent(match[1]) : null);
+      setSection('overview');
+    };
+    window.addEventListener('popstate', handleNavigation);
+    return () => window.removeEventListener('popstate', handleNavigation);
   }, []);
   useEffect(() => {
     if (access.phase !== 'ready') {
@@ -115,6 +130,7 @@ export default function BusinessApp() {
       const { organization } = await api.createWorkOrganization(organizationName);
       setOrganizations(previous => [...previous, organization]);
       setOrganizationName('');
+      openOrganization(organization.id);
     } catch (error) {
       setOrganizationError(error instanceof Error ? error.message : 'Не удалось создать организацию.');
     } finally {
@@ -122,6 +138,18 @@ export default function BusinessApp() {
     }
   }
 
+  function openOrganization(id: string) {
+    window.history.pushState({}, '', '/organizations/' + encodeURIComponent(id));
+    setActiveOrganizationId(id);
+    setSection('overview');
+  }
+  function backToOrganizations() {
+    window.history.pushState({}, '', '/');
+    setActiveOrganizationId(null);
+    setSection('overview');
+    void api.listWorkOrganizations().then(result=>setOrganizations(result.organizations))
+      .catch(error=>setOrganizationError(error instanceof Error ? error.message : 'Не удалось обновить организации.'));
+  }
   async function logout() {
     setSigningOut(true);
     try { await api.logout(); setAccess({phase:'login'}); }
@@ -136,13 +164,17 @@ export default function BusinessApp() {
     <aside className="work-sidebar">
       <Brand/>
       <div className="work-side-caption">РАБОЧЕЕ ПРОСТРАНСТВО</div>
-      <div className="work-org"><BriefcaseBusiness size={20}/><span><strong>Планировыч Work</strong><small>Администратор платформы</small></span><ChevronRight size={16}/></div>
+      <button type="button" className="work-org work-org-selector" onClick={backToOrganizations} title="К списку организаций"><BriefcaseBusiness size={20}/><span><strong>{organizations.find(org=>org.id===activeOrganizationId)?.name || 'Планировыч Work'}</strong><small>{activeOrganizationId?'Перейти ко всем компаниям':'Корпоративная платформа'}</small></span><ChevronRight size={16}/></button>
       <nav aria-label="Разделы Планировыч Work">{sections.map(item=>{const Icon=item.icon;return <button type="button" key={item.id} className={section===item.id?'work-nav selected':'work-nav'} onClick={()=>setSection(item.id)} aria-current={section===item.id?'page':undefined}><Icon size={18}/>{item.title}</button>;})}</nav>
       <div className="work-side-footer"><span><ShieldCheck size={15}/> Закрытая версия</span><a href="https://planirovych.ru/">Личный Планировыч <ArrowRight size={14}/></a></div>
     </aside>
     <div className="work-body">
       <header className="work-topbar"><div>Планировыч Work <ChevronRight size={14}/><strong>{active.title}</strong></div><div className="work-user"><span>{name.charAt(0).toUpperCase()}</span><strong>{name}</strong><button type="button" onClick={()=>{void logout();}} disabled={signingOut} title="Выйти" aria-label="Выйти"><LogOut size={17}/></button></div></header>
       <main className="work-content">
+        {activeOrganizationId
+          ? <WorkCompanyView id={activeOrganizationId} section={section} currentUserId={access.user.id} onBack={backToOrganizations}
+            onRenamed={changed=>setOrganizations(previous=>previous.map(org=>org.id===changed.id?changed:org))}/>
+          : <>
         <div className="work-kicker">КОРПОРАТИВНОЕ ПРОСТРАНСТВО</div><h1>{section==='overview'?'Рабочая панель':active.title}</h1><p className="work-lead">{section==='overview'?'Новая основа Планировыча для командной работы и управления бизнесом.':active.summary}</p>
         {section==='overview' ? <>
           <section className="work-hero">
@@ -156,7 +188,7 @@ export default function BusinessApp() {
             </div>
             {organizationsLoading ? <div className="work-org-message" role="status">Загружаем организации…</div>
               : organizations.length > 0 ? <div className="work-org-list">
-                {organizations.map(org => <div className="work-org-row" key={org.id}><div className="work-org-row-icon"><BriefcaseBusiness size={19}/></div><div><strong>{org.name}</strong><small>Идентификатор: {org.id}</small></div><span>{org.role === 'OWNER' ? 'Владелец' : org.role}</span></div>)}
+                {organizations.map(org => <button type="button" className="work-org-row work-org-open" key={org.id} onClick={()=>openOrganization(org.id)}><div className="work-org-row-icon"><BriefcaseBusiness size={19}/></div><div><strong>{org.name}</strong><small>Открыть кабинет компании</small></div><span>{org.role === 'OWNER' ? 'Владелец' : org.role}</span><ChevronRight size={17}/></button>)}
               </div> : <div className="work-org-message">Пока нет организаций. Создайте первую для проверки корпоративного ядра.</div>}
             <form onSubmit={createOrganization} className="work-org-create">
               <label htmlFor="work-org-name">Название новой организации</label>
@@ -172,8 +204,15 @@ export default function BusinessApp() {
             <article><div className="work-card-icon orange"><Bot size={22}/></div><h3>ИИ-диспетчер</h3><p>Контроль процессов, аналитика и действия с подтверждением.</p><small>Запланировано</small></article>
           </div>
           <div className="work-bottom-note"><CheckCircle2 size={19}/><div><strong>Точка старта готова</strong><span>Следующим этапом станут организации, роли и корпоративная модель данных.</span></div><b>Этап 1</b></div>
-        </> : <section className="work-placeholder"><div><ActiveIcon size={30}/></div><h2>Раздел в разработке</h2><p>Навигация подготовлена. Данные и действия этого модуля пока не подключены.</p><span><ShieldCheck size={16}/> Без имитации рабочих функций</span></section>}
+        </> : <section className="work-placeholder"><div><ActiveIcon size={30}/></div><h2>Сначала откройте компанию</h2><p>Выберите организацию на вкладке «Обзор», чтобы управлять её сотрудниками и настройками. Корпоративные проекты и ИИ появятся в следующих этапах.</p><button type="button" className="work-primary" onClick={()=>setSection('overview')}>Перейти к организациям</button></section>}
+        </>}
       </main>
     </div>
   </div>;
+}
+
+/** Invite links are intentionally reachable before the ordinary Work admin gate. */
+export default function BusinessApp() {
+  const inviteMatch = window.location.pathname.match(/^\/join\/([a-f0-9]{64})\/?$/);
+  return inviteMatch ? <WorkInvitationJoin token={inviteMatch[1]}/> : <BusinessAppShell/>;
 }

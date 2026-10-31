@@ -465,11 +465,29 @@ export type StandaloneNote = {
   updatedAt: string;
 };
 
-export type WorkOrganization = { id: string; name: string; role: 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER' | 'VIEWER'; createdAt: string; updatedAt: string };
+export type WorkRole = 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER' | 'VIEWER';
+export type WorkOrganization = { id: string; name: string; role: WorkRole; createdAt: string; updatedAt: string };
+export type WorkMember = { id: string; userId: string; name: string | null; username: string | null; email?: string | null; role: WorkRole; departmentId: string | null; createdAt: string };
+export type WorkDepartment = { id: string; name: string; createdAt: string };
+export type WorkInvitation = { id: string; role: WorkRole; expiresAt: string; createdAt: string; url?: string };
+export type WorkWorkspace = { organization: WorkOrganization; members: WorkMember[]; departments: WorkDepartment[]; invitations: WorkInvitation[] };
+export type WorkInvitePreview = { name: string; role: WorkRole; expiresAt: string };
 
 export const api = {
   listWorkOrganizations: () => request<{ organizations: WorkOrganization[] }>('/api/business/organizations'),
   createWorkOrganization: (name: string) => request<{ organization: WorkOrganization }>('/api/business/organizations', { method: 'POST', body: JSON.stringify({ name }) }),
+  getWorkWorkspace: (id: string) => request<WorkWorkspace>(`/api/business/organizations/${encodeURIComponent(id)}/workspace`),
+  renameWorkOrganization: (id: string, name: string) => request<{ organization: WorkOrganization }>(`/api/business/organizations/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
+  createWorkDepartment: (id: string, name: string) => request<{ department: WorkDepartment }>(`/api/business/organizations/${encodeURIComponent(id)}/departments`, { method: 'POST', body: JSON.stringify({ name }) }),
+  renameWorkDepartment: (id: string, depId: string, name: string) => request<{ department: WorkDepartment }>(`/api/business/organizations/${encodeURIComponent(id)}/departments/${encodeURIComponent(depId)}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
+  deleteWorkDepartment: (id: string, depId: string) => request<{ ok: boolean }>(`/api/business/organizations/${encodeURIComponent(id)}/departments/${encodeURIComponent(depId)}`, { method: 'DELETE' }),
+  updateWorkMember: (id: string, memberId: string, changes: { role?: WorkRole; departmentId?: string | null }) => request<{ member: Pick<WorkMember,'id' | 'role' | 'departmentId'> }>(`/api/business/organizations/${encodeURIComponent(id)}/members/${encodeURIComponent(memberId)}`, { method: 'PATCH', body: JSON.stringify(changes) }),
+  removeWorkMember: (id: string, memberId: string) => request<{ ok: boolean }>(`/api/business/organizations/${encodeURIComponent(id)}/members/${encodeURIComponent(memberId)}`, { method: 'DELETE' }),
+  createWorkInvitation: (id: string, role: WorkRole) => request<{ invitation: WorkInvitation }>(`/api/business/organizations/${encodeURIComponent(id)}/invitations`, { method: 'POST', body: JSON.stringify({ role }) }),
+  revokeWorkInvitation: (id: string, inviteId: string) => request<{ ok: boolean }>(`/api/business/organizations/${encodeURIComponent(id)}/invitations/${encodeURIComponent(inviteId)}`, { method: 'DELETE' }),
+  getWorkInviteSession: () => request<{ registered: boolean }>('/api/business/invitations/session'),
+  previewWorkInvitation: (token: string) => request<{ invitation: WorkInvitePreview }>(`/api/business/invitations/${encodeURIComponent(token)}`),
+  acceptWorkInvitation: (token: string) => request<{ organizationId: string }>(`/api/business/invitations/${encodeURIComponent(token)}/accept`, { method: 'POST', body: JSON.stringify({}) }),
   getMe: () => request<{ user: CurrentUser }>('/api/auth/me'),
   getAiChatProjects: <T>() => request<{ projects: T[] | null }>('/api/ai-chat/projects'),
   getAiChatThreadMessages: (projectId: string, chatId: string) => request<{ messages: ChatMessage[]; projectsOutline: import('./ai-chat-reconciliation').AiChatProjectOutline[] }>(`/api/ai-chat/projects/${encodeURIComponent(projectId)}/chats/${encodeURIComponent(chatId)}/messages`),
