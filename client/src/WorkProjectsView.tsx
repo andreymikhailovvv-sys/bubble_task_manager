@@ -5,7 +5,7 @@ import { api, type WorkCompanyTask, type WorkProject, type WorkTaskStatus, type 
 const statusNames: Record<WorkTaskStatus,string>={TODO:'Новая',IN_PROGRESS:'В работе',REVIEW:'На проверке',DONE:'Готово'};
 const priorityNames: Record<WorkTaskPriority,string>={LOW:'Низкий',NORMAL:'Обычный',HIGH:'Высокий',CRITICAL:'Критический'};
 const readable=(e:unknown)=>e instanceof Error?e.message:'Операция не выполнена';
-const dateInput=(date:string|null)=>date?new Date(date).toISOString().slice(0,16):'';
+const dateInput=(date:string|null)=>{ if(!date)return '';const time=new Date(date);return new Date(time.getTime()-time.getTimezoneOffset()*60000).toISOString().slice(0,16); };
 const managerRole=(role:WorkWorkspace['organization']['role'])=>['OWNER','ADMIN','MANAGER'].includes(role);
 
 export default function WorkProjectsView({organizationId,workspace,currentUserId}:{organizationId:string;workspace:WorkWorkspace;currentUserId:string}) {
