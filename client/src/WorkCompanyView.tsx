@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, BriefcaseBusiness, Building2, Check, Copy, Link2
 import { api, type WorkDepartment, type WorkInvitation, type WorkOrganization, type WorkRole, type WorkWorkspace } from './lib/api';
 import WorkProjectsView from './WorkProjectsView';
 import WorkAiPanel from './WorkAiPanel';
+import WorkOverviewDashboard from './WorkOverviewDashboard';
 
 export type WorkSection = 'overview' | 'projects' | 'team' | 'ai' | 'settings';
 const labels: Record<WorkRole,string> = {
@@ -13,8 +14,9 @@ const manageable = (role: WorkRole) => role === 'OWNER' || role === 'ADMIN';
 const readableError = (error: unknown) => error instanceof Error ? error.message : 'Не удалось выполнить действие';
 const displayName = (member: WorkWorkspace['members'][number]) => member.name || member.username || member.email || 'Пользователь';
 
-export default function WorkCompanyView({ id, section, currentUserId, onBack, onRenamed }:
-  { id: string; section: WorkSection; currentUserId: string; onBack: () => void; onRenamed: (organization: WorkOrganization) => void }) {
+export default function WorkCompanyView({ id, section, currentUserId, onBack, onRenamed, showCompanyCard=false, onOpenCompanyCard, onOpenProjects }:
+  { id: string; section: WorkSection; currentUserId: string; onBack: () => void; onRenamed: (organization: WorkOrganization) => void;
+    showCompanyCard?:boolean;onOpenCompanyCard:()=>void;onOpenProjects:()=>void }) {
   const [data,setData] = useState<WorkWorkspace | null>(null);
   const [loading,setLoading] = useState(true);
   const [error,setError] = useState('');
@@ -93,24 +95,25 @@ export default function WorkCompanyView({ id, section, currentUserId, onBack, on
   };
   const sectionText = section === 'team' ? 'Команда' : section === 'settings' ? 'Настройки' : section === 'projects' ? 'Проекты' : section === 'ai' ? 'ИИ-диспетчер' : 'Обзор';
   return <div className="work-company">
-    <button type="button" className="work-company-back" onClick={onBack}><ArrowLeft size={16}/> Все организации</button>
-    <div className="work-company-header">
+    {showCompanyCard&&<button type="button" className="work-company-back" onClick={onBack}><ArrowLeft size={16}/> Назад к рабочей панели</button>}
+    {(section!=='overview'||showCompanyCard)&&<div className="work-company-header">
       <span className="work-company-logo"><Building2 size={26}/></span>
       <div><div className="work-kicker">КОРПОРАТИВНОЕ ПРОСТРАНСТВО</div><h1>{organization.name}</h1><p className="work-lead">{sectionText} · Ваша роль: {labels[organization.role]}</p></div>
-    </div>
+    </div>}
     {error && <div className="work-company-error" role="alert">{error}<button type="button" onClick={()=>setError('')}>Закрыть</button></div>}
-    {section === 'overview' && <>
+    {section === 'overview' && (showCompanyCard ? <>
       <div className="work-company-stats">
         <article><UsersRound size={21}/><strong>{members.length}</strong><span>Участников</span></article>
         <article><Building2 size={21}/><strong>{totalDepartments}</strong><span>Подразделений</span></article>
-        <article><UserRoundPlus size={21}/><strong>{manager ? invitations.length : '—'}</strong><span>Активных приглашений</span></article>
+        <article><UserRoundPlus size={21}/><strong>{manager?invitations.length:'—'}</strong><span>Приглашений</span></article>
       </div>
       <div className="work-company-panel">
-        <h2>Рабочее пространство создано</h2>
-        <p>Данные компании отделены от личных задач пользователей. Теперь можно управлять сотрудниками, ролями и подразделениями. Корпоративные проекты и задачи подключим следующим этапом.</p>
-        <div className="work-company-tags"><span><Check size={15}/> Участники</span><span><Check size={15}/> Подразделения</span><span><ShieldCheck size={15}/> Серверные права</span></div>
+        <h2>Карточка организации</h2>
+        <p>Настройки компании, её сотрудники и корпоративные проекты доступны в соответствующих разделах меню.</p>
+        <button type="button" className="work-overview-company-link" onClick={onOpenProjects}>Открыть проекты <ArrowRight size={16}/></button>
       </div>
-    </>}
+    </> : <WorkOverviewDashboard organizationId={id} workspace={data}
+      userId={currentUserId} onOpenCompanyCard={onOpenCompanyCard} onOpenProjects={onOpenProjects}/>)}
     {section === 'team' && <>
       <div className="work-company-panel">
         <div className="work-company-panel-title"><div><h2>Сотрудники</h2><p>Участники текущей компании. Права проверяются сервером.</p></div><span>{members.length} человек</span></div>
