@@ -485,6 +485,7 @@ export const api = {
   removeWorkMember: (id: string, memberId: string) => request<{ ok: boolean }>(`/api/business/organizations/${encodeURIComponent(id)}/members/${encodeURIComponent(memberId)}`, { method: 'DELETE' }),
   createWorkInvitation: (id: string, role: WorkRole) => request<{ invitation: WorkInvitation }>(`/api/business/organizations/${encodeURIComponent(id)}/invitations`, { method: 'POST', body: JSON.stringify({ role }) }),
   revokeWorkInvitation: (id: string, inviteId: string) => request<{ ok: boolean }>(`/api/business/organizations/${encodeURIComponent(id)}/invitations/${encodeURIComponent(inviteId)}`, { method: 'DELETE' }),
+  getWorkInviteSession: () => request<{ registered: boolean }>('/api/business/invitations/session'),
   previewWorkInvitation: (token: string) => request<{ invitation: WorkInvitePreview }>(`/api/business/invitations/${encodeURIComponent(token)}`),
   acceptWorkInvitation: (token: string) => request<{ organizationId: string }>(`/api/business/invitations/${encodeURIComponent(token)}/accept`, { method: 'POST', body: JSON.stringify({}) }),
   getMe: () => request<{ user: CurrentUser }>('/api/auth/me'),

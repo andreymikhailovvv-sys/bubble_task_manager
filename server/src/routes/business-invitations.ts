@@ -9,6 +9,14 @@ import { invitationTokenHash, validInvitationToken } from '../lib/work-company-r
 export const workInvitationRouter = Router();
 workInvitationRouter.use((_req, res, next) => { res.setHeader('Cache-Control', 'private, no-store'); next(); });
 
+// Unlike /api/auth/me, this endpoint never silently creates a guest identity.
+workInvitationRouter.get('/session', asyncHandler(async (req, res) => {
+  if (!req.user?.id) { res.json({ registered: false }); return; }
+  const user = await prisma.user.findUnique({ where: { id: req.user.id },
+    select: { id: true, deviceId: true, username: true, passwordHash: true, googleSub: true, email: true, telegramChatId: true } });
+  res.json({ registered: Boolean(user && !isGuestAccount(user)) });
+}));
+
 workInvitationRouter.get('/:token', asyncHandler(async (req, res) => {
   if (!validInvitationToken(req.params.token)) { res.status(404).json({ error: 'Приглашение недействительно' }); return; }
   const invitation = await prisma.organizationInvitation.findUnique({

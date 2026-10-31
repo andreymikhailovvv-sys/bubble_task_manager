@@ -16,11 +16,11 @@ export default function WorkInvitationJoin({ token }: { token:string }) {
     document.documentElement.classList.remove('work-workspace-preload');
     document.title = 'Приглашение в Планировыч.Бизнес';
     let active = true;
-    void Promise.allSettled([api.previewWorkInvitation(token), api.getMe()]).then(results => {
+    void Promise.allSettled([api.previewWorkInvitation(token), api.getWorkInviteSession()]).then(results => {
       if (!active) return;
       if (results[0].status === 'fulfilled') setInvite(results[0].value.invitation);
       else setError(results[0].reason instanceof Error ? results[0].reason.message : 'Недействительное приглашение');
-      setAuthenticated(results[1].status === 'fulfilled');
+      setAuthenticated(results[1].status === 'fulfilled' && results[1].value.registered);
       setLoading(false);
     });
     return () => { active = false; };

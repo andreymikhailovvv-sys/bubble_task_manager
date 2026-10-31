@@ -64,6 +64,8 @@ test('company APIs enforce tenant membership, role gates and serializable last-o
   assert.match(invitations,/updated\.count !== 1/);
   assert.match(invitations,/usedAt: null, revokedAt: null, expiresAt:/);
   assert.match(invitations,/isGuestAccount\(actor\)/);
+  assert.match(invitations,/get\('\/session', asyncHandler/);
+  assert.match(invitations,/registered: Boolean\(user && !isGuestAccount\(user\)\)/);
   assert.match(api,/organizationMember\.findFirst\(\{/);
   assert.doesNotMatch(company,/prisma\.task\./);
 });
