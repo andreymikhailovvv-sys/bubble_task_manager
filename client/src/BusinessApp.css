@@ -116,3 +116,9 @@
 .work-join-home { display:flex;align-items:center;gap:8px;justify-content:center;margin-top:25px;font-size:12px;color:#bcb0f1; }
 @media(max-width:1100px){.work-member{flex-wrap:wrap}.work-member-name{flex-basis:calc(100% - 65px)}.work-field{flex:1}.work-icon-danger{margin-left:auto}}
 @media(max-width:630px){.work-company-stats{grid-template-columns:1fr}.work-company-stats article{padding:17px}.work-company-panel{padding:18px}.work-member{gap:9px;padding:11px}.work-member-name{flex-basis:calc(100% - 60px)}.work-field{flex:1 1 145px}.work-field select{width:100%;max-width:none}.work-company-form>div,.work-invite-created>div{flex-direction:column}.work-company-form select{max-width:none}.work-department{align-items:flex-start;flex-wrap:wrap}.work-department>span{flex-wrap:wrap}.work-department-actions{margin-left:auto}.work-company-header{align-items:flex-start}.work-company-logo{width:48px;height:48px;border-radius:14px}.work-join-card{padding:24px}}
+
+.work-org-selector { width:100%;text-align:left;color:inherit;font:inherit;cursor:pointer; }
+.work-org-open { width:100%;text-align:left;color:inherit;font:inherit;cursor:pointer; }
+.work-org-open:hover { background:#24344e;border-color:#766ca9; }
+.work-org-open>svg:last-child { color:#a8a0d7;flex:none; }
+.work-placeholder .work-primary { width:max-content;padding:12px 18px; }
