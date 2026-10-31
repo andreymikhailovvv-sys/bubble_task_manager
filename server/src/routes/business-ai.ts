@@ -94,14 +94,19 @@ workAiRouter.post('/:organizationId/ai/tasks/:taskId/human-messages',asyncHandle
   if(typeof content!=='string'||!content.trim()||content.length>4000){
     res.status(400).json({error:'Сообщение должно содержать 1–4000 символов'});return;
   }
-  if(typeof recipientId!=='string'||recipientId===member.id||
-     ![task.assignedMemberId,task.createdByMemberId].includes(recipientId)){
-    res.status(400).json({error:'Получатель должен быть участником этой задачи'});return;
+  if(typeof recipientId!=='string'||recipientId===member.id){
+    res.status(400).json({error:'Выберите другого участника'});return;
   }
   const recipient=await prisma.organizationMember.findFirst({
-    where:{id:recipientId,organizationId:req.params.organizationId},select:{id:true}
+    where:{id:recipientId,organizationId:req.params.organizationId},
+    select:{id:true,role:true}
   });
-  if(!recipient){res.status(404).json({error:'Получатель не найден'});return;}
+  if(!recipient){res.status(404).json({error:'Получатель не найден в организации'});return;}
+  // A task participant can write to the company owner/leadership even when
+  // the manager was not recorded as this legacy task's creator.
+  if(!manager(recipient.role)&&![task.assignedMemberId,task.createdByMemberId].includes(recipient.id)){
+    res.status(403).json({error:'Получатель не является участником задачи или руководителем'});return;
+  }
   const message=await prisma.organizationAiMessage.create({
     data:{
       organizationId:req.params.organizationId,

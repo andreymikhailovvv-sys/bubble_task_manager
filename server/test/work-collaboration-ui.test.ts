@@ -33,7 +33,8 @@ test('corporate subtask comments and human recipients cannot cross task/tenant s
  assert.match(projects,/parentCommentId:parentId/);
  assert.match(projects,/where:\{id:parentId,subtaskId:subtask\.id\}/);
  assert.match(ai,/human-messages/);
- assert.match(ai,/\[task\.assignedMemberId,task\.createdByMemberId\]\.includes\(recipientId\)/);
+ assert.match(ai,/!manager\(recipient\.role\)/);
+ assert.match(ai,/\[task\.assignedMemberId,task\.createdByMemberId\]\.includes\(recipient\.id\)/);
  assert.match(ai,/organizationId:req\.params\.organizationId/);
  assert.match(ai,/senderMemberId:member\.id[\s\S]*?recipientMemberId:recipient\.id/);
  assert.match(service,/senderMemberId:true,recipientMemberId:true/);
@@ -58,4 +59,37 @@ test('Work rich chat shares personal markdown and dispatcher stays fixed height'
  assert.match(css,/overflow-y:auto;overscroll-behavior:contain/);
  assert.match(api,/workPostSubtaskComment/);
  assert.match(api,/workSendParticipantMessage/);
+});
+
+
+test('Work mounts real personal TaskEditor and personal comment window, not custom clones',async()=>{
+ const [app,work,editor,detail,comments,shared,picker,ai,frame,migration]=await Promise.all([
+   read('../../client/src/App.tsx'),read('../../client/src/WorkTaskFocusDialog.tsx'),
+   read('../../client/src/components/TaskEditor.tsx'),
+   read('../../client/src/WorkSubtaskDetailDialog.tsx'),
+   read('../../client/src/WorkSubtaskCommentsDialog.tsx'),
+   read('../../client/src/components/SubtaskCommentsDialog.tsx'),
+   read('../../client/src/components/TaskAiRecipientPicker.tsx'),
+   read('../../client/src/WorkAiPanel.tsx'),
+   read('../../client/src/components/AiMessageReply.tsx'),
+   read('../prisma/migrations/20261101001500_work_subtask_editor_fields/migration.sql')
+ ]);
+ assert.match(app,/<TaskEditor/);
+ assert.match(detail,/<TaskEditor/);
+ assert.match(detail,/externalSubtask externalReadOnly/);
+ assert.match(detail,/api\.workUpdateSubtask/);
+ assert.doesNotMatch(detail,/api\.updateTask\(/);
+ assert.match(editor,/if \(externalSubtask \|\| !task\?\.id/);
+ assert.match(app,/<SubtaskCommentsDialog/);
+ assert.match(comments,/<SubtaskCommentsDialog/);
+ assert.match(work,/<WorkSubtaskCommentsDialog/);
+ assert.match(work,/setSubtaskComments\(st\)/);
+ assert.match(app,/<TaskAiRecipientPicker/);
+ assert.match(ai,/<TaskAiRecipientPicker/);
+ assert.match(ai,/<AiReplyAction/);
+ assert.match(frame,/MessageActionArrow direction="reply"/);
+ assert.match(picker,/task-ai-recipient-menu/);
+ assert.match(shared,/collaboration-comment-panel/);
+ assert.match(migration,/ALTER TABLE "OrganizationWorkSubtask"/);
+ assert.doesNotMatch(migration,/ALTER TABLE "Task"/);
 });

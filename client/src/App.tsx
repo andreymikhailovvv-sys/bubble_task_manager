@@ -55,6 +55,8 @@ import { FocusedSubtaskComposer } from './components/FocusedSubtaskComposer';
 import { AiModelChip } from './components/AiModelChip';
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
 import { AiReplyAction, AiReplyPreview, AiReplyMessageBody, serializeAiReply, type AiReplyTarget } from './components/AiMessageReply';
+import { TaskAiRecipientPicker } from './components/TaskAiRecipientPicker';
+import { SubtaskCommentsDialog } from './components/SubtaskCommentsDialog';
 import { TelegramIntegrationsMenu } from './components/TelegramIntegrationsMenu';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
 import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike, orderAiChatMessagesChronologically } from './lib/ai-chat-reconciliation';
@@ -4126,53 +4128,14 @@ export default function App() {
 
   const renderTaskAiRecipientPicker = (task: Task) => {
     if (!task.isCollaborative || !task.collaborationMembers?.length) return null;
-    const selectedUserId = getTaskAiRecipientId(task);
-    const selectedMember = task.collaborationMembers.find((member) => member.userId === selectedUserId);
-    return (
-      <div className="relative mb-1 flex justify-end">
-        <button
-          type="button"
-          className="task-ai-recipient-trigger inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold"
-          onClick={() => setIsAiRecipientMenuOpen((open) => !open)}
-          aria-haspopup="menu"
-          aria-expanded={isAiRecipientMenuOpen}
-        >
-          <span className="task-ai-recipient-label">Получатель:</span>
-          <span>{selectedMember?.name ?? 'ИИ'}</span>
-          <ChevronDown size={12} />
-        </button>
-        {isAiRecipientMenuOpen ? (
-          <div className="task-ai-recipient-menu absolute bottom-full right-0 z-30 mb-1 min-w-48 rounded-xl border p-1.5 shadow-2xl" role="menu">
-            <button
-              type="button"
-              className={`task-ai-recipient-item block w-full rounded-lg px-3 py-2 text-left text-xs ${selectedUserId === 'ai' ? 'task-ai-recipient-item-active' : ''}`}
-              onClick={() => {
-                setAiRecipientByTaskId((prev) => ({ ...prev, [task.id]: 'ai' }));
-                setIsAiRecipientMenuOpen(false);
-              }}
-            >
-              ИИ
-            </button>
-            {task.collaborationMembers.filter((member) => member.userId !== currentUser?.id).map((member) => (
-              <button
-                key={member.userId}
-                type="button"
-                className={`task-ai-recipient-item flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs ${selectedUserId === member.userId ? 'task-ai-recipient-item-active' : ''}`}
-                onClick={() => {
-                  setAiRecipientByTaskId((prev) => ({ ...prev, [task.id]: member.userId }));
-                  setIsAiRecipientMenuOpen(false);
-                }}
-              >
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: member.color }} />
-                <span className="truncate">{member.name}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </div>
-    );
+    return <TaskAiRecipientPicker
+      value={getTaskAiRecipientId(task)}
+      onChange={memberId=>setAiRecipientByTaskId(prev=>({...prev,[task.id]:memberId}))}
+      members={task.collaborationMembers.filter(member=>member.userId!==currentUser?.id).map(member=>({
+        id:member.userId,name:member.name,color:member.color
+      }))}
+    />;
   };
-
   const renderWorkspaceCommentIndicator = (task: Task, compact = false) => {
     const total = task.commentCount ?? 0;
     if (total <= 0) return null;
@@ -6999,70 +6962,16 @@ export default function App() {
         </div>
       ) : null}
 
-      {subtaskCommentPanel ? (
-        <div className="modal-backdrop fixed inset-0 z-[270] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setSubtaskCommentPanel(null)}>
-          <section className="collaboration-comment-panel flex max-h-[min(72vh,620px)] w-full max-w-lg flex-col overflow-hidden rounded-3xl border shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="collaboration-comment-header flex items-start justify-between gap-3 border-b px-5 py-4">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-500">Комментарии к подзадаче</p>
-                <h3 className="mt-1 truncate text-base font-semibold text-primary">{subtaskCommentPanel.task.title}</h3>
-              </div>
-              <button type="button" className="focused-task-icon-button h-8 w-8 shrink-0 border" onClick={() => setSubtaskCommentPanel(null)} aria-label="Закрыть комментарии"><X size={14} /></button>
-            </div>
-            <div ref={subtaskCommentScrollRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
-              {subtaskCommentsLoading ? <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-violet-500" /></div> : null}
-              {!subtaskCommentsLoading && subtaskComments.length === 0 ? <p className="collaboration-comment-empty rounded-xl px-3 py-4 text-center text-sm">Комментариев пока нет.</p> : null}
-              {!subtaskCommentsLoading ? subtaskComments.map((comment) => (
-                <article
-                  key={comment.id}
-                  className={`collaboration-comment-card rounded-2xl border px-3 py-2.5 shadow-sm ${comment.parentCommentId ? 'ml-5' : ''}`}
-                  style={{ '--comment-author-color': comment.authorColor ?? '#64748b' } as CSSProperties}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="collaboration-comment-author truncate text-xs font-semibold">{comment.authorName}</span>
-                    <time className="collaboration-comment-time shrink-0 text-[10px]">{new Date(comment.createdAt).toLocaleString('ru-RU')}</time>
-                  </div>
-                  <p className="collaboration-comment-text mt-1 whitespace-pre-wrap break-words text-sm leading-5">{comment.content}</p>
-                  <button type="button" className="collaboration-comment-reply mt-1.5 text-[11px] font-semibold" onClick={() => { setSubtaskCommentReplyTo(comment); setSubtaskCommentPanel((current) => current ? { ...current, compose: true } : current); }}>
-                    Ответить
-                  </button>
-                </article>
-              )) : null}
-            </div>
-            <div className="collaboration-comment-composer border-t px-4 py-3">
-              {subtaskCommentReplyTo ? (
-                <div className="collaboration-comment-reply-preview mb-2 flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-xs">
-                  <span className="min-w-0 truncate">Ответ для {subtaskCommentReplyTo.authorName}: {subtaskCommentReplyTo.content}</span>
-                  <button type="button" className="shrink-0" onClick={() => setSubtaskCommentReplyTo(null)} aria-label="Отменить ответ"><X size={13} /></button>
-                </div>
-              ) : null}
-              <textarea
-                className="collaboration-comment-input min-h-20 w-full resize-y rounded-2xl border px-3 py-2 text-sm outline-none"
-                placeholder={subtaskCommentReplyTo ? 'Напишите ответ…' : 'Оставьте комментарий…'}
-                value={subtaskCommentDraft}
-                autoFocus={subtaskCommentPanel.compose}
-                maxLength={3000}
-                onChange={(event) => setSubtaskCommentDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-                    event.preventDefault();
-                    void sendSubtaskComment();
-                  }
-                }}
-              />
-              {subtaskCommentError ? <p className="mt-1 text-xs text-rose-500">{subtaskCommentError}</p> : null}
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <p className="text-[10px] text-muted">Ctrl/Cmd + Enter для отправки</p>
-                <button type="button" className="primary-button inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50" disabled={!subtaskCommentDraft.trim() || subtaskCommentSending} onClick={() => void sendSubtaskComment()}>
-                  {subtaskCommentSending ? <Loader2 size={14} className="animate-spin" /> : <SendHorizontal size={14} />}
-                  Отправить
-                </button>
-              </div>
-            </div>
-          </section>
-        </div>
-      ) : null}
-
+      {subtaskCommentPanel&&<SubtaskCommentsDialog
+        title={subtaskCommentPanel.task.title} comments={subtaskComments}
+        loading={subtaskCommentsLoading} replyTo={subtaskCommentReplyTo}
+        draft={subtaskCommentDraft} onDraftChange={setSubtaskCommentDraft}
+        onReply={comment=>{setSubtaskCommentReplyTo(subtaskComments.find(item=>item.id===comment.id)??null);setSubtaskCommentPanel(current=>current?{...current,compose:true}:current);}}
+        onDismissReply={()=>setSubtaskCommentReplyTo(null)}
+        onSend={()=>void sendSubtaskComment()} onClose={()=>setSubtaskCommentPanel(null)}
+        error={subtaskCommentError} sending={subtaskCommentSending}
+        autoFocus={subtaskCommentPanel.compose} scrollRef={subtaskCommentScrollRef}
+      />}
       {editorState ? (
         <TaskEditor
           timelineTasks={timelinePickerTasks}

@@ -310,7 +310,7 @@ workProjectsRouter.get('/:organizationId/projects/:projectId/tasks/:taskId/subta
   const rows=await prisma.organizationWorkSubtask.findMany({
     where:{taskId:req.params.taskId},
     orderBy:[{sortOrder:'asc'},{createdAt:'asc'}],
-    select:{id:true,taskId:true,title:true,isDone:true,dueAt:true,
+    select:{id:true,taskId:true,title:true,description:true,importance:true,isDone:true,dueAt:true,
       sortOrder:true,createdByMemberId:true,createdAt:true,updatedAt:true,_count:{select:{comments:true}}},
     take:251
   });
@@ -335,13 +335,23 @@ workProjectsRouter.patch('/:organizationId/projects/:projectId/tasks/:taskId/sub
   });
   if(!current){res.status(404).json({error:'Подзадача не найдена'});return;}
   const changes=req.body||{},keys=Object.keys(changes);
-  if(!keys.length||keys.some(key=>!['title','dueAt','isDone'].includes(key))){
+  if(!keys.length||keys.some(key=>!['title','description','importance','dueAt','isDone'].includes(key))){
     res.status(400).json({error:'Некорректные изменения'});return;
   }
   if(!access.manager&&keys.some(key=>key!=='isDone')&&current.createdByMemberId!==access.member.id){
     res.status(403).json({error:'Сотрудник может изменять название и срок только созданной им подзадачи'});return;
   }
-  const data:{title?:string;dueAt?:Date|null;isDone?:boolean}={};
+  const data:{title?:string;description?:string|null;importance?:number;dueAt?:Date|null;isDone?:boolean}={};
+  if(keys.includes('description')){
+    if(changes.description!==null&&(typeof changes.description!=='string'||changes.description.length>20000)){
+      res.status(400).json({error:'Описание должно быть не длиннее 20000 символов'});return;
+    }
+    data.description=changes.description??null;
+  }
+  if(keys.includes('importance')){
+    if(!Number.isInteger(changes.importance)||changes.importance<1||changes.importance>5){res.status(400).json({error:'Важность должна быть от 1 до 5'});return;}
+    data.importance=changes.importance;
+  }
   if(keys.includes('title')){
     const title=validName(changes.title,240);
     if(!title){res.status(400).json({error:'Название: 2–240 символов'});return;}
