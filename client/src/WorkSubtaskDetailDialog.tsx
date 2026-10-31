@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState,type FormEvent} from 'react';
 import {CalendarPlus,CheckCircle2,MessageCircle,Reply,SendHorizontal,Trash2,X} from 'lucide-react';
 import {DateTimePickerWithApply} from './components/DateTimePickerWithApply';
+import {TaskEditorFrame} from './components/TaskEditorFrame';
 import {AutoGrowingTextarea} from './components/AutoGrowingTextarea';
 import {api,type WorkSubtask,type WorkSubtaskComment,type WorkWorkspace} from './lib/api';
 import './styles.css';
@@ -57,9 +58,8 @@ export default function WorkSubtaskDetailDialog({organizationId,projectId,taskId
   try{await api.workDeleteSubtask(organizationId,projectId,taskId,subtask.id);onDeleted(subtask.id);onClose();}
   catch(e){setError(e instanceof Error?e.message:'Ошибка удаления');setBusy(false);}
  };
- return <div className="modal-backdrop fixed inset-0 z-[900] flex items-center justify-center p-3 backdrop-blur-sm" onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}>
-   <aside role="dialog" aria-modal="true" aria-label="Карточка подзадачи"
-      className="task-edit-shell focused-task-editor-shell work-subtask-editor relative h-[min(710px,calc(100dvh-24px))] w-full max-w-3xl overflow-hidden rounded-[2.3rem] border p-5 shadow-2xl">
+ return <TaskEditorFrame onClose={onClose}
+   className="task-edit-shell focused-task-editor-shell work-subtask-editor relative h-[min(710px,calc(100dvh-24px))] w-full max-w-3xl overflow-hidden rounded-[2.3rem] border p-5 shadow-2xl">
      <button type="button" className="focused-task-icon-button focused-task-calendar-like-button absolute right-5 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full"
        onClick={onClose} title="Закрыть" aria-label="Закрыть окно"><X size={18}/></button>
      <main className="focus-main-card task-edit-card flex h-full min-h-0 flex-col overflow-hidden rounded-[2rem] p-3">
@@ -117,6 +117,5 @@ export default function WorkSubtaskDetailDialog({organizationId,projectId,taskId
            disabled={busy} onClick={()=>void del()}><Trash2 size={15}/> Удалить</button>}
        </div>
      </main>
-   </aside>
- </div>;
+ </TaskEditorFrame>;
 }
