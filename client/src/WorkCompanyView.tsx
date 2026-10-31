@@ -160,6 +160,8 @@ export default function WorkCompanyView({ id, section, currentUserId, onBack, on
       <div className="work-company-details"><div>Идентификатор компании <code>{organization.id}</code></div><div>Дата создания <strong>{new Date(organization.createdAt).toLocaleDateString('ru-RU')}</strong></div><div>Твоя роль <strong>{labels[organization.role]}</strong></div></div>
     </div>}
     {section === 'projects' && <WorkProjectsView organizationId={id} workspace={data} currentUserId={currentUserId}/>}
-    {section === 'ai' && <WorkAiPanel organizationId={id} canManage={['OWNER','ADMIN','MANAGER'].includes(organization.role)} canSetModel={manager}/>} 
+    {section === 'ai' && (['OWNER','ADMIN','MANAGER'].includes(organization.role)
+      ? <WorkAiPanel organizationId={id} canManage canSetModel={manager}/>
+      : <div className="work-company-panel work-company-upcoming"><h2>ИИ-диспетчер компании</h2><p>Доступ к корпоративному ИИ-диспетчеру имеют владельцы, администраторы и руководители.</p></div>)} 
   </div>;
 }
