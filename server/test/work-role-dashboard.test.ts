@@ -66,7 +66,7 @@ test('employee quick chat segregates messages and AI context by membership and t
   assert.match(ai,/tasks:\{where:ownTasksWhere/);
   assert.match(route,/role==='VIEWER'/);
   assert.match(route,/\/ai\/quick\/chat/);
-  assert.match(route,/workAiHistory\(req\.params\.organizationId,null,member\.id\)/);
+  assert.match(route,/workAiHistory\(req\.params\.organizationId,null,member\.id,member\.id\)/);
   assert.match(quick,/workQuickAiAsk/);
   assert.match(quick,/dashboard\.projects\.map/);
   assert.match(quick,/ExpandedAiChat/);
