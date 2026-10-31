@@ -1,112 +1,187 @@
-import {useEffect,useState} from 'react';
-import {Bot,ChevronRight,ChevronDown,Maximize2,MessageSquare,Send,X,FolderKanban,Wallet,PanelLeftClose} from 'lucide-react';
-import {api,type WorkDashboard,type WorkAiCredits,type WorkAiMessage} from './lib/api';
-import WorkAiPanel from './WorkAiPanel';
+import {useEffect,useMemo,useRef,useState} from 'react';
+import {Loader2,SendHorizontal} from 'lucide-react';
+import {AutoGrowingTextarea} from './components/AutoGrowingTextarea';
+import {ExpandedAiChat,type ExpandedAiChatProject} from './components/ExpandedAiChat';
+import {QuickAiLauncherFrame} from './components/QuickAiLauncherFrame';
+import {api,type WorkDashboard,type WorkAiMessage,type WorkAiCredits} from './lib/api';
+import type {AiChatModel} from './lib/types';
+import './styles.css';
 
-const formatCredits=(milli:number)=>(milli/1000).toLocaleString('ru-RU',{maximumFractionDigits:3});
+// Intentionally use the original personal Planировыч chat surfaces, their
+// markup, class names, scrollbar behavior, hover boundary and expanded chat.
+// Only the data source and role-aware actions are corporate.
+const QUICK='work-company-quick';
+const colors=['#8b5cf6','#06b6d4','#a78bfa','#4a95b2'] as const;
+const labels:Record<AiChatModel,string>={'gpt-6-luna':'Luna','gpt-6.1-terra':'Terra','gpt-6.1-sol':'Sol'};
+const known=(v:string):v is AiChatModel=>v in labels;
 export default function WorkQuickAi({organizationId,dashboard}:{organizationId:string;dashboard:WorkDashboard}){
-  const [full,setFull]=useState(false);
-  const [hover,setHover]=useState(false);
-  const [sidebar,setSidebar]=useState(true);
-  const [activeProject,setActiveProject]=useState<string|null>(null);
-  const [activeTask,setActiveTask]=useState<string|null>(null);
-  const [messages,setMessages]=useState<WorkAiMessage[]>([]);
+  const [expanded,setExpanded]=useState(false);
+  const [quickMessages,setQuickMessages]=useState<WorkAiMessage[]>([]);
+  const [taskMessages,setTaskMessages]=useState<WorkAiMessage[]>([]);
+  const [selectedProjectId,setSelectedProjectId]=useState('work-default');
+  const [selectedChatId,setSelectedChatId]=useState(QUICK);
   const [credits,setCredits]=useState<WorkAiCredits|null>(null);
   const [draft,setDraft]=useState('');
-  const [busy,setBusy]=useState(false);
+  const [loading,setLoading]=useState(false);
+  const [fetching,setFetching]=useState(true);
   const [error,setError]=useState('');
-  const [loading,setLoading]=useState(true);
-  const viewer=dashboard.role==='VIEWER';
+  const messagesRef=useRef<HTMLDivElement|null>(null);
+  const allowed=dashboard.role!=='VIEWER';
+  const admin=['OWNER','ADMIN'].includes(dashboard.role);
+  const [selectedModel,setSelectedModel]=useState<AiChatModel>('gpt-6-luna');
   useEffect(()=>{
-    let live=true;
-    setFull(false);setActiveProject(null);setActiveTask(null);setMessages([]);setCredits(null);setError('');
-    setLoading(true);
-    if(viewer){setLoading(false);return;}
-    void Promise.all([api.workQuickAiHistory(organizationId),api.workAiBalance(organizationId)]).then(([history,balance])=>{
-      if(live){setMessages(history.messages);setCredits(balance.credits);}
-    }).catch(e=>{if(live)setError(e instanceof Error?e.message:'Ошибка истории');})
-      .finally(()=>{if(live)setLoading(false);});
+    // Personal theme tokens are shared and B2B is explicitly dark.
+    const old=document.body.dataset.theme;
+    document.body.dataset.theme='dark';
+    return()=>{if(old===undefined)delete document.body.dataset.theme;else document.body.dataset.theme=old;};
+  },[]);
+  useEffect(()=>{
+    let mounted=true;
+    setExpanded(false);setSelectedChatId(QUICK);setSelectedProjectId('work-default');
+    setQuickMessages([]);setTaskMessages([]);setError('');setFetching(true);
+    if(!allowed){setFetching(false);return;}
+    void Promise.all([api.workQuickAiHistory(organizationId),api.workAiBalance(organizationId)])
+      .then(([history,balance])=>{
+        if(!mounted)return;
+        setQuickMessages(history.messages);setCredits(balance.credits);
+        if(known(balance.credits.aiModel))setSelectedModel(balance.credits.aiModel);
+      }).catch(e=>{if(mounted)setError(e instanceof Error?e.message:'Ошибка загрузки чата');})
+      .finally(()=>{if(mounted)setFetching(false);});
+    return()=>{mounted=false;};
+  },[organizationId,allowed]);
+  useEffect(()=>{
+    if(selectedChatId===QUICK){setTaskMessages([]);return;}
+    const task=dashboard.tasks.find(item=>item.id===selectedChatId);
+    if(!task){setSelectedChatId(QUICK);return;}
+    let live=true;setFetching(true);setError('');setTaskMessages([]);
+    void api.workAiHistory(organizationId,task.id).then(data=>{
+      if(live)setTaskMessages(data.messages);
+    }).catch(e=>{if(live)setError(e instanceof Error?e.message:'Ошибка загрузки задачи');})
+      .finally(()=>{if(live)setFetching(false);});
     return()=>{live=false;};
-  },[organizationId,viewer]);
+  },[organizationId,selectedChatId,dashboard.tasks]);
   useEffect(()=>{
-    if(!full)return;
-    const keyboard=(e:KeyboardEvent)=>{if(e.key==='Escape')setFull(false);};
-    document.addEventListener('keydown',keyboard);
-    return()=>document.removeEventListener('keydown',keyboard);
-  },[full]);
-  const submit=async()=>{
-    if(busy||viewer||!draft.trim())return;
-    const question=draft.trim();setBusy(true);setError('');
+    const node=messagesRef.current;
+    if(node)node.scrollTop=node.scrollHeight;
+  },[quickMessages.length,expanded]);
+  const projects=useMemo<ExpandedAiChatProject[]>(()=>[
+    {id:'work-default',title:'Быстрые запросы',color:'#8b5cf6',icon:'✦',
+      chats:[{id:QUICK,title:'Быстрые запросы',messages:quickMessages}]},
+    ...dashboard.projects.map((project,index)=>({
+      id:project.id,title:project.name,color:colors[index%colors.length],icon:'🗂️',
+      chats:dashboard.tasks.filter(task=>task.projectId===project.id).map(task=>({
+        id:task.id,title:task.title,messages:selectedChatId===task.id?taskMessages:[]
+      }))
+    }))
+  ],[dashboard.projects,dashboard.tasks,quickMessages,taskMessages,selectedChatId]);
+  const activeProject=projects.find(p=>p.id===selectedProjectId)||projects[0];
+  const activeChat=activeProject.chats.find(t=>t.id===selectedChatId)||activeProject.chats[0];
+  const visible=selectedChatId===QUICK?quickMessages:taskMessages;
+  const errorText=(e:unknown)=>e instanceof Error?e.message:'ИИ не ответил';
+  const send=async(question:string,quick:boolean)=>{
+    const q=question.trim();if(!q||loading||!allowed)return;
+    setLoading(true);setError('');
     try{
-      const response=await api.workQuickAiAsk(organizationId,question);
-      const history=await api.workQuickAiHistory(organizationId);
-      setMessages(history.messages);setCredits(response.credits);setDraft('');
-    }catch(e){setError(e instanceof Error?e.message:'Не удалось выполнить запрос');}
-    finally{setBusy(false);}
+      const result=quick?await api.workQuickAiAsk(organizationId,q):await api.workAiAsk(organizationId,q,selectedChatId);
+      setCredits(result.credits);
+      const response=quick?await api.workQuickAiHistory(organizationId):await api.workAiHistory(organizationId,selectedChatId);
+      if(quick){setQuickMessages(response.messages);setDraft('');}
+      else setTaskMessages(response.messages);
+    }catch(e){setError(errorText(e));}
+    finally{setLoading(false);}
   };
-  const thread=<>{loading?<p className="work-muted">Загружаем сообщения…</p>:messages.length?messages.map(item=>
-    <div className={'work-quick-message '+(item.role==='assistant'?'assistant':'user')} key={item.id}>
-      <small>{item.role==='assistant'?'ИИ':'Вы'}</small><div>{item.content}</div>
-    </div>):<div className="work-quick-empty">Задайте вопрос по своим задачам и проектам компании.</div>}</>;
-  const editor=<form className="work-quick-composer" onSubmit={e=>{e.preventDefault();void submit();}}>
-    <textarea value={draft} onChange={e=>setDraft(e.target.value)} rows={2} maxLength={3000} placeholder="Быстрый запрос к ИИ…" disabled={busy||viewer}
-      onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();if(draft.trim())void submit();}}}/>
-    <button aria-label="Отправить запрос" disabled={busy||!draft.trim()||viewer}><Send size={18}/></button>
-  </form>;
-  const selectedProject=dashboard.projects.find(x=>x.id===activeProject);
-  const selectedTask=dashboard.tasks.find(x=>x.id===activeTask);
+  const sendQuick=()=>void send(draft,true);
+  const changeModel=(model:AiChatModel)=>{
+    if(!admin)return;
+    setLoading(true);setError('');
+    void api.workAiSetModel(organizationId,model).then(()=>setSelectedModel(model))
+      .catch(e=>setError(errorText(e))).finally(()=>setLoading(false));
+  };
+  const selectProject=(project:ExpandedAiChatProject)=>{
+    setSelectedProjectId(project.id);
+    setSelectedChatId(project.chats[0]?.id||QUICK);
+  };
+  const selectChat=(id:string)=>{
+    setSelectedChatId(id);
+    const project=projects.find(p=>p.chats.some(chat=>chat.id===id));
+    if(project)setSelectedProjectId(project.id);
+  };
+  if(!allowed)return null;
   return <>
-    <div className="work-quick-anchor" onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)}>
-      {hover&&!full&&!viewer&&<div className="work-quick-peek">
-        <div className="work-quick-peek-head"><Bot size={17}/><strong>Быстрые запросы</strong>
-          <button type="button" onClick={()=>setFull(true)} aria-label="Развернуть"><Maximize2 size={16}/></button>
-        </div>
-        <div className="work-quick-peek-thread">{thread}</div>
-        {error&&<p role="alert" className="work-ai-error">{error}</p>}
-        {editor}
-      </div>}
-      <button className="work-quick-fab" type="button" aria-label="Открыть общий чат с ИИ" onClick={()=>setFull(true)} title="Быстрые запросы">
-        <Bot size={23}/><span>ИИ</span>
-      </button>
-    </div>
-    {full&&<div className="work-quick-modal" role="dialog" aria-modal="true" aria-label="Корпоративный чат с ИИ">
-      <div className="work-quick-window">
-        <header className="work-quick-header">
-          <button type="button" aria-label="Переключить список проектов" onClick={()=>setSidebar(!sidebar)}><PanelLeftClose size={18}/></button>
-          <div><strong>Планировыч.Work · ИИ</strong><small>{selectedTask?.title||selectedProject?.name||'Быстрые запросы'}</small></div>
-          <button type="button" aria-label="Закрыть чат" onClick={()=>setFull(false)}><X size={20}/></button>
-        </header>
-        <div className="work-quick-body">
-          {sidebar&&<aside className="work-quick-sidebar">
-            <div className="work-quick-sidebar-head">ПРОЕКТЫ</div>
-            <button type="button" className={!activeTask?'selected':''} onClick={()=>{setActiveProject(null);setActiveTask(null);}}>
-              <MessageSquare size={17}/> Быстрые запросы
+    <QuickAiLauncherFrame work onHoverChange={hovered=>{
+      if(hovered)requestAnimationFrame(()=>{const node=messagesRef.current;if(node)node.scrollTop=node.scrollHeight;});
+    }}>
+      <div className="absolute bottom-14 right-0 w-80 transition duration-200 pointer-events-none translate-y-2 opacity-0 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100">
+        <div className="dialog-surface rounded-3xl border p-3 shadow-2xl backdrop-blur transition duration-200 hover:shadow-violet-500/20">
+          <div ref={messagesRef} className="quick-ai-chat-messages mb-2 max-h-72 overflow-y-auto overflow-x-hidden pr-1 text-xs">
+            <div className="space-y-2">
+              {quickMessages.slice(-20).map(item=><div key={item.id} className={`ai-message-forward-group w-fit max-w-[calc(100%-2rem)] ${item.role==='user'?'ml-auto':'mr-auto'}`}>
+                <div className={`quick-ai-chat-message w-full rounded-2xl px-3 py-2 shadow-sm ${item.role==='user'?'quick-ai-chat-message-user':'quick-ai-chat-message-assistant'}`}>
+                  <b>{item.role==='user'?'Вы':'ИИ'}:</b> {item.content}
+                </div>
+              </div>)}
+              {!quickMessages.length&&<p className="text-subtle">Быстрый вопрос по проектам и задачам выбранной компании.</p>}
+              {loading&&<p className="text-subtle"><Loader2 size={14} className="inline animate-spin"/> Думаю…</p>}
+            </div>
+          </div>
+          {error&&<p role="alert" className="text-xs text-rose-300">{error}</p>}
+          <div className="flex items-end gap-2">
+            <AutoGrowingTextarea maxHeight={144}
+              className="form-field min-h-9 min-w-0 flex-1 resize-none rounded-2xl border px-3 py-2 text-sm leading-5 transition focus:ring-2 focus:ring-violet-300"
+              value={draft} onChange={e=>setDraft(e.target.value)}
+              onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){
+                e.preventDefault();sendQuick();
+              }}} placeholder="Спросить быстро…"/>
+            <button type="button" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-600 p-2 text-white shadow-lg transition duration-200 hover:bg-violet-500 disabled:opacity-50"
+              aria-label="Отправить" disabled={loading||!draft.trim()} onClick={sendQuick}>
+              {loading?<Loader2 size={16} className="animate-spin"/>:<SendHorizontal size={16}/>}
             </button>
-            {dashboard.projects.map(project=><div key={project.id}>
-              <button type="button" className={activeProject===project.id?'selected':''} onClick={()=>{
-                setActiveProject(activeProject===project.id?null:project.id);setActiveTask(null);
-              }}><FolderKanban size={16}/><span>{project.name}</span>
-                {activeProject===project.id?<ChevronDown size={14}/>:<ChevronRight size={14}/>}
-              </button>
-              {activeProject===project.id&&<div className="work-quick-sidebar-tasks">
-                {dashboard.tasks.filter(task=>task.projectId===project.id).map(task=>
-                <button key={task.id} type="button" className={activeTask===task.id?'selected':''}
-                  onClick={()=>setActiveTask(task.id)}><MessageSquare size={14}/>{task.title}</button>)}
-                {!dashboard.tasks.some(t=>t.projectId===project.id)&&<span className="work-muted">Нет поручений</span>}
-              </div>}
-            </div>)}
-          </aside>}
-          <main className="work-quick-main">
-            {activeTask?<WorkAiPanel key={activeTask} organizationId={organizationId} taskId={activeTask} canManage={['OWNER','ADMIN','MANAGER'].includes(dashboard.role)}/>:
-              <><div className="work-quick-main-subtitle"><Bot size={17}/>
-                <span>{selectedProject?'Выберите чат задачи в проекте слева':'Ваши быстрые запросы по выбранной организации'}</span></div>
-              <div className="work-quick-thread">{thread}</div>
-              {error&&<p role="alert" className="work-ai-error">{error}</p>}
-              {credits&&<div className="work-quick-balance"><Wallet size={14}/> Баланс компании: {formatCredits(credits.aiCreditsMilli)} кр.</div>}
-              {editor}</>}
-          </main>
+          </div>
         </div>
       </div>
-    </div>}
+      <button type="button"
+        className="ai-chat-launcher-button flex h-14 w-14 touch-none select-none items-center justify-center rounded-full text-2xl text-white shadow-2xl transition duration-200 hover:scale-105 hover:shadow-violet-500/40 active:scale-95"
+        title="Чат с ИИ" aria-label="Развернуть чат с ИИ"
+        onClick={()=>{setSelectedChatId(QUICK);setSelectedProjectId('work-default');setExpanded(true);}}>
+        ✦
+      </button>
+    </QuickAiLauncherFrame>
+    {expanded&&<ExpandedAiChat
+      projects={projects}
+      activeProject={activeProject}
+      activeChat={activeChat}
+      quickChatId={QUICK}
+      model={selectedModel}
+      modelOptions={admin?Object.entries(labels).map(([value,label])=>({value,label})):
+        [{value:selectedModel,label:labels[selectedModel]}]}
+      pendingFiles={[]}
+      loading={loading||fetching}
+      imageGenerating={false}
+      messageCount={visible.length}
+      readOnlyStructure
+      attachmentsEnabled={false}
+      messages={visible.map(item=><div key={item.id} className={`ai-message-forward-group w-fit max-w-[92%] ${item.role==='assistant'?'mr-auto':'ml-auto'}`}>
+        <div className={`chat-message w-full rounded-xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] ${item.role==='assistant'?'chat-message-assistant':'chat-message-user'}`}>
+          <div className="mb-1 flex items-center justify-between">
+            <p className="chat-message-label text-[11px] font-semibold uppercase tracking-wide">{item.role==='assistant'?'ИИ':item.role==='system'?'Мониторинг':'Вы'}</p>
+          </div><div>{item.content}</div>
+        </div>
+      </div>)}
+      status={error?<p role="alert" className="text-sm text-rose-400">{error}</p>:
+        loading?<p className="text-sm text-muted">Формируем ответ…</p>:
+        credits?<p className="text-[11px] text-muted">Баланс организации: {(credits.aiCreditsMilli/1000).toFixed(3)} кр.</p>:null}
+      onClose={()=>setExpanded(false)}
+      onCreateProject={()=>undefined}
+      onCreateChat={()=>undefined}
+      onSelectProject={selectProject}
+      onSelectChat={selectChat}
+      onDeleteProject={()=>undefined}
+      onDeleteChat={()=>undefined}
+      onContextMenu={()=>undefined}
+      onModelChange={changeModel}
+      onAddFiles={()=>undefined}
+      onRemoveFile={()=>undefined}
+      onSend={question=>void send(question,selectedChatId===QUICK)}
+    />}
   </>;
 }
