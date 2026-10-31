@@ -56,8 +56,8 @@ test('company APIs enforce tenant membership, role gates and serializable last-o
   assert.match(company,/canAssignRole\(currentActor\.role, current\.role, nextRole\)/);
   assert.match(company,/owners <= 1/);
   assert.ok(company.split('TransactionIsolationLevel.Serializable').length>=3);
-  assert.match(company,/where: \\{ id: req\\.params\\.departmentId, organizationId: req\\.params\\.organizationId \\}/);
-  assert.match(company,/where: \\{ id: req\\.body\\.departmentId, organizationId \\}/);
+  assert.match(company,/where: \{ id: req\.params\.departmentId, organizationId: req\.params\.organizationId \}/);
+  assert.match(company,/where: \{ id: req\.body\.departmentId, organizationId \}/);
   assert.match(company,/role === 'ADMIN' && actor\.role !== 'OWNER'/);
   assert.match(company,/15 ссылок за час/);
   assert.match(invitations,/tokenHash: invitationTokenHash\(req\.params\.token\)/);
