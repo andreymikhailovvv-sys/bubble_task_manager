@@ -27,7 +27,7 @@ function newPinky() {
   return {x:72,y:FLOOR-66,w:38,h:66,vy:0,hp:6,maxHp:6,iframes:0,ground:true,face:1,run:0,
     weapon:'auto', ammo:{auto:55,rpg:0},fireCd:0,rocketUnlocked:false};
 }
-function newBrain() { return {x:25,y:FLOOR-47,w:35,h:47,face:1,throwCd:2.4,run:0}; }
+function newBrain() { return {x:25,y:FLOOR-47,w:35,h:47,face:1,throwCd:2.4,autoCd:.6,run:0}; }
 function speak(value,secs=1.7) {
   tip=value;hintTime=secs;announcement.textContent=value;announcement.classList.add('visible');
 }
@@ -111,7 +111,7 @@ function enterStage(number) {
   stage=number;stageTime=0;boss=null;bossClock=1.2;wave=0;beatClock=0;beatIndex=0;
   enemies=[];items=[];shots=[];sparks=[];effects=[];machines=[];walls=[];exitTile=null;
   worldH=H;pinky.x=76;pinky.y=FLOOR-pinky.h;pinky.vy=0;pinky.ground=true;pinky.iframes=1.2;
-  brain.x=20;brain.y=FLOOR-brain.h;brain.throwCd=1.7;cameraReset();
+  brain.x=20;brain.y=FLOOR-brain.h;brain.throwCd=1.7;brain.autoCd=.7;cameraReset();
   if(number===1) {
     worldW=2250;chips=0;plans=0;
     [[175,388,'chip'],[370,348,'chip'],[565,395,'chip'],[700,351,'plan'],
@@ -274,6 +274,19 @@ function updateCompanion(dt) {
   brain.face=pinky.face;brain.run+=dt*Math.abs(dx)*.08;
   if(isMaze()){
     if(!canStand(brain.x,brain.y,brain.w,brain.h)){brain.x=pinky.x-22;brain.y=pinky.y+24;}
+  }
+  brain.autoCd-=dt;
+  if(brain.autoCd<=0){
+    const origin={x:brain.x+18,y:brain.y+15};
+    const target=boss&&boss.hp>0?boss:enemies.filter(e=>e.alive)
+      .sort((a,b)=>dist(origin.x,origin.y,a.x+a.w/2,a.y+a.h/2)-dist(origin.x,origin.y,b.x+b.w/2,b.y+b.h/2))[0];
+    if(target&&dist(origin.x,origin.y,target.x+target.w/2,target.y+target.h/2)<410){
+      const dx=target.x+target.w/2-origin.x,dy=target.y+target.h/2-origin.y;
+      const a=Math.atan2(dy,dx)+rand(-.045,.045);
+      shots.push({type:'bullet',team:'brain',x:origin.x,y:origin.y,
+        vx:Math.cos(a)*650,vy:Math.sin(a)*650,r:4,life:1,power:1,hit:false});
+      brain.autoCd=.27;brain.face=dx>=0?1:-1;
+    }else brain.autoCd=.7;
   }
   brain.throwCd-=dt;
   if(brain.throwCd<=0){
@@ -807,13 +820,15 @@ function drawCompanion(){
   }else{
     shadow(brain.x+18,FLOOR,40);
     ctx.save();if(brain.face<0){ctx.translate(brain.x+35,0);ctx.scale(-1,1);ctx.translate(-brain.x,0);}
-    drawBrain(brain.x+18,brain.y+18,.68);ctx.restore();
+    drawBrain(brain.x+18,brain.y+18,.68);
+    box(brain.x+15,brain.y+31,31,8,'#4b555d','#b8c2c2',2,1);
+    box(brain.x+25,brain.y+37,6,8,'#2f373f');ctx.restore();
   }
 }
 function hud(){
   box(12,12,936,70,'#091628e3','#55838d80',11,1.5);
   label('CHIP HEIST 2.0',28,32,15,'#8effdc','left',1000);
-  label('УРОВЕНЬ '+stage+'/4',28,62,11,'#9eb6c9');
+  label('УРОВЕНЬ '+stage+'/4 · БРЕЙН: АВТО+ГРАНАТЫ',28,62,9,'#9eb6c9');
   for(let i=0;i<6;i++)label(i<pinky.hp?'♥':'♡',171+i*25,47,23,i<pinky.hp?'#fb8499':'#60778b');
   label('СЧЁТ',333,32,10,'#9cb0c1');label(score.toLocaleString('ru-RU'),333,58,18,'#ffe29e','left',950);
   box(492,24,210,49,'#193046','#53718c',8,1);
