@@ -29,6 +29,8 @@ jobs:
         run: npm ci --include=dev --no-audit --no-fund
       - name: Compile web client and API server
         run: npm run build
+      - name: Verify Work AI company wallet, monitoring and admin grants
+        run: node --import tsx --test server/test/work-ai-credits-and-monitoring.test.ts
       - name: Verify tenant-owned Work projects and lightweight entry
         run: node --import tsx --test server/test/work-projects-and-entry.test.ts
       - name: Verify Work company permissions, invitations and departments
