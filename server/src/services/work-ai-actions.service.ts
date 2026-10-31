@@ -26,8 +26,8 @@ const date = (value:unknown):Date => {
   return parsed;
 };
 const labelDate = (value:string) => new Date(value).toLocaleString('ru-RU',{dateStyle:'medium',timeStyle:'short'});
-const summary = (a:WorkChangeAction) => {
-  const name=a.name||a.title||a.taskId||a.projectId||a.subtaskId||'';
+const summary = (a:WorkChangeAction,displayTitle='') => {
+  const name=a.name||a.title||displayTitle||'Объект';
   return ({
     create_project:'Новый проект', update_project:'Изменение проекта',
     create_task:'Новое поручение', update_task:'Изменение поручения',
@@ -96,8 +96,8 @@ export function parseWorkChanges(input:unknown):WorkChangeAction[] {
 function allowed(a:WorkChangeAction,actor:Actor){
   if(MANAGERS.has(actor.role))return;
   if(actor.role!=='MEMBER')fail('Недостаточно прав');
-  if(a.op==='update_task'&&a.status&&!a.title&&!a.description&&!a.dueAt&&!a.clearDueAt&&!a.priority&&!a.assigneeMemberId)return;
-  if(a.op==='update_subtask'&&defined(a.isDone)&&!a.title&&!a.description&&!a.dueAt&&!a.clearDueAt)return;
+  if(a.op==='update_task'&&a.status&&!a.title&&!defined(a.description)&&!a.dueAt&&!a.clearDueAt&&!a.priority&&!a.assigneeMemberId)return;
+  if(a.op==='update_subtask'&&defined(a.isDone)&&!a.title&&!defined(a.description)&&!a.dueAt&&!a.clearDueAt)return;
   fail('Сотруднику разрешено менять только статус своего поручения и выполнение подзадачи');
 }
 async function projectRow(tx:typeof prisma,organizationId:string,id:string){
@@ -120,39 +120,43 @@ async function subtaskRow(tx:typeof prisma,organizationId:string,id:string){
 export async function planWorkChanges(organizationId:string,actor:Actor,input:unknown):Promise<PlannedAction[]> {
   const actions=parseWorkChanges(input);
   const projectKeys=new Set<string>(),taskKeys=new Set<string>(),updated=new Set<string>();
+  const projectNames=new Map<string,string>(),taskNames=new Map<string,string>();
   const planned:PlannedAction[]=[];
   for(const a of actions){
     allowed(a,actor);
     let baseline:string|undefined;
+    let displayTitle='',parentTitle='';
     if(a.op==='create_project'){
       if(!a.name||!key(a.projectKey)||projectKeys.has(a.projectKey!))fail('Новый проект должен иметь название и уникальный projectKey');
-      projectKeys.add(a.projectKey!);
+      projectKeys.add(a.projectKey!);projectNames.set(a.projectKey!,a.name);
     } else if(a.op==='update_project'){
       if(!a.projectId||(!a.name&&!defined(a.description)))fail('Укажите проект и изменения');
       const p=await projectRow(prisma,organizationId,a.projectId);
       if(updated.has('p:'+p.id))fail('Один проект изменяется лишь один раз в чипе');
-      updated.add('p:'+p.id);baseline=p.updatedAt.toISOString();
+      updated.add('p:'+p.id);baseline=p.updatedAt.toISOString();displayTitle=p.name;
     } else if(a.op==='create_task'){
       if(!a.title||!key(a.taskKey)||taskKeys.has(a.taskKey!))fail('Для нового поручения нужны название и уникальный taskKey');
       if(Boolean(a.projectId)===Boolean(a.projectKey))fail('Укажите существующий projectId или projectKey нового проекта');
       if(a.projectKey&&!projectKeys.has(a.projectKey))fail('Сначала создайте указанный проект');
-      if(a.projectId){const p=await projectRow(prisma,organizationId,a.projectId);if(p.isArchived)fail('Проект архивирован');baseline=p.updatedAt.toISOString();}
-      taskKeys.add(a.taskKey!);
+      if(a.projectKey)parentTitle=projectNames.get(a.projectKey)||'';
+      if(a.projectId){const p=await projectRow(prisma,organizationId,a.projectId);if(p.isArchived)fail('Проект архивирован');baseline=p.updatedAt.toISOString();parentTitle=p.name;}
+      taskKeys.add(a.taskKey!);taskNames.set(a.taskKey!,a.title);
     } else if(a.op==='update_task'){
       if(!a.taskId||![a.title, a.description,a.dueAt,a.priority,a.status,a.assigneeMemberId,a.clearDueAt].some(Boolean))fail('Укажите поручение и изменение');
       const t=await taskRow(prisma,organizationId,a.taskId);
       if(t.project.isArchived)fail('Проект архивирован');
       if(!MANAGERS.has(actor.role)&&t.assignedMemberId!==actor.id&&t.createdByMemberId!==actor.id)fail('Поручение не принадлежит сотруднику');
       if(updated.has('t:'+t.id))fail('Одно поручение изменяется лишь один раз в чипе');
-      updated.add('t:'+t.id);baseline=t.updatedAt.toISOString();
+      updated.add('t:'+t.id);baseline=t.updatedAt.toISOString();displayTitle=t.title;
     } else if(a.op==='create_subtask'){
       if(!a.title||Boolean(a.taskId)===Boolean(a.taskKey))fail('Для подзадачи нужны название и taskId либо taskKey');
       if(a.taskKey&&!taskKeys.has(a.taskKey))fail('Сначала создайте указанное поручение');
+      if(a.taskKey)parentTitle=taskNames.get(a.taskKey)||'';
       if(a.taskId){
         const t=await taskRow(prisma,organizationId,a.taskId);
         if(t.project.isArchived)fail('Проект архивирован');
         if(!MANAGERS.has(actor.role)&&t.assignedMemberId!==actor.id&&t.createdByMemberId!==actor.id)fail('Нет прав на поручение');
-        baseline=t.updatedAt.toISOString();
+        baseline=t.updatedAt.toISOString();parentTitle=t.title;
       }
     } else if(a.op==='update_subtask'){
       if(!a.subtaskId||![a.title,a.description,a.dueAt,a.clearDueAt,defined(a.isDone)].some(Boolean))fail('Укажите подзадачу и изменение');
@@ -160,13 +164,19 @@ export async function planWorkChanges(organizationId:string,actor:Actor,input:un
       if(t.task.project.isArchived)fail('Проект архивирован');
       if(!MANAGERS.has(actor.role)&&t.task.assignedMemberId!==actor.id&&t.task.createdByMemberId!==actor.id)fail('Нет прав на поручение');
       if(updated.has('s:'+t.id))fail('Одна подзадача изменяется лишь раз');
-      updated.add('s:'+t.id);baseline=t.updatedAt.toISOString();
+      updated.add('s:'+t.id);baseline=t.updatedAt.toISOString();displayTitle=t.title;
     }
+    let assigneeName:string|undefined;
     if(a.assigneeMemberId){
-      const member=await prisma.organizationMember.findFirst({where:{id:a.assigneeMemberId,organizationId},select:{id:true}});
+      const member=await prisma.organizationMember.findFirst({where:{id:a.assigneeMemberId,organizationId},
+        select:{id:true,user:{select:{name:true,username:true}}}});
       if(!member)fail('Исполнитель должен состоять в компании');
+      assigneeName=member.user.name||member.user.username||'Сотрудник';
     }
-    planned.push({...a,baseline,summary:summary(a),details:details(a)});
+    const descriptions=details(a).filter(d=>!d.startsWith('Исполнитель: участник '));
+    if(parentTitle)descriptions.unshift((a.op==='create_task'?'Проект: ':'В поручении: ')+parentTitle);
+    if(assigneeName)descriptions.push('Исполнитель: '+assigneeName);
+    planned.push({...a,baseline,summary:summary(a,displayTitle),details:descriptions});
   }
   return planned;
 }
@@ -190,6 +200,7 @@ export async function applyWorkChangeProposal(organizationId:string,actor:Actor,
       if(!claim.count)fail('Предложение уже обрабатывается');
       const actions=row.operations as unknown as PlannedAction[];
       const projects=new Map<string,string>(), tasks=new Map<string,string>(),createdIds:string[]=[];
+      const touchedProjects=new Set<string>(),touchedTasks=new Set<string>();
       for(const a of actions){
         allowed(a,member);
         if(a.assigneeMemberId&&!await tx.organizationMember.findFirst({where:{id:a.assigneeMemberId,organizationId}}))fail('Исполнитель больше не состоит в компании');
@@ -201,12 +212,13 @@ export async function applyWorkChangeProposal(organizationId:string,actor:Actor,
           const p=await tx.organizationProject.findFirst({where:{id:a.projectId!,organizationId}});
           if(!p||!same(p.updatedAt,a.baseline))fail('Проект изменён после подготовки чипа');
           await tx.organizationProject.update({where:{id:p.id},data:{...(a.name?{name:a.name.trim()}:{}),...descriptionPatch(a)}});
+          touchedProjects.add(p.id);
         }
         if(a.op==='create_task'){
           const projectId=a.projectId||projects.get(a.projectKey!);
           if(!projectId)fail('Проект не найден');
           const p=await tx.organizationProject.findFirst({where:{id:projectId,organizationId}});
-          if(!p||!same(p.updatedAt,a.baseline))fail('Проект изменился после подготовки чипа');
+          if(!p||(!touchedProjects.has(p.id)&&!same(p.updatedAt,a.baseline)))fail('Проект изменился после подготовки чипа');
           ensureActive(p.isArchived);
           const t=await tx.organizationWorkTask.create({data:{
             projectId:p.id,title:a.title!.trim(),description:a.description||null,
@@ -218,7 +230,7 @@ export async function applyWorkChangeProposal(organizationId:string,actor:Actor,
         if(a.op==='update_task'){
           const t=await tx.organizationWorkTask.findFirst({where:{id:a.taskId!,project:{organizationId}},
             include:{project:{select:{isArchived:true}}}});
-          if(!t||!same(t.updatedAt,a.baseline))fail('Поручение изменилось после подготовки чипа');
+          if(!t||(!touchedTasks.has(t.id)&&!same(t.updatedAt,a.baseline)))fail('Поручение изменилось после подготовки чипа');
           ensureActive(t.project.isArchived);
           if(!MANAGERS.has(member.role)&&t.assignedMemberId!==member.id&&t.createdByMemberId!==member.id)fail('Доступ к поручению изменился');
           await tx.organizationWorkTask.update({where:{id:t.id},data:{
@@ -226,6 +238,7 @@ export async function applyWorkChangeProposal(organizationId:string,actor:Actor,
             ...(a.priority?{priority:a.priority}:{}),...(a.status?{status:a.status}:{}),
             ...(a.assigneeMemberId?{assignedMemberId:a.assigneeMemberId}:{})
           }});
+          touchedTasks.add(t.id);
           if(a.status||a.dueAt||a.clearDueAt)changedTaskIds.push(t.id);
         }
         if(a.op==='create_subtask'){
