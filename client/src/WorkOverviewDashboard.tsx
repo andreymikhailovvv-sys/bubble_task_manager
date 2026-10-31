@@ -25,6 +25,11 @@ export default function WorkOverviewDashboard({organizationId,workspace,userId,o
       .finally(()=>{if(mounted)setLoading(false);});
     return()=>{mounted=false;};
   },[organizationId]);
+  useEffect(()=>{
+    const refresh=()=>{void api.workDashboard(organizationId).then(setDashboard).catch(e=>setError(errorText(e)));};
+    window.addEventListener('work-ai-proposal-applied',refresh);
+    return()=>window.removeEventListener('work-ai-proposal-applied',refresh);
+  },[organizationId]);
   if(loading)return <div className="work-company-state" role="status">Загружаем рабочую панель…</div>;
   if(!dashboard)return <div className="work-company-state" role="alert">{error||'Нет данных организации'}</div>;
   const tasks=dashboard.tasks;

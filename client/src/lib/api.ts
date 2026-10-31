@@ -485,7 +485,15 @@ export type WorkSubtask = {id:string;taskId:string;title:string;description?:str
 export type WorkDashboardTask = WorkCompanyTask & { project: {id:string;name:string}; assignee: {user: {name:string|null;username:string|null}} | null };
 export type WorkDashboard = { role:WorkRole; memberId:string;projects:WorkProject[];tasks:WorkDashboardTask[];stats:{projects:number;tasks:number;open:number;overdue:number};hasMoreTasks:boolean };
 export type WorkAiCredits = { aiCreditsMilli: number; spentMilli: number; aiModel: string };
-export type WorkAiMessage = { id:string;role:string;content:string;createdAt:string;
+export type WorkAiProposal = {
+  id:string;status:'PENDING'|'APPLYING'|'APPLIED'|'REJECTED'|'CONFLICT'|'FAILED';
+  canConfirm:boolean;
+  operations:Array<{type:string;title:string;details:string[]}>;
+  result?:{createdIds?:string[];applied?:number}|null;
+  error?:string|null;createdAt:string;
+};
+export type WorkAiMessage = {
+  proposal?:WorkAiProposal|null; id:string;role:string;content:string;createdAt:string;
   senderMemberId?:string|null;recipientMemberId?:string|null;
   sender?:{role:string;user:{name:string|null;username:string|null}}|null;
   recipient?:{user:{name:string|null;username:string|null}}|null; };
@@ -505,6 +513,9 @@ export const api = {
   adminListWorkOrganizations: (password: string) => request<{organizations:AdminWorkOrganization[]}>('/api/admin/organizations',{method:'POST',body:JSON.stringify({password})}),
   adminGrantWorkCredits: (password: string, id:string, creditsToAdd:number) => request<{organizationId:string;aiCreditsMilli:number}>(`/api/admin/organizations/${encodeURIComponent(id)}/credits`,{method:'POST',body:JSON.stringify({password,creditsToAdd})}),
   adminWorkCreditHistory: (password:string,id:string)=>request<{history:AdminWorkCreditHistory[]}>(`/api/admin/organizations/${encodeURIComponent(id)}/credit-history`,{method:'POST',body:JSON.stringify({password})}),
+  getWorkAiProposal: (org:string,id:string)=>request<{proposal:WorkAiProposal}>(`/api/business/organizations/${encodeURIComponent(org)}/ai/proposals/${encodeURIComponent(id)}`),
+  approveWorkAiProposal: (org:string,id:string)=>request<{proposal:WorkAiProposal}>(`/api/business/organizations/${encodeURIComponent(org)}/ai/proposals/${encodeURIComponent(id)}/approve`,{method:'POST',body:'{}'}),
+  rejectWorkAiProposal: (org:string,id:string)=>request<{proposal:WorkAiProposal}>(`/api/business/organizations/${encodeURIComponent(org)}/ai/proposals/${encodeURIComponent(id)}/reject`,{method:'POST',body:'{}'}),
   workAiBalance: (id:string)=>request<{credits:WorkAiCredits}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/balance`),
   workAiSetModel: (id:string,model:string)=>request<{model:string}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/model`,{method:'PATCH',body:JSON.stringify({model})}),
   workAiHistory: (id:string,taskId?:string)=>request<{messages:WorkAiMessage[]}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/${taskId?'tasks/'+encodeURIComponent(taskId)+'/':''}history`),

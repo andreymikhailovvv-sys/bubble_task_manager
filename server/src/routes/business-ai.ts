@@ -5,6 +5,7 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { authorizeWorkAi, askCompanyAi, workAiHistory, MAX_WORK_AI_QUESTION } from '../services/work-ai-assistant.service.js';
 import { getCompanyCreditSnapshot, CompanyInsufficientCreditsError } from '../services/work-ai-wallet.service.js';
 import { configureWorkTaskMonitoring, createWorkFollowup } from '../services/work-ai-monitoring.service.js';
+import { applyWorkChangeProposal, getWorkChangeProposal, rejectWorkChangeProposal } from '../services/work-ai-actions.service.js';
 
 export const workAiRouter=Router();
 workAiRouter.use(requireAuth,(_req,res,next)=>{res.setHeader('Cache-Control','private, no-store');next();});
@@ -47,7 +48,7 @@ workAiRouter.patch('/:organizationId/ai/model',asyncHandler(async(req,res)=>{
 workAiRouter.get('/:organizationId/ai/quick/history',asyncHandler(async(req,res)=>{
   const member=await check(req,res);if(!member)return;
   if(member.role==='VIEWER'){res.status(403).json({error:'Только чтение'});return;}
-  res.json({messages:await workAiHistory(req.params.organizationId,null,member.id)});
+  res.json({messages:await workAiHistory(req.params.organizationId,null,member.id,member.id)});
 }));
 workAiRouter.post('/:organizationId/ai/quick/chat',asyncHandler(async(req,res)=>{
   const member=await check(req,res);if(!member)return;
@@ -67,7 +68,7 @@ workAiRouter.post('/:organizationId/ai/quick/chat',asyncHandler(async(req,res)=>
 workAiRouter.get('/:organizationId/ai/history',asyncHandler(async(req,res)=>{
   const member=await check(req,res);if(!member)return;
   if(!manager(member.role)){res.status(403).json({error:'Доступ к диспетчеру ограничен'});return;}
-  res.json({messages:await workAiHistory(req.params.organizationId)});
+  res.json({messages:await workAiHistory(req.params.organizationId,null,null,member.id)});
 }));
 workAiRouter.post('/:organizationId/ai/chat',asyncHandler(async(req,res)=>{
   const member=await check(req,res);if(!member)return;
@@ -123,7 +124,7 @@ workAiRouter.post('/:organizationId/ai/tasks/:taskId/human-messages',asyncHandle
 workAiRouter.get('/:organizationId/ai/tasks/:taskId/history',asyncHandler(async(req,res)=>{
   const member=await check(req,res);if(!member)return;
   if(!await scopedTask(req,res,member))return;
-  res.json({messages:await workAiHistory(req.params.organizationId,req.params.taskId)});
+  res.json({messages:await workAiHistory(req.params.organizationId,req.params.taskId,null,member.id)});
 }));
 workAiRouter.post('/:organizationId/ai/tasks/:taskId/chat',asyncHandler(async(req,res)=>{
   const member=await check(req,res);if(!member)return;
@@ -182,4 +183,29 @@ workAiRouter.delete('/:organizationId/ai/tasks/:taskId/triggers/:jobId',asyncHan
   },data:{state:'CANCELLED'}});
   if(!updated.count){res.status(404).json({error:'Активный триггер не найден'});return;}
   res.json({ok:true});
+}));
+
+/* Explicit approval is required for every Work AI mutation. The member is
+   resolved from the authenticated session, never from request body fields. */
+async function ownProposal(req:any,res:any){
+  const member=await check(req,res);
+  if(!member)return null;
+  const proposal=await prisma.organizationAiChangeProposal.findFirst({
+    where:{id:req.params.proposalId,organizationId:req.params.organizationId,actorMemberId:member.id},
+    select:{id:true}
+  });
+  if(!proposal){res.status(404).json({error:'Предложение не найдено'});return null;}
+  return member;
+}
+workAiRouter.get('/:organizationId/ai/proposals/:proposalId',asyncHandler(async(req,res)=>{
+  const member=await ownProposal(req,res);if(!member)return;
+  res.json({proposal:await getWorkChangeProposal(req.params.organizationId,member,req.params.proposalId)});
+}));
+workAiRouter.post('/:organizationId/ai/proposals/:proposalId/approve',asyncHandler(async(req,res)=>{
+  const member=await ownProposal(req,res);if(!member)return;
+  res.json({proposal:await applyWorkChangeProposal(req.params.organizationId,member,req.params.proposalId)});
+}));
+workAiRouter.post('/:organizationId/ai/proposals/:proposalId/reject',asyncHandler(async(req,res)=>{
+  const member=await ownProposal(req,res);if(!member)return;
+  res.json({proposal:await rejectWorkChangeProposal(req.params.organizationId,member,req.params.proposalId)});
 }));

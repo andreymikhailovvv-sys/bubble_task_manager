@@ -55,6 +55,14 @@ export default function WorkProjectsView({organizationId,workspace,currentUserId
     setBusy(true);setError('');
     try{await callback();}catch(e){setError(readable(e));}finally{setBusy(false);}
   };
+  useEffect(()=>{
+    const refresh=()=>{
+      void api.listWorkProjects(organizationId).then(r=>{setProjects(r.projects);setTruncated(r.hasMore);}).catch(e=>setError(readable(e)));
+      if(selected)void api.listWorkProjectTasks(organizationId,selected).then(r=>{setTasks(r.tasks);setTaskTruncated(r.hasMore);}).catch(e=>setError(readable(e)));
+    };
+    window.addEventListener('work-ai-proposal-applied',refresh);
+    return()=>window.removeEventListener('work-ai-proposal-applied',refresh);
+  },[organizationId,selected]);
   const selectedProject=projects.find(p=>p.id===selected);
   const refreshProjects=async()=>{
     const response=await api.listWorkProjects(organizationId);

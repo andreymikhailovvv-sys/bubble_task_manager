@@ -5,6 +5,7 @@ import {AutoGrowingTextarea} from './components/AutoGrowingTextarea';
 import {TaskAiEmptyState} from './components/TaskAiEmptyState';
 import {AiProgress} from './components/AiProgress';
 import {WorkAiMessageBody} from './components/WorkAiMessageBody';
+import {WorkAiProposalCard} from './components/WorkAiProposalCard';
 import {AiReplyAction,AiReplyPreview,serializeAiReply,type AiReplyTarget} from './components/AiMessageReply';
 import {TaskAiRecipientPicker} from './components/TaskAiRecipientPicker';
 import type {AiChatModel,ChatMessage} from './lib/types';
@@ -172,6 +173,7 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
           </div>
           <div><WorkAiMessageBody content={message.content}/></div>
         </div>
+        {message.proposal&&<WorkAiProposalCard organizationId={organizationId} initial={message.proposal} onChanged={()=>void load().catch(e=>setError(errText(e)))}/>}
       <div className="ai-message-forward-actions flex justify-end">{replyAction(message)}</div></div>)}
       {busy&&<AiProgress status={progress}/>}
     </>;
@@ -280,7 +282,9 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
         <div className={'work-ai-message '+(item.role==='assistant'?'assistant':'user')}>
         <small>{labelFor(item)}{item.recipient?' → '+(item.recipient.user.name||item.recipient.user.username||'Участник'):''} · {new Date(item.createdAt).toLocaleString('ru-RU')}</small>
         <div><WorkAiMessageBody content={item.content}/></div>
-        </div><div className="ai-message-forward-actions flex justify-end">{replyAction(item)}</div>
+        </div>
+        {item.proposal&&<WorkAiProposalCard organizationId={organizationId} initial={item.proposal} onChanged={()=>void load().catch(e=>setError(errText(e)))}/>}
+        <div className="ai-message-forward-actions flex justify-end">{replyAction(item)}</div>
       </div>)}
       {busy&&<AiProgress status={progress}/>}
       <div ref={bottomRef}/>

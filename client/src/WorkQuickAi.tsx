@@ -3,6 +3,7 @@ import {Loader2,SendHorizontal} from 'lucide-react';
 import {AutoGrowingTextarea} from './components/AutoGrowingTextarea';
 import {AiProgress} from './components/AiProgress';
 import {WorkAiMessageBody} from './components/WorkAiMessageBody';
+import {WorkAiProposalCard} from './components/WorkAiProposalCard';
 import {ExpandedAiChat,type ExpandedAiChatProject} from './components/ExpandedAiChat';
 import {QuickAiLauncherFrame} from './components/QuickAiLauncherFrame';
 import {api,type WorkDashboard,type WorkAiMessage,type WorkAiCredits} from './lib/api';
@@ -127,6 +128,7 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
                 <div className={`quick-ai-chat-message w-full rounded-2xl px-3 py-2 shadow-sm ${item.role==='user'?'quick-ai-chat-message-user':'quick-ai-chat-message-assistant'}`}>
                   <b>{item.role==='user'?'Вы':'ИИ'}:</b> <WorkAiMessageBody content={item.content}/>
                 </div>
+                {item.proposal&&<WorkAiProposalCard organizationId={organizationId} initial={item.proposal} onChanged={()=>void api.workQuickAiHistory(organizationId).then(r=>setQuickMessages(r.messages)).catch(e=>setError(errorText(e)))}/>}
               </div>)}
               {!quickMessages.length&&<p className="text-subtle">Быстрый вопрос по проектам и задачам выбранной компании.</p>}
               {loading&&<AiProgress status={aiProgress}/>}
@@ -174,6 +176,9 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
             <p className="chat-message-label text-[11px] font-semibold uppercase tracking-wide">{item.role==='assistant'?'ИИ':item.role==='system'?'Мониторинг':'Вы'}</p>
           </div><div><WorkAiMessageBody content={item.content}/></div>
         </div>
+        {item.proposal&&<WorkAiProposalCard organizationId={organizationId} initial={item.proposal} onChanged={()=>void (selectedChatId===QUICK
+          ?api.workQuickAiHistory(organizationId).then(r=>setQuickMessages(r.messages))
+          :api.workAiHistory(organizationId,selectedChatId).then(r=>setTaskMessages(r.messages))).catch(e=>setError(errorText(e)))}/>}
       </div>)}
       status={error?<p role="alert" className="text-sm text-rose-400">{error}</p>:
         loading?<AiProgress status={aiProgress}/>:
