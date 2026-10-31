@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Archive, ArrowRight, CalendarDays, CheckCircle2, ClipboardList, FolderKanban, Plus, Trash2, Bot } from 'lucide-react';
 import { api, type WorkCompanyTask, type WorkProject, type WorkTaskStatus, type WorkTaskPriority, type WorkWorkspace } from './lib/api';
 import WorkAiPanel from './WorkAiPanel';
+import WorkTaskFocusDialog from './WorkTaskFocusDialog';
 
 const statusNames: Record<WorkTaskStatus,string>={TODO:'Новая',IN_PROGRESS:'В работе',REVIEW:'На проверке',DONE:'Готово'};
 const priorityNames: Record<WorkTaskPriority,string>={LOW:'Низкий',NORMAL:'Обычный',HIGH:'Высокий',CRITICAL:'Критический'};
@@ -14,6 +15,7 @@ export default function WorkProjectsView({organizationId,workspace,currentUserId
   const [selected,setSelected]=useState<string|null>(null);
   const [tasks,setTasks]=useState<WorkCompanyTask[]>([]);
   const [activeAiTask,setActiveAiTask]=useState<string|null>(null);
+  const [focusTask,setFocusTask]=useState<WorkCompanyTask|null>(null);
   const [loading,setLoading]=useState(true);
   const [loadingTasks,setLoadingTasks]=useState(false);
   const [truncated,setTruncated]=useState(false);
@@ -127,15 +129,18 @@ export default function WorkProjectsView({organizationId,workspace,currentUserId
         {tasks.map(task=><article className="work-task-item" key={task.id}>
           <div className="work-task-item-heading"><ClipboardList size={19}/><div><strong>{task.title}</strong><small>{task.description||'Без описания'}</small></div><span className={'work-task-priority '+task.priority.toLowerCase()}>{priorityNames[task.priority]}</span></div>
           <div className="work-task-fields">
-            <label>Статус<select value={task.status} disabled={busy||selectedProject.isArchived||(!canManage&&(workspace.organization.role!=='MEMBER'||task.assignedMemberId!==selfMember?.id))}
+            <label>Статус<select value={task.status} disabled={busy||selectedProject.isArchived||(!canManage&&(workspace.organization.role!=='MEMBER'||(task.assignedMemberId!==selfMember?.id&&task.createdByMemberId!==selfMember?.id)))}
               onChange={e=>patchTask(task,{status:e.target.value as WorkTaskStatus})}>{(['TODO','IN_PROGRESS','REVIEW','DONE'] as WorkTaskStatus[]).map(status=><option value={status} key={status}>{statusNames[status]}</option>)}</select></label>
             <label>Исполнитель<select value={task.assignedMemberId||''} disabled={busy||!canManage||selectedProject.isArchived} onChange={e=>patchTask(task,{assignedMemberId:e.target.value||null})}>
               <option value="">Не назначен</option>{workspace.members.map(m=><option value={m.id} key={m.id}>{m.name||m.username||'Сотрудник'}</option>)}
             </select></label>
             <label>Срок<input type="datetime-local" disabled={busy||!canManage||selectedProject.isArchived} value={dateInput(task.dueAt)} onChange={e=>patchTask(task,{dueAt:e.target.value?new Date(e.target.value).toISOString():null})}/></label>
           </div>
-          <button type="button" className="work-task-ai-toggle" onClick={()=>setActiveAiTask(activeAiTask===task.id?null:task.id)}><Bot size={15}/> {activeAiTask===task.id?'Скрыть помощь ИИ':'Помощь ИИ и мониторинг'}</button>
-          {activeAiTask===task.id&&<WorkAiPanel key={task.id} organizationId={organizationId} taskId={task.id} canManage={canManage}/>}
+          <button type="button" className="work-task-ai-toggle" onClick={()=>setFocusTask(task)}><ClipboardList size={15}/> Фокус задачи</button>
+          {(canManage||(workspace.organization.role==='MEMBER'&&(task.assignedMemberId===selfMember?.id||task.createdByMemberId===selfMember?.id)))&&
+            <button type="button" className="work-task-ai-toggle" onClick={()=>setActiveAiTask(activeAiTask===task.id?null:task.id)}><Bot size={15}/> {activeAiTask===task.id?'Скрыть помощь ИИ':'Помощь ИИ и мониторинг'}</button>}
+          {activeAiTask===task.id&&(canManage||(workspace.organization.role==='MEMBER'&&(task.assignedMemberId===selfMember?.id||task.createdByMemberId===selfMember?.id)))&&
+            <WorkAiPanel key={task.id} organizationId={organizationId} taskId={task.id} canManage={canManage}/>}
           <div className="work-task-footer"><span><CalendarDays size={14}/> {task.dueAt?new Date(task.dueAt).toLocaleString('ru-RU'):'Без срока'}</span><span><CheckCircle2 size={14}/> {showName(task.assignedMemberId)}</span>
             {canManage&&!selectedProject.isArchived&&<button type="button" disabled={busy} onClick={()=>{if(!window.confirm('Удалить задачу из проекта?'))return;void run(async()=>{await api.deleteWorkProjectTask(organizationId,selectedProject.id,task.id);setTasks(prev=>prev.filter(t=>t.id!==task.id));await refreshProjects();});}}><Trash2 size={15}/> Удалить</button>}
           </div>
@@ -144,5 +149,10 @@ export default function WorkProjectsView({organizationId,workspace,currentUserId
         {taskTruncated&&<p className="work-project-error">Показаны первые 500 задач. Для полного перечня понадобится постраничная навигация.</p>}
       </div>}
     </div>}
+    {focusTask&&<WorkTaskFocusDialog key={focusTask.id} organizationId={organizationId} task={focusTask}
+      workspace={workspace} currentUserId={currentUserId} onClose={()=>setFocusTask(null)} onChange={updated=>{
+        setTasks(prev=>prev.map(task=>task.id===updated.id?updated:task));
+        setFocusTask(prev=>prev&&prev.id===updated.id?updated:prev);
+      }}/>}
   </div>;
 }
