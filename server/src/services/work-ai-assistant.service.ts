@@ -18,9 +18,12 @@ export async function authorizeWorkAi(userId:string,organizationId:string){
   return member;
 }
 export async function askCompanyAi(input:{
-  organizationId:string; userId?:string; taskId?:string|null; question:string; feature:'company_chat'|'task_chat'|'task_monitoring';
+  organizationId:string; userId?:string; taskId?:string|null; question:string; feature:'company_chat'|'task_chat'|'task_monitoring'|'quick_chat';
 }){
   const {organizationId,taskId}=input;
+  const currentMember=input.userId?await authorizeWorkAi(input.userId,organizationId):null;
+  const quickMemberId=input.feature==='quick_chat'?currentMember?.id:null;
+  if(input.feature==='quick_chat'&&!quickMemberId)throw new Error('Нет доступа к рабочему чату');
   const question=safeText(input.question,MAX_WORK_AI_QUESTION);
   if(!question)throw new Error('Введите вопрос для ИИ');
   if(input.userId){
@@ -41,14 +44,18 @@ export async function askCompanyAi(input:{
       project:{select:{name:true}}}
   }):null;
   if(taskId&&!task)throw new Error('Корпоративная задача не найдена');
+  const personalScope=quickMemberId||((currentMember&&!['OWNER','ADMIN','MANAGER'].includes(currentMember.role))?currentMember.id:null);
+  const ownTasksWhere=personalScope?{OR:[{assignedMemberId:personalScope},{createdByMemberId:personalScope}]}:{};
   const [projects,members,recent]=await Promise.all([
-    prisma.organizationProject.findMany({where:{organizationId,isArchived:false},
-      select:{id:true,name:true,tasks:{take:15,orderBy:{createdAt:'desc'},select:{
+    prisma.organizationProject.findMany({where:{organizationId,isArchived:false,...(personalScope?{
+      OR:[{createdByMemberId:personalScope},{tasks:{some:ownTasksWhere}}]
+    }:{})},
+      select:{id:true,name:true,tasks:{where:ownTasksWhere,take:15,orderBy:{createdAt:'desc'},select:{
         title:true,status:true,priority:true,dueAt:true,assignedMemberId:true
       }}},take:25,orderBy:{createdAt:'desc'}}),
-    prisma.organizationMember.findMany({where:{organizationId},
+    prisma.organizationMember.findMany({where:{organizationId,...(personalScope?{id:personalScope}:{})},
       select:{id:true,role:true,department:{select:{name:true}},user:{select:{name:true,username:true}}},take:60}),
-    prisma.organizationAiMessage.findMany({where:{organizationId,taskId:taskId??null},
+    prisma.organizationAiMessage.findMany({where:{organizationId,taskId:taskId??null,memberId:quickMemberId},
       orderBy:{createdAt:'desc'},take:12,select:{role:true,content:true}})
   ]);
   const context=JSON.stringify({organization:org.name,task,projects,members}).slice(0,16000);
@@ -100,10 +107,10 @@ export async function askCompanyAi(input:{
     const billed=await settleCompanyCredits(reservation.id,providerUsage??null,'completed');
     await prisma.$transaction(async tx=>{
       await tx.organizationAiMessage.create({
-        data:{organizationId,taskId:taskId??null,role:input.feature==='task_monitoring'?'system':'user',content:question}
+        data:{organizationId,taskId:taskId??null,memberId:quickMemberId,role:input.feature==='task_monitoring'?'system':'user',content:question}
       });
       await tx.organizationAiMessage.create({
-        data:{organizationId,taskId:taskId??null,role:'assistant',content:answer.slice(0,24000)}
+        data:{organizationId,taskId:taskId??null,memberId:quickMemberId,role:'assistant',content:answer.slice(0,24000)}
       });
     });
     return {answer,model:selected,chargedMilli:billed.chargedMilli,
@@ -115,9 +122,9 @@ export async function askCompanyAi(input:{
     throw error;
   }
 }
-export async function workAiHistory(organizationId:string,taskId?:string|null){
+export async function workAiHistory(organizationId:string,taskId?:string|null,memberId:string|null=null){
   return prisma.organizationAiMessage.findMany({
-    where:{organizationId,taskId:taskId??null},
+    where:{organizationId,taskId:taskId??null,memberId},
     select:{id:true,role:true,content:true,createdAt:true},orderBy:{createdAt:'asc'},take:250
   });
 }
