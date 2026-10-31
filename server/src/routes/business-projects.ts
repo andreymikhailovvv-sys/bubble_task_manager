@@ -79,6 +79,45 @@ workProjectsRouter.use((req,res,next)=>{
   next();
 });
 
+// Role-specific overview: manager views company-wide tasks; employees only tasks
+// in which they are an assignee or the creator. Project and task IDs never leak
+// from another organization.
+workProjectsRouter.get('/:organizationId/dashboard',asyncHandler(async(req,res)=>{
+  const member=await memberFor(req,res);
+  if(!member)return;
+  const organizationId=req.params.organizationId;
+  const management=canManageOrganization(member.role)||member.role==='MANAGER';
+  const accessFilter=management?{}:{OR:[{assignedMemberId:member.id},{createdByMemberId:member.id}]};
+  const [projects,taskRows,taskCount,overdueCount,openCount]=await Promise.all([
+    prisma.organizationProject.findMany({
+      where:{organizationId,isArchived:false,...(management?{}:{OR:[
+        {createdByMemberId:member.id},{tasks:{some:{assignedMemberId:member.id}}},
+        {tasks:{some:{createdByMemberId:member.id}}}
+      ]})},
+      select:{id:true,name:true,description:true,isArchived:true,createdAt:true,
+        _count:{select:{tasks:true}}},
+      orderBy:{createdAt:'desc'},take:100
+    }),
+    prisma.organizationWorkTask.findMany({
+      where:{project:{organizationId,isArchived:false},...accessFilter},
+      select:{id:true,title:true,description:true,status:true,priority:true,dueAt:true,
+        assignedMemberId:true,createdByMemberId:true,projectId:true,updatedAt:true,
+        project:{select:{id:true,name:true}},
+        assignee:{select:{user:{select:{name:true,username:true}}}} },
+      orderBy:[{dueAt:'asc'},{createdAt:'desc'}],take:200
+    }),
+    prisma.organizationWorkTask.count({where:{project:{organizationId,isArchived:false},...accessFilter}}),
+    prisma.organizationWorkTask.count({where:{project:{organizationId,isArchived:false},...accessFilter,
+      status:{not:'DONE'},dueAt:{lt:new Date()}}}),
+    prisma.organizationWorkTask.count({where:{project:{organizationId,isArchived:false},...accessFilter,
+      status:{not:'DONE'}}})
+  ]);
+  res.json({role:member.role,memberId:member.id,
+    projects:projects.map(({_count,...project})=>({...project,taskCount:_count.tasks})),
+    tasks:taskRows,stats:{projects:projects.length,tasks:taskCount,open:openCount,overdue:overdueCount},
+    hasMoreTasks:taskCount>taskRows.length});
+}));
+
 workProjectsRouter.get('/:organizationId/projects',asyncHandler(async(req,res)=>{
   const member=await memberFor(req,res);
   if (!member) return;
