@@ -472,11 +472,24 @@ export type WorkDepartment = { id: string; name: string; createdAt: string };
 export type WorkInvitation = { id: string; role: WorkRole; expiresAt: string; createdAt: string; url?: string };
 export type WorkWorkspace = { organization: WorkOrganization; members: WorkMember[]; departments: WorkDepartment[]; invitations: WorkInvitation[] };
 export type WorkInvitePreview = { name: string; role: WorkRole; expiresAt: string };
+export type WorkProject = { id: string; name: string; description: string | null; isArchived: boolean; taskCount?: number; createdAt: string; updatedAt: string };
+export type WorkTaskStatus = 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE';
+export type WorkTaskPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL';
+export type WorkCompanyTask = { id: string; projectId: string; title: string; description: string | null; status: WorkTaskStatus; priority: WorkTaskPriority; dueAt: string | null; assignedMemberId: string | null; createdAt: string; updatedAt: string };
+
 
 export const api = {
   listWorkOrganizations: () => request<{ organizations: WorkOrganization[] }>('/api/business/organizations'),
   createWorkOrganization: (name: string) => request<{ organization: WorkOrganization }>('/api/business/organizations', { method: 'POST', body: JSON.stringify({ name }) }),
   getWorkWorkspace: (id: string) => request<WorkWorkspace>(`/api/business/organizations/${encodeURIComponent(id)}/workspace`),
+  listWorkProjects: (organizationId: string) => request<{ projects: WorkProject[]; hasMore: boolean }>(`/api/business/organizations/${encodeURIComponent(organizationId)}/projects`),
+  createWorkProject: (organizationId: string, name: string, description: string) => request<{ project: WorkProject }>(`/api/business/organizations/${encodeURIComponent(organizationId)}/projects`, { method: 'POST', body: JSON.stringify({name,description}) }),
+  updateWorkProject: (organizationId: string, projectId: string, changes: Partial<Pick<WorkProject,'name'|'description'|'isArchived'>>) => request<{ project: WorkProject }>(`/api/business/organizations/${encodeURIComponent(organizationId)}/projects/${encodeURIComponent(projectId)}`, { method: 'PATCH', body: JSON.stringify(changes) }),
+  listWorkProjectTasks: (organizationId: string, projectId: string) => request<{tasks: WorkCompanyTask[];hasMore:boolean}>(`/api/business/organizations/${encodeURIComponent(organizationId)}/projects/${encodeURIComponent(projectId)}/tasks`),
+  createWorkProjectTask: (organizationId: string, projectId: string, value: {title:string;description?:string;priority:WorkTaskPriority;dueAt:string|null;assignedMemberId:string|null}) => request<{task:WorkCompanyTask}>(`/api/business/organizations/${encodeURIComponent(organizationId)}/projects/${encodeURIComponent(projectId)}/tasks`,{method:'POST',body:JSON.stringify(value)}),
+  updateWorkProjectTask: (organizationId: string, projectId: string, taskId: string, changes: Partial<Pick<WorkCompanyTask,'title'|'description'|'priority'|'dueAt'|'assignedMemberId'|'status'>>) => request<{task:WorkCompanyTask}>(`/api/business/organizations/${encodeURIComponent(organizationId)}/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}`,{method:'PATCH',body:JSON.stringify(changes)}),
+  deleteWorkProjectTask: (organizationId: string, projectId: string, taskId: string) => request<{ok:boolean}>(`/api/business/organizations/${encodeURIComponent(organizationId)}/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}`,{method:'DELETE'}),
+
   renameWorkOrganization: (id: string, name: string) => request<{ organization: WorkOrganization }>(`/api/business/organizations/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
   createWorkDepartment: (id: string, name: string) => request<{ department: WorkDepartment }>(`/api/business/organizations/${encodeURIComponent(id)}/departments`, { method: 'POST', body: JSON.stringify({ name }) }),
   renameWorkDepartment: (id: string, depId: string, name: string) => request<{ department: WorkDepartment }>(`/api/business/organizations/${encodeURIComponent(id)}/departments/${encodeURIComponent(depId)}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
