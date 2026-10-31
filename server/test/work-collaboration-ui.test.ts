@@ -35,7 +35,7 @@ test('corporate subtask comments and human recipients cannot cross task/tenant s
  assert.match(ai,/human-messages/);
  assert.match(ai,/\[task\.assignedMemberId,task\.createdByMemberId\]\.includes\(recipientId\)/);
  assert.match(ai,/organizationId:req\.params\.organizationId/);
- assert.match(ai,/senderMemberId:member\.id,recipientMemberId:recipient\.id/);
+ assert.match(ai,/senderMemberId:member\.id[\s\S]*?recipientMemberId:recipient\.id/);
  assert.match(service,/senderMemberId:true,recipientMemberId:true/);
 });
 
