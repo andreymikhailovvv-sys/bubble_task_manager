@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, BriefcaseBusiness, Building2, Check, Copy, Link2, Plus, ShieldCheck, Trash2, UserRoundPlus, UsersRound } from 'lucide-react';
 import { api, type WorkDepartment, type WorkInvitation, type WorkOrganization, type WorkRole, type WorkWorkspace } from './lib/api';
 import WorkProjectsView from './WorkProjectsView';
+import WorkAiPanel from './WorkAiPanel';
 
 export type WorkSection = 'overview' | 'projects' | 'team' | 'ai' | 'settings';
 const labels: Record<WorkRole,string> = {
@@ -159,6 +160,6 @@ export default function WorkCompanyView({ id, section, currentUserId, onBack, on
       <div className="work-company-details"><div>Идентификатор компании <code>{organization.id}</code></div><div>Дата создания <strong>{new Date(organization.createdAt).toLocaleDateString('ru-RU')}</strong></div><div>Твоя роль <strong>{labels[organization.role]}</strong></div></div>
     </div>}
     {section === 'projects' && <WorkProjectsView organizationId={id} workspace={data} currentUserId={currentUserId}/>}
-    {section === 'ai' && <div className="work-company-panel work-company-upcoming"><h2>ИИ-диспетчер компании</h2><p>В следующем этапе подключим управление корпоративными проектами и задачами через ИИ с проверкой прав сотрудников.</p></div>}
+    {section === 'ai' && <WorkAiPanel organizationId={id} canManage={['OWNER','ADMIN','MANAGER'].includes(organization.role)} canSetModel={manager}/>} 
   </div>;
 }

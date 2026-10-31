@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Archive, ArrowRight, CalendarDays, CheckCircle2, ClipboardList, FolderKanban, Plus, Trash2 } from 'lucide-react';
+import { Archive, ArrowRight, CalendarDays, CheckCircle2, ClipboardList, FolderKanban, Plus, Trash2, Bot } from 'lucide-react';
 import { api, type WorkCompanyTask, type WorkProject, type WorkTaskStatus, type WorkTaskPriority, type WorkWorkspace } from './lib/api';
+import WorkAiPanel from './WorkAiPanel';
 
 const statusNames: Record<WorkTaskStatus,string>={TODO:'Новая',IN_PROGRESS:'В работе',REVIEW:'На проверке',DONE:'Готово'};
 const priorityNames: Record<WorkTaskPriority,string>={LOW:'Низкий',NORMAL:'Обычный',HIGH:'Высокий',CRITICAL:'Критический'};
@@ -12,6 +13,7 @@ export default function WorkProjectsView({organizationId,workspace,currentUserId
   const [projects,setProjects]=useState<WorkProject[]>([]);
   const [selected,setSelected]=useState<string|null>(null);
   const [tasks,setTasks]=useState<WorkCompanyTask[]>([]);
+  const [activeAiTask,setActiveAiTask]=useState<string|null>(null);
   const [loading,setLoading]=useState(true);
   const [loadingTasks,setLoadingTasks]=useState(false);
   const [truncated,setTruncated]=useState(false);
@@ -132,6 +134,8 @@ export default function WorkProjectsView({organizationId,workspace,currentUserId
             </select></label>
             <label>Срок<input type="datetime-local" disabled={busy||!canManage||selectedProject.isArchived} value={dateInput(task.dueAt)} onChange={e=>patchTask(task,{dueAt:e.target.value?new Date(e.target.value).toISOString():null})}/></label>
           </div>
+          <button type="button" className="work-task-ai-toggle" onClick={()=>setActiveAiTask(activeAiTask===task.id?null:task.id)}><Bot size={15}/> {activeAiTask===task.id?'Скрыть помощь ИИ':'Помощь ИИ и мониторинг'}</button>
+          {activeAiTask===task.id&&<WorkAiPanel key={task.id} organizationId={organizationId} taskId={task.id} canManage={canManage}/>}
           <div className="work-task-footer"><span><CalendarDays size={14}/> {task.dueAt?new Date(task.dueAt).toLocaleString('ru-RU'):'Без срока'}</span><span><CheckCircle2 size={14}/> {showName(task.assignedMemberId)}</span>
             {canManage&&!selectedProject.isArchived&&<button type="button" disabled={busy} onClick={()=>{if(!window.confirm('Удалить задачу из проекта?'))return;void run(async()=>{await api.deleteWorkProjectTask(organizationId,selectedProject.id,task.id);setTasks(prev=>prev.filter(t=>t.id!==task.id));await refreshProjects();});}}><Trash2 size={15}/> Удалить</button>}
           </div>
