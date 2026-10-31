@@ -311,10 +311,10 @@ workProjectsRouter.get('/:organizationId/projects/:projectId/tasks/:taskId/subta
     where:{taskId:req.params.taskId},
     orderBy:[{sortOrder:'asc'},{createdAt:'asc'}],
     select:{id:true,taskId:true,title:true,isDone:true,dueAt:true,
-      sortOrder:true,createdByMemberId:true,createdAt:true,updatedAt:true},
+      sortOrder:true,createdByMemberId:true,createdAt:true,updatedAt:true,_count:{select:{comments:true}}},
     take:251
   });
-  res.json({subtasks:rows.slice(0,250),hasMore:rows.length>250});
+  res.json({subtasks:rows.slice(0,250).map(({_count,...task})=>({...task,commentCount:_count.comments})),hasMore:rows.length>250});
 }));
 workProjectsRouter.post('/:organizationId/projects/:projectId/tasks/:taskId/subtasks',asyncHandler(async(req,res)=>{
   const access=await subtaskAccess(req,res,true);if(!access)return;
