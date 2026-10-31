@@ -50,7 +50,7 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
     </div>):<div className="work-quick-empty">Задайте вопрос по своим задачам и проектам компании.</div>}</>;
   const editor=<form className="work-quick-composer" onSubmit={e=>{e.preventDefault();void submit();}}>
     <textarea value={draft} onChange={e=>setDraft(e.target.value)} rows={2} maxLength={3000} placeholder="Быстрый запрос к ИИ…" disabled={busy||viewer}
-      onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();if(draft.trim())void submit(e);}}}/>
+      onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();if(draft.trim())void submit();}}}/>
     <button aria-label="Отправить запрос" disabled={busy||!draft.trim()||viewer}><Send size={18}/></button>
   </form>;
   const selectedProject=dashboard.projects.find(x=>x.id===activeProject);
