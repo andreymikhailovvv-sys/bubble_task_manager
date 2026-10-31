@@ -4,13 +4,16 @@ import {AiModelChip} from './components/AiModelChip';
 import {AutoGrowingTextarea} from './components/AutoGrowingTextarea';
 import {TaskAiEmptyState} from './components/TaskAiEmptyState';
 import {AiProgress} from './components/AiProgress';
+import {WorkAiMessageBody} from './components/WorkAiMessageBody';
+import {AiReplyPreview,serializeAiReply,type AiReplyTarget} from './components/AiMessageReply';
 import type {AiChatModel} from './lib/types';
-import {api,type WorkAiMessage,type WorkAiJob,type WorkAiCredits} from './lib/api';
+import {api,type WorkAiMessage,type WorkAiJob,type WorkAiCredits,type WorkWorkspace} from './lib/api';
 const models=[['gpt-6-luna','Luna'],['gpt-6.1-terra','Terra'],['gpt-6.1-sol','Sol']] as const;
 const displayCredits=(milli:number)=> (milli/1000).toLocaleString('ru-RU',{minimumFractionDigits:0,maximumFractionDigits:3});
 const errText=(e:unknown)=>e instanceof Error?e.message:'Не удалось выполнить запрос';
-export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel,personalFocus=false,onCloseFocus}:
-  {organizationId:string;taskId?:string;canManage:boolean;canSetModel?:boolean;personalFocus?:boolean;onCloseFocus?:()=>void}){
+export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel,personalFocus=false,onCloseFocus,workspace,currentUserId,participantMemberIds}:
+  {organizationId:string;taskId?:string;canManage:boolean;canSetModel?:boolean;personalFocus?:boolean;onCloseFocus?:()=>void;
+  workspace?:WorkWorkspace;currentUserId?:string;participantMemberIds?:Array<string|null>}){
   const [history,setHistory]=useState<WorkAiMessage[]>([]);
   const [credits,setCredits]=useState<WorkAiCredits|null>(null);
   const [text,setText]=useState('');
@@ -24,6 +27,8 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
   const [loading,setLoading]=useState(true);
   const [progress,setProgress]=useState<'searching_tasks'|'forming_answer'>('searching_tasks');
   const [showTriggers,setShowTriggers]=useState(false);
+  const [recipient,setRecipient]=useState('ai');
+  const [replyTo,setReplyTo]=useState<AiReplyTarget|null>(null);
   const load=async()=>{
     const [messages,balance]=await Promise.all([
       api.workAiHistory(organizationId,taskId),
@@ -59,11 +64,16 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
   const send=async(event:FormEvent)=>{
     event.preventDefault();
     if(!text.trim()||busy)return;
-    const question=text.trim();
+    const question=serializeAiReply(text.trim(),replyTo);
     setBusy(true);setError('');
     try{
-      const result=await api.workAiAsk(organizationId,question,taskId);
-      setCredits(result.credits);setText('');
+      if(taskId&&recipient!=='ai'){
+        await api.workSendParticipantMessage(organizationId,taskId,recipient,question);
+      }else{
+        const result=await api.workAiAsk(organizationId,question,taskId);
+        setCredits(result.credits);
+      }
+      setText('');setReplyTo(null);
       const messages=await api.workAiHistory(organizationId,taskId);
       setHistory(messages.messages);
     }catch(e){setError(errText(e));}finally{setBusy(false);}
@@ -104,6 +114,28 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
     const event={preventDefault:()=>undefined} as FormEvent;
     void send(event);
   };
+  const selfMember=workspace?.members.find(m=>m.userId===currentUserId);
+  const potentialRecipients=taskId&&workspace?workspace.members.filter(member=>
+    member.id!==selfMember?.id&&participantMemberIds?.includes(member.id)):[];
+  const recipientControl=taskId&&workspace&&potentialRecipients.length?<div className="task-ai-recipient-interaction relative mb-1 flex justify-end">
+    <label className="task-ai-recipient-trigger inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold">
+      <span className="task-ai-recipient-label">Получатель:</span>
+      <select className="bg-transparent text-primary outline-none" value={recipient}
+        onChange={e=>setRecipient(e.target.value)}>
+        <option value="ai">ИИ</option>
+        {potentialRecipients.map(member=><option key={member.id} value={member.id}>
+          {member.name||member.username||'Участник'}
+        </option>)}
+      </select>
+    </label>
+  </div>:null;
+  const labelFor=(m:WorkAiMessage)=>m.role==='assistant'?'ИИ':m.role==='human'?
+    (m.sender?.user.name||m.sender?.user.username||'Участник') : m.role==='system'?'Мониторинг':
+    (m.sender?.user.name||m.sender?.user.username||'Вы');
+  const replyAction=(m:WorkAiMessage)=><button type="button" className="ai-message-reply-trigger" title="Ответить"
+    onClick={()=>setReplyTo({id:m.id,role:m.role==='assistant'?'assistant':'user',content:m.content,fileNames:[]})}>
+    <SendHorizontal size={13}/>
+  </button>;
   if(personalFocus){
     const modelAvailable=credits&&(['gpt-6-luna','gpt-6.1-terra','gpt-6.1-sol'].includes(credits.aiModel));
     const modelControl=(extraClass='')=>modelAvailable?<AiModelChip
@@ -128,16 +160,18 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
         <div className={`chat-message w-full rounded-2xl px-4 py-3 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role==='assistant'?'chat-message-assistant':'chat-message-user'}`}>
           <div className="mb-1 flex items-center justify-between">
             <p className="chat-message-label text-[11px] font-semibold uppercase tracking-wide">
-              {message.role==='assistant'?'ИИ':message.role==='system'?'Мониторинг':'Вы'}</p>
+              {labelFor(message)}{message.recipient?' → '+(message.recipient.user.name||message.recipient.user.username||'Участник'):''}</p>
             {message.role==='assistant'&&<button type="button" className="chat-message-copy transition" title="Копировать"
               onClick={()=>{void navigator.clipboard.writeText(message.content);}}><Copy size={12}/></button>}
           </div>
-          <div>{message.content}</div>
+          <div><WorkAiMessageBody content={message.content}/></div>
         </div>
-      </div>)}
+      </div><div className="ai-message-forward-actions">{replyAction(message)}</div></div>)}
       {busy&&<AiProgress status={progress}/>}
     </>;
     const composer=<div className="focused-task-ai-composer">
+      {replyTo&&<AiReplyPreview target={replyTo} onDismiss={()=>setReplyTo(null)}/>}
+      {recipientControl}
       {error&&<p role="alert" className="mb-2 shrink-0 text-xs text-rose-300">{error}</p>}
       <div className="ai-chat-composer flex items-center gap-2 rounded-3xl border p-2">
         <AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0"
@@ -229,8 +263,8 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
     {loading?<p className="work-muted">Загружаем диалог…</p>:<div className="work-ai-history" aria-live="polite">
       {!history.length&&<div className="work-muted">Диалог пока пуст. Запросите сводку по проекту, проверьте риски или уточните следующий шаг.</div>}
       {history.map(item=><div key={item.id} className={'work-ai-message '+(item.role==='assistant'?'assistant':'user')}>
-        <small>{item.role==='assistant'?'ИИ':item.role==='system'?'Автомониторинг':'Вы'} · {new Date(item.createdAt).toLocaleString('ru-RU')}</small>
-        <div>{item.content}</div>
+        <small>{labelFor(item)} · {new Date(item.createdAt).toLocaleString('ru-RU')}</small>
+        <div><WorkAiMessageBody content={item.content}/></div><div className="ai-message-forward-actions">{replyAction(item)}</div>
       </div>)}
     </div>}
     <form className="work-ai-compose" onSubmit={send}>
