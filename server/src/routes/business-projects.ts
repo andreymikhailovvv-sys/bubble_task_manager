@@ -107,16 +107,16 @@ workProjectsRouter.patch('/:organizationId/projects/:projectId',asyncHandler(asy
   if (!await managerFor(req,res)) return;
   if (!await projectFor(req,res)) return;
   const data:{name?:string;description?:string|null;isArchived?:boolean}={};
-  if (Object.hasOwn(req.body||{},'name')) {
+  if (Object.prototype.hasOwnProperty.call(req.body||{},'name')) {
     const name=validName(req.body.name,120);
     if (!name) {res.status(400).json({error:'Название проекта: 2–120 символов'});return;}
     data.name=name;
   }
-  if (Object.hasOwn(req.body||{},'description')) {
+  if (Object.prototype.hasOwnProperty.call(req.body||{},'description')) {
     if (!validDescription(req.body.description)) {res.status(400).json({error:'Описание слишком длинное'});return;}
     data.description=req.body.description;
   }
-  if (Object.hasOwn(req.body||{},'isArchived')) {
+  if (Object.prototype.hasOwnProperty.call(req.body||{},'isArchived')) {
     if (typeof req.body.isArchived!=='boolean') {res.status(400).json({error:'Некорректный признак архива'});return;}
     data.isArchived=req.body.isArchived;
   }
