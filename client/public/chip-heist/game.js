@@ -697,7 +697,7 @@ fullscreenButton.addEventListener('click', () => {
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   else if (frameEl.requestFullscreen) frameEl.requestFullscreen().catch(() => {});
 });
-primaryButton.addEventListener('click', startNewGame);
+primaryButton.onclick = startNewGame;
 enterStage(1);
 announcement.classList.remove('visible');
 requestAnimationFrame(loop);
