@@ -41,6 +41,8 @@ import { isBusinessAdmin } from '../lib/business-admin-access.js';
 import { businessOrganizationsRouter } from './business-organizations.js';
 import { workCompanyRouter } from './business-company-management.js';
 import { workProjectsRouter } from './business-projects.js';
+import { workAiRouter } from './business-ai.js';
+import { grantCompanyCredits, validateCompanyCreditAmount } from '../services/work-ai-wallet.service.js';
 import { workInvitationRouter } from './business-invitations.js';
 import { validateTelegramWebAppInitData } from '../lib/telegram-webapp-auth.js';
 import { FixedWindowRateLimiter, type RateLimitDecision } from '../lib/security-rate-limiter.js';
@@ -64,6 +66,7 @@ import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js'
 
 export const apiRouter = Router();
 apiRouter.use('/business/invitations', workInvitationRouter);
+apiRouter.use('/business/organizations', workAiRouter);
 apiRouter.use('/business/organizations', workProjectsRouter);
 apiRouter.use('/business/organizations', workCompanyRouter);
 apiRouter.use('/business/organizations', businessOrganizationsRouter);
@@ -660,6 +663,34 @@ const requireAdminPassword = (req: any, res: any): boolean => {
   }
   return true;
 };
+
+apiRouter.post('/admin/organizations', asyncHandler(async(req,res)=>{
+  if(!requireAdminPassword(req,res))return;
+  const organizations=await prisma.organization.findMany({
+    orderBy:{createdAt:'desc'},take:500,
+    select:{id:true,name:true,aiCreditsMilli:true,aiModel:true,createdAt:true,
+      _count:{select:{members:true,projects:true}}}
+  });
+  res.set('Cache-Control','no-store');
+  res.json({organizations:organizations.map(({_count,...item})=>({...item,membersCount:_count.members,projectsCount:_count.projects}))});
+}));
+apiRouter.post('/admin/organizations/:id/credits',asyncHandler(async(req,res)=>{
+  if(!requireAdminPassword(req,res))return;
+  const amountMilli=validateCompanyCreditAmount(req.body?.creditsToAdd);
+  if(!amountMilli){res.status(400).json({error:'Введите от 1 до 100000 целых кредитов'});return;}
+  const org=await prisma.organization.findUnique({where:{id:req.params.id},select:{id:true}});
+  if(!org){res.status(404).json({error:'Организация не найдена'});return;}
+  const balanceMilli=await grantCompanyCredits(org.id,amountMilli,null);
+  res.set('Cache-Control','no-store');
+  res.json({organizationId:org.id,aiCreditsMilli:balanceMilli});
+}));
+apiRouter.post('/admin/organizations/:id/credit-history',asyncHandler(async(req,res)=>{
+  if(!requireAdminPassword(req,res))return;
+  const history=await prisma.organizationAiCreditLedger.findMany({where:{organizationId:req.params.id},
+    orderBy:{createdAt:'desc'},take:100,select:{id:true,kind:true,deltaMilli:true,createdAt:true}});
+  res.set('Cache-Control','no-store');
+  res.json({history});
+}));
 
 apiRouter.post('/admin/users', async (req, res) => {
   if (!requireAdminPassword(req, res)) return;

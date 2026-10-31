@@ -476,12 +476,30 @@ export type WorkProject = { id: string; name: string; description: string | null
 export type WorkTaskStatus = 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE';
 export type WorkTaskPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL';
 export type WorkCompanyTask = { id: string; projectId: string; title: string; description: string | null; status: WorkTaskStatus; priority: WorkTaskPriority; dueAt: string | null; assignedMemberId: string | null; createdAt: string; updatedAt: string };
+export type WorkAiCredits = { aiCreditsMilli: number; spentMilli: number; aiModel: string };
+export type WorkAiMessage = { id: string; role: string; content: string; createdAt: string };
+export type WorkAiJob = { id:string; dueAt:string; instruction:string; state:string; createdAt:string };
+export type AdminWorkOrganization = { id:string;name:string;aiCreditsMilli:number;aiModel:string;membersCount:number;projectsCount:number;createdAt:string };
+export type AdminWorkCreditHistory = { id:string;kind:string;deltaMilli:number;createdAt:string };
+
 
 
 export const api = {
   listWorkOrganizations: () => request<{ organizations: WorkOrganization[] }>('/api/business/organizations'),
   createWorkOrganization: (name: string) => request<{ organization: WorkOrganization }>('/api/business/organizations', { method: 'POST', body: JSON.stringify({ name }) }),
   getWorkWorkspace: (id: string) => request<WorkWorkspace>(`/api/business/organizations/${encodeURIComponent(id)}/workspace`),
+
+  adminListWorkOrganizations: (password: string) => request<{organizations:AdminWorkOrganization[]}>('/api/admin/organizations',{method:'POST',body:JSON.stringify({password})}),
+  adminGrantWorkCredits: (password: string, id:string, creditsToAdd:number) => request<{organizationId:string;aiCreditsMilli:number}>(`/api/admin/organizations/${encodeURIComponent(id)}/credits`,{method:'POST',body:JSON.stringify({password,creditsToAdd})}),
+  adminWorkCreditHistory: (password:string,id:string)=>request<{history:AdminWorkCreditHistory[]}>(`/api/admin/organizations/${encodeURIComponent(id)}/credit-history`,{method:'POST',body:JSON.stringify({password})}),
+  workAiBalance: (id:string)=>request<{credits:WorkAiCredits}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/balance`),
+  workAiSetModel: (id:string,model:string)=>request<{model:string}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/model`,{method:'PATCH',body:JSON.stringify({model})}),
+  workAiHistory: (id:string,taskId?:string)=>request<{messages:WorkAiMessage[]}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/${taskId?'tasks/'+encodeURIComponent(taskId)+'/':''}history`),
+  workAiAsk: (id:string,question:string,taskId?:string)=>request<{answer:string;model:string;chargedMilli:number;credits:WorkAiCredits}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/${taskId?'tasks/'+encodeURIComponent(taskId)+'/':''}chat`,{method:'POST',body:JSON.stringify({question})}),
+  workMonitoringStatus: (id:string,taskId:string)=>request<{enabled:boolean;jobs:WorkAiJob[]}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/tasks/${encodeURIComponent(taskId)}/monitoring`),
+  workMonitoringSet: (id:string,taskId:string,enabled:boolean)=>request<{enabled:boolean;revision:number}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/tasks/${encodeURIComponent(taskId)}/monitoring`,{method:'PATCH',body:JSON.stringify({enabled})}),
+  workMonitoringAddTrigger: (id:string,taskId:string,dueAt:string,instruction:string)=>request<{job:WorkAiJob}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/tasks/${encodeURIComponent(taskId)}/triggers`,{method:'POST',body:JSON.stringify({dueAt,instruction})}),
+  workMonitoringCancelTrigger: (id:string,taskId:string,jobId:string)=>request<{ok:boolean}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/tasks/${encodeURIComponent(taskId)}/triggers/${encodeURIComponent(jobId)}`,{method:'DELETE'}),
   listWorkProjects: (organizationId: string) => request<{ projects: WorkProject[]; hasMore: boolean }>(`/api/business/organizations/${encodeURIComponent(organizationId)}/projects`),
   createWorkProject: (organizationId: string, name: string, description: string) => request<{ project: WorkProject }>(`/api/business/organizations/${encodeURIComponent(organizationId)}/projects`, { method: 'POST', body: JSON.stringify({name,description}) }),
   updateWorkProject: (organizationId: string, projectId: string, changes: Partial<Pick<WorkProject,'name'|'description'|'isArchived'>>) => request<{ project: WorkProject }>(`/api/business/organizations/${encodeURIComponent(organizationId)}/projects/${encodeURIComponent(projectId)}`, { method: 'PATCH', body: JSON.stringify(changes) }),

@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
+import { pollCorporateMonitoring, recoverCorporateMonitoring } from './work-ai-monitoring.service.js';
 import { aiAssistantService } from './ai-assistant.service.js';
 import { requireMonitoredTask, requireMonitoringOwner } from './task-monitoring.service.js';
 import { MONITORING_FALLBACK_QUESTION } from './task-monitoring-trigger.service.js';
@@ -342,6 +343,11 @@ async function armNextDeadline() {
 }
 
 export function startTaskMonitoringWorker() {
+  // Work shares this server worker's recovery tick; only due rows are polled,
+  // never a scan of all company tasks.
+  void recoverCorporateMonitoring().catch(error => console.error('[Work Monitoring] startup failed', error));
+  setInterval(() => { void pollCorporateMonitoring().catch(error =>
+    console.error('[Work Monitoring] tick failed',error)); }, RECOVERY_INTERVAL_MS).unref();
   console.info('[TaskMonitoring] event worker started');
   registerTaskMonitoringWakeup(() => {
     // A newly created job can already be overdue. Dispatch immediately,

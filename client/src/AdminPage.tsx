@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { api, type AdminBroadcastImage, type AdminBroadcastTarget, type AdminSubscriptionPlan, type AdminUser, type CreditUsageStatistics, type SubscriptionLinks } from './lib/api';
+import { api, type AdminBroadcastImage, type AdminBroadcastTarget, type AdminSubscriptionPlan, type AdminUser, type CreditUsageStatistics, type SubscriptionLinks, type AdminWorkOrganization, type AdminWorkCreditHistory } from './lib/api';
 import { CreditUsageStats } from './components/CreditUsageStats';
 
 const BROADCAST_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -33,6 +33,13 @@ const readBroadcastImage = (file: File): Promise<{ payload: AdminBroadcastImage;
 
 export default function AdminPage() {
   const [password, setPassword] = useState('');
+  const [workOrganizations,setWorkOrganizations]=useState<AdminWorkOrganization[]>([]);
+  const [selectedWorkId,setSelectedWorkId]=useState('');
+  const [workCredits,setWorkCredits]=useState('100');
+  const [workCreditHistory,setWorkCreditHistory]=useState<AdminWorkCreditHistory[]>([]);
+  const [workBusy,setWorkBusy]=useState(false);
+  const [workError,setWorkError]=useState('');
+  const [workView,setWorkView]=useState<'users'|'organizations'>('users');
   const [error, setError] = useState('');
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -62,6 +69,9 @@ export default function AdminPage() {
     try {
       const [response, linksResponse] = await Promise.all([api.adminGetUsers({ password }), api.getSubscriptionLinks()]);
       setUsers(response.users);
+      const companyResponse=await api.adminListWorkOrganizations(password);
+      setWorkOrganizations(companyResponse.organizations);
+      setSelectedWorkId(previous=>previous || companyResponse.organizations[0]?.id || '');
       setSubscriptionLinks(linksResponse.links);
       if (response.users.length > 0 && !selectedUserId) {
         setSelectedUserId(response.users[0].id);
@@ -76,6 +86,30 @@ export default function AdminPage() {
     }
   }
 
+  useEffect(()=>{
+    if(!password||!selectedWorkId)return;
+    let live=true;
+    void api.adminWorkCreditHistory(password,selectedWorkId)
+      .then(v=>{if(live)setWorkCreditHistory(v.history);})
+      .catch(e=>{if(live)setWorkError(e instanceof Error?e.message:'Ошибка загрузки истории');});
+    return()=>{live=false;};
+  },[password,selectedWorkId]);
+  async function addWorkCredits(event:FormEvent){
+    event.preventDefault();
+    const credits=Number(workCredits);
+    if(!selectedWorkId||!Number.isSafeInteger(credits)||credits<1||credits>100000){
+      setWorkError('Укажите от 1 до 100000 целых кредитов');return;
+    }
+    setWorkBusy(true);setWorkError('');
+    try{
+      const result=await api.adminGrantWorkCredits(password,selectedWorkId,credits);
+      setWorkOrganizations(prev=>prev.map(org=>org.id===selectedWorkId?{...org,aiCreditsMilli:result.aiCreditsMilli}:org));
+      const rows=await api.adminWorkCreditHistory(password,selectedWorkId);
+      setWorkCreditHistory(rows.history);
+    }catch(e){setWorkError(e instanceof Error?e.message:'Ошибка начисления кредитов');}
+    finally{setWorkBusy(false);}
+  }
+  const selectedWork=workOrganizations.find(org=>org.id===selectedWorkId);
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? null;
   const telegramUsers = useMemo(() => users.filter((user) => user.telegramLinked), [users]);
   const broadcastAudienceCount = useMemo(() => {
@@ -355,7 +389,44 @@ export default function AdminPage() {
           </button>
         </form>
 
-        <div className="grid gap-4 md:grid-cols-[320px_1fr]">
+        <div className="flex gap-2 rounded-xl border border-slate-700 bg-slate-900/70 p-2">
+          <button type="button" onClick={()=>setWorkView('users')} className={`rounded-lg px-4 py-2 text-sm ${workView==='users'?'bg-cyan-700 text-white':'text-slate-300'}`}>Пользователи</button>
+          <button type="button" onClick={()=>setWorkView('organizations')} className={`rounded-lg px-4 py-2 text-sm ${workView==='organizations'?'bg-cyan-700 text-white':'text-slate-300'}`}>Организации ({workOrganizations.length})</button>
+        </div>
+        {workView==='organizations'&&<div className="grid gap-4 md:grid-cols-[320px_1fr]">
+          <section className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
+            <h2 className="mb-3 text-sm font-semibold">Корпоративные аккаунты</h2>
+            <div className="max-h-[60vh] space-y-2 overflow-auto">
+              {workOrganizations.map(org=><button key={org.id} type="button" onClick={()=>setSelectedWorkId(org.id)}
+                className={`w-full rounded-lg border p-3 text-left text-sm ${org.id===selectedWorkId?'border-cyan-500 bg-cyan-950/40':'border-slate-700 bg-slate-800/40'}`}>
+                <strong className="block">{org.name}</strong>
+                <span className="block mt-1 text-xs text-slate-400">{(org.aiCreditsMilli/1000).toLocaleString('ru-RU',{maximumFractionDigits:3})} кредитов · {org.membersCount} участников · {org.projectsCount} проектов</span>
+              </button>)}
+            </div>
+          </section>
+          <section className="rounded-xl border border-slate-700 bg-slate-900/70 p-4">
+            {selectedWork?<><h2 className="text-lg font-semibold">{selectedWork.name}</h2>
+              <p className="mt-2 text-sm text-slate-300">Корпоративный баланс: <strong>{(selectedWork.aiCreditsMilli/1000).toLocaleString('ru-RU',{maximumFractionDigits:3})}</strong> кредитов</p>
+              <p className="mt-1 text-xs text-slate-500">ID: {selectedWork.id}</p>
+              <form onSubmit={addWorkCredits} className="mt-6 flex flex-wrap items-end gap-3 border-t border-slate-700 pt-4">
+                <label className="text-sm">Добавить кредитов<input type="number" min={1} max={100000} step={1}
+                  value={workCredits} onChange={e=>setWorkCredits(e.target.value)}
+                  className="mt-1 block w-40 rounded-md border border-slate-600 bg-slate-950 px-3 py-2"/></label>
+                <button disabled={workBusy} className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold hover:bg-emerald-500 disabled:opacity-50">{workBusy?'Начисляем…':'Начислить организации'}</button>
+              </form>
+              {workError&&<p role="alert" className="mt-3 text-sm text-rose-300">{workError}</p>}
+              <h3 className="mt-7 border-t border-slate-700 pt-4 font-semibold">Последние операции</h3>
+              <div className="mt-3 max-h-80 overflow-auto space-y-2">
+                {workCreditHistory.map(item=><div key={item.id} className="flex justify-between gap-3 rounded-lg bg-slate-800/50 p-2 text-xs">
+                  <div><strong>{item.kind}</strong><span className="block text-slate-400">{new Date(item.createdAt).toLocaleString('ru-RU')}</span></div>
+                  <span className={item.deltaMilli>=0?'text-emerald-300':'text-rose-300'}>{item.deltaMilli>=0?'+':''}{(item.deltaMilli/1000).toFixed(3)}</span>
+                </div>)}
+                {!workCreditHistory.length&&<p className="text-xs text-slate-500">Операций пока нет.</p>}
+              </div>
+            </>:<p className="text-sm text-slate-400">Выберите организацию</p>}
+          </section>
+        </div>}
+        {workView==='users'&&<div className="grid gap-4 md:grid-cols-[320px_1fr]">
           <section className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
             <h2 className="mb-2 text-sm font-medium text-slate-300">Пользователи ({users.length})</h2>
             <div className="max-h-[60vh] space-y-2 overflow-auto pr-1">
@@ -442,7 +513,7 @@ export default function AdminPage() {
               <p className="text-sm text-slate-300">Выберите пользователя слева.</p>
             )}
           </section>
-        </div>
+        </div>}
       </div>
     </main>
   );

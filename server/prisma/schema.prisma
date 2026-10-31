@@ -48,10 +48,76 @@ model OrganizationWorkTask {
   assignee         OrganizationMember? @relation(fields: [assignedMemberId], references: [id], onDelete: SetNull)
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
+  aiMonitoringEnabled Boolean          @default(false)
+  aiMonitoringRevision Int              @default(0)
+  aiMonitoringJobs OrganizationAiMonitoringJob[]
+  aiMessages OrganizationAiMessage[]
 
   @@index([projectId, status, createdAt])
   @@index([assignedMemberId, status])
   @@index([dueAt])
+}
+
+model OrganizationAiReservation {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  reservedMilli  Int
+  chargedMilli   Int          @default(0)
+  state          String       @default("RESERVED")
+  feature        String
+  model          String
+  inputTokens    Int?
+  outputTokens   Int?
+  createdAt      DateTime     @default(now())
+  settledAt      DateTime?
+
+  @@index([organizationId, createdAt])
+  @@index([state, createdAt])
+}
+
+model OrganizationAiCreditLedger {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deltaMilli     Int
+  kind           String
+  actorUserId    String?
+  reservationId  String?
+  note           String?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
+}
+
+model OrganizationAiMessage {
+  id             String               @id @default(cuid())
+  organizationId String
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  taskId         String?
+  task           OrganizationWorkTask? @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  role           String
+  content        String               @db.Text
+  createdAt      DateTime             @default(now())
+
+  @@index([organizationId, taskId, createdAt])
+}
+
+model OrganizationAiMonitoringJob {
+  id             String                @id @default(cuid())
+  organizationId String
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  taskId         String
+  task           OrganizationWorkTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  eventKey       String                @unique
+  dueAt          DateTime
+  instruction    String                @db.Text
+  state          String                @default("PENDING")
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@index([state, dueAt])
+  @@index([organizationId, taskId, dueAt])
 }
 
 enum OrganizationRole {
@@ -69,6 +135,12 @@ model Organization {
   departments OrganizationDepartment[]
   invitations OrganizationInvitation[]
   projects    OrganizationProject[]
+  aiCreditsMilli Int                   @default(0)
+  aiModel        String                @default("gpt-6.1-terra")
+  aiReservations OrganizationAiReservation[]
+  aiLedger       OrganizationAiCreditLedger[]
+  aiMessages     OrganizationAiMessage[]
+  aiMonitoringJobs OrganizationAiMonitoringJob[]
   createdAt   DateTime                 @default(now())
   updatedAt   DateTime                 @updatedAt
 }
