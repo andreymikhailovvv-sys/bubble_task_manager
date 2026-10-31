@@ -102,14 +102,17 @@ workAiRouter.post('/:organizationId/ai/tasks/:taskId/human-messages',asyncHandle
     where:{id:recipientId,organizationId:req.params.organizationId},select:{id:true}
   });
   if(!recipient){res.status(404).json({error:'Получатель не найден'});return;}
-  const message=await prisma.organizationAiMessage.create({data:{
-    organizationId:req.params.organizationId,taskId:task.id,role:'human',
-    senderMemberId:member.id,recipientMemberId:recipient.id,content:content.trim()
-  },select:{id:true,role:true,content:true,createdAt:true,
-    senderMemberId:true,recipientMemberId:true,
-    sender:{select:{role:true,user:{select:{name:true,username:true}}}},
-    recipient:{select:{user:{select:{name:true,username:true}}}}}
-  }});
+  const message=await prisma.organizationAiMessage.create({
+    data:{
+      organizationId:req.params.organizationId,
+      taskId:task.id,role:'human',senderMemberId:member.id,
+      recipientMemberId:recipient.id,content:content.trim()
+    },
+    include:{
+      sender:{select:{role:true,user:{select:{name:true,username:true}}}},
+      recipient:{select:{user:{select:{name:true,username:true}}}}
+    }
+  });
   res.status(201).json({message});
 }));
 workAiRouter.get('/:organizationId/ai/tasks/:taskId/history',asyncHandler(async(req,res)=>{
