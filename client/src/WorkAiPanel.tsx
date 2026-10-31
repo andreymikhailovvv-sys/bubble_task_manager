@@ -18,8 +18,10 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
   const [monitorBusy,setMonitorBusy]=useState(false);
   const [loading,setLoading]=useState(true);
   const load=async()=>{
-    const calls=[api.workAiHistory(organizationId,taskId),api.workAiBalance(organizationId)];
-    const [messages,balance]=await Promise.all(calls);
+    const [messages,balance]=await Promise.all([
+      api.workAiHistory(organizationId,taskId),
+      api.workAiBalance(organizationId)
+    ]);
     setHistory(messages.messages);setCredits(balance.credits);
     if(taskId){
       const state=await api.workMonitoringStatus(organizationId,taskId);
