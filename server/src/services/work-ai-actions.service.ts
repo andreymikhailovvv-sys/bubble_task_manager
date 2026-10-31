@@ -7,6 +7,14 @@ const STATUSES: WorkTaskStatus[] = ['TODO','IN_PROGRESS','REVIEW','DONE'];
 const PRIORITIES: WorkTaskPriority[] = ['LOW','NORMAL','HIGH','CRITICAL'];
 const OPS = ['create_project','update_project','create_task','update_task','create_subtask','update_subtask'] as const;
 type Operation = typeof OPS[number];
+const FIELDS:Record<Operation,readonly string[]>={
+  create_project:['op','projectKey','name','description'],
+  update_project:['op','projectId','name','description'],
+  create_task:['op','projectId','projectKey','taskKey','title','description','dueAt','priority','status','assigneeMemberId'],
+  update_task:['op','taskId','title','description','dueAt','clearDueAt','priority','status','assigneeMemberId'],
+  create_subtask:['op','taskId','taskKey','title','description','dueAt'],
+  update_subtask:['op','subtaskId','title','description','dueAt','clearDueAt','isDone']
+};
 export type WorkChangeAction = {
   op: Operation; projectId?: string; projectKey?: string; taskId?: string; taskKey?: string;
   subtaskId?: string; name?: string; title?: string; description?: string;
@@ -70,6 +78,7 @@ export function parseWorkChanges(input:unknown):WorkChangeAction[] {
     if(!raw||typeof raw!=='object'||Array.isArray(raw))return fail('Некорректная операция');
     const a=raw as Record<string,unknown>;
     if(!OPS.includes(a.op as Operation))return fail('Недопустимое действие');
+    if(Object.entries(a).some(([field,value])=>defined(value)&&!FIELDS[a.op as Operation].includes(field)))return fail('Лишние поля в операции '+String(a.op));
     const out:WorkChangeAction={op:a.op as Operation};
     for(const field of ['projectId','projectKey','taskId','taskKey','subtaskId','name','title','description','dueAt','priority','status','assigneeMemberId'] as const){
       if(defined(a[field])) {
@@ -88,6 +97,7 @@ export function parseWorkChanges(input:unknown):WorkChangeAction[] {
     if(out.title&&(text(out.title,240).length<2||out.title.length>240))return fail('Название: 2–240 символов');
     if(out.description&&out.description.length>20000)return fail('Слишком длинное описание');
     if(out.dueAt)date(out.dueAt);
+    if(out.dueAt&&out.clearDueAt)return fail('Нельзя одновременно задать и удалить срок');
     if(out.priority&&!PRIORITIES.includes(out.priority))return fail('Недопустимый приоритет');
     if(out.status&&!STATUSES.includes(out.status))return fail('Недопустимый статус');
     return out;
@@ -142,7 +152,7 @@ export async function planWorkChanges(organizationId:string,actor:Actor,input:un
       if(a.projectId){const p=await projectRow(prisma,organizationId,a.projectId);if(p.isArchived)fail('Проект архивирован');baseline=p.updatedAt.toISOString();parentTitle=p.name;}
       taskKeys.add(a.taskKey!);taskNames.set(a.taskKey!,a.title);
     } else if(a.op==='update_task'){
-      if(!a.taskId||![a.title, a.description,a.dueAt,a.priority,a.status,a.assigneeMemberId,a.clearDueAt].some(Boolean))fail('Укажите поручение и изменение');
+      if(!a.taskId||![Boolean(a.title),defined(a.description),Boolean(a.dueAt),Boolean(a.priority),Boolean(a.status),Boolean(a.assigneeMemberId),Boolean(a.clearDueAt)].some(Boolean))fail('Укажите поручение и изменение');
       const t=await taskRow(prisma,organizationId,a.taskId);
       if(t.project.isArchived)fail('Проект архивирован');
       if(!MANAGERS.has(actor.role)&&t.assignedMemberId!==actor.id&&t.createdByMemberId!==actor.id)fail('Поручение не принадлежит сотруднику');
@@ -159,7 +169,7 @@ export async function planWorkChanges(organizationId:string,actor:Actor,input:un
         baseline=t.updatedAt.toISOString();parentTitle=t.title;
       }
     } else if(a.op==='update_subtask'){
-      if(!a.subtaskId||![a.title,a.description,a.dueAt,a.clearDueAt,defined(a.isDone)].some(Boolean))fail('Укажите подзадачу и изменение');
+      if(!a.subtaskId||![Boolean(a.title),defined(a.description),Boolean(a.dueAt),Boolean(a.clearDueAt),defined(a.isDone)].some(Boolean))fail('Укажите подзадачу и изменение');
       const t=await subtaskRow(prisma,organizationId,a.subtaskId);
       if(t.task.project.isArchived)fail('Проект архивирован');
       if(!MANAGERS.has(actor.role)&&t.task.assignedMemberId!==actor.id&&t.task.createdByMemberId!==actor.id)fail('Нет прав на поручение');
