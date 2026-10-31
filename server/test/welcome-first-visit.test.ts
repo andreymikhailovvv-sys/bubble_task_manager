@@ -11,6 +11,7 @@ const gateScript = rootHtml.match(/<script>\s*(\/\/ First-time visitors[\s\S]*?)
 assert.ok(gateScript.includes("location.replace('/welcome/' + location.search)"), 'root must redirect before the heavy SPA is requested');
 
 type GateOptions = {
+  hostname?: string;
   pathname?: string;
   search?: string;
   hash?: string;
@@ -36,6 +37,7 @@ function navigate(options: GateOptions = {}) {
   };
   vm.runInNewContext(gateScript, {
     location: {
+      hostname: options.hostname ?? 'planirovych.ru',
       pathname: options.pathname ?? '/',
       search: options.search ?? '',
       hash: options.hash ?? '',
@@ -89,4 +91,24 @@ test('welcome HTML has meaningful headings, native navigation and functional app
   assert.doesNotMatch(welcomeHtml, /<script[^>]*type="module"/);
   assert.match(welcomeJs, /localStorage\.setItem\('planirovych_welcome_seen_v1', '1'\)/);
   assert.match(welcomeJs, /planirovych_welcome_seen=1/);
+});
+
+test('business host never redirects to the personal welcome page', () => {
+  assert.deepEqual(navigate({ hostname: 'work.planirovych.ru' }), []);
+  assert.deepEqual(navigate({ hostname: 'work.planirovych.ru', search: '?utm_source=example' }), []);
+  assert.deepEqual(navigate({ hostname: 'planirovych.ru' }), ['/welcome/']);
+});
+
+test('Work has its own boot splash with required branding and a React dismissal', async () => {
+  const businessApp = await readFile(new URL('../../client/src/BusinessApp.tsx', import.meta.url), 'utf8');
+  const main = await readFile(new URL('../../client/src/main.tsx', import.meta.url), 'utf8');
+  assert.match(rootHtml, /work-workspace-preload/);
+  assert.match(rootHtml, /Планировыч\.Бизнес/);
+  assert.match(rootHtml, /Твоя компания под контролем/);
+  assert.match(rootHtml, /Загрузка не завершилась/);
+  assert.match(businessApp, /classList\.remove\('work-workspace-preload'\)/);
+  assert.match(main, /classList\.remove\('work-workspace-preload'\)/);
+  // Personal loader and its original dismissal are untouched.
+  assert.match(rootHtml, /web-workspace-preload/);
+  assert.match(rootHtml, /Твой день под контролем/);
 });
