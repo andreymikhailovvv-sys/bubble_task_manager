@@ -253,7 +253,7 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
     <header className="work-ai-dispatcher-header">
       <div className="work-ai-dispatcher-title"><Bot size={19}/><h2>{taskId?'Помощь ИИ по задаче':'ИИ-диспетчер компании'}</h2></div>
       <div className="work-ai-dispatcher-actions">
-        {credits&&<div className="work-ai-dispatcher-wallet" title="Точный баланс учитывается сервером">
+        {credits&&<div className="work-ai-dispatcher-wallet" title="Баланс организации. Точный баланс учитывается сервером" aria-label="Баланс организации">
           <Wallet size={16}/><span>{Math.floor(credits.aiCreditsMilli/1000).toLocaleString('ru-RU')} кр.</span>
         </div>}
         {credits&&<label className="work-ai-dispatcher-model" aria-label="Выбранная модель ИИ">
