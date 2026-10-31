@@ -43,6 +43,8 @@
       // First-time visitors see the lightweight welcome page before React loads.
       // Established browsers and direct application links keep their existing behavior.
       (function () {
+        // Work has its own guarded entrypoint; never redirect it to personal onboarding.
+        if (location.hostname?.toLowerCase() === 'work.planirovych.ru') return;
         if (location.pathname !== '/' || location.hash) return;
 
         // Do not intercept authentication callbacks or unknown deep-link parameters.
@@ -73,7 +75,28 @@
     </script>
     <script>
       // Show before the JS bundle downloads, only for the desktop planner.
-      if (location.pathname === '/' && matchMedia('(min-width: 1025px)').matches) {
+      if (location.hostname?.toLowerCase() === 'work.planirovych.ru') {
+        // Display the business splash immediately, on both desktop and mobile.
+        document.documentElement.classList.add('work-workspace-preload');
+        // Never leave an infinite animation if the JavaScript bundle fails to load.
+        window.setTimeout(function () {
+          if (!document.documentElement.classList.contains('work-workspace-preload')) return;
+          var splash = document.getElementById('workspace-boot-splash');
+          if (!splash) return;
+          var caption = splash.querySelector('.boot-caption');
+          if (caption) caption.textContent = 'Загрузка не завершилась. Обновите страницу, чтобы повторить попытку.';
+          var progress = splash.querySelector('.boot-loader');
+          if (progress) progress.style.display = 'none';
+          if (!splash.querySelector('.boot-retry')) {
+            var retry = document.createElement('button');
+            retry.type = 'button';
+            retry.className = 'boot-retry';
+            retry.textContent = 'Обновить страницу';
+            retry.addEventListener('click', function () { location.reload(); });
+            splash.querySelector('.boot-core')?.appendChild(retry);
+          }
+        }, 20000);
+      } else if (location.pathname === '/' && matchMedia('(min-width: 1025px)').matches) {
         document.documentElement.classList.add('web-workspace-preload');
       }
     </script>
@@ -81,13 +104,43 @@
       /* Inline, render-blocking CSS is intentional: paint the splash before any app bundles. */
       html.web-workspace-preload, html.web-workspace-preload body { background: #070c1b; }
       #workspace-boot-splash { display: none; }
-      .web-workspace-preload #workspace-boot-splash {
+      .web-workspace-preload #workspace-boot-splash, .work-workspace-preload #workspace-boot-splash {
         display: flex; position: fixed; inset: 0; z-index: 2147483000;
         align-items: center; justify-content: center; overflow: hidden;
         background: radial-gradient(ellipse at 48% 45%, #172552 0%, #0d1530 44%, #070c1b 100%);
         color: #edf5ff; font-family: Inter, system-ui, sans-serif;
         isolation: isolate;
       }
+      /* The Work landing screen is deliberately darker and more restrained than the personal planner. */
+      .work-workspace-preload #workspace-boot-splash {
+        background: radial-gradient(ellipse at 50% 40%, #2a3355 0%, #111a33 46%, #080e1e 100%);
+        color: #f2f3ff;
+      }
+      .boot-business-only { display: none; }
+      .work-workspace-preload .boot-personal-only { display: none; }
+      .work-workspace-preload .boot-business-only { display: inline; }
+      .work-workspace-preload #workspace-boot-splash .boot-halo {
+        background: radial-gradient(circle, rgba(122,104,204,.22) 0%, rgba(77,147,180,.09) 32%, transparent 70%);
+      }
+      .work-workspace-preload #workspace-boot-splash .boot-wordmark {
+        font-size: clamp(2.5rem, 6.5vw, 5.5rem);
+        background: linear-gradient(108deg, #fff 12%, #d6ceff 46%, #8ec7d9 73%, #fff 96%);
+        background-size: 250% 100%;
+        -webkit-background-clip: text; background-clip: text;
+      }
+      .work-workspace-preload #workspace-boot-splash .boot-subtitle { color: #c1c9db; letter-spacing: .16em; }
+      .work-workspace-preload #workspace-boot-splash .boot-loader { background: rgba(157,151,217,.17); }
+      .work-workspace-preload #workspace-boot-splash .boot-loader::after {
+        background: linear-gradient(90deg, #9287db, #76bdd1);
+        box-shadow: 0 0 18px rgba(146,135,219,.35);
+      }
+      #workspace-boot-splash .boot-retry {
+        position: relative; margin-top: 1.4rem; padding: .72rem 1.2rem;
+        border-radius: .75rem; border: 1px solid rgba(190,182,255,.55);
+        background: rgba(84,77,148,.5); color: #f3f0ff;
+        font: 600 .8rem Inter, system-ui, sans-serif; cursor: pointer;
+      }
+      #workspace-boot-splash .boot-retry:focus-visible { outline: 2px solid #81d2e3; outline-offset: 3px; }
       #workspace-boot-splash .boot-core { position: relative; text-align: center; padding: 2.5rem 1.5rem; }
       #workspace-boot-splash .boot-halo {
         position: absolute; top: 46%; left: 50%;
@@ -142,10 +195,10 @@
     <div id="workspace-boot-splash" role="status" aria-label="Загрузка Планировыча">
       <div class="boot-halo" aria-hidden="true"></div>
       <div class="boot-core">
-        <h1 class="boot-wordmark">Планировыч</h1>
-        <p class="boot-subtitle">Твой день под контролем</p>
+        <h1 class="boot-wordmark"><span class="boot-personal-only">Планировыч</span><span class="boot-business-only">Планировыч.Бизнес</span></h1>
+        <p class="boot-subtitle"><span class="boot-personal-only">Твой день под контролем</span><span class="boot-business-only">Твоя компания под контролем</span></p>
         <div class="boot-loader" aria-hidden="true"></div>
-        <p class="boot-caption">Подготавливаем рабочее пространство</p>
+        <p class="boot-caption"><span class="boot-personal-only">Подготавливаем рабочее пространство</span><span class="boot-business-only">Открываем корпоративное пространство</span></p>
       </div>
     </div>
     <div id="root"></div>

@@ -22,6 +22,10 @@ class AppErrorBoundary extends React.Component<React.PropsWithChildren, AppError
   }
 
   componentDidCatch(error: Error) {
+    // Unmask the error boundary if the Work lazy chunk failed to load.
+    if (window.location.hostname.toLowerCase() === 'work.planirovych.ru') {
+      document.documentElement.classList.remove('work-workspace-preload');
+    }
     console.error('Ошибка рендера приложения', error);
     void api.reportClientError({
       source: 'error-boundary',

@@ -78,6 +78,9 @@ export default function BusinessApp() {
   const [section, setSection] = useState<Section>('overview');
   const [signingOut, setSigningOut] = useState(false);
   useEffect(() => {
+    // React has committed the actual Work page (including its login/checking state).
+    // Only now dismiss the host-specific HTML splash, even before bootstrap responds.
+    document.documentElement.classList.remove('work-workspace-preload');
     document.title = 'Планировыч Work · Корпоративная платформа';
     let mounted = true;
     void checkAccess().then(result => { if (mounted) setAccess(result); });
