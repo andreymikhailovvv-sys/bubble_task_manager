@@ -2,6 +2,7 @@ CREATE TABLE "OrganizationWorkSubtaskComment" (
   "id" TEXT NOT NULL,
   "subtaskId" TEXT NOT NULL,
   "authorMemberId" TEXT NOT NULL,
+  "parentCommentId" TEXT,
   "content" TEXT NOT NULL,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "OrganizationWorkSubtaskComment_pkey" PRIMARY KEY ("id")
@@ -14,6 +15,10 @@ ALTER TABLE "OrganizationWorkSubtaskComment"
 ALTER TABLE "OrganizationWorkSubtaskComment"
   ADD CONSTRAINT "OrganizationWorkSubtaskComment_authorMemberId_fkey"
   FOREIGN KEY ("authorMemberId") REFERENCES "OrganizationMember"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+CREATE INDEX "OrganizationWorkSubtaskComment_parentCommentId_idx"
+  ON "OrganizationWorkSubtaskComment"("parentCommentId");
+ALTER TABLE "OrganizationWorkSubtaskComment" ADD CONSTRAINT "OrganizationWorkSubtaskComment_parentCommentId_fkey"
+  FOREIGN KEY ("parentCommentId") REFERENCES "OrganizationWorkSubtaskComment"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "OrganizationAiMessage" ADD COLUMN "senderMemberId" TEXT;
 ALTER TABLE "OrganizationAiMessage" ADD COLUMN "recipientMemberId" TEXT;
 CREATE INDEX "OrganizationAiMessage_organizationId_taskId_recipientMemberId_createdAt_idx"
