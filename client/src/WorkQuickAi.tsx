@@ -1,5 +1,5 @@
-import {useEffect,useState,type FormEvent} from 'react';
-import {Bot,ChevronRight,ChevronDown,Maximize2,Minimize2,MessageSquare,Send,X,FolderKanban,Wallet,PanelLeftClose} from 'lucide-react';
+import {useEffect,useState} from 'react';
+import {Bot,ChevronRight,ChevronDown,Maximize2,MessageSquare,Send,X,FolderKanban,Wallet,PanelLeftClose} from 'lucide-react';
 import {api,type WorkDashboard,type WorkAiCredits,type WorkAiMessage} from './lib/api';
 import WorkAiPanel from './WorkAiPanel';
 
@@ -34,8 +34,8 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
     document.addEventListener('keydown',keyboard);
     return()=>document.removeEventListener('keydown',keyboard);
   },[full]);
-  const submit=async(e:FormEvent)=>{
-    e.preventDefault();if(busy||viewer||!draft.trim())return;
+  const submit=async()=>{
+    if(busy||viewer||!draft.trim())return;
     const question=draft.trim();setBusy(true);setError('');
     try{
       const response=await api.workQuickAiAsk(organizationId,question);
@@ -48,7 +48,7 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
     <div className={'work-quick-message '+(item.role==='assistant'?'assistant':'user')} key={item.id}>
       <small>{item.role==='assistant'?'ИИ':'Вы'}</small><div>{item.content}</div>
     </div>):<div className="work-quick-empty">Задайте вопрос по своим задачам и проектам компании.</div>}</>;
-  const editor=<form className="work-quick-composer" onSubmit={submit}>
+  const editor=<form className="work-quick-composer" onSubmit={e=>{e.preventDefault();void submit();}}>
     <textarea value={draft} onChange={e=>setDraft(e.target.value)} rows={2} maxLength={3000} placeholder="Быстрый запрос к ИИ…" disabled={busy||viewer}
       onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();if(draft.trim())void submit(e);}}}/>
     <button aria-label="Отправить запрос" disabled={busy||!draft.trim()||viewer}><Send size={18}/></button>
