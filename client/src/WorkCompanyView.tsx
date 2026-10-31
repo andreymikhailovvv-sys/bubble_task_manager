@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, BriefcaseBusiness, Building2, Check, Copy, Link2, Plus, ShieldCheck, Trash2, UserRoundPlus, UsersRound } from 'lucide-react';
 import { api, type WorkDepartment, type WorkInvitation, type WorkOrganization, type WorkRole, type WorkWorkspace } from './lib/api';
+import WorkProjectsView from './WorkProjectsView';
 
 export type WorkSection = 'overview' | 'projects' | 'team' | 'ai' | 'settings';
 const labels: Record<WorkRole,string> = {
@@ -157,6 +158,7 @@ export default function WorkCompanyView({ id, section, currentUserId, onBack, on
       <form className="work-company-form" onSubmit={rename}><label htmlFor="work-company-name">Название компании</label><div><input id="work-company-name" maxLength={100} value={companyName} onChange={e=>setCompanyName(e.target.value)} disabled={!manager || busy} required/><button type="submit" disabled={!manager || busy || companyName.trim().length<2 || companyName===organization.name}>Сохранить <ArrowRight size={15}/></button></div></form>
       <div className="work-company-details"><div>Идентификатор компании <code>{organization.id}</code></div><div>Дата создания <strong>{new Date(organization.createdAt).toLocaleDateString('ru-RU')}</strong></div><div>Твоя роль <strong>{labels[organization.role]}</strong></div></div>
     </div>}
-    {(section === 'projects' || section === 'ai') && <div className="work-company-panel work-company-upcoming"><h2>{sectionText} компании</h2><p>Этот модуль пока не подключён. Мы намеренно не показываем личные проекты и задачи сотрудников внутри компании без отдельной модели корпоративных прав.</p></div>}
+    {section === 'projects' && <WorkProjectsView organizationId={id} workspace={data} currentUserId={currentUserId}/>}
+    {section === 'ai' && <div className="work-company-panel work-company-upcoming"><h2>ИИ-диспетчер компании</h2><p>В следующем этапе подключим управление корпоративными проектами и задачами через ИИ с проверкой прав сотрудников.</p></div>}
   </div>;
 }

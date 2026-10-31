@@ -7,6 +7,53 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum WorkTaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+}
+
+enum WorkTaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+model OrganizationProject {
+  id             String               @id @default(cuid())
+  organizationId String
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  description    String?              @db.Text
+  isArchived     Boolean              @default(false)
+  tasks          OrganizationWorkTask[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([organizationId, isArchived, createdAt])
+}
+
+model OrganizationWorkTask {
+  id               String              @id @default(cuid())
+  projectId        String
+  project          OrganizationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title            String
+  description      String?             @db.Text
+  status           WorkTaskStatus      @default(TODO)
+  priority         WorkTaskPriority    @default(NORMAL)
+  dueAt            DateTime?
+  assignedMemberId String?
+  assignee         OrganizationMember? @relation(fields: [assignedMemberId], references: [id], onDelete: SetNull)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([projectId, status, createdAt])
+  @@index([assignedMemberId, status])
+  @@index([dueAt])
+}
+
 enum OrganizationRole {
   OWNER
   ADMIN
@@ -21,6 +68,7 @@ model Organization {
   members     OrganizationMember[]
   departments OrganizationDepartment[]
   invitations OrganizationInvitation[]
+  projects    OrganizationProject[]
   createdAt   DateTime                 @default(now())
   updatedAt   DateTime                 @updatedAt
 }
@@ -63,6 +111,7 @@ model OrganizationMember {
   role           OrganizationRole @default(MEMBER)
   departmentId   String?
   department     OrganizationDepartment? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  assignedWorkTasks OrganizationWorkTask[]
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
