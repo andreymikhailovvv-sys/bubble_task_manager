@@ -162,7 +162,7 @@ export default function WorkTaskFocusDialog({organizationId,task,workspace,curre
             <span>Создатель: <strong>{memberName(current.createdByMemberId)}</strong></span>
             <span>Исполнитель: <strong>{memberName(current.assignedMemberId)}</strong></span>
             <span>Компания: {workspace.organization.name}</span>
-          </div>
+          </div>}
         </div>
       </div>}
       <div className="flex h-full min-h-0 flex-col">
