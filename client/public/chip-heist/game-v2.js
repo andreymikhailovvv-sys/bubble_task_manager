@@ -369,6 +369,7 @@ function updateShots(dt){
   for(let i=shots.length-1;i>=0;i--){
     const s=shots[i];s.x+=s.vx*dt;s.y+=s.vy*dt;s.life-=dt;
     if(s.type==='rice')s.vy+=370*dt;
+    let hit=false;
     if(s.team==='enemy'){
       if(dist(s.x,s.y,pinky.x+19,pinky.y+31)<s.r+20){
         damage();burst(s.x,s.y,'#ffecc5',11);shots.splice(i,1);continue;
@@ -377,7 +378,6 @@ function updateShots(dt){
         explosion(s.x,FLOOR-5,45,0,false);shots.splice(i,1);continue;
       }
     } else {
-      let hit=false;
       if(boss&&boss.hp>0&&s.x>boss.x-9&&s.x<boss.x+boss.w+9&&s.y>boss.y-10&&s.y<boss.y+boss.h+9){
         if(s.type==='rocket'||s.type==='grenade')explosion(s.x,s.y,s.type==='rocket'?110:85,s.power);
         else applyHit(boss,s.power);
