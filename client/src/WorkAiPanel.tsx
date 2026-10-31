@@ -5,8 +5,9 @@ import {AutoGrowingTextarea} from './components/AutoGrowingTextarea';
 import {TaskAiEmptyState} from './components/TaskAiEmptyState';
 import {AiProgress} from './components/AiProgress';
 import {WorkAiMessageBody} from './components/WorkAiMessageBody';
-import {AiReplyPreview,serializeAiReply,type AiReplyTarget} from './components/AiMessageReply';
-import type {AiChatModel} from './lib/types';
+import {AiReplyAction,AiReplyPreview,serializeAiReply,type AiReplyTarget} from './components/AiMessageReply';
+import {TaskAiRecipientPicker} from './components/TaskAiRecipientPicker';
+import type {AiChatModel,ChatMessage} from './lib/types';
 import {api,type WorkAiMessage,type WorkAiJob,type WorkAiCredits,type WorkWorkspace} from './lib/api';
 const models=[['gpt-6-luna','Luna'],['gpt-6.1-terra','Terra'],['gpt-6.1-sol','Sol']] as const;
 const displayCredits=(milli:number)=> (milli/1000).toLocaleString('ru-RU',{minimumFractionDigits:0,maximumFractionDigits:3});
@@ -118,26 +119,29 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
   };
   const selfMember=workspace?.members.find(m=>m.userId===currentUserId);
   const potentialRecipients=taskId&&workspace?workspace.members.filter(member=>
-    member.id!==selfMember?.id&&participantMemberIds?.includes(member.id)):[];
-  const recipientControl=taskId&&workspace&&potentialRecipients.length?<div className="task-ai-recipient-interaction relative mb-1 flex justify-end">
-    <label className="task-ai-recipient-trigger inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold">
-      <span className="task-ai-recipient-label">Получатель:</span>
-      <select className="bg-transparent text-primary outline-none" value={recipient}
-        onChange={e=>setRecipient(e.target.value)}>
-        <option value="ai">ИИ</option>
-        {potentialRecipients.map(member=><option key={member.id} value={member.id}>
-          {member.name||member.username||'Участник'}
-        </option>)}
-      </select>
-    </label>
-  </div>:null;
+    member.id!==selfMember?.id&&(
+      ['OWNER','ADMIN','MANAGER'].includes(member.role)||
+      participantMemberIds?.includes(member.id)
+    )):[];
+  const recipientControl=taskId&&workspace?<TaskAiRecipientPicker
+    value={recipient} onChange={setRecipient}
+    members={potentialRecipients.map(member=>({
+      id:member.id,name:member.name||member.username||'Участник',
+      color:['OWNER','ADMIN','MANAGER'].includes(member.role)?'#8b5cf6':'#0ea5b7'
+    }))}/>:null;
   const labelFor=(m:WorkAiMessage)=>m.role==='assistant'?'ИИ':m.role==='human'?
     (m.sender?.user.name||m.sender?.user.username||'Участник') : m.role==='system'?'Мониторинг':
     (m.sender?.user.name||m.sender?.user.username||'Вы');
-  const replyAction=(m:WorkAiMessage)=><button type="button" className="ai-message-reply-trigger" title="Ответить"
-    onClick={()=>setReplyTo({id:m.id,role:m.role==='assistant'?'assistant':'user',content:m.content,fileNames:[]})}>
-    <SendHorizontal size={13}/>
-  </button>;
+  const replyAction=(m:WorkAiMessage)=><AiReplyAction
+    message={{id:m.id,role:m.role==='assistant'?'assistant':'user',content:m.content} as ChatMessage}
+    onReply={target=>{
+      setReplyTo(target);
+      if(m.role==='human'&&m.senderMemberId&&m.senderMemberId!==selfMember?.id&&
+         potentialRecipients.some(member=>member.id===m.senderMemberId)){
+        setRecipient(m.senderMemberId);
+      }
+    }}
+  />;
   if(personalFocus){
     const modelAvailable=credits&&(['gpt-6-luna','gpt-6.1-terra','gpt-6.1-sol'].includes(credits.aiModel));
     const modelControl=(extraClass='')=>modelAvailable?<AiModelChip
@@ -168,7 +172,7 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
           </div>
           <div><WorkAiMessageBody content={message.content}/></div>
         </div>
-      <div className="ai-message-forward-actions">{replyAction(message)}</div></div>)}
+      <div className="ai-message-forward-actions flex justify-end">{replyAction(message)}</div></div>)}
       {busy&&<AiProgress status={progress}/>}
     </>;
     const composer=<div className="focused-task-ai-composer">
@@ -272,10 +276,11 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
         <Bot size={35}/><h3>ИИ готов помочь</h3>
         <p>Спросите об активных проектах, задачах сотрудников или рисках компании.</p>
       </div>}
-      {history.map(item=><div key={item.id} className={'work-ai-message '+(item.role==='assistant'?'assistant':'user')}>
+      {history.map(item=><div key={item.id} className="ai-message-forward-group">
+        <div className={'work-ai-message '+(item.role==='assistant'?'assistant':'user')}>
         <small>{labelFor(item)}{item.recipient?' → '+(item.recipient.user.name||item.recipient.user.username||'Участник'):''} · {new Date(item.createdAt).toLocaleString('ru-RU')}</small>
         <div><WorkAiMessageBody content={item.content}/></div>
-        <div className="ai-message-forward-actions">{replyAction(item)}</div>
+        </div><div className="ai-message-forward-actions flex justify-end">{replyAction(item)}</div>
       </div>)}
       {busy&&<AiProgress status={progress}/>}
       <div ref={bottomRef}/>
