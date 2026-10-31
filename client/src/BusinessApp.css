@@ -309,3 +309,10 @@
   .work-root .focused-task-editor-shell{padding:16px}
   .work-root .focused-task-modal-backdrop{padding:6px}
 }
+
+
+/* Keep global personal theme tokens on Work dialogs, not the Work dashboard.
+   styles.css uses body[data-theme] main as a personal-app background; its
+   selector otherwise paints an unintended black square over Work Overview. */
+body[data-theme] .work-root main.work-content{background:transparent!important;background-image:none!important;background-size:auto!important}
+.work-root .work-overview{background:transparent}
