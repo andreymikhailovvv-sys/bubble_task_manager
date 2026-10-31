@@ -81,7 +81,7 @@ export async function askCompanyAi(input:{
     throw new Error('OPENAI_API_KEY не настроен');
   }
   let providerAnswered=false;
-  let providerUsage:AiOutput['usage']=null;
+  let providerUsage:AiOutput['usage']=undefined;
   try{
     const response=await openAiFetch('https://api.openai.com/v1/responses',{
       method:'POST',headers:{Authorization:'Bearer '+apiKey,'Content-Type':'application/json'},
