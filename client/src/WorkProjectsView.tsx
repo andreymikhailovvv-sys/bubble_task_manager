@@ -134,8 +134,10 @@ export default function WorkProjectsView({organizationId,workspace,currentUserId
             </select></label>
             <label>Срок<input type="datetime-local" disabled={busy||!canManage||selectedProject.isArchived} value={dateInput(task.dueAt)} onChange={e=>patchTask(task,{dueAt:e.target.value?new Date(e.target.value).toISOString():null})}/></label>
           </div>
-          <button type="button" className="work-task-ai-toggle" onClick={()=>setActiveAiTask(activeAiTask===task.id?null:task.id)}><Bot size={15}/> {activeAiTask===task.id?'Скрыть помощь ИИ':'Помощь ИИ и мониторинг'}</button>
-          {activeAiTask===task.id&&<WorkAiPanel key={task.id} organizationId={organizationId} taskId={task.id} canManage={canManage}/>}
+          {(canManage||(workspace.organization.role==='MEMBER'&&task.assignedMemberId===selfMember?.id))&&
+            <button type="button" className="work-task-ai-toggle" onClick={()=>setActiveAiTask(activeAiTask===task.id?null:task.id)}><Bot size={15}/> {activeAiTask===task.id?'Скрыть помощь ИИ':'Помощь ИИ и мониторинг'}</button>}
+          {activeAiTask===task.id&&(canManage||(workspace.organization.role==='MEMBER'&&task.assignedMemberId===selfMember?.id))&&
+            <WorkAiPanel key={task.id} organizationId={organizationId} taskId={task.id} canManage={canManage}/>}
           <div className="work-task-footer"><span><CalendarDays size={14}/> {task.dueAt?new Date(task.dueAt).toLocaleString('ru-RU'):'Без срока'}</span><span><CheckCircle2 size={14}/> {showName(task.assignedMemberId)}</span>
             {canManage&&!selectedProject.isArchived&&<button type="button" disabled={busy} onClick={()=>{if(!window.confirm('Удалить задачу из проекта?'))return;void run(async()=>{await api.deleteWorkProjectTask(organizationId,selectedProject.id,task.id);setTasks(prev=>prev.filter(t=>t.id!==task.id));await refreshProjects();});}}><Trash2 size={15}/> Удалить</button>}
           </div>

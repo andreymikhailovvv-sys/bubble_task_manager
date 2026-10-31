@@ -23,7 +23,7 @@ async function scopedTask(req:any,res:any,member:{id:string;role:string}){
     select:{id:true,assignedMemberId:true,aiMonitoringEnabled:true,status:true}
   });
   if(!task){res.status(404).json({error:'Задача не найдена'});return null;}
-  if(!manager(member.role)&&task.assignedMemberId!==member.id){
+  if(member.role==='VIEWER'||(!manager(member.role)&&task.assignedMemberId!==member.id)){
     res.status(403).json({error:'Нет доступа к ИИ этой задачи'});return null;
   }
   return task;
