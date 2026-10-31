@@ -40,6 +40,7 @@ import { isGuestAccount } from '../lib/guest-account.js';
 import { isBusinessAdmin } from '../lib/business-admin-access.js';
 import { businessOrganizationsRouter } from './business-organizations.js';
 import { workCompanyRouter } from './business-company-management.js';
+import { workProjectsRouter } from './business-projects.js';
 import { workInvitationRouter } from './business-invitations.js';
 import { validateTelegramWebAppInitData } from '../lib/telegram-webapp-auth.js';
 import { FixedWindowRateLimiter, type RateLimitDecision } from '../lib/security-rate-limiter.js';
@@ -63,6 +64,7 @@ import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js'
 
 export const apiRouter = Router();
 apiRouter.use('/business/invitations', workInvitationRouter);
+apiRouter.use('/business/organizations', workProjectsRouter);
 apiRouter.use('/business/organizations', workCompanyRouter);
 apiRouter.use('/business/organizations', businessOrganizationsRouter);
 apiRouter.use('/payments/yookassa', yookassaPaymentsRouter);
