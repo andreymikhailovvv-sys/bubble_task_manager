@@ -45,6 +45,8 @@ test('work AI wallet uses atomic conditional reservation and usage-based finaliz
   assert.match(router,/await check\(req,res\)/);
   assert.match(router,/await scopedTask\(req,res,member\)/);
   assert.match(router,/if\(!manager\(member\.role\)\)/);
+  // Viewer may be assigned a task for reading, but can never spend company credits.
+  assert.match(router,/member\.role==='VIEWER'\|\|/);
   assert.match(monitor,/state:'PENDING'/);
   assert.match(monitor,/state:'PROCESSING'/);
   assert.match(admin,/requireAdminPassword\(req,res\)/);
