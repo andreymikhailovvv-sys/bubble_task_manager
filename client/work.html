@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="robots" content="noindex,nofollow"/>
+  <meta name="theme-color" content="#0a1223"/>
+  <title>Планировыч.Work</title>
+  <meta name="description" content="Планировыч.Work — корпоративное пространство для команд."/>
+  <link rel="icon" type="image/png" href="/favicon.png"/>
+  <style>
+    html,body{min-height:100%;margin:0;background:#090f1d;color:#edf1ff;font-family:Inter,system-ui,sans-serif;}
+    #work-entry-splash{display:none}
+    html.work-workspace-preload #work-entry-splash{
+      display:flex;position:fixed;inset:0;z-index:2147483000;align-items:center;justify-content:center;
+      background:radial-gradient(ellipse at 50% 38%,#2b3458 0%,#121d35 46%,#080f1f 100%);
+      color:#edf1ff;text-align:center;
+    }
+    .work-splash-core{position:relative;padding:35px 20px}
+    .work-splash-orbit{position:absolute;inset:-50px -80px;border-radius:100%;
+      background:radial-gradient(circle,rgba(137,118,210,.18),rgba(89,162,176,.07) 45%,transparent 69%);
+      pointer-events:none;animation:work-glow 3s ease-in-out infinite alternate}
+    .work-splash-brand{position:relative;font-size:clamp(2.6rem,7vw,5.5rem);font-weight:820;
+      letter-spacing:-.065em;margin:0;line-height:1.12;background:linear-gradient(105deg,#fff 5%,#c9c1f5 42%,#86cad2 70%,#fff 100%);
+      color:transparent;-webkit-background-clip:text;background-clip:text;background-size:220% auto;animation:work-shimmer 4s linear infinite}
+    .work-splash-subtitle{position:relative;color:#c3cce0;font-size:clamp(.68rem,2vw,.86rem);text-transform:uppercase;
+      letter-spacing:.19em;margin:17px auto 0}
+    .work-splash-track{position:relative;background:rgba(176,169,220,.16);height:4px;border-radius:9px;overflow:hidden;
+      width:185px;margin:32px auto 0}
+    .work-splash-track:after{content:"";display:block;width:45%;height:100%;border-radius:9px;
+      background:linear-gradient(90deg,#8c84d9,#7bc3d1);animation:work-slide 1.8s ease-in-out infinite alternate}
+    .work-splash-caption{color:#91a2bc;font-size:12px;margin-top:17px}
+    @keyframes work-slide{from{transform:translateX(-100%)}to{transform:translateX(320%)}}
+    @keyframes work-shimmer{from{background-position:120% 0}to{background-position:-120% 0}}
+    @keyframes work-glow{from{opacity:.5;transform:scale(.9)}to{opacity:1;transform:scale(1.08)}}
+    @media(prefers-reduced-motion:reduce){.work-splash-track:after,.work-splash-brand,.work-splash-orbit{animation:none}}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <div id="work-entry-splash" aria-live="polite" role="status" aria-label="Загрузка Планировыч.Work">
+    <div class="work-splash-core">
+      <div class="work-splash-orbit"></div>
+      <h1 class="work-splash-brand">Планировыч.Work</h1>
+      <p class="work-splash-subtitle">Твоя компания под контролем</p>
+      <div class="work-splash-track"></div>
+      <p class="work-splash-caption">Открываем корпоративное пространство</p>
+    </div>
+  </div>
+  <script type="module" src="/src/work-entry.tsx"></script>
+</body>
+</html>

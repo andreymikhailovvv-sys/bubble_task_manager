@@ -96,9 +96,11 @@ app.use(express.static(clientDist, {
     if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-store, must-revalidate');
   }
 }));
-app.get('*', (_, res) => {
+app.get('*', (req, res) => {
   res.setHeader('Cache-Control', 'no-store, must-revalidate');
-  res.sendFile(path.join(clientDist, 'index.html'));
+  // Separate Work entry excludes the personal app, its task stores and Mini App
+  // from the initial login page. The existing personal HTML remains unchanged.
+  res.sendFile(path.join(clientDist, req.hostname.toLowerCase() === 'work.planirovych.ru' ? 'work.html' : 'index.html'));
 });
 
 

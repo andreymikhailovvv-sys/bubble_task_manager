@@ -75,8 +75,8 @@ function AccessPage({ access, onAccess, onLogout }: { access: Access; onAccess: 
     </div>
   </div>;
 }
-function BusinessAppShell() {
-  const [access, setAccess] = useState<Access>({ phase: 'loading' });
+function BusinessAppShell({initialUser}:{initialUser?:CurrentUser}) {
+  const [access, setAccess] = useState<Access>(initialUser?{phase:'ready',user:initialUser}:{phase:'loading'});
   const [section, setSection] = useState<Section>('overview');
   const [activeOrganizationId, setActiveOrganizationId] = useState<string | null>(() => {
     const match = window.location.pathname.match(/^\/organizations\/([^/]+)\/?$/);
@@ -94,7 +94,7 @@ function BusinessAppShell() {
     document.documentElement.classList.remove('work-workspace-preload');
     document.title = 'Планировыч Work · Корпоративная платформа';
     let mounted = true;
-    void checkAccess().then(result => { if (mounted) setAccess(result); });
+    if (!initialUser) void checkAccess().then(result => { if (mounted) setAccess(result); });
     return () => { mounted = false; };
   }, []);
   useEffect(() => {
@@ -212,7 +212,7 @@ function BusinessAppShell() {
 }
 
 /** Invite links are intentionally reachable before the ordinary Work admin gate. */
-export default function BusinessApp() {
+export default function BusinessApp({initialUser}:{initialUser?:CurrentUser}) {
   const inviteMatch = window.location.pathname.match(/^\/join\/([a-f0-9]{64})\/?$/);
-  return inviteMatch ? <WorkInvitationJoin token={inviteMatch[1]}/> : <BusinessAppShell/>;
+  return inviteMatch ? <WorkInvitationJoin token={inviteMatch[1]}/> : <BusinessAppShell initialUser={initialUser}/>;
 }
