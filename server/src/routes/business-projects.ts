@@ -4,6 +4,7 @@ import { prisma } from '../db/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { canManageOrganization } from '../lib/work-company-roles.js';
+import { rescheduleWorkMonitoringAfterTaskChange } from '../services/work-ai-monitoring.service.js';
 
 export const workProjectsRouter = Router();
 workProjectsRouter.use(requireAuth);
@@ -220,6 +221,8 @@ workProjectsRouter.patch('/:organizationId/projects/:projectId/tasks/:taskId',as
       data
     });
     if(!changed.count){res.status(409).json({error:'Назначение изменилось. Обновите задачи'});return;}
+    if(keys.includes('dueAt')||keys.includes('status'))
+      await rescheduleWorkMonitoringAfterTaskChange(req.params.organizationId,task.id);
     const result=await prisma.organizationWorkTask.findUnique({where:{id:task.id}});
     res.json({task:result});
   }catch(error){if(!rejectConflicts(error,res))throw error;}
