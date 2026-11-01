@@ -6,11 +6,6 @@ import {WorkAiMessageBody} from './components/WorkAiMessageBody';
 import {WorkAiProposalCard} from './components/WorkAiProposalCard';
 import {ExpandedAiChat,type ExpandedAiChatProject} from './components/ExpandedAiChat';
 import {QuickAiLauncherFrame} from './components/QuickAiLauncherFrame';
-import {WorkNotificationBell} from './components/WorkNotificationBell';
-import {AiReplyAction,type AiReplyTarget} from './components/AiMessageReply';
-import {serializeWorkAiReply} from './components/WorkAiReply';
-import {MessageActionArrow} from './components/MessageActionIcons';
-import type {ChatMessage} from './lib/types';
 import {api,type WorkDashboard,type WorkAiMessage,type WorkAiCredits} from './lib/api';
 import type {AiChatModel} from './lib/types';
 import './styles.css';
@@ -30,7 +25,6 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
   const [selectedChatId,setSelectedChatId]=useState(QUICK);
   const [credits,setCredits]=useState<WorkAiCredits|null>(null);
   const [draft,setDraft]=useState('');
-  const [replyTo,setReplyTo]=useState<AiReplyTarget|null>(null);
   const [loading,setLoading]=useState(false);
   const [fetching,setFetching]=useState(true);
   const [error,setError]=useState('');
@@ -95,33 +89,17 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
   },[loading]);
   const send=async(question:string,quick:boolean)=>{
     const q=question.trim();if(!q||loading||!allowed)return;
-    const request=serializeWorkAiReply(q,replyTo);
-    const optimistic:WorkAiMessage={id:'pending-work-'+Date.now(),role:'user',content:request,createdAt:new Date().toISOString()};
-    const savedReply=replyTo;
-    if(quick){setDraft('');setQuickMessages(items=>[...items,optimistic]);}
-    else setTaskMessages(items=>[...items,optimistic]);
-    setReplyTo(null);setLoading(true);setError('');
+    setLoading(true);setError('');
     try{
-      const result=quick?await api.workQuickAiAsk(organizationId,request):await api.workAiAsk(organizationId,request,selectedChatId);
+      const result=quick?await api.workQuickAiAsk(organizationId,q):await api.workAiAsk(organizationId,q,selectedChatId);
       setCredits(result.credits);
       const response=quick?await api.workQuickAiHistory(organizationId):await api.workAiHistory(organizationId,selectedChatId);
-      if(quick)setQuickMessages(response.messages);
+      if(quick){setQuickMessages(response.messages);setDraft('');}
       else setTaskMessages(response.messages);
-    }catch(e){
-      setError(errorText(e));
-      const remove=(items:WorkAiMessage[])=>items.filter(item=>item.id!==optimistic.id);
-      if(quick){setQuickMessages(remove);setDraft(value=>value||q);}
-      else setTaskMessages(remove);
-      setReplyTo(savedReply);
-    }finally{setLoading(false);}
+    }catch(e){setError(errorText(e));}
+    finally{setLoading(false);}
   };
   const sendQuick=()=>void send(draft,true);
-  const messageActions=(item:WorkAiMessage)=><div className="ai-message-forward-actions flex justify-end">
-    <AiReplyAction message={{id:item.id,role:item.role==='assistant'?'assistant':'user',content:item.content} as ChatMessage}
-      onReply={target=>{setReplyTo(target);if(!expanded)setExpanded(true);}}/>
-    <button type="button" className="ai-message-forward-trigger" disabled title="Пересылка будет добавлена позже"
-      aria-label="Переслать сообщение (скоро)"><MessageActionArrow direction="forward"/></button>
-  </div>;
   const changeModel=(model:AiChatModel)=>{
     if(!admin)return;
     setLoading(true);setError('');
@@ -151,7 +129,6 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
                   <b>{item.role==='user'?'Вы':'ИИ'}:</b> <WorkAiMessageBody content={item.content}/>
                 </div>
                 {item.proposal&&<WorkAiProposalCard organizationId={organizationId} initial={item.proposal} onChanged={()=>void api.workQuickAiHistory(organizationId).then(r=>setQuickMessages(r.messages)).catch(e=>setError(errorText(e)))}/>}
-                {messageActions(item)}
               </div>)}
               {!quickMessages.length&&<p className="text-subtle">Быстрый вопрос по проектам и задачам выбранной компании.</p>}
               {loading&&<AiProgress status={aiProgress}/>}
@@ -172,7 +149,6 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
           </div>
         </div>
       </div>
-       <div className="work-quick-notification"><WorkNotificationBell organizationId={organizationId}/></div>
       <button type="button"
         className="ai-chat-launcher-button flex h-14 w-14 touch-none select-none items-center justify-center rounded-full text-2xl text-white shadow-2xl transition duration-200 hover:scale-105 hover:shadow-violet-500/40 active:scale-95"
         title="Чат с ИИ" aria-label="Развернуть чат с ИИ"
@@ -203,7 +179,6 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
         {item.proposal&&<WorkAiProposalCard organizationId={organizationId} initial={item.proposal} onChanged={()=>void (selectedChatId===QUICK
           ?api.workQuickAiHistory(organizationId).then(r=>setQuickMessages(r.messages))
           :api.workAiHistory(organizationId,selectedChatId).then(r=>setTaskMessages(r.messages))).catch(e=>setError(errorText(e)))}/>}
-        {messageActions(item)}
       </div>)}
       status={error?<p role="alert" className="text-sm text-rose-400">{error}</p>:
         loading?<AiProgress status={aiProgress}/>:
@@ -219,7 +194,6 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
       onModelChange={changeModel}
       onAddFiles={()=>undefined}
       onRemoveFile={()=>undefined}
-      replyTo={replyTo} onClearReply={()=>setReplyTo(null)}
       onSend={question=>void send(question,selectedChatId===QUICK)}
     />}
   </>;

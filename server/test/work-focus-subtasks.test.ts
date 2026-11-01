@@ -37,7 +37,7 @@ test('Focus uses real personal-style controls with popup settings and foreground
  ]);
  assert.match(focus,/<FocusedTaskWindowFrame>/);
  assert.match(focus,/work-focus-settings absolute right-5 top-16/);
- assert.match(focus,/popupZIndex=\{2600\}/);
+ assert.match(focus,/popupZIndex=\{1400\}/);
  assert.match(focus,/Пересылка корпоративной задачи пока недоступна/);
  assert.match(focus,/onCloseFocus=\{onClose\}/);
  assert.match(ai,/work-focus-ai-toolbar/);
