@@ -128,7 +128,7 @@ export default function WorkTaskFocusDialog({organizationId,task,workspace,curre
           title="Пересылка корпоративной задачи пока недоступна" aria-label="Переслать задачу (недоступно)">
           <SendHorizontal size={16}/></button>
         {manager&&<DateTimePickerWithApply value={current.dueAt}
-          title="Выбрать срок" iconOnly detachedPopup popupAlign="right" popupZIndex={1400}
+          title="Выбрать срок" iconOnly detachedPopup popupAlign="right" popupZIndex={2600}
           onChange={value=>void patch({dueAt:value})}/>}
         <button type="button" className="focused-task-icon-button focused-task-calendar-like-button" title="Настройки задачи"
           aria-expanded={settingsOpen} onClick={()=>setSettingsOpen(v=>!v)}><Settings size={16}/></button>
@@ -211,11 +211,11 @@ export default function WorkTaskFocusDialog({organizationId,task,workspace,curre
                 </div>
                 <span className="text-[11px] text-muted">{subtasks.filter(st=>st.isDone).length} из {subtasks.length}</span>
               </div>
-              {addingSubtask&&<FocusedSubtaskComposer
+              {addingSubtask&&<div className="work-focus-subtask-create"><FocusedSubtaskComposer
                  title={subtaskTitle} dueAt={subtaskDue}
                  onTitleChange={setSubtaskTitle} onDueChange={setSubtaskDue}
                  onAdd={()=>void createSubtask()} canAdd={subtaskTitle.trim().length>=2}
-                 disabled={subtaskBusy} monitoringEnabled={monitorEnabled} popupZIndex={1600}
+                 disabled={subtaskBusy} monitoringEnabled={monitorEnabled} popupZIndex={2600}
                  onCancel={()=>{setAddingSubtask(false);setSubtaskTitle('');setSubtaskDue(null);}}
                />}
                {subtaskError&&<p className="mb-2 text-xs text-rose-400" role="alert">{subtaskError}</p>}
@@ -226,7 +226,7 @@ export default function WorkTaskFocusDialog({organizationId,task,workspace,curre
                     <input type="checkbox" checked={st.isDone} disabled={!mayComplete||subtaskBusy}
                       onChange={e=>void updateSubtask(st.id,{isDone:e.target.checked})}
                       aria-label={'Выполнена: '+st.title}/>
-                    <button type="button" className={`min-w-0 flex-1 truncate text-left text-sm ${st.isDone?'line-through opacity-60':''}`}
+                    <button type="button" className={`work-focus-subtask-title min-w-0 flex-1 truncate text-left text-[16px] font-normal ${st.isDone?'line-through opacity-60':''}`}
                        onClick={()=>setSubtaskDetail(st)}>{st.title}</button>
                      <button type="button" className="task-card-meta-indicator task-card-meta-action relative shrink-0"
                        title="Открыть комментарии подзадачи" onClick={()=>setSubtaskComments(st)}><MessageCircle size={15}/>
