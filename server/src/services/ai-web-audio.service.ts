@@ -177,7 +177,8 @@ async function synthesizeRealtime(text: string, apiKey: string, maxOutputTokens:
       };
       ws.addEventListener('error', (event) => {
         const source = 'error' in event && event.error instanceof Error ? event.error : null;
-        const cause = source?.cause && typeof source.cause === 'object' ? source.cause as { code?: unknown } : null;
+        const sourceCause = (source as (Error & { cause?: unknown }) | null)?.cause;
+        const cause = sourceCause && typeof sourceCause === 'object' ? sourceCause as { code?: unknown } : null;
         console.warn('[AI speech realtime] connection error', {
           phase,
           errorName: source?.name ?? 'WebSocketError',
