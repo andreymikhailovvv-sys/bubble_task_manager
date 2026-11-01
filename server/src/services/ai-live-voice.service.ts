@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import type { Socket } from 'node:net';
+import type { Duplex } from 'node:stream';
 import { ProxyAgent, WebSocket } from 'undici';
 import { reserveAiCreditsMilli, settleAiCreditReservation, refundAiCreditReservation } from './ai-credit-wallet.service.js';
 import { recordAiCreditCharge } from './ai-usage-metering.service.js';
@@ -32,7 +32,7 @@ type ClientPeer = {
 
 // Server-side, minimal RFC 6455 text framing. Only masked browser frames are accepted.
 // Frame sizes, fragmentation, buffering and backpressure are bounded.
-function acceptWebSocket(socket: Socket, key: string, head: Buffer): ClientPeer {
+function acceptWebSocket(socket: Duplex, key: string, head: Buffer): ClientPeer {
   const accept = crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
   socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + accept + '\r\n\r\n');
   let buffer = Buffer.alloc(0);
@@ -101,11 +101,11 @@ function acceptWebSocket(socket: Socket, key: string, head: Buffer): ClientPeer 
   };
 }
 
-function sendUpgradeRejection(socket: Socket, status: number) {
+function sendUpgradeRejection(socket: Duplex, status: number) {
   socket.end('HTTP/1.1 ' + status + ' ' + (status === 403 ? 'Forbidden' : 'Bad Request') + '\r\nConnection: close\r\n\r\n');
 }
 
-export function handleLiveVoiceUpgrade(request: IncomingMessage, socket: Socket, head: Buffer): boolean {
+export function handleLiveVoiceUpgrade(request: IncomingMessage, socket: Duplex, head: Buffer): boolean {
   const url = new URL(request.url ?? '/', 'http://localhost');
   if (url.pathname !== '/api/ai/audio/live') return false;
   const origin = request.headers.origin;
