@@ -49,8 +49,8 @@ import { AiGeneratedDocumentButton } from './components/AiGeneratedDocumentButto
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
 import { AiReplyAction, AiReplyPreview, AiReplyMessageBody, serializeAiReply, type AiReplyTarget } from './components/AiMessageReply';
 import { AiReadAloudAction, AiSpeechCostLine } from './components/AiReadAloudAction';
-import type { LiveVoiceMessage, LiveVoiceToolCompletion } from './components/LiveVoiceDialog';
-import { voiceTranscriptMessage, voiceToolAssistantMessage } from './lib/voice-chat-messages';
+import type { LiveVoiceMessage, LiveVoiceToolCompletion, LiveVoiceProgressStatus } from './components/LiveVoiceDialog';
+import { voiceTranscriptMessage, voiceToolAssistantMessage, updateLiveVoiceProgress } from './lib/voice-chat-messages';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
 import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, mergeTelegramManagedMessages, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike, orderAiChatMessagesChronologically } from './lib/ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
@@ -909,6 +909,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [quickAiChatModel, setQuickAiChatModel] = useState<AiChatModel>(DEFAULT_QUICK_AI_CHAT_MODEL);
   const [aiChatLoading, setAiChatLoading] = useState(false);
   const [aiChatProgress, setAiChatProgress] = useState<AiChatProgressStatus>('analyzing_request');
+  const [liveVoiceTaskProgress, setLiveVoiceTaskProgress] = useState<Record<string, LiveVoiceProgressStatus>>({});
+  const [liveVoiceChatProgress, setLiveVoiceChatProgress] = useState<Record<string, LiveVoiceProgressStatus>>({});
   const [aiChatError, setAiChatError] = useState<string | null>(null);
   const [aiChatProjectDraft, setAiChatProjectDraft] = useState<MiniAiChatProjectDraft>({ mode: 'create', title: '', color: '#8b5cf6', icon: '✨' });
   const [isAiChatProjectDialogOpen, setIsAiChatProjectDialogOpen] = useState(false);
@@ -2824,6 +2826,12 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     subtaskTitleInputRef.current?.focus();
   }, [isCreatingNewSubtask, subtaskEditorId]);
 
+  const updateLiveTaskStatus = (taskId: string, status: LiveVoiceProgressStatus | null) => {
+    setLiveVoiceTaskProgress(previous => updateLiveVoiceProgress(previous, taskId, status));
+  };
+  const updateLiveChatStatus = (projectId: string, chatId: string, status: LiveVoiceProgressStatus | null) => {
+    setLiveVoiceChatProgress(previous => updateLiveVoiceProgress(previous, `${projectId}:${chatId}`, status));
+  };
   const appendLiveTaskMessage = (taskId: string, event: LiveVoiceMessage) => {
     const entry = voiceTranscriptMessage(event);
     setAiDialogByTask(previous => {
@@ -2857,6 +2865,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   };
   const activeAiChatProject = aiChatProjects.find((project) => project.id === activeAiChatProjectId) ?? aiChatProjects[0];
   const activeAiChat = activeAiChatProject?.chats.find((chat) => chat.id === activeAiChatId) ?? activeAiChatProject?.chats[0];
+  const activeLiveVoiceStatus = activeAiChatProject && activeAiChat
+    ? liveVoiceChatProgress[`${activeAiChatProject.id}:${activeAiChat.id}`] : undefined;
   // Both the Telegram mini-app and mobile web use this same chat renderer.
   // De-duplicate by message ID/content once the server history catches up.
   const pinnedManualCheckup = currentUser?.id && latestManualCheckup?.userId === currentUser.id
@@ -3023,7 +3033,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     if (!generalAiChatNearBottomRef.current) return;
     container.scrollTop = container.scrollHeight;
     generalAiChatScrollTopRef.current = container.scrollTop;
-  }, [visibleAiChatMessages.length, aiChatLoading, aiChatProgress, isAiChatOpen, activeAiChatId]);
+  }, [visibleAiChatMessages.length, aiChatLoading, aiChatProgress, activeLiveVoiceStatus, isAiChatOpen, activeAiChatId]);
 
   useLayoutEffect(() => {
     if (!quickAiTabNavigationSerial || !isAiChatOpen || activeAiChatId !== QUICK_AI_CHAT_ID) return;
@@ -3735,7 +3745,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     };
     scrollToBottom(fullscreenAiDialogContainerRef.current);
     taskAiChatScrollTopRef.current = fullscreenAiDialogContainerRef.current?.scrollTop ?? 0;
-  }, [isAiDialogOpen, openedTaskId, openedTaskAiDialog.length, aiLoadingTaskId, openedTaskId ? aiProgressByTask[openedTaskId] : undefined]);
+  }, [isAiDialogOpen, openedTaskId, openedTaskAiDialog.length, aiLoadingTaskId, openedTaskId ? aiProgressByTask[openedTaskId] : undefined, openedTaskId ? liveVoiceTaskProgress[openedTaskId] : undefined]);
 
   useEffect(() => {
     if (!isAiDialogOpen) return;
@@ -5055,7 +5065,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 </div>
                 ))}
                 <TaskMonitoringTriggerChips taskId={openedTask.id} />
-                {aiLoadingTaskId === openedTask.id ? <TaskAiProgress status={aiProgressByTask[openedTask.id] ?? 'analyzing_request'} /> : openedTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={openedTask.id} /> : null}
+                {aiLoadingTaskId === openedTask.id ? <TaskAiProgress status={aiProgressByTask[openedTask.id] ?? 'analyzing_request'} /> : liveVoiceTaskProgress[openedTask.id] ? <TaskAiProgress status={liveVoiceTaskProgress[openedTask.id]} /> : openedTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={openedTask.id} /> : null}
                 <div className="miniapp-ai-chat-bottom-spacer h-24" aria-hidden="true" />
               </div>
             </div>
@@ -5107,6 +5117,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   liveContext={{ type: 'task', taskId: openedTask.id, model: openedTask.aiMonitoringEnabled ? (openedTask.aiMonitoringModel ?? DEFAULT_TASK_AI_CHAT_MODEL) : (selectedAiChatModel) }}
                   onLiveMessage={event => appendLiveTaskMessage(openedTask.id, event)}
                   onLiveToolResult={event => applyLiveTaskTool(openedTask.id, event)}
+                  onLiveStatus={status => updateLiveTaskStatus(openedTask.id, status)}
                   initialDraft={taskAiDraftValueRef.current}
                   onDraftChange={(value) => { taskAiDraftValueRef.current = value; }}
                   onSend={() => { void sendAiMessage(); }}
@@ -5263,7 +5274,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={setReplyToGeneral} /><TelegramMessageQuickShare text={message.content} compact /></div>
                 </div>
               ))}
-              {aiChatLoading ? <AiProgress status={aiChatProgress} /> : null}
+              {aiChatLoading ? <AiProgress status={aiChatProgress} /> : activeLiveVoiceStatus ? <AiProgress status={activeLiveVoiceStatus} /> : null}
               {aiChatError ? <p className="text-sm text-rose-300">{aiChatError}</p> : null}
               <div className="miniapp-ai-chat-bottom-spacer h-24" aria-hidden="true" />
               </div>
@@ -5279,6 +5290,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   liveContext={activeAiChat ? { type: 'chat', chatId: activeAiChat.id, projectId: activeAiChatProject?.id, projectTitle: activeAiChatProject?.title, chatTitle: activeAiChat.title, model: generalAiChatModel, history: activeAiChat.messages.filter(message => message.role === 'assistant' || message.role === 'user').map(message => ({ id: message.id, role: message.role as 'assistant' | 'user', content: message.content })) } : undefined}
                   onLiveMessage={event => activeAiChatProject && activeAiChat && appendLiveProjectMessage(activeAiChatProject.id, activeAiChat.id, event)}
                   onLiveToolResult={event => activeAiChatProject && activeAiChat && applyLiveProjectTool(activeAiChatProject.id, activeAiChat.id, event)}
+                  onLiveStatus={status => activeAiChatProject && activeAiChat && updateLiveChatStatus(activeAiChatProject.id, activeAiChat.id, status)}
                   initialDraft={aiChatDraftValueRef.current}
                   onDraftChange={(value) => { aiChatDraftValueRef.current = value; }}
                   onSend={() => { void sendAiChatQuestion(); }}

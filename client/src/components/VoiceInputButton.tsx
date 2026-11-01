@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Mic, MessageCircle, Radio, SendHorizontal, Square, X } from 'lucide-react';
-import { LiveVoiceDialog, type LiveVoiceContext, type LiveVoiceMessage, type LiveVoiceToolCompletion } from './LiveVoiceDialog';
+import { LiveVoiceDialog, type LiveVoiceContext, type LiveVoiceMessage, type LiveVoiceToolCompletion, type LiveVoiceProgressStatus } from './LiveVoiceDialog';
 import { api } from '../lib/api';
 
 type Props = {
@@ -8,6 +8,7 @@ type Props = {
   liveContext?: LiveVoiceContext;
   onLiveMessage?: (message: LiveVoiceMessage) => void;
   onLiveToolResult?: (result: LiveVoiceToolCompletion) => void;
+  onLiveStatus?: (status: LiveVoiceProgressStatus | null) => void;
   disabled?: boolean;
   small?: boolean;
   className?: string;
@@ -15,7 +16,7 @@ type Props = {
 
 type VoiceState = 'idle' | 'recording' | 'transcribing';
 
-export function VoiceInputButton({ onTranscript, liveContext, onLiveMessage, onLiveToolResult, disabled = false, small = false, className = '' }: Props) {
+export function VoiceInputButton({ onTranscript, liveContext, onLiveMessage, onLiveToolResult, onLiveStatus, disabled = false, small = false, className = '' }: Props) {
   const [state, setState] = useState<VoiceState>('idle');
   const [error, setError] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -194,7 +195,7 @@ export function VoiceInputButton({ onTranscript, liveContext, onLiveMessage, onL
         </button>
       </div> : null}
       {liveOpen ? <LiveVoiceDialog liveContext={liveContext} audioContext={liveAudioContext}
-        onLiveMessage={onLiveMessage} onLiveToolResult={onLiveToolResult}
+        onLiveMessage={onLiveMessage} onLiveToolResult={onLiveToolResult} onLiveStatus={onLiveStatus}
         onClose={() => { setLiveOpen(false); setLiveAudioContext(null); }} /> : null}
     </span>
     {error && state === 'idle' ? <div role="alert" className="voice-input-error">{error}

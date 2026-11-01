@@ -29,3 +29,17 @@ export function voiceToolAssistantMessage(entry: LiveVoiceToolCompletion): ChatM
     webCitations: result.webCitations
   };
 }
+
+/** Track only the chat currently doing delegated voice work. Clearing a call
+ * must not disturb a regular text request or another chat's progress. */
+export function updateLiveVoiceProgress<T extends string>(
+  previous: Record<string, T>, key: string, status: T | null
+): Record<string, T> {
+  if (status === null) {
+    if (!(key in previous)) return previous;
+    const next = { ...previous };
+    delete next[key];
+    return next;
+  }
+  return previous[key] === status ? previous : { ...previous, [key]: status };
+}

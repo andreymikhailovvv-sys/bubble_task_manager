@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Mic, MicOff, PhoneOff, Volume2, X } from 'lucide-react';
-import { api, type AiChatResult, type TaskAssistantResult } from '../lib/api';
+import { api, type AiChatResult, type TaskAssistantResult, type AiChatProgressStatus, type TaskAiProgressStatus } from '../lib/api';
 import type { AiChatModel } from '../lib/types';
 import { formatCreditsSpent } from '../lib/credits';
 
@@ -10,6 +10,7 @@ export type LiveVoiceContext =
 
 export type LiveVoiceMessage = { role: 'user' | 'assistant'; id: string; text: string };
 export type LiveVoiceToolCompletion = { question: string; kind: 'task' | 'chat'; result: AiChatResult | TaskAssistantResult };
+export type LiveVoiceProgressStatus = AiChatProgressStatus | TaskAiProgressStatus;
 
 type Phase = 'connecting' | 'listening' | 'speaking' | 'thinking' | 'ended' | 'error';
 type VoiceEvent = { type?: string; data?: string; text?: string; id?: string; callId?: string; question?: string; message?: string; creditsSpentMilli?: number };
@@ -49,10 +50,11 @@ function decodePcm(base64: string) {
   return values;
 }
 
-export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMessage, onLiveToolResult }: {
+export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMessage, onLiveToolResult, onLiveStatus }: {
   onClose: () => void; audioContext: AudioContext | null; liveContext?: LiveVoiceContext;
   onLiveMessage?: (item: LiveVoiceMessage) => void;
   onLiveToolResult?: (result: LiveVoiceToolCompletion) => void;
+  onLiveStatus?: (status: LiveVoiceProgressStatus | null) => void;
 }) {
   const [phase, setPhase] = useState<Phase>('connecting');
   const processingToolRef = useRef(false);
@@ -83,9 +85,17 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
   const liveContextRef = useRef(liveContext);
   const onLiveMessageRef = useRef(onLiveMessage);
   const onLiveToolResultRef = useRef(onLiveToolResult);
+  const onLiveStatusRef = useRef(onLiveStatus);
   liveContextRef.current = liveContext;
   onLiveMessageRef.current = onLiveMessage;
   onLiveToolResultRef.current = onLiveToolResult;
+  onLiveStatusRef.current = onLiveStatus;
+
+  // The same progress events drive typed and voice-delegated requests.
+  // Keep the status in the underlying chat, not just the call overlay.
+  const reportStatus = (status: LiveVoiceProgressStatus | null) => {
+    if (!stoppedRef.current) onLiveStatusRef.current?.(status);
+  };
 
   const resumeListeningAfterPlayback = () => {
     if (stoppedRef.current || !responseDoneRef.current || processingToolRef.current || sourcesRef.current.size > 0) return;
@@ -113,21 +123,23 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
     uplinkPausedRef.current = true;
     responseDoneRef.current = false;
     setPhase('thinking');
+    reportStatus('analyzing_request');
     try {
       const scope = liveContextRef.current!;
       const result = scope.type === 'task'
         ? await api.askTaskAssistantStreaming(scope.taskId, {
           clientRequestId: crypto.randomUUID(), question, userMessage: question,
           model: scope.model, clientSurface: navigator.userAgent.includes('Telegram') ? 'miniapp' : 'web'
-        })
+        }, { onStatus: status => reportStatus(status) })
         : await api.askAiChatStreaming({
           clientRequestId: crypto.randomUUID(), question,
           history: dialogHistoryRef.current.filter((entry, index, items) => !(index === items.length - 1 && entry.role === 'user' && entry.content.trim() === question.trim())), model: scope.model,
           projectId: scope.type === 'chat' ? scope.projectId : undefined, chatId: scope.type === 'chat' ? scope.chatId : undefined,
           projectTitle: scope.type === 'chat' ? scope.projectTitle : undefined, chatTitle: scope.type === 'chat' ? scope.chatTitle : undefined,
           clientSurface: navigator.userAgent.includes('Telegram') ? 'miniapp' : 'web'
-        });
+        }, { onStatus: status => reportStatus(status) });
       if (!stoppedRef.current) {
+        reportStatus('forming_answer');
         onLiveToolResultRef.current?.({ kind: scope.type, question, result });
         if (scope.type === 'chat') dialogHistoryRef.current.push({ id: crypto.randomUUID(), role: 'assistant', content: result.answer });
         if (ws.readyState === WebSocket.OPEN) {
@@ -140,6 +152,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
       const message = cause instanceof Error ? cause.message : 'Ошибка инструмента.';
       if (!stoppedRef.current) {
         setError(message);
+        reportStatus(ws.readyState === WebSocket.OPEN ? 'forming_answer' : null);
         if (ws.readyState === WebSocket.OPEN) {
           responseDoneRef.current = false;
           ws.send(JSON.stringify({ type: 'tool_result', callId, answer: 'Не удалось выполнить действие: ' + message }));
@@ -161,6 +174,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
       if (cancelled) return;
       cancelled = true;
       stoppedRef.current = true;
+      onLiveStatusRef.current?.(null);
       toolQueueRef.current = [];
       uplinkPausedRef.current = true;
       responseDoneRef.current = false;
@@ -248,6 +262,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
             void handleToolRequest(payload.question, payload.callId, ws);
           }
           if (payload.type === 'speech_started' && !uplinkPausedRef.current) {
+            reportStatus(null);
             clearPlayback();
             setCaption('');
             setPhase('listening');
@@ -257,8 +272,10 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
             uplinkPausedRef.current = true;
             responseDoneRef.current = false;
             setPhase('thinking');
+            reportStatus('analyzing_request');
           }
           if (payload.type === 'audio' && typeof payload.data === 'string') {
+            if (!processingToolRef.current && toolQueueRef.current.length === 0) reportStatus(null);
             uplinkPausedRef.current = true;
             responseDoneRef.current = false;
             try {
@@ -289,6 +306,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
             setCreditsSpentMilli(payload.creditsSpentMilli);
           }
           if (payload.type === 'response_done') {
+            if (!processingToolRef.current && toolQueueRef.current.length === 0) reportStatus(null);
             responseDoneRef.current = true;
             resumeListeningAfterPlayback();
           }
@@ -299,13 +317,14 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
           }
           if (payload.type === 'notice' && payload.message) setError(payload.message);
           if (payload.type === 'error') {
+            reportStatus(null);
             setError(payload.message || 'Ошибка голосового соединения.');
             setPhase('error');
           }
         };
-        ws.onerror = () => { if (!cancelled) { setError('Не удалось подключиться к голосовому серверу.'); setPhase('error'); } };
+        ws.onerror = () => { if (!cancelled) { reportStatus(null); setError('Не удалось подключиться к голосовому серверу.'); setPhase('error'); } };
         ws.onclose = () => {
-          if (!cancelled) setPhase(previous => previous === 'ended' || previous === 'error' ? previous : 'ended');
+          if (!cancelled) { reportStatus(null); setPhase(previous => previous === 'ended' || previous === 'error' ? previous : 'ended'); }
         };
       } catch (cause) {
         if (!cancelled) {

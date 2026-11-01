@@ -56,8 +56,8 @@ import { AiModelChip } from './components/AiModelChip';
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
 import { AiReplyAction, AiReplyPreview, AiReplyMessageBody, serializeAiReply, type AiReplyTarget } from './components/AiMessageReply';
 import { VoiceInputButton } from './components/VoiceInputButton';
-import type { LiveVoiceMessage, LiveVoiceToolCompletion } from './components/LiveVoiceDialog';
-import { voiceTranscriptMessage, voiceToolAssistantMessage } from './lib/voice-chat-messages';
+import type { LiveVoiceMessage, LiveVoiceToolCompletion, LiveVoiceProgressStatus } from './components/LiveVoiceDialog';
+import { voiceTranscriptMessage, voiceToolAssistantMessage, updateLiveVoiceProgress } from './lib/voice-chat-messages';
 import { AiReadAloudAction, AiSpeechCostLine } from './components/AiReadAloudAction';
 import { TaskAiRecipientPicker } from './components/TaskAiRecipientPicker';
 import { SubtaskCommentsDialog } from './components/SubtaskCommentsDialog';
@@ -1150,6 +1150,8 @@ export default function App() {
   const [quickAiChatModel, setQuickAiChatModel] = useState<AiChatModel>('gpt-6-luna');
   const [aiChatLoading, setAiChatLoading] = useState(false);
   const [aiChatProgress, setAiChatProgress] = useState<AiChatProgressStatus>('analyzing_request');
+  const [liveVoiceTaskProgress, setLiveVoiceTaskProgress] = useState<Record<string, LiveVoiceProgressStatus>>({});
+  const [liveVoiceChatProgress, setLiveVoiceChatProgress] = useState<Record<string, LiveVoiceProgressStatus>>({});
   const [aiChatError, setAiChatError] = useState<string | null>(null);
   const [systemNotifications, setSystemNotifications] = useState<SystemNotification[]>([]);
   const [unreadSystemNotificationCount, setUnreadSystemNotificationCount] = useState(0);
@@ -2287,7 +2289,7 @@ export default function App() {
       scrollToBottom(expandedAiDialogContainerRef.current);
     });
     return () => window.cancelAnimationFrame(frameId);
-  }, [focusedTask?.id, focusedDraft, focusedAiDialog.length, isAiExpanded, aiLoadingTaskId, focusedTask ? aiProgressByTask[focusedTask.id] : undefined]);
+  }, [focusedTask?.id, focusedDraft, focusedAiDialog.length, isAiExpanded, aiLoadingTaskId, focusedTask ? aiProgressByTask[focusedTask.id] : undefined, focusedTask ? liveVoiceTaskProgress[focusedTask.id] : undefined]);
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
@@ -2348,7 +2350,7 @@ export default function App() {
       }
     });
     return () => window.cancelAnimationFrame(frameId);
-  }, [focusActiveTask?.id, focusTaskAiDialog.length, focusAiLoading, focusAiProgress, isFocusModeOpen, isFocusAiExpanded]);
+  }, [focusActiveTask?.id, focusTaskAiDialog.length, focusAiLoading, focusAiProgress, focusActiveTask ? liveVoiceTaskProgress[focusActiveTask.id] : undefined, isFocusModeOpen, isFocusAiExpanded]);
 
   useEffect(() => {
     // Switching tasks only changes the selected task and its existing dialog.
@@ -2933,6 +2935,9 @@ export default function App() {
     if (activeAiChatId === QUICK_AI_CHAT_ID) setQuickAiChatModel(DEFAULT_QUICK_AI_CHAT_MODEL);
   }, [activeAiChatId, isAiChatOpen]);
   const quickAiChatMessages = aiChatProjects[0]?.chats.find((chat) => chat.id === QUICK_AI_CHAT_ID)?.messages ?? [];
+  const quickLiveVoiceStatus = aiChatProjects[0] ? liveVoiceChatProgress[`${aiChatProjects[0].id}:${QUICK_AI_CHAT_ID}`] : undefined;
+  const activeLiveVoiceStatus = activeAiChatProject && activeAiChat
+    ? liveVoiceChatProgress[`${activeAiChatProject.id}:${activeAiChat.id}`] : undefined;
   const appendLiveTaskMessage = (taskId: string, event: LiveVoiceMessage) => {
     const message = voiceTranscriptMessage(event);
     setAiDialogByTask(previous => {
@@ -2965,6 +2970,12 @@ export default function App() {
     })));
     if (event.result.taskDataChanged) void load();
     void refreshAiCredits();
+  };
+  const updateLiveTaskStatus = (taskId: string, status: LiveVoiceProgressStatus | null) => {
+    setLiveVoiceTaskProgress(previous => updateLiveVoiceProgress(previous, taskId, status));
+  };
+  const updateLiveChatStatus = (projectId: string, chatId: string, status: LiveVoiceProgressStatus | null) => {
+    setLiveVoiceChatProgress(previous => updateLiveVoiceProgress(previous, `${projectId}:${chatId}`, status));
   };
   const quickAiChatTimeline = useMemo(() => [
     ...quickAiChatMessages.map((message, index) => ({ kind: 'message' as const, timestamp: message.createdAt ? new Date(message.createdAt).getTime() : index, message })),
@@ -3247,7 +3258,7 @@ export default function App() {
     scrollQuickAiChatToBottom();
     const frameId = window.requestAnimationFrame(scrollQuickAiChatToBottom);
     return () => window.cancelAnimationFrame(frameId);
-  }, [quickAiChatMessages.length, systemNotifications.length, aiChatLoading, aiChatProgress]);
+  }, [quickAiChatMessages.length, systemNotifications.length, aiChatLoading, aiChatProgress, quickLiveVoiceStatus]);
 
   useEffect(() => {
     const content = quickAiContentRef.current;
@@ -5660,7 +5671,7 @@ export default function App() {
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(message.id)} /> : null}{message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.mailSendDraft ? <MailInlineSendCard draft={message.mailSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusActiveTask!.id, true)} /> : null}
                     </div><div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={(target) => setReplyToFocusAi(target)} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={focusActiveTask?.sphereId ?? null} /></div></div>)}
                   <TaskMonitoringTriggerChips taskId={focusActiveTask.id} />
-                  {aiLoadingTaskId === focusActiveTask.id && focusAiProgress ? <TaskAiProgress status={focusAiProgress} /> : focusActiveTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={focusActiveTask.id} /> : null}
+                  {aiLoadingTaskId === focusActiveTask.id && focusAiProgress ? <TaskAiProgress status={focusAiProgress} /> : liveVoiceTaskProgress[focusActiveTask.id] ? <TaskAiProgress status={liveVoiceTaskProgress[focusActiveTask.id]} /> : focusActiveTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={focusActiveTask.id} /> : null}
                 </div>
               </div>
               <div className="focused-task-ai-composer">
@@ -5670,7 +5681,8 @@ export default function App() {
 <AiAttachmentTiles files={focusAiPendingFiles} onRemove={(file) => removeFocusAiPendingFile(file.name)} busy={focusAiLoading} uploadProgress={focusAiUploadProgress} />
               <div className="ai-chat-composer mt-3 flex items-end gap-2 rounded-3xl border p-2"><AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); addFocusAiClipboardImages(files); } }} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder="Напишите сообщение…" disabled={focusAiLoading} /><input ref={focusAiFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} /><button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={focusAiLoading} onClick={() => focusAiFileInputRef.current?.click()}><Paperclip size={16} /></button><VoiceInputButton liveContext={focusActiveTask ? { type: 'task', taskId: focusActiveTask.id, model: focusTaskAiModel } : undefined}
     onLiveMessage={event => focusActiveTask && appendLiveTaskMessage(focusActiveTask.id, event)}
-    onLiveToolResult={event => focusActiveTask && applyLiveTaskTool(focusActiveTask.id, event)} disabled={focusAiLoading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
+    onLiveToolResult={event => focusActiveTask && applyLiveTaskTool(focusActiveTask.id, event)}
+    onLiveStatus={status => focusActiveTask && updateLiveTaskStatus(focusActiveTask.id, status)} disabled={focusAiLoading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
   const next = [focusAiDraft.trim(), text].filter(Boolean).join(' ');
   setFocusAiDraft(next);
   if (immediate) void sendFocusAiQuestion({ questionOverride: next });
@@ -5726,7 +5738,7 @@ export default function App() {
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(message.id)} /> : null}{message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.mailSendDraft ? <MailInlineSendCard draft={message.mailSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusActiveTask!.id, true)} /> : null}
                     </div><div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={(target) => setReplyToFocusAi(target)} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={focusActiveTask?.sphereId ?? null} /></div></div>)}
                 <TaskMonitoringTriggerChips taskId={focusActiveTask.id} />
-                {aiLoadingTaskId === focusActiveTask.id && focusAiProgress ? <TaskAiProgress status={focusAiProgress} /> : focusActiveTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={focusActiveTask.id} /> : null}
+                {aiLoadingTaskId === focusActiveTask.id && focusAiProgress ? <TaskAiProgress status={focusAiProgress} /> : liveVoiceTaskProgress[focusActiveTask.id] ? <TaskAiProgress status={liveVoiceTaskProgress[focusActiveTask.id]} /> : focusActiveTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={focusActiveTask.id} /> : null}
             </div>
             <div className="focused-task-ai-composer focused-task-ai-composer-expanded">
             {focusAiError ? <p className="mt-2 text-xs text-rose-500">{focusAiError}</p> : null}
@@ -5739,7 +5751,8 @@ export default function App() {
               <button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={focusAiLoading} onClick={() => focusAiExpandedFileInputRef.current?.click()}><Paperclip size={16} /></button>
               <VoiceInputButton liveContext={focusActiveTask ? { type: 'task', taskId: focusActiveTask.id, model: focusTaskAiModel } : undefined}
     onLiveMessage={event => focusActiveTask && appendLiveTaskMessage(focusActiveTask.id, event)}
-    onLiveToolResult={event => focusActiveTask && applyLiveTaskTool(focusActiveTask.id, event)} disabled={focusAiLoading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
+    onLiveToolResult={event => focusActiveTask && applyLiveTaskTool(focusActiveTask.id, event)}
+    onLiveStatus={status => focusActiveTask && updateLiveTaskStatus(focusActiveTask.id, status)} disabled={focusAiLoading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
   const next = [focusAiDraft.trim(), text].filter(Boolean).join(' ');
   setFocusAiDraft(next);
   if (immediate) void sendFocusAiQuestion({ questionOverride: next });
@@ -7283,7 +7296,7 @@ export default function App() {
                 </div>
                 ))}
                 <TaskMonitoringTriggerChips taskId={focusedTask.id} />
-                {aiLoadingTaskId === focusedTask.id ? <TaskAiProgress status={aiProgressByTask[focusedTask.id] ?? 'analyzing_request'} /> : focusedTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={focusedTask.id} /> : null}
+                {aiLoadingTaskId === focusedTask.id ? <TaskAiProgress status={aiProgressByTask[focusedTask.id] ?? 'analyzing_request'} /> : liveVoiceTaskProgress[focusedTask.id] ? <TaskAiProgress status={liveVoiceTaskProgress[focusedTask.id]} /> : focusedTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={focusedTask.id} /> : null}
                 </div>
               </div>
               <div className="focused-task-ai-composer">
@@ -7335,7 +7348,8 @@ export default function App() {
                 </button>
                 <VoiceInputButton liveContext={{ type: 'task', taskId: focusedTask.id, model: focusedAiModel }}
     onLiveMessage={event => appendLiveTaskMessage(focusedTask.id, event)}
-    onLiveToolResult={event => applyLiveTaskTool(focusedTask.id, event)} disabled={aiLoadingTaskId === focusedTask.id} className="focused-task-ai-attach-button" onTranscript={(text, immediate) => {
+    onLiveToolResult={event => applyLiveTaskTool(focusedTask.id, event)}
+    onLiveStatus={status => updateLiveTaskStatus(focusedTask.id, status)} disabled={aiLoadingTaskId === focusedTask.id} className="focused-task-ai-attach-button" onTranscript={(text, immediate) => {
   const next = [aiDraft.trim(), text].filter(Boolean).join(' ');
   setAiDraft(next);
   if (immediate) void sendFocusedAiQuestion({ questionOverride: next });
@@ -8080,7 +8094,7 @@ export default function App() {
               </div>
               ))}
               <TaskMonitoringTriggerChips taskId={focusedTask.id} />
-                {aiLoadingTaskId === focusedTask.id ? <TaskAiProgress status={aiProgressByTask[focusedTask.id] ?? 'analyzing_request'} /> : focusedTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={focusedTask.id} /> : null}
+                {aiLoadingTaskId === focusedTask.id ? <TaskAiProgress status={aiProgressByTask[focusedTask.id] ?? 'analyzing_request'} /> : liveVoiceTaskProgress[focusedTask.id] ? <TaskAiProgress status={liveVoiceTaskProgress[focusedTask.id]} /> : focusedTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={focusedTask.id} /> : null}
             </div>
             <div className="focused-task-ai-composer focused-task-ai-composer-expanded">
             {replyToAiTask ? <AiReplyPreview target={replyToAiTask} onDismiss={() => setReplyToAiTask(null)} /> : null}
@@ -8102,7 +8116,8 @@ export default function App() {
               <button className="focused-task-ai-attach-button inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40" type="button" title={getTaskAiRecipientId(focusedTask) === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'} disabled={getTaskAiRecipientId(focusedTask) !== 'ai'} onClick={() => expandedAiFileInputRef.current?.click()}><Paperclip size={16} /></button>
               <VoiceInputButton liveContext={{ type: 'task', taskId: focusedTask.id, model: focusedAiModel }}
     onLiveMessage={event => appendLiveTaskMessage(focusedTask.id, event)}
-    onLiveToolResult={event => applyLiveTaskTool(focusedTask.id, event)} disabled={aiLoadingTaskId === focusedTask.id} className="surface-muted text-muted" onTranscript={(text, immediate) => {
+    onLiveToolResult={event => applyLiveTaskTool(focusedTask.id, event)}
+    onLiveStatus={status => updateLiveTaskStatus(focusedTask.id, status)} disabled={aiLoadingTaskId === focusedTask.id} className="surface-muted text-muted" onTranscript={(text, immediate) => {
   const next = [aiDraft.trim(), text].filter(Boolean).join(' ');
   setAiDraft(next);
   if (immediate) void sendFocusedAiQuestion({ questionOverride: next });
@@ -8371,7 +8386,7 @@ export default function App() {
                 </div>
               ))}
               {quickAiChatMessages.length === 0 && systemNotifications.length === 0 ? <p className="text-subtle">Быстрый одноразовый вопрос. Хранится только последние 20 запросов.</p> : null}
-              {quickAiChatLoading ? <AiProgress status={aiChatProgress} /> : null}
+              {quickAiChatLoading ? <AiProgress status={aiChatProgress} /> : quickLiveVoiceStatus ? <AiProgress status={quickLiveVoiceStatus} /> : null}
               </div>
             </div>
             {replyToQuickAi ? <AiReplyPreview target={replyToQuickAi} onDismiss={() => setReplyToQuickAi(null)} compact /> : null}
@@ -8380,7 +8395,8 @@ export default function App() {
               <AutoGrowingTextarea maxHeight={144} className="form-field min-h-9 min-w-0 flex-1 resize-none rounded-2xl border px-3 py-2 text-sm leading-5 transition focus:ring-2 focus:ring-violet-300" value={quickAiChatDraft} onChange={(e) => setQuickAiChatDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); setQuickAiPendingFiles(previous => [...previous, ...files].slice(0, MAX_AI_ATTACHMENTS)); } }} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void sendAiChatQuestion(true); } }} placeholder="Спросить быстро…" />
               <VoiceInputButton liveContext={{ type: 'chat', projectId: aiChatProjects[0]?.id, chatId: QUICK_AI_CHAT_ID, projectTitle: aiChatProjects[0]?.title, chatTitle: 'Быстрые запросы', model: quickAiChatModel }}
     onLiveMessage={event => aiChatProjects[0] && appendLiveProjectMessage(aiChatProjects[0].id, QUICK_AI_CHAT_ID, event)}
-    onLiveToolResult={event => aiChatProjects[0] && applyLiveProjectTool(aiChatProjects[0].id, QUICK_AI_CHAT_ID, event)} small disabled={quickAiChatLoading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
+    onLiveToolResult={event => aiChatProjects[0] && applyLiveProjectTool(aiChatProjects[0].id, QUICK_AI_CHAT_ID, event)}
+    onLiveStatus={status => aiChatProjects[0] && updateLiveChatStatus(aiChatProjects[0].id, QUICK_AI_CHAT_ID, status)} small disabled={quickAiChatLoading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
   const next = [quickAiChatDraft.trim(), text].filter(Boolean).join(' ');
   setQuickAiChatDraft(next);
   if (immediate) void sendAiChatQuestion(true, '', next);
@@ -8522,6 +8538,7 @@ export default function App() {
           onSend={(draft) => void sendAiChatQuestion(false, draft)}
           onLiveMessage={event => activeAiChatProject && activeAiChat && appendLiveProjectMessage(activeAiChatProject.id, activeAiChat.id, event)}
           onLiveToolResult={event => activeAiChatProject && activeAiChat && applyLiveProjectTool(activeAiChatProject.id, activeAiChat.id, event)}
+          onLiveStatus={status => activeAiChatProject && activeAiChat && updateLiveChatStatus(activeAiChatProject.id, activeAiChat.id, status)}
           messages={(activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatTimeline : (activeAiChat?.messages ?? []).map((message, index) => ({ kind: 'message' as const, timestamp: index, message }))).map((item) => item.kind === 'notification' ? <div key={`notification-${item.notification.id}`} className="ai-system-notification-spacing flex justify-start"><div className="system-notification-message max-w-[86%] rounded-3xl rounded-bl-lg border px-4 py-3"><p className="system-notification-label mb-1 text-[11px] font-semibold uppercase tracking-wide">⚙️ Системное уведомление</p><div className="text-sm leading-relaxed"><SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={openTaskReferenceFromAi} onOpenTaskAi={(task) => { setFocusedTaskId(task.id); setIsAiExpanded(true); }} /></div></div></div> : <div key={`message-${item.message.id}`} className={`flex ${item.message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className="ai-message-forward-group w-fit max-w-[86%]"><div className={`ai-chat-message-bubble w-full rounded-3xl px-4 py-3 ${item.message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${item.message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{item.message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{item.message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${item.message.id}`, item.message.content)} className="chat-message-copy rounded-full p-1 hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${item.message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(item.message.content, item.message.attachmentPreviews, item.message.id)}</CollapsibleUserMessage>}</div>{activeAiChat?.id === QUICK_AI_CHAT_ID && item.message.monitoringTaskId && aiTaskReferenceTasks.some(task => task.id === item.message.monitoringTaskId) ? (
             <button type="button" className="task-monitor-chat-link mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold"
               onClick={() => { setIsAiChatOpen(false); setFocusedTaskId(item.message.monitoringTaskId!); setIsAiExpanded(true); }}>
@@ -8539,7 +8556,7 @@ export default function App() {
               ))}
             </div>
           ) : null}{item.message.role === 'assistant' && item.message.webSearchUsed ? <WebCitations sources={item.message.webSources} searched={item.message.webSearchUsed} /> : null}{item.message.role === 'assistant' && item.message.generatedDocument ? <AiGeneratedDocumentButton document={item.message.generatedDocument} /> : null}{item.message.role === 'assistant' && item.message.taskProposal ? <AiTaskProposalCard proposal={item.message.taskProposal} onApplied={() => void load()} /> : null}{item.message.role === 'assistant' && item.message.telegramSendDraft ? <TelegramInlineSendCard draft={item.message.telegramSendDraft} /> : null}{item.message.role === 'assistant' && item.message.mailSendDraft ? <MailInlineSendCard draft={item.message.mailSendDraft} /> : null}{item.message.role === 'assistant' && item.message.telegramReadDraft ? <TelegramReadConsentCard draft={item.message.telegramReadDraft} onContinue={(approval) => continueTelegramReadAiChat(approval, activeAiChatProject!.id, activeAiChat!.id)} /> : null}{item.message.role === 'assistant' && item.message.creditsSpentMilli != null && item.message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(item.message.creditsSpentMilli)}</div> : null}{item.message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(item.message.id)} /> : null}</div><div className="ai-message-forward-actions">{item.message.role === 'assistant' ? <AiReadAloudAction text={item.message.content} messageKey={String(item.message.id)} /> : null}<AiReplyAction message={item.message} onReply={(target) => (activeAiChat?.id === QUICK_AI_CHAT_ID ? setReplyToQuickAi(target) : setReplyToAiChat(target))} /><TelegramMessageQuickShare text={item.message.content} compact /></div></div></div>)}
-          status={<>{aiChatLoading ? <AiProgress status={aiChatProgress} /> : null}{aiChatError ? <p className="text-sm text-rose-400">{aiChatError}</p> : null}</>}
+          status={<>{aiChatLoading ? <AiProgress status={aiChatProgress} /> : activeLiveVoiceStatus ? <AiProgress status={activeLiveVoiceStatus} /> : null}{aiChatError ? <p className="text-sm text-rose-400">{aiChatError}</p> : null}</>}
         />
       ) : null}
 
