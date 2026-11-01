@@ -74,6 +74,8 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const inputRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const gainRef = useRef<GainNode | null>(null);
+  const playbackBoostRef = useRef<GainNode | null>(null);
+  const playbackLimiterRef = useRef<DynamicsCompressorNode | null>(null);
   const restoreAudioSessionRef = useRef<() => void>(() => {});
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const outputSegmentsRef = useRef<Array<{ start: number; end: number; samples: Float32Array }>>([]);
@@ -190,6 +192,10 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
       processorRef.current?.disconnect();
       inputRef.current?.disconnect();
       gainRef.current?.disconnect();
+      playbackBoostRef.current?.disconnect();
+      playbackLimiterRef.current?.disconnect();
+      playbackBoostRef.current = null;
+      playbackLimiterRef.current = null;
       processorRef.current = null;
       inputRef.current = null;
       gainRef.current = null;
@@ -219,6 +225,26 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
         const context = audioContext ?? new AudioContext();
         contextRef.current = context;
         await context.resume();
+        // Telegram Android can route WebView audio via the quieter voice-call
+        // channel. A modest, limited playback boost helps without changing
+        // microphone capture, billing or the Realtime interruption protocol.
+        // It cannot override the OS-selected earpiece/speaker route.
+        const telegramMiniApp = /Telegram/i.test(navigator.userAgent) ||
+          Boolean((window as Window & { Telegram?: { WebApp?: unknown } }).Telegram?.WebApp);
+        if (telegramMiniApp) {
+          const boost = context.createGain();
+          boost.gain.value = 1.5; // about +3.5 dB, not an uncontrolled multiplier
+          const limiter = context.createDynamicsCompressor();
+          limiter.threshold.value = -5;
+          limiter.knee.value = 0;
+          limiter.ratio.value = 16;
+          limiter.attack.value = 0.003;
+          limiter.release.value = 0.14;
+          boost.connect(limiter);
+          limiter.connect(context.destination);
+          playbackBoostRef.current = boost;
+          playbackLimiterRef.current = limiter;
+        }
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
         });
@@ -334,7 +360,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
               buffer.copyToChannel(pcm, 0);
               const source = context.createBufferSource();
               source.buffer = buffer;
-              source.connect(context.destination);
+              source.connect(playbackBoostRef.current ?? context.destination);
               source.onended = () => {
                 sourcesRef.current.delete(source);
                 // The final chunk can finish after response.done. Do not reopen

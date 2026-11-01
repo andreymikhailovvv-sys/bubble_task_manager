@@ -49,7 +49,7 @@ import { AiGeneratedDocumentButton } from './components/AiGeneratedDocumentButto
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
 import { AiReplyAction, AiReplyPreview, AiReplyMessageBody, serializeAiReply, type AiReplyTarget } from './components/AiMessageReply';
 import { AiReadAloudAction, AiSpeechCostLine } from './components/AiReadAloudAction';
-import type { LiveVoiceMessage, LiveVoiceToolCompletion, LiveVoiceProgressStatus } from './components/LiveVoiceDialog';
+import type { LiveVoiceContext, LiveVoiceMessage, LiveVoiceToolCompletion, LiveVoiceProgressStatus } from './components/LiveVoiceDialog';
 import { voiceTranscriptMessage, voiceToolAssistantMessage, updateLiveVoiceProgress, preserveLiveVoiceMessages } from './lib/voice-chat-messages';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
 import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, mergeTelegramManagedMessages, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike, orderAiChatMessagesChronologically } from './lib/ai-chat-reconciliation';
@@ -847,6 +847,17 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const voiceTaskMessagesRef = useRef<Record<string, ChatMessage[]>>({});
   const voiceChatMessagesRef = useRef<Record<string, MiniAiChatMessage[]>>({});
+  // During a live conversation, WebSocket messages and tool callbacks are
+  // fresher than a 2.5-second server poll. Never replace the active transcript.
+  const liveVoiceChatSessionsRef = useRef<Set<string>>(new Set());
+  const liveVoiceTaskSessionsRef = useRef<Set<string>>(new Set());
+  const onMiniLiveVoiceSessionChange = (active: boolean, context?: LiveVoiceContext) => {
+    if (!context) return;
+    const set = context.type === 'chat' ? liveVoiceChatSessionsRef.current : liveVoiceTaskSessionsRef.current;
+    const key = context.type === 'chat' ? `${context.projectId}:${context.chatId}` : context.taskId;
+    if (active) set.add(key);
+    else set.delete(key);
+  };
   const [replyToTask, setReplyToTask] = useState<AiReplyTarget | null>(null);
   const [replyToGeneral, setReplyToGeneral] = useState<AiReplyTarget | null>(null);
   useEffect(() => { setReplyToTask(null); }, [openedTaskId]);
@@ -2857,7 +2868,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     setAiChatProjects(previous => previous.map(project => project.id !== projectId ? project : ({
       ...project, chats: project.chats.map(chat => chat.id !== chatId ? chat :
         { ...chat, messages: chat.messages.some(item => item.id === message.id)
-          ? chat.messages : [...chat.messages, message].slice(chatId === QUICK_AI_CHAT_ID ? -20 : -300) })
+          ? chat.messages : [...chat.messages, message].slice(chatId === QUICK_AI_CHAT_ID ? -100 : -300) })
     })));
   };
   const applyLiveProjectTool = (projectId: string, chatId: string, event: LiveVoiceToolCompletion) => {
@@ -2866,7 +2877,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     voiceChatMessagesRef.current[key] = [...(voiceChatMessagesRef.current[key] ?? []), answer].slice(-80);
     setAiChatProjects(previous => previous.map(project => project.id !== projectId ? project : ({
       ...project, chats: project.chats.map(chat => chat.id !== chatId ? chat :
-        { ...chat, messages: [...chat.messages, answer].slice(chatId === QUICK_AI_CHAT_ID ? -20 : -300) })
+        { ...chat, messages: [...chat.messages, answer].slice(chatId === QUICK_AI_CHAT_ID ? -100 : -300) })
     })));
     if (event.result.taskDataChanged) void loadData({ refreshPlannerOnly: true });
     refreshAiCredits();
@@ -2959,7 +2970,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     if (!projectId || !chatId) return;
     let alive = true;
     const refresh = async () => {
-      if (!alive || aiChatLoading || aiChatProjectsPollingRef.current ||
+      if (!alive || aiChatLoading || liveVoiceChatSessionsRef.current.has(`${projectId}:${chatId}`) ||
+          aiChatProjectsPollingRef.current ||
           aiChatProjectsSaveTimerRef.current !== null || aiChatProjectsSaveInFlightRef.current ||
           document.visibilityState === 'hidden') return;
       aiChatProjectsPollingRef.current = true;
@@ -2987,22 +2999,27 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           return;
         }
         const { messages, projectsOutline } = await api.getAiChatThreadMessages(projectId, chatId);
-        if (!alive || aiChatLoading || aiChatProjectsSaveTimerRef.current !== null ||
+        if (!alive || aiChatLoading || liveVoiceChatSessionsRef.current.has(`${projectId}:${chatId}`) ||
+            aiChatProjectsSaveTimerRef.current !== null ||
             aiChatProjectsSaveInFlightRef.current) return;
         const remote: MiniAiChatMessage[] = messages
           .filter(message => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
           .map((message, index) => attachChatMessageId(message,
             message.id ?? `${index}-${message.role}-${message.content}`));
         setAiChatProjects(previous => {
+          if (liveVoiceChatSessionsRef.current.has(`${projectId}:${chatId}`)) return previous;
           const outlined = reconcileAiChatProjectOutline(previous, projectsOutline);
           const chat = outlined.find(p => p.id === projectId)?.chats.find(c => c.id === chatId);
           if (!chat) {
             if (outlined !== previous) aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(outlined);
             return outlined;
           }
-          const merged = preserveLiveVoiceMessages(reconcileActiveAiChatMessages(
-            chat.messages, reconcileAiChatMessagesWithChips(chat.messages, remote), aiChatLoading
-          ), voiceChatMessagesRef.current[`${projectId}:${chatId}`] ?? []);
+          // Keep the stable, already rendered order and interactive cards of
+          // voice replies, even when the server returns a truncated snapshot.
+          const spoken = voiceChatMessagesRef.current[`${projectId}:${chatId}`] ?? [];
+          const merged = spoken.length
+            ? reconcileAiChatMessagesWithChips(chat.messages, remote)
+            : reconcileActiveAiChatMessages(chat.messages, reconcileAiChatMessagesWithChips(chat.messages, remote), aiChatLoading);
           if (merged === chat.messages) {
             if (outlined !== previous) aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(outlined);
             return outlined;
@@ -3039,10 +3056,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       previousGeneralAiChatIdRef.current = activeAiChatId;
       generalAiChatNearBottomRef.current = true;
     }
+    if (liveVoiceChatSessionsRef.current.has(`${activeAiChatProject?.id}:${activeAiChatId}`)) return;
     if (!generalAiChatNearBottomRef.current) return;
     container.scrollTop = container.scrollHeight;
     generalAiChatScrollTopRef.current = container.scrollTop;
-  }, [visibleAiChatMessages.length, aiChatLoading, aiChatProgress, activeLiveVoiceStatus, isAiChatOpen, activeAiChatId]);
+  }, [visibleAiChatMessages.length, aiChatLoading, aiChatProgress, isAiChatOpen, activeAiChatId, activeAiChatProject?.id]);
 
   useLayoutEffect(() => {
     if (!quickAiTabNavigationSerial || !isAiChatOpen || activeAiChatId !== QUICK_AI_CHAT_ID) return;
@@ -3594,8 +3612,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   useEffect(() => {
     if (!openedTaskId || !isAiDialogOpen) return;
     const loadTaskChatHistory = async () => {
+      if (liveVoiceTaskSessionsRef.current.has(openedTaskId)) return;
       try {
         const result = await api.getTaskAssistantHistory(openedTaskId);
+        if (liveVoiceTaskSessionsRef.current.has(openedTaskId)) return;
         setAiDialogByTask((prev) => {
           const localMessages = prev[openedTaskId] ?? [];
           const serverMessages = result.messages;
@@ -3615,8 +3635,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   useEffect(() => {
     if (!openedTaskId || !isAiDialogOpen) return;
     const intervalId = window.setInterval(async () => {
+      if (liveVoiceTaskSessionsRef.current.has(openedTaskId)) return;
       try {
         const result = await api.getTaskAssistantHistory(openedTaskId);
+        if (liveVoiceTaskSessionsRef.current.has(openedTaskId)) return;
         setAiDialogByTask((prev) => {
           const localMessages = prev[openedTaskId] ?? [];
           const serverMessages = result.messages;
@@ -3752,9 +3774,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       if (!container) return;
       container.scrollTop = container.scrollHeight;
     };
+    if (openedTaskId && liveVoiceTaskSessionsRef.current.has(openedTaskId)) return;
     scrollToBottom(fullscreenAiDialogContainerRef.current);
     taskAiChatScrollTopRef.current = fullscreenAiDialogContainerRef.current?.scrollTop ?? 0;
-  }, [isAiDialogOpen, openedTaskId, openedTaskAiDialog.length, aiLoadingTaskId, openedTaskId ? aiProgressByTask[openedTaskId] : undefined, openedTaskId ? liveVoiceTaskProgress[openedTaskId] : undefined]);
+  }, [isAiDialogOpen, openedTaskId, openedTaskAiDialog.length, aiLoadingTaskId, openedTaskId ? aiProgressByTask[openedTaskId] : undefined]);
 
   useEffect(() => {
     if (!isAiDialogOpen) return;
@@ -5127,6 +5150,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   onLiveMessage={event => appendLiveTaskMessage(openedTask.id, event)}
                   onLiveToolResult={event => applyLiveTaskTool(openedTask.id, event)}
                   onLiveStatus={status => updateLiveTaskStatus(openedTask.id, status)}
+                  onLiveSessionChange={onMiniLiveVoiceSessionChange}
                   initialDraft={taskAiDraftValueRef.current}
                   onDraftChange={(value) => { taskAiDraftValueRef.current = value; }}
                   onSend={() => { void sendAiMessage(); }}
@@ -5300,6 +5324,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   onLiveMessage={event => activeAiChatProject && activeAiChat && appendLiveProjectMessage(activeAiChatProject.id, activeAiChat.id, event)}
                   onLiveToolResult={event => activeAiChatProject && activeAiChat && applyLiveProjectTool(activeAiChatProject.id, activeAiChat.id, event)}
                   onLiveStatus={status => activeAiChatProject && activeAiChat && updateLiveChatStatus(activeAiChatProject.id, activeAiChat.id, status)}
+                  onLiveSessionChange={onMiniLiveVoiceSessionChange}
                   initialDraft={aiChatDraftValueRef.current}
                   onDraftChange={(value) => { aiChatDraftValueRef.current = value; }}
                   onSend={() => { void sendAiChatQuestion(); }}

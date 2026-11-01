@@ -15,6 +15,7 @@ type MiniAiChatComposerProps = {
   onLiveMessage?: (message: LiveVoiceMessage) => void;
   onLiveToolResult?: (completion: LiveVoiceToolCompletion) => void;
   onLiveStatus?: (status: LiveVoiceProgressStatus | null) => void;
+  onLiveSessionChange?: (active: boolean, context?: LiveVoiceContext) => void;
   initialDraft: string;
   onDraftChange: (text: string) => void;
   onSend: () => void;
@@ -33,7 +34,7 @@ type MiniAiChatComposerProps = {
  */
 export const MiniAiChatComposer = forwardRef<MiniAiChatComposerHandle, MiniAiChatComposerProps>(
   function MiniAiChatComposer({
-    variant, liveContext, onLiveMessage, onLiveToolResult, onLiveStatus, initialDraft, onDraftChange, onSend, onAttach,
+    variant, liveContext, onLiveMessage, onLiveToolResult, onLiveStatus, onLiveSessionChange, initialDraft, onDraftChange, onSend, onAttach,
     isSending, hasPendingFiles, attachDisabled, attachTitle
   }, ref) {
     const [draft, setDraft] = useState(initialDraft);
@@ -79,7 +80,7 @@ export const MiniAiChatComposer = forwardRef<MiniAiChatComposerHandle, MiniAiCha
         >
           <Paperclip size={17} />
         </button>
-        <VoiceInputButton liveContext={liveContext} onLiveMessage={onLiveMessage} onLiveToolResult={onLiveToolResult} onLiveStatus={onLiveStatus} disabled={isSending} className="miniapp-ai-chat-attach" onTranscript={(text, immediate) => {
+        <VoiceInputButton liveContext={liveContext} onLiveMessage={onLiveMessage} onLiveToolResult={onLiveToolResult} onLiveStatus={onLiveStatus} onLiveSessionChange={onLiveSessionChange} disabled={isSending} className="miniapp-ai-chat-attach" onTranscript={(text, immediate) => {
           const next = [draftRef.current.trim(), text].filter(Boolean).join(' ');
           changeDraft(next);
           if (immediate) onSend();

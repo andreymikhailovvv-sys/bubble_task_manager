@@ -50,10 +50,10 @@ test('image previews use short-lived signed links while downloads retain existin
   assert.match(styles, /prefers-reduced-motion: reduce/);
   assert.match(wordTests, /download=/);
   assert.match(web, /imageGenerating=\{aiChatLoading && \(aiChatProgress === 'generating_image' \|\| aiChatProgress === 'editing_image'\)\}/);
-  // Voice progress also triggers scrolling. Keep checking that image-progress
-  // changes are watched, without pinning the entire dependency list's order.
-  assert.match(mini, /visibleAiChatMessages\.length, aiChatLoading, aiChatProgress,/);
-  assert.match(mini, /aiChatProgress, activeLiveVoiceStatus, isAiChatOpen/);
+  // Image generation progress still scrolls normally; voice progress is
+  // deliberately excluded to prevent Mini App from jumping during a call.
+  assert.match(mini, /visibleAiChatMessages\.length, aiChatLoading, aiChatProgress, isAiChatOpen/);
+  assert.doesNotMatch(mini, /aiChatProgress, activeLiveVoiceStatus, isAiChatOpen/);
   for (const source of [web, mini]) {
     assert.match(source, /AiGeneratedDocumentButton/);
     assert.match(source, /TaskAiProgress/);
