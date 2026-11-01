@@ -189,7 +189,7 @@ export function TaskMonitoringStatuses({ taskId, enabled, tourStage = null, mode
             className="rounded-lg p-1.5 text-muted"><X size={16} /></button>
         </div>
         <div className="task-monitor-panel-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
-          <TaskMonitoringControls tourExpanded={tourStage === 'model'} enabled={monitorEnabled} model={monitorModel} onModelChange={value => void updateMonitoringModel(value)} onChange={value => void toggle(value)} taskId={taskId}
+          <TaskMonitoringControls enabled={monitorEnabled} tourExpanded={tourStage === 'model'} model={monitorModel} onModelChange={value => void updateMonitoringModel(value)} onChange={value => void toggle(value)} taskId={taskId}
             allowed={allowed && !saving} />
           {saving ? <p role="status" className="mt-2 text-xs text-muted">Сохраняем режим…</p> : null}
           <div className="mt-4 border-t border-[color:var(--panel-border)] pt-3">
