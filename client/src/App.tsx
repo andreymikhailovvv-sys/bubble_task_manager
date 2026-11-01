@@ -2350,7 +2350,7 @@ export default function App() {
       }
     });
     return () => window.cancelAnimationFrame(frameId);
-  }, [focusActiveTask?.id, focusTaskAiDialog.length, focusAiLoading, focusAiProgress, isFocusModeOpen, isFocusAiExpanded]);
+  }, [focusActiveTask?.id, focusTaskAiDialog.length, focusAiLoading, focusAiProgress, focusActiveTask ? liveVoiceTaskProgress[focusActiveTask.id] : undefined, isFocusModeOpen, isFocusAiExpanded]);
 
   useEffect(() => {
     // Switching tasks only changes the selected task and its existing dialog.
