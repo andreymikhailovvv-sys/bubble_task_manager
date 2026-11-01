@@ -9,7 +9,7 @@ type Props = {
   onLiveMessage?: (message: LiveVoiceMessage) => void;
   onLiveToolResult?: (result: LiveVoiceToolCompletion) => void;
   onLiveStatus?: (status: LiveVoiceProgressStatus | null) => void;
-  onLiveSessionChange?: (active: boolean) => void;
+  onLiveSessionChange?: (active: boolean, context?: LiveVoiceContext) => void;
   disabled?: boolean;
   small?: boolean;
   className?: string;
@@ -37,12 +37,15 @@ export function VoiceInputButton({ onTranscript, liveContext, onLiveMessage, onL
   const immediateRef = useRef(false);
   const aliveRef = useRef(true);
   const liveSessionActiveRef = useRef(false);
+  const activeLiveContextRef = useRef<LiveVoiceContext | undefined>(undefined);
   const onLiveSessionChangeRef = useRef(onLiveSessionChange);
   onLiveSessionChangeRef.current = onLiveSessionChange;
   const setLiveSessionActive = (active: boolean) => {
     if (liveSessionActiveRef.current === active) return;
     liveSessionActiveRef.current = active;
-    onLiveSessionChangeRef.current?.(active);
+    if (active) activeLiveContextRef.current = liveContext;
+    onLiveSessionChangeRef.current?.(active, activeLiveContextRef.current);
+    if (!active) activeLiveContextRef.current = undefined;
   };
 
   const release = () => {
@@ -62,7 +65,8 @@ export function VoiceInputButton({ onTranscript, liveContext, onLiveMessage, onL
       aliveRef.current = false;
       if (liveSessionActiveRef.current) {
         liveSessionActiveRef.current = false;
-        onLiveSessionChangeRef.current?.(false);
+        onLiveSessionChangeRef.current?.(false, activeLiveContextRef.current);
+        activeLiveContextRef.current = undefined;
       }
       cancelledRef.current = true;
       const recorder = recorderRef.current;
