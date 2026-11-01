@@ -46,9 +46,10 @@ test('Mini App focus subtask indicators share size, outline and neutral theme co
 
 test('mobile timeline events have readable text in dark and light Mini App themes', async () => {
   const [source, stylesheet] = await Promise.all([mini(), css()]);
-  assert.match(source, /isEvent \? 'miniapp-timeline-event-card'/);
-  assert.match(stylesheet, /\.miniapp-shell:not\(\.miniapp-light\) \.miniapp-timeline-event-card \{/);
-  assert.match(stylesheet, /\.miniapp-shell:not\(\.miniapp-light\) \.miniapp-timeline-event-card \.miniapp-timeline-card-title/);
-  assert.match(stylesheet, /\.miniapp-shell:not\(\.miniapp-light\) \.miniapp-timeline-event-card > p:not\(\.miniapp-timeline-card-title\)/);
-  assert.match(stylesheet, /\.miniapp-shell\.miniapp-light \.miniapp-timeline-event-card/);
+  assert.match(source, /isEvent \? 'miniapp-native-day-event'/);
+  assert.match(source, /isEvent \? '#f59e0b'/);
+  assert.match(stylesheet, /\.miniapp-native-day-card \{[\s\S]*color: #172238/);
+  assert.match(stylesheet, /\.miniapp-native-day-event \{ border-style: dashed;/);
+  assert.match(stylesheet, /\.miniapp-shell:not\(\.miniapp-light\) \.miniapp-native-day-card \{[\s\S]*color: #f1f5f9/);
+  assert.match(stylesheet, /\.miniapp-shell:not\(\.miniapp-light\) \.miniapp-native-day-event/);
 });

@@ -36,7 +36,8 @@ test('reminders only appear in timeline with distinct light/dark styles and iner
   assert.match(web,/if \(options\?\.disableOpenOnClick \|\| isReminderChip\) return/);
   assert.match(web,/draggable=\{canDragTask\}/);
   assert.match(web,/task\.taskType !== 'EVENT' && task\.taskType !== 'REMINDER'/);
-  assert.match(mini,/miniapp-timeline-reminder-card/);
+  assert.match(mini,/const accent = isReminder \? '#0284c7'/);
+  assert.match(mini,/miniapp-native-day-card/);
   assert.match(mini,/miniapp-calendar-reminder-entry/);
   assert.match(mini,/if \(isReminder\) return/);
   assert.match(mini,/task\.taskType !== 'EVENT' && task\.taskType !== 'REMINDER'/);

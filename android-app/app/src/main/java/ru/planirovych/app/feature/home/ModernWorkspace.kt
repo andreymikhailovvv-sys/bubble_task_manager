@@ -65,6 +65,25 @@ private enum class PeriodFilter(val label: String) {
 }
 private enum class SortTasks(val label: String) { URGENCY("По срочности"), IMPORTANCE("По важности") }
 private enum class TimelineScale(val label: String) { DAY("День"), WEEK("Неделя"), MONTH("Месяц") }
+private fun habitScheduledToday(habit: Habit, today: LocalDate): Boolean {
+    if (habit.isAutoCompleted || habit.isArchived) return false
+    val created = habit.createdAt?.let { raw ->
+        runCatching { OffsetDateTime.parse(raw).atZoneSameInstant(ZoneId.systemDefault()).toLocalDate() }
+            .recoverCatching { Instant.parse(raw).atZone(ZoneId.systemDefault()).toLocalDate() }.getOrNull()
+    }
+    if (created != null && today.isBefore(created)) return false
+    if (habit.durationMode == HabitDurationMode.UNTIL_DATE &&
+        !habit.endDate.isNullOrBlank() && today.toString() > habit.endDate.take(10)) return false
+    return when (habit.recurrenceType) {
+        HabitRecurrenceType.DAILY -> true
+        HabitRecurrenceType.WEEKDAYS -> habit.weekdays.contains(today.dayOfWeek.value % 7)
+        HabitRecurrenceType.INTERVAL -> {
+            val start = created ?: today
+            val days = java.time.temporal.ChronoUnit.DAYS.between(start, today)
+            days >= 0 && days % (habit.intervalDays ?: 1).coerceAtLeast(1) == 0L
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,8 +116,9 @@ fun ModernWorkspace(
     val now = System.currentTimeMillis()
     val overdue = state.tasks.any { it.status != TaskStatus.DONE && it.taskType == TaskType.TASK &&
         it.dueDate != null && dueMillis(it.dueDate) < now }
-    val habits = remember(state.habits) {
-        state.habits.filter { !it.isAutoCompleted && !it.isArchived }.sortedWith(
+    val todayForHabits = LocalDate.now()
+    val habits = remember(state.habits, todayForHabits) {
+        state.habits.filter { habitScheduledToday(it, todayForHabits) }.sortedWith(
             compareBy<Habit> { h -> isHabitDoneToday(h) }.thenBy { it.createdAt ?: "" }
         )
     }

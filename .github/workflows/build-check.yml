@@ -29,6 +29,8 @@ jobs:
         run: npm ci --include=dev --no-audit --no-fund
       - name: Compile web client and API server
         run: npm run build
+      - name: Verify AI-created habits, native day layout and voice transcription defaults
+        run: node --import tsx --test server/test/ai-create-habit.test.ts server/test/miniapp-android-day-habits-voice.test.ts
       - name: Verify shared Work subtask discussion, recipients and dispatcher UI
         run: node --import tsx --test server/test/work-collaboration-ui.test.ts
       - name: Verify Work focus, subtasks and company AI context fixes

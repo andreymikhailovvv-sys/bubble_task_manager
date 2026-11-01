@@ -80,7 +80,7 @@ export const MiniAiChatComposer = forwardRef<MiniAiChatComposerHandle, MiniAiCha
         >
           <Paperclip size={17} />
         </button>
-        <VoiceInputButton liveContext={liveContext} onLiveMessage={onLiveMessage} onLiveToolResult={onLiveToolResult} onLiveStatus={onLiveStatus} onLiveSessionChange={onLiveSessionChange} disabled={isSending} className="miniapp-ai-chat-attach" onTranscript={(text, immediate) => {
+        <VoiceInputButton activationMode="transcription" liveContext={liveContext} onLiveMessage={onLiveMessage} onLiveToolResult={onLiveToolResult} onLiveStatus={onLiveStatus} onLiveSessionChange={onLiveSessionChange} disabled={isSending} className="miniapp-ai-chat-attach" onTranscript={(text, immediate) => {
           const next = [draftRef.current.trim(), text].filter(Boolean).join(' ');
           changeDraft(next);
           if (immediate) onSend();

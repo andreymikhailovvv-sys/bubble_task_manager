@@ -12392,3 +12392,80 @@ body[data-theme='dark'] .topbar-overdue-popover { box-shadow: 0 14px 34px rgba(2
   .voice-mode-anchor .live-voice-inline {animation:none;}
   .live-voice-inline-button {transition:none;}
 }
+
+
+/* Day timeline: visual parity with Android NativeTimeline.kt's TimelineDay and
+   DayTimelineCard. Neutral rail marks, compact hourly groups and soft accent cards. */
+.miniapp-native-day-timeline { width: 100%; padding: 4px 0; }
+.miniapp-native-day-rail { position: relative; display: flex; flex-direction: column; gap: 11px; }
+.miniapp-native-day-rail::before {
+  content: ""; position: absolute; z-index: 0; top: 20px; bottom: 14px;
+  left: 64px; width: 1.3px; background: #e1e6ef; pointer-events: none;
+}
+.miniapp-native-day-row {
+  position: relative; z-index: 1; display: grid;
+  grid-template-columns: 64px minmax(0, 1fr); align-items: start; column-gap: 13px;
+}
+.miniapp-native-day-hour { position: relative; min-height: 48px; padding-top: 16px; }
+.miniapp-native-day-hour time {
+  color: #667895; font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums;
+}
+.miniapp-native-day-dot {
+  position: absolute; right: -5px; top: 19px; width: 9px; height: 9px;
+  border-radius: 50%; background: #8d9bb4;
+}
+.miniapp-native-day-items { min-width: 0; display: flex; flex-direction: column; gap: 9px; }
+.miniapp-native-day-card {
+  --day-entry-accent: #64748b;
+  isolation: isolate; position: relative; display: flex; align-items: flex-start;
+  width: 100%; min-height: 62px; gap: 12px; padding: 12px 13px 12px 15px;
+  border: 1px solid #e5eaf2; border-radius: 18px; text-align: left;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--day-entry-accent) 4.3%, #fff), #fff 42%, #fff);
+  box-shadow: 0 5px 12px rgba(53, 75, 109, 0.08); color: #172238;
+  transition: box-shadow .18s ease, transform .18s ease;
+}
+.miniapp-native-day-card::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3.5px;
+  border-radius: 2px; background: color-mix(in srgb, var(--day-entry-accent) 35%, #fff);
+}
+.miniapp-native-day-card-dot {
+  flex: 0 0 7px; width: 7px; height: 7px; margin-top: 8px;
+  border-radius: 50%; background: var(--day-entry-accent);
+}
+.miniapp-native-day-card-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 5px; }
+.miniapp-native-day-card-copy strong {
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-size: 14px; line-height: 19px; font-weight: 600;
+}
+.miniapp-native-day-card-copy small {
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  color: #71839f; font-size: 11.5px; line-height: 15px; font-weight: 500;
+}
+.miniapp-native-day-subtask { min-height: 54px; width: calc(100% - 8px); }
+.miniapp-native-day-subtask .miniapp-native-day-card-dot { width: 6px; flex-basis: 6px; height: 6px; }
+.miniapp-native-day-subtask .miniapp-native-day-card-copy strong { font-size: 12.5px; line-height: 17px; }
+.miniapp-native-day-subtask .miniapp-native-day-card-copy small { font-size: 10.5px; }
+.miniapp-native-day-event { border-style: dashed; border-color: color-mix(in srgb, var(--day-entry-accent) 44%, #fff); }
+.miniapp-native-day-overdue .miniapp-native-day-card-copy small { color: #e63962; }
+.miniapp-native-day-empty {
+  padding: 17px; margin: 0; border: 1px solid #d8e2ef; border-radius: 15px;
+  color: #60718b; background: #fff; font-size: 12px;
+}
+.miniapp-native-day-card:focus-visible { outline: 2px solid #8b5cf6; outline-offset: 2px; }
+.miniapp-native-day-card:active { transform: scale(.99); }
+.miniapp-shell:not(.miniapp-light) .miniapp-native-day-rail::before { background: #46556f; }
+.miniapp-shell:not(.miniapp-light) .miniapp-native-day-hour time { color: #b7c4d7; }
+.miniapp-shell:not(.miniapp-light) .miniapp-native-day-dot { background: #9caccc; }
+.miniapp-shell:not(.miniapp-light) .miniapp-native-day-card {
+  border-color: #40506a; background: linear-gradient(90deg, color-mix(in srgb, var(--day-entry-accent) 10.5%, #19263b), #19263b 45%, #19263b);
+  color: #f1f5f9; box-shadow: 0 2px 10px rgba(0, 0, 0, .14);
+}
+.miniapp-shell:not(.miniapp-light) .miniapp-native-day-card::before {
+  background: color-mix(in srgb, var(--day-entry-accent) 54%, #19263b);
+}
+.miniapp-shell:not(.miniapp-light) .miniapp-native-day-card-copy small { color: #9bafc9; }
+.miniapp-shell:not(.miniapp-light) .miniapp-native-day-overdue .miniapp-native-day-card-copy small { color: #ff91a9; }
+.miniapp-shell:not(.miniapp-light) .miniapp-native-day-event { border-color: color-mix(in srgb, var(--day-entry-accent) 60%, #19263b); }
+.miniapp-shell:not(.miniapp-light) .miniapp-native-day-empty {
+  background: #18243a; border-color: #35455c; color: #a5b4ca;
+}

@@ -23,7 +23,7 @@ const LABELS: Record<string, string> = {
   set_priority: 'Приоритет', update_task: 'Изменение', update_subtask: 'Изменение',
   change_sphere: 'Сектор', change_task_sphere: 'Сектор', clear_due_date: 'Удаление срока',
   reopen: 'Возобновление', reopen_subtask: 'Возобновление', set_notification: 'Уведомления',
-  create_note: 'Создание заметки', update_note: 'Изменение заметки'
+  create_note: 'Создание заметки', update_note: 'Изменение заметки', create_habit: 'Новая привычка'
 };
 
 type ProposalItem = AiTaskProposal['operations'][number];
@@ -103,8 +103,11 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
   // Auto-applied edits arrive in the response with APPLIED already set,
   // bypassing the manual approve handler. Refresh the notes board in that case.
   useEffect(() => {
-    if (initial.status === 'APPLIED' && initial.operations.some(item => ['update_note', 'create_note'].includes(item.type))) {
-      window.dispatchEvent(new Event('standalone-notes-updated'));
+    if (initial.status === 'APPLIED') {
+      if (initial.operations.some(item => ['update_note', 'create_note'].includes(item.type)))
+        window.dispatchEvent(new Event('standalone-notes-updated'));
+      if (initial.operations.some(item => item.type === 'create_habit'))
+        window.dispatchEvent(new Event(proposalAppliedEvent));
     }
   }, [initial.id]);
   useEffect(() => {
