@@ -70,6 +70,6 @@ export function AiReadAloudAction({ text }: { text: string }) {
       disabled={!text.trim()}>
       {state === 'loading' ? <Loader2 size={16} className="animate-spin" /> : state === 'playing' ? <Square size={14}/> : <Volume2 size={17}/>}
     </button>
-    {error ? <span role="alert" className="ai-read-aloud-error" title={error}>!</span> : null}
+    {error ? <span role="alert" className="ai-read-aloud-message" title={error}>{error}</span> : null}
   </span>;
 }
