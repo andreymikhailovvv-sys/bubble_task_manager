@@ -9,7 +9,7 @@ test('successful provider payment credits wallet once using Prisma-readable advi
     yookassaPaymentId:'payment-123', status:'pending', creditedAt:null as Date|null
   };
   const wallet = {
-    id:'user-123', aiCreditsPeriod:'2026-10', subscriptionPlan:'free',
+    id:'user-123', aiCreditsPeriod:new Date().toISOString().slice(0,7), subscriptionPlan:'free',
     aiIncludedCreditsMilli:0, aiBonusCreditsMilli:100_000, aiPurchasedCreditsMilli:0,
     deviceId:null, username:'customer@example.com', passwordHash:'hash',
     googleSub:null, email:'customer@example.com', telegramChatId:null

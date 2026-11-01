@@ -5,6 +5,7 @@ type Props = {
   title?: string;
   className?: string;
   detachedPopup?: boolean;
+  popupZIndex?:number;
   timelineTasks?: Array<{ id: string; title: string; dueDate?: string | null; isSubtask?: boolean; sphereColor?: string | null; taskType?: 'TASK' | 'EVENT' | 'REMINDER' }>;
   onChange: (value: string | null) => void | Promise<void>;
   onOpenChange?: (isOpen: boolean) => void;
@@ -15,6 +16,7 @@ export function InlineDateTimePickerIcon({
   title = 'Изменить срок',
   className = '',
   detachedPopup = false,
+  popupZIndex,
   timelineTasks,
   onChange,
   onOpenChange
@@ -27,6 +29,7 @@ export function InlineDateTimePickerIcon({
       popupAlign="right"
       iconOnly
       detachedPopup={detachedPopup}
+      popupZIndex={popupZIndex}
       buttonClassName="w-auto min-w-0 bg-transparent p-0 hover:bg-transparent"
       onChange={onChange}
       onOpenChange={onOpenChange}

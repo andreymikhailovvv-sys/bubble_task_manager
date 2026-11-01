@@ -58,6 +58,7 @@ model OrganizationWorkTask {
   aiMonitoringJobs OrganizationAiMonitoringJob[]
   aiMessages OrganizationAiMessage[]
   subtasks OrganizationWorkSubtask[]
+  workNotifications OrganizationWorkNotification[]
 
   @@index([projectId, status, createdAt])
   @@index([assignedMemberId, status])
@@ -79,9 +80,30 @@ model OrganizationWorkSubtask {
   creator        OrganizationMember? @relation("WorkSubtaskCreator",fields:[createdByMemberId],references:[id],onDelete:SetNull)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  notifications OrganizationWorkNotification[]
   comments OrganizationWorkSubtaskComment[]
   @@index([taskId,sortOrder,createdAt])
   @@index([createdByMemberId])
+}
+
+model OrganizationWorkNotification {
+  id                String            @id @default(cuid())
+  organizationId    String
+  organization      Organization      @relation(fields:[organizationId],references:[id],onDelete:Cascade)
+  recipientMemberId String
+  recipient         OrganizationMember @relation(fields:[recipientMemberId],references:[id],onDelete:Cascade)
+  taskId            String
+  task              OrganizationWorkTask @relation(fields:[taskId],references:[id],onDelete:Cascade)
+  subtaskId         String
+  subtask           OrganizationWorkSubtask @relation(fields:[subtaskId],references:[id],onDelete:Cascade)
+  commentId         String
+  content           String            @db.Text
+  createdAt         DateTime          @default(now())
+  readAt            DateTime?
+
+  @@unique([recipientMemberId,commentId])
+  @@index([organizationId,recipientMemberId,readAt,createdAt])
+  @@index([subtaskId,recipientMemberId,readAt])
 }
 
 model OrganizationWorkSubtaskComment {
@@ -206,6 +228,7 @@ model Organization {
   aiCreditsMilli Int                   @default(0)
   aiModel        String                @default("gpt-6.1-terra")
   aiChangeProposals OrganizationAiChangeProposal[]
+  workNotifications OrganizationWorkNotification[]
   aiReservations OrganizationAiReservation[]
   aiLedger       OrganizationAiCreditLedger[]
   aiMessages     OrganizationAiMessage[]
@@ -257,6 +280,7 @@ model OrganizationMember {
   aiChangeProposals OrganizationAiChangeProposal[]
   createdWorkSubtasks OrganizationWorkSubtask[] @relation("WorkSubtaskCreator")
   workSubtaskComments OrganizationWorkSubtaskComment[] @relation("WorkSubtaskCommentAuthor")
+  workNotifications OrganizationWorkNotification[]
   sentWorkMessages OrganizationAiMessage[] @relation("WorkChatSender")
   receivedWorkMessages OrganizationAiMessage[] @relation("WorkChatRecipient")
   createdWorkProjects OrganizationProject[] @relation("WorkProjectCreator")

@@ -29,6 +29,44 @@ async function scopedTask(req:any,res:any,member:{id:string;role:string}){
   }
   return task;
 }
+/* Corporate notification feed: readable only by its current organization member. */
+workAiRouter.get('/:organizationId/ai/notifications',asyncHandler(async(req,res)=>{
+  const member=await check(req,res);if(!member)return;
+  const [notifications,unreadCount]=await Promise.all([
+    prisma.organizationWorkNotification.findMany({
+      where:{organizationId:req.params.organizationId,recipientMemberId:member.id},
+      orderBy:{createdAt:'desc'},take:60,
+      select:{id:true,taskId:true,subtaskId:true,content:true,createdAt:true,readAt:true}
+    }),
+    prisma.organizationWorkNotification.count({
+      where:{organizationId:req.params.organizationId,recipientMemberId:member.id,readAt:null}
+    })
+  ]);
+  res.json({notifications,unreadCount});
+}));
+workAiRouter.patch('/:organizationId/ai/notifications/:notificationId/read',asyncHandler(async(req,res)=>{
+  const member=await check(req,res);if(!member)return;
+  const updated=await prisma.organizationWorkNotification.updateMany({
+    where:{id:req.params.notificationId,organizationId:req.params.organizationId,
+      recipientMemberId:member.id,readAt:null},data:{readAt:new Date()}
+  });
+  res.json({ok:true,updated:updated.count});
+}));
+workAiRouter.patch('/:organizationId/ai/subtasks/:subtaskId/notifications/read',asyncHandler(async(req,res)=>{
+  const member=await check(req,res);if(!member)return;
+  const subtask=await prisma.organizationWorkSubtask.findFirst({
+    where:{id:req.params.subtaskId,task:{project:{organizationId:req.params.organizationId}}},
+    select:{task:{select:{assignedMemberId:true,createdByMemberId:true}}}
+  });
+  if(!subtask||(!manager(member.role)&&subtask.task.assignedMemberId!==member.id&&subtask.task.createdByMemberId!==member.id)){
+    res.status(404).json({error:'Подзадача не найдена'});return;
+  }
+  await prisma.organizationWorkNotification.updateMany({
+    where:{organizationId:req.params.organizationId,recipientMemberId:member.id,
+      subtaskId:req.params.subtaskId,readAt:null},data:{readAt:new Date()}
+  });
+  res.json({ok:true});
+}));
 workAiRouter.get('/:organizationId/ai/balance',asyncHandler(async(req,res)=>{
   if(!await check(req,res))return;
   res.json({credits:await getCompanyCreditSnapshot(req.params.organizationId)});

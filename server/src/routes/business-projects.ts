@@ -306,7 +306,7 @@ async function subtaskAccess(req:Request,res:Response,write=false){
   return {member,task,manager};
 }
 workProjectsRouter.get('/:organizationId/projects/:projectId/tasks/:taskId/subtasks',asyncHandler(async(req,res)=>{
-  if(!await subtaskAccess(req,res))return;
+  const access=await subtaskAccess(req,res);if(!access)return;
   const rows=await prisma.organizationWorkSubtask.findMany({
     where:{taskId:req.params.taskId},
     orderBy:[{sortOrder:'asc'},{createdAt:'asc'}],
@@ -314,7 +314,14 @@ workProjectsRouter.get('/:organizationId/projects/:projectId/tasks/:taskId/subta
       sortOrder:true,createdByMemberId:true,createdAt:true,updatedAt:true,_count:{select:{comments:true}}},
     take:251
   });
-  res.json({subtasks:rows.slice(0,250).map(({_count,...task})=>({...task,commentCount:_count.comments})),hasMore:rows.length>250});
+  const counts=rows.length?await prisma.organizationWorkNotification.groupBy({
+    by:['subtaskId'],where:{organizationId:req.params.organizationId,recipientMemberId:access.member.id,readAt:null,
+      subtaskId:{in:rows.map(row=>row.id)}},_count:{_all:true}
+  }):[];
+  const unreadBySubtask=new Map(counts.map(row=>[row.subtaskId,row._count._all]));
+  res.json({subtasks:rows.slice(0,250).map(({_count,...task})=>({
+    ...task,commentCount:_count.comments,unreadCommentCount:unreadBySubtask.get(task.id)||0
+  })),hasMore:rows.length>250});
 }));
 workProjectsRouter.post('/:organizationId/projects/:projectId/tasks/:taskId/subtasks',asyncHandler(async(req,res)=>{
   const access=await subtaskAccess(req,res,true);if(!access)return;
@@ -415,11 +422,32 @@ workProjectsRouter.post('/:organizationId/projects/:projectId/tasks/:taskId/subt
       where:{id:parentId,subtaskId:subtask.id},select:{id:true}
     })){res.status(400).json({error:'Ответ должен ссылаться на комментарий этой подзадачи'});return;}
   }
-  const comment=await prisma.organizationWorkSubtaskComment.create({
-    data:{subtaskId:subtask.id,authorMemberId:access.member.id,
-      content:content.trim(),parentCommentId:parentId},
-    select:{id:true,content:true,authorMemberId:true,parentCommentId:true,createdAt:true,
-      author:{select:{role:true,user:{select:{name:true,username:true}}}}}
+  const task=await prisma.organizationWorkTask.findFirstOrThrow({
+    where:{id:access.task.id,project:{organizationId:req.params.organizationId}},
+    select:{id:true,title:true,createdByMemberId:true,assignedMemberId:true}
+  });
+  const parent=parentId?await prisma.organizationWorkSubtaskComment.findUnique({
+    where:{id:parentId},select:{authorMemberId:true}
+  }):null;
+  const comment=await prisma.$transaction(async tx=>{
+    const saved=await tx.organizationWorkSubtaskComment.create({
+      data:{subtaskId:subtask.id,authorMemberId:access.member.id,
+        content:content.trim(),parentCommentId:parentId},
+      select:{id:true,content:true,authorMemberId:true,parentCommentId:true,createdAt:true,
+        author:{select:{role:true,user:{select:{name:true,username:true}}}}}
+    });
+    const recipients=[...new Set([task.createdByMemberId,task.assignedMemberId,parent?.authorMemberId]
+      .filter((id):id is string=>Boolean(id)&&id!==access.member.id))];
+    if(recipients.length){
+      const author=saved.author.user.name||saved.author.user.username||'Участник';
+      const notice=(parentId?'ответил на комментарий':'оставил комментарий')+' к подзадаче';
+      await tx.organizationWorkNotification.createMany({data:recipients.map(recipientMemberId=>({
+        organizationId:req.params.organizationId,recipientMemberId,taskId:task.id,subtaskId:subtask.id,
+        commentId:saved.id,
+        content:author+' '+notice+' «'+content.trim().slice(0,240)+'» в задаче «'+task.title+'»'
+      })),skipDuplicates:true});
+    }
+    return saved;
   });
   res.status(201).json({comment});
 }));

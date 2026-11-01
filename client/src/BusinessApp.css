@@ -451,3 +451,112 @@ body[data-theme] .work-root main.work-content{background:transparent!important;b
  .work-root .work-ai-dispatcher-bottom{padding:10px}
  .work-root .work-subtask-author{max-width:85px}
 }
+
+/* Work parity with the original personal Focus subtask rows and composer. */
+.work-root .work-focus-subtask-row{
+  min-height:62px;padding:10px 13px;gap:10px;
+  background:#19253a;border:1px solid transparent;border-radius:15px;
+  font-family:inherit;
+}
+.work-root .work-focus-subtask-row:hover{background:#202d45}
+.work-root .work-focus-subtask-title{
+  font-family:inherit;font-size:16px;line-height:1.5;font-weight:400;color:#e6ebf7;
+}
+.work-root .work-focus-subtasks-list{display:flex;flex-direction:column;gap:9px}
+.work-root .work-focus-subtask-create{margin:0 0 12px;position:relative;flex:none;}
+.work-root .work-focus-subtask-create>div{display:flex;align-items:center;gap:8px;flex-wrap:nowrap}
+.work-root .work-focus-subtask-create input{min-width:0;min-height:42px;font-size:14px;padding:9px 12px}
+.work-root .work-focus-subtask-create button{min-height:39px;white-space:nowrap}
+.work-root .work-subtask-author{font-size:10px;font-weight:500;max-width:135px;background:#323c5a;color:#d2d9ed}
+.work-root .work-subtask-date{font-size:11px}
+.work-root .work-subtask-comment-icon{position:relative;display:grid;place-items:center;width:26px;height:27px}
+.work-root .work-subtask-unread-badge{
+  position:absolute;right:-6px;top:-6px;display:grid;place-items:center;
+  min-width:16px;height:16px;padding:0 3px;border-radius:10px;
+  background:#8b5cf6;color:white;font-size:10px;font-weight:700;
+  border:2px solid #19253a;line-height:1;
+}
+/* Shared personal message actions: one restrained icon pair per Work bubble. */
+.work-root .ai-message-forward-group{min-width:0;flex:0 0 auto;margin-bottom:5px;}
+.work-root .ai-message-forward-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px;padding:4px 9px 0;}
+.work-root .ai-message-forward-actions button{
+  width:20px;height:20px;min-width:20px;padding:2px;display:grid;place-items:center;
+  color:#9eafc8;background:transparent;border:0;border-radius:5px;transition:color .15s ease;
+}
+.work-root .ai-message-forward-actions button:not(:disabled):hover{color:#d7e5fc}
+.work-root .ai-message-forward-actions button:disabled{opacity:.45;cursor:default}
+.work-root .work-ai-dispatcher-thread{gap:17px;}
+.work-root .work-ai-dispatcher-thread>.ai-message-forward-group{
+  width:fit-content;max-width:min(90%,760px);
+}
+.work-root .work-ai-dispatcher-thread .work-ai-message{max-width:100%;font-size:13px;}
+/* Match the personal chat bottom bar rather than miniature Work-only controls. */
+.work-root .work-personal-task-ai .focused-task-ai-composer{padding-top:10px}
+.work-root .work-personal-task-ai .ai-chat-composer{
+  min-height:70px;padding:9px!important;gap:10px!important;
+  border-radius:27px;border-color:#354963;background:#1d293d;
+}
+.work-root .work-personal-task-ai .ai-chat-composer textarea{
+  min-height:48px;font-size:14px;line-height:1.5;padding:12px 13px;
+}
+.work-root .work-personal-task-ai .ai-chat-composer>button{width:47px;height:47px;min-width:47px}
+.work-root .work-personal-task-ai .task-ai-recipient-trigger{
+  font-size:11px;min-height:29px;padding:5px 13px;
+}
+.work-root .work-ai-dispatcher-bottom{padding:15px 17px 18px}
+.work-root .work-ai-dispatcher-composer{min-height:70px;padding:9px!important;gap:9px}
+.work-root .work-ai-dispatcher-composer textarea{min-height:46px;font-size:14px}
+.work-root .work-ai-dispatcher-composer>button{width:47px;height:47px}
+/* Corporate notification indicator and in-app system notification feed. */
+.work-root .work-quick-notification{position:absolute;right:66px;bottom:7px;}
+.work-root .work-notification-control{position:relative}
+.work-root .work-notification-trigger{
+  position:relative;display:grid;place-items:center;flex:none;width:39px;height:39px;
+  background:#203148;border:1px solid #465d7c;border-radius:50%;color:#d7e9f5;
+}
+.work-root .work-notification-trigger:hover{background:#28405a}
+.work-root .work-notification-count{
+  position:absolute;right:-5px;top:-7px;display:grid;place-items:center;
+  background:#8b5cf6;color:white;min-width:19px;height:19px;padding:0 4px;
+  border:2px solid #101a2f;border-radius:12px;font-size:10px;font-weight:700;
+}
+.work-root .work-notification-feed{
+  position:absolute;right:0;bottom:calc(100% + 12px);z-index:350;
+  width:min(355px,calc(100vw - 24px));max-height:min(470px,65vh);
+  overflow:hidden;display:flex;flex-direction:column;
+  padding:10px;background:#18263a;color:#eaf1fb;
+  border:1px solid #536681;border-radius:19px;box-shadow:0 20px 50px #0008;
+}
+.work-root .work-ai-dispatcher-actions .work-notification-feed{bottom:auto;top:calc(100% + 12px)}
+.work-root .work-notification-feed-title{
+  display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding:3px 5px 10px;font-size:13px;
+}
+.work-root .work-notification-feed-title button{padding:5px;color:#c9d9eb}
+.work-root .work-notification-feed-items{overflow-y:auto;display:flex;flex-direction:column;gap:7px}
+.work-root .work-notification-item{
+  display:flex;align-items:flex-start;gap:10px;width:100%;padding:11px 12px;
+  border-radius:12px;border:1px solid #35465e;background:#1e2c43;
+  color:#cbd5e6;font-size:12px;line-height:1.5;text-align:left;
+}
+.work-root .work-notification-item.unread{border-color:#6b619d;background:#2c2d4e;color:#fff}
+.work-root .work-notification-item small{display:block;margin-top:5px;font-size:10px;color:#a9b6ca}
+.work-root .work-notification-toast{
+  position:fixed;right:20px;bottom:25px;z-index:5000;
+  display:grid;gap:8px;max-width:min(410px,calc(100vw - 40px));
+  border:1px solid #a78b3e;border-radius:18px;background:#1d2a3e;
+  padding:13px 16px;box-shadow:0 12px 30px #0007;color:#f0f3ff;
+  font-size:13px;line-height:1.55;
+}
+.work-root .work-notification-toast strong{color:#facc15;font-size:11px;letter-spacing:.04em}
+.work-root .work-notification-toast button{color:inherit}
+@media(max-width:700px){
+  .work-root .work-focus-subtask-row{min-height:57px;padding:9px}
+  .work-root .work-focus-subtask-title{font-size:14px}
+  .work-root .work-subtask-author{max-width:65px}
+  .work-root .work-focus-subtask-create>div{flex-wrap:wrap}
+  .work-root .work-focus-subtask-create input{flex-basis:100%}
+  .work-root .work-ai-dispatcher-thread{gap:14px}
+}
+
+.work-root .work-global-notification{position:fixed;bottom:30px;right:24px;z-index:210}
