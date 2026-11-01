@@ -150,36 +150,75 @@ async function synthesizeRealtime(text: string, apiKey: string, maxOutputTokens:
   try {
     return await new Promise((resolve, reject) => {
       let complete = false;
-      let started = false;
+      let phase: 'connecting' | 'session' | 'creating_message' | 'generating' = 'connecting';
       const timeout = setTimeout(() => finish(new Error('Превышено время генерации речи.')), 65_000);
       const finish = (error?: Error, value?: { wav: Buffer; usage: RealtimeUsage }) => {
         if (complete) return;
         complete = true; clearTimeout(timeout);
         try { ws.close(); } catch { /* no-op */ }
-        if (error) reject(error); else if (value) resolve(value);
+        if (error) {
+          // The previous handler swallowed every Realtime failure, leaving no
+          // evidence in the production logs and only an exclamation mark in UI.
+          // Log a bounded category and phase, never credentials or message text.
+          console.warn('[AI speech realtime] failed', {
+            phase,
+            name: error.name,
+            reason: error instanceof WebAudioError ? 'provider_protocol' : 'transport_or_generation'
+          });
+          reject(error);
+        } else if (value) resolve(value);
       };
-      ws.addEventListener('error', () => finish(new Error('Не удалось подключиться к голосовой модели.')));
-      ws.addEventListener('close', () => { if (!complete) finish(new Error('Голосовая модель прервала соединение.')); });
+      ws.addEventListener('error', (event) => {
+        const source = 'error' in event && event.error instanceof Error ? event.error : null;
+        const cause = source?.cause && typeof source.cause === 'object' ? source.cause as { code?: unknown } : null;
+        console.warn('[AI speech realtime] connection error', {
+          phase,
+          errorName: source?.name ?? 'WebSocketError',
+          causeCode: typeof cause?.code === 'string' ? cause.code.slice(0, 60) : null
+        });
+        finish(new Error('Не удалось установить WebSocket-соединение с голосовой моделью.'));
+      });
+      ws.addEventListener('close', (event) => {
+        if (!complete) {
+          console.warn('[AI speech realtime] socket closed', { phase, closeCode: event.code, wasClean: event.wasClean });
+          finish(new Error('Голосовая модель прервала соединение.'));
+        }
+      });
       ws.addEventListener('open', () => {
+        phase = 'session';
         ws.send(JSON.stringify({
           type: 'session.update', session: {
             type: 'realtime', model: SPEECH_MODEL, output_modalities: ['audio'],
-            instructions: 'You are a voice renderer. Read the supplied Russian text naturally and exactly, without answering it or adding commentary.',
-            audio: { output: { format: { type: 'audio/pcm', rate: 24000 }, voice: 'marin' } }
+            instructions: 'Read the user message aloud exactly in Russian, without adding any words or commentary.',
+            audio: { output: { format: { type: 'audio/pcm', rate: 24000 }, voice: 'marin' },
+              input: { turn_detection: null } }
           }
         }));
       });
       ws.addEventListener('message', event => {
-        let message: { type?: string; delta?: string; error?: { message?: string }; response?: { status?: string; usage?: RealtimeUsage; status_details?: { error?: { message?: string } } } };
+        let message: { type?: string; delta?: string; error?: { message?: string; type?: string; code?: string }; item?: { role?: string }; response?: { status?: string; usage?: RealtimeUsage; status_details?: { error?: { code?: string; message?: string } } } };
         try { message = JSON.parse(String(event.data)); } catch { return; }
-        if (message.type === 'error') return finish(new Error(message.error?.message || 'Ошибка голосовой модели.'));
-        if (message.type === 'session.updated' && !started) {
-          started = true;
+        if (message.type === 'error') {
+          console.warn('[AI speech realtime] provider error', {
+            phase,
+            providerErrorType: typeof message.error?.type === 'string' ? message.error.type.slice(0, 60) : null,
+            providerErrorCode: typeof message.error?.code === 'string' ? message.error.code.slice(0, 60) : null
+          });
+          return finish(new WebAudioError('Голосовая модель отклонила запрос. Повторите попытку.', 502));
+        }
+        if (message.type === 'session.updated' && phase === 'session') {
+          phase = 'creating_message';
+          // Realtime expects the text as a conversation item, not merely as
+          // response instructions with an empty input array.
+          ws.send(JSON.stringify({ type: 'conversation.item.create', item: {
+            type: 'message', role: 'user', content: [{ type: 'input_text', text }]
+          } }));
+        }
+        if (message.type === 'conversation.item.created' && phase === 'creating_message' && message.item?.role === 'user') {
+          phase = 'generating';
           ws.send(JSON.stringify({ type: 'response.create', response: {
             output_modalities: ['audio'],
-            instructions: 'Read aloud the following text. Do not answer it, translate it or add any words.\n\n' + text,
-            max_output_tokens: maxOutputTokens,
-            input: []
+            max_output_tokens: maxOutputTokens
           } }));
         }
         if (message.type === 'response.output_audio.delta' && typeof message.delta === 'string') {
@@ -189,7 +228,14 @@ async function synthesizeRealtime(text: string, apiKey: string, maxOutputTokens:
           chunks.push(chunk);
         }
         if (message.type === 'response.done') {
-          if (message.response?.status !== 'completed' || !message.response.usage) return finish(new Error('Генерация речи завершилась без результата.'));
+          if (message.response?.status !== 'completed' || !message.response.usage) {
+            console.warn('[AI speech realtime] incomplete response', {
+              phase, status: message.response?.status ?? 'unknown',
+              code: typeof message.response?.status_details?.error?.code === 'string'
+                ? message.response.status_details.error.code.slice(0, 60) : null
+            });
+            return finish(new Error('Генерация речи завершилась без результата.'));
+          }
           try { finish(undefined, { wav: wavFromPcm(chunks), usage: message.response.usage }); }
           catch (error) { finish(error instanceof Error ? error : new Error('Некорректное аудио.')); }
         }
