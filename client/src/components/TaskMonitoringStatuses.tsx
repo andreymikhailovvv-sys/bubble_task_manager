@@ -13,9 +13,10 @@ const MAX_WIDTH = 390;
 const MAX_HEIGHT = 555;
 
 /** A task-owned monitoring panel anchored to the AI-chat title, shared across clients. */
-export function TaskMonitoringStatuses({ taskId, enabled, model = DEFAULT_TASK_AI_CHAT_MODEL, generation = 0, allowed = true, onTaskUpdated }: {
+export function TaskMonitoringStatuses({ taskId, enabled, tourStage = null, model = DEFAULT_TASK_AI_CHAT_MODEL, generation = 0, allowed = true, onTaskUpdated }: {
   taskId: string;
   enabled: boolean;
+  tourStage?: 'button' | 'model' | null;
   model?: AiChatModel;
   generation?: number;
   allowed?: boolean;
@@ -36,6 +37,7 @@ export function TaskMonitoringStatuses({ taskId, enabled, model = DEFAULT_TASK_A
   const popoverId = useId();
 
   useEffect(() => { setMonitorEnabled(enabled); }, [enabled]);
+  useEffect(() => { if (tourStage === 'model') { setLayout(null); setOpen(true); } else if (tourStage === 'button') setOpen(false); }, [tourStage]);
   // Existing disabled tasks can still contain Terra from the old DB default.
   // A fresh first opt-in shows Luna, while previous monitoring model choices stay.
   useEffect(() => {
@@ -45,7 +47,7 @@ export function TaskMonitoringStatuses({ taskId, enabled, model = DEFAULT_TASK_A
     if (enabled || generation > 0) setMonitorModel(model);
   }, [model, enabled, generation]);
   useEffect(() => {
-    setOpen(false); setUnread(0); setItems([]); setDraft(''); setError(''); setLayout(null);
+    setOpen(tourStage === 'model'); setUnread(0); setItems([]); setDraft(''); setError(''); setLayout(null);
   }, [taskId]);
 
   useEffect(() => {
@@ -166,7 +168,7 @@ export function TaskMonitoringStatuses({ taskId, enabled, model = DEFAULT_TASK_A
   };
 
   return <>
-    <div className="task-monitor-status-anchor relative inline-flex shrink-0">
+    <div data-tour="ai-monitor-button" className="task-monitor-status-anchor relative inline-flex shrink-0">
       <button ref={buttonRef} type="button" onClick={() => { setLayout(null); setOpen(value => !value); }}
         className={`task-monitor-button ${allowed && monitorEnabled ? 'task-monitor-button-active' : ''} inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold`}
         aria-label={monitorEnabled && allowed ? 'Автомониторинг задачи включён' : 'Автомониторинг задачи выключен'} aria-expanded={open} aria-controls={open ? popoverId : undefined}>
@@ -176,7 +178,7 @@ export function TaskMonitoringStatuses({ taskId, enabled, model = DEFAULT_TASK_A
         aria-label={`Новых статусов: ${unread}`}>{unread > 99 ? '99+' : unread}</span> : null}
     </div>
     {open && layout && typeof document !== 'undefined' ? createPortal(
-      <div ref={popoverRef} id={popoverId}
+      <div data-tour="ai-monitor-window" ref={popoverRef} id={popoverId}
         className="task-monitor-status-popover task-monitor-status-portal fixed z-[300] flex flex-col overflow-hidden rounded-2xl border p-3 text-primary shadow-2xl"
         data-status-theme={layout.theme}
         style={{ left: layout.left, top: layout.top, width: layout.width, maxHeight: layout.maxHeight }}
@@ -187,7 +189,7 @@ export function TaskMonitoringStatuses({ taskId, enabled, model = DEFAULT_TASK_A
             className="rounded-lg p-1.5 text-muted"><X size={16} /></button>
         </div>
         <div className="task-monitor-panel-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
-          <TaskMonitoringControls enabled={monitorEnabled} model={monitorModel} onModelChange={value => void updateMonitoringModel(value)} onChange={value => void toggle(value)} taskId={taskId}
+          <TaskMonitoringControls tourExpanded={tourStage === 'model'} enabled={monitorEnabled} model={monitorModel} onModelChange={value => void updateMonitoringModel(value)} onChange={value => void toggle(value)} taskId={taskId}
             allowed={allowed && !saving} />
           {saving ? <p role="status" className="mt-2 text-xs text-muted">Сохраняем режим…</p> : null}
           <div className="mt-4 border-t border-[color:var(--panel-border)] pt-3">
