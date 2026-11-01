@@ -148,12 +148,23 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
   let receivedAudioBytes = 0;
   let billed = false;
   const started = Date.now();
+  const sessionId = crypto.randomUUID();
+  let speechTurnCount = 0;
+  console.info('[AI live voice] session starting', {
+    sessionId, scope: context.storage?.kind ?? 'none',
+    historyMessages: context.history.length
+  });
   const timer = setTimeout(() => stop('Лимит голосового диалога: 2 минуты.'), MAX_SECONDS * 1000);
   const send = (payload: unknown) => { if (!closed) peer.send(payload); };
   const stop = (reason?: string) => {
     if (closed) return;
     if (reason) send({ type: 'notice', message: reason });
     closed = true;
+    console.info('[AI live voice] session closing', {
+      sessionId, reason: reason ?? 'client_end_or_socket_closed',
+      durationSeconds: Math.round((Date.now() - started) / 1000),
+      speechTurns: speechTurnCount, toolCalls: delegatedTools
+    });
     clearTimeout(timer);
     try { upstream?.close(); } catch { /* already closed */ }
     void finalize();
@@ -200,6 +211,9 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
         if (packet.type === 'end') { stop(); return; }
         if (packet.type === 'tool_result' && typeof packet.callId === 'string' && pendingToolCalls.has(packet.callId)) {
           pendingToolCalls.delete(packet.callId);
+          console.info('[AI live voice] delegated tool result', {
+            sessionId, resultLength: typeof packet.answer === 'string' ? packet.answer.length : 0
+          });
           awaitingToolResponse = false;
           suppressDelegatedAudioTranscript = true;
           if (!upstream || upstream.readyState !== WebSocket.OPEN) return;
@@ -225,14 +239,14 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
       upstream?.send(JSON.stringify({ type: 'session.update', session: {
         type: 'realtime', model: 'gpt-realtime-2.1-mini',
         output_modalities: ['audio'],
-        instructions: ['Ты голосовой помощник Планировыча. Говори по-русски естественно, коротко и по существу. Поддерживай живой диалог. Если пользователь просит узнать текущее состояние задач/заметок или подготовить любые действия, вызывай инструмент execute_planirovych_request. НЕ придумывай результаты. Этот инструмент делегирует запрос тому же ИИ Планировыча, что используется в текстовом чате, и создаёт необходимые карточки подтверждения в чате. После возврата коротко озвучь подтверждённый результат, не утверждай, что карточка уже принята.', context.instructions].filter(Boolean).join('\n\n'),
+        instructions: ['Ты голосовой помощник Планировыча в НЕПРЕРЫВНОЙ сессии разговора. Не здоровайся повторно, не представляйся снова и не начинай новый диалог при каждом ответе. Отвечай на последнюю просьбу по-русски естественно и коротко. Если пользователь просит узнать актуальные задачи/заметки или подготовить действие, вызови execute_planirovych_request. Передай туда полную просьбу пользователя с обязательными ограничениями (сектор, срок, статус). Для просроченных задач: срок строго ДО текущего времени, исключая завершённые, НИКОГДА не добавляй нижнюю границу даты, которая отсечёт старые просроченные задачи. Не придумывай результат запроса. Отдельные карточки подтверждаются пользователем в чате, не называй их исполненными заранее.', context.instructions].filter(Boolean).join('\n\n'),
         tools: [{ type: 'function', name: 'execute_planirovych_request',
           description: 'Выполнить запрос пользователя к инструментам Планировыча: задачи, подзадачи, заметки, поиск, файлы, письма, Telegram и другие функции обычного текстового ИИ. Делегирует в существующий безопасный обработчик; результаты и карточки подтверждения отображаются в чате.',
           parameters: { type: 'object', additionalProperties: false, properties: { request: { type: 'string', description: 'Точная просьба пользователя на русском языке' } }, required: ['request'] } }],
         audio: {
           input: { format: { type: 'audio/pcm', rate: 24000 }, transcription: { model: 'gpt-transcribe', language: 'ru' }, turn_detection: {
-            type: 'server_vad', threshold: 0.5, silence_duration_ms: 550, prefix_padding_ms: 300,
-            create_response: true, interrupt_response: true
+            type: 'server_vad', threshold: 0.55, silence_duration_ms: 1100, prefix_padding_ms: 450,
+            create_response: true, interrupt_response: false
           } },
           output: { format: { type: 'audio/pcm', rate: 24000 }, voice: 'marin' }
         }
@@ -251,6 +265,10 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
           send({ type: 'error', message: 'Голосовая модель отклонила запрос.' }); stop(); return;
         }
         if (value.type === 'session.updated') {
+          // A late session.updated is not a new conversation or a request to
+          // start another microphone processor on the client.
+          if (ready) return;
+          console.info('[AI live voice] ready', { sessionId });
           if (!ready) {
             // Previous assistant/user turns are not blindly concatenated into
             // a giant system prompt. Realtime receives role-preserving items.
@@ -277,7 +295,11 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
             if (cost.estimatedCreditsMilli !== null) transcriptionMilli += cost.estimatedCreditsMilli;
           }
         }
-        if (value.type === 'input_audio_buffer.speech_started') send({ type: 'speech_started' });
+        if (value.type === 'input_audio_buffer.speech_started') {
+          speechTurnCount += 1;
+          console.info('[AI live voice] speech started', { sessionId, turn: speechTurnCount });
+          send({ type: 'speech_started' });
+        }
         if (value.type === 'input_audio_buffer.speech_stopped') send({ type: 'thinking' });
         if (value.type === 'response.output_audio.delta' && typeof value.delta === 'string') {
           send({ type: 'audio', data: value.delta });
@@ -301,6 +323,9 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
           } catch { /* provider supplied invalid arguments */ }
           if (!question) question = 'Помоги с последней просьбой пользователя в Планировыче.';
           pendingToolCalls.add(value.item.call_id);
+          console.info('[AI live voice] delegated tool call', {
+            sessionId, index: delegatedTools, questionLength: question.length
+          });
           awaitingToolResponse = true;
           send({ type: 'tool_request', callId: value.item.call_id, question });
         }
@@ -319,7 +344,7 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
         }
       } catch { /* ignore malformed provider event */ }
     });
-    upstream.addEventListener('error', () => { send({ type: 'error', message: 'Не удалось соединиться с голосовой моделью.' }); stop(); });
+    upstream.addEventListener('error', () => { console.warn('[AI live voice] upstream socket error', { sessionId }); send({ type: 'error', message: 'Не удалось соединиться с голосовой моделью.' }); stop(); });
     upstream.addEventListener('close', () => { if (!closed) stop('Соединение с голосовой моделью завершено.'); });
   } catch (error) {
     console.warn('[AI live voice] session failed', { name: error instanceof Error ? error.name : 'unknown' });
