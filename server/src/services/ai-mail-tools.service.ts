@@ -1,7 +1,7 @@
 import { prisma } from '../db/prisma.js';
 import { decryptMailPassword } from '../lib/mail-crypto.js';
 import { ReadOnlyImap, type MailProvider } from './mail-imap.service.js';
-import { emailAddress, smtpReply } from './mail-smtp.service.js';
+import { emailAddress, parseMailRecipients, smtpReply } from './mail-smtp.service.js';
 import { randomUUID } from 'node:crypto';
 
 export const SEARCH_MAIL_TOOL = {
@@ -77,10 +77,11 @@ export async function prepareOwnerMailSend(userId:string,raw:unknown) {
   const v = raw && typeof raw==='object' && !Array.isArray(raw) ? raw as Record<string,unknown> : {};
   const account = typeof v.account==='string' ? v.account.trim().toLowerCase() : '';
   const requestedRecipient = typeof v.recipient==='string' ? v.recipient.trim() : '';
-  const recipient = requestedRecipient ? emailAddress(requestedRecipient) : '';
+  const recipientList = requestedRecipient ? parseMailRecipients(requestedRecipient) : [];
+  const recipient = recipientList?.join(', ') ?? '';
   const subject = typeof v.subject==='string' ? v.subject.trim() : '';
   const body = typeof v.text==='string' ? v.text.trim() : '';
-  if ((requestedRecipient && !recipient) || subject.length>200 || body.length>6000 || !body || /[\r\n\0]/.test(subject))
+  if ((requestedRecipient && (!recipientList || !recipientList.length)) || subject.length>200 || body.length>6000 || !body || /[\r\n\0]/.test(subject))
     return {ok:false,code:'INVALID_DRAFT',message:'Некорректная тема, адрес или текст письма'};
   const accounts = await prisma.emailMailbox.findMany({where:{userId},select:{id:true,email:true},orderBy:{createdAt:'asc'}});
   if(!accounts.length) return {ok:false,code:'NO_MAILBOX',message:'Сначала подключите Яндекс или Mail.ru'};
@@ -103,7 +104,8 @@ export async function getOwnerMailDraft(userId:string,id:string) {
 /** CAS before network I/O. Unknown delivery cannot be retried with the same draft. */
 export async function sendOwnerMailDraft(userId:string,id:string,raw:unknown) {
   const v=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw as Record<string,unknown>:{};
-  const to=typeof v.recipient==='string'?emailAddress(v.recipient):null;
+  const toList=typeof v.recipient==='string'?parseMailRecipients(v.recipient):null;
+  const to=toList?.join(', ') ?? null;
   const subject=typeof v.subject==='string'?v.subject.trim():'';
   const body=typeof v.text==='string'?v.text.trim():'';
   const mailboxId=typeof v.mailboxId==='string'?v.mailboxId:'';
