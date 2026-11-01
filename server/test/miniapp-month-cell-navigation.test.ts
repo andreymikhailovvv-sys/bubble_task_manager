@@ -2,28 +2,38 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-test('Mini App and compact mobile web month cells open the selected day, except task chips', async () => {
-  const [mini, styles] = await Promise.all([
+test('Mini App and compact mobile web month cells provide one full-cell day tap target', async () => {
+  const [mini, styles, entry] = await Promise.all([
     readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8')
+    readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/main.tsx', import.meta.url), 'utf8')
   ]);
 
-  // Both compact surfaces render MiniApp. Only month cells receive a cell-level action.
-  assert.match(mini, /timelineView === 'month' \? \{\s*role: 'button' as const,\s*tabIndex: 0,/);
-  assert.match(mini, /'aria-label': .*Открыть таймлайн на /);
-  assert.match(mini, /onClick: \(\) => openDayTimeline\(date\)/);
-  assert.match(mini, /onKeyDown: \(event: ReactKeyboardEvent<HTMLDivElement>\) => \{/);
-  assert.match(mini, /event\.target !== event\.currentTarget/);
-  assert.match(mini, /event\.key === 'Enter' \|\| event\.key === ' '/);
+  // Telegram Mini App and the narrow mobile website share this same component.
+  assert.match(entry, /<MiniApp runtime="telegram"/);
+  assert.match(entry, /<MiniApp runtime="web"/);
 
-  // Month date is not a nested button; tapping it delegates to the whole cell.
-  assert.match(mini, /timelineView === 'month' \? \(\s*<span className="miniapp-calendar-date" aria-hidden="true">/);
+  const monthCellStart = mini.indexOf('<div key={dateKey} className={`miniapp-calendar-day');
+  const monthCellEnd = mini.indexOf('</div>', mini.indexOf('miniapp-calendar-more', monthCellStart));
+  assert.ok(monthCellStart > -1 && monthCellEnd > monthCellStart);
+  const cell = mini.slice(monthCellStart, monthCellEnd);
 
-  // Month entries are inert spans that absorb taps, while week entries still open tasks.
-  assert.match(mini, /return timelineView === 'month' \? \(\s*<span key=\{entry\.id\} className=\{entryClassName\} style=\{entryStyle\} onClick=\{\(event\) => event\.stopPropagation\(\)\}/);
-  assert.match(mini, /\) : \(\s*<button key=\{entry\.id\} type="button" className=\{entryClassName\}/);
-  assert.match(mini, /onClick=\{\(\) => 'task' in entry \?/);
+  // The absolute hit area exists for EVERY month cell, not only the date number.
+  assert.match(cell, /timelineView === 'month' && \(\s*<button type="button" className="miniapp-calendar-cell-hitarea"/);
+  assert.match(cell, /onClick=\{\(\) => openDayTimeline\(date\)\}/);
+  assert.match(cell, /aria-label=\{`Открыть таймлайн на /);
 
-  assert.match(styles, /\.miniapp-calendar-grid-month \.miniapp-calendar-day:focus-visible/);
-  assert.match(styles, /\.miniapp-calendar-grid-month \.miniapp-calendar-entry \{ cursor: default; \}/);
+  // No month task chip can swallow the click or launch the task dialog.
+  assert.match(cell, /return timelineView === 'month' \? \(\s*<span key=\{entry\.id\} className=\{entryClassName\} style=\{entryStyle\}>/);
+  assert.doesNotMatch(cell, /stopPropagation\(/);
+  assert.match(cell, /\) : \(\s*<button key=\{entry\.id\} type="button" className=\{entryClassName\}/);
+  assert.match(cell, /onClick=\{\(\) => 'task' in entry \?/);
+
+  // It fills the complete grid cell and remains above dates and task previews.
+  assert.match(styles, /\.miniapp-calendar-grid-month \.miniapp-calendar-day \{ position: relative;/);
+  const hitArea = styles.match(/\.miniapp-calendar-grid-month \.miniapp-calendar-cell-hitarea \{([^}]+)\}/)?.[1] ?? '';
+  for (const property of [/position: absolute;/, /z-index: 1;/, /inset: 0;/, /width: 100%;/, /height: 100%;/, /background: transparent;/, /touch-action: manipulation;/]) {
+    assert.match(hitArea, property);
+  }
+  assert.match(styles, /\.miniapp-calendar-grid-month \.miniapp-calendar-cell-hitarea:focus-visible/);
 });
