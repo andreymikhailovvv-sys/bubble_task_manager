@@ -481,7 +481,7 @@ export type WorkProject = { id: string; name: string; description: string | null
 export type WorkTaskStatus = 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE';
 export type WorkTaskPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL';
 export type WorkCompanyTask = { id: string; projectId: string; title: string; description: string | null; status: WorkTaskStatus; priority: WorkTaskPriority; dueAt: string | null; assignedMemberId: string | null; createdByMemberId: string | null; createdAt: string; updatedAt: string };
-export type WorkSubtask = {id:string;taskId:string;title:string;description?:string|null;importance?:number;isDone:boolean;dueAt:string|null;sortOrder:number;createdByMemberId:string|null;commentCount?:number;createdAt:string;updatedAt:string};
+export type WorkSubtask = {id:string;taskId:string;title:string;description?:string|null;importance?:number;isDone:boolean;dueAt:string|null;sortOrder:number;createdByMemberId:string|null;commentCount?:number;unreadCommentCount?:number;createdAt:string;updatedAt:string};
 export type WorkDashboardTask = WorkCompanyTask & { project: {id:string;name:string}; assignee: {user: {name:string|null;username:string|null}} | null };
 export type WorkDashboard = { role:WorkRole; memberId:string;projects:WorkProject[];tasks:WorkDashboardTask[];stats:{projects:number;tasks:number;open:number;overdue:number};hasMoreTasks:boolean };
 export type WorkAiCredits = { aiCreditsMilli: number; spentMilli: number; aiModel: string };
@@ -497,6 +497,7 @@ export type WorkAiMessage = {
   senderMemberId?:string|null;recipientMemberId?:string|null;
   sender?:{role:string;user:{name:string|null;username:string|null}}|null;
   recipient?:{user:{name:string|null;username:string|null}}|null; };
+export type WorkNotification = {id:string;taskId:string;subtaskId:string;content:string;createdAt:string;readAt:string|null};
 export type WorkSubtaskComment = {id:string;subtaskId?:string;content:string;authorMemberId:string;parentCommentId:string|null;createdAt:string;
  author:{role:string;user:{name:string|null;username:string|null}}};
 export type WorkAiJob = { id:string; dueAt:string; instruction:string; state:string; createdAt:string };
@@ -506,6 +507,12 @@ export type AdminWorkCreditHistory = { id:string;kind:string;deltaMilli:number;c
 
 
 export const api = {
+  mailAccounts: () => request<{available:boolean;accounts:MailAccount[]}>('/api/mail-assistant/accounts'),
+  mailConnect: (payload:MailAccountConnect) => request<{account:MailAccount}>('/api/mail-assistant/accounts',{method:'POST',body:JSON.stringify(payload)}),
+  mailUpdate: (id:string,payload:MailAccountSettings) => request<{account:MailAccount}>('/api/mail-assistant/accounts/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify(payload)}),
+  mailRemove: (id:string) => request<{ok:boolean}>('/api/mail-assistant/accounts/'+encodeURIComponent(id),{method:'DELETE'}),
+  mailCheck: (id:string) => request<{ok:boolean}>('/api/mail-assistant/accounts/'+encodeURIComponent(id)+'/check',{method:'POST',body:'{}'}),
+  mailEvents: (id:string) => request<{events:MailAnalysisEvent[]}>('/api/mail-assistant/accounts/'+encodeURIComponent(id)+'/events'),
   listWorkOrganizations: () => request<{ organizations: WorkOrganization[] }>('/api/business/organizations'),
   createWorkOrganization: (name: string) => request<{ organization: WorkOrganization }>('/api/business/organizations', { method: 'POST', body: JSON.stringify({ name }) }),
   getWorkWorkspace: (id: string) => request<WorkWorkspace>(`/api/business/organizations/${encodeURIComponent(id)}/workspace`),
@@ -516,6 +523,9 @@ export const api = {
   getWorkAiProposal: (org:string,id:string)=>request<{proposal:WorkAiProposal}>(`/api/business/organizations/${encodeURIComponent(org)}/ai/proposals/${encodeURIComponent(id)}`),
   approveWorkAiProposal: (org:string,id:string)=>request<{proposal:WorkAiProposal}>(`/api/business/organizations/${encodeURIComponent(org)}/ai/proposals/${encodeURIComponent(id)}/approve`,{method:'POST',body:'{}'}),
   rejectWorkAiProposal: (org:string,id:string)=>request<{proposal:WorkAiProposal}>(`/api/business/organizations/${encodeURIComponent(org)}/ai/proposals/${encodeURIComponent(id)}/reject`,{method:'POST',body:'{}'}),
+  workNotifications: (org:string)=>request<{notifications:WorkNotification[];unreadCount:number}>(`/api/business/organizations/${encodeURIComponent(org)}/ai/notifications`),
+  workReadNotification: (org:string,id:string)=>request<{ok:boolean}>(`/api/business/organizations/${encodeURIComponent(org)}/ai/notifications/${encodeURIComponent(id)}/read`,{method:'PATCH',body:'{}'}),
+  workMarkSubtaskNotificationsRead: (org:string,id:string)=>request<{ok:boolean}>(`/api/business/organizations/${encodeURIComponent(org)}/ai/subtasks/${encodeURIComponent(id)}/notifications/read`,{method:'PATCH',body:'{}'}),
   workAiBalance: (id:string)=>request<{credits:WorkAiCredits}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/balance`),
   workAiSetModel: (id:string,model:string)=>request<{model:string}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/model`,{method:'PATCH',body:JSON.stringify({model})}),
   workAiHistory: (id:string,taskId?:string)=>request<{messages:WorkAiMessage[]}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/${taskId?'tasks/'+encodeURIComponent(taskId)+'/':''}history`),
@@ -922,4 +932,24 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload)
     })
+};
+
+export type MailAccountSettings = {
+  enabled: boolean; intervalMinutes: 5 | 15 | 30 | 60;
+  taskMode: 'NONE' | 'SUGGEST' | 'AUTO'; instructions: string;
+};
+export type MailAccountConnect = MailAccountSettings & {
+  provider: 'yandex' | 'mailru'; email: string; password: string;
+};
+export type MailAccount = MailAccountSettings & {
+  id: string; provider: 'yandex' | 'mailru'; email: string;
+  sentFolder: string | null; lastCheckedAt: string | null; nextCheckAt: string | null;
+  lastError: string | null; processedCount: number; createdAt: string;
+};
+export type MailAnalysisEvent = {
+  id: string; subject: string; from: string; folder: 'INBOX' | 'SENT';
+  createdAt: string; status: 'PROCESSING' | 'DONE' | 'FAILED';
+  summary: { summary: string; important: boolean; decisions: string[]; obligations: string[]; risks: string[];
+    tasks: Array<{operation:string;title:string | null;dueDate:string | null}> } | null;
+  error: string | null; taskProposal: import('./types').AiTaskProposal | null;
 };

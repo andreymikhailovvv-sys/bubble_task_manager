@@ -9,7 +9,7 @@ import type { Prisma } from '@prisma/client';
  * A proposal is a durable, owner-bound command. The model and the browser may
  * suggest actions, but only this service is allowed to commit them.
  */
-export type TaskProposalSource = 'planner' | 'telegram_bot' | 'task_chat' | 'telegram_bot_task' | 'legacy_general' | 'telegram_assistant' | 'daily_checkup';
+export type TaskProposalSource = 'planner' | 'telegram_bot' | 'task_chat' | 'telegram_bot_task' | 'legacy_general' | 'telegram_assistant' | 'daily_checkup' | 'email_assistant';
 export type TaskProposalAction = Record<string, unknown>;
 export type NoteProposalAction = Record<string, unknown> & UpdatePersonalNoteArgs & { operation: 'update_note'; expectedUpdatedAt: string };
 export type CreateNoteProposalAction = Record<string, unknown> & CreatePersonalNoteArgs & { operation: 'create_note' };

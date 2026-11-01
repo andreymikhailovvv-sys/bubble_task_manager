@@ -16,6 +16,7 @@ import { Prisma } from '@prisma/client';
 import { telegramUpdateQueue, TelegramUpdateWorker } from './services/telegram-update-queue.service.js';
 import { telegramQuickShare } from './services/telegram-quick-share.service.js';
 import { telegramAiMonitorWorker } from './services/telegram-ai-monitor-worker.service.js';
+import { mailAssistantWorker } from './services/mail-assistant.service.js';
 import { deliverTelegramAiBotNotifications } from './services/telegram-ai-inbox.service.js';
 import { createPublicSeoPagesMiddleware } from './lib/public-seo-pages.js';
 import { startTaskMonitoringWorker } from './services/task-monitoring-worker.service.js';
@@ -249,3 +250,8 @@ const sendTelegramAssistantInbox = () => deliverTelegramAiBotNotifications().cat
 });
 setTimeout(sendTelegramAssistantInbox, 10_000).unref();
 setInterval(sendTelegramAssistantInbox, 20_000).unref();
+
+// Database-leased, consent-only email monitoring. No separate process required.
+const runEmailMonitor = () => mailAssistantWorker.drain().catch(() => console.warn('[MailAssistant] monitoring failed'));
+setTimeout(runEmailMonitor, 12_000).unref();
+setInterval(runEmailMonitor, 15_000).unref();
