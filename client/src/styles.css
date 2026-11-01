@@ -10659,6 +10659,24 @@ body[data-theme='light'] .upcoming-subtasks-list .upcoming-subtask-row:hover {
 .miniapp-shell.miniapp-telegram-fullscreen .miniapp-slide-backdrop {
   padding-top: var(--miniapp-top-inset, 0px);
 }
+/* Telegram's Android title/system buttons can overlap the top of a tall habit sheet.
+   Keep the header below the real safe area, without moving other focus dialogs. */
+@media (max-width: 639px) {
+  .miniapp-shell:not(.miniapp-web-runtime) .miniapp-slide-backdrop.miniapp-habit-backdrop {
+    padding-top: calc(max(var(--miniapp-top-inset, 0px), env(safe-area-inset-top, 0px)) + 1rem);
+  }
+  .miniapp-shell:not(.miniapp-web-runtime) .miniapp-habit-backdrop .miniapp-habit-modal-panel {
+    display: flex;
+    min-height: 0;
+    max-height: 100%;
+    flex-direction: column;
+  }
+  .miniapp-shell:not(.miniapp-web-runtime) .miniapp-habit-backdrop .miniapp-habit-modal-panel > div {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: 100%;
+  }
+}
 .miniapp-shell .miniapp-bottom-navigation {
   position: fixed;
   right: 0;

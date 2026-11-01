@@ -989,6 +989,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     const chatRecipientUserId = params.get('chatRecipientUserId')?.trim() || null;
     return { taskId, openAi, openQuickAi, openCheckupProposal, openTelegramAiChat, commentTaskId, chatRecipientUserId };
   }, []);
+  // A Telegram task URL is a launch instruction, not a persistent modal state.
+  const handledTaskDeepLinkRef = useRef(false);
 
   const [linkedCheckupProposal, setLinkedCheckupProposal] = useState<AiTaskProposal | null>(null);
   useEffect(() => {
@@ -1810,9 +1812,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   };
 
   useEffect(() => {
-    if (!launchParams.taskId || loading || tasks.length === 0 || openedTaskId) return;
+    if (handledTaskDeepLinkRef.current || !launchParams.taskId || loading || tasks.length === 0 || openedTaskId) return;
     const requestedTask = tasks.find((task) => task.id === launchParams.taskId && !task.parentTaskId);
     if (!requestedTask) return;
+    // Claim the deep link before changing modal state so a subsequent close cannot reopen it.
+    handledTaskDeepLinkRef.current = true;
     openTaskModal(requestedTask);
     if (launchParams.chatRecipientUserId) {
       setAiRecipientByTaskId((prev) => ({ ...prev, [requestedTask.id]: launchParams.chatRecipientUserId! }));
@@ -1848,6 +1852,15 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   }, [launchParams.openQuickAi, launchParams.openTelegramAiChat, loading, currentUser?.id, aiChatProjects]);
 
   const closeTaskModal = () => {
+    // Clear the consumed task deep link when closing, including after save or completion.
+    // This also prevents a stale URL from reopening the same task on a later remount.
+    if (handledTaskDeepLinkRef.current && launchParams.taskId) {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('taskId') === launchParams.taskId) {
+        ['taskId', 'openAi', 'commentTaskId', 'chatRecipientUserId'].forEach((key) => url.searchParams.delete(key));
+        window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+      }
+    }
     setOpenedTaskId(null);
     setOpenedSubtaskId(null);
     setNewSubtaskDraft(null);
@@ -5406,7 +5419,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       ) : null}
 
       {isHabitModalOpen && !editingHabitId ? (
-        <div className={`miniapp-slide-backdrop fixed inset-0 z-[95] flex items-end bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('habit')}`}>
+        <div className={`miniapp-slide-backdrop miniapp-habit-backdrop fixed inset-0 z-[95] flex items-end bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('habit')}`}>
           <section className="miniapp-slide-panel miniapp-focus-panel miniapp-habit-modal-panel miniapp-habit-create-panel relative max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-xl sm:rounded-[2rem]" role="dialog" aria-modal="true" aria-label="Создание привычки">
             <div className="flex max-h-[calc(94vh-2rem)] min-h-0 flex-col sm:max-h-[calc(88vh-2rem)]">
               <div className="mb-3 flex items-center justify-between gap-3">
@@ -5487,7 +5500,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       ) : null}
 
       {isHabitModalOpen && editingHabit ? (
-        <div className={`miniapp-slide-backdrop fixed inset-0 z-[95] flex items-end bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('habit')}`}>
+        <div className={`miniapp-slide-backdrop miniapp-habit-backdrop fixed inset-0 z-[95] flex items-end bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('habit')}`}>
           <section className="miniapp-slide-panel miniapp-focus-panel miniapp-habit-modal-panel miniapp-habit-editor-panel relative max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-xl sm:rounded-[2rem]" role="dialog" aria-modal="true" aria-label="Редактирование привычки">
             <div className="flex max-h-[calc(94vh-2rem)] min-h-0 flex-col sm:max-h-[calc(88vh-2rem)]">
               <div className="mb-3 flex items-center justify-between gap-3">
