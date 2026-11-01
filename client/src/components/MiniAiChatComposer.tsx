@@ -2,7 +2,7 @@ import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { Paperclip, SendHorizontal } from 'lucide-react';
 import { AutoGrowingTextarea } from './AutoGrowingTextarea';
 import { VoiceInputButton } from './VoiceInputButton';
-import type { LiveVoiceContext } from './LiveVoiceDialog';
+import type { LiveVoiceContext, LiveVoiceMessage, LiveVoiceToolCompletion } from './LiveVoiceDialog';
 
 export type MiniAiChatComposerHandle = {
   clearDraft: () => void;
@@ -12,6 +12,8 @@ export type MiniAiChatComposerHandle = {
 type MiniAiChatComposerProps = {
   variant: 'general' | 'task';
   liveContext?: LiveVoiceContext;
+  onLiveMessage?: (message: LiveVoiceMessage) => void;
+  onLiveToolResult?: (completion: LiveVoiceToolCompletion) => void;
   initialDraft: string;
   onDraftChange: (text: string) => void;
   onSend: () => void;
@@ -30,7 +32,7 @@ type MiniAiChatComposerProps = {
  */
 export const MiniAiChatComposer = forwardRef<MiniAiChatComposerHandle, MiniAiChatComposerProps>(
   function MiniAiChatComposer({
-    variant, liveContext, initialDraft, onDraftChange, onSend, onAttach,
+    variant, liveContext, onLiveMessage, onLiveToolResult, initialDraft, onDraftChange, onSend, onAttach,
     isSending, hasPendingFiles, attachDisabled, attachTitle
   }, ref) {
     const [draft, setDraft] = useState(initialDraft);
@@ -76,7 +78,7 @@ export const MiniAiChatComposer = forwardRef<MiniAiChatComposerHandle, MiniAiCha
         >
           <Paperclip size={17} />
         </button>
-        <VoiceInputButton liveContext={liveContext} disabled={isSending} className="miniapp-ai-chat-attach" onTranscript={(text, immediate) => {
+        <VoiceInputButton liveContext={liveContext} onLiveMessage={onLiveMessage} onLiveToolResult={onLiveToolResult} disabled={isSending} className="miniapp-ai-chat-attach" onTranscript={(text, immediate) => {
           const next = [draftRef.current.trim(), text].filter(Boolean).join(' ');
           changeDraft(next);
           if (immediate) onSend();

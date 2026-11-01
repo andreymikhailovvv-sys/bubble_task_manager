@@ -140,6 +140,10 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
   let usageMilli = 0;
   let transcriptionMilli = 0;
   let assistantTranscript = '';
+  let awaitingToolResponse = false;
+  let suppressDelegatedAudioTranscript = false;
+  let delegatedTools = 0;
+  const pendingToolCalls = new Set<string>();
   const sentTranscriptIds = new Set<string>();
   let receivedAudioBytes = 0;
   let billed = false;
@@ -192,8 +196,21 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
     });
     peer.onMessage(value => {
       try {
-        const packet = JSON.parse(value) as { type?: unknown; audio?: unknown };
+        const packet = JSON.parse(value) as { type?: unknown; audio?: unknown; callId?: unknown; answer?: unknown };
         if (packet.type === 'end') { stop(); return; }
+        if (packet.type === 'tool_result' && typeof packet.callId === 'string' && pendingToolCalls.has(packet.callId)) {
+          pendingToolCalls.delete(packet.callId);
+          awaitingToolResponse = false;
+          suppressDelegatedAudioTranscript = true;
+          if (!upstream || upstream.readyState !== WebSocket.OPEN) return;
+          const answer = typeof packet.answer === 'string' ? packet.answer.slice(0, 5000) : 'Инструмент завершился без ответа.';
+          upstream.send(JSON.stringify({
+            type: 'conversation.item.create',
+            item: { type: 'function_call_output', call_id: packet.callId, output: JSON.stringify({ answer }) }
+          }));
+          upstream.send(JSON.stringify({ type: 'response.create', response: { output_modalities: ['audio'] } }));
+          return;
+        }
         if (!ready || !upstream || upstream.readyState !== WebSocket.OPEN) return;
         if (packet.type !== 'audio' || typeof packet.audio !== 'string' ||
           packet.audio.length > 64_000 || !/^[A-Za-z0-9+/]*={0,2}$/.test(packet.audio)) return;
@@ -208,7 +225,10 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
       upstream?.send(JSON.stringify({ type: 'session.update', session: {
         type: 'realtime', model: 'gpt-realtime-2.1-mini',
         output_modalities: ['audio'],
-        instructions: ['Ты голосовой помощник Планировыча. Говори по-русски естественно, коротко и по существу. Поддерживай живой диалог. Не утверждай, что выполнил изменения в задачах или заметках: пока инструменты не подключены.', context.instructions].filter(Boolean).join('\n\n'),
+        instructions: ['Ты голосовой помощник Планировыча. Говори по-русски естественно, коротко и по существу. Поддерживай живой диалог. Если пользователь просит узнать текущее состояние задач/заметок или подготовить любые действия, вызывай инструмент execute_planirovych_request. НЕ придумывай результаты. Этот инструмент делегирует запрос тому же ИИ Планировыча, что используется в текстовом чате, и создаёт необходимые карточки подтверждения в чате. После возврата коротко озвучь подтверждённый результат, не утверждай, что карточка уже принята.', context.instructions].filter(Boolean).join('\n\n'),
+        tools: [{ type: 'function', name: 'execute_planirovych_request',
+          description: 'Выполнить запрос пользователя к инструментам Планировыча: задачи, подзадачи, заметки, поиск, файлы, письма, Telegram и другие функции обычного текстового ИИ. Делегирует в существующий безопасный обработчик; результаты и карточки подтверждения отображаются в чате.',
+          parameters: { type: 'object', additionalProperties: false, properties: { request: { type: 'string', description: 'Точная просьба пользователя на русском языке' } }, required: ['request'] } }],
         audio: {
           input: { format: { type: 'audio/pcm', rate: 24000 }, transcription: { model: 'gpt-transcribe', language: 'ru' }, turn_detection: {
             type: 'server_vad', threshold: 0.5, silence_duration_ms: 550, prefix_padding_ms: 300,
@@ -224,7 +244,7 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
         const value = JSON.parse(String(event.data)) as {
           type?: string; delta?: string; error?: { code?: string };
           response?: { status?: string; usage?: Parameters<typeof realtimeSpeechCostMilli>[0]; output?: Array<{ type?: string; content?: Array<{ transcript?: string }> }> };
-          item_id?: string; transcript?: string; usage?: { type?: string; seconds?: number; input_tokens?: number; output_tokens?: number; input_token_details?: { text_tokens?: number; audio_tokens?: number } }
+          item_id?: string; transcript?: string; item?: { type?: string; name?: string; call_id?: string; arguments?: string }; usage?: { type?: string; seconds?: number; input_tokens?: number; output_tokens?: number; input_token_details?: { text_tokens?: number; audio_tokens?: number } }
         };
         if (value.type === 'error') {
           console.warn('[AI live voice] provider rejected event', { code: value.error?.code ?? 'unknown' });
@@ -266,10 +286,29 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
           assistantTranscript = (assistantTranscript + value.delta).slice(-6000);
           send({ type: 'transcript', text: value.delta.slice(0, 500) });
         }
+        if (value.type === 'response.output_item.done' && value.item?.type === 'function_call' &&
+            value.item.name === 'execute_planirovych_request' && typeof value.item.call_id === 'string') {
+          if (++delegatedTools > 6 || pendingToolCalls.size >= 2) {
+            upstream?.send(JSON.stringify({ type: 'conversation.item.create',
+              item: { type: 'function_call_output', call_id: value.item.call_id, output: JSON.stringify({ error: 'Лимит инструментов голосового сеанса.' }) } }));
+            upstream?.send(JSON.stringify({ type: 'response.create', response: { output_modalities: ['audio'] } }));
+            return;
+          }
+          let question = '';
+          try {
+            const args = JSON.parse(value.item.arguments ?? '{}') as { request?: unknown };
+            question = typeof args.request === 'string' ? args.request.trim().slice(0, 1500) : '';
+          } catch { /* provider supplied invalid arguments */ }
+          if (!question) question = 'Помоги с последней просьбой пользователя в Планировыче.';
+          pendingToolCalls.add(value.item.call_id);
+          awaitingToolResponse = true;
+          send({ type: 'tool_request', callId: value.item.call_id, question });
+        }
         if (value.type === 'response.done') {
           const completedText = value.response?.output?.flatMap(item => item.content || []).map(item => item.transcript || '').filter(Boolean).join(' ') || assistantTranscript;
-          if (completedText.trim()) send({ type: 'assistant_message', id: crypto.randomUUID(), text: completedText.trim().slice(0, 6000) });
+          if (completedText.trim() && !awaitingToolResponse && !suppressDelegatedAudioTranscript) send({ type: 'assistant_message', id: crypto.randomUUID(), text: completedText.trim().slice(0, 6000) });
           assistantTranscript = '';
+          suppressDelegatedAudioTranscript = false;
           if (value.response?.usage) {
             const cost = realtimeSpeechCostMilli(value.response.usage);
             usageMilli += cost;
