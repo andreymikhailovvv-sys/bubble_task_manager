@@ -67,6 +67,7 @@ import { mailAssistant, MailAssistantError } from '../services/mail-assistant.se
 import { mailAssistantInboxFeed, deliverMailReply } from '../services/mail-assistant-inbox.service.js';
 import { rewriteMailQuickText } from '../services/telegram-quick-share-ai.service.js';
 import { getOwnerMailDraft, sendOwnerMailDraft } from '../services/ai-mail-tools.service.js';
+import { emailAddress } from '../services/mail-smtp.service.js';
 
 
 export const apiRouter = Router();
@@ -81,6 +82,17 @@ const mailFailure = (res: Response, error: unknown) => {
   else res.status(500).json({ error: 'Не удалось выполнить действие с почтой' });
 };
 
+apiRouter.get('/mail-assistant/recent-recipients', requireAuth, async(req,res)=>{
+  res.set('Cache-Control','no-store, private');
+  const rows=await prisma.emailAnalysis.findMany({where:{userId:req.user!.id,folder:'INBOX'},
+    select:{sender:true},orderBy:{createdAt:'desc'},take:100});
+  const addresses=[...new Set(rows.map(x=>{
+    // IMAP From may contain a display name in addition to the actual email address.
+    const raw=x.sender?.match(/<([^<>]+)>/)?.[1]??x.sender;
+    return emailAddress(raw);
+  }).filter((x):x is string=>Boolean(x)))].slice(0,40);
+  res.json({addresses});
+});
 apiRouter.post('/mail-assistant/quick-rewrite',requireAuth,mailOrigin,async(req,res)=>{
   res.set('Cache-Control','no-store, private');
   try {

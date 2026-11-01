@@ -105,6 +105,8 @@ jobs:
         run: node --import tsx --test server/test/mail-assistant-security.test.ts
       - name: Verify mailbox AI project security, UI parity and outbound reply safety
         run: node --import tsx --test server/test/mail-assistant-parity.test.ts
+      - name: Verify AI mail read, prepare-to-send, owner isolation and monitoring credits
+        run: node --import tsx --test server/test/mail-ai-tools.test.ts
       - name: Verify SMTP non-delivery diagnostics and safe manual retries
         run: node --import tsx --test server/test/mail-smtp-diagnostics.test.ts
       - name: Verify Telegram user-client cryptography and access gating

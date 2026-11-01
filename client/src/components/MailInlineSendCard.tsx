@@ -5,6 +5,7 @@ import './TelegramInlineSendCard.css';
 
 export function MailInlineSendCard({draft}:{draft:MailSendDraft}){
   const [accounts,setAccounts]=useState<MailAccount[]>([]);
+  const [recipients,setRecipients]=useState<string[]>([]);
   const [mailboxId,setMailboxId]=useState(draft.mailboxId);
   const [recipient,setRecipient]=useState(draft.recipient);
   const [subject,setSubject]=useState(draft.subject);
@@ -19,6 +20,7 @@ export function MailInlineSendCard({draft}:{draft:MailSendDraft}){
   const pending=useRef(false);
   useEffect(()=>{
     let live=true;
+    void api.mailRecentRecipients().then(x=>{if(live)setRecipients(x.addresses)}).catch(()=>{});
     void Promise.all([
       api.mailAccounts(),
       api.mailDraftStatus(draft.id)
@@ -78,8 +80,9 @@ export function MailInlineSendCard({draft}:{draft:MailSendDraft}){
       </select>
     </label>
     <label className="mt-3 block text-xs font-semibold">Кому
-      <input type="email" multiple value={recipient} onChange={e=>setRecipient(e.target.value)} disabled={locked}
+      <input type="email" multiple list={"mail-recipient-options-"+draft.id} value={recipient} onChange={e=>setRecipient(e.target.value)} disabled={locked}
         placeholder="recipient@example.com, second@example.com" className="telegram-ai-send-card__recipient mt-1 w-full rounded-xl border px-3 py-2.5 text-sm" />
+      <datalist id={'mail-recipient-options-'+draft.id}>{recipients.map(x=><option key={x} value={x}/>)}</datalist>
     </label>
     <label className="mt-3 block text-xs font-semibold">Тема
       <input value={subject} maxLength={200} onChange={e=>setSubject(e.target.value)} disabled={locked}
