@@ -57,7 +57,7 @@ import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShar
 import { AiReplyAction, AiReplyPreview, AiReplyMessageBody, serializeAiReply, type AiReplyTarget } from './components/AiMessageReply';
 import { VoiceInputButton } from './components/VoiceInputButton';
 import type { LiveVoiceMessage, LiveVoiceToolCompletion, LiveVoiceProgressStatus } from './components/LiveVoiceDialog';
-import { voiceTranscriptMessage, voiceToolAssistantMessage, updateLiveVoiceProgress } from './lib/voice-chat-messages';
+import { voiceTranscriptMessage, voiceToolAssistantMessage, updateLiveVoiceProgress, preserveLiveVoiceMessages } from './lib/voice-chat-messages';
 import { AiReadAloudAction, AiSpeechCostLine } from './components/AiReadAloudAction';
 import { TaskAiRecipientPicker } from './components/TaskAiRecipientPicker';
 import { SubtaskCommentsDialog } from './components/SubtaskCommentsDialog';
@@ -1129,6 +1129,8 @@ export default function App() {
   const [isAiRecipientPickerVisible, setIsAiRecipientPickerVisible] = useState(false);
   const [isAiRecipientMenuOpen, setIsAiRecipientMenuOpen] = useState(false);
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, TaskAiMessage[]>>({});
+  const voiceTaskMessagesRef = useRef<Record<string, TaskAiMessage[]>>({});
+  const voiceChatMessagesRef = useRef<Record<string, AiChatMessage[]>>({});
   const [aiReadCursorByTask, setAiReadCursorByTask] = useState<Record<string, number>>({});
   const [generalAiMessages, setGeneralAiMessages] = useState<GeneralAiMessage[]>([]);
   const [generalAiSearchQuery, setGeneralAiSearchQuery] = useState('');
@@ -1767,7 +1769,7 @@ export default function App() {
               message.role === serverMessages[index]?.role && message.content === serverMessages[index]?.content
             ));
           if (hasPendingOptimisticMessages || aiLoadingTaskId === focusedTaskId) return prev;
-          const normalizedServerMessages = normalizeTaskAiMessages(serverMessages);
+          const normalizedServerMessages = preserveLiveVoiceMessages(normalizeTaskAiMessages(serverMessages), voiceTaskMessagesRef.current[focusedTaskId] ?? []);
           if (areTaskAiMessagesEqual(localMessages, normalizedServerMessages)) return prev;
           return { ...prev, [focusedTaskId]: normalizedServerMessages };
         });
@@ -1797,7 +1799,7 @@ export default function App() {
               message.role === serverMessages[index]?.role && message.content === serverMessages[index]?.content
             ));
           if (hasPendingOptimisticMessages || aiLoadingTaskId === focusedTaskId) return prev;
-          const normalizedServerMessages = normalizeTaskAiMessages(serverMessages);
+          const normalizedServerMessages = preserveLiveVoiceMessages(normalizeTaskAiMessages(serverMessages), voiceTaskMessagesRef.current[focusedTaskId] ?? []);
           if (areTaskAiMessagesEqual(localMessages, normalizedServerMessages)) return prev;
           return { ...prev, [focusedTaskId]: normalizedServerMessages };
         });
@@ -1988,7 +1990,7 @@ export default function App() {
         setAiDialogByTask(prev => {
           const local = prev[taskId] ?? [];
           if (aiLoadingTaskId === taskId) return prev;
-          const next = normalizeTaskAiMessages(messages);
+          const next = preserveLiveVoiceMessages(normalizeTaskAiMessages(messages), voiceTaskMessagesRef.current[taskId] ?? []);
           return areTaskAiMessagesEqual(local, next) ? prev : { ...prev, [taskId]: next };
         });
       } catch (error) { console.warn('[Focus] task AI history refresh failed', error); }
@@ -2940,6 +2942,7 @@ export default function App() {
     ? liveVoiceChatProgress[`${activeAiChatProject.id}:${activeAiChat.id}`] : undefined;
   const appendLiveTaskMessage = (taskId: string, event: LiveVoiceMessage) => {
     const message = voiceTranscriptMessage(event);
+    voiceTaskMessagesRef.current[taskId] = [...(voiceTaskMessagesRef.current[taskId] ?? []), message].slice(-80);
     setAiDialogByTask(previous => {
       const existing = previous[taskId] ?? [];
       if (existing.some(item => item.id === message.id)) return previous;
@@ -2948,6 +2951,7 @@ export default function App() {
   };
   const applyLiveTaskTool = (taskId: string, event: LiveVoiceToolCompletion) => {
     const answer = voiceToolAssistantMessage(event);
+    voiceTaskMessagesRef.current[taskId] = [...(voiceTaskMessagesRef.current[taskId] ?? []), answer].slice(-80);
     setAiDialogByTask(previous => ({
       ...previous, [taskId]: [...(previous[taskId] ?? []), answer]
     }));
@@ -2956,6 +2960,8 @@ export default function App() {
   };
   const appendLiveProjectMessage = (projectId: string, chatId: string, event: LiveVoiceMessage) => {
     const message = voiceTranscriptMessage(event);
+    const key = `${projectId}:${chatId}`;
+    voiceChatMessagesRef.current[key] = [...(voiceChatMessagesRef.current[key] ?? []), message].slice(-80);
     setAiChatProjects(previous => previous.map(project => project.id !== projectId ? project : ({
       ...project, chats: project.chats.map(chat => chat.id !== chatId ? chat :
         { ...chat, messages: chat.messages.some(item => item.id === message.id)
@@ -2964,6 +2970,8 @@ export default function App() {
   };
   const applyLiveProjectTool = (projectId: string, chatId: string, event: LiveVoiceToolCompletion) => {
     const answer = voiceToolAssistantMessage(event);
+    const key = `${projectId}:${chatId}`;
+    voiceChatMessagesRef.current[key] = [...(voiceChatMessagesRef.current[key] ?? []), answer].slice(-80);
     setAiChatProjects(previous => previous.map(project => project.id !== projectId ? project : ({
       ...project, chats: project.chats.map(chat => chat.id !== chatId ? chat :
         { ...chat, messages: [...chat.messages, answer].slice(chatId === QUICK_AI_CHAT_ID ? -20 : -300) })
@@ -3208,8 +3216,9 @@ export default function App() {
             if (outlined !== previous) aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(outlined);
             return outlined;
           }
-          const merged = reconcileActiveAiChatMessages(
-              chat.messages, reconcileAiChatMessagesWithChips(chat.messages, remote), aiChatLoading);
+          const merged = preserveLiveVoiceMessages(reconcileActiveAiChatMessages(
+              chat.messages, reconcileAiChatMessagesWithChips(chat.messages, remote), aiChatLoading
+            ), voiceChatMessagesRef.current[`${projectId}:${chatId}`] ?? []);
           if (merged === chat.messages) {
             if (outlined !== previous) aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(outlined);
             return outlined;

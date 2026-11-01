@@ -3,6 +3,7 @@ import { Loader2, Mic, MicOff, PhoneOff, Volume2, X } from 'lucide-react';
 import { api, type AiChatResult, type TaskAssistantResult, type AiChatProgressStatus, type TaskAiProgressStatus } from '../lib/api';
 import type { AiChatModel } from '../lib/types';
 import { formatCreditsSpent } from '../lib/credits';
+import { createBargeInDetector, estimateEchoCorrelation } from '../lib/voice-barge-in';
 
 export type LiveVoiceContext =
   | { type: 'task'; taskId: string; timeZone?: string; model?: AiChatModel }
@@ -13,7 +14,7 @@ export type LiveVoiceToolCompletion = { question: string; kind: 'task' | 'chat';
 export type LiveVoiceProgressStatus = AiChatProgressStatus | TaskAiProgressStatus;
 
 type Phase = 'connecting' | 'listening' | 'speaking' | 'thinking' | 'ended' | 'error';
-type VoiceEvent = { type?: string; data?: string; text?: string; id?: string; callId?: string; question?: string; message?: string; creditsSpentMilli?: number };
+type VoiceEvent = { type?: string; data?: string; text?: string; id?: string; callId?: string; question?: string; message?: string; creditsSpentMilli?: number; responseId?: string; itemId?: string; contentIndex?: number };
 const AUDIO_RATE = 24_000;
 
 // The browser's AudioContext typically runs at 44.1 or 48 kHz. Realtime
@@ -73,12 +74,16 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
   const inputRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const gainRef = useRef<GainNode | null>(null);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
+  const outputSegmentsRef = useRef<Array<{ start: number; end: number; samples: Float32Array }>>([]);
+  const bargeInRef = useRef(createBargeInDetector());
+  const currentAudioItemRef = useRef<{ itemId: string; responseId: string; contentIndex: number; startedAt: number } | null>(null);
+  const interruptedResponseRef = useRef<string | null>(null);
   const nextPlaybackRef = useRef(0);
   const mutedRef = useRef(false);
   const stoppedRef = useRef(false);
   const startedAtRef = useRef(0);
-  // Server VAD hears everything sent through the socket, including echo from
-  // our own speaker. Hold the mic uplink until the response has FINISHED PLAYING.
+  // Suspected speaker echo never enters server VAD. Clear near-end speech can
+  // interrupt the response without unplugging the microphone.
   const uplinkPausedRef = useRef(false);
   const responseDoneRef = useRef(false);
   const stopResourcesRef = useRef<() => void>(() => {});
@@ -108,6 +113,8 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
     sourcesRef.current.forEach(source => { try { source.stop(); } catch { /* finished */ } });
     sourcesRef.current.clear();
     nextPlaybackRef.current = contextRef.current?.currentTime ?? 0;
+    outputSegmentsRef.current = [];
+    bargeInRef.current.reset();
   };
 
   const handleToolRequest = async (question: string, callId: string, ws: WebSocket) => {
@@ -188,6 +195,8 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
       streamRef.current = null;
       sourcesRef.current.forEach(source => { try { source.stop(); } catch { /* finished */ } });
       sourcesRef.current.clear();
+      outputSegmentsRef.current = [];
+      bargeInRef.current.reset();
       const ws = wsRef.current;
       if (ws?.readyState === WebSocket.OPEN) {
         try { ws.send(JSON.stringify({ type: 'end' })); } catch { /* socket closed */ }
@@ -243,7 +252,39 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
               for (let i = 0; i < samples.length; i += 8) total += samples[i] * samples[i];
               const rms = Math.sqrt(total / (samples.length / 8));
               setLevel(Math.max(.06, Math.min(1, rms * 5)));
-              if (ws.readyState !== WebSocket.OPEN || mutedRef.current || uplinkPausedRef.current || ws.bufferedAmount > 300_000) return;
+              if (ws.readyState !== WebSocket.OPEN || mutedRef.current || ws.bufferedAmount > 300_000) return;
+              if (uplinkPausedRef.current) {
+                // Keep analysing microphone input during playback. Echo-like
+                // frames are discarded; a sustained local voice breaks in.
+                if (!processingToolRef.current && sourcesRef.current.size > 0) {
+                  const segments = outputSegmentsRef.current;
+                  const outputAt = (time: number) => {
+                    for (let j = segments.length - 1; j >= 0; j--) {
+                      const segment = segments[j];
+                      if (time >= segment.start && time < segment.end) {
+                        return segment.samples[Math.min(segment.samples.length - 1, Math.floor((time - segment.start) * AUDIO_RATE))] || 0;
+                      }
+                      if (time >= segment.end) break;
+                    }
+                    return 0;
+                  };
+                  const corr = estimateEchoCorrelation(samples, context.sampleRate, context.currentTime, outputAt);
+                  if (bargeInRef.current.observe({
+                    microphoneRms: rms, echoCorrelation: corr, playbackActive: true, muted: false, nowMs: performance.now()
+                  })) {
+                    const audio = currentAudioItemRef.current;
+                    const heardMs = audio ? Math.max(0, Math.round((context.currentTime - audio.startedAt) * 1000)) : 0;
+                    interruptedResponseRef.current = audio?.responseId || null;
+                    ws.send(JSON.stringify({ type: 'interrupt', responseId: audio?.responseId, itemId: audio?.itemId, audioEndMs: heardMs, contentIndex: audio?.contentIndex ?? 0 }));
+                    clearPlayback();
+                    uplinkPausedRef.current = false;
+                    responseDoneRef.current = false;
+                    setCaption('');
+                    setPhase('listening');
+                    reportStatus(null);
+                  } else return;
+                } else return;
+              }
               try { ws.send(JSON.stringify({ type: 'audio', audio: encodeBase64(downsamplePcm(samples, context.sampleRate)) })); }
               catch { /* transient sample failure */ }
             };
@@ -275,6 +316,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
             reportStatus('analyzing_request');
           }
           if (payload.type === 'audio' && typeof payload.data === 'string') {
+            if (payload.responseId && payload.responseId === interruptedResponseRef.current) return;
             if (!processingToolRef.current && toolQueueRef.current.length === 0) reportStatus(null);
             uplinkPausedRef.current = true;
             responseDoneRef.current = false;
@@ -295,6 +337,16 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
               sourcesRef.current.add(source);
               const at = Math.max(context.currentTime + .045, nextPlaybackRef.current);
               source.start(at);
+              const previousItem = currentAudioItemRef.current;
+              if (payload.itemId && payload.responseId &&
+                  (!previousItem || previousItem.itemId !== payload.itemId)) {
+                currentAudioItemRef.current = {
+                  itemId: payload.itemId, responseId: payload.responseId,
+                  contentIndex: payload.contentIndex ?? 0, startedAt: at
+                };
+              }
+              outputSegmentsRef.current.push({ start: at, end: at + buffer.duration, samples: pcm });
+              outputSegmentsRef.current = outputSegmentsRef.current.filter(segment => segment.end >= context.currentTime - 1);
               nextPlaybackRef.current = at + buffer.duration;
               setPhase('speaking');
             } catch { setError('Не удалось обработать фрагмент речи.'); }
@@ -369,22 +421,24 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
   };
 
   return <section className="live-voice-inline dialog-surface" role="region" aria-label="Живое общение с ИИ">
-    <div className="live-voice-inline-row">
+    <button className="live-voice-inline-close" type="button" onClick={finish} aria-label="Закрыть голосовой режим"><X size={15}/></button>
+    <div className="live-voice-inline-core">
       <span className={`live-voice-inline-orb ${phase === 'speaking' ? 'is-speaking' : ''}`}
         style={{ '--voice-level': level } as React.CSSProperties} aria-hidden="true">
-        {phase === 'connecting' ? <Loader2 size={16} className="ai-speech-loading-spin"/> : <Volume2 size={16}/>}
+        {phase === 'connecting' ? <Loader2 size={22} className="ai-speech-loading-spin"/> : <Volume2 size={22}/>}
       </span>
       <div className="live-voice-inline-status">
         <strong>{phaseText[phase]}</strong>
         <small title="До 450 кредитов временно резервируются. После завершения списывается фактический расход, остаток возвращается.">{String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')} · {creditsSpentMilli ? formatCreditsSpent(creditsSpentMilli) : '0 кредитов'}</small>
       </div>
+    </div>
+    <div className="live-voice-inline-controls">
       <button className="live-voice-inline-button" type="button" onClick={toggleMuted} disabled={phase === 'ended' || phase === 'error'}
         title={muted ? 'Включить микрофон' : 'Отключить микрофон'} aria-label={muted ? 'Включить микрофон' : 'Отключить микрофон'}>
-        {muted ? <MicOff size={17}/> : <Mic size={17}/>}
+        {muted ? <MicOff size={18}/> : <Mic size={18}/>}
       </button>
       <button className="live-voice-inline-button live-voice-inline-end" type="button" onClick={finish}
-        title="Завершить разговор" aria-label="Завершить разговор"><PhoneOff size={16}/></button>
-      <button className="live-voice-inline-close" type="button" onClick={finish} aria-label="Закрыть голосовой режим"><X size={14}/></button>
+        title="Завершить разговор" aria-label="Завершить разговор"><PhoneOff size={18}/></button>
     </div>
     {caption && phase === 'speaking' ? <p className="live-voice-inline-caption" aria-live="polite">{caption.slice(-120)}</p> : null}
     {error ? <p role="alert" className="live-voice-inline-error">{error}</p> : null}

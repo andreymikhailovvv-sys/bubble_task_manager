@@ -43,3 +43,21 @@ export function updateLiveVoiceProgress<T extends string>(
   }
   return previous[key] === status ? previous : { ...previous, [key]: status };
 }
+
+/** Voice narration and local confirmation cards may not yet exist in the remote
+ * chat history. Polling must merge them rather than wiping the transcript.
+ * Once the server has the same entry, use its authoritative message/cards. */
+export function preserveLiveVoiceMessages<T extends { id?: string; role: string; content: string; createdAt?: string }>(
+  remote: T[], voice: T[]
+): T[] {
+  if (!voice.length) return remote;
+  const missing = voice.filter(message => !remote.some(item =>
+    (message.id && item.id === message.id) ||
+    (item.role === message.role && item.content === message.content)));
+  if (!missing.length) return remote;
+  const combined = [...remote, ...missing];
+  // Keep chronological order when timestamps are available, otherwise keep
+  // server messages before locally received voice events.
+  return combined.sort((a, b) =>
+    a.createdAt && b.createdAt ? new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() : 0);
+}
