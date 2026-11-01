@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeSpeechText, realtimeSpeechCostMilli, realtimeSpeechInputEvent, WebAudioError } from '../src/services/ai-web-audio.service.js';
 import { calculateOpenAiTranscriptionUsageCost } from '../src/services/ai-usage-metering.service.js';
+import { createLiveVoiceTicket } from '../src/services/ai-live-voice.service.js';
+import crypto from 'node:crypto';
 
 test('Web audio uses the current duration-billed transcription model', () => {
   const cost = calculateOpenAiTranscriptionUsageCost('gpt-transcribe', { type: 'duration', seconds: 60 });
@@ -34,4 +36,16 @@ test('Narration passes text to Realtime as a user conversation item', () => {
     item: { type: 'message', role: 'user',
       content: [{ type: 'input_text', text: 'Прочитай этот ответ' }] }
   });
+});
+
+test('Live voice tickets are one-time, short-lived and limited per user', () => {
+  const user = 'voice-ticket-test-' + crypto.randomUUID();
+  const a = createLiveVoiceTicket(user);
+  const b = createLiveVoiceTicket(user);
+  const c = createLiveVoiceTicket(user);
+  assert.notEqual(a.ticket, b.ticket);
+  assert.notEqual(b.ticket, c.ticket);
+  assert.equal(a.maxSeconds, 120);
+  assert.equal(a.expiresInSeconds, 30);
+  assert.throws(() => createLiveVoiceTicket(user), /Слишком много запросов/);
 });
