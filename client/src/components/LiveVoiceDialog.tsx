@@ -56,6 +56,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
 }) {
   const [phase, setPhase] = useState<Phase>('connecting');
   const processingToolRef = useRef(false);
+  const toolQueueRef = useRef<Array<{ question: string; callId: string; ws: WebSocket }>>([]);
   const dialogHistoryRef = useRef(liveContext?.type === 'chat' ? [...(liveContext.history ?? [])] : []);
   const [error, setError] = useState('');
   const [muted, setMuted] = useState(false);
@@ -100,7 +101,14 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
   };
 
   const handleToolRequest = async (question: string, callId: string, ws: WebSocket) => {
-    if (stoppedRef.current || processingToolRef.current || !liveContextRef.current || ws.readyState !== WebSocket.OPEN) return;
+    if (stoppedRef.current || !liveContextRef.current || ws.readyState !== WebSocket.OPEN) return;
+    if (processingToolRef.current) {
+      // Realtime can return more than one function call in a response. Losing
+      // the second call would leave the server waiting forever for its result.
+      if (toolQueueRef.current.length < 3) toolQueueRef.current.push({ question, callId, ws });
+      else ws.send(JSON.stringify({ type: 'tool_result', callId, answer: 'Слишком много одновременных запросов к инструментам.' }));
+      return;
+    }
     processingToolRef.current = true;
     uplinkPausedRef.current = true;
     responseDoneRef.current = false;
@@ -137,7 +145,13 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
           ws.send(JSON.stringify({ type: 'tool_result', callId, answer: 'Не удалось выполнить действие: ' + message }));
         }
       }
-    } finally { processingToolRef.current = false; }
+    } finally {
+      processingToolRef.current = false;
+      if (!stoppedRef.current) {
+        const next = toolQueueRef.current.shift();
+        if (next) void handleToolRequest(next.question, next.callId, next.ws);
+      }
+    }
   };
 
   useEffect(() => {
@@ -147,6 +161,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
       if (cancelled) return;
       cancelled = true;
       stoppedRef.current = true;
+      toolQueueRef.current = [];
       uplinkPausedRef.current = true;
       responseDoneRef.current = false;
       processorRef.current?.disconnect();
