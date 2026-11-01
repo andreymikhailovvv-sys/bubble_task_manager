@@ -32,7 +32,7 @@ export function requestLiveVoiceMediaSession({
   };
 }
 
-export function useTelegramLiveVoiceMediaSession(): () => void {
+export function preferTelegramLiveVoiceMediaSession(): () => void {
   const browser = navigator as Navigator & { audioSession?: LiveVoiceAudioSession };
   const telegramWindow = window as Window & { Telegram?: { WebApp?: unknown } };
   return requestLiveVoiceMediaSession({
