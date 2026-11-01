@@ -141,7 +141,10 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
   let transcriptionMilli = 0;
   let assistantTranscript = '';
   let awaitingToolResponse = false;
-  let suppressDelegatedAudioTranscript = false;
+  let activeResponseId: string | null = null;
+  let lastAudioItemId: string | null = null;
+  let lastAudioContentIndex = 0;
+  const interruptedResponses = new Set<string>();
   let delegatedTools = 0;
   const pendingToolCalls = new Set<string>();
   const sentTranscriptIds = new Set<string>();
@@ -207,15 +210,32 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
     });
     peer.onMessage(value => {
       try {
-        const packet = JSON.parse(value) as { type?: unknown; audio?: unknown; callId?: unknown; answer?: unknown };
+        const packet = JSON.parse(value) as { type?: unknown; audio?: unknown; callId?: unknown; answer?: unknown; responseId?: unknown; itemId?: unknown; audioEndMs?: unknown };
         if (packet.type === 'end') { stop(); return; }
+        if (packet.type === 'interrupt' && ready && upstream?.readyState === WebSocket.OPEN) {
+          // Explicit client-verified barge-in; WebSocket playback must also
+          // truncate the audio the caller did not hear.
+          const responseId = typeof packet.responseId === 'string' ? packet.responseId : activeResponseId;
+          if (responseId && !interruptedResponses.has(responseId)) {
+            interruptedResponses.add(responseId);
+            if (activeResponseId === responseId) {
+              upstream.send(JSON.stringify({ type: 'response.cancel' }));
+              activeResponseId = null;
+            }
+            if (typeof packet.itemId === 'string' && packet.itemId === lastAudioItemId &&
+                typeof packet.audioEndMs === 'number' && Number.isFinite(packet.audioEndMs)) {
+              upstream.send(JSON.stringify({ type: 'conversation.item.truncate', item_id: packet.itemId,
+                content_index: lastAudioContentIndex, audio_end_ms: Math.min(120000, Math.max(0, Math.floor(packet.audioEndMs))) }));
+            }
+          }
+          return;
+        }
         if (packet.type === 'tool_result' && typeof packet.callId === 'string' && pendingToolCalls.has(packet.callId)) {
           pendingToolCalls.delete(packet.callId);
           console.info('[AI live voice] delegated tool result', {
             sessionId, resultLength: typeof packet.answer === 'string' ? packet.answer.length : 0
           });
           awaitingToolResponse = false;
-          suppressDelegatedAudioTranscript = true;
           if (!upstream || upstream.readyState !== WebSocket.OPEN) return;
           const answer = typeof packet.answer === 'string' ? packet.answer.slice(0, 5000) : 'Инструмент завершился без ответа.';
           upstream.send(JSON.stringify({
@@ -257,12 +277,16 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
       try {
         const value = JSON.parse(String(event.data)) as {
           type?: string; delta?: string; error?: { code?: string };
-          response?: { status?: string; usage?: Parameters<typeof realtimeSpeechCostMilli>[0]; output?: Array<{ type?: string; content?: Array<{ transcript?: string }> }> };
+          response?: { id?: string; status?: string; usage?: Parameters<typeof realtimeSpeechCostMilli>[0]; output?: Array<{ type?: string; content?: Array<{ transcript?: string }> }> };
+          response_id?: string; content_index?: number;
           item_id?: string; transcript?: string; item?: { type?: string; name?: string; call_id?: string; arguments?: string }; usage?: { type?: string; seconds?: number; input_tokens?: number; output_tokens?: number; input_token_details?: { text_tokens?: number; audio_tokens?: number } }
         };
         if (value.type === 'error') {
           console.warn('[AI live voice] provider rejected event', { code: value.error?.code ?? 'unknown' });
           send({ type: 'error', message: 'Голосовая модель отклонила запрос.' }); stop(); return;
+        }
+        if (value.type === 'response.created' && value.response?.id) {
+          activeResponseId = value.response.id;
         }
         if (value.type === 'session.updated') {
           // A late session.updated is not a new conversation or a request to
@@ -302,7 +326,11 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
         }
         if (value.type === 'input_audio_buffer.speech_stopped') send({ type: 'thinking' });
         if (value.type === 'response.output_audio.delta' && typeof value.delta === 'string') {
-          send({ type: 'audio', data: value.delta });
+          if (value.response_id && interruptedResponses.has(value.response_id)) return;
+          if (value.item_id) lastAudioItemId = value.item_id;
+          lastAudioContentIndex = value.content_index ?? 0;
+          send({ type: 'audio', data: value.delta,
+            responseId: value.response_id, itemId: value.item_id, contentIndex: value.content_index ?? 0 });
         }
         if (value.type === 'response.output_audio_transcript.delta' && typeof value.delta === 'string') {
           assistantTranscript = (assistantTranscript + value.delta).slice(-6000);
@@ -331,9 +359,14 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
         }
         if (value.type === 'response.done') {
           const completedText = value.response?.output?.flatMap(item => item.content || []).map(item => item.transcript || '').filter(Boolean).join(' ') || assistantTranscript;
-          if (completedText.trim() && !awaitingToolResponse && !suppressDelegatedAudioTranscript) send({ type: 'assistant_message', id: crypto.randomUUID(), text: completedText.trim().slice(0, 6000) });
+          const wasInterrupted = value.response?.id && interruptedResponses.delete(value.response.id);
+          if (activeResponseId === value.response?.id) activeResponseId = null;
+          // Spoken narration is distinct from a delegated text model's card.
+          if (completedText.trim() && !wasInterrupted && value.response?.status !== 'cancelled' &&
+              value.response?.status !== 'failed' && value.response?.status !== 'incomplete') {
+            send({ type: 'assistant_message', id: crypto.randomUUID(), text: completedText.trim().slice(0, 6000) });
+          }
           assistantTranscript = '';
-          suppressDelegatedAudioTranscript = false;
           if (value.response?.usage) {
             const cost = realtimeSpeechCostMilli(value.response.usage);
             usageMilli += cost;
