@@ -12136,3 +12136,63 @@ body[data-theme='dark'] .topbar-overdue-popover { box-shadow: 0 14px 34px rgba(2
   min-height: 2rem;
 }
 .topbar-overdue-popover .timeline-task-chip:hover { filter: none !important; }
+
+
+/* Shared desktop / Telegram Mini App voice composer. No translucent tap-highlight rectangles. */
+.voice-input-trigger {
+  -webkit-tap-highlight-color: transparent;
+  appearance: none;
+  background: var(--surface-muted-bg, rgba(127, 136, 150, .10));
+  color: var(--text-muted, #64748b);
+  border: 0;
+  transition: background .16s ease, color .16s ease;
+}
+.voice-input-trigger:not(:disabled):hover { color: var(--text-primary, inherit); background: var(--field-bg, rgba(127,136,150,.18)); }
+.voice-input-trigger:focus-visible { outline: 2px solid var(--accent, #8b5cf6); outline-offset: 2px; }
+.voice-record-backdrop {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(3, 8, 19, .40);
+  display: flex; justify-content: center; align-items: flex-end;
+  padding: 20px 12px calc(100px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+}
+.voice-record-panel {
+  width: min(100%, 440px); border: 1px solid var(--panel-border, rgba(128, 128, 144, .28));
+  background: var(--panel-bg, #161c2b); color: var(--text-primary, #f8fafc);
+  border-radius: 24px; padding: 19px 16px 15px; box-shadow: 0 15px 55px rgba(0,0,0,.25);
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  animation: voice-panel-enter .2s ease-out;
+}
+.voice-record-title { display:flex; align-items:center; gap:8px; font-size:14px; font-weight:650; }
+.voice-record-wave { width:100%; height:66px; display:flex; align-items:center; justify-content:center; gap:4px; overflow:hidden; }
+.voice-record-wave span {
+  flex: 0 0 4px; min-height:5px; max-height:60px; border-radius:999px;
+  background:linear-gradient(180deg, #39c5ba, #8b5cf6);
+  transition: height .075s linear;
+}
+.voice-record-timer { font-variant-numeric:tabular-nums; color:var(--text-muted,#64748b); font-size:12px; }
+.voice-record-buttons { display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap; width:100%; }
+.voice-record-buttons button {
+  border-radius:999px; min-height:39px; padding:8px 13px; display:inline-flex;
+  gap:6px; align-items:center; justify-content:center; font-size:12px; font-weight:600;
+  -webkit-tap-highlight-color:transparent;
+}
+.voice-record-cancel, .voice-record-stop { color:var(--text-primary,inherit); background:var(--field-bg,rgba(127,136,150,.16)); }
+.voice-record-send { background:#7c3aed; color:white; }
+.voice-record-note { font-size:11px; text-align:center; color:var(--text-muted,#64748b); line-height:1.4; margin:0; }
+.voice-input-error {
+  position:fixed; bottom:calc(100px + env(safe-area-inset-bottom, 0px)); right:16px; z-index:310;
+  padding:9px 12px; border-radius:12px; max-width:min(340px, calc(100vw - 32px));
+  background:var(--panel-bg,#1e293b); border:1px solid var(--panel-border,#64748b);
+  color:var(--text-primary,#fff); display:flex; align-items:center; gap:10px;
+  box-shadow:0 8px 35px rgba(0,0,0,.22); font-size:12px;
+}
+.voice-input-error button { flex-shrink:0; color:var(--text-muted,#64748b); }
+.ai-read-aloud-holder { display:inline-flex; align-items:center; position:relative; }
+.ai-message-forward-actions .ai-read-aloud-trigger { display:inline-flex; align-items:center; justify-content:center; }
+.ai-read-aloud-error { position:absolute; right:-2px; top:-3px; color:#ef4444; font-size:12px; font-weight:bold; }
+@keyframes voice-panel-enter { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+@media (prefers-reduced-motion:reduce) {
+  .voice-record-panel { animation:none; }
+  .voice-record-wave span { transition:none; }
+}

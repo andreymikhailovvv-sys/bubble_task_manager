@@ -507,6 +507,22 @@ export type AdminWorkCreditHistory = { id:string;kind:string;deltaMilli:number;c
 
 
 export const api = {
+  transcribeVoice: (input: { audioBase64: string; mimeType: string; durationSeconds: number }) =>
+    request<{ text: string; creditsSpentMilli: number }>('/api/ai/audio/transcribe', {
+      method: 'POST', body: JSON.stringify(input)
+    }),
+  speakVoice: async (text: string): Promise<Blob> => {
+    const response = await fetch('/api/ai/audio/speak', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null) as { error?: string } | null;
+      throw new Error(payload?.error || 'Не удалось озвучить сообщение.');
+    }
+    return response.blob();
+  },
   mailRewriteText: (text:string,instruction:string) => request<{text:string;creditsSpentMilli:number}>('/api/mail-assistant/quick-rewrite',
     {method:'POST',body:JSON.stringify({text,instruction})}),
   mailRecentRecipients: () => request<{addresses:string[]}>('/api/mail-assistant/recent-recipients'),
