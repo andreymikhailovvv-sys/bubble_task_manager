@@ -279,8 +279,8 @@ model OrganizationMember {
   createdWorkTasks OrganizationWorkTask[] @relation("WorkTaskCreator")
   aiChangeProposals OrganizationAiChangeProposal[]
   createdWorkSubtasks OrganizationWorkSubtask[] @relation("WorkSubtaskCreator")
-  workSubtaskComments OrganizationWorkSubtaskComment[]
-  workNotifications OrganizationWorkNotification[] @relation("WorkSubtaskCommentAuthor")
+  workSubtaskComments OrganizationWorkSubtaskComment[] @relation("WorkSubtaskCommentAuthor")
+  workNotifications OrganizationWorkNotification[]
   sentWorkMessages OrganizationAiMessage[] @relation("WorkChatSender")
   receivedWorkMessages OrganizationAiMessage[] @relation("WorkChatRecipient")
   createdWorkProjects OrganizationProject[] @relation("WorkProjectCreator")
