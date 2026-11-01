@@ -604,6 +604,7 @@ model Sphere {
 
   @@index([userId])
   @@index([userId, createdAt])
+  @@index([botStatus, createdAt])
 }
 
 model Task {
@@ -1403,5 +1404,4 @@ model EmailAnalysis {
 
   @@unique([mailboxId, folder, validity, uid])
   @@index([userId, createdAt])
-  @@index([botStatus, createdAt])
 }
