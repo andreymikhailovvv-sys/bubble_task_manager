@@ -219,7 +219,7 @@ async function synthesizeRealtime(text: string, apiKey: string, maxOutputTokens:
           // response instructions with an empty input array.
           ws.send(JSON.stringify(realtimeSpeechInputEvent(text)));
         }
-        if (message.type === 'conversation.item.created' && phase === 'creating_message' && message.item?.role === 'user') {
+        if ((message.type === 'conversation.item.added' || message.type === 'conversation.item.created') && phase === 'creating_message' && message.item?.role === 'user') {
           phase = 'generating';
           ws.send(JSON.stringify({ type: 'response.create', response: {
             output_modalities: ['audio'],
