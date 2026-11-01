@@ -1147,6 +1147,7 @@ export default function App() {
   const [aiChatUploadProgress, setAiChatUploadProgress] = useState<number | null>(null);
   const [quickAiChatDraft, setQuickAiChatDraft] = useState('');
   const [quickAiPendingFiles, setQuickAiPendingFiles] = useState<File[]>([]);
+  const quickAiFileInputRef = useRef<HTMLInputElement>(null);
   const [quickAiChatLoading, setQuickAiChatLoading] = useState(false);
   const [quickAiPreviewHovered, setQuickAiPreviewHovered] = useState(false);
   const [quickAiChatModel, setQuickAiChatModel] = useState<AiChatModel>('gpt-6-luna');
@@ -5688,7 +5689,15 @@ export default function App() {
               {replyToFocusAi ? <AiReplyPreview target={replyToFocusAi} onDismiss={() => setReplyToFocusAi(null)} /> : null}
               {renderTaskAiRecipientPicker(focusActiveTask)}
 <AiAttachmentTiles files={focusAiPendingFiles} onRemove={(file) => removeFocusAiPendingFile(file.name)} busy={focusAiLoading} uploadProgress={focusAiUploadProgress} />
-              <div className="ai-chat-composer mt-3 flex items-end gap-2 rounded-3xl border p-2"><AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); addFocusAiClipboardImages(files); } }} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder="Напишите сообщение…" disabled={focusAiLoading} /><input ref={focusAiFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} /><button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={focusAiLoading} onClick={() => focusAiFileInputRef.current?.click()}><Paperclip size={16} /></button><VoiceInputButton liveContext={focusActiveTask ? { type: 'task', taskId: focusActiveTask.id, model: focusTaskAiModel } : undefined}
+              <div className="ai-request-composer ai-chat-composer mt-3 flex items-end gap-2 rounded-3xl border p-2"><button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={focusAiLoading} onClick={() => focusAiFileInputRef.current?.click()}><Paperclip size={16} /></button>
+              <AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); addFocusAiClipboardImages(files); } }} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder="Напишите сообщение…" disabled={focusAiLoading} /><input ref={focusAiFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} /><VoiceInputButton activationMode="transcription" liveContext={focusActiveTask ? { type: 'task', taskId: focusActiveTask.id, model: focusTaskAiModel } : undefined}
+    onLiveMessage={event => focusActiveTask && appendLiveTaskMessage(focusActiveTask.id, event)}
+    onLiveToolResult={event => focusActiveTask && applyLiveTaskTool(focusActiveTask.id, event)}
+    onLiveStatus={status => focusActiveTask && updateLiveTaskStatus(focusActiveTask.id, status)} disabled={focusAiLoading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
+  const next = [focusAiDraft.trim(), text].filter(Boolean).join(' ');
+  setFocusAiDraft(next);
+  if (immediate) void sendFocusAiQuestion({ questionOverride: next });
+}} /><VoiceInputButton activationMode="live" liveContext={focusActiveTask ? { type: 'task', taskId: focusActiveTask.id, model: focusTaskAiModel } : undefined}
     onLiveMessage={event => focusActiveTask && appendLiveTaskMessage(focusActiveTask.id, event)}
     onLiveToolResult={event => focusActiveTask && applyLiveTaskTool(focusActiveTask.id, event)}
     onLiveStatus={status => focusActiveTask && updateLiveTaskStatus(focusActiveTask.id, status)} disabled={focusAiLoading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
@@ -5754,11 +5763,19 @@ export default function App() {
             {replyToFocusAi ? <AiReplyPreview target={replyToFocusAi} onDismiss={() => setReplyToFocusAi(null)} /> : null}
               {renderTaskAiRecipientPicker(focusActiveTask)}
             {focusAiPendingFiles.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5">{focusAiPendingFiles.map((file) => <button key={file.name} type="button" className="rounded-full bg-violet-100 px-2 py-1 text-[11px] text-violet-700" onClick={() => removeFocusAiPendingFile(file.name)}>📎 {file.name} ×</button>)}</div> : null}
-            <div className="ai-chat-composer mt-3 flex items-center gap-2 rounded-3xl border p-2">
+            <div className="ai-request-composer ai-chat-composer mt-3 flex items-center gap-2 rounded-3xl border p-2">
+              <button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={focusAiLoading} onClick={() => focusAiExpandedFileInputRef.current?.click()}><Paperclip size={16} /></button>
               <AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); addFocusAiClipboardImages(files); } }} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder="Напишите сообщение…" disabled={focusAiLoading} />
               <input ref={focusAiExpandedFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} />
-              <button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={focusAiLoading} onClick={() => focusAiExpandedFileInputRef.current?.click()}><Paperclip size={16} /></button>
-              <VoiceInputButton liveContext={focusActiveTask ? { type: 'task', taskId: focusActiveTask.id, model: focusTaskAiModel } : undefined}
+              
+              <VoiceInputButton activationMode="transcription" liveContext={focusActiveTask ? { type: 'task', taskId: focusActiveTask.id, model: focusTaskAiModel } : undefined}
+    onLiveMessage={event => focusActiveTask && appendLiveTaskMessage(focusActiveTask.id, event)}
+    onLiveToolResult={event => focusActiveTask && applyLiveTaskTool(focusActiveTask.id, event)}
+    onLiveStatus={status => focusActiveTask && updateLiveTaskStatus(focusActiveTask.id, status)} disabled={focusAiLoading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
+  const next = [focusAiDraft.trim(), text].filter(Boolean).join(' ');
+  setFocusAiDraft(next);
+  if (immediate) void sendFocusAiQuestion({ questionOverride: next });
+}} /><VoiceInputButton activationMode="live" liveContext={focusActiveTask ? { type: 'task', taskId: focusActiveTask.id, model: focusTaskAiModel } : undefined}
     onLiveMessage={event => focusActiveTask && appendLiveTaskMessage(focusActiveTask.id, event)}
     onLiveToolResult={event => focusActiveTask && applyLiveTaskTool(focusActiveTask.id, event)}
     onLiveStatus={status => focusActiveTask && updateLiveTaskStatus(focusActiveTask.id, status)} disabled={focusAiLoading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
@@ -7323,7 +7340,16 @@ export default function App() {
                 }}
               >
               {isAiRecipientPickerVisible ? renderTaskAiRecipientPicker(focusedTask) : null}
-              <div className="ai-chat-composer mt-2 flex shrink-0 items-center gap-2 rounded-3xl border p-2">
+              <div className="ai-request-composer ai-chat-composer mt-2 flex shrink-0 items-center gap-2 rounded-3xl border p-2">
+              <button
+                  className="focused-task-ai-attach-button inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition disabled:opacity-40"
+                  type="button"
+                  onClick={() => focusedAiFileInputRef.current?.click()}
+                  disabled={getTaskAiRecipientId(focusedTask) !== 'ai'}
+                  title={getTaskAiRecipientId(focusedTask) === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'}
+                >
+                  <Paperclip size={16} />
+                </button>
               <AutoGrowingTextarea
                 className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0"
                 placeholder="Напишите сообщение…"
@@ -7346,16 +7372,15 @@ export default function App() {
                 onChange={handleAiFileSelect}
               />
               <div className="flex items-center gap-2">
-                <button
-                  className="focused-task-ai-attach-button inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition disabled:opacity-40"
-                  type="button"
-                  onClick={() => focusedAiFileInputRef.current?.click()}
-                  disabled={getTaskAiRecipientId(focusedTask) !== 'ai'}
-                  title={getTaskAiRecipientId(focusedTask) === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'}
-                >
-                  <Paperclip size={16} />
-                </button>
-                <VoiceInputButton liveContext={{ type: 'task', taskId: focusedTask.id, model: focusedAiModel }}
+                
+                <VoiceInputButton activationMode="transcription" liveContext={{ type: 'task', taskId: focusedTask.id, model: focusedAiModel }}
+    onLiveMessage={event => appendLiveTaskMessage(focusedTask.id, event)}
+    onLiveToolResult={event => applyLiveTaskTool(focusedTask.id, event)}
+    onLiveStatus={status => updateLiveTaskStatus(focusedTask.id, status)} disabled={aiLoadingTaskId === focusedTask.id} className="focused-task-ai-attach-button" onTranscript={(text, immediate) => {
+  const next = [aiDraft.trim(), text].filter(Boolean).join(' ');
+  setAiDraft(next);
+  if (immediate) void sendFocusedAiQuestion({ questionOverride: next });
+}} /><VoiceInputButton activationMode="live" liveContext={{ type: 'task', taskId: focusedTask.id, model: focusedAiModel }}
     onLiveMessage={event => appendLiveTaskMessage(focusedTask.id, event)}
     onLiveToolResult={event => applyLiveTaskTool(focusedTask.id, event)}
     onLiveStatus={status => updateLiveTaskStatus(focusedTask.id, status)} disabled={aiLoadingTaskId === focusedTask.id} className="focused-task-ai-attach-button" onTranscript={(text, immediate) => {
@@ -8119,11 +8144,19 @@ export default function App() {
               }}
             >
             {isAiRecipientPickerVisible ? renderTaskAiRecipientPicker(focusedTask) : null}
-            <div className="ai-chat-composer flex items-center gap-2 rounded-3xl border p-2">
+            <div className="ai-request-composer ai-chat-composer flex items-center gap-2 rounded-3xl border p-2">
+              <button className="focused-task-ai-attach-button inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40" type="button" title={getTaskAiRecipientId(focusedTask) === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'} disabled={getTaskAiRecipientId(focusedTask) !== 'ai'} onClick={() => expandedAiFileInputRef.current?.click()}><Paperclip size={16} /></button>
               <AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm leading-relaxed focus:ring-0" placeholder="Напишите сообщение…" value={aiDraft} onChange={(event) => setAiDraft(event.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); addFocusedAiFiles(files); } }} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusedAiQuestion(); } }} />
               <input ref={expandedAiFileInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={handleAiFileSelect} />
-              <button className="focused-task-ai-attach-button inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40" type="button" title={getTaskAiRecipientId(focusedTask) === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'} disabled={getTaskAiRecipientId(focusedTask) !== 'ai'} onClick={() => expandedAiFileInputRef.current?.click()}><Paperclip size={16} /></button>
-              <VoiceInputButton liveContext={{ type: 'task', taskId: focusedTask.id, model: focusedAiModel }}
+              
+              <VoiceInputButton activationMode="transcription" liveContext={{ type: 'task', taskId: focusedTask.id, model: focusedAiModel }}
+    onLiveMessage={event => appendLiveTaskMessage(focusedTask.id, event)}
+    onLiveToolResult={event => applyLiveTaskTool(focusedTask.id, event)}
+    onLiveStatus={status => updateLiveTaskStatus(focusedTask.id, status)} disabled={aiLoadingTaskId === focusedTask.id} className="surface-muted text-muted" onTranscript={(text, immediate) => {
+  const next = [aiDraft.trim(), text].filter(Boolean).join(' ');
+  setAiDraft(next);
+  if (immediate) void sendFocusedAiQuestion({ questionOverride: next });
+}} /><VoiceInputButton activationMode="live" liveContext={{ type: 'task', taskId: focusedTask.id, model: focusedAiModel }}
     onLiveMessage={event => appendLiveTaskMessage(focusedTask.id, event)}
     onLiveToolResult={event => applyLiveTaskTool(focusedTask.id, event)}
     onLiveStatus={status => updateLiveTaskStatus(focusedTask.id, status)} disabled={aiLoadingTaskId === focusedTask.id} className="surface-muted text-muted" onTranscript={(text, immediate) => {
@@ -8401,8 +8434,28 @@ export default function App() {
             {replyToQuickAi ? <AiReplyPreview target={replyToQuickAi} onDismiss={() => setReplyToQuickAi(null)} compact /> : null}
             <AiAttachmentTiles files={quickAiPendingFiles} onRemove={file => setQuickAiPendingFiles(previous => previous.filter(item => item !== file))} busy={quickAiChatLoading} uploadProgress={aiChatUploadProgress} />
             <div className="flex items-end gap-2">
-              <AutoGrowingTextarea maxHeight={144} className="form-field min-h-9 min-w-0 flex-1 resize-none rounded-2xl border px-3 py-2 text-sm leading-5 transition focus:ring-2 focus:ring-violet-300" value={quickAiChatDraft} onChange={(e) => setQuickAiChatDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); setQuickAiPendingFiles(previous => [...previous, ...files].slice(0, MAX_AI_ATTACHMENTS)); } }} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void sendAiChatQuestion(true); } }} placeholder="Спросить быстро…" />
-              <VoiceInputButton liveContext={{ type: 'chat', projectId: aiChatProjects[0]?.id, chatId: QUICK_AI_CHAT_ID, projectTitle: aiChatProjects[0]?.title, chatTitle: 'Быстрые запросы', model: quickAiChatModel }}
+              <input ref={quickAiFileInputRef} type="file" multiple className="hidden"
+                 accept=".pdf,.docx,.xls,.xlsx,.txt,image/png,image/jpeg,image/webp,image/gif"
+                 onChange={(event) => {
+                   const files = Array.from(event.target.files ?? []);
+                   const accepted = files.filter(file => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\\.(pdf|docx|xlsx?|txt|png|jpe?g|webp|gif)$/i.test(file.name));
+                   const withinLimit = accepted.filter(file => file.size <= MAX_AI_ATTACHMENT_SIZE);
+                   if (withinLimit.length !== files.length) setAiChatError('Некоторые файлы не добавлены: неподдерживаемый формат или размер больше 8 МБ.');
+                   setQuickAiPendingFiles(previous => [...previous, ...withinLimit].slice(0, MAX_AI_ATTACHMENTS));
+                   event.target.value = '';
+                 }} />
+               <button type="button" className="ai-request-attach-button surface-muted inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted"
+                 aria-label="Прикрепить файл" title="Прикрепить файл" disabled={quickAiChatLoading}
+                 onClick={() => quickAiFileInputRef.current?.click()}><Paperclip size={16} /></button>
+               <AutoGrowingTextarea maxHeight={144} className="form-field min-h-9 min-w-0 flex-1 resize-none rounded-2xl border px-3 py-2 text-sm leading-5 transition focus:ring-2 focus:ring-violet-300" value={quickAiChatDraft} onChange={(e) => setQuickAiChatDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); setQuickAiPendingFiles(previous => [...previous, ...files].slice(0, MAX_AI_ATTACHMENTS)); } }} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void sendAiChatQuestion(true); } }} placeholder="Спросить быстро…" />
+              <VoiceInputButton activationMode="transcription" liveContext={{ type: 'chat', projectId: aiChatProjects[0]?.id, chatId: QUICK_AI_CHAT_ID, projectTitle: aiChatProjects[0]?.title, chatTitle: 'Быстрые запросы', model: quickAiChatModel }}
+    onLiveMessage={event => aiChatProjects[0] && appendLiveProjectMessage(aiChatProjects[0].id, QUICK_AI_CHAT_ID, event)}
+    onLiveToolResult={event => aiChatProjects[0] && applyLiveProjectTool(aiChatProjects[0].id, QUICK_AI_CHAT_ID, event)}
+    onLiveStatus={status => aiChatProjects[0] && updateLiveChatStatus(aiChatProjects[0].id, QUICK_AI_CHAT_ID, status)} small disabled={quickAiChatLoading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
+  const next = [quickAiChatDraft.trim(), text].filter(Boolean).join(' ');
+  setQuickAiChatDraft(next);
+  if (immediate) void sendAiChatQuestion(true, '', next);
+}} /><VoiceInputButton activationMode="live" liveContext={{ type: 'chat', projectId: aiChatProjects[0]?.id, chatId: QUICK_AI_CHAT_ID, projectTitle: aiChatProjects[0]?.title, chatTitle: 'Быстрые запросы', model: quickAiChatModel }}
     onLiveMessage={event => aiChatProjects[0] && appendLiveProjectMessage(aiChatProjects[0].id, QUICK_AI_CHAT_ID, event)}
     onLiveToolResult={event => aiChatProjects[0] && applyLiveProjectTool(aiChatProjects[0].id, QUICK_AI_CHAT_ID, event)}
     onLiveStatus={status => aiChatProjects[0] && updateLiveChatStatus(aiChatProjects[0].id, QUICK_AI_CHAT_ID, status)} small disabled={quickAiChatLoading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
