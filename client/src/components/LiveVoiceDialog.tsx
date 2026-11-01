@@ -42,7 +42,7 @@ function decodePcm(base64: string) {
   return values;
 }
 
-export function LiveVoiceDialog({ onClose }: { onClose: () => void }) {
+export function LiveVoiceDialog({ onClose, audioContext }: { onClose: () => void; audioContext: AudioContext | null }) {
   const [phase, setPhase] = useState<Phase>('connecting');
   const [error, setError] = useState('');
   const [muted, setMuted] = useState(false);
@@ -94,7 +94,7 @@ export function LiveVoiceDialog({ onClose }: { onClose: () => void }) {
         if (!navigator.mediaDevices?.getUserMedia || !window.AudioContext || !window.WebSocket) {
           throw new Error('Этот браузер не поддерживает живое общение.');
         }
-        const context = new AudioContext();
+        const context = audioContext ?? new AudioContext();
         contextRef.current = context;
         await context.resume();
         const stream = await navigator.mediaDevices.getUserMedia({
