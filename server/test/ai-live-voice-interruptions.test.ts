@@ -41,3 +41,29 @@ test('mini-app preserves local voice speech and action cards when history polls'
   assert.match(mini, /onLiveStatus=\{status =>/);
   assert.match(shared, /export function preserveLiveVoiceMessages/);
 });
+
+test('live voice is a compact right-aligned rectangular bar, not a mic-attached bubble', async () => {
+  const [styles, component] = await Promise.all([
+    read('../../client/src/styles.css'),
+    read('../../client/src/components/LiveVoiceDialog.tsx')
+  ]);
+  const panel = styles.slice(styles.lastIndexOf('/* Compact live voice bar'));
+  assert.match(panel, /right:-44px; bottom:calc\(100% \+ 12px\)/);
+  assert.match(panel, /border-radius:18px/);
+  assert.match(panel, /flex-direction:row/);
+  assert.doesNotMatch(panel, /live-voice-inline::after/);
+  assert.match(component, /live-voice-inline-controls/);
+  assert.doesNotMatch(component, /live-voice-inline-close/);
+});
+
+test('Telegram media preference is best-effort on iOS and preserves Android call behavior', async () => {
+  const [component, preference] = await Promise.all([
+    read('../../client/src/components/LiveVoiceDialog.tsx'),
+    read('../../client/src/lib/live-voice-audio-session.ts')
+  ]);
+  assert.match(component, /preferTelegramLiveVoiceMediaSession\(\)/);
+  assert.match(component, /restoreAudioSessionRef\.current\(\)/);
+  assert.match(preference, /iPhone\|iPad\|iPod/);
+  assert.match(preference, /session\.type = 'playback'/);
+  assert.match(preference, /if \(session\.type === 'playback'\) session\.type = originalType/);
+});
