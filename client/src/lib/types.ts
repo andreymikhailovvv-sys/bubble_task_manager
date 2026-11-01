@@ -128,6 +128,7 @@ export type ChatMessage = {
   taskProposal?: AiTaskProposal | null;
   telegramSendDraft?: TelegramInlineSendDraft;
   telegramSuggestedReply?: import('./api').TelegramAiSuggestedReply;
+  mailSuggestedReply?: import('./api').MailAiSuggestedReply;
   telegramReadDraft?: TelegramReadDraft;
 };
 
