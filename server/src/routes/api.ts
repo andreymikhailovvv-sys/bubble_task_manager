@@ -100,7 +100,8 @@ apiRouter.post('/mail-assistant/drafts/:id/send', requireAuth, mailOrigin, async
   res.set('Cache-Control','no-store, private');
   try {
     const result=await sendOwnerMailDraft(req.user!.id,req.params.id,req.body);
-    res.status(result.ok ? 200 : 409).json(result);
+    // Expected FAILED/UNKNOWN outcomes are data, not transport errors: preserve the SMTP diagnosis for the client.
+    res.status(result.status==='NOT_FOUND' ? 404 : 200).json(result);
   } catch {
     res.status(500).json({ok:false,status:'UNKNOWN',message:'Не удалось проверить результат отправки. Проверьте папку «Отправленные».'});
   }
