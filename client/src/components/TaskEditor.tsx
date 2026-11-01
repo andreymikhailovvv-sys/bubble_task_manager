@@ -433,9 +433,7 @@ export function TaskEditor({
       status: "TODO",
       notifyBeforeMinutes: 0,
       aiMonitoringEnabled: false,
-      aiNotificationsEnabled: isEventEditor
-        ? false
-        : defaultAiNotificationsEnabled,
+      aiNotificationsEnabled: false,
       taskType: isEventEditor ? "EVENT" : "TASK",
       location: null,
     };
@@ -1226,24 +1224,7 @@ export function TaskEditor({
                     />
                     повторять
                   </label>
-                  {!isEventEditor ? (
-                    <label className="inline-flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={
-                          form.aiNotificationsEnabled ??
-                          defaultAiNotificationsEnabled
-                        }
-                        onChange={(e) =>
-                          setForm((p) => ({
-                            ...p,
-                            aiNotificationsEnabled: e.target.checked,
-                          }))
-                        }
-                      />
-                      уведомления от ИИ
-                    </label>
-                  ) : null}
+
                 </div>
               ) : null}
               {isRecurring ? (

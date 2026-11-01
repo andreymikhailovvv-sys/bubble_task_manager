@@ -2019,7 +2019,8 @@ apiRouter.post('/tasks/:id/ai-chat', requireAuth, aiController.askTaskAssistant)
 apiRouter.post('/tasks/:id/ai-chat/messages', requireAuth, aiController.appendTaskAssistantMessages);
 apiRouter.post('/tasks/:id/participant-messages', requireAuth, asyncHandler(taskParticipantMessageController.send));
 apiRouter.post('/tasks/:id/ai-subtasks', requireAuth, aiController.generateSubtasks);
-apiRouter.post('/tasks/:id/ai-overdue-nudge', requireAuth, aiController.generateOverdueTaskNudge);
+// Retired AI notifications: don't trigger deprecated model calls or affect task monitoring.
+apiRouter.post('/tasks/:id/ai-overdue-nudge', requireAuth, (_req, res) => res.status(410).json({ error: 'Уведомления от ИИ больше не поддерживаются' }));
 apiRouter.post('/tasks/ai-generate', requireAuth, aiController.generateTaskFromPrompt);
 apiRouter.post('/ai/parse-recurrence', requireAuth, aiController.parseRecurrence);
 apiRouter.post('/timeline/ai-optimize', requireAuth, aiController.optimizeTimelineSchedule);

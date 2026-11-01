@@ -7,11 +7,11 @@ import { api, type TelegramIntegrationStatus } from '../lib/api';
 import './TelegramIntegrationsMenu.css';
 
 type Integration = 'bot' | 'messages' | 'assistant' | 'email';
-type Props = { onConnectBot: () => void };
+type Props = { onConnectBot: () => void; tourIntegration?: 'messages' | 'assistant' | 'email' | null };
 const RUNNING = ['starting', 'qr', 'password_required', 'verifying_password'];
 type MenuPlacement = { left: number; top?: number; bottom?: number; width: number; maxHeight: number };
 
-export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
+export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null }: Props) {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<Integration | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -31,17 +31,19 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
   const [placement, setPlacement] = useState<MenuPlacement | null>(null);
   const active = useRef(false);
 
+  useEffect(() => { if (tourIntegration) { setOpen(true); setExpanded(null); } else setOpen(false); }, [tourIntegration]);
   const cancelClose = useCallback(() => {
     if (closeTimeout.current) clearTimeout(closeTimeout.current);
     closeTimeout.current = null;
   }, []);
 
   const scheduleClose = useCallback(() => {
+    if (tourIntegration) return;
     cancelClose();
     // The popup is portaled outside the header: allow the pointer to cross
     // the small gap without making the menu vanish.
     closeTimeout.current = setTimeout(() => setOpen(false), 180);
-  }, [cancelClose]);
+  }, [cancelClose, tourIntegration]);
 
   const updatePlacement = useCallback(() => {
     const anchor = popupRef.current;
@@ -66,6 +68,7 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
     updatePlacement();
     setOpen(true);
   }, [cancelClose, updatePlacement]);
+  useEffect(() => { if (tourIntegration) updatePlacement(); }, [tourIntegration, updatePlacement]);
 
   const refresh = useCallback(async () => {
     try {
@@ -114,6 +117,7 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
     };
     const onOutside = (e: PointerEvent) => {
       const target = e.target as Node;
+      if (tourIntegration) return;
       if (!dialogOpen && !popupRef.current?.contains(target) && !floatingRef.current?.contains(target)) {
         cancelClose();
         setOpen(false);
@@ -122,7 +126,7 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
     document.addEventListener('keydown', onEscape);
     document.addEventListener('pointerdown', onOutside);
     return () => { document.removeEventListener('keydown', onEscape); document.removeEventListener('pointerdown', onOutside); };
-  }, [open, dialogOpen, cancelClose]);
+  }, [open, dialogOpen, cancelClose, tourIntegration]);
 
   const perform = async (fn: () => Promise<unknown>) => {
     if (busy) return;
@@ -175,7 +179,7 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
               const isEmail = kind === 'email';
               const enabled = isEmail ? mailConnected : isBot ? botConnected : isAssistant ? Boolean(status?.connected && status.readEnabled) : connected;
               return (
-                <div key={kind} className="integration-menu__item mb-2 rounded-xl border">
+                <div key={kind} data-tour={kind === 'messages' ? 'integration-messages' : kind === 'assistant' ? 'integration-assistant' : kind === 'email' ? 'integration-email' : undefined} className="integration-menu__item mb-2 rounded-xl border">
                   <button type="button" className="flex w-full items-center gap-2 p-3 text-left" aria-expanded={expanded === kind}
                     onClick={() => expandIntegration(kind)}>
                     <span className="integration-menu__symbol flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">{isEmail ? <Mail size={19}/> : isBot ? <Smartphone size={19}/> : isAssistant ? <Bot size={19}/> : <Send size={18}/>}</span>

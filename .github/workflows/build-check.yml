@@ -143,5 +143,7 @@ jobs:
         run: node --import tsx --test server/test/daily-ai-checkup.test.ts server/test/daily-ai-checkup-proposal.test.ts server/test/daily-ai-checkup-telegram.test.ts
       - name: Verify repeatable manual AI checkup and app navigation
         run: node --import tsx --test server/test/ai-checkup-manual.test.ts server/test/miniapp-habit-tracker-ui.test.ts
+      - name: Verify workspace, AI and integrations training tutorials
+        run: node --import tsx --test server/test/training-tours-2026.test.ts
       - name: Build the deployment Docker image
         run: docker build --progress=plain -t bubble-task-manager:ci .

@@ -84,7 +84,6 @@ fun MiniAppTaskFocusSheet(
     var sphereId by remember(task.id){mutableStateOf(task.sphereId)}
     var importance by remember(task.id){mutableIntStateOf(task.importance.coerceIn(1,5))}
     var notifyMinutes by remember(task.id){mutableStateOf(task.notifyBeforeMinutes)}
-    var aiNotifications by remember(task.id){mutableStateOf(task.aiNotificationsEnabled)}
     var recurring by remember(task.id){mutableStateOf(task.isRecurring)}
     var recurrenceText by remember(task.id){mutableStateOf(task.recurrenceText.orEmpty())}
     var recurrenceRule by remember(task.id){mutableStateOf(task.recurrenceJson)}
@@ -120,8 +119,6 @@ fun MiniAppTaskFocusSheet(
                     if(notifyMinutes==null)put("notifyBeforeMinutes",JsonNull)
                     else put("notifyBeforeMinutes",notifyMinutes)
                 }
-                if(aiNotifications!=task.aiNotificationsEnabled)
-                    put("aiNotificationsEnabled",aiNotifications)
                 if(recurring != task.isRecurring)put("isRecurring",recurring)
                 if(!recurring && task.isRecurring){
                     put("recurrenceText",JsonNull)
@@ -374,8 +371,6 @@ fun MiniAppTaskFocusSheet(
         onSector={sphereId=it},
         notifyBefore=notifyMinutes,
         onNotify={notifyMinutes=it},
-        aiNotifications=aiNotifications,
-        onAiNotifications={aiNotifications=it},
         recurring=recurring,
         onRecurring={
             recurring=it
@@ -441,8 +436,6 @@ private fun FocusTaskSettingsDialog(
     onSector: (String?) -> Unit,
     notifyBefore: Int?,
     onNotify: (Int?) -> Unit,
-    aiNotifications: Boolean,
-    onAiNotifications: (Boolean) -> Unit,
     recurring:Boolean,
     onRecurring:(Boolean)->Unit,
     recurrenceText:String,
@@ -574,13 +567,6 @@ private fun FocusTaskSettingsDialog(
                         )
                     }
                     if(task.taskType!=TaskType.EVENT) {
-                        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                            Checkbox(checked=aiNotifications,
-                                onCheckedChange=onAiNotifications,
-                                modifier=Modifier.size(30.dp))
-                            Spacer(Modifier.width(7.dp))
-                            Text("уведомления от ИИ",fontSize=13.sp,color=c.text)
-                        }
                         Text("Важность: ${importance}",color=c.muted,fontSize=12.sp,
                             fontWeight=FontWeight.SemiBold)
                         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(7.dp)) {

@@ -315,7 +315,7 @@ export const taskService = {
         recurrenceJson: isSubtask ? Prisma.JsonNull : toRecurrenceJson(input.recurrenceJson),
         recurrenceSummary: isSubtask ? null : (input.recurrenceSummary ?? null),
         recurrenceUntil: isSubtask ? null : (input.recurrenceUntil !== undefined ? toDueDate(input.recurrenceUntil) : null),
-        aiNotificationsEnabled: (isEvent || isReminder) ? false : (input.aiNotificationsEnabled ?? true),
+        aiNotificationsEnabled: false,
         aiMonitoringEnabled: newMonitoringEnabled,
         aiMonitoringModel: input.aiMonitoringModel ?? 'gpt-6-luna',
         aiMonitoringGeneration: !isSubtask && !isEvent && !isReminder && !parent?.collaborationId && input.aiMonitoringEnabled === true ? 1 : 0,
@@ -418,7 +418,8 @@ export const taskService = {
       if (input.importance !== undefined) personalSettingsPatch.importance = toNumber(input.importance, 'importance');
       if (input.urgency !== undefined) personalSettingsPatch.urgency = toNumber(input.urgency, 'urgency');
       if (input.notifyBeforeMinutes !== undefined) personalSettingsPatch.notifyBeforeMinutes = toNotifyBeforeMinutes(input.notifyBeforeMinutes);
-      if (input.aiNotificationsEnabled !== undefined) personalSettingsPatch.aiNotificationsEnabled = Boolean(input.aiNotificationsEnabled);
+      // Deprecated legacy AI nudges: never enable them on collaborative task settings.
+      personalSettingsPatch.aiNotificationsEnabled = false;
       if (input.isRecurring !== undefined) personalSettingsPatch.isRecurring = Boolean(input.isRecurring);
       if (input.recurrenceText !== undefined) personalSettingsPatch.recurrenceText = input.recurrenceText;
       if (input.recurrenceJson !== undefined) personalSettingsPatch.recurrenceJson = toRecurrenceJson(input.recurrenceJson);
@@ -489,8 +490,9 @@ export const taskService = {
     if (currentTask.taskType === 'EVENT' || currentTask.taskType === 'REMINDER') {
       if (!isCollaborativeRoot) patch.aiNotificationsEnabled = false;
       patch.parentTask = { disconnect: true };
-    } else if (!isCollaborativeRoot && input.aiNotificationsEnabled !== undefined) {
-      patch.aiNotificationsEnabled = Boolean(input.aiNotificationsEnabled);
+    } else if (!isCollaborativeRoot) {
+      // Keep old records compatible, but retire legacy AI nudges for edited tasks.
+      patch.aiNotificationsEnabled = false;
     }
 
     const isSubtask = Boolean(currentTask.parentTaskId);

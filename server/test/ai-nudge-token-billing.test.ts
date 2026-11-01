@@ -27,12 +27,19 @@ test('overdue AI reminders use metered wallet charges and show actual cost in Te
   assert.match(web, /creditsSpentMilli: result\.billing\?\.creditsSpentMilli \?\? 0/);
 });
 
-test('web AI notification setting supplies defaults for each creation path', async () => {
-  const web = await readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8');
-  const editor = await readFile(new URL('../../client/src/components/TaskEditor.tsx', import.meta.url), 'utf8');
-  assert.match(editor, /aiNotificationsEnabled: isEventEditor[\s\S]*?defaultAiNotificationsEnabled/);
-  assert.match(web, /aiNotificationsEnabled: editorState\?\.task\?\.id \? payload\.aiNotificationsEnabled : \(payload\.aiNotificationsEnabled \?\? isAiNotificationsDefaultEnabled\)/);
-  assert.match(web, /parentTaskId: parentTask\.id,[\s\S]*?aiNotificationsEnabled: payload\.aiNotificationsEnabled \?\? isAiNotificationsDefaultEnabled/);
-  assert.match(web, /createdTask = await api\.createTask\([\s\S]*?aiNotificationsEnabled: isAiNotificationsDefaultEnabled/);
-  assert.match(web, /Кредиты за подсказку ИИ списываются по фактическим токенам/);
+test('legacy AI notification settings are removed while task reminders and monitoring remain', async () => {
+  const [web, editor, mini, server, routes] = await Promise.all([
+    readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/components/TaskEditor.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/services/task.service.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/routes/api.ts', import.meta.url), 'utf8')
+  ]);
+  assert.doesNotMatch(web, /Уведомления от ИИ|уведомления от ИИ|data-tour="ai-notifications-settings"/);
+  assert.doesNotMatch(editor, /уведомления от ИИ/);
+  assert.doesNotMatch(mini, /уведомления от ИИ|Уведомления от ИИ/);
+  assert.match(server, /aiNotificationsEnabled: false/);
+  assert.match(routes, /ai-overdue-nudge'[^\\n]+410/);
+  assert.match(web, /<AiCheckupScheduleSettings/);
+  assert.match(web, /TaskMonitoringStatuses/);
 });

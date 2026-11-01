@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronDown, Coins, HelpCircle, Lightbulb } from 'lucide-react';
 import type { AiChatModel } from '../lib/types';
 import { DEFAULT_TASK_AI_CHAT_MODEL } from '../lib/ai-chat-model';
@@ -9,8 +9,9 @@ const MONITOR_MODELS: Array<{ value: AiChatModel; label: string; description: st
   { value: 'gpt-6.1-sol', label: '6.1 Sol', description: 'Самая мощная на сегодня модель', intellect: 3, cost: 3 }
 ];
 
-export function TaskMonitoringControls({ enabled, onChange, taskId, allowed = true, model = DEFAULT_TASK_AI_CHAT_MODEL, onModelChange }: {
+export function TaskMonitoringControls({ tourExpanded = false, enabled, onChange, taskId, allowed = true, model = DEFAULT_TASK_AI_CHAT_MODEL, onModelChange }: {
   enabled: boolean;
+  tourExpanded?: boolean;
   onChange: (enabled: boolean) => void;
   taskId?: string;
   allowed?: boolean;
@@ -18,7 +19,8 @@ export function TaskMonitoringControls({ enabled, onChange, taskId, allowed = tr
   onModelChange?: (model: AiChatModel) => void;
 }) {
   const [helpOpen, setHelpOpen] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(tourExpanded);
+  useEffect(() => { if (tourExpanded) setDetailsOpen(true); }, [tourExpanded]);
   return <section className="task-monitoring-settings rounded-xl border border-[color:var(--panel-border)] p-3 text-primary">
     <div className="flex items-center justify-between gap-3">
       <span className="flex min-w-0 items-center gap-2 text-sm font-semibold">
@@ -44,7 +46,7 @@ export function TaskMonitoringControls({ enabled, onChange, taskId, allowed = tr
       <span>Настройки автомониторинга · модель ИИ</span>
       <ChevronDown size={15} className={`transition-transform ${detailsOpen ? 'rotate-180' : ''}`} />
     </button>
-    {detailsOpen ? <div className="mt-2 space-y-2" aria-label="Выбор модели автомониторинга">
+    {detailsOpen ? <div data-tour="ai-monitor-model" className="mt-2 space-y-2" aria-label="Выбор модели автомониторинга">
       <p className="text-[11px] leading-relaxed text-muted">Выбранная модель закрепляется за задачей и для автоматических запросов, и для её чата. Изменить её можно только в этом разделе. Лампочки обозначают относительный интеллект, монетки — относительную стоимость.</p>
       {MONITOR_MODELS.map(option => <button type="button" key={option.value}
         disabled={!allowed || !onModelChange}

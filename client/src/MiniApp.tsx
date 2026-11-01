@@ -739,8 +739,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   // The saved checkup is pinned locally until the regular Quick AI history
   // includes it. A concurrent chat refresh must not make the result vanish.
   const [latestManualCheckup, setLatestManualCheckup] = useState<{ userId: string; message: MiniAiChatMessage } | null>(null);
-  const [aiNotificationDefault, setAiNotificationDefault] = useState(() =>
-    localStorage.getItem('btm:ai-notifications-default-enabled') !== '0');
+  const aiNotificationDefault = false;
   const [reportPromptTask, setReportPromptTask] = useState<Task | null>(null);
   const [areHabitsExpanded, setAreHabitsExpanded] = useState(false);
   const [timelineNow, setTimelineNow] = useState(() => new Date());
@@ -803,7 +802,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     recurrenceJson: null,
     recurrenceSummary: null,
     recurrenceUntil: null,
-    aiNotificationsEnabled: true,
+    aiNotificationsEnabled: false,
     aiMonitoringEnabled: false,
     subtasks: []
   });
@@ -2088,7 +2087,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     recurrenceJson: null,
     recurrenceSummary: null,
     recurrenceUntil: null,
-    aiNotificationsEnabled: aiNotificationDefault,
+    aiNotificationsEnabled: false,
     aiMonitoringEnabled: false,
     subtasks: []
   });
@@ -2193,7 +2192,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         recurrenceJson: createTaskDraft.isRecurring ? (createTaskDraft.recurrenceJson ?? null) : null,
         recurrenceSummary: createTaskDraft.isRecurring ? (createTaskDraft.recurrenceSummary ?? null) : null,
         recurrenceUntil: createTaskDraft.isRecurring ? (createTaskDraft.recurrenceUntil ?? null) : null,
-        aiNotificationsEnabled: createTaskDraft.aiNotificationsEnabled ?? true,
+        aiNotificationsEnabled: false,
         aiMonitoringEnabled: createEditorType === 'task' && createTaskDraft.aiMonitoringEnabled === true
       });
       const draftSubtasks = (createEditorType === 'event' ? [] : (createTaskDraft.subtasks ?? []))
@@ -3911,17 +3910,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 {manualCheckupError ? <p className="mt-2 text-xs text-rose-500" role="alert">{manualCheckupError}</p> : null}
               </AiCheckupScheduleSettings>
               <div className="border-t border-[color:var(--panel-border)] pt-4">
-                <p className="mb-2 text-sm font-semibold text-primary">Уведомления от ИИ в новых задачах</p>
-                <CustomSelect value={aiNotificationDefault ? 'enabled' : 'disabled'}
-                  onChange={value => {
-                    const enabled=value === 'enabled';
-                    setAiNotificationDefault(enabled);
-                    localStorage.setItem('btm:ai-notifications-default-enabled',enabled ? '1' : '0');
-                  }}
-                  options={[{ value:'enabled',label:'Включены для новых задач' },{ value:'disabled',label:'Выключены для новых задач' }]}
-                  ariaLabel="Уведомления от ИИ в новых задачах" detachedPopup popupVariant="settings" />
-              </div>
-              <div className="border-t border-[color:var(--panel-border)] pt-4">
                 <p className="mb-2 text-sm font-semibold text-primary">Предлагать отчёт по выполнению задачи</p>
                 <CustomSelect value={currentUser?.offerTaskCompletionReport !== false ? 'enabled' : 'disabled'}
                   onChange={value => void api.updateUserSettings({ offerTaskCompletionReport: value === 'enabled' })
@@ -4560,14 +4548,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       />
                       повторять
                     </label>
-                    {openedTask.taskType !== 'EVENT' ? <label className="flex items-center gap-2 text-sm font-medium">
-                      <input
-                        type="checkbox"
-                        checked={openedTaskDraft.aiNotificationsEnabled ?? true}
-                        onChange={(event) => onChangeDraft(openedTask.id, { aiNotificationsEnabled: event.target.checked })}
-                      />
-                      уведомления от ИИ
-                    </label> : null}
+
                     {openedTaskDraft.isRecurring ? (
                       <TaskRecurrenceConfigurator key={openedTask.id} value={openedTaskDraft}
                         onChange={(patch) => onChangeDraft(openedTask.id, patch)}
@@ -5513,14 +5494,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                         />
                         повторять
                       </label>
-                      {createEditorType === 'task' ? <label className="mt-3 flex items-center gap-2 font-medium">
-                        <input
-                          type="checkbox"
-                          checked={createTaskDraft.aiNotificationsEnabled ?? true}
-                          onChange={(event) => setCreateTaskDraft((prev) => ({ ...prev, aiNotificationsEnabled: event.target.checked }))}
-                        />
-                        уведомления от ИИ
-                      </label> : null}
+
                       {createTaskDraft.isRecurring ? (
                         <TaskRecurrenceConfigurator key={createEditorType} value={createTaskDraft}
                           onChange={(patch) => setCreateTaskDraft((prev) => ({ ...prev, ...patch }))}
