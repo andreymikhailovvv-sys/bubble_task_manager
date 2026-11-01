@@ -2471,9 +2471,9 @@ export const aiAssistantService = {
             }
             if (call.name === 'prepare_mail_send') {
               toolCallsExecuted += 1;
-              const result = mailSendDraft ? {ok:false,code:'ALREADY_PREPARED'} :
+              const result: {ok:boolean;draft?:MailSendDraft;code?:string;message?:string} = mailSendDraft ? {ok:false,code:'ALREADY_PREPARED'} :
                 await prepareOwnerMailSend(input.userId,args);
-              if(result.ok && 'draft' in result) mailSendDraft = result.draft;
+              if(result.ok && result.draft) mailSendDraft = result.draft;
               providerInput.push({type:'function_call_output',call_id:call.call_id,
                 output:JSON.stringify(result.ok ? {ok:true,prepared:true,requiresConfirmation:true} : result)});
               input.onProgress?.('forming_answer');
