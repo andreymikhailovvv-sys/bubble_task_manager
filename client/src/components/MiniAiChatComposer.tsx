@@ -55,6 +55,18 @@ export const MiniAiChatComposer = forwardRef<MiniAiChatComposerHandle, MiniAiCha
 
     return (
       <>
+        <button
+          type="button"
+          className={variant === 'task'
+            ? 'miniapp-ai-chat-attach flex h-9 w-9 shrink-0 items-center justify-center rounded-full disabled:opacity-40'
+            : 'miniapp-ai-chat-attach flex h-9 w-9 shrink-0 items-center justify-center rounded-full'}
+          disabled={attachDisabled}
+          onClick={onAttach}
+          aria-label="Прикрепить файл"
+          title={attachTitle}
+        >
+          <Paperclip size={17} />
+        </button>
         <AutoGrowingTextarea
           value={draft}
           onChange={(event) => changeDraft(event.target.value)}
@@ -68,28 +80,20 @@ export const MiniAiChatComposer = forwardRef<MiniAiChatComposerHandle, MiniAiCha
             }
           }}
         />
-        <button
-          type="button"
-          className={variant === 'task'
-            ? 'miniapp-ai-chat-attach flex h-11 w-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40'
-            : 'miniapp-ai-chat-attach flex h-11 w-11 shrink-0 items-center justify-center rounded-full'}
-          disabled={attachDisabled}
-          onClick={onAttach}
-          aria-label="Прикрепить файл"
-          title={attachTitle}
-        >
-          <Paperclip size={17} />
-        </button>
-        <VoiceInputButton activationMode="transcription" liveContext={liveContext} onLiveMessage={onLiveMessage} onLiveToolResult={onLiveToolResult} onLiveStatus={onLiveStatus} onLiveSessionChange={onLiveSessionChange} disabled={isSending} className="miniapp-ai-chat-attach" onTranscript={(text, immediate) => {
+        <VoiceInputButton activationMode="transcription" small liveContext={liveContext} onLiveMessage={onLiveMessage} onLiveToolResult={onLiveToolResult} onLiveStatus={onLiveStatus} onLiveSessionChange={onLiveSessionChange} disabled={isSending} className="miniapp-ai-chat-attach" onTranscript={(text, immediate) => {
           const next = [draftRef.current.trim(), text].filter(Boolean).join(' ');
           changeDraft(next);
           if (immediate) onSend();
         }} />
+        <VoiceInputButton activationMode="live" small liveContext={liveContext}
+          onLiveMessage={onLiveMessage} onLiveToolResult={onLiveToolResult} onLiveStatus={onLiveStatus}
+          onLiveSessionChange={onLiveSessionChange} disabled={isSending}
+          className="miniapp-ai-chat-attach" onTranscript={() => undefined} />
         <button
           type="button"
           onClick={onSend}
           disabled={isSending || (!draft.trim() && !hasPendingFiles)}
-          className="miniapp-ai-chat-send flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-50"
+          className="miniapp-ai-chat-send flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-50"
           aria-label="Отправить сообщение"
           title={variant === 'task' ? 'Отправить' : undefined}
         >
