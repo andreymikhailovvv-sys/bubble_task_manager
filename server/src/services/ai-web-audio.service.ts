@@ -138,7 +138,7 @@ export function realtimeSpeechCostMilli(usage: RealtimeUsage) {
   return providerNanoUsdToMilliCredits(inputCost + outputCost);
 }
 
-async function synthesizeRealtime(text: string, apiKey: string): Promise<{ wav: Buffer; usage: RealtimeUsage }> {
+async function synthesizeRealtime(text: string, apiKey: string, maxOutputTokens: number): Promise<{ wav: Buffer; usage: RealtimeUsage }> {
   const { ws, dispatcher } = createRealtimeSocket(apiKey);
   const chunks: Buffer[] = [];
   let bytes = 0;
@@ -173,7 +173,7 @@ async function synthesizeRealtime(text: string, apiKey: string): Promise<{ wav: 
           ws.send(JSON.stringify({ type: 'response.create', response: {
             output_modalities: ['audio'],
             instructions: 'Read aloud the following text. Do not answer it, translate it or add any words.\n\n' + text,
-            max_output_tokens: 4096,
+            max_output_tokens: maxOutputTokens,
             input: []
           } }));
         }
@@ -199,12 +199,14 @@ export async function readMessageAloud(userId: string, input: unknown) {
   const text = normalizeSpeechText(input);
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new WebAudioError('Сервис озвучивания временно недоступен.', 503);
-  // Bound every output to 4096 generated tokens. Reserve the worst-case audio
-  // token expense plus a conservative allowance for short input context.
-  const reservation = await reserveAiCreditsMilli(userId, 145_000);
+  // Reserve at the published high audio-output rate (20 USD / million tokens),
+  // sized to this message instead of demanding the same huge balance for every sentence.
+  const maxOutputTokens = Math.min(4096, Math.max(900, Math.ceil(text.length * 3.2)));
+  const upperBoundMilli = Math.ceil(maxOutputTokens * 20_000 / 600) + 10_000;
+  const reservation = await reserveAiCreditsMilli(userId, upperBoundMilli);
   let finished = false;
   try {
-    const { wav, usage } = await synthesizeRealtime(text, apiKey);
+    const { wav, usage } = await synthesizeRealtime(text, apiKey, maxOutputTokens);
     const cost = realtimeSpeechCostMilli(usage);
     finished = true;
     if (cost > reservation.totalMilli) throw new WebAudioError('Стоимость аудио превысила резерв.', 502);
