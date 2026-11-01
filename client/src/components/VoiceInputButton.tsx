@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Loader2, Mic, SendHorizontal, Square, X } from 'lucide-react';
+import { Loader2, Mic, MessageCircle, Radio, SendHorizontal, Square, X } from 'lucide-react';
+import { LiveVoiceDialog } from './LiveVoiceDialog';
 import { api } from '../lib/api';
 
 type Props = {
@@ -14,6 +15,9 @@ type VoiceState = 'idle' | 'recording' | 'transcribing';
 export function VoiceInputButton({ onTranscript, disabled = false, small = false, className = '' }: Props) {
   const [state, setState] = useState<VoiceState>('idle');
   const [error, setError] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [liveOpen, setLiveOpen] = useState(false);
+  const menuRef = useRef<HTMLSpanElement | null>(null);
   const [seconds, setSeconds] = useState(0);
   const [levels, setLevels] = useState<number[]>(Array(25).fill(0.12));
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -48,6 +52,20 @@ export function VoiceInputButton({ onTranscript, disabled = false, small = false
       release();
     };
   }, []);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const outside = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setMenuOpen(false); };
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('keydown', escape);
+    };
+  }, [menuOpen]);
 
   const stop = (sendImmediately: boolean) => {
     immediateRef.current = sendImmediately;
@@ -145,11 +163,21 @@ export function VoiceInputButton({ onTranscript, disabled = false, small = false
   };
 
   return <>
-    <button type="button" disabled={disabled || state !== 'idle'} onClick={() => void start()}
-      className={`voice-input-trigger inline-flex ${small ? 'h-9 w-9' : 'h-11 w-11'} shrink-0 items-center justify-center rounded-full disabled:opacity-50 ${className}`}
-      title="Голосовой ввод" aria-label="Голосовой ввод">
-      <Mic size={small ? 16 : 17} />
-    </button>
+    <span className="voice-mode-anchor" ref={menuRef}>
+      <button type="button" disabled={disabled || state !== 'idle' || liveOpen} onClick={() => setMenuOpen(value => !value)}
+        className={`voice-input-trigger inline-flex ${small ? 'h-9 w-9' : 'h-11 w-11'} shrink-0 items-center justify-center rounded-full disabled:opacity-50 ${className}`}
+        title="Выбрать голосовой режим" aria-label="Выбрать голосовой режим" aria-expanded={menuOpen}>
+        <Mic size={small ? 16 : 17} />
+      </button>
+      {menuOpen ? <div className="voice-mode-menu dialog-surface" role="menu" aria-label="Голосовой режим">
+        <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setLiveOpen(true); }}>
+          <Radio size={18} /><span><strong>Живое общение</strong><small>Говорите с ИИ без пауз на отправку</small></span>
+        </button>
+        <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); void start(); }}>
+          <MessageCircle size={18}/><span><strong>Запись голосом</strong><small>Продиктовать, расшифровать и отправить</small></span>
+        </button>
+      </div> : null}
+    </span>
     {error && state === 'idle' ? <div role="alert" className="voice-input-error">{error}
       <button type="button" title="Закрыть ошибку" onClick={() => setError('')}><X size={13} /></button>
     </div> : null}
@@ -168,5 +196,6 @@ export function VoiceInputButton({ onTranscript, disabled = false, small = false
         <p className="voice-record-note">Распознавание оплачивается кредитами. Запись не отправляется в чат без вашего действия.</p>
       </div>
     </div> : null}
+    {liveOpen ? <LiveVoiceDialog onClose={() => setLiveOpen(false)} /> : null}
   </>;
 }
