@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 type Props = {
   onTranscript: (text: string, sendImmediately: boolean) => void;
   liveContext?: LiveVoiceContext;
+  activationMode?: 'menu' | 'transcription';
   onLiveMessage?: (message: LiveVoiceMessage) => void;
   onLiveToolResult?: (result: LiveVoiceToolCompletion) => void;
   onLiveStatus?: (status: LiveVoiceProgressStatus | null) => void;
@@ -17,7 +18,7 @@ type Props = {
 
 type VoiceState = 'idle' | 'recording' | 'transcribing';
 
-export function VoiceInputButton({ onTranscript, liveContext, onLiveMessage, onLiveToolResult, onLiveStatus, onLiveSessionChange, disabled = false, small = false, className = '' }: Props) {
+export function VoiceInputButton({ onTranscript, liveContext, activationMode = 'menu', onLiveMessage, onLiveToolResult, onLiveStatus, onLiveSessionChange, disabled = false, small = false, className = '' }: Props) {
   const [state, setState] = useState<VoiceState>('idle');
   const [error, setError] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -199,12 +200,12 @@ export function VoiceInputButton({ onTranscript, liveContext, onLiveMessage, onL
 
   return <>
     <span className="voice-mode-anchor" ref={menuRef}>
-      <button type="button" disabled={disabled || state !== 'idle' || liveOpen} onClick={() => setMenuOpen(value => !value)}
+      <button type="button" disabled={disabled || state !== 'idle' || liveOpen} onClick={() => { if (activationMode === 'transcription') void start(); else setMenuOpen(value => !value); }}
         className={`voice-input-trigger inline-flex ${small ? 'h-9 w-9' : 'h-11 w-11'} shrink-0 items-center justify-center rounded-full disabled:opacity-50 ${className}`}
-        title="Выбрать голосовой режим" aria-label="Выбрать голосовой режим" aria-expanded={menuOpen}>
+        title={activationMode === 'transcription' ? 'Голосовой ввод' : 'Выбрать голосовой режим'} aria-label={activationMode === 'transcription' ? 'Голосовой ввод' : 'Выбрать голосовой режим'} aria-expanded={activationMode === 'menu' ? menuOpen : undefined}>
         <Mic size={small ? 16 : 17} />
       </button>
-      {menuOpen ? <div className="voice-mode-menu dialog-surface" role="menu" aria-label="Голосовой режим">
+      {activationMode === 'menu' && menuOpen ? <div className="voice-mode-menu dialog-surface" role="menu" aria-label="Голосовой режим">
         <button type="button" role="menuitem" onClick={startLive}>
           <Radio size={18} /><span><strong>Живое общение</strong><small>Говорите с ИИ без пауз на отправку</small></span>
         </button>
