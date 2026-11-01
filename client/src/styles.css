@@ -12424,10 +12424,6 @@ body[data-theme='dark'] .topbar-overdue-popover { box-shadow: 0 14px 34px rgba(2
   box-shadow: 0 5px 12px rgba(53, 75, 109, 0.08); color: #172238;
   transition: box-shadow .18s ease, transform .18s ease;
 }
-.miniapp-native-day-card::before {
-  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3.5px;
-  border-radius: 2px; background: color-mix(in srgb, var(--day-entry-accent) 35%, #fff);
-}
 .miniapp-native-day-card-dot {
   flex: 0 0 7px; width: 7px; height: 7px; margin-top: 8px;
   border-radius: 50%; background: var(--day-entry-accent);
@@ -12459,9 +12455,6 @@ body[data-theme='dark'] .topbar-overdue-popover { box-shadow: 0 14px 34px rgba(2
 .miniapp-shell:not(.miniapp-light) .miniapp-native-day-card {
   border-color: #40506a; background: linear-gradient(90deg, color-mix(in srgb, var(--day-entry-accent) 10.5%, #19263b), #19263b 45%, #19263b);
   color: #f1f5f9; box-shadow: 0 2px 10px rgba(0, 0, 0, .14);
-}
-.miniapp-shell:not(.miniapp-light) .miniapp-native-day-card::before {
-  background: color-mix(in srgb, var(--day-entry-accent) 54%, #19263b);
 }
 .miniapp-shell:not(.miniapp-light) .miniapp-native-day-card-copy small { color: #9bafc9; }
 .miniapp-shell:not(.miniapp-light) .miniapp-native-day-overdue .miniapp-native-day-card-copy small { color: #ff91a9; }

@@ -29,3 +29,12 @@ test('Mini App habit list displays only entries scheduled for today', async () =
   assert.ok(mini.includes('return habits.filter((habit) => isHabitScheduledForDate(habit, new Date())).sort'));
   assert.ok(android.includes('state.habits.filter { habitScheduledToday(it, todayForHabits) }'));
 });
+
+test('day timeline cards have no colored left-edge stripes in light or dark Mini App', async () => {
+  const styles = await readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8');
+  assert.ok(styles.includes('.miniapp-native-day-card {'), 'preserve day card styling');
+  assert.ok(styles.includes('.miniapp-native-day-card-dot {'), 'preserve colored dots within cards');
+  assert.ok(styles.includes('.miniapp-native-day-rail::before {'), 'preserve timeline rail next to hour labels');
+  assert.doesNotMatch(styles, /\.miniapp-native-day-card::before\s*\{/, 'no left-edge stripe on day cards');
+  assert.doesNotMatch(styles, /\.miniapp-shell:not\(\.miniapp-light\) \.miniapp-native-day-card::before\s*\{/, 'no dark-theme stripe overrides');
+});
