@@ -36,7 +36,7 @@ test('mail canonicalization composes with Telegram without copying foreign chats
 });
 test('mail sender parsing rejects headers and multiple recipients',()=>{
   assert.equal(emailAddress('"Ivan" <ivan@example.com>'),'ivan@example.com');
-  for(const sender of ['bad\\r\\nBCC:secret@example.com','foo@example.com,another@example.com','','no-reply<>']) {
+  for(const sender of ['bad' + String.fromCharCode(13,10) + 'BCC:secret@example.com','foo@example.com,another@example.com','','no-reply<>']) {
     assert.equal(emailAddress(sender),null);
   }
 });
