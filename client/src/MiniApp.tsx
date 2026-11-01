@@ -378,14 +378,21 @@ function getHabitCompletedForDate(habit: Habit, dateKey: string) {
 }
 
 function isHabitScheduledForDate(habit: Habit, date: Date) {
-  if (habit.isAutoCompleted) return false;
-  if (habit.recurrenceType === 'WEEKDAYS') return habit.weekdays.includes(date.getDay());
+  if (habit.isAutoCompleted || habit.isArchived) return false;
+  const currentDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const created = habit.createdAt ? new Date(habit.createdAt) : null;
+  if (created && !Number.isNaN(created.getTime())) {
+    const createdDay = new Date(created.getFullYear(), created.getMonth(), created.getDate());
+    if (currentDay < createdDay) return false;
+  }
+  if (habit.durationMode === 'UNTIL_DATE' && habit.endDate && toDateKey(currentDay) > habit.endDate.slice(0, 10)) return false;
+  if (habit.recurrenceType === 'WEEKDAYS') return habit.weekdays.includes(currentDay.getDay());
   if (habit.recurrenceType === 'INTERVAL') {
-    const start = habit.createdAt ? new Date(habit.createdAt) : new Date();
-    const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
-    const currentDay = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-    const dayDiff = Math.max(0, Math.round((currentDay - startDay) / 86_400_000));
-    return dayDiff % Math.max(1, habit.intervalDays ?? 1) === 0;
+    const start = created && !Number.isNaN(created.getTime()) ? created : currentDay;
+    const startDayUtc = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
+    const currentDayUtc = Date.UTC(currentDay.getFullYear(), currentDay.getMonth(), currentDay.getDate());
+    const dayDiff = Math.round((currentDayUtc - startDayUtc) / 86_400_000);
+    return dayDiff >= 0 && dayDiff % Math.max(1, habit.intervalDays ?? 1) === 0;
   }
   return true;
 }
@@ -747,7 +754,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [areHabitsExpanded, setAreHabitsExpanded] = useState(false);
   const [timelineNow, setTimelineNow] = useState(() => new Date());
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
-  const [timelineView, setTimelineView] = useState<TimelineView>('month');
+  const [timelineView, setTimelineView] = useState<TimelineView>('day');
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   // The original search toolbar stays in document flow. Only a later upward
   // scroll can turn that same toolbar into a floating, safe-area-aware panel.
@@ -1675,7 +1682,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
   const sortedHabits = useMemo(() => {
     const dateKey = toDateKey(new Date());
-    return habits.filter((habit) => !habit.isAutoCompleted).sort((a, b) => {
+    return habits.filter((habit) => isHabitScheduledForDate(habit, new Date())).sort((a, b) => {
       const aCompleted = getHabitCompletedForDate(a, dateKey) >= a.targetCount;
       const bCompleted = getHabitCompletedForDate(b, dateKey) >= b.targetCount;
       if (aCompleted !== bCompleted) return aCompleted ? 1 : -1;
@@ -4517,7 +4524,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         </MiniNavigationControl>
         <MiniNavigationControl role={isTelegramRuntime ? 'button' : undefined} tabIndex={isTelegramRuntime ? 0 : undefined} onKeyDown={handleMiniNavigationKeyDown} className={`miniapp-bottom-navigation-item ${!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'timeline' ? 'is-active' : ''}`}
           aria-current={!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'timeline' ? 'page' : undefined}
-          onClick={(event) => { setIsAiChatOpen(false); setIsStandaloneNotesOpen(false); setIsAiChatMenuOpen(false); setDisplayMode('timeline'); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); event.currentTarget.blur(); }}>
+          onClick={(event) => { setIsAiChatOpen(false); setIsStandaloneNotesOpen(false); setIsAiChatMenuOpen(false); setDisplayMode('timeline'); setTimelineView('day'); setTimelineAnchorDate(new Date()); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); event.currentTarget.blur(); }}>
           <span className="miniapp-bottom-navigation-icon"><CalendarDays size={20} strokeWidth={2} /></span>
           <span>Таймлайн</span>
         </MiniNavigationControl>
