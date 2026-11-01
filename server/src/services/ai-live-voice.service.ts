@@ -110,7 +110,9 @@ export function handleLiveVoiceUpgrade(request: IncomingMessage, socket: Socket,
   if (url.pathname !== '/api/ai/audio/live') return false;
   const origin = request.headers.origin;
   const host = request.headers['x-forwarded-host'] ?? request.headers.host;
-  if (!origin || !host || new URL(origin).host !== host || request.headers.upgrade?.toLowerCase() !== 'websocket') {
+  let originMatchesHost = false;
+  try { originMatchesHost = !!origin && !!host && new URL(origin).host === host; } catch { /* invalid Origin */ }
+  if (!originMatchesHost || request.headers.upgrade?.toLowerCase() !== 'websocket') {
     sendUpgradeRejection(socket, 403); return true;
   }
   const ticket = url.searchParams.get('ticket') ?? '';
@@ -123,7 +125,7 @@ export function handleLiveVoiceUpgrade(request: IncomingMessage, socket: Socket,
   }
   sessions.add(registered.userId);
   const peer = acceptWebSocket(socket, key, head);
-  void startLiveSession(registered.userId, peer).finally(() => sessions.delete(registered.userId));
+  void startLiveSession(registered.userId, peer);
   return true;
 }
 
@@ -169,6 +171,7 @@ async function startLiveSession(userId: string, peer: ClientPeer) {
       if (reservation) await settleAiCreditReservation(reservation, reservation.totalMilli).catch(() => undefined);
     } finally {
       dispatcher?.close();
+      sessions.delete(userId);
       setTimeout(() => peer.close(), 180).unref();
     }
   };
@@ -186,9 +189,10 @@ async function startLiveSession(userId: string, peer: ClientPeer) {
       headers: { Authorization: 'Bearer ' + apiKey }, ...(dispatcher ? { dispatcher } : {})
     });
     peer.onMessage(value => {
-      if (!ready || !upstream || upstream.readyState !== WebSocket.OPEN) return;
       try {
         const packet = JSON.parse(value) as { type?: unknown; audio?: unknown };
+        if (packet.type === 'end') { stop(); return; }
+        if (!ready || !upstream || upstream.readyState !== WebSocket.OPEN) return;
         if (packet.type !== 'audio' || typeof packet.audio !== 'string' ||
           packet.audio.length > 64_000 || !/^[A-Za-z0-9+/]*={0,2}$/.test(packet.audio)) return;
         const decodedLength = Buffer.byteLength(packet.audio, 'base64');
