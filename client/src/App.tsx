@@ -3099,6 +3099,27 @@ export default function App() {
     };
   }, [aiChatProjects]);
 
+  // Connecting or removing a mailbox changes server-owned project navigation
+  // without requiring the user to reload the entire PlanIrovych workspace.
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    let alive = true;
+    const refreshMailProject = () => {
+      void Promise.all([api.getAiChatProjects<Partial<AiChatProject>>(), api.mailAssistantInbox()])
+        .then(([projects, inbox]) => {
+          if (!alive) return;
+          setAiChatProjects(previous => {
+            const base = normalizeAiChatProjects(projects.projects?.length ? projects.projects : previous);
+            const next = mergeMailAiInbox(base, inbox);
+            aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(next);
+            return next;
+          });
+        }).catch(() => {});
+    };
+    window.addEventListener('mail-ai-assistant-updated', refreshMailProject);
+    return () => { alive = false; window.removeEventListener('mail-ai-assistant-updated', refreshMailProject); };
+  }, [currentUser?.id]);
+
   // Same pattern as the existing task-AI chats: fetch the currently open
   // conversation only, compare messages and leave all other UI state alone.
   useEffect(() => {
