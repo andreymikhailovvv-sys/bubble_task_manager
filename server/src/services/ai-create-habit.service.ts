@@ -9,7 +9,7 @@ export type AiCreateHabitArgs = {
   reminderTimes: string[];
   targetCount: number;
 };
-export type CreateHabitProposalAction = AiCreateHabitArgs & { operation: 'create_habit' };
+export type CreateHabitProposalAction = Record<string, unknown> & AiCreateHabitArgs & { operation: 'create_habit' };
 
 export function validateAiCreateHabitArgs(value: unknown): AiCreateHabitArgs {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Некорректные параметры привычки.');
