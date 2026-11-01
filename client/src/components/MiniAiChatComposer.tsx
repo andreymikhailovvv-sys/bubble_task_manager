@@ -1,6 +1,7 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
 import { Paperclip, SendHorizontal } from 'lucide-react';
 import { AutoGrowingTextarea } from './AutoGrowingTextarea';
+import { VoiceInputButton } from './VoiceInputButton';
 
 export type MiniAiChatComposerHandle = {
   clearDraft: () => void;
@@ -73,6 +74,11 @@ export const MiniAiChatComposer = forwardRef<MiniAiChatComposerHandle, MiniAiCha
         >
           <Paperclip size={17} />
         </button>
+        <VoiceInputButton disabled={isSending} className="miniapp-ai-chat-attach" onTranscript={(text, immediate) => {
+          const next = [draftRef.current.trim(), text].filter(Boolean).join(' ');
+          changeDraft(next);
+          if (immediate) onSend();
+        }} />
         <button
           type="button"
           onClick={onSend}
