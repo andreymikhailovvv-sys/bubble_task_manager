@@ -1,5 +1,6 @@
 import { mergeChatProjectSnapshots, canonicalizeTelegramAssistantProjects, canonicalizeMailAssistantProjects } from '../lib/ai-chat-project-sync.js';
 import { aiAssistantService } from '../services/ai-assistant.service.js';
+import { transcribeWebAudio, readMessageAloud, WebAudioError } from '../services/ai-web-audio.service.js';
 import { createAiCheckup } from '../services/ai-checkup-delivery.service.js';
 import { resolveAiCheckupSchedules, validateAiCheckupSchedules } from '../lib/ai-checkup-schedules.js';
 import { getTaskProposal, applyTaskProposal, rejectTaskProposal, undoTaskProposal } from '../services/ai-task-proposal.service.js';
@@ -1921,6 +1922,30 @@ apiRouter.post('/ai/task-proposals/:id/undo', requireAuth, taskProposalSameOrigi
 apiRouter.post('/ai/task-proposals/:id/reject', requireAuth, taskProposalSameOrigin, asyncHandler(async (req, res) => {
   try { res.json(await rejectTaskProposal(req.user!.id, req.params.id)); }
   catch { res.status(404).json({ error: 'Предложение не найдено' }); }
+}));
+
+const webAudioFailure = (res: Response, error: unknown) => {
+  const message = error instanceof Error ? error.message : 'Не удалось обработать аудио.';
+  const status = error instanceof WebAudioError ? error.status
+    : /Недостаточно (?:AI|ИИ) кредитов/.test(message) ? 402 : 502;
+  res.set('Cache-Control', 'no-store, private').status(status).json({
+    error: status === 502 ? 'Ошибка сервиса обработки аудио. Попробуйте позже.' : message
+  });
+};
+apiRouter.post('/ai/audio/transcribe', requireAuth, taskProposalSameOrigin, asyncHandler(async (req, res) => {
+  try {
+    const result = await transcribeWebAudio(req.user!.id, req.body ?? {});
+    res.set('Cache-Control', 'no-store, private').json(result);
+  } catch (error) { webAudioFailure(res, error); }
+}));
+apiRouter.post('/ai/audio/speak', requireAuth, taskProposalSameOrigin, asyncHandler(async (req, res) => {
+  try {
+    const result = await readMessageAloud(req.user!.id, req.body?.text);
+    res.set('Content-Type', 'audio/wav');
+    res.set('Cache-Control', 'no-store, private');
+    res.set('X-AI-Credits-Spent-Milli', String(result.creditsSpentMilli));
+    res.send(result.wav);
+  } catch (error) { webAudioFailure(res, error); }
 }));
 
 apiRouter.post('/ai-chat', requireAuth, aiController.askAiChat);
