@@ -1205,6 +1205,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     const refresh = () => {
       void api.getTasks().then(setTasks).catch(() => undefined);
       void api.getSpheres().then(setSpheres).catch(() => undefined);
+      void api.getHabits().then(setHabits).catch(() => undefined);
     };
     window.addEventListener(proposalAppliedEvent, refresh);
     return () => window.removeEventListener(proposalAppliedEvent, refresh);
