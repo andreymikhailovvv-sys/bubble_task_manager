@@ -140,7 +140,6 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
   let usageMilli = 0;
   let transcriptionMilli = 0;
   let assistantTranscript = '';
-  let awaitingToolResponse = false;
   let activeResponseId: string | null = null;
   let lastAudioItemId: string | null = null;
   let lastAudioContentIndex = 0;
@@ -235,7 +234,6 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
           console.info('[AI live voice] delegated tool result', {
             sessionId, resultLength: typeof packet.answer === 'string' ? packet.answer.length : 0
           });
-          awaitingToolResponse = false;
           if (!upstream || upstream.readyState !== WebSocket.OPEN) return;
           const answer = typeof packet.answer === 'string' ? packet.answer.slice(0, 5000) : 'Инструмент завершился без ответа.';
           upstream.send(JSON.stringify({
@@ -354,7 +352,6 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
           console.info('[AI live voice] delegated tool call', {
             sessionId, index: delegatedTools, questionLength: question.length
           });
-          awaitingToolResponse = true;
           send({ type: 'tool_request', callId: value.item.call_id, question });
         }
         if (value.type === 'response.done') {
