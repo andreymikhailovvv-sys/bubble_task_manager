@@ -10,16 +10,17 @@ export type BargeInDetector = { observe: (sample: BargeInSample) => boolean; res
 export function createBargeInDetector(): BargeInDetector {
   let playbackSince = 0;
   let echoFloor = 0.008;
+  let echoCorrelationFloor = 0;
   let candidateSince = 0;
   let lastAt = 0;
   let interrupted = false;
   return {
     reset() {
-      playbackSince = 0; echoFloor = 0.008; candidateSince = 0; lastAt = 0; interrupted = false;
+      playbackSince = 0; echoFloor = 0.008; echoCorrelationFloor = 0; candidateSince = 0; lastAt = 0; interrupted = false;
     },
     observe({ microphoneRms: rms, echoCorrelation: corr, playbackActive, muted, nowMs }: BargeInSample) {
       if (!playbackActive || muted) {
-        playbackSince = 0; candidateSince = 0; interrupted = false; echoFloor = 0.008;
+        playbackSince = 0; candidateSince = 0; interrupted = false; echoFloor = 0.008; echoCorrelationFloor = 0;
         return false;
       }
       if (interrupted) return false;
@@ -27,14 +28,16 @@ export function createBargeInDetector(): BargeInDetector {
       // The start of the output can be unusually loud and must set a baseline.
       if (nowMs - playbackSince < 280) {
         echoFloor = Math.max(echoFloor * .95, rms);
+        echoCorrelationFloor = Math.max(echoCorrelationFloor, corr);
         candidateSince = 0;
         return false;
       }
       // Correlated signal is almost certainly the model leaking into the mic.
       // AEC can erase that reference, leaving a near-end voice uncorrelated.
       const weakEcho = corr < 0.50;
-      const strongVoice = rms >= Math.max(0.024, echoFloor * (weakEcho ? 1.85 : 3.1));
-      const nearEnd = strongVoice && (weakEcho || rms > echoFloor * 3.1);
+      const doubleTalk = echoCorrelationFloor > 0.55 && corr < echoCorrelationFloor * 0.6;
+      const strongVoice = rms >= Math.max(0.024, echoFloor * (doubleTalk ? 0.92 : weakEcho ? 1.85 : 3.1));
+      const nearEnd = strongVoice && (weakEcho || doubleTalk || rms > echoFloor * 3.1);
       if (!nearEnd) {
         candidateSince = 0;
         // Follow slow output-volume changes, not short user speech spikes.
