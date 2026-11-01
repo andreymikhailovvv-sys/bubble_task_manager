@@ -9,12 +9,21 @@ export function emailAddress(value: string): string | null {
   return candidate.length <= 254 && /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(candidate)
     ? candidate : null;
 }
+/** Validate up to 10 explicit recipients, never infer addresses from display names. */
+export function parseMailRecipients(raw: string): string[] | null {
+  if(typeof raw!=='string'||raw.length>2700||/[\r\n\0]/.test(raw))return null;
+  const items=raw.split(/[;,]/).map(s=>s.trim()).filter(Boolean);
+  if(!items.length||items.length>10)return null;
+  const addresses=items.map(emailAddress);
+  if(addresses.some(x=>!x))return null;
+  return [...new Set(addresses as string[])];
+}
 export async function smtpReply(input: {
   provider: MailProvider; email: string; password: string; from: string; text: string; subject: string;
 }): Promise<'SENT'> {
-  const destination = emailAddress(input.from);
+  const destinations = parseMailRecipients(input.from);
   const sender = emailAddress(input.email);
-  if (!destination || !sender || !input.text.trim() || input.text.length > 6000)
+  if (!destinations || !sender || !input.text.trim() || input.text.length > 6000)
     throw new Error('Недопустимый адрес получателя или текст ответа');
   const host = HOSTS[input.provider];
   const socket = tls.connect({ host, port: 465, servername: host, rejectUnauthorized: true });
@@ -56,12 +65,12 @@ export async function smtpReply(input: {
     await send(Buffer.from(sender).toString('base64'), 334);
     await send(Buffer.from(input.password).toString('base64'), 235);
     await send('MAIL FROM:<' + sender + '>', 250);
-    await send('RCPT TO:<' + destination + '>', 250);
+    for (const destination of destinations) await send('RCPT TO:<' + destination + '>', 250);
     await send('DATA', 354);
     const subject = input.subject.replace(/[\r\n\0]/g, ' ').slice(0, 150);
     const encodedSubject = '=?UTF-8?B?' + Buffer.from(/^Re:/i.test(subject) ? subject : 'Re: ' + subject).toString('base64') + '?=';
     const headers = [
-      'From: <' + sender + '>', 'To: <' + destination + '>',
+      'From: <' + sender + '>', 'To: ' + destinations.map(x=>'<'+x+'>').join(', '),
       'Subject: ' + encodedSubject,
       'Date: ' + new Date().toUTCString(),
       'MIME-Version: 1.0', 'Content-Type: text/plain; charset=UTF-8',
