@@ -17,6 +17,7 @@ import { AI_IMAGE_TOOL, generateAiImage, validateImageToolArguments } from './ai
 import { AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, executeAiFileTool, resolveCatalogImageReferences, type FileToolContext } from './ai-file-operations.service.js';
 import { TELEGRAM_REQUEST_READ_TOOL, prepareTelegramAiReadRequest, type TelegramReadDraft } from './telegram-ai-read-consent.service.js';
 import { TELEGRAM_PREPARE_SEND_TOOL, prepareTelegramInlineSendDraft, type TelegramInlineSendDraft } from './telegram-inline-send-draft.service.js';
+import { SEARCH_MAIL_TOOL, PREPARE_MAIL_TOOL, searchOwnerMailbox, prepareOwnerMailSend, type MailSendDraft } from './ai-mail-tools.service.js';
 
 export const MAX_TOOL_CALLS = 5;
 export const MAX_PROVIDER_CALLS = 6;
@@ -137,6 +138,8 @@ export const AI_CHAT_OPENAI_TOOLS = [
   AI_EDIT_FILE_TOOL,
   TELEGRAM_PREPARE_SEND_TOOL,
   TELEGRAM_REQUEST_READ_TOOL,
+  SEARCH_MAIL_TOOL,
+  PREPARE_MAIL_TOOL,
   {
     type: 'function', name: 'create_excel_workbook', strict: true,
     description: 'Создать и прикрепить к ответу настоящий Excel-файл (.xlsx). Используй при запросе электронной таблицы, Excel, XLSX или отчёта файлом. Модель передаёт только содержимое и структуру листов, сервер собирает XLSX. Не более одного файла за запрос.',
@@ -288,6 +291,8 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
   const actionReports: string[] = []; const undoOperations: unknown[] = [];
   let generatedDocument: GeneratedDocumentMeta | null = null;
   let telegramSendDraft: TelegramInlineSendDraft | null = null;
+  let mailSendDraft: MailSendDraft | null = null;
+  let mailReadUsed = false;
   let telegramReadDraft: TelegramReadDraft | null = null;
   let imageCreditsSpentMilli = 0;
   let fileEditCreditsSpentMilli = 0;
@@ -421,6 +426,8 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
             (item.mimeType.toLowerCase().startsWith('image/') || /\.(?:png|jpe?g|webp)$/i.test(item.fileName)))
             ? 'editing_image' : 'editing_document',
           prepare_telegram_send: 'forming_answer',
+          search_mailbox: 'analyzing_retrieved_context',
+          prepare_mail_send: 'forming_answer',
           request_telegram_chat_read: 'forming_answer'
         };
         const progress = progressByTool[name];
@@ -433,6 +440,17 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         }
         console.info('[AI chat tool] call', { requestId, userId: input.userId, providerCallIndex: providerCallCount, toolCallIndex: round, operation: name });
         if (!value || typeof value !== 'object' || Array.isArray(value)) return { ok: false, code: 'INVALID_ARGUMENTS', message: 'Аргументы tool должны быть объектом.' };
+        if (name === 'search_mailbox') {
+          mailReadUsed = true;
+          try { return await searchOwnerMailbox(input.userId, value); }
+          catch { return {ok:false,code:'MAIL_UNAVAILABLE',message:'Не удалось прочитать почтовый ящик. Проверьте подключение.'}; }
+        }
+        if (name === 'prepare_mail_send') {
+          if (mailSendDraft) return {ok:false,code:'ALREADY_PREPARED'};
+          const result = await prepareOwnerMailSend(input.userId,value);
+          if (result.ok) mailSendDraft = result.draft;
+          return result.ok ? {ok:true,prepared:true,confirmationRequired:true,message:'Письмо подготовлено в карточке, не отправлено.'} : result;
+        }
         if (name === 'request_telegram_chat_read') {
           if (telegramReadDraft) return { ok: false, code: 'ALREADY_PREPARED', message: 'Карточка запроса доступа уже сформирована.' };
           const result = await prepareTelegramAiReadRequest(input.userId, null, value);
@@ -699,7 +717,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         : taskProposal.status === 'PENDING'
           ? 'Подготовил изменения. Просмотрите карточку и нажмите «Принять».'
           : 'Изменения не применены: ' + (taskProposal.error || 'Не удалось выполнить операцию.') + ' Задача не создана, повторно подтверждать нечего.')
-      : loop.answer, telegramSendDraft, telegramReadDraft, taskProposal, model: input.model, taskDataChanged: taskProposal?.status === 'APPLIED', actionReports, undoOperations, generatedDocument, imageCreditsSpentMilli: imageCreditsSpentMilli + fileEditCreditsSpentMilli, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
+      : loop.answer, telegramSendDraft, telegramReadDraft, mailSendDraft, mailReadUsed, taskProposal, model: input.model, taskDataChanged: taskProposal?.status === 'APPLIED', actionReports, undoOperations, generatedDocument, imageCreditsSpentMilli: imageCreditsSpentMilli + fileEditCreditsSpentMilli, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
   } catch (error) {
     await Promise.all(dynamicCalls.map((call) => refundDynamicResponsesCall(call)));
     if (webReservation) await refundAiCreditReservation(webReservation);
