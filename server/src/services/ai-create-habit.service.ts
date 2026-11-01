@@ -29,7 +29,7 @@ export function validateAiCreateHabitArgs(value: unknown): AiCreateHabitArgs {
     throw new TypeError('Укажите дни недели числами 0–6 (0 — воскресенье).');
   }
   if (!Array.isArray(data.reminderTimes) || data.reminderTimes.length > 24 ||
-      data.reminderTimes.some(time => typeof time !== 'string' || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(time))) {
+      data.reminderTimes.some(time => typeof time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time))) {
     throw new TypeError('Время уведомления должно быть в формате HH:mm; максимум 24 времени.');
   }
   const targetCount = data.targetCount;
