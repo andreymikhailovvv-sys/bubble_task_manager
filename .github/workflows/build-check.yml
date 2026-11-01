@@ -101,6 +101,8 @@ jobs:
         run: node --import tsx --test server/test/telegram-ai-monitoring.test.ts
       - name: Verify Telegram identity binding
         run: node --import tsx --test server/test/telegram-user-client-binding.test.ts
+      - name: Verify Yandex and Mail.ru email integration cryptography and read-only access
+        run: node --import tsx --test server/test/mail-assistant-security.test.ts
       - name: Verify Telegram user-client cryptography and access gating
         run: node --import tsx --test server/test/telegram-user-client-security.test.ts
       - name: Verify image edit animation and attachment previews
