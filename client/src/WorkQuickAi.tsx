@@ -171,6 +171,7 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
           </div>
         </div>
       </div>
+       <div className="work-quick-notification"><WorkNotificationBell organizationId={organizationId}/></div>
       <button type="button"
         className="ai-chat-launcher-button flex h-14 w-14 touch-none select-none items-center justify-center rounded-full text-2xl text-white shadow-2xl transition duration-200 hover:scale-105 hover:shadow-violet-500/40 active:scale-95"
         title="Чат с ИИ" aria-label="Развернуть чат с ИИ"
