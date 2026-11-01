@@ -143,6 +143,13 @@ export function realtimeSpeechCostMilli(usage: RealtimeUsage) {
   return providerNanoUsdToMilliCredits(inputCost + outputCost);
 }
 
+export function realtimeSpeechInputEvent(text: string) {
+  return { type: 'conversation.item.create' as const, item: {
+    type: 'message' as const, role: 'user' as const,
+    content: [{ type: 'input_text' as const, text }]
+  } };
+}
+
 async function synthesizeRealtime(text: string, apiKey: string, maxOutputTokens: number): Promise<{ wav: Buffer; usage: RealtimeUsage }> {
   const { ws, dispatcher } = createRealtimeSocket(apiKey);
   const chunks: Buffer[] = [];
@@ -210,9 +217,7 @@ async function synthesizeRealtime(text: string, apiKey: string, maxOutputTokens:
           phase = 'creating_message';
           // Realtime expects the text as a conversation item, not merely as
           // response instructions with an empty input array.
-          ws.send(JSON.stringify({ type: 'conversation.item.create', item: {
-            type: 'message', role: 'user', content: [{ type: 'input_text', text }]
-          } }));
+          ws.send(JSON.stringify(realtimeSpeechInputEvent(text)));
         }
         if (message.type === 'conversation.item.created' && phase === 'creating_message' && message.item?.role === 'user') {
           phase = 'generating';
