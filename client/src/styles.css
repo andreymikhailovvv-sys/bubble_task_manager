@@ -3710,6 +3710,24 @@ body[data-theme='light'] .notes-editor-list-option:hover {
   box-shadow: inset 0 0 18px rgba(16, 185, 129, 0.08), 0 8px 20px rgba(15, 23, 42, 0.18);
 }
 
+/* The real time control occupies the pill's hit area. Unlike a sr-only input
+   opened via showPicker(), direct touch opens iOS Safari/Telegram's native picker. */
+.miniapp-habit-add-reminder .miniapp-habit-native-time-input {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0.01;
+  font-size: 16px;
+  touch-action: manipulation;
+}
+
+.miniapp-habit-add-reminder:focus-within {
+  outline: 2px solid rgba(14, 165, 233, 0.7);
+  outline-offset: 2px;
+}
+
 .miniapp-light .miniapp-habit-counter-button,
 .miniapp-light .miniapp-habit-counter-button-positive,
 .miniapp-light .miniapp-habit-stepper {
