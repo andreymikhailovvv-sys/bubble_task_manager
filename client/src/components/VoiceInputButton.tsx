@@ -9,6 +9,7 @@ type Props = {
   onLiveMessage?: (message: LiveVoiceMessage) => void;
   onLiveToolResult?: (result: LiveVoiceToolCompletion) => void;
   onLiveStatus?: (status: LiveVoiceProgressStatus | null) => void;
+  onLiveSessionChange?: (active: boolean) => void;
   disabled?: boolean;
   small?: boolean;
   className?: string;
@@ -16,7 +17,7 @@ type Props = {
 
 type VoiceState = 'idle' | 'recording' | 'transcribing';
 
-export function VoiceInputButton({ onTranscript, liveContext, onLiveMessage, onLiveToolResult, onLiveStatus, disabled = false, small = false, className = '' }: Props) {
+export function VoiceInputButton({ onTranscript, liveContext, onLiveMessage, onLiveToolResult, onLiveStatus, onLiveSessionChange, disabled = false, small = false, className = '' }: Props) {
   const [state, setState] = useState<VoiceState>('idle');
   const [error, setError] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -35,6 +36,14 @@ export function VoiceInputButton({ onTranscript, liveContext, onLiveMessage, onL
   const cancelledRef = useRef(false);
   const immediateRef = useRef(false);
   const aliveRef = useRef(true);
+  const liveSessionActiveRef = useRef(false);
+  const onLiveSessionChangeRef = useRef(onLiveSessionChange);
+  onLiveSessionChangeRef.current = onLiveSessionChange;
+  const setLiveSessionActive = (active: boolean) => {
+    if (liveSessionActiveRef.current === active) return;
+    liveSessionActiveRef.current = active;
+    onLiveSessionChangeRef.current?.(active);
+  };
 
   const release = () => {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -51,6 +60,10 @@ export function VoiceInputButton({ onTranscript, liveContext, onLiveMessage, onL
     aliveRef.current = true;
     return () => {
       aliveRef.current = false;
+      if (liveSessionActiveRef.current) {
+        liveSessionActiveRef.current = false;
+        onLiveSessionChangeRef.current?.(false);
+      }
       cancelledRef.current = true;
       const recorder = recorderRef.current;
       if (recorder?.state === 'recording') recorder.stop();
@@ -81,6 +94,7 @@ export function VoiceInputButton({ onTranscript, liveContext, onLiveMessage, onL
       void context.resume().catch(() => undefined);
       setLiveAudioContext(context);
     } catch { setLiveAudioContext(null); }
+    setLiveSessionActive(true);
     setLiveOpen(true);
   };
 
@@ -196,7 +210,7 @@ export function VoiceInputButton({ onTranscript, liveContext, onLiveMessage, onL
       </div> : null}
       {liveOpen ? <LiveVoiceDialog liveContext={liveContext} audioContext={liveAudioContext}
         onLiveMessage={onLiveMessage} onLiveToolResult={onLiveToolResult} onLiveStatus={onLiveStatus}
-        onClose={() => { setLiveOpen(false); setLiveAudioContext(null); }} /> : null}
+        onClose={() => { setLiveSessionActive(false); setLiveOpen(false); setLiveAudioContext(null); }} /> : null}
     </span>
     {error && state === 'idle' ? <div role="alert" className="voice-input-error">{error}
       <button type="button" title="Закрыть ошибку" onClick={() => setError('')}><X size={13} /></button>
