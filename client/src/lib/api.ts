@@ -481,7 +481,7 @@ export type WorkProject = { id: string; name: string; description: string | null
 export type WorkTaskStatus = 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE';
 export type WorkTaskPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL';
 export type WorkCompanyTask = { id: string; projectId: string; title: string; description: string | null; status: WorkTaskStatus; priority: WorkTaskPriority; dueAt: string | null; assignedMemberId: string | null; createdByMemberId: string | null; createdAt: string; updatedAt: string };
-export type WorkSubtask = {id:string;taskId:string;title:string;description?:string|null;importance?:number;isDone:boolean;dueAt:string|null;sortOrder:number;createdByMemberId:string|null;commentCount?:number;createdAt:string;updatedAt:string};
+export type WorkSubtask = {id:string;taskId:string;title:string;description?:string|null;importance?:number;isDone:boolean;dueAt:string|null;sortOrder:number;createdByMemberId:string|null;commentCount?:number;unreadCommentCount?:number;createdAt:string;updatedAt:string};
 export type WorkDashboardTask = WorkCompanyTask & { project: {id:string;name:string}; assignee: {user: {name:string|null;username:string|null}} | null };
 export type WorkDashboard = { role:WorkRole; memberId:string;projects:WorkProject[];tasks:WorkDashboardTask[];stats:{projects:number;tasks:number;open:number;overdue:number};hasMoreTasks:boolean };
 export type WorkAiCredits = { aiCreditsMilli: number; spentMilli: number; aiModel: string };
@@ -497,6 +497,7 @@ export type WorkAiMessage = {
   senderMemberId?:string|null;recipientMemberId?:string|null;
   sender?:{role:string;user:{name:string|null;username:string|null}}|null;
   recipient?:{user:{name:string|null;username:string|null}}|null; };
+export type WorkNotification = {id:string;taskId:string;subtaskId:string;content:string;createdAt:string;readAt:string|null};
 export type WorkSubtaskComment = {id:string;subtaskId?:string;content:string;authorMemberId:string;parentCommentId:string|null;createdAt:string;
  author:{role:string;user:{name:string|null;username:string|null}}};
 export type WorkAiJob = { id:string; dueAt:string; instruction:string; state:string; createdAt:string };
@@ -516,6 +517,9 @@ export const api = {
   getWorkAiProposal: (org:string,id:string)=>request<{proposal:WorkAiProposal}>(`/api/business/organizations/${encodeURIComponent(org)}/ai/proposals/${encodeURIComponent(id)}`),
   approveWorkAiProposal: (org:string,id:string)=>request<{proposal:WorkAiProposal}>(`/api/business/organizations/${encodeURIComponent(org)}/ai/proposals/${encodeURIComponent(id)}/approve`,{method:'POST',body:'{}'}),
   rejectWorkAiProposal: (org:string,id:string)=>request<{proposal:WorkAiProposal}>(`/api/business/organizations/${encodeURIComponent(org)}/ai/proposals/${encodeURIComponent(id)}/reject`,{method:'POST',body:'{}'}),
+  workNotifications: (org:string)=>request<{notifications:WorkNotification[];unreadCount:number}>(`/api/business/organizations/${encodeURIComponent(org)}/ai/notifications`),
+  workReadNotification: (org:string,id:string)=>request<{ok:boolean}>(`/api/business/organizations/${encodeURIComponent(org)}/ai/notifications/${encodeURIComponent(id)}/read`,{method:'PATCH',body:'{}'}),
+  workMarkSubtaskNotificationsRead: (org:string,id:string)=>request<{ok:boolean}>(`/api/business/organizations/${encodeURIComponent(org)}/ai/subtasks/${encodeURIComponent(id)}/notifications/read`,{method:'PATCH',body:'{}'}),
   workAiBalance: (id:string)=>request<{credits:WorkAiCredits}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/balance`),
   workAiSetModel: (id:string,model:string)=>request<{model:string}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/model`,{method:'PATCH',body:JSON.stringify({model})}),
   workAiHistory: (id:string,taskId?:string)=>request<{messages:WorkAiMessage[]}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/${taskId?'tasks/'+encodeURIComponent(taskId)+'/':''}history`),
