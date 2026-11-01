@@ -4442,20 +4442,12 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     ? Array.from(new Set(visibleEntries.map((entry) => entry.time.slice(0, 2)))).map((hour) => ({ hour, entries: visibleEntries.filter((entry) => entry.time.startsWith(hour)) }))
                     : [];
                   return (
-                    <div key={dateKey} className={`miniapp-calendar-day ${isToday ? 'is-today' : ''} ${isOutsideMonth ? 'is-outside' : ''}`}
-                      {...(timelineView === 'month' ? {
-                        role: 'button' as const,
-                        tabIndex: 0,
-                        'aria-label': `Открыть таймлайн на ${date.toLocaleDateString('ru-RU')}`,
-                        onClick: () => openDayTimeline(date),
-                        onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => {
-                          if (event.target !== event.currentTarget) return;
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            openDayTimeline(date);
-                          }
-                        }
-                      } : {})}>
+                    <div key={dateKey} className={`miniapp-calendar-day ${isToday ? 'is-today' : ''} ${isOutsideMonth ? 'is-outside' : ''}`}>
+                      {timelineView === 'month' && (
+                        <button type="button" className="miniapp-calendar-cell-hitarea"
+                          onClick={() => openDayTimeline(date)}
+                          aria-label={`Открыть таймлайн на ${date.toLocaleDateString('ru-RU')}`} />
+                      )}
                       {timelineView === 'month' ? (
                         <span className="miniapp-calendar-date" aria-hidden="true"><strong>{date.getDate()}</strong></span>
                       ) : (
@@ -4472,7 +4464,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                               const entryClassName = `miniapp-calendar-entry ${'task' in entry && entry.task.taskType === 'EVENT' ? 'miniapp-calendar-event-entry' : ''} ${'task' in entry && entry.task.taskType === 'REMINDER' ? 'miniapp-calendar-reminder-entry' : ''}`;
                               const entryStyle = { '--calendar-entry-color': entry.color } as CSSProperties;
                               return timelineView === 'month' ? (
-                                <span key={entry.id} className={entryClassName} style={entryStyle} onClick={(event) => event.stopPropagation()}>
+                                <span key={entry.id} className={entryClassName} style={entryStyle}>
                                   <span className="miniapp-calendar-entry-title">{entry.title}</span>
                                 </span>
                               ) : (
