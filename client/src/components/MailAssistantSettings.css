@@ -1,0 +1,6 @@
+.mail-assistant-provider-toggle {display:flex;gap:8px}
+.mail-assistant-provider-toggle button {flex:1;min-width:0;padding:10px 12px;border-radius:12px;border:1px solid var(--integration-border);background:var(--integration-bg);color:var(--integration-text);font-size:13px;font-weight:600}
+.mail-assistant-provider-toggle button.active {border-color:var(--integration-accent);background:var(--integration-hover)}
+.mail-assistant-events {display:flex;flex-direction:column;gap:10px;max-height:580px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--integration-border) transparent}
+.mail-assistant-event {border-color:var(--integration-border);background:var(--integration-bg);overflow-wrap:anywhere}
+@media(max-width:480px){.mail-assistant-provider-toggle button{padding:9px 6px;font-size:12px}.mail-assistant-events{max-height:none}}
