@@ -50,7 +50,7 @@ import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShar
 import { AiReplyAction, AiReplyPreview, AiReplyMessageBody, serializeAiReply, type AiReplyTarget } from './components/AiMessageReply';
 import { AiReadAloudAction, AiSpeechCostLine } from './components/AiReadAloudAction';
 import type { LiveVoiceMessage, LiveVoiceToolCompletion, LiveVoiceProgressStatus } from './components/LiveVoiceDialog';
-import { voiceTranscriptMessage, voiceToolAssistantMessage, updateLiveVoiceProgress } from './lib/voice-chat-messages';
+import { voiceTranscriptMessage, voiceToolAssistantMessage, updateLiveVoiceProgress, preserveLiveVoiceMessages } from './lib/voice-chat-messages';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
 import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, mergeTelegramManagedMessages, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike, orderAiChatMessagesChronologically } from './lib/ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
@@ -845,6 +845,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [isTaskAiRecipientPickerVisible, setIsTaskAiRecipientPickerVisible] = useState(false);
   const [isTaskAiRecipientMenuOpen, setIsTaskAiRecipientMenuOpen] = useState(false);
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
+  const voiceTaskMessagesRef = useRef<Record<string, ChatMessage[]>>({});
+  const voiceChatMessagesRef = useRef<Record<string, MiniAiChatMessage[]>>({});
   const [replyToTask, setReplyToTask] = useState<AiReplyTarget | null>(null);
   const [replyToGeneral, setReplyToGeneral] = useState<AiReplyTarget | null>(null);
   useEffect(() => { setReplyToTask(null); }, [openedTaskId]);
@@ -2834,6 +2836,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   };
   const appendLiveTaskMessage = (taskId: string, event: LiveVoiceMessage) => {
     const entry = voiceTranscriptMessage(event);
+    voiceTaskMessagesRef.current[taskId] = [...(voiceTaskMessagesRef.current[taskId] ?? []), entry].slice(-80);
     setAiDialogByTask(previous => {
       const messages = previous[taskId] ?? [];
       if (messages.some(message => message.id === entry.id)) return previous;
@@ -2842,12 +2845,15 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   };
   const applyLiveTaskTool = (taskId: string, event: LiveVoiceToolCompletion) => {
     const answer = voiceToolAssistantMessage(event);
+    voiceTaskMessagesRef.current[taskId] = [...(voiceTaskMessagesRef.current[taskId] ?? []), answer].slice(-80);
     setAiDialogByTask(previous => ({ ...previous, [taskId]: [...(previous[taskId] ?? []), answer] }));
     if (event.result.taskDataChanged) void loadData({ refreshPlannerOnly: true });
     refreshAiCredits();
   };
   const appendLiveProjectMessage = (projectId: string, chatId: string, event: LiveVoiceMessage) => {
     const message = voiceTranscriptMessage(event);
+    const key = `${projectId}:${chatId}`;
+    voiceChatMessagesRef.current[key] = [...(voiceChatMessagesRef.current[key] ?? []), message].slice(-80);
     setAiChatProjects(previous => previous.map(project => project.id !== projectId ? project : ({
       ...project, chats: project.chats.map(chat => chat.id !== chatId ? chat :
         { ...chat, messages: chat.messages.some(item => item.id === message.id)
@@ -2856,6 +2862,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   };
   const applyLiveProjectTool = (projectId: string, chatId: string, event: LiveVoiceToolCompletion) => {
     const answer = voiceToolAssistantMessage(event);
+    const key = `${projectId}:${chatId}`;
+    voiceChatMessagesRef.current[key] = [...(voiceChatMessagesRef.current[key] ?? []), answer].slice(-80);
     setAiChatProjects(previous => previous.map(project => project.id !== projectId ? project : ({
       ...project, chats: project.chats.map(chat => chat.id !== chatId ? chat :
         { ...chat, messages: [...chat.messages, answer].slice(chatId === QUICK_AI_CHAT_ID ? -20 : -300) })
@@ -2992,8 +3000,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             if (outlined !== previous) aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(outlined);
             return outlined;
           }
-          const merged = reconcileActiveAiChatMessages(
-            chat.messages, reconcileAiChatMessagesWithChips(chat.messages, remote), aiChatLoading);
+          const merged = preserveLiveVoiceMessages(reconcileActiveAiChatMessages(
+            chat.messages, reconcileAiChatMessagesWithChips(chat.messages, remote), aiChatLoading
+          ), voiceChatMessagesRef.current[`${projectId}:${chatId}`] ?? []);
           if (merged === chat.messages) {
             if (outlined !== previous) aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(outlined);
             return outlined;
@@ -3594,7 +3603,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             && localMessages.slice(0, serverMessages.length).every((message, index) => (
               message.role === serverMessages[index]?.role && message.content === serverMessages[index]?.content
             ));
-          return { ...prev, [openedTaskId]: hasPendingOptimisticMessages ? localMessages : serverMessages };
+          return { ...prev, [openedTaskId]: preserveLiveVoiceMessages(hasPendingOptimisticMessages ? localMessages : serverMessages, voiceTaskMessagesRef.current[openedTaskId] ?? []) };
         });
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Не удалось загрузить чат ИИ');
@@ -3615,7 +3624,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             && localMessages.slice(0, serverMessages.length).every((message, index) => (
               message.role === serverMessages[index]?.role && message.content === serverMessages[index]?.content
             ));
-          return { ...prev, [openedTaskId]: hasPendingOptimisticMessages ? localMessages : serverMessages };
+          return { ...prev, [openedTaskId]: preserveLiveVoiceMessages(hasPendingOptimisticMessages ? localMessages : serverMessages, voiceTaskMessagesRef.current[openedTaskId] ?? []) };
         });
       } catch {
         // silent sync retries
