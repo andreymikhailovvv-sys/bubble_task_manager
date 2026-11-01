@@ -288,7 +288,7 @@ async function analyze(account: EmailMailbox, message: MailMessage, requestId: s
         actionId: requestId, providerCallIndex: 1, feature: 'email_monitor', model: account.monitorModel,
         creditsSpentMilli: settlement.chargedMilli });
     }
-    return normalize(data);
+    return { ...normalize(data), creditsSpentMilli: settlement.chargedMilli };
   } finally {
     if (!settled) await refundAiCreditReservation(reservation);
   }
