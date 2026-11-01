@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Bot, CheckCircle2, ChevronDown, ChevronRight, KeyRound, Link2, Loader2, Send, Smartphone, X } from 'lucide-react';
+import { Bot, CheckCircle2, ChevronDown, ChevronRight, KeyRound, Link2, Loader2, Mail, Send, Smartphone, X } from 'lucide-react';
 import { TelegramAiAssistantSettings } from './TelegramAiAssistantSettings';
+import { MailAssistantSettings } from './MailAssistantSettings';
 import { api, type TelegramIntegrationStatus } from '../lib/api';
 import './TelegramIntegrationsMenu.css';
 
-type Integration = 'bot' | 'messages' | 'assistant';
+type Integration = 'bot' | 'messages' | 'assistant' | 'email';
 type Props = { onConnectBot: () => void };
 const RUNNING = ['starting', 'qr', 'password_required', 'verifying_password'];
 type MenuPlacement = { left: number; top?: number; bottom?: number; width: number; maxHeight: number };
@@ -15,6 +16,8 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
   const [expanded, setExpanded] = useState<Integration | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [assistantDialogOpen, setAssistantDialogOpen] = useState(false);
+  const [mailDialogOpen, setMailDialogOpen] = useState(false);
+  const [mailConnected, setMailConnected] = useState(false);
   const [status, setStatus] = useState<TelegramIntegrationStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [apiId, setApiId] = useState('');
@@ -92,6 +95,9 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
     };
   }, [open, updatePlacement]);
   useEffect(() => {
+    if (open) void api.mailAccounts().then(data => setMailConnected(data.accounts.length > 0)).catch(() => {});
+  }, [open, mailDialogOpen]);
+  useEffect(() => {
     if (open || dialogOpen) void refresh();
   }, [open, dialogOpen, refresh]);
   useEffect(() => {
@@ -163,16 +169,17 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
             onFocus={cancelClose}>
             <h3 className="mb-2 px-1 text-sm font-bold">Интеграции</h3>
             <p className="integration-menu__muted mb-3 px-1 text-xs">Подключайте сервисы к своему аккаунту Планировыча.</p>
-            {(['bot', 'messages', 'assistant'] as const).map(kind => {
+            {(['bot', 'messages', 'assistant', 'email'] as const).map(kind => {
               const isBot = kind === 'bot';
               const isAssistant = kind === 'assistant';
-              const enabled = isBot ? botConnected : isAssistant ? Boolean(status?.connected && status.readEnabled) : connected;
+              const isEmail = kind === 'email';
+              const enabled = isEmail ? mailConnected : isBot ? botConnected : isAssistant ? Boolean(status?.connected && status.readEnabled) : connected;
               return (
                 <div key={kind} className="integration-menu__item mb-2 rounded-xl border">
                   <button type="button" className="flex w-full items-center gap-2 p-3 text-left" aria-expanded={expanded === kind}
                     onClick={() => expandIntegration(kind)}>
-                    <span className="integration-menu__symbol flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">{isBot ? <Smartphone size={19}/> : isAssistant ? <Bot size={19}/> : <Send size={18}/>}</span>
-                    <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{isBot ? 'Telegram-бот' : isAssistant ? 'ИИ-ассистент Telegram' : 'Отправка в Telegram'}</span>
+                    <span className="integration-menu__symbol flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">{isEmail ? <Mail size={19}/> : isBot ? <Smartphone size={19}/> : isAssistant ? <Bot size={19}/> : <Send size={18}/>}</span>
+                    <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{isEmail ? 'Почтовый ИИ-ассистент' : isBot ? 'Telegram-бот' : isAssistant ? 'ИИ-ассистент Telegram' : 'Отправка в Telegram'}</span>
                       <span className={`mt-1 flex items-center gap-1 text-xs ${enabled ? 'integration-menu__on' : 'integration-menu__muted'}`}>
                         {enabled ? <CheckCircle2 size={12}/> : null}{isAssistant ? (enabled ? 'Доступно для настройки' : 'Требуется подключение') : (enabled ? 'Подключено' : 'Не подключено')}
                       </span>
@@ -181,7 +188,7 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
                   </button>
                   {expanded === kind && (
                     <div className="integration-menu__details border-t px-3 pb-3 pt-2">
-                      <p className="integration-menu__muted text-xs leading-relaxed">{isBot
+                      <p className="integration-menu__muted text-xs leading-relaxed">{isEmail ? 'Подключите Яндекс Почту или Mail.ru: сводки новых писем, отслеживание обязательств и предложения задач. Только чтение через IMAP, без отправки писем.' : isBot
                         ? 'Получайте уведомления, используйте Telegram Mini App и управляйте задачами через бота Планировыча.'
                         : isAssistant
                           ? 'Выберите личные и групповые чаты, укажите инструкции, уровень анализа, режим работы и лимиты кредитов. На первом этапе настройки сохраняются без фонового чтения и автоответов.'
@@ -191,9 +198,10 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
                           setOpen(false);
                           if (isBot) onConnectBot();
                           else if (isAssistant) setAssistantDialogOpen(true);
+                           else if (isEmail) setMailDialogOpen(true);
                           else { setDialogOpen(true); setError(''); setNotice(''); }
                         }}>
-                        {isAssistant ? 'Настроить ассистента' : enabled && !isBot ? 'Управлять подключением' : isBot && enabled ? 'Открыть подключение' : 'Подключить'}
+                        {isAssistant || isEmail ? 'Настроить ассистента' : enabled && !isBot ? 'Управлять подключением' : isBot && enabled ? 'Открыть подключение' : 'Подключить'}
                       </button>
                     </div>
                   )}
@@ -204,6 +212,7 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
         )}
       </div>
       {assistantDialogOpen && <TelegramAiAssistantSettings onClose={() => setAssistantDialogOpen(false)}/>}
+      {mailDialogOpen && <MailAssistantSettings onClose={() => setMailDialogOpen(false)}/>}
       {dialogOpen && createPortal(
         <div className="telegram-integrations-modal fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm" onClick={closeModal}>
           <section role="dialog" aria-modal="true" aria-label="Подключить отправку в Telegram"
