@@ -46,6 +46,7 @@ export async function transcribeWebAudio(userId: string, input: { audioBase64?: 
   // The reported browser duration is never trusted as a billing upper bound.
   const reservation = await reserveAiCreditsMilli(userId, 16_000);
   let providerCompleted = false;
+  let finalized = false;
   try {
     const requestId = crypto.randomUUID();
     const form = new FormData();
@@ -60,22 +61,26 @@ export async function transcribeWebAudio(userId: string, input: { audioBase64?: 
     const payload = await response.json() as { text?: unknown; usage?: { type?: string; seconds?: number; input_tokens?: number; output_tokens?: number; total_tokens?: number } };
     providerCompleted = true;
     const text = typeof payload.text === 'string' ? payload.text.trim() : '';
-    if (!text || !payload.usage) throw new WebAudioError('Сервис не вернул результат или сведения о расходах.', 502);
+    if (!payload.usage) throw new WebAudioError('Сервис не вернул сведения о расходах.', 502);
     const cost = calculateOpenAiTranscriptionUsageCost(TRANSCRIBE_MODEL, payload.usage);
     if (cost.estimatedCreditsMilli === null || cost.estimatedCreditsMilli > reservation.totalMilli) {
       throw new WebAudioError('Не удалось проверить стоимость голосовой записи.', 502);
     }
     const settled = await settleAiCreditReservation(reservation, cost.estimatedCreditsMilli);
+    finalized = true;
     await recordOpenAiTranscriptionUsage({ userId, requestId, model: TRANSCRIBE_MODEL, usage: payload.usage });
     await recordAiCreditCharge({
       userId, requestId: requestId + ':charge', actionId: requestId, providerCallIndex: 1,
       feature: 'audio_transcription', model: TRANSCRIBE_MODEL, creditsSpentMilli: settled.chargedMilli
     });
+    if (!text) throw new WebAudioError('Не удалось разобрать речь. Кредиты списаны только за фактическое распознавание.', 422);
     return { text, creditsSpentMilli: settled.chargedMilli };
   } catch (error) {
     // Do not silently refund if the provider already generated a billable result.
-    if (!providerCompleted) await refundAiCreditReservation(reservation);
-    else await settleAiCreditReservation(reservation, reservation.totalMilli);
+    if (!finalized) {
+      if (!providerCompleted) await refundAiCreditReservation(reservation);
+      else await settleAiCreditReservation(reservation, reservation.totalMilli);
+    }
     throw error;
   }
 }
