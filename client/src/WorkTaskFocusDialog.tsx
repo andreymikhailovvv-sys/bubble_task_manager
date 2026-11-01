@@ -242,7 +242,7 @@ export default function WorkTaskFocusDialog({organizationId,task,workspace,curre
                         {memberName(st.createdByMemberId)} · {['OWNER','ADMIN','MANAGER'].includes(workspace.members.find(m=>m.id===st.createdByMemberId)?.role||'')?'Руководитель':'Сотрудник'}
                        </span>}
                      {st.dueAt&&<span className="work-subtask-date whitespace-nowrap text-[10px] text-muted">{new Date(st.dueAt).toLocaleDateString('ru-RU')}</span>}
-                     {mayEdit&&<InlineDateTimePickerIcon detachedPopup value={st.dueAt} title="Изменить срок подзадачи"
+                     {mayEdit&&<InlineDateTimePickerIcon detachedPopup popupZIndex={2600} value={st.dueAt} title="Изменить срок подзадачи"
                        onChange={value=>updateSubtask(st.id,{dueAt:value})}/>}
                    </div>;
                 })}
