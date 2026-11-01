@@ -935,8 +935,17 @@ export const api = {
 };
 
 export type MailAccountSettings = {
-  enabled: boolean; intervalMinutes: 5 | 15 | 30 | 60;
-  taskMode: 'NONE' | 'SUGGEST' | 'AUTO'; instructions: string;
+  enabled: boolean; intervalMinutes: number;
+  replyMode: 'OBSERVE' | 'SUGGEST' | 'AUTO';
+  taskMode: 'NONE' | 'SUGGEST' | 'AUTO';
+  suggestWhen: string; suggestHow: string;
+  autoReplyWhen: string; autoReplyHow: string;
+  replyIntervalMinutes: number;
+  taskCreationWhen: string; taskIntervalMinutes: number;
+  summaryIntervalMinutes: number; summaryInstructions: string;
+  monitorModel: 'gpt-6-luna' | 'gpt-6.1-terra' | 'gpt-6.1-sol';
+  dailyCreditLimitMilli: number | null; notifyImportant: boolean;
+  instructions: string;
 };
 export type MailAccountConnect = MailAccountSettings & {
   provider: 'yandex' | 'mailru'; email: string; password: string;
@@ -944,6 +953,8 @@ export type MailAccountConnect = MailAccountSettings & {
 export type MailAccount = MailAccountSettings & {
   id: string; provider: 'yandex' | 'mailru'; email: string;
   sentFolder: string | null; lastCheckedAt: string | null; nextCheckAt: string | null;
+  lastSummaryAt: string | null; lastSummary: { summary: string; decisions: string[]; obligations: string[]; risks: string[] } | null;
+  spentTodayMilli: number; totalSpentMilli: number;
   lastError: string | null; processedCount: number; createdAt: string;
 };
 export type MailAnalysisEvent = {
