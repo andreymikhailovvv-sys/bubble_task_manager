@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Mic, MessageCircle, Radio, SendHorizontal, Square, X } from 'lucide-react';
-import { LiveVoiceDialog, type LiveVoiceContext } from './LiveVoiceDialog';
+import { LiveVoiceDialog, type LiveVoiceContext, type LiveVoiceMessage, type LiveVoiceToolCompletion } from './LiveVoiceDialog';
 import { api } from '../lib/api';
 
 type Props = {
   onTranscript: (text: string, sendImmediately: boolean) => void;
   liveContext?: LiveVoiceContext;
+  onLiveMessage?: (message: LiveVoiceMessage) => void;
+  onLiveToolResult?: (result: LiveVoiceToolCompletion) => void;
   disabled?: boolean;
   small?: boolean;
   className?: string;
@@ -13,7 +15,7 @@ type Props = {
 
 type VoiceState = 'idle' | 'recording' | 'transcribing';
 
-export function VoiceInputButton({ onTranscript, liveContext, disabled = false, small = false, className = '' }: Props) {
+export function VoiceInputButton({ onTranscript, liveContext, onLiveMessage, onLiveToolResult, disabled = false, small = false, className = '' }: Props) {
   const [state, setState] = useState<VoiceState>('idle');
   const [error, setError] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -191,6 +193,9 @@ export function VoiceInputButton({ onTranscript, liveContext, disabled = false, 
           <MessageCircle size={18}/><span><strong>Запись голосом</strong><small>Продиктовать, расшифровать и отправить</small></span>
         </button>
       </div> : null}
+      {liveOpen ? <LiveVoiceDialog liveContext={liveContext} audioContext={liveAudioContext}
+        onLiveMessage={onLiveMessage} onLiveToolResult={onLiveToolResult}
+        onClose={() => { setLiveOpen(false); setLiveAudioContext(null); }} /> : null}
     </span>
     {error && state === 'idle' ? <div role="alert" className="voice-input-error">{error}
       <button type="button" title="Закрыть ошибку" onClick={() => setError('')}><X size={13} /></button>
@@ -210,6 +215,5 @@ export function VoiceInputButton({ onTranscript, liveContext, disabled = false, 
         <p className="voice-record-note">Распознавание оплачивается кредитами. Запись не отправляется в чат без вашего действия.</p>
       </div>
     </div> : null}
-    {liveOpen ? <LiveVoiceDialog liveContext={liveContext} audioContext={liveAudioContext} onClose={() => { setLiveOpen(false); setLiveAudioContext(null); }} /> : null}
   </>;
 }
