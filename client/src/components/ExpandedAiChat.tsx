@@ -3,6 +3,7 @@ import { PanelLeftClose, PanelLeftOpen, Paperclip, Plus, SendHorizontal, Sparkle
 import { AutoGrowingTextarea } from './AutoGrowingTextarea';
 import { AiAttachmentTiles } from './AiAttachmentTiles';
 import { VoiceInputButton } from './VoiceInputButton';
+import type { LiveVoiceMessage, LiveVoiceToolCompletion } from './LiveVoiceDialog';
 import { clipboardImageFiles } from '../lib/aiClipboard';
 import { CustomSelect } from './CustomSelect';
 import type { AiChatModel } from '../lib/types';
@@ -37,13 +38,15 @@ type Props = {
   onAddFiles: (files: File[]) => void;
   onRemoveFile: (file: File) => void;
   onSend: (draft: string) => void;
+  onLiveMessage?: (message: LiveVoiceMessage) => void;
+  onLiveToolResult?: (completion: LiveVoiceToolCompletion) => void;
   readOnlyStructure?: boolean;
   attachmentsEnabled?: boolean;
   replyTo?: AiReplyTarget | null;
   onClearReply?: () => void;
 };
 
-export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, uploadProgress, messageCount, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend, readOnlyStructure=false, attachmentsEnabled=true, replyTo, onClearReply }: Props) {
+export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, uploadProgress, messageCount, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend, onLiveMessage, onLiveToolResult, readOnlyStructure=false, attachmentsEnabled=true, replyTo, onClearReply }: Props) {
   const [draft, setDraft] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [headerHidden, setHeaderHidden] = useState(false);
@@ -222,7 +225,7 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
                 if(!attachmentsEnabled)return;
                 const files = clipboardImageFiles(event.clipboardData);
                 if (files.length > 0) { event.preventDefault(); onAddFiles(files); }
-              }} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); submit(); } }} placeholder="Напишите сообщение…" />{attachmentsEnabled&&<input ref={fileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { onAddFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} />}{attachmentsEnabled&&<button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted" aria-label="Прикрепить файл" onClick={() => fileInputRef.current?.click()}><Paperclip size={17} /></button>}<VoiceInputButton liveContext={activeChat?.id ? { type: 'chat', projectId: activeProject?.id, chatId: activeChat.id, history: (activeChat.messages as Array<{ id?: string; role?: string; content?: string }>).filter(item => (item.role === 'user' || item.role === 'assistant') && typeof item.content === 'string').map(item => ({ id: item.id || '', role: item.role as 'user' | 'assistant', content: item.content! })) } : undefined} disabled={loading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
+              }} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); submit(); } }} placeholder="Напишите сообщение…" />{attachmentsEnabled&&<input ref={fileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { onAddFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} />}{attachmentsEnabled&&<button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted" aria-label="Прикрепить файл" onClick={() => fileInputRef.current?.click()}><Paperclip size={17} /></button>}<VoiceInputButton liveContext={activeChat?.id ? { type: 'chat', projectId: activeProject?.id, chatId: activeChat.id, projectTitle: activeProject?.title, chatTitle: activeChat.title, model, history: (activeChat.messages as Array<{ id?: string; role?: string; content?: string }>).filter(item => (item.role === 'user' || item.role === 'assistant') && typeof item.content === 'string').map(item => ({ id: item.id || '', role: item.role as 'user' | 'assistant', content: item.content! })) } : undefined} onLiveMessage={onLiveMessage} onLiveToolResult={onLiveToolResult} disabled={loading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
     const next = [draft.trim(), text].filter(Boolean).join(' ');
     setDraft(next);
     if (immediate && !loading) { onSend(next); setDraft(''); }
