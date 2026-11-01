@@ -448,7 +448,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         if (name === 'prepare_mail_send') {
           if (mailSendDraft) return {ok:false,code:'ALREADY_PREPARED'};
           const result = await prepareOwnerMailSend(input.userId,value);
-          if (result.ok) mailSendDraft = result.draft;
+          if (result.ok && result.draft) mailSendDraft = result.draft;
           return result.ok ? {ok:true,prepared:true,confirmationRequired:true,message:'Письмо подготовлено в карточке, не отправлено.'} : result;
         }
         if (name === 'request_telegram_chat_read') {
