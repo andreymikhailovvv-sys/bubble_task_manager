@@ -1,4 +1,4 @@
-import { mergeChatProjectSnapshots, canonicalizeTelegramAssistantProjects } from '../lib/ai-chat-project-sync.js';
+import { mergeChatProjectSnapshots, canonicalizeTelegramAssistantProjects, canonicalizeMailAssistantProjects } from '../lib/ai-chat-project-sync.js';
 import { aiAssistantService } from '../services/ai-assistant.service.js';
 import { createAiCheckup } from '../services/ai-checkup-delivery.service.js';
 import { resolveAiCheckupSchedules, validateAiCheckupSchedules } from '../lib/ai-checkup-schedules.js';
@@ -64,6 +64,7 @@ import { telegramQuickShare } from '../services/telegram-quick-share.service.js'
 import { rewriteNotesQuickText } from '../services/telegram-quick-share-ai.service.js';
 import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
 import { mailAssistant, MailAssistantError } from '../services/mail-assistant.service.js';
+import { mailAssistantInboxFeed, deliverMailReply } from '../services/mail-assistant-inbox.service.js';
 
 
 export const apiRouter = Router();
@@ -77,6 +78,19 @@ const mailFailure = (res: Response, error: unknown) => {
   if (error instanceof MailAssistantError) res.status(error.statusCode).json({ error: error.message });
   else res.status(500).json({ error: 'Не удалось выполнить действие с почтой' });
 };
+
+apiRouter.get('/mail-assistant/inbox', requireAuth, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try { res.json(await mailAssistantInboxFeed(req.user!.id)); } catch { res.status(500).json({ error: 'Не удалось загрузить почтовые сводки' }); }
+});
+apiRouter.post('/mail-assistant/inbox/:eventId/send-reply', requireAuth, mailOrigin, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    if (typeof req.body?.text !== 'string') { res.status(400).json({ error: 'Укажите текст ответа' }); return; }
+    res.json(await deliverMailReply(req.user!.id, req.params.eventId, req.body.text));
+  } catch { res.status(409).json({ error: 'Предложение ответа недоступно или изменено' }); }
+});
+
 apiRouter.get('/mail-assistant/accounts', requireAuth, async (req, res) => {
   res.set('Cache-Control', 'no-store');
   try { res.json(await mailAssistant.list(req.user!.id)); } catch (error) { mailFailure(res, error); }
@@ -1615,7 +1629,10 @@ apiRouter.get('/ai-chat/projects/:projectId/chats/:chatId/messages', requireAuth
   const allowedPolicies = await prisma.telegramAiChatPolicy.findMany({
     where: { userId }, select: { id: true, chatTitle: true }, orderBy: { createdAt: 'asc' }
   });
-  const projects = canonicalizeTelegramAssistantProjects(user?.aiChatProjects, allowedPolicies);
+  const ownedMailboxes = await prisma.emailMailbox.findMany({ where: { userId },
+    select: { id: true, email: true, provider: true }, orderBy: { createdAt: 'asc' } });
+  const projects = canonicalizeMailAssistantProjects(
+    canonicalizeTelegramAssistantProjects(user?.aiChatProjects, allowedPolicies), ownedMailboxes);
   const outline = projects.filter((entry) =>
     entry != null && typeof entry === 'object' && !Array.isArray(entry) &&
     typeof (entry as { id?: unknown }).id === 'string')
@@ -1633,6 +1650,12 @@ apiRouter.get('/ai-chat/projects/:projectId/chats/:chatId/messages', requireAuth
   if (chatId === 'quick-ai-requests') {
     const messages = await aiAssistantService.listGeneralDialog({ userId });
     res.json({ messages, projectsOutline: outline });
+    return;
+  }
+  if (projectId === 'mail-ai-assistant-project' && chatId.startsWith('mail-ai-assistant:')) {
+    const inbox = await mailAssistantInboxFeed(userId);
+    if (!inbox.chats.some(x => x.id === chatId)) { res.status(404).json({ error: 'Диалог не найден' }); return; }
+    res.json({ messages: inbox.messages.filter(m => m.chatId === chatId), projectsOutline: outline });
     return;
   }
   const project = projects.find((entry: unknown) =>
@@ -1657,7 +1680,10 @@ apiRouter.get('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) =>
   const policies = await prisma.telegramAiChatPolicy.findMany({
     where: { userId: req.user!.id }, select: { id: true, chatTitle: true }, orderBy: { createdAt: 'asc' }
   });
-  let canonical = canonicalizeTelegramAssistantProjects(user?.aiChatProjects, policies);
+  const mailboxes = await prisma.emailMailbox.findMany({ where: { userId: req.user!.id },
+    select: { id: true, email: true, provider: true }, orderBy: { createdAt: 'asc' } });
+  let canonical = canonicalizeMailAssistantProjects(
+    canonicalizeTelegramAssistantProjects(user?.aiChatProjects, policies), mailboxes);
   // Repair historical browser-generated ghost chats in the persisted snapshot.
   // Lock the row and re-read to avoid overwriting messages saved concurrently.
   if (JSON.stringify(user?.aiChatProjects ?? []) !== JSON.stringify(canonical)) {
@@ -1669,7 +1695,10 @@ apiRouter.get('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) =>
       const currentPolicies = await tx.telegramAiChatPolicy.findMany({
         where: { userId: req.user!.id }, select: { id: true, chatTitle: true }, orderBy: { createdAt: 'asc' }
       });
-      const clean = canonicalizeTelegramAssistantProjects(current.aiChatProjects, currentPolicies);
+      const currentMail = await tx.emailMailbox.findMany({ where: { userId: req.user!.id },
+        select: { id: true, email: true, provider: true }, orderBy: { createdAt: 'asc' } });
+      const clean = canonicalizeMailAssistantProjects(
+        canonicalizeTelegramAssistantProjects(current.aiChatProjects, currentPolicies), currentMail);
       if (JSON.stringify(current.aiChatProjects ?? []) !== JSON.stringify(clean)) {
         await tx.user.update({ where: { id: req.user!.id },
           data: { aiChatProjects: clean as Prisma.InputJsonValue } });
@@ -1763,10 +1792,14 @@ apiRouter.put('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) =>
     const policies = await tx.telegramAiChatPolicy.findMany({
       where: { userId: req.user!.id }, select: { id: true, chatTitle: true }, orderBy: { createdAt: 'asc' }
     });
-    const cleanPrevious = canonicalizeTelegramAssistantProjects(user.aiChatProjects, policies);
-    const cleanIncoming = canonicalizeTelegramAssistantProjects(projects, policies);
-    const merged = canonicalizeTelegramAssistantProjects(
-      mergeChatProjectSnapshots(cleanPrevious, cleanIncoming), policies
+    const currentMail = await tx.emailMailbox.findMany({ where: { userId: req.user!.id },
+      select: { id: true, email: true, provider: true }, orderBy: { createdAt: 'asc' } });
+    const cleanPrevious = canonicalizeMailAssistantProjects(
+      canonicalizeTelegramAssistantProjects(user.aiChatProjects, policies), currentMail);
+    const cleanIncoming = canonicalizeMailAssistantProjects(
+      canonicalizeTelegramAssistantProjects(projects, policies), currentMail);
+    const merged = canonicalizeMailAssistantProjects(
+      canonicalizeTelegramAssistantProjects(mergeChatProjectSnapshots(cleanPrevious, cleanIncoming), policies), currentMail
     );
     if (Buffer.byteLength(JSON.stringify(merged), 'utf8') > 2_000_000) {
       throw new Error('История чатов слишком большая');
