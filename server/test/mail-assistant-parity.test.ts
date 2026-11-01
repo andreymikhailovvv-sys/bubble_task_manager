@@ -47,7 +47,7 @@ test('client and API expose mailbox-owned mail inbox, proposals and reply status
   const web=source('../../client/src/App.tsx');
   const mini=source('../../client/src/MiniApp.tsx');
   const ui=source('../../client/src/components/MailAssistantSettings.tsx');
-  assert.match(api,/mail-assistant\\/inbox/);
+  assert.ok(api.includes('mail-assistant/inbox'));
   assert.match(api,/mailOrigin/);
   assert.match(api,/canonicalizeMailAssistantProjects/);
   assert.match(worker,/prepareTaskProposal/);
