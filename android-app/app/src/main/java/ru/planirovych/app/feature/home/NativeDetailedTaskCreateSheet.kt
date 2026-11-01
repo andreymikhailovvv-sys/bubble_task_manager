@@ -108,7 +108,6 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
     var parsed by remember{mutableStateOf<RecurrenceParseResponse?>(null)}
     var manualRule by remember(type){mutableStateOf<JsonObject?>(null)}
     var manualSummary by remember(type){mutableStateOf<String?>(null)}
-    var aiNotifications by remember{mutableStateOf(true)}
     var aiMonitoring by remember{mutableStateOf(false)}
     var attachmentLoading by remember { mutableStateOf(false) }
     val children=remember { mutableStateListOf<DraftChild>() }
@@ -370,7 +369,7 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
                         put("recurrenceUntil",
                             parsed?.schedule?.get("until") ?: JsonNull)
                     }
-                    put("aiNotificationsEnabled",aiNotifications)
+                    put("aiNotificationsEnabled",false)
                     if(!isEvent)put("aiMonitoringEnabled",aiMonitoring)
                 },if(isEvent)emptyList() else children
                     .filter{it.title.isNotBlank() || it.description.isNotBlank() || it.date!=null}
@@ -423,10 +422,6 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
                         Text("Повторять",color=c.text)
                     }
                     if(!isEvent){
-                        Row(verticalAlignment=Alignment.CenterVertically){
-                            Checkbox(aiNotifications,onCheckedChange={aiNotifications=it})
-                            Text("Уведомления от ИИ",color=c.text)
-                        }
                         Row(verticalAlignment=Alignment.CenterVertically){
                             Checkbox(aiMonitoring,onCheckedChange={aiMonitoring=it})
                             Text("Автомониторинг ИИ",color=c.text)
