@@ -418,6 +418,7 @@ model User {
   telegramAiMonitorCalls TelegramAiMonitorCall[]
   emailMailboxes EmailMailbox[]
   emailAnalyses EmailAnalysis[]
+  emailDigests EmailDigest[]
   habits       Habit[]
   systemNotifications SystemNotification[]
   androidPushDevices AndroidPushDevice[]
@@ -1373,6 +1374,7 @@ model EmailMailbox {
   leasedUntil DateTime?
   revision Int @default(0)
   analyses EmailAnalysis[]
+  digests EmailDigest[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1394,6 +1396,8 @@ model EmailAnalysis {
   status String @default("PROCESSING")
   suggestedReplyText String? @db.Text
   suggestedReplyStatus String @default("NONE")
+  taskPublishedAt DateTime?
+  replyPublishedAt DateTime?
   botStatus String @default("PENDING")
   botClaimedAt DateTime?
   botDeliveredAt DateTime?
@@ -1403,5 +1407,20 @@ model EmailAnalysis {
 
   @@unique([mailboxId, folder, validity, uid])
   @@index([userId, createdAt])
+  @@index([botStatus, createdAt])
+}
+
+model EmailDigest {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mailboxId String
+  mailbox EmailMailbox @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  content String @db.Text
+  botStatus String @default("PENDING")
+  botClaimedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([mailboxId, createdAt])
   @@index([botStatus, createdAt])
 }
