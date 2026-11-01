@@ -17,6 +17,7 @@ import { telegramUpdateQueue, TelegramUpdateWorker } from './services/telegram-u
 import { telegramQuickShare } from './services/telegram-quick-share.service.js';
 import { telegramAiMonitorWorker } from './services/telegram-ai-monitor-worker.service.js';
 import { mailAssistantWorker } from './services/mail-assistant.service.js';
+import { deliverMailAiBotNotifications } from './services/mail-assistant-inbox.service.js';
 import { deliverTelegramAiBotNotifications } from './services/telegram-ai-inbox.service.js';
 import { createPublicSeoPagesMiddleware } from './lib/public-seo-pages.js';
 import { startTaskMonitoringWorker } from './services/task-monitoring-worker.service.js';
@@ -255,3 +256,6 @@ setInterval(sendTelegramAssistantInbox, 20_000).unref();
 const runEmailMonitor = () => mailAssistantWorker.drain().catch(() => console.warn('[MailAssistant] monitoring failed'));
 setTimeout(runEmailMonitor, 12_000).unref();
 setInterval(runEmailMonitor, 15_000).unref();
+const runMailBot = () => deliverMailAiBotNotifications().catch(() => console.warn('[MailAssistant] notification delivery failed'));
+setTimeout(runMailBot, 18_000).unref();
+setInterval(runMailBot, 20_000).unref();
