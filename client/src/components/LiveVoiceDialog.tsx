@@ -301,17 +301,28 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
           if (payload.type === 'error') {
             setError(payload.message || 'Ошибка голосового соединения.');
             setPhase('error');
+            stopResources();
           }
         };
-        ws.onerror = () => { if (!cancelled) { setError('Не удалось подключиться к голосовому серверу.'); setPhase('error'); } };
+        ws.onerror = () => {
+          if (!cancelled) {
+            setError('Не удалось подключиться к голосовому серверу.');
+            setPhase('error');
+            stopResources();
+          }
+        };
         ws.onclose = () => {
-          if (!cancelled) setPhase(previous => previous === 'ended' || previous === 'error' ? previous : 'ended');
+          if (!cancelled) {
+            setPhase('ended');
+            stopResources();
+          }
         };
       } catch (cause) {
         if (!cancelled) {
           setError(cause instanceof Error && cause.name === 'NotAllowedError'
             ? 'Разрешите микрофон в Telegram или браузере.' : cause instanceof Error ? cause.message : 'Не удалось начать диалог.');
           setPhase('error');
+          stopResources();
         }
       }
     };
