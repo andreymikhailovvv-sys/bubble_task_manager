@@ -2868,7 +2868,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     setAiChatProjects(previous => previous.map(project => project.id !== projectId ? project : ({
       ...project, chats: project.chats.map(chat => chat.id !== chatId ? chat :
         { ...chat, messages: chat.messages.some(item => item.id === message.id)
-          ? chat.messages : [...chat.messages, message].slice(chatId === QUICK_AI_CHAT_ID ? -20 : -300) })
+          ? chat.messages : [...chat.messages, message].slice(chatId === QUICK_AI_CHAT_ID ? -100 : -300) })
     })));
   };
   const applyLiveProjectTool = (projectId: string, chatId: string, event: LiveVoiceToolCompletion) => {
@@ -2877,7 +2877,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     voiceChatMessagesRef.current[key] = [...(voiceChatMessagesRef.current[key] ?? []), answer].slice(-80);
     setAiChatProjects(previous => previous.map(project => project.id !== projectId ? project : ({
       ...project, chats: project.chats.map(chat => chat.id !== chatId ? chat :
-        { ...chat, messages: [...chat.messages, answer].slice(chatId === QUICK_AI_CHAT_ID ? -20 : -300) })
+        { ...chat, messages: [...chat.messages, answer].slice(chatId === QUICK_AI_CHAT_ID ? -100 : -300) })
     })));
     if (event.result.taskDataChanged) void loadData({ refreshPlannerOnly: true });
     refreshAiCredits();
