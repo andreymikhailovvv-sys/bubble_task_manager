@@ -7,7 +7,8 @@ import {WorkAiProposalCard} from './components/WorkAiProposalCard';
 import {ExpandedAiChat,type ExpandedAiChatProject} from './components/ExpandedAiChat';
 import {QuickAiLauncherFrame} from './components/QuickAiLauncherFrame';
 import {WorkNotificationBell} from './components/WorkNotificationBell';
-import {AiReplyAction,serializeAiReply,type AiReplyTarget} from './components/AiMessageReply';
+import {AiReplyAction,type AiReplyTarget} from './components/AiMessageReply';
+import {serializeWorkAiReply} from './components/WorkAiReply';
 import {MessageActionArrow} from './components/MessageActionIcons';
 import type {ChatMessage} from './lib/types';
 import {api,type WorkDashboard,type WorkAiMessage,type WorkAiCredits} from './lib/api';
@@ -94,7 +95,7 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
   },[loading]);
   const send=async(question:string,quick:boolean)=>{
     const q=question.trim();if(!q||loading||!allowed)return;
-    const request=serializeAiReply(q,replyTo);
+    const request=serializeWorkAiReply(q,replyTo);
     const optimistic:WorkAiMessage={id:'pending-work-'+Date.now(),role:'user',content:request,createdAt:new Date().toISOString()};
     const savedReply=replyTo;
     if(quick){setDraft('');setQuickMessages(items=>[...items,optimistic]);}
