@@ -439,6 +439,13 @@ internal fun NativeGeneralAiChatPage(
                         .padding(horizontal=7.dp,vertical=6.dp),
                         verticalAlignment=Alignment.CenterVertically,
                         horizontalArrangement=Arrangement.spacedBy(5.dp)){
+                                                Box(Modifier.size(42.dp).clip(CircleShape)
+                            .background(c.bg).border(1.dp,c.border,CircleShape)
+                            .clickable(enabled=!isBusy&&!attaching&&!isTelegram){
+                                picker.launch(arrayOf("*/*"))
+                            },contentAlignment=Alignment.Center){
+                            TaskChatPaperclip(c.secondary)
+                        }
                         BasicTextField(value=draft,onValueChange={
                             draft=it;lastRequestHadError=false
                         },modifier=Modifier.weight(1f).heightIn(min=42.dp,max=140.dp)
@@ -457,13 +464,7 @@ internal fun NativeGeneralAiChatPage(
                                     inner()
                                 }
                             })
-                        Box(Modifier.size(42.dp).clip(CircleShape)
-                            .background(c.bg).border(1.dp,c.border,CircleShape)
-                            .clickable(enabled=!isBusy&&!attaching&&!isTelegram){
-                                picker.launch(arrayOf("*/*"))
-                            },contentAlignment=Alignment.Center){
-                            TaskChatPaperclip(c.secondary)
-                        }
+
                         AiChatMicrophoneButton(
                             enabled=!isBusy&&!isTelegram&&!attaching,
                             background=if(dark)Color(0xFF253349) else Color(0xFFF8FAFC),
