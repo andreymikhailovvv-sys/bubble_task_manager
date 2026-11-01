@@ -507,6 +507,8 @@ export type AdminWorkCreditHistory = { id:string;kind:string;deltaMilli:number;c
 
 
 export const api = {
+  mailRewriteText: (text:string,instruction:string) => request<{text:string;creditsSpentMilli:number}>('/api/mail-assistant/quick-rewrite',
+    {method:'POST',body:JSON.stringify({text,instruction})}),
   mailDraftStatus: (id:string) => request<{draft:{id:string;mailboxId:string;recipient:string;subject:string;text:string;status:string}}>(
     '/api/mail-assistant/drafts/'+encodeURIComponent(id)),
   mailSendDraft: (id:string,payload:{mailboxId:string;recipient:string;subject:string;text:string}) =>

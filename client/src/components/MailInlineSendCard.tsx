@@ -40,7 +40,7 @@ export function MailInlineSendCard({draft}:{draft:MailSendDraft}){
     if(locked||!body.trim()||!instruction.trim())return;
     setRewriting(true);setError('');
     try{
-      const result=await api.rewriteTextForNote({text:body,instruction:'Отредактируй текст электронного письма, верни только готовый текст. '+instruction});
+      const result=await api.mailRewriteText(body,instruction);
       setBody(result.text);setRewriteCost(c=>c+result.creditsSpentMilli);
     }catch(e){setError(e instanceof Error?e.message:'Не удалось изменить письмо с ИИ')}
     finally{setRewriting(false)}

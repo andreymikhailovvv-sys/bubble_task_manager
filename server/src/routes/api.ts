@@ -65,6 +65,7 @@ import { rewriteNotesQuickText } from '../services/telegram-quick-share-ai.servi
 import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
 import { mailAssistant, MailAssistantError } from '../services/mail-assistant.service.js';
 import { mailAssistantInboxFeed, deliverMailReply } from '../services/mail-assistant-inbox.service.js';
+import { rewriteMailQuickText } from '../services/telegram-quick-share-ai.service.js';
 import { getOwnerMailDraft, sendOwnerMailDraft } from '../services/ai-mail-tools.service.js';
 
 
@@ -80,6 +81,15 @@ const mailFailure = (res: Response, error: unknown) => {
   else res.status(500).json({ error: 'Не удалось выполнить действие с почтой' });
 };
 
+apiRouter.post('/mail-assistant/quick-rewrite',requireAuth,mailOrigin,async(req,res)=>{
+  res.set('Cache-Control','no-store, private');
+  try {
+    const data = await rewriteMailQuickText(req.user!.id,req.body?.text,req.body?.instruction);
+    res.json(data);
+  } catch(error){
+    res.status(400).json({error:error instanceof Error?error.message:'Не удалось изменить письмо'});
+  }
+});
 apiRouter.get('/mail-assistant/drafts/:id', requireAuth, async (req,res)=>{
   res.set('Cache-Control','no-store, private');
   const draft = await getOwnerMailDraft(req.user!.id,req.params.id);
