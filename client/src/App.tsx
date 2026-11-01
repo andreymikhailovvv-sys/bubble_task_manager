@@ -1017,6 +1017,10 @@ export default function App() {
       setIsTelegramModalOpen(false);
     } else if (activeTourStep === 'feature-telegram-qr') {
       setIsTelegramModalOpen(true);
+    } else if (activeTourStep?.startsWith('feature-integration-')) {
+      setIsTelegramModalOpen(false);
+      setIsFocusSetupOpen(false);
+      setIsFocusModeOpen(false);
     }
   }, [activeTourStep]);
 
