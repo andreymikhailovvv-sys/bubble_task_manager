@@ -3867,6 +3867,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   // after navigation. An accessible non-native control avoids that artifact;
   // browser/mobile-web continues using its native button.
   const MiniNavigationControl = isTelegramRuntime ? 'div' : 'button';
+  // Derive the indicator position from the actual active view, so closing
+  // Notes/AI or navigating programmatically animates to the correct tab.
+  const activeBottomNavigationTab = isStandaloneNotesOpen ? 'notes' : isAiChatOpen ? 'ai' : displayMode === 'timeline' ? 'timeline' : 'list';
   const handleMiniNavigationKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
     if (isTelegramRuntime && (event.key === 'Enter' || event.key === ' ')) {
       event.preventDefault();
@@ -4486,7 +4489,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         )}
       </div>
 
-      <nav className={`miniapp-bottom-navigation ${openedTaskId || openedSubtaskId || isCreateTaskModalOpen || isHabitModalOpen || isAiDialogOpen ? 'miniapp-bottom-navigation-hidden' : ''}`} aria-label="Разделы Планировыча">
+      <nav className={`miniapp-bottom-navigation ${openedTaskId || openedSubtaskId || isCreateTaskModalOpen || isHabitModalOpen || isAiDialogOpen ? 'miniapp-bottom-navigation-hidden' : ''}`} aria-label="Разделы Планировыча" data-active-tab={activeBottomNavigationTab}>
+        <span className="miniapp-bottom-navigation-indicator" aria-hidden="true">
+          <span className="miniapp-bottom-navigation-indicator-pill" />
+        </span>
         <MiniNavigationControl role={isTelegramRuntime ? 'button' : undefined} tabIndex={isTelegramRuntime ? 0 : undefined} onKeyDown={handleMiniNavigationKeyDown} className={`miniapp-bottom-navigation-item ${!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'list' ? 'is-active' : ''}`}
           aria-current={!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'list' ? 'page' : undefined}
           onClick={(event) => { setIsAiChatOpen(false); setIsStandaloneNotesOpen(false); setIsAiChatMenuOpen(false); setDisplayMode('list'); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); event.currentTarget.blur(); }}>
