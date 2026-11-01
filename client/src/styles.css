@@ -2890,7 +2890,9 @@ body[data-theme='light'] .miniapp-shell .miniapp-efficiency-row b,
   background: rgba(15, 23, 42, 0.42);
 }
 
-.miniapp-calendar-grid-month .miniapp-calendar-day { min-height: 6.5rem; padding-right: 0.2rem; padding-left: 0.2rem; }
+.miniapp-calendar-grid-month .miniapp-calendar-day { min-height: 6.5rem; padding-right: 0.2rem; padding-left: 0.2rem; cursor: pointer; }
+.miniapp-calendar-grid-month .miniapp-calendar-day:focus-visible { outline: 2px solid #8b5cf6; outline-offset: 2px; }
+.miniapp-calendar-grid-month .miniapp-calendar-entry { cursor: default; }
 .miniapp-calendar-day.is-outside { opacity: 0.42; }
 .miniapp-calendar-day.is-today { border-color: rgba(139, 92, 246, 0.9); background: rgba(124, 58, 237, 0.1); }
 
