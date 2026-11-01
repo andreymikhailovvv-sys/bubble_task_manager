@@ -200,6 +200,7 @@ function normalizeMiniAiChatProjects(rawProjects: Array<Partial<MiniAiChatProjec
           ...(message.generatedDocument ? { generatedDocument: message.generatedDocument } : {}),
           ...(message.taskProposal ? { taskProposal: message.taskProposal } : {}),
           ...(message.telegramSendDraft ? { telegramSendDraft: message.telegramSendDraft } : {}),
+          ...(message.mailSendDraft ? { mailSendDraft: message.mailSendDraft } : {}),
           ...(message.telegramSuggestedReply ? { telegramSuggestedReply: message.telegramSuggestedReply } : {}),
           ...(message.mailSuggestedReply ? { mailSuggestedReply: message.mailSuggestedReply } : {}),
           ...(message.telegramReadDraft ? { telegramReadDraft: message.telegramReadDraft } : {})
