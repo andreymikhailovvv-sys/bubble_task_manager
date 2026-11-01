@@ -2869,6 +2869,34 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
 
 
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    let alive = true;
+    const refreshMail = () => {
+      void Promise.all([api.getAiChatProjects<Partial<MiniAiChatProject>>(), api.mailAssistantInbox()])
+        .then(([projects, inbox]) => {
+          if (!alive) return;
+          setAiChatProjects(previous => {
+            const clean = normalizeMiniAiChatProjects(projects.projects?.length ? projects.projects : previous);
+            const remaining = clean.filter(p => p.id !== inbox.projectId);
+            if (inbox.chats.length) {
+              remaining.push({ id: inbox.projectId, title: inbox.projectTitle, color: '#0891b2', icon: '@',
+                chats: inbox.chats.map(chat => ({
+                  id: chat.id, title: chat.title, messages: inbox.messages.filter(m => m.chatId === chat.id)
+                    .map(m => ({ id: m.id, content: m.content, role: 'assistant' as const,
+                      taskProposal: m.taskProposal ?? undefined,
+                      mailSuggestedReply: m.mailSuggestedReply ?? undefined }))
+                })) });
+            }
+            aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(remaining);
+            return remaining;
+          });
+        }).catch(() => {});
+    };
+    window.addEventListener('mail-ai-assistant-updated', refreshMail);
+    return () => { alive = false; window.removeEventListener('mail-ai-assistant-updated', refreshMail); };
+  }, [currentUser?.id]);
+
   // Mirror task-chat sync: only the open conversation is read. Never replace
   // the whole project/chat tree on a timer or reset active selection.
   useEffect(() => {
