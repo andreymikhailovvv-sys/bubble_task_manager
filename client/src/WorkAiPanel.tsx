@@ -8,6 +8,7 @@ import {WorkAiMessageBody} from './components/WorkAiMessageBody';
 import {WorkAiProposalCard} from './components/WorkAiProposalCard';
 import {AiReplyAction,AiReplyPreview,serializeAiReply,type AiReplyTarget} from './components/AiMessageReply';
 import {TaskAiRecipientPicker} from './components/TaskAiRecipientPicker';
+import {MessageActionArrow} from './components/MessageActionIcons';
 import type {AiChatModel,ChatMessage} from './lib/types';
 import {api,type WorkAiMessage,type WorkAiJob,type WorkAiCredits,type WorkWorkspace} from './lib/api';
 const models=[['gpt-6-luna','Luna'],['gpt-6.1-terra','Terra'],['gpt-6.1-sol','Sol']] as const;
@@ -31,8 +32,18 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
   const [showTriggers,setShowTriggers]=useState(false);
   const [recipient,setRecipient]=useState('ai');
   const [replyTo,setReplyTo]=useState<AiReplyTarget|null>(null);
+  const [composerFocused,setComposerFocused]=useState(false);
+  const [pendingMessage,setPendingMessage]=useState<string|null>(null);
   const bottomRef=useRef<HTMLDivElement|null>(null);
-  useEffect(()=>{bottomRef.current?.scrollIntoView({block:'end'});},[history.length]);
+  useEffect(()=>{
+    const jump=()=>{
+      const node=bottomRef.current;
+      if(node){const thread=node.closest('.work-ai-history');if(thread)thread.scrollTop=thread.scrollHeight;}
+      document.querySelectorAll<HTMLElement>('.work-personal-task-ai .focused-task-ai-thread-through')
+        .forEach(thread=>{thread.scrollTop=thread.scrollHeight;});
+    };
+    jump();const raf=requestAnimationFrame(jump);return()=>cancelAnimationFrame(raf);
+  },[history.length,pendingMessage,busy]);
   const load=async()=>{
     const [messages,balance]=await Promise.all([
       api.workAiHistory(organizationId,taskId),
@@ -69,6 +80,9 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
     event.preventDefault();
     if(!text.trim()||busy)return;
     const question=serializeAiReply(text.trim(),replyTo);
+    const savedDraft=text, savedReply=replyTo;
+    setText('');setReplyTo(null);setComposerFocused(false);
+    setPendingMessage(question);
     setBusy(true);setError('');
     try{
       if(taskId&&recipient!=='ai'){
@@ -77,10 +91,10 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
         const result=await api.workAiAsk(organizationId,question,taskId);
         setCredits(result.credits);
       }
-      setText('');setReplyTo(null);
       const messages=await api.workAiHistory(organizationId,taskId);
       setHistory(messages.messages);
-    }catch(e){setError(errText(e));}finally{setBusy(false);}
+    }catch(e){setError(errText(e));setText(current=>current||savedDraft);setReplyTo(current=>current||savedReply);}
+    finally{setPendingMessage(null);setBusy(false);}
   };
   const toggle=async()=>{
     if(!taskId)return;
@@ -124,7 +138,7 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
       ['OWNER','ADMIN','MANAGER'].includes(member.role)||
       participantMemberIds?.includes(member.id)
     )):[];
-  const recipientControl=taskId&&workspace?<TaskAiRecipientPicker
+  const recipientControl=taskId&&workspace&&composerFocused?<TaskAiRecipientPicker
     value={recipient} onChange={setRecipient}
     members={potentialRecipients.map(member=>({
       id:member.id,name:member.name||member.username||'Участник',
@@ -133,7 +147,7 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
   const labelFor=(m:WorkAiMessage)=>m.role==='assistant'?'ИИ':m.role==='human'?
     (m.sender?.user.name||m.sender?.user.username||'Участник') : m.role==='system'?'Мониторинг':
     (m.sender?.user.name||m.sender?.user.username||'Вы');
-  const replyAction=(m:WorkAiMessage)=><AiReplyAction
+  const replyAction=(m:WorkAiMessage)=><><AiReplyAction
     message={{id:m.id,role:m.role==='assistant'?'assistant':'user',content:m.content} as ChatMessage}
     onReply={target=>{
       setReplyTo(target);
@@ -141,8 +155,9 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
          potentialRecipients.some(member=>member.id===m.senderMemberId)){
         setRecipient(m.senderMemberId);
       }
-    }}
-  />;
+    }}/>
+    <button type="button" className="ai-message-forward-trigger" aria-label="Переслать сообщение (скоро)" title="Пересылка будет добавлена позже" disabled><MessageActionArrow direction="forward"/></button>
+  </>;
   if(personalFocus){
     const modelAvailable=credits&&(['gpt-6-luna','gpt-6.1-terra','gpt-6.1-sol'].includes(credits.aiModel));
     const modelControl=(extraClass='')=>modelAvailable?<AiModelChip
@@ -175,6 +190,8 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
         </div>
         {message.proposal&&<WorkAiProposalCard organizationId={organizationId} initial={message.proposal} onChanged={()=>void load().catch(e=>setError(errText(e)))}/>}
       <div className="ai-message-forward-actions flex justify-end">{replyAction(message)}</div></div>)}
+      {pendingMessage&&<div className="ai-message-forward-group ml-auto w-fit max-w-[88%]">
+        <div className="chat-message chat-message-user rounded-2xl px-4 py-3 text-[13px] break-words whitespace-pre-wrap">{pendingMessage}</div></div>}
       {busy&&<AiProgress status={progress}/>}
     </>;
     const composer=<div className="focused-task-ai-composer">
@@ -183,7 +200,7 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
       {error&&<p role="alert" className="mb-2 shrink-0 text-xs text-rose-300">{error}</p>}
       <div className="ai-chat-composer flex items-center gap-2 rounded-3xl border p-2">
         <AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0"
-          placeholder="Напишите сообщение…" value={text} onChange={e=>setText(e.target.value)}
+          placeholder="Напишите сообщение…" value={text} onChange={e=>setText(e.target.value)} onFocus={()=>setComposerFocused(true)}
           onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();sendQuestion();}}}/>
         <button type="button" className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg transition hover:bg-violet-500 disabled:opacity-50"
           disabled={busy||!text.trim()} onClick={sendQuestion} title="Отправить">
@@ -286,6 +303,7 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
         {item.proposal&&<WorkAiProposalCard organizationId={organizationId} initial={item.proposal} onChanged={()=>void load().catch(e=>setError(errText(e)))}/>}
         <div className="ai-message-forward-actions flex justify-end">{replyAction(item)}</div>
       </div>)}
+      {pendingMessage&&<div className="ai-message-forward-group flex flex-col items-end"><div className="work-ai-message user"><small>Вы · отправляется</small><div>{pendingMessage}</div></div></div>}
       {busy&&<AiProgress status={progress}/>}
       <div ref={bottomRef}/>
     </div>
@@ -295,7 +313,7 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
       <form className="ai-chat-composer work-ai-dispatcher-composer flex items-center gap-2 rounded-3xl border p-2"
         onSubmit={send}>
         <AutoGrowingTextarea className="form-field min-h-11 min-w-0 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm"
-          value={text} onChange={e=>setText(e.target.value)} maxLength={3000} disabled={busy}
+          value={text} onChange={e=>setText(e.target.value)} onFocus={()=>setComposerFocused(true)} maxLength={3000} disabled={busy}
           placeholder={taskId?'Напишите сообщение…':'Спросите о работе компании…'}
           onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();sendQuestion();}}}/>
         <button type="submit" disabled={busy||!text.trim()} title="Отправить" aria-label="Отправить">
