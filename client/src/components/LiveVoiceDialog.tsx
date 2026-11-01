@@ -214,6 +214,8 @@ export function LiveVoiceDialog({ onClose, audioContext }: { onClose: () => void
   const toggleMuted = () => {
     const next = !mutedRef.current;
     mutedRef.current = next;
+    streamRef.current?.getAudioTracks().forEach(track => { track.enabled = !next; });
+    if (next) setLevel(0.06);
     setMuted(next);
   };
 
@@ -265,7 +267,7 @@ export function LiveVoiceDialog({ onClose, audioContext }: { onClose: () => void
           <PhoneOff size={18}/>{phase === 'ended' || phase === 'error' ? 'Закрыть' : 'Завершить'}
         </button>
       </footer>
-      <p className="live-voice-note">Режим работает до 2 минут. Кредиты учитываются по использованию голосовой модели; итог показывается при завершении.</p>
+      <p className="live-voice-note">Максимум 2 минуты. До 450 кредитов временно резервируются; после завершения списывается только подтверждённый расход модели, остальное возвращается.</p>
     </section>
   </div>, document.body);
 }
