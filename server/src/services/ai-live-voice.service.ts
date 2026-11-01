@@ -137,7 +137,6 @@ async function startLiveSession(userId: string, peer: ClientPeer) {
   let ready = false;
   let usageMilli = 0;
   let receivedAudioBytes = 0;
-  let lastUsageAtBytes = 0;
   let billed = false;
   const started = Date.now();
   const timer = setTimeout(() => stop('Лимит голосового диалога: 2 минуты.'), MAX_SECONDS * 1000);
@@ -153,11 +152,9 @@ async function startLiveSession(userId: string, peer: ClientPeer) {
   const finalize = async () => {
     if (billed) return;
     billed = true;
-    // Incomplete user turns may not emit response.done. Estimate only audio
-    // transmitted since last accounted response, at a modest upper-bound rate.
-    const unreportedSeconds = Math.min(MAX_SECONDS, Math.max(0, (receivedAudioBytes - lastUsageAtBytes) / 48_000));
-    const fallbackMilli = Math.ceil(unreportedSeconds * 1150);
-    let spent = Math.min(RESERVED_MILLI, usageMilli + fallbackMilli);
+    // Charge only confirmed provider usage. An interrupted turn without
+    // response.done must not be silently billed using fabricated token counts.
+    let spent = Math.min(RESERVED_MILLI, usageMilli);
     try {
       if (reservation) {
         const result = await settleAiCreditReservation(reservation, spent);
@@ -240,7 +237,6 @@ async function startLiveSession(userId: string, peer: ClientPeer) {
           if (value.response?.usage) {
             const cost = realtimeSpeechCostMilli(value.response.usage);
             usageMilli += cost;
-            lastUsageAtBytes = receivedAudioBytes;
             send({ type: 'usage', creditsSpentMilli: usageMilli });
             if (usageMilli >= RESERVED_MILLI - 10_000) stop('Лимит кредитов голосового диалога достигнут.');
           }
