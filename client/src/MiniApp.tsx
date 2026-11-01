@@ -1680,6 +1680,29 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     setTimelineView('day');
   };
 
+  // Mirror NativeTimeline.kt TimelineDay: only hours containing entries are drawn.
+  const nativeDayGroups = useMemo(() => {
+    type DayItem =
+      | { kind: 'task'; time: string; task: Task }
+      | { kind: 'habit'; time: string; habit: Habit; reminderTime: string };
+    const items: DayItem[] = [
+      ...timelineToday.timelineEntries.filter(task => Boolean(task.dueDate)).map(task => {
+        const due = new Date(task.dueDate as string);
+        return { kind: 'task' as const, time: `${String(due.getHours()).padStart(2, '0')}:${String(due.getMinutes()).padStart(2, '0')}`, task };
+      }),
+      ...timelineToday.scheduledHabits.map(({ habit, reminderTime }) =>
+        ({ kind: 'habit' as const, time: reminderTime, habit, reminderTime }))
+    ].sort((a, b) => a.time.localeCompare(b.time));
+    const hours = new Map<string, DayItem[]>();
+    for (const item of items) {
+      const hour = item.time.slice(0, 2);
+      const entries = hours.get(hour) ?? [];
+      entries.push(item);
+      hours.set(hour, entries);
+    }
+    return Array.from(hours, ([hour, entries]) => ({ hour, entries }));
+  }, [timelineToday.timelineEntries, timelineToday.scheduledHabits]);
+
   const sortedHabits = useMemo(() => {
     const dateKey = toDateKey(new Date());
     return habits.filter((habit) => isHabitScheduledForDate(habit, new Date())).sort((a, b) => {
@@ -3815,7 +3838,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   };
 
   useEffect(() => {
-    if (displayMode !== 'timeline' || !timelineToday.isTodayVisible) return;
+    if (displayMode !== 'timeline' || timelineView === 'day' || !timelineToday.isTodayVisible) return;
     const main = mainScrollRef.current;
     const timelineGrid = timelineGridRef.current;
     if (!main || !timelineGrid) return;
@@ -4324,155 +4347,69 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               </div>
               </div>
             </div>
-            {timelineView === 'day' ? <div className="relative overflow-x-hidden">
-              <div ref={timelineGridRef} className="relative" style={{ height: `${timelineToday.totalHeight}px` }}>
-                {timelineToday.hourTops.map((top, hour) => {
-                  const nextHourTop = timelineToday.hourTops[hour + 1] ?? timelineToday.totalHeight;
-                  return (
-                    <div
-                      key={`hour-block-${hour}`}
-                      className="miniapp-timeline-hour-block absolute inset-x-0"
-                      style={{
-                        top: `${top + 2}px`,
-                        height: `${Math.max(0, nextHourTop - top - 4)}px`
-                      }}
-                      aria-hidden="true"
-                    >
-                      <span className="miniapp-timeline-hour-block-label">
-                        {hour.toString().padStart(2, '0')}:00
-                      </span>
-                    </div>
-                  );
-                })}
-                {timelineToday.quarterTops.map((top, quarterIndex) => {
-                  if (timelineToday.occupiedQuarters.has(quarterIndex)) return null;
-                  const hour = Math.floor(quarterIndex / TIMELINE_QUARTERS_PER_HOUR);
-                  const minute = (quarterIndex % TIMELINE_QUARTERS_PER_HOUR) * 15;
-                  const timeLabel = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-                  return (
-                    <button
-                      type="button"
-                      key={`empty-quarter-${quarterIndex}`}
-                      className="miniapp-timeline-empty-slot absolute"
-                      style={{
-                        top: `${top}px`,
-                        height: `${timelineToday.quarterHeights[quarterIndex]}px`,
-                        left: '4rem',
-                        width: 'calc(100% - 4rem)'
-                      }}
-                      onClick={() => openCreateTaskModalForTimelineQuarter(quarterIndex)}
-                      aria-label={`Создать задачу на ${timeLabel}`}
-                      title={`Создать задачу на ${timeLabel}`}
-                    />
-                  );
-                })}
-                {timelineToday.quarterTops.map((top, quarterIndex) => {
-                  const minute = (quarterIndex % TIMELINE_QUARTERS_PER_HOUR) * 15;
-                  const isHour = minute === 0;
-                  return (
-                    <div
-                      key={`quarter-${quarterIndex}`}
-                      className={`miniapp-timeline-quarter-line absolute border-t ${isHour ? 'miniapp-timeline-hour-line' : ''}`}
-                      style={{ top: `${top}px` }}
-                    />
-                  );
-                })}
-                {timelineToday.isTodayVisible ? (
-                  <div className="pointer-events-none absolute inset-x-0 z-20 flex items-center" style={{ top: `${timelineToday.currentTimeTop}px` }}>
-                    <span className="h-3 w-3 -translate-x-1 rounded-full bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.8)]" />
-                    <span className="h-[2px] w-full bg-rose-400/90" />
-                  </div>
-                ) : null}
-                {timelineToday.timelineEntries.map((task) => {
-                  const dueDate = new Date(task.dueDate as string);
-                  const taskHour = dueDate.getHours();
-                  const taskQuarter = (taskHour * TIMELINE_QUARTERS_PER_HOUR) + Math.floor(dueDate.getMinutes() / 15);
-                  const isEvent = task.taskType === 'EVENT';
-                  const isReminder = task.taskType === 'REMINDER';
-                  const hasOverdueState = !task.aiMonitoringEnabled && !isEvent && !isReminder && isOverdue(task);
-                  const isSubtask = Boolean(task.parentTaskId);
-                  const parentTask = task.parentTaskId ? (taskById.get(task.parentTaskId) ?? null) : null;
-                  const taskForSectorColor = parentTask ?? task;
-                  const sphereColor = taskForSectorColor.sphereId ? spheres.find((item) => item.id === taskForSectorColor.sphereId)?.color ?? null : null;
-                  const placement = timelineTaskPlacements.get(timelineProjectionKey(task)) ?? { top: timelineToday.quarterTops[taskQuarter] + 4 };
-                  return (
-                    <button
-                      type="button"
-                      key={timelineProjectionKey(task)}
-                      className={`miniapp-timeline-task-card absolute border px-2 py-1 text-left ${hasOverdueState ? 'miniapp-task-overdue' : ''} ${isSubtask ? 'miniapp-timeline-subtask-card' : ''} ${isEvent ? 'miniapp-timeline-event-card' : ''} ${isReminder ? 'miniapp-timeline-reminder-card' : ''}`}
-                      style={{
-                        top: `${placement.top}px`,
-                        height: `${isSubtask ? TIMELINE_SUBTASK_CARD_HEIGHT : TIMELINE_CARD_HEIGHT}px`,
-                        left: 'calc(4rem + 2px)',
-                        width: 'calc(100% - 4rem - 8px)',
-                        zIndex: 10,
-                        borderColor: isReminder ? 'rgba(14,165,233,0.85)' : isEvent
-                          ? 'rgba(245,158,11,0.9)'
-                          : isSubtask
-                            ? (isLightTheme ? 'rgba(148,163,184,0.95)' : 'rgba(100,116,139,0.9)')
-                            : (hexToRgba(sphereColor ?? '', isLightTheme ? 0.62 : 0.8) ?? (isLightTheme ? 'rgba(14,165,233,0.45)' : 'rgba(56,189,248,0.35)')),
-                        background: isReminder ? (isLightTheme ? 'rgba(224,242,254,0.97)' : 'rgba(3,105,161,0.34)') : isEvent
-                          ? (isLightTheme ? 'rgba(254,243,199,0.96)' : 'rgba(146,64,14,0.42)')
-                          : isSubtask
-                            ? `linear-gradient(135deg, ${hexToRgba(sphereColor ?? '', isLightTheme ? 0.2 : 0.34) ?? (isLightTheme ? 'rgba(224,242,254,0.94)' : 'rgba(14,165,233,0.26)')}, ${isLightTheme ? 'rgba(248,250,252,0.94)' : 'rgba(15,23,42,0.82)'})`
-                            : (hexToRgba(sphereColor ?? '', isLightTheme ? 0.15 : 0.25) ?? (isLightTheme ? 'rgba(224,242,254,0.94)' : 'rgba(14,165,233,0.18)')),
-                        borderLeftWidth: isSubtask ? '4px' : '1px',
-                        borderLeftColor: isReminder ? 'rgba(2,132,199,0.95)' : isSubtask
-                          ? (hexToRgba(sphereColor ?? '', 0.95) ?? 'rgba(56,189,248,0.95)')
-                          : isEvent
-                            ? 'rgba(245,158,11,0.9)'
-                            : (hexToRgba(sphereColor ?? '', 0.8) ?? 'rgba(56,189,248,0.35)')
-                      }}
-                      onClick={() => {
-                        if (isReminder) return;
-                        if (isSubtask) {
-                          openSubtaskModal(taskById.get(task.id) ?? task);
-                          return;
-                        }
-                        openTaskModal(taskById.get(task.id) ?? task);
-                      }}
-                    >
-                      <p className={`miniapp-timeline-card-title flex min-w-0 items-center gap-1 font-semibold ${isSubtask ? 'text-xs leading-4' : 'text-sm'}`}><span className="min-w-0 truncate">{isReminder ? '🔔 ' : ''}{task.title}</span>{task.aiMonitoringEnabled ? <TaskMonitoringBadge /> : null}</p>
-                      <p className={`${isSubtask ? 'text-[10px] leading-3' : 'text-xs'} ${hasOverdueState ? 'miniapp-overdue-label font-medium' : 'text-slate-300'}`}>{task.aiMonitoringEnabled ? `Триггер · ${new Date(task.dueDate as string).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}` : hasOverdueState ? formatRemaining(task.dueDate) : `${isReminder ? 'Напоминание · ' : isEvent ? 'Событие · ' : isSubtask ? 'Подзадача · ' : ''}${formatDueDate(task.dueDate)}`}</p>
-                    </button>
-                  );
-                })}
-                {timelineToday.scheduledHabits.map(({ habit, reminderTime }) => {
-                  const placement = timelineHabitPlacements.get(`${habit.id}-${reminderTime}`) ?? { top: 4 };
-                  const completed = getHabitCompletedForDate(habit, timelineToday.dateKey);
-                  const progress = Math.round((Math.min(completed, habit.targetCount) / Math.max(1, habit.targetCount)) * 100);
-                  return (
-                    <button
-                      type="button"
-                      key={`timeline-habit-${habit.id}-${reminderTime}`}
-                      className="miniapp-timeline-habit-card absolute rounded-md border px-2 py-1 text-left"
-                      onClick={() => openEditHabitModal(habit)}
-                      style={{
-                        top: `${placement.top}px`,
-                        minHeight: `${TIMELINE_CARD_HEIGHT}px`,
-                        left: 'calc(4rem + 2px)',
-                        width: 'calc(100% - 4rem - 8px)',
-                        zIndex: 9,
-                        borderColor: hexToRgba(habit.color, isLightTheme ? 0.55 : 0.72) ?? habit.color,
-                        background: `linear-gradient(135deg, ${hexToRgba(habit.color, isLightTheme ? 0.18 : 0.28) ?? 'rgba(34,197,94,0.18)'}, ${isLightTheme ? 'rgba(255,255,255,0.92)' : 'rgba(15,23,42,0.82)'})`,
-                        borderLeftWidth: '4px',
-                        borderLeftColor: habit.color
-                      }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="miniapp-habit-circle inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-base" style={{ '--habit-color': habit.color, '--habit-progress': `${progress}%` } as CSSProperties}>
-                          <span className="miniapp-habit-circle-core inline-flex h-6 w-6 items-center justify-center rounded-full">{habit.icon}</span>
-                        </span>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold">{habit.name}</p>
-                          <p className="miniapp-timeline-habit-meta text-xs">Привычка · {reminderTime} · {completed}/{habit.targetCount}</p>
+            {timelineView === 'day' ? (
+              <div className="miniapp-native-day-timeline" ref={timelineGridRef}>
+                {nativeDayGroups.length === 0 ? (
+                  <p className="miniapp-native-day-empty">На выбранный день нет записей.</p>
+                ) : (
+                  <div className="miniapp-native-day-rail">
+                    {nativeDayGroups.map(({ hour, entries }) => (
+                      <div className="miniapp-native-day-row" key={hour}>
+                        <div className="miniapp-native-day-hour">
+                          <time>{hour}:00</time>
+                          <span className="miniapp-native-day-dot" aria-hidden="true" />
+                        </div>
+                        <div className="miniapp-native-day-items">
+                          {entries.map((entry) => {
+                            if (entry.kind === 'habit') {
+                              const habit = entry.habit;
+                              return (
+                                <button key={`habit-${habit.id}-${entry.reminderTime}`} type="button"
+                                  className="miniapp-native-day-card miniapp-native-day-habit"
+                                  style={{ '--day-entry-accent': habit.color || '#22c55e' } as CSSProperties}
+                                  onClick={() => openEditHabitModal(habit)}>
+                                  <span className="miniapp-native-day-card-dot" aria-hidden="true" />
+                                  <span className="miniapp-native-day-card-copy">
+                                    <strong>{habit.icon} {habit.name}</strong>
+                                    <small>{entry.reminderTime}</small>
+                                  </span>
+                                </button>
+                              );
+                            }
+                            const task = entry.task;
+                            const isSubtask = Boolean(task.parentTaskId);
+                            const isEvent = task.taskType === 'EVENT';
+                            const isReminder = task.taskType === 'REMINDER';
+                            const parent = task.parentTaskId ? taskById.get(task.parentTaskId) : null;
+                            const sectorColor = spheres.find(sphere => sphere.id === (parent ?? task).sphereId)?.color ?? '#64748b';
+                            const accent = isReminder ? '#0284c7' : isEvent ? '#f59e0b' : sectorColor;
+                            const dueLabel = isReminder || isEvent ? entry.time :
+                              isOverdue(task) ? `Просрочено · ${formatRemaining(task.dueDate)}` : formatRemaining(task.dueDate);
+                            return (
+                              <button type="button" key={timelineProjectionKey(task)}
+                                className={`miniapp-native-day-card ${isSubtask ? 'miniapp-native-day-subtask' : ''} ${isEvent ? 'miniapp-native-day-event' : ''} ${isOverdue(task) ? 'miniapp-native-day-overdue' : ''}`}
+                                style={{ '--day-entry-accent': accent } as CSSProperties}
+                                onClick={() => {
+                                  if (isReminder) return;
+                                  if (isSubtask) openSubtaskModal(taskById.get(task.id) ?? task);
+                                  else openTaskModal(taskById.get(task.id) ?? task);
+                                }}
+                                aria-label={`${isReminder ? 'Напоминание' : isEvent ? 'Событие' : isSubtask ? 'Подзадача' : 'Задача'}: ${task.title}`}>
+                                <span className="miniapp-native-day-card-dot" aria-hidden="true" />
+                                <span className="miniapp-native-day-card-copy">
+                                  <strong>{isReminder ? '🔔 ' : ''}{task.title}{task.aiMonitoringEnabled ? ' · A' : ''}</strong>
+                                  <small>{dueLabel}</small>
+                                </span>
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
-                    </button>
-                  );
-                })}
+                    ))}
+                  </div>
+                )}
               </div>
-            </div> : (
+            ) : (
               <div className={`miniapp-calendar-grid miniapp-calendar-grid-${timelineView}`}>
                 {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((weekday) => <div key={weekday} className="miniapp-calendar-weekday">{weekday}</div>)}
                 {timelineCalendar.days.map(({ date, dateKey, tasks: dayTasks, habits: dayHabits }) => {
