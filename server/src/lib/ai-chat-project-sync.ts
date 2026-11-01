@@ -150,3 +150,27 @@ export function canonicalizeTelegramAssistantProjects(
   // Keep personal chat first, managed Telegram project last.
   return isolateCrossChatProposals([...normal, assistantProject]);
 }
+
+export const MAIL_ASSISTANT_MANAGED_PROJECT = 'mail-ai-assistant-project';
+const MAIL_PREFIX = 'mail-ai-assistant:';
+type ManagedMailbox = { id: string; email: string; provider: string };
+/**
+ * Mailbox rows, not client-submitted JSON, define the managed project and
+ * its authorized chats. Preserve message IDs for existing UI chips.
+ * Safe to call after Telegram canonicalization on each request.
+ */
+export function canonicalizeMailAssistantProjects(projects: unknown, mailboxes: readonly ManagedMailbox[]): JsonProject[] {
+  const all = validProjects(projects);
+  const managed = all.find(project => project.id === MAIL_ASSISTANT_MANAGED_PROJECT);
+  const personal = all.filter(project => project.id !== MAIL_ASSISTANT_MANAGED_PROJECT);
+  if (!mailboxes.length) return personal;
+  const oldChats = new Map((managed?.chats ?? []).filter(c => c.id.startsWith(MAIL_PREFIX)).map(c => [c.id, c]));
+  const chats = mailboxes.map(mailbox => {
+    const id = MAIL_PREFIX + mailbox.id;
+    const title = (mailbox.provider === 'yandex' ? 'Письма Яндекс' : 'Письма Mail.ru') + ' · ' + mailbox.email;
+    return { id, title, messages: validMessages(oldChats.get(id)?.messages).slice(-300) };
+  });
+  const mailProject: JsonProject = { id: MAIL_ASSISTANT_MANAGED_PROJECT,
+    title: 'Почтовый ассистент', color: '#0891b2', icon: '@', chats };
+  return [...personal, mailProject];
+}
