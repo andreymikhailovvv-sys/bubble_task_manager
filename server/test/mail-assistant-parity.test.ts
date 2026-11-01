@@ -53,7 +53,7 @@ test('client and API expose mailbox-owned mail inbox, proposals and reply status
   assert.match(worker,/prepareTaskProposal/);
   assert.match(worker,/dailyCreditLimitMilli/);
   assert.match(inbox,/suggestedReplyStatus: 'SENDING'/);
-  assert.match(inbox,/status: 'UNKNOWN'/);
+  assert.match(inbox,/suggestedReplyStatus: started \? 'UNKNOWN' : 'FAILED'/);
   assert.match(inbox,/notifyDailyAiCheckup/);
   assert.match(web,/mergeMailAiInbox/);
   assert.match(mini,/mailAiAssistant|mailInbox/);
