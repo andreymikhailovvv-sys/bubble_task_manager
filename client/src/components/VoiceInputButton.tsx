@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Mic, MessageCircle, Radio, SendHorizontal, Square, X } from 'lucide-react';
-import { LiveVoiceDialog } from './LiveVoiceDialog';
+import { LiveVoiceDialog, type LiveVoiceContext } from './LiveVoiceDialog';
 import { api } from '../lib/api';
 
 type Props = {
   onTranscript: (text: string, sendImmediately: boolean) => void;
+  liveContext?: LiveVoiceContext;
   disabled?: boolean;
   small?: boolean;
   className?: string;
@@ -12,7 +13,7 @@ type Props = {
 
 type VoiceState = 'idle' | 'recording' | 'transcribing';
 
-export function VoiceInputButton({ onTranscript, disabled = false, small = false, className = '' }: Props) {
+export function VoiceInputButton({ onTranscript, liveContext, disabled = false, small = false, className = '' }: Props) {
   const [state, setState] = useState<VoiceState>('idle');
   const [error, setError] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -209,6 +210,6 @@ export function VoiceInputButton({ onTranscript, disabled = false, small = false
         <p className="voice-record-note">Распознавание оплачивается кредитами. Запись не отправляется в чат без вашего действия.</p>
       </div>
     </div> : null}
-    {liveOpen ? <LiveVoiceDialog audioContext={liveAudioContext} onClose={() => { setLiveOpen(false); setLiveAudioContext(null); }} /> : null}
+    {liveOpen ? <LiveVoiceDialog liveContext={liveContext} audioContext={liveAudioContext} onClose={() => { setLiveOpen(false); setLiveAudioContext(null); }} /> : null}
   </>;
 }
