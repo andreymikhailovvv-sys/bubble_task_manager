@@ -12,6 +12,7 @@ import { analyzeWebSearchCalls, getOpenAiPreflightErrorDiagnostics } from './dyn
 import { prepareTaskProposal, proposalView, type TaskProposalView } from './ai-task-proposal.service.js';
 import { TELEGRAM_REQUEST_READ_TOOL, prepareTelegramAiReadRequest, type TelegramReadDraft } from './telegram-ai-read-consent.service.js';
 import { TELEGRAM_PREPARE_SEND_TOOL, prepareTelegramInlineSendDraft, type TelegramInlineSendDraft } from './telegram-inline-send-draft.service.js';
+import { searchOwnerMailbox, prepareOwnerMailSend, type MailSendDraft } from './ai-mail-tools.service.js';
 import { requiresNoteCreation } from './ai-create-note.service.js';
 import { createTaskChatWorkspaceTools, TASK_CHAT_WORKSPACE_TOOL_NAMES } from './task-chat-workspace-tools.service.js';
 import { selectRequiredPersonalLookup } from './ai-personal-search-intent.js';
@@ -1714,6 +1715,7 @@ export const aiAssistantService = {
         messageKind: true,
         recipientUserId: true,
         telegramSendDraft: true,
+        mailSendDraft: true,
         aiTaskProposalId: true,
         telegramReadDraft: true,
         generatedDocument: { select: { id: true, fileName: true, mimeType: true, size: true } },
@@ -1762,6 +1764,9 @@ export const aiAssistantService = {
         : {}),
       ...(message.role === 'assistant' && message.userId === input.userId && message.telegramSendDraft
         ? { telegramSendDraft: message.telegramSendDraft as TelegramInlineSendDraft }
+        : {}),
+      ...(message.role === 'assistant' && message.userId === input.userId && message.mailSendDraft
+        ? { mailSendDraft: message.mailSendDraft as MailSendDraft }
         : {})
     }));
   },
@@ -1807,7 +1812,7 @@ export const aiAssistantService = {
     }
   },
 
-  appendTaskDialogAssistantMessage: async (input: { userId: string; taskId: string; content: string; creditsSpentMilli: number; webSearchUsed?: boolean; webSources?: TaskWebSource[]; webCitations?: TaskWebCitation[]; generatedDocumentId?: string | null; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; telegramReadOwnerId?: string | null; taskProposalId?: string | null }) => {
+  appendTaskDialogAssistantMessage: async (input: { userId: string; taskId: string; content: string; creditsSpentMilli: number; webSearchUsed?: boolean; webSources?: TaskWebSource[]; webCitations?: TaskWebCitation[]; generatedDocumentId?: string | null; telegramSendDraft?: TelegramInlineSendDraft | null; mailSendDraft?: MailSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; telegramReadOwnerId?: string | null; taskProposalId?: string | null }) => {
     const content = input.content.trim();
     if (!content) return;
 
@@ -1828,6 +1833,7 @@ export const aiAssistantService = {
         generatedDocumentId: input.generatedDocumentId ?? null,
         aiTaskProposalId: input.taskProposalId ?? null,
         ...(input.telegramSendDraft ? { telegramSendDraft: { ...input.telegramSendDraft } } : {}),
+        ...(input.mailSendDraft ? { mailSendDraft: { ...input.mailSendDraft } } : {}),
         ...(input.telegramReadDraft ? { telegramReadDraft: { ...input.telegramReadDraft } } : {}),
         ...(input.telegramReadOwnerId ? { telegramReadOwnerId: input.telegramReadOwnerId } : {})
       }
@@ -2235,6 +2241,8 @@ export const aiAssistantService = {
         let forcedWebSearchRetry = false;
         let correctedSearchDenial = false;
         let telegramSendDraft: TelegramInlineSendDraft | null = null;
+        let mailSendDraft: MailSendDraft | null = null;
+        let mailReadUsed = false;
         let telegramReadDraft: TelegramReadDraft | null = null;
         const fetchedAttachmentIds = new Set<string>();
         const loadedSubtaskIds = new Set<string>();
@@ -2449,6 +2457,25 @@ export const aiAssistantService = {
                     ? { ok: true, waitingForConsent: true, message: 'Карточка Telegram ждёт разрешения владельца. История ещё НЕ прочитана.' }
                     : proposal) });
               }
+              input.onProgress?.('forming_answer');
+              continue;
+            }
+            if (call.name === 'search_mailbox') {
+              toolCallsExecuted += 1;
+              mailReadUsed = true;
+              const found = await searchOwnerMailbox(input.userId,args).catch(() =>
+                ({ok:false,code:'MAIL_UNAVAILABLE',message:'Не удалось получить письма'}));
+              providerInput.push({type:'function_call_output',call_id:call.call_id,output:JSON.stringify(found)});
+              input.onProgress?.('forming_answer');
+              continue;
+            }
+            if (call.name === 'prepare_mail_send') {
+              toolCallsExecuted += 1;
+              const result = mailSendDraft ? {ok:false,code:'ALREADY_PREPARED'} :
+                await prepareOwnerMailSend(input.userId,args);
+              if(result.ok && 'draft' in result) mailSendDraft = result.draft;
+              providerInput.push({type:'function_call_output',call_id:call.call_id,
+                output:JSON.stringify(result.ok ? {ok:true,prepared:true,requiresConfirmation:true} : result)});
               input.onProgress?.('forming_answer');
               continue;
             }
@@ -2733,7 +2760,7 @@ export const aiAssistantService = {
           webReservation = null;
         }
         console.info('[AI] AI operation completed successfully', { requestId, model, userId: input.userId });
-        return { model, answer, actionReports, taskProposal, generatedDocument, telegramSendDraft, telegramReadDraft, webSearchUsed, webSources: sources, webCitations, taskDataChanged: appliedActionsCount > 0, billing: { mode: dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli } };
+        return { model, answer, actionReports, taskProposal, generatedDocument, telegramSendDraft, telegramReadDraft, mailSendDraft, mailReadUsed, webSearchUsed, webSources: sources, webCitations, taskDataChanged: appliedActionsCount > 0, billing: { mode: dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli } };
       } catch (error) {
         if (pendingDynamicReservation) await refundWalletReservation(pendingDynamicReservation).catch(() => undefined);
         await Promise.all(dynamicCalls.map((call) => refundWalletReservation(call.reservation).catch(() => undefined)));
