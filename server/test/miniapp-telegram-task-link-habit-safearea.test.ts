@@ -7,7 +7,9 @@ test('Telegram task deep link opens only once and is removed when the task close
   const launchEffectStart = source.indexOf('if (handledTaskDeepLinkRef.current || !launchParams.taskId');
   assert.ok(launchEffectStart > 0, 'launch effect must guard already handled links');
   const launchEffect = source.slice(launchEffectStart, source.indexOf('  }, [launchParams, loading, openedTaskId, tasks]);', launchEffectStart));
-  assert.ok(launchEffect.indexOf('handledTaskDeepLinkRef.current = true;') < launchEffect.indexOf('openTaskModal(requestedTask);'));
+  const claimIndex = launchEffect.indexOf('handledTaskDeepLinkRef.current = true;');
+  const openIndex = launchEffect.indexOf('openTaskModal(requestedTask);');
+  assert.ok(claimIndex >= 0 && openIndex > claimIndex, 'mark the link handled before opening the task');
 
   const closeStart = source.indexOf('const closeTaskModal = () => {');
   const closeBody = source.slice(closeStart, source.indexOf('setOpenedTaskId(null);', closeStart));
@@ -28,5 +30,8 @@ test('Telegram habit sheets protect their top controls from Android system UI', 
   const safeAreaStyles = css.slice(stylesStart, css.indexOf('\n}', stylesStart));
   assert.ok(safeAreaStyles.includes('--miniapp-top-inset'));
   assert.ok(safeAreaStyles.includes('env(safe-area-inset-top'));
-  assert.ok(safeAreaStyles.includes('max-height: 100%'));
+  const panelRuleStart = css.indexOf('.miniapp-shell:not(.miniapp-web-runtime) .miniapp-habit-backdrop .miniapp-habit-modal-panel {', stylesStart);
+  assert.ok(panelRuleStart > stylesStart, 'habit panels must use the remaining viewport height');
+  const panelStyles = css.slice(panelRuleStart, css.indexOf('\n}', panelRuleStart));
+  assert.ok(panelStyles.includes('max-height: 100%'));
 });
