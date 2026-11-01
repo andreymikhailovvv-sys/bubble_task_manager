@@ -25,6 +25,7 @@ type Reversal = {
   after: Array<{ id: string; updatedAt: string }>;
   created: Array<{ id: string; updatedAt: string; attachments: string[]; comments: string[]; aiMessages: string[] }>;
   notes?: { before: StoredNote[]; after: Array<{ id: string; updatedAt: string }>; created?: Array<{ id: string; updatedAt: string }> };
+  createdHabits?: Array<{ id: string; updatedAt: string }>;
 };
 
 async function loadTasks(userId: string, ids: string[]) {
@@ -59,7 +60,8 @@ export async function captureProposalBefore(userId: string, actions: Array<Recor
 export async function captureProposalAfter(
   userId: string, before: Stored[], createdIds: string[],
   notesBefore: Array<{ id: string; title: string; content: string; groupId: string | null; updatedAt: Date }> = [],
-  createdNoteIds: string[] = []
+  createdNoteIds: string[] = [],
+  createdHabitIds: string[] = []
 ): Promise<Reversal> {
   const previouslyKnown = before.map(item => item.id);
   const after = await prisma.task.findMany({
@@ -83,11 +85,16 @@ export async function captureProposalAfter(
     where: { userId, id: { in: createdNoteIds } }, select: { id: true, updatedAt: true }
   }) : [];
   if (createdNotes.length !== createdNoteIds.length) throw new Error('Не удалось сохранить историю отмены созданных заметок.');
+  const createdHabits = createdHabitIds.length ? await prisma.habit.findMany({
+    where: { userId, id: { in: createdHabitIds } }, select: { id: true, updatedAt: true }
+  }) : [];
+  if (createdHabits.length !== createdHabitIds.length) throw new Error('Не удалось сохранить историю созданных привычек.');
   if (notesAfter.length !== notesBefore.length) {
     throw new Error('Не удалось сохранить историю отмены заметки.');
   }
   return {
     before,
+    ...(createdHabits.length ? { createdHabits: createdHabits.map(habit => ({ id: habit.id, updatedAt: habit.updatedAt.toISOString() })) } : {}),
     ...(notesBefore.length || createdNoteIds.length ? { notes: {
       before: notesBefore.map(note => ({
         id: note.id, title: note.title, content: note.content,
@@ -123,7 +130,8 @@ export async function undoStoredProposal(userId: string, proposalId: string) {
         throw new Error('Некорректная история отмены.');
       }
       const noteHistory = saved.notes;
-      if (!saved.before.length && !saved.created.length && !noteHistory?.before.length && !noteHistory?.created?.length) {
+      if (saved.createdHabits && !Array.isArray(saved.createdHabits)) throw new Error('Некорректная история отмены привычек.');
+      if (!saved.before.length && !saved.created.length && !noteHistory?.before.length && !noteHistory?.created?.length && !saved.createdHabits?.length) {
         throw new Error('Недостаточно данных для безопасного возврата изменений.');
       }
       if (noteHistory && (
@@ -254,6 +262,17 @@ export async function undoStoredProposal(userId: string, proposalId: string) {
           data: { title: note.title, content: note.content, groupId: note.groupId }
         });
         if (restored.count !== 1) throw new Error('Заметка изменилась во время отмены.');
+      }
+      // Never delete a habit after the user has edited it or recorded progress.
+      for (const habit of saved.createdHabits ?? []) {
+        const currentHabit = await tx.habit.findFirst({
+          where: { id: habit.id, userId }, select: { updatedAt: true, _count: { select: { completions: true } } }
+        });
+        if (!currentHabit || currentHabit.updatedAt.toISOString() !== habit.updatedAt || currentHabit._count.completions > 0) {
+          throw new Error('Привычка уже изменена или отмечена выполненной. Отмена заблокирована.');
+        }
+        const deleted = await tx.habit.deleteMany({ where: { id: habit.id, userId, updatedAt: new Date(habit.updatedAt) } });
+        if (deleted.count !== 1) throw new Error('Не удалось отменить создание привычки.');
       }
       await tx.aiTaskProposal.update({ where: { id: proposalId }, data: { status: 'UNDONE', error: null } });
     });
