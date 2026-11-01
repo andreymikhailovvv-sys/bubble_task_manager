@@ -4,6 +4,8 @@ import { taskAccessWhere } from '../lib/task-access.js';
 import { plannerToolsService, type PlannerActionInput } from './planner-tools.service.js';
 import { aiPersonalNotesService, validateAiCreateNoteArgs, validateAiUpdateNoteArgs, type CreatePersonalNoteArgs, type UpdatePersonalNoteArgs } from './ai-create-note.service.js';
 import type { Prisma } from '@prisma/client';
+import { habitService } from './habit.service.js';
+import { validateAiCreateHabitArgs, type CreateHabitProposalAction } from './ai-create-habit.service.js';
 
 /**
  * A proposal is a durable, owner-bound command. The model and the browser may
@@ -13,6 +15,9 @@ export type TaskProposalSource = 'planner' | 'telegram_bot' | 'task_chat' | 'tel
 export type TaskProposalAction = Record<string, unknown>;
 export type NoteProposalAction = Record<string, unknown> & UpdatePersonalNoteArgs & { operation: 'update_note'; expectedUpdatedAt: string };
 export type CreateNoteProposalAction = Record<string, unknown> & CreatePersonalNoteArgs & { operation: 'create_note' };
+function isCreateHabitAction(action: TaskProposalAction): action is CreateHabitProposalAction {
+  return action.operation === 'create_habit';
+}
 function isCreateNoteAction(action: TaskProposalAction): action is CreateNoteProposalAction {
   return action.operation === 'create_note';
 }
@@ -62,6 +67,7 @@ async function ownerSnapshot(userId: string, actions: TaskProposalAction[]) {
   }) : [];
   const byId = new Map(tasks.map(task => [task.id, task]));
   const createdNoteActions = actions.filter(isCreateNoteAction);
+  for (const action of actions.filter(isCreateHabitAction)) validateAiCreateHabitArgs(action);
   const noteActions = actions.filter(isNoteAction);
   for (const action of createdNoteActions) {
     const payload = validateAiCreateNoteArgs(action);
@@ -90,7 +96,7 @@ async function ownerSnapshot(userId: string, actions: TaskProposalAction[]) {
   const sphereNames = new Map<string, string>();
   // All existing references must remain reachable by the consenting actor.
   for (const action of actions) {
-    if (isNoteAction(action) || isCreateNoteAction(action)) continue;
+    if (isNoteAction(action) || isCreateNoteAction(action) || isCreateHabitAction(action)) continue;
     for (const id of actionIds(action)) {
       if (!byId.has(id)) throw new Error('Задача или подзадача недоступна. Предложение не создано.');
     }
@@ -106,6 +112,15 @@ async function ownerSnapshot(userId: string, actions: TaskProposalAction[]) {
       ...notes.map(note => ({ kind: 'note', id: note.id, updatedAt: note.updatedAt.toISOString() }))
     ],
     display: actions.map(action => {
+      if (isCreateHabitAction(action)) {
+        const habit = validateAiCreateHabitArgs(action);
+        const schedule = habit.recurrenceType === 'DAILY' ? 'Ежедневно' :
+          habit.recurrenceType === 'INTERVAL' ? 'Каждые ' + habit.intervalDays + ' дн.' :
+          'Дни недели: ' + habit.weekdays.join(', ') + ' (0 — воскресенье)';
+        return { type: 'create_habit', title: habit.icon + ' ' + habit.name,
+          details: [schedule, 'Повторов в день: ' + habit.targetCount,
+            'Уведомления: ' + (habit.reminderTimes.join(', ') || 'не заданы')] };
+      }
       if (isCreateNoteAction(action)) return {
         type: 'create_note', title: action.title || 'Без названия',
         details: [
@@ -285,6 +300,7 @@ export async function applyTaskProposal(userId: string, id: string, selectedIndi
     const reports: string[] = [];
     const createdIds: string[] = [];
     const createdNoteIds: string[] = [];
+    const createdHabitIds: string[] = [];
     if (row.source === 'planner' || row.source === 'daily_checkup' || row.source === 'telegram_bot' ||
         row.source === 'task_chat' || row.source === 'telegram_bot_task' ||
         (row.source === 'telegram_assistant' && actions.every(a => 'operation' in a)) ||
@@ -308,6 +324,12 @@ export async function applyTaskProposal(userId: string, id: string, selectedIndi
           if (!result.ok) throw new Error(result.error ?? 'Не удалось изменить задачу.');
           reports.push(...result.reports);
           createdIds.push(...result.createdIds);
+          continue;
+        }
+        if (isCreateHabitAction(action)) {
+          const habit = await habitService.create(userId, validateAiCreateHabitArgs(action));
+          createdHabitIds.push(habit.id);
+          reports.push('Создана привычка «' + habit.name + '».');
           continue;
         }
         if (isCreateNoteAction(action)) {
@@ -349,10 +371,10 @@ export async function applyTaskProposal(userId: string, id: string, selectedIndi
         reports.push('Создана задача «' + String(action.title).slice(0, 180) + '».');
       }
     } else throw new Error('Неизвестный источник предложения.');
-    const undoData = await captureProposalAfter(userId, before, createdIds, notesBefore, createdNoteIds);
+    const undoData = await captureProposalAfter(userId, before, createdIds, notesBefore, createdNoteIds, createdHabitIds);
     await prisma.aiTaskProposal.update({ where: { id }, data: {
       status: 'APPLIED', undoData: undoData as unknown as Prisma.InputJsonValue,
-      result: { reports, createdIds, createdNoteIds,
+      result: { reports, createdIds, createdNoteIds, createdHabitIds,
         ...(subset ? { selectedIndices: subset.indices, totalOperations: subset.originalCount } : {}) } as Prisma.InputJsonValue
     } });
   } catch (error) {
