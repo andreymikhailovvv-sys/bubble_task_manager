@@ -126,7 +126,9 @@ export class ReadOnlyImap {
   }
   async connect(provider: MailProvider, email: string, password: string) {
     this.socket = tls.connect({ host: HOST[provider], servername: HOST[provider], port: 993, rejectUnauthorized: true });
-    this.socket.setTimeout(20_000, () => this.socket.destroy(new Error('timeout')));
+    // The same read-only session is reused while AI analyzes fetched messages (up to 65s each).
+    // A 20s idle timeout would silently kill the connection between FETCH operations.
+    this.socket.setTimeout(120_000, () => this.socket.destroy(new Error('timeout')));
     this.socket.on('data', (data: Buffer) => {
       this.pending = Buffer.concat([this.pending, data]);
       this.notify();
