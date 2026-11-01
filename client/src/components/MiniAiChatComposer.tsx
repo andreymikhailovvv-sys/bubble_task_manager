@@ -15,7 +15,7 @@ type MiniAiChatComposerProps = {
   onLiveMessage?: (message: LiveVoiceMessage) => void;
   onLiveToolResult?: (completion: LiveVoiceToolCompletion) => void;
   onLiveStatus?: (status: LiveVoiceProgressStatus | null) => void;
-  onLiveSessionChange?: (active: boolean) => void;
+  onLiveSessionChange?: (active: boolean, context?: LiveVoiceContext) => void;
   initialDraft: string;
   onDraftChange: (text: string) => void;
   onSend: () => void;
