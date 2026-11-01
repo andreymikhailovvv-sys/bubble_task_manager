@@ -35,7 +35,7 @@ export function MailInlineSendCard({draft}:{draft:MailSendDraft}){
     }).catch(()=>{});
     return ()=>{live=false;};
   },[draft.id]);
-  const locked=status!=='PENDING'||busy||rewriting;
+  const locked=(status!=='PENDING'&&status!=='FAILED')||busy||rewriting;
   const rewrite=async()=>{
     if(locked||!body.trim()||!instruction.trim())return;
     setRewriting(true);setError('');
@@ -105,11 +105,11 @@ export function MailInlineSendCard({draft}:{draft:MailSendDraft}){
     {rewriteCost>0&&<p className="telegram-ai-send-card__muted mt-2 text-xs">Редактирование с ИИ: {(rewriteCost/1000).toLocaleString('ru-RU',{maximumFractionDigits:3})} кредитов.</p>}
     {error&&<p role="alert" className="telegram-ai-send-card__error mt-2 text-xs">{error}</p>}
     {status==='SENT'&&<p role="status" className="telegram-ai-send-card__muted mt-2 text-xs">Письмо отправлено.</p>}
-    {status==='UNKNOWN'&&<p role="status" className="telegram-ai-send-card__error mt-2 text-xs">Результат неизвестен. Отправка заблокирована, чтобы избежать дублирования.</p>}
+    {status==='UNKNOWN'&&<p role="status" className="telegram-ai-send-card__error mt-2 text-xs">Нет подтверждения приёма письма SMTP. Повтор заблокирован, чтобы не отправить дубликат.</p>}
     <button type="button" disabled={locked||!mailboxId||!recipient.trim()||!body.trim()} onClick={()=>void send()}
       className="telegram-ai-send-card__send mt-3 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-semibold disabled:opacity-50">
       {busy?<Loader2 size={15} className="animate-spin"/>:<Send size={15}/>}
-      {status==='SENT'?'Отправлено':status==='PENDING'?'Отправить письмо':'Отправка недоступна'}
+      {status==='SENT'?'Отправлено':status==='FAILED'?'Повторить отправку':status==='PENDING'?'Отправить письмо':'Отправка недоступна'}
     </button>
     <p className="telegram-ai-send-card__muted mt-2 text-xs">Письмо уйдёт только после нажатия кнопки. Проверьте адресата перед отправкой.</p>
   </div>;
