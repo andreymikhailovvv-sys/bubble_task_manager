@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Loader2, Mic, MicOff, PhoneOff, Volume2, X } from 'lucide-react';
-import { api } from '../lib/api';
+import { api, type AiChatResult, type TaskAssistantResult } from '../lib/api';
+import type { AiChatModel } from '../lib/types';
 import { formatCreditsSpent } from '../lib/credits';
 
 export type LiveVoiceContext =
-  | { type: 'task'; taskId: string; timeZone?: string }
-  | { type: 'chat'; projectId?: string; chatId: string; history?: Array<{ id: string; role: 'user' | 'assistant'; content: string }>; timeZone?: string };
+  | { type: 'task'; taskId: string; timeZone?: string; model?: AiChatModel }
+  | { type: 'chat'; projectId?: string; chatId: string; history?: Array<{ id: string; role: 'user' | 'assistant'; content: string }>; timeZone?: string; projectTitle?: string; chatTitle?: string; model?: AiChatModel };
+
+export type LiveVoiceMessage = { role: 'user' | 'assistant'; id: string; text: string };
+export type LiveVoiceToolCompletion = { question: string; kind: 'task' | 'chat'; result: AiChatResult | TaskAssistantResult };
 
 type Phase = 'connecting' | 'listening' | 'speaking' | 'thinking' | 'ended' | 'error';
-type VoiceEvent = { type?: string; data?: string; text?: string; message?: string; creditsSpentMilli?: number };
+type VoiceEvent = { type?: string; data?: string; text?: string; id?: string; callId?: string; question?: string; message?: string; creditsSpentMilli?: number };
 const AUDIO_RATE = 24_000;
 
 // The browser's AudioContext typically runs at 44.1 or 48 kHz. Realtime
@@ -46,8 +49,14 @@ function decodePcm(base64: string) {
   return values;
 }
 
-export function LiveVoiceDialog({ onClose, audioContext, liveContext }: { onClose: () => void; audioContext: AudioContext | null; liveContext?: LiveVoiceContext }) {
+export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMessage, onLiveToolResult }: {
+  onClose: () => void; audioContext: AudioContext | null; liveContext?: LiveVoiceContext;
+  onLiveMessage?: (item: LiveVoiceMessage) => void;
+  onLiveToolResult?: (result: LiveVoiceToolCompletion) => void;
+}) {
   const [phase, setPhase] = useState<Phase>('connecting');
+  const processingToolRef = useRef(false);
+  const dialogHistoryRef = useRef(liveContext?.type === 'chat' ? [...(liveContext.history ?? [])] : []);
   const [error, setError] = useState('');
   const [muted, setMuted] = useState(false);
   const [level, setLevel] = useState(0.06);
@@ -70,6 +79,35 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext }: { onClos
     sourcesRef.current.forEach(source => { try { source.stop(); } catch { /* finished */ } });
     sourcesRef.current.clear();
     nextPlaybackRef.current = contextRef.current?.currentTime ?? 0;
+  };
+
+  const handleToolRequest = async (question: string, callId: string, ws: WebSocket) => {
+    if (processingToolRef.current || !liveContext || ws.readyState !== WebSocket.OPEN) return;
+    processingToolRef.current = true;
+    setPhase('thinking');
+    try {
+      const result = liveContext.type === 'task'
+        ? await api.askTaskAssistantStreaming(liveContext.taskId, {
+          clientRequestId: crypto.randomUUID(), question, userMessage: question,
+          model: liveContext.model, clientSurface: navigator.userAgent.includes('Telegram') ? 'miniapp' : 'web'
+        })
+        : await api.askAiChatStreaming({
+          clientRequestId: crypto.randomUUID(), question,
+          history: dialogHistoryRef.current.filter((entry, index, items) => !(index === items.length - 1 && entry.role === 'user' && entry.content.trim() === question.trim())), model: liveContext.model,
+          projectId: liveContext.projectId, chatId: liveContext.chatId,
+          projectTitle: liveContext.projectTitle, chatTitle: liveContext.chatTitle,
+          clientSurface: navigator.userAgent.includes('Telegram') ? 'miniapp' : 'web'
+        });
+      onLiveToolResult?.({ kind: liveContext.type, question, result });
+      if (liveContext.type === 'chat') dialogHistoryRef.current.push({ id: crypto.randomUUID(), role: 'assistant', content: result.answer });
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'tool_result', callId, answer: result.answer }));
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Ошибка инструмента.';
+      setError(message);
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({
+        type: 'tool_result', callId, answer: 'Не удалось выполнить действие: ' + message
+      }));
+    } finally { processingToolRef.current = false; }
   };
 
   useEffect(() => {
@@ -140,6 +178,19 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext }: { onClos
               try { ws.send(JSON.stringify({ type: 'audio', audio: encodeBase64(downsamplePcm(samples, context.sampleRate)) })); }
               catch { /* transient sample failure */ }
             };
+          }
+          if (payload.type === 'user_message' && typeof payload.text === 'string') {
+            const id = payload.id || crypto.randomUUID();
+            if (liveContext?.type === 'chat') dialogHistoryRef.current.push({ id, role: 'user', content: payload.text });
+            onLiveMessage?.({ role: 'user', id, text: payload.text });
+          }
+          if (payload.type === 'assistant_message' && typeof payload.text === 'string') {
+            const id = payload.id || crypto.randomUUID();
+            if (liveContext?.type === 'chat') dialogHistoryRef.current.push({ id, role: 'assistant', content: payload.text });
+            onLiveMessage?.({ role: 'assistant', id, text: payload.text });
+          }
+          if (payload.type === 'tool_request' && typeof payload.question === 'string' && typeof payload.callId === 'string') {
+            void handleToolRequest(payload.question, payload.callId, ws);
           }
           if (payload.type === 'speech_started') {
             clearPlayback();
@@ -219,7 +270,6 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext }: { onClos
     const next = !mutedRef.current;
     mutedRef.current = next;
     streamRef.current?.getAudioTracks().forEach(track => { track.enabled = !next; });
-    if (next) setLevel(0.06);
     setMuted(next);
   };
 
@@ -243,35 +293,25 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext }: { onClos
     error: 'Ошибка соединения'
   };
 
-  return createPortal(<div className="live-voice-backdrop" role="presentation">
-    <section className="live-voice-dialog dialog-surface" role="dialog" aria-modal="true" aria-label="Живое общение с ИИ">
-      <header className="live-voice-header">
-        <span>Живой диалог</span>
-        <button type="button" onClick={onClose} aria-label="Закрыть голосовой диалог"><X size={19}/></button>
-      </header>
-      <div className="live-voice-center">
-        <div className={`live-voice-orb ${phase === 'speaking' ? 'is-speaking' : ''} ${phase === 'listening' ? 'is-listening' : ''}`}
-          style={{ '--voice-level': level } as React.CSSProperties}>
-          <span className="live-voice-orb-core">{phase === 'connecting' ? <Loader2 size={31} className="ai-speech-loading-spin" /> : <Volume2 size={30}/>}</span>
-        </div>
+  return <section className="live-voice-inline dialog-surface" role="region" aria-label="Живое общение с ИИ">
+    <div className="live-voice-inline-row">
+      <span className={`live-voice-inline-orb ${phase === 'speaking' ? 'is-speaking' : ''}`}
+        style={{ '--voice-level': level } as React.CSSProperties} aria-hidden="true">
+        {phase === 'connecting' ? <Loader2 size={16} className="ai-speech-loading-spin"/> : <Volume2 size={16}/>}
+      </span>
+      <div className="live-voice-inline-status">
         <strong>{phaseText[phase]}</strong>
-        <p className="live-voice-caption" aria-live="polite">{caption || 'Говорите естественно. ИИ ответит вслух после паузы.'}</p>
-        <div className="live-voice-meta">
-          <span>{String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')} / 02:00</span>
-          <span>Голос: Marin</span>
-        </div>
-        <div className="live-voice-credits">Озвучивание и разговор: {creditsSpentMilli ? formatCreditsSpent(creditsSpentMilli) : '0 кредитов'}</div>
-        {error ? <div role="alert" className="live-voice-error">{error}</div> : null}
+        <small title="До 450 кредитов временно резервируются. После завершения списывается фактический расход, остаток возвращается.">{String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')} · {creditsSpentMilli ? formatCreditsSpent(creditsSpentMilli) : '0 кредитов'}</small>
       </div>
-      <footer className="live-voice-footer">
-        <button type="button" className={muted ? 'is-muted' : ''} onClick={toggleMuted} disabled={phase === 'error' || phase === 'ended'} aria-label={muted ? 'Включить микрофон' : 'Выключить микрофон'}>
-          {muted ? <MicOff size={19}/> : <Mic size={19}/>}
-        </button>
-        <button type="button" className="live-voice-end" onClick={finish}>
-          <PhoneOff size={18}/>{phase === 'ended' || phase === 'error' ? 'Закрыть' : 'Завершить'}
-        </button>
-      </footer>
-      <p className="live-voice-note">Максимум 2 минуты. До 450 кредитов временно резервируются; после завершения списывается только подтверждённый расход модели, остальное возвращается.</p>
-    </section>
-  </div>, document.body);
+      <button className="live-voice-inline-button" type="button" onClick={toggleMuted} disabled={phase === 'ended' || phase === 'error'}
+        title={muted ? 'Включить микрофон' : 'Отключить микрофон'} aria-label={muted ? 'Включить микрофон' : 'Отключить микрофон'}>
+        {muted ? <MicOff size={17}/> : <Mic size={17}/>}
+      </button>
+      <button className="live-voice-inline-button live-voice-inline-end" type="button" onClick={finish}
+        title="Завершить разговор" aria-label="Завершить разговор"><PhoneOff size={16}/></button>
+      <button className="live-voice-inline-close" type="button" onClick={onClose} aria-label="Закрыть голосовой режим"><X size={14}/></button>
+    </div>
+    {caption && phase === 'speaking' ? <p className="live-voice-inline-caption" aria-live="polite">{caption.slice(-120)}</p> : null}
+    {error ? <p role="alert" className="live-voice-inline-error">{error}</p> : null}
+  </section>;
 }
