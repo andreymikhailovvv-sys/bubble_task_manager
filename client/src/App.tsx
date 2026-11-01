@@ -8433,12 +8433,12 @@ export default function App() {
             </div>
             {replyToQuickAi ? <AiReplyPreview target={replyToQuickAi} onDismiss={() => setReplyToQuickAi(null)} compact /> : null}
             <AiAttachmentTiles files={quickAiPendingFiles} onRemove={file => setQuickAiPendingFiles(previous => previous.filter(item => item !== file))} busy={quickAiChatLoading} uploadProgress={aiChatUploadProgress} />
-            <div className="flex items-end gap-2">
+            <div className="ai-request-composer ai-request-composer-quick flex items-end gap-2">
               <input ref={quickAiFileInputRef} type="file" multiple className="hidden"
                  accept=".pdf,.docx,.xls,.xlsx,.txt,image/png,image/jpeg,image/webp,image/gif"
                  onChange={(event) => {
                    const files = Array.from(event.target.files ?? []);
-                   const accepted = files.filter(file => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\\.(pdf|docx|xlsx?|txt|png|jpe?g|webp|gif)$/i.test(file.name));
+                   const accepted = files.filter(file => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|txt|png|jpe?g|webp|gif)$/i.test(file.name));
                    const withinLimit = accepted.filter(file => file.size <= MAX_AI_ATTACHMENT_SIZE);
                    if (withinLimit.length !== files.length) setAiChatError('Некоторые файлы не добавлены: неподдерживаемый формат или размер больше 8 МБ.');
                    setQuickAiPendingFiles(previous => [...previous, ...withinLimit].slice(0, MAX_AI_ATTACHMENTS));
