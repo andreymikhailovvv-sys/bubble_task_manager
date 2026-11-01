@@ -3,9 +3,9 @@ import { createPortal } from 'react-dom';
 import { MousePointer2, X } from 'lucide-react';
 
 export type TaskTourStep = 'create-task' | 'create-event' | 'create-sector' | 'sphere-add' | 'task-context-menu' | 'quick-ai' | null;
-export type AiTourStep = 'ai-quick-chat' | 'ai-full-chat' | 'ai-task-help' | 'ai-recurrence' | 'ai-optimize' | 'ai-checkup' | 'ai-notifications' | null;
-export type FeatureTourStep = 'feature-rating' | 'feature-focus-button' | 'feature-focus-setup' | 'feature-focus-timer' | 'feature-focus-task' | 'feature-focus-ai' | 'feature-telegram-button' | 'feature-telegram-qr' | null;
-export type WorkspaceTourStep = 'workspace-overview' | 'workspace-display-modes' | 'workspace-bubbles' | 'workspace-bubble-layout' | 'workspace-list' | 'workspace-timeline' | 'workspace-timeline-range' | 'workspace-credits' | 'workspace-settings' | 'workspace-side-rail' | null;
+export type AiTourStep = 'ai-quick-chat' | 'ai-full-chat' | 'ai-task-help' | 'ai-recurrence' | 'ai-optimize' | 'ai-checkup' | 'ai-monitor-button' | 'ai-monitor-model' | null;
+export type FeatureTourStep = 'feature-rating' | 'feature-focus-button' | 'feature-focus-setup' | 'feature-focus-timer' | 'feature-focus-task' | 'feature-focus-ai' | 'feature-telegram-button' | 'feature-telegram-qr' | 'feature-integration-send' | 'feature-integration-telegram-ai' | 'feature-integration-mail' | null;
+export type WorkspaceTourStep = 'workspace-overview' | 'workspace-display-modes' | 'workspace-bubbles' | 'workspace-bubble-layout' | 'workspace-list' | 'workspace-timeline' | 'workspace-timeline-range' | 'workspace-credits' | 'workspace-settings' | 'workspace-side-rail' | 'workspace-notes' | null;
 type TourConfigBase = { selector: string; text: string; combineTargets?: boolean; cardOffsetY?: number };
 export type TaskTourConfig = TourConfigBase & { id: Exclude<TaskTourStep, null> };
 export type AiTourConfig = TourConfigBase & { id: Exclude<AiTourStep, null> };
@@ -21,8 +21,9 @@ export const WORKSPACE_TOUR_STEPS: WorkspaceTourConfig[] = [
   { id: 'workspace-timeline', selector: '[data-tour="timeline-workspace"]', text: '«Таймлайн» позволяет увидеть распределение задач и подзадач в календаре.' },
   { id: 'workspace-timeline-range', selector: '[data-tour="timeline-range"]', text: 'Здесь вы можете переключать промежутки времени таймлайна – день, неделя или месяц.' },
   { id: 'workspace-credits', selector: '[data-tour="credits"]', text: 'Здесь отображается ваше количество кредитов. Они необходимы для использования ИИ. Каждый месяц вам бесплатно дается 100 кредитов – чтобы получить больше можно приобрести подписку. О стоимости использования разных видов ИИ вы можете подробнее узнать в справке.' },
-  { id: 'workspace-settings', selector: '[data-tour="settings-panel"]', text: 'Здесь находятся основные настройки сервиса. Вы можете выбрать себе тему, часовой пояс, а также настроить ИИ-чекап и уведомления от ИИ. Подробнее об этих функциях в уроке «Возможности ИИ».' },
-  { id: 'workspace-side-rail', selector: '[data-tour="workspace-side-rail"]', text: 'В этой области вам доступны: «Ближайшие подзадачи» — блок, в котором вы можете отследить подзадачи. В «Выполненных заданиях» вы можете вернуть задачу, которую уже закрыли. В блоке «Фон рабочего пространства» можно выбрать обои (но только в тёмной теме), а «Управление секторами» позволяет настроить или удалить ваши сектора по задачам.' }
+  { id: 'workspace-settings', selector: '[data-tour="settings-panel"]', text: 'Здесь находятся основные настройки сервиса. Вы можете выбрать тему оформления, часовой пояс, включить ИИ-чекап и настроить обычные уведомления. Подробнее о чекапах — в уроке «Возможности ИИ».' },
+  { id: 'workspace-side-rail', selector: '[data-tour="workspace-sectors"]', text: 'Управляйте своими секторами - переименовывайте, задавайте иконку, цвета и общий промпт. Общий промпт позволит ИИ лучше управлять вашими задачами.' },
+  { id: 'workspace-notes', selector: '[data-tour="workspace-notes"]', text: 'Создавайте заметки и сортируйте их по группам. Вы можете попросить в чате с ИИ найти заметку или создать или отредактировать новую на основе вашей переписки.' }
 ];
 
 export const TASK_TOUR_STEPS: TaskTourConfig[] = [
@@ -38,10 +39,11 @@ export const AI_TOUR_STEPS: AiTourConfig[] = [
   { id: 'ai-quick-chat', selector: '[data-tour="quick-ai"]', text: 'Здесь вы можете отправить быстрый запрос к ИИ — от «Сколько живут хомяки?» до «Перечисли рабочие задачи на сегодня». В этом чате используется слабая, но быстрая модель, а ее память ограничена 20 запросами. Чтобы открыть полноценный чат, нажмите левую кнопку мыши.' },
   { id: 'ai-full-chat', selector: '[data-tour="ai-full-chat"]', text: 'Это развернутый чат с ИИ. В нем вы можете разделять запросы по проектам, чатам, а также выбирать разные модели ИИ. Разные модели тратят разное количество кредитов. ИИ может отвечать на вопросы и при необходимости работать с вашими задачами и расписанием.' },
   { id: 'ai-task-help', selector: '[data-tour="ai-task-help"]', text: 'Внутри каждой задачи есть свой чат с ИИ, в котором вы можете отправлять запросы по этой задаче. Вы можете попросить ИИ создавать и редактировать подзадачи/описания, настройки и так далее. История чата будет сохранена до тех пор, пока вы не завершите/удалите задачу или не очистите ее вручную.' },
+  { id: 'ai-monitor-button', selector: '[data-tour="ai-monitor-button"]', text: 'Активируйте режим автомониторинга для особо важных задач. В этом режиме не работает выставление дедлайнов – вместо этого задачу контролирует ИИ. Он будет напоминать вам о задаче постоянно, даже если вы не ответили на его сообщение. ИИ может самостоятельно помогать в процессе её выполнения. Вы можете дать ему установки прямо в чате, например: «Напоминай о задаче каждые 30 минут. Готовь мне тексты для писем на основе документов, что я прикрепил».' },
+  { id: 'ai-monitor-model', selector: '[data-tour="ai-monitor-model"]', text: 'Перед включением автомониторинга вы можете выбрать модель ИИ. Подсказки о том, какую лучше модель выбрать, написаны здесь. Вы сможете заменить модель в любой момент, но частая смена модели приводит к увеличенному расходу кредитов.' },
   { id: 'ai-recurrence', selector: '[data-tour="ai-recurrence"]', text: 'ИИ может создать расписание для вашей задачи. Для этого нажмите чекбокс «Повторить» и опишите как должна повторяться задача, например «Каждый понедельник и среду. В понедельник в 12, в среду в 14:00».' },
   { id: 'ai-optimize', selector: '[data-tour="ai-optimize"]', text: 'ИИ может оптимизировать ваше расписание. Для этого откройте режим таймлайна и нажмите кнопку «Оптимизировать». Вы можете ввести пожелания к оптимизации, например: «Распредели задачи равномерно, но не переноси их позже 18:00». ИИ оптимизирует тот промежуток времени, который у вас активен в момент нажатия кнопки «Оптимизировать» – «День/неделя/месяц».' },
-  { id: 'ai-checkup', selector: '[data-tour="ai-checkup-settings"]', text: 'Вы можете включить ИИ-чекап в настройках. В выбранное время ИИ будет делать сводку по вашим задачам: перечислять ближайшие и просроченные задачи, указывать на конфликты в расписании и предлагать исправления.' },
-  { id: 'ai-notifications', selector: '[data-tour="ai-notifications-settings"]', cardOffsetY: -72, text: 'Вы также можете по умолчанию включить уведомления от ИИ по вашим задачам. Тогда сервис будет не просто напоминать о ваших задачах, но и сразу предлагать ближайшие шаги по их решению.' }
+  { id: 'ai-checkup', selector: '[data-tour="ai-checkup-settings"]', text: 'Вы можете включить ИИ-чекап в настройках. В выбранное время ИИ будет делать сводку по вашим задачам: перечислять ближайшие и просроченные задачи, указывать на конфликты в расписании и предлагать исправления.' }
 ];
 
 export const FEATURE_TOUR_STEPS: FeatureTourConfig[] = [
@@ -52,7 +54,10 @@ export const FEATURE_TOUR_STEPS: FeatureTourConfig[] = [
   { id: 'feature-focus-task', selector: '[data-tour="feature-focus-task"]', text: 'Переключайтесь между задачами по необходимости. За закрытие задач и подзадач вы получите дополнительный бонус к рейтингу. Уведомление об этом вы получите слева, над таймером.' },
   { id: 'feature-focus-ai', selector: '[data-tour="feature-focus-ai"]', text: 'Это чат с ИИ по выбранным задачам. При переключении задачи ИИ перестраивается на контекст новой задачи. Историю запросов вы можете посмотреть в чате с ИИ в окне «Фокус задачи».' },
   { id: 'feature-telegram-button', selector: '[data-tour="feature-telegram-button"]', text: 'Для использования мобильной версии «Планировыча» и получения уведомлений о задачах на телефон, вы можете подключить телеграм-бота.' },
-  { id: 'feature-telegram-qr', selector: '[data-tour="feature-telegram-qr"]', text: 'Отсканируйте QR-код камерой телефона и вы автоматически авторизуетесь в телеграм-боте. Если авторизация не удалась, вы можете вручную ввести логин и пароль в боте @planirovych_bot.' }
+  { id: 'feature-telegram-qr', selector: '[data-tour="feature-telegram-qr"]', text: 'Отсканируйте QR-код камерой телефона и вы автоматически авторизуетесь в телеграм-боте. Если авторизация не удалась, вы можете вручную ввести логин и пароль в боте @planirovych_bot.' },
+  { id: 'feature-integration-send', selector: '[data-tour="integration-messages"]', text: 'Интеграция «Отправка в Telegram» позволяет ИИ подготовить сообщение от вашего имени. Перед отправкой вы можете выбрать получателя, отредактировать текст и подтвердить отправку прямо из чата Планировыча.' },
+  { id: 'feature-integration-telegram-ai', selector: '[data-tour="integration-assistant"]', text: 'ИИ-ассистент Telegram может анализировать выбранные вами переписки, готовить сводки, предлагать ответы и создавать задачи по договорённостям. Для каждой переписки вы сами выбираете правила, режим ответов и лимиты кредитов.' },
+  { id: 'feature-integration-mail', selector: '[data-tour="integration-email"]', text: 'Почтовый ИИ-ассистент подключает Яндекс Почту и Mail.ru. Он анализирует письма, готовит сводки, предложения задач и ответы. Вы можете искать письма и отправлять подготовленные сообщения из чатов с ИИ после подтверждения.' }
 ];
 
 const PADDING = 8;
@@ -91,7 +96,7 @@ export function TourOverlay({ activeStep, steps = TASK_TOUR_STEPS, onNext, onFin
       const firstRect = targets[0].getBoundingClientRect();
       // Мгновенная прокрутка не даёт карточке сначала отрисоваться у старой
       // позиции цели, а затем визуально повториться после плавного скролла.
-      if (firstRect.top < 0 || firstRect.bottom > window.innerHeight) targets[0].scrollIntoView({ behavior: 'auto', block: 'center' });
+      if (firstRect.top < 0 || firstRect.bottom > window.innerHeight) targets[0].scrollIntoView({ behavior: 'instant', block: activeStep === 'workspace-notes' ? 'end' : 'center' });
       measure();
       setTargetResolved(true);
       observer = new ResizeObserver(measure);
@@ -103,7 +108,7 @@ export function TourOverlay({ activeStep, steps = TASK_TOUR_STEPS, onNext, onFin
     window.addEventListener('resize', measure);
     window.addEventListener('scroll', measure, true);
     return () => { stopped = true; cancelAnimationFrame(frame); observer?.disconnect(); window.removeEventListener('resize', measure); window.removeEventListener('scroll', measure, true); };
-  }, [config.combineTargets, config.selector]);
+  }, [activeStep, config.combineTargets, config.selector]);
 
   useLayoutEffect(() => {
     const handleKey = (event: KeyboardEvent) => event.key === 'Escape' && onFinish();
@@ -113,11 +118,21 @@ export function TourOverlay({ activeStep, steps = TASK_TOUR_STEPS, onNext, onFin
 
   const verticalOffset = activeStep === 'ai-recurrence' ? -8 : 0;
   const hole = targetResolved && rect ? { left: Math.max(0, rect.left - PADDING), top: Math.max(0, rect.top - PADDING + verticalOffset), right: Math.min(innerWidth, rect.right + PADDING), bottom: Math.min(innerHeight, rect.bottom + PADDING + verticalOffset) } : null;
-  const defaultCardTop = hole ? (hole.bottom + 16 < innerHeight - 210 ? hole.bottom + 16 : Math.max(16, hole.top - 190)) : 0;
-  const cardStyle: CSSProperties = hole ? { left: Math.min(Math.max(16, hole.left), innerWidth - Math.min(360, innerWidth - 32)), top: Math.max(16, defaultCardTop + (config.cardOffsetY ?? 0)) } : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' };
+  const cardWidth = Math.min(360, innerWidth - 32);
+  const cardHeight = Math.min(340, Math.max(190, innerHeight - 32));
+  const alongside = hole && (hole.left >= cardWidth + 24 || innerWidth - hole.right >= cardWidth + 24);
+  const cardLeft = hole ? alongside
+    ? (hole.left >= cardWidth + 24 ? Math.max(16, hole.left - cardWidth - 16) : hole.right + 16)
+    : Math.max(16, Math.min(hole.left, innerWidth - cardWidth - 16)) : 0;
+  const cardTop = hole ? alongside
+    ? Math.max(16, Math.min(hole.top, innerHeight - cardHeight - 16))
+    : Math.max(16, Math.min(hole.bottom + 12 + cardHeight <= innerHeight ? hole.bottom + 12 : hole.top - cardHeight - 12, innerHeight - cardHeight - 16)) : 0;
+  const cardStyle: CSSProperties = hole
+    ? { left: cardLeft, top: cardTop + (config.cardOffsetY ?? 0), maxHeight: 'calc(100dvh - 32px)', overflowY: 'auto' }
+    : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)', maxHeight: 'calc(100dvh - 32px)', overflowY: 'auto' };
   const last = activeStep === uniqueSteps[uniqueSteps.length - 1]?.id;
 
-  return createPortal(<div id="active-product-tour" className="tour-root fixed inset-0 z-[250] pointer-events-auto" aria-live="polite">
+  return createPortal(<div id="active-product-tour" className="tour-root fixed inset-0 z-[1200] pointer-events-auto" aria-live="polite">
     {hole ? <>
       <div className="tour-dim fixed left-0 right-0 top-0" style={{ height: hole.top }} />
       <div className="tour-dim fixed left-0" style={{ top: hole.top, width: hole.left, height: hole.bottom - hole.top }} />
