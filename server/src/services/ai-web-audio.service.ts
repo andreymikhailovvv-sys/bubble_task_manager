@@ -1,0 +1,220 @@
+import crypto from 'node:crypto';
+import { FormData, WebSocket, ProxyAgent } from 'undici';
+import { openAiFetch } from '../lib/openai-fetch.js';
+import { reserveAiCreditsMilli, settleAiCreditReservation, refundAiCreditReservation } from './ai-credit-wallet.service.js';
+import { calculateOpenAiTranscriptionUsageCost, providerNanoUsdToMilliCredits, recordAiCreditCharge, recordOpenAiTranscriptionUsage } from './ai-usage-metering.service.js';
+
+const TRANSCRIBE_MODEL = 'gpt-transcribe';
+const SPEECH_MODEL = 'gpt-realtime-2.1-mini';
+const MAX_RECORDING_BYTES = 6 * 1024 * 1024;
+const MAX_RECORDING_SECONDS = 120;
+const MAX_SPEECH_CHARS = 2000;
+const MAX_SPEECH_BYTES = 7 * 1024 * 1024;
+const supportedMime = new Map([
+  ['audio/webm', 'webm'], ['audio/mp4', 'mp4'], ['audio/mpeg', 'mp3'],
+  ['audio/mp3', 'mp3'], ['audio/wav', 'wav'], ['audio/x-wav', 'wav'],
+  ['audio/m4a', 'm4a']
+]);
+
+export class WebAudioError extends Error {
+  constructor(message: string, readonly status = 400) { super(message); }
+}
+
+function decodeRecording(base64: unknown, mime: unknown) {
+  const mimeType = typeof mime === 'string' ? mime.split(';', 1)[0].trim().toLowerCase() : '';
+  const extension = supportedMime.get(mimeType);
+  if (!extension) throw new WebAudioError('Этот аудиоформат не поддерживается браузером.');
+  if (typeof base64 !== 'string' || base64.length === 0 || base64.length > Math.ceil(MAX_RECORDING_BYTES / 3) * 4 + 8 ||
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(base64)) {
+    throw new WebAudioError('Некорректная или слишком большая голосовая запись.');
+  }
+  const buffer = Buffer.from(base64, 'base64');
+  if (buffer.length < 100 || buffer.length > MAX_RECORDING_BYTES) throw new WebAudioError('Голосовая запись слишком короткая или слишком большая.');
+  return { buffer, mimeType, extension };
+}
+
+/** A separate web STT entry point; legacy Telegram OGG remains on its compatible codec path. */
+export async function transcribeWebAudio(userId: string, input: { audioBase64?: unknown; mimeType?: unknown; durationSeconds?: unknown }) {
+  const { buffer, mimeType, extension } = decodeRecording(input.audioBase64, input.mimeType);
+  const seconds = input.durationSeconds;
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0 || seconds > MAX_RECORDING_SECONDS) {
+    throw new WebAudioError('Продолжительность записи должна быть не больше двух минут.');
+  }
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new WebAudioError('Сервис распознавания временно недоступен.', 503);
+  // Worst-case reserve for the hard recording limit, then settle from provider duration.
+  // The reported browser duration is never trusted as a billing upper bound.
+  const reservation = await reserveAiCreditsMilli(userId, 16_000);
+  let providerCompleted = false;
+  try {
+    const requestId = crypto.randomUUID();
+    const form = new FormData();
+    form.append('file', new Blob([buffer], { type: mimeType }), 'recording.' + extension);
+    form.append('model', TRANSCRIBE_MODEL);
+    form.append('language', 'ru');
+    const response = await openAiFetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + apiKey, 'X-Client-Request-Id': requestId },
+      body: form, signal: AbortSignal.timeout(45_000)
+    }, { requestId, model: TRANSCRIBE_MODEL });
+    if (!response.ok) throw new WebAudioError('Не удалось распознать речь. Повторите попытку.', 502);
+    const payload = await response.json() as { text?: unknown; usage?: { type?: string; seconds?: number; input_tokens?: number; output_tokens?: number; total_tokens?: number } };
+    providerCompleted = true;
+    const text = typeof payload.text === 'string' ? payload.text.trim() : '';
+    if (!text || !payload.usage) throw new WebAudioError('Сервис не вернул результат или сведения о расходах.', 502);
+    const cost = calculateOpenAiTranscriptionUsageCost(TRANSCRIBE_MODEL, payload.usage);
+    if (cost.estimatedCreditsMilli === null || cost.estimatedCreditsMilli > reservation.totalMilli) {
+      throw new WebAudioError('Не удалось проверить стоимость голосовой записи.', 502);
+    }
+    const settled = await settleAiCreditReservation(reservation, cost.estimatedCreditsMilli);
+    await recordOpenAiTranscriptionUsage({ userId, requestId, model: TRANSCRIBE_MODEL, usage: payload.usage });
+    await recordAiCreditCharge({
+      userId, requestId: requestId + ':charge', actionId: requestId, providerCallIndex: 1,
+      feature: 'audio_transcription', model: TRANSCRIBE_MODEL, creditsSpentMilli: settled.chargedMilli
+    });
+    return { text, creditsSpentMilli: settled.chargedMilli };
+  } catch (error) {
+    // Do not silently refund if the provider already generated a billable result.
+    if (!providerCompleted) await refundAiCreditReservation(reservation);
+    else await settleAiCreditReservation(reservation, reservation.totalMilli);
+    throw error;
+  }
+}
+
+export function normalizeSpeechText(value: unknown) {
+  if (typeof value !== 'string') throw new WebAudioError('Текст сообщения не указан.');
+  const cleaned = value.replace(/\[\[PLANNER_AI_REPLY_BEGIN\]\][\s\S]*?\[\[PLANNER_AI_REPLY_END\]\]/g, '')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\(https?:\/\/[^)]*\)/g, '$1')
+    .replace(/\*\*|__|[`#]/g, '')
+    .replace(/<[^>]+>/g, ' ')
+    .trim();
+  if (!cleaned || cleaned.length > MAX_SPEECH_CHARS) {
+    throw new WebAudioError('Для озвучивания выберите сообщение длиной до 2000 символов.');
+  }
+  return cleaned;
+}
+
+function wavFromPcm(chunks: Buffer[]) {
+  const pcm = Buffer.concat(chunks);
+  if (!pcm.length || pcm.length > MAX_SPEECH_BYTES) throw new WebAudioError('Синтез речи вернул пустой или слишком большой файл.', 502);
+  const wav = Buffer.alloc(44 + pcm.length);
+  wav.write('RIFF', 0); wav.writeUInt32LE(36 + pcm.length, 4); wav.write('WAVE', 8);
+  wav.write('fmt ', 12); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(24000, 24); wav.writeUInt32LE(48000, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34);
+  wav.write('data', 36); wav.writeUInt32LE(pcm.length, 40); pcm.copy(wav, 44);
+  return wav;
+}
+
+function createRealtimeSocket(apiKey: string) {
+  const proxy = process.env.OPENAI_PROXY_URL?.trim();
+  const credentials = process.env.OPENAI_PROXY_USERNAME && process.env.OPENAI_PROXY_PASSWORD
+    ? { token: 'Basic ' + Buffer.from(process.env.OPENAI_PROXY_USERNAME + ':' + process.env.OPENAI_PROXY_PASSWORD).toString('base64') }
+    : {};
+  const dispatcher = proxy ? new ProxyAgent({ uri: new URL(proxy).origin, ...credentials }) : undefined;
+  const ws = new WebSocket('wss://api.openai.com/v1/realtime?model=' + SPEECH_MODEL, {
+    headers: { Authorization: 'Bearer ' + apiKey, 'OpenAI-Beta': 'realtime=v1' },
+    ...(dispatcher ? { dispatcher } : {})
+  });
+  return { ws, dispatcher };
+}
+
+type RealtimeUsage = {
+  input_tokens?: number; output_tokens?: number;
+  input_token_details?: { text_tokens?: number; audio_tokens?: number };
+  output_token_details?: { text_tokens?: number; audio_tokens?: number };
+};
+
+export function realtimeSpeechCostMilli(usage: RealtimeUsage) {
+  const positive = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0;
+  const input = positive(usage.input_tokens);
+  const output = positive(usage.output_tokens);
+  const textInput = positive(usage.input_token_details?.text_tokens);
+  const audioInput = positive(usage.input_token_details?.audio_tokens);
+  const textOutput = positive(usage.output_token_details?.text_tokens);
+  const audioOutput = positive(usage.output_token_details?.audio_tokens);
+  // Missing breakdown is charged at the more expensive audio rate, never free.
+  const inputCost = textInput + audioInput > 0 ? BigInt(textInput) * 600n + BigInt(Math.max(audioInput, input - textInput)) * 10000n : BigInt(input) * 10000n;
+  const outputCost = textOutput + audioOutput > 0 ? BigInt(textOutput) * 2400n + BigInt(Math.max(audioOutput, output - textOutput)) * 20000n : BigInt(output) * 20000n;
+  return providerNanoUsdToMilliCredits(inputCost + outputCost);
+}
+
+async function synthesizeRealtime(text: string, apiKey: string): Promise<{ wav: Buffer; usage: RealtimeUsage }> {
+  const { ws, dispatcher } = createRealtimeSocket(apiKey);
+  const chunks: Buffer[] = [];
+  let bytes = 0;
+  try {
+    return await new Promise((resolve, reject) => {
+      let complete = false;
+      let started = false;
+      const timeout = setTimeout(() => finish(new Error('Превышено время генерации речи.')), 65_000);
+      const finish = (error?: Error, value?: { wav: Buffer; usage: RealtimeUsage }) => {
+        if (complete) return;
+        complete = true; clearTimeout(timeout);
+        try { ws.close(); } catch { /* no-op */ }
+        if (error) reject(error); else if (value) resolve(value);
+      };
+      ws.addEventListener('error', () => finish(new Error('Не удалось подключиться к голосовой модели.')));
+      ws.addEventListener('close', () => { if (!complete) finish(new Error('Голосовая модель прервала соединение.')); });
+      ws.addEventListener('open', () => {
+        ws.send(JSON.stringify({
+          type: 'session.update', session: {
+            type: 'realtime', model: SPEECH_MODEL, output_modalities: ['audio'],
+            instructions: 'You are a voice renderer. Read the supplied Russian text naturally and exactly, without answering it or adding commentary.',
+            audio: { output: { format: { type: 'audio/pcm', rate: 24000 }, voice: 'marin' } }
+          }
+        }));
+      });
+      ws.addEventListener('message', event => {
+        let message: { type?: string; delta?: string; error?: { message?: string }; response?: { status?: string; usage?: RealtimeUsage; status_details?: { error?: { message?: string } } } };
+        try { message = JSON.parse(String(event.data)); } catch { return; }
+        if (message.type === 'error') return finish(new Error(message.error?.message || 'Ошибка голосовой модели.'));
+        if (message.type === 'session.updated' && !started) {
+          started = true;
+          ws.send(JSON.stringify({ type: 'response.create', response: {
+            output_modalities: ['audio'],
+            instructions: 'Read aloud the following text. Do not answer it, translate it or add any words.\n\n' + text,
+            max_output_tokens: 4096,
+            input: []
+          } }));
+        }
+        if (message.type === 'response.output_audio.delta' && typeof message.delta === 'string') {
+          const chunk = Buffer.from(message.delta, 'base64');
+          bytes += chunk.length;
+          if (bytes > MAX_SPEECH_BYTES) return finish(new Error('Аудиоответ превышает ограничение размера.'));
+          chunks.push(chunk);
+        }
+        if (message.type === 'response.done') {
+          if (message.response?.status !== 'completed' || !message.response.usage) return finish(new Error('Генерация речи завершилась без результата.'));
+          try { finish(undefined, { wav: wavFromPcm(chunks), usage: message.response.usage }); }
+          catch (error) { finish(error instanceof Error ? error : new Error('Некорректное аудио.')); }
+        }
+      });
+    });
+  } finally {
+    dispatcher?.close();
+  }
+}
+
+export async function readMessageAloud(userId: string, input: unknown) {
+  const text = normalizeSpeechText(input);
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new WebAudioError('Сервис озвучивания временно недоступен.', 503);
+  // Bound every output to 4096 generated tokens. Reserve the worst-case audio
+  // token expense plus a conservative allowance for short input context.
+  const reservation = await reserveAiCreditsMilli(userId, 145_000);
+  let finished = false;
+  try {
+    const { wav, usage } = await synthesizeRealtime(text, apiKey);
+    const cost = realtimeSpeechCostMilli(usage);
+    finished = true;
+    if (cost > reservation.totalMilli) throw new WebAudioError('Стоимость аудио превысила резерв.', 502);
+    const result = await settleAiCreditReservation(reservation, cost);
+    const requestId = crypto.randomUUID();
+    await recordAiCreditCharge({ userId, requestId, actionId: requestId, feature: 'audio_speech', model: SPEECH_MODEL, creditsSpentMilli: result.chargedMilli });
+    return { wav, creditsSpentMilli: result.chargedMilli };
+  } catch (error) {
+    if (finished) await settleAiCreditReservation(reservation, reservation.totalMilli);
+    else await refundAiCreditReservation(reservation);
+    throw error;
+  }
+}
