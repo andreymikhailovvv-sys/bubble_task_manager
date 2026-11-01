@@ -12561,3 +12561,91 @@ body[data-theme='dark'] .topbar-overdue-popover { box-shadow: 0 14px 34px rgba(2
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Unified AI request actions: attachment | flexible input | dictate | live | send.
+   The buttons stay separate so tapping Mic never accidentally starts a live call. */
+.ai-request-composer {
+  min-width: 0;
+  gap: .375rem;
+}
+.ai-request-composer > textarea,
+.miniapp-ai-chat-composer-card > .miniapp-ai-chat-input {
+  min-width: 0;
+  width: 0;
+}
+.ai-request-composer > button[title="Прикрепить файл"],
+.ai-request-composer > .ai-request-attach-button,
+.ai-request-composer > .voice-mode-anchor > .voice-input-trigger,
+.ai-request-composer > button[title="Отправить"],
+.ai-request-composer > button[aria-label="Отправить"] {
+  flex: 0 0 auto;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+}
+.ai-request-composer > .voice-mode-anchor {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-self: center;
+}
+.ai-request-composer > button[title="Прикрепить файл"],
+.ai-request-composer > .ai-request-attach-button,
+.ai-request-composer > .voice-mode-anchor > .voice-input-trigger {
+  background: var(--surface-muted-bg, rgba(127, 136, 150, .12));
+  color: var(--text-muted, #94a3b8);
+  box-shadow: inset 0 0 0 1px var(--panel-border, rgba(148, 163, 184, .25));
+}
+.ai-request-composer > button[title="Прикрепить файл"]:focus-visible,
+.ai-request-composer > .ai-request-attach-button:focus-visible {
+  outline: 2px solid var(--accent, #8b5cf6);
+  outline-offset: 2px;
+}
+.ai-request-composer-quick > button[title="Прикрепить файл"],
+.ai-request-composer-quick > .voice-mode-anchor > .voice-input-trigger,
+.ai-request-composer-quick > button[aria-label="Отправить"] {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+.miniapp-shell .miniapp-ai-chat-composer-card {
+  gap: .25rem;
+}
+.miniapp-shell .miniapp-ai-chat-composer-card > .miniapp-ai-chat-attach,
+.miniapp-shell .miniapp-ai-chat-composer-card > .miniapp-ai-chat-send,
+.miniapp-shell .miniapp-ai-chat-composer-card > .voice-mode-anchor > .voice-input-trigger {
+  width: 2.25rem;
+  height: 2.25rem;
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  border-radius: 9999px;
+}
+.miniapp-shell .miniapp-ai-chat-composer-card > .voice-mode-anchor {
+  display: inline-flex;
+  align-self: center;
+  flex: 0 0 auto;
+}
+.miniapp-shell .miniapp-ai-chat-composer-card > .voice-mode-anchor > .voice-input-trigger {
+  background: color-mix(in srgb, var(--surface-muted-bg, #f8fafc) 92%, transparent);
+  color: var(--muted-text, #94a3b8);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--app-card-border) 86%, transparent);
+}
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-composer-card > .voice-mode-anchor > .voice-input-trigger,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-composer-card > .voice-mode-anchor > .voice-input-trigger {
+  background: #f8fafc !important;
+  color: #64748b !important;
+  box-shadow: inset 0 0 0 1px rgba(203, 213, 225, .92) !important;
+}
+.miniapp-shell .miniapp-ai-chat-composer-card > .miniapp-ai-chat-input {
+  padding-right: .375rem;
+  padding-left: .375rem;
+}
+@media (max-width: 380px) {
+  .miniapp-shell .miniapp-ai-chat-composer-card { gap: .1875rem; padding: .375rem; }
+  .miniapp-shell .miniapp-ai-chat-composer-card > .miniapp-ai-chat-attach,
+  .miniapp-shell .miniapp-ai-chat-composer-card > .miniapp-ai-chat-send,
+  .miniapp-shell .miniapp-ai-chat-composer-card > .voice-mode-anchor > .voice-input-trigger {
+    width: 2.125rem;
+    height: 2.125rem;
+    min-width: 2.125rem;
+    min-height: 2.125rem;
+  }
+}

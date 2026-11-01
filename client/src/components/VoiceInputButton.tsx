@@ -6,7 +6,7 @@ import { api } from '../lib/api';
 type Props = {
   onTranscript: (text: string, sendImmediately: boolean) => void;
   liveContext?: LiveVoiceContext;
-  activationMode?: 'menu' | 'transcription';
+  activationMode?: 'menu' | 'transcription' | 'live';
   onLiveMessage?: (message: LiveVoiceMessage) => void;
   onLiveToolResult?: (result: LiveVoiceToolCompletion) => void;
   onLiveStatus?: (status: LiveVoiceProgressStatus | null) => void;
@@ -200,10 +200,10 @@ export function VoiceInputButton({ onTranscript, liveContext, activationMode = '
 
   return <>
     <span className="voice-mode-anchor" ref={menuRef}>
-      <button type="button" disabled={disabled || state !== 'idle' || liveOpen} onClick={() => { if (activationMode === 'transcription') void start(); else setMenuOpen(value => !value); }}
+      <button type="button" disabled={disabled || state !== 'idle' || liveOpen} onClick={() => { if (activationMode === 'transcription') void start(); else if (activationMode === 'live') startLive(); else setMenuOpen(value => !value); }}
         className={`voice-input-trigger inline-flex ${small ? 'h-9 w-9' : 'h-11 w-11'} shrink-0 items-center justify-center rounded-full disabled:opacity-50 ${className}`}
-        title={activationMode === 'transcription' ? 'Голосовой ввод' : 'Выбрать голосовой режим'} aria-label={activationMode === 'transcription' ? 'Голосовой ввод' : 'Выбрать голосовой режим'} aria-expanded={activationMode === 'menu' ? menuOpen : undefined}>
-        <Mic size={small ? 16 : 17} />
+        title={activationMode === 'transcription' ? 'Голосовой ввод' : activationMode === 'live' ? 'Живой диалог' : 'Выбрать голосовой режим'} aria-label={activationMode === 'transcription' ? 'Голосовой ввод' : activationMode === 'live' ? 'Живой диалог' : 'Выбрать голосовой режим'} aria-expanded={activationMode === 'menu' ? menuOpen : undefined}>
+        {activationMode === 'live' ? <Radio size={small ? 16 : 17} /> : <Mic size={small ? 16 : 17} />}
       </button>
       {activationMode === 'menu' && menuOpen ? <div className="voice-mode-menu dialog-surface" role="menu" aria-label="Голосовой режим">
         <button type="button" role="menuitem" onClick={startLive}>

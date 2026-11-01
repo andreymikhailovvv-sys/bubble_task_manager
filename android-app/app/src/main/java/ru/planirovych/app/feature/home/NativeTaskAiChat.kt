@@ -512,6 +512,14 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                         .padding(start=7.dp,end=7.dp,top=5.dp,bottom=5.dp),
                         verticalAlignment=Alignment.Bottom,
                         horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                        Box(Modifier.size(42.dp).clip(CircleShape)
+                            .background(if(dark)Color(0xFF253349) else Color(0xFFF8FAFC))
+                            .border(1.dp,c.border,CircleShape)
+                            .clickable(enabled=!busy&&!attaching){
+                                picker.launch(arrayOf("*/*"))
+                            },contentAlignment=Alignment.Center){
+                            TaskChatPaperclip(c.secondary)
+                        }
                         BasicTextField(value=draft,onValueChange={
                             draft=it;pendingRetry=false
                         },modifier=Modifier.weight(1f).heightIn(min=42.dp,max=142.dp),
@@ -527,14 +535,7 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                                     inner()
                                 }
                             })
-                        Box(Modifier.size(42.dp).clip(CircleShape)
-                            .background(if(dark)Color(0xFF253349) else Color(0xFFF8FAFC))
-                            .border(1.dp,c.border,CircleShape)
-                            .clickable(enabled=!busy&&!attaching){
-                                picker.launch(arrayOf("*/*"))
-                            },contentAlignment=Alignment.Center){
-                            TaskChatPaperclip(c.secondary)
-                        }
+
                         AiChatMicrophoneButton(
                             enabled=!busy&&!attaching,
                             background=if(dark)Color(0xFF253349) else Color(0xFFF8FAFC),
