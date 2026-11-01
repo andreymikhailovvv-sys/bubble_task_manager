@@ -12196,3 +12196,26 @@ body[data-theme='dark'] .topbar-overdue-popover { box-shadow: 0 14px 34px rgba(2
   .voice-record-panel { animation:none; }
   .voice-record-wave span { transition:none; }
 }
+
+
+/* Explain narration failures next to the speech action; no cryptic '!' badge. */
+.ai-read-aloud-holder .ai-read-aloud-message {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 5px);
+  z-index: 50;
+  width: max-content;
+  max-width: min(250px, 75vw);
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border, rgba(148, 163, 184, .35));
+  background: var(--panel-bg, #202532);
+  color: var(--text-primary, #fff);
+  font-size: 11px;
+  line-height: 1.35;
+  font-weight: 500;
+  white-space: normal;
+  text-align: left;
+  overflow-wrap: anywhere;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .15);
+}
