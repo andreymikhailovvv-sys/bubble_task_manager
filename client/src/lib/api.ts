@@ -524,9 +524,10 @@ export const api = {
     const rawCost = Number(response.headers.get('X-AI-Credits-Spent-Milli') || '0');
     return { blob: await response.blob(), creditsSpentMilli: Number.isFinite(rawCost) && rawCost >= 0 ? rawCost : 0 };
   },
-  startLiveVoice: () => request<{ ticket: string; expiresInSeconds: number; maxSeconds: number }>('/api/ai/audio/live/ticket', {
-    method: 'POST', body: JSON.stringify({})
-  }),
+  startLiveVoice: (context?: { type: 'task'; taskId: string; timeZone?: string } | { type: 'chat'; projectId?: string; chatId: string; history?: Array<{ id: string; role: 'user' | 'assistant'; content: string }>; timeZone?: string }) =>
+    request<{ ticket: string; expiresInSeconds: number; maxSeconds: number }>('/api/ai/audio/live/ticket', {
+      method: 'POST', body: JSON.stringify({ context })
+    }),
   mailRewriteText: (text:string,instruction:string) => request<{text:string;creditsSpentMilli:number}>('/api/mail-assistant/quick-rewrite',
     {method:'POST',body:JSON.stringify({text,instruction})}),
   mailRecentRecipients: () => request<{addresses:string[]}>('/api/mail-assistant/recent-recipients'),

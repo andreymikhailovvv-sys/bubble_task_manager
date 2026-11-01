@@ -3,23 +3,25 @@ import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { ProxyAgent, WebSocket } from 'undici';
 import { reserveAiCreditsMilli, settleAiCreditReservation, refundAiCreditReservation } from './ai-credit-wallet.service.js';
-import { recordAiCreditCharge } from './ai-usage-metering.service.js';
+import { calculateOpenAiTranscriptionUsageCost, recordAiCreditCharge } from './ai-usage-metering.service.js';
+import { prepareLiveVoiceContext, type LiveVoicePreparedContext } from './ai-live-context.service.js';
 import { realtimeSpeechCostMilli } from './ai-web-audio.service.js';
 
 // Only issue short-lived one-use tickets from an authenticated, same-origin API route.
 // Neither the OpenAI API key nor proxy credentials are ever sent to the browser.
-const tickets = new Map<string, { userId: string; expires: number }>();
+const tickets = new Map<string, { userId: string; expires: number; context: LiveVoicePreparedContext }>();
 const sessions = new Set<string>();
 const MAX_SECONDS = 120;
 const RESERVED_MILLI = 450_000;
 const MAX_MESSAGE = 120_000;
 
-export function createLiveVoiceTicket(userId: string) {
+export async function createLiveVoiceTicket(userId: string, scope?: unknown) {
   for (const [key, item] of tickets) if (item.expires < Date.now()) tickets.delete(key);
   if (sessions.has(userId)) throw new Error('У вас уже открыт живой голосовой диалог.');
   if ([...tickets.values()].filter(x => x.userId === userId).length >= 3) throw new Error('Слишком много запросов на голосовой диалог.');
+  const context = await prepareLiveVoiceContext(userId, scope);
   const ticket = crypto.randomBytes(28).toString('base64url');
-  tickets.set(ticket, { userId, expires: Date.now() + 30_000 });
+  tickets.set(ticket, { userId, expires: Date.now() + 30_000, context });
   return { ticket, expiresInSeconds: 30, maxSeconds: MAX_SECONDS };
 }
 
@@ -125,17 +127,20 @@ export function handleLiveVoiceUpgrade(request: IncomingMessage, socket: Duplex,
   }
   sessions.add(registered.userId);
   const peer = acceptWebSocket(socket, key, head);
-  void startLiveSession(registered.userId, peer);
+  void startLiveSession(registered.userId, peer, registered.context);
   return true;
 }
 
-async function startLiveSession(userId: string, peer: ClientPeer) {
+async function startLiveSession(userId: string, peer: ClientPeer, context: LiveVoicePreparedContext) {
   let reservation: Awaited<ReturnType<typeof reserveAiCreditsMilli>> | null = null;
   let upstream: WebSocket | null = null;
   let dispatcher: ProxyAgent | undefined;
   let closed = false;
   let ready = false;
   let usageMilli = 0;
+  let transcriptionMilli = 0;
+  let assistantTranscript = '';
+  const sentTranscriptIds = new Set<string>();
   let receivedAudioBytes = 0;
   let billed = false;
   const started = Date.now();
@@ -154,7 +159,7 @@ async function startLiveSession(userId: string, peer: ClientPeer) {
     billed = true;
     // Charge only confirmed provider usage. An interrupted turn without
     // response.done must not be silently billed using fabricated token counts.
-    let spent = Math.min(RESERVED_MILLI, usageMilli);
+    let spent = Math.min(RESERVED_MILLI, usageMilli + transcriptionMilli);
     try {
       if (reservation) {
         const result = await settleAiCreditReservation(reservation, spent);
@@ -203,9 +208,9 @@ async function startLiveSession(userId: string, peer: ClientPeer) {
       upstream?.send(JSON.stringify({ type: 'session.update', session: {
         type: 'realtime', model: 'gpt-realtime-2.1-mini',
         output_modalities: ['audio'],
-        instructions: 'Ты голосовой помощник Планировыча. Говори по-русски естественно, коротко и по существу. Поддерживай живой диалог. Не утверждай, что выполнил действия в планировщике: у голосового режима нет доступа к инструментам управления задачами.',
+        instructions: ['Ты голосовой помощник Планировыча. Говори по-русски естественно, коротко и по существу. Поддерживай живой диалог. Не утверждай, что выполнил изменения в задачах или заметках: пока инструменты не подключены.', context.instructions].filter(Boolean).join('\n\n'),
         audio: {
-          input: { format: { type: 'audio/pcm', rate: 24000 }, turn_detection: {
+          input: { format: { type: 'audio/pcm', rate: 24000 }, transcription: { model: 'gpt-transcribe', language: 'ru' }, turn_detection: {
             type: 'server_vad', threshold: 0.5, silence_duration_ms: 550, prefix_padding_ms: 300,
             create_response: true, interrupt_response: true
           } },
@@ -218,27 +223,58 @@ async function startLiveSession(userId: string, peer: ClientPeer) {
       try {
         const value = JSON.parse(String(event.data)) as {
           type?: string; delta?: string; error?: { code?: string };
-          response?: { status?: string; usage?: Parameters<typeof realtimeSpeechCostMilli>[0] }
+          response?: { status?: string; usage?: Parameters<typeof realtimeSpeechCostMilli>[0]; output?: Array<{ type?: string; content?: Array<{ transcript?: string }> }> };
+          item_id?: string; transcript?: string; usage?: { type?: string; seconds?: number; input_tokens?: number; output_tokens?: number; input_token_details?: { text_tokens?: number; audio_tokens?: number } }
         };
         if (value.type === 'error') {
           console.warn('[AI live voice] provider rejected event', { code: value.error?.code ?? 'unknown' });
           send({ type: 'error', message: 'Голосовая модель отклонила запрос.' }); stop(); return;
         }
-        if (value.type === 'session.updated') { ready = true; send({ type: 'ready' }); return; }
+        if (value.type === 'session.updated') {
+          if (!ready) {
+            // Previous assistant/user turns are not blindly concatenated into
+            // a giant system prompt. Realtime receives role-preserving items.
+            // Server VAD will only create responses for newly spoken audio.
+            for (const item of context.history) {
+              upstream?.send(JSON.stringify({
+                type: 'conversation.item.create',
+                item: { type: 'message', role: item.role, content: [
+                  { type: item.role === 'assistant' ? 'output_text' : 'input_text', text: item.content }
+                ] }
+              }));
+            }
+          }
+          ready = true; send({ type: 'ready' }); return;
+        }
+        if (value.type === 'conversation.item.input_audio_transcription.completed' && typeof value.transcript === 'string') {
+          const id = value.item_id || crypto.randomUUID();
+          if (!sentTranscriptIds.has(id) && value.transcript.trim()) {
+            sentTranscriptIds.add(id);
+            send({ type: 'user_message', id, text: value.transcript.trim().slice(0, 6000) });
+          }
+          if (value.usage) {
+            const cost = calculateOpenAiTranscriptionUsageCost('gpt-transcribe', value.usage);
+            if (cost.estimatedCreditsMilli !== null) transcriptionMilli += cost.estimatedCreditsMilli;
+          }
+        }
         if (value.type === 'input_audio_buffer.speech_started') send({ type: 'speech_started' });
         if (value.type === 'input_audio_buffer.speech_stopped') send({ type: 'thinking' });
         if (value.type === 'response.output_audio.delta' && typeof value.delta === 'string') {
           send({ type: 'audio', data: value.delta });
         }
         if (value.type === 'response.output_audio_transcript.delta' && typeof value.delta === 'string') {
+          assistantTranscript = (assistantTranscript + value.delta).slice(-6000);
           send({ type: 'transcript', text: value.delta.slice(0, 500) });
         }
         if (value.type === 'response.done') {
+          const completedText = value.response?.output?.flatMap(item => item.content || []).map(item => item.transcript || '').filter(Boolean).join(' ') || assistantTranscript;
+          if (completedText.trim()) send({ type: 'assistant_message', id: crypto.randomUUID(), text: completedText.trim().slice(0, 6000) });
+          assistantTranscript = '';
           if (value.response?.usage) {
             const cost = realtimeSpeechCostMilli(value.response.usage);
             usageMilli += cost;
-            send({ type: 'usage', creditsSpentMilli: usageMilli });
-            if (usageMilli >= RESERVED_MILLI - 10_000) stop('Лимит кредитов голосового диалога достигнут.');
+            send({ type: 'usage', creditsSpentMilli: usageMilli + transcriptionMilli, breakdown: { speechMilli: usageMilli, transcriptionMilli } });
+            if (usageMilli + transcriptionMilli >= RESERVED_MILLI - 10_000) stop('Лимит кредитов голосового диалога достигнут.');
           }
           send({ type: 'response_done' });
         }

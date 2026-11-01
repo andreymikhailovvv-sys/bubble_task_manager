@@ -38,14 +38,33 @@ test('Narration passes text to Realtime as a user conversation item', () => {
   });
 });
 
-test('Live voice tickets are one-time, short-lived and limited per user', () => {
+test('Live voice tickets are one-time, short-lived and limited per user', async () => {
   const user = 'voice-ticket-test-' + crypto.randomUUID();
-  const a = createLiveVoiceTicket(user);
-  const b = createLiveVoiceTicket(user);
-  const c = createLiveVoiceTicket(user);
+  const a = await createLiveVoiceTicket(user);
+  const b = await createLiveVoiceTicket(user);
+  const c = await createLiveVoiceTicket(user);
   assert.notEqual(a.ticket, b.ticket);
   assert.notEqual(b.ticket, c.ticket);
   assert.equal(a.maxSeconds, 120);
   assert.equal(a.expiresInSeconds, 30);
-  assert.throws(() => createLiveVoiceTicket(user), /Слишком много запросов/);
+  await assert.rejects(() => createLiveVoiceTicket(user), /Слишком много запросов/);
+});
+
+test('Realtime billing applies modality-specific cached input discounts', () => {
+  // 100 total text + 100 audio input; 80 text / 60 audio cached.
+  // Cost in nanoUSD: 20*600 + 80*60 + 40*10000 + 60*300 = 434800.
+  assert.equal(realtimeSpeechCostMilli({
+    input_tokens: 200, output_tokens: 0,
+    input_token_details: {
+      text_tokens: 100, audio_tokens: 100, cached_tokens: 140,
+      cached_tokens_details: { text_tokens: 80, audio_tokens: 60 }
+    }
+  }), 725);
+});
+
+test('Unspecified cache modality is never guessed or discounted', () => {
+  assert.equal(realtimeSpeechCostMilli({
+    input_tokens: 100, output_tokens: 0,
+    input_token_details: { text_tokens: 50, audio_tokens: 50, cached_tokens: 30 }
+  }), 884);
 });

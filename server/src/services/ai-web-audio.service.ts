@@ -123,24 +123,51 @@ function createRealtimeSocket(apiKey: string) {
   return { ws, dispatcher };
 }
 
-type RealtimeUsage = {
+export type RealtimeUsage = {
   input_tokens?: number; output_tokens?: number;
-  input_token_details?: { text_tokens?: number; audio_tokens?: number };
+  input_token_details?: {
+    text_tokens?: number; audio_tokens?: number; cached_tokens?: number;
+    cached_tokens_details?: { text_tokens?: number; audio_tokens?: number };
+  };
   output_token_details?: { text_tokens?: number; audio_tokens?: number };
 };
 
-export function realtimeSpeechCostMilli(usage: RealtimeUsage) {
+/** Price each modality separately, subtracting the provider-confirmed cached input
+ *  subset before applying the discounted cache rates. Rates are in nano-USD/token.
+ *  Unknown breakdowns are charged conservatively, never treated as cache by guesswork. */
+export function realtimeSpeechCostBreakdown(usage: RealtimeUsage) {
   const positive = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0;
-  const input = positive(usage.input_tokens);
-  const output = positive(usage.output_tokens);
+  const input = positive(usage.input_tokens), output = positive(usage.output_tokens);
   const textInput = positive(usage.input_token_details?.text_tokens);
   const audioInput = positive(usage.input_token_details?.audio_tokens);
   const textOutput = positive(usage.output_token_details?.text_tokens);
   const audioOutput = positive(usage.output_token_details?.audio_tokens);
-  // Missing breakdown is charged at the more expensive audio rate, never free.
-  const inputCost = textInput + audioInput > 0 ? BigInt(textInput) * 600n + BigInt(Math.max(audioInput, input - textInput)) * 10000n : BigInt(input) * 10000n;
-  const outputCost = textOutput + audioOutput > 0 ? BigInt(textOutput) * 2400n + BigInt(Math.max(audioOutput, output - textOutput)) * 20000n : BigInt(output) * 20000n;
-  return providerNanoUsdToMilliCredits(inputCost + outputCost);
+  const details = usage.input_token_details?.cached_tokens_details;
+  const reportedCached = Math.min(input, positive(usage.input_token_details?.cached_tokens));
+  // The cache details must be consistent with the aggregate count. If omitted,
+  // retain the existing conservative normal input rates rather than inventing
+  // cached audio/text allocation.
+  const cachedText = details ? Math.min(textInput, positive(details.text_tokens), reportedCached) : 0;
+  const cachedAudio = details ? Math.min(audioInput, positive(details.audio_tokens), Math.max(0, reportedCached - cachedText)) : 0;
+  const normalTextInput = Math.max(0, textInput - cachedText);
+  const normalAudioInput = Math.max(0, (textInput + audioInput > 0 ? Math.max(audioInput, input - textInput) : input) - cachedAudio);
+  const textInputNano = BigInt(normalTextInput) * 600n + BigInt(cachedText) * 60n;
+  const audioInputNano = BigInt(normalAudioInput) * 10000n + BigInt(cachedAudio) * 300n;
+  const textOutputNano = BigInt(textOutput) * 2400n;
+  const audioOutputNano = BigInt(textOutput + audioOutput > 0 ? Math.max(audioOutput, output - textOutput) : output) * 20000n;
+  const nano = textInputNano + audioInputNano + textOutputNano + audioOutputNano;
+  return {
+    creditsSpentMilli: providerNanoUsdToMilliCredits(nano),
+    inputTextMilli: providerNanoUsdToMilliCredits(textInputNano),
+    inputAudioMilli: providerNanoUsdToMilliCredits(audioInputNano),
+    outputTextMilli: providerNanoUsdToMilliCredits(textOutputNano),
+    outputAudioMilli: providerNanoUsdToMilliCredits(audioOutputNano),
+    cachedTextTokens: cachedText, cachedAudioTokens: cachedAudio
+  };
+}
+
+export function realtimeSpeechCostMilli(usage: RealtimeUsage) {
+  return realtimeSpeechCostBreakdown(usage).creditsSpentMilli;
 }
 
 export function realtimeSpeechInputEvent(text: string) {

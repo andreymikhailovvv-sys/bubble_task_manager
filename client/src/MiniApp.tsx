@@ -5071,6 +5071,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 <MiniAiChatComposer
                   ref={taskAiComposerRef}
                   variant="task"
+                  liveContext={{ type: 'task', taskId: openedTask.id }}
                   initialDraft={taskAiDraftValueRef.current}
                   onDraftChange={(value) => { taskAiDraftValueRef.current = value; }}
                   onSend={() => { void sendAiMessage(); }}
@@ -5240,6 +5241,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 <MiniAiChatComposer
                   ref={aiChatComposerRef}
                   variant="general"
+                  liveContext={activeAiChat ? { type: 'chat', chatId: activeAiChat.id, projectId: activeAiChatProject?.id, history: activeAiChat.messages.filter(message => message.role === 'assistant' || message.role === 'user').map(message => ({ id: message.id, role: message.role as 'assistant' | 'user', content: message.content })) } : undefined}
                   initialDraft={aiChatDraftValueRef.current}
                   onDraftChange={(value) => { aiChatDraftValueRef.current = value; }}
                   onSend={() => { void sendAiChatQuestion(); }}

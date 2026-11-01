@@ -4,6 +4,10 @@ import { Loader2, Mic, MicOff, PhoneOff, Volume2, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { formatCreditsSpent } from '../lib/credits';
 
+export type LiveVoiceContext =
+  | { type: 'task'; taskId: string; timeZone?: string }
+  | { type: 'chat'; projectId?: string; chatId: string; history?: Array<{ id: string; role: 'user' | 'assistant'; content: string }>; timeZone?: string };
+
 type Phase = 'connecting' | 'listening' | 'speaking' | 'thinking' | 'ended' | 'error';
 type VoiceEvent = { type?: string; data?: string; text?: string; message?: string; creditsSpentMilli?: number };
 const AUDIO_RATE = 24_000;
@@ -42,7 +46,7 @@ function decodePcm(base64: string) {
   return values;
 }
 
-export function LiveVoiceDialog({ onClose, audioContext }: { onClose: () => void; audioContext: AudioContext | null }) {
+export function LiveVoiceDialog({ onClose, audioContext, liveContext }: { onClose: () => void; audioContext: AudioContext | null; liveContext?: LiveVoiceContext }) {
   const [phase, setPhase] = useState<Phase>('connecting');
   const [error, setError] = useState('');
   const [muted, setMuted] = useState(false);
@@ -102,7 +106,7 @@ export function LiveVoiceDialog({ onClose, audioContext }: { onClose: () => void
         });
         if (cancelled) { stream.getTracks().forEach(track => track.stop()); return; }
         streamRef.current = stream;
-        const { ticket } = await api.startLiveVoice();
+        const { ticket } = await api.startLiveVoice(liveContext ? { ...liveContext, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone } : undefined);
         if (cancelled) return;
         const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(`${scheme}//${location.host}/api/ai/audio/live?ticket=${encodeURIComponent(ticket)}`);
