@@ -152,7 +152,10 @@ export function LiveVoiceDialog({ onClose }: { onClose: () => void }) {
               const source = context.createBufferSource();
               source.buffer = buffer;
               source.connect(context.destination);
-              source.onended = () => { sourcesRef.current.delete(source); };
+              source.onended = () => {
+                sourcesRef.current.delete(source);
+                if (sourcesRef.current.size === 0) setPhase(previous => previous === 'speaking' ? 'listening' : previous);
+              };
               sourcesRef.current.add(source);
               const at = Math.max(context.currentTime + .045, nextPlaybackRef.current);
               source.start(at);
