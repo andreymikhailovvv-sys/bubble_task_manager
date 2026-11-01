@@ -62,7 +62,7 @@ test('note edits are displayed in the shared proposal on web and Mini App, not c
   assert.match(proposal, /if \(snapshot\.kind === 'note'\)/);
   assert.match(proposal, /aiPersonalNotesService\.update\(/);
   assert.match(proposal, /const notesBefore = noteIds\.length/);
-  assert.match(proposal, /captureProposalAfter\(userId, before, createdIds, notesBefore, createdNoteIds\)/);
+  assert.match(proposal, /captureProposalAfter\(userId, before, createdIds, notesBefore, createdNoteIds, createdHabitIds\)/);
   assert.match(undo, /notes\?: \{ before: StoredNote\[\]; after:/);
   assert.match(undo, /tx\.standaloneNote\.updateMany/);
   assert.match(undo, /noteHistory\.before\.length/);
@@ -111,7 +111,7 @@ test('create_note uses existing approval chip, not an immediate DB write, with a
   assert.match(proposal, /where: \{ userId, name: \{ equals: payload\.groupName, mode: 'insensitive' \} \}/);
   assert.match(proposal, /aiPersonalNotesService\.create\(userId, action\)/);
   assert.match(proposal, /createdNoteIds\.push\(result\.note\.id\)/);
-  assert.match(proposal, /createdNoteIds\);/);
+  assert.match(proposal, /createdNoteIds, createdHabitIds\);/);
   assert.match(undo, /createdNoteIds: string\[\] = \[\]/);
   assert.match(undo, /tx\.standaloneNote\.deleteMany/);
   assert.match(undo, /updatedAt: new Date\(note\.updatedAt\)/);
