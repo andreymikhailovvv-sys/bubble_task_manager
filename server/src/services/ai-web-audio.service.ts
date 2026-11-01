@@ -117,7 +117,7 @@ function createRealtimeSocket(apiKey: string) {
     : {};
   const dispatcher = proxy ? new ProxyAgent({ uri: new URL(proxy).origin, ...credentials }) : undefined;
   const ws = new WebSocket('wss://api.openai.com/v1/realtime?model=' + SPEECH_MODEL, {
-    headers: { Authorization: 'Bearer ' + apiKey, 'OpenAI-Beta': 'realtime=v1' },
+    headers: { Authorization: 'Bearer ' + apiKey },
     ...(dispatcher ? { dispatcher } : {})
   });
   return { ws, dispatcher };
