@@ -9,6 +9,7 @@ import {WorkAiProposalCard} from './components/WorkAiProposalCard';
 import {AiReplyAction,AiReplyPreview,serializeAiReply,type AiReplyTarget} from './components/AiMessageReply';
 import {TaskAiRecipientPicker} from './components/TaskAiRecipientPicker';
 import {MessageActionArrow} from './components/MessageActionIcons';
+import {WorkNotificationBell} from './components/WorkNotificationBell';
 import type {AiChatModel,ChatMessage} from './lib/types';
 import {api,type WorkAiMessage,type WorkAiJob,type WorkAiCredits,type WorkWorkspace} from './lib/api';
 const models=[['gpt-6-luna','Luna'],['gpt-6.1-terra','Terra'],['gpt-6.1-sol','Sol']] as const;
@@ -276,6 +277,7 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
     <header className="work-ai-dispatcher-header">
       <div className="work-ai-dispatcher-title"><Bot size={19}/><h2>{taskId?'Помощь ИИ по задаче':'ИИ-диспетчер компании'}</h2></div>
       <div className="work-ai-dispatcher-actions">
+        <WorkNotificationBell organizationId={organizationId}/>
         {credits&&<div className="work-ai-dispatcher-wallet" title="Баланс организации. Точный баланс учитывается сервером" aria-label="Баланс организации">
           <Wallet size={16}/><span>{Math.floor(credits.aiCreditsMilli/1000).toLocaleString('ru-RU')} кр.</span>
         </div>}
