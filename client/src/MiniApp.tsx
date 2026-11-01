@@ -4442,20 +4442,45 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     ? Array.from(new Set(visibleEntries.map((entry) => entry.time.slice(0, 2)))).map((hour) => ({ hour, entries: visibleEntries.filter((entry) => entry.time.startsWith(hour)) }))
                     : [];
                   return (
-                    <div key={dateKey} className={`miniapp-calendar-day ${isToday ? 'is-today' : ''} ${isOutsideMonth ? 'is-outside' : ''}`}>
-                      <button type="button" className="miniapp-calendar-date" onClick={() => openDayTimeline(date)} aria-label={`Открыть таймлайн на ${date.toLocaleDateString('ru-RU')}`}>
-                        {timelineView === 'week' && <span>{date.toLocaleDateString('ru-RU', { weekday: 'short' })}</span>}
-                        <strong>{date.getDate()}</strong>
-                      </button>
+                    <div key={dateKey} className={`miniapp-calendar-day ${isToday ? 'is-today' : ''} ${isOutsideMonth ? 'is-outside' : ''}`}
+                      {...(timelineView === 'month' ? {
+                        role: 'button' as const,
+                        tabIndex: 0,
+                        'aria-label': `Открыть таймлайн на ${date.toLocaleDateString('ru-RU')}`,
+                        onClick: () => openDayTimeline(date),
+                        onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => {
+                          if (event.target !== event.currentTarget) return;
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            openDayTimeline(date);
+                          }
+                        }
+                      } : {})}>
+                      {timelineView === 'month' ? (
+                        <span className="miniapp-calendar-date" aria-hidden="true"><strong>{date.getDate()}</strong></span>
+                      ) : (
+                        <button type="button" className="miniapp-calendar-date" onClick={() => openDayTimeline(date)} aria-label={`Открыть таймлайн на ${date.toLocaleDateString('ru-RU')}`}>
+                          <span>{date.toLocaleDateString('ru-RU', { weekday: 'short' })}</span>
+                          <strong>{date.getDate()}</strong>
+                        </button>
+                      )}
                       <div className="miniapp-calendar-entries">
                         {(timelineView === 'week' ? hourlyEntries : [{ hour: '', entries: visibleEntries }]).map((group) => (
                           <div key={group.hour || 'month'} className={timelineView === 'week' ? 'miniapp-calendar-hour-group' : undefined}>
                             {timelineView === 'week' ? <span className="miniapp-calendar-hour-label">{group.hour}:00</span> : null}
-                            {group.entries.map((entry) => (
-                              <button key={entry.id} type="button" className={`miniapp-calendar-entry ${'task' in entry && entry.task.taskType === 'EVENT' ? 'miniapp-calendar-event-entry' : ''} ${'task' in entry && entry.task.taskType === 'REMINDER' ? 'miniapp-calendar-reminder-entry' : ''}`} style={{ '--calendar-entry-color': entry.color } as CSSProperties} onClick={() => 'task' in entry ? (entry.task.taskType === 'REMINDER' ? undefined : entry.task.parentTaskId ? openSubtaskModal(taskById.get(entry.task.id) ?? entry.task) : openTaskModal(taskById.get(entry.task.id) ?? entry.task)) : openEditHabitModal(entry.habit)}>
-                                <span className="miniapp-calendar-entry-title">{entry.title}</span>
-                              </button>
-                            ))}
+                            {group.entries.map((entry) => {
+                              const entryClassName = `miniapp-calendar-entry ${'task' in entry && entry.task.taskType === 'EVENT' ? 'miniapp-calendar-event-entry' : ''} ${'task' in entry && entry.task.taskType === 'REMINDER' ? 'miniapp-calendar-reminder-entry' : ''}`;
+                              const entryStyle = { '--calendar-entry-color': entry.color } as CSSProperties;
+                              return timelineView === 'month' ? (
+                                <span key={entry.id} className={entryClassName} style={entryStyle} onClick={(event) => event.stopPropagation()}>
+                                  <span className="miniapp-calendar-entry-title">{entry.title}</span>
+                                </span>
+                              ) : (
+                                <button key={entry.id} type="button" className={entryClassName} style={entryStyle} onClick={() => 'task' in entry ? (entry.task.taskType === 'REMINDER' ? undefined : entry.task.parentTaskId ? openSubtaskModal(taskById.get(entry.task.id) ?? entry.task) : openTaskModal(taskById.get(entry.task.id) ?? entry.task)) : openEditHabitModal(entry.habit)}>
+                                  <span className="miniapp-calendar-entry-title">{entry.title}</span>
+                                </button>
+                              );
+                            })}
                           </div>
                         ))}
                         {entries.length > visibleEntries.length ? <span className="miniapp-calendar-more">Ещё {entries.length - visibleEntries.length}</span> : null}
