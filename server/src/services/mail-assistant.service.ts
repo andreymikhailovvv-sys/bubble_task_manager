@@ -293,15 +293,14 @@ async function analyze(account: EmailMailbox, message: MailMessage, requestId: s
     if (!settled) await refundAiCreditReservation(reservation);
   }
 }
-async function processMessage(account: EmailMailbox, direction: 'INBOX' | 'SENT', uid: number, message: MailMessage) {
-  const validity = direction === 'INBOX' ? account.inboxValidity : account.sentValidity || '';
+async function processMessage(account: EmailMailbox, folder: 'INBOX'|'SENT', uid: number, message: MailMessage) {
+  const validity = folder === 'INBOX' ? account.inboxValidity : account.sentValidity || '';
   const record = await prisma.emailAnalysis.upsert({
-    where: { mailboxId_folder_validity_uid: { mailboxId: account.id, folder: direction, validity, uid } },
-    create: { userId: account.userId, mailboxId: account.id, folder: direction, validity, uid,
-      subject: message.subject, sender: message.from, status: 'PROCESSING' },
+    where: { mailboxId_folder_validity_uid: { mailboxId: account.id, folder, validity, uid } },
+    create: { mailboxId: account.id, userId: account.userId, folder, validity, uid,
+      subject: message.subject, sender: message.from, status: 'PROCESSING', botStatus: 'SKIPPED' },
     update: {}
   });
-  // Uncertain interrupted runs are not automatically replayed: this prevents a second paid call.
   if (record.status !== 'PROCESSING' || record.createdAt.getTime() < Date.now() - 12 * 60_000) return;
   try {
     const result = await analyze(account, message, record.id);
@@ -309,25 +308,91 @@ async function processMessage(account: EmailMailbox, direction: 'INBOX' | 'SENT'
       id: account.id, userId: account.userId, revision: account.revision, enabled: true
     } });
     if (!current) return;
-    const tasks = direction === 'INBOX' && current.taskMode !== 'NONE' ? result.tasks : [];
-    if (tasks.length) {
-      await prepareTaskProposal({ userId: account.userId, requestId: record.id,
-        source: 'email_assistant', actions: tasks, autoApply: current.taskMode === 'AUTO' });
-    }
+    const reply = folder === 'INBOX' && result.shouldReply && emailAddress(message.from)
+      ? result.replyText : '';
     await prisma.emailAnalysis.update({ where: { id: record.id }, data: {
-      status: 'DONE', summary: result as unknown as Prisma.InputJsonValue
+      summary: result as unknown as Prisma.InputJsonValue, status: 'DONE',
+      suggestedReplyText: reply || null,
+      botStatus: current.notifyImportant && result.important ? 'PENDING' : 'SKIPPED'
     } });
-    if (result.important || tasks.length) {
-      await prisma.systemNotification.upsert({ where: { eventKey: 'mail-assistant:' + record.id },
-        update: {}, create: { userId: account.userId, eventKey: 'mail-assistant:' + record.id,
-          content: '📨 Почтовый ассистент · ' + account.email + ': ' + message.subject.slice(0, 90) } });
+    if (current.notifyImportant && result.important) {
+      await prisma.systemNotification.upsert({
+        where: { eventKey: 'mail-ai-important:' + record.id }, update: {},
+        create: { userId: account.userId, eventKey: 'mail-ai-important:' + record.id,
+          content: '📨 Почтовый ассистент · ' + account.email + ': важное письмо «' + message.subject.slice(0, 90) + '»' }
+      });
     }
   } catch (error) {
     await prisma.emailAnalysis.update({ where: { id: record.id }, data: {
-      status: 'FAILED',
-      error: error instanceof Error && /Недостаточно/.test(error.message)
-        ? 'Недостаточно кредитов ИИ' : 'Не удалось проанализировать письмо'
+      status: 'FAILED', error: error instanceof Error && /Недостаточно|лимит кредитов/.test(error.message)
+        ? 'Недостаточно кредитов ИИ или достигнут дневной лимит' : 'Не удалось проанализировать письмо'
     } });
+  }
+}
+const isDue = (time: Date | null, minutes: number) =>
+  minutes >= 0 && (!time || Date.now() - time.getTime() >= (minutes === 0 ? 15_000 : minutes * 60_000));
+
+async function publishPending(account: EmailMailbox, token: string) {
+  const latest = await prisma.emailMailbox.findFirst({ where: {
+    id: account.id, userId: account.userId, revision: account.revision,
+    enabled: true, leaseToken: token, leasedUntil: { gt: new Date() }
+  } });
+  if (!latest) return;
+  const rows = await prisma.emailAnalysis.findMany({
+    where: { userId: account.userId, mailboxId: account.id, status: 'DONE' },
+    orderBy: { createdAt: 'asc' }, take: 200
+  });
+  const now = new Date();
+  if (latest.taskMode !== 'NONE' && isDue(latest.lastTaskAt, latest.taskIntervalMinutes)) {
+    for (const row of rows.filter(x => x.folder === 'INBOX' && !x.taskPublishedAt).slice(0, 20)) {
+      const summary = row.summary && typeof row.summary === 'object' ? row.summary as {tasks?:unknown} : null;
+      const actions = Array.isArray(summary?.tasks) ? summary.tasks.slice(0, 3) : [];
+      if (actions.length) {
+        await prepareTaskProposal({ userId: account.userId, requestId: row.id,
+          source: 'email_assistant', actions, autoApply: latest.taskMode === 'AUTO' });
+        await prisma.emailAnalysis.updateMany({ where: { id: row.id, userId: account.userId },
+          data: { botStatus: 'PENDING' } });
+        await prisma.systemNotification.upsert({ where: { eventKey: 'mail-ai-task:' + row.id },
+          update: {}, create: { userId: account.userId, eventKey: 'mail-ai-task:' + row.id,
+            content: '📌 Почтовый ассистент · ' + latest.email + ': предложены задачи из письма «' + row.subject.slice(0,90) + '»' } });
+      }
+      await prisma.emailAnalysis.updateMany({ where: { id: row.id, userId: account.userId },
+        data: { taskPublishedAt: now } });
+    }
+    await prisma.emailMailbox.updateMany({ where: { id: account.id, leaseToken: token, revision: account.revision },
+      data: { lastTaskAt: now } });
+  }
+  if (latest.replyMode !== 'OBSERVE' && isDue(latest.lastReplyAt, latest.replyIntervalMinutes)) {
+    for (const row of rows.filter(x => x.folder === 'INBOX' && !x.replyPublishedAt).slice(0, 20)) {
+      if (row.suggestedReplyText && emailAddress(row.sender)) {
+        await prisma.emailAnalysis.updateMany({ where: { id: row.id, userId: account.userId },
+          data: { replyPublishedAt: now, botStatus: 'PENDING',
+            suggestedReplyStatus: latest.replyMode === 'AUTO' ? 'AUTO_PENDING' : 'PENDING' } });
+        await prisma.systemNotification.upsert({ where: { eventKey: 'mail-ai-reply:' + row.id },
+          update: {}, create: { userId: account.userId, eventKey: 'mail-ai-reply:' + row.id,
+            content: '✉️ Почтовый ассистент · ' + latest.email + ': предложен ответ на письмо «' + row.subject.slice(0,90) + '»' } });
+        if (latest.replyMode === 'AUTO') await deliverMailReply(account.userId, row.id, row.suggestedReplyText, true);
+      } else {
+        await prisma.emailAnalysis.updateMany({ where: { id: row.id, userId: account.userId }, data: { replyPublishedAt: now } });
+      }
+    }
+    await prisma.emailMailbox.updateMany({ where: { id: account.id, leaseToken: token, revision: account.revision },
+      data: { lastReplyAt: now } });
+  }
+  if (latest.summaryIntervalMinutes !== -1 && isDue(latest.lastSummaryAt, latest.summaryIntervalMinutes)) {
+    const fresh = rows.filter(row => !latest.lastSummaryAt || row.createdAt > latest.lastSummaryAt);
+    if (fresh.length) {
+      const content = ('📨 Сводка почты · ' + latest.email + '\n\n' +
+        fresh.slice(-15).map(row => {
+          const result = row.summary && typeof row.summary === 'object' ? row.summary as {summary?:string} : null;
+          return '• ' + row.subject.slice(0, 100) + ': ' + (result?.summary ?? '').slice(0,350);
+        }).join('\n')).slice(0,4000);
+      await prisma.emailDigest.create({ data: { userId: account.userId, mailboxId: account.id, content } });
+      await prisma.emailMailbox.updateMany({ where: { id: account.id, leaseToken: token, revision: account.revision },
+        data: { lastSummaryAt: now, lastSummary: {
+          summary: content.slice(0,2000), decisions: [], obligations: [], risks: []
+        } as Prisma.InputJsonValue } });
+    }
   }
 }
 async function scan(account: EmailMailbox, token: string) {
@@ -385,12 +450,17 @@ export const mailAssistantWorker = {
       }, data: { leaseToken: token, leasedUntil: new Date(Date.now() + LEASE) } });
       if (!claim.count) continue;
       let error: string | null = null;
-      try { await scan(account, token); } catch {
+      try { await scan(account, token); await publishPending(account, token); } catch {
         error = 'Проверка почты не удалась. Проверьте IMAP, пароль приложения или доступность сервера';
       }
       await prisma.emailMailbox.updateMany({ where: { id: account.id, leaseToken: token }, data: {
         leaseToken: null, leasedUntil: null, lastCheckedAt: new Date(),
-        lastError: error, nextCheckAt: new Date(Date.now() + (error ? 10 : account.intervalMinutes) * 60_000)
+        lastError: error, nextCheckAt: new Date(Date.now() + (error ? 600_000 : Math.max(15_000,
+            Math.min(account.intervalMinutes * 60_000,
+              ...[account.replyMode !== 'OBSERVE' ? account.replyIntervalMinutes : null,
+                  account.taskMode !== 'NONE' ? account.taskIntervalMinutes : null,
+                  account.summaryIntervalMinutes >= 0 ? account.summaryIntervalMinutes : null]
+                .filter((v): v is number => v !== null).map(v => v === 0 ? 15_000 : v * 60_000)))))
       } });
     }
   }
