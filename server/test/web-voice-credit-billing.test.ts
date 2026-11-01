@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeSpeechText, realtimeSpeechCostMilli, WebAudioError } from '../src/services/ai-web-audio.service.js';
+import { normalizeSpeechText, realtimeSpeechCostMilli, realtimeSpeechInputEvent, WebAudioError } from '../src/services/ai-web-audio.service.js';
 import { calculateOpenAiTranscriptionUsageCost } from '../src/services/ai-usage-metering.service.js';
 
 test('Web audio uses the current duration-billed transcription model', () => {
@@ -25,4 +25,13 @@ test('Speech text is sanitized and bounded', () => {
   assert.equal(normalizeSpeechText('**Привет** [здесь](https://example.com)'), 'Привет здесь');
   assert.throws(() => normalizeSpeechText(''), WebAudioError);
   assert.throws(() => normalizeSpeechText('a'.repeat(2001)), WebAudioError);
+});
+
+test('Narration passes text to Realtime as a user conversation item', () => {
+  const event = realtimeSpeechInputEvent('Прочитай этот ответ');
+  assert.deepEqual(event, {
+    type: 'conversation.item.create',
+    item: { type: 'message', role: 'user',
+      content: [{ type: 'input_text', text: 'Прочитай этот ответ' }] }
+  });
 });
