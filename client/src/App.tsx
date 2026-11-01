@@ -174,7 +174,6 @@ const getRankingModeStorageKey = (userId: string) => `btm:${userId}:ranking-mode
 const getOnboardingOfferStorageKey = (userId: string) => `btm:${userId}:onboarding-offer-seen`;
 const getLatestNewsReadStorageKey = (userId: string) => `btm:${userId}:latest-news-read`;
 const USER_TIMEZONE_STORAGE_KEY = 'btm:user-timezone';
-const AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY = 'btm:ai-notifications-default-enabled';
 const DEFAULT_TIMEZONE = 'Europe/Moscow';
 const CONTEXT_MENU_VIEWPORT_MARGIN = 12;
 const CONTEXT_MENU_WIDTH = 184;
@@ -920,7 +919,8 @@ export default function App() {
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [timelineViewMode, setTimelineViewMode] = useState<'day' | 'week' | 'month'>('month');
   const [isTimelineToolbarHidden, setIsTimelineToolbarHidden] = useState(false);
-  const [isAiNotificationsDefaultEnabled, setIsAiNotificationsDefaultEnabled] = useState<boolean>(() => localStorage.getItem(AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY) !== '0');
+  // Legacy AI nudges are retired; keep the persistence field disabled for older task records.
+  const isAiNotificationsDefaultEnabled = false;
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [isUpdatesOpen, setIsUpdatesOpen] = useState(false);
   const [hasUnreadNews, setHasUnreadNews] = useState(false);
@@ -979,10 +979,10 @@ export default function App() {
   useEffect(() => {
     if (activeTourStep === 'ai-full-chat') {
       setIsAiChatOpen(true);
-    } else if (activeTourStep === 'ai-task-help') {
+    } else if (activeTourStep === 'ai-task-help' || activeTourStep === 'ai-monitor-button' || activeTourStep === 'ai-monitor-model') {
       setIsAiChatOpen(false);
       setEditorState(null);
-      setFocusedTaskId((current) => current ?? tasks.find((task) => !task.parentTaskId)?.id ?? null);
+      setFocusedTaskId((current) => current ?? tasks.find((task) => !task.parentTaskId && !task.isCollaborative && task.taskType === 'TASK')?.id ?? tasks.find(task => !task.parentTaskId)?.id ?? null);
     } else if (activeTourStep === 'ai-recurrence') {
       setIsAiChatOpen(false);
       setFocusedTaskId(null);
@@ -991,7 +991,7 @@ export default function App() {
       setEditorState(null);
       setFocusedTaskId(null);
       setDisplayMode('timeline');
-    } else if (activeTourStep === 'ai-checkup' || activeTourStep === 'ai-notifications') {
+    } else if (activeTourStep === 'ai-checkup') {
       setIsAiChatOpen(false);
       setEditorState(null);
       setFocusedTaskId(null);
@@ -1290,9 +1290,6 @@ export default function App() {
     window.history.replaceState({}, '', `${window.location.pathname}${params.size ? `?${params.toString()}` : ''}${window.location.hash}`);
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem(AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY, isAiNotificationsDefaultEnabled ? '1' : '0');
-  }, [isAiNotificationsDefaultEnabled]);
 
   useEffect(() => {
     if (!timelineCreateMenu) return;
@@ -1818,8 +1815,7 @@ export default function App() {
         setIsSphereFilterOpen(false);
       }
       const tourKeepsSettingsOpen = activeTourStep === 'workspace-settings'
-        || activeTourStep === 'ai-checkup'
-        || activeTourStep === 'ai-notifications';
+        || activeTourStep === 'ai-checkup';
       if (!tourKeepsSettingsOpen && isSettingsOpen && settingsMenuRef.current && target && !settingsMenuRef.current.contains(target) && !(target instanceof Element && target.closest('[data-tour="settings-panel"]'))) {
         setIsSettingsOpen(false);
       }
@@ -5073,6 +5069,9 @@ export default function App() {
   };
   const isTourAddMenuOpen = activeTourStep === 'create-task' || activeTourStep === 'create-event' || activeTourStep === 'create-sector';
   const forceQuickAiPreviewOpen = activeTourStep === 'quick-ai' || activeTourStep === 'ai-quick-chat';
+  const integrationTourKind = activeTourStep === 'feature-integration-send' ? 'messages'
+    : activeTourStep === 'feature-integration-telegram-ai' ? 'assistant'
+    : activeTourStep === 'feature-integration-mail' ? 'email' : null;
 
   return (
     <main
@@ -5093,7 +5092,7 @@ export default function App() {
       ) : null}
       {isSettingsOpen ? createPortal(
         <div data-theme={effectiveThemeMode} className="fixed inset-0 z-[290] flex items-center justify-center overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6"
-          onMouseDown={(event) => { if (event.target === event.currentTarget) setIsSettingsOpen(false); }}>
+          onMouseDown={(event) => { if (event.target === event.currentTarget && activeTourStep !== 'workspace-settings' && activeTourStep !== 'ai-checkup') setIsSettingsOpen(false); }}>
           <section data-tour="settings-panel" data-settings-modal role="dialog" aria-modal="true" aria-label="Настройки"
             className="settings-modal-shell surface-popover light-dropdown relative flex h-[min(88dvh,820px)] w-full max-w-xl flex-col overflow-hidden rounded-3xl border shadow-2xl"
             onMouseDown={(event) => event.stopPropagation()}>
@@ -5186,23 +5185,6 @@ export default function App() {
                 {manualCheckupError ? <p className="mt-2 text-[11px] text-rose-500" role="alert">{manualCheckupError}</p> : null}
               </AiCheckupScheduleSettings>
               {settingsError ? <div className="mt-2 rounded border border-rose-500/40 bg-rose-500/10 px-2 py-1.5 text-[11px] text-rose-200">{settingsError}</div> : null}
-              <div data-tour="ai-notifications-settings" className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
-                <div className="mb-1 flex items-center gap-2 text-xs text-slate-300">
-                  <span>Уведомления от ИИ</span>
-                  <span
-                    className="cursor-help rounded-full border border-slate-600 px-1.5 text-[10px] text-slate-300"
-                    title="Настройка определяет, включён ли чекбокс ИИ-уведомлений при создании новых задач. Уже созданные задачи не меняются. Кредиты за подсказку ИИ списываются по фактическим токенам."
-                  >
-                    ?
-                  </span>
-                </div>
-                <CustomSelect detachedPopup popupVariant="settings"
-                  value={isAiNotificationsDefaultEnabled ? 'enabled' : 'disabled'}
-                  onChange={(value) => setIsAiNotificationsDefaultEnabled(value === 'enabled')}
-                  options={[{ value: 'enabled', label: 'Включены для всех задач' }, { value: 'disabled', label: 'Выключены для всех задач' }]}
-                  ariaLabel="Уведомления от ИИ"
-                />
-              </div>
               <div className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
                 <div className="mb-2 text-xs font-semibold text-primary">Предлагать отчёт по выполнению задачи</div>
                 <CustomSelect detachedPopup popupVariant="settings"
@@ -5272,7 +5254,7 @@ export default function App() {
           onOpenSubtask={(subtask) => setEditorState({ task: subtask })}
           onOpenNote={(id) => setRequestedStandaloneNote({ id, serial: Date.now() })}
         />
-        <TelegramIntegrationsMenu onConnectBot={() => void openTelegramLinkModal()} />
+        <TelegramIntegrationsMenu tourIntegration={integrationTourKind} onConnectBot={() => void openTelegramLinkModal()} />
         <a className="public-nav-link shrink-0 px-2 py-2 text-sm" href="/about">О сервисе</a>
         <div className="auth-actions" aria-label="Управление аккаунтом">
           {hasAccount ? (
@@ -6952,7 +6934,7 @@ export default function App() {
               </button>
             ) : null}
           </section>
-          <section className="workspace-widget-card rounded-[1.35rem] border p-4">
+          <section data-tour="workspace-sectors" className="workspace-widget-card rounded-[1.35rem] border p-4">
             <h3 className="mb-3 text-base font-bold tracking-[-0.01em]">Управление секторами</h3>
             <ul className="space-y-2 text-xs">
               {spheres.map((sphere) => {
@@ -6983,7 +6965,7 @@ export default function App() {
             </ul>
             <p className="mt-2 text-[11px] text-slate-400">Максимум секторов: {MAX_SPHERES}.</p>
           </section>
-          <StandaloneNotesWorkspace key={currentUser?.id ?? 'anonymous'} userId={currentUser?.id ?? ''} requestedNote={requestedStandaloneNote} />
+          <div data-tour="workspace-notes"><StandaloneNotesWorkspace key={currentUser?.id ?? 'anonymous'} userId={currentUser?.id ?? ''} requestedNote={requestedStandaloneNote} /></div>
         </aside>
       </div>
       {subtaskCommentContextMenu ? (
@@ -7203,7 +7185,7 @@ export default function App() {
                 <div>
                   <p className="flex items-center gap-2 text-sm font-semibold ai-panel-title"><Bot size={16} /> Помощь ИИ</p>
                 </div>
-                <TaskMonitoringStatuses taskId={focusedTask.id}
+                <TaskMonitoringStatuses tourStage={activeTourStep === 'ai-monitor-model' ? 'model' : activeTourStep === 'ai-monitor-button' ? 'button' : null} taskId={focusedTask.id}
                   model={focusedTask.aiMonitoringModel}
                   generation={focusedTask.aiMonitoringGeneration}
                   enabled={focusedTask.aiMonitoringEnabled === true}
@@ -7618,14 +7600,6 @@ export default function App() {
                       }}
                     />
                     повторять
-                  </label>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={focusedDraft.aiNotificationsEnabled ?? isAiNotificationsDefaultEnabled}
-                      onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), aiNotificationsEnabled: e.target.checked }))}
-                    />
-                    уведомления от ИИ
                   </label>
                   </div>
                   {focusedDraft.isRecurring ? (
