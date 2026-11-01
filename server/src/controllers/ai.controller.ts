@@ -403,8 +403,9 @@ export const aiController = {
         generatedDocumentId: result.generatedDocument?.id ?? null,
         taskProposalId: result.taskProposal?.id ?? null,
         telegramSendDraft: result.telegramSendDraft ?? null,
+        mailSendDraft: result.mailSendDraft ?? null,
         telegramReadDraft: result.telegramReadDraft ?? null,
-        telegramReadOwnerId: req.body?.telegramRead != null ? req.user!.id : null
+        telegramReadOwnerId: (req.body?.telegramRead != null || result.mailReadUsed) ? req.user!.id : null
       });
 
       console.info('[AI] /tasks/:id/ai-chat response sent', {

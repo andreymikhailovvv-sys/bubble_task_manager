@@ -65,6 +65,8 @@ import { rewriteNotesQuickText } from '../services/telegram-quick-share-ai.servi
 import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
 import { mailAssistant, MailAssistantError } from '../services/mail-assistant.service.js';
 import { mailAssistantInboxFeed, deliverMailReply } from '../services/mail-assistant-inbox.service.js';
+import { rewriteMailQuickText } from '../services/telegram-quick-share-ai.service.js';
+import { getOwnerMailDraft, sendOwnerMailDraft } from '../services/ai-mail-tools.service.js';
 
 
 export const apiRouter = Router();
@@ -79,6 +81,30 @@ const mailFailure = (res: Response, error: unknown) => {
   else res.status(500).json({ error: 'Не удалось выполнить действие с почтой' });
 };
 
+apiRouter.post('/mail-assistant/quick-rewrite',requireAuth,mailOrigin,async(req,res)=>{
+  res.set('Cache-Control','no-store, private');
+  try {
+    const data = await rewriteMailQuickText(req.user!.id,req.body?.text,req.body?.instruction);
+    res.json(data);
+  } catch(error){
+    res.status(400).json({error:error instanceof Error?error.message:'Не удалось изменить письмо'});
+  }
+});
+apiRouter.get('/mail-assistant/drafts/:id', requireAuth, async (req,res)=>{
+  res.set('Cache-Control','no-store, private');
+  const draft = await getOwnerMailDraft(req.user!.id,req.params.id);
+  if (!draft) { res.status(404).json({error:'Черновик не найден'}); return; }
+  res.json({draft});
+});
+apiRouter.post('/mail-assistant/drafts/:id/send', requireAuth, mailOrigin, async (req,res)=>{
+  res.set('Cache-Control','no-store, private');
+  try {
+    const result=await sendOwnerMailDraft(req.user!.id,req.params.id,req.body);
+    res.status(result.ok ? 200 : 409).json(result);
+  } catch {
+    res.status(500).json({ok:false,status:'UNKNOWN',message:'Не удалось проверить результат отправки. Проверьте папку «Отправленные».'});
+  }
+});
 apiRouter.get('/mail-assistant/inbox', requireAuth, async (req, res) => {
   res.set('Cache-Control', 'no-store');
   try { res.json(await mailAssistantInboxFeed(req.user!.id)); } catch { res.status(500).json({ error: 'Не удалось загрузить почтовые сводки' }); }

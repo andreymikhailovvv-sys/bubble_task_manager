@@ -44,6 +44,7 @@ export function reconcileActiveAiChatMessages<T extends IdentifiedChatMessage>(
       message.taskProposal?.id === other.taskProposal?.id &&
       message.taskProposal?.status === other.taskProposal?.status &&
       JSON.stringify(message.telegramSendDraft ?? null) === JSON.stringify(other.telegramSendDraft ?? null) &&
+      JSON.stringify(message.mailSendDraft ?? null) === JSON.stringify(other.mailSendDraft ?? null) &&
       JSON.stringify(message.telegramReadDraft ?? null) === JSON.stringify(other.telegramReadDraft ?? null);
   })) return local;
 
@@ -235,6 +236,8 @@ export function reconcileAiChatMessagesWithChips<T extends IdentifiedChatMessage
         ? { telegramReadDraft: original.telegramReadDraft } : {}),
       ...(message.telegramSendDraft == null && original.telegramSendDraft
         ? { telegramSendDraft: original.telegramSendDraft } : {}),
+      ...(message.mailSendDraft == null && original.mailSendDraft
+        ? { mailSendDraft: original.mailSendDraft } : {}),
       ...(message.taskProposal == null && original.taskProposal
         ? { taskProposal: original.taskProposal } : {}),
       ...(message.generatedDocument == null && original.generatedDocument

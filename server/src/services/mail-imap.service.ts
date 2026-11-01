@@ -187,6 +187,16 @@ export class ReadOnlyImap {
       .filter(x => Number.isSafeInteger(x) && x > cursor);
     return [...new Set(values)].sort((a, b) => a - b).slice(0, 10);
   }
+  /** Server-owned IMAP SEARCH; user content is only a quoted search term. */
+  async searchUids(query: string, limit = 12) {
+    const needle = query.trim().slice(0, 120);
+    const command = needle ? 'UID SEARCH TEXT ' + quote(needle) : 'UID SEARCH ALL';
+    const rows = (await this.command(command)).lines;
+    const uids = rows.filter(x => /^\* SEARCH(?: |$)/.test(x))
+      .flatMap(x => x.slice(8).trim().split(/\s+/))
+      .map(Number).filter(uid => Number.isSafeInteger(uid) && uid > 0);
+    return [...new Set(uids)].sort((a, b) => b - a).slice(0, Math.max(1, Math.min(limit, 30)));
+  }
   async fetch(uid: number) {
     const data = (await this.command('UID FETCH ' + uid + ' (UID BODY.PEEK[]<0.32768>)')).literals[0];
     return data ? parseMailSource(data, uid) : null;

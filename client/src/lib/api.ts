@@ -13,7 +13,7 @@ type UnauthorizedHandler = () => void;
 export type AiBilling = { mode: 'dynamic' | 'legacy'; creditsSpentMilli: number };
 export type AiChatProgressStatus = 'analyzing_request' | 'using_chat_history' | 'searching_workspace' | 'searching_notes' | 'reading_note' | 'searching_tasks' | 'listing_tasks' | 'reading_task' | 'checking_sectors' | 'analyzing_retrieved_context' | 'applying_changes' | 'reading_attachment' | `reading_attachment:${string}` | 'searching_web' | 'analyzing_web_results' | 'forming_answer' | 'generating_image' | 'editing_image' | 'editing_document';
 export type TaskAiProgressStatus = 'analyzing_request' | 'using_chat_history' | 'searching_subtasks' | 'analyzing_subtasks' | 'reading_subtask' | 'searching_files' | 'reading_file' | `reading_file:${string}` | 'analyzing_retrieved_context' | 'searching_web' | 'analyzing_web_results' | 'forming_answer' | 'applying_changes' | 'generating_image' | 'editing_image' | 'editing_document';
-export type TaskAssistantResult = { taskProposal?: import('./types').AiTaskProposal | null; answer: string; model: string; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; taskDataChanged: boolean; actionReports?: string[]; generatedDocument?: GeneratedDocument | null; webSearchUsed?: boolean; webSources?: WebSource[]; webCitations?: WebCitation[]; billing?: AiBilling };
+export type TaskAssistantResult = { taskProposal?: import('./types').AiTaskProposal | null; answer: string; model: string; telegramSendDraft?: TelegramInlineSendDraft | null; mailSendDraft?: MailSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; taskDataChanged: boolean; actionReports?: string[]; generatedDocument?: GeneratedDocument | null; webSearchUsed?: boolean; webSources?: WebSource[]; webCitations?: WebCitation[]; billing?: AiBilling };
 type TaskAiStreamEvent = { type: 'status'; status: TaskAiProgressStatus } | { type: 'result'; result: TaskAssistantResult } | { type: 'error'; message: string } | { type: 'ping' };
 
 let unauthorizedHandler: UnauthorizedHandler | null = null;
@@ -227,7 +227,7 @@ async function askTaskAssistantStreaming(taskId: string, payload: { clientReques
   }
 }
 
-export type AiChatResult = { suggestedChatTitle?: string; taskProposal?: import('./types').AiTaskProposal | null; answer: string; model: string; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; taskDataChanged: boolean; actionReports?: string[]; generatedDocument?: GeneratedDocument | null; undoOperations?: Array<{ taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } }>; webSearchUsed: boolean; webSources?: WebSource[]; webCitations?: WebCitation[]; billing?: AiBilling };
+export type AiChatResult = { suggestedChatTitle?: string; taskProposal?: import('./types').AiTaskProposal | null; answer: string; model: string; telegramSendDraft?: TelegramInlineSendDraft | null; mailSendDraft?: MailSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; taskDataChanged: boolean; actionReports?: string[]; generatedDocument?: GeneratedDocument | null; undoOperations?: Array<{ taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } }>; webSearchUsed: boolean; webSources?: WebSource[]; webCitations?: WebCitation[]; billing?: AiBilling };
 export async function readAiChatNdjson(stream: ReadableStream<Uint8Array>, onStatus?: (status: AiChatProgressStatus) => void): Promise<AiChatResult> {
   const reader = stream.getReader(); const decoder = new TextDecoder(); let buffer = ''; let result: AiChatResult | null = null;
   const consume = (line: string) => { if (!line.trim()) return; const event = JSON.parse(line) as { type: string; status?: AiChatProgressStatus; result?: AiChatResult; message?: string }; if (event.type === 'status' && event.status) onStatus?.(event.status); else if (event.type === 'result' && event.result) result = event.result; else if (event.type === 'error') throw new Error(event.message || 'Ошибка чата ИИ'); };
@@ -507,6 +507,13 @@ export type AdminWorkCreditHistory = { id:string;kind:string;deltaMilli:number;c
 
 
 export const api = {
+  mailRewriteText: (text:string,instruction:string) => request<{text:string;creditsSpentMilli:number}>('/api/mail-assistant/quick-rewrite',
+    {method:'POST',body:JSON.stringify({text,instruction})}),
+  mailDraftStatus: (id:string) => request<{draft:{id:string;mailboxId:string;recipient:string;subject:string;text:string;status:string}}>(
+    '/api/mail-assistant/drafts/'+encodeURIComponent(id)),
+  mailSendDraft: (id:string,payload:{mailboxId:string;recipient:string;subject:string;text:string}) =>
+    request<{ok:boolean;status:string;message?:string}>('/api/mail-assistant/drafts/'+encodeURIComponent(id)+'/send',
+      {method:'POST',body:JSON.stringify(payload)}),
   mailAssistantInbox: () => request<MailAiInbox>('/api/mail-assistant/inbox'),
   mailAssistantSendReply: (eventId:string,text:string) =>
     request<{ok:boolean;status:'SENT'|'FAILED'|'UNKNOWN'}>('/api/mail-assistant/inbox/'+encodeURIComponent(eventId)+'/send-reply',
@@ -980,4 +987,9 @@ export type MailAiInbox = {
     id:string; chatId:string; role:'assistant'; content:string; createdAt:string;
     taskProposal: import('./types').AiTaskProposal | null; mailSuggestedReply: MailAiSuggestedReply | null;
   }>;
+};
+
+export type MailSendDraft = {
+  id: string; mailboxId: string; sender: string; recipient: string;
+  subject: string; text: string;
 };

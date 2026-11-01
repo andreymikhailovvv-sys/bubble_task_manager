@@ -34,6 +34,7 @@ export function persistAiChatProjectsCache(
         ...(message.generatedDocument ? { generatedDocument: message.generatedDocument } : {}),
         ...(message.taskProposal ? { taskProposal: message.taskProposal } : {}),
         ...(message.telegramSendDraft ? { telegramSendDraft: message.telegramSendDraft } : {}),
+        ...(message.mailSendDraft ? { mailSendDraft: message.mailSendDraft } : {}),
         ...(message.telegramReadDraft ? { telegramReadDraft: message.telegramReadDraft } : {})
       }))
     }))

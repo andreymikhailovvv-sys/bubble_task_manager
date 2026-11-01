@@ -419,6 +419,7 @@ model User {
   emailMailboxes EmailMailbox[]
   emailAnalyses EmailAnalysis[]
   emailDigests EmailDigest[]
+  mailComposeDrafts MailComposeDraft[]
   habits       Habit[]
   systemNotifications SystemNotification[]
   androidPushDevices AndroidPushDevice[]
@@ -812,6 +813,7 @@ model TaskAiMessage {
   messageKind String      @default("AI")
   recipientUserId String?
   telegramSendDraft Json?
+  mailSendDraft Json?
   aiTaskProposalId String?
   telegramReadDraft Json?
   telegramReadOwnerId String?
@@ -1423,4 +1425,19 @@ model EmailDigest {
 
   @@index([mailboxId, createdAt])
   @@index([botStatus, createdAt])
+}
+
+model MailComposeDraft {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mailboxId String
+  recipient String
+  subject String
+  body String @db.Text
+  status String @default("PENDING")
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }

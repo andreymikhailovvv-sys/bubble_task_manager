@@ -21,6 +21,8 @@ const FEATURE_LABELS: Record<string, string> = {
   image_generation: 'Генерация изображений',
   notes_quick_rewrite: 'Изменение текста для заметок',
   telegram_quick_rewrite: 'Изменение текста для Telegram',
+  mail_quick_rewrite: 'Редактирование письма с ИИ',
+  email_monitor: 'Почтовый ассистент · анализ писем',
   web_search: 'Веб-поиск'
 };
 
