@@ -54,6 +54,7 @@ import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
 import { DEFAULT_MOBILE_PROJECT_CHAT_MODEL, DEFAULT_QUICK_AI_CHAT_MODEL, DEFAULT_TASK_AI_CHAT_MODEL, readSavedAiChatModel } from './lib/ai-chat-model';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
 import { TelegramAiReplySuggestionCard } from './components/TelegramAiReplySuggestionCard';
+import { MailAiReplySuggestionCard } from './components/MailAiReplySuggestionCard';
 import { TelegramReadConsentCard } from './components/TelegramReadConsentCard';
 import { loadTaskAiRecipientSelection, saveTaskAiRecipientSelection } from './lib/taskAiRecipientStorage';
 import { changedDraftFields, mergeRemoteDraftFields } from './lib/taskDraftSync';
@@ -199,6 +200,7 @@ function normalizeMiniAiChatProjects(rawProjects: Array<Partial<MiniAiChatProjec
           ...(message.taskProposal ? { taskProposal: message.taskProposal } : {}),
           ...(message.telegramSendDraft ? { telegramSendDraft: message.telegramSendDraft } : {}),
           ...(message.telegramSuggestedReply ? { telegramSuggestedReply: message.telegramSuggestedReply } : {}),
+          ...(message.mailSuggestedReply ? { mailSuggestedReply: message.mailSuggestedReply } : {}),
           ...(message.telegramReadDraft ? { telegramReadDraft: message.telegramReadDraft } : {})
         }))
     }))
@@ -1098,13 +1100,14 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       setAiCredits(user.aiCredits ?? 0);
       setCurrentUser(user);
 
-      const [sphereList, taskList, habitList, quickHistory, syncedProjects, telegramInbox] = await Promise.all([
+      const [sphereList, taskList, habitList, quickHistory, syncedProjects, telegramInbox, mailInbox] = await Promise.all([
         api.getSpheres(),
         api.getTasks(),
         api.getHabits(),
         api.getGeneralAssistantHistory().catch(() => ({ messages: [] as ChatMessage[] })),
         api.getAiChatProjects<Partial<MiniAiChatProject>>(),
-        api.telegramAssistantInbox().catch(() => null)
+        api.telegramAssistantInbox().catch(() => null),
+        api.mailAssistantInbox().catch(() => null)
       ]);
       const quickMessages: MiniAiChatMessage[] = quickHistory.messages
         .filter((message) => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
@@ -1130,6 +1133,22 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         const telegramProject: MiniAiChatProject = { id: telegramInbox.projectId, title: telegramInbox.projectTitle, color: '#229ed9', icon: 'telegram', chats: telegramChats };
         if (idx >= 0) nextAiChatProjects[idx] = telegramProject;
         else nextAiChatProjects.push(telegramProject);
+      }
+      if (mailInbox?.chats.length) {
+        const previous = nextAiChatProjects.find(p => p.id === mailInbox.projectId);
+        const mailChats: MiniAiChatThread[] = mailInbox.chats.map(account => {
+          const local = previous?.chats.find(c => c.id === account.id)?.messages ?? [];
+          const incoming = mailInbox.messages.filter(m => m.chatId === account.id).map(m => ({
+            id: m.id, role: 'assistant' as const, content: m.content,
+            taskProposal: m.taskProposal ?? undefined, mailSuggestedReply: m.mailSuggestedReply ?? undefined
+          }));
+          return { id: account.id, title: account.title, messages: mergeTelegramManagedMessages(local,incoming) };
+        });
+        const currentIndex = nextAiChatProjects.findIndex(p => p.id === mailInbox.projectId);
+        const project: MiniAiChatProject = { id: mailInbox.projectId, title: mailInbox.projectTitle,
+          icon: '@', color: '#0891b2', chats: mailChats };
+        if (currentIndex >= 0) nextAiChatProjects[currentIndex] = project;
+        else nextAiChatProjects.push(project);
       }
       aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(nextAiChatProjects);
       if (!syncedProjects.projects?.length) {
@@ -4983,6 +5002,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     {message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} onDownload={downloadAiGeneratedDocument} /> : null}
                   {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} /> : null}
                   {message.role === 'assistant' && message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={message.telegramSuggestedReply} /> : null}
+                  {message.role === 'assistant' && message.mailSuggestedReply ? <MailAiReplySuggestionCard reply={message.mailSuggestedReply} /> : null}
                   {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={continueTelegramReadTask} /> : null}
                   {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                   </div>
