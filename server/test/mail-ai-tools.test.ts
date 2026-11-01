@@ -66,5 +66,5 @@ test('mail send cards are available in desktop task, general AI, and Mini App ch
   assert.match(mini,/<MailInlineSendCard/);
   assert.match(task,/mailSendDraft/);
   assert.match(source('../src/services/ai-chat-tools.service.ts'),/mailSendDraft/);
-  assert.match(source('../src/services/ai-mail-tools.service.ts'),/confirmationRequired|confirmationRequired:|confirmationRequired/);
+  assert.match(source('../src/services/ai-mail-tools.service.ts'),/Письмо НЕ отправлено/);
 });
