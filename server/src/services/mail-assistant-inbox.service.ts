@@ -11,6 +11,15 @@ export function mailAiChatTitle(provider: string, email: string) {
   return (provider === 'yandex' ? 'Письма Яндекс' : 'Письма Mail.ru') + ' · ' + email;
 }
 const safe = (value: string, n = 400) => value.trim().slice(0, n);
+export function autoReplyAllowed(sender: string, accountEmail: string): boolean {
+  const recipient = emailAddress(sender);
+  if (!recipient || recipient.toLowerCase() === accountEmail.toLowerCase()) return false;
+  const local = recipient.split('@')[0].toLowerCase();
+  if (/^(?:no[-_.]?reply|do[-_.]?not[-_.]?reply|mailer[-_.]?daemon|postmaster|bounce|notifications?|auto[-_.]?reply|support[-_.]?bot)/.test(local)) return false;
+  // Never auto-reply to compound or list addresses.
+  if (/[,;]|\r|\n/.test(sender)) return false;
+  return true;
+}
 
 export async function mailAssistantInboxFeed(userId: string) {
   const accounts = await prisma.emailMailbox.findMany({
@@ -56,6 +65,7 @@ export async function deliverMailReply(userId: string, eventId: string, text: st
   if (!row || !row.mailbox.enabled || row.status !== 'DONE' || row.folder !== 'INBOX' ||
       row.replyPublishedAt === null || !row.suggestedReplyText) throw new Error('Предложение ответа недоступно');
   if (row.mailbox.replyMode !== (automated ? 'AUTO' : 'SUGGEST')) throw new Error('Режим ответов изменился');
+  if (automated && !autoReplyAllowed(row.sender, row.mailbox.email)) throw new Error('Автоответ для этого адреса запрещён');
   if (typeof text !== 'string' || !text.trim() || text.length > 6000 || !emailAddress(row.sender)) {
     throw new Error('Недопустимый текст или адрес получателя');
   }

@@ -55,7 +55,7 @@ test('integration is owner-scoped, opt-in, read-only and uses existing task prop
   assert.match(imap, /BODY\.PEEK/);
   assert.doesNotMatch(imap, /\\bSMTP\\b|\\bSTORE\\b|\\bEXPUNGE\\b/);
   assert.match(service, /prepareTaskProposal/);
-  assert.match(service, /autoApply: current\.taskMode === 'AUTO'/);
+  assert.match(service, /autoApply: latest\.taskMode === 'AUTO'/);
   assert.match(service, /inboxUid: incoming\.next - 1/);
   assert.match(service, /leaseToken: token/);
   assert.match(menu, /Почтовый ИИ-ассистент/);

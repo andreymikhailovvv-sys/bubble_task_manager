@@ -10,7 +10,7 @@ import { openAiFetch } from '../lib/openai-fetch.js';
 import { normalizeMonitorTaskAction } from './telegram-ai-monitor-summary.service.js';
 import { prepareTaskProposal, proposalView } from './ai-task-proposal.service.js';
 import { emailAddress } from './mail-smtp.service.js';
-import { deliverMailReply } from './mail-assistant-inbox.service.js';
+import { deliverMailReply, autoReplyAllowed } from './mail-assistant-inbox.service.js';
 
 export class MailAssistantError extends Error {
   constructor(public statusCode: number, message: string) { super(message); }
@@ -364,7 +364,7 @@ async function publishPending(account: EmailMailbox, token: string) {
   }
   if (latest.replyMode !== 'OBSERVE' && isDue(latest.lastReplyAt, latest.replyIntervalMinutes)) {
     for (const row of rows.filter(x => x.folder === 'INBOX' && !x.replyPublishedAt).slice(0, 20)) {
-      if (row.suggestedReplyText && emailAddress(row.sender)) {
+      if (row.suggestedReplyText && emailAddress(row.sender) && (latest.replyMode !== 'AUTO' || autoReplyAllowed(row.sender, latest.email))) {
         await prisma.emailAnalysis.updateMany({ where: { id: row.id, userId: account.userId },
           data: { replyPublishedAt: now, botStatus: 'PENDING',
             suggestedReplyStatus: latest.replyMode === 'AUTO' ? 'AUTO_PENDING' : 'PENDING' } });
