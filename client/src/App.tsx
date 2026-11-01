@@ -6969,7 +6969,7 @@ export default function App() {
             </ul>
             <p className="mt-2 text-[11px] text-slate-400">Максимум секторов: {MAX_SPHERES}.</p>
           </section>
-          <div data-tour="workspace-notes"><StandaloneNotesWorkspace key={currentUser?.id ?? 'anonymous'} userId={currentUser?.id ?? ''} requestedNote={requestedStandaloneNote} /></div>
+          <div data-tour="workspace-notes" style={activeTourStep === 'workspace-notes' ? { maxHeight: 'min(520px, calc(100dvh - 40px))', overflowY: 'auto' } : undefined}><StandaloneNotesWorkspace key={currentUser?.id ?? 'anonymous'} userId={currentUser?.id ?? ''} requestedNote={requestedStandaloneNote} /></div>
         </aside>
       </div>
       {subtaskCommentContextMenu ? (
