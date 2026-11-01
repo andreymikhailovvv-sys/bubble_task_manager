@@ -9,37 +9,84 @@ import { calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordOp
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { normalizeMonitorTaskAction } from './telegram-ai-monitor-summary.service.js';
 import { prepareTaskProposal, proposalView } from './ai-task-proposal.service.js';
+import { smtpReply, emailAddress } from './mail-smtp.service.js';
 
 export class MailAssistantError extends Error {
   constructor(public statusCode: number, message: string) { super(message); }
 }
 const limiter = new FixedWindowRateLimiter(8, 15 * 60_000);
-const MODEL = 'gpt-6-luna';
 const LEASE = 15 * 60_000;
 const modes = ['NONE', 'SUGGEST', 'AUTO'] as const;
-const intervals = [5, 15, 30, 60] as const;
-
+const replyModes = ['OBSERVE', 'SUGGEST', 'AUTO'] as const;
+const allowedModels = ['gpt-6-luna','gpt-6.1-terra','gpt-6.1-sol'];
+const shortIntervals = [0, 5, 10, 30, 180, 360, 1440];
+function frequency(value: unknown, label: string, disabled = false): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < (disabled ? -1 : 0) ||
+      value > 5_256_000) throw new MailAssistantError(400, 'Недопустимая частота: ' + label);
+  return value;
+}
 function settings(data: Record<string, unknown>) {
-  const intervalMinutes = data.intervalMinutes ?? 5;
+  const intervalMinutes = frequency(data.intervalMinutes ?? 5, 'проверка');
   const taskMode = data.taskMode ?? 'SUGGEST';
+  const replyMode = data.replyMode ?? 'OBSERVE';
+  const model = data.monitorModel ?? 'gpt-6-luna';
   const instructions = typeof data.instructions === 'string' ? data.instructions.trim() : '';
-  if (!intervals.includes(intervalMinutes as typeof intervals[number])) throw new MailAssistantError(400, 'Недопустимая периодичность');
-  if (!modes.includes(taskMode as typeof modes[number])) throw new MailAssistantError(400, 'Недопустимый режим задач');
-  if (instructions.length > 2500) throw new MailAssistantError(400, 'Инструкции слишком длинные');
+  const taskCreationWhen = typeof data.taskCreationWhen === 'string' ? data.taskCreationWhen.trim() : '';
+  const suggestWhen = typeof data.suggestWhen === 'string' ? data.suggestWhen.trim() : '';
+  const suggestHow = typeof data.suggestHow === 'string' ? data.suggestHow.trim() : '';
+  const autoReplyWhen = typeof data.autoReplyWhen === 'string' ? data.autoReplyWhen.trim() : '';
+  const autoReplyHow = typeof data.autoReplyHow === 'string' ? data.autoReplyHow.trim() : '';
+  const summaryInstructions = typeof data.summaryInstructions === 'string' ? data.summaryInstructions.trim() : '';
+  if (!modes.includes(taskMode as typeof modes[number]) ||
+      !replyModes.includes(replyMode as typeof replyModes[number])) throw new MailAssistantError(400, 'Недопустимый режим ассистента');
+  if (!allowedModels.includes(String(model))) throw new MailAssistantError(400, 'Недоступная модель мониторинга');
+  if ([instructions, taskCreationWhen, suggestWhen, suggestHow, autoReplyWhen, autoReplyHow, summaryInstructions].some(x => x.length > 2500)) {
+    throw new MailAssistantError(400, 'Слишком длинные инструкции');
+  }
   if (typeof data.enabled !== 'boolean') throw new MailAssistantError(400, 'Нужно явно указать разрешение на мониторинг');
-  return { intervalMinutes: intervalMinutes as number,
+  if (typeof data.notifyImportant !== 'boolean' && data.notifyImportant !== undefined) throw new MailAssistantError(400, 'Некорректные уведомления');
+  const dailyCreditLimitMilli = data.dailyCreditLimitMilli === undefined ? 50_000 : data.dailyCreditLimitMilli;
+  if (dailyCreditLimitMilli !== null &&
+      (typeof dailyCreditLimitMilli !== 'number' || !Number.isSafeInteger(dailyCreditLimitMilli) ||
+       dailyCreditLimitMilli < 1 || dailyCreditLimitMilli > 100_000_000)) {
+    throw new MailAssistantError(400, 'Недопустимый дневной предел кредитов');
+  }
+  return {
+    intervalMinutes,
     taskMode: taskMode as 'NONE' | 'SUGGEST' | 'AUTO',
-    instructions, enabled: data.enabled };
+    replyMode: replyMode as 'OBSERVE' | 'SUGGEST' | 'AUTO',
+    taskCreationWhen,
+    replyIntervalMinutes: frequency(data.replyIntervalMinutes ?? 5, 'ответы'),
+    taskIntervalMinutes: frequency(data.taskIntervalMinutes ?? 30, 'задачи'),
+    summaryIntervalMinutes: frequency(data.summaryIntervalMinutes ?? 30, 'сводки', true),
+    summaryInstructions,
+    suggestWhen, suggestHow, autoReplyWhen, autoReplyHow,
+    monitorModel: String(model),
+    dailyCreditLimitMilli: dailyCreditLimitMilli as number | null,
+    notifyImportant: data.notifyImportant !== false,
+    instructions, enabled: data.enabled
+  };
 }
 function checkKey() {
   if (!mailKeyReady()) throw new MailAssistantError(503, 'Почтовый ассистент ещё не настроен на сервере');
 }
 function publicAccount(a: EmailMailbox) {
-  return { id: a.id, provider: a.provider, email: a.email,
-    enabled: a.enabled, intervalMinutes: a.intervalMinutes, taskMode: a.taskMode,
-    instructions: a.instructions, sentFolder: a.sentFolder, lastCheckedAt: a.lastCheckedAt,
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    id: a.id, provider: a.provider, email: a.email, enabled: a.enabled,
+    intervalMinutes: a.intervalMinutes, taskMode: a.taskMode, replyMode: a.replyMode,
+    taskCreationWhen: a.taskCreationWhen, taskIntervalMinutes: a.taskIntervalMinutes,
+    replyIntervalMinutes: a.replyIntervalMinutes, summaryIntervalMinutes: a.summaryIntervalMinutes,
+    summaryInstructions: a.summaryInstructions, suggestWhen: a.suggestWhen, suggestHow: a.suggestHow,
+    autoReplyWhen: a.autoReplyWhen, autoReplyHow: a.autoReplyHow,
+    monitorModel: a.monitorModel, dailyCreditLimitMilli: a.dailyCreditLimitMilli,
+    notifyImportant: a.notifyImportant, instructions: a.instructions,
+    lastSummary: a.lastSummary, lastSummaryAt: a.lastSummaryAt,
+    spentTodayMilli: a.creditDayKey === today ? a.dailySpentMilli : 0, totalSpentMilli: a.totalSpentMilli,
+    sentFolder: a.sentFolder, lastCheckedAt: a.lastCheckedAt,
     nextCheckAt: a.nextCheckAt, lastError: a.lastError,
-    processedCount: a.processedCount, createdAt: a.createdAt };
+    processedCount: a.processedCount, createdAt: a.createdAt
+  };
 }
 async function own(userId: string, id: string) {
   const record = await prisma.emailMailbox.findFirst({ where: { id, userId } });
