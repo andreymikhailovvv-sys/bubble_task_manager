@@ -421,22 +421,24 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
   };
 
   return <section className="live-voice-inline dialog-surface" role="region" aria-label="Живое общение с ИИ">
-    <div className="live-voice-inline-row">
+    <button className="live-voice-inline-close" type="button" onClick={finish} aria-label="Закрыть голосовой режим"><X size={15}/></button>
+    <div className="live-voice-inline-core">
       <span className={`live-voice-inline-orb ${phase === 'speaking' ? 'is-speaking' : ''}`}
         style={{ '--voice-level': level } as React.CSSProperties} aria-hidden="true">
-        {phase === 'connecting' ? <Loader2 size={16} className="ai-speech-loading-spin"/> : <Volume2 size={16}/>}
+        {phase === 'connecting' ? <Loader2 size={22} className="ai-speech-loading-spin"/> : <Volume2 size={22}/>}
       </span>
       <div className="live-voice-inline-status">
         <strong>{phaseText[phase]}</strong>
         <small title="До 450 кредитов временно резервируются. После завершения списывается фактический расход, остаток возвращается.">{String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')} · {creditsSpentMilli ? formatCreditsSpent(creditsSpentMilli) : '0 кредитов'}</small>
       </div>
+    </div>
+    <div className="live-voice-inline-controls">
       <button className="live-voice-inline-button" type="button" onClick={toggleMuted} disabled={phase === 'ended' || phase === 'error'}
         title={muted ? 'Включить микрофон' : 'Отключить микрофон'} aria-label={muted ? 'Включить микрофон' : 'Отключить микрофон'}>
-        {muted ? <MicOff size={17}/> : <Mic size={17}/>}
+        {muted ? <MicOff size={18}/> : <Mic size={18}/>}
       </button>
       <button className="live-voice-inline-button live-voice-inline-end" type="button" onClick={finish}
-        title="Завершить разговор" aria-label="Завершить разговор"><PhoneOff size={16}/></button>
-      <button className="live-voice-inline-close" type="button" onClick={finish} aria-label="Закрыть голосовой режим"><X size={14}/></button>
+        title="Завершить разговор" aria-label="Завершить разговор"><PhoneOff size={18}/></button>
     </div>
     {caption && phase === 'speaking' ? <p className="live-voice-inline-caption" aria-live="polite">{caption.slice(-120)}</p> : null}
     {error ? <p role="alert" className="live-voice-inline-error">{error}</p> : null}
