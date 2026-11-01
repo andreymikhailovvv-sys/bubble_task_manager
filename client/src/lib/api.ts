@@ -511,7 +511,7 @@ export const api = {
     request<{ text: string; creditsSpentMilli: number }>('/api/ai/audio/transcribe', {
       method: 'POST', body: JSON.stringify(input)
     }),
-  speakVoice: async (text: string): Promise<Blob> => {
+  speakVoice: async (text: string): Promise<{ blob: Blob; creditsSpentMilli: number }> => {
     const response = await fetch('/api/ai/audio/speak', {
       method: 'POST', credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -521,8 +521,12 @@ export const api = {
       const payload = await response.json().catch(() => null) as { error?: string } | null;
       throw new Error(payload?.error || 'Не удалось озвучить сообщение.');
     }
-    return response.blob();
+    const rawCost = Number(response.headers.get('X-AI-Credits-Spent-Milli') || '0');
+    return { blob: await response.blob(), creditsSpentMilli: Number.isFinite(rawCost) && rawCost >= 0 ? rawCost : 0 };
   },
+  startLiveVoice: () => request<{ ticket: string; expiresInSeconds: number; maxSeconds: number }>('/api/ai/audio/live/ticket', {
+    method: 'POST', body: JSON.stringify({})
+  }),
   mailRewriteText: (text:string,instruction:string) => request<{text:string;creditsSpentMilli:number}>('/api/mail-assistant/quick-rewrite',
     {method:'POST',body:JSON.stringify({text,instruction})}),
   mailRecentRecipients: () => request<{addresses:string[]}>('/api/mail-assistant/recent-recipients'),
