@@ -20,7 +20,7 @@ test('совместная задача отдает каждому участн
   assert.match(source, /isRecurring: ownMembership\.isRecurring/);
   assert.match(source, /!isCollaborativeRoot && input\.importance !== undefined/);
   assert.match(source, /!isCollaborativeRoot && input\.notifyBeforeMinutes !== undefined/);
-  assert.match(source, /!isCollaborativeRoot && input\.aiNotificationsEnabled !== undefined/);
+  assert.match(source, /personalSettingsPatch\.aiNotificationsEnabled = false/);
   assert.match(source, /!isCollaborativeRoot && \(input\.isRecurring === true/);
   assert.match(source, /collaborativeTaskMember\.update\(/);
   assert.match(source, /sharedDueDateChanged/);

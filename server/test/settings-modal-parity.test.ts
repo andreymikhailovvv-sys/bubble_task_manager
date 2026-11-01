@@ -13,7 +13,7 @@ test('desktop settings is a centered modal rather than a tiny anchored popover',
   assert.match(source, /Часовой пояс пользователя/);
   assert.match(source, /browser-notification-settings/);
   assert.match(source, /<AiCheckupScheduleSettings user=\{currentUser\}/);
-  assert.match(source, /ai-notifications-settings/);
+  assert.doesNotMatch(source, /data-tour="ai-notifications-settings"|Уведомления от ИИ/);
   assert.match(source, /offerTaskCompletionReport/);
 });
 
@@ -26,8 +26,8 @@ test('miniapp and mobile web settings are full dialogs without browser permissio
   assert.match(source, /onTouchMove=\{\(event\) => event\.stopPropagation\(\)\}/);
   assert.match(source, /'Europe\/Moscow','Europe\/Kaliningrad'/);
   assert.match(source, /<AiCheckupScheduleSettings user=\{currentUser\}/);
-  assert.match(source, /aiNotificationDefault/);
-  assert.match(source, /aiNotificationsEnabled: aiNotificationDefault/);
+  assert.doesNotMatch(source, /Уведомления от ИИ в новых задачах/);
+  assert.match(source, /aiNotificationsEnabled: false/);
   assert.match(source, /offerTaskCompletionReport/);
   const part = source.slice(source.indexOf('{isSettingsOpen ? createPortal('),
     source.indexOf(') : null}', source.indexOf('{isSettingsOpen ? createPortal(')));
@@ -44,8 +44,8 @@ test('settings select menus remain above dialogs, themed and tappable while scro
   ]);
   const desktopDialog = desktop.slice(desktop.indexOf('{isSettingsOpen ? createPortal('), desktop.indexOf('document.body', desktop.indexOf('{isSettingsOpen ? createPortal(')));
   const miniDialog = mini.slice(mini.indexOf('{isSettingsOpen ? createPortal('), mini.indexOf('document.body', mini.indexOf('{isSettingsOpen ? createPortal(')));
-  assert.equal((desktopDialog.match(/popupVariant="settings"/g) ?? []).length, 4);
-  assert.equal((miniDialog.match(/popupVariant="settings"/g) ?? []).length, 3);
+  assert.equal((desktopDialog.match(/popupVariant="settings"/g) ?? []).length, 3);
+  assert.equal((miniDialog.match(/popupVariant="settings"/g) ?? []).length, 2);
   assert.match(select, /data-miniapp-popover=\{popupVariant === 'settings' \? 'settings'/);
   assert.match(select, /onTouchMove=\{popupVariant === 'settings'/);
   assert.match(select, /const openAbove =/);
