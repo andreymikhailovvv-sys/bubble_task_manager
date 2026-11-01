@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Mic, MicOff, PhoneOff, Volume2, X } from 'lucide-react';
+import { Loader2, Mic, MicOff, PhoneOff, Volume2 } from 'lucide-react';
 import { api, type AiChatResult, type TaskAssistantResult, type AiChatProgressStatus, type TaskAiProgressStatus } from '../lib/api';
 import type { AiChatModel } from '../lib/types';
 import { formatCreditsSpent } from '../lib/credits';
+import { preferTelegramLiveVoiceMediaSession } from '../lib/live-voice-audio-session';
 import { createBargeInDetector, estimateEchoCorrelation } from '../lib/voice-barge-in';
 
 export type LiveVoiceContext =
@@ -73,6 +74,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const inputRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const gainRef = useRef<GainNode | null>(null);
+  const restoreAudioSessionRef = useRef<() => void>(() => {});
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const outputSegmentsRef = useRef<Array<{ start: number; end: number; samples: Float32Array }>>([]);
   const bargeInRef = useRef(createBargeInDetector());
@@ -193,6 +195,8 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
       gainRef.current = null;
       streamRef.current?.getTracks().forEach(track => track.stop());
       streamRef.current = null;
+      restoreAudioSessionRef.current();
+      restoreAudioSessionRef.current = () => {};
       sourcesRef.current.forEach(source => { try { source.stop(); } catch { /* finished */ } });
       sourcesRef.current.clear();
       outputSegmentsRef.current = [];
@@ -220,6 +224,9 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
         });
         if (cancelled) { stream.getTracks().forEach(track => track.stop()); return; }
         streamRef.current = stream;
+        // iOS Telegram supports an explicit media-playback audio category.
+        // Android and unsupported browsers simply keep their existing route.
+        restoreAudioSessionRef.current = preferTelegramLiveVoiceMediaSession();
         const { ticket } = await api.startLiveVoice(liveContext ? { ...liveContext, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone } : undefined);
         if (cancelled) return;
         const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -421,26 +428,23 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
   };
 
   return <section className="live-voice-inline dialog-surface" role="region" aria-label="Живое общение с ИИ">
-    <button className="live-voice-inline-close" type="button" onClick={finish} aria-label="Закрыть голосовой режим"><X size={15}/></button>
-    <div className="live-voice-inline-core">
-      <span className={`live-voice-inline-orb ${phase === 'speaking' ? 'is-speaking' : ''}`}
-        style={{ '--voice-level': level } as React.CSSProperties} aria-hidden="true">
-        {phase === 'connecting' ? <Loader2 size={22} className="ai-speech-loading-spin"/> : <Volume2 size={22}/>}
-      </span>
-      <div className="live-voice-inline-status">
-        <strong>{phaseText[phase]}</strong>
-        <small title="До 450 кредитов временно резервируются. После завершения списывается фактический расход, остаток возвращается.">{String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')} · {creditsSpentMilli ? formatCreditsSpent(creditsSpentMilli) : '0 кредитов'}</small>
-      </div>
+    <span className={`live-voice-inline-orb ${phase === 'speaking' ? 'is-speaking' : ''}`}
+      style={{ '--voice-level': level } as React.CSSProperties} aria-hidden="true">
+      {phase === 'connecting' ? <Loader2 size={18} className="ai-speech-loading-spin"/> : <Volume2 size={18}/>}
+    </span>
+    <div className="live-voice-inline-status">
+      <strong>{phaseText[phase]}</strong>
+      <small title="До 450 кредитов временно резервируются. После завершения списывается фактический расход, остаток возвращается.">{String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')} · {creditsSpentMilli ? formatCreditsSpent(creditsSpentMilli) : '0 кредитов'}</small>
+      {caption && phase === 'speaking' ? <span className="live-voice-inline-caption" aria-live="polite">{caption.slice(-100)}</span> : null}
+      {error ? <span role="alert" className="live-voice-inline-error">{error}</span> : null}
     </div>
     <div className="live-voice-inline-controls">
       <button className="live-voice-inline-button" type="button" onClick={toggleMuted} disabled={phase === 'ended' || phase === 'error'}
         title={muted ? 'Включить микрофон' : 'Отключить микрофон'} aria-label={muted ? 'Включить микрофон' : 'Отключить микрофон'}>
-        {muted ? <MicOff size={18}/> : <Mic size={18}/>}
+        {muted ? <MicOff size={17}/> : <Mic size={17}/>}
       </button>
       <button className="live-voice-inline-button live-voice-inline-end" type="button" onClick={finish}
-        title="Завершить разговор" aria-label="Завершить разговор"><PhoneOff size={18}/></button>
+        title="Завершить разговор" aria-label="Завершить разговор"><PhoneOff size={17}/></button>
     </div>
-    {caption && phase === 'speaking' ? <p className="live-voice-inline-caption" aria-live="polite">{caption.slice(-120)}</p> : null}
-    {error ? <p role="alert" className="live-voice-inline-error">{error}</p> : null}
   </section>;
 }
