@@ -6,7 +6,8 @@ import {TaskAiEmptyState} from './components/TaskAiEmptyState';
 import {AiProgress} from './components/AiProgress';
 import {WorkAiMessageBody} from './components/WorkAiMessageBody';
 import {WorkAiProposalCard} from './components/WorkAiProposalCard';
-import {AiReplyAction,AiReplyPreview,serializeAiReply,type AiReplyTarget} from './components/AiMessageReply';
+import {AiReplyAction,AiReplyPreview,type AiReplyTarget} from './components/AiMessageReply';
+import {serializeWorkAiReply} from './components/WorkAiReply';
 import {TaskAiRecipientPicker} from './components/TaskAiRecipientPicker';
 import {MessageActionArrow} from './components/MessageActionIcons';
 import {WorkNotificationBell} from './components/WorkNotificationBell';
@@ -80,7 +81,7 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
   const send=async(event:FormEvent)=>{
     event.preventDefault();
     if(!text.trim()||busy)return;
-    const question=serializeAiReply(text.trim(),replyTo);
+    const question=serializeWorkAiReply(text.trim(),replyTo);
     const savedDraft=text, savedReply=replyTo;
     setText('');setReplyTo(null);setComposerFocused(false);
     setPendingMessage(text.trim());
