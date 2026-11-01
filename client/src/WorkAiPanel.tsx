@@ -83,7 +83,7 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
     const question=serializeAiReply(text.trim(),replyTo);
     const savedDraft=text, savedReply=replyTo;
     setText('');setReplyTo(null);setComposerFocused(false);
-    setPendingMessage(question);
+    setPendingMessage(text.trim());
     setBusy(true);setError('');
     try{
       if(taskId&&recipient!=='ai'){
