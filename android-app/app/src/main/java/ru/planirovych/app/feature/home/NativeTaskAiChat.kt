@@ -512,7 +512,7 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                         .padding(start=7.dp,end=7.dp,top=5.dp,bottom=5.dp),
                         verticalAlignment=Alignment.Bottom,
                         horizontalArrangement=Arrangement.spacedBy(6.dp)){
-                                                Box(Modifier.size(42.dp).clip(CircleShape)
+                        Box(Modifier.size(42.dp).clip(CircleShape)
                             .background(if(dark)Color(0xFF253349) else Color(0xFFF8FAFC))
                             .border(1.dp,c.border,CircleShape)
                             .clickable(enabled=!busy&&!attaching){
