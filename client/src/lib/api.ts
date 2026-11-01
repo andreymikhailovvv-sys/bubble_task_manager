@@ -507,6 +507,10 @@ export type AdminWorkCreditHistory = { id:string;kind:string;deltaMilli:number;c
 
 
 export const api = {
+  mailAssistantInbox: () => request<MailAiInbox>('/api/mail-assistant/inbox'),
+  mailAssistantSendReply: (eventId:string,text:string) =>
+    request<{ok:boolean;status:'SENT'|'FAILED'|'UNKNOWN'}>('/api/mail-assistant/inbox/'+encodeURIComponent(eventId)+'/send-reply',
+      {method:'POST',body:JSON.stringify({text})}),
   mailAccounts: () => request<{available:boolean;accounts:MailAccount[]}>('/api/mail-assistant/accounts'),
   mailConnect: (payload:MailAccountConnect) => request<{account:MailAccount}>('/api/mail-assistant/accounts',{method:'POST',body:JSON.stringify(payload)}),
   mailUpdate: (id:string,payload:MailAccountSettings) => request<{account:MailAccount}>('/api/mail-assistant/accounts/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify(payload)}),
@@ -935,8 +939,17 @@ export const api = {
 };
 
 export type MailAccountSettings = {
-  enabled: boolean; intervalMinutes: 5 | 15 | 30 | 60;
-  taskMode: 'NONE' | 'SUGGEST' | 'AUTO'; instructions: string;
+  enabled: boolean; intervalMinutes: number;
+  replyMode: 'OBSERVE' | 'SUGGEST' | 'AUTO';
+  taskMode: 'NONE' | 'SUGGEST' | 'AUTO';
+  suggestWhen: string; suggestHow: string;
+  autoReplyWhen: string; autoReplyHow: string;
+  replyIntervalMinutes: number;
+  taskCreationWhen: string; taskIntervalMinutes: number;
+  summaryIntervalMinutes: number; summaryInstructions: string;
+  monitorModel: 'gpt-6-luna' | 'gpt-6.1-terra' | 'gpt-6.1-sol';
+  dailyCreditLimitMilli: number | null; notifyImportant: boolean;
+  instructions: string;
 };
 export type MailAccountConnect = MailAccountSettings & {
   provider: 'yandex' | 'mailru'; email: string; password: string;
@@ -944,6 +957,8 @@ export type MailAccountConnect = MailAccountSettings & {
 export type MailAccount = MailAccountSettings & {
   id: string; provider: 'yandex' | 'mailru'; email: string;
   sentFolder: string | null; lastCheckedAt: string | null; nextCheckAt: string | null;
+  lastSummaryAt: string | null; lastSummary: { summary: string; decisions: string[]; obligations: string[]; risks: string[] } | null;
+  spentTodayMilli: number; totalSpentMilli: number;
   lastError: string | null; processedCount: number; createdAt: string;
 };
 export type MailAnalysisEvent = {
@@ -952,4 +967,17 @@ export type MailAnalysisEvent = {
   summary: { summary: string; important: boolean; decisions: string[]; obligations: string[]; risks: string[];
     tasks: Array<{operation:string;title:string | null;dueDate:string | null}> } | null;
   error: string | null; taskProposal: import('./types').AiTaskProposal | null;
+};
+
+export type MailAiSuggestedReply = {
+  eventId: string; recipient: string; subject: string; text: string;
+  status: 'PENDING' | 'AUTO_PENDING' | 'SENDING' | 'SENT' | 'FAILED' | 'UNKNOWN';
+};
+export type MailAiInbox = {
+  projectId: string; projectTitle: string; projectIcon: string;
+  chats: Array<{id:string;mailboxId:string;title:string}>;
+  messages: Array<{
+    id:string; chatId:string; role:'assistant'; content:string; createdAt:string;
+    taskProposal: import('./types').AiTaskProposal | null; mailSuggestedReply: MailAiSuggestedReply | null;
+  }>;
 };

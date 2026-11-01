@@ -80,7 +80,7 @@ type SliderProps = {
   onChange: (index: number) => void;
 };
 
-function SettingSlider({ title, description, index, options, shortLabels, onChange }: SliderProps) {
+export function SettingSlider({ title, description, index, options, shortLabels, onChange }: SliderProps) {
   const id = useId();
   const progress = options.length > 1 ? (index / (options.length - 1)) * 100 : 0;
   return (
@@ -121,7 +121,7 @@ type TimeFrequencySliderProps = {
   title: string; description: string; minutes: number; months: number | null;
   disabledOption?: boolean; onChange: (minutes: number, months: number | null) => void;
 };
-function TimeFrequencySlider({ title, description, minutes, months, disabledOption = false, onChange }: TimeFrequencySliderProps) {
+export function TimeFrequencySlider({ title, description, minutes, months, disabledOption = false, onChange }: TimeFrequencySliderProps) {
   const fixed = disabledOption ? SUMMARY_INTERVALS : CHECK_INTERVALS;
   const names: string[] = disabledOption ? [...SUMMARY_NAMES, CUSTOM_OPTION] : [...CHECK_NAMES, CUSTOM_OPTION];
   const labels: string[] = disabledOption ? [...SUMMARY_SHORT, CUSTOM_OPTION] : [...CHECK_SHORT, CUSTOM_OPTION];
@@ -174,7 +174,7 @@ function TimeFrequencySlider({ title, description, minutes, months, disabledOpti
     </div>}
   </div>;
 }
-function CreditLimitSlider({ value, onChange }: { value: number | null; onChange: (value: number | null) => void }) {
+export function CreditLimitSlider({ value, onChange }: { value: number | null; onChange: (value: number | null) => void }) {
   const preset = DAILY_LIMITS.findIndex(v => v === value);
   const [editingCustom, setEditingCustom] = useState(false);
   const custom = preset < 0 || editingCustom;

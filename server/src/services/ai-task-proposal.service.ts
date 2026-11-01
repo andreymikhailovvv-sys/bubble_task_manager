@@ -287,8 +287,9 @@ export async function applyTaskProposal(userId: string, id: string, selectedIndi
     const createdNoteIds: string[] = [];
     if (row.source === 'planner' || row.source === 'daily_checkup' || row.source === 'telegram_bot' ||
         row.source === 'task_chat' || row.source === 'telegram_bot_task' ||
-        (row.source === 'telegram_assistant' && actions.every(a => 'operation' in a))) {
-      if (row.source === 'telegram_assistant' && row.autoApplied &&
+        (row.source === 'telegram_assistant' && actions.every(a => 'operation' in a)) ||
+        (row.source === 'email_assistant' && actions.every(a => 'operation' in a))) {
+      if ((row.source === 'telegram_assistant' || row.source === 'email_assistant') && row.autoApplied &&
           actions.some(a => !['create_task', 'create_event', 'create_reminder', 'create_subtask'].includes(String(a.operation)))) {
         throw new Error('Автоматический Telegram-ассистент не может изменять существующие задачи.');
       }

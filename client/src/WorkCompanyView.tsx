@@ -3,7 +3,6 @@ import { ArrowLeft, ArrowRight, BriefcaseBusiness, Building2, Check, Copy, Link2
 import { api, type WorkDepartment, type WorkInvitation, type WorkOrganization, type WorkRole, type WorkWorkspace } from './lib/api';
 import WorkProjectsView from './WorkProjectsView';
 import WorkAiPanel from './WorkAiPanel';
-import {WorkNotificationBell} from './components/WorkNotificationBell';
 import WorkOverviewDashboard from './WorkOverviewDashboard';
 
 export type WorkSection = 'overview' | 'projects' | 'team' | 'ai' | 'settings';
@@ -96,7 +95,6 @@ export default function WorkCompanyView({ id, section, currentUserId, onBack, on
   };
   const sectionText = section === 'team' ? 'Команда' : section === 'settings' ? 'Настройки' : section === 'projects' ? 'Проекты' : section === 'ai' ? 'ИИ-диспетчер' : 'Обзор';
   return <div className="work-company">
-    {(section==='team'||section==='projects'||section==='settings'||(section==='overview'&&showCompanyCard))&&<div className="work-global-notification"><WorkNotificationBell organizationId={id}/></div>}
     {showCompanyCard&&<button type="button" className="work-company-back" onClick={onBack}><ArrowLeft size={16}/> Назад к рабочей панели</button>}
     {(section!=='overview'||showCompanyCard)&&<div className="work-company-header">
       <span className="work-company-logo"><Building2 size={26}/></span>

@@ -48,9 +48,9 @@ test('authorized policy count, not browser list, controls Telegram assistant nav
   const api = source('../src/routes/api.ts');
   const mini = source('../../client/src/MiniApp.tsx');
   const web = source('../../client/src/App.tsx');
-  assert.match(api, /const cleanPrevious = canonicalizeTelegramAssistantProjects/);
-  assert.match(api, /const cleanIncoming = canonicalizeTelegramAssistantProjects/);
-  assert.match(api, /let canonical = canonicalizeTelegramAssistantProjects/);
+  assert.match(api, /const cleanPrevious = canonicalizeMailAssistantProjects\([\s\S]*?canonicalizeTelegramAssistantProjects/);
+  assert.match(api, /const cleanIncoming = canonicalizeMailAssistantProjects\([\s\S]*?canonicalizeTelegramAssistantProjects/);
+  assert.match(api, /let canonical = canonicalizeMailAssistantProjects\([\s\S]*?canonicalizeTelegramAssistantProjects/);
   assert.match(api, /FOR UPDATE/);
   assert.match(mini, /activeAiChatProject\.id === 'telegram-ai-assistant-project'/);
   assert.match(mini, /chat\.id\.startsWith\('telegram-ai-assistant:'\)/);

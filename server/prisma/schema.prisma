@@ -418,6 +418,7 @@ model User {
   telegramAiMonitorCalls TelegramAiMonitorCall[]
   emailMailboxes EmailMailbox[]
   emailAnalyses EmailAnalysis[]
+  emailDigests EmailDigest[]
   habits       Habit[]
   systemNotifications SystemNotification[]
   androidPushDevices AndroidPushDevice[]
@@ -1336,6 +1337,27 @@ model EmailMailbox {
   email String
   passwordCipher String
   enabled Boolean @default(false)
+  replyMode String @default("OBSERVE")
+  suggestWhen String @default("")
+  suggestHow String @default("")
+  autoReplyWhen String @default("")
+  autoReplyHow String @default("")
+  replyIntervalMinutes Int @default(5)
+  taskCreationWhen String @default("")
+  taskIntervalMinutes Int @default(30)
+  summaryIntervalMinutes Int @default(30)
+  summaryInstructions String @default("")
+  monitorModel String @default("gpt-6-luna")
+  dailyCreditLimitMilli Int?
+  creditDayKey String?
+  dailySpentMilli Int @default(0)
+  dailyReservedMilli Int @default(0)
+  totalSpentMilli Int @default(0)
+  notifyImportant Boolean @default(true)
+  lastReplyAt DateTime?
+  lastTaskAt DateTime?
+  lastSummaryAt DateTime?
+  lastSummary Json?
   intervalMinutes Int @default(5)
   taskMode String @default("SUGGEST")
   instructions String @default("")
@@ -1352,6 +1374,7 @@ model EmailMailbox {
   leasedUntil DateTime?
   revision Int @default(0)
   analyses EmailAnalysis[]
+  digests EmailDigest[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1371,10 +1394,33 @@ model EmailAnalysis {
   subject String
   sender String
   status String @default("PROCESSING")
+  suggestedReplyText String? @db.Text
+  suggestedReplyStatus String @default("NONE")
+  taskPublishedAt DateTime?
+  replyPublishedAt DateTime?
+  botStatus String @default("PENDING")
+  botClaimedAt DateTime?
+  botDeliveredAt DateTime?
   summary Json?
   error String?
   createdAt DateTime @default(now())
 
   @@unique([mailboxId, folder, validity, uid])
   @@index([userId, createdAt])
+  @@index([botStatus, createdAt])
+}
+
+model EmailDigest {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mailboxId String
+  mailbox EmailMailbox @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  content String @db.Text
+  botStatus String @default("PENDING")
+  botClaimedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([mailboxId, createdAt])
+  @@index([botStatus, createdAt])
 }

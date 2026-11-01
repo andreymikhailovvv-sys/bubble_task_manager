@@ -128,7 +128,7 @@ export default function WorkTaskFocusDialog({organizationId,task,workspace,curre
           title="Пересылка корпоративной задачи пока недоступна" aria-label="Переслать задачу (недоступно)">
           <SendHorizontal size={16}/></button>
         {manager&&<DateTimePickerWithApply value={current.dueAt}
-          title="Выбрать срок" iconOnly detachedPopup popupAlign="right" popupZIndex={2600}
+          title="Выбрать срок" iconOnly detachedPopup popupAlign="right" popupZIndex={1400}
           onChange={value=>void patch({dueAt:value})}/>}
         <button type="button" className="focused-task-icon-button focused-task-calendar-like-button" title="Настройки задачи"
           aria-expanded={settingsOpen} onClick={()=>setSettingsOpen(v=>!v)}><Settings size={16}/></button>
@@ -211,13 +211,13 @@ export default function WorkTaskFocusDialog({organizationId,task,workspace,curre
                 </div>
                 <span className="text-[11px] text-muted">{subtasks.filter(st=>st.isDone).length} из {subtasks.length}</span>
               </div>
-              {addingSubtask&&<div className="work-focus-subtask-create"><FocusedSubtaskComposer
+              {addingSubtask&&<FocusedSubtaskComposer
                  title={subtaskTitle} dueAt={subtaskDue}
                  onTitleChange={setSubtaskTitle} onDueChange={setSubtaskDue}
                  onAdd={()=>void createSubtask()} canAdd={subtaskTitle.trim().length>=2}
-                 disabled={subtaskBusy} monitoringEnabled={monitorEnabled} popupZIndex={2600}
+                 disabled={subtaskBusy} monitoringEnabled={monitorEnabled} popupZIndex={1600}
                  onCancel={()=>{setAddingSubtask(false);setSubtaskTitle('');setSubtaskDue(null);}}
-               /></div>}
+               />}
                {subtaskError&&<p className="mb-2 text-xs text-rose-400" role="alert">{subtaskError}</p>}
               <div className="work-focus-subtasks-list min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden pr-1">
                 {subtaskLoading?<p className="text-xs text-muted">Загружаем подзадачи…</p>:visibleSubtasks.map(st=>{
@@ -226,23 +226,17 @@ export default function WorkTaskFocusDialog({organizationId,task,workspace,curre
                     <input type="checkbox" checked={st.isDone} disabled={!mayComplete||subtaskBusy}
                       onChange={e=>void updateSubtask(st.id,{isDone:e.target.checked})}
                       aria-label={'Выполнена: '+st.title}/>
-                    <button type="button" className={`work-focus-subtask-title min-w-0 flex-1 truncate text-left text-[16px] font-normal ${st.isDone?'line-through opacity-60':''}`}
+                    <button type="button" className={`min-w-0 flex-1 truncate text-left text-sm ${st.isDone?'line-through opacity-60':''}`}
                        onClick={()=>setSubtaskDetail(st)}>{st.title}</button>
-                     <button type="button" className="task-card-meta-indicator task-card-meta-action work-subtask-comment-icon relative shrink-0"
-                       title="Открыть комментарии подзадачи" onClick={()=>{
-                         setSubtaskComments(st);
-                         if(st.unreadCommentCount)void api.workMarkSubtaskNotificationsRead(organizationId,st.id).then(()=>{
-                           setSubtasks(prev=>prev.map(item=>item.id===st.id?{...item,unreadCommentCount:0}:item));
-                           window.dispatchEvent(new Event('work-notifications-updated'));
-                         }).catch(()=>{});
-                       }}><MessageCircle size={17}/>
-                       {Boolean(st.unreadCommentCount)&&<span className="work-subtask-unread-badge">{st.unreadCommentCount!>9?'9+':st.unreadCommentCount}</span>}</button>
+                     <button type="button" className="task-card-meta-indicator task-card-meta-action relative shrink-0"
+                       title="Открыть комментарии подзадачи" onClick={()=>setSubtaskComments(st)}><MessageCircle size={15}/>
+                       {Boolean(st.commentCount)&&<span className="ml-1 text-[10px]">{st.commentCount}</span>}</button>
                      {st.createdByMemberId&&<span className="work-subtask-author shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
                         title={'Добавил: '+memberName(st.createdByMemberId)}>
                         {memberName(st.createdByMemberId)} · {['OWNER','ADMIN','MANAGER'].includes(workspace.members.find(m=>m.id===st.createdByMemberId)?.role||'')?'Руководитель':'Сотрудник'}
                        </span>}
                      {st.dueAt&&<span className="work-subtask-date whitespace-nowrap text-[10px] text-muted">{new Date(st.dueAt).toLocaleDateString('ru-RU')}</span>}
-                     {mayEdit&&<InlineDateTimePickerIcon detachedPopup popupZIndex={2600} value={st.dueAt} title="Изменить срок подзадачи"
+                     {mayEdit&&<InlineDateTimePickerIcon detachedPopup value={st.dueAt} title="Изменить срок подзадачи"
                        onChange={value=>updateSubtask(st.id,{dueAt:value})}/>}
                    </div>;
                 })}

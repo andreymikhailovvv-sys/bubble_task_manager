@@ -19,7 +19,7 @@ import { AiCheckupScheduleSettings } from './components/AiCheckupScheduleSetting
 import { TaskCompletionReportDialog } from './components/TaskCompletionReportDialog';
 import { TaskAiEmptyState } from './components/TaskAiEmptyState';
 import { CustomSelect } from './components/CustomSelect';
-import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, stripAiChatDisplayPreviews, stripAiChatProjectDisplayPreviews, setUnauthorizedHandler, ATTACHMENT_STORAGE_LIMIT_EVENT, formatStorageMiB, type AttachmentStorage, type AccountAttachment, type CreditPack, type CreditUsageStatistics, type CurrentUser, type SubscriptionLinks, type TaskAiProgressStatus, type AiChatProgressStatus, type TelegramAiAssistantInbox } from './lib/api';
+import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, stripAiChatDisplayPreviews, stripAiChatProjectDisplayPreviews, setUnauthorizedHandler, ATTACHMENT_STORAGE_LIMIT_EVENT, formatStorageMiB, type AttachmentStorage, type AccountAttachment, type CreditPack, type CreditUsageStatistics, type CurrentUser, type SubscriptionLinks, type TaskAiProgressStatus, type AiChatProgressStatus, type TelegramAiAssistantInbox, type MailAiInbox } from './lib/api';
 import { calcScore, getTaskCoefficient, type BubbleRankingMode } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, Sphere, Task, TaskAttachment, TaskComment } from './lib/types';
@@ -64,6 +64,7 @@ import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
 import { DEFAULT_QUICK_AI_CHAT_MODEL, DEFAULT_TASK_AI_CHAT_MODEL, DEFAULT_WEB_PROJECT_CHAT_MODEL, readSavedAiChatModel } from './lib/ai-chat-model';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
 import { TelegramAiReplySuggestionCard } from './components/TelegramAiReplySuggestionCard';
+import { MailAiReplySuggestionCard } from './components/MailAiReplySuggestionCard';
 import { TelegramReadConsentCard } from './components/TelegramReadConsentCard';
 import { WebCitations } from './components/WebCitations';
 import { AiInlineMarkup } from './components/AiInlineMarkup';
@@ -391,6 +392,24 @@ export function mergeTelegramAiInbox(projects: AiChatProject[], feed: TelegramAi
   };
   if (previous && JSON.stringify(previous) === JSON.stringify(nextProject)) return projects;
   return [...ownedProjects, nextProject];
+}
+
+const MAIL_AI_MANAGED_PROJECT_ID = 'mail-ai-assistant-project';
+const MAIL_AI_CHAT_PREFIX = 'mail-ai-assistant:';
+export function mergeMailAiInbox(projects: AiChatProject[], feed: MailAiInbox): AiChatProject[] {
+  const normal = projects.filter(project => project.id !== MAIL_AI_MANAGED_PROJECT_ID);
+  if (!feed.chats.length) return normal.length === projects.length ? projects : normal;
+  const previous = projects.find(project => project.id === MAIL_AI_MANAGED_PROJECT_ID);
+  const chats = feed.chats.map(item => {
+    const stored = previous?.chats.find(chat => chat.id === item.id)?.messages ?? [];
+    const merged = new Map(stored.map(message => [message.id, message]));
+    for (const message of feed.messages.filter(message => message.chatId === item.id)) {
+      merged.set(message.id, { ...message, role: 'assistant' as const, content: message.content,
+        mailSuggestedReply: message.mailSuggestedReply ?? undefined, taskProposal: message.taskProposal ?? undefined });
+    }
+    return { id: item.id, title: item.title, messages: [...merged.values()].slice(-300) };
+  });
+  return [...normal, { id: feed.projectId, title: feed.projectTitle, icon: '@', color: '#0891b2', chats }];
 }
 type AiChatProjectDraft = { mode: 'create' | 'edit'; projectId?: string; title: string; color: string; icon: string };
 type AiChatContextMenu = { type: 'project' | 'chat'; id: string; x: number; y: number };
@@ -1598,10 +1617,11 @@ export default function App() {
     }
     const loadGeneralAiHistory = async () => {
       try {
-        const [result, syncedProjects, telegramInbox] = await Promise.all([
+        const [result, syncedProjects, telegramInbox, mailInbox] = await Promise.all([
           api.getGeneralAssistantHistory(),
           api.getAiChatProjects<Partial<AiChatProject>>(),
-          api.telegramAssistantInbox().catch(() => null)
+          api.telegramAssistantInbox().catch(() => null),
+          api.mailAssistantInbox().catch(() => null)
         ]);
         if (isCancelled) return;
         const normalized = result.messages
@@ -1613,7 +1633,8 @@ export default function App() {
         setAiChatProjects((prev) => {
           const source = syncedProjects.projects?.length ? syncedProjects.projects : prev;
           const base = normalizeAiChatProjects(source, normalized);
-          const next = telegramInbox ? mergeTelegramAiInbox(base, telegramInbox) : base;
+          const afterTelegram = telegramInbox ? mergeTelegramAiInbox(base, telegramInbox) : base;
+          const next = mailInbox ? mergeMailAiInbox(afterTelegram, mailInbox) : afterTelegram;
           aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(next);
           if (!syncedProjects.projects?.length) {
             void api.saveAiChatProjects(next).catch(error => console.warn('[AI chat] initial project sync failed', error));
@@ -3077,6 +3098,27 @@ export default function App() {
       if (aiChatProjectsSaveTimerRef.current !== null) window.clearTimeout(aiChatProjectsSaveTimerRef.current);
     };
   }, [aiChatProjects]);
+
+  // Connecting or removing a mailbox changes server-owned project navigation
+  // without requiring the user to reload the entire PlanIrovych workspace.
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    let alive = true;
+    const refreshMailProject = () => {
+      void Promise.all([api.getAiChatProjects<Partial<AiChatProject>>(), api.mailAssistantInbox()])
+        .then(([projects, inbox]) => {
+          if (!alive) return;
+          setAiChatProjects(previous => {
+            const base = normalizeAiChatProjects(projects.projects?.length ? projects.projects : previous);
+            const next = mergeMailAiInbox(base, inbox);
+            aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(next);
+            return next;
+          });
+        }).catch(() => {});
+    };
+    window.addEventListener('mail-ai-assistant-updated', refreshMailProject);
+    return () => { alive = false; window.removeEventListener('mail-ai-assistant-updated', refreshMailProject); };
+  }, [currentUser?.id]);
 
   // Same pattern as the existing task-AI chats: fetch the currently open
   // conversation only, compare messages and leave all other UI state alone.
