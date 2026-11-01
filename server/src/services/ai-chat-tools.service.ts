@@ -6,6 +6,7 @@ import { plannerToolsService, authorizePlannerActionReferences, PLANNER_OPERATIO
 import { personalNotesToolsService, mergeTaskAndNoteSearchResults, validateNoteSearchInput } from './personal-notes-tools.service.js';
 import { validateAiCreateNoteArgs, validateAiUpdateNoteArgs } from './ai-create-note.service.js';
 import type { NoteProposalAction, CreateNoteProposalAction } from './ai-task-proposal.service.js';
+import { validateAiCreateHabitArgs, type CreateHabitProposalAction } from './ai-create-habit.service.js';
 import { providerNanoUsdToMilliCredits, recordAiCreditCharge, recordOpenAiUsageShadow, type OpenAiUsage } from './ai-usage-metering.service.js';
 import { refundDynamicResponsesCall, runDynamicResponsesCall, settleDynamicResponsesCall, type DynamicResponsesCall } from './dynamic-responses-billing.service.js';
 import { OPENAI_WEB_SEARCH_COST_NANO_USD } from '../config/openai-pricing.js';
@@ -52,6 +53,21 @@ export const AI_CHAT_OPENAI_TOOLS = [
     parameters: { type: 'object', additionalProperties: false, required: ['title', 'content', 'groupName'], properties: {
       title: { type: 'string' }, content: { type: 'string' }, groupName: nullable('string')
     } }
+  },
+  {
+    type: 'function', name: 'create_habit', strict: true,
+    description: 'Подготовить новую ПРИВЫЧКУ с расписанием для подтверждения пользователем. Вызывай только по явной просьбе создать привычку, а не задачу или напоминание. Укажи название, эмодзи, повторение DAILY (ежедневно), WEEKDAYS (определённые дни недели) или INTERVAL (каждые N дней), число повторов в день и уведомления в формате HH:mm по локальному времени пользователя. weekdays: 0 — воскресенье, 1 — понедельник ... 6 — суббота. Для DAILY и WEEKDAYS intervalDays=null; для остальных типов weekdays=[]. reminderTimes=[] означает без уведомлений. Не утверждай о создании до подтверждения карточки.',
+    parameters: { type: 'object', additionalProperties: false,
+      required: ['name', 'icon', 'recurrenceType', 'weekdays', 'intervalDays', 'reminderTimes', 'targetCount'],
+      properties: {
+        name: { type: 'string' }, icon: { type: 'string' },
+        recurrenceType: { type: 'string', enum: ['DAILY', 'WEEKDAYS', 'INTERVAL'] },
+        weekdays: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 6 } },
+        intervalDays: { type: ['integer', 'null'] },
+        reminderTimes: { type: 'array', items: { type: 'string' } },
+        targetCount: { type: 'integer', minimum: 1, maximum: 99 }
+      }
+    }
   },
   {
     type: 'function', name: 'update_note', strict: true,
@@ -282,12 +298,13 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
   // Freeze relative dates when the user's request starts, not on later approval.
   const dateResolutionNow = new Date(startedAt);
   const resolvedItemIds = new Set<string>(); const resolvedSphereIds = new Set<string>();
-  const preparedTaskActions: Array<PlannerActionInput | NoteProposalAction | CreateNoteProposalAction> = [];
+  const preparedTaskActions: Array<PlannerActionInput | NoteProposalAction | CreateNoteProposalAction | CreateHabitProposalAction> = [];
   const resolvedNoteIds = new Set<string>();
   const readNoteIds = new Set<string>();
   const readNoteVersions = new Map<string, string>();
   const updatedNoteIds = new Set<string>();
   let noteCreated = false;
+  let habitCreated = false;
   const actionReports: string[] = []; const undoOperations: unknown[] = [];
   let generatedDocument: GeneratedDocumentMeta | null = null;
   let telegramSendDraft: TelegramInlineSendDraft | null = null;
@@ -411,6 +428,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           search_notes: 'searching_notes',
           read_note: 'reading_note',
           create_note: 'applying_changes',
+          create_habit: 'applying_changes',
           search_tasks: 'searching_tasks',
           list_tasks: 'listing_tasks',
           get_task: 'reading_task',
@@ -468,6 +486,19 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
             return { ok: true, prepared: true, needsRecipientSelection: !result.draft.recipientId, message: 'Карточка с текстом и получателем добавлена к ответу. Сообщение НЕ отправлено. Отправка только по нажатию пользователя.' };
           }
           return result;
+        }
+        if (name === 'create_habit') {
+          if (habitCreated) return { ok: false, code: 'HABIT_ALREADY_PREPARED', message: 'Привычка уже предложена в этом запросе.' };
+          if (preparedTaskActions.length >= MAX_BATCH_TASK_ACTIONS)
+            return { ok: false, code: 'TOO_MANY_ACTIONS', message: 'Лимит предложений исчерпан.' };
+          try {
+            const habit = validateAiCreateHabitArgs(value);
+            preparedTaskActions.push({ operation: 'create_habit', ...habit });
+            habitCreated = true;
+            return { ok: true, status: 'prepared', message: 'Создание привычки подготовлено. Подтвердите карточку изменений.' };
+          } catch (error) {
+            return { ok: false, code: 'INVALID_HABIT', message: error instanceof Error ? error.message : 'Неверные параметры привычки.' };
+          }
         }
         if (name === 'create_note') {
           if (noteCreated) return { ok: false, code: 'NOTE_ALREADY_PREPARED', message: 'Предложение создания заметки уже подготовлено.' };
