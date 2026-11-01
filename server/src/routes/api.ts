@@ -63,8 +63,45 @@ import { telegramAiInboxFeed, approveTelegramAiSuggestedTask, sendTelegramAiSugg
 import { telegramQuickShare } from '../services/telegram-quick-share.service.js';
 import { rewriteNotesQuickText } from '../services/telegram-quick-share-ai.service.js';
 import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
+import { mailAssistant, MailAssistantError } from '../services/mail-assistant.service.js';
+
 
 export const apiRouter = Router();
+const mailOrigin = (req: Request, res: Response, next: NextFunction) => {
+  if (!telegramChatRequestIsSameOrigin(req.get('origin'), req.get('host'), req.get('sec-fetch-site'))) {
+    res.status(403).json({ error: 'Недопустимый источник запроса' }); return;
+  }
+  next();
+};
+const mailFailure = (res: Response, error: unknown) => {
+  if (error instanceof MailAssistantError) res.status(error.statusCode).json({ error: error.message });
+  else res.status(500).json({ error: 'Не удалось выполнить действие с почтой' });
+};
+apiRouter.get('/mail-assistant/accounts', requireAuth, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try { res.json(await mailAssistant.list(req.user!.id)); } catch (error) { mailFailure(res, error); }
+});
+apiRouter.post('/mail-assistant/accounts', requireAuth, mailOrigin, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try { res.status(201).json(await mailAssistant.connect(req.user!.id, req.body)); } catch (error) { mailFailure(res, error); }
+});
+apiRouter.patch('/mail-assistant/accounts/:id', requireAuth, mailOrigin, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try { res.json(await mailAssistant.update(req.user!.id, req.params.id, req.body)); } catch (error) { mailFailure(res, error); }
+});
+apiRouter.delete('/mail-assistant/accounts/:id', requireAuth, mailOrigin, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try { res.json(await mailAssistant.disconnect(req.user!.id, req.params.id)); } catch (error) { mailFailure(res, error); }
+});
+apiRouter.post('/mail-assistant/accounts/:id/check', requireAuth, mailOrigin, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try { res.json(await mailAssistant.check(req.user!.id, req.params.id)); } catch (error) { mailFailure(res, error); }
+});
+apiRouter.get('/mail-assistant/accounts/:id/events', requireAuth, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try { res.json(await mailAssistant.events(req.user!.id, req.params.id)); } catch (error) { mailFailure(res, error); }
+});
+
 apiRouter.use('/business/invitations', workInvitationRouter);
 apiRouter.use('/business/organizations', workAiRouter);
 apiRouter.use('/business/organizations', workProjectsRouter);

@@ -100,7 +100,7 @@ export type TelegramInlineSendDraft = {
 export type AiTaskProposal = {
   id: string;
   status: 'PENDING' | 'APPLYING' | 'APPLIED' | 'REJECTED' | 'FAILED' | 'CONFLICT' | 'UNDOING' | 'UNDONE';
-  source: 'planner' | 'telegram_bot' | 'task_chat' | 'telegram_bot_task' | 'legacy_general' | 'telegram_assistant' | 'daily_checkup';
+  source: 'planner' | 'telegram_bot' | 'task_chat' | 'telegram_bot_task' | 'legacy_general' | 'telegram_assistant' | 'daily_checkup' | 'email_assistant';
   autoApplied: boolean;
   operations: Array<{ type: string; title: string; before?: string; after?: string; dueDate?: string | null; parentTitle?: string; details?: string[] }>;
   result: { reports?: string[]; createdIds?: string[]; selectedIndices?: number[]; totalOperations?: number } | null;

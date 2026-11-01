@@ -416,6 +416,8 @@ model User {
   telegramAiInboxEvents TelegramAiInboxEvent[]
   telegramAiTaskApprovals TelegramAiTaskApproval[]
   telegramAiMonitorCalls TelegramAiMonitorCall[]
+  emailMailboxes EmailMailbox[]
+  emailAnalyses EmailAnalysis[]
   habits       Habit[]
   systemNotifications SystemNotification[]
   androidPushDevices AndroidPushDevice[]
@@ -1323,5 +1325,56 @@ model StandaloneNoteGroup {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, name])
+  @@index([userId, createdAt])
+}
+
+model EmailMailbox {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider String
+  email String
+  passwordCipher String
+  enabled Boolean @default(false)
+  intervalMinutes Int @default(5)
+  taskMode String @default("SUGGEST")
+  instructions String @default("")
+  inboxUid Int @default(0)
+  inboxValidity String
+  sentFolder String?
+  sentUid Int @default(0)
+  sentValidity String?
+  processedCount Int @default(0)
+  lastCheckedAt DateTime?
+  lastError String?
+  nextCheckAt DateTime?
+  leaseToken String?
+  leasedUntil DateTime?
+  revision Int @default(0)
+  analyses EmailAnalysis[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, email])
+  @@index([enabled, nextCheckAt])
+}
+
+model EmailAnalysis {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mailboxId String
+  mailbox EmailMailbox @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  folder String
+  validity String
+  uid Int
+  subject String
+  sender String
+  status String @default("PROCESSING")
+  summary Json?
+  error String?
+  createdAt DateTime @default(now())
+
+  @@unique([mailboxId, folder, validity, uid])
   @@index([userId, createdAt])
 }

@@ -507,6 +507,12 @@ export type AdminWorkCreditHistory = { id:string;kind:string;deltaMilli:number;c
 
 
 export const api = {
+  mailAccounts: () => request<{available:boolean;accounts:MailAccount[]}>('/api/mail-assistant/accounts'),
+  mailConnect: (payload:MailAccountConnect) => request<{account:MailAccount}>('/api/mail-assistant/accounts',{method:'POST',body:JSON.stringify(payload)}),
+  mailUpdate: (id:string,payload:MailAccountSettings) => request<{account:MailAccount}>('/api/mail-assistant/accounts/'+encodeURIComponent(id),{method:'PATCH',body:JSON.stringify(payload)}),
+  mailRemove: (id:string) => request<{ok:boolean}>('/api/mail-assistant/accounts/'+encodeURIComponent(id),{method:'DELETE'}),
+  mailCheck: (id:string) => request<{ok:boolean}>('/api/mail-assistant/accounts/'+encodeURIComponent(id)+'/check',{method:'POST',body:'{}'}),
+  mailEvents: (id:string) => request<{events:MailAnalysisEvent[]}>('/api/mail-assistant/accounts/'+encodeURIComponent(id)+'/events'),
   listWorkOrganizations: () => request<{ organizations: WorkOrganization[] }>('/api/business/organizations'),
   createWorkOrganization: (name: string) => request<{ organization: WorkOrganization }>('/api/business/organizations', { method: 'POST', body: JSON.stringify({ name }) }),
   getWorkWorkspace: (id: string) => request<WorkWorkspace>(`/api/business/organizations/${encodeURIComponent(id)}/workspace`),
@@ -926,4 +932,24 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload)
     })
+};
+
+export type MailAccountSettings = {
+  enabled: boolean; intervalMinutes: 5 | 15 | 30 | 60;
+  taskMode: 'NONE' | 'SUGGEST' | 'AUTO'; instructions: string;
+};
+export type MailAccountConnect = MailAccountSettings & {
+  provider: 'yandex' | 'mailru'; email: string; password: string;
+};
+export type MailAccount = MailAccountSettings & {
+  id: string; provider: 'yandex' | 'mailru'; email: string;
+  sentFolder: string | null; lastCheckedAt: string | null; nextCheckAt: string | null;
+  lastError: string | null; processedCount: number; createdAt: string;
+};
+export type MailAnalysisEvent = {
+  id: string; subject: string; from: string; folder: 'INBOX' | 'SENT';
+  createdAt: string; status: 'PROCESSING' | 'DONE' | 'FAILED';
+  summary: { summary: string; important: boolean; decisions: string[]; obligations: string[]; risks: string[];
+    tasks: Array<{operation:string;title:string | null;dueDate:string | null}> } | null;
+  error: string | null; taskProposal: import('./types').AiTaskProposal | null;
 };
