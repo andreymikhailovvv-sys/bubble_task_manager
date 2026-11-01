@@ -558,3 +558,5 @@ body[data-theme] .work-root main.work-content{background:transparent!important;b
   .work-root .work-focus-subtask-create input{flex-basis:100%}
   .work-root .work-ai-dispatcher-thread{gap:14px}
 }
+
+.work-root .work-global-notification{position:fixed;bottom:30px;right:24px;z-index:210}
