@@ -791,7 +791,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [customHabitIconDraft, setCustomHabitIconDraft] = useState('');
   const habitLongPressTimerRef = useRef<number | null>(null);
   const habitLongPressTriggeredRef = useRef(false);
-  const habitReminderTimeInputRef = useRef<HTMLInputElement | null>(null);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [createTaskDraft, setCreateTaskDraft] = useState<TaskDraft>({
     title: '',
@@ -2583,21 +2582,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
               <div className="space-y-2">
                 <label className="block text-xs text-slate-300">Уведомления</label>
-                <input
-                  ref={habitReminderTimeInputRef}
-                  type="time"
-                  value={habitDraft.reminderTime}
-                  onChange={(event) => {
-                    const nextTime = event.target.value;
-                    setHabitDraft((prev) => ({
-                      ...prev,
-                      reminderTime: nextTime,
-                      reminderTimes: nextTime ? normalizeHabitReminderTimes([...prev.reminderTimes, nextTime]) : prev.reminderTimes
-                    }));
-                  }}
-                  className="sr-only"
-                  aria-label="Время нового уведомления"
-                />
                 <div className="flex flex-wrap items-center gap-2">
                   {habitDraft.reminderTimes.map((time) => (
                     <span key={time} className="miniapp-habit-reminder-chip inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium text-slate-200">
@@ -2615,21 +2599,30 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       </button>
                     </span>
                   ))}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const input = habitReminderTimeInputRef.current;
-                      if (!input) return;
-                      const pickerInput = input as HTMLInputElement & { showPicker?: () => void };
-                      if (pickerInput.showPicker) pickerInput.showPicker();
-                      else pickerInput.click();
-                    }}
-                    className="miniapp-habit-add-reminder inline-flex items-center justify-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold"
-                    aria-label="Добавить уведомление"
+                  <label
+                    className="miniapp-habit-add-reminder relative inline-flex cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-full border px-4 py-2 text-xs font-semibold"
                   >
-                    <Plus size={15} strokeWidth={2.5} />
-                    {!habitDraft.reminderTimes.length ? <span>Добавить уведомление</span> : null}
-                  </button>
+                    <Plus size={15} strokeWidth={2.5} aria-hidden="true" />
+                    {!habitDraft.reminderTimes.length ? <span aria-hidden="true">Добавить уведомление</span> : null}
+                    {/* iOS Safari/Telegram must receive the tap on the native time input.
+                        A programmatic showPicker()/click() on a visually hidden input
+                        is not reliable inside an iPhone WebView. */}
+                    <input
+                      type="time"
+                      value={habitDraft.reminderTime}
+                      onChange={(event) => {
+                        const nextTime = event.currentTarget.value;
+                        if (!nextTime) return;
+                        setHabitDraft((prev) => ({
+                          ...prev,
+                          reminderTime: nextTime,
+                          reminderTimes: normalizeHabitReminderTimes([...prev.reminderTimes, nextTime])
+                        }));
+                      }}
+                      className="miniapp-habit-native-time-input absolute inset-0 z-10 h-full w-full cursor-pointer"
+                      aria-label="Добавить уведомление: выбрать время"
+                    />
+                  </label>
                 </div>
               </div>
 
