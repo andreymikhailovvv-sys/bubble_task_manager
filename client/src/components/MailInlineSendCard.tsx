@@ -78,8 +78,8 @@ export function MailInlineSendCard({draft}:{draft:MailSendDraft}){
       </select>
     </label>
     <label className="mt-3 block text-xs font-semibold">Кому
-      <input type="email" value={recipient} onChange={e=>setRecipient(e.target.value)} disabled={locked}
-        placeholder="recipient@example.com" className="telegram-ai-send-card__recipient mt-1 w-full rounded-xl border px-3 py-2.5 text-sm" />
+      <input type="email" multiple value={recipient} onChange={e=>setRecipient(e.target.value)} disabled={locked}
+        placeholder="recipient@example.com, second@example.com" className="telegram-ai-send-card__recipient mt-1 w-full rounded-xl border px-3 py-2.5 text-sm" />
     </label>
     <label className="mt-3 block text-xs font-semibold">Тема
       <input value={subject} maxLength={200} onChange={e=>setSubject(e.target.value)} disabled={locked}
