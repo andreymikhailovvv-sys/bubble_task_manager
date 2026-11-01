@@ -22,6 +22,7 @@ import { deliverTelegramAiBotNotifications } from './services/telegram-ai-inbox.
 import { createPublicSeoPagesMiddleware } from './lib/public-seo-pages.js';
 import { startTaskMonitoringWorker } from './services/task-monitoring-worker.service.js';
 import { startAndroidPushWorker } from './services/android-push-worker.service.js';
+import { handleLiveVoiceUpgrade } from './services/ai-live-voice.service.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
@@ -208,8 +209,14 @@ setInterval(() => {
   });
 }, CHECKUP_POLL_INTERVAL_MS).unref();
 
-app.listen(port, '0.0.0.0', () => {
+const httpServer = app.listen(port, '0.0.0.0', () => {
   console.log(`Server started on http://0.0.0.0:${port}`);
+});
+
+httpServer.on('upgrade', (request, socket, head) => {
+  // A one-time authenticated ticket is required. Do not expose a generic
+  // WebSocket proxy or accept untrusted paths.
+  if (!handleLiveVoiceUpgrade(request, socket, head)) socket.destroy();
 });
 
 const telegramUpdateWorker = new TelegramUpdateWorker(

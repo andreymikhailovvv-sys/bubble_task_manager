@@ -1,3 +1,4 @@
+import { createLiveVoiceTicket } from '../services/ai-live-voice.service.js';
 import { mergeChatProjectSnapshots, canonicalizeTelegramAssistantProjects, canonicalizeMailAssistantProjects } from '../lib/ai-chat-project-sync.js';
 import { aiAssistantService } from '../services/ai-assistant.service.js';
 import { transcribeWebAudio, readMessageAloud, WebAudioError } from '../services/ai-web-audio.service.js';
@@ -1922,6 +1923,15 @@ apiRouter.post('/ai/task-proposals/:id/undo', requireAuth, taskProposalSameOrigi
 apiRouter.post('/ai/task-proposals/:id/reject', requireAuth, taskProposalSameOrigin, asyncHandler(async (req, res) => {
   try { res.json(await rejectTaskProposal(req.user!.id, req.params.id)); }
   catch { res.status(404).json({ error: 'Предложение не найдено' }); }
+}));
+
+apiRouter.post('/ai/audio/live/ticket', requireAuth, taskProposalSameOrigin, asyncHandler(async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store').json(createLiveVoiceTicket(req.user!.id));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Не удалось открыть голосовой диалог.';
+    res.status(429).json({ error: message });
+  }
 }));
 
 const webAudioFailure = (res: Response, error: unknown) => {
