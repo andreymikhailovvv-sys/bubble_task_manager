@@ -3873,8 +3873,27 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       event.currentTarget.click();
     }
   };
-  const showTelegramBrand = useTelegramCompactChatHeader && !isAiChatOpen && !openedTaskId && !openedSubtaskId &&
-    !isCreateTaskModalOpen && !isHabitModalOpen && !isAiDialogOpen;
+  // The global search/credits/rating/settings toolbar belongs to the workspace,
+  // never to a task/subtask focus sheet, AI/notes, or any standalone editor.
+  const showWorkspaceSearchBar = !isAiChatOpen && !isStandaloneNotesOpen &&
+    !openedTaskId && !openedSubtaskId &&
+    !isAiDialogOpen && !isCreateTaskModalOpen && !isHabitModalOpen &&
+    !isQuickCreateOpen && !isSettingsOpen && !authModalMode &&
+    !isTaskNotesEditorOpen && !isSubtaskNotesEditorOpen &&
+    !isAiChatProjectDialogOpen && !isCalendarExportOpen && !reportPromptTask;
+  const showTelegramBrand = useTelegramCompactChatHeader && showWorkspaceSearchBar;
+
+  useEffect(() => {
+    if (showWorkspaceSearchBar) return;
+    // If the user leaves while the toolbar is floating, discard the old
+    // scroll state so it re-enters in normal flow rather than over an editor.
+    setIsSearchBarFloating(false);
+    setIsHeaderVisible(true);
+    setFloatingSearchBarHeight(0);
+    setIsGlobalSearchOpen(false);
+    mainScrollIntentRef.current = 0;
+    lastMainScrollTopRef.current = mainScrollRef.current?.scrollTop ?? 0;
+  }, [showWorkspaceSearchBar]);
 
   useEffect(() => {
     const onTriggerChange = () => { void loadData({ refreshPlannerOnly: true }); };
@@ -3913,10 +3932,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         setIsEfficiencyDetailsOpen(false);
         setIsSettingsOpen(false);
         setIsCreditPurchaseOpen(false);
-        if (isAiChatOpen || isStandaloneNotesOpen) {
-          setIsSearchBarFloating(false);
-          return;
-        }
+        if (!showWorkspaceSearchBar) return;
         const nextTop = event.currentTarget.scrollTop;
         const previousTop = lastMainScrollTopRef.current;
         const delta = nextTop - previousTop;
@@ -4052,9 +4068,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         </div>, document.body
       ) : null}
       <div className="mx-auto max-w-2xl space-y-4">
-        <div ref={searchBarSlotRef} className="miniapp-premium-topbar-slot"
+        {showWorkspaceSearchBar ? <div ref={searchBarSlotRef} className="miniapp-premium-topbar-slot"
           style={isSearchBarFloating ? { minHeight: floatingSearchBarHeight || undefined } : undefined}>
-        <section ref={searchBarPanelRef} className={`relative z-30 miniapp-premium-topbar rounded-xl border border-slate-700 bg-slate-900/95 p-2.5 backdrop-blur ${!isAiChatOpen && !isStandaloneNotesOpen && isSearchBarFloating && (isHeaderVisible || isGlobalSearchOpen) ? 'miniapp-premium-topbar-floating' : ''}`}>
+        <section ref={searchBarPanelRef} className={`relative z-30 miniapp-premium-topbar rounded-xl border border-slate-700 bg-slate-900/95 p-2.5 backdrop-blur ${isSearchBarFloating && (isHeaderVisible || isGlobalSearchOpen) ? 'miniapp-premium-topbar-floating' : ''}`}>
           <div className="flex items-center gap-2">
             <WorkspaceGlobalSearch
               mobile
@@ -4147,7 +4163,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             </div>
           </div>
         </section>
-        </div>
+        </div> : null}
 
         {error ? (
           <div className="rounded-xl border border-rose-500/60 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</div>
