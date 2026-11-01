@@ -17,6 +17,7 @@ export function VoiceInputButton({ onTranscript, disabled = false, small = false
   const [error, setError] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [liveOpen, setLiveOpen] = useState(false);
+  const [liveAudioContext, setLiveAudioContext] = useState<AudioContext | null>(null);
   const menuRef = useRef<HTMLSpanElement | null>(null);
   const [seconds, setSeconds] = useState(0);
   const [levels, setLevels] = useState<number[]>(Array(25).fill(0.12));
@@ -66,6 +67,18 @@ export function VoiceInputButton({ onTranscript, disabled = false, small = false
       document.removeEventListener('keydown', escape);
     };
   }, [menuOpen]);
+
+  const startLive = () => {
+    setMenuOpen(false);
+    // Create/resume the playback context synchronously with the user's tap,
+    // before Telegram WebView/browser autoplay policies discard user activation.
+    try {
+      const context = new AudioContext();
+      void context.resume().catch(() => undefined);
+      setLiveAudioContext(context);
+    } catch { setLiveAudioContext(null); }
+    setLiveOpen(true);
+  };
 
   const stop = (sendImmediately: boolean) => {
     immediateRef.current = sendImmediately;
@@ -170,7 +183,7 @@ export function VoiceInputButton({ onTranscript, disabled = false, small = false
         <Mic size={small ? 16 : 17} />
       </button>
       {menuOpen ? <div className="voice-mode-menu dialog-surface" role="menu" aria-label="Голосовой режим">
-        <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setLiveOpen(true); }}>
+        <button type="button" role="menuitem" onClick={startLive}>
           <Radio size={18} /><span><strong>Живое общение</strong><small>Говорите с ИИ без пауз на отправку</small></span>
         </button>
         <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); void start(); }}>
@@ -196,6 +209,6 @@ export function VoiceInputButton({ onTranscript, disabled = false, small = false
         <p className="voice-record-note">Распознавание оплачивается кредитами. Запись не отправляется в чат без вашего действия.</p>
       </div>
     </div> : null}
-    {liveOpen ? <LiveVoiceDialog onClose={() => setLiveOpen(false)} /> : null}
+    {liveOpen ? <LiveVoiceDialog audioContext={liveAudioContext} onClose={() => { setLiveOpen(false); setLiveAudioContext(null); }} /> : null}
   </>;
 }
