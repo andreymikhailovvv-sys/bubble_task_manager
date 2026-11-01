@@ -217,7 +217,7 @@ export default function WorkTaskFocusDialog({organizationId,task,workspace,curre
                  onAdd={()=>void createSubtask()} canAdd={subtaskTitle.trim().length>=2}
                  disabled={subtaskBusy} monitoringEnabled={monitorEnabled} popupZIndex={2600}
                  onCancel={()=>{setAddingSubtask(false);setSubtaskTitle('');setSubtaskDue(null);}}
-               />}
+               /></div>}
                {subtaskError&&<p className="mb-2 text-xs text-rose-400" role="alert">{subtaskError}</p>}
               <div className="work-focus-subtasks-list min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden pr-1">
                 {subtaskLoading?<p className="text-xs text-muted">Загружаем подзадачи…</p>:visibleSubtasks.map(st=>{
@@ -228,9 +228,15 @@ export default function WorkTaskFocusDialog({organizationId,task,workspace,curre
                       aria-label={'Выполнена: '+st.title}/>
                     <button type="button" className={`work-focus-subtask-title min-w-0 flex-1 truncate text-left text-[16px] font-normal ${st.isDone?'line-through opacity-60':''}`}
                        onClick={()=>setSubtaskDetail(st)}>{st.title}</button>
-                     <button type="button" className="task-card-meta-indicator task-card-meta-action relative shrink-0"
-                       title="Открыть комментарии подзадачи" onClick={()=>setSubtaskComments(st)}><MessageCircle size={15}/>
-                       {Boolean(st.commentCount)&&<span className="ml-1 text-[10px]">{st.commentCount}</span>}</button>
+                     <button type="button" className="task-card-meta-indicator task-card-meta-action work-subtask-comment-icon relative shrink-0"
+                       title="Открыть комментарии подзадачи" onClick={()=>{
+                         setSubtaskComments(st);
+                         if(st.unreadCommentCount)void api.workMarkSubtaskNotificationsRead(organizationId,st.id).then(()=>{
+                           setSubtasks(prev=>prev.map(item=>item.id===st.id?{...item,unreadCommentCount:0}:item));
+                           window.dispatchEvent(new Event('work-notifications-updated'));
+                         }).catch(()=>{});
+                       }}><MessageCircle size={17}/>
+                       {Boolean(st.unreadCommentCount)&&<span className="work-subtask-unread-badge">{st.unreadCommentCount!>9?'9+':st.unreadCommentCount}</span>}</button>
                      {st.createdByMemberId&&<span className="work-subtask-author shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
                         title={'Добавил: '+memberName(st.createdByMemberId)}>
                         {memberName(st.createdByMemberId)} · {['OWNER','ADMIN','MANAGER'].includes(workspace.members.find(m=>m.id===st.createdByMemberId)?.role||'')?'Руководитель':'Сотрудник'}
