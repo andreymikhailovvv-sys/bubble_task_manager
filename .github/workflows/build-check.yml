@@ -107,6 +107,8 @@ jobs:
         run: node --import tsx --test server/test/mail-assistant-parity.test.ts
       - name: Verify AI mail read, prepare-to-send, owner isolation and monitoring credits
         run: node --import tsx --test server/test/mail-ai-tools.test.ts
+      - name: Verify SMTP non-delivery diagnostics and safe manual retries
+        run: node --import tsx --test server/test/mail-smtp-diagnostics.test.ts
       - name: Verify Telegram user-client cryptography and access gating
         run: node --import tsx --test server/test/telegram-user-client-security.test.ts
       - name: Verify image edit animation and attachment previews

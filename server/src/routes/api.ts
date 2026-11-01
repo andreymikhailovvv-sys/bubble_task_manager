@@ -86,7 +86,11 @@ apiRouter.get('/mail-assistant/recent-recipients', requireAuth, async(req,res)=>
   res.set('Cache-Control','no-store, private');
   const rows=await prisma.emailAnalysis.findMany({where:{userId:req.user!.id,folder:'INBOX'},
     select:{sender:true},orderBy:{createdAt:'desc'},take:100});
-  const addresses=[...new Set(rows.map(x=>emailAddress(x.sender)).filter((x):x is string=>Boolean(x)))].slice(0,40);
+  const addresses=[...new Set(rows.map(x=>{
+    // IMAP From may contain a display name in addition to the actual email address.
+    const raw=x.sender?.match(/<([^<>]+)>/)?.[1]??x.sender;
+    return emailAddress(raw);
+  }).filter((x):x is string=>Boolean(x)))].slice(0,40);
   res.json({addresses});
 });
 apiRouter.post('/mail-assistant/quick-rewrite',requireAuth,mailOrigin,async(req,res)=>{
@@ -108,7 +112,8 @@ apiRouter.post('/mail-assistant/drafts/:id/send', requireAuth, mailOrigin, async
   res.set('Cache-Control','no-store, private');
   try {
     const result=await sendOwnerMailDraft(req.user!.id,req.params.id,req.body);
-    res.status(result.ok ? 200 : 409).json(result);
+    // Expected FAILED/UNKNOWN outcomes are data, not transport errors: preserve the SMTP diagnosis for the client.
+    res.status(result.status==='NOT_FOUND' ? 404 : 200).json(result);
   } catch {
     res.status(500).json({ok:false,status:'UNKNOWN',message:'Не удалось проверить результат отправки. Проверьте папку «Отправленные».'});
   }

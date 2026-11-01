@@ -1,7 +1,7 @@
 import { prisma } from '../db/prisma.js';
 import { decryptMailPassword } from '../lib/mail-crypto.js';
 import { ReadOnlyImap, type MailProvider } from './mail-imap.service.js';
-import { emailAddress, parseMailRecipients, smtpReply } from './mail-smtp.service.js';
+import { emailAddress, parseMailRecipients, smtpReply, MailSmtpError, explainMailSmtpError } from './mail-smtp.service.js';
 import { randomUUID } from 'node:crypto';
 
 export const SEARCH_MAIL_TOOL = {
@@ -113,25 +113,38 @@ export async function sendOwnerMailDraft(userId:string,id:string,raw:unknown) {
     return {ok:false,status:'INVALID' as const,message:'Укажите корректный адрес, тему и текст письма'};
   const draft=await prisma.mailComposeDraft.findFirst({where:{id,userId}});
   if(!draft) return {ok:false,status:'NOT_FOUND' as const};
-  if(draft.status!=='PENDING')return {ok:false,status:draft.status};
+  if(draft.status!=='PENDING' && draft.status!=='FAILED')return {ok:false,status:draft.status};
   const mailbox=await prisma.emailMailbox.findFirst({where:{id:mailboxId,userId}});
   if(!mailbox)return {ok:false,status:'INVALID' as const,message:'Почтовый ящик недоступен'};
   const claimed=await prisma.mailComposeDraft.updateMany({
-    where:{id,userId,status:'PENDING'},
+    where:{id,userId,status:{in:['PENDING','FAILED']}},
     data:{status:'SENDING',mailboxId,recipient:to,subject,body}
   });
   if(!claimed.count)return {ok:false,status:'IN_PROGRESS' as const};
-  let started=false;
+  let smtpAttempted=false, smtpAccepted=false;
+  const startedAt=Date.now();
   try {
     const password=decryptMailPassword(mailbox.passwordCipher,userId);
-    started=true;
+    smtpAttempted=true;
     await smtpReply({provider:mailbox.provider as MailProvider,email:mailbox.email,
       password,from:to,subject,text:body});
+    smtpAccepted=true;
     await prisma.mailComposeDraft.updateMany({where:{id,userId,status:'SENDING'},data:{status:'SENT'}});
+    console.info('[MailSend] accepted', {draftId:id,provider:mailbox.provider,durationMs:Date.now()-startedAt});
     return {ok:true,status:'SENT' as const};
-  } catch {
-    const status=started?'UNKNOWN':'FAILED';
+  } catch(error) {
+    const smtpError=error instanceof MailSmtpError ? error : null;
+    const status=smtpAccepted || (smtpError ? smtpError.deliveryUncertain : smtpAttempted) ? 'UNKNOWN' : 'FAILED';
+    const message=smtpError ? explainMailSmtpError(smtpError)
+      : status==='UNKNOWN' ? 'SMTP мог принять письмо, но подтверждение не получено. Проверьте доставку перед новой попыткой.'
+      : 'Не удалось подготовить SMTP-отправку. Проверьте подключение почты.';
+    console.warn('[MailSend] failed', {draftId:id,provider:mailbox.provider,status,
+      phase:smtpError?.stage??(smtpAccepted?'PERSIST':'PREPARE'),
+      code:smtpError?.code??'INTERNAL_ERROR',
+      smtpStatus:smtpError?.smtpStatus??null,
+      deliveryUncertain:status==='UNKNOWN',durationMs:Date.now()-startedAt});
     await prisma.mailComposeDraft.updateMany({where:{id,userId,status:'SENDING'},data:{status}});
-    return {ok:false,status,message:started?'Результат SMTP неизвестен. Проверьте папку «Отправленные» и не повторяйте отправку вслепую.':'Не удалось отправить письмо'};
+    return {ok:false,status,code:smtpError?.code??'INTERNAL_ERROR',stage:smtpError?.stage??null,
+      message:status==='UNKNOWN' ? message : message+' Отправку можно повторить после устранения причины.'};
   }
 }

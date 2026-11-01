@@ -20,8 +20,8 @@ test('mail tool schema only allows read and prepare; SMTP requires owner click',
   assert.match(sourceText,/where:\{userId/);
   assert.match(sourceText,/decryptMailPassword\(row\.passwordCipher,userId\)/);
   assert.match(sourceText,/status:'SENDING'/);
-  assert.match(sourceText,/status:'PENDING'/);
-  assert.match(sourceText,/started\?'UNKNOWN':'FAILED'/);
+  assert.match(sourceText,/status:\{in:\['PENDING','FAILED'\]\}/);
+  assert.match(sourceText,/smtpError\.deliveryUncertain/);
   assert.match(sourceText,/return \{ok:true,draft/);
   const controller=source('../src/routes/api.ts');
   assert.match(controller,/mail-assistant\/drafts\/:id\/send/);
