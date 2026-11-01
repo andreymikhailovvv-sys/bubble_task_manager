@@ -56,6 +56,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
 }) {
   const [phase, setPhase] = useState<Phase>('connecting');
   const processingToolRef = useRef(false);
+  const toolQueueRef = useRef<Array<{ question: string; callId: string; ws: WebSocket }>>([]);
   const dialogHistoryRef = useRef(liveContext?.type === 'chat' ? [...(liveContext.history ?? [])] : []);
   const [error, setError] = useState('');
   const [muted, setMuted] = useState(false);
@@ -74,6 +75,24 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
   const mutedRef = useRef(false);
   const stoppedRef = useRef(false);
   const startedAtRef = useRef(0);
+  // Server VAD hears everything sent through the socket, including echo from
+  // our own speaker. Hold the mic uplink until the response has FINISHED PLAYING.
+  const uplinkPausedRef = useRef(false);
+  const responseDoneRef = useRef(false);
+  const stopResourcesRef = useRef<() => void>(() => {});
+  const liveContextRef = useRef(liveContext);
+  const onLiveMessageRef = useRef(onLiveMessage);
+  const onLiveToolResultRef = useRef(onLiveToolResult);
+  liveContextRef.current = liveContext;
+  onLiveMessageRef.current = onLiveMessage;
+  onLiveToolResultRef.current = onLiveToolResult;
+
+  const resumeListeningAfterPlayback = () => {
+    if (stoppedRef.current || !responseDoneRef.current || processingToolRef.current || sourcesRef.current.size > 0) return;
+    responseDoneRef.current = false;
+    uplinkPausedRef.current = false;
+    setPhase('listening');
+  };
 
   const clearPlayback = () => {
     sourcesRef.current.forEach(source => { try { source.stop(); } catch { /* finished */ } });
@@ -82,40 +101,69 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
   };
 
   const handleToolRequest = async (question: string, callId: string, ws: WebSocket) => {
-    if (processingToolRef.current || !liveContext || ws.readyState !== WebSocket.OPEN) return;
+    if (stoppedRef.current || !liveContextRef.current || ws.readyState !== WebSocket.OPEN) return;
+    if (processingToolRef.current) {
+      // Realtime can return more than one function call in a response. Losing
+      // the second call would leave the server waiting forever for its result.
+      if (toolQueueRef.current.length < 3) toolQueueRef.current.push({ question, callId, ws });
+      else ws.send(JSON.stringify({ type: 'tool_result', callId, answer: 'Слишком много одновременных запросов к инструментам.' }));
+      return;
+    }
     processingToolRef.current = true;
+    uplinkPausedRef.current = true;
+    responseDoneRef.current = false;
     setPhase('thinking');
     try {
-      const result = liveContext.type === 'task'
-        ? await api.askTaskAssistantStreaming(liveContext.taskId, {
+      const scope = liveContextRef.current!;
+      const result = scope.type === 'task'
+        ? await api.askTaskAssistantStreaming(scope.taskId, {
           clientRequestId: crypto.randomUUID(), question, userMessage: question,
-          model: liveContext.model, clientSurface: navigator.userAgent.includes('Telegram') ? 'miniapp' : 'web'
+          model: scope.model, clientSurface: navigator.userAgent.includes('Telegram') ? 'miniapp' : 'web'
         })
         : await api.askAiChatStreaming({
           clientRequestId: crypto.randomUUID(), question,
-          history: dialogHistoryRef.current.filter((entry, index, items) => !(index === items.length - 1 && entry.role === 'user' && entry.content.trim() === question.trim())), model: liveContext.model,
-          projectId: liveContext.projectId, chatId: liveContext.chatId,
-          projectTitle: liveContext.projectTitle, chatTitle: liveContext.chatTitle,
+          history: dialogHistoryRef.current.filter((entry, index, items) => !(index === items.length - 1 && entry.role === 'user' && entry.content.trim() === question.trim())), model: scope.model,
+          projectId: scope.type === 'chat' ? scope.projectId : undefined, chatId: scope.type === 'chat' ? scope.chatId : undefined,
+          projectTitle: scope.type === 'chat' ? scope.projectTitle : undefined, chatTitle: scope.type === 'chat' ? scope.chatTitle : undefined,
           clientSurface: navigator.userAgent.includes('Telegram') ? 'miniapp' : 'web'
         });
-      onLiveToolResult?.({ kind: liveContext.type, question, result });
-      if (liveContext.type === 'chat') dialogHistoryRef.current.push({ id: crypto.randomUUID(), role: 'assistant', content: result.answer });
-      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'tool_result', callId, answer: result.answer }));
+      if (!stoppedRef.current) {
+        onLiveToolResultRef.current?.({ kind: scope.type, question, result });
+        if (scope.type === 'chat') dialogHistoryRef.current.push({ id: crypto.randomUUID(), role: 'assistant', content: result.answer });
+        if (ws.readyState === WebSocket.OPEN) {
+          // Realtime must finish narrating the delegated result before mic uplink resumes.
+          responseDoneRef.current = false;
+          ws.send(JSON.stringify({ type: 'tool_result', callId, answer: result.answer }));
+        }
+      }
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Ошибка инструмента.';
-      setError(message);
-      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({
-        type: 'tool_result', callId, answer: 'Не удалось выполнить действие: ' + message
-      }));
-    } finally { processingToolRef.current = false; }
+      if (!stoppedRef.current) {
+        setError(message);
+        if (ws.readyState === WebSocket.OPEN) {
+          responseDoneRef.current = false;
+          ws.send(JSON.stringify({ type: 'tool_result', callId, answer: 'Не удалось выполнить действие: ' + message }));
+        }
+      }
+    } finally {
+      processingToolRef.current = false;
+      if (!stoppedRef.current) {
+        const next = toolQueueRef.current.shift();
+        if (next) void handleToolRequest(next.question, next.callId, next.ws);
+      }
+    }
   };
 
   useEffect(() => {
     stoppedRef.current = false;
     let cancelled = false;
     const stopResources = () => {
+      if (cancelled) return;
       cancelled = true;
       stoppedRef.current = true;
+      toolQueueRef.current = [];
+      uplinkPausedRef.current = true;
+      responseDoneRef.current = false;
       processorRef.current?.disconnect();
       inputRef.current?.disconnect();
       gainRef.current?.disconnect();
@@ -126,11 +174,16 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
       streamRef.current = null;
       sourcesRef.current.forEach(source => { try { source.stop(); } catch { /* finished */ } });
       sourcesRef.current.clear();
-      wsRef.current?.close();
+      const ws = wsRef.current;
+      if (ws?.readyState === WebSocket.OPEN) {
+        try { ws.send(JSON.stringify({ type: 'end' })); } catch { /* socket closed */ }
+      }
+      ws?.close();
       wsRef.current = null;
       void contextRef.current?.close().catch(() => undefined);
       contextRef.current = null;
     };
+    stopResourcesRef.current = stopResources;
     const start = async () => {
       try {
         if (!navigator.mediaDevices?.getUserMedia || !window.AudioContext || !window.WebSocket) {
@@ -155,6 +208,8 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
           let payload: VoiceEvent;
           try { payload = JSON.parse(String(event.data)) as VoiceEvent; } catch { return; }
           if (payload.type === 'ready') {
+            // Duplicate session.updated must not create several microphone processors.
+            if (processorRef.current || stoppedRef.current) return;
             startedAtRef.current = Date.now();
             setPhase('listening');
             const input = context.createMediaStreamSource(stream);
@@ -174,31 +229,38 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
               for (let i = 0; i < samples.length; i += 8) total += samples[i] * samples[i];
               const rms = Math.sqrt(total / (samples.length / 8));
               setLevel(Math.max(.06, Math.min(1, rms * 5)));
-              if (ws.readyState !== WebSocket.OPEN || mutedRef.current || ws.bufferedAmount > 300_000) return;
+              if (ws.readyState !== WebSocket.OPEN || mutedRef.current || uplinkPausedRef.current || ws.bufferedAmount > 300_000) return;
               try { ws.send(JSON.stringify({ type: 'audio', audio: encodeBase64(downsamplePcm(samples, context.sampleRate)) })); }
               catch { /* transient sample failure */ }
             };
           }
           if (payload.type === 'user_message' && typeof payload.text === 'string') {
             const id = payload.id || crypto.randomUUID();
-            if (liveContext?.type === 'chat') dialogHistoryRef.current.push({ id, role: 'user', content: payload.text });
-            onLiveMessage?.({ role: 'user', id, text: payload.text });
+            if (liveContextRef.current?.type === 'chat') dialogHistoryRef.current.push({ id, role: 'user', content: payload.text });
+            onLiveMessageRef.current?.({ role: 'user', id, text: payload.text });
           }
           if (payload.type === 'assistant_message' && typeof payload.text === 'string') {
             const id = payload.id || crypto.randomUUID();
-            if (liveContext?.type === 'chat') dialogHistoryRef.current.push({ id, role: 'assistant', content: payload.text });
-            onLiveMessage?.({ role: 'assistant', id, text: payload.text });
+            if (liveContextRef.current?.type === 'chat') dialogHistoryRef.current.push({ id, role: 'assistant', content: payload.text });
+            onLiveMessageRef.current?.({ role: 'assistant', id, text: payload.text });
           }
           if (payload.type === 'tool_request' && typeof payload.question === 'string' && typeof payload.callId === 'string') {
             void handleToolRequest(payload.question, payload.callId, ws);
           }
-          if (payload.type === 'speech_started') {
+          if (payload.type === 'speech_started' && !uplinkPausedRef.current) {
             clearPlayback();
             setCaption('');
             setPhase('listening');
           }
-          if (payload.type === 'thinking') setPhase('thinking');
+          if (payload.type === 'thinking') {
+            // Do not send speaker echo or follow-up room noise as a new user turn.
+            uplinkPausedRef.current = true;
+            responseDoneRef.current = false;
+            setPhase('thinking');
+          }
           if (payload.type === 'audio' && typeof payload.data === 'string') {
+            uplinkPausedRef.current = true;
+            responseDoneRef.current = false;
             try {
               const pcm = decodePcm(payload.data);
               if (!pcm.length) return;
@@ -209,7 +271,9 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
               source.connect(context.destination);
               source.onended = () => {
                 sourcesRef.current.delete(source);
-                if (sourcesRef.current.size === 0) setPhase(previous => previous === 'speaking' ? 'listening' : previous);
+                // The final chunk can finish after response.done. Do not reopen
+                // mic between queued chunks or while a tool is still running.
+                if (sourcesRef.current.size === 0) resumeListeningAfterPlayback();
               };
               sourcesRef.current.add(source);
               const at = Math.max(context.currentTime + .045, nextPlaybackRef.current);
@@ -225,17 +289,13 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
             setCreditsSpentMilli(payload.creditsSpentMilli);
           }
           if (payload.type === 'response_done') {
-            const until = nextPlaybackRef.current - context.currentTime;
-            // Keep the speaking UI while the last queued audio frames play.
-            if (until <= 0) setPhase('listening');
+            responseDoneRef.current = true;
+            resumeListeningAfterPlayback();
           }
           if (payload.type === 'finished') {
             if (typeof payload.creditsSpentMilli === 'number') setCreditsSpentMilli(payload.creditsSpentMilli);
-            setPhase('ended');
-            processorRef.current?.disconnect();
-            streamRef.current?.getTracks().forEach(track => track.stop());
-            clearPlayback();
-            ws.close();
+            stopResources();
+            onClose();
           }
           if (payload.type === 'notice' && payload.message) setError(payload.message);
           if (payload.type === 'error') {
@@ -261,7 +321,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
 
   useEffect(() => {
     const interval = window.setInterval(() => {
-      if (startedAtRef.current) setElapsed(Math.floor((Date.now() - startedAtRef.current) / 1000));
+      if (!stoppedRef.current && startedAtRef.current) setElapsed(Math.floor((Date.now() - startedAtRef.current) / 1000));
     }, 500);
     return () => window.clearInterval(interval);
   }, []);
@@ -274,14 +334,10 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
   };
 
   const finish = () => {
-    if (phase === 'ended' || phase === 'error') { onClose(); return; }
-    processorRef.current?.disconnect();
-    streamRef.current?.getTracks().forEach(track => track.stop());
-    const ws = wsRef.current;
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'end' }));
-      setPhase('thinking');
-    } else onClose();
+    // A hang-up is local and synchronous. Never wait for the upstream model,
+    // final billing, another WebSocket event or playback to finish.
+    stopResourcesRef.current();
+    onClose();
   };
 
   const phaseText: Record<Phase, string> = {
@@ -309,7 +365,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
       </button>
       <button className="live-voice-inline-button live-voice-inline-end" type="button" onClick={finish}
         title="Завершить разговор" aria-label="Завершить разговор"><PhoneOff size={16}/></button>
-      <button className="live-voice-inline-close" type="button" onClick={onClose} aria-label="Закрыть голосовой режим"><X size={14}/></button>
+      <button className="live-voice-inline-close" type="button" onClick={finish} aria-label="Закрыть голосовой режим"><X size={14}/></button>
     </div>
     {caption && phase === 'speaking' ? <p className="live-voice-inline-caption" aria-live="polite">{caption.slice(-120)}</p> : null}
     {error ? <p role="alert" className="live-voice-inline-error">{error}</p> : null}
