@@ -3,6 +3,7 @@ import { planWorkChanges, workChangesTool, proposalView, type WorkChangeAction }
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../db/prisma.js';
 import { openAiFetch } from '../lib/openai-fetch.js';
+import { readOpenAiResponsesStreamWithRecovery, retrieveOpenAiResponse } from './openai-responses-stream.service.js';
 import { settleCompanyCredits, reserveCompanyCredits, getCompanyCreditSnapshot } from './work-ai-wallet.service.js';
 
 const MODEL='gpt-6.1-terra';
@@ -20,7 +21,7 @@ export async function authorizeWorkAi(userId:string,organizationId:string){
   return member;
 }
 export async function askCompanyAi(input:{
-  organizationId:string; userId?:string; taskId?:string|null; question:string; feature:'company_chat'|'task_chat'|'task_monitoring'|'quick_chat';
+  organizationId:string; userId?:string; taskId?:string|null; question:string; feature:'company_chat'|'task_chat'|'task_monitoring'|'quick_chat'; onTextDelta?: (text:string)=>void;
 }){
   const {organizationId,taskId}=input;
   const currentMember=input.userId?await authorizeWorkAi(input.userId,organizationId):null;
@@ -102,7 +103,7 @@ export async function askCompanyAi(input:{
     ],
     ...(selected==='gpt-6.1-terra'?{reasoning:{effort:'none'}}:{})
   };
-  const serialized=JSON.stringify(payload);
+  const serialized=JSON.stringify({...payload,stream:true});
   // Conservative byte ceiling covers every token in the encoded payload plus
   // protocol overhead; output is separately capped by max_output_tokens.
   const estimatedInputUpperBound=Buffer.byteLength(serialized,'utf8')+1024;
@@ -124,8 +125,13 @@ export async function askCompanyAi(input:{
       await response.body?.cancel();
       throw new Error('Сервис ИИ ответил ошибкой HTTP '+code);
     }
+    const json=await readOpenAiResponsesStreamWithRecovery(response.body, {
+      onEvent:(event:{type?:unknown;delta?:unknown})=>{
+        if(event.type==='response.output_text.delta'&&typeof event.delta==='string')input.onTextDelta?.(event.delta);
+      },
+      retrieveResponse:(responseId)=>retrieveOpenAiResponse(responseId,apiKey,reservation.id+':work',selected)
+    }) as AiOutput;
     providerAnswered=true;
-    const json=await response.json() as AiOutput;
     providerUsage=json.usage;
     const calls=(json.output??[]).filter(item=>item.type==='function_call');
     let prepared:Awaited<ReturnType<typeof planWorkChanges>>|null=null;

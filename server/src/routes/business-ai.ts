@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { prisma } from '../db/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/async-handler.js';
@@ -7,6 +7,21 @@ import { getCompanyCreditSnapshot, CompanyInsufficientCreditsError } from '../se
 import { configureWorkTaskMonitoring, createWorkFollowup } from '../services/work-ai-monitoring.service.js';
 import { applyWorkChangeProposal, getWorkChangeProposal, rejectWorkChangeProposal } from '../services/work-ai-actions.service.js';
 
+// NDJSON is opt-in. Existing JSON callers and background monitoring stay compatible.
+async function respondCompanyAi(req:Request,res:Response,input:Parameters<typeof askCompanyAi>[0]){
+  const streaming=(req.get('accept')??'').toLowerCase().split(',').some(value=>value.trim().split(';')[0]==='application/x-ndjson');
+  const write=(event:unknown)=>{res.write(JSON.stringify(event)+'\n');(res as Response & {flush?:()=>void}).flush?.();};
+  if(streaming)res.status(200).set({'Content-Type':'application/x-ndjson; charset=utf-8','Cache-Control':'no-cache, no-transform','X-Accel-Buffering':'no'}).flushHeaders();
+  try{
+    const result=await askCompanyAi({...input,...(streaming?{onTextDelta:(text:string)=>write({type:'delta',text})}:{})});
+    if(streaming){write({type:'result',result});res.end();}
+    else res.json(result);
+  }catch(error){
+    if(streaming){write({type:'error',message:error instanceof Error?error.message:'Ошибка ИИ'});res.end();}
+    else if(error instanceof CompanyInsufficientCreditsError)res.status(402).json({error:error.message});
+    else throw error;
+  }
+}
 export const workAiRouter=Router();
 workAiRouter.use(requireAuth,(_req,res,next)=>{res.setHeader('Cache-Control','private, no-store');next();});
 const admin=(role:string)=>role==='OWNER'||role==='ADMIN';
@@ -57,13 +72,8 @@ workAiRouter.post('/:organizationId/ai/quick/chat',asyncHandler(async(req,res)=>
     req.body.question.length>MAX_WORK_AI_QUESTION){
     res.status(400).json({error:'Некорректный вопрос'});return;
   }
-  try{
-    res.json(await askCompanyAi({organizationId:req.params.organizationId,
-      userId:req.user!.id,question:req.body.question,feature:'quick_chat'}));
-  }catch(error){
-    if(error instanceof CompanyInsufficientCreditsError){res.status(402).json({error:error.message});return;}
-    throw error;
-  }
+  await respondCompanyAi(req,res,{organizationId:req.params.organizationId,
+    userId:req.user!.id,question:req.body.question,feature:'quick_chat'});
 }));
 workAiRouter.get('/:organizationId/ai/history',asyncHandler(async(req,res)=>{
   const member=await check(req,res);if(!member)return;
@@ -75,14 +85,8 @@ workAiRouter.post('/:organizationId/ai/chat',asyncHandler(async(req,res)=>{
   if(!manager(member.role)){res.status(403).json({error:'Доступ к диспетчеру ограничен'});return;}
   if(typeof req.body?.question!=='string'||!req.body.question.trim()||
      req.body.question.length>MAX_WORK_AI_QUESTION){res.status(400).json({error:'Некорректный вопрос'});return;}
-  try{
-    const answer=await askCompanyAi({organizationId:req.params.organizationId,userId:req.user!.id,
-      question:req.body.question,feature:'company_chat'});
-    res.json(answer);
-  }catch(error){
-    if(error instanceof CompanyInsufficientCreditsError){res.status(402).json({error:error.message});return;}
-    throw error;
-  }
+  await respondCompanyAi(req,res,{organizationId:req.params.organizationId,userId:req.user!.id,
+    question:req.body.question,feature:'company_chat'});
 }));
 // Human participant messages bypass provider usage and company wallet.
 // Recipient must be the task creator or the current assignee, not an
@@ -131,13 +135,8 @@ workAiRouter.post('/:organizationId/ai/tasks/:taskId/chat',asyncHandler(async(re
   if(!await scopedTask(req,res,member))return;
   if(typeof req.body?.question!=='string'||!req.body.question.trim()||
      req.body.question.length>MAX_WORK_AI_QUESTION){res.status(400).json({error:'Некорректный вопрос'});return;}
-  try{
-    res.json(await askCompanyAi({organizationId:req.params.organizationId,userId:req.user!.id,
-      taskId:req.params.taskId,question:req.body.question,feature:'task_chat'}));
-  }catch(error){
-    if(error instanceof CompanyInsufficientCreditsError){res.status(402).json({error:error.message});return;}
-    throw error;
-  }
+  await respondCompanyAi(req,res,{organizationId:req.params.organizationId,userId:req.user!.id,
+    taskId:req.params.taskId,question:req.body.question,feature:'task_chat'});
 }));
 workAiRouter.get('/:organizationId/ai/tasks/:taskId/monitoring',asyncHandler(async(req,res)=>{
   const member=await check(req,res);if(!member)return;
