@@ -11,6 +11,7 @@ import { normalizeMonitorTaskAction } from './telegram-ai-monitor-summary.servic
 import { prepareTaskProposal, proposalView } from './ai-task-proposal.service.js';
 import { emailAddress } from './mail-smtp.service.js';
 import { deliverMailReply, autoReplyAllowed } from './mail-assistant-inbox.service.js';
+import { diagnoseMailError } from './mail-diagnostics.js';
 
 export class MailAssistantError extends Error {
   constructor(public statusCode: number, message: string) { super(message); }
@@ -120,8 +121,11 @@ export const mailAssistant = {
         const status = await imap.status(name).catch(() => null);
         if (status) sent = { name, ...status };
       }
-    } catch {
-      throw new MailAssistantError(422, 'Не удалось войти по IMAP. Проверьте адрес, пароль приложения и разрешение IMAP');
+    } catch (cause) {
+      const diagnosis = diagnoseMailError(cause);
+      console.warn('[MailAssistant] connect failed', { provider: credentials.provider,
+        code: diagnosis.code, stage: diagnosis.stage });
+      throw new MailAssistantError(422, diagnosis.message);
     } finally { imap.close(); }
     const passwordCipher = encryptMailPassword(credentials.password, userId);
     const updated = await prisma.emailMailbox.upsert({
@@ -301,7 +305,16 @@ async function processMessage(account: EmailMailbox, folder: 'INBOX'|'SENT', uid
       subject: message.subject, sender: message.from, status: 'PROCESSING', botStatus: 'SKIPPED' },
     update: {}
   });
-  if (record.status !== 'PROCESSING' || record.createdAt.getTime() < Date.now() - 12 * 60_000) return;
+  // A FAILED analysis must be retried. The IMAP cursor is not advanced on failure;
+  // upsert(update:{}) intentionally preserved the old FAILED status until claimed.
+  if (record.status === 'DONE') return;
+  if (record.status === 'FAILED') {
+    const claimed = await prisma.emailAnalysis.updateMany({
+      where: { id: record.id, userId: account.userId, status: 'FAILED' },
+      data: { status: 'PROCESSING', error: null }
+    });
+    if (!claimed.count) return;
+  }
   try {
     const result = await analyze(account, message, record.id);
     const current = await prisma.emailMailbox.findFirst({ where: {
@@ -322,11 +335,15 @@ async function processMessage(account: EmailMailbox, folder: 'INBOX'|'SENT', uid
           content: '📨 Почтовый ассистент · ' + account.email + ': важное письмо «' + message.subject.slice(0, 90) + '»' }
       });
     }
-  } catch (error) {
+  } catch (cause) {
+    const diagnosis = diagnoseMailError(cause);
+    console.warn('[MailAssistant] analysis failed', { mailboxId: account.id,
+      provider: account.provider, folder, code: diagnosis.code, stage: diagnosis.stage });
     await prisma.emailAnalysis.update({ where: { id: record.id }, data: {
-      status: 'FAILED', error: error instanceof Error && /Недостаточно|лимит кредитов/.test(error.message)
-        ? 'Недостаточно кредитов ИИ или достигнут дневной лимит' : 'Не удалось проанализировать письмо'
+      status: 'FAILED', error: diagnosis.message
     } });
+    // Prevent advancing the IMAP cursor: the next scan can actually retry.
+    throw cause;
   }
 }
 const isDue = (time: Date | null, minutes: number) =>
@@ -450,8 +467,11 @@ export const mailAssistantWorker = {
       }, data: { leaseToken: token, leasedUntil: new Date(Date.now() + LEASE) } });
       if (!claim.count) continue;
       let error: string | null = null;
-      try { await scan(account, token); await publishPending(account, token); } catch {
-        error = 'Проверка почты не удалась. Проверьте IMAP, пароль приложения или доступность сервера';
+      try { await scan(account, token); await publishPending(account, token); } catch (cause) {
+        const diagnosis = diagnoseMailError(cause);
+        error = diagnosis.message;
+        console.warn('[MailAssistant] monitoring failed', { mailboxId: account.id,
+          provider: account.provider, code: diagnosis.code, stage: diagnosis.stage });
       }
       await prisma.emailMailbox.updateMany({ where: { id: account.id, leaseToken: token }, data: {
         leaseToken: null, leasedUntil: null, lastCheckedAt: new Date(),
