@@ -293,7 +293,7 @@ export async function runAiChatToolLoop(options: ToolLoopOptions) {
   throw new Error(`Превышен безопасный лимит обращений к модели (${MAX_PROVIDER_CALLS}).`);
 }
 
-export async function askAiChatWithTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string; autoApplyTaskActions?: boolean; dynamicBilling?: boolean; fileTools?: FileToolContext; requiredLookupTool?: 'search_workspace' | 'search_notes' | 'create_note'; onProgress?: (status: import('./ai-chat-progress.js').AiChatProgressStatus) => void }) {
+export async function askAiChatWithTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string; autoApplyTaskActions?: boolean; dynamicBilling?: boolean; fileTools?: FileToolContext; requiredLookupTool?: 'search_workspace' | 'search_notes' | 'create_note'; onProgress?: (status: import('./ai-chat-progress.js').AiChatProgressStatus) => void; onTextDelta?: (delta: string) => void; onTextReset?: () => void }) {
   const requestId = input.actionRequestId; const startedAt = Date.now();
   // Freeze relative dates when the user's request starts, not on later approval.
   const dateResolutionNow = new Date(startedAt);
@@ -333,7 +333,12 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
     lastProgress = status;
     input.onProgress?.(status);
   };
-  const observeProviderEvent = (event: { type?: unknown }) => {
+  let hasPreviewText = false;
+  const observeProviderEvent = (event: { type?: unknown; delta?: unknown }) => {
+    if (event.type === 'response.output_text.delta' && typeof event.delta === 'string') {
+      hasPreviewText = true;
+      input.onTextDelta?.(event.delta);
+    }
     const progress = getWebSearchProgressStatus(event.type);
     if (progress) {
       webSearchProgressObserved = true;
@@ -360,6 +365,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
       finalizeAfterTool: (name, result) => name === 'edit_file' && generatedDocument && result && typeof result === 'object' && (result as { ok?: unknown }).ok === true
         ? String((result as { message?: unknown }).message || 'Файл изменён. Новая версия прикреплена к сообщению.') : null,
       request: async (requestInput) => {
+        if (hasPreviewText) { input.onTextReset?.(); hasPreviewText = false; }
         const providerCallIndex = providerCallCount + 1;
         const isForcedFinalRound = providerCallIndex === MAX_PROVIDER_CALLS;
         if (isForcedFinalRound) emitProgress('forming_answer');

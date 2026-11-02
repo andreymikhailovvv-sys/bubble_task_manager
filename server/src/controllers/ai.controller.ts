@@ -152,7 +152,9 @@ export const aiController = {
         requestId, attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
         fileReferences, currentMessageId: req.body?.clientRequestId,
         onDiagnosticsPrepared: (diagnostics) => { traceDiagnostics = diagnostics; },
-        ...(streaming ? { onProgress: (status: import('../services/ai-chat-progress.js').AiChatProgressStatus) => writeStreamEvent({ type: 'status', status }) } : {}) });
+        ...(streaming ? { onProgress: (status: import('../services/ai-chat-progress.js').AiChatProgressStatus) => writeStreamEvent({ type: 'status', status }),
+          onTextDelta: (text: string) => writeStreamEvent({ type: 'delta', text }),
+          onTextReset: () => writeStreamEvent({ type: 'reset' }) } : {}) });
       traceResult = result;
       if (isQuickChat) {
         if (!telegramContinuation) await aiAssistantService.appendGeneralDialogMessages({ userId: req.user!.id, messages: [{ role: 'user', content: question }] });
@@ -378,7 +380,9 @@ export const aiController = {
         currentMessageId: req.body?.clientRequestId, userTimeZone,
         billingMode: isDynamicTaskChatBillingEnabled(req.user!.id) ? 'dynamic' : 'legacy',
         skipEfficiencyBonus: req.body?.skipEfficiencyBonus === true,
-        ...(streaming ? { onProgress: (status: import('../services/task-ai-progress.js').TaskAiProgressStatus) => writeStreamEvent({ type: 'status', status }) } : {})
+        ...(streaming ? { onProgress: (status: import('../services/task-ai-progress.js').TaskAiProgressStatus) => writeStreamEvent({ type: 'status', status }),
+          onTextDelta: (text: string) => writeStreamEvent({ type: 'delta', text }),
+          onTextReset: () => writeStreamEvent({ type: 'reset' }) } : {})
       });
       traceTaskResult = result;
 

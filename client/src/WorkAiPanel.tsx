@@ -20,6 +20,7 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
   const [credits,setCredits]=useState<WorkAiCredits|null>(null);
   const [text,setText]=useState('');
   const [busy,setBusy]=useState(false);
+  const [streamedText,setStreamedText]=useState('');
   const [error,setError]=useState('');
   const [monitoring,setMonitoring]=useState(false);
   const [jobs,setJobs]=useState<WorkAiJob[]>([]);
@@ -69,18 +70,18 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
     event.preventDefault();
     if(!text.trim()||busy)return;
     const question=serializeAiReply(text.trim(),replyTo);
-    setBusy(true);setError('');
+    setBusy(true);setError('');setStreamedText('');
     try{
       if(taskId&&recipient!=='ai'){
         await api.workSendParticipantMessage(organizationId,taskId,recipient,question);
       }else{
-        const result=await api.workAiAsk(organizationId,question,taskId);
+        const result=await api.workAiAsk(organizationId,question,taskId,{onTextDelta:(delta)=>setStreamedText(prev=>prev+delta),onTextReset:()=>setStreamedText('')});
         setCredits(result.credits);
       }
       setText('');setReplyTo(null);
       const messages=await api.workAiHistory(organizationId,taskId);
       setHistory(messages.messages);
-    }catch(e){setError(errText(e));}finally{setBusy(false);}
+    }catch(e){setError(errText(e));}finally{setBusy(false);setStreamedText('');}
   };
   const toggle=async()=>{
     if(!taskId)return;
@@ -175,7 +176,8 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
         </div>
         {message.proposal&&<WorkAiProposalCard organizationId={organizationId} initial={message.proposal} onChanged={()=>void load().catch(e=>setError(errText(e)))}/>}
       <div className="ai-message-forward-actions flex justify-end">{replyAction(message)}</div></div>)}
-      {busy&&<AiProgress status={progress}/>}
+      {busy&&streamedText&&<div className="work-ai-message assistant"><small>ИИ печатает</small><WorkAiMessageBody content={streamedText}/></div>}
+      {busy&&<AiProgress status={progress}/>} 
     </>;
     const composer=<div className="focused-task-ai-composer">
       {replyTo&&<AiReplyPreview target={replyTo} onDismiss={()=>setReplyTo(null)}/>}
@@ -286,7 +288,8 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
         {item.proposal&&<WorkAiProposalCard organizationId={organizationId} initial={item.proposal} onChanged={()=>void load().catch(e=>setError(errText(e)))}/>}
         <div className="ai-message-forward-actions flex justify-end">{replyAction(item)}</div>
       </div>)}
-      {busy&&<AiProgress status={progress}/>}
+      {busy&&streamedText&&<div className="work-ai-message assistant"><small>ИИ печатает</small><WorkAiMessageBody content={streamedText}/></div>}
+      {busy&&<AiProgress status={progress}/>} 
       <div ref={bottomRef}/>
     </div>
     <div className="work-ai-dispatcher-bottom">

@@ -154,7 +154,7 @@ internal fun NativeGeneralAiChatPage(
     }
     LaunchedEffect(thread?.id,messages.size,state.pendingMessage,state.busy,latestAssistant){
         val count=messages.size+(if(state.pendingMessage!=null)1 else 0)+
-            (if(state.busy)1 else 0)
+            (if(state.busy)1 else 0)+(if(state.busy&&state.streamText.isNotEmpty())1 else 0)
         val receivedAssistant=latestAssistant!=null && latestAssistant!=previousAssistant
         if(!historyPositioned){
             if(count>0)listState.scrollToItem(count-1)
@@ -380,6 +380,10 @@ internal fun NativeGeneralAiChatPage(
                     }
                     if(state.pendingMessage!=null)item(key="pending-general-user"){
                         TaskChatBubble(state.pendingMessage!!,c,context,
+                            onReply={},pending=true)
+                    }
+                    if(state.busy&&state.streamText.isNotEmpty())item(key="general-ai-stream"){
+                        TaskChatBubble(TaskAiChatMessage(role="assistant",content=state.streamText),c,context,
                             onReply={},pending=true)
                     }
                     if(state.busy)item(key="general-ai-progress"){

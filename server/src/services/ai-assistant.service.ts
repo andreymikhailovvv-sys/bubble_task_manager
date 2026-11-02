@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { FormData } from 'undici';
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { getWebSearchProgressStatus, readOpenAiResponsesStreamWithRecovery, retrieveOpenAiResponse } from './openai-responses-stream.service.js';
+import { IncrementalJsonAnswer } from './ai-stream-text.service.js';
 import { supportsReasoningEffort } from '../lib/openai-model-capabilities.js';
 import { askAiChatWithTools, AI_CHAT_OPENAI_TOOLS, AI_CHAT_WEB_SEARCH_TOOL, WEB_SEARCH_CALL_CREDITS_MILLI } from './ai-chat-tools.service.js';
 import { mergeAiWebEvidence } from './ai-web-search-evidence.service.js';
@@ -301,6 +302,8 @@ type AskTaskAssistantInput = {
   billingMode?: 'legacy' | 'dynamic';
   billingFeature?: 'task_chat' | 'overdue_nudge' | 'task_monitoring';
   onProgress?: (status: TaskAiProgressStatus) => void;
+  onTextDelta?: (delta: string) => void;
+  onTextReset?: () => void;
 };
 
 export const TASK_CHAT_MAX_OUTPUT_TOKENS = 4096;
@@ -351,6 +354,8 @@ type AskAiChatInput = AskGeneralAssistantInput & {
   currentMessageId?: string;
   autoApplyTaskActions?: boolean;
   onProgress?: (status: AiChatProgressStatus) => void;
+  onTextDelta?: (delta: string) => void;
+  onTextReset?: () => void;
   onDiagnosticsPrepared?: (diagnostics: { context: AiChatContextDiagnostics }) => void;
 };
 type GeneralAssistantUndoOperation = {
@@ -1493,7 +1498,7 @@ export const aiAssistantService = {
       console.info('[AI file catalog] prepared', { requestId: actionRequestId, surface: 'general', count: fileCatalog.items.length, truncated: fileCatalog.truncated, sources: fileCatalog.items.reduce((acc, item) => ({ ...acc, [item.source]: (acc[item.source] ?? 0) + 1 }), {} as Record<string, number>) });
       console.info('[AI chat context] prepared', { requestId: actionRequestId, userId: input.userId, projectId: input.projectId, chatId: input.chatId, clientSurface: input.clientSurface, contextMode: context.contextMode, historyMessagesAvailable: normalizedHistory.length, historyMessagesUsed: history.length, historyEstimatedTokens: history.reduce((sum, item) => sum + estimateAiChatTokens(item.content), 0), unsummarizedMessages: context.unsummarizedMessages, unsummarizedEstimatedTokens: context.unsummarizedEstimatedTokens, memoryPresent: Boolean(memoryBlock), memoryRevision: context.memoryRevision, memoryEstimatedTokens: estimateAiChatTokens(memoryBlock), memoryCompactionTriggered: context.memoryCompactionTriggered, memoryCompactionBatches: context.memoryCompactionBatches, memoryCaughtUp: context.memoryCaughtUp, fallback: context.fallback, fallbackReason: context.fallbackReason });
       input.onDiagnosticsPrepared?.({ context });
-      const result = await askAiChatWithTools({ userId: input.userId, model, messages, userTimeZone, apiKey, actionRequestId, autoApplyTaskActions: input.autoApplyTaskActions === true, requiredLookupTool: requiresNoteCreation(question) ? 'create_note' : selectRequiredPersonalLookup(question) ?? undefined, dynamicBilling: isDynamicTextBillingEnabled(input.userId), onProgress: input.onProgress,
+      const result = await askAiChatWithTools({ userId: input.userId, model, messages, userTimeZone, apiKey, actionRequestId, autoApplyTaskActions: input.autoApplyTaskActions === true, requiredLookupTool: requiresNoteCreation(question) ? 'create_note' : selectRequiredPersonalLookup(question) ?? undefined, dynamicBilling: isDynamicTextBillingEnabled(input.userId), onProgress: input.onProgress, onTextDelta: input.onTextDelta, onTextReset: input.onTextReset,
         fileTools: { userId: input.userId, projectId: input.projectId, chatId: input.chatId, catalog: fileCatalog,
           uploads: input.attachments, model, apiKey, actionId: actionRequestId, dynamicBilling: isDynamicTextBillingEnabled(input.userId) } });
       const titled = shouldTitleChat ? extractAiChatTitleFromAnswer(result.answer) : { answer: result.answer, title: null };
@@ -2248,10 +2253,13 @@ export const aiAssistantService = {
         const fetchedAttachmentIds = new Set<string>();
         const loadedSubtaskIds = new Set<string>();
         let rawAnswer = '';
+        let hasPreviewText = false;
         let toolCallsExecuted = 0;
       let monitoringActionsExecuted = 0;
         for (let modelProviderCallIndex = 0; modelProviderCallIndex < TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS && providerCallIndex < TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS; modelProviderCallIndex += 1) {
           providerCallIndex += 1;
+          if (hasPreviewText) { input.onTextReset?.(); hasPreviewText = false; }
+          const partialAnswer = new IncrementalJsonAnswer();
           const isForcedFinalRound = toolCallsExecuted >= TASK_CHAT_CONTEXT_MAX_TOOL_CALLS;
           const allowWebSearch = Boolean(webReservation) && !webSearchUsed && !isForcedFinalRound;
           if (isForcedFinalRound) {
@@ -2299,9 +2307,13 @@ export const aiAssistantService = {
             throw new Error(`OpenAI request failed for model "${model}": ${openAiResponse.status}`);
           }
           const responseJson = await readOpenAiResponsesStreamWithRecovery(openAiResponse.body, {
-            onEvent: (event) => {
+            onEvent: (event: { type?: unknown; delta?: unknown }) => {
               const progress = getWebSearchProgressStatus(event.type);
               if (progress) input.onProgress?.(progress);
+              if (event.type === 'response.output_text.delta' && typeof event.delta === 'string') {
+                const text = partialAnswer.push(event.delta);
+                if (text) { hasPreviewText = true; input.onTextDelta?.(text); }
+              }
             },
             retrieveResponse: (responseId) => retrieveOpenAiResponse(responseId, apiKey, requestId + ':task-chat:' + providerCallIndex, model),
             onRecovery: (stage, detail) => console.warn('[AI task streaming] recovery', {

@@ -14,7 +14,8 @@ export type AiBilling = { mode: 'dynamic' | 'legacy'; creditsSpentMilli: number 
 export type AiChatProgressStatus = 'analyzing_request' | 'using_chat_history' | 'searching_workspace' | 'searching_notes' | 'reading_note' | 'searching_tasks' | 'listing_tasks' | 'reading_task' | 'checking_sectors' | 'analyzing_retrieved_context' | 'applying_changes' | 'reading_attachment' | `reading_attachment:${string}` | 'searching_web' | 'analyzing_web_results' | 'forming_answer' | 'generating_image' | 'editing_image' | 'editing_document';
 export type TaskAiProgressStatus = 'analyzing_request' | 'using_chat_history' | 'searching_subtasks' | 'analyzing_subtasks' | 'reading_subtask' | 'searching_files' | 'reading_file' | `reading_file:${string}` | 'analyzing_retrieved_context' | 'searching_web' | 'analyzing_web_results' | 'forming_answer' | 'applying_changes' | 'generating_image' | 'editing_image' | 'editing_document';
 export type TaskAssistantResult = { taskProposal?: import('./types').AiTaskProposal | null; answer: string; model: string; telegramSendDraft?: TelegramInlineSendDraft | null; mailSendDraft?: MailSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; taskDataChanged: boolean; actionReports?: string[]; generatedDocument?: GeneratedDocument | null; webSearchUsed?: boolean; webSources?: WebSource[]; webCitations?: WebCitation[]; billing?: AiBilling };
-type TaskAiStreamEvent = { type: 'status'; status: TaskAiProgressStatus } | { type: 'result'; result: TaskAssistantResult } | { type: 'error'; message: string } | { type: 'ping' };
+type TaskAiStreamEvent = { type: 'status'; status: TaskAiProgressStatus } | { type: 'result'; result: TaskAssistantResult } | { type: 'error'; message: string } | { type: 'delta'; text: string } | { type: 'reset' } | { type: 'ping' };
+export type AiTextStreamCallbacks = { onTextDelta?: (text: string) => void; onTextReset?: () => void };
 
 let unauthorizedHandler: UnauthorizedHandler | null = null;
 const USER_TIMEZONE_STORAGE_KEY = 'btm:user-timezone';
@@ -93,7 +94,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   return response.json();
 }
 
-export async function readTaskAssistantNdjson(stream: ReadableStream<Uint8Array>, onStatus?: (status: TaskAiProgressStatus) => void): Promise<TaskAssistantResult> {
+export async function readTaskAssistantNdjson(stream: ReadableStream<Uint8Array>, onStatus?: (status: TaskAiProgressStatus) => void, textEvents?: AiTextStreamCallbacks): Promise<TaskAssistantResult> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
@@ -102,6 +103,8 @@ export async function readTaskAssistantNdjson(stream: ReadableStream<Uint8Array>
     if (!line.trim()) return;
     const event = JSON.parse(line) as TaskAiStreamEvent;
     if (event.type === 'status') onStatus?.(event.status);
+    else if (event.type === 'delta') textEvents?.onTextDelta?.(event.text);
+    else if (event.type === 'reset') textEvents?.onTextReset?.();
     else if (event.type === 'result') result = event.result;
     else if (event.type === 'error') throw new Error(event.message);
   };
@@ -141,7 +144,7 @@ export function stripAiChatProjectDisplayPreviews<T extends { chats: Array<{ mes
  */
 function streamAiRequestWithUploadProgress<Result, Status extends string>(
   url: string, body: unknown,
-  options: { onStatus?: (status: Status) => void; onUploadProgress?: (percent: number | null) => void }
+  options: { onStatus?: (status: Status) => void; onUploadProgress?: (percent: number | null) => void } & AiTextStreamCallbacks
 ): Promise<Result> {
   return new Promise<Result>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -159,8 +162,10 @@ function streamAiRequestWithUploadProgress<Result, Status extends string>(
     };
     const consume = (line: string) => {
       if (!line.trim()) return;
-      const event = JSON.parse(line) as { type?: string; status?: Status; result?: Result; message?: string };
+      const event = JSON.parse(line) as { type?: string; status?: Status; result?: Result; message?: string; text?: string };
       if (event.type === 'status' && event.status) options.onStatus?.(event.status);
+      else if (event.type === 'delta' && typeof event.text === 'string') options.onTextDelta?.(event.text);
+      else if (event.type === 'reset') options.onTextReset?.();
       else if (event.type === 'result' && event.result) result = event.result;
       else if (event.type === 'error') throw new Error(event.message || 'Ошибка чата ИИ');
     };
@@ -204,7 +209,7 @@ function streamAiRequestWithUploadProgress<Result, Status extends string>(
   });
 }
 
-async function askTaskAssistantStreaming(taskId: string, payload: { clientRequestId?: string; question: string; userMessage?: string; model?: AiChatModel; mode?: ChatMode; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean; interactionContext?: 'chat' | 'focus' | 'smart_postpone'; clientSurface?: 'web' | 'miniapp'; telegramRead?: TelegramReadApproval }, options?: { onStatus?: (status: TaskAiProgressStatus) => void; onUploadProgress?: (percent: number | null) => void }): Promise<TaskAssistantResult> {
+async function askTaskAssistantStreaming(taskId: string, payload: { clientRequestId?: string; question: string; userMessage?: string; model?: AiChatModel; mode?: ChatMode; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean; interactionContext?: 'chat' | 'focus' | 'smart_postpone'; clientSurface?: 'web' | 'miniapp'; telegramRead?: TelegramReadApproval }, options?: { onStatus?: (status: TaskAiProgressStatus) => void; onUploadProgress?: (percent: number | null) => void } & AiTextStreamCallbacks): Promise<TaskAssistantResult> {
   if (payload.attachments?.length && options?.onUploadProgress && typeof XMLHttpRequest !== 'undefined') {
     const result = await streamAiRequestWithUploadProgress<TaskAssistantResult, TaskAiProgressStatus>(
       `/api/tasks/${taskId}/ai-chat`,
@@ -218,7 +223,7 @@ async function askTaskAssistantStreaming(taskId: string, payload: { clientReques
   if (response.status === 401) unauthorizedHandler?.();
   if (!response.body) throw new Error(response.ok ? 'Поток ответа чата ИИ недоступен' : `HTTP ${response.status}`);
   try {
-    const result = await readTaskAssistantNdjson(response.body, options?.onStatus);
+    const result = await readTaskAssistantNdjson(response.body, options?.onStatus, options);
     if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('task-monitoring-triggers-updated', { detail: { taskId } }));
     return result;
   } catch (error) {
@@ -227,21 +232,56 @@ async function askTaskAssistantStreaming(taskId: string, payload: { clientReques
   }
 }
 
+type WorkAiReply = { answer: string; model: string; chargedMilli: number; credits: WorkAiCredits };
+async function askWorkAiStreaming(path: string, question: string, textEvents?: AiTextStreamCallbacks): Promise<WorkAiReply> {
+  if (!textEvents?.onTextDelta) return request<WorkAiReply>(path, { method: 'POST', body: JSON.stringify({ question }) });
+  const response = await fetch(path, { method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' },
+    body: JSON.stringify({ question }) });
+  if (response.status === 401) unauthorizedHandler?.();
+  if (!response.body) throw new Error('Поток ответа ИИ недоступен');
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let result: WorkAiReply | null = null;
+  const consume = (line: string) => {
+    if (!line.trim()) return;
+    const event = JSON.parse(line) as {type: string; text?: string; result?: WorkAiReply; message?: string};
+    if (event.type === 'delta' && typeof event.text === 'string') textEvents.onTextDelta?.(event.text);
+    else if (event.type === 'reset') textEvents.onTextReset?.();
+    else if (event.type === 'result' && event.result) result = event.result;
+    else if (event.type === 'error') throw new Error(event.message || 'Ошибка корпоративного ИИ');
+  };
+  try {
+    while (true) {
+      const {value,done} = await reader.read();
+      buffer += decoder.decode(value, {stream: !done});
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) consume(line);
+      if (done) break;
+    }
+    consume(buffer);
+    if (!result) throw new Error('Сервер не вернул ответ корпоративного ИИ');
+    return result;
+  } finally { reader.releaseLock(); }
+}
+
 export type AiChatResult = { suggestedChatTitle?: string; taskProposal?: import('./types').AiTaskProposal | null; answer: string; model: string; telegramSendDraft?: TelegramInlineSendDraft | null; mailSendDraft?: MailSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; taskDataChanged: boolean; actionReports?: string[]; generatedDocument?: GeneratedDocument | null; undoOperations?: Array<{ taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } }>; webSearchUsed: boolean; webSources?: WebSource[]; webCitations?: WebCitation[]; billing?: AiBilling };
-export async function readAiChatNdjson(stream: ReadableStream<Uint8Array>, onStatus?: (status: AiChatProgressStatus) => void): Promise<AiChatResult> {
+export async function readAiChatNdjson(stream: ReadableStream<Uint8Array>, onStatus?: (status: AiChatProgressStatus) => void, textEvents?: AiTextStreamCallbacks): Promise<AiChatResult> {
   const reader = stream.getReader(); const decoder = new TextDecoder(); let buffer = ''; let result: AiChatResult | null = null;
-  const consume = (line: string) => { if (!line.trim()) return; const event = JSON.parse(line) as { type: string; status?: AiChatProgressStatus; result?: AiChatResult; message?: string }; if (event.type === 'status' && event.status) onStatus?.(event.status); else if (event.type === 'result' && event.result) result = event.result; else if (event.type === 'error') throw new Error(event.message || 'Ошибка чата ИИ'); };
+  const consume = (line: string) => { if (!line.trim()) return; const event = JSON.parse(line) as { type: string; status?: AiChatProgressStatus; result?: AiChatResult; message?: string; text?: string }; if (event.type === 'status' && event.status) onStatus?.(event.status); else if (event.type === 'delta' && typeof event.text === 'string') textEvents?.onTextDelta?.(event.text); else if (event.type === 'reset') textEvents?.onTextReset?.(); else if (event.type === 'result' && event.result) result = event.result; else if (event.type === 'error') throw new Error(event.message || 'Ошибка чата ИИ'); };
   while (true) { const { value, done } = await reader.read(); buffer += decoder.decode(value, { stream: !done }); const lines = buffer.split('\n'); buffer = lines.pop() ?? ''; lines.forEach(consume); if (done) break; }
   consume(buffer); if (!result) throw new Error('Сервер не вернул результат чата ИИ'); return result;
 }
-async function askAiChatStreaming(payload: { clientRequestId?: string; question: string; history: ChatMessage[]; model?: AiChatModel; projectTitle?: string; chatTitle?: string; projectId?: string; chatId?: string; clientSurface?: 'web' | 'miniapp'; attachments?: ChatAttachmentPayload[]; telegramRead?: TelegramReadApproval }, options?: { onStatus?: (status: AiChatProgressStatus) => void; onUploadProgress?: (percent: number | null) => void }) {
+async function askAiChatStreaming(payload: { clientRequestId?: string; question: string; history: ChatMessage[]; model?: AiChatModel; projectTitle?: string; chatTitle?: string; projectId?: string; chatId?: string; clientSurface?: 'web' | 'miniapp'; attachments?: ChatAttachmentPayload[]; telegramRead?: TelegramReadApproval }, options?: { onStatus?: (status: AiChatProgressStatus) => void; onUploadProgress?: (percent: number | null) => void } & AiTextStreamCallbacks) {
   if (payload.attachments?.length && options?.onUploadProgress && typeof XMLHttpRequest !== 'undefined') {
     return streamAiRequestWithUploadProgress<AiChatResult, AiChatProgressStatus>(
       '/api/ai-chat', { ...payload, history: stripAiChatDisplayPreviews(payload.history), userTimeZone: resolveUserTimeZone() }, options
     );
   }
   const response = await fetch('/api/ai-chat', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' }, body: JSON.stringify({ ...payload, history: stripAiChatDisplayPreviews(payload.history), userTimeZone: resolveUserTimeZone() }) });
-  if (response.status === 401) unauthorizedHandler?.(); if (!response.body) throw new Error(`HTTP ${response.status}`); return readAiChatNdjson(response.body, options?.onStatus);
+  if (response.status === 401) unauthorizedHandler?.(); if (!response.body) throw new Error(`HTTP ${response.status}`); return readAiChatNdjson(response.body, options?.onStatus, options);
 }
 
 export type CurrentUser = {
@@ -562,7 +602,7 @@ export const api = {
   workAiBalance: (id:string)=>request<{credits:WorkAiCredits}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/balance`),
   workAiSetModel: (id:string,model:string)=>request<{model:string}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/model`,{method:'PATCH',body:JSON.stringify({model})}),
   workAiHistory: (id:string,taskId?:string)=>request<{messages:WorkAiMessage[]}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/${taskId?'tasks/'+encodeURIComponent(taskId)+'/':''}history`),
-  workAiAsk: (id:string,question:string,taskId?:string)=>request<{answer:string;model:string;chargedMilli:number;credits:WorkAiCredits}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/${taskId?'tasks/'+encodeURIComponent(taskId)+'/':''}chat`,{method:'POST',body:JSON.stringify({question})}),
+  workAiAsk: (id:string,question:string,taskId?:string,textEvents?:AiTextStreamCallbacks)=>askWorkAiStreaming(`/api/business/organizations/${encodeURIComponent(id)}/ai/${taskId?'tasks/'+encodeURIComponent(taskId)+'/':''}chat`,question,textEvents),
   workMonitoringStatus: (id:string,taskId:string)=>request<{enabled:boolean;jobs:WorkAiJob[]}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/tasks/${encodeURIComponent(taskId)}/monitoring`),
   workMonitoringSet: (id:string,taskId:string,enabled:boolean)=>request<{enabled:boolean;revision:number}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/tasks/${encodeURIComponent(taskId)}/monitoring`,{method:'PATCH',body:JSON.stringify({enabled})}),
   workMonitoringAddTrigger: (id:string,taskId:string,dueAt:string,instruction:string)=>request<{job:WorkAiJob}>(`/api/business/organizations/${encodeURIComponent(id)}/ai/tasks/${encodeURIComponent(taskId)}/triggers`,{method:'POST',body:JSON.stringify({dueAt,instruction})}),
@@ -577,7 +617,7 @@ export const api = {
   workDeleteSubtask: (org:string,project:string,task:string,subtask:string)=>request<{ok:boolean}>(`/api/business/organizations/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}/tasks/${encodeURIComponent(task)}/subtasks/${encodeURIComponent(subtask)}`,{method:'DELETE'}),
   workDashboard: (organizationId:string) => request<WorkDashboard>(`/api/business/organizations/${encodeURIComponent(organizationId)}/dashboard`),
   workQuickAiHistory: (organizationId:string) => request<{messages:WorkAiMessage[]}>(`/api/business/organizations/${encodeURIComponent(organizationId)}/ai/quick/history`),
-  workQuickAiAsk: (organizationId:string,question:string) => request<{answer:string;model:string;chargedMilli:number;credits:WorkAiCredits}>(`/api/business/organizations/${encodeURIComponent(organizationId)}/ai/quick/chat`,{method:'POST',body:JSON.stringify({question})}),
+  workQuickAiAsk: (organizationId:string,question:string,textEvents?:AiTextStreamCallbacks) => askWorkAiStreaming(`/api/business/organizations/${encodeURIComponent(organizationId)}/ai/quick/chat`,question,textEvents),
   listWorkProjects: (organizationId: string) => request<{ projects: WorkProject[]; hasMore: boolean }>(`/api/business/organizations/${encodeURIComponent(organizationId)}/projects`),
   createWorkProject: (organizationId: string, name: string, description: string) => request<{ project: WorkProject }>(`/api/business/organizations/${encodeURIComponent(organizationId)}/projects`, { method: 'POST', body: JSON.stringify({name,description}) }),
   updateWorkProject: (organizationId: string, projectId: string, changes: Partial<Pick<WorkProject,'name'|'description'|'isArchived'>>) => request<{ project: WorkProject }>(`/api/business/organizations/${encodeURIComponent(organizationId)}/projects/${encodeURIComponent(projectId)}`, { method: 'PATCH', body: JSON.stringify(changes) }),
