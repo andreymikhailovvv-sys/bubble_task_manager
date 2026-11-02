@@ -83,10 +83,12 @@ async function requestShortIntro({ question, context, onText, signal }: IntroInp
 }
 
 /**
- * The server immediately starts a meaningful intent-aware preview if the
- * optional cheap model has not finished. The generated introduction may
- * replace the local preview once, but only inside a short time budget.
- * The selected main model never waits for either.
+ * A cheap model is the ONLY source of a normal introductory sentence.
+ * The server-side contextual text is retained strictly as a failure fallback:
+ * request error, unavailable models, empty answer, or deadline expiry.
+ * This prevents a distracting server-preview -> model-preview reset.
+ *
+ * The selected main model starts in parallel and never waits for the intro.
  */
 export function startAiIntroOverlay(options: {
   question: string;
@@ -94,7 +96,6 @@ export function startAiIntroOverlay(options: {
   send: (event: IntroEvent) => void;
   requestIntro?: IntroRequest;
   tickMs?: number;
-  previewDelayMs?: number;
   modelDeadlineMs?: number;
 }) {
   const controller = new AbortController();
@@ -103,11 +104,9 @@ export function startAiIntroOverlay(options: {
   let stopped = false;
   let mainStarted = false;
   let sentIntro = false;
+  let introChosen = false;
   let pending = '';
   let acceptedCharacters = 0;
-  let providerDone = !enabled;
-  let previewStarted = false;
-  let deadlineReached = false;
   let modelText = '';
 
   const flush = () => {
@@ -117,31 +116,36 @@ export function startAiIntroOverlay(options: {
     if (!piece) return;
     sentIntro = true;
     options.send({ type: 'delta', text: piece });
-    if (providerDone && previewStarted && !pending) clearInterval(timer);
+    // No more intro replacements are possible once one source was chosen.
+    if (!pending) clearInterval(timer);
   };
   const timer = setInterval(flush, options.tickMs ?? 22);
   const accept = (text: string) => {
-    if (!text || stopped || mainStarted) return;
     const available = MAX_INTRO_CHARACTERS - acceptedCharacters;
     if (available <= 0) return;
     const safe = Array.from(text.replace(/[\r\n\t]+/g, ' ')).slice(0, available).join('');
     pending += safe;
     acceptedCharacters += Array.from(safe).length;
   };
-  const previewTimer = enabled ? setTimeout(() => {
-    if (stopped || mainStarted || previewStarted) return;
-    previewStarted = true;
-    accept(buildContextualAiIntro(options.question, options.context));
-    console.info('[AI quick intro] contextual preview started', {
-      elapsedMs: Date.now() - startedAt
+  const showIntro = (text: string, source: 'model' | 'fallback', reason?: string) => {
+    if (stopped || mainStarted || introChosen) return;
+    introChosen = true;
+    accept(text);
+    console.info('[AI quick intro] introduction selected', {
+      source, ...(reason ? { reason } : {}), elapsedMs: Date.now() - startedAt
     });
-  }, options.previewDelayMs ?? 120) : null;
+    if (!pending) clearInterval(timer);
+  };
+  const showFallback = (reason: string) => {
+    if (stopped || mainStarted || introChosen) return;
+    showIntro(buildContextualAiIntro(options.question, options.context), 'fallback', reason);
+  };
 
   const deadlineTimer = enabled ? setTimeout(() => {
-    if (stopped || mainStarted || providerDone) return;
-    deadlineReached = true;
-    console.info('[AI quick intro] refinement deadline reached', { elapsedMs: Date.now() - startedAt });
+    if (stopped || mainStarted || introChosen) return;
+    console.warn('[AI quick intro] model deadline exceeded', { elapsedMs: Date.now() - startedAt });
     controller.abort();
+    showFallback('timeout');
   }, options.modelDeadlineMs ?? 2300) : null;
 
   if (enabled) {
@@ -149,31 +153,29 @@ export function startAiIntroOverlay(options: {
       question: options.question,
       context: options.context,
       onText: delta => {
-        if (!stopped && !mainStarted && !deadlineReached && modelText.length < MAX_INTRO_CHARACTERS) {
+        if (!stopped && !mainStarted && !introChosen && modelText.length < MAX_INTRO_CHARACTERS) {
           modelText += Array.from(delta).slice(0, MAX_INTRO_CHARACTERS - modelText.length).join('');
         }
       },
       signal: controller.signal
     }).then(() => {
-      if (stopped || mainStarted || deadlineReached || controller.signal.aborted) return;
+      if (stopped || mainStarted || introChosen) return;
       const candidate = modelText.replace(/\s+/g, ' ').trim();
-      if (candidate.length < 10 || /^(?:сейчас\s+)?(?:разберу запрос|подготовлю ответ|обрабатываю запрос|думаю над ответом)[.!]?$/iu.test(candidate)) return;
-      if (sentIntro) options.send({ type: 'reset' });
-      sentIntro = false;
-      pending = '';
-      acceptedCharacters = 0;
-      previewStarted = true;
-      if (previewTimer) clearTimeout(previewTimer);
-      accept(candidate);
-      console.info('[AI quick intro] model refinement applied', { elapsedMs: Date.now() - startedAt });
+      if (candidate.length >= 10 &&
+          !/^(?:сейчас\s+)?(?:разберу запрос|подготовлю ответ|обрабатываю запрос|думаю над ответом)[.!]?$/iu.test(candidate)) {
+        showIntro(candidate, 'model');
+      } else {
+        showFallback('empty_or_generic_model_response');
+      }
     }).catch(error => {
-      if (!controller.signal.aborted) console.warn('[AI quick intro] refinement failed', {
-        errorName: error instanceof Error ? error.name : 'unknown'
+      if (stopped || mainStarted || introChosen) return;
+      console.warn('[AI quick intro] model request failed', {
+        errorName: error instanceof Error ? error.name : 'unknown',
+        elapsedMs: Date.now() - startedAt
       });
+      showFallback('model_error');
     }).finally(() => {
-      providerDone = true;
       if (deadlineTimer) clearTimeout(deadlineTimer);
-      if (previewStarted && !pending) clearInterval(timer);
     });
   } else clearInterval(timer);
 
@@ -181,7 +183,6 @@ export function startAiIntroOverlay(options: {
     if (stopped) return;
     stopped = true;
     clearInterval(timer);
-    if (previewTimer) clearTimeout(previewTimer);
     if (deadlineTimer) clearTimeout(deadlineTimer);
     controller.abort();
     pending = '';
