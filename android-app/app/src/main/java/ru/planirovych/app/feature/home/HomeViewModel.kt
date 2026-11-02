@@ -27,6 +27,7 @@ data class TaskAiChatState(
     val busy:Boolean=false,
     val actionBusy:Boolean=false,
     val progressStatus:String?=null,
+    val streamText:String="",
     val monitoringTriggers:List<TaskMonitoringTrigger> = emptyList(),
     val monitoringStatuses:List<TaskMonitoringStatus> = emptyList(),
     val lastActionReports:List<String> = emptyList(),
@@ -40,6 +41,7 @@ data class GeneralAiChatState(
     val selectedChatId:String=QUICK_AI_THREAD_ID,
     val loading:Boolean=false,val saving:Boolean=false,val busy:Boolean=false,
     val error:String?=null,val progressStatus:String?=null,
+    val streamText:String="",
     val pendingMessage:TaskAiChatMessage?=null
 ){
     val project:GeneralAiProject? get()=projects.firstOrNull{it.id==selectedProjectId}
@@ -294,14 +296,16 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
             put("createdAt",java.time.Instant.now().toString())
         }
         generalAiMutable.update{state->
-            state.copy(busy=true,error=null,progressStatus="analyzing_request",
+            state.copy(busy=true,error=null,progressStatus="analyzing_request",streamText="",
                 pendingMessage=repository.readTaskAiMessage(optimistic))
         }
         viewModelScope.launch {
             try{
                 val response=repository.askGeneralAi(project,
-                    thread.copy(model=model),thread.messages,requestId,question,files
-                ){status->
+                    thread.copy(model=model),thread.messages,requestId,question,files,
+                    onText={text->generalAiMutable.update{state->
+                        if(state.busy)state.copy(streamText=text)else state
+                    }}){status->
                     generalAiMutable.update{state->
                         if(state.busy)state.copy(progressStatus=status)else state
                     }
@@ -358,13 +362,13 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                     }
                 }
                 generalAiMutable.update{it.copy(
-                    busy=false,progressStatus=null,pendingMessage=null,error=null)}
+                    busy=false,progressStatus=null,streamText="",pendingMessage=null,error=null)}
                 onDone()
             }catch(e:Throwable){
                 // A retry must keep the same requestId; server idempotency
                 // prevents duplicate tool actions / credit charges.
                 generalAiMutable.update{it.copy(
-                    busy=false,progressStatus=null,pendingMessage=null,error=e.userMessage())}
+                    busy=false,progressStatus=null,streamText="",pendingMessage=null,error=e.userMessage())}
             }
         }
     }
@@ -461,7 +465,7 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
     ){
         if(taskAiMutable.value.busy || taskAiMutable.value.taskId!=taskId)return
         taskAiMutable.update{it.copy(busy=true,error=null,requestId=requestId,
-            progressStatus="analyzing_request",lastActionReports=emptyList())}
+            progressStatus="analyzing_request",streamText="",lastActionReports=emptyList())}
         viewModelScope.launch{
             try{
                 val reply=repository.sendTaskAiMessage(taskId,requestId,question,model,
@@ -470,13 +474,16 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                             if(it.taskId==taskId && it.requestId==requestId)
                                 it.copy(progressStatus=status) else it
                         }
-                    })
+                    },onText={text->taskAiMutable.update{
+                        if(it.taskId==taskId && it.requestId==requestId)
+                            it.copy(streamText=text) else it
+                    }})
                 // The server writes both messages before returning; never append them
                 // with /messages (which would duplicate the shared chat).
                 val history=repository.loadTaskAiHistory(taskId)
                 taskAiMutable.update{
                     if(it.taskId==taskId)it.copy(messages=history,busy=false,
-                        requestId=null,progressStatus=null,error=null,
+                        requestId=null,progressStatus=null,streamText="",error=null,
                         lastActionReports=reply.actionReports)
                     else it.copy(busy=false,progressStatus=null)
                 }
@@ -498,7 +505,7 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                     if(it.taskId==taskId)it.copy(
                         messages=history?:it.messages,busy=false,
                         error=error.userMessage(),requestId=requestId,
-                        progressStatus=null)
+                        progressStatus=null,streamText="")
                     else it.copy(busy=false)
                 }
             }
