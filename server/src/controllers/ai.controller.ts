@@ -373,7 +373,7 @@ export const aiController = {
         res.flushHeaders();
         introOverlay = startAiIntroOverlay({
           question, context: 'Помощь ИИ по задаче. ' +
-            (persistedHistory.filter((message) => message.role === 'user').at(-1)?.content ?? '').slice(0, 120),
+            (persistedHistory.filter((message) => message.role === 'user').slice(-1)[0]?.content ?? '').slice(0, 120),
           send: writeStreamEvent
         });
         res.once('close', () => introOverlay?.stop());
