@@ -112,7 +112,7 @@ export function startAiIntroOverlay(options: {
 
   const flush = () => {
     if (stopped || mainStarted || !pending) return;
-    const piece = Array.from(pending).slice(0, 4).join('');
+    const piece = Array.from(pending).slice(0, 3).join('');
     pending = pending.slice(piece.length);
     if (!piece) return;
     sentIntro = true;
