@@ -54,40 +54,53 @@ function partBody(value: string, head: Record<string, string>) {
   }
   return decode(Buffer.from(value, 'latin1'), charset);
 }
+// Some providers wrap multipart/alternative inside multipart/mixed.
+// Walk a bounded MIME tree and prefer text/plain, using HTML only as fallback.
+function parsedMimeBody(body: string, head: Record<string,string>, depth = 0):
+  { text: string; hasAttachments: boolean; plain: boolean } {
+  const type = head['content-type'] || 'text/plain';
+  const disposition = head['content-disposition'] || '';
+  if (/attachment|filename\s*=/i.test(disposition + ' ' + type)) {
+    return { text: '', hasAttachments: true, plain: false };
+  }
+  if (depth > 4) return { text: '', hasAttachments: true, plain: false };
+  const boundary = /boundary\s*=\s*(?:"([^"]+)"|([^;\s]+))/i.exec(type);
+  if (/multipart\//i.test(type) && boundary) {
+    const marker = '--' + (boundary[1] || boundary[2]);
+    let plain = '', html = '', hasAttachments = false;
+    for (const chunk of body.split(marker).slice(1, 25)) {
+      if (chunk.startsWith('--')) break;
+      const gap = chunk.search(/\r?\n\r?\n/);
+      if (gap < 0) continue;
+      const nestedHead = parseHeaders(chunk.slice(0, gap).replace(/^\r?\n/, ''));
+      const nested = parsedMimeBody(chunk.slice(gap).replace(/^\r?\n\r?\n/, ''), nestedHead, depth + 1);
+      hasAttachments ||= nested.hasAttachments;
+      if (nested.text && nested.plain && !plain) plain = nested.text;
+      else if (nested.text && !html) html = nested.text;
+    }
+    return { text: plain || html, hasAttachments, plain: Boolean(plain) };
+  }
+  if (/^text\/plain\b/i.test(type)) return { text: partBody(body, head), hasAttachments: false, plain: true };
+  if (/^text\/html\b/i.test(type)) {
+    const html = partBody(body, head);
+    return { text: html.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
+      .replace(/<[^>]*>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&'),
+      hasAttachments: false, plain: false };
+  }
+  return { text: '', hasAttachments: true, plain: false };
+}
 export function parseMailSource(source: Buffer, uid: number): MailMessage {
   const raw = source.toString('latin1');
   const at = raw.search(/\r?\n\r?\n/);
   const head = parseHeaders(at < 0 ? raw : raw.slice(0, at));
   const body = at < 0 ? '' : raw.slice(at).replace(/^\r?\n\r?\n/, '');
-  const type = head['content-type'] || 'text/plain';
-  const boundary = /boundary\s*=\s*(?:"([^"]+)"|([^;\s]+))/i.exec(type);
-  let text = '', hasAttachments = /attachment/i.test(head['content-disposition'] || '');
-  if (/multipart\//i.test(type) && boundary) {
-    const marker = '--' + (boundary[1] || boundary[2]);
-    for (const chunk of body.split(marker).slice(1, 20)) {
-      const gap = chunk.search(/\r?\n\r?\n/);
-      if (gap < 0) continue;
-      const subHead = parseHeaders(chunk.slice(0, gap).replace(/^\r?\n/, ''));
-      const subType = subHead['content-type'] || 'text/plain';
-      if (/attachment|filename\s*=/i.test((subHead['content-disposition'] || '') + subType)) {
-        hasAttachments = true; continue;
-      }
-      if (!text && /^text\/plain\b/i.test(subType)) {
-        text = partBody(chunk.slice(gap).replace(/^\r?\n\r?\n/, ''), subHead);
-      }
-    }
-  } else if (/^text\/plain\b/i.test(type)) {
-    text = partBody(body, head);
-  } else if (/^text\/html\b/i.test(type)) {
-    text = partBody(body, head).replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
-      .replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
-  } else hasAttachments = true;
+  const part = parsedMimeBody(body, head);
   return {
     uid, from: (head.from || '').slice(0, 320),
     subject: (head.subject || '(без темы)').slice(0, 300),
     date: (head.date || '').slice(0, 100),
-    text: text.replace(/\0/g, '').replace(/\s{3,}/g, '\n\n').trim().slice(0, 12_000),
-    hasAttachments
+    text: part.text.replace(/\0/g, '').replace(/\s{3,}/g, '\n\n').trim().slice(0, 12_000),
+    hasAttachments: part.hasAttachments
   };
 }
 

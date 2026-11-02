@@ -349,18 +349,30 @@ async function processMessage(account: EmailMailbox, folder: 'INBOX'|'SENT', uid
 const isDue = (time: Date | null, minutes: number) =>
   minutes >= 0 && (!time || Date.now() - time.getTime() >= (minutes === 0 ? 15_000 : minutes * 60_000));
 
-async function publishPending(account: EmailMailbox, token: string) {
+async function publishPending(account: EmailMailbox, token: string): Promise<{ warnings: string[]; digests: number }> {
+  const warnings: string[] = [];
+  let digests = 0;
+  const reportFailure = (stage: 'TASKS' | 'REPLIES' | 'SUMMARY', cause: unknown) => {
+    const failure = diagnoseMailError(cause);
+    console.warn('[MailAssistant] publishing failed', { mailboxId: account.id,
+      provider: account.provider, stage: 'PUBLISH_' + stage, code: failure.code,
+      errorType: cause instanceof Error ? cause.name : 'Unknown' });
+    warnings.push('Сбой обработки ' + (stage === 'TASKS' ? 'задач' : stage === 'REPLIES' ? 'ответов' : 'сводки') +
+      ' (' + failure.code + ').');
+  };
   const latest = await prisma.emailMailbox.findFirst({ where: {
     id: account.id, userId: account.userId, revision: account.revision,
     enabled: true, leaseToken: token, leasedUntil: { gt: new Date() }
   } });
-  if (!latest) return;
+  if (!latest) return { warnings, digests };
   const rows = await prisma.emailAnalysis.findMany({
     where: { userId: account.userId, mailboxId: account.id, status: 'DONE' },
-    orderBy: { createdAt: 'asc' }, take: 200
-  });
+    // Keep the newest analyses in scope even for long-lived, busy mailboxes.
+    orderBy: { createdAt: 'desc' }, take: 200
+  }).then(rows => rows.reverse());
   const now = new Date();
   if (latest.taskMode !== 'NONE' && isDue(latest.lastTaskAt, latest.taskIntervalMinutes)) {
+    try {
     for (const row of rows.filter(x => x.folder === 'INBOX' && !x.taskPublishedAt).slice(0, 20)) {
       const summary = row.summary && typeof row.summary === 'object' ? row.summary as {tasks?:unknown} : null;
       const actions = Array.isArray(summary?.tasks) ? summary.tasks.slice(0, 3) : [];
@@ -378,8 +390,10 @@ async function publishPending(account: EmailMailbox, token: string) {
     }
     await prisma.emailMailbox.updateMany({ where: { id: account.id, leaseToken: token, revision: account.revision },
       data: { lastTaskAt: now } });
+    } catch (cause) { reportFailure('TASKS', cause); }
   }
   if (latest.replyMode !== 'OBSERVE' && isDue(latest.lastReplyAt, latest.replyIntervalMinutes)) {
+    try {
     for (const row of rows.filter(x => x.folder === 'INBOX' && !x.replyPublishedAt).slice(0, 20)) {
       if (row.suggestedReplyText && emailAddress(row.sender) && (latest.replyMode !== 'AUTO' || autoReplyAllowed(row.sender, latest.email))) {
         await prisma.emailAnalysis.updateMany({ where: { id: row.id, userId: account.userId },
@@ -395,8 +409,10 @@ async function publishPending(account: EmailMailbox, token: string) {
     }
     await prisma.emailMailbox.updateMany({ where: { id: account.id, leaseToken: token, revision: account.revision },
       data: { lastReplyAt: now } });
+    } catch (cause) { reportFailure('REPLIES', cause); }
   }
   if (latest.summaryIntervalMinutes !== -1 && isDue(latest.lastSummaryAt, latest.summaryIntervalMinutes)) {
+    try {
     const fresh = rows.filter(row => !latest.lastSummaryAt || row.createdAt > latest.lastSummaryAt);
     if (fresh.length) {
       const content = ('📨 Сводка почты · ' + latest.email + '\n\n' +
@@ -405,15 +421,19 @@ async function publishPending(account: EmailMailbox, token: string) {
           return '• ' + row.subject.slice(0, 100) + ': ' + (result?.summary ?? '').slice(0,350);
         }).join('\n')).slice(0,4000);
       await prisma.emailDigest.create({ data: { userId: account.userId, mailboxId: account.id, content } });
+      digests++;
       await prisma.emailMailbox.updateMany({ where: { id: account.id, leaseToken: token, revision: account.revision },
         data: { lastSummaryAt: now, lastSummary: {
           summary: content.slice(0,2000), decisions: [], obligations: [], risks: []
         } as Prisma.InputJsonValue } });
     }
+    } catch (cause) { reportFailure('SUMMARY', cause); }
   }
+  return { warnings, digests };
 }
-async function scan(account: EmailMailbox, token: string) {
+async function scan(account: EmailMailbox, token: string): Promise<{ seen: number; eligible: number }> {
   const imap = new ReadOnlyImap();
+  let stage = 'CONNECT', seen = 0, eligible = 0;
   try {
     await imap.connect(account.provider as MailProvider, account.email,
       decryptMailPassword(account.passwordCipher, account.userId));
@@ -424,6 +444,7 @@ async function scan(account: EmailMailbox, token: string) {
       name: account.sentFolder, type: 'SENT', cursor: account.sentUid, validity: account.sentValidity
     });
     for (const folder of folders) {
+      stage = 'STATUS_' + folder.type;
       const status = await imap.status(folder.name);
       if (status.validity !== folder.validity) {
         await prisma.emailMailbox.updateMany({
@@ -433,9 +454,11 @@ async function scan(account: EmailMailbox, token: string) {
         });
         continue; // UIDVALIDITY resets must not cause unrequested full historical import.
       }
+      stage = 'SELECT_' + folder.type;
       await imap.select(folder.name);
       // Legacy failures may already be behind the saved UID cursor. Recover
       // only failed analyses of the same mailbox/folder/UIDVALIDITY, not history.
+      stage = 'RECOVER_' + folder.type;
       const failed = await prisma.emailAnalysis.findMany({
         where: { mailboxId: account.id, userId: account.userId, folder: folder.type,
           validity: folder.validity, status: 'FAILED' },
@@ -444,26 +467,41 @@ async function scan(account: EmailMailbox, token: string) {
       for (const previous of failed) {
         const active = await prisma.emailMailbox.findFirst({ where: { id: account.id,
           enabled: true, leaseToken: token, revision: account.revision, leasedUntil: { gt: new Date() } } });
-        if (!active) return;
+        if (!active) return { seen, eligible };
+        stage = 'RECOVER_FETCH_' + folder.type;
         const message = await imap.fetch(previous.uid);
         if (message) await processMessage(account, folder.type, previous.uid, message);
       }
+      stage = 'SEARCH_' + folder.type;
       const uids = (await imap.uids(folder.cursor)).slice(0, 3);
       for (const uid of uids) {
         const active = await prisma.emailMailbox.findFirst({ where: { id: account.id,
           enabled: true, leaseToken: token, revision: account.revision, leasedUntil: { gt: new Date() } } });
-        if (!active) return;
+        if (!active) return { seen, eligible };
+        stage = 'FETCH_' + folder.type;
         const message = await imap.fetch(uid);
+        seen++;
         if (message && (message.text.length + message.subject.length) >= 10) {
+          eligible++;
+          stage = 'ANALYZE_' + folder.type;
           await processMessage(account, folder.type, uid, message);
         }
+        stage = 'SAVE_CURSOR_' + folder.type;
         await prisma.emailMailbox.updateMany({ where: {
           id: account.id, leaseToken: token, revision: account.revision
         }, data: { [folder.type === 'INBOX' ? 'inboxUid' : 'sentUid']: uid,
           processedCount: { increment: message ? 1 : 0 } } });
       }
     }
+  } catch (cause) {
+    const diagnosis = diagnoseMailError(cause);
+    console.warn('[MailAssistant] scan failed', { mailboxId: account.id,
+      provider: account.provider, stage, code: diagnosis.code,
+      errorType: cause instanceof Error ? cause.name : 'Unknown' });
+    throw Object.assign(new Error('Ошибка проверки почты на этапе ' + stage + ' (' + diagnosis.code + ').'),
+      { stage: stage.slice(0,20), code: 'MAIL_SCAN_FAILED' });
   } finally { imap.close(); }
+  return { seen, eligible };
 }
 export const mailAssistantWorker = {
   async drain() {
@@ -480,13 +518,32 @@ export const mailAssistantWorker = {
         OR: [{ leasedUntil: null }, { leasedUntil: { lt: new Date() } }]
       }, data: { leaseToken: token, leasedUntil: new Date(Date.now() + LEASE) } });
       if (!claim.count) continue;
-      let error: string | null = null;
-      try { await scan(account, token); await publishPending(account, token); } catch (cause) {
+      const warnings: string[] = [];
+      let seen = 0, eligible = 0, digests = 0;
+      // Summary publishing is independent of IMAP and of task/reply processing.
+      // Previously one failed command prevented *every* digest in this cycle.
+      try {
+        const result = await scan(account, token);
+        seen = result.seen; eligible = result.eligible;
+      } catch (cause) {
         const diagnosis = diagnoseMailError(cause);
-        error = diagnosis.message;
-        console.warn('[MailAssistant] monitoring failed', { mailboxId: account.id,
-          provider: account.provider, code: diagnosis.code, stage: diagnosis.stage });
+        warnings.push(diagnosis.message);
       }
+      try {
+        const result = await publishPending(account, token);
+        warnings.push(...result.warnings);
+        digests = result.digests;
+      } catch (cause) {
+        const diagnosis = diagnoseMailError(cause);
+        console.warn('[MailAssistant] publishing setup failed', { mailboxId: account.id,
+          provider: account.provider, stage: 'PUBLISH_LOAD', code: diagnosis.code,
+          errorType: cause instanceof Error ? cause.name : 'Unknown' });
+        warnings.push('Не удалось загрузить обработанные письма для сводки (' + diagnosis.code + ').');
+      }
+      const error = warnings.length ? warnings.join(' ').slice(0,900) : null;
+      console.info('[MailAssistant] cycle completed', { mailboxId: account.id,
+        provider: account.provider, newUids: seen, eligibleMessages: eligible, digestsCreated: digests,
+        warnings: warnings.length });
       await prisma.emailMailbox.updateMany({ where: { id: account.id, leaseToken: token }, data: {
         leaseToken: null, leasedUntil: null, lastCheckedAt: new Date(),
         lastError: error, nextCheckAt: new Date(Date.now() + (error ? 600_000 : Math.max(15_000,

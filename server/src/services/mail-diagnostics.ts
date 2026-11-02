@@ -9,6 +9,10 @@ export function diagnoseMailError(cause: unknown): MailDiagnostic {
   const code = typeof value.code === 'string' ? value.code : '';
   const stage = typeof value.stage === 'string' && /^[A-Z_]{2,20}$/.test(value.stage) ? value.stage : 'UNKNOWN';
   const message = typeof value.message === 'string' ? value.message : '';
+  if (code === 'MAIL_SCAN_FAILED') {
+    return { code: 'MAIL_SCAN_FAILED', stage,
+      message: 'Проверка почты прервалась на этапе ' + stage + '. Подробности записаны в журнале сервера.' };
+  }
   if (code === 'IMAP_REJECTED') {
     return stage === 'LOGIN'
       ? {code: 'IMAP_AUTH_REJECTED', stage, message: 'Почтовый сервер отклонил вход. Проверьте пароль приложения и разрешение IMAP.'}
@@ -22,6 +26,21 @@ export function diagnoseMailError(cause: unknown): MailDiagnostic {
   }
   if (/^ERR_TLS_|^CERT_|^UNABLE_TO_VERIFY_|^DEPTH_ZERO_SELF_SIGNED_CERT$/.test(code)) {
     return {code: 'IMAP_TLS', stage: 'CONNECT', message: 'Ошибка защищённого TLS-соединения с почтовым сервером.'};
+  }
+  if (message === 'Почтовый сервер отключился') {
+    return {code: 'IMAP_CONNECTION_CLOSED', stage: 'READ', message: 'Почтовый сервер закрыл IMAP-соединение во время проверки.'};
+  }
+  if (message === 'Слишком большое письмо' || message === 'Слишком большой ответ IMAP') {
+    return {code: 'IMAP_RESPONSE_LIMIT', stage: 'READ', message: 'Ответ почтового сервера превысил допустимый размер.'};
+  }
+  if (message === 'Неполные IMAP данные') {
+    return {code: 'IMAP_STATUS_INVALID', stage: 'STATUS', message: 'Почтовый сервер вернул неполные данные о папке.'};
+  }
+  if (message === 'IMAP недоступен') {
+    return {code: 'IMAP_UNAVAILABLE', stage: 'CONNECT', message: 'Почтовый сервер не подтвердил готовность IMAP.'};
+  }
+  if (/^P[12]\d{3}$/.test(code)) {
+    return {code: 'MAIL_DATABASE_' + code, stage: 'DATABASE', message: 'Сбой операции с базой данных почтового ассистента.'};
   }
   if (/Дневной лимит кредитов/.test(message)) {
     return {code: 'MAIL_DAILY_LIMIT', stage: 'ANALYSIS', message: 'Достигнут дневной лимит кредитов почтового ассистента.'};

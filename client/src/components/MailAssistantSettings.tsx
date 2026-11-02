@@ -178,6 +178,10 @@ export function MailAssistantSettings({ onClose }: { onClose: () => void }) {
                     {' · '}Всего израсходовано: {(selected.totalSpentMilli / 1000).toLocaleString('ru-RU',{maximumFractionDigits:3})} кр.
                   </p>
                   {selected.lastError && <p role="alert" className="telegram-integrations-modal__warning text-xs">{selected.lastError}</p>}
+                  {selected.enabled && selected.summaryIntervalMinutes === -1 &&
+                    <p className="integration-menu__muted text-xs">Почтовые сводки отключены в разделе «Частота сводок».</p>}
+                  {selected.enabled && selected.lastCheckedAt && !selected.lastError && selected.processedCount === 0 &&
+                    <p className="integration-menu__muted text-xs">Проверка почты выполнялась, но новых писем после подключения пока не обнаружено. Старые письма не импортируются автоматически.</p>}
                   <div className="flex flex-wrap gap-2">
                     <button type="button" disabled={busy} onClick={toggle} className="telegram-integrations-modal__secondary rounded-lg border px-3 py-2 text-xs font-semibold">
                       {selected.enabled ? 'Остановить мониторинг' : 'Включить мониторинг'}

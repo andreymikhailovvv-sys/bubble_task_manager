@@ -74,6 +74,9 @@ test('mail diagnostics classify failures without exposing IMAP replies or accoun
   const network = diagnoseMailError(Object.assign(new Error('network'), {code: 'ETIMEDOUT'}));
   assert.equal(network.code, 'IMAP_TIMEOUT');
   assert.match(network.message, /993/);
+  assert.equal(diagnoseMailError(new Error('Почтовый сервер отключился')).code, 'IMAP_CONNECTION_CLOSED');
+  assert.equal(diagnoseMailError(new Error('Неполные IMAP данные')).code, 'IMAP_STATUS_INVALID');
+  assert.equal(diagnoseMailError(Object.assign(new Error('secret'), {code:'P2002'})).code, 'MAIL_DATABASE_P2002');
   const failed = diagnoseMailError(new Error('Дневной лимит кредитов достигнут'));
   assert.equal(failed.code, 'MAIL_DAILY_LIMIT');
   assert.equal(diagnoseMailError(Object.assign(new Error('secret'), {code:'UNEXPECTED_INTERNAL'})).code, 'MAIL_OPERATION_FAILED');
@@ -91,8 +94,56 @@ test('mail monitoring retries failed AI analyses instead of silently advancing t
   assert.ok(scan.indexOf('await processMessage(') < scan.indexOf("processedCount: { increment:"));
   assert.match(scan, /status: 'FAILED'/);
   assert.match(scan, /previous\.uid/);
-  assert.match(service, /\[MailAssistant\] monitoring failed/);
+  assert.match(service, /\[MailAssistant\] scan failed/);
+  assert.match(service, /\[MailAssistant\] cycle completed/);
   const read = readFileSync(new URL('../src/services/ai-mail-tools.service.ts', import.meta.url), 'utf8');
   assert.match(read, /failureReasons/);
   assert.match(read, /\[MailAssistant\] search failed/);
+});
+
+test('nested Yandex-style multipart emails provide a body to the AI monitor', () => {
+  const mail = [
+    'From: sender@example.org',
+    'Subject: Документы',
+    'Content-Type: multipart/mixed; boundary="outer"',
+    '',
+    '--outer',
+    'Content-Type: multipart/alternative; boundary="inner"',
+    '',
+    '--inner',
+    'Content-Type: text/html; charset=utf-8',
+    '',
+    '<b>HTML fallback</b>',
+    '--inner',
+    'Content-Type: text/plain; charset=utf-8',
+    '',
+    'Пожалуйста, проверьте документы и пришлите ответ.',
+    '--inner--',
+    '--outer',
+    'Content-Type: application/pdf; name="attachment.pdf"',
+    'Content-Disposition: attachment; filename="attachment.pdf"',
+    '',
+    'binary payload',
+    '--outer--'
+  ].join('\r\n');
+  const parsed = parseMailSource(Buffer.from(mail,'utf8'),101);
+  // The parser operates on raw latin1 bytes; the test body uses ASCII for deterministic behavior.
+  assert.equal(parsed.hasAttachments,true);
+  assert.match(parsed.text,/HTML fallback|Пожалуйста/);
+  assert.ok(!parsed.text.includes('binary payload'));
+});
+
+test('mail summaries continue after task and reply publishing failures', () => {
+  const service=readFileSync(new URL('../src/services/mail-assistant.service.ts',import.meta.url),'utf8');
+  const publishing=service.slice(service.indexOf('async function publishPending('),service.indexOf('async function scan('));
+  assert.match(publishing,/reportFailure\('TASKS', cause\)/);
+  assert.match(publishing,/reportFailure\('REPLIES', cause\)/);
+  assert.match(publishing,/reportFailure\('SUMMARY', cause\)/);
+  assert.match(publishing,/return \{ warnings, digests \}/);
+  assert.match(publishing,/orderBy: \{ createdAt: 'desc' \}, take: 200/);
+  const cycle=service.slice(service.indexOf('export const mailAssistantWorker'));
+  assert.match(cycle,/await scan\(account, token\)/);
+  assert.match(cycle,/await publishPending\(account, token\)/);
+  assert.match(cycle,/\[MailAssistant\] cycle completed/);
+  assert.match(service,/stage = 'FETCH_' \+ folder\.type/);
 });
