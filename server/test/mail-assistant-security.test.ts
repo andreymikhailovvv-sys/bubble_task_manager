@@ -74,6 +74,9 @@ test('mail diagnostics classify failures without exposing IMAP replies or accoun
   const network = diagnoseMailError(Object.assign(new Error('network'), {code: 'ETIMEDOUT'}));
   assert.equal(network.code, 'IMAP_TIMEOUT');
   assert.match(network.message, /993/);
+  assert.equal(diagnoseMailError(new Error('Почтовый сервер отключился')).code, 'IMAP_CONNECTION_CLOSED');
+  assert.equal(diagnoseMailError(new Error('Неполные IMAP данные')).code, 'IMAP_STATUS_INVALID');
+  assert.equal(diagnoseMailError(Object.assign(new Error('secret'), {code:'P2002'})).code, 'MAIL_DATABASE_P2002');
   const failed = diagnoseMailError(new Error('Дневной лимит кредитов достигнут'));
   assert.equal(failed.code, 'MAIL_DAILY_LIMIT');
   assert.equal(diagnoseMailError(Object.assign(new Error('secret'), {code:'UNEXPECTED_INTERNAL'})).code, 'MAIL_OPERATION_FAILED');
