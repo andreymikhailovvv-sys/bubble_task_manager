@@ -4164,7 +4164,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               <button type="button" onClick={() => { if (currentUser?.isGuest && isWebRuntime) { setIsCreditPurchaseOpen(false); openAuthModal('register'); } else { setCreditPopoverView('purchase'); setIsCreditPurchaseOpen((open) => !open); } }} className="miniapp-credit-badge inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold" title={currentUser?.isGuest ? 'Зарегистрируйтесь, чтобы получить 100 ИИ-кредитов' : 'Купить AI-кредиты'} aria-label={`AI-кредиты: ${aiCredits}`} aria-expanded={isCreditPurchaseOpen}>
                 <Coins size={15} />
                 {displayMode === 'timeline' ? <span className="miniapp-utility-menu-label">Кредиты</span> : null}
-                <span>{aiCredits}</span>
+                <span className={displayMode === 'timeline' ? 'miniapp-utility-menu-value' : undefined}>{aiCredits}</span>
               </button>
               {isCreditPurchaseOpen ? <div onScroll={(event) => event.stopPropagation()} onTouchMove={(event) => event.stopPropagation()} className="miniapp-credit-popover absolute right-0 top-full z-[60] mt-2 max-h-[75vh] w-[min(21rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border p-4 shadow-2xl">
                 <div className="miniapp-credit-popover-hero -m-4 mb-3 rounded-t-2xl p-4">
@@ -4209,7 +4209,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <defs><linearGradient id="miniEffFill" x1="10" y1="10" x2="62" y2="62"><stop offset="0%" stopColor="#38bdf8" /><stop offset="45%" stopColor="#8b5cf6" /><stop offset="100%" stopColor="#f472b6" /></linearGradient><linearGradient id="miniEffRing" x1="12" y1="58" x2="60" y2="14"><stop offset="0%" stopColor="#22d3ee" /><stop offset="55%" stopColor="#a78bfa" /><stop offset="100%" stopColor="#fb7185" /></linearGradient></defs>
                   <circle cx="36" cy="36" r="25" fill="url(#miniEffFill)" opacity="0.18" /><circle cx="36" cy="36" r="26" fill="none" stroke="rgba(148,163,184,0.32)" strokeWidth="5" /><circle cx="36" cy="36" r="26" fill="none" stroke="url(#miniEffRing)" strokeWidth="5" strokeLinecap="round" pathLength="100" strokeDasharray={`${efficiencyScore} 100`} transform="rotate(-90 36 36)" /><path d="M36 17l5.4 12.1 13.1 1.4-9.8 8.8 2.8 12.9L36 45.5l-11.5 6.7 2.8-12.9-9.8-8.8 13.1-1.4L36 17z" fill="url(#miniEffFill)" />
                 </svg>
-                {displayMode === 'timeline' ? <span className="miniapp-utility-menu-label">Рейтинг · {formattedEfficiencyScore}/100</span> : null}
+                {displayMode === 'timeline' ? <>
+                  <span className="miniapp-utility-menu-label">Рейтинг</span>
+                  <span className="miniapp-utility-menu-value">{formattedEfficiencyScore}/100</span>
+                </> : null}
               </button>
               <button
                 type="button"
