@@ -617,7 +617,7 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
     val previewContent=if(pending && !isUser){
         val prefix=if(content.endsWith("*") && !content.endsWith("**"))
             content.dropLast(1) else content
-        if(prefix.windowed(2).count{it=="**"} % 2 == 1) prefix+"**" else prefix
+        if((prefix.split("**").size-1) % 2 == 1) prefix+"**" else prefix
     }else content
     Row(Modifier.fillMaxWidth(),
         horizontalArrangement=if(isUser)Arrangement.End else Arrangement.Start){
