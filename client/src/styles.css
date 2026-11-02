@@ -13182,3 +13182,15 @@ body[data-theme='light'] .miniapp-shell .miniapp-workspace-utilities.is-timeline
   .miniapp-shell .miniapp-workspace-utilities.is-list .miniapp-efficiency-button,
   .miniapp-shell .miniapp-workspace-utilities.is-list button[data-miniapp-popover="settings"] { width: 2.35rem; }
 }
+
+/* The list's existing action order remains intact, but its three buttons
+   also sit on separate surfaces rather than inside a fourth outer card. */
+.miniapp-shell .miniapp-list-workspace .miniapp-workspace-toolbar-card,
+.miniapp-shell.miniapp-light .miniapp-list-workspace .miniapp-workspace-toolbar-card,
+body[data-theme='light'] .miniapp-shell .miniapp-list-workspace .miniapp-workspace-toolbar-card {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
