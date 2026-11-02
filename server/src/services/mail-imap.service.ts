@@ -116,7 +116,7 @@ export function parseMailSource(source: Buffer, uid: number): MailMessage {
  */
 type ImapNode = string | null | ImapNode[];
 function parseImapTree(source: string): ImapNode | null {
-  const tokens = source.match(/\\(|\\)|"(?:\\\\.|[^"\\\\])*"|[^\\s()]+/g);
+  const tokens = source.match(/\(|\)|"(?:\\.|[^"\\])*"|[^\s()]+/g);
   if (!tokens || tokens.length > 20_000) return null;
   let at = 0;
   function next(depth: number): ImapNode {
@@ -130,7 +130,7 @@ function parseImapTree(source: string): ImapNode | null {
     }
     if (token === ')' ) throw new Error('Invalid BODYSTRUCTURE');
     if (token.toUpperCase() === 'NIL') return null;
-    if (token.startsWith('"')) return token.slice(1,-1).replace(/\\\\(["\\\\])/g,'$1');
+    if (token.startsWith('"')) return token.slice(1,-1).replace(/\\(["\\])/g,'$1');
     return token;
   }
   try { return next(0); } catch { return null; }
