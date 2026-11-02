@@ -1,3 +1,4 @@
+import { AiStreamingMessageBody } from './components/AiStreamingMessageBody';
 import { prepareAiChatImageFile } from './lib/ai-image-upload';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
@@ -5100,7 +5101,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 </div>
                 ))}
                 <TaskMonitoringTriggerChips taskId={openedTask.id} />
-                {aiLoadingTaskId === openedTask.id && taskAiStreamingText[openedTask.id] ? <div className="miniapp-ai-chat-message-assistant rounded-2xl p-3 text-sm whitespace-pre-wrap">{taskAiStreamingText[openedTask.id]}</div> : null}
+                {aiLoadingTaskId === openedTask.id && taskAiStreamingText[openedTask.id] ? <div className="miniapp-ai-chat-message-assistant rounded-2xl p-3 text-sm whitespace-pre-wrap"><AiStreamingMessageBody content={taskAiStreamingText[openedTask.id]} /></div> : null}
                 {aiLoadingTaskId === openedTask.id ? <TaskAiProgress status={aiProgressByTask[openedTask.id] ?? 'analyzing_request'} /> : liveVoiceTaskProgress[openedTask.id] ? <TaskAiProgress status={liveVoiceTaskProgress[openedTask.id]} /> : openedTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={openedTask.id} /> : null}
                 <div className="miniapp-ai-chat-bottom-spacer h-24" aria-hidden="true" />
               </div>
@@ -5311,7 +5312,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={setReplyToGeneral} /><TelegramMessageQuickShare text={message.content} compact /></div>
                 </div>
               ))}
-              {aiChatLoading && aiChatStreamingText ? <div className="miniapp-ai-chat-message-assistant rounded-2xl p-3 text-sm whitespace-pre-wrap">{aiChatStreamingText}</div> : null}
+              {aiChatLoading && aiChatStreamingText ? <div className="miniapp-ai-chat-message-assistant rounded-2xl p-3 text-sm whitespace-pre-wrap"><AiStreamingMessageBody content={aiChatStreamingText} /></div> : null}
               {aiChatLoading ? <AiProgress status={aiChatProgress} /> : activeLiveVoiceStatus ? <AiProgress status={activeLiveVoiceStatus} /> : null}
               {aiChatError ? <p className="text-sm text-rose-300">{aiChatError}</p> : null}
               <div className="miniapp-ai-chat-bottom-spacer h-24" aria-hidden="true" />

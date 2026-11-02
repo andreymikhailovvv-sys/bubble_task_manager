@@ -1,3 +1,4 @@
+import { AiStreamingMessageBody } from './components/AiStreamingMessageBody';
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {Loader2,SendHorizontal} from 'lucide-react';
 import {AutoGrowingTextarea} from './components/AutoGrowingTextarea';
@@ -133,7 +134,7 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
                 {item.proposal&&<WorkAiProposalCard organizationId={organizationId} initial={item.proposal} onChanged={()=>void api.workQuickAiHistory(organizationId).then(r=>setQuickMessages(r.messages)).catch(e=>setError(errorText(e)))}/>}
               </div>)}
               {!quickMessages.length&&<p className="text-subtle">Быстрый вопрос по проектам и задачам выбранной компании.</p>}
-              {loading&&streamedText&&<div className="quick-ai-chat-message quick-ai-chat-message-assistant rounded-2xl p-3 whitespace-pre-wrap">{streamedText}</div>}
+              {loading&&streamedText&&<div className="quick-ai-chat-message quick-ai-chat-message-assistant rounded-2xl p-3 whitespace-pre-wrap"><AiStreamingMessageBody content={streamedText} /></div>}
               {loading&&<AiProgress status={aiProgress}/>}
             </div>
           </div>
@@ -183,7 +184,7 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
           ?api.workQuickAiHistory(organizationId).then(r=>setQuickMessages(r.messages))
           :api.workAiHistory(organizationId,selectedChatId).then(r=>setTaskMessages(r.messages))).catch(e=>setError(errorText(e)))}/>}
       </div>)}
-      status={<>{loading&&streamedText&&<div className="chat-message-assistant rounded-2xl p-3 whitespace-pre-wrap text-sm">{streamedText}</div>}{error?<p role="alert" className="text-sm text-rose-400">{error}</p>:
+      status={<>{loading&&streamedText&&<div className="chat-message-assistant rounded-2xl p-3 whitespace-pre-wrap text-sm"><AiStreamingMessageBody content={streamedText} /></div>}{error?<p role="alert" className="text-sm text-rose-400">{error}</p>:
         loading?<AiProgress status={aiProgress}/>:
         credits?<p className="text-[11px] text-muted">Баланс организации: {(credits.aiCreditsMilli/1000).toFixed(3)} кр.</p>:null}</>}
       onClose={()=>setExpanded(false)}

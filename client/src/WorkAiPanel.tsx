@@ -1,3 +1,4 @@
+import { AiStreamingMessageBody } from './components/AiStreamingMessageBody';
 import {useEffect,useRef,useState,type FormEvent} from 'react';
 import {Bot, Send, RefreshCw, Radar, Plus, X, Wallet, Search, Maximize2, Minimize2, SendHorizontal, Loader2, Check, Copy, ChevronDown} from 'lucide-react';
 import {AiModelChip} from './components/AiModelChip';
@@ -176,7 +177,7 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
         </div>
         {message.proposal&&<WorkAiProposalCard organizationId={organizationId} initial={message.proposal} onChanged={()=>void load().catch(e=>setError(errText(e)))}/>}
       <div className="ai-message-forward-actions flex justify-end">{replyAction(message)}</div></div>)}
-      {busy&&streamedText&&<div className="work-ai-message assistant"><small>ИИ печатает</small><WorkAiMessageBody content={streamedText}/></div>}
+      {busy&&streamedText&&<div className="work-ai-message assistant"><small>ИИ печатает</small><AiStreamingMessageBody content={streamedText}/></div>}
       {busy&&<AiProgress status={progress}/>} 
     </>;
     const composer=<div className="focused-task-ai-composer">
@@ -288,7 +289,7 @@ export default function WorkAiPanel({organizationId,taskId,canManage,canSetModel
         {item.proposal&&<WorkAiProposalCard organizationId={organizationId} initial={item.proposal} onChanged={()=>void load().catch(e=>setError(errText(e)))}/>}
         <div className="ai-message-forward-actions flex justify-end">{replyAction(item)}</div>
       </div>)}
-      {busy&&streamedText&&<div className="work-ai-message assistant"><small>ИИ печатает</small><WorkAiMessageBody content={streamedText}/></div>}
+      {busy&&streamedText&&<div className="work-ai-message assistant"><small>ИИ печатает</small><AiStreamingMessageBody content={streamedText}/></div>}
       {busy&&<AiProgress status={progress}/>} 
       <div ref={bottomRef}/>
     </div>
