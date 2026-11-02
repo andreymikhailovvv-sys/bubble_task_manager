@@ -22,7 +22,8 @@ test('timeline top row has separate search, postpone and expandable utilities, n
   assert.match(toolbar, /aria-expanded=\{isTimelineMoreOpen\}/);
   assert.match(toolbar, /miniapp-workspace-utilities-panel/);
   assert.match(toolbar, /Кредиты/);
-  assert.match(toolbar, /Рейтинг · \{formattedEfficiencyScore\}/);
+  assert.match(toolbar, /miniapp-utility-menu-label">Рейтинг<\/span>/);
+  assert.match(toolbar, /miniapp-utility-menu-value">\{formattedEfficiencyScore\}\/100/);
   assert.match(toolbar, /Настройки/);
   assert.match(css, /\.miniapp-premium-topbar\.miniapp-timeline-topbar/);
   assert.match(css, /\.miniapp-workspace-utilities\.is-timeline\.is-open/);
@@ -54,4 +55,31 @@ test('list retains its original layout, and search focus does not repaint timeli
   assert.match(mini, /setIsHeaderVisible\(false\)/);
   assert.match(mini, /miniapp-bottom-navigation/);
   assert.match(mini, /miniapp-native-day-timeline/);
+});
+
+
+test('timeline toolbar tiles match list height and overflow menu is consistently aligned', async () => {
+  const [mini, css] = await Promise.all([
+    read('../../client/src/MiniApp.tsx'),
+    read('../../client/src/styles.css')
+  ]);
+  const start = css.indexOf('/* Timeline top controls: three independent surfaces');
+  assert.ok(start >= 0);
+  const toolbarCss = css.slice(start);
+
+  // All three timeline controls are 2.75rem, the same as the list toolbar.
+  assert.match(toolbarCss, /\.miniapp-timeline-topbar \.miniapp-global-search-field \{\s*height: 2\.75rem;\s*min-height: 2\.75rem;/);
+  assert.match(toolbarCss, /\.miniapp-timeline-topbar \.miniapp-global-search-field input \{ height: 2\.65rem; \}/);
+  assert.match(toolbarCss, /\.miniapp-timeline-postpone-button,[\s\S]*?\.miniapp-timeline-more-toggle \{[\s\S]*?min-height: 2\.75rem;/);
+  assert.match(toolbarCss, /\.miniapp-timeline-more-toggle \{\s*width: 2\.75rem;/);
+  assert.match(toolbarCss, /\.miniapp-workspace-utilities\.is-list \.miniapp-credit-badge,[\s\S]*?height: 2\.75rem;/);
+
+  assert.match(mini, /miniapp-utility-menu-label">Рейтинг<\/span>/);
+  assert.match(mini, /miniapp-utility-menu-value">\{formattedEfficiencyScore\}\/100/);
+  assert.match(mini, /miniapp-utility-menu-value' : undefined\}>\{aiCredits\}/);
+  assert.match(toolbarCss, /grid-template-columns: 1\.7rem minmax\(0, 1fr\) auto;/);
+  assert.match(toolbarCss, /\.miniapp-utility-menu-value \{[\s\S]*?font-variant-numeric: tabular-nums;/);
+  assert.match(toolbarCss, /\.miniapp-timeline-view-switch button:first-child \{\s*border-radius: \.95rem \.72rem \.72rem \.95rem;/);
+  assert.match(toolbarCss, /\.miniapp-timeline-view-switch button:last-child \{\s*border-radius: \.72rem \.95rem \.95rem \.72rem;/);
+  assert.match(toolbarCss, /\.miniapp-timeline-view-switch \{\s*display: grid;\s*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
 });
