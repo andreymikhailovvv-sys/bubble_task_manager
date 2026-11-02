@@ -9,6 +9,10 @@ export function diagnoseMailError(cause: unknown): MailDiagnostic {
   const code = typeof value.code === 'string' ? value.code : '';
   const stage = typeof value.stage === 'string' && /^[A-Z_]{2,20}$/.test(value.stage) ? value.stage : 'UNKNOWN';
   const message = typeof value.message === 'string' ? value.message : '';
+  if (code === 'MAIL_SCAN_FAILED') {
+    return { code: 'MAIL_SCAN_FAILED', stage,
+      message: 'Проверка почты прервалась на этапе ' + stage + '. Подробности записаны в журнале сервера.' };
+  }
   if (code === 'IMAP_REJECTED') {
     return stage === 'LOGIN'
       ? {code: 'IMAP_AUTH_REJECTED', stage, message: 'Почтовый сервер отклонил вход. Проверьте пароль приложения и разрешение IMAP.'}
