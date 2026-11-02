@@ -155,7 +155,7 @@ export function startAiIntroOverlay(options: {
     }).then(() => {
       if (stopped || mainStarted || deadlineReached || controller.signal.aborted) return;
       const candidate = modelText.replace(/\s+/g, ' ').trim();
-      if (candidate.length < 18 || /^(?:сейчас\s+)?(?:разберу запрос|подготовлю ответ|обрабатываю запрос|думаю над ответом)[.!]?$/iu.test(candidate)) return;
+      if (candidate.length < 10 || /^(?:сейчас\s+)?(?:разберу запрос|подготовлю ответ|обрабатываю запрос|думаю над ответом)[.!]?$/iu.test(candidate)) return;
       if (sentIntro) options.send({ type: 'reset' });
       sentIntro = false;
       pending = '';
