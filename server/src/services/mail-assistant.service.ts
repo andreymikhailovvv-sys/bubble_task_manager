@@ -137,7 +137,8 @@ export const mailAssistant = {
       update: { provider: credentials.provider, passwordCipher, ...config,
         inboxUid: incoming.next - 1, inboxValidity: incoming.validity,
         sentFolder: sent?.name ?? null, sentUid: sent ? sent.next - 1 : 0, sentValidity: sent?.validity ?? null,
-        nextCheckAt: config.enabled ? new Date() : null, lastError: null, revision: { increment: 1 },
+        nextCheckAt: config.enabled ? new Date() : null, lastError: null,
+        manualDigestRequestedAt: null, revision: { increment: 1 },
         leaseToken: null, leasedUntil: null }
     });
     return { account: publicAccount(updated) };
@@ -149,7 +150,8 @@ export const mailAssistant = {
     const config = settings(payload);
     const account = await prisma.emailMailbox.update({ where: { id }, data: {
       ...config, revision: { increment: 1 }, nextCheckAt: config.enabled ? new Date() : null,
-      leaseToken: null, leasedUntil: null, lastError: null
+      leaseToken: null, leasedUntil: null, lastError: null,
+      manualDigestRequestedAt: null
     } });
     return { account: publicAccount(account) };
   },
@@ -162,7 +164,7 @@ export const mailAssistant = {
     const row = await own(userId, id);
     if (!row.enabled) throw new MailAssistantError(409, 'Мониторинг отключён');
     await prisma.emailMailbox.updateMany({ where: { id, userId, enabled: true },
-      data: { nextCheckAt: new Date(), lastSummaryAt: null } });
+      data: { nextCheckAt: new Date(), manualDigestRequestedAt: new Date(), lastError: null } });
     return { ok: true };
   },
   async events(userId: string, id: string) {
@@ -297,12 +299,14 @@ async function analyze(account: EmailMailbox, message: MailMessage, requestId: s
     if (!settled) await refundAiCreditReservation(reservation);
   }
 }
-async function processMessage(account: EmailMailbox, folder: 'INBOX'|'SENT', uid: number, message: MailMessage) {
+async function processMessage(account: EmailMailbox, folder: 'INBOX'|'SENT', uid: number, message: MailMessage,
+  summaryOnly = false) {
   const validity = folder === 'INBOX' ? account.inboxValidity : account.sentValidity || '';
   const record = await prisma.emailAnalysis.upsert({
     where: { mailboxId_folder_validity_uid: { mailboxId: account.id, folder, validity, uid } },
     create: { mailboxId: account.id, userId: account.userId, folder, validity, uid,
-      subject: message.subject, sender: message.from, status: 'PROCESSING', botStatus: 'SKIPPED' },
+      subject: message.subject, sender: message.from, status: 'PROCESSING',
+      summaryOnly, botStatus: 'SKIPPED' },
     update: {}
   });
   // A FAILED analysis must be retried. The IMAP cursor is not advanced on failure;
@@ -321,14 +325,14 @@ async function processMessage(account: EmailMailbox, folder: 'INBOX'|'SENT', uid
       id: account.id, userId: account.userId, revision: account.revision, enabled: true
     } });
     if (!current) return;
-    const reply = folder === 'INBOX' && result.shouldReply && emailAddress(message.from)
+    const reply = !record.summaryOnly && !summaryOnly && folder === 'INBOX' && result.shouldReply && emailAddress(message.from)
       ? result.replyText : '';
     await prisma.emailAnalysis.update({ where: { id: record.id }, data: {
       summary: result as unknown as Prisma.InputJsonValue, status: 'DONE',
       suggestedReplyText: reply || null,
-      botStatus: current.notifyImportant && result.important ? 'PENDING' : 'SKIPPED'
+      botStatus: !record.summaryOnly && !summaryOnly && current.notifyImportant && result.important ? 'PENDING' : 'SKIPPED'
     } });
-    if (current.notifyImportant && result.important) {
+    if (!record.summaryOnly && !summaryOnly && current.notifyImportant && result.important) {
       await prisma.systemNotification.upsert({
         where: { eventKey: 'mail-ai-important:' + record.id }, update: {},
         create: { userId: account.userId, eventKey: 'mail-ai-important:' + record.id,
@@ -349,7 +353,7 @@ async function processMessage(account: EmailMailbox, folder: 'INBOX'|'SENT', uid
 const isDue = (time: Date | null, minutes: number) =>
   minutes >= 0 && (!time || Date.now() - time.getTime() >= (minutes === 0 ? 15_000 : minutes * 60_000));
 
-async function publishPending(account: EmailMailbox, token: string): Promise<{ warnings: string[]; digests: number }> {
+async function publishPending(account: EmailMailbox, token: string, manualReady: boolean): Promise<{ warnings: string[]; digests: number }> {
   const warnings: string[] = [];
   let digests = 0;
   const reportFailure = (stage: 'TASKS' | 'REPLIES' | 'SUMMARY', cause: unknown) => {
@@ -371,9 +375,11 @@ async function publishPending(account: EmailMailbox, token: string): Promise<{ w
     orderBy: { createdAt: 'desc' }, take: 200
   }).then(rows => rows.reverse());
   const now = new Date();
+  const manual = Boolean(manualReady && latest.manualDigestRequestedAt &&
+    account.manualDigestRequestedAt?.getTime() === latest.manualDigestRequestedAt.getTime());
   if (latest.taskMode !== 'NONE' && isDue(latest.lastTaskAt, latest.taskIntervalMinutes)) {
     try {
-    for (const row of rows.filter(x => x.folder === 'INBOX' && !x.taskPublishedAt).slice(0, 20)) {
+    for (const row of rows.filter(x => x.folder === 'INBOX' && !x.summaryOnly && !x.taskPublishedAt).slice(0, 20)) {
       const summary = row.summary && typeof row.summary === 'object' ? row.summary as {tasks?:unknown} : null;
       const actions = Array.isArray(summary?.tasks) ? summary.tasks.slice(0, 3) : [];
       if (actions.length) {
@@ -394,7 +400,7 @@ async function publishPending(account: EmailMailbox, token: string): Promise<{ w
   }
   if (latest.replyMode !== 'OBSERVE' && isDue(latest.lastReplyAt, latest.replyIntervalMinutes)) {
     try {
-    for (const row of rows.filter(x => x.folder === 'INBOX' && !x.replyPublishedAt).slice(0, 20)) {
+    for (const row of rows.filter(x => x.folder === 'INBOX' && !x.summaryOnly && !x.replyPublishedAt).slice(0, 20)) {
       if (row.suggestedReplyText && emailAddress(row.sender) && (latest.replyMode !== 'AUTO' || autoReplyAllowed(row.sender, latest.email))) {
         await prisma.emailAnalysis.updateMany({ where: { id: row.id, userId: account.userId },
           data: { replyPublishedAt: now, botStatus: 'PENDING',
@@ -411,9 +417,10 @@ async function publishPending(account: EmailMailbox, token: string): Promise<{ w
       data: { lastReplyAt: now } });
     } catch (cause) { reportFailure('REPLIES', cause); }
   }
-  if (latest.summaryIntervalMinutes !== -1 && isDue(latest.lastSummaryAt, latest.summaryIntervalMinutes)) {
+  if (manual || (latest.summaryIntervalMinutes !== -1 && isDue(latest.lastSummaryAt, latest.summaryIntervalMinutes))) {
     try {
-    const fresh = rows.filter(row => !latest.lastSummaryAt || row.createdAt > latest.lastSummaryAt);
+    const fresh = manual ? rows.slice(-15) :
+      rows.filter(row => !latest.lastSummaryAt || row.createdAt > latest.lastSummaryAt);
     if (fresh.length) {
       const content = ('📨 Сводка почты · ' + latest.email + '\n\n' +
         fresh.slice(-15).map(row => {
@@ -423,9 +430,15 @@ async function publishPending(account: EmailMailbox, token: string): Promise<{ w
       await prisma.emailDigest.create({ data: { userId: account.userId, mailboxId: account.id, content } });
       digests++;
       await prisma.emailMailbox.updateMany({ where: { id: account.id, leaseToken: token, revision: account.revision },
-        data: { lastSummaryAt: now, lastSummary: {
+        data: { lastSummaryAt: now, ...(manual ? { manualDigestRequestedAt: null } : {}), lastSummary: {
           summary: content.slice(0,2000), decisions: [], obligations: [], risks: []
         } as Prisma.InputJsonValue } });
+    } else if (manual) {
+      warnings.push('Для сводки не обнаружено писем. Проверьте содержимое папки «Входящие».');
+      await prisma.emailMailbox.updateMany({
+        where: { id: account.id, leaseToken: token, revision: account.revision },
+        data: { manualDigestRequestedAt: null }
+      });
     }
     } catch (cause) { reportFailure('SUMMARY', cause); }
   }
@@ -492,6 +505,32 @@ async function scan(account: EmailMailbox, token: string): Promise<{ seen: numbe
         }, data: { [folder.type === 'INBOX' ? 'inboxUid' : 'sentUid']: uid,
           processedCount: { increment: message ? 1 : 0 } } });
       }
+      if (folder.type === 'INBOX' && account.manualDigestRequestedAt) {
+        // A manual summary explicitly requests recent *existing* mail, including
+        // mail from before the connection was created. Keep the cursor untouched.
+        stage = 'MANUAL_SEARCH_INBOX';
+        const recent = (await imap.searchUids('', 5)).sort((a,b) => b-a);
+        for (const uid of recent) {
+          const active = await prisma.emailMailbox.findFirst({ where: {
+            id: account.id, enabled: true, leaseToken: token,
+            revision: account.revision, leasedUntil: { gt: new Date() }
+          } });
+          if (!active) return { seen, eligible };
+          const exists = await prisma.emailAnalysis.findUnique({
+            where: { mailboxId_folder_validity_uid: {
+              mailboxId: account.id, folder: 'INBOX', validity: folder.validity, uid
+            } }, select: { status: true }
+          });
+          if (exists?.status === 'DONE') continue;
+          stage = 'MANUAL_FETCH_INBOX';
+          const message = await imap.fetch(uid);
+          if (message && (message.text.length + message.subject.length) >= 10) {
+            stage = 'MANUAL_ANALYZE_INBOX';
+            await processMessage(account, 'INBOX', uid, message, true);
+            eligible++;
+          }
+        }
+      }
     }
   } catch (cause) {
     const diagnosis = diagnoseMailError(cause);
@@ -522,15 +561,17 @@ export const mailAssistantWorker = {
       let seen = 0, eligible = 0, digests = 0;
       // Summary publishing is independent of IMAP and of task/reply processing.
       // Previously one failed command prevented *every* digest in this cycle.
+      let scanOk = false;
       try {
         const result = await scan(account, token);
         seen = result.seen; eligible = result.eligible;
+        scanOk = true;
       } catch (cause) {
         const diagnosis = diagnoseMailError(cause);
         warnings.push(diagnosis.message);
       }
       try {
-        const result = await publishPending(account, token);
+        const result = await publishPending(account, token, scanOk);
         warnings.push(...result.warnings);
         digests = result.digests;
       } catch (cause) {
@@ -544,9 +585,19 @@ export const mailAssistantWorker = {
       console.info('[MailAssistant] cycle completed', { mailboxId: account.id,
         provider: account.provider, newUids: seen, eligibleMessages: eligible, digestsCreated: digests,
         warnings: warnings.length });
+      // A manual request can arrive during an active scan. Do not interrupt an
+      // in-flight AI analysis (which could strand a PROCESSING row), and do not
+      // overwrite the newly requested immediate scan with the normal interval.
+      const pendingRequest = await prisma.emailMailbox.findFirst({
+        where: { id: account.id, leaseToken: token, revision: account.revision },
+        select: { manualDigestRequestedAt: true }
+      });
+      const requestedDuringScan = Boolean(pendingRequest?.manualDigestRequestedAt &&
+        pendingRequest.manualDigestRequestedAt.getTime() !== account.manualDigestRequestedAt?.getTime());
       await prisma.emailMailbox.updateMany({ where: { id: account.id, leaseToken: token }, data: {
         leaseToken: null, leasedUntil: null, lastCheckedAt: new Date(),
-        lastError: error, nextCheckAt: new Date(Date.now() + (error ? 600_000 : Math.max(15_000,
+        lastError: error, nextCheckAt: requestedDuringScan ? new Date() :
+          new Date(Date.now() + (error ? 600_000 : Math.max(15_000,
             Math.min(account.intervalMinutes * 60_000,
               ...[account.replyMode !== 'OBSERVE' ? account.replyIntervalMinutes : null,
                   account.taskMode !== 'NONE' ? account.taskIntervalMinutes : null,

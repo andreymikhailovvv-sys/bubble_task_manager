@@ -1359,6 +1359,8 @@ model EmailMailbox {
   lastReplyAt DateTime?
   lastTaskAt DateTime?
   lastSummaryAt DateTime?
+  // Explicit user request to summarize recent existing mail, not an automatic history import.
+  manualDigestRequestedAt DateTime?
   lastSummary Json?
   intervalMinutes Int @default(5)
   taskMode String @default("SUGGEST")
@@ -1396,6 +1398,8 @@ model EmailAnalysis {
   subject String
   sender String
   status String @default("PROCESSING")
+  // Historical messages read for an on-demand digest must not trigger tasks or replies.
+  summaryOnly Boolean @default(false)
   suggestedReplyText String? @db.Text
   suggestedReplyStatus String @default("NONE")
   taskPublishedAt DateTime?

@@ -181,13 +181,13 @@ export function MailAssistantSettings({ onClose }: { onClose: () => void }) {
                   {selected.enabled && selected.summaryIntervalMinutes === -1 &&
                     <p className="integration-menu__muted text-xs">Почтовые сводки отключены в разделе «Частота сводок».</p>}
                   {selected.enabled && selected.lastCheckedAt && !selected.lastError && selected.processedCount === 0 &&
-                    <p className="integration-menu__muted text-xs">Проверка почты выполнялась, но новых писем после подключения пока не обнаружено. Старые письма не импортируются автоматически.</p>}
+                    <p className="integration-menu__muted text-xs">Проверка почты выполнялась, но новых писем после подключения пока не обнаружено. Старые письма не импортируются автоматически. Чтобы получить сводку по пяти последним существующим письмам, нажмите «Обновить сводку».</p>}
                   <div className="flex flex-wrap gap-2">
                     <button type="button" disabled={busy} onClick={toggle} className="telegram-integrations-modal__secondary rounded-lg border px-3 py-2 text-xs font-semibold">
                       {selected.enabled ? 'Остановить мониторинг' : 'Включить мониторинг'}
                     </button>
                     <button type="button" disabled={busy || !selected.enabled} onClick={() => void action(async () => {
-                      await api.mailCheck(selected.id); setNotice('Проверка запланирована.');
+                      await api.mailCheck(selected.id); setNotice('Запланировано обновление сводки по последним пяти письмам.');
                     })} className="telegram-integrations-modal__secondary rounded-lg border px-3 py-2 text-xs font-semibold">Обновить сводку</button>
                     <button type="button" disabled={busy} onClick={() => void action(async () => {
                       const updated = await refresh(); const item = updated.find(x => x.id === selected.id); if (item) pick(item);

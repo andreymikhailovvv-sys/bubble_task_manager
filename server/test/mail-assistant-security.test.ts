@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { encryptMailPassword, decryptMailPassword, mailKeyReady } from '../src/lib/mail-crypto.js';
-import { parseMailSource, validateMailCredentials } from '../src/services/mail-imap.service.js';
+import { ReadOnlyImap, parseMailSource, validateMailCredentials } from '../src/services/mail-imap.service.js';
 import { diagnoseMailError } from '../src/services/mail-diagnostics.js';
 
 const KEY = 'b3'.repeat(32);
@@ -143,7 +143,51 @@ test('mail summaries continue after task and reply publishing failures', () => {
   assert.match(publishing,/orderBy: \{ createdAt: 'desc' \}, take: 200/);
   const cycle=service.slice(service.indexOf('export const mailAssistantWorker'));
   assert.match(cycle,/await scan\(account, token\)/);
-  assert.match(cycle,/await publishPending\(account, token\)/);
+  assert.match(cycle,/await publishPending\(account, token, scanOk\)/);
   assert.match(cycle,/\[MailAssistant\] cycle completed/);
   assert.match(service,/stage = 'FETCH_' \+ folder\.type/);
+});
+
+test('IMAP fetch requests bounded headers and text instead of whole attachment-bearing messages', async () => {
+  const imap = new ReadOnlyImap();
+  const commands: string[] = [];
+  Object.defineProperty(imap, 'command', { value: async (command: string) => {
+    commands.push(command);
+    return { lines: [], literals: [
+      Buffer.from('From: sender@example.com\r\nSubject: New message\r\nContent-Type: text/plain; charset=utf-8\r\n'),
+      Buffer.from('Please check the attached report.\r\n')
+    ] };
+  } });
+  const message = await imap.fetch(42);
+  assert.equal(message?.uid, 42);
+  assert.equal(message?.subject, 'New message');
+  assert.match(message?.text || '', /attached report/);
+  assert.match(commands[0], /BODY\.PEEK\[HEADER\]<0\.12288>/);
+  assert.match(commands[0], /BODY\.PEEK\[TEXT\]<0\.24576>/);
+  assert.ok(!commands[0].includes('BODY.PEEK[]'));
+  assert.equal(commands.length, 1);
+});
+
+test('IMAP fetch does not silently skip malformed one-part server responses', async () => {
+  const imap = new ReadOnlyImap();
+  Object.defineProperty(imap, 'command', { value: async () => ({ lines: [],
+    literals: [Buffer.from('From: sender@example.com\r\n')] }) });
+  await assert.rejects(imap.fetch(42), (error: unknown) =>
+    (error as { code?: string }).code === 'IMAP_FETCH_INCOMPLETE');
+});
+
+test('manual digests backfill five recent inbox emails without automatic tasks or replies', () => {
+  const service=readFileSync(new URL('../src/services/mail-assistant.service.ts',import.meta.url),'utf8');
+  const schema=readFileSync(new URL('../prisma/schema.prisma',import.meta.url),'utf8');
+  assert.match(schema,/manualDigestRequestedAt DateTime\?/);
+  assert.match(schema,/summaryOnly Boolean @default\(false\)/);
+  assert.match(service,/manualDigestRequestedAt: new Date\(\)/);
+  assert.match(service,/searchUids\('', 5\)/);
+  assert.match(service,/processMessage\(account, 'INBOX', uid, message, true\)/);
+  assert.match(service,/!x\.summaryOnly && !x\.taskPublishedAt/);
+  assert.match(service,/!x\.summaryOnly && !x\.replyPublishedAt/);
+  assert.match(service,/!record\.summaryOnly && !summaryOnly && current\.notifyImportant/);
+  assert.match(service,/const manual = Boolean\(manualReady/);
+  assert.match(service,/manualDigestRequestedAt: null/);
+  assert.match(service,/const fresh = manual \? rows\.slice\(-15\)/);
 });
