@@ -32,10 +32,13 @@ export function MailAssistantSettings({ onClose }: { onClose: () => void }) {
   const [draft, setDraft] = useState<MailAccountSettings>({ ...defaultSettings });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'summary' | 'status' | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [showHelp, setShowHelp] = useState(true);
   const selected = accounts.find(a => a.id === selectedId) ?? null;
+  const summaryProcessing = pendingAction === 'summary' ||
+    Boolean(selected?.manualDigestRequestedAt && !selected.lastError);
   const update = <K extends keyof MailAccountSettings>(key: K, value: MailAccountSettings[K]) =>
     setDraft(previous => ({ ...previous, [key]: value }));
 
@@ -55,6 +58,34 @@ export function MailAssistantSettings({ onClose }: { onClose: () => void }) {
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
   }, []);
+  // The check endpoint merely queues work. Keep the spinner until the worker
+  // completes instead of pretending the queued HTTP response is the summary.
+  useEffect(() => {
+    const started = selected?.manualDigestRequestedAt;
+    if (!selectedId || !started || selected?.lastError) return;
+    let live = true;
+    let fetching = false;
+    const timer = window.setInterval(() => {
+      if (fetching) return;
+      fetching = true;
+      void api.mailAccounts().then(result => {
+        if (!live) return;
+        setAccounts(result.accounts);
+        const account = result.accounts.find(a => a.id === selectedId);
+        if (!account || account.manualDigestRequestedAt) return;
+        if (account.lastError) {
+          setNotice('');
+        } else if (account.lastSummaryAt && new Date(account.lastSummaryAt) >= new Date(started)) {
+          setNotice('Сводка обновлена.');
+        } else {
+          setNotice('Проверка завершена. Подходящих писем для сводки не найдено.');
+        }
+      }).catch(() => {
+        if (live) setError('Не удалось проверить ход обновления сводки.');
+      }).finally(() => { fetching = false; });
+    }, 2500);
+    return () => { live = false; window.clearInterval(timer); };
+  }, [selectedId, selected?.manualDigestRequestedAt, selected?.lastError]);
   useEffect(() => {
     const fn = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
     document.addEventListener('keydown', fn);
@@ -178,6 +209,10 @@ export function MailAssistantSettings({ onClose }: { onClose: () => void }) {
                     {' · '}Всего израсходовано: {(selected.totalSpentMilli / 1000).toLocaleString('ru-RU',{maximumFractionDigits:3})} кр.
                   </p>
                   {selected.lastError && <p role="alert" className="telegram-integrations-modal__warning text-xs">{selected.lastError}</p>}
+                  {summaryProcessing && <p role="status" aria-live="polite" className="integration-menu__muted inline-flex items-center gap-2 text-xs">
+                    <Loader2 size={13} className="animate-spin" aria-hidden="true"/>
+                    {selected.manualDigestRequestedAt ? 'Обработка писем на сервере. Сводка появится по завершении.' : 'Отправляем запрос на обновление сводки…'}
+                  </p>
                   {selected.enabled && selected.summaryIntervalMinutes === -1 &&
                     <p className="integration-menu__muted text-xs">Почтовые сводки отключены в разделе «Частота сводок».</p>}
                   {selected.enabled && selected.lastCheckedAt && !selected.lastError && selected.processedCount === 0 &&
@@ -186,12 +221,36 @@ export function MailAssistantSettings({ onClose }: { onClose: () => void }) {
                     <button type="button" disabled={busy} onClick={toggle} className="telegram-integrations-modal__secondary rounded-lg border px-3 py-2 text-xs font-semibold">
                       {selected.enabled ? 'Остановить мониторинг' : 'Включить мониторинг'}
                     </button>
-                    <button type="button" disabled={busy || !selected.enabled} onClick={() => void action(async () => {
-                      await api.mailCheck(selected.id); setNotice('Запланировано обновление сводки по последним пяти письмам.');
-                    })} className="telegram-integrations-modal__secondary rounded-lg border px-3 py-2 text-xs font-semibold">Обновить сводку</button>
-                    <button type="button" disabled={busy} onClick={() => void action(async () => {
-                      const updated = await refresh(); const item = updated.find(x => x.id === selected.id); if (item) pick(item);
-                    })} className="telegram-integrations-modal__secondary rounded-lg border px-3 py-2 text-xs">Обновить статус</button>
+                    <button type="button" disabled={busy || !selected.enabled || summaryProcessing}
+                      aria-busy={summaryProcessing}
+                      onClick={() => void action(async () => {
+                        setPendingAction('summary');
+                        try {
+                          await api.mailCheck(selected.id);
+                          await refresh();
+                          setNotice('Запрос принят. Почтовый ассистент обрабатывает последние пять писем.');
+                        } finally { setPendingAction(null); }
+                      })}
+                      className="telegram-integrations-modal__secondary inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold">
+                      {summaryProcessing && <Loader2 size={14} className="animate-spin" aria-hidden="true"/>}
+                      {summaryProcessing ? 'Обновляем сводку…' : 'Обновить сводку'}
+                    </button>
+                    <button type="button" disabled={busy} aria-busy={pendingAction === 'status'}
+                      onClick={() => void action(async () => {
+                        setPendingAction('status');
+                        try {
+                          await refresh();
+                          setNotice('Статус почты обновлён.');
+                        } finally {
+                          // Fast requests should still have a visible interaction response.
+                          await new Promise(resolve => window.setTimeout(resolve, 350));
+                          setPendingAction(null);
+                        }
+                      })}
+                      className="telegram-integrations-modal__secondary inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs">
+                      {pendingAction === 'status' && <Loader2 size={14} className="animate-spin" aria-hidden="true"/>}
+                      {pendingAction === 'status' ? 'Проверяем статус…' : 'Обновить статус'}
+                    </button> 
                   </div>
                   {selected.lastSummary && <details className="telegram-ai-monitor-summary rounded-xl border p-3">
                     <summary className="cursor-pointer text-sm font-semibold">Последняя сводка {selected.lastSummaryAt ? '· ' + formatDate(selected.lastSummaryAt) : ''}</summary>
