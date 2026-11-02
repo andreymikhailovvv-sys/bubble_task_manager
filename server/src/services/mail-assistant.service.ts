@@ -367,8 +367,9 @@ async function publishPending(account: EmailMailbox, token: string): Promise<{ w
   if (!latest) return { warnings, digests };
   const rows = await prisma.emailAnalysis.findMany({
     where: { userId: account.userId, mailboxId: account.id, status: 'DONE' },
-    orderBy: { createdAt: 'asc' }, take: 200
-  });
+    // Keep the newest analyses in scope even for long-lived, busy mailboxes.
+    orderBy: { createdAt: 'desc' }, take: 200
+  }).then(rows => rows.reverse());
   const now = new Date();
   if (latest.taskMode !== 'NONE' && isDue(latest.lastTaskAt, latest.taskIntervalMinutes)) {
     try {
