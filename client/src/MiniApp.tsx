@@ -3245,8 +3245,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     setAiChatError(null);
     try {
       setAiChatProgress('analyzing_request');
-      setAiChatPendingFiles([]); // Attachment bytes are already prepared.
       setAiChatStreamingText('');
+      setAiChatPendingFiles([]); // Attachment bytes are already prepared.
       const result = await api.askAiChatStreaming({
         clientRequestId: userMessage.id,
         question: serializeAiReply(question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.', replyToGeneral),
