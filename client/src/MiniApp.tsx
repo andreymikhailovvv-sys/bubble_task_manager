@@ -4213,7 +4213,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               </button>
               <button
                 type="button"
-                onClick={() => { setIsTimelineMoreOpen(false); setIsSettingsOpen((prev) => !prev)}
+                onClick={() => { setIsTimelineMoreOpen(false); setIsSettingsOpen((prev) => !prev); }}
                 data-miniapp-popover="settings"
                 className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-600 bg-slate-800 transition-colors hover:bg-amber-500/10"
                 aria-label="Открыть настройки"
