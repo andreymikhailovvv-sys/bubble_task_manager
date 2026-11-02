@@ -113,7 +113,7 @@ export function MiniGeneralAiChatHeader({
           <button type="button" className="miniapp-ai-context-picker-close"
             aria-label="Закрыть" onClick={() => onSetPicker(null)}><X size={18}/></button>
         </div>
-        <div className="miniapp-ai-context-picker-options">
+        <div className="miniapp-ai-context-picker-options" role="radiogroup" aria-label="Доступные варианты">
           {picker === 'chats' && (project?.chats ?? []).map(item =>
             <button type="button" key={item.id} className="miniapp-ai-context-picker-option"
               role="radio" aria-checked={chat?.id === item.id} onClick={() => onSelectChat(item.id)}>
