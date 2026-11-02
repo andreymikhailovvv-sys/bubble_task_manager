@@ -128,7 +128,7 @@ export class ReadOnlyImap {
     this.socket = tls.connect({ host: HOST[provider], servername: HOST[provider], port: 993, rejectUnauthorized: true });
     // The same read-only session is reused while AI analyzes fetched messages (up to 65s each).
     // A 20s idle timeout would silently kill the connection between FETCH operations.
-    this.socket.setTimeout(120_000, () => this.socket.destroy(new Error('timeout')));
+    this.socket.setTimeout(120_000, () => this.socket.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })));
     this.socket.on('data', (data: Buffer) => {
       this.pending = Buffer.concat([this.pending, data]);
       this.notify();
@@ -160,7 +160,11 @@ export class ReadOnlyImap {
         literals.push(await this.literal(length));
       }
       if (next.startsWith(tag + ' ')) {
-        if (!/^A\d+ OK\b/i.test(next)) throw new Error('Сервер отклонил IMAP запрос');
+        if (!/^A\d+ OK\b/i.test(next)) {
+          // Only the verb, never the LOGIN command or server reply, is retained.
+          const stage = value.split(' ', 1)[0].toUpperCase().replace(/[^A-Z]/g, '').slice(0, 20);
+          throw Object.assign(new Error('Сервер отклонил IMAP запрос'), { code: 'IMAP_REJECTED', stage });
+        }
         return { lines, literals };
       }
     }
