@@ -12923,3 +12923,26 @@ body[data-theme='light'] .miniapp-ai-context-picker-create {
 @media (prefers-reduced-motion: reduce) {
   .miniapp-ai-context-picker { animation: none; }
 }
+
+/* Telegram's own Close and overflow affordances keep their original row.
+   A quiet brand replaces the old interactive project chip in that system row. */
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-telegram-brand {
+  position: absolute;
+  z-index: 25;
+  top: max(3.2rem, calc(var(--miniapp-top-inset, 0px) - 4.75rem));
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 35vw;
+  padding: .35rem .2rem;
+  overflow: hidden;
+  color: #a3b2cb;
+  font-size: .82rem;
+  font-weight: 670;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.miniapp-shell.miniapp-telegram-fullscreen.miniapp-light .miniapp-ai-chat-telegram-brand,
+body[data-theme='light'] .miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-telegram-brand {
+  color: #65748d;
+}
