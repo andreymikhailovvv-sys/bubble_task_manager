@@ -14,6 +14,8 @@ test('complete bold spans remain untouched while new spans stream', () => {
 });
 
 test('single asterisk waiting for the next packet is not displayed raw', () => {
+  assert.equal(prepareStreamingAiInlineMarkup('**'), '');
+  assert.equal(prepareStreamingAiInlineMarkup('Вступление **'), 'Вступление ');
   assert.equal(prepareStreamingAiInlineMarkup('*'), '');
   assert.equal(prepareStreamingAiInlineMarkup('Текст *'), 'Текст ');
   assert.equal(prepareStreamingAiInlineMarkup('**Работ*'), '**Работ**');
