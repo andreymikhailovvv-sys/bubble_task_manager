@@ -142,7 +142,7 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
     suspend fun askGeneralAi(
         project:GeneralAiProject,thread:GeneralAiThread,
         history:List<JsonObject>,requestId:String,question:String,
-        attachments:List<TaskAiFile>,onProgress:(String)->Unit
+        attachments:List<TaskAiFile>,onText:(String)->Unit={},onProgress:(String)->Unit
     ):JsonObject {
         val payload=buildJsonObject {
             put("clientRequestId",requestId)
@@ -173,6 +173,7 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
         }
         return withContext(Dispatchers.IO){
             var result:JsonObject?=null
+            var preview=""
             api.streamGeneralAi(payload).use{body->
                 body.charStream().buffered().forEachLine{line->
                     if(line.isBlank())return@forEachLine
@@ -181,6 +182,8 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
                     when(event.aiString("type")){
                         "status"->event.aiString("status").takeIf{it.isNotBlank()}
                             ?.let(onProgress)
+                        "delta"->{preview+=event.aiString("text");onText(preview)}
+                        "reset"->{preview="";onText("")}
                         "result"->result=event["result"] as? JsonObject
                         "error"->throw IllegalStateException(
                             event.aiString("message","Ошибка запроса ИИ"))
@@ -201,7 +204,7 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
     suspend fun sendTaskAiMessage(
         id:String,requestId:String,question:String,model:String,
         attachments:List<TaskAiFile>,userMessage:String=question,
-        onProgress:(String)->Unit={}
+        onProgress:(String)->Unit={},onText:(String)->Unit={}
     ):TaskAiReply {
         val payload=buildJsonObject {
             put("clientRequestId",requestId)
@@ -228,6 +231,7 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
         // server-side tools and never inferred from a local animation/timer.
         val response=withContext(Dispatchers.IO) {
             var result:JsonObject?=null
+            var preview=""
             api.streamTaskAi(id,payload).use{body->
                 body.charStream().buffered().forEachLine{line->
                     if(line.isBlank())return@forEachLine
@@ -235,6 +239,8 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
                         ?: throw IllegalStateException("Некорректный ответ ИИ")
                     when(event.optString("type")){
                         "status"->event.optString("status")?.let(onProgress)
+                        "delta"->{preview+=event.optString("text").orEmpty();onText(preview)}
+                        "reset"->{preview="";onText("")}
                         "result"->result=event["result"] as? JsonObject
                         "error"->throw IllegalStateException(
                             event.optString("message")?:"Ошибка запроса ИИ")
