@@ -349,18 +349,29 @@ async function processMessage(account: EmailMailbox, folder: 'INBOX'|'SENT', uid
 const isDue = (time: Date | null, minutes: number) =>
   minutes >= 0 && (!time || Date.now() - time.getTime() >= (minutes === 0 ? 15_000 : minutes * 60_000));
 
-async function publishPending(account: EmailMailbox, token: string) {
+async function publishPending(account: EmailMailbox, token: string): Promise<{ warnings: string[]; digests: number }> {
+  const warnings: string[] = [];
+  let digests = 0;
+  const reportFailure = (stage: 'TASKS' | 'REPLIES' | 'SUMMARY', cause: unknown) => {
+    const failure = diagnoseMailError(cause);
+    console.warn('[MailAssistant] publishing failed', { mailboxId: account.id,
+      provider: account.provider, stage: 'PUBLISH_' + stage, code: failure.code,
+      errorType: cause instanceof Error ? cause.name : 'Unknown' });
+    warnings.push('Сбой обработки ' + (stage === 'TASKS' ? 'задач' : stage === 'REPLIES' ? 'ответов' : 'сводки') +
+      ' (' + failure.code + ').');
+  };
   const latest = await prisma.emailMailbox.findFirst({ where: {
     id: account.id, userId: account.userId, revision: account.revision,
     enabled: true, leaseToken: token, leasedUntil: { gt: new Date() }
   } });
-  if (!latest) return;
+  if (!latest) return { warnings, digests };
   const rows = await prisma.emailAnalysis.findMany({
     where: { userId: account.userId, mailboxId: account.id, status: 'DONE' },
     orderBy: { createdAt: 'asc' }, take: 200
   });
   const now = new Date();
   if (latest.taskMode !== 'NONE' && isDue(latest.lastTaskAt, latest.taskIntervalMinutes)) {
+    try {
     for (const row of rows.filter(x => x.folder === 'INBOX' && !x.taskPublishedAt).slice(0, 20)) {
       const summary = row.summary && typeof row.summary === 'object' ? row.summary as {tasks?:unknown} : null;
       const actions = Array.isArray(summary?.tasks) ? summary.tasks.slice(0, 3) : [];
@@ -378,8 +389,10 @@ async function publishPending(account: EmailMailbox, token: string) {
     }
     await prisma.emailMailbox.updateMany({ where: { id: account.id, leaseToken: token, revision: account.revision },
       data: { lastTaskAt: now } });
+    } catch (cause) { reportFailure('TASKS', cause); }
   }
   if (latest.replyMode !== 'OBSERVE' && isDue(latest.lastReplyAt, latest.replyIntervalMinutes)) {
+    try {
     for (const row of rows.filter(x => x.folder === 'INBOX' && !x.replyPublishedAt).slice(0, 20)) {
       if (row.suggestedReplyText && emailAddress(row.sender) && (latest.replyMode !== 'AUTO' || autoReplyAllowed(row.sender, latest.email))) {
         await prisma.emailAnalysis.updateMany({ where: { id: row.id, userId: account.userId },
@@ -395,8 +408,10 @@ async function publishPending(account: EmailMailbox, token: string) {
     }
     await prisma.emailMailbox.updateMany({ where: { id: account.id, leaseToken: token, revision: account.revision },
       data: { lastReplyAt: now } });
+    } catch (cause) { reportFailure('REPLIES', cause); }
   }
   if (latest.summaryIntervalMinutes !== -1 && isDue(latest.lastSummaryAt, latest.summaryIntervalMinutes)) {
+    try {
     const fresh = rows.filter(row => !latest.lastSummaryAt || row.createdAt > latest.lastSummaryAt);
     if (fresh.length) {
       const content = ('📨 Сводка почты · ' + latest.email + '\n\n' +
@@ -405,12 +420,15 @@ async function publishPending(account: EmailMailbox, token: string) {
           return '• ' + row.subject.slice(0, 100) + ': ' + (result?.summary ?? '').slice(0,350);
         }).join('\n')).slice(0,4000);
       await prisma.emailDigest.create({ data: { userId: account.userId, mailboxId: account.id, content } });
+      digests++;
       await prisma.emailMailbox.updateMany({ where: { id: account.id, leaseToken: token, revision: account.revision },
         data: { lastSummaryAt: now, lastSummary: {
           summary: content.slice(0,2000), decisions: [], obligations: [], risks: []
         } as Prisma.InputJsonValue } });
     }
+    } catch (cause) { reportFailure('SUMMARY', cause); }
   }
+  return { warnings, digests };
 }
 async function scan(account: EmailMailbox, token: string) {
   const imap = new ReadOnlyImap();
