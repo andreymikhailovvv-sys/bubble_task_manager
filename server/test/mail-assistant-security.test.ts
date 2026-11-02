@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { encryptMailPassword, decryptMailPassword, mailKeyReady } from '../src/lib/mail-crypto.js';
-import { ReadOnlyImap, parseMailSource, validateMailCredentials } from '../src/services/mail-imap.service.js';
+import { ReadOnlyImap, parseMailSource, selectImapTextPart, validateMailCredentials } from '../src/services/mail-imap.service.js';
 import { diagnoseMailError } from '../src/services/mail-diagnostics.js';
 
 const KEY = 'b3'.repeat(32);
@@ -148,32 +148,69 @@ test('mail summaries continue after task and reply publishing failures', () => {
   assert.match(service,/stage = 'FETCH_' \+ folder\.type/);
 });
 
-test('IMAP fetch requests bounded headers and text instead of whole attachment-bearing messages', async () => {
+test('IMAP selects text/plain inside nested multipart structure without downloading attachments', async () => {
+  const structure = 'BODYSTRUCTURE ((("TEXT" "HTML" ("CHARSET" "UTF-8") NIL NIL "7BIT" 80 1)' +
+    '("TEXT" "PLAIN" ("CHARSET" "UTF-8") NIL NIL "7BIT" 120 2) "ALTERNATIVE")' +
+    '("APPLICATION" "PDF" ("NAME" "large.pdf") NIL NIL "BASE64" 30000000) "MIXED")';
+  assert.deepEqual(selectImapTextPart('* 1 FETCH (' + structure + ')'), {
+    section: '1.2', contentType: 'text/plain', hasAttachments: true
+  });
   const imap = new ReadOnlyImap();
   const commands: string[] = [];
   Object.defineProperty(imap, 'command', { value: async (command: string) => {
     commands.push(command);
-    return { lines: [], literals: [
-      Buffer.from('From: sender@example.com\r\nSubject: New message\r\nContent-Type: text/plain; charset=utf-8\r\n'),
+    if (commands.length === 1) return {lines: ['* 1 FETCH (' + structure + ')'],
+      literals: [Buffer.from('From: sender@example.com\r\nSubject: A large report\r\n')]};
+    return {lines: [],literals: [
+      Buffer.from('Content-Type: text/plain; charset=utf-8\r\n'),
       Buffer.from('Please check the attached report.\r\n')
-    ] };
-  } });
+    ]};
+  }});
   const message = await imap.fetch(42);
-  assert.equal(message?.uid, 42);
-  assert.equal(message?.subject, 'New message');
+  assert.equal(message?.uid,42);
+  assert.equal(message?.subject,'A large report');
   assert.match(message?.text || '', /attached report/);
+  assert.equal(message?.hasAttachments,true);
   assert.match(commands[0], /BODY\.PEEK\[HEADER\]<0\.12288>/);
-  assert.match(commands[0], /BODY\.PEEK\[TEXT\]<0\.24576>/);
-  assert.ok(!commands[0].includes('BODY.PEEK[]'));
-  assert.equal(commands.length, 1);
+  assert.match(commands[0], /BODYSTRUCTURE/);
+  assert.match(commands[1], /BODY\.PEEK\[1\.2\.MIME\]<0\.4096>/);
+  assert.match(commands[1], /BODY\.PEEK\[1\.2\]<0\.24576>/);
+  assert.ok(commands.every(x => !x.includes('BODY.PEEK[]')));
+  assert.equal(commands.length, 2);
 });
 
-test('IMAP fetch does not silently skip malformed one-part server responses', async () => {
+test('IMAP uses safe text fallback for single-part messages', async () => {
   const imap = new ReadOnlyImap();
-  Object.defineProperty(imap, 'command', { value: async () => ({ lines: [],
-    literals: [Buffer.from('From: sender@example.com\r\n')] }) });
+  Object.defineProperty(imap, 'command', { value: async (cmd:string) => cmd.includes('BODYSTRUCTURE')
+    ? {lines:['* 1 FETCH (BODYSTRUCTURE ("TEXT" "PLAIN" ("CHARSET" "UTF-8") NIL NIL "7BIT" 50 1))'],
+      literals:[Buffer.from('From: sender@example.com\r\nSubject: Plain letter\r\nContent-Type: text/plain\r\n')]}
+    : {lines:[],literals:[Buffer.from('Plain letter body')]}});
+  const msg=await imap.fetch(9);
+  assert.equal(msg?.subject,'Plain letter');
+  assert.equal(msg?.text,'Plain letter body');
+});
+
+test('IMAP fetch rejects incomplete MIME-part replies instead of silently losing mail', async () => {
+  const imap = new ReadOnlyImap();
+  Object.defineProperty(imap, 'command', { value: async (command: string) => command.includes('BODYSTRUCTURE')
+    ? {lines:['* 1 FETCH (BODYSTRUCTURE (("TEXT" "PLAIN" NIL NIL NIL "7BIT" 45 1) "MIXED"))'],
+      literals: [Buffer.from('From: sender@example.com\r\n')]}
+    : {lines: [],literals: [Buffer.from('Content-Type: text/plain\r\n')] }});
   await assert.rejects(imap.fetch(42), (error: unknown) =>
     (error as { code?: string }).code === 'IMAP_FETCH_INCOMPLETE');
+});
+
+test('IMAP stream reader retains bounded preview from ignored large partial FETCH', async () => {
+  const imap = new ReadOnlyImap();
+  // Model a misbehaving provider reporting a >1.2 MB literal in one data chunk.
+  const huge = Buffer.concat([Buffer.from('First text characters'), Buffer.alloc(1_500_000, 65)]);
+  (imap as unknown as {pending:Buffer}).pending = huge;
+  const preview = await (imap as unknown as {
+    literal: (size:number, capture:number, transferLimit:number)=>Promise<Buffer>
+  }).literal(huge.length, 24576, 64 * 1024 * 1024);
+  assert.equal(preview.length, 24576);
+  assert.ok(preview.toString().startsWith('First text characters'));
+  assert.equal((imap as unknown as {pending:Buffer}).pending.length,0);
 });
 
 test('manual digests backfill five recent inbox emails without automatic tasks or replies', () => {
@@ -190,4 +227,19 @@ test('manual digests backfill five recent inbox emails without automatic tasks o
   assert.match(service,/const manual = Boolean\(manualReady/);
   assert.match(service,/manualDigestRequestedAt: null/);
   assert.match(service,/const fresh = manual \? rows\.slice\(-15\)/);
+});
+
+test('mail settings animate both manual refresh controls and track real worker progress', () => {
+  const component=readFileSync(new URL('../../client/src/components/MailAssistantSettings.tsx',import.meta.url),'utf8');
+  const api=readFileSync(new URL('../../client/src/lib/api.ts',import.meta.url),'utf8');
+  const service=readFileSync(new URL('../src/services/mail-assistant.service.ts',import.meta.url),'utf8');
+  assert.match(component,/pendingAction === 'summary'/);
+  assert.match(component,/pendingAction === 'status'/);
+  assert.match(component,/summaryProcessing/);
+  assert.match(component,/aria-busy/);
+  assert.match(component,/animate-spin/);
+  assert.match(component,/window\.setInterval/);
+  assert.match(component,/api\.mailAccounts\(\)/);
+  assert.match(api,/manualDigestRequestedAt: string \| null/);
+  assert.match(service,/manualDigestRequestedAt: a\.manualDigestRequestedAt/);
 });
