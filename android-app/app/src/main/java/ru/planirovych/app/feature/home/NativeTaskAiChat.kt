@@ -612,6 +612,13 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
     onOpenDocument:(String)->Unit={}){
     val isUser=message.role=="user"
     val content=messageDisplayContent(message.content)
+    // Preview can end halfway through a **bold** delimiter. Hide the stray
+    // marker and close the open pair only for formatted rendering.
+    val previewContent=if(pending && !isUser){
+        val prefix=if(content.endsWith("*") && !content.endsWith("**"))
+            content.dropLast(1) else content
+        if(prefix.windowed(2).count{it=="**"} % 2 == 1) prefix+"**" else prefix
+    }else content
     Row(Modifier.fillMaxWidth(),
         horizontalArrangement=if(isUser)Arrangement.End else Arrangement.Start){
         Column(Modifier.widthIn(max=330.dp).fillMaxWidth(.89f),
@@ -634,7 +641,7 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                             color=if(isUser)c.userText.copy(alpha=.93f)
                                 else c.assistantText.copy(alpha=.88f),
                             fontSize=12.sp,fontWeight=FontWeight.Bold)
-                        if(pending)Text("Отправляется…",
+                        if(pending)Text(if(isUser)"Отправляется…" else "ИИ отвечает…",
                             color=if(isUser)c.userText.copy(alpha=.7f)else c.secondary,
                             fontSize=9.sp)
                         else IconButton(onClick={
@@ -649,7 +656,7 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                         }
                     }
                     if(!isUser) NativeAiFormattedMessage(
-                        text=content,textColor=c.assistantText,
+                        text=previewContent,textColor=c.assistantText,
                         linkColor=if(c.bg.red>.5f)Color(0xFF0369A1) else Color(0xFF67E8F9))
                     else Text(content,color=c.userText,fontSize=13.sp,lineHeight=20.sp)
                     if(message.messageKind=="MONITOR_ACTION"){
