@@ -4,8 +4,12 @@ export type MailProvider = 'yandex' | 'mailru';
 export type MailStatus = { next: number; validity: string };
 export type MailMessage = { uid: number; from: string; subject: string; date: string; text: string; hasAttachments: boolean };
 const HOST: Record<MailProvider, string> = { yandex: 'imap.yandex.ru', mailru: 'imap.mail.ru' };
-const MAX_REPLY = 400_000;
-const MAX_LITERAL = 40_000;
+// Some IMAP servers do not honor partial FETCH byte ranges exactly. Keep a
+// bounded response budget while permitting normal large headers/body literals.
+const MAX_REPLY = 1_200_000;
+const MAX_LITERAL = 512_000;
+const HEADER_BYTES = 12_288;
+const BODY_BYTES = 24_576;
 export function validateMailCredentials(provider: unknown, email: unknown, password: unknown) {
   if (provider !== 'yandex' && provider !== 'mailru') throw new Error('Выберите почтового провайдера');
   if (typeof email !== 'string' || typeof password !== 'string') throw new Error('Укажите адрес и пароль приложения');
@@ -215,8 +219,20 @@ export class ReadOnlyImap {
     return [...new Set(uids)].sort((a, b) => b - a).slice(0, Math.max(1, Math.min(limit, 30)));
   }
   async fetch(uid: number) {
-    const data = (await this.command('UID FETCH ' + uid + ' (UID BODY.PEEK[]<0.32768>)')).literals[0];
-    return data ? parseMailSource(data, uid) : null;
+    if (!Number.isSafeInteger(uid) || uid < 1) throw new Error('Некорректный UID письма');
+    // Do not fetch a large attachment-containing raw message just to obtain
+    // its subject and a short text preview. Mail.ru can return large literals
+    // for BODY[] despite the requested byte range.
+    const response = await this.command('UID FETCH ' + uid +
+      ' (UID BODY.PEEK[HEADER]<0.' + HEADER_BYTES + '> BODY.PEEK[TEXT]<0.' + BODY_BYTES + '>)');
+    const [header, body] = response.literals;
+    if (!header || !body) {
+      // A message can disappear between SEARCH and FETCH (e.g. deleted on a
+      // second device). The caller treats this as a skipped UID, not a failure.
+      return null;
+    }
+    const source = Buffer.concat([header, Buffer.from('\r\n'), body]);
+    return parseMailSource(source, uid);
   }
   close() { if (this.socket && !this.socket.destroyed) this.socket.destroy(); }
 }
