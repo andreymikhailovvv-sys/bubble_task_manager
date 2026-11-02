@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from 'express';
+import { startAiIntroOverlay } from '../services/ai-quick-intro.service.js';
 import { prisma } from '../db/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/async-handler.js';
@@ -10,17 +11,27 @@ import { applyWorkChangeProposal, getWorkChangeProposal, rejectWorkChangeProposa
 // NDJSON is opt-in. Existing JSON callers and background monitoring stay compatible.
 async function respondCompanyAi(req:Request,res:Response,input:Parameters<typeof askCompanyAi>[0]){
   const streaming=(req.get('accept')??'').toLowerCase().split(',').some(value=>value.trim().split(';')[0]==='application/x-ndjson');
-  const write=(event:unknown)=>{res.write(JSON.stringify(event)+'\n');(res as Response & {flush?:()=>void}).flush?.();};
+  const write=(event:unknown)=>{if(res.writableEnded||res.destroyed)return;res.write(JSON.stringify(event)+'\n');(res as Response & {flush?:()=>void}).flush?.();};
   if(streaming)res.status(200).set({'Content-Type':'application/x-ndjson; charset=utf-8','Cache-Control':'no-cache, no-transform','X-Accel-Buffering':'no'}).flushHeaders();
+  const intro=streaming?startAiIntroOverlay({
+    question:input.question,
+    context:input.feature==='quick_chat'?'Быстрые запросы компании':
+      input.feature==='task_chat'?'Помощь ИИ по корпоративной задаче':'ИИ-диспетчер компании',
+    send:write
+  }):null;
+  if(intro)res.once('close',()=>intro.stop());
   try{
-    const result=await askCompanyAi({...input,...(streaming?{onTextDelta:(text:string)=>write({type:'delta',text})}:{})});
+    const result=await askCompanyAi({...input,...(streaming?{onTextDelta:(text:string)=>
+      intro?intro.onMainDelta(text):write({type:'delta',text})}:{})});
+    intro?.stop();
     if(streaming){write({type:'result',result});res.end();}
     else res.json(result);
   }catch(error){
+    intro?.stop();
     if(streaming){write({type:'error',message:error instanceof Error?error.message:'Ошибка ИИ'});res.end();}
     else if(error instanceof CompanyInsufficientCreditsError)res.status(402).json({error:error.message});
     else throw error;
-  }
+  }finally{intro?.stop();}
 }
 export const workAiRouter=Router();
 workAiRouter.use(requireAuth,(_req,res,next)=>{res.setHeader('Cache-Control','private, no-store');next();});
