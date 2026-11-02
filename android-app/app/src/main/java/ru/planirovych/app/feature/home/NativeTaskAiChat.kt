@@ -285,7 +285,8 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
             (if(ui.lastActionReports.isNotEmpty())1 else 0)+
             (if(monitoringStatuses.isNotEmpty())1 else 0)+
             (if(triggers.isNotEmpty())1 else 0)+
-            (if(busy&&sendingDisplay!=null)1 else 0)+(if(busy)1 else 0)
+            (if(busy&&sendingDisplay!=null)1 else 0)+(if(busy)1 else 0)+
+            (if(busy&&ui.streamText.isNotEmpty())1 else 0)
         val receivedAssistant=latestAssistant!=null && latestAssistant!=previousAssistant
         if(!historyPositioned){
             if(currentCount>0)listState.scrollToItem(currentCount-1)
@@ -442,6 +443,10 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                         if(busy&&sendingDisplay!=null)item(key="pending-user"){
                             TaskChatBubble(TaskAiChatMessage(role="user",
                                 content=sendingDisplay.orEmpty()),c,ctx,
+                                onReply={},pending=true)
+                        }
+                        if(busy&&ui.streamText.isNotEmpty())item(key="assistant-stream"){
+                            TaskChatBubble(TaskAiChatMessage(role="assistant",content=ui.streamText),c,ctx,
                                 onReply={},pending=true)
                         }
                         if(busy)item(key="assistant-thinking"){
