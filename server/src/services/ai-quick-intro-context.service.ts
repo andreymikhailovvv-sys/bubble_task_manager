@@ -7,13 +7,16 @@ export function buildContextualAiIntro(question: string, context: string): strin
   const request = question.trim().toLocaleLowerCase('ru');
   const area = context.toLocaleLowerCase('ru');
   const contains = (pattern: RegExp) => pattern.test(request);
+  const sector = question.match(/сектор(?:а|е|у|ом)?\s+[«"']?([\p{L}\p{N}-]{2,25})/iu)?.[1];
+  const sectorDetail = sector ? ' в секторе «' + sector + '»' : '';
+  const mailService = /яндекс/iu.test(request) ? ' Яндекс Почты' : /mail\.ru/iu.test(request) ? ' Mail.ru' : '';
 
   if (contains(/почт|письм|email|e-mail|mail\.ru|яндекс.*почт|входящ/iu)) {
     if (contains(/ответ|отправ|напис|состав|черновик/iu)) {
       return 'Посмотрю контекст переписки и подберу формулировку ответа на письмо.';
     }
     if (contains(/непрочит|новы|входящ|сегодня|последн/iu)) {
-      return 'Проверю свежие письма и выделю сообщения, на которые стоит обратить внимание.';
+      return 'Проверю свежие письма' + mailService + ' и выделю важные сообщения.';
     }
     if (contains(/найд|поиск|от кого|отправител|тем[ыуе]/iu)) {
       return 'Поищу нужные письма и сверю отправителей с содержанием.';
@@ -22,7 +25,7 @@ export function buildContextualAiIntro(question: string, context: string): strin
   }
   if (contains(/задач|дела\b|дедлайн|просроч|сектор|подзадач|to.?do/iu) || /помощь ии по задач/iu.test(area)) {
     if (contains(/просроч|не выполн|дедлайн|опозд/iu)) {
-      return 'Проверю сроки задач и отдельно отмечу то, что требует внимания.';
+      return 'Проверю сроки задач' + sectorDetail + ' и отмечу то, что требует внимания.';
     }
     if (contains(/завтра|сегодня|недел|выходн|расписан|календар/iu)) {
       return 'Сверю задачи с нужными датами и соберу удобную картину дня.';
@@ -33,7 +36,7 @@ export function buildContextualAiIntro(question: string, context: string): strin
     if (contains(/приорит|важн|очеред|сортир/iu)) {
       return 'Сопоставлю задачи по срокам и важности, чтобы выделить приоритеты.';
     }
-    return 'Посмотрю задачи по вашему вопросу и выделю нужные детали.';
+    return 'Посмотрю задачи' + sectorDetail + ' и выделю нужные детали.';
   }
   if (contains(/привычк|повторен|регулярн/iu)) {
     return 'Разберу расписание повторения и подберу настройки привычки.';
