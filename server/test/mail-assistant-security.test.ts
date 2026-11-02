@@ -143,7 +143,7 @@ test('mail summaries continue after task and reply publishing failures', () => {
   assert.match(publishing,/orderBy: \{ createdAt: 'desc' \}, take: 200/);
   const cycle=service.slice(service.indexOf('export const mailAssistantWorker'));
   assert.match(cycle,/await scan\(account, token\)/);
-  assert.match(cycle,/await publishPending\(account, token\)/);
+  assert.match(cycle,/await publishPending\(account, token, scanOk\)/);
   assert.match(cycle,/\[MailAssistant\] cycle completed/);
   assert.match(service,/stage = 'FETCH_' \+ folder\.type/);
 });
