@@ -26,6 +26,7 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
   const [credits,setCredits]=useState<WorkAiCredits|null>(null);
   const [draft,setDraft]=useState('');
   const [loading,setLoading]=useState(false);
+  const [streamedText,setStreamedText]=useState('');
   const [fetching,setFetching]=useState(true);
   const [error,setError]=useState('');
   const [aiProgress,setAiProgress]=useState<'searching_tasks'|'forming_answer'>('searching_tasks');
@@ -89,15 +90,16 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
   },[loading]);
   const send=async(question:string,quick:boolean)=>{
     const q=question.trim();if(!q||loading||!allowed)return;
-    setLoading(true);setError('');
+    setLoading(true);setError('');setStreamedText('');
     try{
-      const result=quick?await api.workQuickAiAsk(organizationId,q):await api.workAiAsk(organizationId,q,selectedChatId);
+      const stream={onTextDelta:(delta:string)=>setStreamedText(prev=>prev+delta),onTextReset:()=>setStreamedText('')};
+      const result=quick?await api.workQuickAiAsk(organizationId,q,stream):await api.workAiAsk(organizationId,q,selectedChatId,stream);
       setCredits(result.credits);
       const response=quick?await api.workQuickAiHistory(organizationId):await api.workAiHistory(organizationId,selectedChatId);
       if(quick){setQuickMessages(response.messages);setDraft('');}
       else setTaskMessages(response.messages);
     }catch(e){setError(errorText(e));}
-    finally{setLoading(false);}
+    finally{setLoading(false);setStreamedText('');}
   };
   const sendQuick=()=>void send(draft,true);
   const changeModel=(model:AiChatModel)=>{
@@ -131,6 +133,7 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
                 {item.proposal&&<WorkAiProposalCard organizationId={organizationId} initial={item.proposal} onChanged={()=>void api.workQuickAiHistory(organizationId).then(r=>setQuickMessages(r.messages)).catch(e=>setError(errorText(e)))}/>}
               </div>)}
               {!quickMessages.length&&<p className="text-subtle">Быстрый вопрос по проектам и задачам выбранной компании.</p>}
+              {loading&&streamedText&&<div className="quick-ai-chat-message quick-ai-chat-message-assistant rounded-2xl p-3 whitespace-pre-wrap">{streamedText}</div>}
               {loading&&<AiProgress status={aiProgress}/>}
             </div>
           </div>
@@ -180,9 +183,9 @@ export default function WorkQuickAi({organizationId,dashboard}:{organizationId:s
           ?api.workQuickAiHistory(organizationId).then(r=>setQuickMessages(r.messages))
           :api.workAiHistory(organizationId,selectedChatId).then(r=>setTaskMessages(r.messages))).catch(e=>setError(errorText(e)))}/>}
       </div>)}
-      status={error?<p role="alert" className="text-sm text-rose-400">{error}</p>:
+      status={<>{loading&&streamedText&&<div className="chat-message-assistant rounded-2xl p-3 whitespace-pre-wrap text-sm">{streamedText}</div>}{error?<p role="alert" className="text-sm text-rose-400">{error}</p>:
         loading?<AiProgress status={aiProgress}/>:
-        credits?<p className="text-[11px] text-muted">Баланс организации: {(credits.aiCreditsMilli/1000).toFixed(3)} кр.</p>:null}
+        credits?<p className="text-[11px] text-muted">Баланс организации: {(credits.aiCreditsMilli/1000).toFixed(3)} кр.</p>:null}</>}
       onClose={()=>setExpanded(false)}
       onCreateProject={()=>undefined}
       onCreateChat={()=>undefined}
