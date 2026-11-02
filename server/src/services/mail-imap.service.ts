@@ -135,7 +135,7 @@ export class ReadOnlyImap {
     }
   }
   private async literal(n: number) {
-    if (!Number.isSafeInteger(n) || n <= 0 || n > MAX_LITERAL) throw new Error('Слишком большое письмо');
+    if (!Number.isSafeInteger(n) || n < 0 || n > MAX_LITERAL) throw new Error('Слишком большое письмо');
     await this.enough(n);
     const value = this.pending.subarray(0, n);
     this.pending = this.pending.subarray(n);
@@ -226,11 +226,10 @@ export class ReadOnlyImap {
     const response = await this.command('UID FETCH ' + uid +
       ' (UID BODY.PEEK[HEADER]<0.' + HEADER_BYTES + '> BODY.PEEK[TEXT]<0.' + BODY_BYTES + '>)');
     const [header, body] = response.literals;
-    if (!header || !body) {
-      // A message can disappear between SEARCH and FETCH (e.g. deleted on a
-      // second device). The caller treats this as a skipped UID, not a failure.
-      return null;
-    }
+    if (response.literals.length === 0) return null; // Message deleted after SEARCH.
+    if (!header || !body) throw Object.assign(new Error('Неполный IMAP FETCH'), {
+      code: 'IMAP_FETCH_INCOMPLETE'
+    });
     const source = Buffer.concat([header, Buffer.from('\r\n'), body]);
     return parseMailSource(source, uid);
   }
