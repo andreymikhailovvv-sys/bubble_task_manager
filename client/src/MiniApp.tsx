@@ -5233,6 +5233,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               onCreateProject={() => { setTelegramChatPicker(null); openAiChatProjectDialog(); }}
               onCreateChat={() => { setTelegramChatPicker(null); createAiChatThread(); }}
             />
+            {useTelegramCompactChatHeader ? <div className="miniapp-ai-chat-telegram-brand" aria-hidden="true">Планировыч</div> : null}
              <div className="miniapp-ai-chat-thread-wrap relative min-h-0 flex-1">
               <div ref={aiChatDialogContainerRef} onScroll={(event) => {
                 const container = event.currentTarget;
