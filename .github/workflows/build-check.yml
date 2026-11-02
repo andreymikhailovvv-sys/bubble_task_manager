@@ -31,6 +31,8 @@ jobs:
         run: npm run build
       - name: Verify parallel free AI intro animation and main-model handoff
         run: node --import tsx --test server/test/ai-quick-intro.test.ts
+      - name: Verify immediate contextual AI introductions and model timeout
+        run: node --import tsx --test server/test/ai-quick-intro-context.test.ts
       - name: Verify streaming Markdown emphasis before final answer
         run: node --import tsx --test server/test/ai-streaming-markdown.test.ts
       - name: Verify Mini App search toolbar is confined to List and Timeline
