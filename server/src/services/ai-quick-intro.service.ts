@@ -73,6 +73,7 @@ export function startAiIntroOverlay(options: {
   let sentIntro = false;
   let pending = '';
   let acceptedCharacters = 0;
+  let providerDone = false;
   const flush = () => {
     if (stopped || mainStarted || !pending) return;
     const piece = Array.from(pending).slice(0, 3).join('');
@@ -80,6 +81,7 @@ export function startAiIntroOverlay(options: {
     if (!piece) return;
     sentIntro = true;
     options.send({ type: 'delta', text: piece });
+    if (providerDone && !pending) clearInterval(timer);
   };
   const timer = setInterval(flush, options.tickMs ?? 25);
   const stop = () => {
@@ -106,8 +108,10 @@ export function startAiIntroOverlay(options: {
   }).catch(() => {
     // Preview failure is not an AI request failure; normal response continues.
   }).finally(() => {
-    // The animation may still be rendering buffered text. It remains bounded
-    // until the real model starts or the HTTP response ends.
+    providerDone = true;
+    // Keep only the short animated tail; do not spin an idle timer for the
+    // entire (potentially long) main-model request.
+    if (!pending) clearInterval(timer);
   });
   const beginMain = () => {
     if (mainStarted) return;
