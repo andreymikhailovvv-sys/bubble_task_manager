@@ -434,6 +434,20 @@ async function scan(account: EmailMailbox, token: string) {
         continue; // UIDVALIDITY resets must not cause unrequested full historical import.
       }
       await imap.select(folder.name);
+      // Legacy failures may already be behind the saved UID cursor. Recover
+      // only failed analyses of the same mailbox/folder/UIDVALIDITY, not history.
+      const failed = await prisma.emailAnalysis.findMany({
+        where: { mailboxId: account.id, userId: account.userId, folder: folder.type,
+          validity: folder.validity, status: 'FAILED' },
+        orderBy: { uid: 'asc' }, take: 3
+      });
+      for (const previous of failed) {
+        const active = await prisma.emailMailbox.findFirst({ where: { id: account.id,
+          enabled: true, leaseToken: token, revision: account.revision, leasedUntil: { gt: new Date() } } });
+        if (!active) return;
+        const message = await imap.fetch(previous.uid);
+        if (message) await processMessage(account, folder.type, previous.uid, message);
+      }
       const uids = (await imap.uids(folder.cursor)).slice(0, 3);
       for (const uid of uids) {
         const active = await prisma.emailMailbox.findFirst({ where: { id: account.id,
