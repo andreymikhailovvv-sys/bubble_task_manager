@@ -28,7 +28,7 @@ test('compact toolbar retains postponed actions and accessible filters; notes mo
     read('../../client/src/components/MiniWorkspaceTools.tsx'),
     read('../../client/src/styles.css')
   ]);
-  assert.equal((mini.match(/<MiniWorkspaceTools/g) ?? []).length, 2);
+  assert.equal((mini.match(/<MiniWorkspaceTools/g) ?? []).length, 1);
   assert.match(toolbar, /miniapp-workspace-tools-compact/);
   assert.doesNotMatch(toolbar, /miniapp-workspace-tool-notes|onNotesOpen/);
   assert.match(mini, /miniapp-bottom-navigation/);
@@ -55,7 +55,7 @@ test('workspace tools remain below dialogs and the credits popover on both compa
   const openRule = css.match(/\.miniapp-workspace-tools\.is-filter-menu-open \{([^}]+)\}/)?.[1] ?? '';
   const normalLayer = Number(toolbarRule.match(/z-index:\s*(\d+)/)?.[1]);
   const openLayer = Number(openRule.match(/z-index:\s*(\d+)/)?.[1]);
-  const headerLayer = Number(mini.match(/relative z-(\d+) miniapp-premium-topbar rounded-xl/)?.[1]);
+  const headerLayer = Number(mini.match(/relative z-(\d+) miniapp-premium-topbar \$\{displayMode/)?.[1]);
   const createTaskLayer = Number(mini.match(/miniapp-slide-backdrop fixed inset-0 z-(\d+) flex items-end/)?.[1]);
   assert.equal(normalLayer, 1);
   assert.ok(normalLayer < openLayer && openLayer < headerLayer);
@@ -115,8 +115,9 @@ test('Telegram fullscreen uses safe insets and bottom tabs replace the old displ
     read('../../client/src/components/MiniWorkspaceTools.tsx'),
     read('../../client/src/styles.css')
   ]);
-  assert.equal((mini.match(/<MiniWorkspaceTools/g) ?? []).length, 2);
-  assert.equal((mini.match(/onPostpone=\{\(\) => void postponeAllOverdueToToday\(\)\}/g) ?? []).length, 2);
+  assert.equal((mini.match(/<MiniWorkspaceTools/g) ?? []).length, 1);
+  assert.equal((mini.match(/onPostpone=\{\(\) => void postponeAllOverdueToToday\(\)\}/g) ?? []).length, 1);
+  assert.match(mini, /miniapp-timeline-postpone-button/);
   assert.doesNotMatch(tools, /display-mode-toggle-group|onDisplayModeChange/);
   assert.match(mini, /webApp\.requestFullscreen\?\.\(\)/);
   assert.match(mini, /safeAreaChanged/);
@@ -148,11 +149,12 @@ test('timeline has independent layout blocks while keeping original controls and
   const end = mini.indexOf('className={`miniapp-calendar-grid miniapp-calendar-grid-', start);
   assert.ok(start >= 0 && end > start, 'timeline layout should precede the unchanged calendar grid');
   const timeline = mini.slice(start, end);
-  assert.match(timeline, /miniapp-timeline-actions-panel/);
+  // The redundant timeline action row is gone; postpone now sits beside global search.
+  assert.doesNotMatch(timeline, /miniapp-timeline-actions-panel/);
   assert.match(timeline, /miniapp-timeline-view-panel/);
   assert.match(timeline, /miniapp-timeline-period-panel/);
   assert.doesNotMatch(timeline, /miniapp-premium-timeline|miniapp-workspace-toolbar-card/);
-  assert.match(timeline, /<MiniWorkspaceTools/);
+  assert.doesNotMatch(timeline, /<MiniWorkspaceTools/);
   assert.match(timeline, /timelineView === view/);
   assert.match(timeline, /moveTimelinePeriod\(-1\)/);
   assert.match(timeline, /moveTimelinePeriod\(1\)/);
