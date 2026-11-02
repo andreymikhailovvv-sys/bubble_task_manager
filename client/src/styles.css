@@ -12946,3 +12946,251 @@ body[data-theme='light'] .miniapp-ai-context-picker-create {
 body[data-theme='light'] .miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-telegram-brand {
   color: #65748d;
 }
+
+
+/* Timeline top controls: three independent surfaces, no oversized shared card.
+   The list keeps its original four controls and existing toolbar layout. */
+.miniapp-shell .miniapp-premium-topbar.miniapp-timeline-topbar,
+.miniapp-shell .miniapp-premium-topbar.miniapp-list-topbar,
+.miniapp-shell.miniapp-light .miniapp-premium-topbar.miniapp-timeline-topbar,
+.miniapp-shell.miniapp-light .miniapp-premium-topbar.miniapp-list-topbar {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.miniapp-shell .miniapp-workspace-topbar-row {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: stretch;
+  gap: .6rem;
+}
+.miniapp-shell .miniapp-workspace-topbar-row .workspace-global-search-anchor {
+  min-width: 0;
+  flex: 1 1 0%;
+}
+.miniapp-shell .miniapp-workspace-topbar-row .miniapp-global-search-field {
+  height: 2.75rem;
+  min-height: 2.75rem;
+  border: 1px solid rgba(125, 148, 184, .36);
+  border-radius: 1rem;
+  background: rgba(26, 40, 64, .93);
+  box-shadow: none;
+}
+.miniapp-shell .miniapp-workspace-topbar-row .miniapp-global-search-field input {
+  height: 2.65rem;
+  min-height: 0;
+  font-size: 16px;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.miniapp-shell .miniapp-workspace-topbar-row .miniapp-global-search-field input::placeholder {
+  font-size: .86rem;
+}
+.miniapp-shell .miniapp-workspace-topbar-row .miniapp-global-search-field input::-webkit-search-decoration,
+.miniapp-shell .miniapp-workspace-topbar-row .miniapp-global-search-field input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+.miniapp-shell .miniapp-timeline-topbar .miniapp-global-search-field,
+.miniapp-shell .miniapp-timeline-topbar .miniapp-global-search-field:focus-within,
+.miniapp-shell .miniapp-timeline-topbar .miniapp-global-search-field:focus,
+.miniapp-shell .miniapp-timeline-topbar .miniapp-global-search-field:active {
+  border-color: rgba(125, 148, 184, .36) !important;
+  background: rgba(26, 40, 64, .93) !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+.miniapp-shell .miniapp-timeline-topbar .miniapp-global-search-field input:focus,
+.miniapp-shell .miniapp-timeline-topbar .miniapp-global-search-field input:focus-visible,
+.miniapp-shell .miniapp-timeline-topbar .workspace-global-search-anchor:focus-within {
+  outline: none !important;
+  box-shadow: none !important;
+}
+.miniapp-shell .miniapp-timeline-topbar .miniapp-global-search-field {
+  height: 3.1rem;
+  min-height: 3.1rem;
+}
+.miniapp-shell .miniapp-timeline-topbar .miniapp-global-search-field input { height: 3rem; }
+.miniapp-shell .miniapp-timeline-topbar button { -webkit-tap-highlight-color: transparent; }
+.miniapp-shell .miniapp-timeline-postpone-button,
+.miniapp-shell .miniapp-timeline-more-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.1rem;
+  border: 1px solid rgba(125, 148, 184, .32);
+  border-radius: 1rem;
+  background: rgba(28, 42, 66, .94);
+  color: #e4e9f5;
+  box-shadow: none;
+}
+.miniapp-shell .miniapp-timeline-postpone-button {
+  gap: .45rem;
+  padding: 0 .9rem;
+  font-size: .82rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.miniapp-shell .miniapp-timeline-postpone-button svg { color: #c4b5fd; flex: 0 0 auto; }
+.miniapp-shell .miniapp-timeline-postpone-button:disabled { opacity: .55; cursor: not-allowed; }
+.miniapp-shell .miniapp-timeline-more-toggle {
+  width: 3.1rem;
+  padding: 0;
+}
+.miniapp-shell .miniapp-timeline-postpone-button:focus-visible,
+.miniapp-shell .miniapp-timeline-more-toggle:focus-visible {
+  outline: 2px solid #a78bfa;
+  outline-offset: 2px;
+}
+.miniapp-shell .miniapp-workspace-utilities {
+  display: inline-flex;
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 0;
+  align-items: stretch;
+}
+.miniapp-shell .miniapp-workspace-utilities.is-list .miniapp-workspace-utilities-panel {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+}
+.miniapp-shell .miniapp-workspace-utilities.is-list .miniapp-credit-badge,
+.miniapp-shell .miniapp-workspace-utilities.is-list .miniapp-efficiency-button,
+.miniapp-shell .miniapp-workspace-utilities.is-list button[data-miniapp-popover="settings"] {
+  height: 2.75rem;
+  min-height: 2.75rem;
+  border: 1px solid rgba(125, 148, 184, .34);
+  border-radius: .95rem;
+  background: rgba(28, 42, 66, .94);
+  box-shadow: none;
+}
+.miniapp-shell .miniapp-workspace-utilities.is-list .miniapp-efficiency-button,
+.miniapp-shell .miniapp-workspace-utilities.is-list button[data-miniapp-popover="settings"] {
+  width: 2.75rem;
+}
+.miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel {
+  position: absolute;
+  z-index: 165;
+  top: calc(100% + .6rem);
+  right: 0;
+  display: none;
+  width: min(16.5rem, calc(100vw - 2rem));
+  max-width: min(16.5rem, calc(100vw - 2rem));
+  flex-direction: column;
+  align-items: stretch;
+  gap: .24rem;
+  padding: .45rem;
+  border: 1px solid rgba(125, 148, 184, .35);
+  border-radius: 1.1rem;
+  background: #1b2942;
+  color: #f0f4fc;
+  box-shadow: 0 16px 32px rgba(4, 10, 27, .3);
+}
+.miniapp-shell .miniapp-workspace-utilities.is-timeline.is-open .miniapp-workspace-utilities-panel {
+  display: flex;
+}
+.miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-credit-badge,
+.miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-efficiency-button,
+.miniapp-shell .miniapp-workspace-utilities.is-timeline button[data-miniapp-popover="settings"] {
+  display: flex;
+  width: 100%;
+  min-height: 2.9rem;
+  height: auto;
+  align-items: center;
+  justify-content: flex-start;
+  gap: .65rem;
+  padding: .65rem .7rem;
+  border: 0;
+  border-radius: .8rem;
+  background: transparent;
+  color: #e5ebf8;
+  font-size: .84rem;
+  font-weight: 650;
+  text-align: left;
+}
+.miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-credit-badge:active,
+.miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-efficiency-button:active,
+.miniapp-shell .miniapp-workspace-utilities.is-timeline button[data-miniapp-popover="settings"]:active {
+  background: rgba(133, 99, 207, .18);
+}
+.miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-efficiency-orb { flex: 0 0 auto; }
+.miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-utility-menu-label { flex: 1; min-width: 0; }
+.miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-credit-popover,
+.miniapp-shell .miniapp-workspace-utilities.is-timeline .efficiency-details-popover-modern {
+  right: 0;
+  left: auto;
+  top: calc(100% + .65rem);
+  width: min(21rem, calc(100vw - 2rem));
+  max-width: calc(100vw - 2rem);
+  z-index: 175;
+}
+.miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-credit-popover {
+  max-height: min(65dvh, 32rem);
+}
+.miniapp-shell.miniapp-light .miniapp-workspace-topbar-row .miniapp-global-search-field,
+body[data-theme='light'] .miniapp-shell .miniapp-workspace-topbar-row .miniapp-global-search-field,
+.miniapp-shell.miniapp-light .miniapp-timeline-topbar .miniapp-global-search-field:focus-within,
+body[data-theme='light'] .miniapp-shell .miniapp-timeline-topbar .miniapp-global-search-field:focus-within {
+  border-color: #d7e0ed !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+.miniapp-shell.miniapp-light .miniapp-timeline-postpone-button,
+.miniapp-shell.miniapp-light .miniapp-timeline-more-toggle,
+.miniapp-shell.miniapp-light .miniapp-workspace-utilities.is-list .miniapp-credit-badge,
+.miniapp-shell.miniapp-light .miniapp-workspace-utilities.is-list .miniapp-efficiency-button,
+.miniapp-shell.miniapp-light .miniapp-workspace-utilities.is-list button[data-miniapp-popover="settings"],
+body[data-theme='light'] .miniapp-shell .miniapp-timeline-postpone-button,
+body[data-theme='light'] .miniapp-shell .miniapp-timeline-more-toggle {
+  border-color: #d7e0ed;
+  background: #fff;
+  color: #23354f;
+}
+.miniapp-shell.miniapp-light .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel,
+body[data-theme='light'] .miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel {
+  border-color: #d7e0ed;
+  background: #fff;
+  color: #24334e;
+  box-shadow: 0 14px 32px rgba(31, 47, 77, .14);
+}
+.miniapp-shell.miniapp-light .miniapp-workspace-utilities.is-timeline .miniapp-credit-badge,
+.miniapp-shell.miniapp-light .miniapp-workspace-utilities.is-timeline .miniapp-efficiency-button,
+.miniapp-shell.miniapp-light .miniapp-workspace-utilities.is-timeline button[data-miniapp-popover="settings"],
+body[data-theme='light'] .miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-credit-badge,
+body[data-theme='light'] .miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-efficiency-button,
+body[data-theme='light'] .miniapp-shell .miniapp-workspace-utilities.is-timeline button[data-miniapp-popover="settings"] {
+  background: transparent;
+  color: #24334e;
+}
+.miniapp-shell.miniapp-light .miniapp-workspace-utilities.is-timeline .miniapp-credit-badge:active,
+.miniapp-shell.miniapp-light .miniapp-workspace-utilities.is-timeline .miniapp-efficiency-button:active,
+.miniapp-shell.miniapp-light .miniapp-workspace-utilities.is-timeline button[data-miniapp-popover="settings"]:active {
+  background: #f1ecfa;
+}
+@media (max-width: 370px) {
+  .miniapp-shell .miniapp-workspace-topbar-row { gap: .38rem; }
+  .miniapp-shell .miniapp-timeline-postpone-button { gap: .3rem; padding: 0 .55rem; font-size: .76rem; }
+  .miniapp-shell .miniapp-timeline-more-toggle { width: 2.85rem; }
+  .miniapp-shell .miniapp-workspace-utilities.is-list .miniapp-workspace-utilities-panel { gap: .25rem; }
+  .miniapp-shell .miniapp-workspace-utilities.is-list .miniapp-credit-badge { padding: 0 .4rem; }
+  .miniapp-shell .miniapp-workspace-utilities.is-list .miniapp-efficiency-button,
+  .miniapp-shell .miniapp-workspace-utilities.is-list button[data-miniapp-popover="settings"] { width: 2.35rem; }
+}
+
+/* The list's existing action order remains intact, but its three buttons
+   also sit on separate surfaces rather than inside a fourth outer card. */
+.miniapp-shell .miniapp-list-workspace .miniapp-workspace-toolbar-card,
+.miniapp-shell.miniapp-light .miniapp-list-workspace .miniapp-workspace-toolbar-card,
+body[data-theme='light'] .miniapp-shell .miniapp-list-workspace .miniapp-workspace-toolbar-card {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}

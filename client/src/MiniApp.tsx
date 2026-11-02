@@ -2,7 +2,7 @@ import { AiStreamingMessageBody } from './components/AiStreamingMessageBody';
 import { prepareAiChatImageFile } from './lib/ai-image-upload';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, MessageCircle, Minus, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, StickyNote, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, MessageCircle, Minus, MoreVertical, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, StickyNote, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, stripAiChatProjectDisplayPreviews, type CreditPack, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus, type StandaloneNote } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { TaskCompletionReportDialog } from './components/TaskCompletionReportDialog';
@@ -924,6 +924,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [logoutSubmitting, setLogoutSubmitting] = useState(false);
   const [isEfficiencyDetailsOpen, setIsEfficiencyDetailsOpen] = useState(false);
+  const [isTimelineMoreOpen, setIsTimelineMoreOpen] = useState(false);
+  const timelineMoreRef = useRef<HTMLDivElement | null>(null);
   const [isAiChatMenuOpen, setIsAiChatMenuOpen] = useState(false);
   const [telegramChatPicker, setTelegramChatPicker] = useState<MiniAiContextPicker>(null);
   const aiChatDraftValueRef = useRef('');
@@ -3900,6 +3902,33 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     !isTaskNotesEditorOpen && !isSubtaskNotesEditorOpen &&
     !isAiChatProjectDialogOpen && !isCalendarExportOpen && !reportPromptTask;
   const showTelegramBrand = useTelegramCompactChatHeader && showWorkspaceSearchBar;
+  useEffect(() => {
+    if (displayMode !== 'timeline') {
+      setIsTimelineMoreOpen(false);
+      return;
+    }
+    if (!isTimelineMoreOpen) return;
+    const dismissOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !timelineMoreRef.current?.contains(event.target)) {
+        setIsTimelineMoreOpen(false);
+        setIsCreditPurchaseOpen(false);
+        setIsEfficiencyDetailsOpen(false);
+      }
+    };
+    const dismissEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsTimelineMoreOpen(false);
+        setIsCreditPurchaseOpen(false);
+        setIsEfficiencyDetailsOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', dismissOutside);
+    document.addEventListener('keydown', dismissEscape);
+    return () => {
+      document.removeEventListener('pointerdown', dismissOutside);
+      document.removeEventListener('keydown', dismissEscape);
+    };
+  }, [displayMode, isTimelineMoreOpen]);
 
   useEffect(() => {
     if (showWorkspaceSearchBar) return;
@@ -3950,6 +3979,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         setIsEfficiencyDetailsOpen(false);
         setIsSettingsOpen(false);
         setIsCreditPurchaseOpen(false);
+        setIsTimelineMoreOpen(false);
         if (!showWorkspaceSearchBar) return;
         const nextTop = event.currentTarget.scrollTop;
         const previousTop = lastMainScrollTopRef.current;
@@ -3993,6 +4023,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         setIsEfficiencyDetailsOpen(false);
         setIsSettingsOpen(false);
         setIsCreditPurchaseOpen(false);
+        setIsTimelineMoreOpen(false);
       }}
       className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 ${fullscreenClass} ${isWebRuntime ? 'miniapp-web-runtime' : ''} ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}
     >
@@ -4088,8 +4119,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       <div className="mx-auto max-w-2xl space-y-4">
         {showWorkspaceSearchBar ? <div ref={searchBarSlotRef} className="miniapp-premium-topbar-slot"
           style={isSearchBarFloating ? { minHeight: floatingSearchBarHeight || undefined } : undefined}>
-        <section ref={searchBarPanelRef} className={`relative z-30 miniapp-premium-topbar rounded-xl border border-slate-700 bg-slate-900/95 p-2.5 backdrop-blur ${isSearchBarFloating && (isHeaderVisible || isGlobalSearchOpen) ? 'miniapp-premium-topbar-floating' : ''}`}>
-          <div className="flex items-center gap-2">
+        <section ref={searchBarPanelRef} className={`relative z-30 miniapp-premium-topbar ${displayMode === 'timeline' ? 'miniapp-timeline-topbar' : 'miniapp-list-topbar'} rounded-xl border border-slate-700 bg-slate-900/95 p-2.5 backdrop-blur ${isSearchBarFloating && (isHeaderVisible || isGlobalSearchOpen) ? 'miniapp-premium-topbar-floating' : ''}`}>
+          <div className="miniapp-workspace-topbar-row flex items-center gap-2">
             <WorkspaceGlobalSearch
               mobile
               userId={currentUser?.id ?? ''}
@@ -4105,9 +4136,34 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 setIsStandaloneNotesOpen(true);
               }}
             />
-            <div className="relative inline-flex shrink-0 items-center gap-1">
+            {displayMode === 'timeline' ? (
+              <button type="button" className="miniapp-timeline-postpone-button"
+                onClick={() => void postponeAllOverdueToToday()}
+                disabled={isPostponingOverdue || overdueTasks.length === 0}
+                title="Перенести просроченные задачи на сегодня на это же время"
+                aria-label="Перенести просроченные задачи на сегодня на это же время">
+                {isPostponingOverdue ? <Loader2 size={18} className="animate-spin" /> : <Clock3 size={18}/>}
+                <span>Отложить</span>
+              </button>
+            ) : null}
+            <div ref={timelineMoreRef} className={`miniapp-workspace-utilities ${displayMode === 'timeline' ? 'is-timeline' : 'is-list'} ${isTimelineMoreOpen ? 'is-open' : ''}`}>
+              {displayMode === 'timeline' ? (
+                <button type="button" className="miniapp-timeline-more-toggle" aria-label="Кредиты, рейтинг и настройки"
+                  aria-haspopup="menu" aria-expanded={isTimelineMoreOpen}
+                  onClick={() => {
+                    setIsCreditPurchaseOpen(false);
+                    setIsEfficiencyDetailsOpen(false);
+                    setIsTimelineMoreOpen(prev => !prev);
+                  }}>
+                  <MoreVertical size={21} aria-hidden="true"/>
+                </button>
+              ) : null}
+              <div className="miniapp-workspace-utilities-panel relative inline-flex shrink-0 items-center gap-1"
+                role={displayMode === 'timeline' ? 'menu' : undefined}
+                aria-label={displayMode === 'timeline' ? 'Дополнительные действия' : undefined}>
               <button type="button" onClick={() => { if (currentUser?.isGuest && isWebRuntime) { setIsCreditPurchaseOpen(false); openAuthModal('register'); } else { setCreditPopoverView('purchase'); setIsCreditPurchaseOpen((open) => !open); } }} className="miniapp-credit-badge inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold" title={currentUser?.isGuest ? 'Зарегистрируйтесь, чтобы получить 100 ИИ-кредитов' : 'Купить AI-кредиты'} aria-label={`AI-кредиты: ${aiCredits}`} aria-expanded={isCreditPurchaseOpen}>
                 <Coins size={15} />
+                {displayMode === 'timeline' ? <span className="miniapp-utility-menu-label">Кредиты</span> : null}
                 <span>{aiCredits}</span>
               </button>
               {isCreditPurchaseOpen ? <div onScroll={(event) => event.stopPropagation()} onTouchMove={(event) => event.stopPropagation()} className="miniapp-credit-popover absolute right-0 top-full z-[60] mt-2 max-h-[75vh] w-[min(21rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border p-4 shadow-2xl">
@@ -4153,16 +4209,18 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <defs><linearGradient id="miniEffFill" x1="10" y1="10" x2="62" y2="62"><stop offset="0%" stopColor="#38bdf8" /><stop offset="45%" stopColor="#8b5cf6" /><stop offset="100%" stopColor="#f472b6" /></linearGradient><linearGradient id="miniEffRing" x1="12" y1="58" x2="60" y2="14"><stop offset="0%" stopColor="#22d3ee" /><stop offset="55%" stopColor="#a78bfa" /><stop offset="100%" stopColor="#fb7185" /></linearGradient></defs>
                   <circle cx="36" cy="36" r="25" fill="url(#miniEffFill)" opacity="0.18" /><circle cx="36" cy="36" r="26" fill="none" stroke="rgba(148,163,184,0.32)" strokeWidth="5" /><circle cx="36" cy="36" r="26" fill="none" stroke="url(#miniEffRing)" strokeWidth="5" strokeLinecap="round" pathLength="100" strokeDasharray={`${efficiencyScore} 100`} transform="rotate(-90 36 36)" /><path d="M36 17l5.4 12.1 13.1 1.4-9.8 8.8 2.8 12.9L36 45.5l-11.5 6.7 2.8-12.9-9.8-8.8 13.1-1.4L36 17z" fill="url(#miniEffFill)" />
                 </svg>
+                {displayMode === 'timeline' ? <span className="miniapp-utility-menu-label">Рейтинг · {formattedEfficiencyScore}/100</span> : null}
               </button>
               <button
                 type="button"
-                onClick={() => setIsSettingsOpen((prev) => !prev)}
+                onClick={() => { setIsTimelineMoreOpen(false); setIsSettingsOpen((prev) => !prev); }}
                 data-miniapp-popover="settings"
                 className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-600 bg-slate-800 transition-colors hover:bg-amber-500/10"
                 aria-label="Открыть настройки"
                 title="Настройки"
               >
                 <Settings size={16} className="text-amber-400" />
+                {displayMode === 'timeline' ? <span className="miniapp-utility-menu-label">Настройки</span> : null}
               </button>
               {isEfficiencyDetailsOpen ? (
                 <div data-miniapp-popover="efficiency" className="efficiency-details-popover-modern absolute right-0 top-full z-50 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-[1.6rem] border p-4 text-xs shadow-2xl backdrop-blur">
@@ -4178,6 +4236,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   </div>
                 </div>
               ) : null}
+              </div>
             </div>
           </div>
         </section>
@@ -4342,24 +4401,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         ) : (
 
           <section className="miniapp-timeline-section miniapp-timeline-independent-blocks">
-            <div className="miniapp-workspace-timeline-toolbar miniapp-timeline-actions-panel">
-            <MiniWorkspaceTools
-              mode={displayMode}
-              timeFilter={timeFilter}
-              onTimeFilterChange={setTimeFilter}
-              sortMode={listSortMode}
-              onSortChange={setListSortMode}
-              spheres={spheres}
-              selectedSphereIds={listSelectedSphereIds}
-              onSelectAllSpheres={(all) => setListSelectedSphereIds(all ? null : [])}
-              onToggleSphere={toggleListSphereSelection}
-              timelineSphereId={sphereFilter}
-              onTimelineSphereChange={setSphereFilter}
-              onPostpone={() => void postponeAllOverdueToToday()}
-              postponing={isPostponingOverdue}
-              canPostpone={overdueTasks.length > 0}
-            />
-            </div>
             <div className="miniapp-timeline-navigation">
               <div className="miniapp-timeline-view-panel">
               <div className="miniapp-timeline-view-switch" role="group" aria-label="Масштаб таймлайна">
