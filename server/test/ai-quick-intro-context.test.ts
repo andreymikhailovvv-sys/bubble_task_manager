@@ -15,6 +15,8 @@ test('fallback is specific to mailbox, overdue tasks, writing and planning reque
   const plan = buildContextualAiIntro('Сделай стратегию запуска сервиса', 'Быстрые запросы');
   assert.match(email, /письм/iu);
   assert.match(tasks, /срок/iu);
+  assert.match(buildContextualAiIntro('Проверь просроченные задачи из сектора Личное', 'Чат'), /Личное/u);
+  assert.match(email, /Яндекс Почты/u);
   assert.match(text, /структур|абзац/iu);
   assert.match(plan, /шаг|приоритет/iu);
   assert.equal(new Set([email, tasks, text, plan]).size, 4);
