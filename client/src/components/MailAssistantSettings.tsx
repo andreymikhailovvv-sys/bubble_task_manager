@@ -212,7 +212,7 @@ export function MailAssistantSettings({ onClose }: { onClose: () => void }) {
                   {summaryProcessing && <p role="status" aria-live="polite" className="integration-menu__muted inline-flex items-center gap-2 text-xs">
                     <Loader2 size={13} className="animate-spin" aria-hidden="true"/>
                     {selected.manualDigestRequestedAt ? 'Обработка писем на сервере. Сводка появится по завершении.' : 'Отправляем запрос на обновление сводки…'}
-                  </p>
+                  </p>}
                   {selected.enabled && selected.summaryIntervalMinutes === -1 &&
                     <p className="integration-menu__muted text-xs">Почтовые сводки отключены в разделе «Частота сводок».</p>}
                   {selected.enabled && selected.lastCheckedAt && !selected.lastError && selected.processedCount === 0 &&
