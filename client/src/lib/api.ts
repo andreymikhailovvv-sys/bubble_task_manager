@@ -986,6 +986,7 @@ export type MailAccountConnect = MailAccountSettings & {
 export type MailAccount = MailAccountSettings & {
   id: string; provider: 'yandex' | 'mailru'; email: string;
   sentFolder: string | null; lastCheckedAt: string | null; nextCheckAt: string | null;
+  manualDigestRequestedAt: string | null;
   lastSummaryAt: string | null; lastSummary: { summary: string; decisions: string[]; obligations: string[]; risks: string[] } | null;
   spentTodayMilli: number; totalSpentMilli: number;
   lastError: string | null; processedCount: number; createdAt: string;

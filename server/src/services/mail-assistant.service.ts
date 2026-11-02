@@ -84,6 +84,7 @@ function publicAccount(a: EmailMailbox) {
     monitorModel: a.monitorModel, dailyCreditLimitMilli: a.dailyCreditLimitMilli,
     notifyImportant: a.notifyImportant, instructions: a.instructions,
     lastSummary: a.lastSummary, lastSummaryAt: a.lastSummaryAt,
+    manualDigestRequestedAt: a.manualDigestRequestedAt,
     spentTodayMilli: a.creditDayKey === today ? a.dailySpentMilli : 0, totalSpentMilli: a.totalSpentMilli,
     sentFolder: a.sentFolder, lastCheckedAt: a.lastCheckedAt,
     nextCheckAt: a.nextCheckAt, lastError: a.lastError,

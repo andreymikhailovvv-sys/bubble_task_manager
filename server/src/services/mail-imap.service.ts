@@ -6,9 +6,11 @@ export type MailMessage = { uid: number; from: string; subject: string; date: st
 const HOST: Record<MailProvider, string> = { yandex: 'imap.yandex.ru', mailru: 'imap.mail.ru' };
 // Some IMAP servers do not honor partial FETCH byte ranges exactly. Keep a
 // bounded response budget while permitting normal large headers/body literals.
-const MAX_REPLY = 1_200_000;
-const MAX_LITERAL = 512_000;
+const MAX_REPLY = 1_200_000; // Maximum metadata/line size, never a raw mail-body limit.
+const MAX_LITERAL = 512_000; // Ordinary IMAP commands still have a strict memory budget.
+const MAX_FETCH_TRANSFER = 64 * 1024 * 1024; // A bounded, streamed transfer for buggy servers.
 const HEADER_BYTES = 12_288;
+const MIME_HEADER_BYTES = 4_096;
 const BODY_BYTES = 24_576;
 export function validateMailCredentials(provider: unknown, email: unknown, password: unknown) {
   if (provider !== 'yandex' && provider !== 'mailru') throw new Error('Выберите почтового провайдера');
@@ -108,6 +110,65 @@ export function parseMailSource(source: Buffer, uid: number): MailMessage {
   };
 }
 
+
+/** Read the IMAP BODYSTRUCTURE expression without touching message contents.
+ * The tree has small string tokens, nested lists and NIL; we do not execute it.
+ */
+type ImapNode = string | null | ImapNode[];
+function parseImapTree(source: string): ImapNode | null {
+  const tokens = source.match(/\(|\)|"(?:\\.|[^"\\])*"|[^\s()]+/g);
+  if (!tokens || tokens.length > 20_000) return null;
+  let at = 0;
+  function next(depth: number): ImapNode {
+    if (depth > 25 || at >= tokens!.length) throw new Error('Invalid BODYSTRUCTURE');
+    const token = tokens![at++];
+    if (token === '(') {
+      const list: ImapNode[] = [];
+      while (at < tokens!.length && tokens![at] !== ')') list.push(next(depth + 1));
+      if (tokens![at++] !== ')') throw new Error('Invalid BODYSTRUCTURE');
+      return list;
+    }
+    if (token === ')' ) throw new Error('Invalid BODYSTRUCTURE');
+    if (token.toUpperCase() === 'NIL') return null;
+    if (token.startsWith('"')) return token.slice(1,-1).replace(/\\(["\\])/g,'$1');
+    return token;
+  }
+  try { return next(0); } catch { return null; }
+}
+type BodySection = { section: string; contentType: string; hasAttachments: boolean };
+function bestTextPart(structure: ImapNode): BodySection | null {
+  const matches: Array<{ section: string; type: string; attachment: boolean }> = [];
+  let attachmentPresent = false;
+  function walk(node: ImapNode, path: string, depth: number) {
+    if (!Array.isArray(node) || depth > 12) return;
+    if (Array.isArray(node[0])) {
+      let i = 0;
+      while (Array.isArray(node[i]) && i < 50) {
+        walk(node[i], path ? path + '.' + (i + 1) : String(i + 1), depth + 1);
+        i++;
+      }
+      return;
+    }
+    const kind = String(node[0] || '').toLowerCase();
+    const subtype = String(node[1] || '').toLowerCase();
+    const attachment = /"ATTACHMENT"/i.test(JSON.stringify(node.slice(7, 12)));
+    if (attachment || kind !== 'text') attachmentPresent = true;
+    if (kind === 'text' && (subtype === 'plain' || subtype === 'html') && !attachment)
+      matches.push({ section: path, type: subtype, attachment });
+  }
+  walk(structure, '', 0);
+  const chosen = matches.find(x => x.type === 'plain') ?? matches[0];
+  if (!chosen) return null;
+  return { section: chosen.section, contentType: 'text/' + chosen.type,
+    hasAttachments: attachmentPresent };
+}
+export function selectImapTextPart(response: string): BodySection | null {
+  const index = response.toUpperCase().indexOf('BODYSTRUCTURE ');
+  if (index < 0) return null;
+  const tree = parseImapTree(response.slice(index + 'BODYSTRUCTURE '.length));
+  return tree ? bestTextPart(tree) : null;
+}
+
 type Reply = { lines: string[]; literals: Buffer[] };
 export class ReadOnlyImap {
   private socket!: TLSSocket;
@@ -134,12 +195,21 @@ export class ReadOnlyImap {
       await this.enough(this.pending.length + 1);
     }
   }
-  private async literal(n: number) {
-    if (!Number.isSafeInteger(n) || n < 0 || n > MAX_LITERAL) throw new Error('Слишком большое письмо');
-    await this.enough(n);
-    const value = this.pending.subarray(0, n);
-    this.pending = this.pending.subarray(n);
-    return value;
+  private async literal(n: number, capture: number, transferLimit: number) {
+    if (!Number.isSafeInteger(n) || n < 0 || n > transferLimit) throw new Error('Слишком большое письмо');
+    // A Mail.ru FETCH can return an entire multipart message even for <0.24576>.
+    // Drain it in socket-size chunks, retaining only the requested preview.
+    const retained: Buffer[] = [];
+    let remaining = n, stored = 0;
+    while (remaining > 0) {
+      await this.enough(1);
+      const take = Math.min(remaining, this.pending.length);
+      const copy = Math.min(take, Math.max(0, capture - stored));
+      if (copy) { retained.push(this.pending.subarray(0, copy)); stored += copy; }
+      this.pending = this.pending.subarray(take);
+      remaining -= take;
+    }
+    return Buffer.concat(retained, stored);
   }
   async connect(provider: MailProvider, email: string, password: string) {
     this.socket = tls.connect({ host: HOST[provider], servername: HOST[provider], port: 993, rejectUnauthorized: true });
@@ -159,8 +229,9 @@ export class ReadOnlyImap {
     if (!(await this.line()).startsWith('* OK')) throw new Error('IMAP недоступен');
     await this.command('LOGIN ' + quote(email) + ' ' + quote(password));
   }
-  async command(value: string): Promise<Reply> {
+  async command(value: string, captureLimits?: number[]): Promise<Reply> {
     const tag = 'A' + (++this.tag).toString().padStart(4, '0');
+    const isFetch = /^UID FETCH /i.test(value);
     this.socket.write(tag + ' ' + value + '\r\n');
     const lines: string[] = [], literals: Buffer[] = [];
     let count = 0;
@@ -172,9 +243,13 @@ export class ReadOnlyImap {
       const match = /\{(\d+)\}$/.exec(next);
       if (match) {
         const length = Number(match[1]);
-        count += length;
-        if (count > MAX_REPLY) throw new Error('Слишком большой ответ IMAP');
-        literals.push(await this.literal(length));
+        if (!isFetch) {
+          count += length;
+          if (count > MAX_REPLY) throw new Error('Слишком большой ответ IMAP');
+        }
+        const capture = isFetch ? Math.min(MAX_LITERAL, captureLimits?.[literals.length] ?? BODY_BYTES) : MAX_LITERAL;
+        literals.push(await this.literal(length, capture,
+          isFetch ? MAX_FETCH_TRANSFER : MAX_LITERAL));
       }
       if (next.startsWith(tag + ' ')) {
         if (!/^A\d+ OK\b/i.test(next)) {
@@ -220,18 +295,38 @@ export class ReadOnlyImap {
   }
   async fetch(uid: number) {
     if (!Number.isSafeInteger(uid) || uid < 1) throw new Error('Некорректный UID письма');
-    // Do not fetch a large attachment-containing raw message just to obtain
-    // its subject and a short text preview. Mail.ru can return large literals
-    // for BODY[] despite the requested byte range.
-    const response = await this.command('UID FETCH ' + uid +
-      ' (UID BODY.PEEK[HEADER]<0.' + HEADER_BYTES + '> BODY.PEEK[TEXT]<0.' + BODY_BYTES + '>)');
-    const [header, body] = response.literals;
-    if (response.literals.length === 0) return null; // Message deleted after SEARCH.
-    if (!header || !body) throw Object.assign(new Error('Неполный IMAP FETCH'), {
-      code: 'IMAP_FETCH_INCOMPLETE'
-    });
-    const source = Buffer.concat([header, Buffer.from('\r\n'), body]);
-    return parseMailSource(source, uid);
+    // Select the text MIME section server-side. BODY[TEXT] includes multipart
+    // attachments, even if the caller only wants a 24-KB snippet.
+    const metadata = await this.command('UID FETCH ' + uid +
+      ' (UID BODY.PEEK[HEADER]<0.' + HEADER_BYTES + '> BODYSTRUCTURE)', [HEADER_BYTES]);
+    const header = metadata.literals[0];
+    if (!header) return null; // Deleted between SEARCH and FETCH.
+    const selected = selectImapTextPart(metadata.lines.join(' '));
+    const suffix = selected?.section;
+    const bodyCommand = suffix
+      ? 'UID FETCH ' + uid + ' (BODY.PEEK[' + suffix + '.MIME]<0.' + MIME_HEADER_BYTES +
+        '> BODY.PEEK[' + suffix + ']<0.' + BODY_BYTES + '>)'
+      : 'UID FETCH ' + uid + ' (BODY.PEEK[TEXT]<0.' + BODY_BYTES + '>)';
+    const content = await this.command(bodyCommand,
+      suffix ? [MIME_HEADER_BYTES, BODY_BYTES] : [BODY_BYTES]);
+    if (!content.literals.length) return null;
+    let message: MailMessage;
+    if (suffix && content.literals.length >= 2) {
+      const partHeader = content.literals[0];
+      const payload = content.literals[1];
+      const outer = parseMailSource(Buffer.concat([header, Buffer.from('\r\n')]), uid);
+      const part = parseMailSource(Buffer.concat([
+        partHeader.length ? partHeader : Buffer.from('Content-Type: ' + selected!.contentType + '\r\n'),
+        Buffer.from('\r\n'), payload
+      ]), uid);
+      message = { ...outer, text: part.text,
+        hasAttachments: selected!.hasAttachments };
+    } else if (!suffix) {
+      message = parseMailSource(Buffer.concat([header, Buffer.from('\r\n'), content.literals[0]]), uid);
+    } else {
+      throw Object.assign(new Error('Неполный IMAP FETCH'), { code: 'IMAP_FETCH_INCOMPLETE' });
+    }
+    return message;
   }
   close() { if (this.socket && !this.socket.destroyed) this.socket.destroy(); }
 }
