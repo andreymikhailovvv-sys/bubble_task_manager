@@ -22,7 +22,8 @@ test('timeline top row has separate search, postpone and expandable utilities, n
   assert.match(toolbar, /aria-expanded=\{isTimelineMoreOpen\}/);
   assert.match(toolbar, /miniapp-workspace-utilities-panel/);
   assert.match(toolbar, /Кредиты/);
-  assert.match(toolbar, /Рейтинг · \{formattedEfficiencyScore\}/);
+  assert.match(toolbar, /miniapp-utility-menu-label">Рейтинг<\/span>/);
+  assert.match(toolbar, /miniapp-utility-menu-value">\{formattedEfficiencyScore\}\/100/);
   assert.match(toolbar, /Настройки/);
   assert.match(css, /\.miniapp-premium-topbar\.miniapp-timeline-topbar/);
   assert.match(css, /\.miniapp-workspace-utilities\.is-timeline\.is-open/);
