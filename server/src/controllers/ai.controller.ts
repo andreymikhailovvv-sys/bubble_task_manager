@@ -165,8 +165,8 @@ export const aiController = {
         fileReferences, currentMessageId: req.body?.clientRequestId,
         onDiagnosticsPrepared: (diagnostics) => { traceDiagnostics = diagnostics; },
         ...(streaming ? { onProgress: (status: import('../services/ai-chat-progress.js').AiChatProgressStatus) => writeStreamEvent({ type: 'status', status }),
-          onTextDelta: (text: string) => introOverlay?.onMainDelta(text) ?? writeStreamEvent({ type: 'delta', text }),
-          onTextReset: () => introOverlay?.onMainReset() ?? writeStreamEvent({ type: 'reset' }) } : {}) });
+          onTextDelta: (text: string) => introOverlay ? introOverlay.onMainDelta(text) : writeStreamEvent({ type: 'delta', text }),
+          onTextReset: () => introOverlay ? introOverlay.onMainReset() : writeStreamEvent({ type: 'reset' }) } : {}) });
       traceResult = result;
       if (isQuickChat) {
         if (!telegramContinuation) await aiAssistantService.appendGeneralDialogMessages({ userId: req.user!.id, messages: [{ role: 'user', content: question }] });
@@ -404,8 +404,8 @@ export const aiController = {
         billingMode: isDynamicTaskChatBillingEnabled(req.user!.id) ? 'dynamic' : 'legacy',
         skipEfficiencyBonus: req.body?.skipEfficiencyBonus === true,
         ...(streaming ? { onProgress: (status: import('../services/task-ai-progress.js').TaskAiProgressStatus) => writeStreamEvent({ type: 'status', status }),
-          onTextDelta: (text: string) => introOverlay?.onMainDelta(text) ?? writeStreamEvent({ type: 'delta', text }),
-          onTextReset: () => introOverlay?.onMainReset() ?? writeStreamEvent({ type: 'reset' }) } : {})
+          onTextDelta: (text: string) => introOverlay ? introOverlay.onMainDelta(text) : writeStreamEvent({ type: 'delta', text }),
+          onTextReset: () => introOverlay ? introOverlay.onMainReset() : writeStreamEvent({ type: 'reset' }) } : {})
       });
       traceTaskResult = result;
 
