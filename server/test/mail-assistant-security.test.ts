@@ -89,6 +89,8 @@ test('mail monitoring retries failed AI analyses instead of silently advancing t
   assert.doesNotMatch(retry, /record\.createdAt\.getTime\(\) < Date\.now\(\)/);
   const scan = service.slice(service.indexOf('async function scan('), service.indexOf('export const mailAssistantWorker'));
   assert.ok(scan.indexOf('await processMessage(') < scan.indexOf("processedCount: { increment:"));
+  assert.match(scan, /status: 'FAILED'/);
+  assert.match(scan, /previous\.uid/);
   assert.match(service, /\[MailAssistant\] monitoring failed/);
   const read = readFileSync(new URL('../src/services/ai-mail-tools.service.ts', import.meta.url), 'utf8');
   assert.match(read, /failureReasons/);
