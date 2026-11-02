@@ -55,7 +55,11 @@ test('authorized policy count, not browser list, controls Telegram assistant nav
   assert.match(mini, /activeAiChatProject\.id === 'telegram-ai-assistant-project'/);
   assert.match(mini, /chat\.id\.startsWith\('telegram-ai-assistant:'\)/);
   assert.match(mini, /project\.icon === 'telegram' \? <svg/);
-  assert.match(mini, /activeAiChatProject\?\.icon === 'telegram' \? <svg role="img" aria-label="Telegram"/);
+  // The project symbol is now rendered by the shared header component rather than inline in MiniApp.
+  const header = source('../../client/src/components/MiniGeneralAiChatHeader.tsx');
+  assert.match(mini, /<MiniGeneralAiChatHeader/);
+  assert.match(header, /icon === 'telegram'/);
+  assert.match(header, /<svg viewBox="0 0 24 24"/);
   assert.match(web, /sanitizeCachedTelegramAssistantProjects\(normalized\)/);
 });
 
