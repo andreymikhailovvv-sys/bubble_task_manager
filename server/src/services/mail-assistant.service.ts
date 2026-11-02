@@ -164,7 +164,8 @@ export const mailAssistant = {
     const row = await own(userId, id);
     if (!row.enabled) throw new MailAssistantError(409, 'Мониторинг отключён');
     await prisma.emailMailbox.updateMany({ where: { id, userId, enabled: true },
-      data: { nextCheckAt: new Date(), manualDigestRequestedAt: new Date(), lastError: null } });
+      data: { nextCheckAt: new Date(), manualDigestRequestedAt: new Date(), lastError: null,
+        revision: { increment: 1 }, leaseToken: null, leasedUntil: null } });
     return { ok: true };
   },
   async events(userId: string, id: string) {
@@ -375,7 +376,8 @@ async function publishPending(account: EmailMailbox, token: string, manualReady:
     orderBy: { createdAt: 'desc' }, take: 200
   }).then(rows => rows.reverse());
   const now = new Date();
-  const manual = Boolean(manualReady && latest.manualDigestRequestedAt);
+  const manual = Boolean(manualReady && latest.manualDigestRequestedAt &&
+    account.manualDigestRequestedAt?.getTime() === latest.manualDigestRequestedAt.getTime());
   if (latest.taskMode !== 'NONE' && isDue(latest.lastTaskAt, latest.taskIntervalMinutes)) {
     try {
     for (const row of rows.filter(x => x.folder === 'INBOX' && !x.summaryOnly && !x.taskPublishedAt).slice(0, 20)) {
