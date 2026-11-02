@@ -13011,10 +13011,10 @@ body[data-theme='light'] .miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-
   box-shadow: none !important;
 }
 .miniapp-shell .miniapp-timeline-topbar .miniapp-global-search-field {
-  height: 3.1rem;
-  min-height: 3.1rem;
+  height: 2.75rem;
+  min-height: 2.75rem;
 }
-.miniapp-shell .miniapp-timeline-topbar .miniapp-global-search-field input { height: 3rem; }
+.miniapp-shell .miniapp-timeline-topbar .miniapp-global-search-field input { height: 2.65rem; }
 .miniapp-shell .miniapp-timeline-topbar button { -webkit-tap-highlight-color: transparent; }
 .miniapp-shell .miniapp-timeline-postpone-button,
 .miniapp-shell .miniapp-timeline-more-toggle {
@@ -13022,7 +13022,7 @@ body[data-theme='light'] .miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  min-height: 3.1rem;
+  min-height: 2.75rem;
   border: 1px solid rgba(125, 148, 184, .32);
   border-radius: 1rem;
   background: rgba(28, 42, 66, .94);
@@ -13039,7 +13039,7 @@ body[data-theme='light'] .miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-
 .miniapp-shell .miniapp-timeline-postpone-button svg { color: #c4b5fd; flex: 0 0 auto; }
 .miniapp-shell .miniapp-timeline-postpone-button:disabled { opacity: .55; cursor: not-allowed; }
 .miniapp-shell .miniapp-timeline-more-toggle {
-  width: 3.1rem;
+  width: 2.75rem;
   padding: 0;
 }
 .miniapp-shell .miniapp-timeline-postpone-button:focus-visible,
@@ -13176,7 +13176,7 @@ body[data-theme='light'] .miniapp-shell .miniapp-workspace-utilities.is-timeline
 @media (max-width: 370px) {
   .miniapp-shell .miniapp-workspace-topbar-row { gap: .38rem; }
   .miniapp-shell .miniapp-timeline-postpone-button { gap: .3rem; padding: 0 .55rem; font-size: .76rem; }
-  .miniapp-shell .miniapp-timeline-more-toggle { width: 2.85rem; }
+  .miniapp-shell .miniapp-timeline-more-toggle { width: 2.75rem; }
   .miniapp-shell .miniapp-workspace-utilities.is-list .miniapp-workspace-utilities-panel { gap: .25rem; }
   .miniapp-shell .miniapp-workspace-utilities.is-list .miniapp-credit-badge { padding: 0 .4rem; }
   .miniapp-shell .miniapp-workspace-utilities.is-list .miniapp-efficiency-button,
@@ -13193,4 +13193,76 @@ body[data-theme='light'] .miniapp-shell .miniapp-list-workspace .miniapp-workspa
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+}
+
+
+/* Aligned timeline overflow: icon, label and right-aligned figure use the same
+   columns in every row. No visual change to the list's existing shortcuts. */
+.miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel {
+  padding: .5rem;
+  gap: .18rem;
+}
+.miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel > button {
+  display: grid;
+  grid-template-columns: 1.7rem minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: .7rem;
+  min-height: 3.1rem;
+  padding: .6rem .78rem;
+  border-radius: .82rem;
+  text-align: left;
+}
+.miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel > button > svg {
+  grid-column: 1;
+  width: 1.32rem;
+  height: 1.32rem;
+  justify-self: center;
+  flex: none;
+}
+.miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel .miniapp-utility-menu-label {
+  grid-column: 2;
+  min-width: 0;
+  flex: none;
+  font-size: .87rem;
+  line-height: 1.25;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel .miniapp-utility-menu-value {
+  grid-column: 3;
+  justify-self: end;
+  padding: .3rem .47rem;
+  border-radius: .6rem;
+  background: rgba(166, 136, 224, .13);
+  color: #dfd2fc;
+  font-size: .75rem;
+  line-height: 1.25;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.miniapp-shell.miniapp-light .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel .miniapp-utility-menu-value,
+body[data-theme='light'] .miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel .miniapp-utility-menu-value {
+  background: #f1ebfa;
+  color: #6d42a8;
+}
+
+/* The outer pill has a 1.25rem radius and .3rem inset, so the selected
+   edge segment must be rounded at ~.95rem rather than the old .55rem. */
+.miniapp-shell .miniapp-timeline-independent-blocks .miniapp-timeline-view-panel .miniapp-timeline-view-switch {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .12rem;
+  min-width: 0;
+}
+.miniapp-shell .miniapp-timeline-independent-blocks .miniapp-timeline-view-panel .miniapp-timeline-view-switch button {
+  min-width: 0;
+  min-height: 2.5rem;
+  border-radius: .72rem;
+}
+.miniapp-shell .miniapp-timeline-independent-blocks .miniapp-timeline-view-panel .miniapp-timeline-view-switch button:first-child {
+  border-radius: .95rem .72rem .72rem .95rem;
+}
+.miniapp-shell .miniapp-timeline-independent-blocks .miniapp-timeline-view-panel .miniapp-timeline-view-switch button:last-child {
+  border-radius: .72rem .95rem .95rem .72rem;
 }
