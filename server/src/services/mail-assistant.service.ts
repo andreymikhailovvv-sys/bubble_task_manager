@@ -164,8 +164,7 @@ export const mailAssistant = {
     const row = await own(userId, id);
     if (!row.enabled) throw new MailAssistantError(409, 'Мониторинг отключён');
     await prisma.emailMailbox.updateMany({ where: { id, userId, enabled: true },
-      data: { nextCheckAt: new Date(), manualDigestRequestedAt: new Date(), lastError: null,
-        revision: { increment: 1 }, leaseToken: null, leasedUntil: null } });
+      data: { nextCheckAt: new Date(), manualDigestRequestedAt: new Date(), lastError: null } });
     return { ok: true };
   },
   async events(userId: string, id: string) {
@@ -586,9 +585,19 @@ export const mailAssistantWorker = {
       console.info('[MailAssistant] cycle completed', { mailboxId: account.id,
         provider: account.provider, newUids: seen, eligibleMessages: eligible, digestsCreated: digests,
         warnings: warnings.length });
+      // A manual request can arrive during an active scan. Do not interrupt an
+      // in-flight AI analysis (which could strand a PROCESSING row), and do not
+      // overwrite the newly requested immediate scan with the normal interval.
+      const pendingRequest = await prisma.emailMailbox.findFirst({
+        where: { id: account.id, leaseToken: token, revision: account.revision },
+        select: { manualDigestRequestedAt: true }
+      });
+      const requestedDuringScan = Boolean(pendingRequest?.manualDigestRequestedAt &&
+        pendingRequest.manualDigestRequestedAt.getTime() !== account.manualDigestRequestedAt?.getTime());
       await prisma.emailMailbox.updateMany({ where: { id: account.id, leaseToken: token }, data: {
         leaseToken: null, leasedUntil: null, lastCheckedAt: new Date(),
-        lastError: error, nextCheckAt: new Date(Date.now() + (error ? 600_000 : Math.max(15_000,
+        lastError: error, nextCheckAt: requestedDuringScan ? new Date() :
+          new Date(Date.now() + (error ? 600_000 : Math.max(15_000,
             Math.min(account.intervalMinutes * 60_000,
               ...[account.replyMode !== 'OBSERVE' ? account.replyIntervalMinutes : null,
                   account.taskMode !== 'NONE' ? account.taskIntervalMinutes : null,
