@@ -1,4 +1,5 @@
 import { normalizeSelectableAiChatModel } from '../lib/ai-chat-model.js';
+import { startAiIntroOverlay } from '../services/ai-quick-intro.service.js';
 import { consumeTelegramAiReadRequest } from '../services/telegram-ai-read-consent.service.js';
 import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
 import { Request, Response } from 'express';
@@ -76,7 +77,8 @@ export const aiController = {
   askAiChat: async (req: Request, res: Response) => {
     const startedAt = Date.now(); const requestId = randomUUID(); let traceResult: any = null; let traceDiagnostics: { context: AiChatContextDiagnostics } | null = null; let traceError: unknown = null; let requestClaim: AiChatRequestClaim | null = null;
     const streaming = (req.get('accept') ?? '').toLowerCase().split(',').some((value) => value.trim().split(';')[0] === 'application/x-ndjson');
-    const writeStreamEvent = (event: unknown) => { res.write(`${JSON.stringify(event)}\n`); (res as Response & { flush?: () => void }).flush?.(); };
+    const writeStreamEvent = (event: unknown) => { if (res.writableEnded || res.destroyed) return; res.write(`${JSON.stringify(event)}\n`); (res as Response & { flush?: () => void }).flush?.(); };
+    let introOverlay: ReturnType<typeof startAiIntroOverlay> | null = null;
     try {
       const question = typeof req.body?.question === 'string' ? req.body.question : '';
       const telegramContinuation = req.body?.telegramRead != null;
@@ -108,7 +110,17 @@ export const aiController = {
         } else res.json(requestClaim.response);
         return;
       }
-      if (streaming) { res.status(200).set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no' }); res.flushHeaders(); }
+      if (streaming) {
+        res.status(200).set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no' });
+        res.flushHeaders();
+        // Run independently of timezone, history compaction, attachments and the selected model.
+        introOverlay = startAiIntroOverlay({
+          question, context: [req.body?.projectTitle, req.body?.chatTitle]
+            .filter((value): value is string => typeof value === 'string').join(' / ').slice(0, 160) || 'Общий чат Планировыча',
+          send: writeStreamEvent
+        });
+        res.once('close', () => introOverlay?.stop());
+      }
       const history = Array.isArray(req.body?.history) ? req.body.history.filter((m: any) => (m?.role === 'user' || m?.role === 'assistant') && typeof m?.content === 'string').map((m: any) => ({ ...(typeof m.id === 'string' ? { id: m.id } : {}), role: m.role, content: m.content, ...(typeof m.monitoringTaskId === 'string' ? { monitoringTaskId: m.monitoringTaskId } : {}) })) : [];
       // File IDs from the browser's history are hints only. The catalog
       // service checks every referenced document against the signed-in owner.
@@ -153,8 +165,8 @@ export const aiController = {
         fileReferences, currentMessageId: req.body?.clientRequestId,
         onDiagnosticsPrepared: (diagnostics) => { traceDiagnostics = diagnostics; },
         ...(streaming ? { onProgress: (status: import('../services/ai-chat-progress.js').AiChatProgressStatus) => writeStreamEvent({ type: 'status', status }),
-          onTextDelta: (text: string) => writeStreamEvent({ type: 'delta', text }),
-          onTextReset: () => writeStreamEvent({ type: 'reset' }) } : {}) });
+          onTextDelta: (text: string) => introOverlay?.onMainDelta(text) ?? writeStreamEvent({ type: 'delta', text }),
+          onTextReset: () => introOverlay?.onMainReset() ?? writeStreamEvent({ type: 'reset' }) } : {}) });
       traceResult = result;
       if (isQuickChat) {
         if (!telegramContinuation) await aiAssistantService.appendGeneralDialogMessages({ userId: req.user!.id, messages: [{ role: 'user', content: question }] });
@@ -166,9 +178,11 @@ export const aiController = {
       await grantAiChatRequestRating(req.user!.id, 'general:' + (requestClaim?.kind === 'new'
         ? req.body.clientRequestId : requestId)).catch(error =>
           console.error('[Efficiency] general AI chat bonus failed', error));
+      introOverlay?.stop();
       if (streaming) { writeStreamEvent({ type: 'result', result: publicResult }); res.end(); } else res.json(publicResult);
     } catch (error) {
       traceError = error;
+      introOverlay?.stop();
       if (requestClaim?.kind === 'new') {
         await failAiChatRequest(requestClaim).catch((finalizationError) => {
           console.error('[AI chat idempotency] unable to finalize failed request', { requestId, errorName: finalizationError instanceof Error ? finalizationError.name : 'UnknownError' });
@@ -188,6 +202,7 @@ export const aiController = {
       else if (error instanceof AiChatRequestKeyError) res.status(400).json({ error: error.message });
       else sendAiError(res, error);
     } finally {
+      introOverlay?.stop();
       const diagnostics = traceResult?.diagnostics ?? traceDiagnostics; const workflow = traceResult?.workflowDiagnostics;
       logAiTraceSummary({ requestId, endpoint: 'ai-chat', surface: req.body?.clientSurface === 'web' || req.body?.clientSurface === 'miniapp' ? req.body.clientSurface : 'unknown', chatKind: req.body?.chatId === 'quick-ai-requests' ? 'quick' : 'project', projectId: typeof req.body?.projectId === 'string' ? req.body.projectId : null, chatId: typeof req.body?.chatId === 'string' ? req.body.chatId : null, model: traceResult?.model ?? req.body?.model ?? null, contextMode: diagnostics?.context?.contextMode ?? (req.body?.chatId === 'quick-ai-requests' ? 'quick' : 'legacy'), memoryRevision: diagnostics?.context?.memoryRevision ?? null, memoryCompactionTriggered: diagnostics?.context?.memoryCompactionTriggered ?? false, providerStreaming: workflow?.providerStreaming ?? false, webSearchProgressObserved: workflow?.webSearchProgressObserved ?? false, providerCalls: workflow?.providerCalls ?? 0, toolCalls: workflow?.toolCalls ?? 0, toolOperations: workflow?.toolOperations ?? [], batchToolCalls: workflow?.batchToolCalls, batchActionsRequested: workflow?.batchActionsRequested, batchActionsSucceeded: workflow?.batchActionsSucceeded, batchActionsFailed: workflow?.batchActionsFailed, webSearchUsed: workflow?.webSearchUsed ?? false, webSearchCallsActual: workflow?.webSearchCallsActual ?? 0, webSearchCallsBilled: workflow?.webSearchCallsBilled ?? 0, webSearchLimit: workflow?.webSearchLimit ?? 1, webSearchLimitExceeded: workflow?.webSearchLimitExceeded ?? false, webSearchDuplicateItems: workflow?.webSearchDuplicateItems ?? 0, webSearchSearchItemsRaw: workflow?.webSearchSearchItemsRaw ?? 0, webSearchCreditsMilliBilled: workflow?.webSearchCreditsMilliBilled ?? 0, providerWebSearchCostMilli: workflow?.providerWebSearchCostMilli ?? 0, webSearchCalls: workflow?.webSearchCallsActual ?? workflow?.webSearchCalls ?? 0, webSearchCreditsMilli: workflow?.webSearchCreditsMilliBilled ?? workflow?.webSearchCreditsMilli ?? 0, webSourceCount: workflow?.webSourceCount ?? 0, inputTokensTotal: workflow?.inputTokensTotal ?? 0, outputTokensTotal: workflow?.outputTokensTotal ?? 0, creditsSpentMilli: traceResult?.billing?.creditsSpentMilli ?? 0, taskDataChanged: traceResult?.taskDataChanged ?? false, durationMs: Date.now() - startedAt, success: !traceError, ...(!traceError ? {} : { errorCode: traceError instanceof Error ? traceError.name : 'UnknownError' }) });
     }
@@ -293,9 +308,11 @@ export const aiController = {
     const traceStartedAt = Date.now(); const traceRequestId = randomUUID(); let traceTaskResult: any = null; let traceTaskError: unknown = null; let taskRequestClaim: AiChatRequestClaim | null = null;
     const streaming = (req.get('accept') ?? '').toLowerCase().split(',').some((value) => value.trim().split(';')[0] === 'application/x-ndjson');
     const writeStreamEvent = (event: unknown) => {
+      if (res.writableEnded || res.destroyed) return;
       res.write(`${JSON.stringify(event)}\n`);
       (res as Response & { flush?: () => void }).flush?.();
     };
+    let introOverlay: ReturnType<typeof startAiIntroOverlay> | null = null;
     try {
       if (req.body?.telegramRead != null &&
           !telegramChatRequestIsSameOrigin(req.get('origin') || undefined, req.get('host') || undefined, req.get('sec-fetch-site') || undefined)) {
@@ -354,6 +371,12 @@ export const aiController = {
       if (streaming) {
         res.status(200).set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no' });
         res.flushHeaders();
+        introOverlay = startAiIntroOverlay({
+          question, context: 'Помощь ИИ по задаче. ' +
+            (persistedHistory.filter((message) => message.role === 'user').at(-1)?.content ?? '').slice(0, 120),
+          send: writeStreamEvent
+        });
+        res.once('close', () => introOverlay?.stop());
       }
 
       const mode = req.body?.mode === 'smart' ? 'smart' : 'fast';
@@ -381,8 +404,8 @@ export const aiController = {
         billingMode: isDynamicTaskChatBillingEnabled(req.user!.id) ? 'dynamic' : 'legacy',
         skipEfficiencyBonus: req.body?.skipEfficiencyBonus === true,
         ...(streaming ? { onProgress: (status: import('../services/task-ai-progress.js').TaskAiProgressStatus) => writeStreamEvent({ type: 'status', status }),
-          onTextDelta: (text: string) => writeStreamEvent({ type: 'delta', text }),
-          onTextReset: () => writeStreamEvent({ type: 'reset' }) } : {})
+          onTextDelta: (text: string) => introOverlay?.onMainDelta(text) ?? writeStreamEvent({ type: 'delta', text }),
+          onTextReset: () => introOverlay?.onMainReset() ?? writeStreamEvent({ type: 'reset' }) } : {})
       });
       traceTaskResult = result;
 
@@ -425,12 +448,14 @@ export const aiController = {
       await grantAiChatRequestRating(req.user!.id, 'task:' + (taskRequestClaim?.kind === 'new'
         ? req.body.clientRequestId : traceRequestId)).catch(error =>
           console.error('[Efficiency] task AI chat bonus failed', error));
+      introOverlay?.stop();
       if (streaming) {
         writeStreamEvent({ type: 'result', result });
         res.end();
       } else res.json(result);
     } catch (error) {
       traceTaskError = error;
+      introOverlay?.stop();
       if (taskRequestClaim?.kind === 'new') {
         await failAiChatRequest(taskRequestClaim).catch((finalizationError) => {
           console.error('[AI task chat idempotency] finalization failed', {
@@ -458,6 +483,7 @@ export const aiController = {
       } else if (error instanceof AiChatRequestKeyError) res.status(400).json({ error: message });
       else sendAiError(res, error);
     } finally {
+      introOverlay?.stop();
       logAiTraceSummary({ requestId: traceRequestId, endpoint: 'task-chat', surface: req.body?.clientSurface === 'web' || req.body?.clientSurface === 'miniapp' ? req.body.clientSurface : 'unknown', taskId: req.params.id, model: traceTaskResult?.model ?? req.body?.model ?? null, contextMode: process.env.TASK_CHAT_MEMORY_ENABLED === 'true' ? 'v3' : 'v2', memoryRevision: traceTaskResult?.diagnostics?.memoryRevision ?? null, memoryCompactionTriggered: traceTaskResult?.diagnostics?.memoryCompactionTriggered ?? false, providerCalls: traceTaskResult?.diagnostics?.providerCalls ?? 0, toolCalls: traceTaskResult?.diagnostics?.toolCalls ?? 0, toolOperations: traceTaskResult?.diagnostics?.toolOperations ?? [], inputTokensTotal: traceTaskResult?.diagnostics?.inputTokensTotal ?? 0, outputTokensTotal: traceTaskResult?.diagnostics?.outputTokensTotal ?? 0, creditsSpentMilli: traceTaskResult?.billing?.creditsSpentMilli ?? 0, durationMs: Date.now() - traceStartedAt, success: !traceTaskError, ...(!traceTaskError ? {} : { errorCode: traceTaskError instanceof Error ? traceTaskError.name : 'UnknownError' }) });
     }
   },
