@@ -91,7 +91,8 @@ test('mail monitoring retries failed AI analyses instead of silently advancing t
   assert.ok(scan.indexOf('await processMessage(') < scan.indexOf("processedCount: { increment:"));
   assert.match(scan, /status: 'FAILED'/);
   assert.match(scan, /previous\.uid/);
-  assert.match(service, /\[MailAssistant\] monitoring failed/);
+  assert.match(service, /\[MailAssistant\] scan failed/);
+  assert.match(service, /\[MailAssistant\] cycle completed/);
   const read = readFileSync(new URL('../src/services/ai-mail-tools.service.ts', import.meta.url), 'utf8');
   assert.match(read, /failureReasons/);
   assert.match(read, /\[MailAssistant\] search failed/);
