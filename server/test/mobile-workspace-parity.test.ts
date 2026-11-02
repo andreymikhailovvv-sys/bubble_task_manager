@@ -184,17 +184,19 @@ test('timeline, AI chat and notes fullscreen surfaces have safe top treatment', 
 });
 
 test('Telegram fullscreen chat compact header and scroll-aware notes preserve mobile web', async () => {
-  const [mini, css, notes] = await Promise.all([
+  const [mini, css, notes, header] = await Promise.all([
     read('../../client/src/MiniApp.tsx'),
     read('../../client/src/styles.css'),
-    read('../../client/src/components/StandaloneNotesWorkspace.tsx')
+    read('../../client/src/components/StandaloneNotesWorkspace.tsx'),
+    read('../../client/src/components/MiniGeneralAiChatHeader.tsx')
   ]);
   assert.match(mini, /useTelegramCompactChatHeader = isTelegramRuntime && telegramViewport\.fullscreen/);
-  assert.match(mini, /miniapp-ai-chat-header-telegram/);
-  assert.match(mini, /miniapp-ai-chat-inline-heading/);
-  assert.match(mini, /miniapp-ai-chat-inline-title/);
-  assert.match(mini, /miniapp-ai-chat-telegram-project/);
-  assert.match(mini, /!useTelegramCompactChatHeader \? \(/);
+  assert.match(mini, /<MiniGeneralAiChatHeader/);
+  assert.match(mini, /miniapp-ai-chat-telegram-brand/);
+  assert.match(header, /miniapp-ai-context-main-row/);
+  assert.match(header, /miniapp-ai-chat-header-telegram/);
+  assert.match(header, /toggle\('projects'\)/);
+  assert.match(header, /toggle\('chats'\)/);
   assert.match(css, /\.miniapp-ai-chat-panel-general::before \{\s*height: calc\(var\(--miniapp-top-inset, 0px\) \+ 3\.65rem\)/);
   assert.match(css, /\.miniapp-ai-chat-header-general\.miniapp-ai-chat-header-telegram/);
   assert.match(css, /\.miniapp-ai-chat-inline-title h2/);
@@ -211,22 +213,23 @@ test('Telegram fullscreen chat compact header and scroll-aware notes preserve mo
 });
 
 test('Telegram native selectors and safe-area colors do not alter mobile web chat', async () => {
-  const [mini, notes, css] = await Promise.all([
+  const [mini, notes, css, header] = await Promise.all([
     read('../../client/src/MiniApp.tsx'),
     read('../../client/src/components/StandaloneNotesWorkspace.tsx'),
-    read('../../client/src/styles.css')
+    read('../../client/src/styles.css'),
+    read('../../client/src/components/MiniGeneralAiChatHeader.tsx')
   ]);
   assert.match(mini, /telegramChatPicker/);
-  assert.match(mini, /role="menuitemradio"/);
-  assert.match(mini, /setActiveAiChatId\(chat.id\)/);
+  assert.match(header, /role="radiogroup"/);
+  assert.match(header, /aria-checked=/);
+  assert.match(mini, /setActiveAiChatId\(chatId\)/);
   assert.match(mini, /setActiveAiChatProjectId\(project.id\)/);
-  assert.match(mini, /miniapp-ai-chat-title-trigger/);
-  assert.match(mini, /miniapp-telegram-project-trigger/);
-  assert.match(mini, /useTelegramCompactChatHeader && telegramChatPicker/);
-  assert.match(mini, /!useTelegramCompactChatHeader \? \(/);
+  assert.match(mini, /<MiniGeneralAiChatHeader/);
+  assert.match(mini, /telegramFullscreen=\{useTelegramCompactChatHeader\}/);
+  assert.match(header, /toggle\('models'\)/);
   assert.match(mini, /showTelegramBrand/);
   assert.match(mini, /isAiChatOpen \|\| isStandaloneNotesOpen\) setIsSearchBarFloating\(false\)/);
-  assert.match(css, /\.miniapp-telegram-picker-option/);
+  assert.match(css, /\.miniapp-ai-context-picker-option/);
   assert.match(css, /\.miniapp-shell\.miniapp-telegram-fullscreen::before/);
   assert.match(css, /\.miniapp-ai-chat-panel-general\.miniapp-ai-header-collapsed/);
   assert.match(css, /backdrop-filter: none !important/);
@@ -236,12 +239,14 @@ test('Telegram native selectors and safe-area colors do not alter mobile web cha
 });
 
 test('Telegram project picker, navigation and attachment theme refinements remain isolated', async () => {
-  const [mini, css] = await Promise.all([
+  const [mini, css, header] = await Promise.all([
     read('../../client/src/MiniApp.tsx'),
-    read('../../client/src/styles.css')
+    read('../../client/src/styles.css'),
+    read('../../client/src/components/MiniGeneralAiChatHeader.tsx')
   ]);
   // Project icons use the SVG already rendered in the full-size sidebar.
-  assert.match(mini, /miniapp-telegram-picker-project-icon[^\n]*project\.icon === 'telegram' \? <svg/);
+  assert.match(header, /icon === 'telegram'/);
+  assert.match(header, /<svg viewBox="0 0 24 24"/);
   assert.doesNotMatch(mini, /project\.icon === 'telegram' \? '✈'/);
   // Telegram WebView uses focus-safe accessible controls; mobile web remains a button.
   assert.match(mini, /MiniNavigationControl = isTelegramRuntime \? 'div' : 'button'/);
