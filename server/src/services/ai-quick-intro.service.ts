@@ -41,6 +41,7 @@ async function requestShortIntro({ question, context, onText, signal }: IntroInp
   for (const model of models) {
     if (signal.aborted) return;
     let startedText = false;
+    let completedText = '';
     try {
       const response = await openAiFetch('https://api.openai.com/v1/responses', {
         method: 'POST',
@@ -65,9 +66,10 @@ async function requestShortIntro({ question, context, onText, signal }: IntroInp
           startedText = true;
           console.info('[AI quick intro] first provider text', { model, elapsedMs: Date.now() - startedAt });
         }
-        onText(event.delta);
+        completedText += event.delta;
       });
-      if (startedText) return;
+      // Never combine partial text from a failed attempt with another model.
+      if (startedText && completedText.trim()) { onText(completedText); return; }
       console.warn('[AI quick intro] provider returned no intro', { model, elapsedMs: Date.now() - startedAt });
     } catch (error) {
       if (signal.aborted) return;
