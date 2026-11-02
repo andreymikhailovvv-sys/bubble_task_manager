@@ -504,6 +504,32 @@ async function scan(account: EmailMailbox, token: string): Promise<{ seen: numbe
         }, data: { [folder.type === 'INBOX' ? 'inboxUid' : 'sentUid']: uid,
           processedCount: { increment: message ? 1 : 0 } } });
       }
+      if (folder.type === 'INBOX' && account.manualDigestRequestedAt) {
+        // A manual summary explicitly requests recent *existing* mail, including
+        // mail from before the connection was created. Keep the cursor untouched.
+        stage = 'MANUAL_SEARCH_INBOX';
+        const recent = (await imap.searchUids('', 5)).sort((a,b) => b-a);
+        for (const uid of recent) {
+          const active = await prisma.emailMailbox.findFirst({ where: {
+            id: account.id, enabled: true, leaseToken: token,
+            revision: account.revision, leasedUntil: { gt: new Date() }
+          } });
+          if (!active) return { seen, eligible };
+          const exists = await prisma.emailAnalysis.findUnique({
+            where: { mailboxId_folder_validity_uid: {
+              mailboxId: account.id, folder: 'INBOX', validity: folder.validity, uid
+            } }, select: { status: true }
+          });
+          if (exists?.status === 'DONE') continue;
+          stage = 'MANUAL_FETCH_INBOX';
+          const message = await imap.fetch(uid);
+          if (message && (message.text.length + message.subject.length) >= 10) {
+            stage = 'MANUAL_ANALYZE_INBOX';
+            await processMessage(account, 'INBOX', uid, message, true);
+            eligible++;
+          }
+        }
+      }
     }
   } catch (cause) {
     const diagnosis = diagnoseMailError(cause);
