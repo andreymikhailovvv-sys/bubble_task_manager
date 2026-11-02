@@ -8,7 +8,7 @@ const collected = (events: IntroEvent[]) =>
   events.filter((event): event is { type: 'delta'; text: string } => event.type === 'delta')
     .map(event => event.text).join('');
 
-test('fallback is specific to mailbox, overdue tasks, writing and planning requests', () => {
+test('server fallback is specific to mailbox, overdue tasks, writing and planning requests', () => {
   const email = buildContextualAiIntro('Покажи новые письма Яндекс Почты', 'Быстрые запросы');
   const tasks = buildContextualAiIntro('Какие задачи у меня просрочены?', 'Помощь ИИ');
   const text = buildContextualAiIntro('Напиши текст и раздели его на абзацы', 'Быстрые запросы');
@@ -20,17 +20,15 @@ test('fallback is specific to mailbox, overdue tasks, writing and planning reque
   assert.match(text, /структур|абзац/iu);
   assert.match(plan, /шаг|приоритет/iu);
   assert.equal(new Set([email, tasks, text, plan]).size, 4);
-  assert.ok(![email,tasks,text,plan].some(line => line === 'Сейчас разберу запрос и подготовлю ответ.'));
 });
 
-test('local context appears before the delayed model even begins responding', async () => {
+test('successful fast model is the only source of intro; no server preview or intermediate reset', async () => {
   const events: IntroEvent[] = [];
   let emitModel: ((text: string) => void) | undefined;
   let resolveModel: (() => void) | undefined;
   const overlay = startAiIntroOverlay({
     question: 'Посмотри просроченные задачи',
     context: 'Быстрые запросы',
-    previewDelayMs: 1,
     tickMs: 1,
     modelDeadlineMs: 500,
     send: event => events.push(event),
@@ -40,55 +38,94 @@ test('local context appears before the delayed model even begins responding', as
     }
   });
   try {
-    await sleep(65);
-    assert.match(collected(events), /срок/iu);
-    assert.equal(events.some(item => item.type === 'reset'), false);
+    await sleep(40);
+    assert.deepEqual(events, [], 'server should remain silent while model succeeds');
     emitModel?.('Сверю просроченные задачи и подготовлю список по важности.');
     resolveModel?.();
-    await sleep(70);
-    const lastReset = events.findLastIndex(item => item.type === 'reset');
-    assert.ok(lastReset > 0);
-    assert.match(collected(events.slice(lastReset + 1)), /просроченные задачи/iu);
+    await sleep(95);
+    assert.equal(events.some(item => item.type === 'reset'), false);
+    assert.equal(collected(events), 'Сверю просроченные задачи и подготовлю список по важности.');
     overlay.onMainDelta('Просроченных задач две.');
+    assert.equal(events.filter(item => item.type === 'reset').length, 1);
     assert.deepEqual(events.at(-1), { type: 'delta', text: 'Просроченных задач две.' });
   } finally { overlay.stop(); }
 });
 
-test('slow cheap model times out without delaying context-specific preview or main response', async () => {
+test('only provider errors trigger contextual server fallback', async () => {
+  const events: IntroEvent[] = [];
+  const overlay = startAiIntroOverlay({
+    question: 'Новые письма Яндекс Почты', context: 'Почта',
+    tickMs: 1, modelDeadlineMs: 500,
+    send: event => events.push(event),
+    requestIntro: async () => { throw new Error('provider unavailable'); }
+  });
+  try {
+    await sleep(100);
+    assert.match(collected(events), /Яндекс Почты/u);
+    assert.equal(events.some(item => item.type === 'reset'), false);
+    overlay.onMainDelta('Писем нет.');
+    assert.equal(events.filter(item => item.type === 'reset').length, 1);
+  } finally { overlay.stop(); }
+});
+
+test('empty model response also triggers contextual fallback', async () => {
+  const events: IntroEvent[] = [];
+  const overlay = startAiIntroOverlay({
+    question: 'Составь краткую сводку', context: 'Личный чат',
+    tickMs: 1, modelDeadlineMs: 500,
+    send: event => events.push(event),
+    requestIntro: async () => {}
+  });
+  try {
+    await sleep(100);
+    assert.match(collected(events), /сводк/iu);
+    assert.equal(events.some(item => item.type === 'reset'), false);
+  } finally { overlay.stop(); }
+});
+
+test('model timeout yields fallback without late model text or a preview reset', async () => {
   const events: IntroEvent[] = [];
   let signal: AbortSignal | undefined;
+  let emitLateModel: ((text: string) => void) | undefined;
+  let resolveLateModel: (() => void) | undefined;
   const overlay = startAiIntroOverlay({
     question: 'Составь короткую сводку',
     context: 'Личный чат',
-    tickMs: 1, previewDelayMs: 1, modelDeadlineMs: 25,
-    send: e => events.push(e),
-    requestIntro: ({ signal: requestSignal }) => {
+    tickMs: 1, modelDeadlineMs: 25,
+    send: event => events.push(event),
+    requestIntro: ({ signal: requestSignal, onText }) => {
       signal = requestSignal;
-      return new Promise<void>(() => {});
+      emitLateModel = onText;
+      return new Promise<void>(resolve => { resolveLateModel = resolve; });
     }
   });
   try {
-    await sleep(70);
+    await sleep(90);
     assert.equal(signal?.aborted, true);
     assert.match(collected(events), /сводк/iu);
+    emitLateModel?.('Опоздавший ответ вспомогательной модели.');
+    resolveLateModel?.();
+    await sleep(15);
+    assert.equal(events.some(item => item.type === 'reset'), false);
+    assert.doesNotMatch(collected(events), /Опоздавший/iu);
     overlay.onMainDelta('Вот сводка.');
     assert.deepEqual(events.at(-1), { type: 'delta', text: 'Вот сводка.' });
   } finally { overlay.stop(); }
 });
 
-test('an instantaneous main answer prevents either fallback or cheap-model output', async () => {
+test('main answer arriving first prevents either model or server fallback from showing', async () => {
   const events: IntroEvent[] = [];
   const overlay = startAiIntroOverlay({
     question: 'Найди письма', context: 'Почта',
-    tickMs: 1, previewDelayMs: 1,
+    tickMs: 1, modelDeadlineMs: 20,
     send: event => events.push(event),
-    requestIntro: async ({onText}) => {
-      await sleep(15);
-      onText('Проверю почту');
+    requestIntro: async ({ onText }) => {
+      await sleep(35);
+      onText('Проверю почту и соберу нужные письма.');
     }
   });
   overlay.onMainDelta('Ответ без предварительного текста');
-  await sleep(24);
+  await sleep(60);
   assert.deepEqual(events, [{ type: 'delta', text: 'Ответ без предварительного текста' }]);
   overlay.stop();
 });
