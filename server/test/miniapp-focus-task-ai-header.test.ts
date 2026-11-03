@@ -95,8 +95,8 @@ test('focus task is exactly three independent cards: title/date, description/act
   const description = focus.indexOf('miniapp-focus-section-content');
   const subtasks = focus.indexOf('miniapp-focus-section-subtasks');
   assert.ok(summary >= 0 && description > summary && subtasks > description);
-  assert.equal((focus.match(/<section className="miniapp-focus-section /g) ?? []).length, 2,
-    'Summary and description must always have independent cards');
+  assert.equal((focus.match(/<section className="miniapp-focus-section /g) ?? []).length, 3,
+    'Summary, description/actions, and subtasks must be separate cards');
   assert.match(focus, /<section className="miniapp-focus-section miniapp-focus-section-subtasks/);
   const top = focus.slice(summary, description);
   const middle = focus.slice(description, subtasks);
