@@ -17,9 +17,13 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
   const [notes, setNotes] = useState<StandaloneNote[]>([]);
   const [groups, setGroups] = useState<StandaloneNoteGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
+  // Multi-select is mobile-only: every group, including ungrouped notes, starts visible.
+  const [mobileExcludedGroupIds, setMobileExcludedGroupIds] = useState<string[]>([]);
+  const [mobileIncludeUngrouped, setMobileIncludeUngrouped] = useState(true);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const mobileFiltersRef = useRef<HTMLDivElement | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [notesFiltersVisible, setNotesFiltersVisible] = useState(true);
-  const notesFiltersManuallyClosedRef = useRef(false);
   const notesHeaderRef = useRef<HTMLDivElement | null>(null);
   const [notesHeaderHeight, setNotesHeaderHeight] = useState(0);
   const notesLastScrollTopRef = useRef(0);
@@ -34,7 +38,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     notesLastScrollTopRef.current = top;
     if (top <= 12) {
       notesScrollIntentRef.current = 0;
-      if (!notesFiltersManuallyClosedRef.current) setNotesFiltersVisible(true);
+      setNotesFiltersVisible(true);
       return;
     }
     // Collapsing filters changes the scrollable height. Ignore that brief
@@ -43,11 +47,11 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     const intent = notesScrollIntentRef.current;
     notesScrollIntentRef.current = Math.sign(intent) === Math.sign(delta) ? intent + delta : delta;
     if (notesScrollIntentRef.current > 24) {
+      setMobileFiltersOpen(false);
       setNotesFiltersVisible(false);
       notesLastToggleAtRef.current = performance.now();
       notesScrollIntentRef.current = 0;
     } else if (notesScrollIntentRef.current < -16) {
-      notesFiltersManuallyClosedRef.current = false;
       setNotesFiltersVisible(true);
       notesLastToggleAtRef.current = performance.now();
       notesScrollIntentRef.current = 0;
@@ -74,6 +78,23 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     return () => observer.disconnect();
   }, [telegramMiniApp, boardOpen]);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!mobileFiltersOpen || mode !== 'mobile') return;
+    const dismissOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !mobileFiltersRef.current?.contains(event.target)) {
+        setMobileFiltersOpen(false);
+      }
+    };
+    const dismissEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileFiltersOpen(false);
+    };
+    document.addEventListener('pointerdown', dismissOutside);
+    document.addEventListener('keydown', dismissEscape);
+    return () => {
+      document.removeEventListener('pointerdown', dismissOutside);
+      document.removeEventListener('keydown', dismissEscape);
+    };
+  }, [mode, mobileFiltersOpen]);
 
   // Only one editor is open at a time. Serialize its writes so slower network
   // responses cannot overwrite a newer version of the same note.
@@ -104,9 +125,11 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     setNotes([]);
     setGroups([]);
     setSelectedGroup('all');
+    setMobileExcludedGroupIds([]);
+    setMobileIncludeUngrouped(true);
+    setMobileFiltersOpen(false);
     setSearchQuery('');
     setNotesFiltersVisible(true);
-    notesFiltersManuallyClosedRef.current = false;
     setGroupManager(null);
     setGroupCreateForNoteId(null);
     setGroupPicker(null);
@@ -254,10 +277,16 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
       .normalize('NFKC').toLocaleLowerCase('ru-RU').replace(/ё/g, 'е')
   ])), [notes]);
 
+  const mobileAllGroupsSelected = mobileIncludeUngrouped &&
+    groups.every(group => !mobileExcludedGroupIds.includes(group.id));
   const filteredNotes = useMemo(() => {
-    const groupNotes = selectedGroup === 'all' ? notes
-      : selectedGroup === 'ungrouped' ? notes.filter(note => !note.groupId)
-      : notes.filter(note => note.groupId === selectedGroup);
+    const groupNotes = mode === 'mobile'
+      ? notes.filter(note => note.groupId
+        ? !mobileExcludedGroupIds.includes(note.groupId)
+        : mobileIncludeUngrouped)
+      : selectedGroup === 'all' ? notes
+        : selectedGroup === 'ungrouped' ? notes.filter(note => !note.groupId)
+        : notes.filter(note => note.groupId === selectedGroup);
     const query = searchQuery.normalize('NFKC').toLocaleLowerCase('ru-RU').replace(/ё/g, 'е').trim();
     if (!query) return groupNotes;
     const terms = query.split(/\s+/);
@@ -265,7 +294,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
       const searchable = noteSearchIndex.get(note.id) ?? '';
       return terms.every(term => searchable.includes(term));
     });
-  }, [notes, selectedGroup, searchQuery, noteSearchIndex]);
+  }, [notes, selectedGroup, searchQuery, noteSearchIndex, mode, mobileExcludedGroupIds, mobileIncludeUngrouped]);
   const groupFor = (note: StandaloneNote) => groups.find(group => group.id === note.groupId);
 
   const createGroup = async (data: { name: string; color: string }): Promise<StandaloneNoteGroup> => {
@@ -280,6 +309,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
   const deleteGroup = async (group: StandaloneNoteGroup) => {
     await api.deleteStandaloneNoteGroup(group.id);
     setGroups(current => current.filter(item => item.id !== group.id));
+    setMobileExcludedGroupIds(current => current.filter(id => id !== group.id));
     setNotes(current => current.map(note => note.groupId === group.id ? { ...note, groupId: null } : note));
     if (selectedGroup === group.id) setSelectedGroup('all');
     setGroupPicker(null);
@@ -334,6 +364,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
   const closeBoard = () => {
     if (editing) return;
     setGroupPicker(null);
+    setMobileFiltersOpen(false);
     setBoardOpen(false);
     if (mode === 'mobile') onClose?.();
   };
@@ -385,37 +416,88 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
               <div className="standalone-notes-header-title-row flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="standalone-note-accent text-xs font-semibold uppercase tracking-widest">Личные записи</p>
-                  <h2 className="mt-1 text-xl font-bold text-primary">Мои заметки <span className="text-sm font-normal text-muted">({filteredNotes.length}{selectedGroup !== 'all' ? ' из ' + notes.length : ''})</span></h2>
+                  <h2 className="mt-1 text-xl font-bold text-primary">Мои заметки <span className="text-sm font-normal text-muted">({filteredNotes.length}{(mode === 'mobile' ? !mobileAllGroupsSelected : selectedGroup !== 'all') ? ' из ' + notes.length : ''})</span></h2>
                 </div>
                 <div className="flex shrink-0 items-center justify-end gap-2">
                   {mode !== 'mobile' ? <button type="button" className="standalone-notes-create inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold" disabled={creating} onClick={() => void createNote()}><Plus size={16} /> Новая заметка</button> : null}
                   <button type="button" className="standalone-notes-icon-button standalone-notes-header-close rounded-xl border p-2" onClick={closeBoard} aria-label="Закрыть список заметок"><X size={18} /></button>
                 </div>
               </div>
-              {mode === 'mobile' ? <div className="standalone-notes-mobile-actions">
-                <button type="button" className="standalone-notes-create standalone-notes-mobile-new inline-flex items-center justify-center gap-2"
-                  disabled={creating} onClick={() => void createNote()}><Plus size={19} /> Новая заметка</button>
-                <div className="standalone-notes-groups-split">
-                  <button type="button" className="standalone-notes-groups-manage inline-flex items-center justify-center gap-2"
-                    onClick={() => openGroupManager('manage')} aria-label="Настройки групп заметок"><Settings2 size={19} /> Группы</button>
-                  <button type="button" className="standalone-notes-groups-toggle inline-flex items-center justify-center"
-                    aria-label={notesFiltersVisible ? 'Свернуть группы и поиск' : 'Показать группы и поиск'}
-                    aria-controls="standalone-notes-group-search-panel" aria-expanded={notesFiltersVisible}
-                    onClick={() => {
-                      notesScrollIntentRef.current = 0;
-                      notesFiltersManuallyClosedRef.current = notesFiltersVisible;
-                      notesLastToggleAtRef.current = performance.now();
-                      setNotesFiltersVisible(current => !current);
-                    }}>
-                    <ChevronDown size={17} className={notesFiltersVisible ? 'standalone-notes-chevron-open' : ''} />
-                  </button>
+              
+              {mode === 'mobile' ? (
+                <div className={`standalone-notes-mobile-controls ${!notesFiltersVisible ? 'standalone-notes-filters-collapsed' : ''}`}>
+                  <div className="standalone-notes-mobile-actions">
+                    <button type="button" className="standalone-notes-create standalone-notes-mobile-new inline-flex items-center justify-center gap-2"
+                      disabled={creating} onClick={() => void createNote()}><Plus size={19} /> Новая заметка</button>
+                    <div className="standalone-notes-mobile-filter-anchor" ref={mobileFiltersRef}>
+                      <button type="button" className={`standalone-notes-mobile-filter-trigger ${mobileFiltersOpen ? 'is-open' : ''}`}
+                        aria-label="Фильтры заметок" aria-haspopup="dialog" aria-controls="standalone-notes-mobile-filter-menu"
+                        aria-expanded={mobileFiltersOpen}
+                        onClick={() => setMobileFiltersOpen(current => !current)}>
+                        <Settings2 size={19} aria-hidden="true" />
+                        <span>Фильтры</span>
+                      </button>
+                      {mobileFiltersOpen ? (
+                        <div className="standalone-notes-mobile-filter-menu" id="standalone-notes-mobile-filter-menu"
+                          role="dialog" aria-label="Фильтры по группам заметок">
+                          <div className="standalone-notes-mobile-filter-heading">Какие заметки показывать</div>
+                          <button type="button" className={`standalone-notes-mobile-filter-option standalone-notes-mobile-filter-all ${mobileAllGroupsSelected ? 'is-selected' : ''}`}
+                            role="checkbox" aria-checked={mobileAllGroupsSelected}
+                            onClick={() => { setMobileExcludedGroupIds([]); setMobileIncludeUngrouped(true); }}>
+                            <span className="standalone-notes-mobile-filter-check">{mobileAllGroupsSelected ? <Check size={15} /> : null}</span>
+                            <span>Показать все группы</span>
+                          </button>
+                          <div className="standalone-notes-mobile-filter-list" role="group" aria-label="Выбор групп">
+                            <button type="button" className="standalone-notes-mobile-filter-option"
+                              role="checkbox" aria-checked={mobileIncludeUngrouped}
+                              onClick={() => setMobileIncludeUngrouped(current => !current)}>
+                              <span className={`standalone-notes-mobile-filter-check ${mobileIncludeUngrouped ? 'is-checked' : ''}`}>
+                                {mobileIncludeUngrouped ? <Check size={15} /> : null}
+                              </span>
+                              <span className="standalone-notes-filter-group-title">Без группы</span>
+                            </button>
+                            {groups.map(group => {
+                              const selected = !mobileExcludedGroupIds.includes(group.id);
+                              return (
+                                <button type="button" key={group.id} className="standalone-notes-mobile-filter-option"
+                                  role="checkbox" aria-checked={selected}
+                                  onClick={() => setMobileExcludedGroupIds(current =>
+                                    current.includes(group.id) ? current.filter(id => id !== group.id) : [...current, group.id]
+                                  )}>
+                                  <span className={`standalone-notes-mobile-filter-check ${selected ? 'is-checked' : ''}`}>
+                                    {selected ? <Check size={15} /> : null}
+                                  </span>
+                                  <span className="standalone-group-color-dot h-2.5 w-2.5 shrink-0 rounded-full"
+                                    style={noteGroupStyle(group.color)} />
+                                  <span className="standalone-notes-filter-group-title">{group.name}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="standalone-notes-mobile-filter-footer">
+                            <button type="button" onClick={() => { setMobileFiltersOpen(false); openGroupManager('new'); }}
+                              disabled={groups.length >= 40}><Plus size={17} /> Добавить группу</button>
+                            <button type="button" onClick={() => { setMobileFiltersOpen(false); openGroupManager('manage'); }}>
+                              <Settings2 size={17} /> Настройки групп
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                  <label className="standalone-notes-search relative flex w-full min-w-0 shrink-0 items-center overflow-hidden rounded-xl border sm:w-[255px]">
+                  <Search size={16} className="ml-3 shrink-0 text-muted" aria-hidden="true" />
+                  <input type="search" aria-label="Поиск по названию и содержимому заметок"
+                    placeholder="Поиск по заметкам…" value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    className="min-w-0 flex-1 bg-transparent px-2.5 py-2 text-sm outline-none" />
+                </label>
                 </div>
-              </div> : null}
-              <div id={mode === 'mobile' ? 'standalone-notes-group-search-panel' : undefined} className={`standalone-notes-board-filters flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 ${mode === 'mobile' && !notesFiltersVisible ? 'standalone-notes-filters-collapsed' : ''}`}
-                onFocusCapture={() => { if (mode === 'mobile') { notesFiltersManuallyClosedRef.current = false; setNotesFiltersVisible(true); } }}>
-                <nav className="standalone-group-filter flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto pb-1" aria-label="Группы заметок">
-                {mode !== 'mobile' ? <button type="button" className="standalone-group-chip standalone-group-manage" title="Редактировать группы"
-                  aria-label="Редактировать группы" onClick={() => openGroupManager('manage')}><Settings2 size={15} /><span className="sr-only">Управление группами</span></button> : null}
+              ) : (
+                <div className="standalone-notes-board-filters flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                  <nav className="standalone-group-filter flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto pb-1" aria-label="Группы заметок">
+                <button type="button" className="standalone-group-chip standalone-group-manage" title="Редактировать группы"
+                  aria-label="Редактировать группы" onClick={() => openGroupManager('manage')}><Settings2 size={15} /><span className="sr-only">Управление группами</span></button>
                 <button type="button" className={'standalone-group-chip ' + (selectedGroup === 'all' ? 'standalone-group-chip-active' : '')}
                   aria-pressed={selectedGroup === 'all'} onClick={() => setSelectedGroup('all')}>Все <span className="opacity-70">{notes.length}</span></button>
                 <button type="button" className={'standalone-group-chip ' + (selectedGroup === 'ungrouped' ? 'standalone-group-chip-active' : '')}
@@ -431,21 +513,22 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
                 <button type="button" className="standalone-group-chip standalone-group-add" title="Добавить группу"
                   aria-label="Добавить группу" onClick={() => openGroupManager('new')} disabled={groups.length >= 40}><Plus size={17} /> Группа</button>
                 </nav>
-                <label className="standalone-notes-search relative flex w-full min-w-0 shrink-0 items-center overflow-hidden rounded-xl border sm:w-[255px]">
+                  <label className="standalone-notes-search relative flex w-full min-w-0 shrink-0 items-center overflow-hidden rounded-xl border sm:w-[255px]">
                   <Search size={16} className="ml-3 shrink-0 text-muted" aria-hidden="true" />
                   <input type="search" aria-label="Поиск по названию и содержимому заметок"
                     placeholder="Поиск по заметкам…" value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
                     className="min-w-0 flex-1 bg-transparent px-2.5 py-2 text-sm outline-none" />
                 </label>
-              </div>
+                </div>
+              )}
             </div>
             {error ? <p role="alert" className="standalone-notes-error mx-4 mt-3 rounded-lg px-3 py-2 text-sm sm:mx-6">{error}</p> : null}
             <div className="standalone-notes-scroll-area min-h-0 flex-1 overflow-y-auto p-4 sm:p-6" onScroll={handleNotesScroll}>
               {filteredNotes.length === 0 ? (
                 <div className="standalone-notes-empty rounded-2xl border p-8 text-center text-muted">
                   <StickyNote className="mx-auto mb-3 opacity-70" size={32} />
-                  {searchQuery.trim() ? 'По запросу ничего не найдено. Попробуйте другие слова.' : notes.length ? 'В этой группе пока нет заметок.' : 'Пока нет заметок. Создайте первую запись.'}
+                  {searchQuery.trim() ? 'По запросу ничего не найдено. Попробуйте другие слова.' : notes.length ? 'В выбранных группах пока нет заметок.' : 'Пока нет заметок. Создайте первую запись.'}
                 </div>
               ) : (
                 <div className="standalone-notes-grid grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">

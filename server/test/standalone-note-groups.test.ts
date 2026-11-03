@@ -73,7 +73,10 @@ test('board has group filter chips, plus last, group assignment and edit control
   assert.match(board, /selectedGroup === 'ungrouped'/);
   assert.match(board, /notes\.filter\(note => note\.groupId === selectedGroup\)/);
   assert.match(board, /standalone-group-filter/);
-  assert.ok(board.indexOf('Редактировать группы') < board.indexOf('Добавить группу'));
+  assert.ok(board.includes('Добавить группу') && board.includes('Настройки групп'),
+    'Mobile filter menu should retain create/manage group actions');
+  assert.ok(board.indexOf('standalone-group-manage') < board.indexOf('standalone-group-add'),
+    'Desktop group toolbar still puts management before the add-group chip');
   assert.match(board, /aria-label=\{'Выбрать группу заметки/);
   assert.match(board, /api\.updateStandaloneNote\(noteId, \{ groupId \}\)/);
   assert.match(board, /setNotes\(current => current\.map\(note => note\.groupId === group\.id \? \{ \.\.\.note, groupId: null \}/);
@@ -182,26 +185,42 @@ test('Telegram deep-link chat header remains visible during auto scroll then fol
 });
 
 
-test('mobile notes redesign keeps groups management separate from collapsible group chips and search', async () => {
+test('mobile notes keeps a collapsible two-action/search bar with independent multi-select filters', async () => {
   const [board, css] = await Promise.all([
     readFile(new URL('../../client/src/components/StandaloneNotesWorkspace.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8')
   ]);
+  assert.match(board, /standalone-notes-mobile-controls/);
   assert.match(board, /standalone-notes-mobile-actions/);
   assert.match(board, /standalone-notes-mobile-new/);
-  assert.match(board, /standalone-notes-groups-manage/);
-  assert.match(board, /Настройки групп заметок/);
-  assert.match(board, /onClick=\{\(\) => openGroupManager\('manage'\)\}/);
-  assert.match(board, /standalone-notes-groups-toggle/);
-  assert.match(board, /aria-expanded=\{notesFiltersVisible\}/);
-  assert.match(board, /aria-controls="standalone-notes-group-search-panel"/);
-  assert.match(board, /notesFiltersManuallyClosedRef\.current = notesFiltersVisible/);
-  assert.match(board, /if \(!notesFiltersManuallyClosedRef\.current\) setNotesFiltersVisible\(true\)/);
+  assert.match(board, /standalone-notes-mobile-filter-trigger/);
+  assert.match(board, /Фильтры<\/span>/);
+  assert.doesNotMatch(board, /standalone-notes-groups-split|standalone-notes-groups-toggle/);
+  assert.match(board, /standalone-notes-mobile-filter-menu/);
+  assert.match(board, /aria-expanded=\{mobileFiltersOpen\}/);
+  assert.match(board, /aria-label="Фильтры по группам заметок"/);
+  assert.match(board, /aria-checked=\{mobileAllGroupsSelected\}/);
+  assert.match(board, /Показать все группы/);
+  assert.match(board, /setMobileExcludedGroupIds\(\[\]\)/);
+  assert.match(board, /setMobileIncludeUngrouped\(true\)/);
+  assert.match(board, /role="checkbox" aria-checked=\{selected\}/);
+  assert.match(board, /mobileExcludedGroupIds\.includes\(group\.id\)/);
+  assert.match(board, /current\.filter\(id => id !== group\.id\)/);
+  assert.match(board, /aria-checked=\{mobileIncludeUngrouped\}/);
+  assert.match(board, /setMobileIncludeUngrouped\(current => !current\)/);
+  assert.match(board, /onClick=\{\(\) => \{ setMobileFiltersOpen\(false\); openGroupManager\('manage'\); \}\}/);
+  assert.match(board, /onClick=\{\(\) => \{ setMobileFiltersOpen\(false\); openGroupManager\('new'\); \}\}/);
+  assert.match(board, /notes\.filter\(note => note\.groupId/);
+  assert.match(board, /mobileExcludedGroupIds\.includes\(note\.groupId\)/);
   assert.match(board, /onScroll=\{handleNotesScroll\}/);
+  assert.match(board, /setNotesFiltersVisible\(false\)/);
+  assert.match(board, /setNotesFiltersVisible\(true\)/);
   assert.match(board, /standalone-notes-filters-collapsed/);
-  assert.match(board, /id=\{mode === 'mobile' \? 'standalone-notes-group-search-panel'/);
   assert.match(board, /setSearchQuery\(event\.target\.value\)/);
-  assert.match(css, /\.standalone-notes-mobile \.standalone-notes-board-filters\.standalone-notes-filters-collapsed/);
+  assert.match(css, /\.standalone-notes-mobile \.standalone-notes-mobile-controls\.standalone-notes-filters-collapsed \{\s*display: none/);
+  assert.match(css, /\.standalone-notes-mobile \.standalone-notes-mobile-filter-option \{/);
+  assert.match(css, /background: #fff;/);
+  assert.match(css, /body\[data-theme='dark'\] \.standalone-notes-mobile \.standalone-notes-mobile-filter-option/);
 });
 
 test('mobile notes cards are independently spaced with group-first hierarchy and soft shadows', async () => {

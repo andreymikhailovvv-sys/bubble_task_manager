@@ -98,7 +98,7 @@ test('board searches title and content together, preserving selected group and t
 });
 
 
-test('notes search sits below the top actions beside the groups without an oversized gap', async () => {
+test('mobile notes search sits below the action row; desktop keeps inline group filters', async () => {
   const [board, styles] = await Promise.all([
     readFile(new URL('../../client/src/components/StandaloneNotesWorkspace.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8')
@@ -108,11 +108,16 @@ test('notes search sits below the top actions beside the groups without an overs
   const header = board.slice(start, end);
   assert.ok(start >= 0 && end > start);
   assert.match(header, /standalone-notes-board-header flex flex-col gap-2/);
-  assert.ok(header.indexOf('Мои заметки') < header.indexOf('standalone-group-filter'));
-  assert.ok(header.indexOf('Новая заметка') < header.indexOf('standalone-notes-search'),
-    'Search must be on the row below the new-note and close buttons');
-  assert.ok(header.indexOf('standalone-group-filter') < header.indexOf('standalone-notes-search'),
-    'Group filters must stay on the left, search on the right');
+  assert.ok(header.indexOf('Мои заметки') < header.indexOf('standalone-notes-mobile-controls'));
+  const mobileControls = header.slice(header.indexOf('standalone-notes-mobile-controls'), header.indexOf('standalone-notes-board-filters flex'));
+  assert.ok(mobileControls.indexOf('Новая заметка') < mobileControls.indexOf('standalone-notes-search'),
+    'Mobile search should be below the new-note and filter buttons');
+  assert.ok(mobileControls.indexOf('Фильтры') < mobileControls.indexOf('standalone-notes-search'),
+    'Group filter popup belongs to the action row, not a permanent chip strip');
+  assert.doesNotMatch(mobileControls, /standalone-group-filter flex/);
+  const desktopControls = header.slice(header.indexOf('standalone-notes-board-filters flex'));
+  assert.ok(desktopControls.indexOf('standalone-group-filter') < desktopControls.indexOf('standalone-notes-search'),
+    'Desktop group chips remain inline before search');
   assert.match(header, /standalone-notes-board-filters flex min-w-0 flex-col gap-2 sm:flex-row/);
   assert.match(header, /standalone-notes-search[^"]*overflow-hidden/);
   const searchStyle = styles.match(/\.standalone-notes-search:focus-within\s*\{([^}]+)\}/)?.[1] ?? '';

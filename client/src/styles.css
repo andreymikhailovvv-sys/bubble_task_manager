@@ -13677,3 +13677,229 @@ body[data-theme='dark'] .standalone-notes-mobile .standalone-note-card-footer .s
     transition: none;
   }
 }
+
+
+/* Unified light utility menu: specificity targets the three actual button
+   classes, not only generic direct children (those inherited gray fills). */
+body[data-theme='light'] .miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel > button.miniapp-credit-badge,
+body[data-theme='light'] .miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel > button.miniapp-efficiency-button,
+body[data-theme='light'] .miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel > button[data-miniapp-popover='settings'],
+.miniapp-shell.miniapp-light .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel > button.miniapp-credit-badge,
+.miniapp-shell.miniapp-light .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel > button.miniapp-efficiency-button,
+.miniapp-shell.miniapp-light .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel > button[data-miniapp-popover='settings'] {
+  box-sizing: border-box;
+  display: grid;
+  width: 100%;
+  height: 3.3rem !important;
+  min-height: 3.3rem !important;
+  padding: .62rem .78rem;
+  background: #fff !important;
+  background-image: none !important;
+  border: 1px solid #e9e1f5 !important;
+  border-radius: .85rem;
+  color: #24334e;
+  box-shadow: 0 2px 7px rgba(73, 59, 109, .045) !important;
+}
+body[data-theme='light'] .miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel > button:is(:hover, :active),
+.miniapp-shell.miniapp-light .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel > button:is(:hover, :active) {
+  background: #fff !important;
+  border-color: #d8c6f2 !important;
+}
+
+/* Notes: two primary actions, then search. The complete controls area folds
+   on list scroll, leaving the heading and the note cards unobstructed. */
+.standalone-notes-mobile .standalone-notes-mobile-controls {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  min-width: 0;
+}
+.standalone-notes-mobile .standalone-notes-mobile-controls.standalone-notes-filters-collapsed {
+  display: none;
+  pointer-events: none;
+}
+.standalone-notes-mobile .standalone-notes-mobile-filter-anchor {
+  position: relative;
+  min-width: 0;
+}
+.standalone-notes-mobile .standalone-notes-mobile-filter-trigger {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 2.9rem;
+  align-items: center;
+  justify-content: center;
+  gap: .55rem;
+  padding: .65rem .45rem;
+  border: 1px solid #dfd4f4;
+  border-radius: .95rem;
+  background: #fff;
+  color: #633ea4;
+  box-shadow: 0 3px 11px rgba(75, 65, 134, .055);
+  font-size: clamp(.78rem, 3.5vw, .9rem);
+  font-weight: 750;
+  white-space: nowrap;
+}
+.standalone-notes-mobile .standalone-notes-mobile-filter-trigger.is-open {
+  border-color: #a985e8;
+  background: #fff;
+}
+.standalone-notes-mobile .standalone-notes-mobile-filter-trigger:focus-visible {
+  outline: 2px solid #8958ec;
+  outline-offset: 2px;
+}
+.standalone-notes-mobile .standalone-notes-mobile-filter-menu {
+  position: absolute;
+  z-index: 28;
+  top: calc(100% + .58rem);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  width: min(20.5rem, calc(100vw - 1.9rem));
+  max-width: calc(100vw - 1.9rem);
+  max-height: min(58dvh, 29rem);
+  padding: .64rem;
+  gap: .42rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid #e4daf3;
+  border-radius: 1.16rem;
+  background: #faf8ff;
+  box-shadow: 0 16px 36px rgba(31, 32, 86, .17);
+  color: #24334e;
+  scrollbar-width: none;
+}
+.standalone-notes-mobile .standalone-notes-mobile-filter-menu::-webkit-scrollbar {
+  display: none;
+}
+.standalone-notes-mobile .standalone-notes-mobile-filter-heading {
+  padding: .23rem .48rem .12rem;
+  font-size: .75rem;
+  font-weight: 740;
+  letter-spacing: .01em;
+  color: #76829a;
+}
+.standalone-notes-mobile .standalone-notes-mobile-filter-option {
+  display: flex;
+  width: 100%;
+  min-height: 2.8rem;
+  align-items: center;
+  justify-content: flex-start;
+  gap: .68rem;
+  min-width: 0;
+  padding: .6rem .73rem;
+  border: 1px solid #ebe4f5;
+  border-radius: .83rem;
+  background: #fff;
+  color: #283751;
+  text-align: left;
+  font-size: .84rem;
+  font-weight: 650;
+  box-shadow: 0 2px 6px rgba(53, 46, 106, .035);
+}
+.standalone-notes-mobile .standalone-notes-mobile-filter-option:hover {
+  background: #fff;
+  border-color: #cbb9e9;
+}
+.standalone-notes-mobile .standalone-notes-mobile-filter-all {
+  font-weight: 760;
+}
+.standalone-notes-mobile .standalone-notes-mobile-filter-check {
+  display: inline-flex;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: 0 0 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #c7bbdc;
+  border-radius: .35rem;
+  background: #fff;
+  color: #fff;
+}
+.standalone-notes-mobile .standalone-notes-mobile-filter-check.is-checked,
+.standalone-notes-mobile .standalone-notes-mobile-filter-option.is-selected .standalone-notes-mobile-filter-check {
+  border-color: #8650e0;
+  background: #8650e0;
+}
+.standalone-notes-mobile .standalone-notes-mobile-filter-list {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: .37rem;
+}
+.standalone-notes-mobile .standalone-notes-filter-group-title {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+}
+.standalone-notes-mobile .standalone-notes-mobile-filter-footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .45rem;
+  padding-top: .45rem;
+  margin-top: .13rem;
+  border-top: 1px solid #e9e0f3;
+}
+.standalone-notes-mobile .standalone-notes-mobile-filter-footer button {
+  display: flex;
+  min-width: 0;
+  min-height: 2.8rem;
+  align-items: center;
+  justify-content: center;
+  gap: .38rem;
+  padding: .45rem .3rem;
+  border: 1px solid #e6def4;
+  border-radius: .8rem;
+  background: #fff;
+  color: #6945a6;
+  font-size: .74rem;
+  line-height: 1.22;
+  font-weight: 730;
+}
+.standalone-notes-mobile .standalone-notes-mobile-filter-footer button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+.standalone-notes-mobile .standalone-notes-mobile-filter-footer button svg { flex-shrink: 0; }
+.standalone-notes-mobile .standalone-notes-mobile-filter-option:focus-visible,
+.standalone-notes-mobile .standalone-notes-mobile-filter-footer button:focus-visible {
+  outline: 2px solid #8754db;
+  outline-offset: 1px;
+}
+body[data-theme='dark'] .standalone-notes-mobile .standalone-notes-mobile-filter-trigger {
+  background: #263550;
+  border-color: #514377;
+  color: #d9c7fc;
+}
+body[data-theme='dark'] .standalone-notes-mobile .standalone-notes-mobile-filter-menu {
+  background: #18263e;
+  color: #f0f4ff;
+  border-color: #405172;
+  box-shadow: 0 18px 36px rgba(0, 0, 0, .35);
+}
+body[data-theme='dark'] .standalone-notes-mobile .standalone-notes-mobile-filter-heading { color: #aebbd1; }
+body[data-theme='dark'] .standalone-notes-mobile .standalone-notes-mobile-filter-option,
+body[data-theme='dark'] .standalone-notes-mobile .standalone-notes-mobile-filter-footer button {
+  background: #243651;
+  border-color: #3b4d6c;
+  color: #f0f4ff;
+  box-shadow: none;
+}
+body[data-theme='dark'] .standalone-notes-mobile .standalone-notes-mobile-filter-option:hover {
+  background: #2d4060;
+}
+body[data-theme='dark'] .standalone-notes-mobile .standalone-notes-mobile-filter-check {
+  background: #1c2b43;
+  border-color: #8091ad;
+}
+body[data-theme='dark'] .standalone-notes-mobile .standalone-notes-mobile-filter-check.is-checked,
+body[data-theme='dark'] .standalone-notes-mobile .standalone-notes-mobile-filter-option.is-selected .standalone-notes-mobile-filter-check {
+  background: #8b5cf6;
+  border-color: #8b5cf6;
+}
+body[data-theme='dark'] .standalone-notes-mobile .standalone-notes-mobile-filter-footer { border-color: #405172; }
+@media (max-width: 360px) {
+  .standalone-notes-mobile .standalone-notes-mobile-actions { gap: .42rem; }
+  .standalone-notes-mobile .standalone-notes-mobile-filter-footer { grid-template-columns: 1fr; }
+}
