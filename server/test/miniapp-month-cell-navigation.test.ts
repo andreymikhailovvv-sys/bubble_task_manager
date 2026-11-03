@@ -19,15 +19,16 @@ test('Mini App and compact mobile web month cells provide one full-cell day tap 
   const cell = mini.slice(monthCellStart, monthCellEnd);
 
   // The absolute hit area exists for EVERY month cell, not only the date number.
-  assert.match(cell, /timelineView === 'month' && \(\s*<button type="button" className="miniapp-calendar-cell-hitarea"/);
+  assert.match(cell, /<button type="button" className="miniapp-calendar-cell-hitarea"/);
   assert.match(cell, /onClick=\{\(\) => openDayTimeline\(date\)\}/);
   assert.match(cell, /aria-label=\{`Открыть таймлайн на /);
 
   // No month task chip can swallow the click or launch the task dialog.
-  assert.match(cell, /return timelineView === 'month' \? \(\s*<span key=\{entry\.id\} className=\{entryClassName\} style=\{entryStyle\}>/);
+  assert.match(cell, /visibleEntries\.map\(\(entry\) => \{/);
+  assert.match(cell, /<span key=\{entry\.id\} className=\{entryClassName\} style=\{entryStyle\}>/);
   assert.doesNotMatch(cell, /stopPropagation\(/);
-  assert.match(cell, /\) : \(\s*<button key=\{entry\.id\} type="button" className=\{entryClassName\}/);
-  assert.match(cell, /onClick=\{\(\) => 'task' in entry \?/);
+  assert.doesNotMatch(cell, /onClick=\{\(\) => 'task' in entry \?/);
+  assert.doesNotMatch(cell, /<button key=\{entry\.id\} type="button"/);
 
   // It fills the complete grid cell and remains above dates and task previews.
   assert.match(styles, /\.miniapp-calendar-grid-month \.miniapp-calendar-day \{ position: relative;/);
