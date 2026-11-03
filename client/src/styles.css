@@ -13266,3 +13266,81 @@ body[data-theme='light'] .miniapp-shell .miniapp-workspace-utilities.is-timeline
 .miniapp-shell .miniapp-timeline-independent-blocks .miniapp-timeline-view-panel .miniapp-timeline-view-switch button:last-child {
   border-radius: .72rem .95rem .95rem .72rem;
 }
+
+
+/* Light Mini App: the toolbar is only a layout row, never a white strip
+   behind the three independent controls (also while search floats). */
+.miniapp-shell.miniapp-light .miniapp-premium-topbar.miniapp-timeline-topbar,
+.miniapp-shell.miniapp-light .miniapp-premium-topbar.miniapp-list-topbar,
+body[data-theme='light'] .miniapp-shell .miniapp-premium-topbar.miniapp-timeline-topbar,
+body[data-theme='light'] .miniapp-shell .miniapp-premium-topbar.miniapp-list-topbar {
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.miniapp-shell.miniapp-light .miniapp-premium-topbar-slot,
+body[data-theme='light'] .miniapp-shell .miniapp-premium-topbar-slot {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Bring the list's credit pill back to its pink accent instead of letting
+   the generic light-theme utility rule paint it white. */
+.miniapp-shell.miniapp-light .miniapp-workspace-utilities.is-list .miniapp-credit-badge,
+body[data-theme='light'] .miniapp-shell .miniapp-workspace-utilities.is-list .miniapp-credit-badge {
+  background: #fdf2f8;
+  border-color: #f2c5dd;
+  color: #be185d;
+  box-shadow: none;
+}
+.miniapp-shell.miniapp-light .miniapp-workspace-utilities.is-list .miniapp-credit-badge:hover,
+body[data-theme='light'] .miniapp-shell .miniapp-workspace-utilities.is-list .miniapp-credit-badge:hover {
+  background: #fce7f3;
+  border-color: #e9a2c5;
+}
+
+/* Three equivalent, visibly separated rows for the overflow in both themes.
+   Keep the credits/rating accents in their icons and numeric badges only. */
+.miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel {
+  gap: .38rem;
+  padding: .55rem;
+}
+.miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel > button {
+  background: #263a56;
+  border: 1px solid rgba(157, 177, 214, .14);
+  border-radius: .83rem;
+  min-height: 3.25rem;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+.miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel > button:hover,
+.miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel > button:active {
+  background: #314764;
+  border-color: rgba(168, 189, 222, .26);
+}
+.miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel > button:focus-visible {
+  outline: 2px solid #a78bfa;
+  outline-offset: 1px;
+}
+.miniapp-shell.miniapp-light .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel > button,
+body[data-theme='light'] .miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel > button {
+  background: #eef2f7;
+  border: 1px solid #e0e7f0;
+  color: #24334e;
+}
+.miniapp-shell.miniapp-light .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel > button:hover,
+.miniapp-shell.miniapp-light .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel > button:active,
+body[data-theme='light'] .miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel > button:hover,
+body[data-theme='light'] .miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel > button:active {
+  background: #e7edf5;
+  border-color: #d3deed;
+}
+@media (prefers-reduced-motion: reduce) {
+  .miniapp-shell .miniapp-workspace-utilities.is-timeline .miniapp-workspace-utilities-panel > button {
+    transition: none;
+  }
+}

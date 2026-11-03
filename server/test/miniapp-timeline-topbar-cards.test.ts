@@ -83,3 +83,30 @@ test('timeline toolbar tiles match list height and overflow menu is consistently
   assert.match(toolbarCss, /\.miniapp-timeline-view-switch button:last-child \{\s*border-radius: \.72rem \.95rem \.95rem \.72rem;/);
   assert.match(toolbarCss, /\.miniapp-timeline-view-switch \{\s*display: grid;\s*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
 });
+
+
+test('light toolbar has independent tiles and overflow rows are uniform across both themes', async () => {
+  const css = await read('../../client/src/styles.css');
+  const marker = css.indexOf('/* Light Mini App: the toolbar is only a layout row');
+  assert.ok(marker >= 0, 'light theme overrides should be declared after shared toolbar styles');
+  const fixes = css.slice(marker);
+
+  // No white parent strip between separately rounded search, postpone and overflow tiles.
+  assert.match(fixes, /miniapp-shell\.miniapp-light \.miniapp-premium-topbar\.miniapp-timeline-topbar/);
+  assert.match(fixes, /body\[data-theme='light'\] \.miniapp-shell \.miniapp-premium-topbar\.miniapp-timeline-topbar/);
+  assert.match(fixes, /background: transparent !important;/);
+  assert.match(fixes, /miniapp-premium-topbar-slot/);
+
+  // The list's credit balance regains the pink accent of the existing badge.
+  assert.match(fixes, /miniapp-workspace-utilities\.is-list \.miniapp-credit-badge/);
+  assert.match(fixes, /background: #fdf2f8;/);
+  assert.match(fixes, /color: #be185d;/);
+
+  // Every overflow row is a separate card; no special white first row.
+  assert.match(fixes, /miniapp-workspace-utilities\.is-timeline \.miniapp-workspace-utilities-panel > button \{/);
+  assert.match(fixes, /background: #263a56;/);
+  assert.match(fixes, /background: #eef2f7;/);
+  assert.match(fixes, /gap: \.38rem;/);
+  assert.match(fixes, /border-radius: \.83rem;/);
+  assert.match(fixes, /prefers-reduced-motion: reduce/);
+});
