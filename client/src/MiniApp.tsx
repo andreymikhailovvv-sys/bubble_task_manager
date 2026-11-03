@@ -4690,12 +4690,19 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
               <div ref={openedTaskContentsScrollRef} className="miniapp-focus-section-scroller min-h-0 flex-1 overflow-y-auto" onScroll={() => setIsOpenedTaskSubtaskFilterOpen(false)}>
                 <section className="miniapp-focus-section miniapp-focus-section-summary" aria-label="Название и срок задачи">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2">
-                  <p className="shrink-0 text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">{openedTask.taskType === 'EVENT' ? 'Редактирование события' : 'Фокус задачи'}</p>
-                  {openedTask.isCollaborative ? <button type="button" className="miniapp-collaboration-badge truncate" onClick={() => setIsCollaborationSettingsOpen(true)}>Совместная задача</button> : null}
+              <div className="miniapp-focus-summary-header flex items-start justify-between gap-3">
+                <div className="miniapp-focus-header-main flex min-w-0 flex-1 flex-col gap-1.5">
+                  <textarea
+                    ref={taskTitleInputRef}
+                    value={openedTaskDraft.title}
+                    onChange={(event) => onChangeDraft(openedTask.id, { title: event.target.value })}
+                    className={`miniapp-focus-title-input invisible-scrollbar w-full resize-none border-0 bg-transparent p-0 text-3xl font-bold leading-tight outline-none ${taskTitleRows === 1 ? 'min-h-[2.15rem]' : taskTitleRows === 2 ? 'min-h-[4.5rem]' : 'min-h-[6.75rem]'}`}
+                    rows={taskTitleRows}
+                    placeholder="Без названия"
+                  />
+                  {openedTask.isCollaborative ? <button type="button" className="miniapp-collaboration-badge w-fit max-w-full truncate" onClick={() => setIsCollaborationSettingsOpen(true)}>Совместная задача</button> : null}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="miniapp-focus-summary-actions flex shrink-0 items-center gap-2">
                   <button type="button" onClick={() => openCalendarExport(openedTask.id)} className="miniapp-focus-icon-button" title="Добавить в календарь" aria-label="Добавить задачу в календарь">
                     <CalendarPlus size={16} />
                   </button>
@@ -4707,15 +4714,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   </button>
                 </div>
               </div>
-
-                <textarea
-                  ref={taskTitleInputRef}
-                  value={openedTaskDraft.title}
-                  onChange={(event) => onChangeDraft(openedTask.id, { title: event.target.value })}
-                  className={`miniapp-focus-title-input invisible-scrollbar w-full resize-none border-0 bg-transparent p-0 text-3xl font-bold leading-tight outline-none ${taskTitleRows === 1 ? 'min-h-[2.15rem]' : taskTitleRows === 2 ? 'min-h-[4.5rem]' : 'min-h-[6.75rem]'}`}
-                  rows={taskTitleRows}
-                  placeholder="Без названия"
-                />
                 {openedTask.taskType === 'EVENT' ? (
                   <input
                     value={openedTaskDraft.location ?? ''}

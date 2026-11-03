@@ -106,12 +106,17 @@ test('focus task is exactly three independent cards: title/date, description/act
   const top = focus.slice(summary, description);
   const middle = focus.slice(description, subtasks);
   const bottom = focus.slice(subtasks);
-  assert.match(top, /Фокус задачи/);
+  assert.doesNotMatch(top, /Фокус задачи/);
+  assert.match(top, /miniapp-focus-summary-header/);
   assert.match(top, /miniapp-focus-title-input/);
+  assert.ok(top.indexOf('miniapp-focus-title-input') < top.indexOf('miniapp-focus-summary-actions'),
+    'The task name must be in the header before the action icons');
+  assert.equal((top.match(/miniapp-focus-title-input/g) ?? []).length, 1);
   assert.match(top, /buttonLabel="Выбрать дату"/);
   assert.match(top, /openedTaskDraft\.dueDate \? formatRemaining\(openedTaskDraft\.dueDate\)/);
   assert.doesNotMatch(top, /miniapp-focus-primary-actions/);
   assert.match(middle, /miniapp-focus-description-surface/);
+  assert.match(middle, /miniapp-focus-description-heading/);
   assert.match(middle, /miniapp-focus-expand-description/);
   assert.match(middle, /Paperclip size=\{15\}/);
   assert.match(middle, /miniapp-focus-primary-actions/);
@@ -144,4 +149,24 @@ test('light focus cards are white on a transparent shell, dark cards keep custom
   assert.match(section, /padding-inline: \.62rem;/);
   assert.match(section, /padding-bottom: max\(1rem, env\(safe-area-inset-bottom\)\)/);
   assert.match(section, /miniapp-focus-task-panel--settings-open \.miniapp-task-settings-panel/);
+});
+
+test('focus description confines long links and scrolling within the resizable surface', async () => {
+  const css = await read('../../client/src/styles.css');
+  const start = css.indexOf('/* The older Mini App preview forces min-height');
+  assert.ok(start > 0, 'The overriding focus-specific rule must exist');
+  const boundary = css.slice(start, start + 950);
+  assert.match(boundary, /\.miniapp-focus-description-surface > \.task-description-preview\.miniapp-task-description-preview/);
+  assert.match(boundary, /min-height: 0 !important;/);
+  assert.match(boundary, /max-height: 100% !important;/);
+  assert.match(boundary, /overflow-y: auto !important;/);
+  assert.match(boundary, /overflow-wrap: anywhere;/);
+  assert.match(css, /\.miniapp-focus-description-surface a \{/);
+});
+
+test('the description heading matches subtask title size and weight on desktop and mobile', async () => {
+  const css = await read('../../client/src/styles.css');
+  assert.match(css, /\.miniapp-focus-description-heading \{[\s\S]*?font-size: 1\.02rem;[\s\S]*?font-weight: 740;/);
+  assert.match(css, /\.miniapp-focus-section-subtasks h3 \{[\s\S]*?font-size: 1\.02rem;[\s\S]*?font-weight: 740;/);
+  assert.match(css, /\.miniapp-focus-section-subtasks h3,\s*\.miniapp-shell \.miniapp-focus-task-panel--sectioned \.miniapp-focus-description-heading \{\s*font-size: \.96rem;/);
 });

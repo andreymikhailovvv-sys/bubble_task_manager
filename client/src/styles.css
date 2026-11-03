@@ -14203,8 +14203,16 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-panel-task .miniapp-tas
   padding-top: 1.04rem;
   padding-bottom: 1.24rem;
 }
-.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-summary > .flex:first-child {
-  margin-bottom: 1.15rem;
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-summary-header {
+  margin-bottom: 0;
+  min-width: 0;
+  align-items: flex-start;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-header-main {
+  min-width: 0;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-summary-actions {
+  flex-shrink: 0;
 }
 .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-summary .miniapp-focus-title-input {
   display: block;
@@ -14217,7 +14225,7 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-panel-task .miniapp-tas
   font-weight: 770;
 }
 .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-summary > div:last-child {
-  margin-top: .9rem;
+  margin-top: .55rem;
   flex-wrap: wrap;
   row-gap: .6rem;
   column-gap: .65rem;
@@ -14230,9 +14238,13 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-panel-task .miniapp-tas
 }
 .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content .miniapp-focus-description-heading {
   color: var(--focus-body-text);
-  line-height: 1.35;
+  font-size: 1.02rem;
+  font-weight: 740;
+  line-height: 1.3;
 }
 .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content .miniapp-focus-description-surface {
+  min-width: 0;
+  box-sizing: border-box;
   margin-top: .72rem;
   padding: .72rem .82rem !important;
   border: 1px solid var(--focus-subtask-border) !important;
@@ -14245,6 +14257,23 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-panel-task .miniapp-tas
   background: var(--focus-subtask-bg);
   border-color: var(--focus-subtask-border);
   color: var(--focus-quiet-text);
+}
+/* The older Mini App preview forces min-height: 8rem !important.
+   Override it here: the resizable parent owns the actual height. */
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-description-surface > .task-description-preview.miniapp-task-description-preview,
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-description-surface > textarea.miniapp-task-description-preview {
+  min-width: 0;
+  min-height: 0 !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overflow-wrap: anywhere;
+  box-sizing: border-box;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-description-surface a {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content .miniapp-focus-description-input,
 .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content .task-description-preview {
@@ -14371,7 +14400,8 @@ body[data-theme='light'] .miniapp-shell .miniapp-focus-task-panel--sectioned .mi
   .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-summary {
     padding-top: 1.03rem;
   }
-  .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-subtasks h3 {
+  .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-subtasks h3,
+  .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-description-heading {
     font-size: .96rem;
   }
   .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-subtasks > .flex:first-child {
