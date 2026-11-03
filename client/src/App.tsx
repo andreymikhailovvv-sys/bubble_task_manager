@@ -7534,7 +7534,7 @@ export default function App() {
                     </div>
                     <div className="focused-task-primary-actions ml-auto flex shrink-0 flex-col gap-1.5">
                       <button type="button" className="success-button focused-task-complete-action rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => completeTask(focusedTask)}><Check size={15} /> Выполнить</button>
-                      <button type="button" className="focused-task-edit-action rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => setIsFocusedNotesEditorOpen(true)}><Edit3 size={14} /> Редактировать</button>
+                      <button type="button" className="focused-task-edit-action rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => focusedTaskTitleInputRef.current?.focus()} title="Редактировать название задачи"><Edit3 size={14} /> Редактировать</button>
                       <button type="button" className="focused-task-delete-action rounded-xl px-3 py-2 text-sm font-semibold" onClick={async () => { if (focusedTask.isCollaborative && focusedTask.collaborationOwner) { setCollaborationAction({ task: focusedTask, action: 'delete' }); return; } await api.deleteTask(focusedTask.id, 'me'); setFocusedTaskId(null); await load(); }}><Trash2 size={14} /> Удалить</button>
                     </div>
                   </div>
