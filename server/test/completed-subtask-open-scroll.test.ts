@@ -26,7 +26,7 @@ test('Mini App Return changes DONE to TODO without deleting the subtask', async 
 
 test('restoring a subtask preserves the parent scroll viewport in Mini App', async () => {
   const source = await readClient('MiniApp.tsx');
-  assert.match(source, /ref=\{openedTaskContentsScrollRef\} className="min-h-0 flex-1 overflow-y-auto/);
+  assert.match(source, /ref=\{openedTaskContentsScrollRef\} className="miniapp-focus-section-scroller min-h-0 flex-1 overflow-y-auto/);
   assert.match(source, /nextStatus === 'TODO' && openedTaskContentsScrollRef\.current/);
   assert.match(source, /pendingOpenedTaskScrollTopRef\.current = openedTaskContentsScrollRef\.current\.scrollTop/);
   assert.match(source, /useLayoutEffect\(\(\) => \{\s*const top = pendingOpenedTaskScrollTopRef\.current;/);
