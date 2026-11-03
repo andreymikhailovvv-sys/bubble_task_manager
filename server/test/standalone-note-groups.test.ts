@@ -180,3 +180,56 @@ test('Telegram deep-link chat header remains visible during auto scroll then fol
   assert.match(mini, /onTouchMove=\{\(\) => \{ generalAiChatUserScrollEnabledRef\.current = true; \}\}/);
   assert.match(mini, /setIsHidden\(delta > 0\)/);
 });
+
+
+test('mobile notes redesign keeps groups management separate from collapsible group chips and search', async () => {
+  const [board, css] = await Promise.all([
+    readFile(new URL('../../client/src/components/StandaloneNotesWorkspace.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8')
+  ]);
+  assert.match(board, /standalone-notes-mobile-actions/);
+  assert.match(board, /standalone-notes-mobile-new/);
+  assert.match(board, /standalone-notes-groups-manage/);
+  assert.match(board, /Настройки групп заметок/);
+  assert.match(board, /onClick=\{\(\) => openGroupManager\('manage'\)\}/);
+  assert.match(board, /standalone-notes-groups-toggle/);
+  assert.match(board, /aria-expanded=\{notesFiltersVisible\}/);
+  assert.match(board, /aria-controls="standalone-notes-group-search-panel"/);
+  assert.match(board, /notesFiltersManuallyClosedRef\.current = notesFiltersVisible/);
+  assert.match(board, /if \(!notesFiltersManuallyClosedRef\.current\) setNotesFiltersVisible\(true\)/);
+  assert.match(board, /onScroll=\{handleNotesScroll\}/);
+  assert.match(board, /standalone-notes-filters-collapsed/);
+  assert.match(board, /id=\{mode === 'mobile' \? 'standalone-notes-group-search-panel'/);
+  assert.match(board, /setSearchQuery\(event\.target\.value\)/);
+  assert.match(css, /\.standalone-notes-mobile \.standalone-notes-board-filters\.standalone-notes-filters-collapsed/);
+});
+
+test('mobile notes cards are independently spaced with group-first hierarchy and soft shadows', async () => {
+  const [board, css] = await Promise.all([
+    readFile(new URL('../../client/src/components/StandaloneNotesWorkspace.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8')
+  ]);
+  const card = board.slice(board.indexOf('<article key={note.id}'), board.indexOf('</article>', board.indexOf('<article key={note.id}')));
+  assert.ok(card.indexOf('standalone-group-note-label') < card.indexOf('<h3 className="break-words'), 'Group badge must precede title');
+  assert.match(card, /standalone-note-preview/);
+  assert.match(card, /<CalendarDays size=\{15\}/);
+  assert.match(card, /showGroupPicker\(note\.id, event\.currentTarget\)/);
+  assert.match(card, /deleteNote\(note\)/);
+  assert.match(css, /--notes-shadow: 0 7px 23px/);
+  assert.match(css, /\.standalone-notes-mobile \.standalone-note-card \{/);
+  assert.match(css, /\.standalone-notes-mobile \.standalone-note-preview \{/);
+  assert.match(css, /\.standalone-notes-mobile \.standalone-notes-mobile-actions \{/);
+  assert.match(css, /body\[data-theme='dark'\] \.standalone-notes-mobile \.standalone-notes-board \{/);
+});
+
+test('light timeline utilities use unified white menu cards without changing dark theme', async () => {
+  const css = await readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8');
+  const start = css.indexOf('/* Light timeline utility menu: bright cards');
+  assert.ok(start > 0);
+  const segment = css.slice(start, css.indexOf('/* Notes redesign is deliberately scoped', start));
+  assert.match(segment, /background: #faf8ff/);
+  assert.match(segment, /background: #fff/);
+  assert.match(segment, /border-color: #eae3f4/);
+  assert.match(segment, /\.is-timeline \.miniapp-workspace-utilities-panel > button/);
+  assert.doesNotMatch(segment, /body\[data-theme='dark'\]/);
+});
