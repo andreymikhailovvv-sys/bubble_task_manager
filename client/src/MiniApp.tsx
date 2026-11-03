@@ -4687,7 +4687,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 </div>
               ) : null}
 
-              <div ref={openedTaskContentsScrollRef} className="min-h-0 flex-1 overflow-y-auto pr-1" onScroll={() => setIsOpenedTaskSubtaskFilterOpen(false)}>
+              <div ref={openedTaskContentsScrollRef} className="miniapp-focus-section-scroller min-h-0 flex-1 overflow-y-auto" onScroll={() => setIsOpenedTaskSubtaskFilterOpen(false)}>
                 <section className="miniapp-focus-section miniapp-focus-section-summary" aria-label="Название и срок задачи">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
