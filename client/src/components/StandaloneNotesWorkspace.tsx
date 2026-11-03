@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type UIEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, Maximize2, Plus, Search, Settings2, StickyNote, Tags, Trash2, X } from 'lucide-react';
+import { CalendarDays, Check, ChevronDown, Maximize2, Plus, Search, Settings2, StickyNote, Tags, Trash2, X } from 'lucide-react';
 import { api, type StandaloneNote, type StandaloneNoteGroup } from '../lib/api';
 import { noteHtmlToPlainText, noteValueToEditorHtml } from '../lib/notes';
 import { NotesEditor } from './NotesEditor';
@@ -103,6 +103,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     setGroups([]);
     setSelectedGroup('all');
     setSearchQuery('');
+    setNotesFiltersVisible(true);
     setGroupManager(null);
     setGroupCreateForNoteId(null);
     setGroupPicker(null);
@@ -378,21 +379,35 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
           <section className="standalone-notes-board flex h-[min(87dvh,880px)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border shadow-2xl" role="dialog" aria-modal="true" aria-label="Все заметки"
             style={telegramMiniApp ? ({ '--notes-telegram-header-height': `${notesHeaderHeight}px` } as CSSProperties) : undefined}>
             <div ref={notesHeaderRef} className={`standalone-notes-board-header flex flex-col gap-2 border-b p-4 sm:px-6 ${mode === 'mobile' && !notesFiltersVisible ? 'standalone-notes-header-compact' : ''}`}>
-              <div className="flex items-start justify-between gap-3">
+              <div className="standalone-notes-header-title-row flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="standalone-note-accent text-xs font-semibold uppercase tracking-widest">Личные записи</p>
                   <h2 className="mt-1 text-xl font-bold text-primary">Мои заметки <span className="text-sm font-normal text-muted">({filteredNotes.length}{selectedGroup !== 'all' ? ' из ' + notes.length : ''})</span></h2>
                 </div>
                 <div className="flex shrink-0 items-center justify-end gap-2">
-                  <button type="button" className="standalone-notes-create inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold" disabled={creating} onClick={() => void createNote()}><Plus size={16} /> Новая заметка</button>
-                  <button type="button" className="standalone-notes-icon-button rounded-xl border p-2" onClick={closeBoard} aria-label="Закрыть список заметок"><X size={18} /></button>
+                  {mode !== 'mobile' ? <button type="button" className="standalone-notes-create inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold" disabled={creating} onClick={() => void createNote()}><Plus size={16} /> Новая заметка</button> : null}
+                  <button type="button" className="standalone-notes-icon-button standalone-notes-header-close rounded-xl border p-2" onClick={closeBoard} aria-label="Закрыть список заметок"><X size={18} /></button>
                 </div>
               </div>
-              <div className={`standalone-notes-board-filters flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 ${mode === 'mobile' && !notesFiltersVisible ? 'standalone-notes-filters-collapsed' : ''}`}
+              {mode === 'mobile' ? <div className="standalone-notes-mobile-actions">
+                <button type="button" className="standalone-notes-create standalone-notes-mobile-new inline-flex items-center justify-center gap-2"
+                  disabled={creating} onClick={() => void createNote()}><Plus size={19} /> Новая заметка</button>
+                <div className="standalone-notes-groups-split">
+                  <button type="button" className="standalone-notes-groups-manage inline-flex items-center justify-center gap-2"
+                    onClick={() => openGroupManager('manage')} aria-label="Настройки групп заметок"><Settings2 size={19} /> Группы</button>
+                  <button type="button" className="standalone-notes-groups-toggle inline-flex items-center justify-center"
+                    aria-label={notesFiltersVisible ? 'Свернуть группы и поиск' : 'Показать группы и поиск'}
+                    aria-controls="standalone-notes-group-search-panel" aria-expanded={notesFiltersVisible}
+                    onClick={() => { notesScrollIntentRef.current = 0; setNotesFiltersVisible(current => !current); }}>
+                    <ChevronDown size={17} className={notesFiltersVisible ? 'standalone-notes-chevron-open' : ''} />
+                  </button>
+                </div>
+              </div> : null}
+              <div id={mode === 'mobile' ? 'standalone-notes-group-search-panel' : undefined} className={`standalone-notes-board-filters flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 ${mode === 'mobile' && !notesFiltersVisible ? 'standalone-notes-filters-collapsed' : ''}`}
                 onFocusCapture={() => { if (mode === 'mobile') setNotesFiltersVisible(true); }}>
                 <nav className="standalone-group-filter flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto pb-1" aria-label="Группы заметок">
-                <button type="button" className="standalone-group-chip standalone-group-manage" title="Редактировать группы"
-                  aria-label="Редактировать группы" onClick={() => openGroupManager('manage')}><Settings2 size={15} /><span className="sr-only">Управление группами</span></button>
+                {mode !== 'mobile' ? <button type="button" className="standalone-group-chip standalone-group-manage" title="Редактировать группы"
+                  aria-label="Редактировать группы" onClick={() => openGroupManager('manage')}><Settings2 size={15} /><span className="sr-only">Управление группами</span></button> : null}
                 <button type="button" className={'standalone-group-chip ' + (selectedGroup === 'all' ? 'standalone-group-chip-active' : '')}
                   aria-pressed={selectedGroup === 'all'} onClick={() => setSelectedGroup('all')}>Все <span className="opacity-70">{notes.length}</span></button>
                 <button type="button" className={'standalone-group-chip ' + (selectedGroup === 'ungrouped' ? 'standalone-group-chip-active' : '')}
@@ -429,19 +444,19 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
                   {filteredNotes.map((note) => (
                     <article key={note.id} className="standalone-note-card group flex min-h-48 flex-col overflow-hidden rounded-2xl border">
                       <button type="button" className="standalone-note-open min-w-0 flex-1 px-4 pb-2 pt-4 text-left" onClick={() => openEditor(note)} aria-label={'Открыть заметку «' + titleOf(note) + '»'}>
-                        <h3 className="break-words text-base font-bold text-primary">{titleOf(note)}</h3>
                         {groupFor(note) ? (
                           <span className="standalone-group-note-label mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium"
                             style={noteGroupStyle(groupFor(note)!.color)}>
                             <span className="standalone-group-color-dot h-2 w-2 rounded-full shrink-0"/><span className="truncate">{groupFor(note)!.name}</span>
                           </span>
                         ) : null}
+                        <h3 className="break-words text-base font-bold text-primary">{titleOf(note)}</h3>
                         <div className="standalone-note-preview mt-2 max-h-48 overflow-hidden text-sm leading-relaxed text-muted"
                           dangerouslySetInnerHTML={{ __html: noteValueToEditorHtml(note.content) }} />
                         {!note.content.trim() ? <p className="mt-2 text-sm text-subtle">Пустая заметка</p> : null}
                       </button>
                       <div className="standalone-note-card-footer flex items-center justify-between gap-2 border-t px-4 py-2">
-                        <time className="truncate text-[11px] text-muted" dateTime={note.updatedAt}>{new Date(note.updatedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}</time>
+                        <time className="standalone-note-updated-at flex min-w-0 items-center gap-1.5 truncate text-[11px] text-muted" dateTime={note.updatedAt}><CalendarDays size={15} aria-hidden="true" />{new Date(note.updatedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}</time>
                         <div className="flex items-center gap-1">
                           <button type="button" className="standalone-notes-icon-button rounded-lg p-1.5" onClick={(event) => showGroupPicker(note.id, event.currentTarget)}
                             aria-label={'Выбрать группу заметки «' + titleOf(note) + '»'} title="Выбрать группу"><Tags size={16} /></button>
