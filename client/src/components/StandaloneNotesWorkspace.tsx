@@ -24,7 +24,6 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
   const mobileFiltersRef = useRef<HTMLDivElement | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [notesFiltersVisible, setNotesFiltersVisible] = useState(true);
-  const notesFiltersManuallyClosedRef = useRef(false);
   const notesHeaderRef = useRef<HTMLDivElement | null>(null);
   const [notesHeaderHeight, setNotesHeaderHeight] = useState(0);
   const notesLastScrollTopRef = useRef(0);
@@ -39,7 +38,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     notesLastScrollTopRef.current = top;
     if (top <= 12) {
       notesScrollIntentRef.current = 0;
-      if (!notesFiltersManuallyClosedRef.current) setNotesFiltersVisible(true);
+      setNotesFiltersVisible(true);
       return;
     }
     // Collapsing filters changes the scrollable height. Ignore that brief
@@ -53,7 +52,6 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
       notesLastToggleAtRef.current = performance.now();
       notesScrollIntentRef.current = 0;
     } else if (notesScrollIntentRef.current < -16) {
-      notesFiltersManuallyClosedRef.current = false;
       setNotesFiltersVisible(true);
       notesLastToggleAtRef.current = performance.now();
       notesScrollIntentRef.current = 0;
@@ -132,7 +130,6 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     setMobileFiltersOpen(false);
     setSearchQuery('');
     setNotesFiltersVisible(true);
-    notesFiltersManuallyClosedRef.current = false;
     setGroupManager(null);
     setGroupCreateForNoteId(null);
     setGroupPicker(null);
@@ -531,7 +528,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
               {filteredNotes.length === 0 ? (
                 <div className="standalone-notes-empty rounded-2xl border p-8 text-center text-muted">
                   <StickyNote className="mx-auto mb-3 opacity-70" size={32} />
-                  {searchQuery.trim() ? 'По запросу ничего не найдено. Попробуйте другие слова.' : notes.length ? 'В этой группе пока нет заметок.' : 'Пока нет заметок. Создайте первую запись.'}
+                  {searchQuery.trim() ? 'По запросу ничего не найдено. Попробуйте другие слова.' : notes.length ? 'В выбранных группах пока нет заметок.' : 'Пока нет заметок. Создайте первую запись.'}
                 </div>
               ) : (
                 <div className="standalone-notes-grid grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
