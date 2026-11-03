@@ -13,7 +13,7 @@ test('Mini App and compact mobile web month cells provide one full-cell day tap 
   assert.match(entry, /<MiniApp runtime="telegram"/);
   assert.match(entry, /<MiniApp runtime="web"/);
 
-  const monthCellStart = mini.indexOf('<div key={dateKey} className={`miniapp-calendar-day');
+  const monthCellStart = mini.indexOf("<div key={dateKey} className={'miniapp-calendar-day'");
   const monthCellEnd = mini.indexOf('</div>', mini.indexOf('miniapp-calendar-more', monthCellStart));
   assert.ok(monthCellStart > -1 && monthCellEnd > monthCellStart);
   const cell = mini.slice(monthCellStart, monthCellEnd);
@@ -21,7 +21,7 @@ test('Mini App and compact mobile web month cells provide one full-cell day tap 
   // The absolute hit area exists for EVERY month cell, not only the date number.
   assert.match(cell, /<button type="button" className="miniapp-calendar-cell-hitarea"/);
   assert.match(cell, /onClick=\{\(\) => openDayTimeline\(date\)\}/);
-  assert.match(cell, /aria-label=\{`Открыть таймлайн на /);
+  assert.match(cell, /aria-label=\{'Открыть таймлайн на ' \+ date\.toLocaleDateString/);
 
   // No month task chip can swallow the click or launch the task dialog.
   assert.match(cell, /visibleEntries\.map\(\(entry\) => \{/);
