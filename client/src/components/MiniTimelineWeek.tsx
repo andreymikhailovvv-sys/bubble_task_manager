@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { Habit, Sphere, Task } from '../lib/types';
+import { timelineProjectionKey } from '../lib/monitoringTimeline';
 
 type WeekDay = {
   date: Date;
@@ -160,7 +161,7 @@ export function MiniTimelineWeek({
                           const dueLabel = isReminder || isEvent ? entry.time :
                             overdue ? 'Просрочено · ' + formatRemaining(task.dueDate) : formatRemaining(task.dueDate);
                           return (
-                            <button type="button" key={task.id} className={'miniapp-native-day-card'
+                            <button type="button" key={timelineProjectionKey(task)} className={'miniapp-native-day-card'
                               + (isSubtask ? ' miniapp-native-day-subtask' : '')
                               + (isEvent ? ' miniapp-native-day-event' : '')
                               + (overdue ? ' miniapp-native-day-overdue' : '')}
