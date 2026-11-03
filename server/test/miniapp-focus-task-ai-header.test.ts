@@ -18,7 +18,12 @@ test('focus sheet has explicit date and expand labels and one dominant completio
   assert.match(picker, /buttonLabel\?: string/);
   assert.match(picker, /\{iconOnly && buttonLabel \? <span/);
   assert.match(focus, /miniapp-focus-expand-description/);
-  assert.match(focus, /На весь экран/);
+  assert.match(focus, /Редактировать описание/);
+  assert.doesNotMatch(focus, /На весь экран/);
+  assert.match(focus, /<ResizableDescriptionSurface className="miniapp-focus-description-surface/);
+  assert.match(focus, /Описание<\/h3>/);
+  assert.match(focus, /openedTaskDraft\.dueDate \? formatRemaining\(openedTaskDraft\.dueDate\)/);
+  assert.doesNotMatch(focus, /До дедлайна:/);
   assert.match(focus, /miniapp-focus-primary-actions/);
   assert.match(focus, /completeTask\(openedTask\.id\)/);
   assert.match(focus, /deleteTask\(openedTask\.id\)/);
@@ -104,7 +109,7 @@ test('focus task is exactly three independent cards: title/date, description/act
   assert.match(top, /Фокус задачи/);
   assert.match(top, /miniapp-focus-title-input/);
   assert.match(top, /buttonLabel="Выбрать дату"/);
-  assert.match(top, /До дедлайна:/);
+  assert.match(top, /openedTaskDraft\.dueDate \? formatRemaining\(openedTaskDraft\.dueDate\)/);
   assert.doesNotMatch(top, /miniapp-focus-primary-actions/);
   assert.match(middle, /miniapp-focus-description-surface/);
   assert.match(middle, /miniapp-focus-expand-description/);

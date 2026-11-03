@@ -2,7 +2,7 @@ import { AiStreamingMessageBody } from './components/AiStreamingMessageBody';
 import { prepareAiChatImageFile } from './lib/ai-image-upload';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, MessageCircle, Minus, MoreVertical, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, StickyNote, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Edit3, Menu, MessageCircle, Minus, MoreVertical, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, StickyNote, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, stripAiChatProjectDisplayPreviews, type CreditPack, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus, type StandaloneNote } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { TaskCompletionReportDialog } from './components/TaskCompletionReportDialog';
@@ -23,6 +23,7 @@ import { WorkspaceGlobalSearch } from './components/WorkspaceGlobalSearch';
 import { matchesWorkspaceText } from './lib/workspaceSearch';
 import { MiniWorkspaceTools } from './components/MiniWorkspaceTools';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
+import { ResizableDescriptionSurface } from './components/ResizableDescriptionSurface';
 import { measureTitleTextareaRows } from './lib/titleTextareaRows';
 import { newestFocusSubtaskFirst, urgentFocusSubtaskFirst } from './lib/focusSubtaskSort';
 import { loadThemePreference, resolveThemeMode, type ThemePreference } from './lib/autoTheme';
@@ -4731,22 +4732,23 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     timelineTasks={timelinePickerTasks}
                     iconOnly buttonLabel="Выбрать дату" title="Выбрать дату и время" detachedPopup buttonClassName="miniapp-focus-date-button"
                   />}
-                  <span>{openedTask.aiMonitoringEnabled ? 'На усмотрение ИИ' : openedTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(openedTaskDraft.dueDate)}` : 'Дедлайн не задан'}</span>
+                  <span>{openedTask.aiMonitoringEnabled ? 'На усмотрение ИИ' : openedTaskDraft.dueDate ? formatRemaining(openedTaskDraft.dueDate) : 'Дедлайн не задан'}</span>
                 </div>
                 </section>
                 <section className="miniapp-focus-section miniapp-focus-section-content" aria-label="Описание и действия по задаче">
-                <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
+                <h3 className="miniapp-focus-description-heading text-sm font-semibold">Описание</h3>
+                <ResizableDescriptionSurface className="miniapp-focus-description-surface mt-3 rounded-2xl p-3">
                   <TaskDescriptionInput
                     value={openedTaskDraft.description}
                     onChange={(description) => onChangeDraft(openedTask.id, { description })}
-                    className="miniapp-focus-description-input miniapp-task-description-preview invisible-scrollbar min-h-32 w-full resize-none border-0 bg-transparent text-sm leading-6 outline-none placeholder:text-slate-400"
+                    className="miniapp-focus-description-input miniapp-task-description-preview invisible-scrollbar h-full min-h-0 w-full resize-none overflow-y-auto border-0 bg-transparent text-sm leading-6 outline-none placeholder:text-slate-400"
                     placeholder="Введите описание"
                   />
-                </div>
+                </ResizableDescriptionSurface>
 
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <button type="button" className="miniapp-focus-icon-button miniapp-focus-expand-description" onClick={() => setIsTaskNotesEditorOpen(true)} title="Открыть описание на весь экран" aria-label="Развернуть описание на весь экран">
-                    <Maximize2 size={15} /> <span>На весь экран</span>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button type="button" className="miniapp-focus-icon-button miniapp-focus-expand-description" onClick={() => setIsTaskNotesEditorOpen(true)} title="Редактировать описание" aria-label="Редактировать описание">
+                    <Edit3 size={15} /> <span>Редактировать описание</span>
                   </button>
                   <button
                     type="button"

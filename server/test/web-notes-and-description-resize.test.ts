@@ -39,7 +39,8 @@ test('web task focus and task/subtask editor use the same resizable viewport', a
   assert.match(css, /height: 100% !important/);
   assert.match(css, /overflow-y: auto/);
   assert.match(css, /\.resizable-description-grip/);
-  assert.doesNotMatch(mini, /ResizableDescriptionSurface/);
+  assert.match(mini, /<ResizableDescriptionSurface className="miniapp-focus-description-surface/);
+  assert.match(css, /\.miniapp-focus-task-panel--sectioned \.miniapp-focus-section-content \.miniapp-focus-description-surface/);
 });
 
 test('note card picker and note editor both create a new group and assign it to selected note', async () => {
