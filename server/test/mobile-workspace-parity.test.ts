@@ -396,7 +396,9 @@ test('mobile browser timeline spacing, touch-safe navigation, and folding notes 
   assert.match(css, /\.miniapp-shell\.miniapp-web-runtime button\.miniapp-bottom-navigation-item:focus-visible \.miniapp-bottom-navigation-icon \{\s*outline:\s*2px solid/);
   assert.match(notes, /if \(mode !== 'mobile'\) return;/);
   assert.match(notes, /standalone-notes-web-collapsible/);
-  assert.match(notes, /mode === 'mobile' && !notesFiltersVisible \? 'standalone-notes-filters-collapsed'/);
+  assert.match(notes, /standalone-notes-mobile-controls/);
+  assert.match(css, /\.standalone-notes-mobile \.standalone-notes-mobile-controls\.standalone-notes-filters-collapsed/);
+  assert.match(notes, /!notesFiltersVisible \? 'standalone-notes-filters-collapsed'/);
   assert.match(css, /\.standalone-notes-mobile\.standalone-notes-web-collapsible \.standalone-notes-board-filters\.standalone-notes-filters-collapsed \{\s*display:\s*none;/);
   assert.match(css, /\.standalone-notes-telegram \.standalone-notes-board-filters\.standalone-notes-filters-collapsed/);
 });
