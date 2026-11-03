@@ -14228,13 +14228,23 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-panel-task .miniapp-tas
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content .miniapp-focus-description-surface {
-  margin: 0;
-  padding: .05rem 0 0 !important;
-  border: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content .miniapp-focus-description-heading {
   color: var(--focus-body-text);
+  line-height: 1.35;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content .miniapp-focus-description-surface {
+  margin-top: .72rem;
+  padding: .72rem .82rem !important;
+  border: 1px solid var(--focus-subtask-border) !important;
+  border-radius: 1rem;
+  background: var(--focus-subtask-bg) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035) !important;
+  color: var(--focus-body-text);
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content .miniapp-focus-description-surface .resizable-description-grip {
+  background: var(--focus-subtask-bg);
+  border-color: var(--focus-subtask-border);
+  color: var(--focus-quiet-text);
 }
 .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content .miniapp-focus-description-input,
 .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content .task-description-preview {
@@ -14329,8 +14339,9 @@ body[data-theme='light'] .miniapp-shell .miniapp-focus-task-panel--sectioned .mi
 }
 .miniapp-shell.miniapp-light .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content .miniapp-focus-description-surface,
 body[data-theme='light'] .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content .miniapp-focus-description-surface {
-  background: transparent !important;
-  border: 0 !important;
+  background: #f8f9fd !important;
+  border: 1px solid #e1e7f2 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .65) !important;
 }
 .miniapp-shell.miniapp-light .miniapp-focus-task-panel--sectioned .miniapp-focus-section-subtasks .miniapp-focus-subtask-row,
 body[data-theme='light'] .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-subtasks .miniapp-focus-subtask-row {
