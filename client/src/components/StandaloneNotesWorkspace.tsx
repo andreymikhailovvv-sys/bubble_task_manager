@@ -19,6 +19,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [notesFiltersVisible, setNotesFiltersVisible] = useState(true);
+  const notesFiltersManuallyClosedRef = useRef(false);
   const notesHeaderRef = useRef<HTMLDivElement | null>(null);
   const [notesHeaderHeight, setNotesHeaderHeight] = useState(0);
   const notesLastScrollTopRef = useRef(0);
@@ -33,7 +34,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     notesLastScrollTopRef.current = top;
     if (top <= 12) {
       notesScrollIntentRef.current = 0;
-      setNotesFiltersVisible(true);
+      if (!notesFiltersManuallyClosedRef.current) setNotesFiltersVisible(true);
       return;
     }
     // Collapsing filters changes the scrollable height. Ignore that brief
@@ -46,6 +47,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
       notesLastToggleAtRef.current = performance.now();
       notesScrollIntentRef.current = 0;
     } else if (notesScrollIntentRef.current < -16) {
+      notesFiltersManuallyClosedRef.current = false;
       setNotesFiltersVisible(true);
       notesLastToggleAtRef.current = performance.now();
       notesScrollIntentRef.current = 0;
@@ -104,6 +106,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     setSelectedGroup('all');
     setSearchQuery('');
     setNotesFiltersVisible(true);
+    notesFiltersManuallyClosedRef.current = false;
     setGroupManager(null);
     setGroupCreateForNoteId(null);
     setGroupPicker(null);
@@ -398,13 +401,18 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
                   <button type="button" className="standalone-notes-groups-toggle inline-flex items-center justify-center"
                     aria-label={notesFiltersVisible ? 'Свернуть группы и поиск' : 'Показать группы и поиск'}
                     aria-controls="standalone-notes-group-search-panel" aria-expanded={notesFiltersVisible}
-                    onClick={() => { notesScrollIntentRef.current = 0; setNotesFiltersVisible(current => !current); }}>
+                    onClick={() => {
+                      notesScrollIntentRef.current = 0;
+                      notesFiltersManuallyClosedRef.current = notesFiltersVisible;
+                      notesLastToggleAtRef.current = performance.now();
+                      setNotesFiltersVisible(current => !current);
+                    }}>
                     <ChevronDown size={17} className={notesFiltersVisible ? 'standalone-notes-chevron-open' : ''} />
                   </button>
                 </div>
               </div> : null}
               <div id={mode === 'mobile' ? 'standalone-notes-group-search-panel' : undefined} className={`standalone-notes-board-filters flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 ${mode === 'mobile' && !notesFiltersVisible ? 'standalone-notes-filters-collapsed' : ''}`}
-                onFocusCapture={() => { if (mode === 'mobile') setNotesFiltersVisible(true); }}>
+                onFocusCapture={() => { if (mode === 'mobile') { notesFiltersManuallyClosedRef.current = false; setNotesFiltersVisible(true); } }}>
                 <nav className="standalone-group-filter flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto pb-1" aria-label="Группы заметок">
                 {mode !== 'mobile' ? <button type="button" className="standalone-group-chip standalone-group-manage" title="Редактировать группы"
                   aria-label="Редактировать группы" onClick={() => openGroupManager('manage')}><Settings2 size={15} /><span className="sr-only">Управление группами</span></button> : null}
