@@ -29,7 +29,7 @@ test('focus sheet has explicit date and expand labels and one dominant completio
 
 test('completed subtasks toggle at bottom with count and preserve checked state handling', async () => {
   const mini = await read('../../client/src/MiniApp.tsx');
-  const from = mini.indexOf('className="miniapp-focus-subtasks mt-4');
+  const from = mini.indexOf('miniapp-focus-section-subtasks miniapp-focus-subtasks');
   const until = mini.indexOf('{isCollaborationSettingsOpen && openedTask?.isCollaborative', from);
   const section = mini.slice(from, until);
   const doneToggle = section.indexOf('miniapp-focus-show-completed');
@@ -79,4 +79,64 @@ test('same Telegram brand appears in focus, task chat and general AI chat', asyn
   assert.equal((mini.match(/className="miniapp-telegram-service-title miniapp-telegram-overlay-brand"/g) ?? []).length, 3);
   assert.match(css, /miniapp-telegram-fullscreen \.miniapp-telegram-overlay-brand/);
   assert.match(mini, /showTelegramBrand \? <div className="miniapp-telegram-service-title"/);
+});
+
+
+test('focus task is exactly three independent cards: title/date, description/actions, subtasks', async () => {
+  const [mini, css] = await Promise.all([
+    read('../../client/src/MiniApp.tsx'),
+    read('../../client/src/styles.css')
+  ]);
+  const start = mini.indexOf('miniapp-focus-task-panel--sectioned');
+  const end = mini.indexOf('{isCollaborationSettingsOpen && openedTask?.isCollaborative', start);
+  assert.ok(start > 0 && end > start);
+  const focus = mini.slice(start, end);
+  const summary = focus.indexOf('miniapp-focus-section-summary');
+  const description = focus.indexOf('miniapp-focus-section-content');
+  const subtasks = focus.indexOf('miniapp-focus-section-subtasks');
+  assert.ok(summary >= 0 && description > summary && subtasks > description);
+  assert.equal((focus.match(/<section className="miniapp-focus-section /g) ?? []).length, 3,
+    'Summary, description/actions, and subtasks must be separate cards');
+  assert.match(focus, /<section className="miniapp-focus-section miniapp-focus-section-subtasks/);
+  const top = focus.slice(summary, description);
+  const middle = focus.slice(description, subtasks);
+  const bottom = focus.slice(subtasks);
+  assert.match(top, /Фокус задачи/);
+  assert.match(top, /miniapp-focus-title-input/);
+  assert.match(top, /buttonLabel="Выбрать дату"/);
+  assert.match(top, /До дедлайна:/);
+  assert.doesNotMatch(top, /miniapp-focus-primary-actions/);
+  assert.match(middle, /miniapp-focus-description-surface/);
+  assert.match(middle, /miniapp-focus-expand-description/);
+  assert.match(middle, /Paperclip size=\{15\}/);
+  assert.match(middle, /miniapp-focus-primary-actions/);
+  assert.match(middle, /completeTask\(openedTask\.id\)/);
+  assert.match(middle, /deleteTask\(openedTask\.id\)/);
+  assert.match(middle, /Открыть диалог с ИИ/);
+  assert.match(bottom, /openedTaskSubtasks\.map/);
+  assert.match(bottom, /miniapp-focus-show-completed/);
+  assert.match(focus, /ref=\{openedTaskContentsScrollRef\} className="miniapp-focus-section-scroller/);
+  assert.match(css, /\.miniapp-focus-task-panel--sectioned \.miniapp-focus-section-scroller/);
+  assert.match(css, /\.miniapp-focus-task-panel--sectioned \.miniapp-focus-section \{/);
+  assert.match(css, /--focus-card-shadow:/);
+});
+
+test('light focus cards are white on a transparent shell, dark cards keep custom gradient', async () => {
+  const css = await read('../../client/src/styles.css');
+  const start = css.indexOf('/* Focus task: three independent reading surfaces');
+  assert.ok(start > 0);
+  const section = css.slice(start);
+  assert.match(section, /padding: 0 !important;/);
+  assert.match(section, /background: transparent !important;/);
+  assert.match(section, /background: var\(--focus-card-bg\);/);
+  assert.match(section, /--focus-card-bg: linear-gradient/);
+  assert.match(section, /\.miniapp-shell\.miniapp-light \.miniapp-focus-task-panel--sectioned/);
+  assert.match(section, /--focus-card-bg: #fff;/);
+  assert.match(section, /background: #fff;/);
+  assert.match(section, /--focus-subtask-bg: #f8f9fd;/);
+  assert.match(section, /box-shadow: var\(--focus-card-shadow\);/);
+  assert.match(section, /@media \(max-width: 639px\)/);
+  assert.match(section, /padding-inline: \.62rem;/);
+  assert.match(section, /padding-bottom: max\(1rem, env\(safe-area-inset-bottom\)\)/);
+  assert.match(section, /miniapp-focus-task-panel--settings-open \.miniapp-task-settings-panel/);
 });

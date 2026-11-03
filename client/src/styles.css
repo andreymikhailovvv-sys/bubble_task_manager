@@ -14145,3 +14145,261 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-panel-task .miniapp-tas
   .miniapp-shell .miniapp-task-ai-monitor-control .task-monitor-button { width: 1.9rem; height: 1.9rem; min-height: 1.9rem; }
   .miniapp-shell .miniapp-task-ai-context-controls .miniapp-ai-context-control-value { font-size: .74rem; }
 }
+
+
+/* Focus task: three independent reading surfaces, matching the agreed
+   Timeline / Notes spacing language. The wrapper owns only scrolling. */
+.miniapp-shell .miniapp-focus-task-panel--sectioned {
+  --focus-card-bg: linear-gradient(155deg, #1c2a44 0%, #19233c 72%, #1b1c3c 100%);
+  --focus-card-border: rgba(141, 107, 237, .47);
+  --focus-card-shadow: 0 12px 30px rgba(4, 9, 28, .18), 0 2px 8px rgba(4, 9, 28, .09);
+  --focus-subtask-bg: #1c2a44;
+  --focus-subtask-border: rgba(145, 165, 208, .24);
+  --focus-quiet-text: #a3b2d0;
+  --focus-body-text: #eff3ff;
+  box-sizing: border-box;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-task-scroll-layout {
+  min-width: 0;
+  padding: 0;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-scroller {
+  display: flex;
+  flex-direction: column;
+  gap: .94rem;
+  width: 100%;
+  min-height: 0;
+  padding: .15rem .78rem 1.2rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  scroll-padding-block: 1rem;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-scroller::-webkit-scrollbar {
+  display: none;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section {
+  display: block;
+  flex: 0 0 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 1.12rem 1.12rem 1.24rem;
+  border: 1px solid var(--focus-card-border);
+  border-radius: 1.55rem;
+  background: var(--focus-card-bg);
+  color: var(--focus-body-text);
+  box-shadow: var(--focus-card-shadow);
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-summary {
+  padding-top: 1.04rem;
+  padding-bottom: 1.24rem;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-summary > .flex:first-child {
+  margin-bottom: 1.15rem;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-summary .miniapp-focus-title-input {
+  display: block;
+  color: var(--focus-body-text);
+  min-width: 0;
+  margin: 0;
+  font-size: clamp(1.5rem, 5.5vw, 2.2rem);
+  line-height: 1.2;
+  letter-spacing: -.025em;
+  font-weight: 770;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-summary > div:last-child {
+  margin-top: .9rem;
+  flex-wrap: wrap;
+  row-gap: .6rem;
+  column-gap: .65rem;
+  line-height: 1.35;
+  min-width: 0;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-summary > div:last-child > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content .miniapp-focus-description-surface {
+  margin: 0;
+  padding: .05rem 0 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--focus-body-text);
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content .miniapp-focus-description-input,
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content .task-description-preview {
+  color: var(--focus-body-text);
+  line-height: 1.55;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content .miniapp-focus-primary-actions {
+  margin-top: 1.14rem;
+  gap: .58rem;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content .miniapp-focus-ai-dialog-button {
+  margin-top: .62rem;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content .miniapp-focus-attachment-pill {
+  background: var(--focus-subtask-bg);
+  border-color: var(--focus-subtask-border);
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-subtasks {
+  padding-top: 1.08rem;
+  padding-bottom: 1.35rem;
+  border-top: 1px solid var(--focus-card-border) !important;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-subtasks > .flex:first-child {
+  margin-bottom: .25rem;
+  gap: .4rem;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-subtasks h3 {
+  gap: .5rem;
+  min-width: 0;
+  font-size: 1.02rem;
+  font-weight: 740;
+  line-height: 1.3;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-subtasks .miniapp-focus-subtask-row {
+  background: var(--focus-subtask-bg);
+  border: 1px solid var(--focus-subtask-border);
+  border-radius: 1rem;
+  box-shadow: 0 3px 10px rgba(4, 8, 29, .07);
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-subtasks > p {
+  margin: .24rem 0 .5rem;
+  color: var(--focus-quiet-text);
+  font-size: .83rem;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-show-completed {
+  margin-top: 1.15rem;
+  max-width: 100%;
+  text-align: center;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-subtask-add-button {
+  min-height: 2.15rem;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-icon-button {
+  flex-shrink: 0;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-task-settings-panel {
+  z-index: 60;
+  top: 3.5rem;
+  left: .8rem;
+  right: .8rem;
+  max-height: calc(100% - 4.3rem);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, .3);
+}
+/* Light: pale periwinkle background between separate white cards.
+   Never inherit the old full-height white focus panel. */
+.miniapp-shell.miniapp-light .miniapp-focus-task-panel--sectioned,
+body[data-theme='light'] .miniapp-shell .miniapp-focus-task-panel--sectioned {
+  --focus-card-bg: #fff;
+  --focus-card-border: #dedbf2;
+  --focus-card-shadow: 0 8px 26px rgba(68, 58, 130, .075), 0 2px 6px rgba(68, 58, 130, .035);
+  --focus-subtask-bg: #f8f9fd;
+  --focus-subtask-border: #e1e7f2;
+  --focus-quiet-text: #7886a0;
+  --focus-body-text: #1e2b44;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+.miniapp-shell.miniapp-light .miniapp-focus-task-panel--sectioned .miniapp-focus-section,
+body[data-theme='light'] .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section {
+  background: #fff;
+  background-image: none;
+  border-color: #dedbf2;
+  color: #1e2b44;
+  box-shadow: var(--focus-card-shadow);
+}
+.miniapp-shell.miniapp-light .miniapp-focus-task-panel--sectioned .miniapp-focus-title-input,
+body[data-theme='light'] .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-title-input,
+.miniapp-shell.miniapp-light .miniapp-focus-task-panel--sectioned .miniapp-focus-description-input,
+body[data-theme='light'] .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-description-input {
+  color: #1e2b44;
+}
+.miniapp-shell.miniapp-light .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content .miniapp-focus-description-surface,
+body[data-theme='light'] .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content .miniapp-focus-description-surface {
+  background: transparent !important;
+  border: 0 !important;
+}
+.miniapp-shell.miniapp-light .miniapp-focus-task-panel--sectioned .miniapp-focus-section-subtasks .miniapp-focus-subtask-row,
+body[data-theme='light'] .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-subtasks .miniapp-focus-subtask-row {
+  background: #f8f9fd;
+  border-color: #e1e7f2;
+  box-shadow: 0 3px 10px rgba(50, 70, 117, .045);
+}
+.miniapp-shell.miniapp-light .miniapp-focus-task-panel--sectioned .miniapp-focus-section-subtasks > p,
+body[data-theme='light'] .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-subtasks > p {
+  color: #7886a0;
+}
+.miniapp-shell.miniapp-light .miniapp-focus-task-panel--sectioned .miniapp-focus-attachment-pill,
+body[data-theme='light'] .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-attachment-pill {
+  background: #fafaff;
+  border-color: #e4e3f3;
+}
+@media (max-width: 639px) {
+  .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-scroller {
+    padding-inline: .62rem;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    gap: .82rem;
+  }
+  .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section {
+    padding: 1.05rem .95rem 1.18rem;
+    border-radius: 1.42rem;
+  }
+  .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-summary {
+    padding-top: 1.03rem;
+  }
+  .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-subtasks h3 {
+    font-size: .96rem;
+  }
+  .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-subtasks > .flex:first-child {
+    flex-wrap: wrap;
+    row-gap: .6rem;
+  }
+  .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-subtasks > .flex:first-child > .relative {
+    margin-left: auto;
+  }
+  .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-task-scroll-layout {
+    max-height: 100%;
+  }
+  .miniapp-shell.miniapp-telegram-fullscreen .miniapp-telegram-task-backdrop {
+    background: linear-gradient(180deg, #0c1428 0%, #12142f 100%);
+  }
+  .miniapp-shell.miniapp-telegram-fullscreen.miniapp-light .miniapp-telegram-task-backdrop,
+  body[data-theme='light'] .miniapp-shell.miniapp-telegram-fullscreen .miniapp-telegram-task-backdrop {
+    background: linear-gradient(180deg, #f3f5fc 0%, #f1f0fb 100%);
+  }
+  .miniapp-shell .miniapp-focus-task-panel--sectioned.miniapp-focus-task-panel--settings-open .miniapp-task-settings-panel {
+    top: 3.5rem;
+    bottom: .6rem;
+    max-height: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section {
+    scroll-behavior: auto;
+  }
+}
+
+
+/* Mobile web focus uses the same independent-card canvas as Telegram. */
+@media (max-width: 639px) {
+  .miniapp-shell:not(.miniapp-light) .miniapp-web-task-backdrop {
+    background: linear-gradient(180deg, #0c1428 0%, #12142f 100%);
+  }
+  .miniapp-shell.miniapp-light .miniapp-web-task-backdrop,
+  body[data-theme='light'] .miniapp-shell .miniapp-web-task-backdrop {
+    background: linear-gradient(180deg, #f3f5fc 0%, #f1f0fb 100%);
+  }
+}

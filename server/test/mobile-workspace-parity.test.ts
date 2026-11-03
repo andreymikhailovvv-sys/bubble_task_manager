@@ -356,7 +356,7 @@ test('Telegram focus task has a bounded scroll viewport without covering native 
     read('../../client/src/styles.css')
   ]);
   assert.match(mini, /miniapp-telegram-task-backdrop/);
-  assert.match(mini, /ref=\{openedTaskContentsScrollRef\} className="min-h-0 flex-1 overflow-y-auto/);
+  assert.match(mini, /ref=\{openedTaskContentsScrollRef\} className="miniapp-focus-section-scroller min-h-0 flex-1 overflow-y-auto/);
   const focusPanel = css.match(/\.miniapp-shell\.miniapp-telegram-fullscreen \.miniapp-telegram-task-backdrop \.miniapp-focus-task-panel \{([^}]+)\}/)?.[1] ?? '';
   assert.match(focusPanel, /height:\s*calc\(100dvh - max\(5\.8rem, var\(--miniapp-top-inset/);
   const layout = css.match(/\.miniapp-shell\.miniapp-telegram-fullscreen \.miniapp-telegram-task-backdrop \.miniapp-focus-task-scroll-layout \{([^}]+)\}/)?.[1] ?? '';
