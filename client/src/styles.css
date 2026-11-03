@@ -14852,9 +14852,14 @@ body[data-theme='dark'] .workspace-command-deck .workspace-command-tile {
   }
   .workspace-command-deck .workspace-command-menu { grid-column: 1; grid-row: 1; }
   .workspace-command-deck .workspace-command-modes { grid-column: 2; grid-row: 1; }
-  .workspace-command-deck .workspace-command-filters { grid-column: 3; grid-row: 1; }
-  .workspace-command-deck .workspace-command-metrics { grid-column: 4; grid-row: 1; }
+  .workspace-command-deck .workspace-command-filters { grid-column: 3 / 5; grid-row: 1; }
   .workspace-command-deck .workspace-command-settings { grid-column: 5; grid-row: 1; }
+  .workspace-command-deck .workspace-command-metrics {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+    width: min(100%, 230px);
+  }
   .workspace-command-deck .workspace-command-actions {
     grid-column: 3 / 5;
     grid-row: 2;
