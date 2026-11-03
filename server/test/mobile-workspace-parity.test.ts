@@ -146,13 +146,14 @@ test('timeline has independent layout blocks while keeping original controls and
     read('../../client/src/components/MiniWorkspaceTools.tsx')
   ]);
   const start = mini.indexOf('<section className="miniapp-timeline-section miniapp-timeline-independent-blocks">');
-  const end = mini.indexOf('className={`miniapp-calendar-grid miniapp-calendar-grid-', start);
+  const end = mini.indexOf('className="miniapp-calendar-grid miniapp-calendar-grid-month"', start);
   assert.ok(start >= 0 && end > start, 'timeline layout should precede the unchanged calendar grid');
   const timeline = mini.slice(start, end);
   // The redundant timeline action row is gone; postpone now sits beside global search.
   assert.doesNotMatch(timeline, /miniapp-timeline-actions-panel/);
   assert.match(timeline, /miniapp-timeline-view-panel/);
   assert.match(timeline, /miniapp-timeline-period-panel/);
+  assert.match(timeline, /timelineView === 'week' \? \(\s*<MiniTimelineWeek/);
   assert.doesNotMatch(timeline, /miniapp-premium-timeline|miniapp-workspace-toolbar-card/);
   assert.doesNotMatch(timeline, /<MiniWorkspaceTools/);
   assert.match(timeline, /timelineView === view/);
