@@ -14444,3 +14444,190 @@ body[data-theme='light'] .miniapp-shell .miniapp-focus-task-panel--sectioned .mi
     background: linear-gradient(180deg, #f3f5fc 0%, #f1f0fb 100%);
   }
 }
+
+
+/* Native Android-inspired WEEK: weekday buttons drive horizontally scrollable
+   columns; cards deliberately reuse the DAY component's visual classes. */
+.miniapp-shell .miniapp-timeline-section.miniapp-timeline-independent-blocks {
+  touch-action: auto; /* The old pan-y declaration blocked horizontal touch scrolling. */
+}
+.miniapp-native-week-timeline {
+  --miniapp-week-column-width: 228px;
+  display: flex;
+  min-width: 0;
+  width: 100%;
+  flex-direction: column;
+  gap: .6rem;
+  overflow: hidden;
+}
+.miniapp-native-week-day-picker {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+.miniapp-native-week-day-button {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 7px 1px;
+  border: 1px solid #e1e8f1;
+  border-radius: 12px;
+  color: #25334b;
+  background: #fff;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .17s ease, border-color .17s ease;
+}
+.miniapp-native-week-day-button small {
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: #657792;
+  text-transform: capitalize;
+}
+.miniapp-native-week-day-button span {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+.miniapp-native-week-day-button.is-today { background: #f5f0ff; border-color: #a58bec; }
+.miniapp-native-week-day-button.is-selected { border-color: #a58bec; background: #f7f3ff; }
+.miniapp-native-week-day-button.is-selected span { background: #7c3aed; color: #fff; }
+.miniapp-native-week-day-button:focus-visible,
+.miniapp-native-week-column-title:focus-visible,
+.miniapp-native-week-open-day:focus-visible,
+.miniapp-native-week-track:focus-visible {
+  outline: 2px solid #8b5cf6;
+  outline-offset: 2px;
+}
+.miniapp-native-week-hint {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #657792;
+  font-size: 10.5px;
+  line-height: 1.4;
+  padding: 0 2px;
+}
+.miniapp-native-week-hint svg { flex-shrink: 0; }
+.miniapp-native-week-track {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 0 12px;
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+  scrollbar-width: none;
+}
+.miniapp-native-week-track::-webkit-scrollbar { display: none; }
+/* Trailing room lets Sunday align to the start just like Monday. */
+.miniapp-native-week-track::after {
+  content: '';
+  flex: 0 0 max(0px, calc(100% - var(--miniapp-week-column-width)));
+  align-self: stretch;
+  pointer-events: none;
+}
+.miniapp-native-week-column {
+  display: flex;
+  flex: 0 0 var(--miniapp-week-column-width);
+  box-sizing: border-box;
+  flex-direction: column;
+  gap: 11px;
+  min-width: 0;
+  padding: 12px 10px;
+  border: 1px solid #e2e8f2;
+  border-radius: 16px;
+  background: #fcfdff;
+  scroll-snap-align: start;
+  scroll-snap-stop: normal;
+}
+.miniapp-native-week-column.is-today { border-color: rgba(165, 139, 236, .7); background: #fbf9ff; }
+.miniapp-native-week-column-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #1e293b;
+  text-align: left;
+  gap: 4px;
+}
+.miniapp-native-week-column-title span {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  text-transform: capitalize;
+}
+.miniapp-native-week-column-title svg { flex-shrink: 0; color: #6e7e99; }
+.miniapp-native-week-column-rule { height: 1px; flex: 0 0 1px; background: #e2e8f2; }
+.miniapp-native-week-hours { display: flex; flex-direction: column; gap: 11px; }
+.miniapp-native-week-hour { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.miniapp-native-week-hour > time { color: #6e7e99; font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.miniapp-native-week-items { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.miniapp-native-week-items .miniapp-native-day-card { min-width: 0; padding: 11px 10px; gap: 8px; }
+.miniapp-native-week-items .miniapp-native-day-card-dot { flex-shrink: 0; }
+.miniapp-native-week-empty { color: #6e7e99; margin: 0; font-size: 11px; padding: 9px 0; }
+.miniapp-native-week-open-day {
+  align-self: start;
+  padding: 3px 0;
+  border: none;
+  background: none;
+  color: #7c3aed;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-align: left;
+}
+.miniapp-shell:not(.miniapp-light) .miniapp-native-week-day-button {
+  color: #e8eef7; border-color: #40506a; background: #1a283c;
+}
+.miniapp-shell:not(.miniapp-light) .miniapp-native-week-day-button small,
+.miniapp-shell:not(.miniapp-light) .miniapp-native-week-hint { color: #a9b9d0; }
+.miniapp-shell:not(.miniapp-light) .miniapp-native-week-day-button.is-today,
+.miniapp-shell:not(.miniapp-light) .miniapp-native-week-day-button.is-selected {
+  background: #31264a; border-color: #a58bec;
+}
+.miniapp-shell:not(.miniapp-light) .miniapp-native-week-column {
+  border-color: #40506a; background: #19263a;
+}
+.miniapp-shell:not(.miniapp-light) .miniapp-native-week-column.is-today { border-color: #8369b9; }
+.miniapp-shell:not(.miniapp-light) .miniapp-native-week-column-title { color: #f1f5f9; }
+.miniapp-shell:not(.miniapp-light) .miniapp-native-week-column-title svg,
+.miniapp-shell:not(.miniapp-light) .miniapp-native-week-hour > time,
+.miniapp-shell:not(.miniapp-light) .miniapp-native-week-empty { color: #afbdd2; }
+.miniapp-shell:not(.miniapp-light) .miniapp-native-week-column-rule { background: #40506a; }
+.miniapp-shell:not(.miniapp-light) .miniapp-native-week-open-day { color: #c4b5fd; }
+@media (max-width: 380px) {
+  .miniapp-native-week-timeline { --miniapp-week-column-width: 210px; }
+  .miniapp-native-week-day-picker { gap: 3px; }
+  .miniapp-native-week-day-button { padding: 6px 0; }
+}
+@media (min-width: 640px) {
+  .miniapp-native-week-timeline { --miniapp-week-column-width: 245px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .miniapp-native-week-day-button { transition: none; }
+  .miniapp-native-week-track { scroll-behavior: auto; }
+}
