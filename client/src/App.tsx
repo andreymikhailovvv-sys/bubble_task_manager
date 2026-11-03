@@ -7482,25 +7482,21 @@ export default function App() {
           </div>
         ) : null}
 
-        <aside className="focused-task-editor-shell focus-mode-shell focused-task-modal-panel-height focused-task-split-shell order-1 relative min-h-0 w-full max-w-3xl">
-            <div className="focused-task-utility-actions absolute right-5 top-4 z-20 flex items-center gap-1.5">
-            <button type="button" className="focused-task-icon-button focused-task-calendar-like-button lg:hidden" onClick={() => void closeFocusedTask()} aria-label="Закрыть окно"><X size={16} /></button>
-            <button type="button" className="focused-task-icon-button focused-task-calendar-like-button " onClick={async () => { setTaskShareDialog({ mode: 'create', loading: true }); try { const { token } = await api.createTaskShare(focusedTask.id); setTaskShareDialog({ mode: 'create', url: `${window.location.origin}${window.location.pathname}?joinTask=${encodeURIComponent(token)}` }); await load(); } catch (error) { setTaskShareDialog({ mode: 'create', error: error instanceof Error ? error.message : 'Не удалось создать ссылку' }); } }} aria-label="Поделиться задачей" title="Поделиться задачей"><SendHorizontal size={16} /></button>
-            <button type="button" className="focused-task-icon-button focused-task-calendar-like-button " onClick={() => setIsFocusedCalendarExportOpen(true)} aria-label="Добавить задачу в календарь" title="Добавить в календарь"><CalendarPlus size={16} /></button>
-            <button type="button" className="focused-task-icon-button focused-task-calendar-like-button " onClick={() => setIsFocusedSettingsOpen((prev) => !prev)} aria-label="Открыть настройки задачи" title="Настройки задачи"><Settings size={16} /></button>
-
-            </div>
-            <div className="focused-task-split-layout flex h-full min-h-0 flex-col gap-3">
-              <div className="focus-main-card focused-task-primary-card flex min-h-0 flex-col rounded-[1.8rem] border">
-
+        <aside className="focused-task-editor-shell focus-mode-shell focused-task-modal-panel-height order-1 relative min-h-0 w-full max-w-3xl overflow-hidden rounded-[2.3rem] border p-5">
+            <button type="button" className="focused-task-icon-button focused-task-calendar-like-button absolute right-36 top-3 z-20 lg:hidden" onClick={() => void closeFocusedTask()} aria-label="Закрыть окно"><X size={16} /></button>
+            <button type="button" className="focused-task-icon-button focused-task-calendar-like-button absolute right-24 top-3 z-20" onClick={async () => { setTaskShareDialog({ mode: 'create', loading: true }); try { const { token } = await api.createTaskShare(focusedTask.id); setTaskShareDialog({ mode: 'create', url: `${window.location.origin}${window.location.pathname}?joinTask=${encodeURIComponent(token)}` }); await load(); } catch (error) { setTaskShareDialog({ mode: 'create', error: error instanceof Error ? error.message : 'Не удалось создать ссылку' }); } }} aria-label="Поделиться задачей" title="Поделиться задачей"><SendHorizontal size={16} /></button>
+            <button type="button" className="focused-task-icon-button focused-task-calendar-like-button absolute right-14 top-3 z-20" onClick={() => setIsFocusedCalendarExportOpen(true)} aria-label="Добавить задачу в календарь" title="Добавить в календарь"><CalendarPlus size={16} /></button>
+            <button type="button" className="focused-task-icon-button focused-task-calendar-like-button absolute right-5 top-3 z-20" onClick={() => setIsFocusedSettingsOpen((prev) => !prev)} aria-label="Открыть настройки задачи" title="Настройки задачи"><Settings size={16} /></button>
+            <div className="flex h-full min-h-0 flex-col">
+              <div className="focus-main-card flex min-h-0 flex-none flex-col overflow-visible rounded-[2rem] border-0 p-0 shadow-none">
                 <div
-                  className={`focused-task-primary-scroll min-h-0 flex-1 overflow-y-auto px-1 ${
+                  className={`min-h-0 flex-1 overflow-y-auto px-1 ${
                     (focusedTitleRows === 1) ? 'focused-task-single-line-title' : ''
                   }`}
                   onScroll={() => setIsSubtaskFilterOpen(false)}
                 >
-                  <div className="focused-task-top-caption flex items-center gap-2"><p className="focused-task-caption text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус задачи</p>{focusedTask.isCollaborative ? <button type="button" className="rounded-full border border-amber-300/70 bg-gradient-to-r from-amber-100 to-yellow-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700 shadow-sm" onClick={() => setIsCollaborationSettingsOpen(true)}>Совместная задача</button> : null}</div>
-                  <div className="focused-task-heading-layout mt-3 flex items-start gap-3">
+                  <div className="flex items-center gap-2"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус задачи</p>{focusedTask.isCollaborative ? <button type="button" className="rounded-full border border-amber-300/70 bg-gradient-to-r from-amber-100 to-yellow-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700 shadow-sm" onClick={() => setIsCollaborationSettingsOpen(true)}>Совместная задача</button> : null}</div>
+                  <div className="mt-4 flex items-start gap-3">
                     <div className="relative min-w-0 flex-1">
                       <textarea
                         ref={focusedTaskTitleInputRef}
@@ -7532,29 +7528,24 @@ export default function App() {
                         title="Редактировать название"
                       />
                     </div>
-                    <div className="focused-task-primary-actions ml-auto flex shrink-0 flex-col gap-1.5">
-                      <button type="button" className="success-button focused-task-complete-action rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => completeTask(focusedTask)}><Check size={15} /> Выполнить</button>
-                      <button type="button" className="focused-task-edit-action rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => focusedTaskTitleInputRef.current?.focus()} title="Редактировать название задачи"><Edit3 size={14} /> Редактировать</button>
-                      <button type="button" className="focused-task-delete-action rounded-xl px-3 py-2 text-sm font-semibold" onClick={async () => { if (focusedTask.isCollaborative && focusedTask.collaborationOwner) { setCollaborationAction({ task: focusedTask, action: 'delete' }); return; } await api.deleteTask(focusedTask.id, 'me'); setFocusedTaskId(null); await load(); }}><Trash2 size={14} /> Удалить</button>
+                    <div className="ml-auto flex shrink-0 items-center gap-2">
+                      <button className="danger-button rounded-xl px-3 py-2 text-sm font-semibold" onClick={async () => { if (focusedTask.isCollaborative && focusedTask.collaborationOwner) { setCollaborationAction({ task: focusedTask, action: 'delete' }); return; } await api.deleteTask(focusedTask.id, 'me'); setFocusedTaskId(null); await load(); }}>Удалить</button>
+                      <button className="success-button rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => completeTask(focusedTask)}>Выполнить</button>
                     </div>
                   </div>
-                  <div className="focused-task-deadline-row mt-2 flex items-center gap-2 text-sm font-medium">
-                    <div className={`focused-task-deadline-chip ${!focusedTask.aiMonitoringEnabled && focusedDraft.dueDate && new Date(focusedDraft.dueDate).getTime() < Date.now() ? 'is-overdue' : ''}`}>
-                      {focusedTask.aiMonitoringEnabled ? <><CalendarDays size={15} /><span>Дедлайн:</span><TaskMonitoringBadge /><span>На усмотрение ИИ</span></> : <>
-                        <span>Дедлайн:</span>
-                        <span>{focusedDraft.dueDate ? (new Date(focusedDraft.dueDate).getTime() < Date.now() ? formatDeadlineLeft(focusedDraft.dueDate) : `Через ${formatDeadlineLeft(focusedDraft.dueDate)}`) : 'Не задан'}</span>
-                        <DateTimePickerWithApply
-                          value={focusedDraft.dueDate}
-                          title="Изменить дедлайн задачи"
-                          timelineTasks={timelinePickerTasks}
-                          detachedPopup iconOnly
-                          buttonClassName="focused-task-deadline-calendar"
-                          onChange={(nextValue) => setFocusedDraft((p) => ({ ...(p ?? {}), dueDate: nextValue }))}
-                        />
-                      </>}
-                    </div>
+                  <div className="focused-task-deadline-row mt-3 flex items-center gap-2 text-sm font-medium text-violet-500">
+                    {focusedTask.aiMonitoringEnabled ? <><span>Дедлайн:</span><TaskMonitoringBadge /><span>На усмотрение ИИ</span></> : <>
+                      <span>{focusedDraft.dueDate ? `До дедлайна: ${formatDeadlineLeft(focusedDraft.dueDate)}` : 'Дедлайн не задан'}</span>
+                      <DateTimePickerWithApply
+                        value={focusedDraft.dueDate}
+                        timelineTasks={timelinePickerTasks}
+                        detachedPopup iconOnly
+                        buttonClassName="focused-task-icon-button"
+                        onChange={(nextValue) => setFocusedDraft((p) => ({ ...(p ?? {}), dueDate: nextValue }))}
+                      />
+                    </>}
                   </div>
-                  <ResizableDescriptionSurface className="focused-task-description-surface mt-3 rounded-2xl p-3" initialHeight={112} minHeight={88} maxHeight={260}>
+                  <ResizableDescriptionSurface className="focused-task-description-surface mt-3 rounded-2xl p-3">
                     <TaskDescriptionInput
                       className="focused-task-description-input subtask-description-inline invisible-scrollbar h-full min-h-0 w-full resize-none overflow-y-auto border-0 bg-transparent text-sm leading-6 text-muted outline-none placeholder:text-slate-400"
                       placeholder="Введите описание"
@@ -7562,8 +7553,16 @@ export default function App() {
                       onChange={(description) => setFocusedDraft((p) => ({ ...(p ?? {}), description }))}
                     />
                   </ResizableDescriptionSurface>
-                  <div className="focused-task-attachment-row mt-3 flex flex-wrap items-center justify-start gap-2">
-                    <span className="focused-task-attachment-label text-[11px] font-semibold">Вложения</span>
+                  <div className="mt-2 flex flex-wrap items-center justify-start gap-2">
+                    <button
+                      type="button"
+                      className="focused-task-icon-button focused-task-calendar-like-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
+                      onClick={() => setIsFocusedNotesEditorOpen(true)}
+                      title="Открыть заметки"
+                      aria-label="Открыть заметки"
+                    >
+                      <Edit3 size={15} />
+                    </button>
                     <button
                       type="button"
                       className={`focused-task-icon-button focused-task-calendar-like-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${isTaskAttachmentDragActive ? 'notes-open-button-active' : ''} ${isUploadingTaskAttachment ? 'opacity-60' : ''}`}
@@ -7608,7 +7607,6 @@ export default function App() {
                         </button>
                       </div>
                     ))}
-                    <button type="button" className="focused-task-edit-description-button inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold" onClick={() => setIsFocusedNotesEditorOpen(true)}><Edit3 size={14} /> Редактировать описание</button>
                   </div>
                   {isFocusedNotesEditorOpen ? (
                     <NotesEditor
@@ -7741,10 +7739,23 @@ export default function App() {
                   ) : null}
                 </div>
               </div>
-              <div className="focused-task-subtasks focused-task-subtasks-card flex min-h-0 flex-col gap-3 rounded-[1.8rem] border">
+              <div className="focused-task-subtasks mt-2 flex min-h-0 flex-col space-y-2 border-t border-violet-100 pt-3">
                 <div className="flex items-center justify-between gap-2">
-                  <h4 className="focused-task-subtasks-heading flex items-center gap-1.5 text-lg font-bold">
+                  <h4 className="flex items-center gap-1.5 text-sm font-semibold">
                     Подзадачи
+                    <button
+                      type="button"
+                      className="focused-task-add-subtask-button focused-task-calendar-like-button"
+                      onClick={() => {
+                        setFocusedSubtaskTitle('');
+                        setFocusedSubtaskDueDate(null);
+                        setIsAddingFocusedSubtask(true);
+                      }}
+                      title="Добавить подзадачу"
+                      aria-label="Добавить подзадачу"
+                    >
+                      <Plus size={15} />
+                    </button>
                     <button
                       type="button"
                       className={`rounded p-1 ${hideClosedFocusedSubtasks ? 'text-cyan-200' : 'text-muted hover:brightness-110'}`}
@@ -7772,7 +7783,7 @@ export default function App() {
                       </button>
                     ) : null}
                   </h4>
-                  <div className="focused-task-subtasks-actions flex items-center gap-2">
+                  <div className="flex items-center gap-2">
                     {(subtaskMap[focusedTask.id] ?? []).length === 0 ? (
                       <button
                         type="button"
@@ -7832,19 +7843,6 @@ export default function App() {
                         </div>
                       ) : null}
                     </div>
-                    <button
-                      type="button"
-                      className="focused-task-add-subtask-button focused-task-subtask-add-action inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold"
-                      onClick={() => {
-                        setFocusedSubtaskTitle('');
-                        setFocusedSubtaskDueDate(null);
-                        setIsAddingFocusedSubtask(true);
-                      }}
-                      title="Добавить подзадачу"
-                      aria-label="Добавить подзадачу"
-                    >
-                      <Plus size={15} /> Добавить
-                    </button>
                   </div>
                 </div>
                 {isAddingFocusedSubtask ? <FocusedSubtaskComposer
@@ -7862,7 +7860,7 @@ export default function App() {
                   onReorder={(nextOrder) => {
                     reorderVisibleSubtasks(focusedTask.id, nextOrder.map((task) => task.id));
                   }}
-                  className="focused-task-subtasks-list min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 text-sm"
+                  className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 text-sm"
                   ref={focusedSubtaskListScrollRef}
                   onScroll={() => setIsSubtaskFilterOpen(false)}
                 >
@@ -7871,7 +7869,8 @@ export default function App() {
                       key={subtask.id}
                       value={subtask}
                       whileDrag={{ scale: 1.02, boxShadow: '0 14px 30px rgba(15,23,42,0.14)', zIndex: 90 }}
-                      className={`focused-subtask-row focused-task-subtask-card relative flex items-center gap-2 overflow-hidden rounded-xl px-3 py-2 text-sm ${closingTaskIds.includes(subtask.id) ? 'focused-subtask-row-completing ring-1 ring-emerald-300/70' : ''} ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-compact-overdue-static focused-task-subtask-overdue' : ''}`}
+                      className={`focused-subtask-row relative flex items-center gap-2 overflow-hidden rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ${closingTaskIds.includes(subtask.id) ? 'focused-subtask-row-completing ring-1 ring-emerald-300/70' : ''} ${subtaskFilterMode === 'importance' ? 'focused-subtask-row-importance' : ''} ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-compact-overdue-static' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'subtask-compact-reminder-static' : ''}`}
+                      style={subtaskFilterMode === 'importance' ? ({ '--subtask-importance-accent': IMPORTANCE_ACCENT_COLORS[subtask.importance ?? 3] ?? IMPORTANCE_ACCENT_COLORS[3] } as CSSProperties) : undefined}
                       onContextMenu={(event) => handleSubtaskCommentContextMenu(event, subtask, Boolean(focusedTask.isCollaborative))}
                     >
                       <input type="checkbox" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
@@ -7885,14 +7884,10 @@ export default function App() {
                         <LinkifiedText text={subtask.title} stopPropagationOnLinkClick />
                       </button>
                       {renderWorkspaceAttachmentIndicator(subtask)}
-                      <span className={`focused-task-subtask-deadline-chip shrink-0 whitespace-nowrap text-xs font-semibold ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'is-overdue' : ''}`} title={subtask.dueDate ? `До дедлайна: ${formatDeadlineLeft(subtask.dueDate)}` : 'Дедлайн не задан'}>
-                        <CalendarDays size={13} aria-hidden="true" />
-                        {subtask.dueDate ? formatSubtaskRelativeDeadline(subtask.dueDate) : 'Без срока'}
-                      </span>
+                      {subtask.dueDate ? <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-violet-500" title={`До дедлайна: ${formatDeadlineLeft(subtask.dueDate)}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                       {focusedTask.isCollaborative ? renderSubtaskCommentButton(subtask) : null}
                       {focusedTask.isCollaborative && subtask.creatorName ? <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }}>{subtask.creatorName}</span> : null}
                       <InlineDateTimePickerIcon
-                        className="focused-task-subtask-date-editor"
                         value={subtask.dueDate}
                         title="Изменить срок подзадачи"
                         detachedPopup
