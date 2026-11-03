@@ -4602,26 +4602,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           style={isWebRuntime ? { top: webVisualViewport.top, bottom: 'auto', height: webVisualViewport.height } : undefined}
         >
           {useTelegramCompactChatHeader ? <div className="miniapp-telegram-service-title miniapp-telegram-overlay-brand" aria-label="Планировыч AI">✦ Планировыч AI</div> : null}
-          <div className={`miniapp-slide-panel miniapp-focus-panel miniapp-focus-task-panel relative max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-2xl sm:rounded-[2rem] ${isTaskSettingsOpen ? 'miniapp-focus-task-panel--settings-open' : ''}`}>
+          <div className={`miniapp-slide-panel miniapp-focus-panel miniapp-focus-task-panel miniapp-focus-task-panel--sectioned relative max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-2xl sm:rounded-[2rem] ${isTaskSettingsOpen ? 'miniapp-focus-task-panel--settings-open' : ''}`}>
             <div className="miniapp-focus-task-scroll-layout flex max-h-[calc(94vh-2rem)] min-h-0 flex-col sm:max-h-[calc(88vh-2rem)]">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2">
-                  <p className="shrink-0 text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">{openedTask.taskType === 'EVENT' ? 'Редактирование события' : 'Фокус задачи'}</p>
-                  {openedTask.isCollaborative ? <button type="button" className="miniapp-collaboration-badge truncate" onClick={() => setIsCollaborationSettingsOpen(true)}>Совместная задача</button> : null}
-                </div>
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={() => openCalendarExport(openedTask.id)} className="miniapp-focus-icon-button" title="Добавить в календарь" aria-label="Добавить задачу в календарь">
-                    <CalendarPlus size={16} />
-                  </button>
-                  <button type="button" onClick={() => setIsTaskSettingsOpen((prev) => !prev)} className="miniapp-focus-icon-button" title="Настройки задачи" aria-label="Открыть настройки задачи">
-                    <Settings size={16} />
-                  </button>
-                  <button type="button" onClick={() => void saveAndCloseTaskEditor(openedTask.id, 'task')} disabled={savingId === openedTask.id} className="miniapp-focus-icon-button" aria-label="Сохранить и закрыть окно">
-                    {savingId === openedTask.id ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />}
-                  </button>
-                </div>
-              </div>
-
               {isTaskSettingsOpen ? (
                 <div className="miniapp-task-settings-panel miniapp-settings-scroll-area invisible-scrollbar absolute left-4 right-4 top-14 z-50 space-y-4 overflow-y-auto rounded-3xl border p-4 shadow-2xl sm:left-auto sm:w-[360px]">
                   <div className="flex items-center justify-between gap-2">
@@ -4706,6 +4688,25 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               ) : null}
 
               <div ref={openedTaskContentsScrollRef} className="min-h-0 flex-1 overflow-y-auto pr-1" onScroll={() => setIsOpenedTaskSubtaskFilterOpen(false)}>
+                <section className="miniapp-focus-section miniapp-focus-section-summary" aria-label="Название и срок задачи">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <p className="shrink-0 text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">{openedTask.taskType === 'EVENT' ? 'Редактирование события' : 'Фокус задачи'}</p>
+                  {openedTask.isCollaborative ? <button type="button" className="miniapp-collaboration-badge truncate" onClick={() => setIsCollaborationSettingsOpen(true)}>Совместная задача</button> : null}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => openCalendarExport(openedTask.id)} className="miniapp-focus-icon-button" title="Добавить в календарь" aria-label="Добавить задачу в календарь">
+                    <CalendarPlus size={16} />
+                  </button>
+                  <button type="button" onClick={() => setIsTaskSettingsOpen((prev) => !prev)} className="miniapp-focus-icon-button" title="Настройки задачи" aria-label="Открыть настройки задачи">
+                    <Settings size={16} />
+                  </button>
+                  <button type="button" onClick={() => void saveAndCloseTaskEditor(openedTask.id, 'task')} disabled={savingId === openedTask.id} className="miniapp-focus-icon-button" aria-label="Сохранить и закрыть окно">
+                    {savingId === openedTask.id ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />}
+                  </button>
+                </div>
+              </div>
+
                 <textarea
                   ref={taskTitleInputRef}
                   value={openedTaskDraft.title}
@@ -4732,6 +4733,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   />}
                   <span>{openedTask.aiMonitoringEnabled ? 'На усмотрение ИИ' : openedTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(openedTaskDraft.dueDate)}` : 'Дедлайн не задан'}</span>
                 </div>
+                </section>
+                <section className="miniapp-focus-section miniapp-focus-section-content" aria-label="Описание и действия по задаче">
                 <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
                   <TaskDescriptionInput
                     value={openedTaskDraft.description}
@@ -4789,7 +4792,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <Bot size={16} /> Открыть диалог с ИИ
                 </button> : null}
 
-                {openedTask.taskType !== 'EVENT' ? <div className="miniapp-focus-subtasks mt-4 flex min-h-0 flex-col space-y-2 border-t pt-3">
+                </section>
+                {openedTask.taskType !== 'EVENT' ? <section className="miniapp-focus-section miniapp-focus-section-subtasks miniapp-focus-subtasks flex min-h-0 flex-col space-y-2" aria-label="Подзадачи">
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="flex items-center gap-1.5 text-sm font-semibold">
                       Подзадачи
@@ -4917,7 +4921,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       <span>{hideClosedOpenedTaskSubtasks ? 'Показать выполненные' : 'Скрыть выполненные'} ({openedTaskCompletedSubtaskCount})</span>
                     </button>
                   ) : null}
-                </div> : null}
+                </section> : null}
               </div>
             </div>
           </div>
