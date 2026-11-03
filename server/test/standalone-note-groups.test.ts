@@ -73,7 +73,10 @@ test('board has group filter chips, plus last, group assignment and edit control
   assert.match(board, /selectedGroup === 'ungrouped'/);
   assert.match(board, /notes\.filter\(note => note\.groupId === selectedGroup\)/);
   assert.match(board, /standalone-group-filter/);
-  assert.ok(board.indexOf('Редактировать группы') < board.indexOf('Добавить группу'));
+  assert.ok(board.includes('Добавить группу') && board.includes('Настройки групп'),
+    'Mobile filter menu should retain create/manage group actions');
+  assert.ok(board.indexOf('standalone-group-manage') < board.indexOf('standalone-group-add'),
+    'Desktop group toolbar still puts management before the add-group chip');
   assert.match(board, /aria-label=\{'Выбрать группу заметки/);
   assert.match(board, /api\.updateStandaloneNote\(noteId, \{ groupId \}\)/);
   assert.match(board, /setNotes\(current => current\.map\(note => note\.groupId === group\.id \? \{ \.\.\.note, groupId: null \}/);
