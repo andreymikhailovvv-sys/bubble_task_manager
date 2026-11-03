@@ -38,3 +38,39 @@ test('day timeline cards have no colored left-edge stripes in light or dark Mini
   assert.doesNotMatch(styles, /\.miniapp-native-day-card::before\s*\{/, 'no left-edge stripe on day cards');
   assert.doesNotMatch(styles, /\.miniapp-shell:not\(\.miniapp-light\) \.miniapp-native-day-card::before\s*\{/, 'no dark-theme stripe overrides');
 });
+
+
+test('Mini App week matches Android readable columns with seven date selectors and day cards', async () => {
+  const [mini, styles, week, android, entry] = await Promise.all([
+    readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/components/MiniTimelineWeek.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeTimeline.kt', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/main.tsx', import.meta.url), 'utf8')
+  ]);
+  assert.match(android, /private fun ReadableWeekGrid\(/);
+  assert.match(mini, /timelineView === 'week' \? \(\s*<MiniTimelineWeek/);
+  assert.match(mini, /onSelectDay=\{setTimelineAnchorDate\}/);
+  assert.match(mini, /onOpenDay=\{openDayTimeline\}/);
+  assert.match(mini, /key=\{timelineCalendar\.days\[0\]\?\.dateKey\}/);
+  assert.match(week, /miniapp-native-week-day-picker/);
+  assert.match(week, /days\.map\(\(\{ date, dateKey \}, index\)/);
+  assert.match(week, /onClick=\{\(\) => scrollToDay\(index\)\}/);
+  assert.match(week, /track\.scrollTo\(\{/);
+  assert.match(week, /onScroll=\{syncSelectedDayOnScroll\}/);
+  assert.match(week, /aria-pressed=\{isSelected\}/);
+  assert.match(week, /miniapp-native-week-column/);
+  assert.match(week, /onClick=\{\(\) => onOpenDay\(date\)\}/);
+  assert.match(week, /miniapp-native-day-card miniapp-native-day-habit/);
+  assert.match(week, /'miniapp-native-day-card'/);
+  assert.match(week, /isSubtask \? ' miniapp-native-day-subtask'/);
+  assert.match(week, /isEvent \? ' miniapp-native-day-event'/);
+  assert.match(week, /isReminder\) onOpenDay\(date\)/);
+  assert.match(styles, /miniapp-native-week-track \{[\s\S]*?overflow-x: auto;/);
+  assert.match(styles, /miniapp-native-week-track::after \{/);
+  assert.match(styles, /miniapp-native-week-day-button\.is-selected span/);
+  assert.match(styles, /touch-action: auto; \/\* The old pan-y declaration blocked horizontal touch scrolling/);
+  assert.match(styles, /\.miniapp-shell:not\(\.miniapp-light\) \.miniapp-native-week-column/);
+  assert.match(entry, /<MiniApp runtime="telegram"/);
+  assert.match(entry, /<MiniApp runtime="web"/);
+});
