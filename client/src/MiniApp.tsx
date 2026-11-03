@@ -23,6 +23,7 @@ import { WorkspaceGlobalSearch } from './components/WorkspaceGlobalSearch';
 import { matchesWorkspaceText } from './lib/workspaceSearch';
 import { MiniWorkspaceTools } from './components/MiniWorkspaceTools';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
+import { MiniTimelineWeek } from './components/MiniTimelineWeek';
 import { ResizableDescriptionSurface } from './components/ResizableDescriptionSurface';
 import { measureTitleTextareaRows } from './lib/titleTextareaRows';
 import { newestFocusSubtaskFirst, urgentFocusSubtaskFirst } from './lib/focusSubtaskSort';
@@ -4493,6 +4494,22 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   </div>
                 )}
               </div>
+            ) : timelineView === 'week' ? (
+              <MiniTimelineWeek
+                key={timelineCalendar.days[0]?.dateKey}
+                days={timelineCalendar.days}
+                anchorDate={timelineAnchorDate}
+                now={timelineNow}
+                taskById={taskById}
+                spheres={spheres}
+                isOverdue={isOverdue}
+                formatRemaining={formatRemaining}
+                onSelectDay={setTimelineAnchorDate}
+                onOpenDay={openDayTimeline}
+                onOpenTask={openTaskModal}
+                onOpenSubtask={openSubtaskModal}
+                onOpenHabit={openEditHabitModal}
+              />
             ) : (
               <div className={`miniapp-calendar-grid miniapp-calendar-grid-${timelineView}`}>
                 {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((weekday) => <div key={weekday} className="miniapp-calendar-weekday">{weekday}</div>)}
