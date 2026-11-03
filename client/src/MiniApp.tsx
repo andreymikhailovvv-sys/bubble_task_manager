@@ -4511,54 +4511,40 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 onOpenHabit={openEditHabitModal}
               />
             ) : (
-              <div className={`miniapp-calendar-grid miniapp-calendar-grid-${timelineView}`}>
+              <div className="miniapp-calendar-grid miniapp-calendar-grid-month">
                 {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((weekday) => <div key={weekday} className="miniapp-calendar-weekday">{weekday}</div>)}
-                {timelineCalendar.days.map(({ date, dateKey, tasks: dayTasks, habits: dayHabits }) => {
+                {timelineCalendar.days.map(({ date, dateKey, tasks: dayTasks }) => {
                   const isToday = dateKey === toDateKey(timelineNow);
-                  const isOutsideMonth = timelineView === 'month' && date.getMonth() !== timelineAnchorDate.getMonth();
-                  const taskEntries = [
-                    ...dayTasks.map((task) => ({ id: timelineProjectionKey(task), time: new Date(task.dueDate as string).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }), title: task.title, color: task.taskType === 'REMINDER' ? '#0284c7' : task.taskType === 'EVENT' ? '#f59e0b' : (spheres.find((sphere) => sphere.id === (taskById.get(task.parentTaskId ?? '') ?? task).sphereId)?.color ?? '#38bdf8'), task })),
-                  ];
-                  const habitEntries = dayHabits.map(({ habit, reminderTime }) => ({ id: `habit-${habit.id}-${reminderTime}`, time: reminderTime, title: `${habit.icon} ${habit.name}`, color: habit.color, habit }));
-                  const entries = [...taskEntries, ...(timelineView === 'month' ? [] : habitEntries)].sort((a, b) => a.time.localeCompare(b.time));
-                  const visibleEntries = timelineView === 'month' ? entries.slice(0, 3) : entries;
-                  const hourlyEntries = timelineView === 'week'
-                    ? Array.from(new Set(visibleEntries.map((entry) => entry.time.slice(0, 2)))).map((hour) => ({ hour, entries: visibleEntries.filter((entry) => entry.time.startsWith(hour)) }))
-                    : [];
+                  const isOutsideMonth = date.getMonth() !== timelineAnchorDate.getMonth();
+                  const entries = dayTasks.map((task) => ({
+                    id: timelineProjectionKey(task),
+                    time: new Date(task.dueDate as string).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+                    title: task.title,
+                    color: task.taskType === 'REMINDER' ? '#0284c7' : task.taskType === 'EVENT' ? '#f59e0b' :
+                      (spheres.find((sphere) => sphere.id === (taskById.get(task.parentTaskId ?? '') ?? task).sphereId)?.color ?? '#38bdf8'),
+                    task
+                  })).sort((a, b) => a.time.localeCompare(b.time));
+                  const visibleEntries = entries.slice(0, 3);
                   return (
-                    <div key={dateKey} className={`miniapp-calendar-day ${isToday ? 'is-today' : ''} ${isOutsideMonth ? 'is-outside' : ''}`}>
-                      {timelineView === 'month' && (
-                        <button type="button" className="miniapp-calendar-cell-hitarea"
-                          onClick={() => openDayTimeline(date)}
-                          aria-label={`Открыть таймлайн на ${date.toLocaleDateString('ru-RU')}`} />
-                      )}
-                      {timelineView === 'month' ? (
-                        <span className="miniapp-calendar-date" aria-hidden="true"><strong>{date.getDate()}</strong></span>
-                      ) : (
-                        <button type="button" className="miniapp-calendar-date" onClick={() => openDayTimeline(date)} aria-label={`Открыть таймлайн на ${date.toLocaleDateString('ru-RU')}`}>
-                          <span>{date.toLocaleDateString('ru-RU', { weekday: 'short' })}</span>
-                          <strong>{date.getDate()}</strong>
-                        </button>
-                      )}
+                    <div key={dateKey} className={'miniapp-calendar-day' + (isToday ? ' is-today' : '') + (isOutsideMonth ? ' is-outside' : '')}>
+                      <button type="button" className="miniapp-calendar-cell-hitarea"
+                        onClick={() => openDayTimeline(date)}
+                        aria-label={'Открыть таймлайн на ' + date.toLocaleDateString('ru-RU')} />
+                      <span className="miniapp-calendar-date" aria-hidden="true"><strong>{date.getDate()}</strong></span>
                       <div className="miniapp-calendar-entries">
-                        {(timelineView === 'week' ? hourlyEntries : [{ hour: '', entries: visibleEntries }]).map((group) => (
-                          <div key={group.hour || 'month'} className={timelineView === 'week' ? 'miniapp-calendar-hour-group' : undefined}>
-                            {timelineView === 'week' ? <span className="miniapp-calendar-hour-label">{group.hour}:00</span> : null}
-                            {group.entries.map((entry) => {
-                              const entryClassName = `miniapp-calendar-entry ${'task' in entry && entry.task.taskType === 'EVENT' ? 'miniapp-calendar-event-entry' : ''} ${'task' in entry && entry.task.taskType === 'REMINDER' ? 'miniapp-calendar-reminder-entry' : ''}`;
-                              const entryStyle = { '--calendar-entry-color': entry.color } as CSSProperties;
-                              return timelineView === 'month' ? (
-                                <span key={entry.id} className={entryClassName} style={entryStyle}>
-                                  <span className="miniapp-calendar-entry-title">{entry.title}</span>
-                                </span>
-                              ) : (
-                                <button key={entry.id} type="button" className={entryClassName} style={entryStyle} onClick={() => 'task' in entry ? (entry.task.taskType === 'REMINDER' ? undefined : entry.task.parentTaskId ? openSubtaskModal(taskById.get(entry.task.id) ?? entry.task) : openTaskModal(taskById.get(entry.task.id) ?? entry.task)) : openEditHabitModal(entry.habit)}>
-                                  <span className="miniapp-calendar-entry-title">{entry.title}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        ))}
+                        <div>
+                          {visibleEntries.map((entry) => {
+                            const entryClassName = 'miniapp-calendar-entry'
+                              + (entry.task.taskType === 'EVENT' ? ' miniapp-calendar-event-entry' : '')
+                              + (entry.task.taskType === 'REMINDER' ? ' miniapp-calendar-reminder-entry' : '');
+                            const entryStyle = { '--calendar-entry-color': entry.color } as CSSProperties;
+                            return (
+                              <span key={entry.id} className={entryClassName} style={entryStyle}>
+                                <span className="miniapp-calendar-entry-title">{entry.title}</span>
+                              </span>
+                            );
+                          })}
+                        </div>
                         {entries.length > visibleEntries.length ? <span className="miniapp-calendar-more">Ещё {entries.length - visibleEntries.length}</span> : null}
                       </div>
                     </div>
