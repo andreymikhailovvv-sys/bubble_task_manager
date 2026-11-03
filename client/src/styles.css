@@ -14391,3 +14391,15 @@ body[data-theme='light'] .miniapp-shell .miniapp-focus-task-panel--sectioned .mi
     scroll-behavior: auto;
   }
 }
+
+
+/* Mobile web focus uses the same independent-card canvas as Telegram. */
+@media (max-width: 639px) {
+  .miniapp-shell:not(.miniapp-light) .miniapp-web-task-backdrop {
+    background: linear-gradient(180deg, #0c1428 0%, #12142f 100%);
+  }
+  .miniapp-shell.miniapp-light .miniapp-web-task-backdrop,
+  body[data-theme='light'] .miniapp-shell .miniapp-web-task-backdrop {
+    background: linear-gradient(180deg, #f3f5fc 0%, #f1f0fb 100%);
+  }
+}
