@@ -192,7 +192,8 @@ test('Telegram fullscreen chat compact header and scroll-aware notes preserve mo
   ]);
   assert.match(mini, /useTelegramCompactChatHeader = isTelegramRuntime && telegramViewport\.fullscreen/);
   assert.match(mini, /<MiniGeneralAiChatHeader/);
-  assert.match(mini, /miniapp-ai-chat-telegram-brand/);
+  assert.match(mini, /miniapp-telegram-overlay-brand/);
+  assert.match(mini, /<MiniTaskAiChatHeader/);
   assert.match(header, /miniapp-ai-context-main-row/);
   assert.match(header, /miniapp-ai-chat-header-telegram/);
   assert.match(header, /toggle\('projects'\)/);

@@ -13903,3 +13903,245 @@ body[data-theme='dark'] .standalone-notes-mobile .standalone-notes-mobile-filter
   .standalone-notes-mobile .standalone-notes-mobile-actions { gap: .42rem; }
   .standalone-notes-mobile .standalone-notes-mobile-filter-footer { grid-template-columns: 1fr; }
 }
+
+
+/* Focus sheet: the essential controls are readable, without extra icon noise. */
+.miniapp-shell .miniapp-focus-task-panel .miniapp-focus-date-button {
+  width: auto;
+  min-height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  padding: .45rem .85rem;
+  border: 1px solid rgba(139, 92, 246, .25);
+  border-radius: 999px;
+  background: rgba(139, 92, 246, .09);
+  color: #8b5cf6;
+  font-size: .8rem;
+  font-weight: 700;
+  box-shadow: none;
+}
+.miniapp-shell .miniapp-focus-task-panel .miniapp-focus-expand-description {
+  width: auto;
+  min-width: 0;
+  height: 2.25rem;
+  padding: .43rem .85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: .48rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-size: .78rem;
+  font-weight: 670;
+}
+.miniapp-shell .miniapp-focus-task-panel .miniapp-focus-primary-actions {
+  grid-template-columns: minmax(0, 1.9fr) minmax(0, .9fr);
+  align-items: stretch;
+}
+.miniapp-shell .miniapp-focus-task-panel .miniapp-focus-primary-actions > button {
+  width: 100%;
+  min-height: 2.65rem;
+  font-size: .84rem;
+  font-weight: 740;
+}
+.miniapp-shell .miniapp-focus-task-panel .miniapp-focus-primary-actions .miniapp-focus-danger-button {
+  background: transparent;
+  color: #e11d48;
+  border: 1px solid rgba(244, 114, 153, .64);
+  box-shadow: none;
+}
+.miniapp-shell .miniapp-focus-task-panel .miniapp-focus-subtask-add-button {
+  display: inline-flex;
+  width: auto;
+  min-width: 0;
+  min-height: 2.05rem;
+  padding: .34rem .72rem;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-size: .76rem;
+  font-weight: 700;
+}
+.miniapp-shell .miniapp-focus-task-panel .miniapp-focus-show-completed {
+  display: flex;
+  margin: .72rem auto .1rem;
+  min-height: 2.3rem;
+  align-items: center;
+  justify-content: center;
+  gap: .48rem;
+  padding: .44rem .9rem;
+  border: 1px solid rgba(139, 92, 246, .25);
+  border-radius: 999px;
+  background: rgba(139, 92, 246, .07);
+  color: #8b5cf6;
+  font-size: .78rem;
+  font-weight: 700;
+}
+.miniapp-shell .miniapp-focus-task-panel .miniapp-focus-show-completed:focus-visible,
+.miniapp-shell .miniapp-focus-task-panel .miniapp-focus-date-button:focus-visible,
+.miniapp-shell .miniapp-focus-task-panel .miniapp-focus-expand-description:focus-visible {
+  outline: 2px solid #8b5cf6;
+  outline-offset: 2px;
+}
+.miniapp-shell.miniapp-light .miniapp-focus-task-panel .miniapp-focus-date-button,
+.miniapp-shell.miniapp-light .miniapp-focus-task-panel .miniapp-focus-show-completed,
+body[data-theme='light'] .miniapp-shell .miniapp-focus-task-panel .miniapp-focus-date-button,
+body[data-theme='light'] .miniapp-shell .miniapp-focus-task-panel .miniapp-focus-show-completed {
+  background: #f1ebff;
+  border-color: #e4d9ff;
+  color: #7743d8;
+}
+.miniapp-shell:not(.miniapp-light) .miniapp-focus-task-panel .miniapp-focus-date-button,
+.miniapp-shell:not(.miniapp-light) .miniapp-focus-task-panel .miniapp-focus-show-completed {
+  background: rgba(139, 92, 246, .16);
+  border-color: rgba(167, 139, 250, .32);
+  color: #c4b5fd;
+}
+.miniapp-shell:not(.miniapp-light) .miniapp-focus-task-panel .miniapp-focus-primary-actions .miniapp-focus-danger-button {
+  background: rgba(225, 29, 72, .08);
+  color: #fda4af;
+  border-color: rgba(251, 113, 133, .48);
+}
+@media (max-width: 370px) {
+  .miniapp-shell .miniapp-focus-task-panel .miniapp-focus-primary-actions {
+    grid-template-columns: minmax(0, 1.65fr) minmax(0, .94fr);
+  }
+  .miniapp-shell .miniapp-focus-task-panel .miniapp-focus-primary-actions > button {
+    font-size: .77rem;
+    padding-inline: .4rem;
+  }
+}
+
+/* Telegram badge is a single shared branded surface inside each full-screen
+   overlay, not a fake replacement for Telegram's native close/menu buttons. */
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-telegram-overlay-brand {
+  position: fixed;
+  z-index: 52;
+  top: max(3.2rem, calc(var(--miniapp-top-inset, 0px) - 4.75rem));
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  max-width: min(43vw, 13rem);
+  min-height: 2.3rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(196, 159, 252, .18);
+  border-radius: 999px;
+  background: linear-gradient(110deg, #9550f2, #7431e6);
+  box-shadow: 0 5px 14px rgba(77, 39, 155, .17);
+  padding: .48rem .9rem;
+  font-size: .8rem;
+  font-weight: 760;
+  color: #fff;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Task chat inherits the same two-tier header as general AI: a clear task
+   title, then separate model and monitoring surfaces, sharing picker design. */
+.miniapp-shell .miniapp-ai-chat-panel-task {
+  --miniapp-ai-header-height: 8.7rem;
+  position: relative;
+}
+.miniapp-shell .miniapp-ai-chat-panel-task .miniapp-task-ai-context-header {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: .7rem;
+  height: auto !important;
+  min-height: 0;
+  padding: .7rem .85rem .78rem !important;
+  background: rgba(16, 27, 47, .95) !important;
+  border-bottom: 1px solid rgba(127, 151, 191, .16) !important;
+  box-shadow: 0 7px 18px rgba(5, 10, 24, .08);
+}
+.miniapp-shell .miniapp-task-ai-context-header.miniapp-ai-chat-header-hidden {
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+.miniapp-shell .miniapp-task-ai-context-title {
+  cursor: default;
+}
+.miniapp-shell .miniapp-task-ai-context-title span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.miniapp-shell .miniapp-task-ai-context-symbol { pointer-events: none; }
+.miniapp-shell .miniapp-task-ai-context-controls {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.miniapp-shell .miniapp-task-ai-context-controls .miniapp-ai-context-control {
+  min-width: 0;
+  overflow: hidden;
+}
+.miniapp-shell .miniapp-task-ai-context-controls .miniapp-ai-context-model-control:disabled {
+  cursor: not-allowed;
+  opacity: .66;
+}
+.miniapp-shell .miniapp-task-ai-monitor-control {
+  justify-content: space-between;
+  gap: .42rem;
+  padding-inline: .62rem;
+}
+.miniapp-shell .miniapp-task-ai-monitor-control .miniapp-ai-context-control-copy {
+  min-width: 0;
+}
+.miniapp-shell .miniapp-task-ai-monitor-control .task-monitor-status-anchor {
+  flex: 0 0 auto;
+}
+.miniapp-shell .miniapp-task-ai-monitor-control .task-monitor-button {
+  width: 2.12rem;
+  height: 2.12rem;
+  min-height: 2.12rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  border-radius: .7rem;
+}
+.miniapp-shell .miniapp-task-ai-monitor-control .task-monitor-button span {
+  display: none;
+}
+.miniapp-shell .miniapp-task-ai-monitor-control .task-monitor-button svg {
+  width: 1.08rem;
+  height: 1.08rem;
+  flex-shrink: 0;
+}
+.miniapp-shell .miniapp-ai-chat-panel-task .miniapp-ai-chat-thread-wrap .miniapp-ai-chat-thread {
+  padding-top: calc(var(--miniapp-ai-header-height) + .8rem) !important;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-task .miniapp-task-ai-context-header.miniapp-ai-chat-header-telegram-task {
+  top: var(--miniapp-top-inset, 0px);
+  height: auto !important;
+  min-height: 0;
+  padding: .7rem .85rem .78rem !important;
+  gap: .7rem;
+  background: rgba(16, 27, 47, .95) !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(127, 151, 191, .16) !important;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-task .miniapp-ai-chat-thread-wrap .miniapp-ai-chat-thread {
+  padding-top: calc(var(--miniapp-top-inset, 0px) + var(--miniapp-ai-header-height) + .8rem) !important;
+}
+.miniapp-shell.miniapp-light .miniapp-ai-chat-panel-task .miniapp-task-ai-context-header,
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-panel-task .miniapp-task-ai-context-header,
+.miniapp-shell.miniapp-telegram-fullscreen.miniapp-light .miniapp-ai-chat-panel-task .miniapp-task-ai-context-header.miniapp-ai-chat-header-telegram-task {
+  background: rgba(247, 249, 253, .97) !important;
+  border-bottom-color: rgba(177, 191, 213, .34) !important;
+  box-shadow: 0 6px 18px rgba(35, 57, 93, .045);
+}
+@media (max-width: 375px) {
+  .miniapp-shell .miniapp-task-ai-monitor-control { padding-inline: .4rem; }
+  .miniapp-shell .miniapp-task-ai-monitor-control .task-monitor-button { width: 1.9rem; height: 1.9rem; min-height: 1.9rem; }
+  .miniapp-shell .miniapp-task-ai-context-controls .miniapp-ai-context-control-value { font-size: .74rem; }
+}

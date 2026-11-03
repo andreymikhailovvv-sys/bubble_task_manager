@@ -124,7 +124,7 @@ jobs:
       - name: Verify image edit animation and attachment previews
         run: node --import tsx --test server/test/ai-image-edit-attachment-ui.test.ts
       - name: Verify mobile web and Telegram Mini App shared filters, notes and current HTML
-        run: node --import tsx --test server/test/mobile-workspace-parity.test.ts server/test/miniapp-timeline-topbar-cards.test.ts
+        run: node --import tsx --test server/test/mobile-workspace-parity.test.ts server/test/miniapp-timeline-topbar-cards.test.ts server/test/miniapp-focus-task-ai-header.test.ts
       - name: Verify idempotent AI chat rating, time selection and global overdue toolbar
         run: node --import tsx --test server/test/ai-request-rating.test.ts
       - name: Verify user-controlled trigger cancellation, Quick AI newline and checkup cards

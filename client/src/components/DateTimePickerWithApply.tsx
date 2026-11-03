@@ -11,6 +11,7 @@ type Props = {
   buttonClassName?: string;
   popupAlign?: 'left' | 'right';
   iconOnly?: boolean;
+  buttonLabel?: string;
   detachedPopup?: boolean;
   popupZIndex?: number;
   detachedOffset?: number;
@@ -56,6 +57,7 @@ export function DateTimePickerWithApply({
   buttonClassName = '',
   popupAlign = 'left',
   iconOnly = false,
+  buttonLabel,
   detachedPopup = false,
   popupZIndex,
   detachedOffset = 10,
@@ -336,6 +338,7 @@ export function DateTimePickerWithApply({
         type="button"
         className={`date-time-trigger flex ${iconOnly ? 'w-auto' : 'w-full'} items-center justify-between gap-2 rounded px-2 py-2 text-sm ${buttonClassName}`}
         title={title}
+        aria-label={buttonLabel ?? title}
         onClick={(event) => {
           event.stopPropagation();
           setIsOpen((prev) => {
@@ -349,6 +352,7 @@ export function DateTimePickerWithApply({
       >
         {iconOnly ? null : <span className="truncate text-left">{formattedValue}</span>}
         <CalendarDays size={14} className="date-time-trigger-icon shrink-0" />
+        {iconOnly && buttonLabel ? <span className="whitespace-nowrap">{buttonLabel}</span> : null}
       </button>
 
       {isOpen
