@@ -496,8 +496,8 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
               ) : (
                 <div className="standalone-notes-board-filters flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                   <nav className="standalone-group-filter flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto pb-1" aria-label="Группы заметок">
-                {mode !== 'mobile' ? <button type="button" className="standalone-group-chip standalone-group-manage" title="Редактировать группы"
-                  aria-label="Редактировать группы" onClick={() => openGroupManager('manage')}><Settings2 size={15} /><span className="sr-only">Управление группами</span></button> : null}
+                <button type="button" className="standalone-group-chip standalone-group-manage" title="Редактировать группы"
+                  aria-label="Редактировать группы" onClick={() => openGroupManager('manage')}><Settings2 size={15} /><span className="sr-only">Управление группами</span></button>
                 <button type="button" className={'standalone-group-chip ' + (selectedGroup === 'all' ? 'standalone-group-chip-active' : '')}
                   aria-pressed={selectedGroup === 'all'} onClick={() => setSelectedGroup('all')}>Все <span className="opacity-70">{notes.length}</span></button>
                 <button type="button" className={'standalone-group-chip ' + (selectedGroup === 'ungrouped' ? 'standalone-group-chip-active' : '')}
