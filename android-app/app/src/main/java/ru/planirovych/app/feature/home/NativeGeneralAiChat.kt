@@ -90,7 +90,7 @@ internal fun NativeGeneralAiChatPage(
     var attaching by remember{mutableStateOf(false)}
     var attachError by remember{mutableStateOf<String?>(null)}
     var historyPositioned by remember{mutableStateOf(false)}
-    var headerCollapsed by remember(thread?.id){mutableStateOf(false)}
+    var headerCollapsed by remember{mutableStateOf(false)}
     var lastVisibleCount by remember{mutableIntStateOf(0)}
     var composerHeightPx by remember{mutableIntStateOf(0)}
     var lastRequestId by remember{mutableStateOf<String?>(null)}
@@ -106,6 +106,7 @@ internal fun NativeGeneralAiChatPage(
     var deleteThread by remember{mutableStateOf<GeneralAiThread?>(null)}
     val project=state.project
     val thread=state.chat
+    LaunchedEffect(thread?.id){headerCollapsed=false}
     val isTelegram=project?.isTelegram==true || thread?.id?.startsWith("telegram-ai-assistant:")==true
     val messages=remember(thread?.id,thread?.messages){
         thread?.messages.orEmpty().map(::generalAiMessage)
