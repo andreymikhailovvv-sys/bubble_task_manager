@@ -246,9 +246,9 @@ test('Telegram project picker, navigation and attachment theme refinements remai
     read('../../client/src/styles.css'),
     read('../../client/src/components/MiniGeneralAiChatHeader.tsx')
   ]);
-  // Project icons use the SVG already rendered in the full-size sidebar.
-  assert.match(header, /icon === 'telegram'/);
-  assert.match(header, /<svg viewBox="0 0 24 24"/);
+  // Project icons remain in the project-only sidebar, not the compact chat selector.
+  assert.match(mini, /project.icon === 'telegram' \? <svg/);
+  assert.doesNotMatch(header, /toggle\('projects'\)/);
   assert.doesNotMatch(mini, /project\.icon === 'telegram' \? '✈'/);
   // Telegram WebView uses focus-safe accessible controls; mobile web remains a button.
   assert.match(mini, /MiniNavigationControl = isTelegramRuntime \? 'div' : 'button'/);
