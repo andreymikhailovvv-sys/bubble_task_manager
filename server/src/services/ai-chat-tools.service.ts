@@ -1,3 +1,7 @@
+import { randomUUID } from 'node:crypto';
+import { prisma } from '../db/prisma.js';
+import { telegramUserChatCapability } from './telegram-user-client-chat-access.service.js';
+import { emailAddress } from './mail-smtp.service.js';
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { mergeAiWebEvidence } from './ai-web-search-evidence.service.js';
 import { prepareTaskProposal } from './ai-task-proposal.service.js';
@@ -19,6 +23,25 @@ import { AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, executeAiFileTool, resolveCatalog
 import { TELEGRAM_REQUEST_READ_TOOL, prepareTelegramAiReadRequest, type TelegramReadDraft } from './telegram-ai-read-consent.service.js';
 import { TELEGRAM_PREPARE_SEND_TOOL, prepareTelegramInlineSendDraft, type TelegramInlineSendDraft } from './telegram-inline-send-draft.service.js';
 import { SEARCH_MAIL_TOOL, PREPARE_MAIL_TOOL, searchOwnerMailbox, prepareOwnerMailSend, type MailSendDraft } from './ai-mail-tools.service.js';
+
+/**
+ * A dedicated reply-preparation tool for owner-authenticated managed assistant
+ * conversations. Neither the model nor its arguments can choose a different
+ * Telegram peer / mail sender. The output is an existing client send card.
+ */
+export const PREPARE_ASSISTANT_REPLY_TOOL = {
+  type: 'function', name: 'prepare_assistant_reply', strict: true,
+  description: 'В диалоге Telegram- или почтового ассистента подготовить карточку ответа на конкретное сообщение. НЕ отправляет ничего. Telegram: получатель уже связан с текущим управляемым чатом, передай sourceMessageId пустой строкой. Почта: укажи sourceMessageId из предоставленного списка входящих писем. Текст ответа передай в text. Используй для предложений ответа, которые должен проверить и отправить владелец.',
+  parameters: { type: 'object', additionalProperties: false,
+    required: ['sourceMessageId', 'text'], properties: {
+      sourceMessageId: { type: 'string', description: 'ID входящего письма из текущего почтового чата; для Telegram пустая строка' },
+      text: { type: 'string', description: 'Составленный ответ, который владелец может отредактировать и отправить' }
+    }
+  }
+} as const;
+export type AssistantReplyToolContext =
+  | { kind: 'telegram'; policyId: string }
+  | { kind: 'mail'; mailboxId: string };
 
 export const MAX_TOOL_CALLS = 5;
 export const MAX_PROVIDER_CALLS = 6;
@@ -293,7 +316,7 @@ export async function runAiChatToolLoop(options: ToolLoopOptions) {
   throw new Error(`Превышен безопасный лимит обращений к модели (${MAX_PROVIDER_CALLS}).`);
 }
 
-export async function askAiChatWithTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string; autoApplyTaskActions?: boolean; dynamicBilling?: boolean; fileTools?: FileToolContext; requiredLookupTool?: 'search_workspace' | 'search_notes' | 'create_note'; onProgress?: (status: import('./ai-chat-progress.js').AiChatProgressStatus) => void; onTextDelta?: (delta: string) => void; onTextReset?: () => void }) {
+export async function askAiChatWithTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string; assistantReplyContext?: AssistantReplyToolContext; autoApplyTaskActions?: boolean; dynamicBilling?: boolean; fileTools?: FileToolContext; requiredLookupTool?: 'search_workspace' | 'search_notes' | 'create_note'; onProgress?: (status: import('./ai-chat-progress.js').AiChatProgressStatus) => void; onTextDelta?: (delta: string) => void; onTextReset?: () => void }) {
   const requestId = input.actionRequestId; const startedAt = Date.now();
   // Freeze relative dates when the user's request starts, not on later approval.
   const dateResolutionNow = new Date(startedAt);
@@ -375,7 +398,8 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         const requiredLookup = providerCallIndex === 1 && input.requiredLookupTool && !isForcedFinalRound
           ? input.requiredLookupTool : null;
         const includeWebSearch = !isForcedFinalRound && !requiredLookup && webSearchAvailable && !webSearchUsed;
-        const tools = includeWebSearch ? [...AI_CHAT_OPENAI_TOOLS, AI_CHAT_WEB_SEARCH_TOOL] : AI_CHAT_OPENAI_TOOLS;
+        const assistantReplyTools = input.assistantReplyContext ? [PREPARE_ASSISTANT_REPLY_TOOL] : [];
+        const tools = includeWebSearch ? [...AI_CHAT_OPENAI_TOOLS, ...assistantReplyTools, AI_CHAT_WEB_SEARCH_TOOL] : [...AI_CHAT_OPENAI_TOOLS, ...assistantReplyTools];
         const toolChoice = requiredLookup
           ? { type: 'function' as const, name: requiredLookup }
           : 'auto' as const;
@@ -386,7 +410,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           catch (error) {
             if (includeWebSearch && !webSearchUsed && webReservation && error instanceof Error && error.message === 'Недостаточно AI кредитов') {
               await refundAiCreditReservation(webReservation); webReservation = null; webSearchAvailable = false;
-              call = await runDynamicResponsesCall({ userId: input.userId, actionId: requestId, providerCallIndex, feature: 'ai_chat', apiKey: input.apiKey, payload: { ...providerPayload, tools: AI_CHAT_OPENAI_TOOLS, max_tool_calls: undefined }, stream: true, onProviderEvent: observeProviderEvent });
+              call = await runDynamicResponsesCall({ userId: input.userId, actionId: requestId, providerCallIndex, feature: 'ai_chat', apiKey: input.apiKey, payload: { ...providerPayload, tools: [...AI_CHAT_OPENAI_TOOLS, ...assistantReplyTools], max_tool_calls: undefined }, stream: true, onProviderEvent: observeProviderEvent });
             } else throw error;
           }
           dynamicCalls.push(call);
@@ -452,6 +476,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           prepare_telegram_send: 'forming_answer',
           search_mailbox: 'analyzing_retrieved_context',
           prepare_mail_send: 'forming_answer',
+          prepare_assistant_reply: 'forming_answer',
           request_telegram_chat_read: 'forming_answer'
         };
         const progress = progressByTool[name];
@@ -464,6 +489,50 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         }
         console.info('[AI chat tool] call', { requestId, userId: input.userId, providerCallIndex: providerCallCount, toolCallIndex: round, operation: name });
         if (!value || typeof value !== 'object' || Array.isArray(value)) return { ok: false, code: 'INVALID_ARGUMENTS', message: 'Аргументы tool должны быть объектом.' };
+        if (name === 'prepare_assistant_reply') {
+          const context = input.assistantReplyContext;
+          if (!context) return { ok: false, code: 'NOT_AN_ASSISTANT_CHAT' };
+          const text = typeof value.text === 'string' ? value.text.trim() : '';
+          const sourceMessageId = typeof value.sourceMessageId === 'string' ? value.sourceMessageId.trim() : '';
+          if (!text || text.length > (context.kind === 'telegram' ? 1000 : 6000) ||
+              /[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]/.test(text)) {
+            return { ok: false, code: 'INVALID_REPLY', message: 'Недопустимый текст ответа' };
+          }
+          if (context.kind === 'telegram') {
+            if (telegramSendDraft) return { ok: false, code: 'ALREADY_PREPARED' };
+            const [policy, capability] = await Promise.all([
+              prisma.telegramAiChatPolicy.findFirst({ where: { id: context.policyId, userId: input.userId, isEnabled: true },
+                select: { chatId: true, chatTitle: true } }),
+              telegramUserChatCapability(input.userId)
+            ]);
+            if (!policy || !capability.connected || !capability.readEnabled || !capability.sendEnabled)
+              return { ok: false, code: 'TELEGRAM_UNAVAILABLE' };
+            telegramSendDraft = { requestId: randomUUID(), text, recipientId: policy.chatId,
+              recipientName: policy.chatTitle, requestedRecipient: policy.chatTitle, match: 'exact' };
+            return { ok: true, prepared: true, recipient: policy.chatTitle, confirmationRequired: true,
+              message: 'Карточка Telegram подготовлена, без отправки.' };
+          }
+          if (mailSendDraft) return { ok: false, code: 'ALREADY_PREPARED' };
+          if (!sourceMessageId) return { ok: false, code: 'SOURCE_REQUIRED', message: 'Укажите ID письма из текущего ящика' };
+          const source = await prisma.emailAnalysis.findFirst({
+            where: { id: sourceMessageId, userId: input.userId, mailboxId: context.mailboxId,
+              folder: 'INBOX', status: 'DONE' },
+            select: { sender: true, subject: true }
+          });
+          const mailbox = await prisma.emailMailbox.findFirst({
+            where: { id: context.mailboxId, userId: input.userId, enabled: true }, select: { email: true }
+          });
+          if (!source || !mailbox || !emailAddress(source.sender))
+            return { ok: false, code: 'INVALID_REPLY_SOURCE', message: 'Входящее письмо не найдено в этом ящике' };
+          const reply = await prepareOwnerMailSend(input.userId, {
+            account: mailbox.email, recipient: emailAddress(source.sender),
+            subject: /^\\s*re\\s*:/i.test(source.subject) ? source.subject : 'Re: ' + source.subject,
+            text
+          });
+          if (reply.ok && reply.draft) mailSendDraft = reply.draft;
+          return reply.ok ? { ok: true, prepared: true, recipient: emailAddress(source.sender),
+            confirmationRequired: true, message: 'Карточка почтового ответа подготовлена. Ничего не отправлено.' } : reply;
+        }
         if (name === 'search_mailbox') {
           mailReadUsed = true;
           try { return await searchOwnerMailbox(input.userId, value); }
