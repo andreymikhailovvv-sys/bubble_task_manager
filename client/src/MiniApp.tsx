@@ -783,6 +783,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const taskDraftOriginalByIdRef = useRef<Record<string, TaskDraft>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
+  const [celebratingTaskId, setCelebratingTaskId] = useState<string | null>(null);
   const [updatingFocusSubtaskIds, setUpdatingFocusSubtaskIds] = useState<string[]>([]);
   const updatingFocusSubtasksRef = useRef<Set<string>>(new Set());
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -1992,6 +1993,15 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     try {
       const completed = tasks.find((item) => item.id === taskId);
       const updatedTask = await api.updateTask(taskId, { status: 'DONE', collaborationScope: scope ?? 'me' });
+      // Keep a completed list card mounted briefly so its confetti exit can finish.
+      // The API is already successful; failed completions never trigger a celebration.
+      if (completed && !completed.parentTaskId && completed.status !== 'DONE' && document.querySelector(`[data-miniapp-list-task-id="${CSS.escape(taskId)}"]`)) {
+        setCelebratingTaskId(taskId);
+        if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          await new Promise<void>((resolve) => window.setTimeout(resolve, 560));
+        }
+        setCelebratingTaskId(null);
+      }
       setTasks((current) => current.map((item) => item.id === taskId ? updatedTask : item));
 
       if (!completed?.parentTaskId && openedTaskId === taskId) {
@@ -4352,7 +4362,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               return (
                 <article
                   key={task.id}
-                  className={`miniapp-task-list-card relative border border-slate-700 bg-slate-800/80 p-3 ${hasOverdueState ? 'miniapp-task-overdue' : ''} ${isEvent ? 'miniapp-task-list-event-card' : ''}`}
+                  data-miniapp-list-task-id={task.id}
+                  className={`miniapp-task-list-card relative border border-slate-700 bg-slate-800/80 p-3 ${celebratingTaskId === task.id ? 'miniapp-task-confetti-exit' : ''} ${hasOverdueState ? 'miniapp-task-overdue' : ''} ${isEvent ? 'miniapp-task-list-event-card' : ''}`}
                   style={taskCardStyle}
                 >
                   <button
