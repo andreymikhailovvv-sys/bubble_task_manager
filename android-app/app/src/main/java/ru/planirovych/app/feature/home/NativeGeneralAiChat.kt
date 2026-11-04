@@ -122,7 +122,7 @@ internal fun NativeGeneralAiChatPage(
     val taskTitles=remember(tasks){tasks.associate{it.id to it.title}}
     var voiceSendSerial by remember { mutableIntStateOf(0) }
     val speechInput=rememberAiChatSpeechInput(
-        transcribe=vm::transcribeVoice,
+        dark=dark,transcribe=vm::transcribeVoice,
         onRecognized={spoken,sendImmediately->
             draft=appendAiDictation(draft,spoken)
             attachError=null
