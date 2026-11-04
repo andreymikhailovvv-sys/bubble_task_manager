@@ -127,6 +127,7 @@ export async function sendConditionalTelegramAutoReply(input: {
     return skip(reason);
   }
 
+  const eventId = 'telegram-ai-auto-reply:' + input.policyId + ':' + input.messageId;
   let started = false;
   let client: Awaited<ReturnType<typeof openClient>> | null = null;
   try {
@@ -142,11 +143,25 @@ export async function sendConditionalTelegramAutoReply(input: {
     // Recheck revocation and policy immediately before the irreversible call.
     const fresh = await connectedOwner(input.userId);
     const permission = await telegramUserChatCapability(input.userId);
+    const currentPolicy = await active();
     if (!permission.readEnabled || !permission.sendEnabled ||
         fresh.telegramAccountId !== owner.telegramAccountId ||
-        fresh.encryptedSession !== owner.encryptedSession || !await active()) {
+        fresh.encryptedSession !== owner.encryptedSession || !currentPolicy) {
       throw new TelegramUserClientError(409, 'Доступ к автоответам изменён');
     }
+    // Persist the card before any irreversible Telegram network call.
+    // A crash or ambiguous timeout therefore cannot lose the outgoing audit.
+    await prisma.telegramAiInboxEvent.upsert({
+      where: { id: eventId },
+      create: {
+        id: eventId, userId: input.userId, policyId: currentPolicy.id, messageId: input.messageId,
+        taskModeAtPublish: 'NONE', botStatus: 'SKIPPED',
+        content: '🤖 Автоответ в Telegram · ' + currentPolicy.chatTitle.slice(0, 90),
+        summary: { taskSuggestions: [] }, model: currentPolicy.monitorModel,
+        suggestedReplyMessageId: input.messageId, suggestedReplyText: input.text.trim(),
+        suggestedReplyStatus: 'SENDING'
+      }, update: {}
+    });
     await prisma.telegramAiAutoReplyAttempt.update({
       where: { id: attemptId }, data: { status: 'SENDING' }
     });
@@ -161,12 +176,20 @@ export async function sendConditionalTelegramAutoReply(input: {
       where: { id: attemptId, status: 'SENDING' },
       data: { status: 'SENT', completedAt: new Date() }
     });
+    await prisma.telegramAiInboxEvent.updateMany({
+      where: { id: eventId, userId: input.userId, suggestedReplyStatus: 'SENDING' },
+      data: { suggestedReplyStatus: 'SENT' }
+    }).catch(() => { /* The SENT attempt is authoritative; do not retry the Telegram send. */ });
     console.info('[TelegramAutoReply] sent', { policyId: input.policyId, messageId: input.messageId });
     return 'SENT';
   } catch {
     await prisma.telegramAiAutoReplyAttempt.updateMany({
       where: { id: attemptId },
       data: { status: started ? 'UNKNOWN' : 'FAILED', completedAt: new Date() }
+    }).catch(() => {});
+    await prisma.telegramAiInboxEvent.updateMany({
+      where: { id: eventId, userId: input.userId, suggestedReplyStatus: 'SENDING' },
+      data: { suggestedReplyStatus: started ? 'UNKNOWN' : 'FAILED' }
     }).catch(() => {});
     console.warn('[TelegramAutoReply] delivery ended', {
       policyId: input.policyId, messageId: input.messageId, outcome: started ? 'UNKNOWN' : 'FAILED'
