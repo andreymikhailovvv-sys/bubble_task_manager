@@ -14891,3 +14891,60 @@ body[data-theme='dark'] .focused-task-editor-shell .focused-task-description-sur
   min-width: 0;
   height: auto;
 }
+
+
+/* Compact AI chat navigation shared by Telegram Mini App and mobile web.
+   The drawer owns projects; the header contains chat and model only. */
+.miniapp-shell .miniapp-ai-chat-panel-general {
+  --miniapp-ai-header-height: 5.25rem;
+}
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-general {
+  --miniapp-ai-header-height: 5.25rem;
+}
+.miniapp-shell .miniapp-ai-chat-panel-general .miniapp-ai-context-header-compact,
+.miniapp-shell.miniapp-telegram-fullscreen .miniapp-ai-chat-panel-general .miniapp-ai-context-header-compact.miniapp-ai-chat-header-telegram {
+  gap: 0;
+  padding: .52rem .7rem !important;
+  min-height: 0;
+}
+.miniapp-ai-context-compact-row {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+  gap: .48rem;
+}
+.miniapp-ai-context-compact-row > .miniapp-ai-context-icon-button {
+  flex: 0 0 2.6rem;
+  align-self: center;
+}
+.miniapp-ai-context-compact-row > .miniapp-ai-context-control {
+  flex: 1 1 0;
+  width: 0;
+  min-height: 3.35rem;
+  padding: .42rem .48rem;
+  gap: .42rem;
+  border-radius: .86rem;
+}
+.miniapp-ai-context-compact-row > .miniapp-ai-context-chat-control {
+  flex-grow: 1.25;
+}
+.miniapp-ai-context-compact-row .miniapp-ai-context-control-label {
+  font-size: .6rem;
+}
+.miniapp-ai-context-compact-row .miniapp-ai-context-control-value {
+  font-size: .8rem;
+}
+.miniapp-ai-context-chat-icon { flex: 0 0 auto; color: #a78bfa; }
+.miniapp-ai-context-chat-option { display: flex; align-items: center; min-width: 0; }
+.miniapp-ai-context-chat-option > .miniapp-ai-context-picker-option {
+  flex: 1; min-width: 0;
+}
+.miniapp-ai-context-chat-actions { display: flex; gap: 2px; padding-right: 8px; }
+.miniapp-ai-context-chat-actions button {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 31px; height: 31px; border-radius: 9px;
+  color: var(--text-muted, #94a3b8);
+}
+.miniapp-ai-context-chat-actions button:disabled { opacity: .3; }
+.miniapp-ai-context-chat-actions button:not(:disabled):active { background: rgba(139, 92, 246, .12); }
