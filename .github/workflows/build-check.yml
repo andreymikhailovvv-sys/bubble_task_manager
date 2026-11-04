@@ -155,6 +155,8 @@ jobs:
         run: node --import tsx --test server/test/ai-checkup-manual.test.ts server/test/miniapp-habit-tracker-ui.test.ts
       - name: Verify workspace, AI and integrations training tutorials
         run: node --import tsx --test server/test/training-tours-2026.test.ts
+      - name: Verify focus editor controls and managed assistant reply cards
+        run: node --import tsx --test server/test/web-focus-assistant-reply-cards-2026.test.ts
       - name: Verify voice transcription and narration credit accounting
         run: node --import tsx --test server/test/web-voice-credit-billing.test.ts
       - name: Build the deployment Docker image
