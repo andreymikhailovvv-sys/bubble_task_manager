@@ -285,7 +285,7 @@ internal fun NativeGeneralAiChatPage(
                                     leadingIcon={Icon(Icons.Default.ChatBubbleOutline,null,
                                         tint=if(thread?.id==item.id)c.accent else c.secondary)},
                                     trailingIcon={if(thread?.id==item.id)
-                                        {Icon(Icons.Default.Check,null,tint=c.accent)} else null},
+                                        Icon(Icons.Default.Check,null,tint=c.accent)},
                                     onClick={
                                         project?.id?.let{vm.chooseGeneralAiChat(it,item.id)}
                                         chatMenu=false
@@ -343,7 +343,7 @@ internal fun NativeGeneralAiChatPage(
                                 DropdownMenuItem(text={Text(item.title,color=c.text,maxLines=1)},
                                     leadingIcon={GeneralAiProjectGlyph(item.icon,21.dp)},
                                     trailingIcon={if(project?.id==item.id)
-                                        {Icon(Icons.Default.Check,null,tint=c.accent)} else null},
+                                        Icon(Icons.Default.Check,null,tint=c.accent)},
                                     onClick={
                                         vm.chooseGeneralAiChat(item.id,
                                             item.chats.firstOrNull()?.id?:QUICK_AI_THREAD_ID)
@@ -379,7 +379,7 @@ internal fun NativeGeneralAiChatPage(
                             modelOptions.forEach{(key,label)->
                                 DropdownMenuItem(text={Text(label,color=c.text)},
                                     trailingIcon={if(model==key)
-                                        {Icon(Icons.Default.Check,null,tint=c.accent)} else null},
+                                        Icon(Icons.Default.Check,null,tint=c.accent)},
                                     onClick={
                                         project?.id?.let{pid->
                                             thread?.id?.let{tid->
