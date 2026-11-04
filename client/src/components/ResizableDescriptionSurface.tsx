@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { GripHorizontal } from 'lucide-react';
 
 type Props = {
@@ -7,6 +7,8 @@ type Props = {
   initialHeight?: number;
   minHeight?: number;
   maxHeight?: number;
+  /** Optional user-scoped preference, shared by focus tasks and retained across reloads. */
+  storageKey?: string;
 };
 
 export const clampDescriptionHeight = (height: number, minHeight: number, maxHeight: number) =>
@@ -14,9 +16,25 @@ export const clampDescriptionHeight = (height: number, minHeight: number, maxHei
 
 /** Only used in web task/focus editors. Preview and textarea share one fixed, bounded viewport. */
 export function ResizableDescriptionSurface({
-  children, className = '', initialHeight = 128, minHeight = 96, maxHeight = 320
+  children, className = '', initialHeight = 128, minHeight = 96, maxHeight = 320, storageKey
 }: Props) {
-  const [height, setHeight] = useState(() => clampDescriptionHeight(initialHeight, minHeight, maxHeight));
+  const readSavedHeight = () => {
+    if (!storageKey || typeof window === 'undefined') return clampDescriptionHeight(initialHeight, minHeight, maxHeight);
+    try {
+      const stored = window.localStorage.getItem(storageKey);
+      const parsed = stored === null ? NaN : Number(stored);
+      return Number.isFinite(parsed) ? clampDescriptionHeight(parsed, minHeight, maxHeight)
+        : clampDescriptionHeight(initialHeight, minHeight, maxHeight);
+    } catch { return clampDescriptionHeight(initialHeight, minHeight, maxHeight); }
+  };
+  const [height, setHeight] = useState(readSavedHeight);
+  useEffect(() => { setHeight(readSavedHeight()); }, [storageKey, initialHeight, minHeight, maxHeight]);
+  const updateHeight = (value: number) => {
+    const next = clampDescriptionHeight(value, minHeight, maxHeight);
+    setHeight(next);
+    if (!storageKey) return;
+    try { window.localStorage.setItem(storageKey, String(next)); } catch { /* Storage can be disabled. */ }
+  };
   const dragRef = useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
 
   const startResize = (event: PointerEvent<HTMLDivElement>) => {
@@ -28,7 +46,7 @@ export function ResizableDescriptionSurface({
   const moveResize = (event: PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    setHeight(clampDescriptionHeight(drag.startHeight + event.clientY - drag.startY, minHeight, maxHeight));
+    updateHeight(drag.startHeight + event.clientY - drag.startY);
   };
   const endResize = (event: PointerEvent<HTMLDivElement>) => {
     if (dragRef.current?.pointerId !== event.pointerId) return;
@@ -49,8 +67,8 @@ export function ResizableDescriptionSurface({
         onKeyDown={(event) => {
           if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown' && event.key !== 'Home' && event.key !== 'End') return;
           event.preventDefault();
-          setHeight((prev) => event.key === 'Home' ? minHeight : event.key === 'End' ? maxHeight
-            : clampDescriptionHeight(prev + (event.key === 'ArrowDown' ? 16 : -16), minHeight, maxHeight));
+          updateHeight(event.key === 'Home' ? minHeight : event.key === 'End' ? maxHeight
+            : height + (event.key === 'ArrowDown' ? 16 : -16));
         }}>
         <GripHorizontal size={17} strokeWidth={1.8} aria-hidden="true"/>
       </div>
