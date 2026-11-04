@@ -120,11 +120,14 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
     var sendingDisplay by remember(task.id){mutableStateOf<String?>(null)}
     var attachmentError by remember(task.id){mutableStateOf<String?>(null)}
     var pendingRetry by remember(task.id){mutableStateOf(false)}
+    var voiceSendSerial by remember(task.id){mutableIntStateOf(0)}
     val speechInput=rememberAiChatSpeechInput(
-        onRecognized={spoken->
+        transcribe=vm::transcribeVoice,
+        onRecognized={spoken,sendImmediately->
             draft=appendAiDictation(draft,spoken)
             attachmentError=null
             pendingRetry=false
+            if(sendImmediately)voiceSendSerial++
         },
         onError={message->attachmentError=message}
     )
@@ -304,6 +307,9 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
         lastItemCount=currentCount
     }
 
+    LaunchedEffect(voiceSendSerial){
+        if(voiceSendSerial>0)sendMessage()
+    }
     Dialog(onDismissRequest=onClose,
         properties=DialogProperties(usePlatformDefaultWidth=false)){
         Surface(Modifier.fillMaxSize().imePadding(),color=c.bg,
