@@ -405,7 +405,7 @@ export type TelegramAiAssistantInbox = {
   messages: Array<{ id: string; chatId: string; role: 'assistant'; content: string; createdAt: string; taskSuggestions?: string[]; taskProposal?: import('./types').AiTaskProposal | null; approvedSuggestionIndices: number[]; telegramSuggestedReply?: TelegramAiSuggestedReply | null }>;
 };
 export type TelegramAiSuggestedReply = {
-  eventId: string; text: string; messageId: number; status: 'PENDING' | 'SENDING' | 'SENT' | 'FAILED' | 'UNKNOWN'; chatTitle: string;
+  eventId: string; text: string; messageId: number; status: 'PENDING' | 'SENDING' | 'SENT' | 'FAILED' | 'UNKNOWN'; chatTitle: string; automated?: boolean;
 };
 export type TelegramMonitorSummary = {
   summary: string;

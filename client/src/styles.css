@@ -14729,3 +14729,39 @@ body[data-theme='light'] .miniapp-shell .miniapp-focus-task-panel--sectioned .mi
     animation: none !important;
   }
 }
+
+
+/* Focus editor: labelled compact controls and an end-of-list completed toggle. */
+.focused-task-editor-shell .focused-task-label-button {
+  min-width: 0;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--card-bg) 92%, transparent);
+  border-color: var(--panel-border);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, .05);
+  white-space: nowrap;
+}
+.focused-task-editor-shell .focused-task-label-button:hover,
+.focused-task-editor-shell .focused-task-show-completed-button:hover {
+  border-color: #38b8cd;
+  color: #0897ae;
+}
+.focused-task-editor-shell .focused-task-label-button svg { flex: none; color: #0897ae; }
+.focused-task-editor-shell .focused-task-show-completed-button {
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--card-bg) 90%, transparent);
+  border-color: var(--panel-border);
+  transition: color .16s ease, border-color .16s ease;
+}
+.focused-task-editor-shell .focused-task-show-completed-row { margin-top: .35rem; }
+body[data-theme='light'] .focused-task-editor-shell .focused-task-label-button,
+body[data-theme='light'] .focused-task-editor-shell .focused-task-show-completed-button {
+  background: #f8fafd;
+  border-color: #dbe4f0;
+  color: #078ba4;
+}
+body[data-theme='dark'] .focused-task-editor-shell .focused-task-label-button,
+body[data-theme='dark'] .focused-task-editor-shell .focused-task-show-completed-button {
+  background: #203047;
+  border-color: #43536c;
+  color: #80ddec;
+}

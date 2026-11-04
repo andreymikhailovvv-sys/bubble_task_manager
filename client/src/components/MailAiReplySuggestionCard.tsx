@@ -31,7 +31,7 @@ export function MailAiReplySuggestionCard({ reply }: { reply: MailAiSuggestedRep
   return <div className="telegram-quick-share telegram-ai-send-card mt-3 rounded-2xl border p-3 text-sm">
     <div className="flex items-center gap-2">
       <span className="telegram-ai-send-card__logo flex h-8 w-8 items-center justify-center rounded-xl"><Mail size={16}/></span>
-      <strong className="min-w-0 flex-1">Предложение ответа на письмо</strong>
+      <strong className="min-w-0 flex-1">{status === 'SENT' ? 'Отправленное письмо' : 'Предложение ответа на письмо'}</strong>
       {status === 'SENT' && <Check size={16} className="text-emerald-500"/>}
     </div>
     <p className="telegram-ai-send-card__muted mt-2 text-xs">Получатель: {reply.recipient}</p>
@@ -40,7 +40,7 @@ export function MailAiReplySuggestionCard({ reply }: { reply: MailAiSuggestedRep
     <textarea id={'mail-reply-'+reply.eventId} rows={4} maxLength={6000} value={text}
       onChange={e=>setText(e.target.value)} disabled={blocked}
       className="telegram-ai-send-card__message mt-1 w-full resize-y rounded-xl border p-3 text-sm leading-relaxed disabled:opacity-70"/>
-    {status === 'SENT' && <p className="telegram-ai-send-card__muted mt-2 text-xs">Отправлено по почте</p>}
+    {status === 'SENT' && <p role="status" className="telegram-ai-send-card__muted mt-2 text-xs">Письмо отправлено · подтверждено</p>}
     {status === 'UNKNOWN' && <p role="status" className="telegram-ai-send-card__error mt-2 text-xs">
       Не удалось установить результат отправки. Повтор заблокирован, чтобы не отправить письмо дважды.</p>}
     {error && <p role="alert" className="telegram-ai-send-card__error mt-2 text-xs">{error}</p>}

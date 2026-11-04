@@ -7545,7 +7545,8 @@ export default function App() {
                       />
                     </>}
                   </div>
-                  <ResizableDescriptionSurface className="focused-task-description-surface mt-3 rounded-2xl p-3">
+                  <ResizableDescriptionSurface className="focused-task-description-surface mt-3 rounded-2xl p-3"
+                    storageKey={currentUser?.id ? `planirovych:focus-description-height:v1:${currentUser.id}` : undefined}>
                     <TaskDescriptionInput
                       className="focused-task-description-input subtask-description-inline invisible-scrollbar h-full min-h-0 w-full resize-none overflow-y-auto border-0 bg-transparent text-sm leading-6 text-muted outline-none placeholder:text-slate-400"
                       placeholder="Введите описание"
@@ -7556,12 +7557,13 @@ export default function App() {
                   <div className="mt-2 flex flex-wrap items-center justify-start gap-2">
                     <button
                       type="button"
-                      className="focused-task-icon-button focused-task-calendar-like-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
+                      className="focused-task-label-button inline-flex min-h-8 items-center justify-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition"
                       onClick={() => setIsFocusedNotesEditorOpen(true)}
-                      title="Открыть заметки"
-                      aria-label="Открыть заметки"
+                      title="Редактировать описание"
+                      aria-label="Редактировать описание"
                     >
-                      <Edit3 size={15} />
+                      <Edit3 size={15} aria-hidden="true" />
+                      <span>Редактировать описание</span>
                     </button>
                     <button
                       type="button"
@@ -7745,7 +7747,7 @@ export default function App() {
                     Подзадачи
                     <button
                       type="button"
-                      className="focused-task-add-subtask-button focused-task-calendar-like-button"
+                      className="focused-task-add-subtask-button focused-task-label-button inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold"
                       onClick={() => {
                         setFocusedSubtaskTitle('');
                         setFocusedSubtaskDueDate(null);
@@ -7754,15 +7756,8 @@ export default function App() {
                       title="Добавить подзадачу"
                       aria-label="Добавить подзадачу"
                     >
-                      <Plus size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      className={`rounded p-1 ${hideClosedFocusedSubtasks ? 'text-cyan-200' : 'text-muted hover:brightness-110'}`}
-                      onClick={() => setHideClosedFocusedSubtasks((prev) => !prev)}
-                      title={hideClosedFocusedSubtasks ? 'Показывать закрытые подзадачи' : 'Скрывать закрытые подзадачи'}
-                    >
-                      {hideClosedFocusedSubtasks ? <EyeOff size={13} /> : <Eye size={13} />}
+                      <Plus size={15} aria-hidden="true" />
+                      <span>Добавить</span>
                     </button>
                     {focusedTask.isCollaborative && (focusedTask.unreadCommentCount ?? 0) > 0 ? (
                       <button
@@ -7900,6 +7895,16 @@ export default function App() {
                     </Reorder.Item>
                   ))}
                   {(hideClosedFocusedSubtasks ? getFocusedSubtaskItems(focusedTask.id).filter((task) => task.status !== 'DONE' || (task.unreadCommentCount ?? 0) > 0) : getFocusedSubtaskItems(focusedTask.id)).length === 0 ? <li className="text-xs text-subtle">Пока нет подзадач</li> : null}
+                  {getFocusedSubtaskItems(focusedTask.id).some((task) => task.status === 'DONE') ? (
+                    <li className="focused-task-show-completed-row list-none pt-1">
+                      <button type="button" className="focused-task-show-completed-button inline-flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold"
+                        onClick={() => setHideClosedFocusedSubtasks((prev) => !prev)}
+                        aria-expanded={!hideClosedFocusedSubtasks}>
+                        {hideClosedFocusedSubtasks ? <Eye size={14} aria-hidden="true" /> : <EyeOff size={14} aria-hidden="true" />}
+                        {hideClosedFocusedSubtasks ? 'Показать выполненные' : 'Скрыть выполненные'} ({getFocusedSubtaskItems(focusedTask.id).filter((task) => task.status === 'DONE').length})
+                      </button>
+                    </li>
+                  ) : null}
                 </Reorder.Group>
               </div>
             </div>
@@ -8407,7 +8412,7 @@ export default function App() {
                   ) : null}
                   {item.message.role === 'assistant' && item.message.webSearchUsed ? <WebCitations sources={item.message.webSources} searched={item.message.webSearchUsed} /> : null}
                   {item.message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(item.message.id)} /> : null}
-                   {item.message.role === 'assistant' && item.message.generatedDocument ? <AiGeneratedDocumentButton document={item.message.generatedDocument} /> : null}{item.message.role === 'assistant' && item.message.taskProposal ? <AiTaskProposalCard proposal={item.message.taskProposal} onApplied={() => void load()} /> : null}{item.message.role === 'assistant' && item.message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={item.message.telegramSuggestedReply} /> : null}{item.message.role === 'assistant' && item.message.telegramSendDraft ? <TelegramInlineSendCard draft={item.message.telegramSendDraft} /> : null}{item.message.role === 'assistant' && item.message.mailSendDraft ? <MailInlineSendCard draft={item.message.mailSendDraft} /> : null}{item.message.role === 'assistant' && item.message.telegramReadDraft ? <TelegramReadConsentCard draft={item.message.telegramReadDraft} onContinue={(approval) => continueTelegramReadAiChat(approval, aiChatProjects[0].id, QUICK_AI_CHAT_ID)} /> : null}
+                   {item.message.role === 'assistant' && item.message.generatedDocument ? <AiGeneratedDocumentButton document={item.message.generatedDocument} /> : null}{item.message.role === 'assistant' && item.message.taskProposal ? <AiTaskProposalCard proposal={item.message.taskProposal} onApplied={() => void load()} /> : null}{item.message.role === 'assistant' && item.message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={item.message.telegramSuggestedReply} /> : null}{item.message.role === 'assistant' && item.message.mailSuggestedReply ? <MailAiReplySuggestionCard reply={item.message.mailSuggestedReply} /> : null}{item.message.role === 'assistant' && item.message.telegramSendDraft ? <TelegramInlineSendCard draft={item.message.telegramSendDraft} /> : null}{item.message.role === 'assistant' && item.message.mailSendDraft ? <MailInlineSendCard draft={item.message.mailSendDraft} /> : null}{item.message.role === 'assistant' && item.message.telegramReadDraft ? <TelegramReadConsentCard draft={item.message.telegramReadDraft} onContinue={(approval) => continueTelegramReadAiChat(approval, aiChatProjects[0].id, QUICK_AI_CHAT_ID)} /> : null}
                 </div>
                 <div className="ai-message-forward-actions">{item.message.role === 'assistant' ? <AiReadAloudAction text={item.message.content} messageKey={String(item.message.id)} /> : null}<AiReplyAction message={item.message} onReply={setReplyToQuickAi} /><TelegramMessageQuickShare text={item.message.content} compact /></div>
                 </div>

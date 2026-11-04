@@ -145,7 +145,8 @@ export async function telegramAiInboxFeed(userId: string) {
       telegramSuggestedReply: event.suggestedReplyMessageId != null && event.suggestedReplyText
         ? { eventId: event.id, messageId: event.suggestedReplyMessageId,
           text: event.suggestedReplyText, status: event.suggestedReplyStatus,
-          chatTitle: policies.find(p => p.id === event.policyId)?.chatTitle ?? 'Telegram' }
+          chatTitle: policies.find(p => p.id === event.policyId)?.chatTitle ?? 'Telegram',
+          automated: event.id.startsWith('telegram-ai-auto-reply:') }
         : null,
       taskSuggestions: typeof event.summary === 'object' && event.summary && 'taskSuggestions' in event.summary
         ? (Array.isArray((event.summary as { taskSuggestions?: unknown }).taskSuggestions)
