@@ -5283,7 +5283,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             <MiniGeneralAiChatHeader
               project={activeAiChatProject}
               chat={activeAiChat}
-              projects={aiChatProjects}
               model={generalAiChatModel}
               modelOptions={AI_CHAT_MODEL_OPTIONS}
               picker={telegramChatPicker}
@@ -5293,12 +5292,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               onSetPicker={setTelegramChatPicker}
               onShowHeader={() => setIsGeneralAiChatHeaderHidden(false)}
               onOpenMenu={() => { setTelegramChatPicker(null); setIsAiChatMenuOpen(true); }}
-              onClose={() => closeMiniWindowWithMotion('ai-chat', () => setIsAiChatOpen(false))}
-              onSelectProject={(project) => { setActiveAiChatProjectId(project.id); setActiveAiChatId(project.chats[0]?.id ?? ''); setTelegramChatPicker(null); }}
               onSelectChat={(chatId) => { setActiveAiChatId(chatId); setTelegramChatPicker(null); }}
               onSelectModel={(nextModel) => { changeGeneralAiChatModel(nextModel); setTelegramChatPicker(null); }}
-              onCreateProject={() => { setTelegramChatPicker(null); openAiChatProjectDialog(); }}
               onCreateChat={() => { setTelegramChatPicker(null); createAiChatThread(); }}
+              onRenameChat={(chat) => { setTelegramChatPicker(null); setRenamingAiChatId(chat.id); setAiChatRenameDraft(chat.title); }}
+              onDeleteChat={(chat) => { setTelegramChatPicker(null); deleteAiChatThread(chat.id); }}
             />
             {useTelegramCompactChatHeader ? <div className="miniapp-telegram-service-title miniapp-telegram-overlay-brand" aria-label="Планировыч AI">✦ Планировыч AI</div> : null}
              <div className="miniapp-ai-chat-thread-wrap relative min-h-0 flex-1">
@@ -5390,7 +5388,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               onClick={(event) => event.stopPropagation()}
             >
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-xl font-bold tracking-tight text-primary">Проекты и чаты</h3>
+                <h3 className="text-xl font-bold tracking-tight text-primary">Проекты</h3>
                 <button type="button" className="miniapp-ai-chat-menu-close rounded-2xl border p-2" onClick={() => setIsAiChatMenuOpen(false)}><X size={16} /></button>
               </div>
               <div className="space-y-2">
@@ -5399,15 +5397,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <div key={project.id} className={`miniapp-ai-chat-menu-card rounded-3xl border p-2.5 shadow-sm ${project.id === activeAiChatProject?.id ? 'miniapp-ai-chat-menu-card-active-project' : ''}`} style={{ '--project-color': project.color } as CSSProperties}>
                     <button type="button" className="flex w-full items-center gap-2 text-left" onClick={() => { setActiveAiChatProjectId(project.id); setActiveAiChatId(project.chats[0]?.id ?? ''); }}><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-base miniapp-ai-chat-menu-project-icon" style={{ backgroundColor: project.color }}>{project.icon === 'telegram' ? <svg role="img" aria-label="Telegram" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M21.94 4.17a1.46 1.46 0 0 0-1.7-.23L2.1 11.1a1.18 1.18 0 0 0 .12 2.24l4.68 1.45 1.77 5.3a1.15 1.15 0 0 0 1.9.47l2.9-2.88 4.68 3.46a1.3 1.3 0 0 0 2.03-.76l2.18-14.6a1.52 1.52 0 0 0-.42-1.61Zm-3.88 3.9-8.2 7.47-.32 2.63-1.28-3.83 9.8-6.27Z"/></svg> : project.icon}</span><span className="min-w-0 flex-1 truncate text-sm font-bold miniapp-ai-chat-menu-title">{project.title}</span></button>
                     <div className="mt-2 flex gap-2"><button type="button" className="miniapp-ai-chat-menu-action inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold" disabled={project.id === aiChatProjects[0]?.id || (project.id === 'telegram-ai-assistant-project' || project.id === 'mail-ai-assistant-project')} onClick={() => openAiChatProjectDialog(project.id)}><Settings size={12} /> Настроить</button><button type="button" disabled={project.id === aiChatProjects[0]?.id || (project.id === 'telegram-ai-assistant-project' || project.id === 'mail-ai-assistant-project') || aiChatProjects.length <= 1} className="miniapp-ai-chat-menu-action miniapp-ai-chat-menu-action-danger inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold disabled:opacity-40" onClick={() => deleteAiChatProject(project.id)}><Trash2 size={12} /> Удалить</button></div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 space-y-2">
-                <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Чаты</p><button type="button" className="miniapp-ai-chat-menu-add miniapp-ai-chat-menu-add-chat rounded-2xl p-2 text-white" onClick={createAiChatThread} disabled={(activeAiChatProject?.id === 'telegram-ai-assistant-project' || activeAiChatProject?.id === 'mail-ai-assistant-project')}><Plus size={16} /></button></div>
-                {(activeAiChatProject?.chats ?? []).map((chat) => (
-                  <div key={chat.id} className={`miniapp-ai-chat-menu-card rounded-3xl border p-2.5 shadow-sm ${chat.id === activeAiChat?.id ? 'miniapp-ai-chat-menu-card-active-chat' : ''}`}>
-                    <button type="button" className="w-full text-left" onClick={() => { setActiveAiChatId(chat.id); setIsAiChatMenuOpen(false); }}><span className="block truncate text-sm font-bold miniapp-ai-chat-menu-title">{chat.title}</span><span className="miniapp-ai-chat-menu-subtitle text-[11px]">{chat.messages.length} сообщ.</span></button>
-                    <div className="mt-2 flex gap-2"><button type="button" className="miniapp-ai-chat-menu-action rounded-xl border px-2.5 py-1.5 text-xs font-semibold" disabled={chat.id === QUICK_AI_CHAT_ID || (chat.id.startsWith('telegram-ai-assistant:') || chat.id.startsWith('mail-ai-assistant:'))} onClick={() => { setRenamingAiChatId(chat.id); setAiChatRenameDraft(chat.title); }}>Переименовать</button><button type="button" disabled={chat.id === QUICK_AI_CHAT_ID || (chat.id.startsWith('telegram-ai-assistant:') || chat.id.startsWith('mail-ai-assistant:')) || (activeAiChatProject?.chats.length ?? 0) <= 1} className="miniapp-ai-chat-menu-action miniapp-ai-chat-menu-action-danger rounded-xl border px-2.5 py-1.5 text-xs font-semibold disabled:opacity-40" onClick={() => deleteAiChatThread(chat.id)}>Удалить</button></div>
                   </div>
                 ))}
               </div>
