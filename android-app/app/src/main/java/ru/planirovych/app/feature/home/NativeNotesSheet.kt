@@ -482,11 +482,16 @@ private fun NoteEditorDialog(note:StandaloneNote?,groups:List<StandaloneNoteGrou
         }
     }
 }
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NoteGroupManager(vm:HomeViewModel,colors:WorkspaceColors,
     groups:List<StandaloneNoteGroup>,startNew:Boolean,onClose:()->Unit){
     val state by vm.state.collectAsStateWithLifecycle()
+    val dark=colors.text.red>.75f
+    val surface=if(dark)Color(0xFF17243A) else Color(0xFFF8F9FF)
+    val card=if(dark)Color(0xFF20314C) else Color.White
+    val edge=if(dark)Color(0xFF40516E) else Color(0xFFDCE2F1)
+    val ink=if(dark)Color(0xFFF0F4FF) else Color(0xFF17223A)
+    val muted=if(dark)Color(0xFFAAB9D2) else Color(0xFF65738E)
     var selected by remember { mutableStateOf<StandaloneNoteGroup?>(null) }
     var form by remember { mutableStateOf(startNew) }
     var name by remember { mutableStateOf("") }
@@ -494,68 +499,145 @@ private fun NoteGroupManager(vm:HomeViewModel,colors:WorkspaceColors,
     var confirm by remember { mutableStateOf<StandaloneNoteGroup?>(null) }
     val swatches=listOf("#8b5cf6","#0891b2","#d97706","#db2777",
         "#059669","#4f46e5","#e11d48","#64748b")
-    ModalBottomSheet(onDismissRequest=onClose,containerColor=colors.panel,
-        sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)){
-        Column(Modifier.fillMaxWidth().heightIn(max=580.dp)
-            .verticalScroll(rememberScrollState()).padding(horizontal=17.dp,vertical=12.dp)
-            .navigationBarsPadding(),verticalArrangement=Arrangement.spacedBy(12.dp)){
-            Text("Группы заметок",fontWeight=FontWeight.Bold,fontSize=19.sp,color=colors.text)
-            Text("Группы секторов редактируются через настройки секторов.",
-                color=colors.secondaryText,fontSize=11.sp)
-            groups.forEach{g->
-                Surface(color=colors.card,shape=RoundedCornerShape(12.dp),
-                    border=BorderStroke(1.dp,colors.panelBorder)){
-                    Row(Modifier.fillMaxWidth().padding(start=10.dp),
-                        verticalAlignment=Alignment.CenterVertically){
-                        Box(Modifier.size(10.dp).background(noteColor(g.color),CircleShape))
-                        Spacer(Modifier.width(8.dp))
-                        Text(g.name,Modifier.weight(1f),
-                            color=colors.text,fontSize=13.sp,maxLines=1)
-                        if(g.sphereId!=null)Text("Сектор",color=colors.secondaryText,fontSize=10.sp)
-                        else {
-                            IconButton(onClick={
-                                selected=g;name=g.name;color=g.color;form=true
-                            }){Icon(Icons.Default.Edit,"Изменить",tint=colors.purple)}
-                            IconButton(onClick={confirm=g}){
-                                Icon(Icons.Default.DeleteOutline,"Удалить",
-                                    tint=colors.secondaryText)
+    val shape=RoundedCornerShape(24.dp)
+    androidx.compose.ui.window.Dialog(onDismissRequest=onClose,
+        properties=androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth=false)){
+        Surface(Modifier.fillMaxWidth(.94f)
+            .heightIn(max=(androidx.compose.ui.platform.LocalConfiguration
+                .current.screenHeightDp*.84f).dp),
+            shape=shape,color=surface,border=BorderStroke(1.dp,edge),
+            shadowElevation=14.dp){
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                .padding(17.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
+                Row(Modifier.fillMaxWidth(),
+                    verticalAlignment=Alignment.Top,
+                    horizontalArrangement=Arrangement.spacedBy(10.dp)){
+                    Column(Modifier.weight(1f),
+                        verticalArrangement=Arrangement.spacedBy(5.dp)){
+                        Text("Группы заметок",fontSize=19.sp,
+                            fontWeight=FontWeight.Bold,color=ink)
+                        Text("Секторные группы связаны с секторами. Остальные " +
+                            "можно переименовывать и удалять, не теряя заметок.",
+                            fontSize=11.sp,lineHeight=16.sp,color=muted)
+                    }
+                    Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
+                        .background(card).border(1.dp,edge,RoundedCornerShape(10.dp))
+                        .clickable(onClick=onClose),contentAlignment=Alignment.Center){
+                        Icon(Icons.Default.Close,"Закрыть",tint=ink,
+                            modifier=Modifier.size(18.dp))
+                    }
+                }
+                HorizontalDivider(color=edge)
+                groups.forEach{g->
+                    Row(Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(13.dp))
+                        .background(card)
+                        .border(1.dp,edge,RoundedCornerShape(13.dp))
+                        .padding(start=12.dp,end=7.dp,top=8.dp,bottom=8.dp),
+                        verticalAlignment=Alignment.CenterVertically,
+                        horizontalArrangement=Arrangement.spacedBy(9.dp)){
+                        Box(Modifier.size(13.dp).background(noteColor(g.color),CircleShape))
+                        Text(g.name,Modifier.weight(1f),color=ink,
+                            fontWeight=FontWeight.SemiBold,fontSize=13.sp,
+                            maxLines=1,overflow=TextOverflow.Ellipsis)
+                        if(g.sphereId!=null){
+                            Text("Сектор",color=muted,fontSize=10.sp)
+                        }else{
+                            Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
+                                .background(if(dark)Color(0xFF3B315E)
+                                    else Color(0xFFEFE9FF))
+                                .clickable{
+                                    selected=g;name=g.name;color=g.color;form=true
+                                },contentAlignment=Alignment.Center){
+                                Icon(Icons.Default.Edit,"Изменить группу",
+                                    tint=if(dark)Color(0xFFC8A8FF) else Color(0xFF7041D7),
+                                    modifier=Modifier.size(17.dp))
+                            }
+                            Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
+                                .background(if(dark)Color(0xFF482C42)
+                                    else Color(0xFFFFEDF3))
+                                .clickable{confirm=g},contentAlignment=Alignment.Center){
+                                Icon(Icons.Default.DeleteOutline,"Удалить группу",
+                                    tint=if(dark)Color(0xFFFF9EC1) else Color(0xFFDD2263),
+                                    modifier=Modifier.size(17.dp))
                             }
                         }
                     }
                 }
-            }
-            if(!form){
-                OutlinedButton(onClick={
-                    selected=null;name="";color="#8b5cf6";form=true
-                },modifier=Modifier.fillMaxWidth(),enabled=groups.size<40){
-                    Icon(Icons.Default.Add,null);Text("Новая группа")
+                if(groups.isEmpty()){
+                    Text("Групп пока нет.",color=muted,fontSize=12.sp)
                 }
-            } else {
-                OutlinedTextField(value=name,onValueChange={name=it.take(50)},
-                    label={Text("Название группы")},modifier=Modifier.fillMaxWidth())
-                Text("Цвет группы",color=colors.secondaryText,fontSize=12.sp)
-                Row(horizontalArrangement=Arrangement.spacedBy(5.dp)){
-                    swatches.forEach{swatch->
-                        Box(Modifier.size(33.dp).background(noteColor(swatch),CircleShape)
-                            .border(if(color==swatch)3.dp else 1.dp,
-                                if(color==swatch)colors.text else colors.panelBorder,CircleShape)
-                            .clickable{color=swatch})
-                    }
-                }
-                Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                    OutlinedButton(onClick={form=false},modifier=Modifier.weight(1f)){
-                        Text("Отмена")
-                    }
-                    Button(onClick={
-                        vm.saveNoteGroup(selected?.id,name,color){
-                            form=false;selected=null
+                if(!form){
+                    Row(Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(13.dp))
+                        .background(card)
+                        .border(1.dp,edge,RoundedCornerShape(13.dp))
+                        .clickable(enabled=groups.size<40){
+                            selected=null;name="";color="#8b5cf6";form=true
                         }
-                    },enabled=name.isNotBlank()&&!state.notesBusy,
-                        modifier=Modifier.weight(1f)){Text("Сохранить")}
+                        .padding(vertical=13.dp),
+                        verticalAlignment=Alignment.CenterVertically,
+                        horizontalArrangement=Arrangement.Center,
+                        ){
+                        Icon(Icons.Default.Add,null,tint=colors.purple,
+                            modifier=Modifier.size(19.dp))
+                        Spacer(Modifier.width(7.dp))
+                        Text("Новая группа",color=ink,fontWeight=FontWeight.SemiBold,
+                            fontSize=13.sp)
+                    }
+                }else{
+                    Column(Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(17.dp)).background(card)
+                        .border(1.dp,edge,RoundedCornerShape(17.dp))
+                        .padding(14.dp),
+                        verticalArrangement=Arrangement.spacedBy(11.dp)){
+                        Text(if(selected!=null)"Изменить группу" else "Новая группа",
+                            fontSize=15.sp,color=ink,fontWeight=FontWeight.Bold)
+                        OutlinedTextField(value=name,onValueChange={name=it.take(50)},
+                            label={Text("Название")},singleLine=true,
+                            modifier=Modifier.fillMaxWidth(),
+                            colors=OutlinedTextFieldDefaults.colors(
+                                focusedTextColor=ink,unfocusedTextColor=ink,
+                                focusedBorderColor=colors.purple))
+                        Text("Цвет группы",color=muted,fontSize=12.sp,
+                            fontWeight=FontWeight.SemiBold)
+                        Row(Modifier.fillMaxWidth(),
+                            horizontalArrangement=Arrangement.spacedBy(5.dp)){
+                            swatches.forEach{swatch->
+                                Box(Modifier.weight(1f).aspectRatio(1f)
+                                    .clip(CircleShape).background(noteColor(swatch))
+                                    .border(if(color==swatch)3.dp else 1.dp,
+                                        if(color==swatch)ink else edge,CircleShape)
+                                    .clickable{color=swatch})
+                            }
+                        }
+                        Row(Modifier.fillMaxWidth(),
+                            horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                            OutlinedButton(onClick={form=false},
+                                modifier=Modifier.weight(1f),
+                                shape=RoundedCornerShape(12.dp)){
+                                Text("Отмена",maxLines=1)
+                            }
+                            Button(onClick={
+                                vm.saveNoteGroup(selected?.id,name,color){
+                                    form=false;selected=null
+                                }
+                            },enabled=name.isNotBlank()&&!state.notesBusy,
+                                modifier=Modifier.weight(1.3f),
+                                shape=RoundedCornerShape(12.dp),
+                                colors=ButtonDefaults.buttonColors(
+                                    containerColor=Color(0xFF7C3AED))){
+                                Text(if(state.notesBusy)"Сохраняю…" else "Сохранить",
+                                    maxLines=1,softWrap=false)
+                            }
+                        }
+                    }
+                }
+                state.notesError?.let{
+                    Text(it,color=MaterialTheme.colorScheme.error,fontSize=12.sp)
                 }
             }
-            state.notesError?.let{Text(it,color=MaterialTheme.colorScheme.error)}
-            Spacer(Modifier.height(8.dp))
         }
     }
     confirm?.let{g->
