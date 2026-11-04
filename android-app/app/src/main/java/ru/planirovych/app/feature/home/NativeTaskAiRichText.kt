@@ -212,7 +212,8 @@ private fun NativeAiProseWithTaskRefs(text:String,textColor:Color,linkColor:Colo
                         val chipBg=if(light)Color.White else Color(0xFF1B4255)
                         val chipInk=if(light)Color(0xFF172238) else Color(0xFFE0F7FF)
                         val frame=RoundedCornerShape(18.dp)
-                        Row(Modifier.fillMaxWidth()
+                        // Wrap to the title length, but never exceed the message.
+                        Row(Modifier.widthIn(max=310.dp)
                             .clip(frame).background(chipBg)
                             .border(1.dp,if(light)Color(0xFFDCE5EE)
                                 else Color(0xFF35778C),frame)
@@ -223,7 +224,6 @@ private fun NativeAiProseWithTaskRefs(text:String,textColor:Color,linkColor:Colo
                             Text("↗",fontSize=12.sp,color=chipInk,
                                 fontWeight=FontWeight.Bold)
                             Text(title?:"Задача не найдена",
-                                modifier=Modifier.weight(1f),
                                 fontSize=10.sp,fontWeight=FontWeight.SemiBold,
                                 color=chipInk,maxLines=1,
                                 overflow=TextOverflow.Ellipsis,softWrap=false)
