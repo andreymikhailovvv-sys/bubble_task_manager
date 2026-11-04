@@ -111,7 +111,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     Scaffold(contentWindowInsets = WindowInsets.safeDrawing,
         containerColor = MaterialTheme.colorScheme.background,
         floatingActionButton = {
-            if(!state.loading && state.error==null && pagerState.currentPage!=2) {
+            if(!state.loading && state.error==null && pagerState.currentPage!=2 && pagerState.currentPage!=3) {
                 Box {
                     FloatingActionButton(
                         onClick={creationMenu=!creationMenu},

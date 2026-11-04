@@ -134,7 +134,12 @@ fun ModernWorkspace(
                     onExit={pagerScope.launch{pagerState.animateScrollToPage(0)}},
                     onOpenTask=onOpenTask,onOpenTaskAi=onOpenTaskAi)
             }
-            3 -> NativeNotesPage(vm=vm,colors=colors,dark=dark,modifier=Modifier.fillMaxSize())
+            3 -> {
+                val pagerScope=rememberCoroutineScope()
+                NativeNotesPage(vm=vm,colors=colors,dark=dark,
+                    modifier=Modifier.fillMaxSize(),
+                    onClose={pagerScope.launch{pagerState.animateScrollToPage(0)}})
+            }
             else -> {
                 val contentMode = if(page==1) WorkspaceMode.TIMELINE else WorkspaceMode.LIST
     val rootTasks = remember(state.tasks, period, searchQuery, contentMode, sectorFilterEnabled, selectedSectors, timelineSector, sort) {
