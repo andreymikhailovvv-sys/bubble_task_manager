@@ -61,6 +61,20 @@ data class HomeState(val loading: Boolean = true, val user: CurrentUser? = null,
 class HomeViewModel(private val repository: WorkspaceRepository, private val themes: ThemePreferences) : ViewModel() {
     private val mutable = MutableStateFlow(HomeState())
     private val taskAiMutable=MutableStateFlow(TaskAiChatState())
+    private val taskProposalAutoApplyMutable=MutableStateFlow<Boolean?>(null)
+    val taskProposalAutoApply=taskProposalAutoApplyMutable.asStateFlow()
+    suspend fun taskProposalDetails(id:String):JsonObject =
+        repository.getTaskAiProposal(id)
+    suspend fun loadTaskProposalAutoApply():Boolean{
+        val remote=repository.getTaskAiAutoApplyPreference()
+        taskProposalAutoApplyMutable.value=remote
+        return remote
+    }
+    suspend fun setTaskProposalAutoApply(enabled:Boolean):Boolean{
+        val saved=repository.setTaskAiAutoApplyPreference(enabled)
+        taskProposalAutoApplyMutable.value=saved
+        return saved
+    }
     private val generalAiMutable=MutableStateFlow(GeneralAiChatState())
     val generalAi=generalAiMutable.asStateFlow()
     suspend fun transcribeVoice(bytes:ByteArray,durationSeconds:Double):String =
