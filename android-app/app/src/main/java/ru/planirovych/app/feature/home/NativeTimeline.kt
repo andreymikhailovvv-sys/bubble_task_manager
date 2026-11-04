@@ -491,7 +491,8 @@ private fun ReadableWeekGrid(
     val selectedIndex by remember { derivedStateOf { weekScroll.firstVisibleItemIndex.coerceIn(0,6) } }
     LaunchedEffect(days.firstOrNull()?.first) { weekScroll.scrollToItem(0) }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val columnWidth=minOf(228.dp,maxWidth-12.dp).coerceAtLeast(176.dp)
+        val availableWidth=maxWidth
+        val columnWidth=minOf(228.dp,availableWidth-12.dp).coerceAtLeast(176.dp)
         Column(verticalArrangement=Arrangement.spacedBy(9.dp)){
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)){
                 days.forEachIndexed{index,(day,_)->
@@ -533,7 +534,7 @@ private fun ReadableWeekGrid(
                 modifier=Modifier.fillMaxWidth(),
                 state=weekScroll,
                 contentPadding=PaddingValues(bottom=6.dp,
-                    end=(maxWidth-columnWidth).coerceAtLeast(0.dp)),
+                    end=(availableWidth-columnWidth).coerceAtLeast(0.dp)),
                 horizontalArrangement=Arrangement.spacedBy(8.dp)
             ){
                 items(days,key={it.first.toString()}){(day,entries)->
