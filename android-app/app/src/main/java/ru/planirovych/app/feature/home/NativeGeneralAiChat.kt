@@ -83,7 +83,6 @@ internal fun NativeGeneralAiChatPage(
     var handledQuickLaunch by remember { mutableIntStateOf(0) }
     var menuOpen by remember{mutableStateOf(false)}
     var modelMenu by remember{mutableStateOf(false)}
-    var projectMenu by remember{mutableStateOf(false)}
     var chatMenu by remember{mutableStateOf(false)}
     var draft by remember{mutableStateOf("")}
     var reply by remember{mutableStateOf<GeneralReply?>(null)}
@@ -91,6 +90,7 @@ internal fun NativeGeneralAiChatPage(
     var attaching by remember{mutableStateOf(false)}
     var attachError by remember{mutableStateOf<String?>(null)}
     var historyPositioned by remember{mutableStateOf(false)}
+    var headerCollapsed by remember(thread?.id){mutableStateOf(false)}
     var lastVisibleCount by remember{mutableIntStateOf(0)}
     var composerHeightPx by remember{mutableIntStateOf(0)}
     var lastRequestId by remember{mutableStateOf<String?>(null)}
@@ -181,6 +181,28 @@ internal fun NativeGeneralAiChatPage(
         previousAssistant=latestAssistant
         lastVisibleCount=count
     }
+    LaunchedEffect(thread?.id){
+        var previousIndex:Int?=null
+        var previousOffset=0
+        var movement=0
+        snapshotFlow{
+            Triple(listState.firstVisibleItemIndex,
+                listState.firstVisibleItemScrollOffset,listState.isScrollInProgress)
+        }.collect{(index,offset,scrolling)->
+            val oldIndex=previousIndex
+            if(scrolling && historyPositioned && oldIndex!=null){
+                val delta=if(index==oldIndex)offset-previousOffset
+                    else (index-oldIndex).coerceIn(-3,3)*36
+                if(delta!=0){
+                    if((delta>0&&movement<0)||(delta<0&&movement>0))movement=0
+                    movement=(movement+delta).coerceIn(-80,80)
+                    if(movement>22){headerCollapsed=true;movement=0}
+                    if(movement< -22){headerCollapsed=false;movement=0}
+                }
+            }else if(!scrolling)movement=0
+            previousIndex=index;previousOffset=offset
+        }
+    }
     LaunchedEffect(state.busy,state.error){
         if(!state.busy&&state.error!=null&&queuedDraft.isNotBlank()){
             if(draft.isBlank())draft=queuedDraft
@@ -251,43 +273,53 @@ internal fun NativeGeneralAiChatPage(
     }
     Box(Modifier.fillMaxSize().background(c.bg)){
         Column(Modifier.fillMaxSize()){
-            // Exactly the Mini App's two-row context header. Never collapses
-            // on scroll; the conversation alone scrolls beneath it.
-            val headerBg=if(dark)Color(0xFF101B2F) else Color(0xFFF7F9FD)
-            val controlBg=if(dark)Color(0xFF1B2A43) else Color.White
+            val headerBg=if(dark)Color(0xDD101B2F) else Color(0xEAF7F9FD)
+            val controlBg=if(dark)Color(0xC71B2A43) else Color(0xEDFFFFFF)
             val controlBorder=if(dark)Color(0xFF3B4C67) else Color(0xFFDCE3EF)
-            Column(Modifier.fillMaxWidth().background(headerBg)
-                .padding(horizontal=13.dp,vertical=11.dp),
-                verticalArrangement=Arrangement.spacedBy(11.dp)){
-                Row(Modifier.fillMaxWidth(),
-                    verticalAlignment=Alignment.CenterVertically,
-                    horizontalArrangement=Arrangement.spacedBy(10.dp)){
-                    Box(Modifier.size(43.dp).clip(CircleShape)
+            // Scroll away like the Mini App. Translucent frosted surfaces let the
+            // conversation remain subtly visible beneath the compact controls.
+            AnimatedVisibility(visible=!headerCollapsed,
+                enter=expandVertically(animationSpec=tween(180))+fadeIn(),
+                exit=shrinkVertically(animationSpec=tween(160))+fadeOut()){
+                Row(Modifier.fillMaxWidth()
+                    .background(headerBg)
+                    .border(width=.5.dp,color=controlBorder.copy(alpha=.4f))
+                    .padding(horizontal=10.dp,vertical=8.dp),
+                    horizontalArrangement=Arrangement.spacedBy(7.dp),
+                    verticalAlignment=Alignment.CenterVertically){
+                    Box(Modifier.size(39.dp).clip(CircleShape)
                         .background(controlBg).border(1.dp,controlBorder,CircleShape)
-                        .clickable {
+                        .clickable{
                             menuOpen=true;vm.refreshGeneralAi()
                         },contentAlignment=Alignment.Center){
-                        Icon(Icons.Default.Menu,"Проекты и чаты",tint=c.text,
-                            modifier=Modifier.size(21.dp))
+                        Icon(Icons.Default.Menu,"Проекты",tint=c.text,modifier=Modifier.size(20.dp))
                     }
-                    Box(Modifier.weight(1f)){
-                        Row(Modifier.fillMaxWidth().heightIn(min=43.dp)
-                            .clickable{chatMenu=true},
+                    Box(Modifier.weight(1.18f)){
+                        Row(Modifier.fillMaxWidth().height(53.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(controlBg)
+                            .border(1.dp,controlBorder,RoundedCornerShape(14.dp))
+                            .clickable{chatMenu=true}
+                            .padding(horizontal=8.dp),
                             verticalAlignment=Alignment.CenterVertically,
-                            horizontalArrangement=Arrangement.spacedBy(5.dp)){
-                            Text(thread?.title?:"Быстрые запросы",
-                                modifier=Modifier.weight(1f,fill=false),
-                                color=c.text,fontSize=19.sp,fontWeight=FontWeight.Bold,
-                                maxLines=1,overflow=TextOverflow.Ellipsis)
-                            Icon(Icons.Default.KeyboardArrowDown,"Выбрать чат",
-                                tint=c.secondary,modifier=Modifier.size(19.dp))
+                            horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                            Icon(Icons.Default.ChatBubbleOutline,null,tint=c.accent,
+                                modifier=Modifier.size(17.dp))
+                            Column(Modifier.weight(1f),
+                                verticalArrangement=Arrangement.spacedBy(3.dp)){
+                                Text("ЧАТ",color=c.secondary,fontSize=9.sp,
+                                    fontWeight=FontWeight.Bold,letterSpacing=.6.sp)
+                                Text(thread?.title?:"Быстрые запросы",
+                                    color=c.text,fontSize=12.sp,fontWeight=FontWeight.Bold,
+                                    maxLines=1,overflow=TextOverflow.Ellipsis)
+                            }
+                            Icon(Icons.Default.ExpandMore,null,tint=c.secondary,
+                                modifier=Modifier.size(16.dp))
                         }
-                        DropdownMenu(expanded=chatMenu,
-                            onDismissRequest={chatMenu=false},
+                        DropdownMenu(expanded=chatMenu,onDismissRequest={chatMenu=false},
                             modifier=Modifier.background(controlBg)){
                             project?.chats.orEmpty().forEach{item->
-                                DropdownMenuItem(
-                                    text={Text(item.title,color=c.text,maxLines=1)},
+                                DropdownMenuItem(text={Text(item.title,color=c.text,maxLines=1)},
                                     leadingIcon={Icon(Icons.Default.ChatBubbleOutline,null,
                                         tint=if(thread?.id==item.id)c.accent else c.secondary)},
                                     trailingIcon={if(thread?.id==item.id)
@@ -306,92 +338,53 @@ internal fun NativeGeneralAiChatPage(
                                         chatMenu=false
                                     })
                             }
-                        }
-                    }
-                    Box(Modifier.size(43.dp).clip(CircleShape)
-                        .background(controlBg).border(1.dp,controlBorder,CircleShape)
-                        .clickable(onClick=onExit),contentAlignment=Alignment.Center){
-                        Icon(Icons.Default.Close,"Закрыть чат",tint=c.text,
-                            modifier=Modifier.size(21.dp))
-                    }
-                }
-                Row(Modifier.fillMaxWidth(),
-                    horizontalArrangement=Arrangement.spacedBy(9.dp)){
-                    Box(Modifier.weight(1.18f)){
-                        Row(Modifier.fillMaxWidth().height(64.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(controlBg)
-                            .border(1.dp,controlBorder,RoundedCornerShape(16.dp))
-                            .clickable { projectMenu=true }
-                            .padding(horizontal=10.dp),
-                            verticalAlignment=Alignment.CenterVertically,
-                            horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                            Box(Modifier.size(37.dp).clip(RoundedCornerShape(12.dp))
-                                .background(nativeProjectColor(project?.color?:"#8b5cf6")),
-                                contentAlignment=Alignment.Center){
-                                GeneralAiProjectGlyph(project?.icon?:"✨",22.dp)
-                            }
-                            Column(Modifier.weight(1f),
-                                verticalArrangement=Arrangement.spacedBy(4.dp)){
-                                Text("ПРОЕКТ",color=c.secondary,fontSize=10.sp,
-                                    fontWeight=FontWeight.Bold,letterSpacing=.7.sp)
-                                Text(project?.title?:"Личный проект",color=c.text,
-                                    fontSize=13.sp,fontWeight=FontWeight.Bold,maxLines=1,
-                                    overflow=TextOverflow.Ellipsis)
-                            }
-                            Icon(Icons.Default.KeyboardArrowDown,null,tint=c.secondary,
-                                modifier=Modifier.size(17.dp))
-                        }
-                        DropdownMenu(expanded=projectMenu,
-                            onDismissRequest={projectMenu=false},
-                            modifier=Modifier.background(controlBg)){
-                            state.projects.forEach{item->
-                                DropdownMenuItem(text={Text(item.title,color=c.text,maxLines=1)},
-                                    leadingIcon={GeneralAiProjectGlyph(item.icon,21.dp)},
-                                    trailingIcon={if(project?.id==item.id)
-                                        Icon(Icons.Default.Check,null,tint=c.accent)},
-                                    onClick={
-                                        vm.chooseGeneralAiChat(item.id,
-                                            item.chats.firstOrNull()?.id?:QUICK_AI_THREAD_ID)
-                                        projectMenu=false
-                                    })
+                            val selected=thread
+                            val editable=selected!=null &&
+                                selected.id!=QUICK_AI_THREAD_ID &&
+                                !selected.id.startsWith("telegram-ai-assistant:") &&
+                                !selected.id.startsWith("mail-ai-assistant:") && !isTelegram
+                            if(editable && selected!=null){
+                                DropdownMenuItem(text={Text("Переименовать",color=c.text)},
+                                    leadingIcon={Icon(Icons.Default.Edit,null,tint=c.secondary)},
+                                    onClick={renameTarget=selected;chatMenu=false})
+                                DropdownMenuItem(text={Text("Удалить чат",color=c.text)},
+                                    enabled=(project?.chats?.size?:0)>1,
+                                    leadingIcon={Icon(Icons.Default.DeleteOutline,null,tint=c.secondary)},
+                                    onClick={deleteThread=selected;chatMenu=false})
                             }
                         }
                     }
                     Box(Modifier.weight(1f)){
-                        Row(Modifier.fillMaxWidth().height(64.dp)
-                            .clip(RoundedCornerShape(16.dp))
+                        Row(Modifier.fillMaxWidth().height(53.dp)
+                            .clip(RoundedCornerShape(14.dp))
                             .background(controlBg)
-                            .border(1.dp,controlBorder,RoundedCornerShape(16.dp))
+                            .border(1.dp,controlBorder,RoundedCornerShape(14.dp))
                             .clickable(enabled=!isTelegram&&!state.saving){modelMenu=true}
-                            .padding(horizontal=10.dp),
+                            .padding(horizontal=8.dp),
                             verticalAlignment=Alignment.CenterVertically,
-                            horizontalArrangement=Arrangement.spacedBy(9.dp)){
+                            horizontalArrangement=Arrangement.spacedBy(7.dp)){
                             Box(Modifier.size(9.dp).background(Color(0xFFA779ED),CircleShape))
                             Column(Modifier.weight(1f),
-                                verticalArrangement=Arrangement.spacedBy(4.dp)){
-                                Text("МОДЕЛЬ ИИ",color=c.secondary,fontSize=10.sp,
-                                    fontWeight=FontWeight.Bold,letterSpacing=.7.sp)
-                                Text(modelLabel,color=c.text,fontSize=13.sp,
+                                verticalArrangement=Arrangement.spacedBy(3.dp)){
+                                Text("МОДЕЛЬ ИИ",color=c.secondary,fontSize=9.sp,
+                                    fontWeight=FontWeight.Bold,letterSpacing=.6.sp)
+                                Text(modelLabel,color=c.text,fontSize=12.sp,
                                     fontWeight=FontWeight.Bold,maxLines=1,
                                     overflow=TextOverflow.Ellipsis)
                             }
-                            Icon(Icons.Default.KeyboardArrowDown,null,tint=c.secondary,
-                                modifier=Modifier.size(17.dp))
+                            Icon(Icons.Default.ExpandMore,null,tint=c.secondary,
+                                modifier=Modifier.size(16.dp))
                         }
-                        DropdownMenu(expanded=modelMenu,
-                            onDismissRequest={modelMenu=false},
+                        DropdownMenu(expanded=modelMenu,onDismissRequest={modelMenu=false},
                             modifier=Modifier.background(controlBg)){
                             modelOptions.forEach{(key,label)->
                                 DropdownMenuItem(text={Text(label,color=c.text)},
                                     trailingIcon={if(model==key)
                                         Icon(Icons.Default.Check,null,tint=c.accent)},
                                     onClick={
-                                        project?.id?.let{pid->
-                                            thread?.id?.let{tid->
-                                                vm.setGeneralAiModel(pid,tid,key)
-                                            }
-                                        }
+                                        project?.id?.let{pid->thread?.id?.let{tid->
+                                            vm.setGeneralAiModel(pid,tid,key)
+                                        }}
                                         modelMenu=false
                                     })
                             }
@@ -598,7 +591,7 @@ internal fun NativeGeneralAiChatPage(
                     .padding(13.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
                     Row(Modifier.fillMaxWidth(),
                         verticalAlignment=Alignment.CenterVertically){
-                        Text("Проекты и чаты",Modifier.weight(1f),
+                        Text("Проекты",Modifier.weight(1f),
                             color=c.text,fontWeight=FontWeight.Bold,fontSize=19.sp)
                         IconButton(onClick={menuOpen=false}){
                             Icon(Icons.Default.Close,"Закрыть меню",tint=c.text)
@@ -644,47 +637,6 @@ internal fun NativeGeneralAiChatPage(
                                             state.projects.size>1&&!isBusy){
                                         deleteProject=p
                                     }
-                                }
-                        }
-                    }
-                    Spacer(Modifier.height(3.dp))
-                    Row(Modifier.fillMaxWidth(),
-                        horizontalArrangement=Arrangement.SpaceBetween,
-                        verticalAlignment=Alignment.CenterVertically){
-                        Text("ЧАТЫ",color=Color(0xFF0891B2),
-                            fontWeight=FontWeight.Bold,letterSpacing=1.8.sp,fontSize=11.sp)
-                        SmallFloatingAdd(color=Color(0xFF06B6D4),
-                            enabled=!isBusy&&!project.orIsTelegram()){
-                            project?.id?.let(vm::createGeneralAiThread)
-                        }
-                    }
-                    project?.chats.orEmpty().forEach{t->
-                        val active=thread?.id==t.id
-                        AiSidebarGradientCard(
-                            active=active,accent=Color(0xFF06B6D4),
-                            dark=dark,modifier=Modifier.fillMaxWidth()){
-                                Column(Modifier.fillMaxWidth().clickable{
-                                    project?.id?.let{vm.chooseGeneralAiChat(it,t.id)}
-                                    menuOpen=false
-                                }){
-                                    Text(t.title,
-                                        color=if(dark)Color(0xFFF8FAFC)else Color(0xFF0F172A),
-                                        fontSize=14.sp,
-                                        fontWeight=FontWeight.Bold,maxLines=2)
-                                    Spacer(Modifier.height(4.dp))
-                                    Text("${t.messages.size} сообщ.",
-                                        color=if(dark)Color(0xFFA8B8CE)
-                                            else Color(0xFF64748B),fontSize=12.sp)
-                                }
-                                val editable=t.id!=QUICK_AI_THREAD_ID &&
-                                    !t.id.startsWith("telegram-ai-assistant:") &&
-                                    !project.orIsTelegram()
-                                Row(horizontalArrangement=Arrangement.spacedBy(7.dp)){
-                                    AiSidebarAction("Переименовать",Icons.Default.Edit,c,
-                                        enabled=editable&&!isBusy){renameTarget=t}
-                                    AiSidebarAction("Удалить",Icons.Default.DeleteOutline,c,
-                                        danger=true,enabled=editable&&!isBusy&&
-                                            (project?.chats?.size?:0)>1){deleteThread=t}
                                 }
                         }
                     }
