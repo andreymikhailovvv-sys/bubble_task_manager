@@ -206,7 +206,7 @@ fun ModernWorkspace(
             HabitsStrip(habits, colors, dark, onHabitClick = { selectedHabitId = it.id }, onAdd = { createHabitOpen = true })
         }
         item {
-            WorkspaceToolbar(colors, dark,
+            WorkspaceToolbar(colors, dark, mode=contentMode,
                 filtered = period != PeriodFilter.ALL || if (contentMode == WorkspaceMode.LIST)
                     sort != SortTasks.URGENCY || sectorFilterEnabled else timelineSector != "all",
                 onFilter = { filtersOpen=true },
@@ -237,11 +237,13 @@ fun ModernWorkspace(
             animationSpec=tween(180))+fadeIn(),
         exit=slideOutVertically(targetOffsetY={-it},
             animationSpec=tween(155))+fadeOut()){
-        WorkspaceTopbar(state,colors,
+        WorkspaceTopbar(state,colors,mode=contentMode,dark=dark,
             search={search(it);headerVisible=true},
             settings=settings,
             onCredits={creditsOpen=true},
-            onScore={scoreOpen=true})
+            onScore={scoreOpen=true},
+            onPostpone={vm.postponeOverdue()},
+            canPostpone=overdue && !state.taskBusy)
     }
     }
             }
@@ -272,54 +274,134 @@ fun ModernWorkspace(
     }
 }
 
+/**
+ * List and Timeline share the Mini App's search-led header:
+ * List: search | credit balance | efficiency | settings
+ * Timeline: search | overdue postpone | compact overflow utilities.
+ * Keep each item on its own surface, never wrap the whole row in another card.
+ */
 @Composable
-private fun WorkspaceTopbar(state:HomeState, colors:WorkspaceColors,
-    search:(String)->Unit, settings:()->Unit, onCredits:()->Unit, onScore:()->Unit) {
-    Surface(shape=RoundedCornerShape(23.dp), color=colors.panel,
-        border=BorderStroke(1.dp,colors.panelBorder), shadowElevation=3.dp) {
-        Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment=Alignment.CenterVertically,
-            horizontalArrangement=Arrangement.spacedBy(5.dp)) {
-            Row(Modifier.weight(1f).height(36.dp).clip(RoundedCornerShape(12.dp))
-                    .background(colors.field).border(1.dp,colors.panelBorder,RoundedCornerShape(12.dp))
-                    .padding(horizontal=8.dp), verticalAlignment=Alignment.CenterVertically) {
+private fun WorkspaceTopbar(
+    state:HomeState, colors:WorkspaceColors, mode:WorkspaceMode, dark:Boolean,
+    search:(String)->Unit, settings:()->Unit,
+    onCredits:()->Unit, onScore:()->Unit,
+    onPostpone:()->Unit, canPostpone:Boolean
+) {
+    val shape=RoundedCornerShape(13.dp)
+    val iconColor=if(dark)Color(0xFF94E4EC) else Color(0xFF0891B2)
+    var moreOpen by remember(mode) { mutableStateOf(false) }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.spacedBy(7.dp),
+        verticalAlignment=Alignment.CenterVertically) {
+        Surface(modifier=Modifier.weight(1f).height(44.dp),
+            shape=shape,color=colors.card,
+            border=BorderStroke(1.dp,colors.panelBorder),shadowElevation=2.dp) {
+            Row(Modifier.fillMaxSize().padding(start=11.dp,end=7.dp),
+                verticalAlignment=Alignment.CenterVertically) {
                 Icon(Icons.Default.Search, contentDescription=null, tint=colors.secondaryText,
-                    modifier=Modifier.size(17.dp))
-                Spacer(Modifier.width(5.dp))
-                BasicTextField(value=state.query, onValueChange=search,
-                    modifier=Modifier.weight(1f), singleLine=true,
-                    textStyle=MaterialTheme.typography.bodyMedium.copy(color=colors.text,fontSize=14.sp),
+                    modifier=Modifier.size(18.dp))
+                Spacer(Modifier.width(7.dp))
+                BasicTextField(value=state.query,onValueChange=search,
+                    modifier=Modifier.weight(1f),singleLine=true,
+                    textStyle=MaterialTheme.typography.bodyMedium.copy(
+                        color=colors.text,fontSize=14.sp),
                     cursorBrush=androidx.compose.ui.graphics.SolidColor(colors.purple),
                     decorationBox={inner ->
                         Box(contentAlignment=Alignment.CenterStart) {
-                            if (state.query.isEmpty()) Text("Поиск",fontSize=13.sp,color=colors.secondaryText)
+                            if(state.query.isEmpty())Text("Поиск",fontSize=13.sp,
+                                color=colors.secondaryText)
                             inner()
                         }
                     })
-            }
-            Row(Modifier.height(36.dp).clip(RoundedCornerShape(12.dp))
-                .background(colors.muted).clickable(onClick=onCredits)
-                .border(1.dp,colors.panelBorder,RoundedCornerShape(12.dp))
-                .padding(horizontal=7.dp), verticalAlignment=Alignment.CenterVertically) {
-                Icon(Icons.Default.Paid, null, modifier=Modifier.size(16.dp),tint=Color(0xFF22B8CF))
-                Spacer(Modifier.width(3.dp))
-                Text((state.user?.aiCredits ?: 0).toString(), fontSize=12.sp,
-                    fontWeight=FontWeight.SemiBold,color=colors.text,maxLines=1)
-            }
-            Box(Modifier.size(36.dp).clip(RoundedCornerShape(12.dp))
-                .background(colors.muted).border(1.dp,colors.panelBorder,RoundedCornerShape(12.dp))
-                .clickable(onClick=onScore),contentAlignment=Alignment.Center) {
-                Box(Modifier.size(27.dp), contentAlignment=Alignment.Center) {
-                    CircularProgressIndicator(progress={
-                        ((state.user?.efficiencyScore ?: 0.0)/100.0).toFloat().coerceIn(0f,1f)
-                    },modifier=Modifier.fillMaxSize(),strokeWidth=2.8.dp,color=Color(0xFF8B5CF6),
-                    trackColor=colors.panelBorder)
-                    Icon(Icons.Default.Star, null,tint=Color(0xFFF472B6),modifier=Modifier.size(17.dp))
+                if(state.query.isNotEmpty()) {
+                    Box(Modifier.size(27.dp).clip(CircleShape)
+                        .clickable { search("") },contentAlignment=Alignment.Center) {
+                        Icon(Icons.Default.Close,"Очистить поиск",
+                            tint=colors.secondaryText,modifier=Modifier.size(16.dp))
+                    }
                 }
             }
-            Box(Modifier.size(36.dp).clip(RoundedCornerShape(12.dp))
-                .background(colors.muted).border(1.dp,colors.panelBorder,RoundedCornerShape(12.dp))
-                .clickable(onClick=settings), contentAlignment=Alignment.Center) {
-                Icon(Icons.Default.Settings,"Настройки",modifier=Modifier.size(17.dp),tint=Color(0xFFF59E0B))
+        }
+        if(mode==WorkspaceMode.LIST) {
+            val creditColor=if(dark)Color(0xFFF9A8D4) else Color(0xFFBE185D)
+            val creditFill=if(dark)Color(0xFF37243B) else Color(0xFFFDF2F8)
+            val creditBorder=if(dark)Color(0xFF70405A) else Color(0xFFF2C5DD)
+            Surface(modifier=Modifier.height(44.dp).clip(shape).clickable(onClick=onCredits),
+                shape=shape,color=creditFill,border=BorderStroke(1.dp,creditBorder),
+                shadowElevation=1.dp) {
+                Row(Modifier.padding(horizontal=9.dp),verticalAlignment=Alignment.CenterVertically,
+                    horizontalArrangement=Arrangement.spacedBy(4.dp)) {
+                    Icon(Icons.Default.Paid,"AI-кредиты",modifier=Modifier.size(16.dp),tint=creditColor)
+                    Text((state.user?.aiCredits ?: 0).toString(),fontSize=11.sp,
+                        fontWeight=FontWeight.SemiBold,color=creditColor,maxLines=1)
+                }
+            }
+            Surface(modifier=Modifier.size(width=41.dp,height=44.dp)
+                    .clip(shape).clickable(onClick=onScore),
+                shape=shape,color=colors.card,border=BorderStroke(1.dp,colors.panelBorder),
+                shadowElevation=1.dp) {
+                Box(contentAlignment=Alignment.Center) {
+                    CircularProgressIndicator(progress={
+                        ((state.user?.efficiencyScore ?: 0.0)/100.0).toFloat().coerceIn(0f,1f)
+                    },modifier=Modifier.size(29.dp),strokeWidth=2.6.dp,
+                        color=Color(0xFF8B5CF6),trackColor=colors.panelBorder)
+                    Icon(Icons.Default.Star,"Рейтинг эффективности",
+                        tint=if(dark)Color(0xFFD8B4FE) else Color(0xFF8B5CF6),
+                        modifier=Modifier.size(17.dp))
+                }
+            }
+            Surface(modifier=Modifier.size(width=41.dp,height=44.dp)
+                    .clip(shape).clickable(onClick=settings),
+                shape=shape,color=colors.card,border=BorderStroke(1.dp,colors.panelBorder),
+                shadowElevation=1.dp) {
+                Box(contentAlignment=Alignment.Center) {
+                    Icon(Icons.Default.Settings,"Настройки",
+                        modifier=Modifier.size(19.dp),tint=iconColor)
+                }
+            }
+        } else {
+            val postponeInk=if(dark)Color(0xFF93DAF0) else Color(0xFF067EA2)
+            val postponeFill=if(dark)Color(0xFF19354A) else Color(0xFFEFFAFF)
+            Row(Modifier.height(44.dp).alpha(if(canPostpone)1f else .5f)
+                .clip(shape).background(postponeFill)
+                .border(1.dp,tinted(postponeInk,colors.panelBorder,.35f),shape)
+                .then(if(canPostpone)Modifier.clickable(onClick=onPostpone) else Modifier)
+                .padding(horizontal=10.dp),
+                verticalAlignment=Alignment.CenterVertically,
+                horizontalArrangement=Arrangement.spacedBy(5.dp)) {
+                Icon(Icons.Default.Schedule,"Перенести просроченные задачи",
+                    tint=postponeInk,modifier=Modifier.size(16.dp))
+                Text("Отложить",fontSize=11.sp,fontWeight=FontWeight.SemiBold,
+                    color=postponeInk,maxLines=1)
+            }
+            Box {
+                Surface(modifier=Modifier.size(width=43.dp,height=44.dp)
+                        .clip(shape).clickable { moreOpen=true },
+                    shape=shape,color=colors.card,border=BorderStroke(1.dp,colors.panelBorder),
+                    shadowElevation=1.dp) {
+                    Box(contentAlignment=Alignment.Center) {
+                        Icon(Icons.Default.MoreVert,"Кредиты, рейтинг и настройки",
+                            tint=colors.text,modifier=Modifier.size(22.dp))
+                    }
+                }
+                DropdownMenu(expanded=moreOpen,onDismissRequest={moreOpen=false},
+                    modifier=Modifier.background(colors.panel)) {
+                    DropdownMenuItem(
+                        text={Row(verticalAlignment=Alignment.CenterVertically,
+                            horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                            Text("Кредиты",color=colors.text)
+                            Text((state.user?.aiCredits ?: 0).toString(),color=colors.secondaryText)
+                        }},
+                        leadingIcon={Icon(Icons.Default.Paid,null,tint=Color(0xFF22B8CF))},
+                        onClick={moreOpen=false;onCredits()})
+                    DropdownMenuItem(
+                        text={Text("Рейтинг",color=colors.text)},
+                        leadingIcon={Icon(Icons.Default.Star,null,tint=Color(0xFFA78BFA))},
+                        onClick={moreOpen=false;onScore()})
+                    DropdownMenuItem(
+                        text={Text("Настройки",color=colors.text)},
+                        leadingIcon={Icon(Icons.Default.Settings,null,tint=iconColor)},
+                        onClick={moreOpen=false;settings()})
+                }
             }
         }
     }
@@ -379,40 +461,37 @@ private fun HabitsStrip(habits:List<Habit>, colors:WorkspaceColors, dark:Boolean
     }
 }
 
-@Composable private fun WorkspaceToolbar(colors:WorkspaceColors,dark:Boolean,
-    filtered:Boolean,onFilter:()->Unit,onPostpone:()->Unit,canPostpone:Boolean) {
-    Surface(shape=RoundedCornerShape(19.dp),
-        color=tinted(colors.purple,colors.panel,if(dark).12f else .045f),
-        border=BorderStroke(1.dp,tinted(colors.purple,colors.panelBorder,if(dark).44f else .22f)),
-        shadowElevation=2.dp) {
-        Row(Modifier.fillMaxWidth().padding(9.dp),
-            horizontalArrangement=Arrangement.spacedBy(8.dp),
+@Composable
+private fun WorkspaceToolbar(
+    colors:WorkspaceColors,dark:Boolean,mode:WorkspaceMode,filtered:Boolean,
+    onFilter:()->Unit,onPostpone:()->Unit,canPostpone:Boolean
+) {
+    // No outer tinted container. Mini App renders these as independent chips.
+    val filterInk=if(filtered)colors.purple else if(dark)Color(0xFFE2E8F0) else Color(0xFF24354F)
+    val filterFill=if(filtered)colors.selected else colors.card
+    val filterBorder=if(filtered)colors.purple else colors.panelBorder
+    if(mode==WorkspaceMode.TIMELINE) {
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End) {
+            ToolbarButton("Фильтры",Icons.Default.FilterList,
+                filterInk,filterFill,filterBorder,
+                Modifier.width(124.dp),onFilter)
+        }
+    } else {
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp),
             verticalAlignment=Alignment.CenterVertically) {
             ToolbarButton("Отложить",Icons.Default.Schedule,
                 if(dark)Color(0xFF7DD3FC) else Color(0xFF0369A1),
-                tinted(Color(0xFF38BDF8),colors.panel,.10f),
-                tinted(Color(0xFF38BDF8),colors.panel,.34f),
-                Modifier.weight(1.13f),onPostpone,enabled=canPostpone)
+                tinted(Color(0xFF38BDF8),colors.panel,if(dark).14f else .09f),
+                tinted(Color(0xFF38BDF8),colors.panelBorder,.32f),
+                Modifier.weight(1.04f),onPostpone,enabled=canPostpone)
             ToolbarButton("Оптимизировать",Icons.Default.AutoAwesome,
                 if(dark)Color(0xFFF9A8D4) else Color(0xFFBE185D),
-                tinted(Color(0xFFF472B6),colors.panel,.13f),
-                tinted(Color(0xFFF472B6),colors.panel,.35f),
-                Modifier.weight(1.55f),{},enabled=false,dimDisabled=false)
-            Row(Modifier.weight(1f).height(43.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(if(filtered)colors.selected else colors.muted)
-                .border(1.dp,if(filtered)colors.purple else colors.panelBorder,
-                    RoundedCornerShape(14.dp))
-                .clickable(onClick=onFilter),
-                horizontalArrangement=Arrangement.Center,
-                verticalAlignment=Alignment.CenterVertically) {
-                Icon(Icons.Default.FilterList,"Фильтры",
-                    tint=if(filtered)colors.purple else colors.text,
-                    modifier=Modifier.size(16.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("Фильтры",fontSize=10.5.sp,color=colors.text,
-                    fontWeight=FontWeight.SemiBold,maxLines=1)
-            }
+                tinted(Color(0xFFF472B6),colors.panel,if(dark).13f else .07f),
+                tinted(Color(0xFFF472B6),colors.panelBorder,.29f),
+                Modifier.weight(1.49f),{},enabled=false,dimDisabled=false)
+            ToolbarButton("Фильтры",Icons.Default.FilterList,
+                filterInk,filterFill,filterBorder,
+                Modifier.weight(1.03f),onFilter)
         }
     }
 }
@@ -432,13 +511,16 @@ private fun HabitsStrip(habits:List<Habit>, colors:WorkspaceColors, dark:Boolean
     ink:Color,fill:Color,border:Color,modifier:Modifier=Modifier,
     click:()->Unit,enabled:Boolean=true,dimDisabled:Boolean=true) {
     val alpha=if(!enabled && dimDisabled).48f else 1f
-    Row(modifier.height(43.dp).alpha(alpha).clip(RoundedCornerShape(14.dp))
-        .background(fill).border(1.dp,border,RoundedCornerShape(14.dp))
-        .then(if(enabled)Modifier.clickable(onClick=click) else Modifier),
+    val shape=RoundedCornerShape(13.dp)
+    Row(modifier.height(44.dp).alpha(alpha)
+        .shadow(1.dp,shape).clip(shape)
+        .background(fill).border(1.dp,border,shape)
+        .then(if(enabled)Modifier.clickable(onClick=click) else Modifier)
+        .padding(horizontal=4.dp),
         horizontalArrangement=Arrangement.Center,verticalAlignment=Alignment.CenterVertically) {
         Icon(icon,null,tint=ink,modifier=Modifier.size(15.dp))
-        Spacer(Modifier.width(3.dp))
-        Text(label,color=ink,fontSize=10.5.sp,fontWeight=FontWeight.SemiBold,maxLines=1,
+        Spacer(Modifier.width(5.dp))
+        Text(label,color=ink,fontSize=11.sp,fontWeight=FontWeight.SemiBold,maxLines=1,
             softWrap=false)
     }
 }
