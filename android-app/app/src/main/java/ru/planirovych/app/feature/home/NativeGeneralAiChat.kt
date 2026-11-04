@@ -119,11 +119,14 @@ internal fun NativeGeneralAiChatPage(
     )
     val modelLabel=modelOptions.firstOrNull{it.first==model}?.second?:"GPT-6 Luna"
     val taskTitles=remember(tasks){tasks.associate{it.id to it.title}}
+    var voiceSendSerial by remember { mutableIntStateOf(0) }
     val speechInput=rememberAiChatSpeechInput(
-        onRecognized={spoken->
+        transcribe=vm::transcribeVoice,
+        onRecognized={spoken,sendImmediately->
             draft=appendAiDictation(draft,spoken)
             attachError=null
             lastRequestHadError=false
+            if(sendImmediately)voiceSendSerial++
         },
         onError={message->attachError=message}
     )
@@ -243,6 +246,9 @@ internal fun NativeGeneralAiChatPage(
             })
     }
 
+    LaunchedEffect(voiceSendSerial){
+        if(voiceSendSerial>0)send()
+    }
     Box(Modifier.fillMaxSize().background(c.bg)){
         Column(Modifier.fillMaxSize()){
             // Exactly the Mini App's two-row context header. Never collapses
