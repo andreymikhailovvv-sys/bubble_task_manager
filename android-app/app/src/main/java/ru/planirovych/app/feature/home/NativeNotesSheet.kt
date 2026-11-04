@@ -163,10 +163,14 @@ internal fun NativeNotesPage(vm:HomeViewModel,colors:WorkspaceColors,
                                     color=if(dark)Color(0xFFE1D0FF)
                                         else Color(0xFF6840B1),maxLines=1)
                             }
+                            val filterShape=RoundedCornerShape(19.dp)
                             DropdownMenu(expanded=filterOpen,
                                 onDismissRequest={filterOpen=false},
-                                modifier=Modifier.widthIn(min=240.dp,max=310.dp)
-                                    .heightIn(max=425.dp).background(notesCard)){
+                                modifier=Modifier.widthIn(min=250.dp,max=330.dp)
+                                    .heightIn(max=590.dp)
+                                    .clip(filterShape)
+                                    .background(notesCard)
+                                    .border(1.dp,notesBorder,filterShape)){
                                 Text("Какие заметки показывать",
                                     Modifier.padding(horizontal=15.dp,vertical=9.dp),
                                     color=notesMuted,fontSize=12.sp,
