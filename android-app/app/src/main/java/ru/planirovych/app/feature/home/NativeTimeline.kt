@@ -71,8 +71,9 @@ private data class TimelineEntry(
     val dueDate:String?=null
 )
 private fun timelineEntries(date:LocalDate,tasks:List<Task>,allTasks:List<Task>,
-    habits:List<Habit>,spheres:List<Sphere>):List<TimelineEntry>{
-    val parents=allTasks.associateBy{it.id}
+    habits:List<Habit>,spheres:List<Sphere>,
+    parents:Map<String,Task> = allTasks.associateBy{it.id},
+    sectors:Map<String,Sphere> = spheres.associateBy{it.id}):List<TimelineEntry>{
     val entries=tasks.mapNotNull {task ->
         val due=timelineDate(task.dueDate) ?: return@mapNotNull null
         if(due.toLocalDate()!=date)return@mapNotNull null
@@ -86,10 +87,10 @@ private fun timelineEntries(date:LocalDate,tasks:List<Task>,allTasks:List<Task>,
         val accent=when(kind){
             "Событие" -> Color(0xFFF59E0B)
             "Напоминание" -> Color(0xFF0284C7)
-            else -> calendarColor(spheres.firstOrNull{it.id==source.sphereId}?.color)
+            else -> calendarColor(sectors[source.sphereId.orEmpty()]?.color)
         }
         TimelineEntry(task.id,due.toLocalTime(),task.title,kind,accent,task.id,
-            sectorName=spheres.firstOrNull{it.id==source.sphereId}?.name,
+            sectorName=sectors[source.sphereId.orEmpty()]?.name,
             dueDate=task.dueDate)
     }.toMutableList()
     habits.filter{timelineHabitScheduled(it,date)}.forEach{habit->
@@ -101,6 +102,25 @@ private fun timelineEntries(date:LocalDate,tasks:List<Task>,allTasks:List<Task>,
         }
     }
     return entries.sortedWith(compareBy<TimelineEntry>{it.time}.thenBy{it.title})
+}
+/**
+ * Index task dates and parent sectors ONCE for each visible week/month.
+ * Previously every calendar cell scanned every task and rebuilt the parent
+ * map, i.e. 42 full passes through the task list during monthly composition.
+ */
+private fun timelineEntriesForDays(
+    first:LocalDate,dayCount:Int,tasks:List<Task>,allTasks:List<Task>,
+    habits:List<Habit>,spheres:List<Sphere>
+):List<Pair<LocalDate,List<TimelineEntry>>> {
+    val parents=allTasks.associateBy{it.id}
+    val sectors=spheres.associateBy{it.id}
+    val tasksByDay=tasks.mapNotNull{task->
+        timelineDate(task.dueDate)?.toLocalDate()?.let{it to task}
+    }.groupBy({it.first},{it.second})
+    return List(dayCount){index->
+        val date=first.plusDays(index.toLong())
+        date to timelineEntries(date,tasksByDay[date].orEmpty(),allTasks,habits,spheres,parents,sectors)
+    }
 }
 private fun shortTime(value:LocalTime)=value.format(DateTimeFormatter.ofPattern("HH:mm"))
 private fun timelineDueLabel(raw:String?):String {
@@ -221,7 +241,7 @@ internal fun NativeTimelineWorkspace(
             }
         }
         when(zoom){
-            TimelineZoom.DAY->TimelineDay(anchor,tasks,allTasks,habits,spheres,colors,dark,onOpen)
+            TimelineZoom.DAY->TimelineDay(anchor,tasks,allTasks,habits,spheres,colors,dark,onOpen,onOpenHabit)
             TimelineZoom.WEEK->TimelineWeek(start,tasks,allTasks,habits,spheres,colors,dark,
                 onOpen,onOpenHabit=onOpenHabit,
                 openDay={anchorRaw=it.toString();zoom=TimelineZoom.DAY})
@@ -239,7 +259,9 @@ internal fun NativeTimelineWorkspace(
  */
 @Composable
 private fun DayTimelineCard(
-    entry:TimelineEntry,colors:WorkspaceColors,dark:Boolean,onOpen:(String)->Unit
+    entry:TimelineEntry,colors:WorkspaceColors,dark:Boolean,
+    onOpen:(String)->Unit,onOpenHabit:(String)->Unit={},
+    onOpenDay:()->Unit={}
 ){
     val subtask=entry.kind=="Подзадача"
     val event=entry.kind=="Событие"
@@ -252,7 +274,6 @@ private fun DayTimelineCard(
         listOf(softTint,cardBase,cardBase)
     )
     val outline=if(dark)Color(0xFF40506A) else Color(0xFFE5EAF2)
-    val stripe=mixCalendarColor(cardBase,accent,if(dark).54f else .35f)
     val shape=RoundedCornerShape(18.dp)
     val dueLabel=if(event||reminder||habit)shortTime(entry.time)
         else timelineDueLabel(entry.dueDate)
@@ -268,37 +289,32 @@ private fun DayTimelineCard(
             // Subtasks align with tasks on the left; only the right edge is inset.
             .padding(end=if(subtask)8.dp else 0.dp)
             .shadow(
-                elevation=if(dark)2.dp else 5.dp,
+                elevation=if(dark)1.dp else 2.dp,
                 shape=shape,
                 ambientColor=if(dark)Color(0x22000000) else Color(0x12354B6D),
                 spotColor=if(dark)Color(0x28000000) else Color(0x1C354B6D)
             )
             .clip(shape)
             .background(gradient)
-            .drawBehind {
-                // A soft sector accent rather than a saturated, full-card tint.
+            .then(if(event) Modifier.drawBehind {
+                // Events retain their subtle dashed outline; tasks have NO side stripe.
+                val stroke=1.dp.toPx()
                 drawRoundRect(
-                    color=stripe,
-                    topLeft=Offset.Zero,
-                    size=Size(3.5.dp.toPx(),size.height),
-                    cornerRadius=CornerRadius(2.dp.toPx())
+                    color=accent.copy(alpha=if(dark).60f else .44f),
+                    topLeft=Offset(stroke/2,stroke/2),
+                    size=Size(size.width-stroke,size.height-stroke),
+                    cornerRadius=CornerRadius(18.dp.toPx()),
+                    style=Stroke(width=stroke,
+                        pathEffect=PathEffect.dashPathEffect(
+                            floatArrayOf(6.dp.toPx(),4.dp.toPx()),0f))
                 )
-                if(event){
-                    val stroke=1.dp.toPx()
-                    drawRoundRect(
-                        color=accent.copy(alpha=if(dark).60f else .44f),
-                        topLeft=Offset(stroke/2,stroke/2),
-                        size=Size(size.width-stroke,size.height-stroke),
-                        cornerRadius=CornerRadius(18.dp.toPx()),
-                        style=Stroke(width=stroke,
-                            pathEffect=PathEffect.dashPathEffect(
-                                floatArrayOf(6.dp.toPx(),4.dp.toPx()),0f))
-                    )
+            } else Modifier.border(1.dp,outline,shape))
+            .clickable(enabled=entry.taskId!=null || (habit && entry.habit!=null) || reminder) {
+                when {
+                    habit -> entry.habit?.id?.let(onOpenHabit)
+                    reminder -> onOpenDay()
+                    else -> entry.taskId?.let(onOpen)
                 }
-            }
-            .then(if(event)Modifier else Modifier.border(1.dp,outline,shape))
-            .clickable(enabled=entry.taskId!=null&&!reminder){
-                entry.taskId?.let(onOpen)
             }
             .heightIn(min=if(subtask)54.dp else 62.dp),
         verticalAlignment=Alignment.Top
@@ -336,7 +352,7 @@ private fun DayTimelineCard(
 @Composable
 private fun TimelineDay(day:LocalDate,tasks:List<Task>,allTasks:List<Task>,
     habits:List<Habit>,spheres:List<Sphere>,colors:WorkspaceColors,dark:Boolean,
-    onOpen:(String)->Unit){
+    onOpen:(String)->Unit,onOpenHabit:(String)->Unit){
     val entries=remember(day,tasks,allTasks,habits,spheres){
         timelineEntries(day,tasks,allTasks,habits,spheres)
     }
@@ -389,7 +405,7 @@ private fun TimelineDay(day:LocalDate,tasks:List<Task>,allTasks:List<Task>,
                     verticalArrangement=Arrangement.spacedBy(9.dp)
                 ){
                     records.forEach{entry->
-                        DayTimelineCard(entry,colors,dark,onOpen)
+                        DayTimelineCard(entry,colors,dark,onOpen,onOpenHabit)
                     }
                 }
             }
@@ -427,36 +443,31 @@ private fun MiniAppCalendarGrid(
     onOpen:(String)->Unit,onOpenHabit:(String)->Unit,openDay:(LocalDate)->Unit
 ){
     val gridStart=first.minusDays((first.dayOfWeek.value-1).toLong())
+    // Keep the same 42 cells as Mini App, but compute their records once.
+    val cells=remember(gridStart,monthMode,tasks,allTasks,habits,spheres){
+        timelineEntriesForDays(gridStart,if(monthMode)42 else 7,
+            tasks,allTasks,if(monthMode)emptyList() else habits,spheres)
+    }
     if(!monthMode){
-        val days=remember(gridStart,tasks,allTasks,habits,spheres){
-            (0L..6L).map{index->
-                val day=gridStart.plusDays(index)
-                day to timelineEntries(day,tasks,allTasks,habits,spheres)
-            }
-        }
-        ReadableWeekGrid(days,colors,dark,onOpen,onOpenHabit,openDay)
+        ReadableWeekGrid(cells,colors,dark,onOpen,onOpenHabit,openDay)
         return
     }
     val labels=listOf("Пн","Вт","Ср","Чт","Пт","Сб","Вс")
-    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(5.dp)){
+    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(4.dp)){
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)){
             labels.forEach{label->
                 Text(label,modifier=Modifier.weight(1f).padding(vertical=5.dp),
                     textAlign=TextAlign.Center,color=colors.secondaryText,
-                    fontSize=11.sp,fontWeight=FontWeight.SemiBold)
+                    fontSize=10.sp,fontWeight=FontWeight.Bold)
             }
         }
         repeat(6){row->
-            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max),
-                horizontalArrangement=Arrangement.spacedBy(4.dp)){
+            // Fixed-height cells avoid 6 expensive IntrinsicSize.Max passes.
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)){
                 repeat(7){col->
-                    val date=gridStart.plusDays((row*7+col).toLong())
-                    val entries=remember(date,tasks,allTasks,habits,spheres){
-                        timelineEntries(date,tasks,allTasks,habits,spheres)
-                            .filter{it.kind!="Привычка"}
-                    }
+                    val (date,entries)=cells[row*7+col]
                     CalendarDayCell(date,entries,date.month!=first.month,true,
-                        colors,dark,Modifier.weight(1f).fillMaxHeight(),
+                        colors,dark,Modifier.weight(1f),
                         onDay={openDay(date)},onTask=onOpen,onHabit=onOpenHabit)
                 }
             }
@@ -470,53 +481,64 @@ private fun ReadableWeekGrid(
     colors:WorkspaceColors,dark:Boolean,
     onOpen:(String)->Unit,onHabit:(String)->Unit,openDay:(LocalDate)->Unit
 ){
-    val weekScroll=rememberScrollState()
+    // LazyRow composes only visible columns. In contrast to the old eager
+    // horizontalScroll Row, a busy week no longer lays out seven tall columns
+    // on every vertical scroll frame.
+    val weekScroll=rememberLazyListState()
     val scope=rememberCoroutineScope()
-    val stride=with(LocalDensity.current){160.dp.roundToPx()}
     val secondary=if(dark)Color(0xFFA9B9D0) else Color(0xFF657792)
     val border=if(dark)Color(0xFF40506A) else Color(0xFFE1E8F1)
-    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(8.dp)){
-        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)){
-            days.forEachIndexed{index,(day,_)->
-                val today=day==LocalDate.now()
-                val shape=RoundedCornerShape(12.dp)
-                Column(Modifier.weight(1f).clip(shape)
-                    .background(if(today)if(dark)Color(0xFF31264A)
-                        else Color(0xFFF5F0FF)
-                        else if(dark)Color(0xFF1A283C) else Color.White)
-                    .border(1.dp,if(today)Color(0xFFA58BEC) else border,shape)
-                    .clickable{scope.launch{
-                        weekScroll.animateScrollTo(index*stride)
-                    }}.padding(vertical=7.dp),
-                    horizontalAlignment=Alignment.CenterHorizontally){
-                    Text(day.format(DateTimeFormatter.ofPattern("EE",Locale("ru")))
-                        .replaceFirstChar{it.uppercase()},
-                        color=secondary,fontSize=10.sp)
-                    Spacer(Modifier.height(2.dp))
-                    Box(Modifier.size(27.dp).clip(CircleShape)
-                        .background(if(today)Color(0xFF7C3AED) else Color.Transparent),
-                        contentAlignment=Alignment.Center){
-                        Text(day.dayOfMonth.toString(),
-                            color=if(today)Color.White else colors.text,
-                            fontSize=13.sp,fontWeight=FontWeight.Bold)
+    val selectedIndex by remember { derivedStateOf { weekScroll.firstVisibleItemIndex.coerceIn(0,6) } }
+    LaunchedEffect(days.firstOrNull()?.first) { weekScroll.scrollToItem(0) }
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val columnWidth=minOf(228.dp,maxWidth-12.dp).coerceAtLeast(176.dp)
+        Column(verticalArrangement=Arrangement.spacedBy(9.dp)){
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)){
+                days.forEachIndexed{index,(day,_)->
+                    val today=day==LocalDate.now()
+                    val selected=index==selectedIndex
+                    val shape=RoundedCornerShape(11.dp)
+                    Column(Modifier.weight(1f).clip(shape)
+                        .background(if(today||selected)if(dark)Color(0xFF31264A)
+                            else Color(0xFFF5F0FF)
+                            else if(dark)Color(0xFF1A283C) else Color.White)
+                        .border(1.dp,if(today||selected)Color(0xFFA58BEC) else border,shape)
+                        .clickable { scope.launch { weekScroll.animateScrollToItem(index) } }
+                        .padding(vertical=7.dp),
+                        horizontalAlignment=Alignment.CenterHorizontally){
+                        Text(day.format(DateTimeFormatter.ofPattern("EE",Locale("ru")))
+                            .replaceFirstChar{it.uppercase()},color=secondary,fontSize=10.sp,
+                            maxLines=1)
+                        Spacer(Modifier.height(2.dp))
+                        Box(Modifier.size(27.dp).clip(CircleShape)
+                            .background(if(today||selected)Color(0xFF7C3AED) else Color.Transparent),
+                            contentAlignment=Alignment.Center){
+                            Text(day.dayOfMonth.toString(),
+                                color=if(today||selected)Color.White else colors.text,
+                                fontSize=13.sp,fontWeight=FontWeight.Bold)
+                        }
                     }
                 }
             }
-        }
-        Row(verticalAlignment=Alignment.CenterVertically){
-            Icon(Icons.Default.ChevronLeft,null,tint=secondary,
-                modifier=Modifier.size(14.dp))
-            Text("Листайте дни или выберите дату сверху",fontSize=10.5.sp,
-                color=secondary)
-            Icon(Icons.Default.ChevronRight,null,tint=secondary,
-                modifier=Modifier.size(14.dp))
-        }
-        Row(Modifier.fillMaxWidth().horizontalScroll(weekScroll)
-            .padding(bottom=6.dp),
-            horizontalArrangement=Arrangement.spacedBy(8.dp),
-            verticalAlignment=Alignment.Top){
-            days.forEach{(day,entries)->
-                ReadableWeekColumn(day,entries,colors,dark,onOpen,onHabit,openDay)
+            Row(verticalAlignment=Alignment.CenterVertically,
+                horizontalArrangement=Arrangement.spacedBy(3.dp)){
+                Icon(Icons.Default.ChevronLeft,null,tint=secondary,
+                    modifier=Modifier.size(14.dp))
+                Text("Листайте дни или выберите дату сверху",
+                    fontSize=10.5.sp,color=secondary)
+                Icon(Icons.Default.ChevronRight,null,tint=secondary,
+                    modifier=Modifier.size(14.dp))
+            }
+            LazyRow(
+                modifier=Modifier.fillMaxWidth(),
+                state=weekScroll,
+                contentPadding=PaddingValues(bottom=6.dp,
+                    end=(maxWidth-columnWidth).coerceAtLeast(0.dp)),
+                horizontalArrangement=Arrangement.spacedBy(8.dp)
+            ){
+                items(days,key={it.first.toString()}){(day,entries)->
+                    ReadableWeekColumn(day,entries,colors,dark,onOpen,onHabit,openDay,columnWidth)
+                }
             }
         }
     }
@@ -526,7 +548,8 @@ private fun ReadableWeekGrid(
 private fun ReadableWeekColumn(
     day:LocalDate,entries:List<TimelineEntry>,
     colors:WorkspaceColors,dark:Boolean,
-    onOpen:(String)->Unit,onHabit:(String)->Unit,openDay:(LocalDate)->Unit
+    onOpen:(String)->Unit,onHabit:(String)->Unit,openDay:(LocalDate)->Unit,
+    width:Dp
 ){
     val today=day==LocalDate.now()
     val edge=if(today)Color(0xFFA58BEC).copy(alpha=.7f)
@@ -535,7 +558,7 @@ private fun ReadableWeekColumn(
     val bg=if(dark)Color(0xFF19263A)
         else if(today)Color(0xFFFBF9FF) else Color(0xFFFCFDFF)
     val grouped=remember(entries){entries.groupBy{it.time.hour}.toSortedMap()}
-    Column(Modifier.width(152.dp)
+    Column(Modifier.width(width)
         .clip(RoundedCornerShape(16.dp)).background(bg)
         .border(1.dp,edge,RoundedCornerShape(16.dp))
         .padding(horizontal=10.dp,vertical=12.dp),
@@ -546,7 +569,7 @@ private fun ReadableWeekColumn(
             Text(day.format(DateTimeFormatter.ofPattern("EE, d MMM",Locale("ru")))
                     .replaceFirstChar{it.uppercase()},
                 fontSize=12.sp,fontWeight=FontWeight.Bold,
-                color=colors.text,maxLines=1)
+                color=colors.text,maxLines=1,overflow=TextOverflow.Ellipsis)
             Icon(Icons.Default.ChevronRight,"Открыть день",
                 tint=muted,modifier=Modifier.size(16.dp))
         }
@@ -555,16 +578,14 @@ private fun ReadableWeekColumn(
             Text("Нет записей",fontSize=11.sp,color=muted,
                 modifier=Modifier.padding(vertical=9.dp))
         }else grouped.forEach{(hour,items)->
-            Column(verticalArrangement=Arrangement.spacedBy(5.dp)){
+            Column(verticalArrangement=Arrangement.spacedBy(7.dp)){
                 Text(String.format(Locale.US,"%02d:00",hour),
                     color=muted,fontSize=10.5.sp,
                     fontWeight=FontWeight.SemiBold)
                 items.forEach{entry->
-                    MiniAppCalendarEntry(entry,false,dark,colors){
-                        if(entry.kind=="Привычка")entry.habit?.id?.let(onHabit)
-                        else if(entry.kind=="Напоминание")openDay(day)
-                        else entry.taskId?.let(onOpen)
-                    }
+                    // Reuse EXACTLY the Day rendering in week instead of a
+                    // separate 152dp calendar chip with a colored left stripe.
+                    DayTimelineCard(entry,colors,dark,onOpen,onHabit,{openDay(day)})
                 }
             }
         }
@@ -592,14 +613,14 @@ private fun CalendarDayCell(
     }
     val background=if(dark)Color(0xFF19263A)
         else if(today)Color(0xFFFAF8FF) else Color(0xFFFCFDFF)
-    Column(modifier.clip(shape).background(background)
-        .border(1.dp,border,shape).heightIn(min=135.dp)
-        .padding(horizontal=2.dp,vertical=6.dp),
+    Column(modifier.height(106.dp).clip(shape).background(background)
+        .border(1.dp,border,shape)
+        .padding(horizontal=2.dp,vertical=4.dp),
         horizontalAlignment=Alignment.CenterHorizontally,
-        verticalArrangement=Arrangement.spacedBy(5.dp)){
-        Box(Modifier.fillMaxWidth().height(30.dp).clickable(onClick=onDay),
+        verticalArrangement=Arrangement.spacedBy(2.dp)){
+        Box(Modifier.fillMaxWidth().height(23.dp).clickable(onClick=onDay),
             contentAlignment=Alignment.Center){
-            Box(Modifier.size(28.dp).clip(CircleShape)
+            Box(Modifier.size(23.dp).clip(CircleShape)
                 .background(if(today)Color(0xFF7C3AED) else Color.Transparent),
                 contentAlignment=Alignment.Center){
                 Text(date.dayOfMonth.toString(),
@@ -607,17 +628,17 @@ private fun CalendarDayCell(
                         today->Color.White
                         outside->colors.secondaryText.copy(alpha=.7f)
                         else->colors.text
-                    },fontSize=13.sp,fontWeight=FontWeight.Bold)
+                    },fontSize=11.5.sp,fontWeight=FontWeight.Bold)
             }
         }
-        entries.take(2).forEach{entry->
+        entries.take(3).forEach{entry->
             MiniAppCalendarEntry(entry,true,dark,colors){
                 if(entry.kind=="Напоминание")onDay()
                 else entry.taskId?.let(onTask)?:onDay()
             }
         }
-        if(entries.size>2){
-            Text("Ещё "+(entries.size-2),
+        if(entries.size>3){
+            Text("Ещё "+(entries.size-3),
                 color=if(dark)Color(0xFFC4B5FD) else Color(0xFF6D28D9),
                 fontSize=10.sp,fontWeight=FontWeight.Bold,
                 modifier=Modifier.fillMaxWidth().clickable(onClick=onDay)
@@ -656,9 +677,9 @@ private fun MiniAppCalendarEntry(
                         floatArrayOf(5.dp.toPx(),4.dp.toPx()),0f)))
         }else Modifier.border(.7.dp,line,radius))
         .clickable(onClick=onClick)
-        .heightIn(min=if(monthMode)30.dp else if(subtask)38.dp else 43.dp),
+        .heightIn(min=if(monthMode)18.dp else if(subtask)38.dp else 43.dp),
         verticalAlignment=Alignment.CenterVertically){
-        Box(Modifier.width(3.dp).height(if(monthMode)21.dp else 30.dp)
+        Box(Modifier.width(3.dp).height(if(monthMode)13.dp else 30.dp)
             .clip(RoundedCornerShape(2.dp))
             .background(accent.copy(alpha=.60f)))
         Text(entry.title,
@@ -667,10 +688,10 @@ private fun MiniAppCalendarEntry(
                 end=if(monthMode)1.dp else 4.dp,
                 top=4.dp,bottom=4.dp),
             color=ink,
-            fontSize=if(monthMode)10.sp else if(subtask)11.sp else 11.5.sp,
-            lineHeight=if(monthMode)12.sp else 14.sp,
+            fontSize=if(monthMode)8.5.sp else if(subtask)11.sp else 11.5.sp,
+            lineHeight=if(monthMode)10.sp else 14.sp,
             fontWeight=FontWeight.Medium,
-            maxLines=2,softWrap=true,overflow=TextOverflow.Ellipsis,
+            maxLines=if(monthMode)1 else 2,softWrap=true,overflow=TextOverflow.Ellipsis,
             textAlign=TextAlign.Start,
             style=TextStyle(platformStyle=PlatformTextStyle(includeFontPadding=false)))
     }
