@@ -64,7 +64,7 @@ test('task AI uses general-style custom picker and monitoring mode without chang
   assert.match(ai, /onSelectModel=\{\(model\) =>/);
   assert.doesNotMatch(ai.slice(0, ai.indexOf('miniapp-ai-chat-thread-wrap')), /<select/);
   assert.match(taskHeader, /miniapp-ai-context-main-row/);
-  assert.match(generalHeader, /miniapp-ai-context-main-row/);
+  assert.match(generalHeader, /miniapp-ai-context-compact-row/);
   assert.match(taskHeader, /miniapp-ai-context-controls miniapp-task-ai-context-controls/);
   assert.match(taskHeader, /Модель ИИ/);
   assert.match(taskHeader, /Режим/);
