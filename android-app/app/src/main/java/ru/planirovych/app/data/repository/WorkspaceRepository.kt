@@ -38,6 +38,18 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
     suspend fun purchaseStatus(purchaseId:String):AiCreditPurchase =
         api.creditPurchaseStatus(purchaseId).purchase
 
+    /** Same server-side GPT transcription and credit accounting as the Mini App. */
+    suspend fun transcribeVoice(bytes:ByteArray,durationSeconds:Double):String{
+        require(bytes.size in 100..(6*1024*1024)){ "Некорректный размер записи." }
+        require(durationSeconds>0 && durationSeconds<=120){ "Максимум 120 секунд." }
+        val response=api.transcribeVoice(buildJsonObject{
+            put("audioBase64",android.util.Base64.encodeToString(bytes,android.util.Base64.NO_WRAP))
+            put("mimeType","audio/mp4")
+            put("durationSeconds",durationSeconds)
+        })
+        return response["text"]?.jsonPrimitive?.contentOrNull
+            ?.takeIf{it.isNotBlank()}?:error("Сервис вернул пустую расшифровку.")
+    }
     suspend fun loadTasks(): List<Task> = api.tasks()
     suspend fun updateTask(id: String, changes: JsonObject): Task = api.updateTask(id, changes)
     suspend fun updateStatus(id: String, status: TaskStatus): Task =
