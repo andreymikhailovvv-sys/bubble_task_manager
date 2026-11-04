@@ -122,7 +122,8 @@ fun ModernWorkspace(
             compareBy<Habit> { h -> isHabitDoneToday(h) }.thenBy { it.createdAt ?: "" }
         )
     }
-    HorizontalPager(state=pagerState,modifier=modifier.fillMaxSize(),
+    HorizontalPager(state=pagerState,userScrollEnabled=false,
+        modifier=modifier.fillMaxSize(),
         beyondViewportPageCount=1) { page ->
         when(page) {
             2 -> {

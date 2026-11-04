@@ -191,10 +191,19 @@ fun MiniAppTaskFocusSheet(
             Row(Modifier.fillMaxWidth().padding(start=15.dp,end=15.dp,bottom=10.dp),
                 verticalAlignment=Alignment.CenterVertically,
                 horizontalArrangement=Arrangement.SpaceBetween){
-                Text(if(task.taskType==TaskType.EVENT)"РЕДАКТИРОВАНИЕ СОБЫТИЯ" else "ФОКУС ЗАДАЧИ",
-                    modifier=Modifier.weight(1f),
-                    color=c.purple,fontSize=11.sp,fontWeight=FontWeight.Bold,
-                    letterSpacing=2.sp,maxLines=1)
+                BasicTextField(value=title,onValueChange={title=it;onClearError()},
+                    modifier=Modifier.weight(1f).padding(end=6.dp),
+                    enabled=!busy,maxLines=2,
+                    textStyle=TextStyle(color=c.text,fontSize=19.sp,
+                        fontWeight=FontWeight.Bold,lineHeight=23.sp),
+                    cursorBrush=SolidColor(c.purple),
+                    decorationBox={inner->
+                        Box {
+                            if(title.isEmpty())Text("Название задачи",color=c.muted,
+                                fontSize=19.sp)
+                            inner()
+                        }
+                    })
                 Row(horizontalArrangement=Arrangement.spacedBy(7.dp)){
                     FocusRoundIcon(Icons.Default.EventAvailable,c,"В календарь"){
                         saveThen {
@@ -216,16 +225,6 @@ fun MiniAppTaskFocusSheet(
             }
             Column(Modifier.weight(1f,fill=false).verticalScroll(rememberScrollState())
                 .padding(horizontal=15.dp).padding(bottom=20.dp)){
-                BasicTextField(value=title,onValueChange={title=it;onClearError()},
-                    modifier=Modifier.fillMaxWidth().padding(top=5.dp,bottom=8.dp),
-                    textStyle=TextStyle(color=c.text,fontSize=27.sp,fontWeight=FontWeight.Bold,
-                        lineHeight=32.sp,letterSpacing=(-0.6f).sp),
-                    maxLines=4,enabled=!busy,cursorBrush=SolidColor(c.purple),
-                    decorationBox={inner->Box{
-                        if(title.isEmpty())Text("Без названия",color=c.muted,fontSize=27.sp)
-                        inner()
-                    }}
-                )
                 Row(verticalAlignment=Alignment.CenterVertically,
                     modifier=Modifier.fillMaxWidth()){
                     FocusRoundIcon(Icons.Default.CalendarMonth,c,"Изменить дедлайн",selectDueDate)
@@ -252,10 +251,20 @@ fun MiniAppTaskFocusSheet(
                             maxLines=5,overflow=TextOverflow.Ellipsis)
                     }
                 }
-                Row(Modifier.padding(top=9.dp,bottom=10.dp),
+                Row(Modifier.fillMaxWidth().padding(top=9.dp,bottom=10.dp),
+                    verticalAlignment=Alignment.CenterVertically,
                     horizontalArrangement=Arrangement.spacedBy(9.dp)){
-                    FocusRoundIcon(Icons.Default.OpenInFull,c,"Развернуть описание"){
-                        descriptionExpanded=true
+                    Row(Modifier.clip(RoundedCornerShape(12.dp))
+                        .background(c.card)
+                        .border(1.dp,c.border,RoundedCornerShape(12.dp))
+                        .clickable(enabled=!busy){descriptionExpanded=true}
+                        .padding(horizontal=13.dp,vertical=9.dp),
+                        verticalAlignment=Alignment.CenterVertically,
+                        horizontalArrangement=Arrangement.spacedBy(7.dp)){
+                        Icon(Icons.Default.Edit,null,tint=c.teal,
+                            modifier=Modifier.size(16.dp))
+                        Text("Редактировать описание",fontSize=12.sp,
+                            fontWeight=FontWeight.SemiBold,color=c.text)
                     }
                     FocusRoundIcon(Icons.Default.AttachFile,c,"Прикрепить файл"){
                         pickFile.launch(arrayOf("*/*"))
@@ -294,9 +303,9 @@ fun MiniAppTaskFocusSheet(
                 Row(Modifier.fillMaxWidth().padding(top=3.dp),
                     horizontalArrangement=Arrangement.spacedBy(8.dp)){
                     FocusAction("Выполнить",Icons.Default.CheckCircle,Color(0xFF059669),
-                        Modifier.weight(1f),enabled=!busy){confirmation="complete"}
+                        Modifier.weight(1.9f),enabled=!busy){confirmation="complete"}
                     FocusAction("Удалить",Icons.Default.DeleteOutline,Color(0xFFE11D48),
-                        Modifier.weight(1f),enabled=!busy){confirmation="delete"}
+                        Modifier.weight(.9f),enabled=!busy){confirmation="delete"}
                 }
                 if(task.taskType!=TaskType.EVENT){
                     Spacer(Modifier.height(8.dp))
@@ -310,18 +319,8 @@ fun MiniAppTaskFocusSheet(
                     Spacer(Modifier.height(10.dp))
                     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,
                         verticalAlignment=Alignment.CenterVertically){
-                        Row(verticalAlignment=Alignment.CenterVertically){
-                            Text("Подзадачи",color=c.text,fontSize=15.sp,fontWeight=FontWeight.SemiBold)
-                            Spacer(Modifier.width(6.dp))
-                            FocusRoundIcon(Icons.Default.Add,c,"Добавить подзадачу"){
-                                saveThen(onNewSubtask)
-                            }
-                            IconButton(onClick={showDone=!showDone},modifier=Modifier.size(30.dp)){
-                                Icon(if(showDone)Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                    if(showDone)"Скрыть выполненные" else "Показать выполненные",
-                                    tint=c.teal,modifier=Modifier.size(17.dp))
-                            }
-                        }
+                        Text("Подзадачи",color=c.text,fontSize=15.sp,
+                            fontWeight=FontWeight.SemiBold)
                         Box{
                             Box(Modifier.clip(CircleShape).background(Color(0xFF0284C7))
                                 .clickable{orderOpen=true}.padding(horizontal=13.dp,vertical=10.dp)){
@@ -338,6 +337,21 @@ fun MiniAppTaskFocusSheet(
                         }
                     }
                     Spacer(Modifier.height(11.dp))
+                    Row(Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(c.card)
+                        .border(1.dp,c.border,RoundedCornerShape(12.dp))
+                        .clickable(enabled=!busy){saveThen(onNewSubtask)}
+                        .padding(horizontal=13.dp,vertical=11.dp),
+                        verticalAlignment=Alignment.CenterVertically,
+                        horizontalArrangement=Arrangement.spacedBy(9.dp)){
+                        Icon(Icons.Default.Add,null,tint=c.teal,modifier=Modifier.size(18.dp))
+                        Text("Добавить подзадачу",color=c.text,fontSize=12.sp,
+                            fontWeight=FontWeight.SemiBold)
+                    }
+                    Spacer(Modifier.height(11.dp))
+                    val completedCount=tasks.count{it.parentTaskId==task.id &&
+                        it.status==TaskStatus.DONE}
                     val subtasks=tasks.filter{it.parentTaskId==task.id}
                         .filter{showDone || it.status!=TaskStatus.DONE}
                         .sortedWith(compareBy<Task>{it.status==TaskStatus.DONE}
@@ -356,6 +370,21 @@ fun MiniAppTaskFocusSheet(
                                 TaskStatus.TODO else TaskStatus.DONE){}},
                             onOpen={saveThen{onOpenSubtask(item.id)}})
                         Spacer(Modifier.height(8.dp))
+                    }
+                    if(completedCount>0){
+                        Row(Modifier.fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable{showDone=!showDone}
+                            .padding(horizontal=12.dp,vertical=12.dp),
+                            verticalAlignment=Alignment.CenterVertically,
+                            horizontalArrangement=Arrangement.spacedBy(9.dp)){
+                            Icon(if(showDone)Icons.Default.VisibilityOff
+                                else Icons.Default.Visibility,
+                                null,tint=c.teal,modifier=Modifier.size(17.dp))
+                            Text(if(showDone)"Скрыть выполненные ($completedCount)"
+                                else "Показать выполненные ($completedCount)",
+                                color=c.teal,fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+                        }
                     }
                 }
                 error?.let{Text(it,color=c.red,fontSize=12.sp,
