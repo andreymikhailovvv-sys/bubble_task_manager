@@ -254,9 +254,9 @@ fun MiniAppTaskFocusSheet(
                 Row(Modifier.fillMaxWidth().padding(top=9.dp,bottom=10.dp),
                     verticalAlignment=Alignment.CenterVertically,
                     horizontalArrangement=Arrangement.spacedBy(9.dp)){
-                    Row(Modifier.clip(RoundedCornerShape(12.dp))
+                    Row(Modifier.clip(CircleShape)
                         .background(c.card)
-                        .border(1.dp,c.border,RoundedCornerShape(12.dp))
+                        .border(1.dp,c.border,CircleShape)
                         .clickable(enabled=!busy){descriptionExpanded=true}
                         .padding(horizontal=13.dp,vertical=9.dp),
                         verticalAlignment=Alignment.CenterVertically,
@@ -276,26 +276,32 @@ fun MiniAppTaskFocusSheet(
                     state.taskAttachmentsError?.let {
                         Text(it,color=c.red,fontSize=12.sp,modifier=Modifier.padding(bottom=6.dp))
                     }
+                    // Each file is a compact chip, not a full-width filename.
                     state.taskAttachments.forEach{attachment->
-                        Row(Modifier.fillMaxWidth().padding(bottom=6.dp)
-                            .clip(RoundedCornerShape(12.dp)).background(c.card)
-                            .border(1.dp,c.border,RoundedCornerShape(12.dp))
-                            .padding(start=9.dp),verticalAlignment=Alignment.CenterVertically){
+                        Row(Modifier.padding(bottom=6.dp)
+                            .widthIn(max=194.dp)
+                            .clip(CircleShape).background(c.card)
+                            .border(1.dp,c.border,CircleShape)
+                            .padding(start=9.dp,end=3.dp),
+                            verticalAlignment=Alignment.CenterVertically){
                             Icon(Icons.Default.AttachFile,null,tint=c.purple,
-                                modifier=Modifier.size(14.dp))
-                            Text(attachment.name,Modifier.weight(1f)
-                                .clickable {
-                                    vm.openTaskAttachmentLink(task.id,attachment.id){ url ->
-                                        runCatching { ctx.startActivity(
-                                            Intent(Intent.ACTION_VIEW,Uri.parse(url))) }
-                                    }
-                                }.padding(horizontal=9.dp,vertical=10.dp),
-                                fontSize=12.sp,color=c.text,maxLines=1,overflow=TextOverflow.Ellipsis)
+                                modifier=Modifier.size(13.dp))
+                            Spacer(Modifier.width(5.dp))
+                            Text(attachment.name,
+                                modifier=Modifier.widthIn(max=125.dp)
+                                    .clickable {
+                                        vm.openTaskAttachmentLink(task.id,attachment.id){ url ->
+                                            runCatching { ctx.startActivity(
+                                                Intent(Intent.ACTION_VIEW,Uri.parse(url))) }
+                                        }
+                                    }.padding(vertical=8.dp),
+                                fontSize=11.sp,color=c.text,maxLines=1,
+                                softWrap=false,overflow=TextOverflow.Ellipsis)
                             IconButton(onClick={confirmation="file:"+attachment.id},
                                 enabled=!state.taskAttachmentsBusy,
-                                modifier=Modifier.size(32.dp)){
+                                modifier=Modifier.size(27.dp)){
                                 Icon(Icons.Default.Close,"Удалить вложение",
-                                    tint=c.muted,modifier=Modifier.size(14.dp))
+                                    tint=c.muted,modifier=Modifier.size(12.dp))
                             }
                         }
                     }
@@ -317,10 +323,25 @@ fun MiniAppTaskFocusSheet(
                     Spacer(Modifier.height(20.dp))
                     HorizontalDivider(color=c.border)
                     Spacer(Modifier.height(10.dp))
-                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,
+                    Row(Modifier.fillMaxWidth(),
+                        horizontalArrangement=Arrangement.spacedBy(7.dp),
                         verticalAlignment=Alignment.CenterVertically){
-                        Text("Подзадачи",color=c.text,fontSize=15.sp,
+                        Text("Подзадачи",color=c.text,fontSize=14.sp,
                             fontWeight=FontWeight.SemiBold)
+                        Row(Modifier.clip(CircleShape)
+                            .background(c.card)
+                            .border(1.dp,c.border,CircleShape)
+                            .clickable(enabled=!busy){saveThen(onNewSubtask)}
+                            .padding(horizontal=9.dp,vertical=8.dp),
+                            verticalAlignment=Alignment.CenterVertically,
+                            horizontalArrangement=Arrangement.spacedBy(4.dp)){
+                            Icon(Icons.Default.Add,null,tint=c.teal,
+                                modifier=Modifier.size(14.dp))
+                            Text("Добавить подзадачу",color=c.text,
+                                fontSize=10.sp,maxLines=1,softWrap=false,
+                                fontWeight=FontWeight.SemiBold)
+                        }
+                        Spacer(Modifier.weight(1f))
                         Box{
                             Box(Modifier.clip(CircleShape).background(Color(0xFF0284C7))
                                 .clickable{orderOpen=true}.padding(horizontal=13.dp,vertical=10.dp)){
@@ -335,19 +356,6 @@ fun MiniAppTaskFocusSheet(
                                 }
                             }
                         }
-                    }
-                    Spacer(Modifier.height(11.dp))
-                    Row(Modifier.fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(c.card)
-                        .border(1.dp,c.border,RoundedCornerShape(12.dp))
-                        .clickable(enabled=!busy){saveThen(onNewSubtask)}
-                        .padding(horizontal=13.dp,vertical=11.dp),
-                        verticalAlignment=Alignment.CenterVertically,
-                        horizontalArrangement=Arrangement.spacedBy(9.dp)){
-                        Icon(Icons.Default.Add,null,tint=c.teal,modifier=Modifier.size(18.dp))
-                        Text("Добавить подзадачу",color=c.text,fontSize=12.sp,
-                            fontWeight=FontWeight.SemiBold)
                     }
                     Spacer(Modifier.height(11.dp))
                     val completedCount=tasks.count{it.parentTaskId==task.id &&
