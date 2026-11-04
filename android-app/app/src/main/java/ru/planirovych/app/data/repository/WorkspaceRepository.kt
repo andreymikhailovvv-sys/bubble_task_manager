@@ -278,12 +278,23 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
     suspend fun loadTaskMonitoringStatuses(id:String):List<TaskMonitoringStatus> =
         api.taskMonitoringStatuses(id)
 
-    suspend fun updateTaskAiProposal(id:String,action:String){
-        val empty=buildJsonObject{}
-        when(action){
-            "approve"->api.approveTaskAiProposal(id,empty)
-            "reject"->api.rejectTaskAiProposal(id,empty)
-            "undo"->api.undoTaskAiProposal(id,empty)
+    suspend fun getTaskAiProposal(id:String):JsonObject=api.getTaskAiProposal(id)
+    suspend fun getTaskAiAutoApplyPreference():Boolean =
+        api.getTaskAiProposalPreferences()["autoApply"]?.jsonPrimitive?.booleanOrNull ?: false
+    suspend fun setTaskAiAutoApplyPreference(enabled:Boolean):Boolean =
+        api.setTaskAiProposalPreferences(buildJsonObject{put("autoApply",enabled)})
+            .let{response->response["autoApply"]?.jsonPrimitive?.booleanOrNull?:enabled}
+
+    suspend fun updateTaskAiProposal(id:String,action:String,
+        selectedIndices:List<Int>?=null):JsonObject{
+        val payload=buildJsonObject {
+            if(selectedIndices!=null)put("selectedIndices",JsonArray(
+                selectedIndices.map(::JsonPrimitive)))
+        }
+        return when(action){
+            "approve"->api.approveTaskAiProposal(id,payload)
+            "reject"->api.rejectTaskAiProposal(id,buildJsonObject{})
+            "undo"->api.undoTaskAiProposal(id,buildJsonObject{})
             else->throw IllegalArgumentException("Неизвестное действие")
         }
     }

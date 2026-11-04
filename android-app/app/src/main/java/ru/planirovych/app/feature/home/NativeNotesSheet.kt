@@ -164,13 +164,17 @@ internal fun NativeNotesPage(vm:HomeViewModel,colors:WorkspaceColors,
                                         else Color(0xFF6840B1),maxLines=1)
                             }
                             val filterShape=RoundedCornerShape(19.dp)
+                            // Style the popup's own Surface, not just its inner content.
+                            // The old rectangular Material menu showed through round corners.
                             DropdownMenu(expanded=filterOpen,
                                 onDismissRequest={filterOpen=false},
                                 modifier=Modifier.widthIn(min=250.dp,max=330.dp)
-                                    .heightIn(max=590.dp)
-                                    .clip(filterShape)
-                                    .background(notesCard)
-                                    .border(1.dp,notesBorder,filterShape)){
+                                    .heightIn(max=590.dp),
+                                shape=filterShape,
+                                containerColor=notesCard,
+                                tonalElevation=0.dp,
+                                shadowElevation=6.dp,
+                                border=BorderStroke(1.dp,notesBorder)){
                                 Text("Какие заметки показывать",
                                     Modifier.padding(horizontal=15.dp,vertical=9.dp),
                                     color=notesMuted,fontSize=12.sp,

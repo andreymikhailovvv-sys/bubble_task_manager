@@ -61,6 +61,20 @@ data class HomeState(val loading: Boolean = true, val user: CurrentUser? = null,
 class HomeViewModel(private val repository: WorkspaceRepository, private val themes: ThemePreferences) : ViewModel() {
     private val mutable = MutableStateFlow(HomeState())
     private val taskAiMutable=MutableStateFlow(TaskAiChatState())
+    private val taskProposalAutoApplyMutable=MutableStateFlow<Boolean?>(null)
+    val taskProposalAutoApply=taskProposalAutoApplyMutable.asStateFlow()
+    suspend fun taskProposalDetails(id:String):JsonObject =
+        repository.getTaskAiProposal(id)
+    suspend fun loadTaskProposalAutoApply():Boolean{
+        val remote=repository.getTaskAiAutoApplyPreference()
+        taskProposalAutoApplyMutable.value=remote
+        return remote
+    }
+    suspend fun setTaskProposalAutoApply(enabled:Boolean):Boolean{
+        val saved=repository.setTaskAiAutoApplyPreference(enabled)
+        taskProposalAutoApplyMutable.value=saved
+        return saved
+    }
     private val generalAiMutable=MutableStateFlow(GeneralAiChatState())
     val generalAi=generalAiMutable.asStateFlow()
     suspend fun transcribeVoice(bytes:ByteArray,durationSeconds:Double):String =
@@ -262,15 +276,19 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
             })
         }})
     }
-    fun applyGeneralAiProposal(id:String,action:String){
+    fun applyGeneralAiProposal(id:String,action:String,
+        selectedIndices:List<Int>?=null,onFinished:(JsonObject?)->Unit={}){
         viewModelScope.launch{
             try{
-                repository.updateTaskAiProposal(id,action)
-                val updated=repository.loadTasks()
-                mutable.update{it.copy(tasks=updated)}
+                val result=repository.updateTaskAiProposal(id,action,selectedIndices)
+                onFinished(result)
+                runCatching { repository.loadTasks() }.getOrNull()?.let { updated->
+                    mutable.update{it.copy(tasks=updated)}
+                }
                 generalAiMutable.update{it.copy(error=null)}
             }catch(t:Throwable){
                 generalAiMutable.update{it.copy(error=t.userMessage())}
+                onFinished(null)
             }
         }
     }
@@ -514,12 +532,14 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
             }
         }
     }
-    fun applyTaskAiProposal(taskId:String,proposalId:String,action:String){
-        if(taskAiMutable.value.actionBusy)return
+    fun applyTaskAiProposal(taskId:String,proposalId:String,action:String,
+        selectedIndices:List<Int>?=null,onFinished:(JsonObject?)->Unit={}){
+        if(taskAiMutable.value.actionBusy){onFinished(null);return}
         taskAiMutable.update{it.copy(actionBusy=true,error=null)}
         viewModelScope.launch {
             try {
-                repository.updateTaskAiProposal(proposalId,action)
+                val result=repository.updateTaskAiProposal(proposalId,action,selectedIndices)
+                onFinished(result)
                 val tasks=repository.loadTasks()
                 val history=repository.loadTaskAiHistory(taskId)
                 mutable.update{it.copy(tasks=tasks)}
@@ -528,6 +548,7 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                     else it.copy(actionBusy=false)}
             }catch(e:Throwable){
                 taskAiMutable.update{it.copy(actionBusy=false,error=e.userMessage())}
+                onFinished(null)
             }
         }
     }

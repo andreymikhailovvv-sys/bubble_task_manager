@@ -427,8 +427,9 @@ internal fun NativeGeneralAiChatPage(
                                 onOpenTaskReference=onOpenTask,
                                 onReply={reply=GeneralReply(message.id.orEmpty(),
                                     message.role,message.content)},
-                                onProposalAction={id,action->
-                                    vm.applyGeneralAiProposal(id,action)
+                                proposalVm=vm,
+                                onProposalAction={id,action,indices,finished->
+                                    vm.applyGeneralAiProposal(id,action,indices,finished)
                                 },actionBusy=isBusy,
                                 onOpenDocument={id->
                                     vm.generalAiDocumentLink(id){url->

@@ -82,10 +82,20 @@ interface PlanirovychApi {
     @GET("api/tasks/{id}/monitoring/statuses")
     suspend fun taskMonitoringStatuses(@Path("id") taskId:String):List<TaskMonitoringStatus>
 
+    @GET("api/ai/task-proposals/{id}")
+    suspend fun getTaskAiProposal(@Path("id") id:String):JsonObject
+    @GET("api/ai/task-proposals/preferences")
+    suspend fun getTaskAiProposalPreferences():JsonObject
+    @Headers("Sec-Fetch-Site: same-origin")
+    @PATCH("api/ai/task-proposals/preferences")
+    suspend fun setTaskAiProposalPreferences(@Body payload:JsonObject):JsonObject
+    @Headers("Sec-Fetch-Site: same-origin")
     @POST("api/ai/task-proposals/{id}/approve")
     suspend fun approveTaskAiProposal(@Path("id") id:String,@Body payload:JsonObject):JsonObject
+    @Headers("Sec-Fetch-Site: same-origin")
     @POST("api/ai/task-proposals/{id}/reject")
     suspend fun rejectTaskAiProposal(@Path("id") id:String,@Body payload:JsonObject):JsonObject
+    @Headers("Sec-Fetch-Site: same-origin")
     @POST("api/ai/task-proposals/{id}/undo")
     suspend fun undoTaskAiProposal(@Path("id") id:String,@Body payload:JsonObject):JsonObject
     @POST("api/ai-documents/{id}/download-link")
