@@ -122,7 +122,7 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
     var pendingRetry by remember(task.id){mutableStateOf(false)}
     var voiceSendSerial by remember(task.id){mutableIntStateOf(0)}
     val speechInput=rememberAiChatSpeechInput(
-        transcribe=vm::transcribeVoice,
+        dark=dark,transcribe=vm::transcribeVoice,
         onRecognized={spoken,sendImmediately->
             draft=appendAiDictation(draft,spoken)
             attachmentError=null
