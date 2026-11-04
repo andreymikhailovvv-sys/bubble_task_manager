@@ -7,12 +7,8 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowOutward
 import androidx.compose.material3.Text
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Alignment
@@ -278,9 +274,15 @@ private fun NativeAiTable(table:AiTextBlock.Table,textColor:Color,linkColor:Colo
                             else Modifier)
                         .padding(horizontal=9.dp,vertical=8.dp),
                         contentAlignment=Alignment.CenterStart){
-                        androidx.compose.material3.Text(
-                            value,color=textColor,fontSize=11.sp,
-                            fontWeight=FontWeight.SemiBold,lineHeight=15.sp)
+                        if(onOpenTaskReference!=null &&
+                            aiTaskReferencePattern.containsMatchIn(value)){
+                            NativeAiProseWithTaskRefs(value,textColor,linkColor,11.sp,
+                                taskTitles,onOpenTaskReference)
+                        }else{
+                            androidx.compose.material3.Text(
+                                value,color=textColor,fontSize=11.sp,
+                                fontWeight=FontWeight.SemiBold,lineHeight=15.sp)
+                        }
                     }
                 }
             }
@@ -292,8 +294,8 @@ private fun NativeAiTable(table:AiTextBlock.Table,textColor:Color,linkColor:Colo
                         Box(Modifier.width(142.dp).heightIn(min=38.dp)
                             .padding(horizontal=9.dp,vertical=7.dp),
                             contentAlignment=Alignment.CenterStart){
-                            NativeAiInlineText(row.getOrElse(col){""},
-                                textColor,linkColor)
+                            NativeAiProseWithTaskRefs(row.getOrElse(col){""},
+                                textColor,linkColor,12.sp,taskTitles,onOpenTaskReference)
                         }
                     }
                 }
