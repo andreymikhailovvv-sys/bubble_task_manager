@@ -283,7 +283,7 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
         api.getTaskAiProposalPreferences()["autoApply"]?.jsonPrimitive?.booleanOrNull ?: false
     suspend fun setTaskAiAutoApplyPreference(enabled:Boolean):Boolean =
         api.setTaskAiProposalPreferences(buildJsonObject{put("autoApply",enabled)})
-            ["autoApply"]?.jsonPrimitive?.booleanOrNull ?: enabled
+            .let{response->response["autoApply"]?.jsonPrimitive?.booleanOrNull?:enabled}
 
     suspend fun updateTaskAiProposal(id:String,action:String,
         selectedIndices:List<Int>?=null):JsonObject{
