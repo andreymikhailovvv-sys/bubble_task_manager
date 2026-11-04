@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFile} from 'node:fs/promises';
 
-test('miniapp general AI chat has unified header with custom project, chat and model pickers', async () => {
+test('miniapp general AI chat has compact chat/model pickers and a project-only drawer', async () => {
   const [mini, header, css] = await Promise.all([
     readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../client/src/components/MiniGeneralAiChatHeader.tsx', import.meta.url), 'utf8'),
@@ -12,14 +12,17 @@ test('miniapp general AI chat has unified header with custom project, chat and m
   assert.match(general, /<MiniGeneralAiChatHeader/);
   assert.match(general, /model=\{generalAiChatModel\}/);
   assert.match(general, /onSelectModel=\{\(nextModel\) => \{ changeGeneralAiChatModel\(nextModel\)/);
-  assert.match(general, /onSelectProject=\{\(project\) =>/);
+  assert.match(general, /onOpenMenu=\{\(\) =>/);
+  assert.doesNotMatch(general, /onSelectProject=/);
   assert.match(general, /onSelectChat=\{\(chatId\) =>/);
   assert.doesNotMatch(general, /<select/); // Android native dropdown is gone from this header
-  assert.match(header, /toggle\('projects'\)/);
+  assert.doesNotMatch(header, /toggle\('projects'\)/);
   assert.match(header, /toggle\('chats'\)/);
   assert.match(header, /toggle\('models'\)/);
   assert.match(header, /role="dialog" aria-modal="true"/);
-  assert.match(header, /onCreateProject/);
+  assert.match(header, /onRenameChat/);
+  assert.match(header, /onDeleteChat/);
+  assert.match(header, /miniapp-ai-context-compact-row/);
   assert.match(header, /onCreateChat/);
   assert.match(css, /miniapp-ai-context-header\.miniapp-ai-chat-header-hidden/);
   assert.match(css, /miniapp-ai-context-picker-layer/);
