@@ -15,7 +15,13 @@ test('focus editor names actions, reveals completed rows at bottom, and saves he
   const focus = app.slice(start, end);
   assert.ok(start > 0 && end > start);
   assert.match(focus, /<Edit3 size=\{15\} aria-hidden="true" \/>\s*<span>Редактировать описание<\/span>/);
-  assert.match(focus, /focused-task-add-subtask-button focused-task-label-button[\s\S]*?<Plus size=\{15\} aria-hidden="true" \/>\s*<span>Добавить<\/span>/);
+  assert.match(focus, /focused-task-add-subtask-button focused-task-label-button[\\s\\S]*?<Plus size=\\{15\\} aria-hidden="true" \\/>\\s*<span>Добавить подзадачу<\\/span>/);
+  assert.match(focus, /<h4 className="shrink-0 text-sm font-semibold">Подзадачи<\\/h4>\\s*<button/);
+  assert.doesNotMatch(focus, /<h4[^>]*>Подзадачи\\s*<button/);
+  assert.match(css, /\\.focused-task-editor-shell \\.focused-task-add-subtask-button \\{[\\s\\S]*?width: auto;/);
+  assert.match(css, /\\.focused-task-editor-shell \\.focused-task-label-button:hover/);
+  assert.match(css, /\\.focused-task-editor-shell \\.focused-task-description-surface:hover/);
+  assert.match(css, /body\\[data-theme='dark'\\] \\.focused-task-editor-shell \\.focused-task-description-surface:hover/);
   assert.doesNotMatch(focus.slice(0,focus.indexOf('<Reorder.Group')), /Показывать закрытые подзадачи|Скрывать закрытые подзадачи/);
   const listEnd = focus.indexOf("focused-task-show-completed-row");
   assert.ok(listEnd > focus.indexOf('<Reorder.Group'));
