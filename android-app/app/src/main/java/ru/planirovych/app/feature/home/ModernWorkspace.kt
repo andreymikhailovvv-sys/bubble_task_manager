@@ -180,7 +180,7 @@ fun ModernWorkspace(
     LazyColumn(
         state=workspaceScroll,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start=14.dp,end=14.dp,top=112.dp,bottom=28.dp),
+        contentPadding = PaddingValues(start=14.dp,end=14.dp,top=92.dp,bottom=28.dp),
         verticalArrangement = Arrangement.spacedBy(13.dp),
     ) {
         if (contentMode == WorkspaceMode.LIST) item {
@@ -214,7 +214,7 @@ fun ModernWorkspace(
         }
     }
     Box(Modifier.align(Alignment.TopCenter)
-        .padding(start=14.dp,end=14.dp,top=55.dp)){
+        .padding(start=14.dp,end=14.dp,top=35.dp)){
         WorkspaceTopbar(state,colors,mode=contentMode,dark=dark,
             search=search,settings=settings,
             onCredits={creditsOpen=true},
@@ -496,7 +496,7 @@ private fun WorkspaceToolbar(
     // Never apply alpha to the entire chip: it reveals gray corners and
     // makes disabled "Отложить" look like it has extra blocks on both sides.
     Row(modifier.height(44.dp)
-        .shadow(4.dp,shape).clip(shape)
+        .shadow(1.dp,shape).clip(shape)
         .background(fill).border(1.dp,border,shape)
         .clickable(enabled=enabled,onClick=click)
         .padding(horizontal=4.dp),
