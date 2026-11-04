@@ -201,29 +201,31 @@ private fun NativeAiProseWithTaskRefs(text:String,textColor:Color,linkColor:Colo
             if(prose.isNotEmpty())NativeAiInlineText(prose,textColor,linkColor,fontSize)
             else if(refs.isEmpty())Spacer(Modifier.height(fontSize.value.dp))
             if(refs.isNotEmpty()){
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-                    .padding(vertical=3.dp),
-                    horizontalArrangement=Arrangement.spacedBy(7.dp)){
+                // Do not use a horizontal scrolling Row: long task titles used
+                // to render outside the AI message bubble.
+                Column(Modifier.fillMaxWidth().padding(vertical=3.dp),
+                    verticalArrangement=Arrangement.spacedBy(6.dp)){
                     refs.forEach{ref->
                         val title=taskTitles[ref.id]
                         val light=textColor.red<.5f
                         val chipBg=if(light)Color.White else Color(0xFF1B4255)
                         val chipInk=if(light)Color(0xFF172238) else Color(0xFFE0F7FF)
-                        val frame=CircleShape
-                        Row(Modifier
-                            .clip(frame)
-                            .background(chipBg)
+                        val frame=RoundedCornerShape(18.dp)
+                        Row(Modifier.fillMaxWidth()
+                            .clip(frame).background(chipBg)
                             .border(1.dp,if(light)Color(0xFFDCE5EE)
                                 else Color(0xFF35778C),frame)
                             .clickable(enabled=title!=null){onOpenTaskReference(ref.id)}
-                            .padding(horizontal=8.dp,vertical=4.dp),
+                            .padding(horizontal=9.dp,vertical=5.dp),
                             verticalAlignment=Alignment.CenterVertically,
-                            horizontalArrangement=Arrangement.spacedBy(4.dp)){
+                            horizontalArrangement=Arrangement.spacedBy(5.dp)){
                             Text("↗",fontSize=12.sp,color=chipInk,
                                 fontWeight=FontWeight.Bold)
-                            Text(title?:"Задача не найдена",fontSize=10.sp,
-                                fontWeight=FontWeight.SemiBold,color=chipInk,
-                                maxLines=1)
+                            Text(title?:"Задача не найдена",
+                                modifier=Modifier.weight(1f),
+                                fontSize=10.sp,fontWeight=FontWeight.SemiBold,
+                                color=chipInk,maxLines=1,
+                                overflow=TextOverflow.Ellipsis,softWrap=false)
                         }
                     }
                 }
