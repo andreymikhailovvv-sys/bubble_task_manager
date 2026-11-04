@@ -23,10 +23,17 @@ object NetworkModule {
                         chain.request().url.encodedPath)
                 val generalAiSend=chain.request().method=="POST" &&
                     chain.request().url.encodedPath.endsWith("/api/ai-chat")
-                if(taskAiSend||generalAiSend)
-                    chain.withReadTimeout(240,TimeUnit.SECONDS)
-                    .proceed(chain.request())
-                else chain.proceed(chain.request())
+                val voiceTranscription=chain.request().method=="POST" &&
+                    chain.request().url.encodedPath.endsWith("/api/ai/audio/transcribe")
+                when {
+                    taskAiSend||generalAiSend ->
+                        chain.withReadTimeout(240,TimeUnit.SECONDS)
+                            .proceed(chain.request())
+                    voiceTranscription ->
+                        chain.withReadTimeout(90,TimeUnit.SECONDS)
+                            .proceed(chain.request())
+                    else -> chain.proceed(chain.request())
+                }
             }
             .addInterceptor(HttpLoggingInterceptor().apply { level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC else HttpLoggingInterceptor.Level.NONE })
             .build()

@@ -120,11 +120,14 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
     var sendingDisplay by remember(task.id){mutableStateOf<String?>(null)}
     var attachmentError by remember(task.id){mutableStateOf<String?>(null)}
     var pendingRetry by remember(task.id){mutableStateOf(false)}
+    var voiceSendSerial by remember(task.id){mutableIntStateOf(0)}
     val speechInput=rememberAiChatSpeechInput(
-        onRecognized={spoken->
+        dark=dark,transcribe=vm::transcribeVoice,
+        onRecognized={spoken,sendImmediately->
             draft=appendAiDictation(draft,spoken)
             attachmentError=null
             pendingRetry=false
+            if(sendImmediately)voiceSendSerial++
         },
         onError={message->attachmentError=message}
     )
@@ -149,6 +152,24 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
         "gpt-6.1-terra" to "GPT-6.1 Terra",
         "gpt-6.1-sol" to "GPT-6.1 Sol"
     )
+    val canMonitor=task.taskType==TaskType.TASK &&
+        task.parentTaskId==null && !task.isCollaborative
+    val displayModel=if(task.aiMonitoringEnabled)
+        task.aiMonitoringModel?:"gpt-6-luna" else model
+    val modelLabel=modelOptions.firstOrNull{it.first==displayModel}
+        ?.second?:"GPT-6 Luna"
+    LaunchedEffect(task.id,task.aiMonitoringEnabled,task.aiMonitoringModel){
+        if(task.aiMonitoringEnabled)model=task.aiMonitoringModel?:"gpt-6-luna"
+    }
+    fun changeMonitoring(enabled:Boolean){
+        if(!canMonitor || home.taskBusy)return
+        vm.saveTask(task.id,kotlinx.serialization.json.buildJsonObject{
+            put("aiMonitoringEnabled",enabled)
+            put("aiMonitoringModel",if(enabled)model else displayModel)
+        }){
+            vm.refreshTaskAiMonitoring(task.id)
+        }
+    }
     LaunchedEffect(task.id){
         vm.openTaskAi(task.id)
         while(isActive){
@@ -304,6 +325,9 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
         lastItemCount=currentCount
     }
 
+    LaunchedEffect(voiceSendSerial){
+        if(voiceSendSerial>0)sendMessage()
+    }
     Dialog(onDismissRequest=onClose,
         properties=DialogProperties(usePlatformDefaultWidth=false)){
         Surface(Modifier.fillMaxSize().imePadding(),color=c.bg,
@@ -314,70 +338,73 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                     enter=expandVertically(animationSpec=tween(170))+fadeIn(),
                     exit=shrinkVertically(animationSpec=tween(150))+fadeOut()
                 ){
-                Row(Modifier.fillMaxWidth().background(c.panel)
-                    .heightIn(min=58.dp)
-                    .padding(horizontal=11.dp,vertical=8.dp),
+                Row(Modifier.fillMaxWidth()
+                    .background(c.panel.copy(alpha=if(dark).86f else .93f))
+                    .padding(horizontal=10.dp,vertical=8.dp),
                     verticalAlignment=Alignment.CenterVertically,
                     horizontalArrangement=Arrangement.spacedBy(7.dp)){
-                    Box(Modifier.size(32.dp).clip(CircleShape)
-                        .background(c.accent.copy(alpha=.12f)),
-                        contentAlignment=Alignment.Center){
-                        Icon(Icons.Default.SmartToy,null,tint=c.accent,
-                            modifier=Modifier.size(19.dp))
-                    }
-                    Column(Modifier.weight(1f),
-                        verticalArrangement=Arrangement.spacedBy(1.dp)){
-                        Text("Помощь ИИ",fontWeight=FontWeight.Bold,
-                            color=c.text,fontSize=16.sp,maxLines=1)
-                        Text(task.title,color=c.secondary,fontSize=10.sp,
-                            maxLines=1,overflow=TextOverflow.Ellipsis)
-                    }
-                    Box {
-                        Row(Modifier.clip(RoundedCornerShape(11.dp))
-                            .background(c.bg)
-                            .border(1.dp,c.border,RoundedCornerShape(11.dp))
-                            .clickable {modelMenu=true}
-                            .padding(horizontal=8.dp,vertical=8.dp),
+                    val controlBg=if(dark)Color(0xE11B2A43) else Color(0xF2FFFFFF)
+                    val controlBorder=if(dark)Color(0xFF3B4C67) else Color(0xFFDCE3EF)
+                    Box(Modifier.weight(1.04f)){
+                        Row(Modifier.fillMaxWidth().height(53.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(controlBg)
+                            .border(1.dp,controlBorder,RoundedCornerShape(14.dp))
+                            .clickable(enabled=!task.aiMonitoringEnabled){modelMenu=true}
+                            .padding(horizontal=9.dp),
                             verticalAlignment=Alignment.CenterVertically,
-                            horizontalArrangement=Arrangement.spacedBy(3.dp)){
-                            Text(when(model){
-                                "gpt-6-luna" -> "Luna"
-                                "gpt-6.1-terra" -> "Terra"
-                                "gpt-5.4-mini" -> "Terra"
-                                else -> "Sol"
-                            },color=c.text,fontSize=11.sp,fontWeight=FontWeight.SemiBold)
-                            Icon(Icons.Default.ExpandMore,null,
-                                modifier=Modifier.size(15.dp),tint=c.secondary)
+                            horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                            Box(Modifier.size(8.dp).background(Color(0xFFA779ED),CircleShape))
+                            Column(Modifier.weight(1f),
+                                verticalArrangement=Arrangement.spacedBy(3.dp)){
+                                Text("МОДЕЛЬ ИИ",color=c.secondary,fontSize=9.sp,
+                                    fontWeight=FontWeight.Bold)
+                                Text(modelLabel,color=c.text,fontSize=12.sp,
+                                    maxLines=1,overflow=TextOverflow.Ellipsis,
+                                    fontWeight=FontWeight.Bold)
+                            }
+                            Icon(Icons.Default.ExpandMore,null,tint=c.secondary,
+                                modifier=Modifier.size(15.dp))
                         }
-                        DropdownMenu(expanded=modelMenu,onDismissRequest={modelMenu=false}){
+                        DropdownMenu(expanded=modelMenu && !task.aiMonitoringEnabled,
+                            onDismissRequest={modelMenu=false}){
                             modelOptions.forEach{(key,title)->
-                                DropdownMenuItem(
-                                    text={Text(title)},
+                                DropdownMenuItem(text={Text(title)},
                                     onClick={model=key;modelMenu=false},
-                                    trailingIcon=if(model==key){{Icon(Icons.Default.Check,null)}}
-                                        else null
-                                )
+                                    trailingIcon={if(model==key)
+                                        Icon(Icons.Default.Check,null,tint=c.accent)})
                             }
                         }
                     }
-                    if(task.taskType==TaskType.TASK && task.parentTaskId==null){
-                        IconButton(onClick={
+                    Row(Modifier.weight(1.2f).height(53.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(controlBg)
+                        .border(1.dp,controlBorder,RoundedCornerShape(14.dp))
+                        .clickable(enabled=canMonitor){
                             vm.refreshTaskAiMonitoring(task.id)
                             monitoringPanelOpen=true
-                        },modifier=Modifier.size(29.dp)){
-                            Icon(Icons.Default.Radar,"Автомониторинг и статусы",
-                                tint=if(task.aiMonitoringEnabled)c.accent else c.secondary,
-                                modifier=Modifier.size(17.dp))
                         }
+                        .padding(start=9.dp,end=3.dp),
+                        verticalAlignment=Alignment.CenterVertically,
+                        horizontalArrangement=Arrangement.spacedBy(3.dp)){
+                        Column(Modifier.weight(1f),
+                            verticalArrangement=Arrangement.spacedBy(3.dp)){
+                            Text("РЕЖИМ",fontSize=9.sp,color=c.secondary,
+                                fontWeight=FontWeight.Bold)
+                            Text(if(task.aiMonitoringEnabled)"Автомониторинг" else "По запросу",
+                                fontSize=11.sp,color=c.text,fontWeight=FontWeight.Bold,
+                                maxLines=1,overflow=TextOverflow.Ellipsis)
+                        }
+                        Switch(checked=task.aiMonitoringEnabled,
+                            onCheckedChange={changeMonitoring(it)},
+                            enabled=canMonitor&&!home.taskBusy,
+                            modifier=Modifier.scale(.72f).width(39.dp))
                     }
-                    IconButton(onClick={vm.syncTaskAiHistory(task.id)},
-                        modifier=Modifier.size(30.dp)){
-                        Icon(Icons.Default.Refresh,"Обновить чат",tint=c.secondary,
-                            modifier=Modifier.size(17.dp))
-                    }
-                    IconButton(onClick=onClose,modifier=Modifier.size(30.dp)){
-                        Icon(Icons.Default.Close,"Закрыть чат",tint=c.text,
-                            modifier=Modifier.size(20.dp))
+                    Box(Modifier.size(33.dp).clip(CircleShape)
+                        .background(controlBg).border(1.dp,controlBorder,CircleShape)
+                        .clickable(onClick=onClose),contentAlignment=Alignment.Center){
+                        Icon(Icons.Default.Close,"Закрыть чат задачи",tint=c.text,
+                            modifier=Modifier.size(19.dp))
                     }
                 }
                 }

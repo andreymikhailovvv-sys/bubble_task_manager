@@ -63,6 +63,9 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
     private val taskAiMutable=MutableStateFlow(TaskAiChatState())
     private val generalAiMutable=MutableStateFlow(GeneralAiChatState())
     val generalAi=generalAiMutable.asStateFlow()
+    suspend fun transcribeVoice(bytes:ByteArray,durationSeconds:Double):String =
+        repository.transcribeVoice(bytes,durationSeconds)
+
     private val generalWriteMutex=Mutex()
     private var generalLoadedForUser:String?=null
 

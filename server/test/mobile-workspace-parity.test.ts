@@ -195,9 +195,9 @@ test('Telegram fullscreen chat compact header and scroll-aware notes preserve mo
   assert.match(mini, /<MiniGeneralAiChatHeader/);
   assert.match(mini, /miniapp-telegram-overlay-brand/);
   assert.match(mini, /<MiniTaskAiChatHeader/);
-  assert.match(header, /miniapp-ai-context-main-row/);
+  assert.match(header, /miniapp-ai-context-compact-row/);
   assert.match(header, /miniapp-ai-chat-header-telegram/);
-  assert.match(header, /toggle\('projects'\)/);
+  assert.doesNotMatch(header, /toggle\('projects'\)/);
   assert.match(header, /toggle\('chats'\)/);
   assert.match(css, /\.miniapp-ai-chat-panel-general::before \{\s*height: calc\(var\(--miniapp-top-inset, 0px\) \+ 3\.65rem\)/);
   assert.match(css, /\.miniapp-ai-chat-header-general\.miniapp-ai-chat-header-telegram/);
@@ -246,9 +246,9 @@ test('Telegram project picker, navigation and attachment theme refinements remai
     read('../../client/src/styles.css'),
     read('../../client/src/components/MiniGeneralAiChatHeader.tsx')
   ]);
-  // Project icons use the SVG already rendered in the full-size sidebar.
-  assert.match(header, /icon === 'telegram'/);
-  assert.match(header, /<svg viewBox="0 0 24 24"/);
+  // Project icons remain in the project-only sidebar, not the compact chat selector.
+  assert.match(mini, /project.icon === 'telegram' \? <svg/);
+  assert.doesNotMatch(header, /toggle\('projects'\)/);
   assert.doesNotMatch(mini, /project\.icon === 'telegram' \? '✈'/);
   // Telegram WebView uses focus-safe accessible controls; mobile web remains a button.
   assert.match(mini, /MiniNavigationControl = isTelegramRuntime \? 'div' : 'button'/);

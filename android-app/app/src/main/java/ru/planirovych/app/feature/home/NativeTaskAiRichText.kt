@@ -216,12 +216,12 @@ private fun NativeAiProseWithTaskRefs(text:String,textColor:Color,linkColor:Colo
                             .border(1.dp,if(light)Color(0xFFDCE5EE)
                                 else Color(0xFF35778C),frame)
                             .clickable(enabled=title!=null){onOpenTaskReference(ref.id)}
-                            .padding(horizontal=11.dp,vertical=7.dp),
+                            .padding(horizontal=8.dp,vertical=4.dp),
                             verticalAlignment=Alignment.CenterVertically,
-                            horizontalArrangement=Arrangement.spacedBy(6.dp)){
-                            Text("↗",fontSize=14.sp,color=chipInk,
+                            horizontalArrangement=Arrangement.spacedBy(4.dp)){
+                            Text("↗",fontSize=12.sp,color=chipInk,
                                 fontWeight=FontWeight.Bold)
-                            Text(title?:"Задача не найдена",fontSize=11.sp,
+                            Text(title?:"Задача не найдена",fontSize=10.sp,
                                 fontWeight=FontWeight.SemiBold,color=chipInk,
                                 maxLines=1)
                         }

@@ -53,6 +53,11 @@ interface PlanirovychApi {
     @GET("api/ai-chat/projects/{projectId}/chats/{chatId}/messages")
     suspend fun generalAiThread(@Path("projectId") projectId:String,
         @Path("chatId") chatId:String):JsonObject
+    // Native Retrofit requests do not send browser Fetch Metadata by default.
+    // Mark the direct first-party request for the endpoint's same-origin guard.
+    @Headers("Sec-Fetch-Site: same-origin")
+    @POST("api/ai/audio/transcribe")
+    suspend fun transcribeVoice(@Body payload:JsonObject):JsonObject
     @GET("api/ai-general-chat")
     suspend fun generalAiQuickHistory(@Query("userTimeZone") timeZone:String):JsonObject
     @Streaming
