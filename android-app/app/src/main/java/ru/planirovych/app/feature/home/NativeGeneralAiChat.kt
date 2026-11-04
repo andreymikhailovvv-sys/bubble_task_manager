@@ -272,13 +272,14 @@ internal fun NativeGeneralAiChatPage(
         if(voiceSendSerial>0)send()
     }
     Box(Modifier.fillMaxSize().background(c.bg)){
-        Column(Modifier.fillMaxSize()){
+        Box(Modifier.fillMaxSize()){
             val headerBg=if(dark)Color(0xDD101B2F) else Color(0xEAF7F9FD)
             val controlBg=if(dark)Color(0xC71B2A43) else Color(0xEDFFFFFF)
             val controlBorder=if(dark)Color(0xFF3B4C67) else Color(0xFFDCE3EF)
             // Scroll away like the Mini App. Translucent frosted surfaces let the
             // conversation remain subtly visible beneath the compact controls.
             AnimatedVisibility(visible=!headerCollapsed,
+                modifier=Modifier.align(Alignment.TopCenter).zIndex(2f),
                 enter=expandVertically(animationSpec=tween(180))+fadeIn(),
                 exit=shrinkVertically(animationSpec=tween(160))+fadeOut()){
                 Row(Modifier.fillMaxWidth()
@@ -392,7 +393,7 @@ internal fun NativeGeneralAiChatPage(
                     }
                 }
             }
-            Box(Modifier.fillMaxWidth().weight(1f)){
+            Box(Modifier.fillMaxSize()){
                 if(state.loading && messages.isEmpty()){
                     CircularProgressIndicator(Modifier.align(Alignment.Center))
                 }else if(messages.isEmpty()&&!state.busy){
@@ -415,7 +416,7 @@ internal fun NativeGeneralAiChatPage(
                 LazyColumn(state=listState,
                     modifier=Modifier.fillMaxSize().alpha(if(historyPositioned)1f else 0f),
                     contentPadding=PaddingValues(start=12.dp,end=12.dp,
-                        top=10.dp,bottom=bottomPadding),
+                        top=82.dp,bottom=bottomPadding),
                     verticalArrangement=Arrangement.spacedBy(11.dp)){
                     items(messages,key={m->m.id?:
                         m.role+"-"+messages.indexOf(m)} ){message->
