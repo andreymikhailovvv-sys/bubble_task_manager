@@ -20,7 +20,7 @@ test('Android List and Timeline headers mirror Mini App topbar actions without o
   assert.match(header, /if\(mode==WorkspaceMode\.LIST\) \{/);
   assert.match(header, /onCredits\(\)/);
   assert.match(header, /onScore\(\)/);
-  assert.match(header, /onPostpone\(\)/);
+  assert.match(header, /Modifier\.clickable\(onClick=onPostpone\)/);
   assert.match(header, /DropdownMenu\(expanded=moreOpen/);
   assert.match(header, /Icons\.Default\.MoreVert/);
   assert.match(header, /Icons\.Default\.Settings/);
@@ -41,8 +41,8 @@ test('Android List and Timeline headers mirror Mini App topbar actions without o
   assert.match(toolbar, /ToolbarButton\("Оптимизировать"/);
   assert.match(toolbar, /ToolbarButton\("Фильтры"/);
   assert.match(toolbar, /enabled=false,dimDisabled=false/);
-  assert.match(android, /onFilter=\{ filtersOpen=true \}/);
-  assert.match(android, /onPostpone=\{ vm\.postponeOverdue\(\) \}/);
+  assert.match(android, /onFilter\s*=\s*\{\s*filtersOpen=true\s*\}/);
+  assert.match(android, /onPostpone\s*=\s*\{\s*vm\.postponeOverdue\(\)\s*\}/);
   assert.match(mini, /miniapp-workspace-utilities/);
   assert.match(mini, /miniapp-timeline-more-toggle/);
   assert.match(mini, /miniapp-timeline-postpone-button/);
