@@ -61,6 +61,7 @@ data class Task(
     val recurrenceUntil: String? = null,
     val aiNotificationsEnabled: Boolean = false,
     val aiMonitoringEnabled: Boolean = false,
+    val aiMonitoringModel: String? = null,
     val importance: Int = 0,
     val urgency: Int = 0,
     val priorityScore: Double = 0.0,
