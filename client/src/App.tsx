@@ -7742,12 +7742,12 @@ export default function App() {
                 </div>
               </div>
               <div className="focused-task-subtasks mt-2 flex min-h-0 flex-col space-y-2 border-t border-violet-100 pt-3">
-                <div className="flex items-center justify-between gap-2">
-                  <h4 className="flex items-center gap-1.5 text-sm font-semibold">
-                    Подзадачи
+                <div className="focused-task-subtasks-header flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <h4 className="shrink-0 text-sm font-semibold">Подзадачи</h4>
                     <button
                       type="button"
-                      className="focused-task-add-subtask-button focused-task-label-button inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold"
+                      className="focused-task-add-subtask-button focused-task-label-button inline-flex min-h-8 items-center justify-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition"
                       onClick={() => {
                         setFocusedSubtaskTitle('');
                         setFocusedSubtaskDueDate(null);
@@ -7757,7 +7757,7 @@ export default function App() {
                       aria-label="Добавить подзадачу"
                     >
                       <Plus size={15} aria-hidden="true" />
-                      <span>Добавить</span>
+                      <span>Добавить подзадачу</span>
                     </button>
                     {focusedTask.isCollaborative && (focusedTask.unreadCommentCount ?? 0) > 0 ? (
                       <button
@@ -7777,7 +7777,7 @@ export default function App() {
                         Отметить прочитанными ({focusedTask.unreadCommentCount})
                       </button>
                     ) : null}
-                  </h4>
+                  </div>
                   <div className="flex items-center gap-2">
                     {(subtaskMap[focusedTask.id] ?? []).length === 0 ? (
                       <button
