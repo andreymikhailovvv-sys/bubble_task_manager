@@ -7,6 +7,10 @@ import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
+import androidx.compose.animation.core.*
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
 import androidx.compose.material.icons.Icons
@@ -141,15 +145,18 @@ internal fun rememberAiChatSpeechInput(
         }
     }
 
+    // Sample amplitude without re-laying out all bars. Only the timer's displayed
+    // second changes in composition; wave scale is applied during the draw phase.
     LaunchedEffect(stage){
         while(stage==VoiceRecordingStage.RECORDING){
-            elapsedSeconds=((SystemClock.elapsedRealtime()-startedAt)/1000L).toInt()
+            val second=((SystemClock.elapsedRealtime()-startedAt)/1000L).toInt()
+            if(elapsedSeconds!=second)elapsedSeconds=second
             amplitude=((recorder.value?.maxAmplitude?:0)/25000f).coerceIn(.12f,1f)
-            if(elapsedSeconds>=120){
+            if(second>=120){
                 finishRecording(false)
                 break
             }
-            delay(160)
+            delay(80)
         }
     }
     DisposableEffect(Unit){
@@ -165,6 +172,16 @@ internal fun rememberAiChatSpeechInput(
     }
     if(stage!=VoiceRecordingStage.IDLE){
         val recordingNow=stage==VoiceRecordingStage.RECORDING
+        val waveTransition=rememberInfiniteTransition(label="voice-wave")
+        val phase by waveTransition.animateFloat(
+            initialValue=0f,targetValue=(2f*Math.PI.toFloat()),
+            animationSpec=infiniteRepeatable(
+                animation=tween(1100,easing=LinearEasing),repeatMode=RepeatMode.Restart
+            ),label="voice-wave-phase"
+        )
+        val smoothAmplitude by animateFloatAsState(
+            targetValue=amplitude,animationSpec=tween(110),label="voice-volume"
+        )
         Dialog(onDismissRequest={},properties=DialogProperties(
             dismissOnBackPress=false,dismissOnClickOutside=false)){
             Surface(shape=RoundedCornerShape(25.dp),
@@ -185,14 +202,21 @@ internal fun rememberAiChatSpeechInput(
                     Row(Modifier.fillMaxWidth().height(61.dp),
                         horizontalArrangement=Arrangement.spacedBy(3.dp),
                         verticalAlignment=Alignment.CenterVertically){
+                        val waveBrush=Brush.verticalGradient(listOf(
+                            Color(0xFF39C5BA),Color(0xFF8B5CF6)))
                         repeat(23){index->
-                            val wave=(.38f+.62f*kotlin.math.abs(
-                                sin((index*.58+elapsedSeconds*2.1))))
-                            val barHeight=if(recordingNow)
-                                7.dp+(amplitude*wave*46f).dp else 9.dp
-                            Box(Modifier.weight(1f).height(barHeight)
+                            Box(Modifier.weight(1f).height(51.dp)
+                                .graphicsLayer{
+                                    // GPU-scale the fixed geometry instead of rebuilding
+                                    // bar heights at the 6 FPS amplitude sampling cadence.
+                                    scaleY=if(recordingNow)
+                                        (.12f + .88f*smoothAmplitude*
+                                            (.35f+.65f*kotlin.math.abs(
+                                                sin(index*.61f+phase)))).coerceIn(.12f,1f)
+                                        else .14f
+                                }
                                 .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0xFFA78BFA)))
+                                .background(waveBrush))
                         }
                     }
                     Text(if(recordingNow)
@@ -203,18 +227,41 @@ internal fun rememberAiChatSpeechInput(
                         fontSize=13.sp)
                     if(recordingNow){
                         Row(Modifier.fillMaxWidth(),
-                            horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                            OutlinedButton(onClick={releaseRecorder(true)},
-                                modifier=Modifier.weight(1f)){
-                                Text("Отмена",fontSize=11.sp)
+                            horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                            val buttonShape=RoundedCornerShape(12.dp)
+                            Box(Modifier.weight(1f).height(42.dp)
+                                .clip(buttonShape)
+                                .background(if(dark)Color(0xFF422B3D)
+                                    else Color(0xFFFFE8ED))
+                                .border(1.dp,if(dark)Color(0xFF744258)
+                                    else Color(0xFFF2C6D2),buttonShape)
+                                .clickable {releaseRecorder(true)},
+                                contentAlignment=Alignment.Center){
+                                Text("Отмена",fontSize=11.sp,fontWeight=FontWeight.SemiBold,
+                                    maxLines=1,softWrap=false,overflow=TextOverflow.Ellipsis,
+                                    color=if(dark)Color(0xFFFFB6CB) else Color(0xFFB42350))
                             }
-                            OutlinedButton(onClick={finishRecording(false)},
-                                modifier=Modifier.weight(1f)){
-                                Text("В текст",fontSize=11.sp)
+                            Box(Modifier.weight(1f).height(42.dp)
+                                .clip(buttonShape)
+                                .background(if(dark)Color(0xFF164952)
+                                    else Color(0xFFDBFAF9))
+                                .border(1.dp,if(dark)Color(0xFF24717B)
+                                    else Color(0xFFB5EAE6),buttonShape)
+                                .clickable {finishRecording(false)},
+                                contentAlignment=Alignment.Center){
+                                Text("В текст",fontSize=11.sp,fontWeight=FontWeight.SemiBold,
+                                    maxLines=1,softWrap=false,overflow=TextOverflow.Ellipsis,
+                                    color=if(dark)Color(0xFF8BECE4) else Color(0xFF137D7B))
                             }
-                            Button(onClick={finishRecording(true)},
-                                modifier=Modifier.weight(1.2f)){
-                                Text("Отправить",fontSize=11.sp)
+                            Box(Modifier.weight(1.3f).height(42.dp)
+                                .clip(buttonShape)
+                                .background(Color(0xFF7C3AED))
+                                .clickable {finishRecording(true)},
+                                contentAlignment=Alignment.Center){
+                                Text("Отправить",fontSize=11.sp,
+                                    fontWeight=FontWeight.Bold,maxLines=1,
+                                    softWrap=false,overflow=TextOverflow.Ellipsis,
+                                    color=Color.White)
                             }
                         }
                     }else{
