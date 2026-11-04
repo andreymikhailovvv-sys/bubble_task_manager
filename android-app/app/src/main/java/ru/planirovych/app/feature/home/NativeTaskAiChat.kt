@@ -609,7 +609,9 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
     context:Context,onReply:()->Unit,pending:Boolean=false,
     onProposalAction:(String,String)->Unit={_,_->},
     actionBusy:Boolean=false,
-    onOpenDocument:(String)->Unit={}){
+    onOpenDocument:(String)->Unit={},
+    generalChat:Boolean=false,taskTitles:Map<String,String> = emptyMap(),
+    onOpenTaskReference:((String)->Unit)?=null){
     val isUser=message.role=="user"
     val content=messageDisplayContent(message.content)
     // Preview can end halfway through a **bold** delimiter. Hide the stray
@@ -623,7 +625,8 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
     }else content
     Row(Modifier.fillMaxWidth(),
         horizontalArrangement=if(isUser)Arrangement.End else Arrangement.Start){
-        Column(Modifier.widthIn(max=330.dp).fillMaxWidth(.89f),
+        Column(Modifier.widthIn(max=if(generalChat && !isUser)390.dp else 330.dp)
+            .fillMaxWidth(if(generalChat && !isUser).97f else .89f),
             horizontalAlignment=if(isUser)Alignment.End else Alignment.Start,
             verticalArrangement=Arrangement.spacedBy(3.dp)){
             val bubbleShape=RoundedCornerShape(
@@ -659,7 +662,10 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                     }
                     if(!isUser) NativeAiFormattedMessage(
                         text=previewContent,textColor=c.assistantText,
-                        linkColor=if(c.bg.red>.5f)Color(0xFF0369A1) else Color(0xFF67E8F9))
+                        linkColor=if(c.bg.red>.5f)Color(0xFF0369A1) else Color(0xFF67E8F9),
+                        fontSize=if(generalChat)14.sp else 13.sp,
+                        taskTitles=taskTitles,
+                        onOpenTaskReference=onOpenTaskReference)
                     else Text(content,color=c.userText,fontSize=13.sp,lineHeight=20.sp)
                     if(message.messageKind=="MONITOR_ACTION"){
                         Text("Действие автомониторинга",color=c.secondary,fontSize=10.sp)
