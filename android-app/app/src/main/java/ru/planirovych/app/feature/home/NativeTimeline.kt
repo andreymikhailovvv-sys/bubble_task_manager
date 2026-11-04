@@ -171,12 +171,12 @@ internal fun NativeTimelineWorkspace(
             .clip(switchShape)
             .background(colors.panel)
             .border(1.dp,colors.panelBorder,switchShape)
-            .padding(5.dp),
-            horizontalArrangement=Arrangement.spacedBy(3.dp)){
+            .padding(6.dp),
+            horizontalArrangement=Arrangement.spacedBy(2.dp)){
             TimelineZoom.entries.forEach{option->
                 val active=option==zoom
-                Box(Modifier.weight(1f).height(38.dp)
-                    .clip(RoundedCornerShape(13.dp))
+                Box(Modifier.weight(1f).padding(horizontal=1.dp)
+                    .height(38.dp).clip(RoundedCornerShape(13.dp))
                     .background(if(active)Color(0xFF7C3AED) else Color.Transparent)
                     .clickable{zoom=option},
                     contentAlignment=Alignment.Center){

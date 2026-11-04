@@ -6,6 +6,9 @@ import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Text
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Alignment
@@ -90,6 +93,18 @@ private fun annotatedAiText(text: String, linkColor: Color): AnnotatedString =
         append(normalized.substring(index))
     }
 
+// Both formats are emitted by the server and handled by the Mini App.
+private val aiTaskReferencePattern=Regex(
+    """\[\[task_ref=([^\]]+)\]\]|\[\[task_ref:([^|\]]+)\|([^\]]+)\]\]"""
+)
+private data class AiTaskReference(val id:String,val fallbackLabel:String)
+private fun aiTaskRefs(text:String):List<AiTaskReference> =
+    aiTaskReferencePattern.findAll(text).mapNotNull{match->
+        val id=(match.groups[1]?.value?:match.groups[2]?.value).orEmpty().trim()
+        if(id.isEmpty())null else AiTaskReference(id,match.groups[3]?.value?.trim()
+            ?.takeIf{it.isNotEmpty()}?:"Открыть задачу")
+    }.toList()
+
 private sealed interface AiTextBlock {
     data class Prose(val content:String):AiTextBlock
     data class Table(val headers:List<String>,val rows:List<List<String>>):AiTextBlock
@@ -154,25 +169,78 @@ private fun parseAiTextBlocks(content:String):List<AiTextBlock>{
 }
 
 @Composable
-internal fun NativeAiFormattedMessage(text:String,textColor:Color,linkColor:Color){
+internal fun NativeAiFormattedMessage(text:String,textColor:Color,linkColor:Color,
+    fontSize:TextUnit=13.sp,
+    taskTitles:Map<String,String> = emptyMap(),
+    onOpenTaskReference:((String)->Unit)?=null){
     val blocks=remember(text){parseAiTextBlocks(text)}
     Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
         blocks.forEach{block->
             when(block){
-                is AiTextBlock.Prose->NativeAiInlineText(block.content,textColor,linkColor)
-                is AiTextBlock.Table->NativeAiTable(block,textColor,linkColor)
+                is AiTextBlock.Prose->NativeAiProseWithTaskRefs(block.content,textColor,linkColor,
+                    fontSize,taskTitles,onOpenTaskReference)
+                is AiTextBlock.Table->NativeAiTable(block,textColor,linkColor,
+                    taskTitles,onOpenTaskReference)
             }
         }
     }
 }
 
 @Composable
-private fun NativeAiInlineText(text:String,textColor:Color,linkColor:Color){
+private fun NativeAiProseWithTaskRefs(text:String,textColor:Color,linkColor:Color,
+    fontSize:TextUnit,taskTitles:Map<String,String>,onOpenTaskReference:((String)->Unit)?){
+    if(onOpenTaskReference==null || !aiTaskReferencePattern.containsMatchIn(text)){
+        NativeAiInlineText(text,textColor,linkColor,fontSize)
+        return
+    }
+    val lines=remember(text){text.split("\n")}
+    Column(verticalArrangement=Arrangement.spacedBy(4.dp)){
+        lines.forEach{line->
+            val refs=aiTaskRefs(line)
+            val prose=aiTaskReferencePattern.replace(line,"").trimEnd()
+            if(prose.isNotEmpty())NativeAiInlineText(prose,textColor,linkColor,fontSize)
+            else if(refs.isEmpty())Spacer(Modifier.height(fontSize.value.dp))
+            if(refs.isNotEmpty()){
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                    .padding(vertical=3.dp),
+                    horizontalArrangement=Arrangement.spacedBy(7.dp)){
+                    refs.forEach{ref->
+                        val title=taskTitles[ref.id]
+                        val light=textColor.red<.5f
+                        val chipBg=if(light)Color.White else Color(0xFF1B4255)
+                        val chipInk=if(light)Color(0xFF172238) else Color(0xFFE0F7FF)
+                        val frame=CircleShape
+                        Row(Modifier
+                            .clip(frame)
+                            .background(chipBg)
+                            .border(1.dp,if(light)Color(0xFFDCE5EE)
+                                else Color(0xFF35778C),frame)
+                            .clickable(enabled=title!=null){onOpenTaskReference(ref.id)}
+                            .padding(horizontal=11.dp,vertical=7.dp),
+                            verticalAlignment=Alignment.CenterVertically,
+                            horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                            Text("↗",fontSize=14.sp,color=chipInk,
+                                fontWeight=FontWeight.Bold)
+                            Text(title?:"Задача не найдена",fontSize=11.sp,
+                                fontWeight=FontWeight.SemiBold,color=chipInk,
+                                maxLines=1)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NativeAiInlineText(text:String,textColor:Color,linkColor:Color,
+    fontSize:TextUnit=13.sp){
     val context=LocalContext.current
     val formatted=remember(text,linkColor){annotatedAiText(text,linkColor)}
     ClickableText(
         text=formatted,
-        style=TextStyle(color=textColor,fontSize=13.sp,lineHeight=20.sp),
+        style=TextStyle(color=textColor,fontSize=fontSize,
+            lineHeight=if(fontSize.value>=14f)22.sp else 20.sp),
         onClick={offset->
             val url=formatted.getStringAnnotations("URL",offset,offset)
                 .firstOrNull()?.item?:return@ClickableText
@@ -188,7 +256,8 @@ private fun NativeAiInlineText(text:String,textColor:Color,linkColor:Color){
  * truncating their columns or taking over the whole message scroll.
  */
 @Composable
-private fun NativeAiTable(table:AiTextBlock.Table,textColor:Color,linkColor:Color){
+private fun NativeAiTable(table:AiTextBlock.Table,textColor:Color,linkColor:Color,
+    taskTitles:Map<String,String>,onOpenTaskReference:((String)->Unit)?){
     val frame=RoundedCornerShape(8.dp)
     val border=textColor.copy(alpha=.18f)
     val headerBg=textColor.copy(alpha=.075f)
@@ -205,9 +274,15 @@ private fun NativeAiTable(table:AiTextBlock.Table,textColor:Color,linkColor:Colo
                             else Modifier)
                         .padding(horizontal=9.dp,vertical=8.dp),
                         contentAlignment=Alignment.CenterStart){
-                        androidx.compose.material3.Text(
-                            value,color=textColor,fontSize=11.sp,
-                            fontWeight=FontWeight.SemiBold,lineHeight=15.sp)
+                        if(onOpenTaskReference!=null &&
+                            aiTaskReferencePattern.containsMatchIn(value)){
+                            NativeAiProseWithTaskRefs(value,textColor,linkColor,11.sp,
+                                taskTitles,onOpenTaskReference)
+                        }else{
+                            androidx.compose.material3.Text(
+                                value,color=textColor,fontSize=11.sp,
+                                fontWeight=FontWeight.SemiBold,lineHeight=15.sp)
+                        }
                     }
                 }
             }
@@ -219,8 +294,8 @@ private fun NativeAiTable(table:AiTextBlock.Table,textColor:Color,linkColor:Colo
                         Box(Modifier.width(142.dp).heightIn(min=38.dp)
                             .padding(horizontal=9.dp,vertical=7.dp),
                             contentAlignment=Alignment.CenterStart){
-                            NativeAiInlineText(row.getOrElse(col){""},
-                                textColor,linkColor)
+                            NativeAiProseWithTaskRefs(row.getOrElse(col){""},
+                                textColor,linkColor,12.sp,taskTitles,onOpenTaskReference)
                         }
                     }
                 }
