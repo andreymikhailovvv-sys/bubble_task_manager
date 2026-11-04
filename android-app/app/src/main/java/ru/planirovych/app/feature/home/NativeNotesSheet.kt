@@ -14,6 +14,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.*
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -29,12 +31,15 @@ import ru.planirovych.app.data.model.*
 /** Native notes board mirrors MiniApp's StandaloneNotesWorkspace and uses the same API. */
 @Composable
 internal fun NativeNotesPage(vm:HomeViewModel,colors:WorkspaceColors,
-    dark:Boolean,modifier:Modifier=Modifier){
+    dark:Boolean,modifier:Modifier=Modifier,onClose:()->Unit={}){
     val state by vm.state.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
     val notesScroll=rememberLazyListState()
     var searchVisible by remember { mutableStateOf(true) }
-    var groupId by remember { mutableStateOf("all") }
+    var filterOpen by remember { mutableStateOf(false) }
+    var excludedGroups by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var includeUngrouped by remember { mutableStateOf(true) }
+    val allSelected=excludedGroups.isEmpty() && includeUngrouped
     var editing by remember { mutableStateOf<StandaloneNote?>(null) }
     var editorOpen by remember { mutableStateOf(false) }
     var groupManagerOpen by remember { mutableStateOf(false) }
@@ -46,9 +51,10 @@ internal fun NativeNotesPage(vm:HomeViewModel,colors:WorkspaceColors,
     val groupMap=remember(groups){groups.associateBy{it.id}}
     LaunchedEffect(state.user?.id){vm.loadNotes()}
     val normalized=query.trim().lowercase().replace('ё','е')
-    val filtered=remember(state.notes,groupId,normalized){
+    val filtered=remember(state.notes,excludedGroups,includeUngrouped,normalized){
         state.notes.asSequence()
-            .filter { groupId=="all" || (groupId=="ungrouped" && it.groupId==null) || it.groupId==groupId }
+            .filter { note -> if(note.groupId==null)includeUngrouped
+                else note.groupId !in excludedGroups }
             .filter {note->
                 normalized.isBlank() ||
                 (note.title+" "+noteText(note.content)).lowercase()
@@ -79,144 +85,277 @@ internal fun NativeNotesPage(vm:HomeViewModel,colors:WorkspaceColors,
                 previousOffset=offset
             }
     }
-    LaunchedEffect(groupId,normalized){
+    LaunchedEffect(excludedGroups,includeUngrouped,normalized){
         searchVisible=true
         notesScroll.scrollToItem(0)
     }
-    Column(modifier.fillMaxSize().padding(horizontal=14.dp,vertical=12.dp),
-        verticalArrangement=Arrangement.spacedBy(11.dp)){
-        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
-            horizontalArrangement=Arrangement.SpaceBetween){
-            Column {
-                Text("ЛИЧНЫЕ ЗАПИСИ",fontSize=10.sp,
-                    letterSpacing=1.7.sp,fontWeight=FontWeight.Bold,color=colors.purple)
-                Text("Мои заметки",fontSize=21.sp,fontWeight=FontWeight.Bold,color=colors.text)
-                Text(filtered.size.toString()+" из "+state.notes.size,
-                    fontSize=11.sp,color=colors.secondaryText)
-            }
-            Button(onClick={editing=null;editorOpen=true},
-                shape=RoundedCornerShape(13.dp),
-                contentPadding=PaddingValues(horizontal=11.dp,vertical=8.dp)){
-                Icon(Icons.Default.Add,null,modifier=Modifier.size(17.dp))
-                Spacer(Modifier.width(3.dp))
-                Text("Новая",fontSize=12.sp)
-            }
-        }
-        LazyRow(horizontalArrangement=Arrangement.spacedBy(7.dp)){
-            item {
-                NoteGroupChip("Группы",false,colors,Color(0xFF8B5CF6),
-                    icon=Icons.Default.Settings){groupManagerOpen=true;newGroup=false}
-            }
-            item{NoteGroupChip("Все",groupId=="all",colors,colors.purple){
-                groupId="all"
-            }}
-            item{NoteGroupChip("Без группы",groupId=="ungrouped",colors,Color(0xFF64748B)){
-                groupId="ungrouped"
-            }}
-            items(groups,key={it.id}){g->
-                NoteGroupChip(g.name,groupId==g.id,colors,noteColor(g.color)){
-                    groupId=g.id
+    val notesBg=if(dark)Color(0xFF101A2C) else Color(0xFFF5F6FF)
+    val notesCard=if(dark)Color(0xFF1D2D46) else Color.White
+    val notesInk=if(dark)Color(0xFFF0F4FF) else Color(0xFF17223A)
+    val notesMuted=if(dark)Color(0xFFAAB9D2) else Color(0xFF65738E)
+    val notesBorder=if(dark)Color(0xFF40516E) else Color(0xFFDBE0F6)
+    val notesField=if(dark)Color(0xFF1C2B45) else Color.White
+    Column(modifier.fillMaxSize().background(notesBg)) {
+        Column(Modifier.fillMaxWidth()
+            .padding(start=15.dp,end=15.dp,top=14.dp,bottom=11.dp),
+            verticalArrangement=Arrangement.spacedBy(14.dp)) {
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
+                horizontalArrangement=Arrangement.SpaceBetween){
+                Column(verticalArrangement=Arrangement.spacedBy(5.dp)){
+                    Text("ЛИЧНЫЕ ЗАПИСИ",fontSize=11.sp,
+                        letterSpacing=1.35.sp,fontWeight=FontWeight.Bold,
+                        color=if(dark)Color(0xFFCAB7F8) else Color(0xFF7544B6))
+                    Row(verticalAlignment=Alignment.CenterVertically,
+                        horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                        Text("Мои заметки",fontSize=23.sp,
+                            fontWeight=FontWeight.ExtraBold,color=notesInk,maxLines=1)
+                        Text(if(allSelected)"("+filtered.size+")"
+                            else "("+filtered.size+" из "+state.notes.size+")",
+                            fontSize=13.sp,color=notesMuted,maxLines=1)
+                    }
+                }
+                Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
+                    .background(if(dark)Color(0xFF253650) else Color(0xFFEEF0F8))
+                    .border(1.dp,if(dark)Color(0xFF3C4F6C)
+                        else Color(0xFFD9E0ED),RoundedCornerShape(12.dp))
+                    .clickable(onClick=onClose),contentAlignment=Alignment.Center){
+                    Icon(Icons.Default.Close,"Закрыть заметки",tint=notesInk,
+                        modifier=Modifier.size(21.dp))
                 }
             }
-            item{NoteGroupChip("+ Группа",false,colors,Color(0xFF059669)){
-                groupManagerOpen=true;newGroup=true
-            }}
-        }
-        AnimatedVisibility(visible=searchVisible,
-            enter=expandVertically()+fadeIn(),exit=shrinkVertically()+fadeOut()){
-            BasicTextField(value=query,onValueChange={query=it},
-                modifier=Modifier.fillMaxWidth().height(44.dp)
-                    .clip(RoundedCornerShape(13.dp))
-                    .background(colors.field)
-                    .border(1.dp,colors.panelBorder,RoundedCornerShape(13.dp)),
-                singleLine=true,textStyle=TextStyle(fontSize=13.sp,color=colors.text),
-                cursorBrush=SolidColor(colors.purple),
-                decorationBox={inner->
-                    Row(Modifier.fillMaxSize().padding(start=13.dp,end=7.dp),
-                        verticalAlignment=Alignment.CenterVertically){
-                        Icon(Icons.Default.Search,null,tint=colors.secondaryText,
-                            modifier=Modifier.size(18.dp))
-                        Spacer(Modifier.width(10.dp))
-                        Box(Modifier.weight(1f),contentAlignment=Alignment.CenterStart){
-                            if(query.isEmpty())Text("Поиск по заметкам",
-                                fontSize=13.sp,color=colors.secondaryText,maxLines=1)
-                            inner()
+            AnimatedVisibility(visible=searchVisible,
+                enter=expandVertically()+fadeIn(),exit=shrinkVertically()+fadeOut()){
+                Column(Modifier.fillMaxWidth(),
+                    verticalArrangement=Arrangement.spacedBy(11.dp)){
+                    Row(Modifier.fillMaxWidth(),
+                        horizontalArrangement=Arrangement.spacedBy(9.dp)){
+                        Box(Modifier.weight(1.35f).height(49.dp)
+                            .clip(RoundedCornerShape(15.dp))
+                            .background(Brush.horizontalGradient(listOf(
+                                Color(0xFF933CF0),Color(0xFF5048E5))))
+                            .clickable {editing=null;editorOpen=true},
+                            contentAlignment=Alignment.Center){
+                            Row(verticalAlignment=Alignment.CenterVertically,
+                                horizontalArrangement=Arrangement.spacedBy(7.dp)){
+                                Icon(Icons.Default.Add,null,tint=Color.White,
+                                    modifier=Modifier.size(22.dp))
+                                Text("Новая заметка",fontSize=14.sp,
+                                    fontWeight=FontWeight.Bold,color=Color.White,
+                                    maxLines=1,softWrap=false)
+                            }
                         }
-                        if(query.isNotEmpty())IconButton(onClick={query=""},
-                            modifier=Modifier.size(30.dp)){
-                            Icon(Icons.Default.Close,"Очистить поиск",
-                                tint=colors.secondaryText,modifier=Modifier.size(16.dp))
+                        Box(Modifier.weight(1f)){
+                            Row(Modifier.fillMaxWidth().height(49.dp)
+                                .clip(RoundedCornerShape(15.dp))
+                                .background(if(dark)Color(0xFF283B56)
+                                    else Color(0xFFEEE9FF))
+                                .border(1.dp,notesBorder,RoundedCornerShape(15.dp))
+                                .clickable{filterOpen=true},
+                                verticalAlignment=Alignment.CenterVertically,
+                                horizontalArrangement=Arrangement.Center){
+                                Icon(Icons.Default.Tune,null,
+                                    tint=if(dark)Color(0xFFD9C1FF)
+                                        else Color(0xFF6840B1),
+                                    modifier=Modifier.size(19.dp))
+                                Spacer(Modifier.width(7.dp))
+                                Text("Фильтры",fontSize=14.sp,
+                                    fontWeight=FontWeight.SemiBold,
+                                    color=if(dark)Color(0xFFE1D0FF)
+                                        else Color(0xFF6840B1),maxLines=1)
+                            }
+                            DropdownMenu(expanded=filterOpen,
+                                onDismissRequest={filterOpen=false},
+                                modifier=Modifier.widthIn(min=240.dp,max=310.dp)
+                                    .heightIn(max=425.dp).background(notesCard)){
+                                Text("Какие заметки показывать",
+                                    Modifier.padding(horizontal=15.dp,vertical=9.dp),
+                                    color=notesMuted,fontSize=12.sp,
+                                    fontWeight=FontWeight.SemiBold)
+                                DropdownMenuItem(
+                                    text={Text("Показать все группы",color=notesInk)},
+                                    leadingIcon={Checkbox(checked=allSelected,
+                                        onCheckedChange=null,
+                                        modifier=Modifier.size(22.dp))},
+                                    onClick={excludedGroups=emptySet();includeUngrouped=true})
+                                HorizontalDivider(color=notesBorder)
+                                DropdownMenuItem(
+                                    text={Text("Без группы",color=notesInk)},
+                                    leadingIcon={Checkbox(checked=includeUngrouped,
+                                        onCheckedChange=null,
+                                        modifier=Modifier.size(22.dp))},
+                                    onClick={includeUngrouped=!includeUngrouped})
+                                groups.forEach{g->
+                                    DropdownMenuItem(
+                                        text={Row(verticalAlignment=Alignment.CenterVertically){
+                                            Box(Modifier.size(9.dp)
+                                                .background(noteColor(g.color),CircleShape))
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(g.name,color=notesInk,maxLines=1,
+                                                overflow=TextOverflow.Ellipsis)
+                                        }},
+                                        leadingIcon={Checkbox(
+                                            checked=g.id !in excludedGroups,
+                                            onCheckedChange=null,
+                                            modifier=Modifier.size(22.dp))},
+                                        onClick={excludedGroups=if(g.id in excludedGroups)
+                                            excludedGroups-g.id else excludedGroups+g.id})
+                                }
+                                HorizontalDivider(color=notesBorder)
+                                DropdownMenuItem(
+                                    text={Text("Добавить группу",color=notesInk)},
+                                    leadingIcon={Icon(Icons.Default.Add,null,
+                                        tint=colors.purple)},
+                                    enabled=groups.size<40,
+                                    onClick={filterOpen=false;groupManagerOpen=true;newGroup=true})
+                                DropdownMenuItem(
+                                    text={Text("Настройки групп",color=notesInk)},
+                                    leadingIcon={Icon(Icons.Default.Settings,null,
+                                        tint=colors.purple)},
+                                    onClick={filterOpen=false;groupManagerOpen=true;newGroup=false})
+                            }
                         }
                     }
-                })
+                    BasicTextField(value=query,onValueChange={query=it},
+                        modifier=Modifier.fillMaxWidth().height(49.dp)
+                            .clip(RoundedCornerShape(15.dp))
+                            .background(notesField)
+                            .border(1.dp,if(dark)Color(0xFF40536F)
+                                else Color(0xFFD9DEF2),RoundedCornerShape(15.dp)),
+                        singleLine=true,textStyle=TextStyle(fontSize=16.sp,color=notesInk),
+                        cursorBrush=SolidColor(colors.purple),
+                        decorationBox={inner->
+                            Row(Modifier.fillMaxSize()
+                                .padding(start=14.dp,end=8.dp),
+                                verticalAlignment=Alignment.CenterVertically){
+                                Icon(Icons.Default.Search,null,tint=notesMuted,
+                                    modifier=Modifier.size(20.dp))
+                                Spacer(Modifier.width(10.dp))
+                                Box(Modifier.weight(1f),
+                                    contentAlignment=Alignment.CenterStart){
+                                    if(query.isEmpty())Text("Поиск по заметкам…",
+                                        fontSize=16.sp,color=notesMuted,maxLines=1)
+                                    inner()
+                                }
+                                if(query.isNotEmpty())IconButton(onClick={query=""},
+                                    modifier=Modifier.size(30.dp)){
+                                    Icon(Icons.Default.Close,"Очистить поиск",
+                                        tint=notesMuted,modifier=Modifier.size(16.dp))
+                                }
+                            }
+                        })
+                }
+            }
         }
-        state.notesError?.let{Text(it,color=MaterialTheme.colorScheme.error,fontSize=12.sp)}
+        state.notesError?.let{Text(it,Modifier.padding(horizontal=15.dp),
+            color=MaterialTheme.colorScheme.error,fontSize=12.sp)}
         if(state.notesLoading && state.notes.isEmpty()){
-            Box(Modifier.fillMaxWidth().weight(1f),contentAlignment=Alignment.Center){
-                CircularProgressIndicator()
+            Box(Modifier.weight(1f).fillMaxWidth(),contentAlignment=Alignment.Center){
+                CircularProgressIndicator(color=colors.purple)
             }
-        } else if(filtered.isEmpty()){
-            Box(Modifier.fillMaxWidth().weight(1f),contentAlignment=Alignment.Center){
+        }else if(filtered.isEmpty()){
+            Box(Modifier.weight(1f).fillMaxWidth(),contentAlignment=Alignment.Center){
                 Text(if(query.isNotBlank())"По запросу ничего не найдено"
-                    else if(groupId!="all")"В этой группе нет заметок"
+                    else if(state.notes.isNotEmpty())"В выбранных группах нет заметок"
                     else "Пока нет заметок. Создайте первую.",
-                    color=colors.secondaryText)
+                    color=notesMuted,fontSize=13.sp)
             }
-        } else {
-            LazyColumn(Modifier.weight(1f),state=notesScroll,
-                contentPadding=PaddingValues(bottom=18.dp),
-                verticalArrangement=Arrangement.spacedBy(11.dp)){
+        }else {
+            LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal=14.dp),
+                state=notesScroll,contentPadding=PaddingValues(top=18.dp,bottom=21.dp),
+                verticalArrangement=Arrangement.spacedBy(13.dp)){
                 items(filtered,key={it.id}) {note->
                     val group=groupMap[note.groupId]
-                    Surface(shape=RoundedCornerShape(18.dp),color=colors.card,
-                        border=BorderStroke(1.dp,colors.panelBorder),shadowElevation=1.dp){
+                    val cardShape=RoundedCornerShape(19.dp)
+                    Surface(modifier=Modifier.fillMaxWidth()
+                        .shadow(if(dark)3.dp else 4.dp,cardShape),
+                        shape=cardShape,color=notesCard,
+                        border=BorderStroke(1.dp,notesBorder),shadowElevation=0.dp){
                         Column {
                             Column(Modifier.fillMaxWidth().clickable{
                                 editing=note;editorOpen=true
-                            }.padding(14.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
-                                Text(note.title.ifBlank{"Без названия"},
-                                    color=colors.text,fontWeight=FontWeight.Bold,fontSize=15.sp,
-                                    maxLines=2,overflow=TextOverflow.Ellipsis)
+                            }.padding(start=16.dp,end=16.dp,top=15.dp,bottom=12.dp),
+                                verticalArrangement=Arrangement.spacedBy(9.dp)){
                                 if(group!=null){
+                                    val tint=noteColor(group.color)
                                     Row(Modifier.clip(CircleShape)
-                                        .background(noteColor(group.color).copy(alpha=.12f))
-                                        .padding(horizontal=9.dp,vertical=5.dp),
-                                        verticalAlignment=Alignment.CenterVertically){
-                                        Box(Modifier.size(7.dp).background(noteColor(group.color),CircleShape))
-                                        Spacer(Modifier.width(6.dp))
-                                        Text(group.name,fontSize=11.sp,color=colors.text,maxLines=1)
+                                        .background(tint.copy(alpha=if(dark).27f else .17f))
+                                        .padding(horizontal=10.dp,vertical=5.dp),
+                                        verticalAlignment=Alignment.CenterVertically,
+                                        horizontalArrangement=Arrangement.spacedBy(7.dp)){
+                                        Box(Modifier.size(8.dp).background(tint,CircleShape))
+                                        Text(group.name,color=notesInk,
+                                            fontSize=11.sp,fontWeight=FontWeight.Bold,
+                                            maxLines=1)
                                     }
                                 }
+                                Text(note.title.ifBlank{"Без названия"},
+                                    color=notesInk,fontWeight=FontWeight.Bold,
+                                    fontSize=16.sp,lineHeight=21.sp,maxLines=2,
+                                    overflow=TextOverflow.Ellipsis)
                                 Text(noteText(note.content).ifBlank{"Пустая заметка"},
-                                    fontSize=12.sp,color=colors.secondaryText,
-                                    maxLines=4,overflow=TextOverflow.Ellipsis)
+                                    color=notesMuted,fontSize=14.sp,lineHeight=21.sp,
+                                    maxLines=2,overflow=TextOverflow.Ellipsis)
                             }
-                            HorizontalDivider(color=colors.panelBorder)
-                            Row(Modifier.fillMaxWidth().padding(horizontal=10.dp),
+                            HorizontalDivider(Modifier.padding(horizontal=16.dp),
+                                thickness=.7.dp,color=notesBorder)
+                            Row(Modifier.fillMaxWidth()
+                                .padding(start=16.dp,end=15.dp,top=8.dp,bottom=9.dp),
                                 verticalAlignment=Alignment.CenterVertically,
                                 horizontalArrangement=Arrangement.SpaceBetween){
-                                Text(note.updatedAt?.take(10)?:note.createdAt?.take(10).orEmpty(),
-                                    fontSize=10.sp,color=colors.secondaryText)
-                                Row {
-                                    var groupPicker by remember { mutableStateOf(false) }
+                                Row(Modifier.weight(1f),
+                                    verticalAlignment=Alignment.CenterVertically,
+                                    horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                                    Icon(Icons.Default.CalendarToday,null,tint=notesMuted,
+                                        modifier=Modifier.size(15.dp))
+                                    Text(notesDisplayDate(note.updatedAt?:note.createdAt),
+                                        color=notesMuted,fontSize=12.sp,maxLines=1,
+                                        overflow=TextOverflow.Ellipsis)
+                                }
+                                Row(horizontalArrangement=Arrangement.spacedBy(7.dp)){
+                                    var groupPicker by remember(note.id) {
+                                        mutableStateOf(false)
+                                    }
                                     Box{
-                                        IconButton(onClick={groupPicker=true},modifier=Modifier.size(34.dp)){
-                                            Icon(Icons.Default.Label,"Переместить в группу",
-                                                tint=colors.secondaryText,modifier=Modifier.size(18.dp))
+                                        Box(Modifier.size(37.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(if(dark)Color(0xFF3B315E)
+                                                else Color(0xFFEFE9FF))
+                                            .clickable{groupPicker=true},
+                                            contentAlignment=Alignment.Center){
+                                            Icon(Icons.Default.Label,
+                                                "Переместить в группу",
+                                                tint=if(dark)Color(0xFFC8A8FF)
+                                                    else Color(0xFF7041D7),
+                                                modifier=Modifier.size(18.dp))
                                         }
                                         DropdownMenu(expanded=groupPicker,
-                                            onDismissRequest={groupPicker=false}){
-                                            DropdownMenuItem(text={Text("Без группы")},onClick={
-                                                groupPicker=false;vm.assignNoteGroup(note.id,null)
-                                            })
-                                            groups.forEach{g->DropdownMenuItem(text={Text(g.name)},onClick={
-                                                groupPicker=false;vm.assignNoteGroup(note.id,g.id)
-                                            })}
+                                            onDismissRequest={groupPicker=false},
+                                            modifier=Modifier.background(notesCard)){
+                                            DropdownMenuItem(text={Text("Без группы",color=notesInk)},
+                                                onClick={
+                                                    groupPicker=false
+                                                    vm.assignNoteGroup(note.id,null)
+                                                })
+                                            groups.forEach{g->
+                                                DropdownMenuItem(text={Text(g.name,color=notesInk)},
+                                                    onClick={
+                                                        groupPicker=false
+                                                        vm.assignNoteGroup(note.id,g.id)
+                                                    })
+                                            }
                                         }
                                     }
-                                    IconButton(onClick={deleting=note},modifier=Modifier.size(34.dp)){
-                                        Icon(Icons.Default.DeleteOutline,"Удалить заметку",
-                                            tint=colors.secondaryText,modifier=Modifier.size(18.dp))
+                                    Box(Modifier.size(37.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if(dark)Color(0xFF482C42)
+                                            else Color(0xFFFFEDF3))
+                                        .clickable{deleting=note},
+                                        contentAlignment=Alignment.Center){
+                                        Icon(Icons.Default.DeleteOutline,
+                                            "Удалить заметку",
+                                            tint=if(dark)Color(0xFFFF9EC1)
+                                                else Color(0xFFDD2263),
+                                            modifier=Modifier.size(18.dp))
                                     }
                                 }
                             }
@@ -229,7 +368,7 @@ internal fun NativeNotesPage(vm:HomeViewModel,colors:WorkspaceColors,
     if(editorOpen) NoteEditorDialog(
         note=editing,groups=groups,colors=colors,dark=dark,busy=state.notesBusy,
         error=state.notesError,
-        initialGroup=if(groupId!="all"&&groupId!="ungrouped")groupId else null,
+        initialGroup=null,
         onClose={editorOpen=false;editing=null},
         onSave={title,html,group->
             val close={editorOpen=false;editing=null}
@@ -248,6 +387,15 @@ internal fun NativeNotesPage(vm:HomeViewModel,colors:WorkspaceColors,
             }){Text("Удалить")}},
             dismissButton={TextButton(onClick={deleting=null}){Text("Отмена")}})
     }
+}
+private fun notesDisplayDate(raw:String?):String{
+    if(raw.isNullOrBlank())return ""
+    return runCatching{
+        java.time.OffsetDateTime.parse(raw)
+            .atZoneSameInstant(java.time.ZoneId.systemDefault())
+            .format(java.time.format.DateTimeFormatter.ofPattern(
+                "d MMM yyyy 'г.'",java.util.Locale("ru")))
+    }.getOrElse{raw.take(10)}
 }
 private fun noteText(html:String):String =
     Html.fromHtml(html,Html.FROM_HTML_MODE_COMPACT).toString().trim()
