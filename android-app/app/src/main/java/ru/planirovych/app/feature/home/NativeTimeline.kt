@@ -617,7 +617,7 @@ private fun CalendarDayCell(
         .border(1.dp,border,shape)
         .padding(horizontal=2.dp,vertical=4.dp),
         horizontalAlignment=Alignment.CenterHorizontally,
-        verticalArrangement=Arrangement.spacedBy(5.dp)){
+        verticalArrangement=Arrangement.spacedBy(2.dp)){
         Box(Modifier.fillMaxWidth().height(23.dp).clickable(onClick=onDay),
             contentAlignment=Alignment.Center){
             Box(Modifier.size(23.dp).clip(CircleShape)
