@@ -128,10 +128,11 @@ fun ModernWorkspace(
             2 -> {
                 val pagerScope=rememberCoroutineScope()
                 NativeGeneralAiChatPage(vm=vm,userId=state.user?.id,dark=dark,
-                    quickAiMode=quickAiMode,quickAiRequestId=quickAiRequestId,
+                    tasks=state.tasks,quickAiMode=quickAiMode,
+                    quickAiRequestId=quickAiRequestId,
                     chatVisible=pagerState.currentPage==2,
                     onExit={pagerScope.launch{pagerState.animateScrollToPage(0)}},
-                    onOpenTaskAi=onOpenTaskAi)
+                    onOpenTask=onOpenTask,onOpenTaskAi=onOpenTaskAi)
             }
             3 -> NativeNotesPage(vm=vm,colors=colors,dark=dark,modifier=Modifier.fillMaxSize())
             else -> {
@@ -173,28 +174,8 @@ fun ModernWorkspace(
             .toList()
     }
     val workspaceScroll=rememberLazyListState()
-    var headerVisible by remember(page){mutableStateOf(true)}
-    LaunchedEffect(workspaceScroll,page){
-        var previousIndex=workspaceScroll.firstVisibleItemIndex
-        var previousOffset=workspaceScroll.firstVisibleItemScrollOffset
-        var movement=0
-        snapshotFlow{Triple(workspaceScroll.firstVisibleItemIndex,
-            workspaceScroll.firstVisibleItemScrollOffset,
-            workspaceScroll.isScrollInProgress)}.collect{(index,offset,scrolling)->
-            if(scrolling){
-                val delta=if(index==previousIndex)offset-previousOffset
-                    else (index-previousIndex).coerceIn(-3,3)*42
-                if(delta!=0){
-                    if((delta>0&&movement<0)||(delta<0&&movement>0))movement=0
-                    movement=(movement+delta).coerceIn(-100,100)
-                    if(movement>25){headerVisible=false;movement=0}
-                    if(movement< -25){headerVisible=true;movement=0}
-                }
-            }else movement=0
-            if(index==0&&offset==0)headerVisible=true
-            previousIndex=index;previousOffset=offset
-        }
-    }
+    // Keep the search/action row pinned; the empty area above it is reserved
+    // for a future native app control, without pulling the content upwards.
     Box(Modifier.fillMaxSize()){
     LazyColumn(
         state=workspaceScroll,
@@ -232,21 +213,10 @@ fun ModernWorkspace(
                 onOpenHabit={selectedHabitId=it})
         }
     }
-    // The Mini App gets this strip from Telegram; native Android needs its own.
-    // Keep it stationary when the search bar temporarily hides on scroll.
-    WorkspaceAppTitle(colors,dark,
-        modifier=Modifier.align(Alignment.TopCenter)
-            .padding(start=14.dp,end=14.dp,top=5.dp))
-    AnimatedVisibility(visible=headerVisible,
-        modifier=Modifier.align(Alignment.TopCenter)
-            .padding(start=14.dp,end=14.dp,top=55.dp),
-        enter=slideInVertically(initialOffsetY={-it},
-            animationSpec=tween(180))+fadeIn(),
-        exit=slideOutVertically(targetOffsetY={-it},
-            animationSpec=tween(155))+fadeOut()){
+    Box(Modifier.align(Alignment.TopCenter)
+        .padding(start=14.dp,end=14.dp,top=55.dp)){
         WorkspaceTopbar(state,colors,mode=contentMode,dark=dark,
-            search={search(it);headerVisible=true},
-            settings=settings,
+            search=search,settings=settings,
             onCredits={creditsOpen=true},
             onScore={scoreOpen=true},
             onPostpone={vm.postponeOverdue()},
@@ -287,19 +257,6 @@ fun ModernWorkspace(
  * Timeline: search | overdue postpone | compact overflow utilities.
  * Keep each item on its own surface, never wrap the whole row in another card.
  */
-@Composable
-private fun WorkspaceAppTitle(colors:WorkspaceColors,dark:Boolean,modifier:Modifier=Modifier) {
-    val shape=RoundedCornerShape(15.dp)
-    Surface(modifier=modifier.fillMaxWidth().height(40.dp),
-        shape=shape,color=colors.card,border=BorderStroke(1.dp,colors.panelBorder),
-        shadowElevation=if(dark)2.dp else 3.dp) {
-        Box(contentAlignment=Alignment.Center) {
-            Text("Планировыч",fontSize=16.sp,fontWeight=FontWeight.Bold,
-                letterSpacing=.1.sp,color=colors.text)
-        }
-    }
-}
-
 @Composable
 private fun WorkspaceTopbar(
     state:HomeState, colors:WorkspaceColors, mode:WorkspaceMode, dark:Boolean,
@@ -534,17 +491,19 @@ private fun WorkspaceToolbar(
 @Composable private fun ToolbarButton(label:String,icon:androidx.compose.ui.graphics.vector.ImageVector,
     ink:Color,fill:Color,border:Color,modifier:Modifier=Modifier,
     click:()->Unit,enabled:Boolean=true,dimDisabled:Boolean=true) {
-    val alpha=if(!enabled && dimDisabled).48f else 1f
+    val iconInk=if(!enabled && dimDisabled)ink.copy(alpha=.55f) else ink
     val shape=RoundedCornerShape(13.dp)
-    Row(modifier.height(44.dp).alpha(alpha)
-        .shadow(3.dp,shape).clip(shape)
+    // Never apply alpha to the entire chip: it reveals gray corners and
+    // makes disabled "Отложить" look like it has extra blocks on both sides.
+    Row(modifier.height(44.dp)
+        .shadow(4.dp,shape).clip(shape)
         .background(fill).border(1.dp,border,shape)
-        .then(if(enabled)Modifier.clickable(onClick=click) else Modifier)
+        .clickable(enabled=enabled,onClick=click)
         .padding(horizontal=4.dp),
         horizontalArrangement=Arrangement.Center,verticalAlignment=Alignment.CenterVertically) {
-        Icon(icon,null,tint=ink,modifier=Modifier.size(15.dp))
+        Icon(icon,null,tint=iconInk,modifier=Modifier.size(15.dp))
         Spacer(Modifier.width(5.dp))
-        Text(label,color=ink,fontSize=11.sp,fontWeight=FontWeight.SemiBold,maxLines=1,
+        Text(label,color=iconInk,fontSize=11.sp,fontWeight=FontWeight.SemiBold,maxLines=1,
             softWrap=false)
     }
 }
