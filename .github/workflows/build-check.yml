@@ -35,6 +35,8 @@ jobs:
         run: node --import tsx --test server/test/ai-quick-intro-context.test.ts
       - name: Verify streaming Markdown emphasis before final answer
         run: node --import tsx --test server/test/ai-streaming-markdown.test.ts
+      - name: Verify Android Timeline parity, fixed month cells and lazy week
+        run: node --import tsx --test server/test/android-timeline-miniapp-parity-scroll.test.ts
       - name: Verify Android List and Timeline header parity
         run: node --import tsx --test server/test/android-miniapp-workspace-header-parity.test.ts
       - name: Verify Mini App search toolbar is confined to List and Timeline
