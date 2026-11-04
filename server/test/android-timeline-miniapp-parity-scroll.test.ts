@@ -10,7 +10,8 @@ test('Android Timeline opens directly under the top bar, without a redundant Fil
   const toolbar = android.indexOf('WorkspaceToolbar(colors, dark, mode=contentMode', list);
   const display = android.indexOf('NativeTimelineWorkspace(rootTasks', toolbar);
   assert.ok(list > 0 && toolbar > list && display > toolbar, 'workspace and timeline remain wired');
-  const section = android.slice(list, display);
+  // Include the opening call. An exclusive slice ending at its start cannot match it.
+  const section = android.slice(list, display + 'NativeTimelineWorkspace'.length);
   assert.match(section, /if \(contentMode == WorkspaceMode\.LIST\) item \{\s*WorkspaceToolbar/);
   assert.match(section, /else item \{\s*NativeTimelineWorkspace/);
   assert.match(android, /WorkspaceTopbar\(state,colors,mode=contentMode/);
@@ -36,7 +37,11 @@ test('Day and Week share neutral cards without colored left-edge stripes', async
   assert.doesNotMatch(week, /MiniAppCalendarEntry\(/);
   assert.match(week, /LazyRow\(/);
   assert.match(week, /rememberLazyListState\(\)/);
-  assert.match(week, /columnWidth=minOf\(228\.dp,maxWidth-12\.dp\)/);
+  // Width is captured before entering LazyRow's receiver scope; direct maxWidth
+  // access there broke Kotlin compilation (fixed in PR #1275).
+  assert.match(week, /val availableWidth=maxWidth/);
+  assert.match(week, /columnWidth=minOf\(228\.dp,availableWidth-12\.dp\)/);
+  assert.match(week, /end=\(availableWidth-columnWidth\)/);
   assert.match(week, /weekScroll\.animateScrollToItem\(index\)/);
   assert.match(mini, /miniapp-native-day-card/);
 });
