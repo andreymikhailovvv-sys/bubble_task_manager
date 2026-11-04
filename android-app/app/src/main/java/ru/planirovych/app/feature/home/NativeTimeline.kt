@@ -87,10 +87,10 @@ private fun timelineEntries(date:LocalDate,tasks:List<Task>,allTasks:List<Task>,
         val accent=when(kind){
             "Событие" -> Color(0xFFF59E0B)
             "Напоминание" -> Color(0xFF0284C7)
-            else -> calendarColor(sectors[source.sphereId]?.color)
+            else -> calendarColor(sectors[source.sphereId.orEmpty()]?.color)
         }
         TimelineEntry(task.id,due.toLocalTime(),task.title,kind,accent,task.id,
-            sectorName=sectors[source.sphereId]?.name,
+            sectorName=sectors[source.sphereId.orEmpty()]?.name,
             dueDate=task.dueDate)
     }.toMutableList()
     habits.filter{timelineHabitScheduled(it,date)}.forEach{habit->
