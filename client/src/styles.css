@@ -14631,3 +14631,101 @@ body[data-theme='light'] .miniapp-shell .miniapp-focus-task-panel--sectioned .mi
   .miniapp-native-week-day-button { transition: none; }
   .miniapp-native-week-track { scroll-behavior: auto; }
 }
+
+
+/* Unified task sheet: one continuous rounded surface, with internal dividers. */
+.miniapp-shell .miniapp-focus-task-panel--sectioned {
+  background: linear-gradient(155deg, #1c2a44 0%, #19233c 72%, #1b1c3c 100%) !important;
+  border: 1px solid rgba(141, 107, 237, .38) !important;
+  border-radius: 2rem 2rem 0 0 !important;
+  box-shadow: 0 16px 38px rgba(4, 9, 28, .22) !important;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-scroller {
+  gap: 0 !important;
+  padding: 0 1.05rem max(1.15rem, env(safe-area-inset-bottom)) !important;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section {
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 1.2rem .35rem 1.3rem !important;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-summary {
+  padding-top: 1.45rem !important;
+}
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content,
+.miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-subtasks {
+  border-top: 1px solid rgba(150, 165, 204, .22) !important;
+}
+.miniapp-shell.miniapp-light .miniapp-focus-task-panel--sectioned,
+body[data-theme='light'] .miniapp-shell .miniapp-focus-task-panel--sectioned {
+  background: #fff !important;
+  border-color: #dedbf2 !important;
+  box-shadow: 0 12px 36px rgba(53, 65, 116, .1) !important;
+}
+.miniapp-shell.miniapp-light .miniapp-focus-task-panel--sectioned .miniapp-focus-section,
+body[data-theme='light'] .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+.miniapp-shell.miniapp-light .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content,
+.miniapp-shell.miniapp-light .miniapp-focus-task-panel--sectioned .miniapp-focus-section-subtasks,
+body[data-theme='light'] .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-content,
+body[data-theme='light'] .miniapp-shell .miniapp-focus-task-panel--sectioned .miniapp-focus-section-subtasks {
+  border-top: 1px solid #e6e8f2 !important;
+}
+@media (min-width: 640px) {
+  .miniapp-shell .miniapp-focus-task-panel--sectioned { border-radius: 2rem !important; }
+}
+
+/* Celebrate successful completion only on the disappearing list card. */
+.miniapp-shell .miniapp-task-list-card.miniapp-task-confetti-exit {
+  position: relative;
+  isolation: isolate;
+  pointer-events: none;
+  animation: miniapp-task-celebrate-exit 540ms cubic-bezier(.2,.7,.2,1) both;
+}
+.miniapp-shell .miniapp-task-list-card.miniapp-task-confetti-exit::before,
+.miniapp-shell .miniapp-task-list-card.miniapp-task-confetti-exit::after {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  inset: -22px;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-image:
+    radial-gradient(circle, #a855f7 0 3px, transparent 3.5px),
+    radial-gradient(circle, #06b6d4 0 3px, transparent 3.5px),
+    radial-gradient(circle, #f59e0b 0 2px, transparent 2.5px),
+    radial-gradient(circle, #10b981 0 3px, transparent 3.5px),
+    radial-gradient(circle, #f472b6 0 2px, transparent 2.5px),
+    radial-gradient(circle, #60a5fa 0 3px, transparent 3.5px);
+  background-position: 16% 48%, 35% 20%, 65% 25%, 85% 50%, 27% 80%, 72% 85%;
+  animation: miniapp-task-confetti-burst 540ms ease-out both;
+}
+.miniapp-shell .miniapp-task-list-card.miniapp-task-confetti-exit::after {
+  transform: rotate(25deg);
+  animation-delay: 40ms;
+}
+@keyframes miniapp-task-celebrate-exit {
+  0% { opacity: 1; transform: scale(1); max-height: 240px; margin-bottom: 0; }
+  35% { opacity: 1; transform: scale(1.015); }
+  70% { opacity: .4; transform: scale(.96); }
+  100% { opacity: 0; transform: scale(.87); max-height: 0; padding-top: 0; padding-bottom: 0; margin-bottom: 0; border-width: 0; }
+}
+@keyframes miniapp-task-confetti-burst {
+  0% { opacity: 0; background-size: 0 0; filter: blur(0); }
+  20% { opacity: 1; background-size: 9px 9px; }
+  75% { opacity: 1; background-size: 7px 7px; }
+  100% { opacity: 0; background-size: 4px 4px; filter: blur(2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .miniapp-shell .miniapp-task-list-card.miniapp-task-confetti-exit,
+  .miniapp-shell .miniapp-task-list-card.miniapp-task-confetti-exit::before,
+  .miniapp-shell .miniapp-task-list-card.miniapp-task-confetti-exit::after {
+    animation: none !important;
+  }
+}
