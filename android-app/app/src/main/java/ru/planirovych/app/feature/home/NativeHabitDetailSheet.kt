@@ -3,9 +3,6 @@ package ru.planirovych.app.feature.home
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.foundation.*
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
 import androidx.compose.foundation.text.BasicTextField
@@ -17,6 +14,8 @@ import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -117,29 +116,15 @@ fun NativeHabitDetailSheet(vm:HomeViewModel,habit:Habit,dark:Boolean,onClose:()-
     var confirm by remember(habit.id){mutableStateOf<String?>(null)}
     val metrics=remember(habit,month,counts){habitMetrics(habit,month,counts)}
     val amount=habitAmount(today,counts)
-    val density=LocalDensity.current
-    var dragDistance by remember(habit.id){ mutableFloatStateOf(0f) }
     LaunchedEffect(habit.id){vm.loadHabitHistory(habit.id)}
     ModalBottomSheet(
         onDismissRequest=onClose,
-        sheetGesturesEnabled=false,
+        sheetGesturesEnabled=true,
         containerColor=c.bg,contentColor=c.text,
         sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),
         dragHandle={
-            Box(Modifier.fillMaxWidth().height(28.dp)
-                .pointerInput(habit.id) {
-                    detectVerticalDragGestures(
-                        onDragEnd={
-                            if(dragDistance > with(density){64.dp.toPx()})onClose()
-                            dragDistance=0f
-                        },
-                        onDragCancel={dragDistance=0f},
-                        onVerticalDrag={change,amount->
-                            change.consume()
-                            dragDistance=(dragDistance+amount).coerceAtLeast(0f)
-                        }
-                    )
-                },contentAlignment=Alignment.Center) {
+            Box(Modifier.fillMaxWidth().height(28.dp),
+                contentAlignment=Alignment.Center) {
                 Box(Modifier.width(38.dp).height(4.dp).clip(CircleShape)
                     .background(c.muted.copy(alpha=.52f)))
             }
@@ -172,7 +157,7 @@ fun NativeHabitDetailSheet(vm:HomeViewModel,habit:Habit,dark:Boolean,onClose:()-
                     Text(habit.name,fontSize=18.sp,fontWeight=FontWeight.Bold,color=c.text)
                     Text("Сегодня выполнено: "+amount+" из "+habit.targetCount,
                         color=c.muted,fontSize=12.sp)
-                    Row(horizontalArrangement=Arrangement.spacedBy(7.dp),
+                    Row(horizontalArrangement=Arrangement.spacedBy(11.dp),
                         verticalAlignment=Alignment.CenterVertically){
                         HabitCounterButton(Icons.Default.Remove,c,
                             enabled=amount>0&&!state.habitBusy){
@@ -226,6 +211,14 @@ fun NativeHabitDetailSheet(vm:HomeViewModel,habit:Habit,dark:Boolean,onClose:()-
                     val first=month.atDay(1)
                     val start=first.minusDays((first.dayOfWeek.value-1).toLong())
                     val cells=((first.dayOfWeek.value-1+month.lengthOfMonth()+6)/7)*7
+                    // Show no more than five rows. Six-week months remain fully
+                    // accessible by scrolling this grid instead of hiding dates.
+                    val fiveRowsHeight=(
+                        (LocalConfiguration.current.screenWidthDp-70).coerceAtLeast(230)*
+                        5f/7f+20f).dp
+                    Column(Modifier.fillMaxWidth().heightIn(max=fiveRowsHeight)
+                        .verticalScroll(rememberScrollState()),
+                        verticalArrangement=Arrangement.spacedBy(4.dp)){
                     repeat(cells/7){week->
                         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(2.dp)){
                             repeat(7){index->
@@ -259,6 +252,7 @@ fun NativeHabitDetailSheet(vm:HomeViewModel,habit:Habit,dark:Boolean,onClose:()-
                             }
                         }
                     }
+                    }
                     when {
                         history==null && state.habitError!=null ->
                             Text("Историю получить не удалось. Отметки календаря недоступны.",
@@ -279,15 +273,19 @@ fun NativeHabitDetailSheet(vm:HomeViewModel,habit:Habit,dark:Boolean,onClose:()-
             }
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(9.dp)){
                 HabitStatCard("Выполнение за месяц",metrics.percent.toString()+"%",
-                    metrics.completed.toString()+" из "+metrics.eligible,c,Modifier.weight(1f))
+                    metrics.completed.toString()+" из "+metrics.eligible,c,dark,accent,
+                    Icons.Default.TrackChanges,Modifier.weight(1f),featured=true)
                 HabitStatCard("Текущая серия",metrics.currentStreak.toString(),
-                    "плановых дней подряд",c,Modifier.weight(1f))
+                    "плановых дней подряд",c,dark,accent,
+                    Icons.Default.LocalFireDepartment,Modifier.weight(1f))
             }
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(9.dp)){
                 HabitStatCard("Лучшая серия",metrics.longestStreak.toString(),
-                    "из доступной истории",c,Modifier.weight(1f))
+                    "из доступной истории",c,dark,accent,
+                    Icons.Default.EmojiEvents,Modifier.weight(1f))
                 HabitStatCard("Успешных дней",metrics.completed.toString(),
-                    "в выбранном месяце",c,Modifier.weight(1f))
+                    "в выбранном месяце",c,dark,accent,
+                    Icons.Default.CheckCircle,Modifier.weight(1f))
             }
             Spacer(Modifier.height(8.dp))
         }
@@ -312,18 +310,19 @@ fun NativeHabitDetailSheet(vm:HomeViewModel,habit:Habit,dark:Boolean,onClose:()-
 }
 @Composable private fun HabitCircleIcon(icon:androidx.compose.ui.graphics.vector.ImageVector,
     c:HabitPalette,label:String,click:()->Unit){
+    val turquoise=if(c.bg==Color.White)Color(0xFF0891B2) else Color(0xFF67E8F9)
     Box(Modifier.size(34.dp).clip(CircleShape).background(c.field)
-        .border(1.dp,c.primary.copy(alpha=.24f),CircleShape)
+        .border(1.dp,turquoise.copy(alpha=.38f),CircleShape)
         .clickable(onClick=click),contentAlignment=Alignment.Center){
-        Icon(icon,label,modifier=Modifier.size(17.dp),tint=c.primary)
+        Icon(icon,label,modifier=Modifier.size(17.dp),tint=turquoise)
     }
 }
 @Composable private fun HabitCounterButton(icon:androidx.compose.ui.graphics.vector.ImageVector,
     c:HabitPalette,enabled:Boolean,click:()->Unit){
     IconButton(onClick=click,enabled=enabled,
-        modifier=Modifier.size(34.dp).border(1.dp,c.border,CircleShape)
+        modifier=Modifier.size(29.dp).border(1.dp,c.border,CircleShape)
             .background(c.field,CircleShape)){
-        Icon(icon,null,tint=c.primary,modifier=Modifier.size(17.dp))
+        Icon(icon,null,tint=c.primary,modifier=Modifier.size(15.dp))
     }
 }
 @Composable private fun HabitLegend(color:Color,label:String,c:HabitPalette){
@@ -334,14 +333,24 @@ fun NativeHabitDetailSheet(vm:HomeViewModel,habit:Habit,dark:Boolean,onClose:()-
     }
 }
 @Composable private fun HabitStatCard(title:String,value:String,subtitle:String,
-    c:HabitPalette,modifier:Modifier=Modifier){
-    Surface(modifier,shape=RoundedCornerShape(17.dp),color=c.field,
-        border=BorderStroke(1.dp,c.border)){
-        Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){
-            Text(value,fontSize=23.sp,color=c.text,fontWeight=FontWeight.Bold)
-            Text(title,fontSize=11.sp,color=c.text,fontWeight=FontWeight.SemiBold)
-            Text(subtitle,fontSize=10.sp,color=c.muted,lineHeight=13.sp)
-        }
+    c:HabitPalette,dark:Boolean,accent:Color,
+    icon:androidx.compose.ui.graphics.vector.ImageVector,
+    modifier:Modifier=Modifier,featured:Boolean=false){
+    val shape=RoundedCornerShape(17.dp)
+    val highlight=lerp(c.field,accent,if(featured)(if(dark).23f else .12f)
+        else (if(dark).09f else .045f))
+    val edge=if(featured)lerp(c.border,accent,.48f) else c.border
+    Column(modifier.clip(shape)
+        .background(Brush.linearGradient(listOf(highlight,c.field)))
+        .border(1.dp,edge,shape)
+        .padding(12.dp),
+        verticalArrangement=Arrangement.spacedBy(4.dp)){
+        Icon(icon,null,tint=accent,modifier=Modifier.size(18.dp))
+        Text(value,fontSize=25.sp,color=c.text,fontWeight=FontWeight.ExtraBold,
+            lineHeight=28.sp)
+        Text(title,fontSize=12.sp,color=c.text,fontWeight=FontWeight.SemiBold,
+            lineHeight=15.sp)
+        Text(subtitle,fontSize=10.sp,color=c.muted,lineHeight=13.sp)
     }
 }
 
