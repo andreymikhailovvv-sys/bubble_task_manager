@@ -617,6 +617,7 @@ internal fun NativeGeneralAiChatPage(
                                 Row(Modifier.fillMaxWidth().clickable{
                                     vm.chooseGeneralAiChat(p.id,p.chats.firstOrNull()?.id
                                         ?:QUICK_AI_THREAD_ID)
+                                    menuOpen=false
                                 },verticalAlignment=Alignment.CenterVertically){
                                     Box(Modifier.size(41.dp).clip(RoundedCornerShape(15.dp))
                                         .background(nativeProjectColor(p.color)),
