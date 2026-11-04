@@ -164,17 +164,19 @@ internal fun NativeTimelineWorkspace(
     Column(verticalArrangement=Arrangement.spacedBy(10.dp)){
         // This mirrors MiniApp's two independent navigation bars:
         // miniapp-timeline-view-switch and miniapp-timeline-date-nav.
-        val switchShape=RoundedCornerShape(12.dp)
-        Row(Modifier.fillMaxWidth().clip(switchShape)
-            .background(if(dark)Color(0xFF0F172A) else Color(0xFFF1F5F9))
-            .border(1.dp,if(dark)Color(0xFF64748B).copy(alpha=.45f)
-                else Color(0xFFCBD5E1),switchShape)
-            .padding(3.dp),
+        // Mini App: separate 20dp-rounded view panel, with a taller 3-way switch.
+        val switchShape=RoundedCornerShape(20.dp)
+        Row(Modifier.fillMaxWidth()
+            .shadow(if(dark)3.dp else 4.dp,switchShape)
+            .clip(switchShape)
+            .background(colors.panel)
+            .border(1.dp,colors.panelBorder,switchShape)
+            .padding(5.dp),
             horizontalArrangement=Arrangement.spacedBy(3.dp)){
             TimelineZoom.entries.forEach{option->
                 val active=option==zoom
-                Box(Modifier.weight(1f).height(34.dp)
-                    .clip(RoundedCornerShape(9.dp))
+                Box(Modifier.weight(1f).height(38.dp)
+                    .clip(RoundedCornerShape(13.dp))
                     .background(if(active)Color(0xFF7C3AED) else Color.Transparent)
                     .clickable{zoom=option},
                     contentAlignment=Alignment.Center){
@@ -188,6 +190,7 @@ internal fun NativeTimelineWorkspace(
         val dateShape=RoundedCornerShape(14.dp)
         val arrowColor=if(dark)Color(0xFFC4B5FD) else Color(0xFF6D28D9)
         Row(Modifier.fillMaxWidth().height(52.dp)
+            .shadow(if(dark)3.dp else 4.dp,dateShape)
             .clip(dateShape)
             .background(if(dark)Color(0xFF22233E) else Color(0xFFFAF7FF))
             .border(1.dp,Color(0xFF8B5CF6).copy(alpha=if(dark).42f else .28f),

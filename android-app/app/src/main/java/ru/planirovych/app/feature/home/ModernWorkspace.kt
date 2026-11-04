@@ -199,7 +199,7 @@ fun ModernWorkspace(
     LazyColumn(
         state=workspaceScroll,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start=14.dp,end=14.dp,top=82.dp,bottom=28.dp),
+        contentPadding = PaddingValues(start=14.dp,end=14.dp,top=112.dp,bottom=28.dp),
         verticalArrangement = Arrangement.spacedBy(13.dp),
     ) {
         if (contentMode == WorkspaceMode.LIST) item {
@@ -232,9 +232,14 @@ fun ModernWorkspace(
                 onOpenHabit={selectedHabitId=it})
         }
     }
+    // The Mini App gets this strip from Telegram; native Android needs its own.
+    // Keep it stationary when the search bar temporarily hides on scroll.
+    WorkspaceAppTitle(colors,dark,
+        modifier=Modifier.align(Alignment.TopCenter)
+            .padding(start=14.dp,end=14.dp,top=5.dp))
     AnimatedVisibility(visible=headerVisible,
         modifier=Modifier.align(Alignment.TopCenter)
-            .padding(start=14.dp,end=14.dp,top=9.dp),
+            .padding(start=14.dp,end=14.dp,top=55.dp),
         enter=slideInVertically(initialOffsetY={-it},
             animationSpec=tween(180))+fadeIn(),
         exit=slideOutVertically(targetOffsetY={-it},
@@ -282,6 +287,19 @@ fun ModernWorkspace(
  * Timeline: search | overdue postpone | compact overflow utilities.
  * Keep each item on its own surface, never wrap the whole row in another card.
  */
+@Composable
+private fun WorkspaceAppTitle(colors:WorkspaceColors,dark:Boolean,modifier:Modifier=Modifier) {
+    val shape=RoundedCornerShape(15.dp)
+    Surface(modifier=modifier.fillMaxWidth().height(40.dp),
+        shape=shape,color=colors.card,border=BorderStroke(1.dp,colors.panelBorder),
+        shadowElevation=if(dark)2.dp else 3.dp) {
+        Box(contentAlignment=Alignment.Center) {
+            Text("Планировыч",fontSize=16.sp,fontWeight=FontWeight.Bold,
+                letterSpacing=.1.sp,color=colors.text)
+        }
+    }
+}
+
 @Composable
 private fun WorkspaceTopbar(
     state:HomeState, colors:WorkspaceColors, mode:WorkspaceMode, dark:Boolean,
@@ -412,8 +430,12 @@ private fun WorkspaceTopbar(
 @Composable
 private fun HabitsStrip(habits:List<Habit>, colors:WorkspaceColors, dark:Boolean,
     onHabitClick:(Habit)->Unit, onAdd:()->Unit) {
-    Surface(shape=RoundedCornerShape(23.dp), color=colors.panel,
-        border=BorderStroke(1.dp,colors.panelBorder), shadowElevation=3.dp) {
+    val shape=RoundedCornerShape(23.dp)
+    Surface(modifier=Modifier.shadow(if(dark)3.dp else 4.dp,shape,
+            ambientColor=if(dark)Color(0x22000000) else Color(0x1C394C6A),
+            spotColor=if(dark)Color(0x30000000) else Color(0x26394C6A)),
+        shape=shape,color=colors.panel,
+        border=BorderStroke(1.dp,colors.panelBorder),shadowElevation=0.dp) {
         Column(Modifier.fillMaxWidth().padding(15.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.SpaceBetween,
                 modifier=Modifier.fillMaxWidth()) {
@@ -515,7 +537,7 @@ private fun WorkspaceToolbar(
     val alpha=if(!enabled && dimDisabled).48f else 1f
     val shape=RoundedCornerShape(13.dp)
     Row(modifier.height(44.dp).alpha(alpha)
-        .shadow(1.dp,shape).clip(shape)
+        .shadow(3.dp,shape).clip(shape)
         .background(fill).border(1.dp,border,shape)
         .then(if(enabled)Modifier.clickable(onClick=click) else Modifier)
         .padding(horizontal=4.dp),
@@ -533,7 +555,7 @@ private fun ModernTaskCard(task:Task,sphere:Sphere?,colors:WorkspaceColors,dark:
     val sectorColor=parseWorkspaceColor(sphere?.color ?: "#64748b")
     val isOverdue=task.dueDate!=null && dueMillis(task.dueDate)<System.currentTimeMillis()
     Surface(modifier=Modifier.shadow(
-            elevation=if(dark)2.dp else 6.dp,
+            elevation=if(dark)3.dp else 4.dp,
             shape=RoundedCornerShape(21.dp),
             ambientColor=if(dark)Color(0x22000000) else Color(0x24394C6A),
             spotColor=if(dark)Color(0x2B000000) else Color(0x34394C6A)),
@@ -592,7 +614,8 @@ private fun ModernTaskCard(task:Task,sphere:Sphere?,colors:WorkspaceColors,dark:
 }
 
 @Composable private fun EmptyWorkspaceMessage(message:String,colors:WorkspaceColors) {
-    Surface(shape=RoundedCornerShape(18.dp),color=colors.card,
+    val shape=RoundedCornerShape(18.dp)
+    Surface(modifier=Modifier.shadow(3.dp,shape),shape=shape,color=colors.card,
         border=BorderStroke(1.dp,colors.panelBorder)) {
         Text(message,Modifier.fillMaxWidth().padding(22.dp),color=colors.secondaryText)
     }
