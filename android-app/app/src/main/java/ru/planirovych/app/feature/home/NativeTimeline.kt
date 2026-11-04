@@ -71,8 +71,9 @@ private data class TimelineEntry(
     val dueDate:String?=null
 )
 private fun timelineEntries(date:LocalDate,tasks:List<Task>,allTasks:List<Task>,
-    habits:List<Habit>,spheres:List<Sphere>):List<TimelineEntry>{
-    val parents=allTasks.associateBy{it.id}
+    habits:List<Habit>,spheres:List<Sphere>,
+    parents:Map<String,Task> = allTasks.associateBy{it.id},
+    sectors:Map<String,Sphere> = spheres.associateBy{it.id}):List<TimelineEntry>{
     val entries=tasks.mapNotNull {task ->
         val due=timelineDate(task.dueDate) ?: return@mapNotNull null
         if(due.toLocalDate()!=date)return@mapNotNull null
@@ -86,10 +87,10 @@ private fun timelineEntries(date:LocalDate,tasks:List<Task>,allTasks:List<Task>,
         val accent=when(kind){
             "Событие" -> Color(0xFFF59E0B)
             "Напоминание" -> Color(0xFF0284C7)
-            else -> calendarColor(spheres.firstOrNull{it.id==source.sphereId}?.color)
+            else -> calendarColor(sectors[source.sphereId]?.color)
         }
         TimelineEntry(task.id,due.toLocalTime(),task.title,kind,accent,task.id,
-            sectorName=spheres.firstOrNull{it.id==source.sphereId}?.name,
+            sectorName=sectors[source.sphereId]?.name,
             dueDate=task.dueDate)
     }.toMutableList()
     habits.filter{timelineHabitScheduled(it,date)}.forEach{habit->
@@ -101,6 +102,25 @@ private fun timelineEntries(date:LocalDate,tasks:List<Task>,allTasks:List<Task>,
         }
     }
     return entries.sortedWith(compareBy<TimelineEntry>{it.time}.thenBy{it.title})
+}
+/**
+ * Index task dates and parent sectors ONCE for each visible week/month.
+ * Previously every calendar cell scanned every task and rebuilt the parent
+ * map, i.e. 42 full passes through the task list during monthly composition.
+ */
+private fun timelineEntriesForDays(
+    first:LocalDate,dayCount:Int,tasks:List<Task>,allTasks:List<Task>,
+    habits:List<Habit>,spheres:List<Sphere>
+):List<Pair<LocalDate,List<TimelineEntry>>> {
+    val parents=allTasks.associateBy{it.id}
+    val sectors=spheres.associateBy{it.id}
+    val tasksByDay=tasks.mapNotNull{task->
+        timelineDate(task.dueDate)?.toLocalDate()?.let{it to task}
+    }.groupBy({it.first},{it.second})
+    return List(dayCount){index->
+        val date=first.plusDays(index.toLong())
+        date to timelineEntries(date,tasksByDay[date].orEmpty(),allTasks,habits,spheres,parents,sectors)
+    }
 }
 private fun shortTime(value:LocalTime)=value.format(DateTimeFormatter.ofPattern("HH:mm"))
 private fun timelineDueLabel(raw:String?):String {
@@ -423,36 +443,31 @@ private fun MiniAppCalendarGrid(
     onOpen:(String)->Unit,onOpenHabit:(String)->Unit,openDay:(LocalDate)->Unit
 ){
     val gridStart=first.minusDays((first.dayOfWeek.value-1).toLong())
+    // Keep the same 42 cells as Mini App, but compute their records once.
+    val cells=remember(gridStart,monthMode,tasks,allTasks,habits,spheres){
+        timelineEntriesForDays(gridStart,if(monthMode)42 else 7,
+            tasks,allTasks,if(monthMode)emptyList() else habits,spheres)
+    }
     if(!monthMode){
-        val days=remember(gridStart,tasks,allTasks,habits,spheres){
-            (0L..6L).map{index->
-                val day=gridStart.plusDays(index)
-                day to timelineEntries(day,tasks,allTasks,habits,spheres)
-            }
-        }
-        ReadableWeekGrid(days,colors,dark,onOpen,onOpenHabit,openDay)
+        ReadableWeekGrid(cells,colors,dark,onOpen,onOpenHabit,openDay)
         return
     }
     val labels=listOf("Пн","Вт","Ср","Чт","Пт","Сб","Вс")
-    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(5.dp)){
+    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(4.dp)){
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)){
             labels.forEach{label->
                 Text(label,modifier=Modifier.weight(1f).padding(vertical=5.dp),
                     textAlign=TextAlign.Center,color=colors.secondaryText,
-                    fontSize=11.sp,fontWeight=FontWeight.SemiBold)
+                    fontSize=10.sp,fontWeight=FontWeight.Bold)
             }
         }
         repeat(6){row->
-            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max),
-                horizontalArrangement=Arrangement.spacedBy(4.dp)){
+            // Fixed-height cells avoid 6 expensive IntrinsicSize.Max passes.
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)){
                 repeat(7){col->
-                    val date=gridStart.plusDays((row*7+col).toLong())
-                    val entries=remember(date,tasks,allTasks,habits,spheres){
-                        timelineEntries(date,tasks,allTasks,habits,spheres)
-                            .filter{it.kind!="Привычка"}
-                    }
+                    val (date,entries)=cells[row*7+col]
                     CalendarDayCell(date,entries,date.month!=first.month,true,
-                        colors,dark,Modifier.weight(1f).fillMaxHeight(),
+                        colors,dark,Modifier.weight(1f),
                         onDay={openDay(date)},onTask=onOpen,onHabit=onOpenHabit)
                 }
             }
@@ -598,14 +613,14 @@ private fun CalendarDayCell(
     }
     val background=if(dark)Color(0xFF19263A)
         else if(today)Color(0xFFFAF8FF) else Color(0xFFFCFDFF)
-    Column(modifier.clip(shape).background(background)
-        .border(1.dp,border,shape).heightIn(min=135.dp)
-        .padding(horizontal=2.dp,vertical=6.dp),
+    Column(modifier.height(106.dp).clip(shape).background(background)
+        .border(1.dp,border,shape)
+        .padding(horizontal=2.dp,vertical=4.dp),
         horizontalAlignment=Alignment.CenterHorizontally,
         verticalArrangement=Arrangement.spacedBy(5.dp)){
-        Box(Modifier.fillMaxWidth().height(30.dp).clickable(onClick=onDay),
+        Box(Modifier.fillMaxWidth().height(23.dp).clickable(onClick=onDay),
             contentAlignment=Alignment.Center){
-            Box(Modifier.size(28.dp).clip(CircleShape)
+            Box(Modifier.size(23.dp).clip(CircleShape)
                 .background(if(today)Color(0xFF7C3AED) else Color.Transparent),
                 contentAlignment=Alignment.Center){
                 Text(date.dayOfMonth.toString(),
@@ -613,17 +628,17 @@ private fun CalendarDayCell(
                         today->Color.White
                         outside->colors.secondaryText.copy(alpha=.7f)
                         else->colors.text
-                    },fontSize=13.sp,fontWeight=FontWeight.Bold)
+                    },fontSize=11.5.sp,fontWeight=FontWeight.Bold)
             }
         }
-        entries.take(2).forEach{entry->
+        entries.take(3).forEach{entry->
             MiniAppCalendarEntry(entry,true,dark,colors){
                 if(entry.kind=="Напоминание")onDay()
                 else entry.taskId?.let(onTask)?:onDay()
             }
         }
-        if(entries.size>2){
-            Text("Ещё "+(entries.size-2),
+        if(entries.size>3){
+            Text("Ещё "+(entries.size-3),
                 color=if(dark)Color(0xFFC4B5FD) else Color(0xFF6D28D9),
                 fontSize=10.sp,fontWeight=FontWeight.Bold,
                 modifier=Modifier.fillMaxWidth().clickable(onClick=onDay)
@@ -662,9 +677,9 @@ private fun MiniAppCalendarEntry(
                         floatArrayOf(5.dp.toPx(),4.dp.toPx()),0f)))
         }else Modifier.border(.7.dp,line,radius))
         .clickable(onClick=onClick)
-        .heightIn(min=if(monthMode)30.dp else if(subtask)38.dp else 43.dp),
+        .heightIn(min=if(monthMode)18.dp else if(subtask)38.dp else 43.dp),
         verticalAlignment=Alignment.CenterVertically){
-        Box(Modifier.width(3.dp).height(if(monthMode)21.dp else 30.dp)
+        Box(Modifier.width(3.dp).height(if(monthMode)13.dp else 30.dp)
             .clip(RoundedCornerShape(2.dp))
             .background(accent.copy(alpha=.60f)))
         Text(entry.title,
@@ -673,10 +688,10 @@ private fun MiniAppCalendarEntry(
                 end=if(monthMode)1.dp else 4.dp,
                 top=4.dp,bottom=4.dp),
             color=ink,
-            fontSize=if(monthMode)10.sp else if(subtask)11.sp else 11.5.sp,
-            lineHeight=if(monthMode)12.sp else 14.sp,
+            fontSize=if(monthMode)8.5.sp else if(subtask)11.sp else 11.5.sp,
+            lineHeight=if(monthMode)10.sp else 14.sp,
             fontWeight=FontWeight.Medium,
-            maxLines=2,softWrap=true,overflow=TextOverflow.Ellipsis,
+            maxLines=if(monthMode)1 else 2,softWrap=true,overflow=TextOverflow.Ellipsis,
             textAlign=TextAlign.Start,
             style=TextStyle(platformStyle=PlatformTextStyle(includeFontPadding=false)))
     }
