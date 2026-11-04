@@ -652,8 +652,9 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
     }else content
     Row(Modifier.fillMaxWidth(),
         horizontalArrangement=if(isUser)Arrangement.End else Arrangement.Start){
-        Column(Modifier.widthIn(max=if(generalChat && !isUser)390.dp else 330.dp)
-            .fillMaxWidth(if(generalChat && !isUser).97f else .89f),
+        // Shared 5%-smaller message geometry for AI/user in both chat surfaces.
+        Column(Modifier.widthIn(max=365.dp)
+            .fillMaxWidth(.92f),
             horizontalAlignment=if(isUser)Alignment.End else Alignment.Start,
             verticalArrangement=Arrangement.spacedBy(3.dp)){
             val bubbleShape=RoundedCornerShape(
@@ -690,10 +691,10 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                     if(!isUser) NativeAiFormattedMessage(
                         text=previewContent,textColor=c.assistantText,
                         linkColor=if(c.bg.red>.5f)Color(0xFF0369A1) else Color(0xFF67E8F9),
-                        fontSize=if(generalChat)14.sp else 13.sp,
+                        fontSize=14.sp,
                         taskTitles=taskTitles,
                         onOpenTaskReference=onOpenTaskReference)
-                    else Text(content,color=c.userText,fontSize=13.sp,lineHeight=20.sp)
+                    else Text(content,color=c.userText,fontSize=14.sp,lineHeight=22.sp)
                     if(message.messageKind=="MONITOR_ACTION"){
                         Text("Действие автомониторинга",color=c.secondary,fontSize=10.sp)
                     }
