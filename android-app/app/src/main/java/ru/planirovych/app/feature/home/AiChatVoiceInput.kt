@@ -38,6 +38,7 @@ private enum class VoiceRecordingStage { IDLE, RECORDING, TRANSCRIBING }
  */
 @Composable
 internal fun rememberAiChatSpeechInput(
+    dark:Boolean,
     transcribe:suspend (ByteArray,Double)->String,
     onRecognized:(String,Boolean)->Unit,
     onError:(String)->Unit
@@ -166,7 +167,8 @@ internal fun rememberAiChatSpeechInput(
         val recordingNow=stage==VoiceRecordingStage.RECORDING
         Dialog(onDismissRequest={},properties=DialogProperties(
             dismissOnBackPress=false,dismissOnClickOutside=false)){
-            Surface(shape=RoundedCornerShape(25.dp),color=Color(0xFF17243A),
+            Surface(shape=RoundedCornerShape(25.dp),
+                color=if(dark)Color(0xFF17243A) else Color.White,
                 shadowElevation=18.dp,modifier=Modifier.fillMaxWidth()){
                 Column(Modifier.fillMaxWidth().padding(20.dp),
                     horizontalAlignment=Alignment.CenterHorizontally,
@@ -177,7 +179,8 @@ internal fun rememberAiChatSpeechInput(
                             modifier=Modifier.size(20.dp))
                         Text(if(recordingNow)"Голосовой ввод"
                             else "Расшифровываем запись…",
-                            fontWeight=FontWeight.Bold,color=Color.White,fontSize=17.sp)
+                            fontWeight=FontWeight.Bold,
+                            color=if(dark)Color.White else Color(0xFF172238),fontSize=17.sp)
                     }
                     Row(Modifier.fillMaxWidth().height(61.dp),
                         horizontalArrangement=Arrangement.spacedBy(3.dp),
@@ -196,7 +199,8 @@ internal fun rememberAiChatSpeechInput(
                         String.format(java.util.Locale.ROOT,"%02d:%02d",
                             elapsedSeconds/60,elapsedSeconds%60)
                         else "Обрабатываем речь и считаем кредиты",
-                        color=Color(0xFFBCCBE1),fontSize=13.sp)
+                        color=if(dark)Color(0xFFBCCBE1) else Color(0xFF52647E),
+                        fontSize=13.sp)
                     if(recordingNow){
                         Row(Modifier.fillMaxWidth(),
                             horizontalArrangement=Arrangement.spacedBy(8.dp)){
@@ -221,7 +225,7 @@ internal fun rememberAiChatSpeechInput(
                     Text("Распознавание GPT оплачивается ИИ-кредитами. " +
                         "Запись отправляется в чат только по команде.",
                         fontSize=11.sp,lineHeight=15.sp,
-                        color=Color(0xFF9BAFC7))
+                        color=if(dark)Color(0xFF9BAFC7) else Color(0xFF64748B))
                 }
             }
         }
