@@ -14830,3 +14830,64 @@ body[data-theme='dark'] .focused-task-editor-shell .focused-task-description-sur
   .focused-task-editor-shell .focused-task-label-button,
   .focused-task-editor-shell .focused-task-description-surface { transition: none; }
 }
+
+
+/* Rich inline task descriptions on the website use the same formatted HTML as
+   the expanded NotesEditor. Keep the existing resizable viewport, scrollbars,
+   focus/hover borders and mobile preview behaviour unchanged. */
+.task-description-inline-rich {
+  display: block;
+  min-width: 0;
+  cursor: text;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  caret-color: var(--accent-strong);
+  outline: none;
+}
+.task-description-inline-rich:empty::before {
+  content: attr(data-placeholder);
+  color: var(--field-placeholder);
+  pointer-events: none;
+}
+.task-description-inline-rich h1,
+.task-description-inline-rich h2 {
+  display: block;
+  padding: 0;
+  margin: 0;
+}
+.task-description-inline-rich h1 {
+  font-size: 1.18em;
+  font-weight: 750;
+  line-height: 1.25;
+}
+.task-description-inline-rich h2 {
+  font-size: 1.08em;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.task-description-inline-rich p,
+.task-description-inline-rich > div {
+  display: block;
+  margin: 0;
+}
+.task-description-inline-rich a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+}
+.task-description-inline-rich a:hover {
+  color: var(--accent-strong);
+}
+.task-description-inline-rich .note-checkbox-item input {
+  pointer-events: none;
+}
+.task-description-inline-rich:focus-visible { outline: none; }
+
+/* The existing labelled editing action also appears in the subtask editor. */
+.task-edit-shell .focused-task-label-button {
+  width: auto;
+  min-width: 0;
+  height: auto;
+}

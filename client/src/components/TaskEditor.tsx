@@ -1057,6 +1057,9 @@ export function TaskEditor({
                   </p>
                 ) : (
                   <TaskDescriptionInput
+                    key={task?.id ?? 'new-task'}
+                    richInlineEditing
+                    readOnly={externalReadOnly}
                     className="subtask-description-inline invisible-scrollbar h-full min-h-0 w-full flex-1 resize-none overflow-y-auto border-0 bg-transparent text-sm leading-6 text-muted outline-none placeholder:text-slate-400"
                     placeholder="Введите описание"
                     value={descriptionValue}
@@ -1067,12 +1070,14 @@ export function TaskEditor({
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  className="focused-task-icon-button focused-task-calendar-like-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
+                  className="focused-task-label-button inline-flex min-h-8 items-center justify-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition"
                   onClick={() => setIsNotesEditorOpen(true)}
                   disabled={externalReadOnly}
                   title="Редактировать описание"
+                  aria-label="Редактировать описание"
                 >
-                  <Edit3 size={15} />
+                  <Edit3 size={15} aria-hidden="true" />
+                  <span>Редактировать описание</span>
                 </button>
                 {!externalSubtask&&<button
                   type="button"

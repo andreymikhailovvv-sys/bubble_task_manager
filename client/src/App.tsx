@@ -7548,6 +7548,8 @@ export default function App() {
                   <ResizableDescriptionSurface className="focused-task-description-surface mt-3 rounded-2xl p-3"
                     storageKey={currentUser?.id ? `planirovych:focus-description-height:v1:${currentUser.id}` : undefined}>
                     <TaskDescriptionInput
+                      key={focusedTask.id}
+                      richInlineEditing
                       className="focused-task-description-input subtask-description-inline invisible-scrollbar h-full min-h-0 w-full resize-none overflow-y-auto border-0 bg-transparent text-sm leading-6 text-muted outline-none placeholder:text-slate-400"
                       placeholder="Введите описание"
                       value={focusedDraft.description ?? ''}

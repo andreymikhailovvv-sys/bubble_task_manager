@@ -1,19 +1,22 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { noteHtmlToPlainText } from '../lib/notes';
 import { LinkifiedText } from './LinkifiedText';
+import { InlineRichDescriptionEditor } from './InlineRichDescriptionEditor';
 
 type Props = {
   value?: string | null;
   onChange: (nextValue: string) => void;
   className?: string;
   placeholder?: string;
+  richInlineEditing?: boolean;
+  readOnly?: boolean;
 };
 
 /**
  * Preserve stored formatted notes in preview mode. Switching into inline
  * editing alone must not overwrite the original HTML with plain text.
  */
-export function TaskDescriptionInput({ value, onChange, className = '', placeholder = 'Введите описание' }: Props) {
+export function TaskDescriptionInput({ value, onChange, className = '', placeholder = 'Введите описание', richInlineEditing = false, readOnly = false }: Props) {
   const [isEditing, setIsEditing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const description = value ?? '';
@@ -21,6 +24,14 @@ export function TaskDescriptionInput({ value, onChange, className = '', placehol
   useEffect(() => {
     if (isEditing) textareaRef.current?.focus();
   }, [isEditing]);
+
+  // Desktop website: keep a single contentEditable HTML surface instead of
+  // switching from formatted preview to a plain textarea on click.
+  // Mini App retains its existing behaviour unless explicitly opted in.
+  if (richInlineEditing) {
+    return <InlineRichDescriptionEditor value={value} onChange={onChange}
+      className={className} placeholder={placeholder} readOnly={readOnly} />;
+  }
 
   if (isEditing) {
     return (
