@@ -205,10 +205,12 @@ fun ModernWorkspace(
         if (contentMode == WorkspaceMode.LIST) item {
             HabitsStrip(habits, colors, dark, onHabitClick = { selectedHabitId = it.id }, onAdd = { createHabitOpen = true })
         }
-        item {
+        // Timeline already has its navigation immediately beneath the top search bar.
+        // The toolbar belongs only to List; do not insert a spare Filters row here.
+        if (contentMode == WorkspaceMode.LIST) item {
             WorkspaceToolbar(colors, dark, mode=contentMode,
-                filtered = period != PeriodFilter.ALL || if (contentMode == WorkspaceMode.LIST)
-                    sort != SortTasks.URGENCY || sectorFilterEnabled else timelineSector != "all",
+                filtered = period != PeriodFilter.ALL ||
+                    sort != SortTasks.URGENCY || sectorFilterEnabled,
                 onFilter = { filtersOpen=true },
                 onPostpone = { vm.postponeOverdue() }, canPostpone = overdue && !state.taskBusy)
         }
