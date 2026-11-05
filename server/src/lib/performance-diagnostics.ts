@@ -71,8 +71,10 @@ function measure(map: Map<string, Measurements>, name: string, ms: number, thres
 }
 
 /** Never derive telemetry labels from the raw request URL or user-supplied values. */
-export function safePerformanceRoute(req: Pick<Request, 'path' | 'route'>): string {
-  if (!req.path.startsWith('/api')) return 'non_api';
+export function safePerformanceRoute(req: Pick<Request, 'originalUrl' | 'route'>): string {
+  // Express rewrites req.path while walking mounted routers; originalUrl remains stable.
+  // Use the raw URL ONLY to determine whether it is an API request. Never log it.
+  if (req.originalUrl !== '/api' && !req.originalUrl.startsWith('/api/')) return 'non_api';
   const template: unknown = req.route?.path;
   if (typeof template !== 'string' || template.length > 110 || !/^\/[a-zA-Z0-9/:._*-]*$/.test(template)) {
     return '/api/unmatched';
