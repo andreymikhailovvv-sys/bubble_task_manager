@@ -157,6 +157,15 @@ export const taskService = {
       orderBy: { createdAt: 'desc' }
     });
     const visibleItems = items.filter((task) => !task.collaboration || !task.collaboration.members.find((member) => member.userId === userId)?.isHidden);
+    const visibleIds = new Set(visibleItems.map((task) => task.id));
+    const bubbleLinks = await prisma.taskBubbleLink.findMany({ where: { userId },
+      select: { firstTaskId: true, secondTaskId: true } });
+    const bubbleLinkByTaskId = new Map<string, string>();
+    for (const link of bubbleLinks) {
+      if (!visibleIds.has(link.firstTaskId) || !visibleIds.has(link.secondTaskId)) continue;
+      bubbleLinkByTaskId.set(link.firstTaskId, link.secondTaskId);
+      bubbleLinkByTaskId.set(link.secondTaskId, link.firstTaskId);
+    }
     // One aggregate query for all visible tasks, never send file bytes in task listings.
     const attachmentCounts = visibleItems.length ? await prisma.taskAttachment.groupBy({
       by: ['taskId'],
@@ -223,6 +232,7 @@ export const taskService = {
       return ({
       ...task,
       monitoringTriggers: task.aiMonitoringEnabled ? (triggersByRoot.get(task.id) ?? []) : [],
+      linkedTaskIds: bubbleLinkByTaskId.has(task.id) ? [bubbleLinkByTaskId.get(task.id)!] : [],
       attachmentCount: attachmentsByTaskId.get(task.id) ?? 0,
       commentCount: taskCommentStats.total,
       unreadCommentCount: taskCommentStats.unread,
