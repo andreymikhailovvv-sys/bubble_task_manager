@@ -1,6 +1,9 @@
 package ru.planirovych.app.feature.home
 
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlin.math.cos
+import kotlin.math.sin
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.*
@@ -9,6 +12,9 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
@@ -28,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -101,6 +108,8 @@ fun ModernWorkspace(
     modifier: Modifier = Modifier,
 ) {
     val colors = remember(dark) { workspaceColors(dark) }
+    val completionScope=rememberCoroutineScope()
+    val completingTaskIds=remember { mutableStateListOf<String>() }
     var period by rememberSaveable { mutableStateOf(PeriodFilter.ALL) }
     var sort by rememberSaveable { mutableStateOf(SortTasks.URGENCY) }
     var selectedSectors by remember { mutableStateOf(setOf<String>()) }
@@ -208,10 +217,38 @@ fun ModernWorkspace(
         if (contentMode == WorkspaceMode.LIST) {
             if (rootTasks.isEmpty()) item { EmptyWorkspaceMessage("Задачи не найдены.", colors) }
             items(rootTasks, key={it.id}) { task ->
-                ModernTaskCard(task, sectors[task.sphereId], colors, dark,
-                    showImportance=sort==SortTasks.IMPORTANCE,
-                    busy=state.taskBusy, onOpen={onOpenTask(task.id)},
-                    onComplete={vm.changeStatus(task.id, TaskStatus.DONE)})
+                val completing=task.id in completingTaskIds
+                Box(Modifier.fillMaxWidth().animateItem()){
+                    AnimatedVisibility(visible=!completing,
+                        exit=fadeOut(animationSpec=tween(370))+
+                            shrinkVertically(animationSpec=tween(450))+
+                            slideOutHorizontally(targetOffsetX={it/4},
+                                animationSpec=tween(450))){
+                        ModernTaskCard(task, sectors[task.sphereId], colors, dark,
+                            showImportance=sort==SortTasks.IMPORTANCE,
+                            busy=state.taskBusy || completing,
+                            onOpen={onOpenTask(task.id)},
+                            onComplete={
+                                if(!state.taskBusy && task.id !in completingTaskIds){
+                                    completingTaskIds.add(task.id)
+                                    completionScope.launch {
+                                        // Let the particle burst and card departure finish
+                                        // before the server removes the item from the list.
+                                        delay(460)
+                                        vm.changeStatus(task.id,TaskStatus.DONE){
+                                            completingTaskIds.remove(task.id)
+                                        }
+                                        // If the server rejects the update, show the card again.
+                                        delay(1400)
+                                        completingTaskIds.remove(task.id)
+                                    }
+                                }
+                            })
+                    }
+                    if(completing) {
+                        TaskCompletionConfetti()
+                    }
+                }
             }
         } else item {
             NativeTimelineWorkspace(rootTasks, state.tasks, state.habits,
@@ -574,6 +611,29 @@ private fun ModernTaskCard(task:Task,sphere:Sphere?,colors:WorkspaceColors,dark:
                 contentAlignment=Alignment.Center) {
                 Box(Modifier.size(18.dp).border(2.dp,colors.secondaryText,CircleShape))
             }
+        }
+    }
+}
+
+@Composable
+private fun TaskCompletionConfetti() {
+    val progress by animateFloatAsState(
+        targetValue=1f,animationSpec=tween(560),label="task-completion-confetti")
+    val colors=listOf(Color(0xFF22C55E),Color(0xFFA855F7),Color(0xFFFACC15),
+        Color(0xFF38BDF8),Color(0xFFFB7185))
+    Canvas(Modifier.matchParentSize()) {
+        val anchor=Offset(size.width*.88f,size.height*.19f)
+        repeat(25){index->
+            val angle=(index*2.399963f)
+            val distance=size.width*(.08f+(index%7)*.024f)*progress
+            val position=Offset(
+                anchor.x+cos(angle)*distance,
+                anchor.y+sin(angle)*distance+size.height*.40f*progress*progress)
+            drawCircle(
+                color=colors[index%colors.size].copy(alpha=(1f-progress).coerceIn(0f,1f)),
+                radius=(2.3f+(index%4)*.8f)*density,
+                center=position
+            )
         }
     }
 }
