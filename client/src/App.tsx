@@ -830,6 +830,7 @@ export default function App() {
   const [initialWorkspaceReady, setInitialWorkspaceReady] = useState(false);
   const [spheres, setSpheres] = useState<Sphere[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [unlinkingBubbleTaskId, setUnlinkingBubbleTaskId] = useState<string | null>(null);
   const [mode, setMode] = useState<'global' | 'sectors'>('sectors');
   const [search, setSearch] = useState('');
   const [requestedStandaloneNote, setRequestedStandaloneNote] = useState<{ id: string; serial: number } | null>(null);
@@ -2753,6 +2754,24 @@ export default function App() {
             openTaskWithFocusGuard(related);
           }}>
           <span className="truncate">{related.title}</span><ChevronRight size={12} className="shrink-0" />
+        </button>
+        <button type="button"
+          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-violet-500 transition hover:bg-violet-500/20 hover:text-violet-700 disabled:opacity-50"
+          title="Разорвать связь задач"
+          aria-label={`Разорвать связь с задачей «${related.title}»`}
+          disabled={unlinkingBubbleTaskId !== null}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setUnlinkingBubbleTaskId(task.id);
+            void api.bubbleAction(task.id, { action: 'unlink' })
+              .then(() => load())
+              .catch((error: unknown) => {
+                window.alert(error instanceof Error ? error.message : 'Не удалось разорвать связь.');
+              })
+              .finally(() => setUnlinkingBubbleTaskId(null));
+          }}>
+          {unlinkingBubbleTaskId === task.id ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
         </button>
       </span>
     );
