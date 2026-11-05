@@ -10,9 +10,11 @@ import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
@@ -97,9 +99,11 @@ fun MiniAppTaskFocusSheet(
     var sectorMenu by remember{mutableStateOf(false)}
     var notifyMenu by remember{mutableStateOf(false)}
     var descriptionExpanded by remember{mutableStateOf(false)}
+    var descriptionHeight by remember(task.id){mutableStateOf(136.dp)}
+    val resizeDensity=LocalDensity.current
     var confirmation by remember{mutableStateOf<String?>(null)}
     var saving by remember{mutableStateOf(false)}
-    val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * .83f).dp
+    val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * .90f).dp
 
     val saveThen: ((()->Unit)->Unit)={after->
         if(!busy && !saving && title.isNotBlank()) {
@@ -183,24 +187,25 @@ fun MiniAppTaskFocusSheet(
         containerColor=c.bg,contentColor=c.text,
         shape=RoundedCornerShape(topStart=30.dp,topEnd=30.dp),
         sheetGesturesEnabled=true,
-        dragHandle={ BottomSheetDefaults.DragHandle(color=c.muted) },
+        // Keep the title and header controls at the sheet's top edge.
+        dragHandle=null,
         sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)){
-        // Material handles a downward drag from both the handle and scroll content.
-        // The fixed maximum height avoids fighting the inner scrollable task list.
+        // The sheet remains swipe-dismissable; only the description grip owns resize gestures.
         Column(Modifier.fillMaxWidth().heightIn(max=maxSheetHeight).imePadding()){
-            Row(Modifier.fillMaxWidth().padding(start=15.dp,end=15.dp,bottom=10.dp),
-                verticalAlignment=Alignment.CenterVertically,
+            Row(Modifier.fillMaxWidth()
+                .padding(start=18.dp,end=18.dp,top=12.dp,bottom=15.dp),
+                verticalAlignment=Alignment.Top,
                 horizontalArrangement=Arrangement.SpaceBetween){
                 BasicTextField(value=title,onValueChange={title=it;onClearError()},
-                    modifier=Modifier.weight(1f).padding(end=6.dp),
+                    modifier=Modifier.weight(1f).padding(top=4.dp,end=7.dp),
                     enabled=!busy,maxLines=2,
-                    textStyle=TextStyle(color=c.text,fontSize=19.sp,
-                        fontWeight=FontWeight.Bold,lineHeight=23.sp),
+                    textStyle=TextStyle(color=c.text,fontSize=24.sp,
+                        fontWeight=FontWeight.Bold,lineHeight=29.sp),
                     cursorBrush=SolidColor(c.purple),
                     decorationBox={inner->
                         Box {
                             if(title.isEmpty())Text("Название задачи",color=c.muted,
-                                fontSize=19.sp)
+                                fontSize=24.sp)
                             inner()
                         }
                     })
@@ -224,46 +229,93 @@ fun MiniAppTaskFocusSheet(
                 }
             }
             Column(Modifier.weight(1f,fill=false).verticalScroll(rememberScrollState())
-                .padding(horizontal=15.dp).padding(bottom=20.dp)){
+                .padding(horizontal=18.dp).padding(bottom=20.dp)){
                 Row(verticalAlignment=Alignment.CenterVertically,
-                    modifier=Modifier.fillMaxWidth()){
-                    FocusRoundIcon(Icons.Default.CalendarMonth,c,"Изменить дедлайн",selectDueDate)
-                    Spacer(Modifier.width(9.dp))
+                    horizontalArrangement=Arrangement.spacedBy(9.dp),
+                    modifier=Modifier.fillMaxWidth().padding(top=2.dp,bottom=17.dp)){
+                    Row(Modifier.clip(CircleShape)
+                        .background(c.purple.copy(alpha=if(dark).17f else .10f))
+                        .border(1.dp,c.purple.copy(alpha=.36f),CircleShape)
+                        .clickable(enabled=!busy,onClick=selectDueDate)
+                        .padding(horizontal=12.dp,vertical=10.dp),
+                        verticalAlignment=Alignment.CenterVertically,
+                        horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                        Icon(Icons.Default.CalendarMonth,null,
+                            modifier=Modifier.size(17.dp),tint=c.teal)
+                        Text("Выбрать дату",fontSize=13.sp,
+                            fontWeight=FontWeight.SemiBold,color=c.purple,
+                            maxLines=1)
+                    }
                     val expired=focusEpoch(dueDate)?.let{it<System.currentTimeMillis()}==true
-                    Text(if(dueDate==null)"Дедлайн не задан" else "До дедлайна: "+focusRelative(dueDate),
-                        Modifier.weight(1f).clickable(onClick=selectDueDate),
-                        fontWeight=FontWeight.SemiBold,fontSize=13.sp,
-                        color=if(expired)c.red else c.purple,maxLines=2)
-                    if(dueDate!=null)IconButton(onClick={dueDate=null},modifier=Modifier.size(28.dp)){
-                        Icon(Icons.Default.Close,"Убрать срок",tint=c.muted,modifier=Modifier.size(15.dp))
+                    Text(if(dueDate==null)"Дедлайн не задан" else focusRelative(dueDate),
+                        Modifier.weight(1f),
+                        fontWeight=FontWeight.SemiBold,fontSize=12.sp,
+                        color=if(expired)c.red else c.muted,maxLines=2)
+                    if(dueDate!=null)IconButton(onClick={dueDate=null},
+                        modifier=Modifier.size(25.dp)){
+                        Icon(Icons.Default.Close,"Убрать срок",
+                            tint=c.muted,modifier=Modifier.size(14.dp))
                     }
                 }
+                HorizontalDivider(color=c.border)
+                Spacer(Modifier.height(18.dp))
+                Text("Описание",color=c.text,fontSize=16.sp,
+                    fontWeight=FontWeight.Bold)
                 Spacer(Modifier.height(12.dp))
-                Surface(shape=RoundedCornerShape(18.dp),color=c.bg,
-                    border=BorderStroke(1.dp,if(dark)Color(0xFF504B70) else Color(0xFFD8D6E3))){
-                    Box(Modifier.fillMaxWidth().height(128.dp)
-                        .clickable(enabled=!busy){descriptionExpanded=true}
-                        .padding(horizontal=12.dp,vertical=11.dp)){
-                        Text(focusReadableDescription(description)
-                                .ifBlank{"Введите описание"},
-                            color=if(description.isBlank())c.muted else c.text,
-                            fontSize=14.sp,lineHeight=24.sp,
-                            maxLines=5,overflow=TextOverflow.Ellipsis)
+                Box(Modifier.fillMaxWidth().padding(bottom=8.dp)){
+                    Surface(modifier=Modifier.fillMaxWidth(),
+                        shape=RoundedCornerShape(18.dp),color=c.bg,
+                        border=BorderStroke(1.dp,c.border)){
+                        Box(Modifier.fillMaxWidth().height(descriptionHeight)
+                            .clickable(enabled=!busy){descriptionExpanded=true}
+                            .padding(horizontal=13.dp,vertical=13.dp)){
+                            Text(focusReadableDescription(description)
+                                    .ifBlank{"Введите описание"},
+                                color=if(description.isBlank())c.muted else c.text,
+                                fontSize=14.sp,lineHeight=23.sp,
+                                maxLines=if(descriptionHeight>=210.dp)15 else
+                                    if(descriptionHeight>=155.dp)7 else 5,
+                                overflow=TextOverflow.Ellipsis)
+                        }
+                    }
+                    // A real drag handle, independent of the sheet swipe and description editor.
+                    Box(Modifier.align(Alignment.BottomCenter).offset(y=1.dp)
+                        .size(width=46.dp,height=20.dp)
+                        .clip(CircleShape).background(c.card)
+                        .border(1.dp,c.border,CircleShape)
+                        .pointerInput(task.id,resizeDensity){
+                            detectVerticalDragGestures { change,delta ->
+                                change.consume()
+                                descriptionHeight=(descriptionHeight+
+                                    with(resizeDensity){delta.toDp()}).coerceIn(98.dp,340.dp)
+                            }
+                        },
+                        contentAlignment=Alignment.Center){
+                        Column(verticalArrangement=Arrangement.spacedBy(3.dp)){
+                            repeat(2){
+                                Row(horizontalArrangement=Arrangement.spacedBy(3.dp)){
+                                    repeat(3){
+                                        Box(Modifier.size(3.dp)
+                                            .background(c.muted,CircleShape))
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-                Row(Modifier.fillMaxWidth().padding(top=9.dp,bottom=10.dp),
+                Row(Modifier.fillMaxWidth().padding(top=10.dp,bottom=15.dp),
                     verticalAlignment=Alignment.CenterVertically,
                     horizontalArrangement=Arrangement.spacedBy(9.dp)){
                     Row(Modifier.clip(CircleShape)
                         .background(c.card)
-                        .border(1.dp,c.border,CircleShape)
+                        .border(1.dp,c.purple.copy(alpha=.36f),CircleShape)
                         .clickable(enabled=!busy){descriptionExpanded=true}
-                        .padding(horizontal=13.dp,vertical=9.dp),
+                        .padding(horizontal=14.dp,vertical=10.dp),
                         verticalAlignment=Alignment.CenterVertically,
-                        horizontalArrangement=Arrangement.spacedBy(7.dp)){
-                        Icon(Icons.Default.Edit,null,tint=c.teal,
-                            modifier=Modifier.size(16.dp))
-                        Text("Редактировать описание",fontSize=12.sp,
+                        horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                        Icon(Icons.Default.Edit,null,tint=c.purple,
+                            modifier=Modifier.size(17.dp))
+                        Text("Редактировать описание",fontSize=13.sp,
                             fontWeight=FontWeight.SemiBold,color=c.text)
                     }
                     FocusRoundIcon(Icons.Default.AttachFile,c,"Прикрепить файл"){
@@ -307,22 +359,26 @@ fun MiniAppTaskFocusSheet(
                     }
                 }
                 Row(Modifier.fillMaxWidth().padding(top=3.dp),
-                    horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                    horizontalArrangement=Arrangement.spacedBy(9.dp)){
                     FocusAction("Выполнить",Icons.Default.CheckCircle,Color(0xFF059669),
                         Modifier.weight(1.9f),enabled=!busy){confirmation="complete"}
-                    FocusAction("Удалить",Icons.Default.DeleteOutline,Color(0xFFE11D48),
-                        Modifier.weight(.9f),enabled=!busy){confirmation="delete"}
+                    FocusAction("Удалить",Icons.Default.DeleteOutline,c.red,
+                        Modifier.weight(.9f),enabled=!busy,outlined=true){
+                        confirmation="delete"
+                    }
                 }
                 if(task.taskType!=TaskType.EVENT){
-                    Spacer(Modifier.height(8.dp))
-                    FocusAction("Открыть диалог с ИИ",Icons.Default.SmartToy,Color(0xFF9333EA),
+                    Spacer(Modifier.height(9.dp))
+                    FocusAction("Открыть диалог с ИИ",Icons.Default.SmartToy,c.purple,
                         Modifier.fillMaxWidth(),enabled=!busy,
-                        gradient=Brush.horizontalGradient(listOf(Color(0xFF7C3AED),Color(0xFFA855F7)))){
+                        gradient=Brush.horizontalGradient(listOf(
+                            Color(0xFFAF4BF3),Color(0xFF6559EE))),
+                        shine=true){
                         saveThen { onOpenAiChat(task.id) }
                     }
-                    Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(21.dp))
                     HorizontalDivider(color=c.border)
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(17.dp))
                     Row(Modifier.fillMaxWidth(),
                         horizontalArrangement=Arrangement.spacedBy(7.dp),
                         verticalAlignment=Alignment.CenterVertically){
@@ -330,15 +386,15 @@ fun MiniAppTaskFocusSheet(
                             fontWeight=FontWeight.SemiBold)
                         Row(Modifier.clip(CircleShape)
                             .background(c.card)
-                            .border(1.dp,c.border,CircleShape)
+                            .border(1.dp,c.purple.copy(alpha=.38f),CircleShape)
                             .clickable(enabled=!busy){saveThen(onNewSubtask)}
-                            .padding(horizontal=9.dp,vertical=8.dp),
+                            .padding(horizontal=11.dp,vertical=10.dp),
                             verticalAlignment=Alignment.CenterVertically,
-                            horizontalArrangement=Arrangement.spacedBy(4.dp)){
-                            Icon(Icons.Default.Add,null,tint=c.teal,
-                                modifier=Modifier.size(14.dp))
-                            Text("Добавить подзадачу",color=c.text,
-                                fontSize=10.sp,maxLines=1,softWrap=false,
+                            horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                            Icon(Icons.Default.Add,null,tint=c.purple,
+                                modifier=Modifier.size(17.dp))
+                            Text("Добавить",color=c.text,
+                                fontSize=12.sp,maxLines=1,softWrap=false,
                                 fontWeight=FontWeight.SemiBold)
                         }
                         Spacer(Modifier.weight(1f))
@@ -380,18 +436,23 @@ fun MiniAppTaskFocusSheet(
                         Spacer(Modifier.height(8.dp))
                     }
                     if(completedCount>0){
-                        Row(Modifier.fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable{showDone=!showDone}
-                            .padding(horizontal=12.dp,vertical=12.dp),
-                            verticalAlignment=Alignment.CenterVertically,
-                            horizontalArrangement=Arrangement.spacedBy(9.dp)){
-                            Icon(if(showDone)Icons.Default.VisibilityOff
-                                else Icons.Default.Visibility,
-                                null,tint=c.teal,modifier=Modifier.size(17.dp))
-                            Text(if(showDone)"Скрыть выполненные ($completedCount)"
-                                else "Показать выполненные ($completedCount)",
-                                color=c.teal,fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+                        Box(Modifier.fillMaxWidth().padding(top=12.dp,bottom=6.dp),
+                            contentAlignment=Alignment.Center){
+                            Row(Modifier.clip(CircleShape)
+                                .background(c.purple.copy(alpha=if(dark).15f else .08f))
+                                .border(1.dp,c.purple.copy(alpha=.35f),CircleShape)
+                                .clickable{showDone=!showDone}
+                                .padding(horizontal=15.dp,vertical=11.dp),
+                                verticalAlignment=Alignment.CenterVertically,
+                                horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                                Icon(if(showDone)Icons.Default.VisibilityOff
+                                    else Icons.Default.Visibility,
+                                    null,tint=c.purple,modifier=Modifier.size(18.dp))
+                                Text(if(showDone)"Скрыть выполненные ($completedCount)"
+                                    else "Показать выполненные ($completedCount)",
+                                    color=c.purple,fontSize=13.sp,
+                                    fontWeight=FontWeight.SemiBold)
+                            }
                         }
                     }
                 }
@@ -638,15 +699,45 @@ private fun FocusTaskSettingsDialog(
 }
 @Composable private fun FocusAction(text:String,
     icon:androidx.compose.ui.graphics.vector.ImageVector,color:Color,
-    modifier:Modifier,enabled:Boolean,gradient:Brush?=null,click:()->Unit){
-    Row(modifier.height(36.dp).clip(CircleShape)
-        .then(if(gradient!=null)Modifier.background(gradient)else Modifier.background(color))
+    modifier:Modifier,enabled:Boolean,gradient:Brush?=null,
+    outlined:Boolean=false,shine:Boolean=false,click:()->Unit){
+    val shineModifier=if(shine){
+        val transition=rememberInfiniteTransition(label="focus-ai-shine")
+        val phase by transition.animateFloat(
+            initialValue=-.6f,targetValue=1.6f,
+            animationSpec=infiniteRepeatable(
+                animation=tween(durationMillis=2700,easing=LinearEasing),
+                repeatMode=RepeatMode.Restart),
+            label="focus-ai-shine-position")
+        Modifier.drawWithContent {
+            drawContent()
+            val centerX=size.width*phase
+            val beamWidth=size.width*.30f
+            drawRect(brush=Brush.linearGradient(
+                colors=listOf(Color.Transparent,Color.White.copy(alpha=.17f),
+                    Color.Transparent),
+                start=Offset(centerX-beamWidth,0f),
+                end=Offset(centerX+beamWidth,size.height)))
+        }
+    } else Modifier
+    Row(modifier.height(44.dp).clip(CircleShape)
+        .then(when {
+            outlined -> Modifier.background(Color.Transparent)
+                .border(1.dp,color.copy(alpha=.58f),CircleShape)
+            gradient!=null -> Modifier.background(gradient)
+            else -> Modifier.background(color)
+        })
+        .then(if(shine)Modifier.border(1.dp,
+            Color.White.copy(alpha=.42f),CircleShape) else Modifier)
+        .then(shineModifier)
         .clickable(enabled=enabled,onClick=click)
         .alpha(if(enabled)1f else .52f),
         horizontalArrangement=Arrangement.Center,verticalAlignment=Alignment.CenterVertically){
-        Icon(icon,null,tint=Color.White,modifier=Modifier.size(16.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(text,color=Color.White,fontSize=13.sp,fontWeight=FontWeight.Bold,maxLines=1)
+        val foreground=if(outlined)color else Color.White
+        Icon(icon,null,tint=foreground,modifier=Modifier.size(18.dp))
+        Spacer(Modifier.width(7.dp))
+        Text(text,color=foreground,fontSize=14.sp,
+            fontWeight=FontWeight.Bold,maxLines=1)
     }
 }
 @Composable private fun FocusSubtask(task:Task,c:FocusColors,busy:Boolean,
