@@ -552,6 +552,14 @@ export function BubbleField({
   ), [bubbles, mapToOval, mode, sectorCount, sectorGeometry]);
   const getBubbleVisualPoint = (bubble: (typeof bubbles)[number]) =>
     bubbleVisualPositions.get(bubble.task.id) ?? mapToOval(bubble.x, bubble.y);
+  const getSectorIndexAtPoint = (point: { x: number; y: number }) => {
+    if (mode !== 'sectors' || sectorCount <= 1) return 0;
+    const angle = ((Math.atan2((point.y - BUBBLE_FIELD_CENTER_Y) / ELLIPSE_Y_SCALE,
+      (point.x - BUBBLE_FIELD_CENTER_X) / ELLIPSE_X_SCALE) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    const index = sectorGeometry.findIndex((geometry) =>
+      angle >= geometry.startAngle && angle < geometry.endAngle);
+    return index >= 0 ? index : 0;
+  };
   const eligibleBubbleTargets = (): VisualBubble[] => visibleBubbles
     .filter((bubble) => !bubble.task.isCollaborative && !bubble.task.parentTaskId && (bubble.task.taskType ?? 'TASK') === 'TASK')
     .map((bubble) => ({ id: bubble.task.id, ...getBubbleVisualPoint(bubble), radius: bubble.radius }));
@@ -589,11 +597,18 @@ export function BubbleField({
     const position = getBubbleVisualPoint(bubble);
     const center = { x: position.x + point.x - session.startSvgX, y: position.y + point.y - session.startSvgY };
     const target = detectBubbleDrop(center, session.taskId, bubble.radius, eligibleBubbleTargets());
+    const destinationSectorIndex = getSectorIndexAtPoint(center);
+    const destinationSector = bubbleSectors[destinationSectorIndex] ?? null;
+    const changesSector = mode === 'sectors' && sectorCount > 1 &&
+      (destinationSector?.id ?? null) !== (bubble.task.sphereId ?? null);
     if (session.target?.targetId !== target?.targetId || session.target?.kind !== target?.kind) {
       session.targetSince = Date.now();
     }
     session.target = target;
-    queueDragView({ taskId: session.taskId, dx: point.x - session.startSvgX, dy: point.y - session.startSvgY, target });
+    queueDragView({
+      taskId: session.taskId, dx: point.x - session.startSvgX, dy: point.y - session.startSvgY, target,
+      destinationSectorIndex, destinationSectorName: destinationSector?.name ?? 'Без сектора', changesSector
+    });
   };
 
   const isPoppingTask = (taskId: string) => poppingTaskId === taskId;
@@ -634,17 +649,28 @@ export function BubbleField({
     const x = clamp(normalizedX, 0, SIZE);
     const y = clamp(normalizedY, 0, SIZE);
     const target = session.target ? tasks.find((task) => task.id === session.target?.targetId) : null;
+    const finalPosition = { x: px, y: py };
+    const destinationIndex = getSectorIndexAtPoint(finalPosition);
+    const destinationSector = bubbleSectors[destinationIndex] ?? null;
+    const changesSector = mode === 'sectors' && sectorCount > 1 &&
+      (destinationSector?.id ?? null) !== (bubble.task.sphereId ?? null);
+    const sectorChange = mode === 'sectors' ? { sphereId: destinationSector?.id ?? null } : {};
     const action = session.target
       ? { action: session.target.kind, targetTaskId: session.target.targetId }
       : bubble.task.linkedTaskIds?.length
-        ? { action: 'unlink' as const, x, y, mode }
-        : { action: 'move' as const, x, y, mode, ...(mode === 'sectors' ? { sphereId: getSphereAtClientPoint(event.clientX, event.clientY)?.id ?? null } : {}) };
+        ? { action: 'unlink' as const, x, y, mode, ...sectorChange }
+        : { action: 'move' as const, x, y, mode, ...sectorChange };
     setBubbleActionPending(true);
     void onBubbleAction(bubble.task, action).then(() => {
       if (action.action === 'link' && target) showBubbleNotice(`Задачи «${bubble.task.title}» и «${target.title}» теперь связаны.`, [bubble.task.id, target.id]);
       else if (action.action === 'nest' && target) showBubbleNotice(`«${bubble.task.title}» теперь подзадача «${target.title}».`);
-      else if (action.action === 'unlink') showBubbleNotice('Связь между задачами удалена.');
-      else showBubbleNotice('Положение пузыря сохранено.');
+      else if (action.action === 'unlink') {
+        showBubbleNotice(changesSector
+          ? `Связь разорвана. «${bubble.task.title}» перенесена в сектор «${destinationSector?.name ?? 'Без сектора'}».`
+          : 'Связь между задачами удалена.');
+      } else showBubbleNotice(changesSector
+        ? `«${bubble.task.title}» перенесена в сектор «${destinationSector?.name ?? 'Без сектора'}».`
+        : 'Положение пузыря сохранено.');
     }).catch((error: unknown) => {
       showBubbleNotice(error instanceof Error ? error.message : 'Не удалось переместить пузырь.');
     }).finally(() => setBubbleActionPending(false));
@@ -1040,7 +1066,8 @@ export function BubbleField({
           {bubbleActionPending ? 'Сохраняем изменение…' : dragView?.target
             ? dragView.target.kind === 'nest' ? 'Внутри пузыря: сделать подзадачей (удерживать 0,5 сек)'
               : 'У края пузыря: связать задачи'
-            : dragView ? 'Отпустите для перемещения, или оттяните связанную задачу, чтобы разъединить'
+            : dragView?.changesSector ? `Переместить в сектор «${dragView.destinationSectorName}»`
+              : dragView ? 'Отпустите для перемещения, или оттяните связанную задачу, чтобы разъединить'
               : bubbleDragNotice}
         </div>
       )}
