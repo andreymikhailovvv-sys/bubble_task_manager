@@ -507,8 +507,7 @@ export function buildBubbles(
   mode: 'global' | 'sectors',
   size: number,
   rankingMode: BubbleRankingMode = 'urgency',
-  subtaskMap: Record<string, Task[]> = {},
-  recenterFilteredSector = false
+  subtaskMap: Record<string, Task[]> = {}
 ): Bubble[] {
   const center = size / 2;
   const maxDistance = size * 0.44;
@@ -684,7 +683,7 @@ export function buildBubbles(
     // The standard physics/ranking algorithm stays the fallback.
     const savedX = mode === 'global' ? bubble.task.bubbleGlobalX : bubble.task.bubbleSectorX;
     const savedY = mode === 'global' ? bubble.task.bubbleGlobalY : bubble.task.bubbleSectorY;
-    if (!recenterFilteredSector && typeof savedX === 'number' && typeof savedY === 'number' &&
+    if (typeof savedX === 'number' && typeof savedY === 'number' &&
         Number.isFinite(savedX) && Number.isFinite(savedY)) {
       bubble.x = Math.max(bubble.radius + 8, Math.min(size - bubble.radius - 8, savedX));
       bubble.y = Math.max(bubble.radius + 8, Math.min(size - bubble.radius - 8, savedY));
