@@ -869,8 +869,6 @@ export function BubbleField({
     const isPopping = poppingTaskId === bubble.task.id;
     const active = bubble.task.status !== 'DONE';
     const bubbleSubtasks = subtaskMap[bubble.task.id] ?? [];
-    const hasUrgentSubtask = active && bubbleSubtasks.some(shouldSubtaskAffectParentReminder);
-    const shouldGlow = active && (shouldTaskGlow(bubble.task) || hasUrgentSubtask);
     const overdue = active && (isOverdue(bubble.task) ||
       bubbleSubtasks.some((subtask) => subtask.status !== 'DONE' && isOverdue(subtask)));
     // Hover only scales the bubble group. The overdue tint and reminder ring
@@ -935,31 +933,21 @@ export function BubbleField({
           strokeWidth={isDragTarget || isDragged ? 5 : selectedId === bubble.task.id ? 3.5 : 2.4}
         />
         {overdue ? (
-          <circle cx={0} cy={0} r={bubble.radius - 1} fill="#ef4444"
-            fillOpacity={isLightTheme ? 0.14 : 0.19} stroke="none" pointerEvents="none" />
+          // A static red tint with gentle internal highlights. No red outer
+          // halo, shadow or animated glow: only the bubble's fill changes.
+          <circle cx={0} cy={0} r={bubble.radius - 1.5}
+            fill="url(#overdueBubbleBlush)" stroke="none" pointerEvents="none" />
         ) : null}
-        {shouldGlow ? (
-          <circle cx={0} cy={0} r={bubble.radius + 4} fill="none"
-            stroke={overdue ? '#f87171' : '#38bdf8'}
-            strokeWidth={2.3} strokeOpacity={overdue ? 0.6 : 0.28}
-            pointerEvents="none" />
-        ) : null}
-        {bubbleSubtasks.length > 0 ? (
-          <>
-            <circle cx={0} cy={0} r={bubble.radius + 6} fill="none" stroke="rgba(148,163,184,0.35)" strokeWidth={4} />
-            <circle
-              cx={0}
-              cy={0}
-              r={bubble.radius + 6}
-              fill="none"
-              stroke="#22c55e"
-              strokeWidth={4.4}
-              strokeLinecap="round"
-              strokeDasharray={progressCircumference}
-              strokeDashoffset={progressCircumference * (1 - subtaskProgress)}
-              transform="rotate(-90)"
-            />
-          </>
+        {/* All tasks share the same neutral progress track. No subtasks = 0%. */}
+        <circle cx={0} cy={0} r={bubble.radius + 6} fill="none"
+          stroke={isLightTheme ? 'rgba(100,116,139,0.42)' : 'rgba(148,163,184,0.43)'}
+          strokeWidth={4} pointerEvents="none" />
+        {subtaskProgress > 0 ? (
+          <circle cx={0} cy={0} r={bubble.radius + 6} fill="none"
+            stroke="#22c55e" strokeWidth={4.4} strokeLinecap="round"
+            strokeDasharray={progressCircumference}
+            strokeDashoffset={progressCircumference * (1 - subtaskProgress)}
+            transform="rotate(-90)" pointerEvents="none" />
         ) : null}
         <text x={0}
             y={-((vectorTitleLines.length - 1) * titleFontSize * 1.12) / 2 + titleFontSize * 0.32}
@@ -1046,7 +1034,11 @@ export function BubbleField({
       className={`bubble-field-container surface-canvas relative ${fullscreen
         ? 'overflow-hidden rounded-none border-0'
         : 'overflow-visible rounded-[2.2rem] border'} ${className ?? 'h-full'}`}
-      style={{ boxShadow: '0 6px 18px rgba(15,23,42,0.08)', backdropFilter: 'none' }}
+      style={{
+        boxShadow: fullscreen ? 'none' : '0 6px 18px rgba(15,23,42,0.08)',
+        background: fullscreen ? 'transparent' : undefined,
+        backdropFilter: 'none'
+      }}
       onMouseLeave={() => {
         if (isNativeCalendarOpen) return;
         scheduleHoverExit();
@@ -1062,6 +1054,11 @@ export function BubbleField({
         onContextMenu={(event) => showContextMenu(event, null)}>
         <motion.g initial={false}>
           <defs>
+            <radialGradient id="overdueBubbleBlush" cx="27%" cy="22%" fx="25%" fy="20%" r="86%">
+              <stop offset="0%" stopColor="#fecaca" stopOpacity={isLightTheme ? 0.36 : 0.28} />
+              <stop offset="50%" stopColor="#fb7185" stopOpacity={isLightTheme ? 0.32 : 0.31} />
+              <stop offset="100%" stopColor="#dc2626" stopOpacity={isLightTheme ? 0.52 : 0.48} />
+            </radialGradient>
             <radialGradient id="bg" cx="50%" cy="50%" r="60%">
               {isLightTheme ? (
                 <>
