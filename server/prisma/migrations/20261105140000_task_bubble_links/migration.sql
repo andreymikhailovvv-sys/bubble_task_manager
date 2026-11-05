@@ -8,6 +8,7 @@ CREATE TABLE "TaskBubbleLink" (
     "userId" TEXT NOT NULL,
     "firstTaskId" TEXT NOT NULL,
     "secondTaskId" TEXT NOT NULL,
+    "anchorTaskId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "TaskBubbleLink_pkey" PRIMARY KEY ("id")
 );
