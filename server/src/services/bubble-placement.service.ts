@@ -18,6 +18,13 @@ const ownedRoot = async (tx: Prisma.TransactionClient, id: string, userId: strin
   return task;
 };
 
+// Task descriptions may be plain text or sanitized rich HTML. Converting to
+// rich markup here ensures transferred subtask lists keep their line breaks.
+const escapeNote = (value: string) => value.replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const noteAsHtml = (value: string) => /<(?:br|p|div|ul|ol|li|strong|em|a|span)(?:\\s|>)/i.test(value)
+  ? value : escapeNote(value).replace(/\\r?\\n/g, '<br>');
+
 const positionPatch = (input: BubbleActionInput) => {
   if (input.mode !== 'global' && input.mode !== 'sectors') throw new TypeError('Неизвестный режим пузырей.');
   if (typeof input.x !== 'number' || !Number.isFinite(input.x) || input.x < 0 || input.x > 900 ||
@@ -102,20 +109,24 @@ export const bubblePlacementService = {
         },
         orderBy: { createdAt: 'asc' }
       });
-      if (children.some((child) => child.collaborationId || child.subtasks.length || child.aiConversationMemory ||
+      if (children.some((child) => child.collaborationId || child.isRecurring || child.aiMonitoringEnabled || child.subtasks.length || child.aiConversationMemory ||
           Object.values(child._count).some((count) => count > 0))) {
         throw new TypeError('У вложенных подзадач есть файлы, переписка или история. Для сохранности данных автоматическое сворачивание недоступно.');
       }
       const summary = children.map((child) => {
-        const status = child.status === 'DONE' ? '[x]' : '[ ]';
-        const info = [
-          child.description?.trim(),
-          child.dueDate ? 'Дедлайн: ' + child.dueDate.toISOString() : null
-        ].filter(Boolean);
-        return '- ' + status + ' ' + child.title + (info.length ? '\n  ' + info.join('\n  ') : '');
-      }).join('\n');
-      const description = [source.description?.trim(), summary ? 'Подзадачи до объединения:\n' + summary : '']
-        .filter(Boolean).join('\n\n') || null;
+        const status = child.status === 'DONE' ? '☑' : '☐';
+        const details = [
+          child.description ? '<div>' + noteAsHtml(child.description) + '</div>' : '',
+          child.dueDate ? '<div>Дедлайн: ' + escapeNote(child.dueDate.toISOString()) + '</div>' : ''
+        ].filter(Boolean).join('');
+        return '<li>' + status + ' ' + escapeNote(child.title) + details + '</li>';
+      }).join('');
+      const originalDescription = source.description?.trim() ?? '';
+      const description = children.length
+        ? [originalDescription ? noteAsHtml(originalDescription) : '',
+           '<p><strong>Подзадачи до объединения:</strong></p><ul>' + summary + '</ul>']
+          .filter(Boolean).join('<br>')
+        : source.description;
       await tx.task.update({
         where: { id: source.id },
         data: { parentTaskId: target.id, sphereId: null, description,
