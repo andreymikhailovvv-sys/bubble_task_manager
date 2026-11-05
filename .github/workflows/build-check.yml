@@ -29,6 +29,8 @@ jobs:
         run: npm ci --include=dev --no-audit --no-fund
       - name: Compile web client and API server
         run: npm run build
+      - name: Verify privacy-safe performance telemetry and bounded histograms
+        run: node --import tsx --test server/test/performance-diagnostics.test.ts
       - name: Verify parallel free AI intro animation and main-model handoff
         run: node --import tsx --test server/test/ai-quick-intro.test.ts
       - name: Verify immediate contextual AI introductions and model timeout
