@@ -18,12 +18,14 @@ test('performance histograms count slow and failed calls and estimate bounded p9
 });
 
 test('telemetry uses only Express route templates, never raw URLs or secrets', () => {
-  const req = { path: '/api/tasks/private-id/ai-chat', route: { path: '/tasks/:id/ai-chat' } };
+  const req = { originalUrl: '/api/tasks/private-id/ai-chat?token=redacted', path: '/tasks/private-id/ai-chat', route: { path: '/tasks/:id/ai-chat' } };
   assert.equal(safePerformanceRoute(req as never), '/api/tasks/:id/ai-chat');
-  assert.equal(safePerformanceRoute({ path: '/api/invite/secret', route: undefined } as never), '/api/unmatched');
-  assert.equal(safePerformanceRoute({ path: '/api/tasks/id', route: { path: '/tasks/:id?secret' } } as never),
+  assert.equal(safePerformanceRoute({ ...req, path: '/tasks/private-id/ai-chat' } as never), '/api/tasks/:id/ai-chat');
+  assert.equal(safePerformanceRoute({ originalUrl: '/apis/tasks', route: { path: '/tasks' } } as never), 'non_api');
+  assert.equal(safePerformanceRoute({ originalUrl: '/api/invite/secret', route: undefined } as never), '/api/unmatched');
+  assert.equal(safePerformanceRoute({ originalUrl: '/api/tasks/id', route: { path: '/tasks/:id?secret' } } as never),
     '/api/unmatched');
-  assert.equal(safePerformanceRoute({ path: '/miniapp/foo', route: undefined } as never), 'non_api');
+  assert.equal(safePerformanceRoute({ originalUrl: '/miniapp/foo', route: undefined } as never), 'non_api');
 });
 
 test('a large number of samples stays in constant-size histogram storage', () => {
