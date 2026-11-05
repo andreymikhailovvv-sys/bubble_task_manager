@@ -425,6 +425,8 @@ internal fun NativeGeneralAiChatPage(
                             TaskChatBubble(message,c,context,
                                 generalChat=true,taskTitles=taskTitles,
                                 onOpenTaskReference=onOpenTask,
+                                onOpenMonitoredTaskAi=if(thread?.id==QUICK_AI_THREAD_ID)
+                                    onOpenTaskAi else null,
                                 onReply={reply=GeneralReply(message.id.orEmpty(),
                                     message.role,message.content)},
                                 proposalVm=vm,
@@ -437,18 +439,7 @@ internal fun NativeGeneralAiChatPage(
                                             Intent(Intent.ACTION_VIEW,Uri.parse(url)))}
                                     }
                                 })
-                            message.monitoringTaskId?.takeIf{
-                                thread?.id==QUICK_AI_THREAD_ID
-                            }?.let{taskId->
-                                OutlinedButton(onClick={onOpenTaskAi(taskId)},
-                                    shape=RoundedCornerShape(12.dp),
-                                    modifier=Modifier.padding(start=6.dp)){
-                                    Icon(Icons.Default.OpenInNew,null,
-                                        modifier=Modifier.size(14.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text("Ответить в чате задачи",fontSize=11.sp)
-                                }
-                            }
+ 
                         }
                     }
                     if(state.pendingMessage!=null)item(key="pending-general-user"){
@@ -492,22 +483,8 @@ internal fun NativeGeneralAiChatPage(
                         }
                     }
                     if(files.isNotEmpty()){
-                        Row(Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement=Arrangement.spacedBy(5.dp)){
-                            files.toList().forEach{file->
-                                Row(Modifier.clip(CircleShape)
-                                    .background(c.panel).border(1.dp,c.border,CircleShape)
-                                    .padding(start=10.dp),
-                                    verticalAlignment=Alignment.CenterVertically){
-                                    Text(file.name,color=c.text,fontSize=10.sp,
-                                        maxLines=1,modifier=Modifier.widthIn(max=105.dp))
-                                    IconButton(onClick={files.remove(file)},
-                                        modifier=Modifier.size(25.dp)){
-                                        Icon(Icons.Default.Close,"Убрать файл",
-                                            tint=c.secondary,modifier=Modifier.size(12.dp))
-                                    }
-                                }
-                            }
+                        NativeAiAttachmentTiles(files.toList(),c){file->
+                            if(!isBusy)files.remove(file)
                         }
                     }
                     (attachError?:state.error)?.let{msg->
