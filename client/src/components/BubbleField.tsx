@@ -473,6 +473,97 @@ export function BubbleField({
   }), []);
 
   const visibleBubbles = bubbles;
+  const bubbleVisualPositions = useMemo(() => linkedBubblePositions(
+    bubbles.map((bubble) => {
+      const point = mapToOval(bubble.x, bubble.y);
+      return { id: bubble.task.id, x: point.x, y: point.y, radius: bubble.radius, linkedTaskIds: bubble.task.linkedTaskIds };
+    }),
+    { minX: BUBBLE_WORKSPACE_X + 10, maxX: VIEWBOX_RIGHT - 10, minY: VIEWBOX_TOP + 20, maxY: VIEWBOX_BOTTOM - 20 }
+  ), [bubbles, mapToOval]);
+  const getBubbleVisualPoint = (bubble: (typeof bubbles)[number]) =>
+    bubbleVisualPositions.get(bubble.task.id) ?? mapToOval(bubble.x, bubble.y);
+  const eligibleBubbleTargets = (): VisualBubble[] => visibleBubbles
+    .filter((bubble) => !bubble.task.isCollaborative && !bubble.task.parentTaskId && (bubble.task.taskType ?? 'TASK') === 'TASK')
+    .map((bubble) => ({ id: bubble.task.id, ...getBubbleVisualPoint(bubble), radius: bubble.radius }));
+
+  const onBubblePointerDown = (event: ReactPointerEvent<SVGGElement>, bubble: (typeof bubbles)[number]) => {
+    if (event.pointerType !== 'mouse' || event.button !== 0 || bubbleActionPending || isSearchFiltering ||
+        bubble.task.isCollaborative || bubble.task.parentTaskId || (bubble.task.taskType ?? 'TASK') !== 'TASK') return;
+    const point = toSvgPoint(event.clientX, event.clientY);
+    if (!point) return;
+    dragSessionRef.current = {
+      taskId: bubble.task.id, pointerId: event.pointerId, startClientX: event.clientX, startClientY: event.clientY,
+      startSvgX: point.x, startSvgY: point.y, lastSvgX: point.x, lastSvgY: point.y,
+      moved: false, target: null, targetSince: 0
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const onBubblePointerMove = (event: ReactPointerEvent<SVGGElement>, bubble: (typeof bubbles)[number]) => {
+    const session = dragSessionRef.current;
+    if (!session || session.taskId !== bubble.task.id || session.pointerId !== event.pointerId) return;
+    const point = toSvgPoint(event.clientX, event.clientY);
+    if (!point) return;
+    session.lastSvgX = point.x;
+    session.lastSvgY = point.y;
+    if (!session.moved && Math.hypot(event.clientX - session.startClientX, event.clientY - session.startClientY) < 7) return;
+    session.moved = true;
+    event.stopPropagation();
+    cancelHoverExit();
+    setHoveredTaskId(null);
+    const position = getBubbleVisualPoint(bubble);
+    const center = { x: position.x + point.x - session.startSvgX, y: position.y + point.y - session.startSvgY };
+    const target = detectBubbleDrop(center, session.taskId, bubble.radius, eligibleBubbleTargets());
+    if (session.target?.targetId !== target?.targetId || session.target?.kind !== target?.kind) {
+      session.targetSince = Date.now();
+    }
+    session.target = target;
+    setDragView({ taskId: session.taskId, dx: point.x - session.startSvgX, dy: point.y - session.startSvgY, target });
+  };
+
+  const onBubblePointerUp = (event: ReactPointerEvent<SVGGElement>, bubble: (typeof bubbles)[number]) => {
+    const session = dragSessionRef.current;
+    if (!session || session.pointerId !== event.pointerId || session.taskId !== bubble.task.id) return;
+    dragSessionRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    setDragView(null);
+    if (!session.moved) return;
+    ignoreClickRef.current = session.taskId;
+    setTimeout(() => { if (ignoreClickRef.current === session.taskId) ignoreClickRef.current = null; }, 0);
+    event.preventDefault();
+    event.stopPropagation();
+    if (session.target?.kind === 'nest' && Date.now() - session.targetSince < 550) {
+      showBubbleNotice('Для создания подзадачи задержите пузырь внутри другого на полсекунды.');
+      return;
+    }
+    const dropPoint = getBubbleVisualPoint(bubble);
+    const px = dropPoint.x + session.lastSvgX - session.startSvgX;
+    const py = dropPoint.y + session.lastSvgY - session.startSvgY;
+    const normalizedX = SIZE / 2 + (px - BUBBLE_FIELD_CENTER_X) / ELLIPSE_X_SCALE;
+    const normalizedY = SIZE / 2 + (py - BUBBLE_FIELD_CENTER_Y) / ELLIPSE_Y_SCALE;
+    const distance = Math.hypot(normalizedX - SIZE / 2, normalizedY - SIZE / 2);
+    if (!session.target && distance > FIELD_RADIUS + bubble.radius) {
+      showBubbleNotice('Отпустите пузырь внутри поля задач.');
+      return;
+    }
+    const x = clamp(normalizedX, 0, SIZE);
+    const y = clamp(normalizedY, 0, SIZE);
+    const target = session.target ? tasks.find((task) => task.id === session.target?.targetId) : null;
+    const action = session.target
+      ? { action: session.target.kind, targetTaskId: session.target.targetId }
+      : bubble.task.linkedTaskIds?.length
+        ? { action: 'unlink' as const, x, y, mode }
+        : { action: 'move' as const, x, y, mode, ...(mode === 'sectors' ? { sphereId: getSphereAtClientPoint(event.clientX, event.clientY)?.id ?? null } : {}) };
+    setBubbleActionPending(true);
+    void onBubbleAction(bubble.task, action).then(() => {
+      if (action.action === 'link' && target) showBubbleNotice(`Задачи «${bubble.task.title}» и «${target.title}» теперь связаны.`);
+      else if (action.action === 'nest' && target) showBubbleNotice(`«${bubble.task.title}» теперь подзадача «${target.title}».`);
+      else if (action.action === 'unlink') showBubbleNotice('Связь между задачами удалена.');
+      else showBubbleNotice('Положение пузыря сохранено.');
+    }).catch((error: unknown) => {
+      showBubbleNotice(error instanceof Error ? error.message : 'Не удалось переместить пузырь.');
+    }).finally(() => setBubbleActionPending(false));
+  };
 
   const hoveredBubble = useMemo(() => visibleBubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null, [hoveredTaskId, visibleBubbles]);
   const hoveredSubtasks = hoveredBubble ? (subtaskMap[hoveredBubble.task.id] ?? []).filter((subtask) => subtask.status !== 'DONE') : [];
