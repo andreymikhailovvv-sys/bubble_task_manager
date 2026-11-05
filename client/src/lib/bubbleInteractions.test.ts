@@ -122,7 +122,7 @@ test('connector is short and starts just inside the bubble rims', () => {
 
 test('largest linked task becomes the visual gravitational centre', () => {
   const field = { minX: 0, maxX: 800, minY: 0, maxY: 800,
-    ellipse: { cx: 400, cy: 400, rx: 380, ry: 365 } };
+    compact: true, ellipse: { cx: 400, cy: 400, rx: 380, ry: 365 } };
   const circles = [
     { id: 'small', x: 650, y: 630, radius: 23, linkedTaskIds: ['large'], bubbleLinkAnchorId: 'small' },
     { id: 'large', x: 630, y: 595, radius: 96, linkedTaskIds: ['small'], bubbleLinkAnchorId: 'small' }
