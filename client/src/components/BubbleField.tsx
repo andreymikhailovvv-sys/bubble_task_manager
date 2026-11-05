@@ -112,7 +112,15 @@ type BubbleDragSession = {
   target: DropIntent | null;
   targetSince: number;
 };
-type BubbleDragView = { taskId: string; dx: number; dy: number; target: DropIntent | null };
+type BubbleDragView = {
+  taskId: string;
+  dx: number;
+  dy: number;
+  target: DropIntent | null;
+  destinationSectorIndex: number;
+  destinationSectorName: string | null;
+  changesSector: boolean;
+};
 
 type SubtaskDraft = {
   title: string;
@@ -493,6 +501,19 @@ export function BubbleField({
     [sourceTaskById, spheres, subtaskMap, tasks, timelinePreviewTasks]
   );
 
+  const bubbleSectors = useMemo(() => getBubbleSectorSpheres(tasks, spheres, mode), [tasks, spheres, mode]);
+  const sectorCount = Math.max(1, bubbleSectors.length);
+  const sectorTaskCounts = useMemo(() => {
+    if (sectorCount === 1) return [tasks.length];
+    const counts = Array.from({ length: sectorCount }, () => 0);
+    tasks.forEach((task) => { counts[getBubbleSectorIndex(task, bubbleSectors)] += 1; });
+    return counts;
+  }, [sectorCount, bubbleSectors, tasks]);
+  const sectorGeometry = useMemo(
+    () => buildSectorGeometry(sectorCount, sectorTaskCounts),
+    [sectorCount, sectorTaskCounts]
+  );
+
   const bubbles = useMemo(
     () => buildBubbles(tasks, spheres, mode, SIZE, rankingMode, subtaskMap),
     [tasks, spheres, mode, rankingMode, subtaskMap]
@@ -509,7 +530,7 @@ export function BubbleField({
       const savedX = mode === 'global' ? bubble.task.bubbleGlobalX : bubble.task.bubbleSectorX;
       const savedY = mode === 'global' ? bubble.task.bubbleGlobalY : bubble.task.bubbleSectorY;
       return {
-        id: bubble.task.id, x: point.x, y: point.y, radius: bubble.radius,
+        id: bubble.task.id, x: point.x, y: point.y, radius: bubble.radius, sectorIndex: bubble.sectorIndex,
         linkedTaskIds: bubble.task.linkedTaskIds, bubbleLinkAnchorId: bubble.task.bubbleLinkAnchorId,
         pinned: typeof savedX === 'number' && typeof savedY === 'number'
       };
@@ -517,9 +538,18 @@ export function BubbleField({
     {
       minX: BUBBLE_WORKSPACE_X + 10, maxX: VIEWBOX_RIGHT - 10,
       minY: VIEWBOX_TOP + 20, maxY: VIEWBOX_BOTTOM - 20,
-      ellipse: { cx: BUBBLE_FIELD_CENTER_X, cy: BUBBLE_FIELD_CENTER_Y, rx: ELLIPSE_RADIUS_X, ry: ELLIPSE_RADIUS_Y }
+      ellipse: { cx: BUBBLE_FIELD_CENTER_X, cy: BUBBLE_FIELD_CENTER_Y, rx: ELLIPSE_RADIUS_X, ry: ELLIPSE_RADIUS_Y },
+      compact: true,
+      sectors: mode === 'sectors' && sectorCount > 1
+        ? sectorGeometry.map((geometry) => ({
+          start: { x: Math.cos(geometry.startAngle) * ELLIPSE_X_SCALE,
+            y: Math.sin(geometry.startAngle) * ELLIPSE_Y_SCALE },
+          end: { x: Math.cos(geometry.endAngle) * ELLIPSE_X_SCALE,
+            y: Math.sin(geometry.endAngle) * ELLIPSE_Y_SCALE }
+        }))
+        : undefined
     }
-  ), [bubbles, mapToOval, mode]);
+  ), [bubbles, mapToOval, mode, sectorCount, sectorGeometry]);
   const getBubbleVisualPoint = (bubble: (typeof bubbles)[number]) =>
     bubbleVisualPositions.get(bubble.task.id) ?? mapToOval(bubble.x, bubble.y);
   const eligibleBubbleTargets = (): VisualBubble[] => visibleBubbles
@@ -644,17 +674,7 @@ export function BubbleField({
   const hoveredTaskCoefficient = hoveredBubble ? getTaskCoefficient(getSourceTask(hoveredBubble.task), subtaskMap) : 0;
   const visibleHoverSubtasks = hoveredSubtasks.slice(0, 6);
   const hiddenHoverSubtaskCount = Math.max(0, hoveredSubtasks.length - visibleHoverSubtasks.length);
-  const bubbleSectors = useMemo(() => getBubbleSectorSpheres(tasks, spheres, mode), [tasks, spheres, mode]);
-  const sectorCount = Math.max(1, bubbleSectors.length);
-  const sectorTaskCounts = useMemo(() => {
-    if (sectorCount === 1) return [tasks.length];
-    const counts = Array.from({ length: sectorCount }, () => 0);
-    tasks.forEach((task) => {
-      counts[getBubbleSectorIndex(task, bubbleSectors)] += 1;
-    });
-    return counts;
-  }, [sectorCount, bubbleSectors, tasks]);
-  const sectorGeometry = useMemo(() => buildSectorGeometry(sectorCount, sectorTaskCounts), [sectorCount, sectorTaskCounts]);
+
 
   // Render connected components atomically: all members and all real edges
   // share a parent transform and the same transition when filtering modes.
