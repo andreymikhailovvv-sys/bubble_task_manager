@@ -10,6 +10,7 @@ import crypto from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { sphereController } from '../controllers/sphere.controller.js';
 import { taskController } from '../controllers/task.controller.js';
+import { bubblePlacementService } from '../services/bubble-placement.service.js';
 import { addMonitoringStatus, listMonitoringStatuses, requireMonitoredTask, getMonitoringStatusUnread, markMonitoringStatusesSeen } from '../services/task-monitoring.service.js';
 import { getMonitoringTriggers, cancelMonitoringTrigger } from '../services/task-monitoring-trigger.service.js';
 import { monitoringIntroEventKey } from '../services/task-monitoring-schedule.service.js';
@@ -1401,6 +1402,21 @@ apiRouter.delete('/spheres/:id', requireAuth, sphereController.remove);
 apiRouter.get('/tasks', requireAuth, taskController.list);
 apiRouter.post('/tasks', requireAuth, taskController.create);
 apiRouter.patch('/tasks/:id', requireAuth, taskController.update);
+apiRouter.post('/tasks/:id/bubble-action', requireAuth, asyncHandler(async (req, res) => {
+  if (!telegramChatRequestIsSameOrigin(req.get('origin'), req.get('host'), req.get('sec-fetch-site'))) {
+    res.status(403).json({ error: 'Недопустимый источник запроса' });
+    return;
+  }
+  try {
+    res.json(await bubblePlacementService.apply(req.params.id, req.user!.id, req.body));
+  } catch (error) {
+    if (error instanceof TypeError) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
+    throw error;
+  }
+}));
 apiRouter.post('/tasks/:id/completion-report', requireAuth, asyncHandler(async (req, res) => {
   const result = await generateTaskCompletionReport({ userId: req.user!.id, taskId: req.params.id });
   res.json(result);

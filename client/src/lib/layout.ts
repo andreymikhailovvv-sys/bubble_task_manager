@@ -676,6 +676,15 @@ export function buildBubbles(
   resolveCollisions(result, center, maxDistance, sectorGeometry, 0, 100);
 
   result.forEach((bubble) => {
+    // Manual positions only override the corresponding display mode.
+    // The standard physics/ranking algorithm stays the fallback.
+    const savedX = mode === 'global' ? bubble.task.bubbleGlobalX : bubble.task.bubbleSectorX;
+    const savedY = mode === 'global' ? bubble.task.bubbleGlobalY : bubble.task.bubbleSectorY;
+    if (typeof savedX === 'number' && typeof savedY === 'number' &&
+        Number.isFinite(savedX) && Number.isFinite(savedY)) {
+      bubble.x = Math.max(bubble.radius + 8, Math.min(size - bubble.radius - 8, savedX));
+      bubble.y = Math.max(bubble.radius + 8, Math.min(size - bubble.radius - 8, savedY));
+    }
     const dist = Math.hypot(bubble.x - center, bubble.y - center);
     bubble.distanceRatio = Math.min(1, dist / maxDistance);
   });

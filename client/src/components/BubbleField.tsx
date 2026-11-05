@@ -1,10 +1,11 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { TaskMonitoringBadge } from './TaskMonitoringBadge';
 import { CalendarDays, ChevronRight, Coins, Gauge, LoaderCircle, MessageCircle, Plus, Repeat, Sparkles } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { buildBubbles, buildSectorGeometry, getBubbleSectorIndex, getBubbleSectorSpheres, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
 import { noteHtmlToPlainText } from '../lib/notes';
+import { detectBubbleDrop, linkedBubblePositions, type DropIntent, type VisualBubble } from '../lib/bubbleInteractions';
 import { resolveSphereIcon } from '../lib/sphereIcons';
 import type { Sphere, Task } from '../lib/types';
 import { InlineDateTimePickerIcon } from './InlineDateTimePickerIcon';
@@ -29,6 +30,7 @@ type Props = {
   onQuickChangeTaskImportance: (task: Task, importanceDelta: number) => Promise<void>;
   onQuickPostponeTask: (task: Task, option: '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart') => Promise<string | null>;
   onCreateSubtask: (parentTask: Task, payload: Partial<Task>) => Promise<void>;
+  onBubbleAction: (task: Task, payload: { action: 'move' | 'link' | 'unlink' | 'nest'; targetTaskId?: string; sphereId?: string | null; mode?: 'global' | 'sectors'; x?: number; y?: number }) => Promise<void>;
   isSubtaskFilterActive: boolean;
   onToggleSubtaskFilter: () => void;
   onRenameSphere?: (sphere: Sphere) => void;
@@ -97,6 +99,21 @@ const POSTPONE_OPTIONS = [
 ] as const;
 type PostponeOption = (typeof POSTPONE_OPTIONS)[number]['value'];
 type BubbleContextMenu = { x: number; y: number; task: Task | null; sphere: Sphere | null };
+type BubbleDragSession = {
+  taskId: string;
+  pointerId: number;
+  startClientX: number;
+  startClientY: number;
+  startSvgX: number;
+  startSvgY: number;
+  lastSvgX: number;
+  lastSvgY: number;
+  moved: boolean;
+  target: DropIntent | null;
+  targetSince: number;
+};
+type BubbleDragView = { taskId: string; dx: number; dy: number; target: DropIntent | null };
+
 type SubtaskDraft = {
   title: string;
   description: string;
@@ -254,6 +271,7 @@ export function BubbleField({
   onSelect,
   onSelectSubtask,
   onCreateSubtask,
+  onBubbleAction,
   isSubtaskFilterActive,
   onToggleSubtaskFilter,
   onToggleSubtaskDone,
@@ -283,6 +301,31 @@ export function BubbleField({
   const hoverExitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nativeCalendarCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const dragSessionRef = useRef<BubbleDragSession | null>(null);
+  const ignoreClickRef = useRef<string | null>(null);
+  const [dragView, setDragView] = useState<BubbleDragView | null>(null);
+  const [bubbleActionPending, setBubbleActionPending] = useState(false);
+  const [bubbleDragNotice, setBubbleDragNotice] = useState<string | null>(null);
+  const [noticePair, setNoticePair] = useState<[string, string] | null>(null);
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => { if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current); }, []);
+  const showBubbleNotice = (message: string, pair: [string, string] | null = null) => {
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    setNoticePair(pair);
+    setBubbleDragNotice(message);
+    noticeTimerRef.current = setTimeout(() => { setBubbleDragNotice(null); setNoticePair(null); }, 3200);
+  };
+  const toSvgPoint = (clientX: number, clientY: number) => {
+    const svg = svgRef.current;
+    const matrix = svg?.getScreenCTM();
+    if (!svg || !matrix) return null;
+    const point = svg.createSVGPoint();
+    point.x = clientX;
+    point.y = clientY;
+    const converted = point.matrixTransform(matrix.inverse());
+    return { x: converted.x, y: converted.y };
+  };
 
   const defaultSubtaskDraft = () => ({ title: '', description: '', dueDate: '', notifyPreset: '0' } satisfies SubtaskDraft);
 
@@ -432,6 +475,99 @@ export function BubbleField({
   }), []);
 
   const visibleBubbles = bubbles;
+  const bubbleVisualPositions = useMemo(() => linkedBubblePositions(
+    bubbles.map((bubble) => {
+      const point = mapToOval(bubble.x, bubble.y);
+      return { id: bubble.task.id, x: point.x, y: point.y, radius: bubble.radius, linkedTaskIds: bubble.task.linkedTaskIds, bubbleLinkAnchorId: bubble.task.bubbleLinkAnchorId };
+    }),
+    { minX: BUBBLE_WORKSPACE_X + 10, maxX: VIEWBOX_RIGHT - 10, minY: VIEWBOX_TOP + 20, maxY: VIEWBOX_BOTTOM - 20 }
+  ), [bubbles, mapToOval]);
+  const getBubbleVisualPoint = (bubble: (typeof bubbles)[number]) =>
+    bubbleVisualPositions.get(bubble.task.id) ?? mapToOval(bubble.x, bubble.y);
+  const eligibleBubbleTargets = (): VisualBubble[] => visibleBubbles
+    .filter((bubble) => !bubble.task.isCollaborative && !bubble.task.parentTaskId && (bubble.task.taskType ?? 'TASK') === 'TASK')
+    .map((bubble) => ({ id: bubble.task.id, ...getBubbleVisualPoint(bubble), radius: bubble.radius }));
+
+  const onBubblePointerDown = (event: ReactPointerEvent<SVGGElement>, bubble: (typeof bubbles)[number]) => {
+    if (event.pointerType !== 'mouse' || event.button !== 0 || bubbleActionPending || isSearchFiltering ||
+        bubble.task.isCollaborative || bubble.task.parentTaskId || (bubble.task.taskType ?? 'TASK') !== 'TASK') return;
+    const point = toSvgPoint(event.clientX, event.clientY);
+    if (!point) return;
+    setNoticePair(null);
+    setBubbleDragNotice(null);
+    dragSessionRef.current = {
+      taskId: bubble.task.id, pointerId: event.pointerId, startClientX: event.clientX, startClientY: event.clientY,
+      startSvgX: point.x, startSvgY: point.y, lastSvgX: point.x, lastSvgY: point.y,
+      moved: false, target: null, targetSince: 0
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const onBubblePointerMove = (event: ReactPointerEvent<SVGGElement>, bubble: (typeof bubbles)[number]) => {
+    const session = dragSessionRef.current;
+    if (!session || session.taskId !== bubble.task.id || session.pointerId !== event.pointerId) return;
+    const point = toSvgPoint(event.clientX, event.clientY);
+    if (!point) return;
+    session.lastSvgX = point.x;
+    session.lastSvgY = point.y;
+    if (!session.moved && Math.hypot(event.clientX - session.startClientX, event.clientY - session.startClientY) < 7) return;
+    session.moved = true;
+    event.stopPropagation();
+    cancelHoverExit();
+    setHoveredTaskId(null);
+    const position = getBubbleVisualPoint(bubble);
+    const center = { x: position.x + point.x - session.startSvgX, y: position.y + point.y - session.startSvgY };
+    const target = detectBubbleDrop(center, session.taskId, bubble.radius, eligibleBubbleTargets());
+    if (session.target?.targetId !== target?.targetId || session.target?.kind !== target?.kind) {
+      session.targetSince = Date.now();
+    }
+    session.target = target;
+    setDragView({ taskId: session.taskId, dx: point.x - session.startSvgX, dy: point.y - session.startSvgY, target });
+  };
+
+  const onBubblePointerUp = (event: ReactPointerEvent<SVGGElement>, bubble: (typeof bubbles)[number]) => {
+    const session = dragSessionRef.current;
+    if (!session || session.pointerId !== event.pointerId || session.taskId !== bubble.task.id) return;
+    dragSessionRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    setDragView(null);
+    if (!session.moved) return;
+    ignoreClickRef.current = session.taskId;
+    setTimeout(() => { if (ignoreClickRef.current === session.taskId) ignoreClickRef.current = null; }, 0);
+    event.preventDefault();
+    event.stopPropagation();
+    if (session.target?.kind === 'nest' && Date.now() - session.targetSince < 550) {
+      showBubbleNotice('Для создания подзадачи задержите пузырь внутри другого на полсекунды.');
+      return;
+    }
+    const dropPoint = getBubbleVisualPoint(bubble);
+    const px = dropPoint.x + session.lastSvgX - session.startSvgX;
+    const py = dropPoint.y + session.lastSvgY - session.startSvgY;
+    const normalizedX = SIZE / 2 + (px - BUBBLE_FIELD_CENTER_X) / ELLIPSE_X_SCALE;
+    const normalizedY = SIZE / 2 + (py - BUBBLE_FIELD_CENTER_Y) / ELLIPSE_Y_SCALE;
+    const distance = Math.hypot(normalizedX - SIZE / 2, normalizedY - SIZE / 2);
+    if (!session.target && distance > FIELD_RADIUS + bubble.radius) {
+      showBubbleNotice('Отпустите пузырь внутри поля задач.');
+      return;
+    }
+    const x = clamp(normalizedX, 0, SIZE);
+    const y = clamp(normalizedY, 0, SIZE);
+    const target = session.target ? tasks.find((task) => task.id === session.target?.targetId) : null;
+    const action = session.target
+      ? { action: session.target.kind, targetTaskId: session.target.targetId }
+      : bubble.task.linkedTaskIds?.length
+        ? { action: 'unlink' as const, x, y, mode }
+        : { action: 'move' as const, x, y, mode, ...(mode === 'sectors' ? { sphereId: getSphereAtClientPoint(event.clientX, event.clientY)?.id ?? null } : {}) };
+    setBubbleActionPending(true);
+    void onBubbleAction(bubble.task, action).then(() => {
+      if (action.action === 'link' && target) showBubbleNotice(`Задачи «${bubble.task.title}» и «${target.title}» теперь связаны.`, [bubble.task.id, target.id]);
+      else if (action.action === 'nest' && target) showBubbleNotice(`«${bubble.task.title}» теперь подзадача «${target.title}».`);
+      else if (action.action === 'unlink') showBubbleNotice('Связь между задачами удалена.');
+      else showBubbleNotice('Положение пузыря сохранено.');
+    }).catch((error: unknown) => {
+      showBubbleNotice(error instanceof Error ? error.message : 'Не удалось переместить пузырь.');
+    }).finally(() => setBubbleActionPending(false));
+  };
 
   const hoveredBubble = useMemo(() => visibleBubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null, [hoveredTaskId, visibleBubbles]);
   const hoveredSubtasks = hoveredBubble ? (subtaskMap[hoveredBubble.task.id] ?? []).filter((subtask) => subtask.status !== 'DONE') : [];
@@ -451,7 +587,9 @@ export function BubbleField({
   }, [sectorCount, bubbleSectors, tasks]);
   const sectorGeometry = useMemo(() => buildSectorGeometry(sectorCount, sectorTaskCounts), [sectorCount, sectorTaskCounts]);
 
-  const orderedBubbles = visibleBubbles;
+  const orderedBubbles = dragView
+    ? [...visibleBubbles].sort((a, b) => Number(a.task.id === dragView.taskId) - Number(b.task.id === dragView.taskId))
+    : visibleBubbles;
 
   useEffect(() => {
     if (isAddingSubtask) {
@@ -571,6 +709,8 @@ export function BubbleField({
     const shouldGlow = bubble.task.status !== 'DONE' && (shouldTaskGlow(bubble.task) || hasUrgentSubtask);
     const overdue = isOverdue(bubble.task);
     const isHovered = hoveredTaskId === bubble.task.id;
+    const isDragged = dragView?.taskId === bubble.task.id;
+    const isDragTarget = dragView?.target?.targetId === bubble.task.id;
     const glowPulseState = isHovered
       ? {
         opacity: [0.55, 1, 0.55],
@@ -603,7 +743,10 @@ export function BubbleField({
     const commentBadgeX = bubble.radius * 0.78;
     const commentBadgeY = bubble.radius * 0.78;
     const isSmartPostponing = smartPostponeTaskId === bubble.task.id;
-    const displayPoint = mapToOval(bubble.x, bubble.y);
+    const baseVisualPoint = getBubbleVisualPoint(bubble);
+    const displayPoint = isDragged && dragView
+      ? { x: baseVisualPoint.x + dragView.dx, y: baseVisualPoint.y + dragView.dy }
+      : baseVisualPoint;
     const titleLineClamp = bubble.radius < 30 ? 2 : bubble.radius < 44 ? 3 : 4;
     const titleFontSize = getBubbleTitleFontSize(bubble.task.title, bubble.radius);
     const titlePreview = getBubbleTitlePreview(bubble.task.title, bubble.radius);
@@ -624,19 +767,26 @@ export function BubbleField({
         key={bubble.task.id}
         data-bubble-task-id={bubble.task.id}
         initial={false}
-        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: isHovered ? BUBBLE_HOVER_SCALE : 1, x: displayPoint.x, y: displayPoint.y }}
+        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: isDragged ? 1.07 : isHovered ? BUBBLE_HOVER_SCALE : isDragTarget ? 1.06 : 1, x: displayPoint.x, y: displayPoint.y }}
         exit={isSearchFiltering ? { opacity: 0, scale: 0.96, x: displayPoint.x, y: displayPoint.y } : { opacity: 1, scale: 1, x: displayPoint.x, y: displayPoint.y }}
-        transition={isPopping
+        transition={isDragged ? { duration: 0 } : isPopping
           ? { type: 'tween', duration: 0.33, ease: 'easeOut' }
           : isSearchFiltering
             ? { type: 'tween', duration: 0.12, ease: 'easeOut' }
             : { type: 'spring', damping: 24, stiffness: 105, mass: 0.82, restDelta: 0.001 }}
         style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-        onClick={() => !isPopping && onSelect(bubble.task)}
-        onMouseEnter={() => activateHover(bubble.task.id)}
-        onMouseLeave={scheduleHoverExit}
+        onClick={() => {
+          if (ignoreClickRef.current === bubble.task.id) { ignoreClickRef.current = null; return; }
+          if (!isPopping && !dragSessionRef.current) onSelect(bubble.task);
+        }}
+        onPointerDown={(event) => onBubblePointerDown(event, bubble)}
+        onPointerMove={(event) => onBubblePointerMove(event, bubble)}
+        onPointerUp={(event) => onBubblePointerUp(event, bubble)}
+        onPointerCancel={() => { dragSessionRef.current = null; setDragView(null); }}
+        onMouseEnter={() => { if (!dragSessionRef.current) activateHover(bubble.task.id); }}
+        onMouseLeave={() => { if (!dragSessionRef.current) scheduleHoverExit(); }}
         onContextMenu={(event) => showContextMenu(event, bubble.task)}
-        className="cursor-pointer"
+        className={bubble.task.isCollaborative || bubble.task.taskType === 'EVENT' || bubble.task.taskType === 'REMINDER' ? 'cursor-pointer' : isDragged ? 'cursor-grabbing' : 'cursor-grab'}
       >
         <circle cx={0} cy={0} r={bubble.radius + 10} fill="transparent" />
         <circle
@@ -645,11 +795,11 @@ export function BubbleField({
           r={bubble.radius}
           fill={getBubbleShade(bubble.color, bubble.distanceRatio)}
           fillOpacity={isLightTheme ? 0.66 : 0.48}
-          stroke={selectedId === bubble.task.id ? (isLightTheme ? '#0f172a' : '#f8fafc') : (isLightTheme ? 'rgba(14,116,144,0.56)' : '#bae6fd')}
+          stroke={isDragTarget ? (dragView?.target?.kind === 'nest' ? '#f59e0b' : '#a78bfa') : bubble.task.linkedTaskIds?.length ? '#a78bfa' : selectedId === bubble.task.id ? (isLightTheme ? '#0f172a' : '#f8fafc') : (isLightTheme ? 'rgba(14,116,144,0.56)' : '#bae6fd')}
           strokeOpacity={selectedId === bubble.task.id ? 1 : isLightTheme ? 0.78 : 0.65}
-          strokeWidth={selectedId === bubble.task.id ? 3.5 : 2.4}
+          strokeWidth={isDragTarget || isDragged ? 5 : selectedId === bubble.task.id || bubble.task.linkedTaskIds?.length ? 3.5 : 2.4}
           filter={glowFilter}
-          style={staticGlowStyle}
+          style={isDragTarget ? { filter: 'drop-shadow(0 0 14px rgba(167,139,250,0.7))' } : staticGlowStyle}
         />
         {shouldGlow ? (
           <motion.circle
@@ -773,6 +923,15 @@ export function BubbleField({
         scheduleHoverExit();
       }}
     >
+      {(dragView || (bubbleDragNotice && !noticePair) || bubbleActionPending) && (
+        <div className="pointer-events-none absolute left-1/2 top-4 z-50 max-w-[90%] -translate-x-1/2 rounded-2xl border border-violet-400/40 bg-slate-950/90 px-4 py-2 text-center text-sm font-medium text-white shadow-xl backdrop-blur-md" role="status" aria-live="polite">
+          {bubbleActionPending ? 'Сохраняем изменение…' : dragView?.target
+            ? dragView.target.kind === 'nest' ? 'Внутри пузыря: сделать подзадачей (удерживать 0,5 сек)'
+              : 'У края пузыря: связать задачи'
+            : dragView ? 'Отпустите для перемещения, или оттяните связанную задачу, чтобы разъединить'
+              : bubbleDragNotice}
+        </div>
+      )}
       <svg ref={svgRef} viewBox={`${VIEWBOX_LEFT} ${VIEWBOX_TOP} ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} className="bubble-field-stage relative z-20 h-full w-full overflow-visible" onContextMenu={(event) => showContextMenu(event, null)}>
         <motion.g initial={false}>
           <defs>
@@ -895,6 +1054,28 @@ export function BubbleField({
           <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X} ry={ELLIPSE_RADIUS_Y} fill="url(#bg)" opacity={isLightTheme ? 0.94 : 0.86} />
           <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X + 22} ry={ELLIPSE_RADIUS_Y + 16} fill="url(#fieldHalo)" filter="url(#bubbleGlow)" opacity={isLightTheme ? 0.48 : 0.7} />
 
+          {visibleBubbles.flatMap((bubble) => (bubble.task.linkedTaskIds ?? [])
+            .filter((id) => bubble.task.id < id)
+            .map((id) => {
+              const a = bubbleVisualPositions.get(bubble.task.id);
+              const b = bubbleVisualPositions.get(id);
+              if (!a || !b) return null;
+              const ax = a.x + (dragView?.taskId === bubble.task.id ? dragView.dx : 0);
+              const ay = a.y + (dragView?.taskId === bubble.task.id ? dragView.dy : 0);
+              const bx = b.x + (dragView?.taskId === id ? dragView.dx : 0);
+              const by = b.y + (dragView?.taskId === id ? dragView.dy : 0);
+              return <line key={`link-${bubble.task.id}-${id}`} x1={ax} y1={ay} x2={bx} y2={by}
+                stroke="#a78bfa" strokeWidth={4} strokeLinecap="round" opacity={0.8} pointerEvents="none" />;
+            }))}
+          {dragView?.target && (() => {
+            const from = visibleBubbles.find((bubble) => bubble.task.id === dragView.taskId);
+            const a = from ? getBubbleVisualPoint(from) : null;
+            const b = bubbleVisualPositions.get(dragView.target.targetId);
+            if (!a || !b) return null;
+            return <line x1={a.x + dragView.dx} y1={a.y + dragView.dy} x2={b.x} y2={b.y}
+              stroke={dragView.target.kind === 'nest' ? '#f59e0b' : '#a78bfa'} strokeWidth={3}
+              strokeDasharray="5 7" opacity={0.8} pointerEvents="none" />;
+          })()}
           {sectorGeometry.map((geometry, idx) => {
             if (sectorCount === 1) return null;
             const angle = geometry.startAngle;
@@ -903,6 +1084,23 @@ export function BubbleField({
           })}
 
           <AnimatePresence>{orderedBubbles.map((bubble) => renderBubble(bubble))}</AnimatePresence>
+          {bubbleDragNotice && noticePair && (() => {
+            const [aId, bId] = noticePair;
+            const a = bubbleVisualPositions.get(aId);
+            const b = bubbleVisualPositions.get(bId);
+            const aRadius = visibleBubbles.find((bubble) => bubble.task.id === aId)?.radius ?? 30;
+            const bRadius = visibleBubbles.find((bubble) => bubble.task.id === bId)?.radius ?? 30;
+            if (!a || !b) return null;
+            const x = clamp((a.x + b.x) / 2 - 220, BUBBLE_WORKSPACE_X + 8, VIEWBOX_RIGHT - 450);
+            const y = clamp(Math.min(a.y - aRadius, b.y - bRadius) - 64, VIEWBOX_TOP + 6, VIEWBOX_BOTTOM - 58);
+            return (
+              <foreignObject x={x} y={y} width={440} height={58} pointerEvents="none">
+                <div className="flex h-full items-center justify-center rounded-2xl border border-violet-400/50 bg-slate-950/90 px-4 py-2 text-center text-sm font-semibold leading-snug text-white shadow-xl backdrop-blur-md" role="status" aria-live="polite">
+                  <span className="line-clamp-2">{bubbleDragNotice}</span>
+                </div>
+              </foreignObject>
+            );
+          })()}
 
           {sectorLabels.map((item) => {
             const Icon = item.sphere ? resolveSphereIcon(item.sphere.icon) : null;
