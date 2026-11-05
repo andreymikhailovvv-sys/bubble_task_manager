@@ -1403,6 +1403,10 @@ apiRouter.get('/tasks', requireAuth, taskController.list);
 apiRouter.post('/tasks', requireAuth, taskController.create);
 apiRouter.patch('/tasks/:id', requireAuth, taskController.update);
 apiRouter.post('/tasks/:id/bubble-action', requireAuth, asyncHandler(async (req, res) => {
+  if (!telegramChatRequestIsSameOrigin(req.get('origin'), req.get('host'), req.get('sec-fetch-site'))) {
+    res.status(403).json({ error: 'Недопустимый источник запроса' });
+    return;
+  }
   try {
     res.json(await bubblePlacementService.apply(req.params.id, req.user!.id, req.body));
   } catch (error) {
