@@ -476,7 +476,7 @@ export function BubbleField({
   const bubbleVisualPositions = useMemo(() => linkedBubblePositions(
     bubbles.map((bubble) => {
       const point = mapToOval(bubble.x, bubble.y);
-      return { id: bubble.task.id, x: point.x, y: point.y, radius: bubble.radius, linkedTaskIds: bubble.task.linkedTaskIds };
+      return { id: bubble.task.id, x: point.x, y: point.y, radius: bubble.radius, linkedTaskIds: bubble.task.linkedTaskIds, bubbleLinkAnchorId: bubble.task.bubbleLinkAnchorId };
     }),
     { minX: BUBBLE_WORKSPACE_X + 10, maxX: VIEWBOX_RIGHT - 10, minY: VIEWBOX_TOP + 20, maxY: VIEWBOX_BOTTOM - 20 }
   ), [bubbles, mapToOval]);
