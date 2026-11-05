@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { TaskMonitoringBadge } from './TaskMonitoringBadge';
 import { CalendarDays, ChevronRight, Coins, Gauge, LoaderCircle, MessageCircle, Plus, Repeat, Sparkles } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { buildBubbles, buildSectorGeometry, getBubbleSectorIndex, getBubbleSectorSpheres, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
 import { noteHtmlToPlainText } from '../lib/notes';
@@ -75,7 +75,6 @@ const ELLIPSE_RADIUS_Y = VIEWBOX_HEIGHT / 2 - 38;
 const ELLIPSE_X_SCALE = ELLIPSE_RADIUS_X / FIELD_RADIUS;
 const ELLIPSE_Y_SCALE = ELLIPSE_RADIUS_Y / FIELD_RADIUS;
 const HOVER_EXIT_DELAY_MS = 120;
-const BUBBLE_HOVER_SCALE = 1.08;
 const ENABLE_BUBBLE_HOVER_DETAILS = false;
 const SUBTASK_REMINDER_GLOW_STYLE =
   '0 0 0 1px rgba(56,189,248,0.24), inset 0 0 12px rgba(56,189,248,0.28)';
@@ -931,7 +930,6 @@ export function BubbleField({
           stroke={isDragTarget ? (dragView?.target?.kind === 'nest' ? '#f59e0b' : '#a78bfa') : selectedId === bubble.task.id ? (isLightTheme ? '#0f172a' : '#f8fafc') : (isLightTheme ? 'rgba(14,116,144,0.56)' : '#bae6fd')}
           strokeOpacity={selectedId === bubble.task.id ? 1 : isLightTheme ? 0.78 : 0.65}
           strokeWidth={isDragTarget || isDragged ? 5 : selectedId === bubble.task.id ? 3.5 : 2.4}
-          style={undefined}
         />
         {overdue ? (
           <circle cx={0} cy={0} r={bubble.radius - 1} fill="#ef4444"
@@ -988,26 +986,18 @@ export function BubbleField({
         ) : null}
 
         {hasAiMessage ? (
-          <motion.g
-            animate={{ scale: 1 }}
-            transition={{ duration: 0 }}
-            pointerEvents="none"
-          >
+          <g pointerEvents="none">
             <circle cx={aiBadgeX} cy={aiBadgeY} r={11} fill="#7c3aed" />
             <foreignObject x={aiBadgeX - 6} y={aiBadgeY - 6} width={12} height={12}>
               <div className="flex h-full w-full items-center justify-center">
                 <Sparkles size={12} color="#ffffff" />
               </div>
             </foreignObject>
-          </motion.g>
+          </g>
         ) : null}
 
         {hasComments ? (
-          <motion.g
-            animate={{ scale: 1 }}
-            transition={{ duration: 0 }}
-            pointerEvents="none"
-          >
+          <g pointerEvents="none">
             <circle cx={commentBadgeX} cy={commentBadgeY} r={11} fill="#2563eb" />
             <foreignObject x={commentBadgeX - 6} y={commentBadgeY - 6} width={12} height={12}>
               <div className="flex h-full w-full items-center justify-center">
@@ -1024,7 +1014,7 @@ export function BubbleField({
                 </foreignObject>
               </>
             ) : null}
-          </motion.g>
+          </g>
         ) : null}
 
         {isSmartPostponing ? (
@@ -1099,10 +1089,6 @@ export function BubbleField({
                 </>
               )}
             </radialGradient>
-            <filter id="bubbleGlow" x="-60%" y="-60%" width="220%" height="220%">
-              <feDropShadow dx="0" dy="0" stdDeviation="8" floodColor="#7dd3fc" floodOpacity="0.42" />
-              <feDropShadow dx="0" dy="0" stdDeviation="16" floodColor="#818cf8" floodOpacity="0.22" />
-            </filter>
           </defs>
           <foreignObject
             x={fullscreen ? FULLSCREEN_TASK_INFO_PANEL_X : TASK_INFO_PANEL_X}
