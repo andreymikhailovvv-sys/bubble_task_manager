@@ -4,6 +4,7 @@ import { isTelegramWebhookSecretConfigured, isTelegramWebhookSecretValid } from 
 import { Blob } from 'node:buffer';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
+import { findExistingSystemNotificationKeys, createSystemNotificationUnlessExists, taskNotificationTiming, taskSystemNotificationEventKey } from '../lib/task-notification-persistence.js';
 import { cancelMonitoringSource, refreshMonitoringAfterExternalWrite, rescheduleMonitoringTree } from './task-monitoring-schedule.service.js';
 import { signalTaskMonitoringWakeup } from './task-monitoring-wakeup.service.js';
 import { aiAssistantService } from './ai-assistant.service.js';
@@ -2147,15 +2148,15 @@ export const telegramService = {
         user: { select: { telegramChatId: true } }
       }
     });
+    const existingReminderNotifications = await findExistingSystemNotificationKeys(prisma,
+      scheduledReminders.filter(reminder => reminder.dueDate !== null)
+        .map(reminder => 'reminder:' + reminder.id + ':' + reminder.dueDate!.toISOString()));
     for (const reminder of scheduledReminders) {
       if (!reminder.dueDate) continue;
       const content = `Напоминание: ${reminder.title}`;
       const eventKey = `reminder:${reminder.id}:${reminder.dueDate.toISOString()}`;
-      await prisma.systemNotification.create({
-        data: { userId: reminder.userId, taskId: reminder.id, eventKey, content }
-      }).catch((error: unknown) => {
-        if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002')) throw error;
-      });
+      await createSystemNotificationUnlessExists(prisma, existingReminderNotifications,
+        { userId: reminder.userId, taskId: reminder.id, eventKey, content });
       if (!BOT_TOKEN || !reminder.user.telegramChatId || reminder.telegramNotifiedAt) continue;
       // Atomic claim prevents two active scheduler replicas from sending twice.
       const claimed = await prisma.task.updateMany({
@@ -2215,6 +2216,32 @@ export const telegramService = {
       }
     });
 
+    // A task's overdue eventKey is stable until its due date changes. Fetch all
+    // existing keys once instead of retrying hundreds of duplicate INSERTs
+    // every minute. The Telegram delivery path below stays unchanged.
+    const candidateTaskEventKeys = tasks.flatMap(task => {
+      const sharedRoot = Boolean(task.collaboration && !task.parentTaskId);
+      const recipients = sharedRoot && task.collaboration
+        ? task.collaboration.members.map(member => ({
+            userId: member.userId,
+            status: member.statusOverride ?? task.status,
+            notifyBeforeMinutes: member.notifyBeforeMinutes
+          }))
+        : [{ userId: task.userId, status: task.status, notifyBeforeMinutes: task.notifyBeforeMinutes }];
+      const dueAtMs = task.dueDate?.getTime() ?? 0;
+      const dueKey = task.dueDate?.toISOString() ?? 'no-date';
+      return recipients.flatMap(recipient => {
+        if (recipient.status === 'DONE' || recipient.notifyBeforeMinutes === null) return [];
+        const { notificationKind } = taskNotificationTiming(
+          dueAtMs, now.getTime(), recipient.notifyBeforeMinutes, MAX_SHINE_WINDOW_MINUTES
+        );
+        return notificationKind
+          ? [taskSystemNotificationEventKey(task.id, dueKey, recipient.userId, sharedRoot, notificationKind)]
+          : [];
+      });
+    });
+    const existingTaskNotifications = await findExistingSystemNotificationKeys(prisma, candidateTaskEventKeys);
+
     for (const task of tasks) {
       const sharedRoot = Boolean(task.collaboration && !task.parentTaskId);
       const recipients = sharedRoot && task.collaboration
@@ -2238,14 +2265,9 @@ export const telegramService = {
       for (const recipient of recipients) {
         if (recipient.status === 'DONE' || recipient.notifyBeforeMinutes === null) continue;
 
-        const dueAt = task.dueDate?.getTime() ?? 0;
-        const diffMs = dueAt - now.getTime();
-        const notifyWindowMs = Math.min(recipient.notifyBeforeMinutes, MAX_SHINE_WINDOW_MINUTES) * 60_000;
-        const isShining = recipient.notifyBeforeMinutes === 0
-          ? diffMs <= 0
-          : diffMs > 0 && diffMs <= notifyWindowMs;
-
-        const notificationKind = diffMs <= 0 ? 'overdue' : isShining ? 'upcoming' : null;
+        const { diffMs, isShining, notificationKind } = taskNotificationTiming(
+          task.dueDate?.getTime() ?? 0, now.getTime(), recipient.notifyBeforeMinutes, MAX_SHINE_WINDOW_MINUTES
+        );
         if (notificationKind) {
           const dueKey = task.dueDate?.toISOString() ?? 'no-date';
           const totalMinutes = Math.max(1, Math.ceil(diffMs / 60_000));
@@ -2255,17 +2277,11 @@ export const telegramService = {
           const content = notificationKind === 'overdue'
             ? `⏰Напоминание о задаче «${task.title}»`
             : `⏰ До дедлайна задачи «${task.title}» осталось ${timeLeft}`;
-          await prisma.systemNotification.create({
-            data: {
-              userId: recipient.userId,
-              taskId: task.id,
-              eventKey: sharedRoot
-                ? `${task.id}:${recipient.userId}:${dueKey}:${notificationKind}`
-                : `${task.id}:${dueKey}:${notificationKind}`,
-              content
-            }
-          }).catch((error: unknown) => {
-            if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002')) throw error;
+          await createSystemNotificationUnlessExists(prisma, existingTaskNotifications, {
+            userId: recipient.userId,
+            taskId: task.id,
+            eventKey: taskSystemNotificationEventKey(task.id, dueKey, recipient.userId, sharedRoot, notificationKind),
+            content
           });
         }
 
