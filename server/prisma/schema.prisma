@@ -676,6 +676,7 @@ model TaskBubbleLink {
   userId        String
   firstTaskId   String
   secondTaskId  String
+  anchorTaskId  String
   firstTask     Task @relation("TaskBubbleLinkFirst", fields: [firstTaskId], references: [id], onDelete: Cascade)
   secondTask    Task @relation("TaskBubbleLinkSecond", fields: [secondTaskId], references: [id], onDelete: Cascade)
   createdAt     DateTime @default(now())
