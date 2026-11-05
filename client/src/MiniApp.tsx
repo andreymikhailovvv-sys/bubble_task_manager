@@ -4974,29 +4974,26 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       /> : null}
       {(openedSubtask || isCreatingNewSubtask) && openedSubtaskDraft ? (
         <div className={`miniapp-slide-backdrop fixed inset-0 ${isAiChatOpen ? 'z-[120]' : 'z-[100]'} flex items-end bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('subtask')}`} onClick={() => isCreatingNewSubtask ? closeMiniWindowWithMotion('subtask', cancelCreateSubtask) : void saveAndCloseTaskEditor(subtaskEditorId, 'subtask')}>
-          <div className="miniapp-slide-panel miniapp-focus-panel max-h-[92dvh] w-full overflow-y-auto rounded-t-[2rem] border p-4 shadow-2xl sm:max-w-xl sm:rounded-[2rem]" onClick={(event) => event.stopPropagation()}>
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">{isCreatingNewSubtask ? 'Создание подзадачи' : 'Редактирование подзадачи'}</p>
-                <p className="mt-1 text-xs text-slate-400">Минимальная карточка с описанием и сроком</p>
-              </div>
-              <div className="flex items-center gap-2">
+          <div className="miniapp-slide-panel miniapp-focus-panel miniapp-subtask-editor-panel max-h-[92dvh] w-full overflow-y-auto rounded-t-[2rem] border p-4 shadow-2xl sm:max-w-xl sm:rounded-[2rem]" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-3 flex items-start justify-between gap-2">
+              <textarea
+                ref={subtaskTitleInputRef}
+                value={openedSubtaskDraft.title}
+                onChange={(event) => changeSubtaskDraft({ title: event.target.value })}
+                className={`miniapp-focus-title-input invisible-scrollbar min-w-0 flex-1 resize-none border-0 bg-transparent p-0 text-2xl font-bold leading-tight outline-none ${subtaskTitleRows === 1 ? 'min-h-[1.9rem]' : subtaskTitleRows === 2 ? 'min-h-[3.8rem]' : 'min-h-[5.7rem]'}`}
+                rows={subtaskTitleRows}
+                placeholder="Название подзадачи"
+                aria-label="Название подзадачи"
+              />
+              <div className="flex shrink-0 items-center gap-2">
                 {openedSubtask ? <button type="button" onClick={() => openCalendarExport(openedSubtask.id)} className="miniapp-focus-icon-button" title="Добавить в календарь" aria-label="Добавить подзадачу в календарь"><CalendarPlus size={16} /></button> : null}
                 <button type="button" onClick={() => isCreatingNewSubtask ? closeMiniWindowWithMotion('subtask', cancelCreateSubtask) : void saveAndCloseTaskEditor(subtaskEditorId, 'subtask')} disabled={!isCreatingNewSubtask && savingId === subtaskEditorId} className="miniapp-focus-icon-button" aria-label={isCreatingNewSubtask ? 'Отменить создание подзадачи' : 'Сохранить и закрыть окно подзадачи'}>
                   {!isCreatingNewSubtask && savingId === subtaskEditorId ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />}
                 </button>
               </div>
             </div>
-            <textarea
-              ref={subtaskTitleInputRef}
-              value={openedSubtaskDraft.title}
-              onChange={(event) => changeSubtaskDraft({ title: event.target.value })}
-              className={`miniapp-focus-title-input invisible-scrollbar w-full resize-none border-0 bg-transparent p-0 text-2xl font-bold leading-tight outline-none ${subtaskTitleRows === 1 ? 'min-h-[1.9rem]' : subtaskTitleRows === 2 ? 'min-h-[3.8rem]' : 'min-h-[5.7rem]'}`}
-              rows={subtaskTitleRows}
-              placeholder="Название подзадачи"
-            />
             <div className="mt-2 flex items-center gap-2 text-xs font-semibold text-violet-500">
-              {openedSubtaskParent?.aiMonitoringEnabled ? <TaskMonitoringBadge /> : <DateTimePickerWithApply value={fromInputDateTime(openedSubtaskDraft.dueDate)} onChange={(nextValue) => changeSubtaskDraft({ dueDate: toInputDateTime(nextValue) })} timelineTasks={timelinePickerTasks} iconOnly detachedPopup buttonClassName="miniapp-focus-icon-button" />}
+              {openedSubtaskParent?.aiMonitoringEnabled ? <TaskMonitoringBadge /> : <DateTimePickerWithApply value={fromInputDateTime(openedSubtaskDraft.dueDate)} onChange={(nextValue) => changeSubtaskDraft({ dueDate: toInputDateTime(nextValue) })} timelineTasks={timelinePickerTasks} iconOnly buttonLabel="Выбрать дату" title="Выбрать дату и время" detachedPopup buttonClassName="miniapp-focus-date-button" />}
               <span>{openedSubtaskParent?.aiMonitoringEnabled ? 'На усмотрение ИИ' : openedSubtaskDraft.dueDate ? formatSubtaskRelativeDeadline(fromInputDateTime(openedSubtaskDraft.dueDate)) : 'Срок не задан'}</span>
             </div>
             <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
@@ -5024,8 +5021,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               </button>
             ) : null}
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <button type="button" className="miniapp-focus-icon-button" onClick={() => setIsSubtaskNotesEditorOpen(true)} title="Открыть заметки" aria-label="Открыть заметки">
-                <Maximize2 size={15} />
+              <button type="button" className="miniapp-focus-icon-button miniapp-focus-expand-description" onClick={() => setIsSubtaskNotesEditorOpen(true)} title="Редактировать описание" aria-label="Редактировать описание">
+                <Edit3 size={15} /> <span>Редактировать описание</span>
               </button>
               {openedSubtask ? <button type="button" className="miniapp-focus-icon-button" disabled={isUploadingSubtaskAttachment} onClick={() => subtaskAttachmentInputRef.current?.click()} title="Добавить вложение" aria-label="Добавить вложение к подзадаче"><Paperclip size={15} /></button> : null}
               {openedSubtask ? <input ref={subtaskAttachmentInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt" multiple className="hidden" onChange={(event) => { void uploadSubtaskAttachmentFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} /> : null}
