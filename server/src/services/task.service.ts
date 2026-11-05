@@ -159,12 +159,15 @@ export const taskService = {
     const visibleItems = items.filter((task) => !task.collaboration || !task.collaboration.members.find((member) => member.userId === userId)?.isHidden);
     const visibleIds = new Set(visibleItems.map((task) => task.id));
     const bubbleLinks = await prisma.taskBubbleLink.findMany({ where: { userId },
-      select: { firstTaskId: true, secondTaskId: true } });
+      select: { firstTaskId: true, secondTaskId: true, anchorTaskId: true } });
     const bubbleLinkByTaskId = new Map<string, string>();
+    const bubbleAnchorByTaskId = new Map<string, string>();
     for (const link of bubbleLinks) {
       if (!visibleIds.has(link.firstTaskId) || !visibleIds.has(link.secondTaskId)) continue;
       bubbleLinkByTaskId.set(link.firstTaskId, link.secondTaskId);
       bubbleLinkByTaskId.set(link.secondTaskId, link.firstTaskId);
+      bubbleAnchorByTaskId.set(link.firstTaskId, link.anchorTaskId);
+      bubbleAnchorByTaskId.set(link.secondTaskId, link.anchorTaskId);
     }
     // One aggregate query for all visible tasks, never send file bytes in task listings.
     const attachmentCounts = visibleItems.length ? await prisma.taskAttachment.groupBy({
@@ -233,6 +236,7 @@ export const taskService = {
       ...task,
       monitoringTriggers: task.aiMonitoringEnabled ? (triggersByRoot.get(task.id) ?? []) : [],
       linkedTaskIds: bubbleLinkByTaskId.has(task.id) ? [bubbleLinkByTaskId.get(task.id)!] : [],
+      bubbleLinkAnchorId: bubbleAnchorByTaskId.get(task.id) ?? null,
       attachmentCount: attachmentsByTaskId.get(task.id) ?? 0,
       commentCount: taskCommentStats.total,
       unreadCommentCount: taskCommentStats.unread,
