@@ -347,3 +347,53 @@ test('each sector forms a high-coefficient inner nucleus without breaking bounda
     }
   }
 });
+
+test('relative sector core packs multiple medium-coefficient tasks ahead of a large low-coefficient circle', () => {
+  const bounds = {
+    minX: -480, maxX: 480, minY: -480, maxY: 480,
+    compact: true,
+    ellipse: { cx: 0, cy: 0, rx: 460, ry: 460 },
+    sectors: [
+      { start: { x: 1, y: 0 }, end: { x: -1, y: 0 } },
+      { start: { x: -1, y: 0 }, end: { x: 1, y: 0 } }
+    ]
+  };
+  const bubbles = [0, 1].flatMap((sectorIndex) =>
+    [0.54, 0.50, 0.45, 0.28, 0.22, 0.15].map((coefficient, index) => ({
+      id: `tier-${sectorIndex}-${index}`,
+      x: 330 - index * 118,
+      y: (sectorIndex === 0 ? 1 : -1) * (285 + (index % 3) * 25),
+      radius: index === 3 ? 77 : index < 3 ? 34 : 26,
+      coefficient,
+      sectorIndex
+    }))
+  );
+  const positions = linkedBubblePositions(bubbles, bounds);
+  for (const sectorIndex of [0, 1]) {
+    const selected = bubbles.filter((bubble) => bubble.sectorIndex === sectorIndex);
+    const core = selected.slice(0, 2);
+    const low = selected.slice(2);
+    const gap = Math.hypot(
+      positions.get(core[0].id)!.x - positions.get(core[1].id)!.x,
+      positions.get(core[0].id)!.y - positions.get(core[1].id)!.y
+    ) - core[0].radius - core[1].radius;
+    assert.ok(gap < 54, `High-coefficient pair is scattered in sector ${sectorIndex}: gap=${gap}`);
+    const radial = (bubble: typeof selected[number]) => {
+      const p = positions.get(bubble.id)!;
+      return Math.hypot(p.x, p.y);
+    };
+    assert.ok(Math.max(...core.map(radial)) < Math.max(...low.map(radial)),
+      `Core must occupy the inner portion of sector ${sectorIndex}`);
+    for (const bubble of selected) {
+      const point = positions.get(bubble.id)!;
+      assert.ok(sectorIndex === 0 ? point.y >= bubble.radius + 9 : point.y <= -bubble.radius - 9,
+        `${bubble.id} violates its sector wall`);
+    }
+  }
+  for (let i = 0; i < bubbles.length; i++) for (let j = i + 1; j < bubbles.length; j++) {
+    const a = bubbles[i], b = bubbles[j];
+    const pa = positions.get(a.id)!, pb = positions.get(b.id)!;
+    assert.ok(Math.hypot(pa.x - pb.x, pa.y - pb.y) >= a.radius + b.radius + 12.9,
+      `Core packing caused collision: ${a.id}, ${b.id}`);
+  }
+});
