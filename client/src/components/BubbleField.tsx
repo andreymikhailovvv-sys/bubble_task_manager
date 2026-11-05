@@ -1157,9 +1157,14 @@ export function BubbleField({
             const a = from ? getBubbleVisualPoint(from) : null;
             const b = bubbleVisualPositions.get(dragView.target.targetId);
             if (!a || !b) return null;
-            return <line x1={a.x + dragView.dx} y1={a.y + dragView.dy} x2={b.x} y2={b.y}
-              stroke={dragView.target.kind === 'nest' ? '#f59e0b' : '#a78bfa'} strokeWidth={3}
-              strokeDasharray="5 7" opacity={0.8} pointerEvents="none" />;
+            const to = visibleBubbles.find((bubble) => bubble.task.id === dragView.target?.targetId);
+            if (!from || !to) return null;
+            const segment = bubbleLinkSegment(
+              { x: a.x + dragView.dx, y: a.y + dragView.dy }, b, from.radius, to.radius
+            );
+            return <line {...segment}
+              stroke={dragView.target.kind === 'nest' ? '#f59e0b' : '#a78bfa'} strokeWidth={2.7}
+              strokeLinecap="round" strokeDasharray="3.5 5" opacity={0.88} pointerEvents="none" />;
           })()}
           {sectorGeometry.map((geometry, idx) => {
             if (sectorCount === 1) return null;
