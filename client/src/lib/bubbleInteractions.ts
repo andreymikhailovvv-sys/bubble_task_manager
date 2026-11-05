@@ -129,9 +129,11 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
         const defaultAngle = Math.atan2(member.y - parent.y, member.x - parent.x);
         const anchorPoint = positions.get(anchor.id)!;
         const outwardAngle = Math.atan2(parentPoint.y - anchorPoint.y, parentPoint.x - anchorPoint.x);
-        const baseAngle = parentId === anchor.id || Math.hypot(parentPoint.x - positions.get(anchor.id)!.x, parentPoint.y - positions.get(anchor.id)!.y) < 0.1
-          ? (Math.hypot(member.x - parent.x, member.y - parent.y) > 0.1 ? defaultAngle : -Math.PI / 2)
-          : outwardAngle;
+        const baseAngle = group.pinned && parentId === anchor.id && bounds.ellipse
+          ? Math.atan2(bounds.ellipse.cy - parentPoint.y, bounds.ellipse.cx - parentPoint.x)
+          : parentId === anchor.id || Math.hypot(parentPoint.x - positions.get(anchor.id)!.x, parentPoint.y - positions.get(anchor.id)!.y) < 0.1
+            ? (Math.hypot(member.x - parent.x, member.y - parent.y) > 0.1 ? defaultAngle : -Math.PI / 2)
+            : outwardAngle;
         const minDistance = parent.radius + member.radius + LINK_GAP;
         let best: { x: number; y: number; score: number } | null = null;
         for (let step = 0; step < 12 && !best; step++) {
