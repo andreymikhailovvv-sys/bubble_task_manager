@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 
 type BubbleActionInput = {
@@ -137,6 +137,6 @@ export const bubblePlacementService = {
         where: { userId, OR: [{ firstTaskId: source.id }, { secondTaskId: source.id }] }
       });
       return { action: 'nest' as const };
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 };
