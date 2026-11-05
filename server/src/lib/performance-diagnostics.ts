@@ -74,7 +74,7 @@ function measure(map: Map<string, Measurements>, name: string, ms: number, thres
 export function safePerformanceRoute(req: Pick<Request, 'path' | 'route'>): string {
   if (!req.path.startsWith('/api')) return 'non_api';
   const template: unknown = req.route?.path;
-  if (typeof template !== 'string' || template.length > 110 || !/^\/[a-zA-Z0-9/:._*?-]*$/.test(template)) {
+  if (typeof template !== 'string' || template.length > 110 || !/^\/[a-zA-Z0-9/:._*-]*$/.test(template)) {
     return '/api/unmatched';
   }
   return '/api' + template;
@@ -152,10 +152,10 @@ export function startPerformanceDiagnostics(): void {
   let previousTime = process.hrtime.bigint();
   let previousElu = performance.eventLoopUtilization();
   let previousAt = Date.now();
-  console.info('[PerfDiag] enabled', {
+  console.info('[PerfDiag] enabled', JSON.stringify({
     pid: process.pid, windowMs: WINDOW_MS, slowHttpMs: SLOW_HTTP_MS, slowDbMs: SLOW_DB_MS,
     dbDurations: 'Prisma query execution only', workerDurations: 'wall time including I/O'
-  });
+  }));
 
   const interval = setInterval(() => {
     const now = Date.now();
@@ -187,8 +187,8 @@ export function startPerformanceDiagnostics(): void {
       workerTop: snapshot(jobs, 20),
       databaseTop: snapshot(database, 12)
     };
-    if (cpuOneCorePct >= 75 || delayMaxMs >= 200) console.warn('[PerfDiag] snapshot', report);
-    else console.info('[PerfDiag] snapshot', report);
+    if (cpuOneCorePct >= 75 || delayMaxMs >= 200) console.warn('[PerfDiag] snapshot', JSON.stringify(report));
+    else console.info('[PerfDiag] snapshot', JSON.stringify(report));
     previousAt = now;
     httpTotal = 0;
     dbTotal = 0;
