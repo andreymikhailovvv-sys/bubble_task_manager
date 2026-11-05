@@ -1,10 +1,11 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { TaskMonitoringBadge } from './TaskMonitoringBadge';
 import { CalendarDays, ChevronRight, Coins, Gauge, LoaderCircle, MessageCircle, Plus, Repeat, Sparkles } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { buildBubbles, buildSectorGeometry, getBubbleSectorIndex, getBubbleSectorSpheres, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
 import { noteHtmlToPlainText } from '../lib/notes';
+import { detectBubbleDrop, linkedBubblePositions, type DropIntent, type VisualBubble } from '../lib/bubbleInteractions';
 import { resolveSphereIcon } from '../lib/sphereIcons';
 import type { Sphere, Task } from '../lib/types';
 import { InlineDateTimePickerIcon } from './InlineDateTimePickerIcon';
@@ -29,6 +30,7 @@ type Props = {
   onQuickChangeTaskImportance: (task: Task, importanceDelta: number) => Promise<void>;
   onQuickPostponeTask: (task: Task, option: '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart') => Promise<string | null>;
   onCreateSubtask: (parentTask: Task, payload: Partial<Task>) => Promise<void>;
+  onBubbleAction: (task: Task, payload: { action: 'move' | 'link' | 'unlink' | 'nest'; targetTaskId?: string; sphereId?: string | null; mode?: 'global' | 'sectors'; x?: number; y?: number }) => Promise<void>;
   isSubtaskFilterActive: boolean;
   onToggleSubtaskFilter: () => void;
   onRenameSphere?: (sphere: Sphere) => void;
@@ -97,6 +99,21 @@ const POSTPONE_OPTIONS = [
 ] as const;
 type PostponeOption = (typeof POSTPONE_OPTIONS)[number]['value'];
 type BubbleContextMenu = { x: number; y: number; task: Task | null; sphere: Sphere | null };
+type BubbleDragSession = {
+  taskId: string;
+  pointerId: number;
+  startClientX: number;
+  startClientY: number;
+  startSvgX: number;
+  startSvgY: number;
+  lastSvgX: number;
+  lastSvgY: number;
+  moved: boolean;
+  target: DropIntent | null;
+  targetSince: number;
+};
+type BubbleDragView = { taskId: string; dx: number; dy: number; target: DropIntent | null };
+
 type SubtaskDraft = {
   title: string;
   description: string;
@@ -254,6 +271,7 @@ export function BubbleField({
   onSelect,
   onSelectSubtask,
   onCreateSubtask,
+  onBubbleAction,
   isSubtaskFilterActive,
   onToggleSubtaskFilter,
   onToggleSubtaskDone,
@@ -283,6 +301,29 @@ export function BubbleField({
   const hoverExitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nativeCalendarCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const dragSessionRef = useRef<BubbleDragSession | null>(null);
+  const ignoreClickRef = useRef<string | null>(null);
+  const [dragView, setDragView] = useState<BubbleDragView | null>(null);
+  const [bubbleActionPending, setBubbleActionPending] = useState(false);
+  const [bubbleDragNotice, setBubbleDragNotice] = useState<string | null>(null);
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => { if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current); }, []);
+  const showBubbleNotice = (message: string) => {
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    setBubbleDragNotice(message);
+    noticeTimerRef.current = setTimeout(() => setBubbleDragNotice(null), 3200);
+  };
+  const toSvgPoint = (clientX: number, clientY: number) => {
+    const svg = svgRef.current;
+    const matrix = svg?.getScreenCTM();
+    if (!svg || !matrix) return null;
+    const point = svg.createSVGPoint();
+    point.x = clientX;
+    point.y = clientY;
+    const converted = point.matrixTransform(matrix.inverse());
+    return { x: converted.x, y: converted.y };
+  };
 
   const defaultSubtaskDraft = () => ({ title: '', description: '', dueDate: '', notifyPreset: '0' } satisfies SubtaskDraft);
 
