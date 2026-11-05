@@ -4974,7 +4974,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       /> : null}
       {(openedSubtask || isCreatingNewSubtask) && openedSubtaskDraft ? (
         <div className={`miniapp-slide-backdrop fixed inset-0 ${isAiChatOpen ? 'z-[120]' : 'z-[100]'} flex items-end bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('subtask')}`} onClick={() => isCreatingNewSubtask ? closeMiniWindowWithMotion('subtask', cancelCreateSubtask) : void saveAndCloseTaskEditor(subtaskEditorId, 'subtask')}>
-          <div className="miniapp-slide-panel miniapp-focus-panel max-h-[92dvh] w-full overflow-y-auto rounded-t-[2rem] border p-4 shadow-2xl sm:max-w-xl sm:rounded-[2rem]" onClick={(event) => event.stopPropagation()}>
+          <div className="miniapp-slide-panel miniapp-focus-panel miniapp-subtask-editor-panel max-h-[92dvh] w-full overflow-y-auto rounded-t-[2rem] border p-4 shadow-2xl sm:max-w-xl sm:rounded-[2rem]" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-start justify-between gap-2">
               <textarea
                 ref={subtaskTitleInputRef}
