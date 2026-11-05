@@ -35,7 +35,10 @@ private const val SEEN_MAX=250
  * used by Mini App/browser. It never marks notifications read on the server.
  */
 object AndroidNotificationDelivery {
+    // Session/network registration must not block a time-sensitive FCM callback.
+    // Prefs and posted notifications use a separate short-held delivery lock.
     private val mutex=Mutex()
+    private val deliveryMutex=Mutex()
     private const val PUSH_PREFS="planirovych_android_push_registration"
 
     private fun installationId(context:Context):String{
@@ -80,12 +83,12 @@ object AndroidNotificationDelivery {
                 val app=context.applicationContext as PlanirovychApplication
                 runCatching{app.repository.unregisterAndroidPushDevice(id)}
             }
-            clearIdentityLocked(context)
+            deliveryMutex.withLock { clearIdentityLocked(context) }
         }
     }
 
     suspend fun clearIdentity(context:Context)=mutex.withLock{
-        clearIdentityLocked(context)
+        deliveryMutex.withLock { clearIdentityLocked(context) }
     }
 
     private fun clearIdentityLocked(context:Context){
@@ -133,7 +136,7 @@ object AndroidNotificationDelivery {
         val id=data["notificationId"]?.takeIf{it.isNotBlank()}?:return
         val recipient=data["userId"]?.takeIf{it.isNotBlank()}?:return
         val content=data["content"]?.takeIf{it.isNotBlank()}?:return
-        mutex.withLock {
+        deliveryMutex.withLock {
             val prefs=context.getSharedPreferences(
                 "planirovych_native_notification_ids",Context.MODE_PRIVATE)
             // The account is set only after successful authenticated feed sync.
@@ -200,9 +203,10 @@ object AndroidNotificationDelivery {
             val app=context.applicationContext as PlanirovychApplication
             val user=app.repository.establishSession()
             val feed=app.repository.loadSystemNotifications()
+            val account=user.id
+            deliveryMutex.withLock {
             val prefs=context.getSharedPreferences(
                 "planirovych_native_notification_ids",Context.MODE_PRIVATE)
-            val account=user.id
             val lastAccount=prefs.getString("user",null)
             val previously=prefs.getString("seen",null)
             val ids=runCatching{
@@ -230,6 +234,7 @@ object AndroidNotificationDelivery {
             val bounded=selected.distinct().takeLast(SEEN_MAX)
             prefs.edit().putString("user",account)
                 .putString("seen",JSONArray(bounded).toString()).apply()
+            }
             // Registration runs only after an authenticated successful sync.
             // Any failure leaves existing delivery and WorkManager intact.
             runCatching{registerDevice(context,account)}
