@@ -26,7 +26,7 @@ export type LinkedBubbleGroup = {
 };
 
 const LINK_GAP = 16;
-const BUBBLE_CLEARANCE = 10;
+const BUBBLE_CLEARANCE = 12;
 
 /** Build visible connected components, preserving each real edge. */
 export function getLinkedBubbleGroups(bubbles: VisualBubble[]): LinkedBubbleGroup[] {
@@ -79,17 +79,38 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
   if (!bubbles.some((bubble) => bubble.pinned || bubble.linkedTaskIds?.length)) return positions;
   const byId = new Map(bubbles.map((bubble) => [bubble.id, bubble]));
   const components = getLinkedBubbleGroups(bubbles);
-  const groups = components.map((group) => ({
-    ...group,
-    pinned: group.ids.some((id) => Boolean(byId.get(id)?.pinned))
-  }));
+  const groups = components.map((group) => {
+    const pinned = group.ids.some((id) => Boolean(byId.get(id)?.pinned));
+    // Use the largest visible circle as the cluster's physics centre.
+    // A manually positioned circle wins over automatic size weighting,
+    // preserving explicit user placement when a group is linked.
+    const candidates = group.ids.filter((id) => !pinned || byId.get(id)?.pinned);
+    const layoutRootId = [...candidates].sort((a, b) =>
+      byId.get(b)!.radius - byId.get(a)!.radius || a.localeCompare(b))[0];
+    return { ...group, pinned, layoutRootId };
+  });
 
   // Every real edge should connect two nearby circles, even if the user
   // formed a chain rather than a star. Place a breadth-first spanning tree
   // around the original anchor, sampling angles until new circles fit.
   for (const group of groups) {
     if (group.ids.length < 2) continue;
-    const anchor = byId.get(group.anchorId)!;
+    const anchor = byId.get(group.layoutRootId)!;
+    // Large linked tasks pull their full cluster closer to the shared
+    // intersection of the sector dividers. Never override a manual pin.
+    if (bounds.ellipse && !group.pinned) {
+      const { cx, cy, rx, ry } = bounds.ellipse;
+      const radiusRatio = Math.min(1, anchor.radius / 145);
+      const allowedRadius = 0.74 - radiusRatio * 0.50;
+      const originalRadius = Math.hypot((anchor.x - cx) / rx, (anchor.y - cy) / ry);
+      if (originalRadius > allowedRadius && originalRadius > 0.001) {
+        const shrink = allowedRadius / originalRadius;
+        positions.set(anchor.id, {
+          x: cx + (anchor.x - cx) * shrink,
+          y: cy + (anchor.y - cy) * shrink
+        });
+      }
+    }
     const placed = new Set<string>([anchor.id]);
     const queue = [anchor.id];
     const adjacency = new Map(group.ids.map((id) => [id, [] as string[]]));
@@ -106,8 +127,9 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
         if (placed.has(id)) continue;
         const member = byId.get(id)!;
         const defaultAngle = Math.atan2(member.y - parent.y, member.x - parent.x);
-        const outwardAngle = Math.atan2(parentPoint.y - anchor.y, parentPoint.x - anchor.x);
-        const baseAngle = parentId === anchor.id || Math.hypot(parentPoint.x - anchor.x, parentPoint.y - anchor.y) < 0.1
+        const anchorPoint = positions.get(anchor.id)!;
+        const outwardAngle = Math.atan2(parentPoint.y - anchorPoint.y, parentPoint.x - anchorPoint.x);
+        const baseAngle = parentId === anchor.id || Math.hypot(parentPoint.x - positions.get(anchor.id)!.x, parentPoint.y - positions.get(anchor.id)!.y) < 0.1
           ? (Math.hypot(member.x - parent.x, member.y - parent.y) > 0.1 ? defaultAngle : -Math.PI / 2)
           : outwardAngle;
         const minDistance = parent.radius + member.radius + LINK_GAP;
@@ -125,7 +147,7 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
                 member.radius + byId.get(otherId)!.radius + LINK_GAP - 0.1;
             });
             if (overlaps) continue;
-            const spread = Math.hypot(x - anchor.x, y - anchor.y);
+            const spread = Math.hypot(x - anchorPoint.x, y - anchorPoint.y);
             const score = Math.abs(offset) * 4.5 + spread * 0.18 + step * 5;
             if (!best || score < best.score) best = { x, y, score };
           }
@@ -212,9 +234,62 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
     }
   }
 
-  // Rigid-component relaxation: groups repel one another only where they touch.
+  // Relax the complete groups rather than independently moving linked circles.
+  // A weak repulsion BEFORE contact distributes clusters into sparse areas;
+  // hard collision resolution still handles real overlaps.
+  const fieldCentre = bounds.ellipse
+    ? { x: bounds.ellipse.cx, y: bounds.ellipse.cy } : null;
   for (let pass = 0; pass < 80; pass++) {
     let deepestOverlap = 0;
+    if (fieldCentre) {
+      const centroid = (group: typeof groups[number]) => {
+        const root = positions.get(group.layoutRootId)!;
+        const extent = Math.max(...group.ids.map((id) => {
+          const point = positions.get(id)!;
+          return Math.hypot(point.x - root.x, point.y - root.y) + byId.get(id)!.radius;
+        }));
+        return { x: root.x, y: root.y, extent };
+      };
+      for (let i = 0; i < groups.length; i++) {
+        const aGroup = groups[i];
+        const a = centroid(aGroup);
+        for (let j = i + 1; j < groups.length; j++) {
+          const bGroup = groups[j];
+          const b = centroid(bGroup);
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const distance = Math.hypot(dx, dy);
+          const comfortDistance = (a.extent + b.extent) * 0.88 + 18;
+          if (distance >= comfortDistance) continue;
+          const angle = distance > 0.01 ? { x: dx / distance, y: dy / distance }
+            : { x: (i + j) % 2 ? -1 : 1, y: 0 };
+          const aWeight = aGroup.pinned ? 0.015 : 1;
+          const bWeight = bGroup.pinned ? 0.015 : 1;
+          const weightSum = aWeight + bWeight;
+          const step = Math.min(3.6, (comfortDistance - distance) * 0.065);
+          translate(aGroup, -angle.x * step * aWeight / weightSum,
+            -angle.y * step * aWeight / weightSum);
+          translate(bGroup, angle.x * step * bWeight / weightSum,
+            angle.y * step * bWeight / weightSum);
+        }
+      }
+      // Do not let the gentle spacing force push large cluster roots right
+      // back to the periphery; size has priority over their satellite count.
+      for (const group of groups) {
+        if (group.pinned || group.ids.length < 2) continue;
+        const root = positions.get(group.layoutRootId)!;
+        const maxRadius = Math.min(1, byId.get(group.layoutRootId)!.radius / 145);
+        const desiredFraction = 0.74 - maxRadius * 0.5;
+        const dx = root.x - fieldCentre.x;
+        const dy = root.y - fieldCentre.y;
+        const ellipse = bounds.ellipse!;
+        const fraction = Math.hypot(dx / ellipse.rx, dy / ellipse.ry);
+        if (fraction > desiredFraction && fraction > 0.001) {
+          const pull = Math.min(0.08, (fraction - desiredFraction) * 0.09);
+          translate(group, -dx * pull, -dy * pull);
+        }
+      }
+    }
     for (let i = 0; i < groups.length; i++) {
       const aGroup = groups[i];
       for (let j = i + 1; j < groups.length; j++) {
