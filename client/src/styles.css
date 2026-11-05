@@ -14981,3 +14981,66 @@ body[data-theme='dark'] .focused-task-editor-shell .focused-task-description-sur
   background: transparent;
   box-shadow: none;
 }
+
+
+/* Subtask editor mirrors the parent focus card without affecting other sheets. */
+.miniapp-shell .miniapp-subtask-editor-panel .miniapp-focus-date-button {
+  width: auto;
+  min-height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  padding: .45rem .85rem;
+  border: 1px solid rgba(139, 92, 246, .25);
+  border-radius: 999px;
+  background: rgba(139, 92, 246, .09);
+  color: #8b5cf6;
+  font-size: .8rem;
+  font-weight: 700;
+}
+.miniapp-shell .miniapp-subtask-editor-panel .miniapp-focus-expand-description {
+  width: auto;
+  min-width: 0;
+  min-height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  gap: .48rem;
+  padding: .43rem .85rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-size: .78rem;
+  font-weight: 670;
+}
+.miniapp-shell .miniapp-subtask-editor-panel .miniapp-subtask-actions {
+  grid-template-columns: minmax(0, 1.9fr) minmax(0, .9fr);
+  align-items: stretch;
+}
+.miniapp-shell .miniapp-subtask-editor-panel .miniapp-subtask-actions > button {
+  width: 100%;
+  min-height: 2.65rem;
+  font-size: .84rem;
+  font-weight: 740;
+}
+.miniapp-shell .miniapp-subtask-editor-panel .miniapp-subtask-actions .miniapp-focus-danger-button {
+  background: transparent;
+  color: #e11d48;
+  border: 1px solid rgba(244, 114, 153, .64);
+  box-shadow: none;
+}
+.miniapp-shell.miniapp-light .miniapp-subtask-editor-panel .miniapp-focus-date-button,
+body[data-theme='light'] .miniapp-shell .miniapp-subtask-editor-panel .miniapp-focus-date-button {
+  background: #f1ebff;
+  border-color: #e4d9ff;
+  color: #7743d8;
+}
+.miniapp-shell:not(.miniapp-light) .miniapp-subtask-editor-panel .miniapp-focus-date-button {
+  background: rgba(139, 92, 246, .16);
+  border-color: rgba(167, 139, 250, .32);
+  color: #c4b5fd;
+}
+.miniapp-shell:not(.miniapp-light) .miniapp-subtask-editor-panel .miniapp-subtask-actions .miniapp-focus-danger-button {
+  background: rgba(225, 29, 72, .08);
+  color: #fda4af;
+  border-color: rgba(251, 113, 133, .48);
+}
