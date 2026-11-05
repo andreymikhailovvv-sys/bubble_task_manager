@@ -84,39 +84,63 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
     pinned: group.ids.some((id) => Boolean(byId.get(id)?.pinned))
   }));
 
-  // A bounded ring around the first linked task is more stable than snapping
-  // every child independently into the root's location. The ring uses enough
-  // radius to keep satellites from overlapping one another.
+  // Every real edge should connect two nearby circles, even if the user
+  // formed a chain rather than a star. Place a breadth-first spanning tree
+  // around the original anchor, sampling angles until new circles fit.
   for (const group of groups) {
     if (group.ids.length < 2) continue;
     const anchor = byId.get(group.anchorId)!;
-    const otherIds = group.ids.filter((id) => id !== anchor.id);
-    const first = byId.get(otherIds[0])!;
-    const originalAngle = Math.hypot(first.x - anchor.x, first.y - anchor.y) > 0.1
-      ? Math.atan2(first.y - anchor.y, first.x - anchor.x) : -Math.PI / 2;
-    const placed: string[] = [anchor.id];
-    otherIds.forEach((id, index) => {
-      const member = byId.get(id)!;
-      const angle = originalAngle + index * 2 * Math.PI / otherIds.length;
-      let distance = anchor.radius + member.radius + LINK_GAP;
-      const ux = Math.cos(angle);
-      const uy = Math.sin(angle);
-      // At most four neighbours: simple radial expansion gives a small,
-      // deterministic cluster with breathing room around every circle.
-      for (let tries = 0; tries < 55; tries++) {
-        const x = anchor.x + ux * distance;
-        const y = anchor.y + uy * distance;
-        const overlaps = placed.some((previousId) => {
-          const previous = positions.get(previousId)!;
-          return Math.hypot(x - previous.x, y - previous.y) <
-            member.radius + byId.get(previousId)!.radius + LINK_GAP - 0.1;
-        });
-        if (!overlaps) break;
-        distance += 5;
+    const placed = new Set<string>([anchor.id]);
+    const queue = [anchor.id];
+    const adjacency = new Map(group.ids.map((id) => [id, [] as string[]]));
+    for (const [a, b] of group.edges) {
+      adjacency.get(a)!.push(b);
+      adjacency.get(b)!.push(a);
+    }
+    for (const parentId of queue) {
+      const parent = byId.get(parentId)!;
+      const parentPoint = positions.get(parentId)!;
+      const children = (adjacency.get(parentId) ?? []).filter((id) => !placed.has(id))
+        .sort((a, b) => byId.get(b)!.radius - byId.get(a)!.radius || a.localeCompare(b));
+      for (const id of children) {
+        if (placed.has(id)) continue;
+        const member = byId.get(id)!;
+        const defaultAngle = Math.atan2(member.y - parent.y, member.x - parent.x);
+        const outwardAngle = Math.atan2(parentPoint.y - anchor.y, parentPoint.x - anchor.x);
+        const baseAngle = parentId === anchor.id || Math.hypot(parentPoint.x - anchor.x, parentPoint.y - anchor.y) < 0.1
+          ? (Math.hypot(member.x - parent.x, member.y - parent.y) > 0.1 ? defaultAngle : -Math.PI / 2)
+          : outwardAngle;
+        const minDistance = parent.radius + member.radius + LINK_GAP;
+        let best: { x: number; y: number; score: number } | null = null;
+        for (let step = 0; step < 12 && !best; step++) {
+          const radius = minDistance + step * 5;
+          for (let sector = 0; sector < 32; sector++) {
+            const offset = sector <= 16 ? sector : sector - 32;
+            const angle = baseAngle + offset * Math.PI / 16;
+            const x = parentPoint.x + Math.cos(angle) * radius;
+            const y = parentPoint.y + Math.sin(angle) * radius;
+            const overlaps = [...placed].some((otherId) => {
+              const other = positions.get(otherId)!;
+              return Math.hypot(other.x - x, other.y - y) <
+                member.radius + byId.get(otherId)!.radius + LINK_GAP - 0.1;
+            });
+            if (overlaps) continue;
+            const spread = Math.hypot(x - anchor.x, y - anchor.y);
+            const score = Math.abs(offset) * 4.5 + spread * 0.18 + step * 5;
+            if (!best || score < best.score) best = { x, y, score };
+          }
+        }
+        // A degenerate dense group should never leave an unplaced task.
+        const destination = best ?? {
+          x: parentPoint.x + minDistance,
+          y: parentPoint.y,
+          score: Infinity
+        };
+        positions.set(id, { x: destination.x, y: destination.y });
+        placed.add(id);
+        queue.push(id);
       }
-      positions.set(id, { x: anchor.x + ux * distance, y: anchor.y + uy * distance });
-      placed.push(id);
-    });
+    }
   }
 
   const translate = (group: { ids: string[] }, dx: number, dy: number) => {
