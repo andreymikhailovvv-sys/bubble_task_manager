@@ -1,4 +1,5 @@
 import { prisma } from '../db/prisma.js';
+import { measureBackground } from '../lib/performance-diagnostics.js';
 import { sendAndroidPush } from './android-fcm.service.js';
 
 let busy = false;
@@ -96,7 +97,7 @@ export function startAndroidPushWorker(): void {
   }
   // This scans only the undelivered outbox. The server exclusively decides
   // when reminders become due; the phone never schedules local deadlines.
-  const timer = setInterval(() => { void dispatchPendingAndroidPush(); }, 4_000);
+  const timer = setInterval(() => { void measureBackground('android.push_dispatch', () => dispatchPendingAndroidPush()); }, 4_000);
   timer.unref();
-  setTimeout(() => { void dispatchPendingAndroidPush(); }, 2_000).unref();
+  setTimeout(() => { void measureBackground('android.push_dispatch', () => dispatchPendingAndroidPush()); }, 2_000).unref();
 }
