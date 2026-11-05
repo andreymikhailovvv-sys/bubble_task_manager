@@ -5220,7 +5220,7 @@ export default function App() {
   return (
     <main
       className={isBubbleFullscreen
-        ? 'app-shell flex h-[100dvh] min-h-0 flex-col overflow-hidden p-0'
+        ? 'app-shell bubble-fullscreen-shell flex h-[100dvh] min-h-0 flex-col overflow-hidden p-0'
         : 'app-shell flex h-screen flex-col overflow-y-auto p-4 lg:p-6'}
       data-theme={effectiveThemeMode}
     >
