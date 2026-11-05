@@ -6,6 +6,7 @@ type Props = {
   onFocus?: () => void;
   taskOpen?: boolean;
   work?: boolean;
+  fullscreenBubbles?: boolean;
 };
 
 /**
@@ -14,9 +15,9 @@ type Props = {
  * region, exactly as in the original personal planner App.tsx. Moving the
  * cursor upward therefore keeps the original group hovered.
  */
-export function QuickAiLauncherFrame({children,onHoverChange,onFocus,taskOpen=false,work=false}:Props){
+export function QuickAiLauncherFrame({children,onHoverChange,onFocus,taskOpen=false,work=false,fullscreenBubbles=false}:Props){
   return <div
-    className={`ai-chat-launcher group fixed bottom-8 right-6 z-[95] ${work?'work-ai-launcher':'lg:right-[360px]'} ${taskOpen?'ai-chat-launcher-task-open':''}`}
+    className={`ai-chat-launcher group fixed bottom-8 right-6 z-[95] ${work?'work-ai-launcher':'lg:right-[360px]'} ${taskOpen?'ai-chat-launcher-task-open':''} ${fullscreenBubbles?'bubble-ai-fullscreen':''}`}
     onMouseEnter={()=>onHoverChange?.(true)}
     onMouseLeave={()=>onHoverChange?.(false)}
     onFocus={onFocus}
