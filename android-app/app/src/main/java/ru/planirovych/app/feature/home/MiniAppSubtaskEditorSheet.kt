@@ -31,6 +31,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -39,8 +41,8 @@ import java.time.*
 import java.time.format.DateTimeFormatter
 import ru.planirovych.app.data.model.*
 
-/** The native equivalent of MiniApp's create/edit subtask card.
- *  Dragging is restricted to the handle so nested description/list scrolling cannot dismiss it.
+/** The native equivalent of MiniApp's subtask editor, displayed as a centered
+ *  dialog above the parent focus sheet rather than replacing that sheet.
  */
 private data class ChildColors(val bg:Color,val ink:Color,val muted:Color,val line:Color,
     val panel:Color,val teal:Color,val purple:Color,val danger:Color)
@@ -133,27 +135,34 @@ fun MiniAppSubtaskEditorSheet(
             }
         }
     }
-    ModalBottomSheet(
+    Dialog(
         onDismissRequest={if(isNew || title.isBlank())onBack() else saveThen(onBack)},
-        sheetGesturesEnabled=true,
-        dragHandle={ BottomSheetDefaults.DragHandle(color=c.muted) },
-        containerColor=c.bg,contentColor=c.ink,
-        shape=RoundedCornerShape(topStart=30.dp,topEnd=30.dp),
-        sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),
+        properties=DialogProperties(usePlatformDefaultWidth=false)
     ) {
-        Column(Modifier.fillMaxWidth().heightIn(max=maxHeight).imePadding()) {
-            Column(Modifier.weight(1f,fill=false).verticalScroll(rememberScrollState())
-                .padding(horizontal=16.dp).padding(bottom=18.dp)) {
-                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
-                    horizontalArrangement=Arrangement.SpaceBetween){
-                    Column(Modifier.weight(1f)){
-                        Text(if(isNew)"СОЗДАНИЕ ПОДЗАДАЧИ" else "РЕДАКТИРОВАНИЕ ПОДЗАДАЧИ",
-                            color=c.purple,fontSize=11.sp,fontWeight=FontWeight.Bold,
-                            letterSpacing=1.6.sp)
-                        Spacer(Modifier.height(3.dp))
-                        Text("Минимальная карточка с описанием и сроком",
-                            color=c.muted,fontSize=11.sp,maxLines=1)
-                    }
+        Surface(
+            modifier=Modifier.fillMaxWidth(.94f).heightIn(max=maxHeight).imePadding(),
+            shape=RoundedCornerShape(24.dp),
+            color=c.bg,
+            contentColor=c.ink,
+            border=BorderStroke(1.dp,c.line),
+            shadowElevation=16.dp
+        ) {
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                .padding(horizontal=16.dp,vertical=18.dp)) {
+                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.Top,
+                    horizontalArrangement=Arrangement.spacedBy(7.dp)){
+                    BasicTextField(value=title,onValueChange={title=it;onClearError()},
+                        modifier=Modifier.weight(1f).padding(top=4.dp,end=3.dp),
+                        textStyle=TextStyle(color=c.ink,fontSize=24.sp,lineHeight=29.sp,
+                            fontWeight=FontWeight.Bold),
+                        maxLines=3,enabled=!busy,cursorBrush=SolidColor(c.purple),
+                        decorationBox={inner->
+                            Box{
+                                if(title.isBlank())Text("Название подзадачи",
+                                    color=c.muted,fontSize=24.sp,fontWeight=FontWeight.Bold)
+                                inner()
+                            }
+                        })
                     if(!isNew){
                         ChildRoundIcon(Icons.Default.EventAvailable,c,"Добавить в календарь"){
                             saveThen {
@@ -168,39 +177,38 @@ fun MiniAppSubtaskEditorSheet(
                                 runCatching{ctx.startActivity(intent)}
                             }
                         }
-                        Spacer(Modifier.width(7.dp))
                     }
                     ChildRoundIcon(Icons.Default.Close,c,"Сохранить и закрыть"){
                         if(isNew || title.isBlank())onBack() else saveThen(onBack)
                     }
                 }
-                Spacer(Modifier.height(17.dp))
-                BasicTextField(value=title,onValueChange={title=it;onClearError()},
-                    modifier=Modifier.fillMaxWidth().padding(bottom=9.dp),
-                    textStyle=TextStyle(color=c.ink,fontSize=24.sp,lineHeight=29.sp,
-                        fontWeight=FontWeight.Bold),
-                    maxLines=3,enabled=!busy,cursorBrush=SolidColor(c.purple),
-                    decorationBox={inner->
-                        Box{
-                            if(title.isBlank())Text("Название подзадачи",
-                                color=c.muted,fontSize=24.sp,fontWeight=FontWeight.Bold)
-                            inner()
-                        }
-                    })
-                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
-                    ChildRoundIcon(Icons.Default.CalendarMonth,c,"Указать срок",datePicker)
-                    Spacer(Modifier.width(9.dp))
+                Spacer(Modifier.height(16.dp))
+                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
+                    horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                    Row(Modifier.clip(CircleShape)
+                        .background(c.purple.copy(alpha=if(dark).17f else .10f))
+                        .border(1.dp,c.purple.copy(alpha=.36f),CircleShape)
+                        .clickable(enabled=!busy,onClick=datePicker)
+                        .padding(horizontal=12.dp,vertical=10.dp),
+                        verticalAlignment=Alignment.CenterVertically,
+                        horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                        Icon(Icons.Default.CalendarMonth,null,modifier=Modifier.size(17.dp),
+                            tint=c.teal)
+                        Text("Выбрать дату",fontSize=13.sp,fontWeight=FontWeight.SemiBold,
+                            color=c.purple,maxLines=1)
+                    }
                     Text(if(dueDate==null)"Срок не задан" else childRemaining(dueDate),
-                        Modifier.weight(1f).clickable(onClick=datePicker),
+                        Modifier.weight(1f),
                         color=if(childMillis(dueDate)?.let{it<System.currentTimeMillis()}==true)
-                            c.danger else c.purple,
+                            c.danger else c.muted,
                         fontSize=12.sp,fontWeight=FontWeight.SemiBold,maxLines=2)
-                    if(dueDate!=null)IconButton(onClick={dueDate=null},modifier=Modifier.size(28.dp)){
+                    if(dueDate!=null)IconButton(onClick={dueDate=null},
+                        modifier=Modifier.size(26.dp)){
                         Icon(Icons.Default.Close,"Убрать срок",tint=c.muted,
                             modifier=Modifier.size(14.dp))
                     }
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(16.dp))
                 Surface(color=c.bg,shape=RoundedCornerShape(16.dp),
                     border=BorderStroke(1.dp,if(dark)Color(0xFF504771) else Color(0xFFD6D2E5))){
                     Box(Modifier.fillMaxWidth().height(112.dp)
@@ -228,10 +236,22 @@ fun MiniAppSubtaskEditorSheet(
                             overflow=TextOverflow.Ellipsis)
                     }
                 }
-                Row(Modifier.padding(top=10.dp,bottom=6.dp),
-                    horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                    ChildRoundIcon(Icons.Default.OpenInFull,c,"Развернуть описание"){
-                        descriptionExpanded=true
+                Row(Modifier.padding(top=12.dp,bottom=10.dp),
+                    verticalAlignment=Alignment.CenterVertically,
+                    horizontalArrangement=Arrangement.spacedBy(9.dp)){
+                    val editAccent=if(dark)c.purple else c.teal
+                    Row(Modifier.clip(CircleShape)
+                        .background(if(dark)c.panel else c.bg)
+                        .border(1.dp,editAccent.copy(alpha=.36f),CircleShape)
+                        .clickable(enabled=!busy){descriptionExpanded=true}
+                        .padding(horizontal=14.dp,vertical=10.dp),
+                        verticalAlignment=Alignment.CenterVertically,
+                        horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                        Icon(Icons.Default.Edit,null,tint=editAccent,
+                            modifier=Modifier.size(17.dp))
+                        Text("Редактировать описание",fontSize=13.sp,
+                            fontWeight=FontWeight.SemiBold,
+                            color=if(dark)c.ink else c.teal)
                     }
                     if(task!=null)ChildRoundIcon(Icons.Default.AttachFile,c,"Прикрепить файл"){
                         filePicker.launch(arrayOf("*/*"))
@@ -274,16 +294,16 @@ fun MiniAppSubtaskEditorSheet(
                         saveThen(onBack)
                     }
                 }else if(task!=null){
-                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(9.dp)){
                         ChildAction(if(task.status==TaskStatus.DONE)"Вернуть" else "Выполнить",
                             Icons.Default.CheckCircle,Color(0xFF059669),
-                            Modifier.weight(1f),enabled=!busy){
+                            Modifier.weight(1.9f),enabled=!busy){
                             if(task.status==TaskStatus.DONE)
                                 saveThen{onChangeStatus(task.id,TaskStatus.TODO,onBack)}
                             else pendingAction="complete"
                         }
-                        ChildAction("Удалить",Icons.Default.DeleteOutline,Color(0xFFE11D48),
-                            Modifier.weight(1f),enabled=!busy){
+                        ChildAction("Удалить",Icons.Default.DeleteOutline,c.danger,
+                            Modifier.weight(.9f),enabled=!busy,outlined=true){
                             pendingAction="delete"
                         }
                     }
@@ -327,15 +347,20 @@ fun MiniAppSubtaskEditorSheet(
 }
 @Composable private fun ChildAction(
     label:String,icon:androidx.compose.ui.graphics.vector.ImageVector,
-    color:Color,modifier:Modifier,enabled:Boolean,onClick:()->Unit
+    color:Color,modifier:Modifier,enabled:Boolean,outlined:Boolean=false,
+    onClick:()->Unit
 ){
-    Row(modifier.height(39.dp).clip(CircleShape).background(color)
+    Row(modifier.height(44.dp).clip(CircleShape)
+        .background(if(outlined)Color.Transparent else color)
+        .then(if(outlined)Modifier.border(1.dp,color.copy(alpha=.58f),CircleShape)
+            else Modifier)
         .clickable(enabled=enabled,onClick=onClick)
         .alpha(if(enabled)1f else .45f),
         horizontalArrangement=Arrangement.Center,verticalAlignment=Alignment.CenterVertically){
-        Icon(icon,null,tint=Color.White,modifier=Modifier.size(16.dp))
+        val foreground=if(outlined)color else Color.White
+        Icon(icon,null,tint=foreground,modifier=Modifier.size(18.dp))
         Spacer(Modifier.width(6.dp))
-        Text(label,color=Color.White,fontSize=12.sp,fontWeight=FontWeight.Bold)
+        Text(label,color=foreground,fontSize=14.sp,fontWeight=FontWeight.Bold)
     }
 }
 private fun childReadDescription(text:String)=
