@@ -5375,7 +5375,7 @@ export default function App() {
       {activeTourStep ? <TourOverlay activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-') ? WORKSPACE_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-') ? FEATURE_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} onComplete={completeTaskTour} /> : null}
       {isBubbleFullscreen && displayMode === 'bubbles' ? (
         <header data-tour="bubbles-fullscreen-toolbar"
-          className="surface-topbar light-glass-topbar relative z-40 mx-2 mt-2 mb-2 flex shrink-0 flex-wrap items-center gap-2 rounded-2xl border px-3 py-2.5 shadow-lg backdrop-blur-lg lg:flex-nowrap lg:mx-3">
+          className="surface-topbar light-glass-topbar relative z-40 mx-auto mt-3 mb-2 flex w-[calc(100%-24px)] max-w-[1080px] shrink-0 flex-wrap items-center gap-2 rounded-2xl border px-3 py-2.5 shadow-lg backdrop-blur-lg lg:flex-nowrap">
           <WorkspaceGlobalSearch
             key={currentUser.id}
             userId={currentUser.id}
@@ -5432,13 +5432,6 @@ export default function App() {
               menuClassName="topbar-dropdown" ariaLabel="Фильтр важности"
             />
           </div>
-          <button type="button" data-tour="bubbles-fullscreen-exit"
-            onClick={() => setIsBubbleFullscreen(false)}
-            className="topbar-action-button ml-auto inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition hover:brightness-110"
-            title="Вернуться в обычный режим" aria-label="Выйти из полноэкранного режима">
-            <Minimize2 size={17} />
-            <span>Выйти из полного экрана</span>
-          </button>
         </header>
       ) : null}
       {!isBubbleFullscreen ? <header className="surface-topbar light-glass-topbar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-3 backdrop-blur">
@@ -6232,8 +6225,10 @@ export default function App() {
           : 'workspace-shell relative min-h-0 flex-1 overflow-hidden pr-[360px]'}>
         {displayMode === 'bubbles' ? (
           <div data-tour="bubbles-workspace" className="relative h-full">
-            {!isBubbleFullscreen ? <>
-            <div data-tour="bubble-layout" className="bubble-layout-toggle absolute right-4 top-4 z-30 flex items-center gap-1 rounded-full border p-1 shadow-xl backdrop-blur" role="group" aria-label="Режим отображения баблов">
+            <div data-tour="bubble-layout"
+              className="bubble-layout-toggle absolute top-4 z-30 flex items-center gap-1 rounded-full border p-1 shadow-xl backdrop-blur"
+              style={{ right: isBubbleFullscreen ? 'max(16px, calc((100vw - 1460px) / 2))' : '16px' }}
+              role="group" aria-label="Режим отображения баблов">
               <button
                 type="button"
                 className={`bubble-layout-toggle-button inline-flex h-9 w-9 items-center justify-center rounded-full transition ${mode === 'global' ? 'bubble-layout-toggle-button-active' : ''}`}
@@ -6255,15 +6250,16 @@ export default function App() {
                 <PieChart size={19} strokeWidth={2.1} />
               </button>
             </div>
-            <button type="button" data-tour="bubbles-fullscreen-enter"
-              onClick={() => { setIsSphereFilterOpen(false); setIsBubbleFullscreen(true); }}
-              className="bubble-layout-toggle absolute right-4 top-[4.55rem] z-30 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold shadow-lg backdrop-blur transition hover:brightness-110"
-              title="Развернуть пространство пузырей на весь экран"
-              aria-label="Полноэкранный режим пузырей">
-              <Maximize2 size={16} />
-              <span>Полный экран</span>
+            <button type="button"
+              data-tour={isBubbleFullscreen ? 'bubbles-fullscreen-exit' : 'bubbles-fullscreen-enter'}
+              onClick={() => { setIsSphereFilterOpen(false); setIsBubbleFullscreen((prev) => !prev); }}
+              className="bubble-layout-toggle absolute top-[4.55rem] z-30 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold shadow-lg backdrop-blur transition hover:brightness-110"
+              style={{ right: isBubbleFullscreen ? 'max(16px, calc((100vw - 1460px) / 2))' : '16px' }}
+              title={isBubbleFullscreen ? 'Выйти из полноэкранного режима' : 'Развернуть пространство пузырей на весь экран'}
+              aria-label={isBubbleFullscreen ? 'Выйти из полноэкранного режима' : 'Полноэкранный режим пузырей'}>
+              {isBubbleFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+              <span>{isBubbleFullscreen ? 'Выйти из полного экрана' : 'Полный экран'}</span>
             </button>
-            </> : null}
             <BubbleField
               className="h-full"
               fullscreen={isBubbleFullscreen}
