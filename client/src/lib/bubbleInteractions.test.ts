@@ -15,7 +15,10 @@ test('linked pair magnetizes and does not move unrelated bubbles', () => {
     { id: 'c', x: 360, y: 260, radius: 20 }
   ];
   const result = linkedBubblePositions(bubbles, { minX: 0, maxX: 500, minY: 0, maxY: 500 });
-  assert.deepEqual(result.get('b'), { x: 164, y: 100 });
+  const first = result.get('a')!;
+  const partner = result.get('b')!;
+  assert.ok(Math.hypot(first.x - partner.x, first.y - partner.y) >= 48 + 8);
+  assert.ok(Math.hypot(first.x - partner.x, first.y - partner.y) <= 48 + 21);
   assert.deepEqual(result.get('c'), { x: 360, y: 260 });
 });
 
@@ -38,8 +41,8 @@ test('saved manual position repels only overlapping neighbours', () => {
   const positions = linkedBubblePositions(bubbles, { minX: 0, maxX: 550, minY: 0, maxY: 500 });
   const manual = positions.get('manual')!;
   const neighbour = positions.get('neighbour')!;
-  assert.ok(Math.hypot(manual.x - neighbour.x, manual.y - neighbour.y) > 65);
-  assert.ok(Math.abs(manual.x - 100) < Math.abs(neighbour.x - 105));
+  assert.ok(Math.hypot(manual.x - neighbour.x, manual.y - neighbour.y) >= 32 + 30 + 7.9);
+  assert.ok(Math.hypot(manual.x - 100, manual.y - 100) < 1);
   assert.deepEqual(positions.get('untouched'), { x: 370, y: 240 });
 });
 
@@ -54,7 +57,8 @@ test('a magnetic pair repels an intruding bubble without breaking the bond', () 
   const anchor = positions.get('anchor')!;
   const partner = positions.get('satellite')!;
   const intruder = positions.get('intruder')!;
-  assert.ok(Math.abs(Math.hypot(partner.x - anchor.x, partner.y - anchor.y) - 66) < 0.1);
+  assert.ok(Math.hypot(partner.x - anchor.x, partner.y - anchor.y) >= 26 + 24 + 8);
+  assert.ok(Math.hypot(partner.x - anchor.x, partner.y - anchor.y) <= 26 + 24 + 25);
   assert.ok(Math.hypot(intruder.x - partner.x, intruder.y - partner.y) > 56);
   assert.deepEqual(positions.get('distant'), { x: 490, y: 450 });
 });
@@ -118,7 +122,7 @@ test('connector is short and starts just inside the bubble rims', () => {
 
 test('largest linked task becomes the visual gravitational centre', () => {
   const field = { minX: 0, maxX: 800, minY: 0, maxY: 800,
-    ellipse: { cx: 400, cy: 400, rx: 380, ry: 365 } };
+    compact: true, ellipse: { cx: 400, cy: 400, rx: 380, ry: 365 } };
   const circles = [
     { id: 'small', x: 650, y: 630, radius: 23, linkedTaskIds: ['large'], bubbleLinkAnchorId: 'small' },
     { id: 'large', x: 630, y: 595, radius: 96, linkedTaskIds: ['small'], bubbleLinkAnchorId: 'small' }
@@ -145,4 +149,154 @@ test('manual coordinates override centre-seeking for linked tasks', () => {
   assert.ok(Math.hypot(manual.x - 590, manual.y - 460) < 1,
     'explicitly positioned task is not pulled to the centre');
   assert.ok(Math.hypot(manual.x - large.x, manual.y - large.y) >= 25 + 90 + 14);
+});
+
+test('two large bubbles detect a link before their rims collide', () => {
+  const targets = [{ id: 'large', x: 220, y: 100, radius: 92 }];
+  const intent = detectBubbleDrop({ x: 18, y: 100 }, 'source', 90, targets);
+  assert.deepEqual(intent, { targetId: 'large', kind: 'link' });
+});
+
+test('strict sector boundaries and no collisions apply to linked and unlinked tasks', () => {
+  const bounds = {
+    minX: -460, maxX: 460, minY: -450, maxY: 450,
+    compact: true,
+    ellipse: { cx: 0, cy: 0, rx: 450, ry: 440 },
+    sectors: [
+      { start: { x: 1, y: 0 }, end: { x: -1, y: 0 } },
+      { start: { x: -1, y: 0 }, end: { x: 1, y: 0 } }
+    ]
+  };
+  const bubbles = [
+    { id: 'a', x: -230, y: -85, radius: 92, sectorIndex: 0,
+      linkedTaskIds: ['b', 'c'], bubbleLinkAnchorId: 'a' },
+    { id: 'b', x: -140, y: -50, radius: 58, sectorIndex: 0,
+      linkedTaskIds: ['a'], bubbleLinkAnchorId: 'a' },
+    { id: 'c', x: -20, y: -50, radius: 44, sectorIndex: 0,
+      linkedTaskIds: ['a'], bubbleLinkAnchorId: 'a' },
+    { id: 'd', x: 60, y: 30, radius: 50, sectorIndex: 0 },
+    { id: 'e', x: 160, y: 10, radius: 28, sectorIndex: 0 },
+    { id: 'f', x: -120, y: 80, radius: 75, sectorIndex: 1 },
+    { id: 'g', x: 50, y: 40, radius: 52, sectorIndex: 1,
+      linkedTaskIds: ['h'], bubbleLinkAnchorId: 'g' },
+    { id: 'h', x: 80, y: 10, radius: 38, sectorIndex: 1,
+      linkedTaskIds: ['g'], bubbleLinkAnchorId: 'g' }
+  ];
+  const points = linkedBubblePositions(bubbles, bounds);
+  for (const bubble of bubbles) {
+    const p = points.get(bubble.id)!;
+    assert.ok(p, `Missing bubble ${bubble.id}`);
+    if (bubble.sectorIndex === 0) {
+      assert.ok(p.y >= bubble.radius + 4, `${bubble.id} crossed upper sector boundary`);
+    } else {
+      assert.ok(p.y <= -bubble.radius - 4, `${bubble.id} crossed lower sector boundary`);
+    }
+    assert.ok(Math.hypot(p.x / (450 - bubble.radius - 3), p.y / (440 - bubble.radius - 3)) <= 1.001,
+      `${bubble.id} left ellipse`);
+  }
+  for (let i = 0; i < bubbles.length; i++) {
+    for (let j = i+1; j < bubbles.length; j++) {
+      const a = bubbles[i], b = bubbles[j];
+      const x = points.get(a.id)!, y = points.get(b.id)!;
+      assert.ok(Math.hypot(x.x - y.x, x.y - y.y) >= a.radius + b.radius + 7.9,
+        `Collision of ${a.id} and ${b.id}`);
+    }
+  }
+});
+
+test('packing draws even unlinked global tasks inward without new overlaps', () => {
+  const bubbles = [
+    { id: 'big', x: 330, y: 40, radius: 85 },
+    { id: 'medium', x: -280, y: 140, radius: 55 },
+    { id: 'small', x: 130, y: -300, radius: 28 },
+    { id: 'tiny', x: -310, y: -270, radius: 22 }
+  ];
+  const bounds = { minX: -420, maxX: 420, minY: -420, maxY: 420,
+    compact: true, ellipse: { cx: 0, cy: 0, rx: 405, ry: 405 } };
+  const points = linkedBubblePositions(bubbles, bounds);
+  const originalAvg = bubbles.reduce((total, p) => total + Math.hypot(p.x, p.y), 0) / bubbles.length;
+  const packedAvg = bubbles.reduce((total, p) => {
+    const v = points.get(p.id)!;
+    return total + Math.hypot(v.x, v.y);
+  }, 0) / bubbles.length;
+  assert.ok(packedAvg < originalAvg * 0.67, 'loose arrangement must compact');
+  for (let i = 0; i < bubbles.length; i++) {
+    for (let j = i+1; j < bubbles.length; j++) {
+      const x = points.get(bubbles[i].id)!, y = points.get(bubbles[j].id)!;
+      assert.ok(Math.hypot(x.x - y.x, x.y - y.y) >= bubbles[i].radius + bubbles[j].radius + 7.9);
+    }
+  }
+});
+
+test('a linked group cannot override collision or boundary protection', () => {
+  const bounds = { minX: -450, maxX: 450, minY: -450, maxY: 450,
+    compact: true, ellipse: { cx: 0, cy: 0, rx: 450, ry: 450 },
+    sectors: [
+      { start: { x: 1, y: 0 }, end: { x: -1, y: 0 } },
+      { start: { x: -1, y: 0 }, end: { x: 1, y: 0 } }
+    ]
+  };
+  const bubbles = [
+    { id: 'anchor', x: -150, y: 50, radius: 100, sectorIndex: 0,
+      linkedTaskIds: ['buddy'], bubbleLinkAnchorId: 'anchor' },
+    { id: 'buddy', x: -120, y: 80, radius: 72, sectorIndex: 0,
+      linkedTaskIds: ['anchor'], bubbleLinkAnchorId: 'anchor' },
+    { id: 'neighbour', x: -145, y: 72, radius: 90, sectorIndex: 0 },
+    { id: 'other-sector', x: -145, y: 72, radius: 92, sectorIndex: 1 }
+  ];
+  const points = linkedBubblePositions(bubbles, bounds);
+  for (const b of bubbles) {
+    const p = points.get(b.id)!;
+    assert.ok(b.sectorIndex === 0 ? p.y > b.radius : p.y < -b.radius);
+  }
+  for (let i = 0; i < bubbles.length; i++) for (let j = i+1; j < bubbles.length; j++) {
+    const a = points.get(bubbles[i].id)!, b = points.get(bubbles[j].id)!;
+    assert.ok(Math.hypot(a.x - b.x, a.y - b.y) >= bubbles[i].radius + bubbles[j].radius + 7.9);
+  }
+});
+
+test('dense three-sector workspace never crosses a divider or overlaps a linked group', () => {
+  const rays = [0, 2 * Math.PI / 3, 4 * Math.PI / 3, 2 * Math.PI];
+  const bounds = {
+    minX: -460, maxX: 460, minY: -460, maxY: 460, compact: true,
+    ellipse: { cx: 0, cy: 0, rx: 440, ry: 440 },
+    sectors: [0, 1, 2].map((index) => ({
+      start: { x: Math.cos(rays[index]), y: Math.sin(rays[index]) },
+      end: { x: Math.cos(rays[index + 1]), y: Math.sin(rays[index + 1]) }
+    }))
+  };
+  const bubbles = [0, 1, 2].flatMap((sectorIndex) =>
+    Array.from({ length: 16 }, (_, i) => {
+      const angle = rays[sectorIndex] + (rays[sectorIndex + 1] - rays[sectorIndex]) * (i % 5 + 1) / 6;
+      const id = `s${sectorIndex}-${i}`;
+      const linkedTaskIds = i < 5
+        ? [i > 0 ? `s${sectorIndex}-${i-1}` : '', i < 4 ? `s${sectorIndex}-${i+1}` : ''].filter(Boolean)
+        : [];
+      return {
+        id, sectorIndex, radius: 18 + (i * 13 + sectorIndex * 7) % 42,
+        x: Math.cos(angle) * (280 + (i * 17) % 105),
+        y: Math.sin(angle) * (280 + (i * 17) % 105),
+        linkedTaskIds, bubbleLinkAnchorId: `s${sectorIndex}-0`
+      };
+    })
+  );
+  const points = linkedBubblePositions(bubbles, bounds);
+  for (const bubble of bubbles) {
+    const p = points.get(bubble.id)!;
+    const angle = rays[bubble.sectorIndex];
+    const endAngle = rays[bubble.sectorIndex + 1];
+    const n1 = { x: -Math.sin(angle), y: Math.cos(angle) };
+    const n2 = { x: Math.sin(endAngle), y: -Math.cos(endAngle) };
+    assert.ok(p.x * n1.x + p.y * n1.y >= bubble.radius + 4,
+      `${bubble.id} crossed sector's first boundary`);
+    assert.ok(p.x * n2.x + p.y * n2.y >= bubble.radius + 4,
+      `${bubble.id} crossed sector's second boundary`);
+    assert.ok(Math.hypot(p.x / (440 - bubble.radius - 3), p.y / (440 - bubble.radius - 3)) <= 1.001,
+      `${bubble.id} outside field`);
+  }
+  for (let i = 0; i < bubbles.length; i++) for (let j = i + 1; j < bubbles.length; j++) {
+    const a = points.get(bubbles[i].id)!, b = points.get(bubbles[j].id)!;
+    assert.ok(Math.hypot(a.x-b.x, a.y-b.y) >= bubbles[i].radius + bubbles[j].radius + 7.9,
+      `Overlap of ${bubbles[i].id} and ${bubbles[j].id}`);
+  }
 });

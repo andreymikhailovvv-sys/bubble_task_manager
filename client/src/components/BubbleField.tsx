@@ -112,7 +112,15 @@ type BubbleDragSession = {
   target: DropIntent | null;
   targetSince: number;
 };
-type BubbleDragView = { taskId: string; dx: number; dy: number; target: DropIntent | null };
+type BubbleDragView = {
+  taskId: string;
+  dx: number;
+  dy: number;
+  target: DropIntent | null;
+  destinationSectorIndex: number;
+  destinationSectorName: string | null;
+  changesSector: boolean;
+};
 
 type SubtaskDraft = {
   title: string;
@@ -493,6 +501,19 @@ export function BubbleField({
     [sourceTaskById, spheres, subtaskMap, tasks, timelinePreviewTasks]
   );
 
+  const bubbleSectors = useMemo(() => getBubbleSectorSpheres(tasks, spheres, mode), [tasks, spheres, mode]);
+  const sectorCount = Math.max(1, bubbleSectors.length);
+  const sectorTaskCounts = useMemo(() => {
+    if (sectorCount === 1) return [tasks.length];
+    const counts = Array.from({ length: sectorCount }, () => 0);
+    tasks.forEach((task) => { counts[getBubbleSectorIndex(task, bubbleSectors)] += 1; });
+    return counts;
+  }, [sectorCount, bubbleSectors, tasks]);
+  const sectorGeometry = useMemo(
+    () => buildSectorGeometry(sectorCount, sectorTaskCounts),
+    [sectorCount, sectorTaskCounts]
+  );
+
   const bubbles = useMemo(
     () => buildBubbles(tasks, spheres, mode, SIZE, rankingMode, subtaskMap),
     [tasks, spheres, mode, rankingMode, subtaskMap]
@@ -509,7 +530,7 @@ export function BubbleField({
       const savedX = mode === 'global' ? bubble.task.bubbleGlobalX : bubble.task.bubbleSectorX;
       const savedY = mode === 'global' ? bubble.task.bubbleGlobalY : bubble.task.bubbleSectorY;
       return {
-        id: bubble.task.id, x: point.x, y: point.y, radius: bubble.radius,
+        id: bubble.task.id, x: point.x, y: point.y, radius: bubble.radius, sectorIndex: bubble.sectorIndex,
         linkedTaskIds: bubble.task.linkedTaskIds, bubbleLinkAnchorId: bubble.task.bubbleLinkAnchorId,
         pinned: typeof savedX === 'number' && typeof savedY === 'number'
       };
@@ -517,11 +538,28 @@ export function BubbleField({
     {
       minX: BUBBLE_WORKSPACE_X + 10, maxX: VIEWBOX_RIGHT - 10,
       minY: VIEWBOX_TOP + 20, maxY: VIEWBOX_BOTTOM - 20,
-      ellipse: { cx: BUBBLE_FIELD_CENTER_X, cy: BUBBLE_FIELD_CENTER_Y, rx: ELLIPSE_RADIUS_X, ry: ELLIPSE_RADIUS_Y }
+      ellipse: { cx: BUBBLE_FIELD_CENTER_X, cy: BUBBLE_FIELD_CENTER_Y, rx: ELLIPSE_RADIUS_X, ry: ELLIPSE_RADIUS_Y },
+      compact: true,
+      sectors: mode === 'sectors' && sectorCount > 1
+        ? sectorGeometry.map((geometry) => ({
+          start: { x: Math.cos(geometry.startAngle) * ELLIPSE_X_SCALE,
+            y: Math.sin(geometry.startAngle) * ELLIPSE_Y_SCALE },
+          end: { x: Math.cos(geometry.endAngle) * ELLIPSE_X_SCALE,
+            y: Math.sin(geometry.endAngle) * ELLIPSE_Y_SCALE }
+        }))
+        : undefined
     }
-  ), [bubbles, mapToOval, mode]);
+  ), [bubbles, mapToOval, mode, sectorCount, sectorGeometry]);
   const getBubbleVisualPoint = (bubble: (typeof bubbles)[number]) =>
     bubbleVisualPositions.get(bubble.task.id) ?? mapToOval(bubble.x, bubble.y);
+  const getSectorIndexAtPoint = (point: { x: number; y: number }) => {
+    if (mode !== 'sectors' || sectorCount <= 1) return 0;
+    const angle = ((Math.atan2((point.y - BUBBLE_FIELD_CENTER_Y) / ELLIPSE_Y_SCALE,
+      (point.x - BUBBLE_FIELD_CENTER_X) / ELLIPSE_X_SCALE) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    const index = sectorGeometry.findIndex((geometry) =>
+      angle >= geometry.startAngle && angle < geometry.endAngle);
+    return index >= 0 ? index : 0;
+  };
   const eligibleBubbleTargets = (): VisualBubble[] => visibleBubbles
     .filter((bubble) => !bubble.task.isCollaborative && !bubble.task.parentTaskId && (bubble.task.taskType ?? 'TASK') === 'TASK')
     .map((bubble) => ({ id: bubble.task.id, ...getBubbleVisualPoint(bubble), radius: bubble.radius }));
@@ -559,11 +597,18 @@ export function BubbleField({
     const position = getBubbleVisualPoint(bubble);
     const center = { x: position.x + point.x - session.startSvgX, y: position.y + point.y - session.startSvgY };
     const target = detectBubbleDrop(center, session.taskId, bubble.radius, eligibleBubbleTargets());
+    const destinationSectorIndex = getSectorIndexAtPoint(center);
+    const destinationSector = bubbleSectors[destinationSectorIndex] ?? null;
+    const changesSector = mode === 'sectors' && sectorCount > 1 &&
+      (destinationSector?.id ?? null) !== (bubble.task.sphereId ?? null);
     if (session.target?.targetId !== target?.targetId || session.target?.kind !== target?.kind) {
       session.targetSince = Date.now();
     }
     session.target = target;
-    queueDragView({ taskId: session.taskId, dx: point.x - session.startSvgX, dy: point.y - session.startSvgY, target });
+    queueDragView({
+      taskId: session.taskId, dx: point.x - session.startSvgX, dy: point.y - session.startSvgY, target,
+      destinationSectorIndex, destinationSectorName: destinationSector?.name ?? 'Без сектора', changesSector
+    });
   };
 
   const isPoppingTask = (taskId: string) => poppingTaskId === taskId;
@@ -604,17 +649,28 @@ export function BubbleField({
     const x = clamp(normalizedX, 0, SIZE);
     const y = clamp(normalizedY, 0, SIZE);
     const target = session.target ? tasks.find((task) => task.id === session.target?.targetId) : null;
+    const finalPosition = { x: px, y: py };
+    const destinationIndex = getSectorIndexAtPoint(finalPosition);
+    const destinationSector = bubbleSectors[destinationIndex] ?? null;
+    const changesSector = mode === 'sectors' && sectorCount > 1 &&
+      (destinationSector?.id ?? null) !== (bubble.task.sphereId ?? null);
+    const sectorChange = mode === 'sectors' ? { sphereId: destinationSector?.id ?? null } : {};
     const action = session.target
       ? { action: session.target.kind, targetTaskId: session.target.targetId }
       : bubble.task.linkedTaskIds?.length
-        ? { action: 'unlink' as const, x, y, mode }
-        : { action: 'move' as const, x, y, mode, ...(mode === 'sectors' ? { sphereId: getSphereAtClientPoint(event.clientX, event.clientY)?.id ?? null } : {}) };
+        ? { action: 'unlink' as const, x, y, mode, ...sectorChange }
+        : { action: 'move' as const, x, y, mode, ...sectorChange };
     setBubbleActionPending(true);
     void onBubbleAction(bubble.task, action).then(() => {
       if (action.action === 'link' && target) showBubbleNotice(`Задачи «${bubble.task.title}» и «${target.title}» теперь связаны.`, [bubble.task.id, target.id]);
       else if (action.action === 'nest' && target) showBubbleNotice(`«${bubble.task.title}» теперь подзадача «${target.title}».`);
-      else if (action.action === 'unlink') showBubbleNotice('Связь между задачами удалена.');
-      else showBubbleNotice('Положение пузыря сохранено.');
+      else if (action.action === 'unlink') {
+        showBubbleNotice(changesSector
+          ? `Связь разорвана. «${bubble.task.title}» перенесена в сектор «${destinationSector?.name ?? 'Без сектора'}».`
+          : 'Связь между задачами удалена.');
+      } else showBubbleNotice(changesSector
+        ? `«${bubble.task.title}» перенесена в сектор «${destinationSector?.name ?? 'Без сектора'}».`
+        : 'Положение пузыря сохранено.');
     }).catch((error: unknown) => {
       showBubbleNotice(error instanceof Error ? error.message : 'Не удалось переместить пузырь.');
     }).finally(() => setBubbleActionPending(false));
@@ -644,17 +700,7 @@ export function BubbleField({
   const hoveredTaskCoefficient = hoveredBubble ? getTaskCoefficient(getSourceTask(hoveredBubble.task), subtaskMap) : 0;
   const visibleHoverSubtasks = hoveredSubtasks.slice(0, 6);
   const hiddenHoverSubtaskCount = Math.max(0, hoveredSubtasks.length - visibleHoverSubtasks.length);
-  const bubbleSectors = useMemo(() => getBubbleSectorSpheres(tasks, spheres, mode), [tasks, spheres, mode]);
-  const sectorCount = Math.max(1, bubbleSectors.length);
-  const sectorTaskCounts = useMemo(() => {
-    if (sectorCount === 1) return [tasks.length];
-    const counts = Array.from({ length: sectorCount }, () => 0);
-    tasks.forEach((task) => {
-      counts[getBubbleSectorIndex(task, bubbleSectors)] += 1;
-    });
-    return counts;
-  }, [sectorCount, bubbleSectors, tasks]);
-  const sectorGeometry = useMemo(() => buildSectorGeometry(sectorCount, sectorTaskCounts), [sectorCount, sectorTaskCounts]);
+
 
   // Render connected components atomically: all members and all real edges
   // share a parent transform and the same transition when filtering modes.
@@ -1020,7 +1066,8 @@ export function BubbleField({
           {bubbleActionPending ? 'Сохраняем изменение…' : dragView?.target
             ? dragView.target.kind === 'nest' ? 'Внутри пузыря: сделать подзадачей (удерживать 0,5 сек)'
               : 'У края пузыря: связать задачи'
-            : dragView ? 'Отпустите для перемещения, или оттяните связанную задачу, чтобы разъединить'
+            : dragView?.changesSector ? `Переместить в сектор «${dragView.destinationSectorName}»`
+              : dragView ? 'Отпустите для перемещения, или оттяните связанную задачу, чтобы разъединить'
               : bubbleDragNotice}
         </div>
       )}
@@ -1150,19 +1197,17 @@ export function BubbleField({
           <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X} ry={ELLIPSE_RADIUS_Y} fill="url(#bg)" opacity={isLightTheme ? 0.94 : 0.86} />
           <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X + 22} ry={ELLIPSE_RADIUS_Y + 16} fill="url(#fieldHalo)" filter="url(#bubbleGlow)" opacity={isLightTheme ? 0.48 : 0.7} />
 
-          {dragView?.target && (() => {
-            const from = visibleBubbles.find((bubble) => bubble.task.id === dragView.taskId);
-            const a = from ? getBubbleVisualPoint(from) : null;
-            const b = bubbleVisualPositions.get(dragView.target.targetId);
-            if (!a || !b) return null;
-            const to = visibleBubbles.find((bubble) => bubble.task.id === dragView.target?.targetId);
-            if (!from || !to) return null;
-            const segment = bubbleLinkSegment(
-              { x: a.x + dragView.dx, y: a.y + dragView.dy }, b, from.radius, to.radius
-            );
-            return <line {...segment}
-              stroke={dragView.target.kind === 'nest' ? '#f59e0b' : '#8b5cf6'} strokeWidth={3.4}
-              strokeLinecap="round" strokeDasharray="4 4.5" opacity={0.98} pointerEvents="none" />;
+          {dragView?.changesSector && !dragView.target && sectorCount > 1 && (() => {
+            const geometry = sectorGeometry[dragView.destinationSectorIndex];
+            if (!geometry) return null;
+            const first = mapToOval(SIZE / 2 + Math.cos(geometry.startAngle) * FIELD_RADIUS,
+              SIZE / 2 + Math.sin(geometry.startAngle) * FIELD_RADIUS);
+            const last = mapToOval(SIZE / 2 + Math.cos(geometry.endAngle) * FIELD_RADIUS,
+              SIZE / 2 + Math.sin(geometry.endAngle) * FIELD_RADIUS);
+            const sector = bubbleSectors[dragView.destinationSectorIndex];
+            return <path d={`M ${BUBBLE_FIELD_CENTER_X} ${BUBBLE_FIELD_CENTER_Y} L ${first.x} ${first.y} A ${ELLIPSE_RADIUS_X} ${ELLIPSE_RADIUS_Y} 0 ${geometry.span > Math.PI ? 1 : 0} 1 ${last.x} ${last.y} Z`}
+              fill={sector?.color ?? '#22d3ee'} fillOpacity={0.10} stroke={sector?.color ?? '#22d3ee'}
+              strokeWidth={2} strokeOpacity={0.55} strokeDasharray="9 9" pointerEvents="none" />;
           })()}
           {sectorGeometry.map((geometry, idx) => {
             if (sectorCount === 1) return null;
@@ -1205,6 +1250,50 @@ export function BubbleField({
               );
             })}
           </AnimatePresence>
+          {/* This preview is intentionally ABOVE all circles. Large-to-large
+              drops overlap both interiors and would hide any line below them. */}
+          {dragView?.target && (() => {
+            const from = visibleBubbles.find((bubble) => bubble.task.id === dragView.taskId);
+            const to = visibleBubbles.find((bubble) => bubble.task.id === dragView.target?.targetId);
+            if (!from || !to) return null;
+            const original = getBubbleVisualPoint(from);
+            const start = { x: original.x + dragView.dx, y: original.y + dragView.dy };
+            const end = getBubbleVisualPoint(to);
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
+            const distance = Math.hypot(dx, dy);
+            const ux = distance > 0.001 ? dx / distance : 1;
+            const uy = distance > 0.001 ? dy / distance : 0;
+            const overlapping = distance < from.radius + to.radius + 18;
+            const segment = overlapping
+              ? {
+                x1: start.x + ux * Math.min(from.radius * 0.38, distance * 0.26),
+                y1: start.y + uy * Math.min(from.radius * 0.38, distance * 0.26),
+                x2: end.x - ux * Math.min(to.radius * 0.38, distance * 0.26),
+                y2: end.y - uy * Math.min(to.radius * 0.38, distance * 0.26)
+              } : bubbleLinkSegment(start, end, from.radius, to.radius);
+            const color = dragView.target.kind === 'nest' ? '#fbbf24' : '#c4b5fd';
+            return <g pointerEvents="none">
+              <circle cx={end.x} cy={end.y} r={to.radius + 8} fill="none"
+                stroke={color} strokeWidth={3} strokeDasharray="5 5" opacity={0.94} />
+              <line {...segment} stroke="#0f172a" strokeOpacity={0.75} strokeWidth={8}
+                strokeLinecap="round" />
+              <line {...segment} stroke={color} strokeWidth={4.5} strokeDasharray="7 5"
+                strokeLinecap="round" opacity={1} />
+            </g>;
+          })()}
+          {dragView?.changesSector && !dragView.target && (() => {
+            const source = visibleBubbles.find((bubble) => bubble.task.id === dragView.taskId);
+            if (!source) return null;
+            const p = getBubbleVisualPoint(source);
+            const x = clamp(p.x + dragView.dx - 142, BUBBLE_WORKSPACE_X + 10, VIEWBOX_RIGHT - 292);
+            const y = clamp(p.y + dragView.dy - source.radius - 53, VIEWBOX_TOP + 12, VIEWBOX_BOTTOM - 40);
+            return <foreignObject x={x} y={y} width={284} height={38} pointerEvents="none">
+              <div className="flex h-full items-center justify-center rounded-full border border-cyan-400/60 bg-slate-950/90 px-3 text-xs font-semibold text-cyan-100 shadow-lg backdrop-blur">
+                <span className="truncate">Перенести в сектор «{dragView.destinationSectorName}»</span>
+              </div>
+            </foreignObject>;
+          })()}
           {bubbleDragNotice && noticePair && (() => {
             const [aId, bId] = noticePair;
             const a = bubbleVisualPositions.get(aId);

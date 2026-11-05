@@ -54,16 +54,20 @@ export const bubblePlacementService = {
         const position = input.action === 'move' ||
           input.mode !== undefined || input.x !== undefined || input.y !== undefined
           ? positionPatch(input) : {};
-        if (input.action === 'move') {
-          const sector = input.sphereId;
-          if (sector !== undefined && sector !== null) {
-            if (typeof sector !== 'string' || !await tx.sphere.findFirst({ where: { id: sector, userId }, select: { id: true } })) {
-              throw new TypeError('Сектор не найден.');
-            }
+        const sector = input.sphereId;
+        // A drag that also breaks a magnetic bond may change sectors.
+        // Explicit unlink from the task window omits this field and leaves
+        // the task's existing sector and coordinates untouched.
+        if (sector !== undefined && sector !== null) {
+          if (typeof sector !== 'string' || !await tx.sphere.findFirst({ where: { id: sector, userId }, select: { id: true } })) {
+            throw new TypeError('Сектор не найден.');
           }
+        }
+        const placement = { ...position, ...(sector !== undefined ? { sphereId: sector } : {}) };
+        if (input.action === 'move') {
           await tx.task.update({
             where: { id: source.id },
-            data: { ...position, ...(sector !== undefined ? { sphereId: sector } : {}) }
+            data: placement
           });
           return { action: input.action };
         }
@@ -73,8 +77,8 @@ export const bubblePlacementService = {
             { secondTaskId: source.id, ...(input.targetTaskId ? { firstTaskId: input.targetTaskId } : {}) }
           ] }
         });
-        if (Object.keys(position).length > 0) {
-          await tx.task.update({ where: { id: source.id }, data: position });
+        if (Object.keys(placement).length > 0) {
+          await tx.task.update({ where: { id: source.id }, data: placement });
         }
         return { action: input.action };
       }
