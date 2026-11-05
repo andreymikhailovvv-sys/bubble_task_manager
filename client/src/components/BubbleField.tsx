@@ -1054,10 +1054,11 @@ export function BubbleField({
         onContextMenu={(event) => showContextMenu(event, null)}>
         <motion.g initial={false}>
           <defs>
-            <radialGradient id="overdueBubbleBlush" cx="27%" cy="22%" fx="25%" fy="20%" r="86%">
-              <stop offset="0%" stopColor="#fecaca" stopOpacity={isLightTheme ? 0.36 : 0.28} />
-              <stop offset="50%" stopColor="#fb7185" stopOpacity={isLightTheme ? 0.32 : 0.31} />
-              <stop offset="100%" stopColor="#dc2626" stopOpacity={isLightTheme ? 0.52 : 0.48} />
+            <radialGradient id="overdueBubbleBlush" cx="29%" cy="23%" fx="27%" fy="21%" r="90%">
+              <stop offset="0%" stopColor="#fee2e2" stopOpacity={isLightTheme ? 0.04 : 0.03} />
+              <stop offset="32%" stopColor="#fca5a5" stopOpacity={isLightTheme ? 0.09 : 0.09} />
+              <stop offset="65%" stopColor="#fb7185" stopOpacity={isLightTheme ? 0.16 : 0.18} />
+              <stop offset="100%" stopColor="#dc2626" stopOpacity={isLightTheme ? 0.27 : 0.29} />
             </radialGradient>
             <radialGradient id="bg" cx="50%" cy="50%" r="60%">
               {isLightTheme ? (
