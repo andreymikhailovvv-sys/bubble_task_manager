@@ -140,7 +140,8 @@ test('new opt-in sessions use one introduction per generation and never rearm de
   assert.match(schedule, /'monitoring-intro:' \+ taskId \+ ':g' \+ generation/);
   assert.match(worker, /\[TaskMonitoring\] event worker started/);
   assert.match(worker, /\[TaskMonitoring\] deadline claimed/);
-  assert.match(worker, /void pollTaskMonitoring\(\)\.catch\(error =>\s*console.error\('\[TaskMonitoring\] immediate dispatch failed'/);
+  // Either direct or telemetry-wrapped invocation must still dispatch immediately.
+  assert.match(worker, /void (?:measureBackground\('task\.monitor_events', \(\) => )?pollTaskMonitoring\(\)\)?\.catch\(error =>\s*console.error\('\[TaskMonitoring\] immediate dispatch failed'/);
   assert.match(route, /apiRouter.get\('\/tasks\/:id\/monitoring\/diagnostics', requireAuth/);
   assert.match(route, /requireMonitoredTask\(req.user!\.id, req.params.id\)/);
 });
