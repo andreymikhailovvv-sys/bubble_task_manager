@@ -621,6 +621,12 @@ model Task {
   location            String?
   parentTask          Task?      @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
   subtasks            Task[]     @relation("TaskSubtasks")
+  bubbleLinksFirst    TaskBubbleLink[] @relation("TaskBubbleLinkFirst")
+  bubbleLinksSecond   TaskBubbleLink[] @relation("TaskBubbleLinkSecond")
+  bubbleGlobalX       Float?
+  bubbleGlobalY       Float?
+  bubbleSectorX       Float?
+  bubbleSectorY       Float?
   importance          Int        @default(3)
   urgency             Int        @default(3)
   priorityScore       Float      @default(3)
@@ -665,6 +671,20 @@ model Task {
 }
 
 // Human-readable progress milestones. These are distinct from TODO/DONE lifecycle.
+model TaskBubbleLink {
+  id            String @id @default(cuid())
+  userId        String
+  firstTaskId   String
+  secondTaskId  String
+  firstTask     Task @relation("TaskBubbleLinkFirst", fields: [firstTaskId], references: [id], onDelete: Cascade)
+  secondTask    Task @relation("TaskBubbleLinkSecond", fields: [secondTaskId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+
+  @@unique([firstTaskId, secondTaskId])
+  @@index([userId])
+  @@index([secondTaskId])
+}
+
 model TaskMonitoringStatus {
   id        String   @id @default(cuid())
   taskId    String
