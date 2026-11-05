@@ -583,7 +583,9 @@ export function BubbleField({
   }, [sectorCount, bubbleSectors, tasks]);
   const sectorGeometry = useMemo(() => buildSectorGeometry(sectorCount, sectorTaskCounts), [sectorCount, sectorTaskCounts]);
 
-  const orderedBubbles = visibleBubbles;
+  const orderedBubbles = dragView
+    ? [...visibleBubbles].sort((a, b) => Number(a.task.id === dragView.taskId) - Number(b.task.id === dragView.taskId))
+    : visibleBubbles;
 
   useEffect(() => {
     if (isAddingSubtask) {
@@ -703,6 +705,8 @@ export function BubbleField({
     const shouldGlow = bubble.task.status !== 'DONE' && (shouldTaskGlow(bubble.task) || hasUrgentSubtask);
     const overdue = isOverdue(bubble.task);
     const isHovered = hoveredTaskId === bubble.task.id;
+    const isDragged = dragView?.taskId === bubble.task.id;
+    const isDragTarget = dragView?.target?.targetId === bubble.task.id;
     const glowPulseState = isHovered
       ? {
         opacity: [0.55, 1, 0.55],
@@ -735,7 +739,10 @@ export function BubbleField({
     const commentBadgeX = bubble.radius * 0.78;
     const commentBadgeY = bubble.radius * 0.78;
     const isSmartPostponing = smartPostponeTaskId === bubble.task.id;
-    const displayPoint = mapToOval(bubble.x, bubble.y);
+    const baseVisualPoint = getBubbleVisualPoint(bubble);
+    const displayPoint = isDragged && dragView
+      ? { x: baseVisualPoint.x + dragView.dx, y: baseVisualPoint.y + dragView.dy }
+      : baseVisualPoint;
     const titleLineClamp = bubble.radius < 30 ? 2 : bubble.radius < 44 ? 3 : 4;
     const titleFontSize = getBubbleTitleFontSize(bubble.task.title, bubble.radius);
     const titlePreview = getBubbleTitlePreview(bubble.task.title, bubble.radius);
@@ -756,19 +763,26 @@ export function BubbleField({
         key={bubble.task.id}
         data-bubble-task-id={bubble.task.id}
         initial={false}
-        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: isHovered ? BUBBLE_HOVER_SCALE : 1, x: displayPoint.x, y: displayPoint.y }}
+        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: isDragged ? 1.07 : isHovered ? BUBBLE_HOVER_SCALE : isDragTarget ? 1.06 : 1, x: displayPoint.x, y: displayPoint.y }}
         exit={isSearchFiltering ? { opacity: 0, scale: 0.96, x: displayPoint.x, y: displayPoint.y } : { opacity: 1, scale: 1, x: displayPoint.x, y: displayPoint.y }}
-        transition={isPopping
+        transition={isDragged ? { duration: 0 } : isPopping
           ? { type: 'tween', duration: 0.33, ease: 'easeOut' }
           : isSearchFiltering
             ? { type: 'tween', duration: 0.12, ease: 'easeOut' }
             : { type: 'spring', damping: 24, stiffness: 105, mass: 0.82, restDelta: 0.001 }}
         style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-        onClick={() => !isPopping && onSelect(bubble.task)}
-        onMouseEnter={() => activateHover(bubble.task.id)}
-        onMouseLeave={scheduleHoverExit}
+        onClick={() => {
+          if (ignoreClickRef.current === bubble.task.id) { ignoreClickRef.current = null; return; }
+          if (!isPopping && !dragSessionRef.current) onSelect(bubble.task);
+        }}
+        onPointerDown={(event) => onBubblePointerDown(event, bubble)}
+        onPointerMove={(event) => onBubblePointerMove(event, bubble)}
+        onPointerUp={(event) => onBubblePointerUp(event, bubble)}
+        onPointerCancel={() => { dragSessionRef.current = null; setDragView(null); }}
+        onMouseEnter={() => { if (!dragSessionRef.current) activateHover(bubble.task.id); }}
+        onMouseLeave={() => { if (!dragSessionRef.current) scheduleHoverExit(); }}
         onContextMenu={(event) => showContextMenu(event, bubble.task)}
-        className="cursor-pointer"
+        className={bubble.task.isCollaborative || bubble.task.taskType === 'EVENT' || bubble.task.taskType === 'REMINDER' ? 'cursor-pointer' : isDragged ? 'cursor-grabbing' : 'cursor-grab'}
       >
         <circle cx={0} cy={0} r={bubble.radius + 10} fill="transparent" />
         <circle
@@ -777,11 +791,11 @@ export function BubbleField({
           r={bubble.radius}
           fill={getBubbleShade(bubble.color, bubble.distanceRatio)}
           fillOpacity={isLightTheme ? 0.66 : 0.48}
-          stroke={selectedId === bubble.task.id ? (isLightTheme ? '#0f172a' : '#f8fafc') : (isLightTheme ? 'rgba(14,116,144,0.56)' : '#bae6fd')}
+          stroke={isDragTarget ? (dragView?.target?.kind === 'nest' ? '#f59e0b' : '#a78bfa') : bubble.task.linkedTaskIds?.length ? '#a78bfa' : selectedId === bubble.task.id ? (isLightTheme ? '#0f172a' : '#f8fafc') : (isLightTheme ? 'rgba(14,116,144,0.56)' : '#bae6fd')}
           strokeOpacity={selectedId === bubble.task.id ? 1 : isLightTheme ? 0.78 : 0.65}
-          strokeWidth={selectedId === bubble.task.id ? 3.5 : 2.4}
+          strokeWidth={isDragTarget || isDragged ? 5 : selectedId === bubble.task.id || bubble.task.linkedTaskIds?.length ? 3.5 : 2.4}
           filter={glowFilter}
-          style={staticGlowStyle}
+          style={isDragTarget ? { filter: 'drop-shadow(0 0 14px rgba(167,139,250,0.7))' } : staticGlowStyle}
         />
         {shouldGlow ? (
           <motion.circle
@@ -905,6 +919,15 @@ export function BubbleField({
         scheduleHoverExit();
       }}
     >
+      {(dragView || bubbleDragNotice || bubbleActionPending) && (
+        <div className="pointer-events-none absolute left-1/2 top-4 z-50 max-w-[90%] -translate-x-1/2 rounded-2xl border border-violet-400/40 bg-slate-950/90 px-4 py-2 text-center text-sm font-medium text-white shadow-xl backdrop-blur-md" role="status" aria-live="polite">
+          {bubbleActionPending ? 'Сохраняем изменение…' : dragView?.target
+            ? dragView.target.kind === 'nest' ? 'Внутри пузыря: сделать подзадачей (удерживать 0,5 сек)'
+              : 'У края пузыря: связать задачи'
+            : dragView ? 'Отпустите для перемещения, или оттяните связанную задачу, чтобы разъединить'
+              : bubbleDragNotice}
+        </div>
+      )}
       <svg ref={svgRef} viewBox={`${VIEWBOX_LEFT} ${VIEWBOX_TOP} ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} className="bubble-field-stage relative z-20 h-full w-full overflow-visible" onContextMenu={(event) => showContextMenu(event, null)}>
         <motion.g initial={false}>
           <defs>
@@ -1027,6 +1050,24 @@ export function BubbleField({
           <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X} ry={ELLIPSE_RADIUS_Y} fill="url(#bg)" opacity={isLightTheme ? 0.94 : 0.86} />
           <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X + 22} ry={ELLIPSE_RADIUS_Y + 16} fill="url(#fieldHalo)" filter="url(#bubbleGlow)" opacity={isLightTheme ? 0.48 : 0.7} />
 
+          {visibleBubbles.flatMap((bubble) => (bubble.task.linkedTaskIds ?? [])
+            .filter((id) => bubble.task.id < id)
+            .map((id) => {
+              const a = bubbleVisualPositions.get(bubble.task.id);
+              const b = bubbleVisualPositions.get(id);
+              if (!a || !b) return null;
+              return <line key={`link-${bubble.task.id}-${id}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                stroke="#a78bfa" strokeWidth={4} strokeLinecap="round" opacity={0.8} pointerEvents="none" />;
+            }))}
+          {dragView?.target && (() => {
+            const from = visibleBubbles.find((bubble) => bubble.task.id === dragView.taskId);
+            const a = from ? getBubbleVisualPoint(from) : null;
+            const b = bubbleVisualPositions.get(dragView.target.targetId);
+            if (!a || !b) return null;
+            return <line x1={a.x + dragView.dx} y1={a.y + dragView.dy} x2={b.x} y2={b.y}
+              stroke={dragView.target.kind === 'nest' ? '#f59e0b' : '#a78bfa'} strokeWidth={3}
+              strokeDasharray="5 7" opacity={0.8} pointerEvents="none" />;
+          })()}
           {sectorGeometry.map((geometry, idx) => {
             if (sectorCount === 1) return null;
             const angle = geometry.startAngle;
