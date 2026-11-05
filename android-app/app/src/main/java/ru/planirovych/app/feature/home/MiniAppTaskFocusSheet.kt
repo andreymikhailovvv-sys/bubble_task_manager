@@ -76,6 +76,9 @@ fun MiniAppTaskFocusSheet(
     onOpenAiChat:(String)->Unit,
 ) {
     val c=remember(dark){focusColors(dark)}
+    // In the light Mini App, editing and adding use teal; the dark theme keeps purple.
+    val utilityAccent=if(dark)c.purple else c.teal
+    val utilityText=if(dark)c.text else c.teal
     val ctx=LocalContext.current
     val state by vm.state.collectAsStateWithLifecycle()
     val scope=rememberCoroutineScope()
@@ -187,11 +190,11 @@ fun MiniAppTaskFocusSheet(
         containerColor=c.bg,contentColor=c.text,
         shape=RoundedCornerShape(topStart=30.dp,topEnd=30.dp),
         sheetGesturesEnabled=true,
-        // Keep the title and header controls at the sheet's top edge.
-        dragHandle=null,
+        dragHandle={ BottomSheetDefaults.DragHandle(color=c.muted) },
         sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)){
-        // The sheet remains swipe-dismissable; only the description grip owns resize gestures.
-        Column(Modifier.fillMaxWidth().heightIn(max=maxSheetHeight).imePadding()){
+        // Fixed sheet height: resizing the description reflows the scrollable content,
+        // not the entire bottom sheet. Its native drag handle still moves the sheet.
+        Column(Modifier.fillMaxWidth().height(maxSheetHeight).imePadding()){
             Row(Modifier.fillMaxWidth()
                 .padding(start=18.dp,end=18.dp,top=12.dp,bottom=15.dp),
                 verticalAlignment=Alignment.Top,
@@ -228,7 +231,7 @@ fun MiniAppTaskFocusSheet(
                     }
                 }
             }
-            Column(Modifier.weight(1f,fill=false).verticalScroll(rememberScrollState())
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())
                 .padding(horizontal=18.dp).padding(bottom=20.dp)){
                 Row(verticalAlignment=Alignment.CenterVertically,
                     horizontalArrangement=Arrangement.spacedBy(9.dp),
@@ -262,7 +265,8 @@ fun MiniAppTaskFocusSheet(
                 Text("Описание",color=c.text,fontSize=16.sp,
                     fontWeight=FontWeight.Bold)
                 Spacer(Modifier.height(12.dp))
-                Box(Modifier.fillMaxWidth().padding(bottom=8.dp)){
+                // Reserve space beneath the field for the bottom half of the resize grip.
+                Box(Modifier.fillMaxWidth().padding(bottom=10.dp)){
                     Surface(modifier=Modifier.fillMaxWidth(),
                         shape=RoundedCornerShape(18.dp),color=c.bg,
                         border=BorderStroke(1.dp,c.border)){
@@ -279,7 +283,7 @@ fun MiniAppTaskFocusSheet(
                         }
                     }
                     // A real drag handle, independent of the sheet swipe and description editor.
-                    Box(Modifier.align(Alignment.BottomCenter).offset(y=1.dp)
+                    Box(Modifier.align(Alignment.BottomCenter).offset(y=10.dp)
                         .size(width=46.dp,height=20.dp)
                         .clip(CircleShape).background(c.card)
                         .border(1.dp,c.border,CircleShape)
@@ -307,16 +311,16 @@ fun MiniAppTaskFocusSheet(
                     verticalAlignment=Alignment.CenterVertically,
                     horizontalArrangement=Arrangement.spacedBy(9.dp)){
                     Row(Modifier.clip(CircleShape)
-                        .background(c.card)
-                        .border(1.dp,c.purple.copy(alpha=.36f),CircleShape)
+                        .background(if(dark)c.card else c.bg)
+                        .border(1.dp,utilityAccent.copy(alpha=.36f),CircleShape)
                         .clickable(enabled=!busy){descriptionExpanded=true}
                         .padding(horizontal=14.dp,vertical=10.dp),
                         verticalAlignment=Alignment.CenterVertically,
                         horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                        Icon(Icons.Default.Edit,null,tint=c.purple,
+                        Icon(Icons.Default.Edit,null,tint=utilityAccent,
                             modifier=Modifier.size(17.dp))
                         Text("Редактировать описание",fontSize=13.sp,
-                            fontWeight=FontWeight.SemiBold,color=c.text)
+                            fontWeight=FontWeight.SemiBold,color=utilityText)
                     }
                     FocusRoundIcon(Icons.Default.AttachFile,c,"Прикрепить файл"){
                         pickFile.launch(arrayOf("*/*"))
@@ -385,15 +389,15 @@ fun MiniAppTaskFocusSheet(
                         Text("Подзадачи",color=c.text,fontSize=14.sp,
                             fontWeight=FontWeight.SemiBold)
                         Row(Modifier.clip(CircleShape)
-                            .background(c.card)
-                            .border(1.dp,c.purple.copy(alpha=.38f),CircleShape)
+                            .background(if(dark)c.card else c.bg)
+                            .border(1.dp,utilityAccent.copy(alpha=.38f),CircleShape)
                             .clickable(enabled=!busy){saveThen(onNewSubtask)}
                             .padding(horizontal=11.dp,vertical=10.dp),
                             verticalAlignment=Alignment.CenterVertically,
                             horizontalArrangement=Arrangement.spacedBy(6.dp)){
-                            Icon(Icons.Default.Add,null,tint=c.purple,
+                            Icon(Icons.Default.Add,null,tint=utilityAccent,
                                 modifier=Modifier.size(17.dp))
-                            Text("Добавить",color=c.text,
+                            Text("Добавить",color=utilityText,
                                 fontSize=12.sp,maxLines=1,softWrap=false,
                                 fontWeight=FontWeight.SemiBold)
                         }
