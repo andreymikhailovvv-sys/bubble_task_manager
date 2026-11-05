@@ -68,7 +68,10 @@ export const bubblePlacementService = {
           return { action: input.action };
         }
         await tx.taskBubbleLink.deleteMany({
-          where: { userId, OR: [{ firstTaskId: source.id }, { secondTaskId: source.id }] }
+          where: { userId, OR: [
+            { firstTaskId: source.id, ...(input.targetTaskId ? { secondTaskId: input.targetTaskId } : {}) },
+            { secondTaskId: source.id, ...(input.targetTaskId ? { firstTaskId: input.targetTaskId } : {}) }
+          ] }
         });
         if (Object.keys(position).length > 0) {
           await tx.task.update({ where: { id: source.id }, data: position });
@@ -81,17 +84,40 @@ export const bubblePlacementService = {
 
       if (input.action === 'link') {
         const existing = await tx.taskBubbleLink.findMany({
-          where: { userId, OR: [
-            { firstTaskId: source.id }, { secondTaskId: source.id },
-            { firstTaskId: target.id }, { secondTaskId: target.id }
-          ] }
+          where: { userId },
+          select: { firstTaskId: true, secondTaskId: true }
         });
-        if (existing.some((link) =>
-          (link.firstTaskId === source.id && link.secondTaskId === target.id) ||
-          (link.secondTaskId === source.id && link.firstTaskId === target.id))) {
-          return { action: 'link' as const };
+        // A connection is an undirected graph, not a single partner slot.
+        // Cap the entire connected component at five distinct tasks.
+        const adjacency = new Map<string, Set<string>>();
+        const connect = (a: string, b: string) => {
+          if (!adjacency.has(a)) adjacency.set(a, new Set());
+          if (!adjacency.has(b)) adjacency.set(b, new Set());
+          adjacency.get(a)!.add(b);
+          adjacency.get(b)!.add(a);
+        };
+        for (const link of existing) connect(link.firstTaskId, link.secondTaskId);
+        if (adjacency.get(source.id)?.has(target.id)) return { action: 'link' as const };
+        const component = (start: string) => {
+          const visited = new Set([start]);
+          const queue = [start];
+          for (const id of queue) {
+            for (const neighbour of adjacency.get(id) ?? []) {
+              if (visited.has(neighbour)) continue;
+              visited.add(neighbour);
+              queue.push(neighbour);
+            }
+          }
+          return visited;
+        };
+        const firstGroup = component(source.id);
+        const secondGroup = component(target.id);
+        if (firstGroup.has(target.id)) {
+          throw new TypeError('Эти задачи уже входят в одну связанную группу.');
         }
-        if (existing.length) throw new TypeError('Одна из задач уже связана с другим пузырём. Сначала разъедините пару.');
+        if (firstGroup.size + secondGroup.size > 5) {
+          throw new TypeError('В одной связанной группе может быть не более пяти задач.');
+        }
         const [firstTaskId, secondTaskId] = [source.id, target.id].sort();
         await tx.taskBubbleLink.create({ data: { userId, firstTaskId, secondTaskId, anchorTaskId: target.id } });
         return { action: 'link' as const };

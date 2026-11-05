@@ -513,6 +513,9 @@ export function buildBubbles(
   const maxDistance = size * 0.44;
   const bubbleSectors = getBubbleSectorSpheres(tasks, spheres, mode);
   const sectorCount = Math.max(1, bubbleSectors.length);
+  // One visible sector occupies the WHOLE circle. The sector-only radial
+  // layout otherwise pushes tasks towards the circumference.
+  const placementMode = mode === 'sectors' && sectorCount === 1 ? 'global' : mode;
 
   const getEffectiveDueDate = (task: Task) => {
     const parseDate = (value?: string | null) => {
@@ -585,12 +588,12 @@ export function buildBubbles(
       const coefficient = getTaskCoefficient(getSourceTask(task), subtaskMap);
       const radius = getRadiusByRank(i, sorted.length, proximity, urgencyWeight, importanceTieBoost, mode, rankingMode, task.importance, overdueBoost, coefficient, sectorMaxCoefficient);
       const distance = rankingMode === 'coefficient'
-        ? 12 + Math.pow(1 - coefficient, 1.45) * Math.max(18, maxDistance * (mode === 'global' ? 0.6 : 0.78)) + i * 0.22
-        : getDistanceByRank(i, sorted.length, maxDistance, mode);
+        ? 12 + Math.pow(1 - coefficient, 1.45) * Math.max(18, maxDistance * (placementMode === 'global' ? 0.6 : 0.78)) + i * 0.22
+        : getDistanceByRank(i, sorted.length, maxDistance, placementMode);
       const rankRatio = sorted.length <= 1 ? 0 : i / (sorted.length - 1);
       targetDistanceById[task.id] = distance;
       gravityById[task.id] = 1 - rankRatio;
-      const angle = mode === 'global'
+      const angle = placementMode === 'global'
         ? (i * 2.399963229728653) + rankInDue * 0.018
         : (() => {
           if (sectorCount === 2) {
@@ -627,7 +630,7 @@ export function buildBubbles(
     });
   });
 
-  tuneBubbleRadiiToAvailableSpace(result, maxDistance, sectorGeometry, mode);
+  tuneBubbleRadiiToAvailableSpace(result, maxDistance, sectorGeometry, placementMode);
 
   result.forEach((bubble) => keepInSector(bubble, center, maxDistance, sectorGeometry));
 
@@ -646,8 +649,8 @@ export function buildBubbles(
       const dy = bubble.y - center;
       const currentDistance = Math.hypot(dx, dy) || 1;
       const targetDistance = rankingMode === 'coefficient'
-        ? 12 + Math.pow(1 - getTaskCoefficient(getSourceTask(bubble.task), subtaskMap), 1.45) * Math.max(18, maxDistance * (mode === 'global' ? 0.6 : 0.78)) + idx * 0.18
-        : getDistanceByRank(idx, ranked.length, maxDistance, mode);
+        ? 12 + Math.pow(1 - getTaskCoefficient(getSourceTask(bubble.task), subtaskMap), 1.45) * Math.max(18, maxDistance * (placementMode === 'global' ? 0.6 : 0.78)) + idx * 0.18
+        : getDistanceByRank(idx, ranked.length, maxDistance, placementMode);
       const minDistance = idx === 0
         ? Math.max(12, targetDistance - 5)
         : Math.max(targetDistance - 14, previousDistance + bubble.radius * 0.12 + 2);
@@ -667,7 +670,7 @@ export function buildBubbles(
 
   applyGravity(result, center, maxDistance, sectorGeometry, targetDistanceById, gravityById);
 
-  if (mode === 'global') {
+  if (placementMode === 'global') {
     compactGlobalLayout(result, center, maxDistance);
   }
 

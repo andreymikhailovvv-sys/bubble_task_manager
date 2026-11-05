@@ -2742,37 +2742,47 @@ export default function App() {
   };
 
   const renderLinkedTaskBadge = (task: Task) => {
-    const related = tasks.find((candidate) => candidate.id === task.linkedTaskIds?.[0]);
-    if (!related) return null;
+    const relatedTasks = (task.linkedTaskIds ?? [])
+      .map((id) => tasks.find((candidate) => candidate.id === id))
+      .filter((candidate): candidate is Task => Boolean(candidate));
+    if (relatedTasks.length === 0) return null;
     return (
-      <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-violet-400/35 bg-violet-500/10 px-2.5 py-1 text-xs font-medium text-violet-500">
-        Связана с
-        <button type="button" className="inline-flex min-w-0 max-w-48 items-center gap-1 rounded-full bg-violet-500/15 px-2 py-0.5 font-semibold hover:bg-violet-500/25"
-          title={related.title} onClick={(event) => {
-            event.stopPropagation();
-            setIsFocusModeOpen(false);
-            openTaskWithFocusGuard(related);
-          }}>
-          <span className="truncate">{related.title}</span><ChevronRight size={12} className="shrink-0" />
-        </button>
-        <button type="button"
-          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-violet-500 transition hover:bg-violet-500/20 hover:text-violet-700 disabled:opacity-50"
-          title="Разорвать связь задач"
-          aria-label={`Разорвать связь с задачей «${related.title}»`}
-          disabled={unlinkingBubbleTaskId !== null}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            setUnlinkingBubbleTaskId(task.id);
-            void api.bubbleAction(task.id, { action: 'unlink' })
-              .then(() => load())
-              .catch((error: unknown) => {
-                window.alert(error instanceof Error ? error.message : 'Не удалось разорвать связь.');
-              })
-              .finally(() => setUnlinkingBubbleTaskId(null));
-          }}>
-          {unlinkingBubbleTaskId === task.id ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
-        </button>
+      <span className="inline-flex min-w-0 max-w-full flex-wrap items-center gap-1.5 text-xs font-medium text-violet-500">
+        <span>{relatedTasks.length > 1 ? 'Связана с задачами:' : 'Связана с'}</span>
+        {relatedTasks.map((related) => {
+          const key = `${task.id}:${related.id}`;
+          return (
+            <span key={related.id} className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border border-violet-400/35 bg-violet-500/10 py-0.5 pl-2 pr-1">
+              <button type="button"
+                className="inline-flex min-w-0 max-w-40 items-center gap-1 rounded-full px-1 py-0.5 font-semibold hover:bg-violet-500/15"
+                title={related.title} onClick={(event) => {
+                  event.stopPropagation();
+                  setIsFocusModeOpen(false);
+                  openTaskWithFocusGuard(related);
+                }}>
+                <span className="truncate">{related.title}</span><ChevronRight size={12} className="shrink-0" />
+              </button>
+              <button type="button"
+                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-violet-500 transition hover:bg-violet-500/20 hover:text-violet-700 disabled:opacity-50"
+                title={`Разорвать связь с «${related.title}»`}
+                aria-label={`Разорвать связь с задачей «${related.title}»`}
+                disabled={unlinkingBubbleTaskId !== null}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setUnlinkingBubbleTaskId(key);
+                  void api.bubbleAction(task.id, { action: 'unlink', targetTaskId: related.id })
+                    .then(() => load())
+                    .catch((error: unknown) => {
+                      window.alert(error instanceof Error ? error.message : 'Не удалось разорвать связь.');
+                    })
+                    .finally(() => setUnlinkingBubbleTaskId(null));
+                }}>
+                {unlinkingBubbleTaskId === key ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
+              </button>
+            </span>
+          );
+        })}
       </span>
     );
   };
