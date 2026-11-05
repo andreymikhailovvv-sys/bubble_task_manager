@@ -6165,7 +6165,6 @@ export default function App() {
             tasks={visibleTasks}
             timelinePreviewTasks={activeTimelineItems}
             spheres={visibleSpheres}
-            isSingleSectorFilterActive={mode === 'sectors' && spheres.length > 1 && visibleSpheres.length === 1}
             rankingMode="coefficient"
             subtaskMap={displayedSubtaskMap}
             isSubtaskFilterActive={subtaskFilterMode !== 'none'}
