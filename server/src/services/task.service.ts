@@ -158,16 +158,37 @@ export const taskService = {
     });
     const visibleItems = items.filter((task) => !task.collaboration || !task.collaboration.members.find((member) => member.userId === userId)?.isHidden);
     const visibleIds = new Set(visibleItems.map((task) => task.id));
-    const bubbleLinks = await prisma.taskBubbleLink.findMany({ where: { userId },
-      select: { firstTaskId: true, secondTaskId: true, anchorTaskId: true } });
-    const bubbleLinkByTaskId = new Map<string, string>();
+    const bubbleLinks = await prisma.taskBubbleLink.findMany({
+      where: { userId },
+      select: { firstTaskId: true, secondTaskId: true, anchorTaskId: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }]
+    });
+    const bubbleLinkByTaskId = new Map<string, string[]>();
     const bubbleAnchorByTaskId = new Map<string, string>();
     for (const link of bubbleLinks) {
       if (!visibleIds.has(link.firstTaskId) || !visibleIds.has(link.secondTaskId)) continue;
-      bubbleLinkByTaskId.set(link.firstTaskId, link.secondTaskId);
-      bubbleLinkByTaskId.set(link.secondTaskId, link.firstTaskId);
-      bubbleAnchorByTaskId.set(link.firstTaskId, link.anchorTaskId);
-      bubbleAnchorByTaskId.set(link.secondTaskId, link.anchorTaskId);
+      const first = bubbleLinkByTaskId.get(link.firstTaskId) ?? [];
+      const second = bubbleLinkByTaskId.get(link.secondTaskId) ?? [];
+      first.push(link.secondTaskId);
+      second.push(link.firstTaskId);
+      bubbleLinkByTaskId.set(link.firstTaskId, first);
+      bubbleLinkByTaskId.set(link.secondTaskId, second);
+    }
+    // Every member receives the same stable group anchor: the anchor of the
+    // oldest surviving edge. Avoid switching the visual root on every new link.
+    for (const link of bubbleLinks) {
+      if (!bubbleLinkByTaskId.has(link.firstTaskId) || bubbleAnchorByTaskId.has(link.firstTaskId)) continue;
+      const visited = new Set([link.firstTaskId]);
+      const queue = [link.firstTaskId];
+      for (const id of queue) {
+        for (const neighbour of bubbleLinkByTaskId.get(id) ?? []) {
+          if (visited.has(neighbour)) continue;
+          visited.add(neighbour);
+          queue.push(neighbour);
+        }
+      }
+      const anchor = visited.has(link.anchorTaskId) ? link.anchorTaskId : link.firstTaskId;
+      for (const id of visited) bubbleAnchorByTaskId.set(id, anchor);
     }
     // One aggregate query for all visible tasks, never send file bytes in task listings.
     const attachmentCounts = visibleItems.length ? await prisma.taskAttachment.groupBy({
@@ -235,7 +256,7 @@ export const taskService = {
       return ({
       ...task,
       monitoringTriggers: task.aiMonitoringEnabled ? (triggersByRoot.get(task.id) ?? []) : [],
-      linkedTaskIds: bubbleLinkByTaskId.has(task.id) ? [bubbleLinkByTaskId.get(task.id)!] : [],
+      linkedTaskIds: bubbleLinkByTaskId.get(task.id) ?? [],
       bubbleLinkAnchorId: bubbleAnchorByTaskId.get(task.id) ?? null,
       attachmentCount: attachmentsByTaskId.get(task.id) ?? 0,
       commentCount: taskCommentStats.total,
