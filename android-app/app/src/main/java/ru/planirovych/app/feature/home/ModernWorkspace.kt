@@ -14,7 +14,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
@@ -229,7 +229,7 @@ fun ModernWorkspace(
                             busy=state.taskBusy || completing,
                             onOpen={onOpenTask(task.id)},
                             onComplete={
-                                if(!state.taskBusy && task.id !in completingTaskIds){
+                                if(!state.taskBusy && completingTaskIds.isEmpty()){
                                     completingTaskIds.add(task.id)
                                     completionScope.launch {
                                         // Let the particle burst and card departure finish
@@ -617,11 +617,12 @@ private fun ModernTaskCard(task:Task,sphere:Sphere?,colors:WorkspaceColors,dark:
 
 @Composable
 private fun TaskCompletionConfetti() {
-    val progress by animateFloatAsState(
-        targetValue=1f,animationSpec=tween(560),label="task-completion-confetti")
+    val animation=remember { Animatable(0f) }
+    LaunchedEffect(Unit){animation.animateTo(1f,animationSpec=tween(560))}
+    val progress=animation.value
     val colors=listOf(Color(0xFF22C55E),Color(0xFFA855F7),Color(0xFFFACC15),
         Color(0xFF38BDF8),Color(0xFFFB7185))
-    Canvas(Modifier.matchParentSize()) {
+    Canvas(Modifier.fillMaxSize()) {
         val anchor=Offset(size.width*.88f,size.height*.19f)
         repeat(25){index->
             val angle=(index*2.399963f)
