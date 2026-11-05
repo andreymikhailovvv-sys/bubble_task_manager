@@ -300,3 +300,50 @@ test('dense three-sector workspace never crosses a divider or overlaps a linked 
       `Overlap of ${bubbles[i].id} and ${bubbles[j].id}`);
   }
 });
+
+test('each sector forms a high-coefficient inner nucleus without breaking boundaries', () => {
+  const bounds = {
+    minX: -480, maxX: 480, minY: -480, maxY: 480,
+    compact: true,
+    ellipse: { cx: 0, cy: 0, rx: 460, ry: 460 },
+    sectors: [
+      { start: { x: 1, y: 0 }, end: { x: -1, y: 0 } },
+      { start: { x: -1, y: 0 }, end: { x: 1, y: 0 } }
+    ]
+  };
+  const bubbles = [0, 1].flatMap((sectorIndex) =>
+    [0.96, 0.89, 0.78, 0.2, 0.12].map((coefficient, idx) => ({
+      id: `sector-${sectorIndex}-${idx}`,
+      x: (idx - 2) * 65,
+      y: (sectorIndex === 0 ? 1 : -1) * (250 + idx * 9),
+      radius: idx < 3 ? 46 - idx * 5 : 27,
+      sectorIndex, coefficient
+    }))
+  );
+  const positions = linkedBubblePositions(bubbles, bounds);
+  for (let sectorIndex = 0; sectorIndex < 2; sectorIndex++) {
+    const tasks = bubbles.filter((bubble) => bubble.sectorIndex === sectorIndex);
+    const high = tasks.filter((bubble) => bubble.coefficient >= 0.78);
+    const low = tasks.filter((bubble) => bubble.coefficient < 0.3);
+    const averageRadius = (items: typeof tasks) =>
+      items.reduce((sum, bubble) => {
+        const p = positions.get(bubble.id)!;
+        return sum + Math.hypot(p.x, p.y);
+      }, 0) / items.length;
+    assert.ok(averageRadius(high) < averageRadius(low),
+      `Sector ${sectorIndex} high-coefficient nucleus was not closer to centre`);
+    for (const bubble of tasks) {
+      const point = positions.get(bubble.id)!;
+      assert.ok(sectorIndex === 0 ? point.y >= bubble.radius + 9 : point.y <= -bubble.radius - 9,
+        `${bubble.id} crossed sector wall`);
+    }
+  }
+  for (let i = 0; i < bubbles.length; i++) {
+    for (let j = i + 1; j < bubbles.length; j++) {
+      const a = bubbles[i], b = bubbles[j];
+      const pa = positions.get(a.id)!, pb = positions.get(b.id)!;
+      assert.ok(Math.hypot(pa.x - pb.x, pa.y - pb.y) >= a.radius + b.radius + 12.9,
+        `Collision ${a.id}/${b.id}`);
+    }
+  }
+});
