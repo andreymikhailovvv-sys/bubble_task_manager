@@ -103,13 +103,25 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
   const halfY = bounds.ellipse?.ry ?? (bounds.maxY - bounds.minY) / 2;
   const sectorOf = (bubble: VisualBubble) => bubble.sectorIndex ?? 0;
   const coefficientOf = (bubble: VisualBubble) => Math.min(1, Math.max(0, bubble.coefficient ?? 0));
-  const maxCoefficientBySector = new Map<number, number>();
-  for (const bubble of bubbles) {
-    const sector = sectorOf(bubble);
-    maxCoefficientBySector.set(sector, Math.max(maxCoefficientBySector.get(sector) ?? 0, coefficientOf(bubble)));
+  // Relative rank, not a fixed coefficient cutoff: otherwise most sectors
+  // end up with just one "important" task and there is no group to form.
+  const coreIdsBySector = new Map<number, Set<string>>();
+  if (bounds.sectors && bounds.sectors.length > 1) {
+    const perSector = new Map<number, VisualBubble[]>();
+    for (const bubble of bubbles) {
+      const sector = sectorOf(bubble);
+      const existing = perSector.get(sector) ?? [];
+      existing.push(bubble);
+      perSector.set(sector, existing);
+    }
+    for (const [sector, candidates] of perSector) {
+      const ranked = [...candidates].sort((a, b) =>
+        coefficientOf(b) - coefficientOf(a) || b.radius - a.radius || a.id.localeCompare(b.id));
+      const count = Math.min(ranked.length, Math.max(2, Math.ceil(ranked.length * 0.32)));
+      coreIdsBySector.set(sector, new Set(ranked.slice(0, count).map((bubble) => bubble.id)));
+    }
   }
-  const highPriority = (bubble: VisualBubble) => Boolean(bounds.sectors && bounds.sectors.length > 1) &&
-    coefficientOf(bubble) >= Math.max(0.3, (maxCoefficientBySector.get(sectorOf(bubble)) ?? 0) * 0.77);
+  const highPriority = (bubble: VisualBubble) => coreIdsBySector.get(sectorOf(bubble))?.has(bubble.id) ?? false;
   const unit = (point: Point) => {
     const length = Math.hypot(point.x, point.y) || 1;
     return { x: point.x / length, y: point.y / length };
@@ -155,16 +167,20 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
   const sortedComponents = components
     .map((component) => ({
       component,
+      // High-coefficient groups are placed first, even if lower-ranked
+      // groups contain a physically larger bubble. Manual pins still win.
       priority: Math.max(...component.ids.map((id) =>
-        byId.get(id)!.radius + coefficientOf(byId.get(id)!) * 28)),
+        (highPriority(byId.get(id)!) ? 1000 : 0) +
+        byId.get(id)!.radius + coefficientOf(byId.get(id)!) * 90)),
       pinned: component.ids.some((id) => byId.get(id)!.pinned)
     }))
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.priority - a.priority);
   for (const { component } of sortedComponents) {
     const ids = [...component.ids].sort((a, b) =>
       Number(Boolean(byId.get(b)!.pinned)) - Number(Boolean(byId.get(a)!.pinned)) ||
-      (byId.get(b)!.radius + coefficientOf(byId.get(b)!) * 28) -
-          (byId.get(a)!.radius + coefficientOf(byId.get(a)!) * 28) || a.localeCompare(b));
+      (Number(highPriority(byId.get(b)!)) - Number(highPriority(byId.get(a)!))) * 1000 ||
+      (byId.get(b)!.radius + coefficientOf(byId.get(b)!) * 90) -
+        (byId.get(a)!.radius + coefficientOf(byId.get(a)!) * 90) || a.localeCompare(b));
     for (const root of ids) {
       if (visited.has(root)) continue;
       const queue = [root];
@@ -173,8 +189,9 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
         ordered.push(id);
         const adjacent = [...(neighbours.get(id) ?? [])].sort((a, b) =>
           Number(Boolean(byId.get(b)!.pinned)) - Number(Boolean(byId.get(a)!.pinned)) ||
-          (byId.get(b)!.radius + coefficientOf(byId.get(b)!) * 28) -
-          (byId.get(a)!.radius + coefficientOf(byId.get(a)!) * 28) || a.localeCompare(b));
+          (Number(highPriority(byId.get(b)!)) - Number(highPriority(byId.get(a)!))) * 1000 ||
+      (byId.get(b)!.radius + coefficientOf(byId.get(b)!) * 90) -
+        (byId.get(a)!.radius + coefficientOf(byId.get(a)!) * 90) || a.localeCompare(b));
         for (const neighbour of adjacent) {
           if (visited.has(neighbour)) continue;
           visited.add(neighbour);
@@ -205,12 +222,18 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
       const preferredDistance = Math.hypot(p.x - preferred.x, p.y - preferred.y);
       if (isPinned) return preferredDistance * 20 + normalCenterDistance(p) * 4;
       const radial = normalCenterDistance(p);
-      const centreWeight = bounds.compact ? 245 : 0;
+      const centreWeight = bounds.compact ? (highPriority(bubble) ? 205 : 245) : 0;
       let result = radial * centreWeight + preferredDistance * (bounds.compact ? 0.085 : 1);
       if (highPriorityPeers.length) {
+        // Make separation from the core expensive, while retaining hard
+        // collision/sector tests in consider() below.
         const nearestPeerGap = Math.min(...highPriorityPeers.map(({ peer, point }) =>
           Math.max(0, Math.hypot(p.x - point.x, p.y - point.y) - bubble.radius - peer.radius - 13)));
-        result += nearestPeerGap * 1.15;
+        const meanX = highPriorityPeers.reduce((total, item) => total + item.point.x, 0) / highPriorityPeers.length;
+        const meanY = highPriorityPeers.reduce((total, item) => total + item.point.y, 0) / highPriorityPeers.length;
+        const averageRadius = highPriorityPeers.reduce((total, item) => total + item.peer.radius, 0) / highPriorityPeers.length;
+        const centroidGap = Math.max(0, Math.hypot(p.x - meanX, p.y - meanY) - bubble.radius - averageRadius);
+        result += nearestPeerGap * 7 + centroidGap * 1.1;
       }
       if (hasLink) {
         // Keep every real adjacent task at a visible but short dotted gap.
@@ -242,6 +265,9 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
     // Exact tangent candidates ensure a few pixels of breathing room and
     // prevent large empty holes between otherwise adjacent bubbles.
     const nearby = [...positions].sort((a, b) =>
+      (highPriority(bubble)
+        ? Number(highPriority(byId.get(b[0])!)) - Number(highPriority(byId.get(a[0])!))
+        : 0) ||
       Math.hypot(a[1].x - preferred.x, a[1].y - preferred.y) -
       Math.hypot(b[1].x - preferred.x, b[1].y - preferred.y));
     for (const [otherId, p] of nearby.slice(0, 100)) {
@@ -269,7 +295,8 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
       }
       // Any candidate with a cost well below the next ring's minimum radial
       // penalty cannot be improved by examining the outer rings.
-      if (best && bounds.compact && !hasLink && bestScore < distance / halfY * 245 - 4) break;
+      if (best && bounds.compact && !hasLink && bestScore < distance / halfY *
+        (highPriority(bubble) ? 205 : 245) - 4) break;
     }
 
     if (!best) {
