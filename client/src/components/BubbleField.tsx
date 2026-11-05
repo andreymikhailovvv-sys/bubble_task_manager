@@ -649,11 +649,13 @@ export function BubbleField({
 
   // The bond is rendered inside the same animated parent as both circles.
   // It cannot reveal a different timing/coordinate system when modes change.
-  const bubbleGroups = useMemo(() => {
+  type BubbleGroup = { key: string; anchor: (typeof bubbles)[number]; satellite: (typeof bubbles)[number] | null };
+  const bubbleGroups = useMemo<BubbleGroup[]>(() => {
     const byId = new Map(visibleBubbles.map((bubble) => [bubble.task.id, bubble]));
     const used = new Set<string>();
-    return visibleBubbles.flatMap((bubble) => {
-      if (used.has(bubble.task.id)) return [];
+    const groups: BubbleGroup[] = [];
+    for (const bubble of visibleBubbles) {
+      if (used.has(bubble.task.id)) continue;
       const partner = byId.get(bubble.task.linkedTaskIds?.[0] ?? '');
       if (partner && partner.task.linkedTaskIds?.[0] === bubble.task.id) {
         const anchorId = bubble.task.bubbleLinkAnchorId ?? partner.task.bubbleLinkAnchorId
@@ -662,11 +664,13 @@ export function BubbleField({
         const satellite = anchor === bubble ? partner : bubble;
         used.add(anchor.task.id);
         used.add(satellite.task.id);
-        return [{ key: `pair-${[anchor.task.id, satellite.task.id].sort().join('-')}`, anchor, satellite }];
+        groups.push({ key: `pair-${[anchor.task.id, satellite.task.id].sort().join('-')}`, anchor, satellite });
+      } else {
+        used.add(bubble.task.id);
+        groups.push({ key: `single-${bubble.task.id}`, anchor: bubble, satellite: null });
       }
-      used.add(bubble.task.id);
-      return [{ key: `single-${bubble.task.id}`, anchor: bubble, satellite: null }];
-    });
+    }
+    return groups;
   }, [visibleBubbles]);
   const orderedGroups = dragView
     ? [...bubbleGroups].sort((a, b) =>
