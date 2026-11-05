@@ -72,6 +72,9 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     var authMode by remember { mutableStateOf<AuthMode?>(null) }
     var openedTaskId by remember { mutableStateOf<String?>(null) }
     var newSubtaskParentId by remember { mutableStateOf<String?>(null) }
+    // Keep the parent focus sheet mounted while its subtask dialog is open.
+    var overlaySubtaskId by remember { mutableStateOf<String?>(null) }
+    var overlayNewSubtaskParentId by remember { mutableStateOf<String?>(null) }
     // Only return to the parent if the subtask was entered from its focus sheet.
     // Direct timeline navigation must close back to the timeline.
     var subtaskReturnToTaskId by remember { mutableStateOf<String?>(null) }
@@ -81,6 +84,8 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
             // A widget should not be hidden behind an already-open task sheet.
             openedTaskId=null
             newSubtaskParentId=null
+            overlaySubtaskId=null
+            overlayNewSubtaskParentId=null
             subtaskReturnToTaskId=null
             taskAiChatId=null
             creationMenu=false
@@ -96,6 +101,8 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     LaunchedEffect(state.user?.id) {
         openedTaskId = null
         newSubtaskParentId = null
+        overlaySubtaskId = null
+        overlayNewSubtaskParentId = null
         subtaskReturnToTaskId = null
         taskAiChatId = null
     }
@@ -103,6 +110,8 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
         if(!notificationTaskId.isNullOrBlank()){
             openedTaskId=notificationTaskId
             newSubtaskParentId=null
+            overlaySubtaskId=null
+            overlayNewSubtaskParentId=null
             subtaskReturnToTaskId=null
             pagerState.scrollToPage(0)
         }
@@ -199,6 +208,8 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                     openedTaskId = it
                     subtaskReturnToTaskId = null
                     newSubtaskParentId = null
+                    overlaySubtaskId = null
+                    overlayNewSubtaskParentId = null
                     vm.clearTaskError()
                 },
                 pagerState = pagerState,
@@ -256,15 +267,14 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                 error = state.taskError,
                 onBack = back,
                 onOpenSubtask = { childId ->
-                    subtaskReturnToTaskId = openedTask.id
-                    openedTaskId = childId
-                    newSubtaskParentId = null
+                    // Dialog overlays the existing focus sheet; no intermediate empty screen.
+                    overlaySubtaskId = childId
+                    overlayNewSubtaskParentId = null
                     vm.clearTaskError()
                 },
                 onNewSubtask = {
-                    subtaskReturnToTaskId = openedTask.id
-                    newSubtaskParentId = openedTask.id
-                    openedTaskId = null
+                    overlayNewSubtaskParentId = openedTask.id
+                    overlaySubtaskId = null
                     vm.clearTaskError()
                 },
                 onSave = vm::saveTask,
@@ -316,6 +326,29 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
             onChangeStatus = vm::changeStatus,
             onDelete = vm::deleteTask,
             onClearError = vm::clearTaskError,
+        )
+    }
+    // Parent sheet stays alive underneath; closing only this dialog reveals it instantly.
+    val overlayChild=overlaySubtaskId?.let{id->state.tasks.firstOrNull{it.id==id}}
+    val overlayParent=when {
+        overlayNewSubtaskParentId!=null ->
+            state.tasks.firstOrNull{it.id==overlayNewSubtaskParentId}
+        overlayChild?.parentTaskId!=null ->
+            state.tasks.firstOrNull{it.id==overlayChild.parentTaskId}
+        else -> null
+    }
+    if(overlayParent!=null && (overlayChild!=null || overlayNewSubtaskParentId!=null)){
+        MiniAppSubtaskEditorSheet(
+            task=overlayChild,parent=overlayParent,dark=dark,vm=vm,
+            busy=state.taskBusy,error=state.taskError,
+            onBack={
+                overlaySubtaskId=null
+                overlayNewSubtaskParentId=null
+                vm.clearTaskError()
+            },
+            onSave=vm::saveTask,onCreateSubtask=vm::createSubtask,
+            onChangeStatus=vm::changeStatus,onDelete=vm::deleteTask,
+            onClearError=vm::clearTaskError
         )
     }
     taskAiChatId?.let{id->
