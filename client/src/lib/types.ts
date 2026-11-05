@@ -13,6 +13,7 @@ export type Task = {
   sphereId?: string | null;
   parentTaskId?: string | null;
   linkedTaskIds?: string[];
+  bubbleLinkAnchorId?: string | null;
   bubbleGlobalX?: number | null;
   bubbleGlobalY?: number | null;
   bubbleSectorX?: number | null;
