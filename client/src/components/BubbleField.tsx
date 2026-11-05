@@ -1197,19 +1197,17 @@ export function BubbleField({
           <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X} ry={ELLIPSE_RADIUS_Y} fill="url(#bg)" opacity={isLightTheme ? 0.94 : 0.86} />
           <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X + 22} ry={ELLIPSE_RADIUS_Y + 16} fill="url(#fieldHalo)" filter="url(#bubbleGlow)" opacity={isLightTheme ? 0.48 : 0.7} />
 
-          {dragView?.target && (() => {
-            const from = visibleBubbles.find((bubble) => bubble.task.id === dragView.taskId);
-            const a = from ? getBubbleVisualPoint(from) : null;
-            const b = bubbleVisualPositions.get(dragView.target.targetId);
-            if (!a || !b) return null;
-            const to = visibleBubbles.find((bubble) => bubble.task.id === dragView.target?.targetId);
-            if (!from || !to) return null;
-            const segment = bubbleLinkSegment(
-              { x: a.x + dragView.dx, y: a.y + dragView.dy }, b, from.radius, to.radius
-            );
-            return <line {...segment}
-              stroke={dragView.target.kind === 'nest' ? '#f59e0b' : '#8b5cf6'} strokeWidth={3.4}
-              strokeLinecap="round" strokeDasharray="4 4.5" opacity={0.98} pointerEvents="none" />;
+          {dragView?.changesSector && !dragView.target && sectorCount > 1 && (() => {
+            const geometry = sectorGeometry[dragView.destinationSectorIndex];
+            if (!geometry) return null;
+            const first = mapToOval(SIZE / 2 + Math.cos(geometry.startAngle) * FIELD_RADIUS,
+              SIZE / 2 + Math.sin(geometry.startAngle) * FIELD_RADIUS);
+            const last = mapToOval(SIZE / 2 + Math.cos(geometry.endAngle) * FIELD_RADIUS,
+              SIZE / 2 + Math.sin(geometry.endAngle) * FIELD_RADIUS);
+            const sector = bubbleSectors[dragView.destinationSectorIndex];
+            return <path d={`M ${BUBBLE_FIELD_CENTER_X} ${BUBBLE_FIELD_CENTER_Y} L ${first.x} ${first.y} A ${ELLIPSE_RADIUS_X} ${ELLIPSE_RADIUS_Y} 0 ${geometry.span > Math.PI ? 1 : 0} 1 ${last.x} ${last.y} Z`}
+              fill={sector?.color ?? '#22d3ee'} fillOpacity={0.10} stroke={sector?.color ?? '#22d3ee'}
+              strokeWidth={2} strokeOpacity={0.55} strokeDasharray="9 9" pointerEvents="none" />;
           })()}
           {sectorGeometry.map((geometry, idx) => {
             if (sectorCount === 1) return null;
@@ -1252,6 +1250,50 @@ export function BubbleField({
               );
             })}
           </AnimatePresence>
+          {/* This preview is intentionally ABOVE all circles. Large-to-large
+              drops overlap both interiors and would hide any line below them. */}
+          {dragView?.target && (() => {
+            const from = visibleBubbles.find((bubble) => bubble.task.id === dragView.taskId);
+            const to = visibleBubbles.find((bubble) => bubble.task.id === dragView.target?.targetId);
+            if (!from || !to) return null;
+            const original = getBubbleVisualPoint(from);
+            const start = { x: original.x + dragView.dx, y: original.y + dragView.dy };
+            const end = getBubbleVisualPoint(to);
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
+            const distance = Math.hypot(dx, dy);
+            const ux = distance > 0.001 ? dx / distance : 1;
+            const uy = distance > 0.001 ? dy / distance : 0;
+            const overlapping = distance < from.radius + to.radius + 18;
+            const segment = overlapping
+              ? {
+                x1: start.x + ux * Math.min(from.radius * 0.38, distance * 0.26),
+                y1: start.y + uy * Math.min(from.radius * 0.38, distance * 0.26),
+                x2: end.x - ux * Math.min(to.radius * 0.38, distance * 0.26),
+                y2: end.y - uy * Math.min(to.radius * 0.38, distance * 0.26)
+              } : bubbleLinkSegment(start, end, from.radius, to.radius);
+            const color = dragView.target.kind === 'nest' ? '#fbbf24' : '#c4b5fd';
+            return <g pointerEvents="none">
+              <circle cx={end.x} cy={end.y} r={to.radius + 8} fill="none"
+                stroke={color} strokeWidth={3} strokeDasharray="5 5" opacity={0.94} />
+              <line {...segment} stroke="#0f172a" strokeOpacity={0.75} strokeWidth={8}
+                strokeLinecap="round" />
+              <line {...segment} stroke={color} strokeWidth={4.5} strokeDasharray="7 5"
+                strokeLinecap="round" opacity={1} />
+            </g>;
+          })()}
+          {dragView?.changesSector && !dragView.target && (() => {
+            const source = visibleBubbles.find((bubble) => bubble.task.id === dragView.taskId);
+            if (!source) return null;
+            const p = getBubbleVisualPoint(source);
+            const x = clamp(p.x + dragView.dx - 142, BUBBLE_WORKSPACE_X + 10, VIEWBOX_RIGHT - 292);
+            const y = clamp(p.y + dragView.dy - source.radius - 53, VIEWBOX_TOP + 12, VIEWBOX_BOTTOM - 40);
+            return <foreignObject x={x} y={y} width={284} height={38} pointerEvents="none">
+              <div className="flex h-full items-center justify-center rounded-full border border-cyan-400/60 bg-slate-950/90 px-3 text-xs font-semibold text-cyan-100 shadow-lg backdrop-blur">
+                <span className="truncate">Перенести в сектор «{dragView.destinationSectorName}»</span>
+              </div>
+            </foreignObject>;
+          })()}
           {bubbleDragNotice && noticePair && (() => {
             const [aId, bId] = noticePair;
             const a = bubbleVisualPositions.get(aId);
