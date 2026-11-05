@@ -38,7 +38,6 @@ type Props = {
   onRescheduleTask?: (task: Task) => void;
   forceTaskContextMenuOpen?: boolean;
   isSearchFiltering?: boolean;
-  isSingleSectorFilterActive?: boolean;
   themeMode?: 'dark' | 'light';
   className?: string;
 };
@@ -285,7 +284,6 @@ export function BubbleField({
   onRescheduleTask,
   forceTaskContextMenuOpen = false,
   isSearchFiltering = false,
-  isSingleSectorFilterActive = false,
   themeMode = 'dark',
   className
 }: Props) {
@@ -496,8 +494,8 @@ export function BubbleField({
   );
 
   const bubbles = useMemo(
-    () => buildBubbles(tasks, spheres, mode, SIZE, rankingMode, subtaskMap, isSingleSectorFilterActive && mode === 'sectors'),
-    [tasks, spheres, mode, rankingMode, subtaskMap, isSingleSectorFilterActive]
+    () => buildBubbles(tasks, spheres, mode, SIZE, rankingMode, subtaskMap),
+    [tasks, spheres, mode, rankingMode, subtaskMap]
   );
   const mapToOval = useCallback((x: number, y: number) => ({
     x: BUBBLE_FIELD_CENTER_X + (x - SIZE / 2) * ELLIPSE_X_SCALE,
@@ -513,7 +511,7 @@ export function BubbleField({
       return {
         id: bubble.task.id, x: point.x, y: point.y, radius: bubble.radius,
         linkedTaskIds: bubble.task.linkedTaskIds, bubbleLinkAnchorId: bubble.task.bubbleLinkAnchorId,
-        pinned: !isSingleSectorFilterActive && typeof savedX === 'number' && typeof savedY === 'number'
+        pinned: typeof savedX === 'number' && typeof savedY === 'number'
       };
     }),
     {
@@ -521,7 +519,7 @@ export function BubbleField({
       minY: VIEWBOX_TOP + 20, maxY: VIEWBOX_BOTTOM - 20,
       ellipse: { cx: BUBBLE_FIELD_CENTER_X, cy: BUBBLE_FIELD_CENTER_Y, rx: ELLIPSE_RADIUS_X, ry: ELLIPSE_RADIUS_Y }
     }
-  ), [bubbles, mapToOval, mode, isSingleSectorFilterActive]);
+  ), [bubbles, mapToOval, mode]);
   const getBubbleVisualPoint = (bubble: (typeof bubbles)[number]) =>
     bubbleVisualPositions.get(bubble.task.id) ?? mapToOval(bubble.x, bubble.y);
   const eligibleBubbleTargets = (): VisualBubble[] => visibleBubbles
