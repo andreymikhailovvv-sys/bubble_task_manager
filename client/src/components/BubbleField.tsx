@@ -39,6 +39,8 @@ type Props = {
   forceTaskContextMenuOpen?: boolean;
   isSearchFiltering?: boolean;
   themeMode?: 'dark' | 'light';
+  /** Use the full viewport for the oval; hide the normal side information panel. */
+  fullscreen?: boolean;
   className?: string;
 };
 
@@ -293,6 +295,7 @@ export function BubbleField({
   forceTaskContextMenuOpen = false,
   isSearchFiltering = false,
   themeMode = 'dark',
+  fullscreen = false,
   className
 }: Props) {
   const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null);
@@ -1054,7 +1057,7 @@ export function BubbleField({
 
   return (
     <div
-      className={`bubble-field-container surface-canvas relative overflow-visible rounded-[2.2rem] border ${containerShadowClass} backdrop-blur-sm ${className ?? 'h-full'}`}
+      className={`bubble-field-container surface-canvas relative ${fullscreen ? 'overflow-hidden rounded-none border-0' : 'overflow-visible rounded-[2.2rem] border'} ${containerShadowClass} backdrop-blur-sm ${className ?? 'h-full'}`}
       onMouseLeave={() => {
         if (isNativeCalendarOpen) return;
         scheduleHoverExit();
@@ -1064,7 +1067,11 @@ export function BubbleField({
         onDragStart={(event) => event.preventDefault()}
         onPointerMove={onCanvasPointerMove} onPointerUp={onCanvasPointerUp}
         onPointerCancel={cancelCanvasPointer} onLostPointerCapture={cancelCanvasPointer}
-        viewBox={`${VIEWBOX_LEFT} ${VIEWBOX_TOP} ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} className="bubble-field-stage relative z-20 h-full w-full overflow-visible" onContextMenu={(event) => showContextMenu(event, null)}>
+        viewBox={fullscreen
+          ? `${BUBBLE_WORKSPACE_X - 38} ${VIEWBOX_TOP} ${BUBBLE_WORKSPACE_WIDTH + 76} ${VIEWBOX_HEIGHT}`
+          : `${VIEWBOX_LEFT} ${VIEWBOX_TOP} ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
+        className={`bubble-field-stage relative z-20 h-full w-full ${fullscreen ? 'overflow-hidden' : 'overflow-visible'}`}
+        onContextMenu={(event) => showContextMenu(event, null)}>
         <motion.g initial={false}>
           <defs>
             <radialGradient id="bg" cx="50%" cy="50%" r="60%">

@@ -832,6 +832,9 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [unlinkingBubbleTaskId, setUnlinkingBubbleTaskId] = useState<string | null>(null);
   const [mode, setMode] = useState<'global' | 'sectors'>('sectors');
+  // Distraction-free viewport for bubbles. Keeps the same BubbleField instance,
+  // filters and overlays; only the surrounding chrome is hidden.
+  const [isBubbleFullscreen, setIsBubbleFullscreen] = useState(false);
   const [search, setSearch] = useState('');
   const [requestedStandaloneNote, setRequestedStandaloneNote] = useState<{ id: string; serial: number } | null>(null);
   const [selectedSphereIds, setSelectedSphereIds] = useState<string[]>([]);
@@ -5216,7 +5219,9 @@ export default function App() {
 
   return (
     <main
-      className="app-shell flex h-screen flex-col overflow-y-auto p-4 lg:p-6"
+      className={isBubbleFullscreen
+        ? 'app-shell flex h-[100dvh] min-h-0 flex-col overflow-hidden p-0'
+        : 'app-shell flex h-screen flex-col overflow-y-auto p-4 lg:p-6'}
       data-theme={effectiveThemeMode}
     >
       {reportPromptTask ? (
@@ -5368,7 +5373,75 @@ export default function App() {
         </div>
       ) : null}
       {activeTourStep ? <TourOverlay activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-') ? WORKSPACE_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-') ? FEATURE_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} onComplete={completeTaskTour} /> : null}
-      <header className="surface-topbar light-glass-topbar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-3 backdrop-blur">
+      {isBubbleFullscreen && displayMode === 'bubbles' ? (
+        <header data-tour="bubbles-fullscreen-toolbar"
+          className="surface-topbar light-glass-topbar relative z-40 mx-2 mt-2 mb-2 flex shrink-0 flex-wrap items-center gap-2 rounded-2xl border px-3 py-2.5 shadow-lg backdrop-blur-lg lg:flex-nowrap lg:mx-3">
+          <WorkspaceGlobalSearch
+            key={currentUser.id}
+            userId={currentUser.id}
+            value={search}
+            onChange={setSearch}
+            tasks={tasks}
+            subtasks={subtasks}
+            onOpenTask={openTaskWithFocusGuard}
+            onOpenSubtask={(subtask) => setEditorState({ task: subtask })}
+            onOpenNote={(id) => setRequestedStandaloneNote({ id, serial: Date.now() })}
+          />
+          <div data-tour="bubbles-fullscreen-filters" className="top-filter-cluster flex min-w-0 flex-wrap items-center gap-2">
+            <div className="relative min-w-36 flex-1 sm:min-w-44" data-sphere-filter-root="true">
+              <button type="button"
+                className="topbar-select-button light-sector-filter-trigger flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm"
+                aria-label="Фильтр секторов" aria-expanded={isSphereFilterOpen}
+                onClick={() => setIsSphereFilterOpen((prev) => !prev)}>
+                <span className="truncate">{sphereFilterLabel}</span>
+                <ChevronDown size={15} className={`ml-2 shrink-0 transition ${isSphereFilterOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {isSphereFilterOpen ? (
+                <div className="light-sector-filter-panel topbar-dropdown absolute left-0 top-[calc(100%+6px)] z-50 w-64 rounded-2xl border p-2 shadow-2xl backdrop-blur">
+                  <label className="light-sector-filter-item topbar-dropdown-item mb-1 flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm">
+                    <input type="checkbox" checked={isAllSpheresSelected}
+                      onChange={(event) => setSelectedSphereIds(event.target.checked ? spheres.map((sphere) => sphere.id) : [])} />
+                    <span>Все сектора</span>
+                  </label>
+                  <div className="max-h-44 space-y-1 overflow-y-auto">
+                    {spheres.map((sphere) => (
+                      <label key={sphere.id} className="light-sector-filter-item topbar-dropdown-item flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm">
+                        <input type="checkbox" checked={selectedSphereIds.includes(sphere.id)}
+                          onChange={() => toggleSphereSelection(sphere.id)} />
+                        <span className="truncate">{sphere.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+            <CustomSelect
+              value={timeFilter}
+              onChange={(value) => setTimeFilter(value as 'all' | 'today' | 'tomorrow' | 'week' | 'month' | 'focus')}
+              options={[{ value: 'all', label: 'За все время' }, { value: 'today', label: 'За сегодня' },
+                { value: 'tomorrow', label: 'За завтра' }, { value: 'week', label: 'За эту неделю' },
+                { value: 'month', label: 'За этот месяц' }, { value: 'focus', label: 'Фокус' }]}
+              className="min-w-36 sm:min-w-44" buttonClassName="topbar-select-button rounded-xl"
+              menuClassName="topbar-dropdown" ariaLabel="Фильтр по времени"
+            />
+            <CustomSelect
+              value="coefficient"
+              onChange={(value) => setRankingMode(value as BubbleRankingMode)}
+              options={[{ value: 'coefficient', label: 'По коэффициенту' }]}
+              className="min-w-36 sm:min-w-44" buttonClassName="topbar-select-button rounded-xl cursor-default"
+              menuClassName="topbar-dropdown" ariaLabel="Фильтр важности"
+            />
+          </div>
+          <button type="button" data-tour="bubbles-fullscreen-exit"
+            onClick={() => setIsBubbleFullscreen(false)}
+            className="topbar-action-button ml-auto inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition hover:brightness-110"
+            title="Вернуться в обычный режим" aria-label="Выйти из полноэкранного режима">
+            <Minimize2 size={17} />
+            <span>Выйти из полного экрана</span>
+          </button>
+        </header>
+      ) : null}
+      {!isBubbleFullscreen ? <header className="surface-topbar light-glass-topbar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-3 backdrop-blur">
         <h1 className="mr-3 flex items-center gap-2 text-xl font-semibold">
           <img src="/icon.png" alt="" className="h-7 w-7 rounded-md" />
           <span>Планировыч AI</span>
@@ -5427,9 +5500,9 @@ export default function App() {
             </>
           )}
         </div>
-      </header>
+      </header> : null}
 
-      {!sectorEditorSphere ? <section className="top-control-bar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-2.5 backdrop-blur">
+      {!isBubbleFullscreen && !sectorEditorSphere ? <section className="top-control-bar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-2.5 backdrop-blur">
         <button type="button" className="updates-menu-trigger relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border" onClick={() => setIsUpdatesOpen(true)} aria-label="Открыть обновления и обучение" title="Обновления и обучение"><Menu size={20} />{hasUnreadNews ? <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">1</span> : null}</button>
         <div data-tour="display-modes" className="display-mode-toggle-group inline-flex shrink-0 items-center rounded-xl border p-1">
           {DISPLAY_MODE_OPTIONS.map((option) => (
@@ -6153,9 +6226,13 @@ export default function App() {
         </div>
       ) : null}
 
-      <div data-tour="workspace" className="workspace-shell relative min-h-0 flex-1 overflow-hidden pr-[360px]">
+      <div data-tour="workspace"
+        className={isBubbleFullscreen
+          ? 'workspace-shell relative min-h-0 flex-1 overflow-hidden rounded-none p-0'
+          : 'workspace-shell relative min-h-0 flex-1 overflow-hidden pr-[360px]'}>
         {displayMode === 'bubbles' ? (
           <div data-tour="bubbles-workspace" className="relative h-full">
+            {!isBubbleFullscreen ? <>
             <div data-tour="bubble-layout" className="bubble-layout-toggle absolute right-4 top-4 z-30 flex items-center gap-1 rounded-full border p-1 shadow-xl backdrop-blur" role="group" aria-label="Режим отображения баблов">
               <button
                 type="button"
@@ -6178,8 +6255,18 @@ export default function App() {
                 <PieChart size={19} strokeWidth={2.1} />
               </button>
             </div>
+            <button type="button" data-tour="bubbles-fullscreen-enter"
+              onClick={() => { setIsSphereFilterOpen(false); setIsBubbleFullscreen(true); }}
+              className="bubble-layout-toggle absolute right-4 top-[4.55rem] z-30 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold shadow-lg backdrop-blur transition hover:brightness-110"
+              title="Развернуть пространство пузырей на весь экран"
+              aria-label="Полноэкранный режим пузырей">
+              <Maximize2 size={16} />
+              <span>Полный экран</span>
+            </button>
+            </> : null}
             <BubbleField
               className="h-full"
+              fullscreen={isBubbleFullscreen}
               themeMode={effectiveThemeMode}
             tasks={visibleTasks}
             timelinePreviewTasks={activeTimelineItems}
@@ -6829,7 +6916,7 @@ export default function App() {
           </div>
         ) : null}
 
-        <aside
+        {!isBubbleFullscreen ? <aside
           data-tour="workspace-side-rail"
           className="workspace-side-rail absolute right-0 top-0 z-10 h-full w-[360px] space-y-4 overflow-y-auto overscroll-contain pb-3 pl-5 pr-3 pt-3"
           data-no-field-zoom="true"
@@ -7127,7 +7214,7 @@ export default function App() {
             <p className="mt-2 text-[11px] text-slate-400">Максимум секторов: {MAX_SPHERES}.</p>
           </section>
           <div data-tour="workspace-notes" style={activeTourStep === 'workspace-notes' ? { maxHeight: 'min(520px, calc(100dvh - 40px))', overflowY: 'auto' } : undefined}><StandaloneNotesWorkspace key={currentUser?.id ?? 'anonymous'} userId={currentUser?.id ?? ''} requestedNote={requestedStandaloneNote} /></div>
-        </aside>
+        </aside> : null}
       </div>
       {subtaskCommentContextMenu ? (
         <div className="fixed inset-0 z-[260]" onMouseDown={() => setSubtaskCommentContextMenu(null)} onContextMenu={(event) => { event.preventDefault(); setSubtaskCommentContextMenu(null); }}>
