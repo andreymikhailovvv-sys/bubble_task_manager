@@ -4,6 +4,7 @@ export type VisualBubble = {
   y: number;
   radius: number;
   linkedTaskIds?: string[];
+  bubbleLinkAnchorId?: string | null;
 };
 
 export type DropIntent = { targetId: string; kind: 'link' | 'nest' };
@@ -18,9 +19,11 @@ export function linkedBubblePositions(
   const byId = new Map(bubbles.map((bubble) => [bubble.id, bubble]));
   for (const anchor of bubbles) {
     const partnerId = anchor.linkedTaskIds?.[0];
-    if (!partnerId || anchor.id > partnerId) continue;
+    if (!partnerId) continue;
     const partner = byId.get(partnerId);
     if (!partner || partner.linkedTaskIds?.[0] !== anchor.id) continue;
+    const chosenAnchor = anchor.bubbleLinkAnchorId ?? (anchor.id < partner.id ? anchor.id : partner.id);
+    if (chosenAnchor !== anchor.id) continue;
     const distance = Math.hypot(partner.x - anchor.x, partner.y - anchor.y);
     const unitX = distance > 0.01 ? (partner.x - anchor.x) / distance : 1;
     const unitY = distance > 0.01 ? (partner.y - anchor.y) / distance : 0;
