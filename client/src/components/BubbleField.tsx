@@ -302,6 +302,22 @@ export function BubbleField({
   const nativeCalendarCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragSessionRef = useRef<BubbleDragSession | null>(null);
+  const dragFrameRef = useRef<number | null>(null);
+  const queuedDragViewRef = useRef<BubbleDragView | null>(null);
+  const cancelDragFrame = () => {
+    if (dragFrameRef.current !== null) cancelAnimationFrame(dragFrameRef.current);
+    dragFrameRef.current = null;
+    queuedDragViewRef.current = null;
+  };
+  const queueDragView = (view: BubbleDragView) => {
+    queuedDragViewRef.current = view;
+    if (dragFrameRef.current !== null) return;
+    dragFrameRef.current = requestAnimationFrame(() => {
+      dragFrameRef.current = null;
+      if (queuedDragViewRef.current) setDragView(queuedDragViewRef.current);
+      queuedDragViewRef.current = null;
+    });
+  };
   const ignoreClickRef = useRef<string | null>(null);
   const [dragView, setDragView] = useState<BubbleDragView | null>(null);
   const [bubbleActionPending, setBubbleActionPending] = useState(false);
@@ -309,7 +325,19 @@ export function BubbleField({
   const [noticePair, setNoticePair] = useState<[string, string] | null>(null);
   const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => () => { if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current); }, []);
+  useEffect(() => {
+    const cancelOnBlur = () => {
+      dragSessionRef.current = null;
+      cancelDragFrame();
+      setDragView(null);
+    };
+    window.addEventListener('blur', cancelOnBlur);
+    return () => {
+      window.removeEventListener('blur', cancelOnBlur);
+      cancelDragFrame();
+      if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    };
+  }, []);
   const showBubbleNotice = (message: string, pair: [string, string] | null = null) => {
     if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
     setNoticePair(pair);
@@ -478,10 +506,20 @@ export function BubbleField({
   const bubbleVisualPositions = useMemo(() => linkedBubblePositions(
     bubbles.map((bubble) => {
       const point = mapToOval(bubble.x, bubble.y);
-      return { id: bubble.task.id, x: point.x, y: point.y, radius: bubble.radius, linkedTaskIds: bubble.task.linkedTaskIds, bubbleLinkAnchorId: bubble.task.bubbleLinkAnchorId };
+      const savedX = mode === 'global' ? bubble.task.bubbleGlobalX : bubble.task.bubbleSectorX;
+      const savedY = mode === 'global' ? bubble.task.bubbleGlobalY : bubble.task.bubbleSectorY;
+      return {
+        id: bubble.task.id, x: point.x, y: point.y, radius: bubble.radius,
+        linkedTaskIds: bubble.task.linkedTaskIds, bubbleLinkAnchorId: bubble.task.bubbleLinkAnchorId,
+        pinned: typeof savedX === 'number' && typeof savedY === 'number'
+      };
     }),
-    { minX: BUBBLE_WORKSPACE_X + 10, maxX: VIEWBOX_RIGHT - 10, minY: VIEWBOX_TOP + 20, maxY: VIEWBOX_BOTTOM - 20 }
-  ), [bubbles, mapToOval]);
+    {
+      minX: BUBBLE_WORKSPACE_X + 10, maxX: VIEWBOX_RIGHT - 10,
+      minY: VIEWBOX_TOP + 20, maxY: VIEWBOX_BOTTOM - 20,
+      ellipse: { cx: BUBBLE_FIELD_CENTER_X, cy: BUBBLE_FIELD_CENTER_Y, rx: ELLIPSE_RADIUS_X, ry: ELLIPSE_RADIUS_Y }
+    }
+  ), [bubbles, mapToOval, mode]);
   const getBubbleVisualPoint = (bubble: (typeof bubbles)[number]) =>
     bubbleVisualPositions.get(bubble.task.id) ?? mapToOval(bubble.x, bubble.y);
   const eligibleBubbleTargets = (): VisualBubble[] => visibleBubbles
@@ -493,6 +531,7 @@ export function BubbleField({
         bubble.task.isCollaborative || bubble.task.parentTaskId || (bubble.task.taskType ?? 'TASK') !== 'TASK') return;
     const point = toSvgPoint(event.clientX, event.clientY);
     if (!point) return;
+    event.preventDefault();
     setNoticePair(null);
     setBubbleDragNotice(null);
     dragSessionRef.current = {
@@ -500,10 +539,11 @@ export function BubbleField({
       startSvgX: point.x, startSvgY: point.y, lastSvgX: point.x, lastSvgY: point.y,
       moved: false, target: null, targetSince: 0
     };
-    event.currentTarget.setPointerCapture(event.pointerId);
+    // The stable root SVG holds capture, not a moving/reordered bubble group.
+    svgRef.current?.setPointerCapture(event.pointerId);
   };
 
-  const onBubblePointerMove = (event: ReactPointerEvent<SVGGElement>, bubble: (typeof bubbles)[number]) => {
+  const onBubblePointerMove = (event: ReactPointerEvent<SVGElement>, bubble: (typeof bubbles)[number]) => {
     const session = dragSessionRef.current;
     if (!session || session.taskId !== bubble.task.id || session.pointerId !== event.pointerId) return;
     const point = toSvgPoint(event.clientX, event.clientY);
@@ -512,6 +552,7 @@ export function BubbleField({
     session.lastSvgY = point.y;
     if (!session.moved && Math.hypot(event.clientX - session.startClientX, event.clientY - session.startClientY) < 7) return;
     session.moved = true;
+    event.preventDefault();
     event.stopPropagation();
     cancelHoverExit();
     setHoveredTaskId(null);
@@ -522,13 +563,14 @@ export function BubbleField({
       session.targetSince = Date.now();
     }
     session.target = target;
-    setDragView({ taskId: session.taskId, dx: point.x - session.startSvgX, dy: point.y - session.startSvgY, target });
+    queueDragView({ taskId: session.taskId, dx: point.x - session.startSvgX, dy: point.y - session.startSvgY, target });
   };
 
-  const onBubblePointerUp = (event: ReactPointerEvent<SVGGElement>, bubble: (typeof bubbles)[number]) => {
+  const onBubblePointerUp = (event: ReactPointerEvent<SVGElement>, bubble: (typeof bubbles)[number]) => {
     const session = dragSessionRef.current;
     if (!session || session.pointerId !== event.pointerId || session.taskId !== bubble.task.id) return;
     dragSessionRef.current = null;
+    cancelDragFrame();
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     setDragView(null);
     if (!session.moved) return;
@@ -569,6 +611,24 @@ export function BubbleField({
     }).finally(() => setBubbleActionPending(false));
   };
 
+  const onCanvasPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
+    const session = dragSessionRef.current;
+    if (!session) return;
+    const source = visibleBubbles.find((bubble) => bubble.task.id === session.taskId);
+    if (source) onBubblePointerMove(event, source);
+  };
+  const onCanvasPointerUp = (event: ReactPointerEvent<SVGSVGElement>) => {
+    const session = dragSessionRef.current;
+    if (!session) return;
+    const source = visibleBubbles.find((bubble) => bubble.task.id === session.taskId);
+    if (source) onBubblePointerUp(event, source);
+  };
+  const cancelCanvasPointer = () => {
+    dragSessionRef.current = null;
+    cancelDragFrame();
+    setDragView(null);
+  };
+
   const hoveredBubble = useMemo(() => visibleBubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null, [hoveredTaskId, visibleBubbles]);
   const hoveredSubtasks = hoveredBubble ? (subtaskMap[hoveredBubble.task.id] ?? []).filter((subtask) => subtask.status !== 'DONE') : [];
   const hoveredSphere = hoveredBubble?.task.sphereId ? spheres.find((sphere) => sphere.id === hoveredBubble.task.sphereId) : null;
@@ -587,9 +647,36 @@ export function BubbleField({
   }, [sectorCount, bubbleSectors, tasks]);
   const sectorGeometry = useMemo(() => buildSectorGeometry(sectorCount, sectorTaskCounts), [sectorCount, sectorTaskCounts]);
 
-  const orderedBubbles = dragView
-    ? [...visibleBubbles].sort((a, b) => Number(a.task.id === dragView.taskId) - Number(b.task.id === dragView.taskId))
-    : visibleBubbles;
+  // The bond is rendered inside the same animated parent as both circles.
+  // It cannot reveal a different timing/coordinate system when modes change.
+  type BubbleGroup = { key: string; anchor: (typeof bubbles)[number]; satellite: (typeof bubbles)[number] | null };
+  const bubbleGroups = useMemo<BubbleGroup[]>(() => {
+    const byId = new Map(visibleBubbles.map((bubble) => [bubble.task.id, bubble]));
+    const used = new Set<string>();
+    const groups: BubbleGroup[] = [];
+    for (const bubble of visibleBubbles) {
+      if (used.has(bubble.task.id)) continue;
+      const partner = byId.get(bubble.task.linkedTaskIds?.[0] ?? '');
+      if (partner && partner.task.linkedTaskIds?.[0] === bubble.task.id) {
+        const anchorId = bubble.task.bubbleLinkAnchorId ?? partner.task.bubbleLinkAnchorId
+          ?? (bubble.task.id < partner.task.id ? bubble.task.id : partner.task.id);
+        const anchor = anchorId === partner.task.id ? partner : bubble;
+        const satellite = anchor === bubble ? partner : bubble;
+        used.add(anchor.task.id);
+        used.add(satellite.task.id);
+        groups.push({ key: `pair-${[anchor.task.id, satellite.task.id].sort().join('-')}`, anchor, satellite });
+      } else {
+        used.add(bubble.task.id);
+        groups.push({ key: `single-${bubble.task.id}`, anchor: bubble, satellite: null });
+      }
+    }
+    return groups;
+  }, [visibleBubbles]);
+  const orderedGroups = dragView
+    ? [...bubbleGroups].sort((a, b) =>
+      Number(a.anchor.task.id === dragView.taskId || a.satellite?.task.id === dragView.taskId) -
+      Number(b.anchor.task.id === dragView.taskId || b.satellite?.task.id === dragView.taskId))
+    : bubbleGroups;
 
   useEffect(() => {
     if (isAddingSubtask) {
@@ -702,7 +789,7 @@ export function BubbleField({
   const sectorStroke = 'var(--sector-line)';
 
 
-  const renderBubble = (bubble: (typeof bubbles)[number]) => {
+  const renderBubble = (bubble: (typeof bubbles)[number], groupOrigin?: { x: number; y: number }) => {
     const isPopping = poppingTaskId === bubble.task.id;
     const hasUrgentSubtask = bubble.task.status !== 'DONE'
       && (subtaskMap[bubble.task.id] ?? []).some((subtask) => shouldSubtaskAffectParentReminder(subtask));
@@ -747,6 +834,9 @@ export function BubbleField({
     const displayPoint = isDragged && dragView
       ? { x: baseVisualPoint.x + dragView.dx, y: baseVisualPoint.y + dragView.dy }
       : baseVisualPoint;
+    const animatedPoint = groupOrigin
+      ? { x: displayPoint.x - groupOrigin.x, y: displayPoint.y - groupOrigin.y }
+      : displayPoint;
     const titleLineClamp = bubble.radius < 30 ? 2 : bubble.radius < 44 ? 3 : 4;
     const titleFontSize = getBubbleTitleFontSize(bubble.task.title, bubble.radius);
     const titlePreview = getBubbleTitlePreview(bubble.task.title, bubble.radius);
@@ -767,8 +857,8 @@ export function BubbleField({
         key={bubble.task.id}
         data-bubble-task-id={bubble.task.id}
         initial={false}
-        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: isDragged ? 1.07 : isHovered ? BUBBLE_HOVER_SCALE : isDragTarget ? 1.06 : 1, x: displayPoint.x, y: displayPoint.y }}
-        exit={isSearchFiltering ? { opacity: 0, scale: 0.96, x: displayPoint.x, y: displayPoint.y } : { opacity: 1, scale: 1, x: displayPoint.x, y: displayPoint.y }}
+        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: isDragged ? 1.07 : isHovered ? BUBBLE_HOVER_SCALE : isDragTarget ? 1.06 : 1, x: animatedPoint.x, y: animatedPoint.y }}
+        exit={isSearchFiltering ? { opacity: 0, scale: 0.96, x: animatedPoint.x, y: animatedPoint.y } : { opacity: 1, scale: 1, x: animatedPoint.x, y: animatedPoint.y }}
         transition={isDragged ? { duration: 0 } : isPopping
           ? { type: 'tween', duration: 0.33, ease: 'easeOut' }
           : isSearchFiltering
@@ -780,10 +870,7 @@ export function BubbleField({
           if (!isPopping && !dragSessionRef.current) onSelect(bubble.task);
         }}
         onPointerDown={(event) => onBubblePointerDown(event, bubble)}
-        onPointerMove={(event) => onBubblePointerMove(event, bubble)}
-        onPointerUp={(event) => onBubblePointerUp(event, bubble)}
-        onPointerCancel={() => { dragSessionRef.current = null; setDragView(null); }}
-        onMouseEnter={() => { if (!dragSessionRef.current) activateHover(bubble.task.id); }}
+         onMouseEnter={() => { if (!dragSessionRef.current) activateHover(bubble.task.id); }}
         onMouseLeave={() => { if (!dragSessionRef.current) scheduleHoverExit(); }}
         onContextMenu={(event) => showContextMenu(event, bubble.task)}
         className={bubble.task.isCollaborative || bubble.task.taskType === 'EVENT' || bubble.task.taskType === 'REMINDER' ? 'cursor-pointer' : isDragged ? 'cursor-grabbing' : 'cursor-grab'}
@@ -932,7 +1019,11 @@ export function BubbleField({
               : bubbleDragNotice}
         </div>
       )}
-      <svg ref={svgRef} viewBox={`${VIEWBOX_LEFT} ${VIEWBOX_TOP} ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} className="bubble-field-stage relative z-20 h-full w-full overflow-visible" onContextMenu={(event) => showContextMenu(event, null)}>
+      <svg ref={svgRef} style={{ userSelect: 'none', WebkitUserSelect: 'none', touchAction: 'pan-x pan-y' }}
+        onDragStart={(event) => event.preventDefault()}
+        onPointerMove={onCanvasPointerMove} onPointerUp={onCanvasPointerUp}
+        onPointerCancel={cancelCanvasPointer} onLostPointerCapture={cancelCanvasPointer}
+        viewBox={`${VIEWBOX_LEFT} ${VIEWBOX_TOP} ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} className="bubble-field-stage relative z-20 h-full w-full overflow-visible" onContextMenu={(event) => showContextMenu(event, null)}>
         <motion.g initial={false}>
           <defs>
             <radialGradient id="bg" cx="50%" cy="50%" r="60%">
@@ -1054,19 +1145,6 @@ export function BubbleField({
           <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X} ry={ELLIPSE_RADIUS_Y} fill="url(#bg)" opacity={isLightTheme ? 0.94 : 0.86} />
           <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X + 22} ry={ELLIPSE_RADIUS_Y + 16} fill="url(#fieldHalo)" filter="url(#bubbleGlow)" opacity={isLightTheme ? 0.48 : 0.7} />
 
-          {visibleBubbles.flatMap((bubble) => (bubble.task.linkedTaskIds ?? [])
-            .filter((id) => bubble.task.id < id)
-            .map((id) => {
-              const a = bubbleVisualPositions.get(bubble.task.id);
-              const b = bubbleVisualPositions.get(id);
-              if (!a || !b) return null;
-              const ax = a.x + (dragView?.taskId === bubble.task.id ? dragView.dx : 0);
-              const ay = a.y + (dragView?.taskId === bubble.task.id ? dragView.dy : 0);
-              const bx = b.x + (dragView?.taskId === id ? dragView.dx : 0);
-              const by = b.y + (dragView?.taskId === id ? dragView.dy : 0);
-              return <line key={`link-${bubble.task.id}-${id}`} x1={ax} y1={ay} x2={bx} y2={by}
-                stroke="#a78bfa" strokeWidth={4} strokeLinecap="round" opacity={0.8} pointerEvents="none" />;
-            }))}
           {dragView?.target && (() => {
             const from = visibleBubbles.find((bubble) => bubble.task.id === dragView.taskId);
             const a = from ? getBubbleVisualPoint(from) : null;
@@ -1083,7 +1161,40 @@ export function BubbleField({
             return <line key={idx} className="sector-divider" x1={BUBBLE_FIELD_CENTER_X} y1={BUBBLE_FIELD_CENTER_Y} x2={point.x} y2={point.y} stroke={sectorStroke} strokeWidth="1.5" />;
           })}
 
-          <AnimatePresence>{orderedBubbles.map((bubble) => renderBubble(bubble))}</AnimatePresence>
+          <AnimatePresence>
+            {orderedGroups.map(({ key, anchor, satellite }) => {
+              if (!satellite) return renderBubble(anchor);
+              const origin = getBubbleVisualPoint(anchor);
+              const other = getBubbleVisualPoint(satellite);
+              const draggingAnchor = dragView?.taskId === anchor.task.id;
+              const draggingSatellite = dragView?.taskId === satellite.task.id;
+              const bondMoving = draggingAnchor || draggingSatellite;
+              const bondTransition = bondMoving ? { duration: 0 }
+                : { type: 'spring' as const, damping: 24, stiffness: 105, mass: 0.82, restDelta: 0.001 };
+              return (
+                <motion.g key={key} initial={false}
+                  animate={{ x: origin.x, y: origin.y }}
+                  exit={isSearchFiltering ? { opacity: 0, scale: 0.96 } : undefined}
+                  transition={bondTransition}>
+                  <motion.line
+                    initial={false}
+                    animate={{
+                      x1: draggingAnchor ? dragView!.dx : 0,
+                      y1: draggingAnchor ? dragView!.dy : 0,
+                      x2: other.x - origin.x + (draggingSatellite ? dragView!.dx : 0),
+                      y2: other.y - origin.y + (draggingSatellite ? dragView!.dy : 0)
+                    }}
+                    transition={bondTransition}
+                    stroke="#a78bfa" strokeWidth={5} strokeLinecap="round" opacity={0.82}
+                    style={{ filter: 'drop-shadow(0 0 5px rgba(167,139,250,0.55))' }}
+                    pointerEvents="none"
+                  />
+                  {renderBubble(anchor, origin)}
+                  {renderBubble(satellite, origin)}
+                </motion.g>
+              );
+            })}
+          </AnimatePresence>
           {bubbleDragNotice && noticePair && (() => {
             const [aId, bId] = noticePair;
             const a = bubbleVisualPositions.get(aId);

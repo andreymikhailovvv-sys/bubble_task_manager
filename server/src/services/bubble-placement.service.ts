@@ -49,7 +49,11 @@ export const bubblePlacementService = {
       const source = await ownedRoot(tx, id, userId);
 
       if (input.action === 'move' || input.action === 'unlink') {
-        const position = positionPatch(input);
+        // Window-level unlink does not move the bubble. Drag-to-unlink still
+        // sends a position; reject partial/malformed coordinates.
+        const position = input.action === 'move' ||
+          input.mode !== undefined || input.x !== undefined || input.y !== undefined
+          ? positionPatch(input) : {};
         if (input.action === 'move') {
           const sector = input.sphereId;
           if (sector !== undefined && sector !== null) {
@@ -66,7 +70,9 @@ export const bubblePlacementService = {
         await tx.taskBubbleLink.deleteMany({
           where: { userId, OR: [{ firstTaskId: source.id }, { secondTaskId: source.id }] }
         });
-        await tx.task.update({ where: { id: source.id }, data: position });
+        if (Object.keys(position).length > 0) {
+          await tx.task.update({ where: { id: source.id }, data: position });
+        }
         return { action: input.action };
       }
 
