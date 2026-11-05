@@ -4,6 +4,7 @@ import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.text.Html
 import android.content.Intent
+import android.content.Context
 import android.net.Uri
 import android.provider.CalendarContract
 import android.provider.OpenableColumns
@@ -17,6 +18,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
@@ -102,11 +104,23 @@ fun MiniAppTaskFocusSheet(
     var sectorMenu by remember{mutableStateOf(false)}
     var notifyMenu by remember{mutableStateOf(false)}
     var descriptionExpanded by remember{mutableStateOf(false)}
-    var descriptionHeight by remember(task.id){mutableStateOf(136.dp)}
     val resizeDensity=LocalDensity.current
+    val descriptionSizePrefs=remember(ctx) {
+        ctx.getSharedPreferences("task_focus_description_sizes",Context.MODE_PRIVATE)
+    }
+    val descriptionSizeKey=remember(task.id){"height_${task.id}"}
+    var descriptionHeight by remember(task.id) {
+        mutableStateOf(
+            descriptionSizePrefs.getFloat(descriptionSizeKey,136f)
+                .coerceIn(98f,340f).dp
+        )
+    }
     var confirmation by remember{mutableStateOf<String?>(null)}
     var saving by remember{mutableStateOf(false)}
-    val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * .90f).dp
+    // Capture the sheet's initial natural height, before any description resizing.
+    // Subsequent drag updates only change the inner scrollable content.
+    val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * .83f).dp
+    var initialSheetHeight by remember(task.id){mutableStateOf<Dp?>(null)}
 
     val saveThen: ((()->Unit)->Unit)={after->
         if(!busy && !saving && title.isNotBlank()) {
@@ -192,9 +206,20 @@ fun MiniAppTaskFocusSheet(
         sheetGesturesEnabled=true,
         dragHandle={ BottomSheetDefaults.DragHandle(color=c.muted) },
         sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)){
-        // Fixed sheet height: resizing the description reflows the scrollable content,
-        // not the entire bottom sheet. Its native drag handle still moves the sheet.
-        Column(Modifier.fillMaxWidth().height(maxSheetHeight).imePadding()){
+        // First measure at the natural content height (the pre-regression behavior),
+        // then lock that measured height so resizing the description never lifts
+        // or stretches the whole bottom sheet.
+        Column(Modifier.fillMaxWidth()
+            .then(initialSheetHeight?.let { Modifier.height(it.coerceAtMost(maxSheetHeight)) }
+                ?: Modifier.heightIn(max=maxSheetHeight))
+            .onSizeChanged { size ->
+                if(initialSheetHeight==null && size.height>0) {
+                    initialSheetHeight=with(resizeDensity) {
+                        size.height.toDp().coerceAtMost(maxSheetHeight)
+                    }
+                }
+            }
+            .imePadding()){
             Row(Modifier.fillMaxWidth()
                 .padding(start=18.dp,end=18.dp,top=12.dp,bottom=15.dp),
                 verticalAlignment=Alignment.Top,
@@ -231,7 +256,8 @@ fun MiniAppTaskFocusSheet(
                     }
                 }
             }
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())
+            Column(Modifier.weight(1f,fill=initialSheetHeight!=null)
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal=18.dp).padding(bottom=20.dp)){
                 Row(verticalAlignment=Alignment.CenterVertically,
                     horizontalArrangement=Arrangement.spacedBy(9.dp),
@@ -287,12 +313,21 @@ fun MiniAppTaskFocusSheet(
                         .size(width=46.dp,height=20.dp)
                         .clip(CircleShape).background(c.card)
                         .border(1.dp,c.border,CircleShape)
-                        .pointerInput(task.id,resizeDensity){
-                            detectVerticalDragGestures { change,delta ->
-                                change.consume()
-                                descriptionHeight=(descriptionHeight+
-                                    with(resizeDensity){delta.toDp()}).coerceIn(98.dp,340.dp)
+                        .pointerInput(task.id,resizeDensity) {
+                            val saveSize={
+                                descriptionSizePrefs.edit()
+                                    .putFloat(descriptionSizeKey,descriptionHeight.value).apply()
                             }
+                            detectVerticalDragGestures(
+                                onDragEnd=saveSize,
+                                onDragCancel=saveSize,
+                                onVerticalDrag={change,delta->
+                                    change.consume()
+                                    descriptionHeight=(descriptionHeight+
+                                        with(resizeDensity){delta.toDp()})
+                                        .coerceIn(98.dp,340.dp)
+                                }
+                            )
                         },
                         contentAlignment=Alignment.Center){
                         Column(verticalArrangement=Arrangement.spacedBy(3.dp)){
