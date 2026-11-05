@@ -254,3 +254,49 @@ test('a linked group cannot override collision or boundary protection', () => {
     assert.ok(Math.hypot(a.x - b.x, a.y - b.y) >= bubbles[i].radius + bubbles[j].radius + 7.9);
   }
 });
+
+test('dense three-sector workspace never crosses a divider or overlaps a linked group', () => {
+  const rays = [0, 2 * Math.PI / 3, 4 * Math.PI / 3, 2 * Math.PI];
+  const bounds = {
+    minX: -460, maxX: 460, minY: -460, maxY: 460, compact: true,
+    ellipse: { cx: 0, cy: 0, rx: 440, ry: 440 },
+    sectors: [0, 1, 2].map((index) => ({
+      start: { x: Math.cos(rays[index]), y: Math.sin(rays[index]) },
+      end: { x: Math.cos(rays[index + 1]), y: Math.sin(rays[index + 1]) }
+    }))
+  };
+  const bubbles = [0, 1, 2].flatMap((sectorIndex) =>
+    Array.from({ length: 16 }, (_, i) => {
+      const angle = rays[sectorIndex] + (rays[sectorIndex + 1] - rays[sectorIndex]) * (i % 5 + 1) / 6;
+      const id = `s${sectorIndex}-${i}`;
+      const linkedTaskIds = i < 5
+        ? [i > 0 ? `s${sectorIndex}-${i-1}` : '', i < 4 ? `s${sectorIndex}-${i+1}` : ''].filter(Boolean)
+        : [];
+      return {
+        id, sectorIndex, radius: 18 + (i * 13 + sectorIndex * 7) % 42,
+        x: Math.cos(angle) * (280 + (i * 17) % 105),
+        y: Math.sin(angle) * (280 + (i * 17) % 105),
+        linkedTaskIds, bubbleLinkAnchorId: `s${sectorIndex}-0`
+      };
+    })
+  );
+  const points = linkedBubblePositions(bubbles, bounds);
+  for (const bubble of bubbles) {
+    const p = points.get(bubble.id)!;
+    const angle = rays[bubble.sectorIndex];
+    const endAngle = rays[bubble.sectorIndex + 1];
+    const n1 = { x: -Math.sin(angle), y: Math.cos(angle) };
+    const n2 = { x: Math.sin(endAngle), y: -Math.cos(endAngle) };
+    assert.ok(p.x * n1.x + p.y * n1.y >= bubble.radius + 4,
+      `${bubble.id} crossed sector's first boundary`);
+    assert.ok(p.x * n2.x + p.y * n2.y >= bubble.radius + 4,
+      `${bubble.id} crossed sector's second boundary`);
+    assert.ok(Math.hypot(p.x / (440 - bubble.radius - 3), p.y / (440 - bubble.radius - 3)) <= 1.001,
+      `${bubble.id} outside field`);
+  }
+  for (let i = 0; i < bubbles.length; i++) for (let j = i + 1; j < bubbles.length; j++) {
+    const a = points.get(bubbles[i].id)!, b = points.get(bubbles[j].id)!;
+    assert.ok(Math.hypot(a.x-b.x, a.y-b.y) >= bubbles[i].radius + bubbles[j].radius + 7.9,
+      `Overlap of ${bubbles[i].id} and ${bubbles[j].id}`);
+  }
+});
