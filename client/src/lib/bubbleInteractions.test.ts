@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { detectBubbleDrop, linkedBubblePositions } from './bubbleInteractions';
+import { bubbleLinkSegment, detectBubbleDrop, getLinkedBubbleGroups, linkedBubblePositions } from './bubbleInteractions';
 
 test('near rim links; deep inside nests; outside does nothing', () => {
   const bubbles = [{ id: 'a', x: 50, y: 50, radius: 40 }, { id: 'b', x: 170, y: 50, radius: 35 }];
@@ -15,7 +15,7 @@ test('linked pair magnetizes and does not move unrelated bubbles', () => {
     { id: 'c', x: 360, y: 260, radius: 20 }
   ];
   const result = linkedBubblePositions(bubbles, { minX: 0, maxX: 500, minY: 0, maxY: 500 });
-  assert.deepEqual(result.get('b'), { x: 160, y: 100 });
+  assert.deepEqual(result.get('b'), { x: 164, y: 100 });
   assert.deepEqual(result.get('c'), { x: 360, y: 260 });
 });
 
@@ -54,7 +54,7 @@ test('a magnetic pair repels an intruding bubble without breaking the bond', () 
   const anchor = positions.get('anchor')!;
   const partner = positions.get('satellite')!;
   const intruder = positions.get('intruder')!;
-  assert.ok(Math.abs(Math.hypot(partner.x - anchor.x, partner.y - anchor.y) - 62) < 0.1);
+  assert.ok(Math.abs(Math.hypot(partner.x - anchor.x, partner.y - anchor.y) - 66) < 0.1);
   assert.ok(Math.hypot(intruder.x - partner.x, intruder.y - partner.y) > 56);
   assert.deepEqual(positions.get('distant'), { x: 490, y: 450 });
 });
@@ -68,4 +68,50 @@ test('user placements are confined inside the oval viewport', () => {
   const result = linkedBubblePositions(bubbles, bounds).get('manual')!;
   const norm = Math.hypot(result.x / (150 - 29), result.y / (110 - 29));
   assert.ok(norm <= 1.001);
+});
+
+test('five interconnected tasks form one component with four retained edges', () => {
+  const circles = [
+    { id: 'root', x: 300, y: 300, radius: 44, linkedTaskIds: ['a','b','c','d'], bubbleLinkAnchorId: 'root', pinned: true },
+    { id: 'a', x: 50, y: 100, radius: 28, linkedTaskIds: ['root'], bubbleLinkAnchorId: 'root' },
+    { id: 'b', x: 530, y: 500, radius: 36, linkedTaskIds: ['root'], bubbleLinkAnchorId: 'root' },
+    { id: 'c', x: 80, y: 400, radius: 22, linkedTaskIds: ['root'], bubbleLinkAnchorId: 'root' },
+    { id: 'd', x: 550, y: 170, radius: 25, linkedTaskIds: ['root'], bubbleLinkAnchorId: 'root' },
+    { id: 'other', x: 600, y: 600, radius: 22 }
+  ];
+  const groups = getLinkedBubbleGroups(circles);
+  assert.equal(groups.length, 2);
+  const connected = groups.find((group) => group.ids.includes('root'))!;
+  assert.equal(connected.anchorId, 'root');
+  assert.equal(connected.ids.length, 5);
+  assert.equal(connected.edges.length, 4);
+  const positions = linkedBubblePositions(circles, { minX: 0, minY: 0, maxX: 700, maxY: 700 });
+  for (let i = 0; i < circles.length; i++) {
+    for (let j = i+1; j < circles.length; j++) {
+      const left = circles[i], right = circles[j];
+      const a = positions.get(left.id)!, b = positions.get(right.id)!;
+      assert.ok(Math.hypot(a.x - b.x, a.y - b.y) >= left.radius + right.radius + 8,
+        `Overlap: ${left.id}, ${right.id}`);
+    }
+  }
+});
+
+test('linked components merge correctly through a chain, not only a star', () => {
+  const bubbles = [
+    { id: 'a', x: 180, y: 180, radius: 40, linkedTaskIds: ['b'], bubbleLinkAnchorId: 'b' },
+    { id: 'b', x: 300, y: 180, radius: 38, linkedTaskIds: ['a', 'c'], bubbleLinkAnchorId: 'b' },
+    { id: 'c', x: 420, y: 180, radius: 36, linkedTaskIds: ['b', 'd'], bubbleLinkAnchorId: 'b' },
+    { id: 'd', x: 540, y: 180, radius: 33, linkedTaskIds: ['c'], bubbleLinkAnchorId: 'b' }
+  ];
+  const groups = getLinkedBubbleGroups(bubbles);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].anchorId, 'b');
+  assert.equal(groups[0].edges.length, 3);
+  const positions = linkedBubblePositions(bubbles, { minX: 0, minY: 0, maxX: 800, maxY: 700 });
+  for (const id of groups[0].ids) assert.ok(positions.has(id));
+});
+
+test('connector is short and starts just inside the bubble rims', () => {
+  const edge = bubbleLinkSegment({ x: 100, y: 100 }, { x: 200, y: 100 }, 30, 25);
+  assert.deepEqual(edge, { x1: 128, y1: 100, x2: 177, y2: 100 });
 });
