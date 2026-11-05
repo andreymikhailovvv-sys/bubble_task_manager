@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { measureBackground } from '../lib/performance-diagnostics.js';
 import { prisma } from '../db/prisma.js';
 import { pollCorporateMonitoring, recoverCorporateMonitoring } from './work-ai-monitoring.service.js';
 import { aiAssistantService } from './ai-assistant.service.js';
@@ -336,7 +337,7 @@ async function armNextDeadline() {
   const waitMs = Math.min(MAX_LOCAL_TIMER_MS, Math.max(20, nextDue.getTime() - Date.now()));
   timer = setTimeout(() => {
     timer = null;
-    void pollTaskMonitoring().catch(error =>
+    void measureBackground('task.monitor_events', () => pollTaskMonitoring()).catch(error =>
       console.error('[TaskMonitoring] event dispatch failed', error));
   }, waitMs);
   timer.unref();
@@ -345,21 +346,21 @@ async function armNextDeadline() {
 export function startTaskMonitoringWorker() {
   // Work shares this server worker's recovery tick; only due rows are polled,
   // never a scan of all company tasks.
-  void recoverCorporateMonitoring().catch(error => console.error('[Work Monitoring] startup failed', error));
-  setInterval(() => { void pollCorporateMonitoring().catch(error =>
+  void measureBackground('work.monitor_boot', () => recoverCorporateMonitoring()).catch(error => console.error('[Work Monitoring] startup failed', error));
+  setInterval(() => { void measureBackground('work.monitor_poll', () => pollCorporateMonitoring()).catch(error =>
     console.error('[Work Monitoring] tick failed',error)); }, RECOVERY_INTERVAL_MS).unref();
   console.info('[TaskMonitoring] event worker started');
   registerTaskMonitoringWakeup(() => {
     // A newly created job can already be overdue. Dispatch immediately,
     // rather than relying on the timer when many task updates race.
-    void pollTaskMonitoring().catch(error =>
+    void measureBackground('task.monitor_events', () => pollTaskMonitoring()).catch(error =>
       console.error('[TaskMonitoring] immediate dispatch failed', error));
     void armNextDeadline().catch(error =>
       console.error('[TaskMonitoring] wakeup failed', error));
   });
   // Crash recovery is a one-time bootstrap of previously opted-in tasks.
   // Restarts never depend on in-memory timeouts surviving the process.
-  void (async () => {
+  void measureBackground('task.monitor_boot', async () => {
     console.info('[TaskMonitoring] recovery starting');
     await prisma.taskMonitoringRun.updateMany({
       where: { state: 'processing', updatedAt: { lt: new Date(Date.now() - 15 * 60_000) } },
@@ -367,11 +368,11 @@ export function startTaskMonitoringWorker() {
     });
     await recoverMonitoredDeadlinesOnBoot();
     await pollTaskMonitoring();
-  })().catch(error => console.error('[TaskMonitoring] queue recovery failed', error));
+  }).catch(error => console.error('[TaskMonitoring] queue recovery failed', error));
   // Fallback checks ONLY persisted scheduled events, for missed process
   // wakeups, replica-local timers, and transient restarts.
   setInterval(() => {
-    void pollTaskMonitoring().catch(error =>
+    void measureBackground('task.monitor_events', () => pollTaskMonitoring()).catch(error =>
       console.error('[TaskMonitoring] recovery tick failed', error));
   }, RECOVERY_INTERVAL_MS).unref();
 }
