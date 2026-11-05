@@ -10,8 +10,8 @@ test('near rim links; deep inside nests; outside does nothing', () => {
 });
 test('linked pair magnetizes and does not move unrelated bubbles', () => {
   const bubbles = [
-    { id: 'a', x: 100, y: 100, radius: 24, linkedTaskIds: ['b'] },
-    { id: 'b', x: 300, y: 100, radius: 24, linkedTaskIds: ['a'] },
+    { id: 'a', x: 100, y: 100, radius: 24, linkedTaskIds: ['b'], bubbleLinkAnchorId: 'a' },
+    { id: 'b', x: 300, y: 100, radius: 24, linkedTaskIds: ['a'], bubbleLinkAnchorId: 'a' },
     { id: 'c', x: 360, y: 260, radius: 20 }
   ];
   const result = linkedBubblePositions(bubbles, { minX: 0, maxX: 500, minY: 0, maxY: 500 });
