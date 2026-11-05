@@ -22,8 +22,8 @@ const ownedRoot = async (tx: Prisma.TransactionClient, id: string, userId: strin
 // rich markup here ensures transferred subtask lists keep their line breaks.
 const escapeNote = (value: string) => value.replace(/&/g, '&amp;')
   .replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const noteAsHtml = (value: string) => /<(?:br|p|div|ul|ol|li|strong|em|a|span)(?:\\s|>)/i.test(value)
-  ? value : escapeNote(value).replace(/\\r?\\n/g, '<br>');
+const noteAsHtml = (value: string) => /<(?:br|p|div|ul|ol|li|strong|em|a|span)(?:\s|>)/i.test(value)
+  ? value : escapeNote(value).replace(/\r?\n/g, '<br>');
 
 const positionPatch = (input: BubbleActionInput) => {
   if (input.mode !== 'global' && input.mode !== 'sectors') throw new TypeError('Неизвестный режим пузырей.');
