@@ -294,7 +294,10 @@ export function detectBubbleDrop(
   for (const bubble of bubbles) {
     if (bubble.id === sourceId) continue;
     const distance = Math.hypot(center.x - bubble.x, center.y - bubble.y);
-    if (distance > bubble.radius + Math.min(sourceRadius, 48) + 18) continue;
+    // Both full radii matter. Clamping the dragged radius to 48px meant
+    // large-to-large links were not detected until the circles overlapped,
+    // making their connecting preview effectively invisible.
+    if (distance > bubble.radius + sourceRadius + 22) continue;
     if (!nearest || distance < nearest.distance) nearest = { targetId: bubble.id, distance, radius: bubble.radius };
   }
   if (!nearest) return null;
