@@ -80,7 +80,7 @@ export const bubblePlacementService = {
         }
         if (existing.length) throw new TypeError('Одна из задач уже связана с другим пузырём. Сначала разъедините пару.');
         const [firstTaskId, secondTaskId] = [source.id, target.id].sort();
-        await tx.taskBubbleLink.create({ data: { userId, firstTaskId, secondTaskId } });
+        await tx.taskBubbleLink.create({ data: { userId, firstTaskId, secondTaskId, anchorTaskId: target.id } });
         return { action: 'link' as const };
       }
 
