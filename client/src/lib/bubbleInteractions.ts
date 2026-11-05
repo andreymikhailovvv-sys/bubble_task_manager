@@ -8,6 +8,8 @@ export type VisualBubble = {
   /** A manually saved location resists displacement by other bubbles. */
   pinned?: boolean;
   sectorIndex?: number;
+  /** Live coefficient from the same ranking model used for bubble size. */
+  coefficient?: number;
 };
 
 export type DropIntent = { targetId: string; kind: 'link' | 'nest' };
@@ -100,6 +102,14 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
   const halfX = bounds.ellipse?.rx ?? (bounds.maxX - bounds.minX) / 2;
   const halfY = bounds.ellipse?.ry ?? (bounds.maxY - bounds.minY) / 2;
   const sectorOf = (bubble: VisualBubble) => bubble.sectorIndex ?? 0;
+  const coefficientOf = (bubble: VisualBubble) => Math.min(1, Math.max(0, bubble.coefficient ?? 0));
+  const maxCoefficientBySector = new Map<number, number>();
+  for (const bubble of bubbles) {
+    const sector = sectorOf(bubble);
+    maxCoefficientBySector.set(sector, Math.max(maxCoefficientBySector.get(sector) ?? 0, coefficientOf(bubble)));
+  }
+  const highPriority = (bubble: VisualBubble) => Boolean(bounds.sectors && bounds.sectors.length > 1) &&
+    coefficientOf(bubble) >= Math.max(0.3, (maxCoefficientBySector.get(sectorOf(bubble)) ?? 0) * 0.77);
   const unit = (point: Point) => {
     const length = Math.hypot(point.x, point.y) || 1;
     return { x: point.x / length, y: point.y / length };
@@ -145,14 +155,16 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
   const sortedComponents = components
     .map((component) => ({
       component,
-      priority: Math.max(...component.ids.map((id) => byId.get(id)!.radius)),
+      priority: Math.max(...component.ids.map((id) =>
+        byId.get(id)!.radius + coefficientOf(byId.get(id)!) * 28)),
       pinned: component.ids.some((id) => byId.get(id)!.pinned)
     }))
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.priority - a.priority);
   for (const { component } of sortedComponents) {
     const ids = [...component.ids].sort((a, b) =>
       Number(Boolean(byId.get(b)!.pinned)) - Number(Boolean(byId.get(a)!.pinned)) ||
-      byId.get(b)!.radius - byId.get(a)!.radius || a.localeCompare(b));
+      (byId.get(b)!.radius + coefficientOf(byId.get(b)!) * 28) -
+          (byId.get(a)!.radius + coefficientOf(byId.get(a)!) * 28) || a.localeCompare(b));
     for (const root of ids) {
       if (visited.has(root)) continue;
       const queue = [root];
@@ -161,7 +173,8 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
         ordered.push(id);
         const adjacent = [...(neighbours.get(id) ?? [])].sort((a, b) =>
           Number(Boolean(byId.get(b)!.pinned)) - Number(Boolean(byId.get(a)!.pinned)) ||
-          byId.get(b)!.radius - byId.get(a)!.radius || a.localeCompare(b));
+          (byId.get(b)!.radius + coefficientOf(byId.get(b)!) * 28) -
+          (byId.get(a)!.radius + coefficientOf(byId.get(a)!) * 28) || a.localeCompare(b));
         for (const neighbour of adjacent) {
           if (visited.has(neighbour)) continue;
           visited.add(neighbour);
@@ -180,6 +193,12 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
       .map((peer) => ({ bubble: byId.get(peer)!, point: positions.get(peer)! }));
     const hasLink = placedNeighbours.length > 0;
     const isPinned = Boolean(bubble.pinned);
+    // The highly-ranked tasks in EACH sector form an inner compact nucleus.
+    // This affects scoring, never the sector wall or collision constraints.
+    const highPriorityPeers = highPriority(bubble)
+      ? [...positions].map(([peerId, point]) => ({ peer: byId.get(peerId)!, point }))
+          .filter(({ peer }) => sectorOf(peer) === sectorOf(bubble) && highPriority(peer) && !peer.pinned)
+      : [];
     const normalCenterDistance = (p: Point) =>
       Math.hypot((p.x - centre.x) / halfX, (p.y - centre.y) / halfY);
     const score = (p: Point) => {
@@ -188,6 +207,11 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
       const radial = normalCenterDistance(p);
       const centreWeight = bounds.compact ? 245 : 0;
       let result = radial * centreWeight + preferredDistance * (bounds.compact ? 0.085 : 1);
+      if (highPriorityPeers.length) {
+        const nearestPeerGap = Math.min(...highPriorityPeers.map(({ peer, point }) =>
+          Math.max(0, Math.hypot(p.x - point.x, p.y - point.y) - bubble.radius - peer.radius - 13)));
+        result += nearestPeerGap * 1.15;
+      }
       if (hasLink) {
         // Keep every real adjacent task at a visible but short dotted gap.
         for (const neighbour of placedNeighbours) {

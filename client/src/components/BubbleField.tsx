@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { TaskMonitoringBadge } from './TaskMonitoringBadge';
 import { CalendarDays, ChevronRight, Coins, Gauge, LoaderCircle, MessageCircle, Plus, Repeat, Sparkles } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { buildBubbles, buildSectorGeometry, getBubbleSectorIndex, getBubbleSectorSpheres, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
 import { noteHtmlToPlainText } from '../lib/notes';
@@ -75,7 +75,6 @@ const ELLIPSE_RADIUS_Y = VIEWBOX_HEIGHT / 2 - 38;
 const ELLIPSE_X_SCALE = ELLIPSE_RADIUS_X / FIELD_RADIUS;
 const ELLIPSE_Y_SCALE = ELLIPSE_RADIUS_Y / FIELD_RADIUS;
 const HOVER_EXIT_DELAY_MS = 120;
-const BUBBLE_HOVER_SCALE = 1.08;
 const ENABLE_BUBBLE_HOVER_DETAILS = false;
 const SUBTASK_REMINDER_GLOW_STYLE =
   '0 0 0 1px rgba(56,189,248,0.24), inset 0 0 12px rgba(56,189,248,0.28)';
@@ -560,6 +559,7 @@ export function BubbleField({
       const savedY = mode === 'global' ? bubble.task.bubbleGlobalY : bubble.task.bubbleSectorY;
       return {
         id: bubble.task.id, x: point.x, y: point.y, radius: bubble.radius, sectorIndex: bubble.sectorIndex,
+        coefficient: getTaskCoefficient(bubble.task, subtaskMap),
         linkedTaskIds: bubble.task.linkedTaskIds, bubbleLinkAnchorId: bubble.task.bubbleLinkAnchorId,
         pinned: typeof savedX === 'number' && typeof savedY === 'number'
       };
@@ -578,7 +578,7 @@ export function BubbleField({
         }))
         : undefined
     }
-  ), [bubbles, mapToOval, mode, sectorCount, sectorGeometry]);
+  ), [bubbles, mapToOval, mode, sectorCount, sectorGeometry, subtaskMap]);
   const getBubbleVisualPoint = (bubble: (typeof bubbles)[number]) =>
     bubbleVisualPositions.get(bubble.task.id) ?? mapToOval(bubble.x, bubble.y);
   const getSectorIndexAtPoint = (point: { x: number; y: number }) => {
@@ -862,41 +862,19 @@ export function BubbleField({
   const workspaceMin = VIEWBOX_TOP;
   const workspaceMax = VIEWBOX_BOTTOM;
   const workspaceMaxX = VIEWBOX_RIGHT;
-  const containerShadowClass = isLightTheme
-    ? 'shadow-[0_18px_48px_rgba(15,23,42,0.12),0_4px_18px_rgba(14,165,233,0.10),inset_0_1px_32px_rgba(255,255,255,0.72)]'
-    : 'shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)]';
   const sectorStroke = 'var(--sector-line)';
 
 
   const renderBubble = (bubble: (typeof bubbles)[number], groupOrigin?: { x: number; y: number }) => {
     const isPopping = poppingTaskId === bubble.task.id;
-    const hasUrgentSubtask = bubble.task.status !== 'DONE'
-      && (subtaskMap[bubble.task.id] ?? []).some((subtask) => shouldSubtaskAffectParentReminder(subtask));
-    const shouldGlow = bubble.task.status !== 'DONE' && (shouldTaskGlow(bubble.task) || hasUrgentSubtask);
-    const overdue = isOverdue(bubble.task);
-    const isHovered = hoveredTaskId === bubble.task.id;
+    const active = bubble.task.status !== 'DONE';
+    const bubbleSubtasks = subtaskMap[bubble.task.id] ?? [];
+    const hasUrgentSubtask = active && bubbleSubtasks.some(shouldSubtaskAffectParentReminder);
+    const shouldGlow = active && (shouldTaskGlow(bubble.task) || hasUrgentSubtask);
+    const overdue = active && (isOverdue(bubble.task) ||
+      bubbleSubtasks.some((subtask) => subtask.status !== 'DONE' && isOverdue(subtask)));
     const isDragged = dragView?.taskId === bubble.task.id;
     const isDragTarget = dragView?.target?.targetId === bubble.task.id;
-    const glowPulseState = isHovered
-      ? {
-        opacity: [0.55, 1, 0.55],
-        r: [bubble.radius + 2, bubble.radius + 9, bubble.radius + 2],
-        strokeWidth: [2, 4.5, 2]
-      }
-      : {
-        opacity: 0.72,
-        r: bubble.radius + 5,
-        strokeWidth: 3
-      };
-    const glowColor = overdue ? '#ef4444' : '#38bdf8';
-    const staticGlowStyle = overdue && !fullscreen
-      ? { filter: 'drop-shadow(0 0 10px rgba(239,68,68,0.8)) drop-shadow(0 0 18px rgba(220,38,38,0.5))' }
-      : undefined;
-    const glowFilter = shouldGlow && !overdue && !fullscreen ? 'url(#bubbleGlow)' : undefined;
-    const hoverGlowFilter = overdue
-      ? 'drop-shadow(0 0 9px rgba(239,68,68,0.62)) drop-shadow(0 0 16px rgba(220,38,38,0.34))'
-      : 'drop-shadow(0 0 9px rgba(56,189,248,0.56)) drop-shadow(0 0 16px rgba(129,140,248,0.3))';
-    const bubbleSubtasks = subtaskMap[bubble.task.id] ?? [];
     const doneSubtasksCount = bubbleSubtasks.filter((task) => task.status === 'DONE').length;
     const subtaskProgress = bubbleSubtasks.length > 0 ? doneSubtasksCount / bubbleSubtasks.length : 0;
     const progressCircumference = 2 * Math.PI * (bubble.radius + 6);
@@ -919,35 +897,18 @@ export function BubbleField({
     const titleLineClamp = bubble.radius < 30 ? 2 : bubble.radius < 44 ? 3 : 4;
     const titleFontSize = getBubbleTitleFontSize(bubble.task.title, bubble.radius);
     const titlePreview = getBubbleTitlePreview(bubble.task.title, bubble.radius);
-    const vectorTitleLines = fullscreen
-      ? wrapBubbleTitleForSvg(titlePreview, bubble.radius, titleFontSize, titleLineClamp)
-      : [];
-    const bubbleTextStyle: CSSProperties = {
-      fontSize: titleFontSize,
-      fontWeight: 600,
-      lineHeight: '1.08',
-      maxHeight: '100%',
-      overflowWrap: 'anywhere',
-      wordBreak: 'break-word',
-      hyphens: 'auto',
-      color: isLightTheme ? '#0f172a' : '#f8fafc',
-      textShadow: isLightTheme ? '0 1px 0 rgba(255,255,255,0.68)' : '0 2px 10px rgba(2,6,23,0.72)'
-    };
+    const vectorTitleLines = wrapBubbleTitleForSvg(titlePreview, bubble.radius, titleFontSize, titleLineClamp);
 
     return (
       <motion.g
         key={bubble.task.id}
         data-bubble-task-id={bubble.task.id}
         initial={false}
-        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: isDragged ? 1.07 : isHovered ? BUBBLE_HOVER_SCALE : isDragTarget ? 1.06 : 1, x: animatedPoint.x, y: animatedPoint.y }}
+        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: isDragged ? 1.05 : isDragTarget ? 1.04 : 1, x: animatedPoint.x, y: animatedPoint.y }}
         exit={isSearchFiltering ? { opacity: 0, scale: 0.96, x: animatedPoint.x, y: animatedPoint.y } : { opacity: 1, scale: 1, x: animatedPoint.x, y: animatedPoint.y }}
         transition={isDragged ? { duration: 0 } : isPopping
           ? { type: 'tween', duration: 0.33, ease: 'easeOut' }
-          : fullscreen
-            ? { type: 'tween', duration: 0.16, ease: 'easeOut' }
-            : isSearchFiltering
-              ? { type: 'tween', duration: 0.12, ease: 'easeOut' }
-              : { type: 'spring', damping: 24, stiffness: 105, mass: 0.82, restDelta: 0.001 }}
+          : { type: 'tween', duration: 0.34, ease: 'easeInOut' }}
         style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
         onClick={() => {
           if (ignoreClickRef.current === bubble.task.id) { ignoreClickRef.current = null; return; }
@@ -969,22 +930,16 @@ export function BubbleField({
           stroke={isDragTarget ? (dragView?.target?.kind === 'nest' ? '#f59e0b' : '#a78bfa') : selectedId === bubble.task.id ? (isLightTheme ? '#0f172a' : '#f8fafc') : (isLightTheme ? 'rgba(14,116,144,0.56)' : '#bae6fd')}
           strokeOpacity={selectedId === bubble.task.id ? 1 : isLightTheme ? 0.78 : 0.65}
           strokeWidth={isDragTarget || isDragged ? 5 : selectedId === bubble.task.id ? 3.5 : 2.4}
-          filter={glowFilter}
-          style={isDragTarget ? { filter: 'drop-shadow(0 0 14px rgba(167,139,250,0.7))' } : staticGlowStyle}
         />
+        {overdue ? (
+          <circle cx={0} cy={0} r={bubble.radius - 1} fill="#ef4444"
+            fillOpacity={isLightTheme ? 0.14 : 0.19} stroke="none" pointerEvents="none" />
+        ) : null}
         {shouldGlow ? (
-          <motion.circle
-            cx={0}
-            cy={0}
-            r={bubble.radius + 2}
-            fill="none"
-            stroke={glowColor}
-            strokeOpacity={overdue ? 0.4 : 0.34}
-            pointerEvents="none"
-            animate={fullscreen ? { opacity: 0.62, r: bubble.radius + 5, strokeWidth: 3 } : glowPulseState}
-            transition={fullscreen ? { duration: 0 } : isHovered ? { duration: overdue ? 1.15 : 1.55, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.18, ease: 'easeOut' }}
-            style={fullscreen ? undefined : { filter: hoverGlowFilter }}
-          />
+          <circle cx={0} cy={0} r={bubble.radius + 4} fill="none"
+            stroke={overdue ? '#f87171' : '#38bdf8'}
+            strokeWidth={2.3} strokeOpacity={overdue ? 0.6 : 0.28}
+            pointerEvents="none" />
         ) : null}
         {bubbleSubtasks.length > 0 ? (
           <>
@@ -1003,8 +958,7 @@ export function BubbleField({
             />
           </>
         ) : null}
-        {fullscreen ? (
-          <text x={0}
+        <text x={0}
             y={-((vectorTitleLines.length - 1) * titleFontSize * 1.12) / 2 + titleFontSize * 0.32}
             textAnchor="middle" fontSize={titleFontSize} fontWeight={600}
             fill={isLightTheme ? '#0f172a' : '#f8fafc'}
@@ -1014,13 +968,6 @@ export function BubbleField({
               <tspan key={index} x={0} dy={index ? titleFontSize * 1.12 : 0}>{line}</tspan>
             ))}
           </text>
-        ) : (
-          <foreignObject x={-bubble.radius * 0.8} y={-bubble.radius * 0.8} width={bubble.radius * 1.6} height={bubble.radius * 1.6} pointerEvents="none">
-            <div className="flex h-full flex-col items-center justify-center overflow-hidden px-1 text-center" lang="ru" style={bubbleTextStyle}>
-              <span style={{ display: '-webkit-box', WebkitLineClamp: titleLineClamp, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{titlePreview}</span>
-            </div>
-          </foreignObject>
-        )}
         {bubble.task.aiMonitoringEnabled ? (
           <g pointerEvents="none" aria-label="Автомониторинг включён">
             <circle cx={0} cy={-bubble.radius - 3} r={12} fill="#10b981" stroke={isLightTheme ? '#fff' : '#0f172a'} strokeWidth={2} />
@@ -1039,26 +986,18 @@ export function BubbleField({
         ) : null}
 
         {hasAiMessage ? (
-          <motion.g
-            animate={fullscreen ? { scale: 1 } : { scale: [1, 1.08, 1] }}
-            transition={fullscreen ? { duration: 0 } : { duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
-            pointerEvents="none"
-          >
+          <g pointerEvents="none">
             <circle cx={aiBadgeX} cy={aiBadgeY} r={11} fill="#7c3aed" />
             <foreignObject x={aiBadgeX - 6} y={aiBadgeY - 6} width={12} height={12}>
               <div className="flex h-full w-full items-center justify-center">
                 <Sparkles size={12} color="#ffffff" />
               </div>
             </foreignObject>
-          </motion.g>
+          </g>
         ) : null}
 
         {hasComments ? (
-          <motion.g
-            animate={fullscreen ? { scale: 1 } : unreadCommentCount > 0 ? { scale: [1, 1.08, 1] } : { scale: 1 }}
-            transition={fullscreen ? { duration: 0 } : unreadCommentCount > 0 ? { duration: 1.7, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.15 }}
-            pointerEvents="none"
-          >
+          <g pointerEvents="none">
             <circle cx={commentBadgeX} cy={commentBadgeY} r={11} fill="#2563eb" />
             <foreignObject x={commentBadgeX - 6} y={commentBadgeY - 6} width={12} height={12}>
               <div className="flex h-full w-full items-center justify-center">
@@ -1075,7 +1014,7 @@ export function BubbleField({
                 </foreignObject>
               </>
             ) : null}
-          </motion.g>
+          </g>
         ) : null}
 
         {isSmartPostponing ? (
@@ -1102,8 +1041,9 @@ export function BubbleField({
   return (
     <div
       className={`bubble-field-container surface-canvas relative ${fullscreen
-        ? 'overflow-hidden rounded-none border-0 shadow-none'
-        : `overflow-visible rounded-[2.2rem] border ${containerShadowClass} backdrop-blur-sm`} ${className ?? 'h-full'}`}
+        ? 'overflow-hidden rounded-none border-0'
+        : 'overflow-visible rounded-[2.2rem] border'} ${className ?? 'h-full'}`}
+      style={{ boxShadow: '0 6px 18px rgba(15,23,42,0.08)', backdropFilter: 'none' }}
       onMouseLeave={() => {
         if (isNativeCalendarOpen) return;
         scheduleHoverExit();
@@ -1149,10 +1089,6 @@ export function BubbleField({
                 </>
               )}
             </radialGradient>
-            <filter id="bubbleGlow" x="-60%" y="-60%" width="220%" height="220%">
-              <feDropShadow dx="0" dy="0" stdDeviation="8" floodColor="#7dd3fc" floodOpacity="0.42" />
-              <feDropShadow dx="0" dy="0" stdDeviation="16" floodColor="#818cf8" floodOpacity="0.22" />
-            </filter>
           </defs>
           <foreignObject
             x={fullscreen ? FULLSCREEN_TASK_INFO_PANEL_X : TASK_INFO_PANEL_X}
@@ -1241,7 +1177,7 @@ export function BubbleField({
             </div>
           </foreignObject>
           <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X} ry={ELLIPSE_RADIUS_Y} fill="url(#bg)" opacity={isLightTheme ? 0.94 : 0.86} />
-          <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X + 22} ry={ELLIPSE_RADIUS_Y + 16} fill="url(#fieldHalo)" filter={fullscreen ? undefined : 'url(#bubbleGlow)'} opacity={isLightTheme ? 0.48 : 0.7} />
+          <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X + 22} ry={ELLIPSE_RADIUS_Y + 16} fill="url(#fieldHalo)" opacity={isLightTheme ? 0.48 : 0.7} />
 
           {dragView?.changesSector && !dragView.target && sectorCount > 1 && (() => {
             const geometry = sectorGeometry[dragView.destinationSectorIndex];
@@ -1269,8 +1205,7 @@ export function BubbleField({
               const memberById = new Map(members.map((bubble) => [bubble.task.id, bubble]));
               const draggingMember = members.some((bubble) => bubble.task.id === dragView?.taskId);
               const transition = draggingMember ? { duration: 0 }
-                : fullscreen ? { type: 'tween' as const, duration: 0.16 }
-                : { type: 'spring' as const, damping: 24, stiffness: 105, mass: 0.82, restDelta: 0.001 };
+                : { type: 'tween' as const, duration: 0.34, ease: 'easeInOut' as const };
               return (
                 <motion.g key={key} initial={false}
                   animate={{ x: origin.x, y: origin.y }}

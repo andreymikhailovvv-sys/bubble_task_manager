@@ -5424,13 +5424,47 @@ export default function App() {
               className="min-w-36 sm:min-w-44" buttonClassName="topbar-select-button rounded-xl"
               menuClassName="topbar-dropdown" ariaLabel="Фильтр по времени"
             />
-            <CustomSelect
-              value="coefficient"
-              onChange={(value) => setRankingMode(value as BubbleRankingMode)}
-              options={[{ value: 'coefficient', label: 'По коэффициенту' }]}
-              className="min-w-36 sm:min-w-44" buttonClassName="topbar-select-button rounded-xl cursor-default"
-              menuClassName="topbar-dropdown" ariaLabel="Фильтр важности"
-            />
+            <div className="add-menu-wrap relative shrink-0"
+              onMouseEnter={() => setIsAddMenuOpen(true)}
+              onMouseLeave={() => { if (!isTourAddMenuOpen) setIsAddMenuOpen(false); }}>
+              <button type="button"
+                data-tour="bubbles-fullscreen-create-task"
+                className="add-menu-trigger light-primary-action inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold"
+                aria-expanded={isAddMenuOpen || isTourAddMenuOpen}
+                aria-haspopup="menu"
+                onClick={() => setIsAddMenuOpen((prev) => !prev)}>
+                <Plus size={16} /> Новая задача <ChevronDown size={14} />
+              </button>
+              {isAddMenuOpen || isTourAddMenuOpen ? (
+                <div className="add-menu-popover topbar-dropdown absolute right-0 top-[calc(100%+0.5rem)] z-50 w-56 rounded-2xl border p-2 shadow-2xl" role="menu">
+                  <button type="button" role="menuitem"
+                    className="add-menu-option add-menu-option-task flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold"
+                    onClick={() => { setEditorState({ initialSphereId: spheres[0]?.id }); setIsAddMenuOpen(false); }}>
+                    <FileText size={14} /> Новая задача
+                  </button>
+                  <button type="button" role="menuitem"
+                    className="add-menu-option add-menu-option-event mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold"
+                    onClick={() => {
+                      setEditorState({ task: { id: '', title: '', description: '', status: 'TODO',
+                        importance: 3, urgency: 3, priorityScore: 0, sphereId: spheres[0]?.id ?? null,
+                        dueDate: null, parentTaskId: null, taskType: 'EVENT', location: '',
+                        notifyBeforeMinutes: 0, isRecurring: false, aiNotificationsEnabled: false } });
+                      setIsAddMenuOpen(false);
+                    }}>
+                    <CalendarDays size={14} /> Новое событие
+                  </button>
+                  <button type="button" role="menuitem"
+                    className="add-menu-option add-menu-option-sector mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={spheres.length >= MAX_SPHERES}
+                    onClick={() => {
+                      setSectorEditorSphere({ id: '', name: '', color: HARMONIOUS_COLORS[0], icon: 'briefcase' });
+                      setIsAddMenuOpen(false);
+                    }}>
+                    <BriefcaseBusiness size={14} /> Новый сектор
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </header>
       ) : null}
@@ -6227,7 +6261,7 @@ export default function App() {
           <div data-tour="bubbles-workspace" className="relative h-full">
             <div data-tour="bubble-layout"
               className="bubble-layout-toggle absolute top-4 z-30 flex items-center gap-1 rounded-full border p-1 shadow-xl backdrop-blur"
-              style={{ right: isBubbleFullscreen ? 'max(16px, calc((100vw - 1460px) / 2))' : '16px' }}
+              style={{ right: '16px' }}
               role="group" aria-label="Режим отображения баблов">
               <button
                 type="button"
@@ -6254,7 +6288,7 @@ export default function App() {
               data-tour={isBubbleFullscreen ? 'bubbles-fullscreen-exit' : 'bubbles-fullscreen-enter'}
               onClick={() => { setIsSphereFilterOpen(false); setIsBubbleFullscreen((prev) => !prev); }}
               className="bubble-layout-toggle absolute top-[4.55rem] z-30 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold shadow-lg backdrop-blur transition hover:brightness-110"
-              style={{ right: isBubbleFullscreen ? 'max(16px, calc((100vw - 1460px) / 2))' : '16px' }}
+              style={{ right: '16px' }}
               title={isBubbleFullscreen ? 'Выйти из полноэкранного режима' : 'Развернуть пространство пузырей на весь экран'}
               aria-label={isBubbleFullscreen ? 'Выйти из полноэкранного режима' : 'Полноэкранный режим пузырей'}>
               {isBubbleFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
@@ -8541,6 +8575,7 @@ export default function App() {
 
       <QuickAiLauncherFrame
         taskOpen={Boolean(focusedTask)}
+        fullscreenBubbles={isBubbleFullscreen && displayMode === 'bubbles'}
         onHoverChange={hovered => { setQuickAiPreviewHovered(hovered); if(hovered){ scheduleQuickAiChatScrollToBottom(); markSystemNotificationsRead(); } }}
         onFocus={scheduleQuickAiChatScrollToBottom}
       >

@@ -14948,3 +14948,10 @@ body[data-theme='dark'] .focused-task-editor-shell .focused-task-description-sur
 }
 .miniapp-ai-context-chat-actions button:disabled { opacity: .3; }
 .miniapp-ai-context-chat-actions button:not(:disabled):active { background: rgba(139, 92, 246, .12); }
+
+
+/* Bubble fullscreen owns the full viewport: keep AI and both mode toggles
+   near the actual screen edge, instead of making room for the hidden side rail. */
+.ai-chat-launcher.bubble-ai-fullscreen {
+  right: max(16px, env(safe-area-inset-right));
+}
