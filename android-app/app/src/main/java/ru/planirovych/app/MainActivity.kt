@@ -80,13 +80,13 @@ class MainActivity:ComponentActivity(){
         }
         lifecycleScope.launch{
             repeatOnLifecycle(Lifecycle.State.STARTED){
-                // Foreground: refresh within a minute. WorkManager covers
-                // background delivery at the OS-defined periodic cadence.
+                // Foreground: short fallback polls if an FCM message is delayed.
+                // Background delivery stays push-first; WorkManager is OS-throttled.
                 while(isActive){
                     withContext(Dispatchers.IO){
                         runCatching{AndroidNotificationDelivery.refresh(this@MainActivity)}
                     }
-                    delay(60_000L)
+                    delay(30_000L)
                 }
             }
         }

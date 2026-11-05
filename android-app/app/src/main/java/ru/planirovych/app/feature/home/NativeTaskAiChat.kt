@@ -504,24 +504,8 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                         }
                     }
                     if(files.isNotEmpty()){
-                        Row(Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement=Arrangement.spacedBy(6.dp)){
-                            files.toList().forEach{file->
-                                Row(Modifier.clip(CircleShape)
-                                    .background(c.accent.copy(alpha=.12f))
-                                    .padding(start=9.dp,end=3.dp,top=3.dp,bottom=3.dp),
-                                    verticalAlignment=Alignment.CenterVertically){
-                                    Icon(Icons.Default.AttachFile,null,
-                                        modifier=Modifier.size(14.dp),tint=c.accent)
-                                    Text(file.name,color=c.text,fontSize=10.sp,maxLines=1,
-                                        modifier=Modifier.widthIn(max=110.dp))
-                                    IconButton(onClick={files.remove(file)},
-                                        enabled=!busy,modifier=Modifier.size(23.dp)){
-                                        Icon(Icons.Default.Close,"Убрать файл",
-                                            modifier=Modifier.size(12.dp),tint=c.secondary)
-                                    }
-                                }
-                            }
+                        NativeAiAttachmentTiles(files.toList(),c){file->
+                            if(!busy)files.remove(file)
                         }
                     }
                     (attachmentError?:error)?.let{message->
@@ -641,9 +625,11 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
     onOpenDocument:(String)->Unit={},
     generalChat:Boolean=false,proposalVm:HomeViewModel?=null,
     taskTitles:Map<String,String> = emptyMap(),
-    onOpenTaskReference:((String)->Unit)?=null){
+    onOpenTaskReference:((String)->Unit)?=null,
+    onOpenMonitoredTaskAi:((String)->Unit)?=null){
     val isUser=message.role=="user"
-    val content=messageDisplayContent(message.content)
+    val rawContent=messageDisplayContent(message.content)
+    val (content,attachmentNames)=splitNativeAiMessageAttachments(rawContent)
     // Preview can end halfway through a **bold** delimiter. Hide the stray
     // marker and close the open pair only for formatted rendering.
     val previewContent=if(pending && !isUser){
@@ -698,6 +684,26 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                         taskTitles=taskTitles,
                         onOpenTaskReference=onOpenTaskReference)
                     else Text(content,color=c.userText,fontSize=14.sp,lineHeight=22.sp)
+                    if(attachmentNames.isNotEmpty()){
+                        NativeAiMessageAttachmentTiles(attachmentNames,c)
+                    }
+                    message.monitoringTaskId?.takeIf{
+                        generalChat && onOpenMonitoredTaskAi!=null
+                    }?.let{monitoredTaskId->
+                        Row(Modifier.clip(RoundedCornerShape(11.dp))
+                            .background(c.accent.copy(alpha=.12f))
+                            .border(1.dp,c.accent.copy(alpha=.32f),
+                                RoundedCornerShape(11.dp))
+                            .clickable{onOpenMonitoredTaskAi?.invoke(monitoredTaskId)}
+                            .padding(horizontal=11.dp,vertical=9.dp),
+                            horizontalArrangement=Arrangement.spacedBy(7.dp),
+                            verticalAlignment=Alignment.CenterVertically){
+                            Icon(Icons.Default.OpenInNew,null,
+                                modifier=Modifier.size(15.dp),tint=c.accent)
+                            Text("Ответить в чате задачи",color=c.accent,
+                                fontWeight=FontWeight.SemiBold,fontSize=12.sp)
+                        }
+                    }
                     if(message.messageKind=="MONITOR_ACTION"){
                         Text("Действие автомониторинга",color=c.secondary,fontSize=10.sp)
                     }
