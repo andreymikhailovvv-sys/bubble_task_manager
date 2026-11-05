@@ -5,7 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { createPortal } from 'react-dom';
 import { buildBubbles, buildSectorGeometry, getBubbleSectorIndex, getBubbleSectorSpheres, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
 import { noteHtmlToPlainText } from '../lib/notes';
-import { detectBubbleDrop, linkedBubblePositions, type DropIntent, type VisualBubble } from '../lib/bubbleInteractions';
+import { bubbleLinkSegment, detectBubbleDrop, getLinkedBubbleGroups, linkedBubblePositions, type DropIntent, type VisualBubble } from '../lib/bubbleInteractions';
 import { resolveSphereIcon } from '../lib/sphereIcons';
 import type { Sphere, Task } from '../lib/types';
 import { InlineDateTimePickerIcon } from './InlineDateTimePickerIcon';
@@ -38,6 +38,7 @@ type Props = {
   onRescheduleTask?: (task: Task) => void;
   forceTaskContextMenuOpen?: boolean;
   isSearchFiltering?: boolean;
+  isSingleSectorFilterActive?: boolean;
   themeMode?: 'dark' | 'light';
   className?: string;
 };
@@ -284,6 +285,7 @@ export function BubbleField({
   onRescheduleTask,
   forceTaskContextMenuOpen = false,
   isSearchFiltering = false,
+  isSingleSectorFilterActive = false,
   themeMode = 'dark',
   className
 }: Props) {
@@ -494,8 +496,8 @@ export function BubbleField({
   );
 
   const bubbles = useMemo(
-    () => buildBubbles(tasks, spheres, mode, SIZE, rankingMode, subtaskMap),
-    [tasks, spheres, mode, rankingMode, subtaskMap]
+    () => buildBubbles(tasks, spheres, mode, SIZE, rankingMode, subtaskMap, isSingleSectorFilterActive && mode === 'sectors'),
+    [tasks, spheres, mode, rankingMode, subtaskMap, isSingleSectorFilterActive]
   );
   const mapToOval = useCallback((x: number, y: number) => ({
     x: BUBBLE_FIELD_CENTER_X + (x - SIZE / 2) * ELLIPSE_X_SCALE,
@@ -511,7 +513,7 @@ export function BubbleField({
       return {
         id: bubble.task.id, x: point.x, y: point.y, radius: bubble.radius,
         linkedTaskIds: bubble.task.linkedTaskIds, bubbleLinkAnchorId: bubble.task.bubbleLinkAnchorId,
-        pinned: typeof savedX === 'number' && typeof savedY === 'number'
+        pinned: !isSingleSectorFilterActive && typeof savedX === 'number' && typeof savedY === 'number'
       };
     }),
     {
@@ -519,7 +521,7 @@ export function BubbleField({
       minY: VIEWBOX_TOP + 20, maxY: VIEWBOX_BOTTOM - 20,
       ellipse: { cx: BUBBLE_FIELD_CENTER_X, cy: BUBBLE_FIELD_CENTER_Y, rx: ELLIPSE_RADIUS_X, ry: ELLIPSE_RADIUS_Y }
     }
-  ), [bubbles, mapToOval, mode]);
+  ), [bubbles, mapToOval, mode, isSingleSectorFilterActive]);
   const getBubbleVisualPoint = (bubble: (typeof bubbles)[number]) =>
     bubbleVisualPositions.get(bubble.task.id) ?? mapToOval(bubble.x, bubble.y);
   const eligibleBubbleTargets = (): VisualBubble[] => visibleBubbles
@@ -566,6 +568,8 @@ export function BubbleField({
     queueDragView({ taskId: session.taskId, dx: point.x - session.startSvgX, dy: point.y - session.startSvgY, target });
   };
 
+  const isPoppingTask = (taskId: string) => poppingTaskId === taskId;
+
   const onBubblePointerUp = (event: ReactPointerEvent<SVGElement>, bubble: (typeof bubbles)[number]) => {
     const session = dragSessionRef.current;
     if (!session || session.pointerId !== event.pointerId || session.taskId !== bubble.task.id) return;
@@ -573,7 +577,14 @@ export function BubbleField({
     cancelDragFrame();
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     setDragView(null);
-    if (!session.moved) return;
+    if (!session.moved) {
+      // Pointer capture targets the root SVG, so a browser click no longer
+      // reaches the bubble. Open the task directly on a stationary release.
+      ignoreClickRef.current = session.taskId;
+      setTimeout(() => { if (ignoreClickRef.current === session.taskId) ignoreClickRef.current = null; }, 0);
+      if (!isPoppingTask(bubble.task.id)) onSelect(bubble.task);
+      return;
+    }
     ignoreClickRef.current = session.taskId;
     setTimeout(() => { if (ignoreClickRef.current === session.taskId) ignoreClickRef.current = null; }, 0);
     event.preventDefault();
@@ -647,35 +658,31 @@ export function BubbleField({
   }, [sectorCount, bubbleSectors, tasks]);
   const sectorGeometry = useMemo(() => buildSectorGeometry(sectorCount, sectorTaskCounts), [sectorCount, sectorTaskCounts]);
 
-  // The bond is rendered inside the same animated parent as both circles.
-  // It cannot reveal a different timing/coordinate system when modes change.
-  type BubbleGroup = { key: string; anchor: (typeof bubbles)[number]; satellite: (typeof bubbles)[number] | null };
+  // Render connected components atomically: all members and all real edges
+  // share a parent transform and the same transition when filtering modes.
+  type BubbleGroup = {
+    key: string;
+    anchor: (typeof bubbles)[number];
+    members: (typeof bubbles)[number][];
+    edges: Array<[string, string]>;
+  };
   const bubbleGroups = useMemo<BubbleGroup[]>(() => {
     const byId = new Map(visibleBubbles.map((bubble) => [bubble.task.id, bubble]));
-    const used = new Set<string>();
-    const groups: BubbleGroup[] = [];
-    for (const bubble of visibleBubbles) {
-      if (used.has(bubble.task.id)) continue;
-      const partner = byId.get(bubble.task.linkedTaskIds?.[0] ?? '');
-      if (partner && partner.task.linkedTaskIds?.[0] === bubble.task.id) {
-        const anchorId = bubble.task.bubbleLinkAnchorId ?? partner.task.bubbleLinkAnchorId
-          ?? (bubble.task.id < partner.task.id ? bubble.task.id : partner.task.id);
-        const anchor = anchorId === partner.task.id ? partner : bubble;
-        const satellite = anchor === bubble ? partner : bubble;
-        used.add(anchor.task.id);
-        used.add(satellite.task.id);
-        groups.push({ key: `pair-${[anchor.task.id, satellite.task.id].sort().join('-')}`, anchor, satellite });
-      } else {
-        used.add(bubble.task.id);
-        groups.push({ key: `single-${bubble.task.id}`, anchor: bubble, satellite: null });
-      }
-    }
-    return groups;
-  }, [visibleBubbles]);
+    const components = getLinkedBubbleGroups(visibleBubbles.map((bubble) => ({
+      id: bubble.task.id, ...getBubbleVisualPoint(bubble),
+      radius: bubble.radius, linkedTaskIds: bubble.task.linkedTaskIds,
+      bubbleLinkAnchorId: bubble.task.bubbleLinkAnchorId
+    })));
+    return components.map((component) => ({
+      key: component.ids.join(':'), anchor: byId.get(component.anchorId)!,
+      members: component.ids.map((id) => byId.get(id)!),
+      edges: component.edges
+    }));
+  }, [visibleBubbles, bubbleVisualPositions]);
   const orderedGroups = dragView
     ? [...bubbleGroups].sort((a, b) =>
-      Number(a.anchor.task.id === dragView.taskId || a.satellite?.task.id === dragView.taskId) -
-      Number(b.anchor.task.id === dragView.taskId || b.satellite?.task.id === dragView.taskId))
+        Number(a.members.some((member) => member.task.id === dragView.taskId)) -
+        Number(b.members.some((member) => member.task.id === dragView.taskId)))
     : bubbleGroups;
 
   useEffect(() => {
@@ -1162,35 +1169,35 @@ export function BubbleField({
           })}
 
           <AnimatePresence>
-            {orderedGroups.map(({ key, anchor, satellite }) => {
-              if (!satellite) return renderBubble(anchor);
+            {orderedGroups.map(({ key, anchor, members, edges }) => {
+              if (members.length === 1) return renderBubble(anchor);
               const origin = getBubbleVisualPoint(anchor);
-              const other = getBubbleVisualPoint(satellite);
-              const draggingAnchor = dragView?.taskId === anchor.task.id;
-              const draggingSatellite = dragView?.taskId === satellite.task.id;
-              const bondMoving = draggingAnchor || draggingSatellite;
-              const bondTransition = bondMoving ? { duration: 0 }
+              const memberById = new Map(members.map((bubble) => [bubble.task.id, bubble]));
+              const draggingMember = members.some((bubble) => bubble.task.id === dragView?.taskId);
+              const transition = draggingMember ? { duration: 0 }
                 : { type: 'spring' as const, damping: 24, stiffness: 105, mass: 0.82, restDelta: 0.001 };
               return (
                 <motion.g key={key} initial={false}
                   animate={{ x: origin.x, y: origin.y }}
                   exit={isSearchFiltering ? { opacity: 0, scale: 0.96 } : undefined}
-                  transition={bondTransition}>
-                  <motion.line
-                    initial={false}
-                    animate={{
-                      x1: draggingAnchor ? dragView!.dx : 0,
-                      y1: draggingAnchor ? dragView!.dy : 0,
-                      x2: other.x - origin.x + (draggingSatellite ? dragView!.dx : 0),
-                      y2: other.y - origin.y + (draggingSatellite ? dragView!.dy : 0)
-                    }}
-                    transition={bondTransition}
-                    stroke="#a78bfa" strokeWidth={5} strokeLinecap="round" opacity={0.82}
-                    style={{ filter: 'drop-shadow(0 0 5px rgba(167,139,250,0.55))' }}
-                    pointerEvents="none"
-                  />
-                  {renderBubble(anchor, origin)}
-                  {renderBubble(satellite, origin)}
+                  transition={transition}>
+                  {edges.map(([firstId, secondId]) => {
+                    const first = memberById.get(firstId)!;
+                    const second = memberById.get(secondId)!;
+                    const pa = getBubbleVisualPoint(first);
+                    const pb = getBubbleVisualPoint(second);
+                    const a = { x: pa.x - origin.x + (dragView?.taskId === firstId ? dragView.dx : 0),
+                                y: pa.y - origin.y + (dragView?.taskId === firstId ? dragView.dy : 0) };
+                    const b = { x: pb.x - origin.x + (dragView?.taskId === secondId ? dragView.dx : 0),
+                                y: pb.y - origin.y + (dragView?.taskId === secondId ? dragView.dy : 0) };
+                    const segment = bubbleLinkSegment(a, b, first.radius, second.radius);
+                    return (
+                      <motion.line key={`${firstId}:${secondId}`} initial={false} animate={segment} transition={transition}
+                        stroke="#a78bfa" strokeWidth={2.7} strokeDasharray="3.5 5" strokeLinecap="round"
+                        opacity={0.88} pointerEvents="none" />
+                    );
+                  })}
+                  {members.map((bubble) => renderBubble(bubble, origin))}
                 </motion.g>
               );
             })}
