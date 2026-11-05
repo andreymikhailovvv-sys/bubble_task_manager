@@ -23,8 +23,11 @@ import { createPublicSeoPagesMiddleware } from './lib/public-seo-pages.js';
 import { startTaskMonitoringWorker } from './services/task-monitoring-worker.service.js';
 import { startAndroidPushWorker } from './services/android-push-worker.service.js';
 import { handleLiveVoiceUpgrade } from './services/ai-live-voice.service.js';
+import { performanceHttpMiddleware, startPerformanceDiagnostics, measureBackground } from './lib/performance-diagnostics.js';
 
 const app = express();
+// Register first to include auth, API, and failed requests in latency measurements.
+app.use(performanceHttpMiddleware);
 const port = Number(process.env.PORT ?? 4000);
 const requestBodyLimit = process.env.REQUEST_BODY_LIMIT?.trim() || '15mb';
 const __filename = fileURLToPath(import.meta.url);
@@ -114,7 +117,7 @@ const runPaymentRecovery = async () => {
   if (paymentRecoveryRunning) return;
   paymentRecoveryRunning = true;
   try {
-    const result = await reconcilePendingCreditPurchases();
+    const result = await measureBackground('payments.recovery', () => reconcilePendingCreditPurchases());
     if (result.scanned) console.info('[Payments] pending purchase recovery cycle', result);
   } catch (error) {
     console.error('[Payments] pending purchase recovery cycle failed', {
@@ -129,7 +132,7 @@ setInterval(() => { void runPaymentRecovery(); }, 60_000).unref();
 
 const telegramPollIntervalMs = Number(process.env.TELEGRAM_POLL_INTERVAL_MS ?? 60_000);
 setInterval(() => {
-  telegramService.notifyShiningTasks().catch((error) => {
+  measureBackground('telegram.shining_tasks', () => telegramService.notifyShiningTasks()).catch((error) => {
     console.error('[Notifications] notifyShiningTasks failed', error);
   });
 }, telegramPollIntervalMs).unref();
@@ -166,7 +169,7 @@ const formatLocalCheckupSlot = (date: Date, timeZone: string) => {
 };
 
 setInterval(() => {
-  void (async () => {
+  void measureBackground('ai.checkup_scheduler', async () => {
     const now = new Date();
     const users = await prisma.user.findMany({
       where: { morningAiCheckupEnabled: true },
@@ -204,7 +207,7 @@ setInterval(() => {
         }
       }
     }
-  })().catch((error) => {
+  }).catch((error) => {
     console.error('[AI] daily checkup failed', error);
   });
 }, CHECKUP_POLL_INTERVAL_MS).unref();
@@ -212,6 +215,7 @@ setInterval(() => {
 const httpServer = app.listen(port, '0.0.0.0', () => {
   console.log(`Server started on http://0.0.0.0:${port}`);
 });
+startPerformanceDiagnostics();
 
 httpServer.on('upgrade', (request, socket, head) => {
   // A one-time authenticated ticket is required. Do not expose a generic
@@ -223,7 +227,7 @@ const telegramUpdateWorker = new TelegramUpdateWorker(
   telegramUpdateQueue,
   (payload) => telegramService.processWebhookUpdate(payload as Parameters<typeof telegramService.processWebhookUpdate>[0])
 );
-const runTelegramWorker = () => telegramUpdateWorker.drain().catch((error) => {
+const runTelegramWorker = () => measureBackground('telegram.update_queue', () => telegramUpdateWorker.drain()).catch((error) => {
   console.error('[TelegramWorker] polling failed', error);
 });
 telegramUpdateQueue.recoverStaleJobs()
@@ -236,7 +240,7 @@ setInterval(runTelegramWorker, Number(process.env.TELEGRAM_WORKER_POLL_INTERVAL_
 
 // Durable personal-Telegram quick-share worker. Jobs survive closing the web
 // window and container restarts; per-recipient audit makes delivery at-most-once.
-const runTelegramQuickShare = () => telegramQuickShare.drain().catch(() => {
+const runTelegramQuickShare = () => measureBackground('telegram.quick_share', () => telegramQuickShare.drain()).catch(() => {
   console.warn('[TelegramQuickShare] queue poll failed');
 });
 setTimeout(runTelegramQuickShare, 3_000).unref();
@@ -245,7 +249,7 @@ setInterval(runTelegramQuickShare, 2_500).unref();
 // Database-leased chat monitoring: at most one worker owns a chat at a time,
 // even when the application runs in multiple replicas. Disabled by default
 // per chat; no environment variable or separate Telegram connection required.
-const runTelegramAiMonitor = () => telegramAiMonitorWorker.drain().catch(() => {
+const runTelegramAiMonitor = () => measureBackground('telegram.ai_monitor', () => telegramAiMonitorWorker.drain()).catch(() => {
   console.warn('[TelegramMonitor] scheduler iteration failed');
 });
 setTimeout(runTelegramAiMonitor, 8_000).unref();
@@ -253,16 +257,16 @@ setInterval(runTelegramAiMonitor, 10_000).unref();
 
 // Durable outgoing summaries to the linked Telegram bot, distinct from
 // monitored peers. Each event is claimed at most once across replicas.
-const sendTelegramAssistantInbox = () => deliverTelegramAiBotNotifications().catch(() => {
+const sendTelegramAssistantInbox = () => measureBackground('telegram.ai_inbox_delivery', () => deliverTelegramAiBotNotifications()).catch(() => {
   console.warn('[TelegramAIInbox] delivery iteration failed');
 });
 setTimeout(sendTelegramAssistantInbox, 10_000).unref();
 setInterval(sendTelegramAssistantInbox, 20_000).unref();
 
 // Database-leased, consent-only email monitoring. No separate process required.
-const runEmailMonitor = () => mailAssistantWorker.drain().catch(() => console.warn('[MailAssistant] monitoring failed'));
+const runEmailMonitor = () => measureBackground('mail.monitor', () => mailAssistantWorker.drain()).catch(() => console.warn('[MailAssistant] monitoring failed'));
 setTimeout(runEmailMonitor, 12_000).unref();
 setInterval(runEmailMonitor, 15_000).unref();
-const runMailBot = () => deliverMailAiBotNotifications().catch(() => console.warn('[MailAssistant] notification delivery failed'));
+const runMailBot = () => measureBackground('mail.bot_delivery', () => deliverMailAiBotNotifications()).catch(() => console.warn('[MailAssistant] notification delivery failed'));
 setTimeout(runMailBot, 18_000).unref();
 setInterval(runMailBot, 20_000).unref();
