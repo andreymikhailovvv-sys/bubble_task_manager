@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 
 type BubbleActionInput = {
@@ -9,7 +10,7 @@ type BubbleActionInput = {
   y?: number;
 };
 
-const ownedRoot = async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0], id: string, userId: string) => {
+const ownedRoot = async (tx: Prisma.TransactionClient, id: string, userId: string) => {
   const task = await tx.task.findFirst({
     where: { id, userId, parentTaskId: null, collaborationId: null, taskType: 'TASK' }
   });
