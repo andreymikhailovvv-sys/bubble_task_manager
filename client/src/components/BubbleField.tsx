@@ -64,7 +64,7 @@ const VIEWBOX_BOTTOM = VIEWBOX_TOP + VIEWBOX_HEIGHT;
 const TASK_INFO_PANEL_WIDTH = 620;
 const TASK_INFO_PANEL_X = VIEWBOX_LEFT + 24;
 const FULLSCREEN_TASK_INFO_PANEL_X = VIEWBOX_LEFT + 48;
-const FULLSCREEN_TASK_INFO_PANEL_WIDTH = 470;
+const FULLSCREEN_TASK_INFO_PANEL_WIDTH = 560;
 const BUBBLE_WORKSPACE_GAP = 36;
 const BUBBLE_WORKSPACE_X = TASK_INFO_PANEL_X + TASK_INFO_PANEL_WIDTH + BUBBLE_WORKSPACE_GAP;
 const BUBBLE_WORKSPACE_WIDTH = VIEWBOX_RIGHT - BUBBLE_WORKSPACE_X - 8;
@@ -873,6 +873,9 @@ export function BubbleField({
     const shouldGlow = active && (shouldTaskGlow(bubble.task) || hasUrgentSubtask);
     const overdue = active && (isOverdue(bubble.task) ||
       bubbleSubtasks.some((subtask) => subtask.status !== 'DONE' && isOverdue(subtask)));
+    // Hover only scales the bubble group. The overdue tint and reminder ring
+    // stay static, including on mouse enter (no pulsing glow).
+    const isHovered = hoveredTaskId === bubble.task.id;
     const isDragged = dragView?.taskId === bubble.task.id;
     const isDragTarget = dragView?.target?.targetId === bubble.task.id;
     const doneSubtasksCount = bubbleSubtasks.filter((task) => task.status === 'DONE').length;
@@ -904,7 +907,7 @@ export function BubbleField({
         key={bubble.task.id}
         data-bubble-task-id={bubble.task.id}
         initial={false}
-        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: isDragged ? 1.05 : isDragTarget ? 1.04 : 1, x: animatedPoint.x, y: animatedPoint.y }}
+        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: isDragged ? 1.05 : isDragTarget ? 1.04 : isHovered ? 1.075 : 1, x: animatedPoint.x, y: animatedPoint.y }}
         exit={isSearchFiltering ? { opacity: 0, scale: 0.96, x: animatedPoint.x, y: animatedPoint.y } : { opacity: 1, scale: 1, x: animatedPoint.x, y: animatedPoint.y }}
         transition={isDragged ? { duration: 0 } : isPopping
           ? { type: 'tween', duration: 0.33, ease: 'easeOut' }
