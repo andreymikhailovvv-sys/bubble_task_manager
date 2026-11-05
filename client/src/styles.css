@@ -1104,8 +1104,19 @@ body[data-theme='light'] .backdrop-blur-sm {
     border-color: var(--badge-border);
     background: var(--badge-bg);
     color: var(--text-muted);
+  }
+
+  .bubble-zoom-badge {
     box-shadow: 0 12px 28px color-mix(in srgb, var(--accent) 12%, transparent);
     backdrop-filter: blur(14px) saturate(1.08);
+  }
+
+  /* The labels should be single, crisp plaques, with no translucent
+     drop-shadow "copy" underneath them in either color theme. */
+  .bubble-sector-label {
+    box-shadow: none;
+    filter: none;
+    backdrop-filter: none;
   }
 
   .dialog-surface {
@@ -14954,4 +14965,19 @@ body[data-theme='dark'] .focused-task-editor-shell .focused-task-description-sur
    near the actual screen edge, instead of making room for the hidden side rail. */
 .ai-chat-launcher.bubble-ai-fullscreen {
   right: max(16px, env(safe-area-inset-right));
+}
+
+
+/* Draw the fullscreen toolbar and its bubble workspace over ONE continuous
+   themed gradient, rather than painting separate canvases whose edges show
+   as a contrasting horizontal stripe beneath the toolbar. */
+.app-shell.bubble-fullscreen-shell {
+  background: var(--bubble-field-bg), var(--canvas-bg);
+  background-size: 100% 100%, 100% 100%;
+  background-repeat: no-repeat;
+}
+
+.bubble-fullscreen-shell .bubble-field-container {
+  background: transparent;
+  box-shadow: none;
 }
