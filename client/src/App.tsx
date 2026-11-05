@@ -2742,6 +2742,18 @@ export default function App() {
   };
 
   const renderLinkedTaskBadge = (task: Task, compact = false) => {
+    // The app uses data-theme, so Tailwind's dark: selector does not reliably
+    // target these chips. Choose contrast explicitly from the active theme.
+    const isLightChipTheme = effectiveThemeMode === 'light';
+    const linkedChipSurface = isLightChipTheme
+      ? 'border-cyan-500/40 bg-gradient-to-r from-cyan-50 to-sky-100/85 text-cyan-900 shadow-sm'
+      : 'border-cyan-300/40 bg-gradient-to-r from-cyan-400/20 to-sky-400/15 text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]';
+    const linkedChipHover = isLightChipTheme
+      ? 'hover:bg-cyan-500/15 focus-visible:ring-cyan-600/45'
+      : 'hover:bg-cyan-300/20 focus-visible:ring-cyan-200/55';
+    const unlinkColor = isLightChipTheme
+      ? 'text-cyan-700 hover:bg-cyan-500/20 hover:text-cyan-950'
+      : 'text-cyan-200 hover:bg-cyan-300/20 hover:text-white';
     const relatedTasks = (task.linkedTaskIds ?? [])
       .map((id) => tasks.find((candidate) => candidate.id === id))
       .filter((candidate): candidate is Task => Boolean(candidate));
@@ -2757,10 +2769,10 @@ export default function App() {
           return (
             <span key={related.id}
               className={compact
-                ? 'inline-flex min-w-0 max-w-40 flex-1 basis-0 items-center gap-0.5 overflow-hidden rounded-full border border-cyan-500/35 bg-cyan-500/10 py-0.5 pl-1.5 pr-0.5 text-sky-700 dark:text-cyan-200'
-                : 'inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border border-cyan-500/35 bg-cyan-500/10 py-0.5 pl-2 pr-1 text-sky-700 dark:text-cyan-200'}>
+                ? `inline-flex min-w-0 max-w-40 flex-1 basis-0 items-center gap-0.5 overflow-hidden rounded-full border py-0.5 pl-1.5 pr-0.5 ${linkedChipSurface}`
+                : `inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border py-0.5 pl-2 pr-1 ${linkedChipSurface}`}>
               <button type="button"
-                className="inline-flex min-w-0 flex-1 items-center gap-1 rounded-full px-1 py-0.5 font-semibold hover:bg-cyan-500/15"
+                className={`inline-flex min-w-0 flex-1 items-center gap-1 rounded-full px-1 py-0.5 font-semibold transition focus-visible:outline-none focus-visible:ring-2 ${linkedChipHover}`}
                 title={related.title} onClick={(event) => {
                   event.stopPropagation();
                   setIsFocusModeOpen(false);
@@ -2769,7 +2781,7 @@ export default function App() {
                 <span className="truncate">{related.title}</span><ChevronRight size={12} className="shrink-0" />
               </button>
               <button type="button"
-                className="inline-flex h-6 w-5 shrink-0 items-center justify-center rounded-full text-cyan-600 transition hover:bg-cyan-500/20 hover:text-cyan-800 dark:text-cyan-300 dark:hover:text-cyan-100 disabled:opacity-50"
+                className={`inline-flex h-6 w-5 shrink-0 items-center justify-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 disabled:opacity-50 ${unlinkColor}`}
                 title={`Разорвать связь с «${related.title}»`}
                 aria-label={`Разорвать связь с задачей «${related.title}»`}
                 disabled={unlinkingBubbleTaskId !== null}

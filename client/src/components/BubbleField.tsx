@@ -330,7 +330,7 @@ export function BubbleField({
   const [dragView, setDragView] = useState<BubbleDragView | null>(null);
   const [bubbleActionPending, setBubbleActionPending] = useState(false);
   const [bubbleDragNotice, setBubbleDragNotice] = useState<string | null>(null);
-  const [noticePair, setNoticePair] = useState<[string, string] | null>(null);
+  const [bubbleNoticeKind, setBubbleNoticeKind] = useState<'success' | 'warning' | 'error'>('success');
   const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -346,11 +346,11 @@ export function BubbleField({
       if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
     };
   }, []);
-  const showBubbleNotice = (message: string, pair: [string, string] | null = null) => {
+  const showBubbleNotice = (message: string, kind: 'success' | 'warning' | 'error' = 'success') => {
     if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
-    setNoticePair(pair);
+    setBubbleNoticeKind(kind);
     setBubbleDragNotice(message);
-    noticeTimerRef.current = setTimeout(() => { setBubbleDragNotice(null); setNoticePair(null); }, 3200);
+    noticeTimerRef.current = setTimeout(() => setBubbleDragNotice(null), 3200);
   };
   const toSvgPoint = (clientX: number, clientY: number) => {
     const svg = svgRef.current;
@@ -570,7 +570,6 @@ export function BubbleField({
     const point = toSvgPoint(event.clientX, event.clientY);
     if (!point) return;
     event.preventDefault();
-    setNoticePair(null);
     setBubbleDragNotice(null);
     dragSessionRef.current = {
       taskId: bubble.task.id, pointerId: event.pointerId, startClientX: event.clientX, startClientY: event.clientY,
@@ -633,7 +632,7 @@ export function BubbleField({
     event.preventDefault();
     event.stopPropagation();
     if (session.target?.kind === 'nest' && Date.now() - session.targetSince < 550) {
-      showBubbleNotice('Для создания подзадачи задержите пузырь внутри другого на полсекунды.');
+      showBubbleNotice('Для создания подзадачи задержите пузырь внутри другого на полсекунды.', 'warning');
       return;
     }
     const dropPoint = getBubbleVisualPoint(bubble);
@@ -643,7 +642,7 @@ export function BubbleField({
     const normalizedY = SIZE / 2 + (py - BUBBLE_FIELD_CENTER_Y) / ELLIPSE_Y_SCALE;
     const distance = Math.hypot(normalizedX - SIZE / 2, normalizedY - SIZE / 2);
     if (!session.target && distance > FIELD_RADIUS + bubble.radius) {
-      showBubbleNotice('Отпустите пузырь внутри поля задач.');
+      showBubbleNotice('Отпустите пузырь внутри поля задач.', 'warning');
       return;
     }
     const x = clamp(normalizedX, 0, SIZE);
@@ -662,7 +661,7 @@ export function BubbleField({
         : { action: 'move' as const, x, y, mode, ...sectorChange };
     setBubbleActionPending(true);
     void onBubbleAction(bubble.task, action).then(() => {
-      if (action.action === 'link' && target) showBubbleNotice(`Задачи «${bubble.task.title}» и «${target.title}» теперь связаны.`, [bubble.task.id, target.id]);
+      if (action.action === 'link' && target) showBubbleNotice(`Задачи «${bubble.task.title}» и «${target.title}» теперь связаны.`);
       else if (action.action === 'nest' && target) showBubbleNotice(`«${bubble.task.title}» теперь подзадача «${target.title}».`);
       else if (action.action === 'unlink') {
         showBubbleNotice(changesSector
@@ -672,7 +671,7 @@ export function BubbleField({
         ? `«${bubble.task.title}» перенесена в сектор «${destinationSector?.name ?? 'Без сектора'}».`
         : 'Положение пузыря сохранено.');
     }).catch((error: unknown) => {
-      showBubbleNotice(error instanceof Error ? error.message : 'Не удалось переместить пузырь.');
+      showBubbleNotice(error instanceof Error ? error.message : 'Не удалось переместить пузырь.', 'error');
     }).finally(() => setBubbleActionPending(false));
   };
 
@@ -1061,16 +1060,6 @@ export function BubbleField({
         scheduleHoverExit();
       }}
     >
-      {(dragView || (bubbleDragNotice && !noticePair) || bubbleActionPending) && (
-        <div className="pointer-events-none absolute left-1/2 top-4 z-50 max-w-[90%] -translate-x-1/2 rounded-2xl border border-violet-400/40 bg-slate-950/90 px-4 py-2 text-center text-sm font-medium text-white shadow-xl backdrop-blur-md" role="status" aria-live="polite">
-          {bubbleActionPending ? 'Сохраняем изменение…' : dragView?.target
-            ? dragView.target.kind === 'nest' ? 'Внутри пузыря: сделать подзадачей (удерживать 0,5 сек)'
-              : 'У края пузыря: связать задачи'
-            : dragView?.changesSector ? `Переместить в сектор «${dragView.destinationSectorName}»`
-              : dragView ? 'Отпустите для перемещения, или оттяните связанную задачу, чтобы разъединить'
-              : bubbleDragNotice}
-        </div>
-      )}
       <svg ref={svgRef} style={{ userSelect: 'none', WebkitUserSelect: 'none', touchAction: 'pan-x pan-y' }}
         onDragStart={(event) => event.preventDefault()}
         onPointerMove={onCanvasPointerMove} onPointerUp={onCanvasPointerUp}
@@ -1272,46 +1261,61 @@ export function BubbleField({
                 x2: end.x - ux * Math.min(to.radius * 0.38, distance * 0.26),
                 y2: end.y - uy * Math.min(to.radius * 0.38, distance * 0.26)
               } : bubbleLinkSegment(start, end, from.radius, to.radius);
-            const color = dragView.target.kind === 'nest' ? '#fbbf24' : '#c4b5fd';
+            // Keep the preview in the foreground, like a normal connection:
+            // no thick opaque underlay that makes short dashes look solid.
+            const color = dragView.target.kind === 'nest'
+              ? (isLightTheme ? '#b45309' : '#fbbf24')
+              : (isLightTheme ? '#6d28d9' : '#a78bfa');
             return <g pointerEvents="none">
-              <circle cx={end.x} cy={end.y} r={to.radius + 8} fill="none"
-                stroke={color} strokeWidth={3} strokeDasharray="5 5" opacity={0.94} />
-              <line {...segment} stroke="#0f172a" strokeOpacity={0.75} strokeWidth={8}
-                strokeLinecap="round" />
-              <line {...segment} stroke={color} strokeWidth={4.5} strokeDasharray="7 5"
-                strokeLinecap="round" opacity={1} />
+              <circle cx={end.x} cy={end.y} r={to.radius + 6} fill="none"
+                stroke={color} strokeWidth={2} strokeDasharray="3.5 5" opacity={0.9} />
+              <line {...segment} stroke={color} strokeWidth={3.1}
+                strokeDasharray="4 5" strokeLinecap="round" opacity={1} />
             </g>;
           })()}
-          {dragView?.changesSector && !dragView.target && (() => {
-            const source = visibleBubbles.find((bubble) => bubble.task.id === dragView.taskId);
-            if (!source) return null;
-            const p = getBubbleVisualPoint(source);
-            const x = clamp(p.x + dragView.dx - 142, BUBBLE_WORKSPACE_X + 10, VIEWBOX_RIGHT - 292);
-            const y = clamp(p.y + dragView.dy - source.radius - 53, VIEWBOX_TOP + 12, VIEWBOX_BOTTOM - 40);
-            return <foreignObject x={x} y={y} width={284} height={38} pointerEvents="none">
-              <div className="flex h-full items-center justify-center rounded-full border border-cyan-400/60 bg-slate-950/90 px-3 text-xs font-semibold text-cyan-100 shadow-lg backdrop-blur">
-                <span className="truncate">Перенести в сектор «{dragView.destinationSectorName}»</span>
-              </div>
-            </foreignObject>;
-          })()}
-          {bubbleDragNotice && noticePair && (() => {
-            const [aId, bId] = noticePair;
-            const a = bubbleVisualPositions.get(aId);
-            const b = bubbleVisualPositions.get(bId);
-            const aRadius = visibleBubbles.find((bubble) => bubble.task.id === aId)?.radius ?? 30;
-            const bRadius = visibleBubbles.find((bubble) => bubble.task.id === bId)?.radius ?? 30;
-            if (!a || !b) return null;
-            const x = clamp((a.x + b.x) / 2 - 220, BUBBLE_WORKSPACE_X + 8, VIEWBOX_RIGHT - 450);
-            const y = clamp(Math.min(a.y - aRadius, b.y - bRadius) - 64, VIEWBOX_TOP + 6, VIEWBOX_BOTTOM - 58);
-            return (
-              <foreignObject x={x} y={y} width={440} height={58} pointerEvents="none">
-                <div className="flex h-full items-center justify-center rounded-2xl border border-violet-400/50 bg-slate-950/90 px-4 py-2 text-center text-sm font-semibold leading-snug text-white shadow-xl backdrop-blur-md" role="status" aria-live="polite">
-                  <span className="line-clamp-2">{bubbleDragNotice}</span>
+          {/* Unified notifications anchored to the oval rather than the full
+              canvas. Preview, sector changes, errors and successes use one place. */}
+          {(dragView || bubbleActionPending || bubbleDragNotice) && (
+            <foreignObject
+              x={BUBBLE_FIELD_CENTER_X - 335}
+              y={VIEWBOX_TOP + 8}
+              width={670}
+              height={76}
+              pointerEvents="none"
+            >
+              <div className="flex h-full w-full items-start justify-center px-3 pt-1">
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className={`inline-flex max-w-full items-center gap-2 rounded-2xl border px-4 py-2.5 text-center text-base font-medium leading-snug shadow-lg backdrop-blur-md ${
+                    isLightTheme
+                      ? 'border-sky-300/80 bg-white/95 text-slate-800 shadow-slate-300/30'
+                      : 'border-cyan-400/35 bg-slate-900/95 text-slate-100 shadow-slate-950/45'
+                  }`}
+                >
+                  {bubbleActionPending ? (
+                    <LoaderCircle size={18} className="shrink-0 animate-spin text-cyan-500" aria-hidden="true" />
+                  ) : dragView ? (
+                    <Sparkles size={18} className="shrink-0 text-cyan-500" aria-hidden="true" />
+                  ) : (
+                    <span className="shrink-0 text-lg" aria-hidden="true">{bubbleNoticeKind === 'success' ? '✅' : '⚠️'}</span>
+                  )}
+                  <span className="min-w-0 line-clamp-2">
+                    {bubbleActionPending ? 'Сохраняем изменение…'
+                      : dragView?.target
+                        ? dragView.target.kind === 'nest'
+                          ? 'Сделать подзадачей: удерживайте внутри пузыря 0,5 секунды'
+                          : 'Связать задачи'
+                        : dragView?.changesSector
+                          ? `Переместить в сектор «${dragView.destinationSectorName}»`
+                          : dragView
+                            ? 'Переместить пузырь или оттянуть связанную задачу, чтобы разъединить'
+                            : bubbleDragNotice}
+                  </span>
                 </div>
-              </foreignObject>
-            );
-          })()}
-
+              </div>
+            </foreignObject>
+          )}
           {sectorLabels.map((item) => {
             const Icon = item.sphere ? resolveSphereIcon(item.sphere.icon) : null;
             return (
