@@ -115,7 +115,8 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
     ];
   };
   const inside = (bubble: VisualBubble, candidate: Point) => {
-    const margin = bubble.radius + 3;
+    // Progress rings protrude by about six pixels beyond the filled circle.
+    const margin = bubble.radius + 8;
     if (bounds.ellipse) {
       const { cx, cy, rx, ry } = bounds.ellipse;
       const safeRx = Math.max(1, rx - margin);
@@ -132,7 +133,7 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
     for (const [id, point] of placed) {
       const other = byId.get(id)!;
       const distance = Math.hypot(candidate.x - point.x, candidate.y - point.y);
-      if (distance < bubble.radius + other.radius + 8 - 0.01) return false;
+      if (distance < bubble.radius + other.radius + 13 - 0.01) return false;
     }
     return true;
   };
@@ -221,7 +222,7 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
       Math.hypot(b[1].x - preferred.x, b[1].y - preferred.y));
     for (const [otherId, p] of nearby.slice(0, 100)) {
       const other = byId.get(otherId)!;
-      const radial = bubble.radius + other.radius + (neighbours.get(id)?.includes(otherId) ? LINK_GAP : 8.5);
+      const radial = bubble.radius + other.radius + (neighbours.get(id)?.includes(otherId) ? LINK_GAP : 13.5);
       const direction = Math.atan2(preferred.y - p.y, preferred.x - p.x);
       for (let step = 0; step < 32; step++) {
         const angle = direction + step * Math.PI / 16;
