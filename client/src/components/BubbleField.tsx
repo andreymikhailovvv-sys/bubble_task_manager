@@ -628,9 +628,32 @@ export function BubbleField({
   }, [sectorCount, bubbleSectors, tasks]);
   const sectorGeometry = useMemo(() => buildSectorGeometry(sectorCount, sectorTaskCounts), [sectorCount, sectorTaskCounts]);
 
-  const orderedBubbles = dragView
-    ? [...visibleBubbles].sort((a, b) => Number(a.task.id === dragView.taskId) - Number(b.task.id === dragView.taskId))
-    : visibleBubbles;
+  // The bond is rendered inside the same animated parent as both circles.
+  // It cannot reveal a different timing/coordinate system when modes change.
+  const bubbleGroups = useMemo(() => {
+    const byId = new Map(visibleBubbles.map((bubble) => [bubble.task.id, bubble]));
+    const used = new Set<string>();
+    return visibleBubbles.flatMap((bubble) => {
+      if (used.has(bubble.task.id)) return [];
+      const partner = byId.get(bubble.task.linkedTaskIds?.[0] ?? '');
+      if (partner && partner.task.linkedTaskIds?.[0] === bubble.task.id) {
+        const anchorId = bubble.task.bubbleLinkAnchorId ?? partner.task.bubbleLinkAnchorId
+          ?? (bubble.task.id < partner.task.id ? bubble.task.id : partner.task.id);
+        const anchor = anchorId === partner.task.id ? partner : bubble;
+        const satellite = anchor === bubble ? partner : bubble;
+        used.add(anchor.task.id);
+        used.add(satellite.task.id);
+        return [{ key: `pair-${[anchor.task.id, satellite.task.id].sort().join('-')}`, anchor, satellite }];
+      }
+      used.add(bubble.task.id);
+      return [{ key: `single-${bubble.task.id}`, anchor: bubble, satellite: null }];
+    });
+  }, [visibleBubbles]);
+  const orderedGroups = dragView
+    ? [...bubbleGroups].sort((a, b) =>
+      Number(a.anchor.task.id === dragView.taskId || a.satellite?.task.id === dragView.taskId) -
+      Number(b.anchor.task.id === dragView.taskId || b.satellite?.task.id === dragView.taskId))
+    : bubbleGroups;
 
   useEffect(() => {
     if (isAddingSubtask) {
@@ -743,7 +766,7 @@ export function BubbleField({
   const sectorStroke = 'var(--sector-line)';
 
 
-  const renderBubble = (bubble: (typeof bubbles)[number]) => {
+  const renderBubble = (bubble: (typeof bubbles)[number], groupOrigin?: { x: number; y: number }) => {
     const isPopping = poppingTaskId === bubble.task.id;
     const hasUrgentSubtask = bubble.task.status !== 'DONE'
       && (subtaskMap[bubble.task.id] ?? []).some((subtask) => shouldSubtaskAffectParentReminder(subtask));
@@ -788,6 +811,9 @@ export function BubbleField({
     const displayPoint = isDragged && dragView
       ? { x: baseVisualPoint.x + dragView.dx, y: baseVisualPoint.y + dragView.dy }
       : baseVisualPoint;
+    const animatedPoint = groupOrigin
+      ? { x: displayPoint.x - groupOrigin.x, y: displayPoint.y - groupOrigin.y }
+      : displayPoint;
     const titleLineClamp = bubble.radius < 30 ? 2 : bubble.radius < 44 ? 3 : 4;
     const titleFontSize = getBubbleTitleFontSize(bubble.task.title, bubble.radius);
     const titlePreview = getBubbleTitlePreview(bubble.task.title, bubble.radius);
@@ -808,8 +834,8 @@ export function BubbleField({
         key={bubble.task.id}
         data-bubble-task-id={bubble.task.id}
         initial={false}
-        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: isDragged ? 1.07 : isHovered ? BUBBLE_HOVER_SCALE : isDragTarget ? 1.06 : 1, x: displayPoint.x, y: displayPoint.y }}
-        exit={isSearchFiltering ? { opacity: 0, scale: 0.96, x: displayPoint.x, y: displayPoint.y } : { opacity: 1, scale: 1, x: displayPoint.x, y: displayPoint.y }}
+        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: isDragged ? 1.07 : isHovered ? BUBBLE_HOVER_SCALE : isDragTarget ? 1.06 : 1, x: animatedPoint.x, y: animatedPoint.y }}
+        exit={isSearchFiltering ? { opacity: 0, scale: 0.96, x: animatedPoint.x, y: animatedPoint.y } : { opacity: 1, scale: 1, x: animatedPoint.x, y: animatedPoint.y }}
         transition={isDragged ? { duration: 0 } : isPopping
           ? { type: 'tween', duration: 0.33, ease: 'easeOut' }
           : isSearchFiltering
@@ -1102,19 +1128,6 @@ export function BubbleField({
           <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X} ry={ELLIPSE_RADIUS_Y} fill="url(#bg)" opacity={isLightTheme ? 0.94 : 0.86} />
           <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X + 22} ry={ELLIPSE_RADIUS_Y + 16} fill="url(#fieldHalo)" filter="url(#bubbleGlow)" opacity={isLightTheme ? 0.48 : 0.7} />
 
-          {visibleBubbles.flatMap((bubble) => (bubble.task.linkedTaskIds ?? [])
-            .filter((id) => bubble.task.id < id)
-            .map((id) => {
-              const a = bubbleVisualPositions.get(bubble.task.id);
-              const b = bubbleVisualPositions.get(id);
-              if (!a || !b) return null;
-              const ax = a.x + (dragView?.taskId === bubble.task.id ? dragView.dx : 0);
-              const ay = a.y + (dragView?.taskId === bubble.task.id ? dragView.dy : 0);
-              const bx = b.x + (dragView?.taskId === id ? dragView.dx : 0);
-              const by = b.y + (dragView?.taskId === id ? dragView.dy : 0);
-              return <line key={`link-${bubble.task.id}-${id}`} x1={ax} y1={ay} x2={bx} y2={by}
-                stroke="#a78bfa" strokeWidth={4} strokeLinecap="round" opacity={0.8} pointerEvents="none" />;
-            }))}
           {dragView?.target && (() => {
             const from = visibleBubbles.find((bubble) => bubble.task.id === dragView.taskId);
             const a = from ? getBubbleVisualPoint(from) : null;
@@ -1131,7 +1144,40 @@ export function BubbleField({
             return <line key={idx} className="sector-divider" x1={BUBBLE_FIELD_CENTER_X} y1={BUBBLE_FIELD_CENTER_Y} x2={point.x} y2={point.y} stroke={sectorStroke} strokeWidth="1.5" />;
           })}
 
-          <AnimatePresence>{orderedBubbles.map((bubble) => renderBubble(bubble))}</AnimatePresence>
+          <AnimatePresence>
+            {orderedGroups.map(({ key, anchor, satellite }) => {
+              if (!satellite) return renderBubble(anchor);
+              const origin = getBubbleVisualPoint(anchor);
+              const other = getBubbleVisualPoint(satellite);
+              const draggingAnchor = dragView?.taskId === anchor.task.id;
+              const draggingSatellite = dragView?.taskId === satellite.task.id;
+              const bondMoving = draggingAnchor || draggingSatellite;
+              const bondTransition = bondMoving ? { duration: 0 }
+                : { type: 'spring' as const, damping: 24, stiffness: 105, mass: 0.82, restDelta: 0.001 };
+              return (
+                <motion.g key={key} initial={false}
+                  animate={{ x: origin.x, y: origin.y }}
+                  exit={isSearchFiltering ? { opacity: 0, scale: 0.96 } : undefined}
+                  transition={bondTransition}>
+                  <motion.line
+                    initial={false}
+                    animate={{
+                      x1: draggingAnchor ? dragView!.dx : 0,
+                      y1: draggingAnchor ? dragView!.dy : 0,
+                      x2: other.x - origin.x + (draggingSatellite ? dragView!.dx : 0),
+                      y2: other.y - origin.y + (draggingSatellite ? dragView!.dy : 0)
+                    }}
+                    transition={bondTransition}
+                    stroke="#a78bfa" strokeWidth={5} strokeLinecap="round" opacity={0.82}
+                    style={{ filter: 'drop-shadow(0 0 5px rgba(167,139,250,0.55))' }}
+                    pointerEvents="none"
+                  />
+                  {renderBubble(anchor, origin)}
+                  {renderBubble(satellite, origin)}
+                </motion.g>
+              );
+            })}
+          </AnimatePresence>
           {bubbleDragNotice && noticePair && (() => {
             const [aId, bId] = noticePair;
             const a = bubbleVisualPositions.get(aId);
