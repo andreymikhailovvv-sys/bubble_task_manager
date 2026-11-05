@@ -63,6 +63,8 @@ const VIEWBOX_RIGHT = VIEWBOX_LEFT + VIEWBOX_WIDTH;
 const VIEWBOX_BOTTOM = VIEWBOX_TOP + VIEWBOX_HEIGHT;
 const TASK_INFO_PANEL_WIDTH = 620;
 const TASK_INFO_PANEL_X = VIEWBOX_LEFT + 24;
+const FULLSCREEN_TASK_INFO_PANEL_X = VIEWBOX_LEFT + 48;
+const FULLSCREEN_TASK_INFO_PANEL_WIDTH = 470;
 const BUBBLE_WORKSPACE_GAP = 36;
 const BUBBLE_WORKSPACE_X = TASK_INFO_PANEL_X + TASK_INFO_PANEL_WIDTH + BUBBLE_WORKSPACE_GAP;
 const BUBBLE_WORKSPACE_WIDTH = VIEWBOX_RIGHT - BUBBLE_WORKSPACE_X - 8;
@@ -253,6 +255,30 @@ function getBubbleTitlePreview(title: string, radius: number) {
   }
 
   return preview;
+}
+
+/** Native SVG text remains crisp at fractional viewBox scales. */
+function wrapBubbleTitleForSvg(text: string, radius: number, fontSize: number, maxLines: number): string[] {
+  const maxChars = Math.max(4, Math.floor(radius * 1.5 / (fontSize * 0.56)));
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const parts = words.flatMap((word) => word.length > maxChars
+    ? Array.from({ length: Math.ceil(word.length / maxChars) }, (_, index) =>
+        word.slice(index * maxChars, (index + 1) * maxChars))
+    : [word]);
+  const lines: string[] = [];
+  let current = '';
+  for (const part of parts) {
+    const next = current ? `${current} ${part}` : part;
+    if (next.length <= maxChars) current = next;
+    else { if (current) lines.push(current); current = part; }
+  }
+  if (current) lines.push(current);
+  if (lines.length <= maxLines) return lines;
+  const visible = lines.slice(0, maxLines);
+  const last = visible[maxLines - 1].replace(/…$/, '');
+  visible[maxLines - 1] = `${last.slice(0, Math.max(1, maxChars - 1)).trimEnd()}…`;
+  return visible;
 }
 
 function getBubbleTitleFontSize(title: string, radius: number) {
@@ -863,10 +889,10 @@ export function BubbleField({
         strokeWidth: 3
       };
     const glowColor = overdue ? '#ef4444' : '#38bdf8';
-    const staticGlowStyle = overdue
+    const staticGlowStyle = overdue && !fullscreen
       ? { filter: 'drop-shadow(0 0 10px rgba(239,68,68,0.8)) drop-shadow(0 0 18px rgba(220,38,38,0.5))' }
       : undefined;
-    const glowFilter = shouldGlow && !overdue ? 'url(#bubbleGlow)' : undefined;
+    const glowFilter = shouldGlow && !overdue && !fullscreen ? 'url(#bubbleGlow)' : undefined;
     const hoverGlowFilter = overdue
       ? 'drop-shadow(0 0 9px rgba(239,68,68,0.62)) drop-shadow(0 0 16px rgba(220,38,38,0.34))'
       : 'drop-shadow(0 0 9px rgba(56,189,248,0.56)) drop-shadow(0 0 16px rgba(129,140,248,0.3))';
@@ -893,6 +919,9 @@ export function BubbleField({
     const titleLineClamp = bubble.radius < 30 ? 2 : bubble.radius < 44 ? 3 : 4;
     const titleFontSize = getBubbleTitleFontSize(bubble.task.title, bubble.radius);
     const titlePreview = getBubbleTitlePreview(bubble.task.title, bubble.radius);
+    const vectorTitleLines = fullscreen
+      ? wrapBubbleTitleForSvg(titlePreview, bubble.radius, titleFontSize, titleLineClamp)
+      : [];
     const bubbleTextStyle: CSSProperties = {
       fontSize: titleFontSize,
       fontWeight: 600,
@@ -914,9 +943,11 @@ export function BubbleField({
         exit={isSearchFiltering ? { opacity: 0, scale: 0.96, x: animatedPoint.x, y: animatedPoint.y } : { opacity: 1, scale: 1, x: animatedPoint.x, y: animatedPoint.y }}
         transition={isDragged ? { duration: 0 } : isPopping
           ? { type: 'tween', duration: 0.33, ease: 'easeOut' }
-          : isSearchFiltering
-            ? { type: 'tween', duration: 0.12, ease: 'easeOut' }
-            : { type: 'spring', damping: 24, stiffness: 105, mass: 0.82, restDelta: 0.001 }}
+          : fullscreen
+            ? { type: 'tween', duration: 0.16, ease: 'easeOut' }
+            : isSearchFiltering
+              ? { type: 'tween', duration: 0.12, ease: 'easeOut' }
+              : { type: 'spring', damping: 24, stiffness: 105, mass: 0.82, restDelta: 0.001 }}
         style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
         onClick={() => {
           if (ignoreClickRef.current === bubble.task.id) { ignoreClickRef.current = null; return; }
@@ -950,9 +981,9 @@ export function BubbleField({
             stroke={glowColor}
             strokeOpacity={overdue ? 0.4 : 0.34}
             pointerEvents="none"
-            animate={glowPulseState}
-            transition={isHovered ? { duration: overdue ? 1.15 : 1.55, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.18, ease: 'easeOut' }}
-            style={{ filter: hoverGlowFilter }}
+            animate={fullscreen ? { opacity: 0.62, r: bubble.radius + 5, strokeWidth: 3 } : glowPulseState}
+            transition={fullscreen ? { duration: 0 } : isHovered ? { duration: overdue ? 1.15 : 1.55, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.18, ease: 'easeOut' }}
+            style={fullscreen ? undefined : { filter: hoverGlowFilter }}
           />
         ) : null}
         {bubbleSubtasks.length > 0 ? (
@@ -972,11 +1003,24 @@ export function BubbleField({
             />
           </>
         ) : null}
-        <foreignObject x={-bubble.radius * 0.8} y={-bubble.radius * 0.8} width={bubble.radius * 1.6} height={bubble.radius * 1.6} pointerEvents="none">
-          <div className="flex h-full flex-col items-center justify-center overflow-hidden px-1 text-center" lang="ru" style={bubbleTextStyle}>
-            <span style={{ display: '-webkit-box', WebkitLineClamp: titleLineClamp, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{titlePreview}</span>
-          </div>
-        </foreignObject>
+        {fullscreen ? (
+          <text x={0}
+            y={-((vectorTitleLines.length - 1) * titleFontSize * 1.12) / 2 + titleFontSize * 0.32}
+            textAnchor="middle" fontSize={titleFontSize} fontWeight={600}
+            fill={isLightTheme ? '#0f172a' : '#f8fafc'}
+            stroke="none" pointerEvents="none"
+            style={{ userSelect: 'none', textRendering: 'optimizeLegibility' }}>
+            {vectorTitleLines.map((line, index) => (
+              <tspan key={index} x={0} dy={index ? titleFontSize * 1.12 : 0}>{line}</tspan>
+            ))}
+          </text>
+        ) : (
+          <foreignObject x={-bubble.radius * 0.8} y={-bubble.radius * 0.8} width={bubble.radius * 1.6} height={bubble.radius * 1.6} pointerEvents="none">
+            <div className="flex h-full flex-col items-center justify-center overflow-hidden px-1 text-center" lang="ru" style={bubbleTextStyle}>
+              <span style={{ display: '-webkit-box', WebkitLineClamp: titleLineClamp, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{titlePreview}</span>
+            </div>
+          </foreignObject>
+        )}
         {bubble.task.aiMonitoringEnabled ? (
           <g pointerEvents="none" aria-label="Автомониторинг включён">
             <circle cx={0} cy={-bubble.radius - 3} r={12} fill="#10b981" stroke={isLightTheme ? '#fff' : '#0f172a'} strokeWidth={2} />
@@ -996,8 +1040,8 @@ export function BubbleField({
 
         {hasAiMessage ? (
           <motion.g
-            animate={{ scale: [1, 1.08, 1] }}
-            transition={{ duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
+            animate={fullscreen ? { scale: 1 } : { scale: [1, 1.08, 1] }}
+            transition={fullscreen ? { duration: 0 } : { duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
             pointerEvents="none"
           >
             <circle cx={aiBadgeX} cy={aiBadgeY} r={11} fill="#7c3aed" />
@@ -1011,8 +1055,8 @@ export function BubbleField({
 
         {hasComments ? (
           <motion.g
-            animate={unreadCommentCount > 0 ? { scale: [1, 1.08, 1] } : { scale: 1 }}
-            transition={unreadCommentCount > 0 ? { duration: 1.7, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.15 }}
+            animate={fullscreen ? { scale: 1 } : unreadCommentCount > 0 ? { scale: [1, 1.08, 1] } : { scale: 1 }}
+            transition={fullscreen ? { duration: 0 } : unreadCommentCount > 0 ? { duration: 1.7, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.15 }}
             pointerEvents="none"
           >
             <circle cx={commentBadgeX} cy={commentBadgeY} r={11} fill="#2563eb" />
@@ -1057,7 +1101,9 @@ export function BubbleField({
 
   return (
     <div
-      className={`bubble-field-container surface-canvas relative ${fullscreen ? 'overflow-hidden rounded-none border-0' : 'overflow-visible rounded-[2.2rem] border'} ${containerShadowClass} backdrop-blur-sm ${className ?? 'h-full'}`}
+      className={`bubble-field-container surface-canvas relative ${fullscreen
+        ? 'overflow-hidden rounded-none border-0 shadow-none'
+        : `overflow-visible rounded-[2.2rem] border ${containerShadowClass} backdrop-blur-sm`} ${className ?? 'h-full'}`}
       onMouseLeave={() => {
         if (isNativeCalendarOpen) return;
         scheduleHoverExit();
@@ -1067,9 +1113,8 @@ export function BubbleField({
         onDragStart={(event) => event.preventDefault()}
         onPointerMove={onCanvasPointerMove} onPointerUp={onCanvasPointerUp}
         onPointerCancel={cancelCanvasPointer} onLostPointerCapture={cancelCanvasPointer}
-        viewBox={fullscreen
-          ? `${BUBBLE_WORKSPACE_X - 38} ${VIEWBOX_TOP} ${BUBBLE_WORKSPACE_WIDTH + 76} ${VIEWBOX_HEIGHT}`
-          : `${VIEWBOX_LEFT} ${VIEWBOX_TOP} ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
+        viewBox={`${VIEWBOX_LEFT} ${VIEWBOX_TOP} ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
+        preserveAspectRatio="xMidYMid meet"
         className={`bubble-field-stage relative z-20 h-full w-full ${fullscreen ? 'overflow-hidden' : 'overflow-visible'}`}
         onContextMenu={(event) => showContextMenu(event, null)}>
         <motion.g initial={false}>
@@ -1109,8 +1154,13 @@ export function BubbleField({
               <feDropShadow dx="0" dy="0" stdDeviation="16" floodColor="#818cf8" floodOpacity="0.22" />
             </filter>
           </defs>
-          <foreignObject x={TASK_INFO_PANEL_X} y={workspaceMin + 24} width={TASK_INFO_PANEL_WIDTH} height={VIEWBOX_HEIGHT - 48} pointerEvents="none">
-            <div className="bubble-tooltip-card bubble-task-info-panel flex h-full flex-col rounded-[2.15rem] border p-6">
+          <foreignObject
+            x={fullscreen ? FULLSCREEN_TASK_INFO_PANEL_X : TASK_INFO_PANEL_X}
+            y={workspaceMin + 24}
+            width={fullscreen ? FULLSCREEN_TASK_INFO_PANEL_WIDTH : TASK_INFO_PANEL_WIDTH}
+            height={VIEWBOX_HEIGHT - 48}
+            pointerEvents="none">
+            <div className={`bubble-tooltip-card bubble-task-info-panel flex h-full flex-col rounded-[2.15rem] border ${fullscreen ? 'p-4' : 'p-6'}`}>
               {hoveredBubble ? (
                 <div className="min-h-0 space-y-4 overflow-hidden">
                   <div>
@@ -1191,7 +1241,7 @@ export function BubbleField({
             </div>
           </foreignObject>
           <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X} ry={ELLIPSE_RADIUS_Y} fill="url(#bg)" opacity={isLightTheme ? 0.94 : 0.86} />
-          <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X + 22} ry={ELLIPSE_RADIUS_Y + 16} fill="url(#fieldHalo)" filter="url(#bubbleGlow)" opacity={isLightTheme ? 0.48 : 0.7} />
+          <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X + 22} ry={ELLIPSE_RADIUS_Y + 16} fill="url(#fieldHalo)" filter={fullscreen ? undefined : 'url(#bubbleGlow)'} opacity={isLightTheme ? 0.48 : 0.7} />
 
           {dragView?.changesSector && !dragView.target && sectorCount > 1 && (() => {
             const geometry = sectorGeometry[dragView.destinationSectorIndex];
@@ -1219,6 +1269,7 @@ export function BubbleField({
               const memberById = new Map(members.map((bubble) => [bubble.task.id, bubble]));
               const draggingMember = members.some((bubble) => bubble.task.id === dragView?.taskId);
               const transition = draggingMember ? { duration: 0 }
+                : fullscreen ? { type: 'tween' as const, duration: 0.16 }
                 : { type: 'spring' as const, damping: 24, stiffness: 105, mass: 0.82, restDelta: 0.001 };
               return (
                 <motion.g key={key} initial={false}
