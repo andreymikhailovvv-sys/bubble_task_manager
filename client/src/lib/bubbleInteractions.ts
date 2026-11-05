@@ -100,6 +100,37 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
   };
 
   groups.forEach(clampGroup);
+  // A third circle can become trapped between the two circles of a rigid
+  // pair. In that case, horizontal repulsion oscillates forever. Eject the
+  // intruder perpendicular to the bond before the ordinary relaxation.
+  for (const bond of groups) {
+    if (bond.ids.length !== 2) continue;
+    const [firstId, secondId] = bond.ids;
+    const first = positions.get(firstId)!;
+    const second = positions.get(secondId)!;
+    const segmentX = second.x - first.x;
+    const segmentY = second.y - first.y;
+    const length = Math.hypot(segmentX, segmentY);
+    if (length < 0.001) continue;
+    const normalX = -segmentY / length;
+    const normalY = segmentX / length;
+    for (const group of groups) {
+      if (group === bond || group.ids.length !== 1) continue;
+      const loneId = group.ids[0];
+      const lone = positions.get(loneId)!;
+      const radius = byId.get(loneId)!.radius;
+      const firstRadius = byId.get(firstId)!.radius;
+      const secondRadius = byId.get(secondId)!.radius;
+      if (Math.hypot(lone.x - first.x, lone.y - first.y) >= firstRadius + radius + 7 ||
+          Math.hypot(lone.x - second.x, lone.y - second.y) >= secondRadius + radius + 7) continue;
+      const signedOffset = (lone.x - first.x) * normalX + (lone.y - first.y) * normalY;
+      const neededOffset = Math.max(firstRadius, secondRadius) + radius + 9;
+      const direction = signedOffset !== 0 ? Math.sign(signedOffset) : (loneId < firstId ? -1 : 1);
+      const shift = Math.max(0, neededOffset - Math.abs(signedOffset));
+      translate(group, normalX * direction * shift, normalY * direction * shift);
+      clampGroup(group);
+    }
+  }
   // Only colliding groups move. Pinned/manual placements yield to each other
   // when there is no feasible alternative, but are much harder to displace.
   for (let pass = 0; pass < 72; pass++) {
