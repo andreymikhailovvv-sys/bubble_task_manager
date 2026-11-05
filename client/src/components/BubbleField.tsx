@@ -306,13 +306,15 @@ export function BubbleField({
   const [dragView, setDragView] = useState<BubbleDragView | null>(null);
   const [bubbleActionPending, setBubbleActionPending] = useState(false);
   const [bubbleDragNotice, setBubbleDragNotice] = useState<string | null>(null);
+  const [noticePair, setNoticePair] = useState<[string, string] | null>(null);
   const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => { if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current); }, []);
-  const showBubbleNotice = (message: string) => {
+  const showBubbleNotice = (message: string, pair: [string, string] | null = null) => {
     if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    setNoticePair(pair);
     setBubbleDragNotice(message);
-    noticeTimerRef.current = setTimeout(() => setBubbleDragNotice(null), 3200);
+    noticeTimerRef.current = setTimeout(() => { setBubbleDragNotice(null); setNoticePair(null); }, 3200);
   };
   const toSvgPoint = (clientX: number, clientY: number) => {
     const svg = svgRef.current;
@@ -491,6 +493,8 @@ export function BubbleField({
         bubble.task.isCollaborative || bubble.task.parentTaskId || (bubble.task.taskType ?? 'TASK') !== 'TASK') return;
     const point = toSvgPoint(event.clientX, event.clientY);
     if (!point) return;
+    setNoticePair(null);
+    setBubbleDragNotice(null);
     dragSessionRef.current = {
       taskId: bubble.task.id, pointerId: event.pointerId, startClientX: event.clientX, startClientY: event.clientY,
       startSvgX: point.x, startSvgY: point.y, lastSvgX: point.x, lastSvgY: point.y,
@@ -556,7 +560,7 @@ export function BubbleField({
         : { action: 'move' as const, x, y, mode, ...(mode === 'sectors' ? { sphereId: getSphereAtClientPoint(event.clientX, event.clientY)?.id ?? null } : {}) };
     setBubbleActionPending(true);
     void onBubbleAction(bubble.task, action).then(() => {
-      if (action.action === 'link' && target) showBubbleNotice(`Задачи «${bubble.task.title}» и «${target.title}» теперь связаны.`);
+      if (action.action === 'link' && target) showBubbleNotice(`Задачи «${bubble.task.title}» и «${target.title}» теперь связаны.`, [bubble.task.id, target.id]);
       else if (action.action === 'nest' && target) showBubbleNotice(`«${bubble.task.title}» теперь подзадача «${target.title}».`);
       else if (action.action === 'unlink') showBubbleNotice('Связь между задачами удалена.');
       else showBubbleNotice('Положение пузыря сохранено.');
@@ -919,7 +923,7 @@ export function BubbleField({
         scheduleHoverExit();
       }}
     >
-      {(dragView || bubbleDragNotice || bubbleActionPending) && (
+      {(dragView || (bubbleDragNotice && !noticePair) || bubbleActionPending) && (
         <div className="pointer-events-none absolute left-1/2 top-4 z-50 max-w-[90%] -translate-x-1/2 rounded-2xl border border-violet-400/40 bg-slate-950/90 px-4 py-2 text-center text-sm font-medium text-white shadow-xl backdrop-blur-md" role="status" aria-live="polite">
           {bubbleActionPending ? 'Сохраняем изменение…' : dragView?.target
             ? dragView.target.kind === 'nest' ? 'Внутри пузыря: сделать подзадачей (удерживать 0,5 сек)'
@@ -1056,7 +1060,11 @@ export function BubbleField({
               const a = bubbleVisualPositions.get(bubble.task.id);
               const b = bubbleVisualPositions.get(id);
               if (!a || !b) return null;
-              return <line key={`link-${bubble.task.id}-${id}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+              const ax = a.x + (dragView?.taskId === bubble.task.id ? dragView.dx : 0);
+              const ay = a.y + (dragView?.taskId === bubble.task.id ? dragView.dy : 0);
+              const bx = b.x + (dragView?.taskId === id ? dragView.dx : 0);
+              const by = b.y + (dragView?.taskId === id ? dragView.dy : 0);
+              return <line key={`link-${bubble.task.id}-${id}`} x1={ax} y1={ay} x2={bx} y2={by}
                 stroke="#a78bfa" strokeWidth={4} strokeLinecap="round" opacity={0.8} pointerEvents="none" />;
             }))}
           {dragView?.target && (() => {
@@ -1076,6 +1084,23 @@ export function BubbleField({
           })}
 
           <AnimatePresence>{orderedBubbles.map((bubble) => renderBubble(bubble))}</AnimatePresence>
+          {bubbleDragNotice && noticePair && (() => {
+            const [aId, bId] = noticePair;
+            const a = bubbleVisualPositions.get(aId);
+            const b = bubbleVisualPositions.get(bId);
+            const aRadius = visibleBubbles.find((bubble) => bubble.task.id === aId)?.radius ?? 30;
+            const bRadius = visibleBubbles.find((bubble) => bubble.task.id === bId)?.radius ?? 30;
+            if (!a || !b) return null;
+            const x = clamp((a.x + b.x) / 2 - 220, BUBBLE_WORKSPACE_X + 8, VIEWBOX_RIGHT - 450);
+            const y = clamp(Math.min(a.y - aRadius, b.y - bRadius) - 64, VIEWBOX_TOP + 6, VIEWBOX_BOTTOM - 58);
+            return (
+              <foreignObject x={x} y={y} width={440} height={58} pointerEvents="none">
+                <div className="flex h-full items-center justify-center rounded-2xl border border-violet-400/50 bg-slate-950/90 px-4 py-2 text-center text-sm font-semibold leading-snug text-white shadow-xl backdrop-blur-md" role="status" aria-live="polite">
+                  <span className="line-clamp-2">{bubbleDragNotice}</span>
+                </div>
+              </foreignObject>
+            );
+          })()}
 
           {sectorLabels.map((item) => {
             const Icon = item.sphere ? resolveSphereIcon(item.sphere.icon) : null;
