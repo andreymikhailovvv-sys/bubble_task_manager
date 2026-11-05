@@ -7,6 +7,7 @@ export type VisualBubble = {
   bubbleLinkAnchorId?: string | null;
   /** A manually saved location resists displacement by other bubbles. */
   pinned?: boolean;
+  sectorIndex?: number;
 };
 
 export type DropIntent = { targetId: string; kind: 'link' | 'nest' };
@@ -17,6 +18,10 @@ export type Bounds = {
   minY: number;
   maxY: number;
   ellipse?: { cx: number; cy: number; rx: number; ry: number };
+  /** Sector rays in the same stretched SVG coordinate system as the circles. */
+  sectors?: Array<{ start: Point; end: Point }>;
+  /** Pack even unlinked tasks, instead of retaining the former sparse automatic layout. */
+  compact?: boolean;
 };
 
 export type LinkedBubbleGroup = {
@@ -71,258 +76,192 @@ export function getLinkedBubbleGroups(bubbles: VisualBubble[]): LinkedBubbleGrou
 }
 
 /**
- * Magnetically pack linked components as compact rigid groups, then resolve
- * collisions between the groups. Never push one linked member away from the others.
+ * Deterministic, collision-free packing. Sector boundaries and circle exclusion
+ * are hard constraints, never optional forces. Linked edges only affect which
+ * circle is placed next and its preferred position, so a bond cannot displace
+ * another task onto a neighbour or across a sector divider.
  */
 export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): Map<string, Point> {
-  const positions = new Map(bubbles.map((bubble) => [bubble.id, { x: bubble.x, y: bubble.y }]));
-  if (!bubbles.some((bubble) => bubble.pinned || bubble.linkedTaskIds?.length)) return positions;
+  const original = new Map(bubbles.map((bubble) => [bubble.id, { x: bubble.x, y: bubble.y }]));
+  if (!bubbles.some((bubble) => bubble.pinned || bubble.linkedTaskIds?.length) && !bounds.compact) return original;
   const byId = new Map(bubbles.map((bubble) => [bubble.id, bubble]));
   const components = getLinkedBubbleGroups(bubbles);
-  const groups = components.map((group) => {
-    const pinned = group.ids.some((id) => Boolean(byId.get(id)?.pinned));
-    // Use the largest visible circle as the cluster's physics centre.
-    // A manually positioned circle wins over automatic size weighting,
-    // preserving explicit user placement when a group is linked.
-    const candidates = group.ids.filter((id) => !pinned || byId.get(id)?.pinned);
-    const layoutRootId = [...candidates].sort((a, b) =>
-      byId.get(b)!.radius - byId.get(a)!.radius || a.localeCompare(b))[0];
-    return { ...group, pinned, layoutRootId };
-  });
-
-  // Every real edge should connect two nearby circles, even if the user
-  // formed a chain rather than a star. Place a breadth-first spanning tree
-  // around the original anchor, sampling angles until new circles fit.
-  for (const group of groups) {
-    if (group.ids.length < 2) continue;
-    const anchor = byId.get(group.layoutRootId)!;
-    // Large linked tasks pull their full cluster closer to the shared
-    // intersection of the sector dividers. Never override a manual pin.
-    if (bounds.ellipse && !group.pinned) {
+  const neighbours = new Map(bubbles.map((bubble) => [bubble.id, [] as string[]]));
+  for (const component of components) {
+    for (const [a, b] of component.edges) {
+      if ((byId.get(a)?.sectorIndex ?? 0) !== (byId.get(b)?.sectorIndex ?? 0)) continue;
+      neighbours.get(a)!.push(b);
+      neighbours.get(b)!.push(a);
+    }
+  }
+  const centre = bounds.ellipse
+    ? { x: bounds.ellipse.cx, y: bounds.ellipse.cy }
+    : { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 };
+  const halfX = bounds.ellipse?.rx ?? (bounds.maxX - bounds.minX) / 2;
+  const halfY = bounds.ellipse?.ry ?? (bounds.maxY - bounds.minY) / 2;
+  const sectorOf = (bubble: VisualBubble) => bubble.sectorIndex ?? 0;
+  const unit = (point: Point) => {
+    const length = Math.hypot(point.x, point.y) || 1;
+    return { x: point.x / length, y: point.y / length };
+  };
+  const regionNormals = (bubble: VisualBubble) => {
+    const region = bounds.sectors?.[sectorOf(bubble)];
+    if (!region || bounds.sectors?.length === 1) return null;
+    const start = unit(region.start);
+    const end = unit(region.end);
+    return [
+      { x: -start.y, y: start.x },
+      { x: end.y, y: -end.x }
+    ];
+  };
+  const inside = (bubble: VisualBubble, candidate: Point) => {
+    const margin = bubble.radius + 3;
+    if (bounds.ellipse) {
       const { cx, cy, rx, ry } = bounds.ellipse;
-      const radiusRatio = Math.min(1, anchor.radius / 145);
-      const allowedRadius = 0.74 - radiusRatio * 0.50;
-      const originalRadius = Math.hypot((anchor.x - cx) / rx, (anchor.y - cy) / ry);
-      if (originalRadius > allowedRadius && originalRadius > 0.001) {
-        const shrink = allowedRadius / originalRadius;
-        positions.set(anchor.id, {
-          x: cx + (anchor.x - cx) * shrink,
-          y: cy + (anchor.y - cy) * shrink
-        });
-      }
+      const safeRx = Math.max(1, rx - margin);
+      const safeRy = Math.max(1, ry - margin);
+      if (Math.hypot((candidate.x - cx) / safeRx, (candidate.y - cy) / safeRy) > 1.000001) return false;
+    } else if (candidate.x < bounds.minX + margin || candidate.x > bounds.maxX - margin ||
+               candidate.y < bounds.minY + margin || candidate.y > bounds.maxY - margin) return false;
+    const normals = regionNormals(bubble);
+    if (normals?.some((normal) =>
+      (candidate.x - centre.x) * normal.x + (candidate.y - centre.y) * normal.y < margin + 1.5)) return false;
+    return true;
+  };
+  const separation = (bubble: VisualBubble, candidate: Point, placed: Map<string, Point>) => {
+    for (const [id, point] of placed) {
+      const other = byId.get(id)!;
+      const distance = Math.hypot(candidate.x - point.x, candidate.y - point.y);
+      if (distance < bubble.radius + other.radius + 8 - 0.01) return false;
     }
-    const placed = new Set<string>([anchor.id]);
-    const queue = [anchor.id];
-    const adjacency = new Map(group.ids.map((id) => [id, [] as string[]]));
-    for (const [a, b] of group.edges) {
-      adjacency.get(a)!.push(b);
-      adjacency.get(b)!.push(a);
-    }
-    for (const parentId of queue) {
-      const parent = byId.get(parentId)!;
-      const parentPoint = positions.get(parentId)!;
-      const children = (adjacency.get(parentId) ?? []).filter((id) => !placed.has(id))
-        .sort((a, b) => byId.get(b)!.radius - byId.get(a)!.radius || a.localeCompare(b));
-      for (const id of children) {
-        if (placed.has(id)) continue;
-        const member = byId.get(id)!;
-        const defaultAngle = Math.atan2(member.y - parent.y, member.x - parent.x);
-        const anchorPoint = positions.get(anchor.id)!;
-        const outwardAngle = Math.atan2(parentPoint.y - anchorPoint.y, parentPoint.x - anchorPoint.x);
-        const baseAngle = group.pinned && parentId === anchor.id && bounds.ellipse
-          ? Math.atan2(bounds.ellipse.cy - parentPoint.y, bounds.ellipse.cx - parentPoint.x)
-          : parentId === anchor.id || Math.hypot(parentPoint.x - positions.get(anchor.id)!.x, parentPoint.y - positions.get(anchor.id)!.y) < 0.1
-            ? (Math.hypot(member.x - parent.x, member.y - parent.y) > 0.1 ? defaultAngle : -Math.PI / 2)
-            : outwardAngle;
-        const minDistance = parent.radius + member.radius + LINK_GAP;
-        let best: { x: number; y: number; score: number } | null = null;
-        for (let step = 0; step < 12 && !best; step++) {
-          const radius = minDistance + step * 5;
-          for (let sector = 0; sector < 32; sector++) {
-            const offset = sector <= 16 ? sector : sector - 32;
-            const angle = baseAngle + offset * Math.PI / 16;
-            const x = parentPoint.x + Math.cos(angle) * radius;
-            const y = parentPoint.y + Math.sin(angle) * radius;
-            const overlaps = [...placed].some((otherId) => {
-              const other = positions.get(otherId)!;
-              return Math.hypot(other.x - x, other.y - y) <
-                member.radius + byId.get(otherId)!.radius + LINK_GAP - 0.1;
-            });
-            if (overlaps) continue;
-            const spread = Math.hypot(x - anchorPoint.x, y - anchorPoint.y);
-            const score = Math.abs(offset) * 4.5 + spread * 0.18 + step * 5;
-            if (!best || score < best.score) best = { x, y, score };
-          }
+    return true;
+  };
+
+  // Place groups in descending size order and honour manual placements first.
+  // Traversing each link component breadth-first keeps chains compact.
+  const ordered: string[] = [];
+  const visited = new Set<string>();
+  const sortedComponents = components
+    .map((component) => ({
+      component,
+      priority: Math.max(...component.ids.map((id) => byId.get(id)!.radius)),
+      pinned: component.ids.some((id) => byId.get(id)!.pinned)
+    }))
+    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.priority - a.priority);
+  for (const { component } of sortedComponents) {
+    const ids = [...component.ids].sort((a, b) =>
+      Number(Boolean(byId.get(b)!.pinned)) - Number(Boolean(byId.get(a)!.pinned)) ||
+      byId.get(b)!.radius - byId.get(a)!.radius || a.localeCompare(b));
+    for (const root of ids) {
+      if (visited.has(root)) continue;
+      const queue = [root];
+      visited.add(root);
+      for (const id of queue) {
+        ordered.push(id);
+        const adjacent = [...(neighbours.get(id) ?? [])].sort((a, b) =>
+          Number(Boolean(byId.get(b)!.pinned)) - Number(Boolean(byId.get(a)!.pinned)) ||
+          byId.get(b)!.radius - byId.get(a)!.radius || a.localeCompare(b));
+        for (const neighbour of adjacent) {
+          if (visited.has(neighbour)) continue;
+          visited.add(neighbour);
+          queue.push(neighbour);
         }
-        // A degenerate dense group should never leave an unplaced task.
-        const destination = best ?? {
-          x: parentPoint.x + minDistance,
-          y: parentPoint.y,
-          score: Infinity
-        };
-        positions.set(id, { x: destination.x, y: destination.y });
-        placed.add(id);
-        queue.push(id);
       }
     }
   }
 
-  const translate = (group: { ids: string[] }, dx: number, dy: number) => {
-    for (const id of group.ids) {
-      const p = positions.get(id)!;
-      p.x += dx;
-      p.y += dy;
-    }
-  };
-  const clampGroup = (group: { ids: string[] }) => {
-    // Correct translation as a whole to maintain the shape and link length.
-    for (let attempt = 0; attempt < 8; attempt++) {
-      let adjusted = false;
-      for (const id of group.ids) {
-        const bubble = byId.get(id)!;
-        const p = positions.get(id)!;
-        const inset = bubble.radius + 6;
-        let dx = 0, dy = 0;
-        if (bounds.ellipse) {
-          const { cx, cy } = bounds.ellipse;
-          const rx = Math.max(1, bounds.ellipse.rx - inset);
-          const ry = Math.max(1, bounds.ellipse.ry - inset);
-          const ratio = Math.hypot((p.x - cx) / rx, (p.y - cy) / ry);
-          if (ratio > 1) {
-            dx = cx + (p.x - cx) / ratio - p.x;
-            dy = cy + (p.y - cy) / ratio - p.y;
-          }
-        } else {
-          dx = Math.max(bounds.minX + inset, Math.min(bounds.maxX - inset, p.x)) - p.x;
-          dy = Math.max(bounds.minY + inset, Math.min(bounds.maxY - inset, p.y)) - p.y;
-        }
-        if (dx || dy) {
-          translate(group, dx, dy);
-          adjusted = true;
+  const positions = new Map<string, Point>();
+  for (const id of ordered) {
+    const bubble = byId.get(id)!;
+    const preferred = original.get(id)!;
+    const placedNeighbours = (neighbours.get(id) ?? [])
+      .filter((peer) => positions.has(peer))
+      .map((peer) => ({ bubble: byId.get(peer)!, point: positions.get(peer)! }));
+    const hasLink = placedNeighbours.length > 0;
+    const isPinned = Boolean(bubble.pinned);
+    const normalCenterDistance = (p: Point) =>
+      Math.hypot((p.x - centre.x) / halfX, (p.y - centre.y) / halfY);
+    const score = (p: Point) => {
+      const preferredDistance = Math.hypot(p.x - preferred.x, p.y - preferred.y);
+      if (isPinned) return preferredDistance * 20 + normalCenterDistance(p) * 4;
+      const radial = normalCenterDistance(p);
+      const centreWeight = bounds.compact ? 245 : 0;
+      let result = radial * centreWeight + preferredDistance * (bounds.compact ? 0.085 : 1);
+      if (hasLink) {
+        // Keep every real adjacent task at a visible but short dotted gap.
+        for (const neighbour of placedNeighbours) {
+          const distance = Math.hypot(p.x - neighbour.point.x, p.y - neighbour.point.y);
+          const ideal = bubble.radius + neighbour.bubble.radius + LINK_GAP;
+          result += Math.abs(distance - ideal) * 2.6;
         }
       }
-      if (!adjusted) break;
+      return result;
+    };
+    let best: Point | null = null;
+    let bestScore = Infinity;
+    const consider = (p: Point) => {
+      if (!inside(bubble, p) || !separation(bubble, p, positions)) return;
+      const cost = score(p);
+      if (cost < bestScore - 0.00001) {
+        bestScore = cost;
+        best = p;
+      }
+    };
+    // In non-compact tests/legacy callers, keep untouched positions exactly.
+    if (!bounds.compact && !hasLink && inside(bubble, preferred) && separation(bubble, preferred, positions)) {
+      positions.set(id, { ...preferred });
+      continue;
     }
-  };
-  groups.forEach(clampGroup);
+    consider(preferred);
 
-  // A circle trapped in the saddle between two members of a cluster will
-  // otherwise oscillate between opposing forces. Move it sideways first.
-  for (const group of groups) {
-    if (group.ids.length < 2) continue;
-    for (const intruder of groups) {
-      if (intruder === group || intruder.ids.length !== 1) continue;
-      const id = intruder.ids[0];
-      const circle = byId.get(id)!;
-      for (let pass = 0; pass < 5; pass++) {
-        const p = positions.get(id)!;
-        const neighbours = group.ids.filter((otherId) => {
-          const other = positions.get(otherId)!;
-          return Math.hypot(p.x - other.x, p.y - other.y) <
-            circle.radius + byId.get(otherId)!.radius + BUBBLE_CLEARANCE;
+    // Exact tangent candidates ensure a few pixels of breathing room and
+    // prevent large empty holes between otherwise adjacent bubbles.
+    const nearby = [...positions].sort((a, b) =>
+      Math.hypot(a[1].x - preferred.x, a[1].y - preferred.y) -
+      Math.hypot(b[1].x - preferred.x, b[1].y - preferred.y));
+    for (const [otherId, p] of nearby.slice(0, 100)) {
+      const other = byId.get(otherId)!;
+      const radial = bubble.radius + other.radius + (neighbours.get(id)?.includes(otherId) ? LINK_GAP : 8.5);
+      const direction = Math.atan2(preferred.y - p.y, preferred.x - p.x);
+      for (let step = 0; step < 32; step++) {
+        const angle = direction + step * Math.PI / 16;
+        consider({ x: p.x + radial * Math.cos(angle), y: p.y + radial * Math.sin(angle) });
+      }
+    }
+
+    // Complete angular sweep inside the oval/sector if no tangent fits or
+    // a more central vacancy is available. Large tasks are placed first.
+    const angleStep = Math.PI / 32;
+    const radialStep = Math.max(9, Math.min(21, bubble.radius * 0.42));
+    for (let distance = 0; distance < Math.max(halfX, halfY); distance += radialStep) {
+      const rx = distance;
+      for (let a = 0; a < 64; a++) {
+        const angle = a * angleStep;
+        consider({
+          x: centre.x + rx * Math.cos(angle) * halfX / Math.max(1, halfY),
+          y: centre.y + rx * Math.sin(angle)
         });
-        if (neighbours.length < 2) break;
-        const a = positions.get(neighbours[0])!;
-        const b = positions.get(neighbours[1])!;
-        const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-        const nx = -(b.y - a.y) / len;
-        const ny = (b.x - a.x) / len;
-        const signed = (p.x - a.x) * nx + (p.y - a.y) * ny;
-        const direction = signed > 0 ? 1 : signed < 0 ? -1 : id < group.anchorId ? -1 : 1;
-        const needed = Math.max(byId.get(neighbours[0])!.radius, byId.get(neighbours[1])!.radius) + circle.radius + BUBBLE_CLEARANCE;
-        translate(intruder, nx * direction * Math.max(0, needed - Math.abs(signed)), ny * direction * Math.max(0, needed - Math.abs(signed)));
-        clampGroup(intruder);
       }
+      // Any candidate with a cost well below the next ring's minimum radial
+      // penalty cannot be improved by examining the outer rings.
+      if (best && bounds.compact && !hasLink && bestScore < distance / halfY * 245 - 4) break;
     }
-  }
 
-  // Relax the complete groups rather than independently moving linked circles.
-  // A weak repulsion BEFORE contact distributes clusters into sparse areas;
-  // hard collision resolution still handles real overlaps.
-  const fieldCentre = bounds.ellipse
-    ? { x: bounds.ellipse.cx, y: bounds.ellipse.cy } : null;
-  for (let pass = 0; pass < 80; pass++) {
-    let deepestOverlap = 0;
-    if (fieldCentre) {
-      const centroid = (group: typeof groups[number]) => {
-        const root = positions.get(group.layoutRootId)!;
-        const extent = Math.max(...group.ids.map((id) => {
-          const point = positions.get(id)!;
-          return Math.hypot(point.x - root.x, point.y - root.y) + byId.get(id)!.radius;
-        }));
-        return { x: root.x, y: root.y, extent };
-      };
-      for (let i = 0; i < groups.length; i++) {
-        const aGroup = groups[i];
-        const a = centroid(aGroup);
-        for (let j = i + 1; j < groups.length; j++) {
-          const bGroup = groups[j];
-          const b = centroid(bGroup);
-          const dx = b.x - a.x;
-          const dy = b.y - a.y;
-          const distance = Math.hypot(dx, dy);
-          const comfortDistance = (a.extent + b.extent) * 0.88 + 18;
-          if (distance >= comfortDistance) continue;
-          const angle = distance > 0.01 ? { x: dx / distance, y: dy / distance }
-            : { x: (i + j) % 2 ? -1 : 1, y: 0 };
-          const aWeight = aGroup.pinned ? 0.015 : 1;
-          const bWeight = bGroup.pinned ? 0.015 : 1;
-          const weightSum = aWeight + bWeight;
-          const step = Math.min(3.6, (comfortDistance - distance) * 0.065);
-          translate(aGroup, -angle.x * step * aWeight / weightSum,
-            -angle.y * step * aWeight / weightSum);
-          translate(bGroup, angle.x * step * bWeight / weightSum,
-            angle.y * step * bWeight / weightSum);
-        }
-      }
-      // Do not let the gentle spacing force push large cluster roots right
-      // back to the periphery; size has priority over their satellite count.
-      for (const group of groups) {
-        if (group.pinned || group.ids.length < 2) continue;
-        const root = positions.get(group.layoutRootId)!;
-        const maxRadius = Math.min(1, byId.get(group.layoutRootId)!.radius / 145);
-        const desiredFraction = 0.74 - maxRadius * 0.5;
-        const dx = root.x - fieldCentre.x;
-        const dy = root.y - fieldCentre.y;
-        const ellipse = bounds.ellipse!;
-        const fraction = Math.hypot(dx / ellipse.rx, dy / ellipse.ry);
-        if (fraction > desiredFraction && fraction > 0.001) {
-          const pull = Math.min(0.08, (fraction - desiredFraction) * 0.09);
-          translate(group, -dx * pull, -dy * pull);
+    if (!best) {
+      // Extremely crowded/physically infeasible inputs should remain finite.
+      // Search a finer spiral before conceding any overlap.
+      for (let distance = 0; distance < Math.max(halfX, halfY) && !best; distance += 5) {
+        for (let a = 0; a < 128; a++) {
+          const angle = a * Math.PI / 64;
+          consider({ x: centre.x + distance * Math.cos(angle) * halfX / Math.max(1, halfY),
+            y: centre.y + distance * Math.sin(angle) });
         }
       }
     }
-    for (let i = 0; i < groups.length; i++) {
-      const aGroup = groups[i];
-      for (let j = i + 1; j < groups.length; j++) {
-        const bGroup = groups[j];
-        let deepest: { x: number; y: number; overlap: number } | null = null;
-        for (const aId of aGroup.ids) for (const bId of bGroup.ids) {
-          const a = positions.get(aId)!;
-          const b = positions.get(bId)!;
-          const dx = b.x - a.x;
-          const dy = b.y - a.y;
-          const distance = Math.hypot(dx, dy);
-          const overlap = byId.get(aId)!.radius + byId.get(bId)!.radius + BUBBLE_CLEARANCE - distance;
-          if (overlap <= 0 || (deepest && overlap <= deepest.overlap)) continue;
-          // A consistent fallback is essential for two bubbles with exactly
-          // equal coordinates, otherwise the solver never separates them.
-          const seed = (i + j) % 2 ? 1 : -1;
-          deepest = { x: distance > 0.0001 ? dx / distance : seed,
-            y: distance > 0.0001 ? dy / distance : 0, overlap };
-        }
-        if (!deepest) continue;
-        deepestOverlap = Math.max(deepestOverlap, deepest.overlap);
-        const aWeight = aGroup.pinned ? 0.06 : 1;
-        const bWeight = bGroup.pinned ? 0.06 : 1;
-        const total = aWeight + bWeight;
-        const step = deepest.overlap * 0.90;
-        translate(aGroup, -deepest.x * step * aWeight / total, -deepest.y * step * aWeight / total);
-        translate(bGroup, deepest.x * step * bWeight / total, deepest.y * step * bWeight / total);
-      }
-    }
-    groups.forEach(clampGroup);
-    if (deepestOverlap < 0.28) break;
+    // When the assigned sector is physically overfull, retain the best
+    // original point rather than producing NaN. Normal packed layouts always
+    // take the collision-free path above.
+    positions.set(id, best ?? { ...preferred });
   }
   return positions;
 }
