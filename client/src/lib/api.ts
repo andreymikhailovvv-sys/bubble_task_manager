@@ -705,6 +705,8 @@ export const api = {
     request<TaskMonitoringStatus>(`/api/tasks/${id}/monitoring/statuses`, { method: 'POST', body: JSON.stringify(payload) }),
   generateTaskCompletionReport: (id: string) => request<{ document: GeneratedDocument; model: string; creditsSpentMilli: number; coveredEvents: number; omittedEvents: number }>(`/api/tasks/${encodeURIComponent(id)}/completion-report`, { method: 'POST' }),
   updateTask: (id: string, payload: Partial<Task> & { collaborationScope?: 'me' | 'all' }) => request<Task>(`/api/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  bubbleAction: (id: string, payload: { action: 'move' | 'link' | 'unlink' | 'nest'; targetTaskId?: string; sphereId?: string | null; mode?: 'global' | 'sectors'; x?: number; y?: number }) =>
+    request<{ action: string }>(`/api/tasks/${encodeURIComponent(id)}/bubble-action`, { method: 'POST', body: JSON.stringify(payload) }),
   deleteTask: (id: string, scope: 'me' | 'all' = 'me') => request<{ ok: true }>(`/api/tasks/${id}?scope=${scope}`, { method: 'DELETE' }),
   createTaskShare: (id: string) => request<{ token: string }>(`/api/tasks/${id}/share`, { method: 'POST' }),
   getTaskShare: (token: string) => request<{ title: string; description?: string | null; subtaskCount: number; ownerName: string }>(`/api/task-shares/${token}`),
