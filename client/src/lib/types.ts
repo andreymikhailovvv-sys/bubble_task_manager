@@ -12,6 +12,11 @@ export type Task = {
   description?: string | null;
   sphereId?: string | null;
   parentTaskId?: string | null;
+  linkedTaskIds?: string[];
+  bubbleGlobalX?: number | null;
+  bubbleGlobalY?: number | null;
+  bubbleSectorX?: number | null;
+  bubbleSectorY?: number | null;
   taskType?: 'TASK' | 'EVENT' | 'REMINDER';
   location?: string | null;
   notifyBeforeMinutes?: number | null;
