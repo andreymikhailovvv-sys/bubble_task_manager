@@ -539,10 +539,11 @@ export function BubbleField({
       startSvgX: point.x, startSvgY: point.y, lastSvgX: point.x, lastSvgY: point.y,
       moved: false, target: null, targetSince: 0
     };
-    event.currentTarget.setPointerCapture(event.pointerId);
+    // The stable root SVG holds capture, not a moving/reordered bubble group.
+    svgRef.current?.setPointerCapture(event.pointerId);
   };
 
-  const onBubblePointerMove = (event: ReactPointerEvent<SVGGElement>, bubble: (typeof bubbles)[number]) => {
+  const onBubblePointerMove = (event: ReactPointerEvent<SVGElement>, bubble: (typeof bubbles)[number]) => {
     const session = dragSessionRef.current;
     if (!session || session.taskId !== bubble.task.id || session.pointerId !== event.pointerId) return;
     const point = toSvgPoint(event.clientX, event.clientY);
@@ -565,7 +566,7 @@ export function BubbleField({
     queueDragView({ taskId: session.taskId, dx: point.x - session.startSvgX, dy: point.y - session.startSvgY, target });
   };
 
-  const onBubblePointerUp = (event: ReactPointerEvent<SVGGElement>, bubble: (typeof bubbles)[number]) => {
+  const onBubblePointerUp = (event: ReactPointerEvent<SVGElement>, bubble: (typeof bubbles)[number]) => {
     const session = dragSessionRef.current;
     if (!session || session.pointerId !== event.pointerId || session.taskId !== bubble.task.id) return;
     dragSessionRef.current = null;
@@ -608,6 +609,24 @@ export function BubbleField({
     }).catch((error: unknown) => {
       showBubbleNotice(error instanceof Error ? error.message : 'Не удалось переместить пузырь.');
     }).finally(() => setBubbleActionPending(false));
+  };
+
+  const onCanvasPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
+    const session = dragSessionRef.current;
+    if (!session) return;
+    const source = visibleBubbles.find((bubble) => bubble.task.id === session.taskId);
+    if (source) onBubblePointerMove(event, source);
+  };
+  const onCanvasPointerUp = (event: ReactPointerEvent<SVGSVGElement>) => {
+    const session = dragSessionRef.current;
+    if (!session) return;
+    const source = visibleBubbles.find((bubble) => bubble.task.id === session.taskId);
+    if (source) onBubblePointerUp(event, source);
+  };
+  const cancelCanvasPointer = () => {
+    dragSessionRef.current = null;
+    cancelDragFrame();
+    setDragView(null);
   };
 
   const hoveredBubble = useMemo(() => visibleBubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null, [hoveredTaskId, visibleBubbles]);
@@ -847,17 +866,7 @@ export function BubbleField({
           if (!isPopping && !dragSessionRef.current) onSelect(bubble.task);
         }}
         onPointerDown={(event) => onBubblePointerDown(event, bubble)}
-        onPointerMove={(event) => onBubblePointerMove(event, bubble)}
-        onPointerUp={(event) => onBubblePointerUp(event, bubble)}
-        onPointerCancel={() => { dragSessionRef.current = null; cancelDragFrame(); setDragView(null); }}
-        onLostPointerCapture={() => {
-          if (dragSessionRef.current?.taskId === bubble.task.id) {
-            dragSessionRef.current = null;
-            cancelDragFrame();
-            setDragView(null);
-          }
-        }}
-        onMouseEnter={() => { if (!dragSessionRef.current) activateHover(bubble.task.id); }}
+         onMouseEnter={() => { if (!dragSessionRef.current) activateHover(bubble.task.id); }}
         onMouseLeave={() => { if (!dragSessionRef.current) scheduleHoverExit(); }}
         onContextMenu={(event) => showContextMenu(event, bubble.task)}
         className={bubble.task.isCollaborative || bubble.task.taskType === 'EVENT' || bubble.task.taskType === 'REMINDER' ? 'cursor-pointer' : isDragged ? 'cursor-grabbing' : 'cursor-grab'}
@@ -1006,7 +1015,11 @@ export function BubbleField({
               : bubbleDragNotice}
         </div>
       )}
-      <svg ref={svgRef} style={{ userSelect: 'none', WebkitUserSelect: 'none', touchAction: 'pan-x pan-y' }} onDragStart={(event) => event.preventDefault()} viewBox={`${VIEWBOX_LEFT} ${VIEWBOX_TOP} ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} className="bubble-field-stage relative z-20 h-full w-full overflow-visible" onContextMenu={(event) => showContextMenu(event, null)}>
+      <svg ref={svgRef} style={{ userSelect: 'none', WebkitUserSelect: 'none', touchAction: 'pan-x pan-y' }}
+        onDragStart={(event) => event.preventDefault()}
+        onPointerMove={onCanvasPointerMove} onPointerUp={onCanvasPointerUp}
+        onPointerCancel={cancelCanvasPointer} onLostPointerCapture={cancelCanvasPointer}
+        viewBox={`${VIEWBOX_LEFT} ${VIEWBOX_TOP} ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} className="bubble-field-stage relative z-20 h-full w-full overflow-visible" onContextMenu={(event) => showContextMenu(event, null)}>
         <motion.g initial={false}>
           <defs>
             <radialGradient id="bg" cx="50%" cy="50%" r="60%">
