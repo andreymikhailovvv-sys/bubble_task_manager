@@ -29,6 +29,8 @@ jobs:
         run: npm ci --include=dev --no-audit --no-fund
       - name: Compile web client and API server
         run: npm run build
+      - name: Verify optimized favicons are built and linked consistently
+        run: node --import tsx --test server/test/favicon-build.test.ts
       - name: Verify magnetic bubble layout and collision regression tests
         run: node --import tsx --test client/src/lib/bubbleInteractions.test.ts
       - name: Verify privacy-safe performance telemetry and bounded histograms
