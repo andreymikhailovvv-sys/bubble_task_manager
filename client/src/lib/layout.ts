@@ -324,6 +324,15 @@ function applyGravity(
   }
 }
 
+// Important, visually large tasks must stay closer to the shared centre
+// of the circle/sector dividers than smaller tasks. This caps radial targets,
+// while the collision solver remains free to move them out when space is tight.
+function sizeWeightedDistance(distance: number, radius: number, maxDistance: number) {
+  const normalized = Math.min(1, Math.max(0, radius / 150));
+  const radialCap = maxDistance * (0.94 - normalized * 0.64);
+  return Math.min(distance, Math.max(18, radialCap));
+}
+
 function getDistanceByRank(index: number, total: number, maxDistance: number, mode: 'global' | 'sectors') {
   const minDistance = 18;
   if (total <= 1) return minDistance;
@@ -587,9 +596,10 @@ export function buildBubbles(
       const overdueBoost = isOverdueNow(task.dueDate) ? 2.2 : 0;
       const coefficient = getTaskCoefficient(getSourceTask(task), subtaskMap);
       const radius = getRadiusByRank(i, sorted.length, proximity, urgencyWeight, importanceTieBoost, mode, rankingMode, task.importance, overdueBoost, coefficient, sectorMaxCoefficient);
-      const distance = rankingMode === 'coefficient'
+      const baseDistance = rankingMode === 'coefficient'
         ? 12 + Math.pow(1 - coefficient, 1.45) * Math.max(18, maxDistance * (placementMode === 'global' ? 0.6 : 0.78)) + i * 0.22
         : getDistanceByRank(i, sorted.length, maxDistance, placementMode);
+      const distance = sizeWeightedDistance(baseDistance, radius, maxDistance);
       const rankRatio = sorted.length <= 1 ? 0 : i / (sorted.length - 1);
       targetDistanceById[task.id] = distance;
       gravityById[task.id] = 1 - rankRatio;
@@ -648,9 +658,10 @@ export function buildBubbles(
       const dx = bubble.x - center;
       const dy = bubble.y - center;
       const currentDistance = Math.hypot(dx, dy) || 1;
-      const targetDistance = rankingMode === 'coefficient'
+      const baseTargetDistance = rankingMode === 'coefficient'
         ? 12 + Math.pow(1 - getTaskCoefficient(getSourceTask(bubble.task), subtaskMap), 1.45) * Math.max(18, maxDistance * (placementMode === 'global' ? 0.6 : 0.78)) + idx * 0.18
         : getDistanceByRank(idx, ranked.length, maxDistance, placementMode);
+      const targetDistance = sizeWeightedDistance(baseTargetDistance, bubble.radius, maxDistance);
       const minDistance = idx === 0
         ? Math.max(12, targetDistance - 5)
         : Math.max(targetDistance - 14, previousDistance + bubble.radius * 0.12 + 2);

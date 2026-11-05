@@ -887,9 +887,9 @@ export function BubbleField({
           r={bubble.radius}
           fill={getBubbleShade(bubble.color, bubble.distanceRatio)}
           fillOpacity={isLightTheme ? 0.66 : 0.48}
-          stroke={isDragTarget ? (dragView?.target?.kind === 'nest' ? '#f59e0b' : '#a78bfa') : bubble.task.linkedTaskIds?.length ? '#a78bfa' : selectedId === bubble.task.id ? (isLightTheme ? '#0f172a' : '#f8fafc') : (isLightTheme ? 'rgba(14,116,144,0.56)' : '#bae6fd')}
+          stroke={isDragTarget ? (dragView?.target?.kind === 'nest' ? '#f59e0b' : '#a78bfa') : selectedId === bubble.task.id ? (isLightTheme ? '#0f172a' : '#f8fafc') : (isLightTheme ? 'rgba(14,116,144,0.56)' : '#bae6fd')}
           strokeOpacity={selectedId === bubble.task.id ? 1 : isLightTheme ? 0.78 : 0.65}
-          strokeWidth={isDragTarget || isDragged ? 5 : selectedId === bubble.task.id || bubble.task.linkedTaskIds?.length ? 3.5 : 2.4}
+          strokeWidth={isDragTarget || isDragged ? 5 : selectedId === bubble.task.id ? 3.5 : 2.4}
           filter={glowFilter}
           style={isDragTarget ? { filter: 'drop-shadow(0 0 14px rgba(167,139,250,0.7))' } : staticGlowStyle}
         />
@@ -1161,8 +1161,8 @@ export function BubbleField({
               { x: a.x + dragView.dx, y: a.y + dragView.dy }, b, from.radius, to.radius
             );
             return <line {...segment}
-              stroke={dragView.target.kind === 'nest' ? '#f59e0b' : '#a78bfa'} strokeWidth={2.7}
-              strokeLinecap="round" strokeDasharray="3.5 5" opacity={0.88} pointerEvents="none" />;
+              stroke={dragView.target.kind === 'nest' ? '#f59e0b' : '#8b5cf6'} strokeWidth={3.4}
+              strokeLinecap="round" strokeDasharray="4 4.5" opacity={0.98} pointerEvents="none" />;
           })()}
           {sectorGeometry.map((geometry, idx) => {
             if (sectorCount === 1) return null;
@@ -1196,8 +1196,8 @@ export function BubbleField({
                     const segment = bubbleLinkSegment(a, b, first.radius, second.radius);
                     return (
                       <motion.line key={`${firstId}:${secondId}`} initial={false} animate={segment} transition={transition}
-                        stroke="#a78bfa" strokeWidth={2.7} strokeDasharray="3.5 5" strokeLinecap="round"
-                        opacity={0.88} pointerEvents="none" />
+                        stroke="#8b5cf6" strokeWidth={3.4} strokeDasharray="4 4.5" strokeLinecap="round"
+                        opacity={0.98} pointerEvents="none" />
                     );
                   })}
                   {members.map((bubble) => renderBubble(bubble, origin))}

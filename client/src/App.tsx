@@ -2741,20 +2741,26 @@ export default function App() {
     else setFocusedTaskId(task.id);
   };
 
-  const renderLinkedTaskBadge = (task: Task) => {
+  const renderLinkedTaskBadge = (task: Task, compact = false) => {
     const relatedTasks = (task.linkedTaskIds ?? [])
       .map((id) => tasks.find((candidate) => candidate.id === id))
       .filter((candidate): candidate is Task => Boolean(candidate));
     if (relatedTasks.length === 0) return null;
     return (
-      <span className="inline-flex min-w-0 max-w-full flex-wrap items-center gap-1.5 text-xs font-medium text-violet-500">
-        <span>{relatedTasks.length > 1 ? 'Связана с задачами:' : 'Связана с'}</span>
+      <span className={compact
+        ? 'flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-xs font-medium text-primary'
+        : 'inline-flex min-w-0 max-w-full flex-wrap items-center gap-1.5 text-xs font-medium text-primary'}>
+        <span className="shrink-0 text-primary">{relatedTasks.length > 1 ? 'Связана с:' : 'Связана с'}</span>
+        <span className={compact ? 'flex min-w-0 flex-1 items-center gap-1 overflow-hidden' : 'contents'}>
         {relatedTasks.map((related) => {
           const key = `${task.id}:${related.id}`;
           return (
-            <span key={related.id} className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border border-violet-400/35 bg-violet-500/10 py-0.5 pl-2 pr-1">
+            <span key={related.id}
+              className={compact
+                ? 'inline-flex min-w-0 max-w-40 flex-1 basis-0 items-center gap-0.5 overflow-hidden rounded-full border border-cyan-500/35 bg-cyan-500/10 py-0.5 pl-1.5 pr-0.5 text-sky-700 dark:text-cyan-200'
+                : 'inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border border-cyan-500/35 bg-cyan-500/10 py-0.5 pl-2 pr-1 text-sky-700 dark:text-cyan-200'}>
               <button type="button"
-                className="inline-flex min-w-0 max-w-40 items-center gap-1 rounded-full px-1 py-0.5 font-semibold hover:bg-violet-500/15"
+                className="inline-flex min-w-0 flex-1 items-center gap-1 rounded-full px-1 py-0.5 font-semibold hover:bg-cyan-500/15"
                 title={related.title} onClick={(event) => {
                   event.stopPropagation();
                   setIsFocusModeOpen(false);
@@ -2763,7 +2769,7 @@ export default function App() {
                 <span className="truncate">{related.title}</span><ChevronRight size={12} className="shrink-0" />
               </button>
               <button type="button"
-                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-violet-500 transition hover:bg-violet-500/20 hover:text-violet-700 disabled:opacity-50"
+                className="inline-flex h-6 w-5 shrink-0 items-center justify-center rounded-full text-cyan-600 transition hover:bg-cyan-500/20 hover:text-cyan-800 dark:text-cyan-300 dark:hover:text-cyan-100 disabled:opacity-50"
                 title={`Разорвать связь с «${related.title}»`}
                 aria-label={`Разорвать связь с задачей «${related.title}»`}
                 disabled={unlinkingBubbleTaskId !== null}
@@ -2783,6 +2789,7 @@ export default function App() {
             </span>
           );
         })}
+        </span>
       </span>
     );
   };
@@ -5630,7 +5637,7 @@ export default function App() {
               <div className="focus-card-peek -mb-1">{focusTasks[(focusActiveIndex - 1 + focusTasks.length) % focusTasks.length]?.title}</div>
               <button className="focus-stack-arrow absolute top-[4.25rem] z-10" onClick={() => switchFocusTask(-1)}><ChevronUp size={22} /></button>
               <motion.article key={focusActiveTask.id} initial={{ opacity: 0, y: 44, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="focus-main-card flex min-h-0 w-full max-w-2xl flex-1 flex-col overflow-hidden rounded-[2rem] border p-6 shadow-xl">
-                <div className="flex flex-wrap items-center gap-2"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Текущая задача</p>{renderLinkedTaskBadge(focusActiveTask)}</div>
+                <div className="flex w-full min-w-0 items-center gap-2 overflow-hidden"><p className="shrink-0 text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Текущая задача</p>{renderLinkedTaskBadge(focusActiveTask, true)}</div>
                 <div className="mt-2 flex items-start justify-between gap-3"><button type="button" className="text-left text-3xl font-bold text-slate-950 hover:underline" onClick={() => { setFocusedTaskId(focusActiveTask.id); setIsFocusedNotesEditorOpen(false); }}>{focusActiveTask.title}</button><button type="button" className="success-button shrink-0 rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => void completeTask(focusActiveTask)}>Выполнить</button></div>
                 <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium text-violet-500">{focusActiveTask.aiMonitoringEnabled ? <><span>Дедлайн:</span><TaskMonitoringBadge /> На усмотрение ИИ</> : (focusActiveTask.dueDate ? `До дедлайна: ${formatSubtaskRelativeDeadline(focusActiveTask.dueDate)}` : 'Дедлайн не задан')}</p>
                 <div className="mt-3 flex min-h-0 items-start">
@@ -7546,7 +7553,7 @@ export default function App() {
                   }`}
                   onScroll={() => setIsSubtaskFilterOpen(false)}
                 >
-                  <div className="flex flex-wrap items-center gap-2"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус задачи</p>{renderLinkedTaskBadge(focusedTask)}{focusedTask.isCollaborative ? <button type="button" className="rounded-full border border-amber-300/70 bg-gradient-to-r from-amber-100 to-yellow-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700 shadow-sm" onClick={() => setIsCollaborationSettingsOpen(true)}>Совместная задача</button> : null}</div>
+                  <div className="flex w-full min-w-0 flex-nowrap items-center gap-2 overflow-hidden pr-44 lg:pr-36"><p className="shrink-0 text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус задачи</p>{renderLinkedTaskBadge(focusedTask, true)}{focusedTask.isCollaborative ? <button type="button" className="shrink-0 rounded-full border border-amber-300/70 bg-gradient-to-r from-amber-100 to-yellow-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700 shadow-sm" onClick={() => setIsCollaborationSettingsOpen(true)}>Совместная задача</button> : null}</div>
                   <div className="mt-4 flex items-start gap-3">
                     <div className="relative min-w-0 flex-1">
                       <textarea

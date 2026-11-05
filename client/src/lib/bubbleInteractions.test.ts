@@ -115,3 +115,34 @@ test('connector is short and starts just inside the bubble rims', () => {
   const edge = bubbleLinkSegment({ x: 100, y: 100 }, { x: 200, y: 100 }, 30, 25);
   assert.deepEqual(edge, { x1: 128, y1: 100, x2: 177, y2: 100 });
 });
+
+test('largest linked task becomes the visual gravitational centre', () => {
+  const field = { minX: 0, maxX: 800, minY: 0, maxY: 800,
+    ellipse: { cx: 400, cy: 400, rx: 380, ry: 365 } };
+  const circles = [
+    { id: 'small', x: 650, y: 630, radius: 23, linkedTaskIds: ['large'], bubbleLinkAnchorId: 'small' },
+    { id: 'large', x: 630, y: 595, radius: 96, linkedTaskIds: ['small'], bubbleLinkAnchorId: 'small' }
+  ];
+  const positions = linkedBubblePositions(circles, field);
+  const biggest = positions.get('large')!;
+  const small = positions.get('small')!;
+  const initialDistance = Math.hypot((630 - 400) / 380, (595 - 400) / 365);
+  const movedDistance = Math.hypot((biggest.x - 400) / 380, (biggest.y - 400) / 365);
+  assert.ok(movedDistance < initialDistance * 0.75, 'large task moves toward shared centre');
+  assert.ok(Math.hypot(biggest.x - small.x, biggest.y - small.y) >= 96 + 23 + 14);
+});
+
+test('manual coordinates override centre-seeking for linked tasks', () => {
+  const field = { minX: 0, maxX: 800, minY: 0, maxY: 800,
+    ellipse: { cx: 400, cy: 400, rx: 380, ry: 365 } };
+  const circles = [
+    { id: 'manual', x: 590, y: 460, radius: 25, pinned: true, linkedTaskIds: ['large'], bubbleLinkAnchorId: 'manual' },
+    { id: 'large', x: 700, y: 460, radius: 90, linkedTaskIds: ['manual'], bubbleLinkAnchorId: 'manual' }
+  ];
+  const positions = linkedBubblePositions(circles, field);
+  const manual = positions.get('manual')!;
+  const large = positions.get('large')!;
+  assert.ok(Math.hypot(manual.x - 590, manual.y - 460) < 1,
+    'explicitly positioned task is not pulled to the centre');
+  assert.ok(Math.hypot(manual.x - large.x, manual.y - large.y) >= 25 + 90 + 14);
+});
