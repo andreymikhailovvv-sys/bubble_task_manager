@@ -28,6 +28,8 @@ export type Bounds = {
   hillSectors?: HillSectorAngles[];
   /** Pack even unlinked tasks, instead of retaining the former sparse automatic layout. */
   compact?: boolean;
+  /** Optional counters for testing and diagnosing slow browser layouts. */
+  diagnostics?: { candidateChecks: number; fallbackScans: number };
 };
 
 export type LinkedBubbleGroup = {
@@ -88,6 +90,10 @@ export function getLinkedBubbleGroups(bubbles: VisualBubble[]): LinkedBubbleGrou
  * another task onto a neighbour or across a sector divider.
  */
 export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): Map<string, Point> {
+  if (bounds.diagnostics) {
+    bounds.diagnostics.candidateChecks = 0;
+    bounds.diagnostics.fallbackScans = 0;
+  }
   const original = new Map(bubbles.map((bubble) => [bubble.id, { x: bubble.x, y: bubble.y }]));
   if (!bubbles.some((bubble) => bubble.pinned || bubble.linkedTaskIds?.length) && !bounds.compact) return original;
   const byId = new Map(bubbles.map((bubble) => [bubble.id, bubble]));
@@ -363,6 +369,7 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
     let safeFallback: Point | null = null;
     let safeFallbackDistance = Infinity;
     const consider = (p: Point) => {
+      if (bounds.diagnostics) bounds.diagnostics.candidateChecks += 1;
       if (!inside(bubble, p)) return;
       // Crowded sectors may not admit a collision-free solution. Never fall
       // back to an unvalidated saved coordinate that crosses into a neighbour.
@@ -451,6 +458,7 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
     }
 
     if (!best) {
+      if (bounds.diagnostics) bounds.diagnostics.fallbackScans += 1;
       // Retain a fine fallback for dense sectors, but never scan hundreds of
       // angles belonging to OTHER sectors. Sampling the same Bézier geometry
       // with an offset phase finds gaps missed by the coarse pass.
