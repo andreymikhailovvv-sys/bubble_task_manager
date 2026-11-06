@@ -435,6 +435,79 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
     // failed to find non-overlapping space.
     positions.set(id, best ?? safeFallback ?? { ...preferred });
   }
+
+  if (bounds.compact && bounds.hillSectors?.length > 1) {
+    // Final magnetic pass. Greedy packing can leave a long link when other
+    // bubbles occupy the initially preferred space. Search the circumference
+    // of each *already placed* neighbour for a closer valid docking spot.
+    // Unlike a spring that moves circles unconditionally, this never moves
+    // a pin, crosses a wall, or introduces a collision. The sum over all
+    // neighbours prevents tightening one link by stretching another.
+    const totalLinkGap = (bubble: VisualBubble, candidate: Point): number =>
+      (neighbours.get(bubble.id) ?? []).reduce((total, peerId) => {
+        const peer = byId.get(peerId)!;
+        const peerPoint = positions.get(peerId)!;
+        const ideal = bubble.radius + peer.radius + LINK_GAP;
+        return total + Math.max(0, Math.hypot(candidate.x - peerPoint.x,
+          candidate.y - peerPoint.y) - ideal);
+      }, 0);
+
+    for (let pass = 0; pass < 2; pass += 1) {
+      let changed = false;
+      for (const component of sortedComponents) {
+        for (const [firstId, secondId] of component.component.edges) {
+          const first = byId.get(firstId)!;
+          const second = byId.get(secondId)!;
+          const p1 = positions.get(firstId)!;
+          const p2 = positions.get(secondId)!;
+          if (Math.hypot(p1.x - p2.x, p1.y - p2.y) <=
+              first.radius + second.radius + LINK_GAP + 20) continue;
+          const movers = [first, second].sort((a, b) =>
+            Number(Boolean(a.pinned)) - Number(Boolean(b.pinned)) ||
+            coefficientOf(a) - coefficientOf(b));
+          for (const mover of movers) {
+            if (mover.pinned) continue;
+            const fixed = mover.id === firstId ? second : first;
+            const anchorPoint = positions.get(fixed.id)!;
+            const originalPoint = positions.get(mover.id)!;
+            let bestPoint = originalPoint;
+            let bestGap = totalLinkGap(mover, originalPoint);
+            if (bestGap < 8) break;
+
+            for (const offset of [0, 12, 28]) {
+              const dockRadius = mover.radius + fixed.radius + LINK_GAP + offset;
+              for (let step = 0; step < 48; step += 1) {
+                const angle = 2 * Math.PI * step / 48;
+                const candidate = {
+                  x: anchorPoint.x + Math.cos(angle) * dockRadius,
+                  y: anchorPoint.y + Math.sin(angle) * dockRadius
+                };
+                if (!inside(mover, candidate)) continue;
+                const occupied = [...positions].some(([id, p]) => {
+                  if (id === mover.id) return false;
+                  const other = byId.get(id)!;
+                  return Math.hypot(candidate.x - p.x, candidate.y - p.y) <
+                    mover.radius + other.radius + 13;
+                });
+                if (occupied) continue;
+                const gap = totalLinkGap(mover, candidate);
+                if (gap < bestGap - 2) {
+                  bestGap = gap;
+                  bestPoint = candidate;
+                }
+              }
+            }
+            if (bestPoint !== originalPoint) {
+              positions.set(mover.id, bestPoint);
+              changed = true;
+              break;
+            }
+          }
+        }
+      }
+      if (!changed) break;
+    }
+  }
   return positions;
 }
 
