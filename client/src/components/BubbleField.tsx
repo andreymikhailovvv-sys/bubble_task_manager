@@ -1131,9 +1131,9 @@ export function BubbleField({
               <radialGradient key={`petal-fill-${index}`} id={`petal-sector-gradient-${index}`}
                 cx="48%" cy="45%" r="85%">
                 <stop offset="0%" stopColor={bubbleSectors[index]?.color ?? '#94a3b8'}
-                  stopOpacity={isLightTheme ? 0.035 : 0.018} />
+                  stopOpacity={isLightTheme ? 0.057 : 0.028} />
                 <stop offset="100%" stopColor={bubbleSectors[index]?.color ?? '#94a3b8'}
-                  stopOpacity={isLightTheme ? 0.075 : 0.038} />
+                  stopOpacity={isLightTheme ? 0.108 : 0.060} />
               </radialGradient>
             ))}
             {/* Blur only the color wash. The outer clip preserves the oval edge
@@ -1144,7 +1144,7 @@ export function BubbleField({
             </clipPath>
             <filter id="petal-sector-feather" x="-20%" y="-20%" width="140%" height="140%"
               colorInterpolationFilters="sRGB">
-              <feGaussianBlur stdDeviation={isLightTheme ? 19 : 24} />
+              <feGaussianBlur stdDeviation={isLightTheme ? 15 : 20} />
             </filter>
           </defs>
           <foreignObject
@@ -1261,9 +1261,9 @@ export function BubbleField({
           {mode === 'sectors' && sectorCount > 1 && sectorGeometry.map((_, idx) => (
             <path key={`hill-wall-${idx}`}
               d={hillBoundaryPath(idx)} fill="none"
-              stroke={isLightTheme ? '#ffffff' : '#cbd5e1'}
-              strokeWidth={isLightTheme ? 1.5 : 1.2}
-              strokeOpacity={isLightTheme ? 0.22 : 0.12}
+              stroke={isLightTheme ? '#7898ac' : '#cbd5e1'}
+              strokeWidth={isLightTheme ? 1.9 : 1.5}
+              strokeOpacity={isLightTheme ? 0.48 : 0.28}
               strokeLinecap="round" pointerEvents="none" />
           ))}
           {mode === 'sectors' && sectorCount > 2 && (
