@@ -111,10 +111,44 @@ test('the same hill SVG and drag/drop geometry render in regular and fullscreen 
   assert.match(src, /const hillRegionPath =/);
   assert.match(src, /hillSectorIndexAtAngle\(/);
   assert.match(src, /hillSectors: mode === 'sectors'/);
-  assert.match(src, /d=\{hillBoundaryPath\(idx, 0\.12\)\}/);
+  assert.match(src, /d=\{hillBoundaryPath\(idx\)\}/);
   assert.match(src, /Q \${control\.x\.toFixed\(2\)\}/);
   assert.doesNotMatch(src, /strokeWidth=\{11\}|hill-ridge-/);
   assert.match(src, /d=\{hillRegionPath\(dragView\.destinationSectorIndex\)\}/);
   assert.match(src, /fullscreen = false/);
+  assert.match(src, /petal-sector-gradient-/);
+  assert.match(src, /fill=\{\`url\(#petal-sector-gradient-\$\{idx\}\)\`\}/);
+  assert.match(src, /r=\{11\}/);
+  assert.match(src, /rounded-full border px-3 py-1\.5 text-sm font-semibold/);
   assert.doesNotMatch(src, /<line key=\{idx\} className="sector-divider"/);
+  assert.doesNotMatch(src, /key=\{\`hill-wall-\$\{idx\}\`\} className="sector-divider"/);
+});
+
+test('pastel petal sectors adapt to imbalanced counts and multiple sector numbers', () => {
+  const scenarios = [
+    [2, [1, 20]],
+    [3, [2, 5, 40]],
+    [3, [35, 1, 3]],
+    [4, [1, 6, 40, 2]],
+    [5, [1, 10, 2, 16, 3]]
+  ] as const;
+  for (const [sectorCount, counts] of scenarios) {
+    const geometry = buildSectorGeometry(sectorCount, [...counts]);
+    assert.equal(geometry.length, sectorCount);
+    assert.ok(Math.abs(geometry.reduce((sum, sector) => sum + sector.span, 0) - 2 * Math.PI) < 0.000001);
+    for (const radius of [0, 0.08, 0.2, 0.4, 0.72, 0.95, 1]) {
+      const sections = geometry.map((_, i) => hillSectorAnglesAtRadius(geometry, i, radius));
+      assert.ok(Math.abs(sections.reduce((sum, sector) => sum + sector.span, 0) - 2 * Math.PI) < 0.000001);
+      for (let i = 0; i < sections.length; i++) {
+        assert.ok(sections[i].span > 0.04, `sector ${i} squeezed shut in ${sectorCount}-region scenario at radius ${radius}`);
+        const midpoint = sections[i].start + sections[i].span / 2;
+        assert.equal(hillSectorIndexAtAngle(midpoint, radius, geometry), i);
+      }
+    }
+    if (sectorCount > 2) {
+      const smallest = counts.indexOf(Math.min(...counts));
+      const largest = counts.indexOf(Math.max(...counts));
+      assert.ok(geometry[largest].span > geometry[smallest].span, 'larger sectors retain more display area');
+    }
+  }
 });
