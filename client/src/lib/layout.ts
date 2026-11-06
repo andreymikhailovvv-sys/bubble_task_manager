@@ -472,10 +472,10 @@ function applyHierarchicalClustering(bubbles: Bubble[], center: number, maxDista
 }
 
 /**
- * The old sector layout attracted large bubbles to the shared divider hub.
- * Hill sectors instead have a separate, soft focus on each sector bisector.
- * Keep the existing collision/size solver; only bias the leading coefficient
- * group and never touch manually placed points (applied later).
+ * High-coefficient bubbles start on the inner part of their own sector;
+ * less important bubbles are arranged in progressively outer layers by the
+ * final packer. Curved-wall clearance and manually pinned positions remain
+ * hard constraints in the final rendering pass.
  */
 function settleHillPeaks(
   bubbles: Bubble[],
@@ -496,7 +496,7 @@ function settleHillPeaks(
       if (i >= coreCount) return;
       const coefficient = getTaskCoefficient(bubble.task, subtaskMap);
       const angularOffset = i === 0 ? 0 : ((i % 2 ? 1 : -1) * Math.ceil(i / 2) * 0.13);
-      const distance = maxDistance * (0.49 + Math.min(0.11, i * 0.026));
+      const distance = maxDistance * (0.34 + Math.min(0.10, i * 0.018));
       targets.set(bubble.task.id, {
         x: center + Math.cos(peak + angularOffset) * distance,
         y: center + Math.sin(peak + angularOffset) * distance,

@@ -1267,9 +1267,12 @@ export function BubbleField({
               strokeLinecap="round" pointerEvents="none" />
           ))}
           {mode === 'sectors' && sectorCount > 2 && (
-            <circle cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} r={7}
-              fill={isLightTheme ? '#ffffff' : '#263448'}
-              fillOpacity={0.4} pointerEvents="none" />
+            <circle cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} r={9}
+              fill={isLightTheme ? '#ffffff' : '#344960'}
+              fillOpacity={isLightTheme ? 0.95 : 0.91}
+              stroke={isLightTheme ? '#7293a8' : '#a5b7ca'}
+              strokeWidth={1.45} strokeOpacity={isLightTheme ? 0.8 : 0.7}
+              pointerEvents="none" />
           )}
 
           <AnimatePresence>

@@ -157,6 +157,32 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
     }
   }
   const highPriority = (bubble: VisualBubble) => coreIdsBySector.get(sectorOf(bubble))?.has(bubble.id) ?? false;
+
+  // Each sector gets its own radial priority layers. Coefficient determines
+  // the order, while radius accounts for the space a larger ring needs at the
+  // central junction. Do not alter saved pins or task sizes.
+  const radialLayers = new Map<string, { target: number; rank: number }>();
+  if (bounds.compact && bounds.hillSectors?.length) {
+    const sectorBubbles = new Map<number, VisualBubble[]>();
+    for (const bubble of bubbles) {
+      const index = sectorOf(bubble);
+      const items = sectorBubbles.get(index) ?? [];
+      items.push(bubble);
+      sectorBubbles.set(index, items);
+    }
+    for (const items of sectorBubbles.values()) {
+      const ranked = [...items].sort((a, b) =>
+        coefficientOf(b) - coefficientOf(a) || b.radius - a.radius || a.id.localeCompare(b.id));
+      ranked.forEach((bubble, index) => {
+        const rank = ranked.length <= 1 ? 0 : index / (ranked.length - 1);
+        const ringClearance = (bubble.radius / Math.max(1, Math.min(halfX, halfY))) * 0.27;
+        radialLayers.set(bubble.id, {
+          target: Math.min(0.84, 0.27 + Math.pow(rank, 0.78) * 0.53 + ringClearance),
+          rank
+        });
+      });
+    }
+  }
   const unit = (point: Point) => {
     const length = Math.hypot(point.x, point.y) || 1;
     return { x: point.x / length, y: point.y / length };
@@ -275,17 +301,23 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
       if (isPinned) return preferredDistance * 20 + normalCenterDistance(p) * 4;
       const radial = normalCenterDistance(p);
       const hill = bounds.hillSectors?.[sectorOf(bubble)];
-      const hillTop = hill ? {
-        x: centre.x + Math.cos(hill.midAngle) * halfX * 0.52,
-        y: centre.y + Math.sin(hill.midAngle) * halfY * 0.52
-      } : null;
-      const hillDistance = hillTop
-        ? Math.hypot((p.x - hillTop.x) / halfX, (p.y - hillTop.y) / halfY)
-        : 0;
+      const layer = radialLayers.get(bubble.id);
       const centreWeight = bounds.compact ? (highPriority(bubble) ? 205 : 245) : 0;
-      let result = hillTop && bounds.compact
-        ? hillDistance * (highPriority(bubble) ? 255 : 65) + preferredDistance * 0.24
-        : radial * centreWeight + preferredDistance * (bounds.compact ? 0.085 : 1);
+      let result: number;
+      if (hill && layer && bounds.compact) {
+        // High coefficient -> inner layer; low coefficient -> outer layer.
+        // Penalty is asymmetric: small tasks are discouraged from taking
+        // scarce inner room, while prominent tasks resist being pushed out.
+        const radialError = radial - layer.target;
+        const radialWeight = 370 + (radialError < 0 ? layer.rank * 235 : (1 - layer.rank) * 155);
+        const angle = Math.atan2((p.y - centre.y) / halfY, (p.x - centre.x) / halfX);
+        const angularDelta = Math.atan2(Math.sin(angle - hill.midAngle), Math.cos(angle - hill.midAngle));
+        result = Math.abs(radialError) * radialWeight
+          + Math.abs(angularDelta) * (highPriority(bubble) ? 38 : 12)
+          + preferredDistance * 0.10;
+      } else {
+        result = radial * centreWeight + preferredDistance * (bounds.compact ? 0.085 : 1);
+      }
       if (highPriorityPeers.length) {
         // Make separation from the core expensive, while retaining hard
         // collision/sector tests in consider() below.
@@ -369,10 +401,10 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
       // penalty cannot be improved by examining the outer rings.
       if (best && bounds.compact && !hasLink) {
         if (bounds.hillSectors?.length) {
-          // After crossing the hilltop ring, no later ring can beat this cost.
-          // This preserves the packed layout's short-circuit performance.
-          const remainingLowerBound = Math.max(0, distance / halfY - 0.52) *
-            (highPriority(bubble) ? 255 : 65);
+          // Beyond this bubble's ideal priority layer, every later ring
+          // incurs at least this radial penalty. Preserve the fast exit.
+          const layer = radialLayers.get(bubble.id);
+          const remainingLowerBound = Math.max(0, distance / halfY - (layer?.target ?? 0.52)) * 370;
           if (bestScore < remainingLowerBound - 4) break;
         } else if (bestScore < distance / halfY *
           (highPriority(bubble) ? 205 : 245) - 4) break;

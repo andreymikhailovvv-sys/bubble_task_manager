@@ -118,7 +118,9 @@ test('the same hill SVG and drag/drop geometry render in regular and fullscreen 
   assert.match(src, /fullscreen = false/);
   assert.match(src, /petal-sector-gradient-/);
   assert.match(src, /fill=\{\`url\(#petal-sector-gradient-\$\{idx\}\)\`\}/);
-  assert.match(src, /r=\{7\}/);
+  assert.match(src, /r=\{9\}/);
+  assert.match(src, /fillOpacity=\{isLightTheme \? 0\.95 : 0\.91\}/);
+  assert.match(src, /stroke=\{isLightTheme \? '#7293a8' : '#a5b7ca'\}/);
   assert.match(src, /rounded-full border px-3 py-1\.5 text-sm font-semibold/);
   assert.doesNotMatch(src, /<line key=\{idx\} className="sector-divider"/);
   assert.doesNotMatch(src, /key=\{\`hill-wall-\$\{idx\}\`\} className="sector-divider"/);
@@ -210,4 +212,67 @@ test('sector wash has readable light-theme boundaries and soft feathering withou
   assert.match(source, /stroke=\{isLightTheme \? '#7898ac' : '#cbd5e1'\}/);
   assert.match(source, /strokeWidth=\{isLightTheme \? 1\.9 : 1\.5\}/);
   assert.match(source, /strokeOpacity=\{isLightTheme \? 0\.48 : 0\.28\}/);
+});
+
+test('higher-coefficient bubbles occupy inner radial layers ahead of smaller tasks', () => {
+  const geometry = buildSectorGeometry(3, [3, 3, 3]);
+  const ellipse = { cx: 450, cy: 450, rx: 425, ry: 425 };
+  const priorities = [
+    { rank: 'high', radius: 56, coefficient: 0.98 },
+    { rank: 'medium', radius: 36, coefficient: 0.60 },
+    { rank: 'low', radius: 20, coefficient: 0.14 }
+  ];
+  const visuals = geometry.flatMap((sector, sectorIndex) => priorities.map((priority) => ({
+    id: `${sectorIndex}-${priority.rank}`,
+    x: ellipse.cx + Math.cos(sector.midAngle) * ellipse.rx * 0.62,
+    y: ellipse.cy + Math.sin(sector.midAngle) * ellipse.ry * 0.62,
+    radius: priority.radius,
+    coefficient: priority.coefficient,
+    sectorIndex
+  })));
+  const placed = linkedBubblePositions(visuals, {
+    minX: 20, maxX: 880, minY: 20, maxY: 880,
+    ellipse, hillSectors: geometry, compact: true
+  });
+  const radial = (id: string) => {
+    const point = placed.get(id)!;
+    return Math.hypot((point.x - ellipse.cx) / ellipse.rx,
+      (point.y - ellipse.cy) / ellipse.ry);
+  };
+  assert.equal(placed.size, visuals.length);
+  for (let index = 0; index < geometry.length; index++) {
+    const high = radial(`${index}-high`);
+    const medium = radial(`${index}-medium`);
+    const low = radial(`${index}-low`);
+    assert.ok(high + 0.04 < low, `higher coefficient must sit inside the low-priority bubble in sector ${index}: ${high} vs ${low}`);
+    assert.ok(high < medium + 0.05, `large bubble should stay in the inner layer in sector ${index}`);
+    assert.ok(medium < low + 0.05, `medium bubble should generally precede small ones in sector ${index}`);
+  }
+  for (const bubble of visuals) {
+    const point = placed.get(bubble.id)!;
+    const x = (point.x - ellipse.cx) / ellipse.rx;
+    const y = (point.y - ellipse.cy) / ellipse.ry;
+    assert.equal(hillSectorIndexAtAngle(Math.atan2(y, x), Math.hypot(x, y), geometry), bubble.sectorIndex);
+  }
+});
+
+test('sector priority layers stay soft for pinned tasks and do not change global packing', () => {
+  const geometry = buildSectorGeometry(3, [2, 2, 2]);
+  const ellipse = { cx: 450, cy: 450, rx: 425, ry: 425 };
+  const pinned = { id: 'saved', x: 450 + Math.cos(geometry[0].midAngle) * 305,
+    y: 450 + Math.sin(geometry[0].midAngle) * 305, radius: 27,
+    coefficient: 0.99, sectorIndex: 0, pinned: true };
+  const other = { id: 'smaller', x: 450 + Math.cos(geometry[0].midAngle) * 245,
+    y: 450 + Math.sin(geometry[0].midAngle) * 245, radius: 22,
+    coefficient: 0.21, sectorIndex: 0 };
+  const sectorResult = linkedBubblePositions([pinned, other], {
+    minX: 20, maxX: 880, minY: 20, maxY: 880,
+    ellipse, hillSectors: geometry, compact: true
+  });
+  assert.deepEqual(sectorResult.get('saved'), { x: pinned.x, y: pinned.y });
+  const original = linkedBubblePositions([pinned, other], {
+    minX: 20, maxX: 880, minY: 20, maxY: 880,
+    ellipse, compact: false
+  });
+  assert.deepEqual(original.get('saved'), { x: pinned.x, y: pinned.y });
 });
