@@ -1244,7 +1244,7 @@ export function BubbleField({
               strokeWidth={1.6} strokeOpacity={0.5} strokeDasharray="9 9" pointerEvents="none" />
           )}
           {mode === 'sectors' && sectorCount > 1 && sectorGeometry.map((_, idx) => (
-            <path key={`hill-wall-${idx}`} className="sector-divider"
+            <path key={`hill-wall-${idx}`}
               d={hillBoundaryPath(idx)} fill="none"
               stroke={isLightTheme ? '#ffffff' : '#cbd5e1'}
               strokeWidth={isLightTheme ? 3.6 : 2.5}
