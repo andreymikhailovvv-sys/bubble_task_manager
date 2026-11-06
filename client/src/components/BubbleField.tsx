@@ -900,7 +900,6 @@ export function BubbleField({
   const workspaceMin = VIEWBOX_TOP;
   const workspaceMax = VIEWBOX_BOTTOM;
   const workspaceMaxX = VIEWBOX_RIGHT;
-  const sectorStroke = 'var(--sector-line)';
 
 
   const renderBubble = (bubble: (typeof bubbles)[number], groupOrigin?: { x: number; y: number }) => {
@@ -1128,6 +1127,15 @@ export function BubbleField({
                 </>
               )}
             </radialGradient>
+            {mode === 'sectors' && sectorCount > 1 && sectorGeometry.map((_, index) => (
+              <radialGradient key={`petal-fill-${index}`} id={`petal-sector-gradient-${index}`}
+                cx="48%" cy="45%" r="85%">
+                <stop offset="0%" stopColor={bubbleSectors[index]?.color ?? '#94a3b8'}
+                  stopOpacity={isLightTheme ? 0.11 : 0.09} />
+                <stop offset="100%" stopColor={bubbleSectors[index]?.color ?? '#94a3b8'}
+                  stopOpacity={isLightTheme ? 0.19 : 0.16} />
+              </radialGradient>
+            ))}
           </defs>
           <foreignObject
             x={fullscreen ? FULLSCREEN_TASK_INFO_PANEL_X : TASK_INFO_PANEL_X}
@@ -1215,14 +1223,19 @@ export function BubbleField({
               )}
             </div>
           </foreignObject>
-          <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X} ry={ELLIPSE_RADIUS_Y} fill="url(#bg)" opacity={isLightTheme ? 0.94 : 0.86} />
+          <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X} ry={ELLIPSE_RADIUS_Y}
+            fill={mode === 'sectors' && sectorCount > 1
+              ? (isLightTheme ? '#f7fbff' : '#152034')
+              : 'url(#bg)'}
+            opacity={isLightTheme ? 0.94 : 0.86} />
           <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X + 22} ry={ELLIPSE_RADIUS_Y + 16} fill="url(#fieldHalo)" opacity={isLightTheme ? 0.48 : 0.7} />
 
-          {/* A single gently tinted region and one clean parabola per wall. */}
+          {/* Petal-like sectors: pastel watercolor wash with one clean divider.
+              Their width and SVG paths use the exact same geometry as the
+              drag/drop hit areas and the existing bubble packing algorithm. */}
           {mode === 'sectors' && sectorCount > 1 && sectorGeometry.map((_, idx) => (
             <path key={`hill-area-${idx}`} d={hillRegionPath(idx)}
-              fill={bubbleSectors[idx]?.color ?? '#94a3b8'}
-              fillOpacity={isLightTheme ? 0.055 : 0.075} pointerEvents="none" />
+              fill={`url(#petal-sector-gradient-${idx})`} pointerEvents="none" />
           ))}
           {dragView?.changesSector && !dragView.target && sectorCount > 1 && (
             <path d={hillRegionPath(dragView.destinationSectorIndex)}
@@ -1232,10 +1245,18 @@ export function BubbleField({
           )}
           {mode === 'sectors' && sectorCount > 1 && sectorGeometry.map((_, idx) => (
             <path key={`hill-wall-${idx}`} className="sector-divider"
-              d={hillBoundaryPath(idx, 0.12)} fill="none" stroke={sectorStroke}
-              strokeWidth={1.7} strokeOpacity={isLightTheme ? 0.52 : 0.5}
+              d={hillBoundaryPath(idx)} fill="none"
+              stroke={isLightTheme ? '#ffffff' : '#cbd5e1'}
+              strokeWidth={isLightTheme ? 3.6 : 2.5}
+              strokeOpacity={isLightTheme ? 0.94 : 0.48}
               strokeLinecap="round" pointerEvents="none" />
           ))}
+          {mode === 'sectors' && sectorCount > 2 && (
+            <circle cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} r={11}
+              fill={isLightTheme ? '#ffffff' : '#263448'}
+              stroke={isLightTheme ? '#e2e8f0' : '#64748b'}
+              strokeWidth={1.25} pointerEvents="none" />
+          )}
 
           <AnimatePresence>
             {orderedGroups.map(({ key, anchor, members, edges }) => {
@@ -1388,10 +1409,14 @@ export function BubbleField({
             return (
               <g key={item.sphere?.id ?? 'unassigned-tasks'} transform={`translate(${item.x} ${item.y})`}>
                 <foreignObject x={-88} y={-18} width={176} height={40}>
-                  <div className="bubble-sector-label flex w-full items-center justify-center gap-1 rounded border px-2 py-1 text-xs">
+                  <div className="bubble-sector-label flex w-full items-center justify-center gap-1 rounded-full border px-3 py-1.5 text-sm font-semibold"
+                    style={item.sphere ? {
+                      borderColor: `color-mix(in srgb, ${item.sphere.color} 29%, ${isLightTheme ? '#ffffff' : '#475569'})`,
+                      background: `color-mix(in srgb, ${item.sphere.color} ${isLightTheme ? '9%' : '15%'}, ${isLightTheme ? '#ffffff' : '#0f172a'})`
+                    } : undefined}>
                     {item.sphere ? (
-                      <button className="inline-flex min-w-0 items-center gap-1" onClick={() => onRenameSphere?.(item.sphere!)}>
-                        {Icon ? <Icon size={14} color={item.sphere.color} /> : null}
+                      <button className="inline-flex min-w-0 items-center gap-2" onClick={() => onRenameSphere?.(item.sphere!)}>
+                        {Icon ? <Icon size={15} color={item.sphere.color} /> : null}
                         <span className="truncate" style={{ color: item.sphere.color }}>{item.sphere.name}</span>
                       </button>
                     ) : <span className="truncate text-muted">Без сектора</span>}
