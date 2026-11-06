@@ -4,9 +4,9 @@ import { prisma } from '../db/prisma.js';
 type PrismaTransaction = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>;
 
 const DEFAULT_SPHERES = [
-  { key: 'personal', name: 'Личное', color: '#86efac', icon: '🏠' },
-  { key: 'work', name: 'Работа', color: '#60a5fa', icon: '💼' },
-  { key: 'projects', name: 'Проекты', color: '#fbbf24', icon: '🚀' }
+  { key: 'personal', name: 'Личное', color: '#22c55e', icon: 'home' },
+  { key: 'work', name: 'Работа', color: '#ec4899', icon: 'briefcase' },
+  { key: 'projects', name: 'Проекты', color: '#f97316', icon: 'laptop' }
 ] as const;
 
 const getCurrentWeekDate = (firstLaunchAt: Date, dayOffset: number, hourUtc: number) => {
@@ -99,12 +99,12 @@ export const onboardingService = {
       subtasks: [
         {
           title: 'открыть режим таймлайна',
-          description: 'нажать на иконку слева сверху и открыть режим "таймлайн"',
+          description: 'Нажать на иконку слева сверху и открыть режим "таймлайн"',
           dueDate: getCurrentWeekDate(firstLaunchAt, 1, 10)
         },
         {
           title: 'Добавить задачу в календарь',
-          description: 'нажать правую кнопку мыши на нужное время и добавить задачу',
+          description: 'Нажать правую кнопку мыши на нужное время и добавить задачу',
           dueDate: getCurrentWeekDate(firstLaunchAt, 1, 11)
         }
       ]
@@ -112,23 +112,40 @@ export const onboardingService = {
 
     await createTask({
       title: 'Расписать свои проекты',
-      description: 'добавить свои проекты и разбить их на подзадачи',
+      description: 'Добавить свои проекты и разбить их на подзадачи',
       sphereKey: 'projects',
+      importance: 5,
       dueDate: getCurrentWeekDate(firstLaunchAt, 2, 12)
     });
 
     await createTask({
       title: 'Набрать "хороший" рейтинг',
-      description: 'поднять рейтинг (индикатор сверху по центру до состояния "хороший" за счет выполнения задач, подзадач, привычек и обращения к ИИ',
+      description: 'Поднять рейтинг (индикатор сверху по центру до состояния "хороший" за счет выполнения задач, подзадач, привычек и обращения к ИИ',
       sphereKey: 'projects',
       dueDate: getCurrentWeekDate(firstLaunchAt, 3, 14)
     });
 
     await createTask({
       title: 'Расписать рабочие задачи',
-      description: 'добавить рабочие задачи и поставить дедлайны',
+      description: 'Добавить рабочие задачи и поставить дедлайны',
       sphereKey: 'work',
       dueDate: getCurrentWeekDate(firstLaunchAt, 4, 10)
+    });
+
+    await createTask({
+      title: 'Добавь системный промпт к сектору «Работа»',
+      description: 'Нажмите на сектор «работа» и укажите общий промпт в поле снизу. Можно написать свой рабочий график, должность и другую информацию, которая позволит ИИ лучше давать подсказки.',
+      sphereKey: 'work',
+      importance: 2,
+      dueDate: null
+    });
+
+    await createTask({
+      title: 'Создать заметку',
+      description: 'Нажмите в правом меню кнопку добавления заметки и создайте ее или перенесите из другого сервиса. Вы можете создавать, редактировать и искать заметки с помощью ИИ в общем чате.',
+      sphereKey: 'personal',
+      importance: 3,
+      dueDate: null
     });
   }
 };
