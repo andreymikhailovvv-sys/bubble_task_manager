@@ -139,16 +139,23 @@ fun MiniAppSubtaskEditorSheet(
         onDismissRequest={if(isNew || title.isBlank())onBack() else saveThen(onBack)},
         properties=DialogProperties(usePlatformDefaultWidth=false)
     ) {
-        Surface(
-            modifier=Modifier.fillMaxWidth(.94f).heightIn(max=maxHeight).imePadding(),
-            shape=RoundedCornerShape(24.dp),
-            color=c.bg,
-            contentColor=c.ink,
-            border=BorderStroke(1.dp,c.line),
-            shadowElevation=16.dp
-        ) {
-            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-                .padding(horizontal=16.dp,vertical=18.dp)) {
+        // The keyboard reduces the dialog's available height, not its footer.
+        // Keep Create/Complete/Delete outside the scrollable editor fields.
+        BoxWithConstraints(Modifier.fillMaxSize().imePadding(),
+            contentAlignment=Alignment.Center) {
+            val visibleMaxHeight=minOf(maxHeight,this.maxHeight-16.dp).coerceAtLeast(200.dp)
+            Surface(
+                modifier=Modifier.fillMaxWidth(.94f).heightIn(max=visibleMaxHeight),
+                shape=RoundedCornerShape(24.dp),
+                color=c.bg,
+                contentColor=c.ink,
+                border=BorderStroke(1.dp,c.line),
+                shadowElevation=16.dp
+            ) {
+                Column(Modifier.fillMaxWidth()) {
+                    Column(Modifier.weight(1f,fill=false)
+                        .verticalScroll(rememberScrollState())
+                        .padding(start=16.dp,end=16.dp,top=18.dp,bottom=4.dp)) {
                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.Top,
                     horizontalArrangement=Arrangement.spacedBy(7.dp)){
                     BasicTextField(value=title,onValueChange={title=it;onClearError()},
@@ -287,29 +294,36 @@ fun MiniAppSubtaskEditorSheet(
                         }
                     }
                 }
-                Spacer(Modifier.height(14.dp))
-                if(isNew){
-                    ChildAction("Создать подзадачу",Icons.Default.Add,Color(0xFF059669),
-                        Modifier.fillMaxWidth(),enabled=!busy && title.isNotBlank() && !saving){
-                        saveThen(onBack)
                     }
-                }else if(task!=null){
-                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(9.dp)){
-                        ChildAction(if(task.status==TaskStatus.DONE)"Вернуть" else "Выполнить",
-                            Icons.Default.CheckCircle,Color(0xFF059669),
-                            Modifier.weight(1.9f),enabled=!busy){
-                            if(task.status==TaskStatus.DONE)
-                                saveThen{onChangeStatus(task.id,TaskStatus.TODO,onBack)}
-                            else pendingAction="complete"
+                    // Sticky actions remain reachable when the IME shrinks the dialog.
+                    Column(Modifier.fillMaxWidth().background(c.bg)
+                        .padding(start=16.dp,end=16.dp,top=9.dp,bottom=14.dp)) {
+                        if(isNew){
+                            ChildAction("Создать подзадачу",Icons.Default.Add,Color(0xFF059669),
+                                Modifier.fillMaxWidth(),
+                                enabled=!busy && title.isNotBlank() && !saving){
+                                saveThen(onBack)
+                            }
+                        }else if(task!=null){
+                            Row(Modifier.fillMaxWidth(),
+                                horizontalArrangement=Arrangement.spacedBy(9.dp)){
+                                ChildAction(if(task.status==TaskStatus.DONE)"Вернуть" else "Выполнить",
+                                    Icons.Default.CheckCircle,Color(0xFF059669),
+                                    Modifier.weight(1.9f),enabled=!busy){
+                                    if(task.status==TaskStatus.DONE)
+                                        saveThen{onChangeStatus(task.id,TaskStatus.TODO,onBack)}
+                                    else pendingAction="complete"
+                                }
+                                ChildAction("Удалить",Icons.Default.DeleteOutline,c.danger,
+                                    Modifier.weight(.9f),enabled=!busy,outlined=true){
+                                    pendingAction="delete"
+                                }
+                            }
                         }
-                        ChildAction("Удалить",Icons.Default.DeleteOutline,c.danger,
-                            Modifier.weight(.9f),enabled=!busy,outlined=true){
-                            pendingAction="delete"
-                        }
+                        error?.let{Text(it,color=c.danger,
+                            modifier=Modifier.padding(top=8.dp),fontSize=12.sp)}
                     }
                 }
-                error?.let{Text(it,color=c.danger,
-                    modifier=Modifier.padding(top=8.dp),fontSize=12.sp)}
             }
         }
     }
