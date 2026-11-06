@@ -74,7 +74,7 @@ private class RichNativeEditText(context:Context):EditText(context) {
                 val previous=lastPointerY
                 lastPointerY=event.y
                 val consumed=super.onTouchEvent(event)
-                if(draggingContent && !hasSelection() && canScrollVertically(
+                if(draggingContent && selectionStart==selectionEnd && canScrollVertically(
                         if(previous>event.y)1 else -1)) {
                     scrollBy(0,((previous-event.y)*1.2f).toInt())
                 }
