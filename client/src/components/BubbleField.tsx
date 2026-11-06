@@ -803,8 +803,8 @@ export function BubbleField({
   };
   // Both the highlighted drop region and its two shared valley lines use
   // exactly the same curved geometry as pointer hit-testing.
-  const hillBoundaryPath = (boundaryIndex: number) => Array.from({ length: 25 }, (_, step) => {
-    const point = hillBoundaryPoint(boundaryIndex, step / 24);
+  const hillBoundaryPath = (boundaryIndex: number, startRatio = 0) => Array.from({ length: 25 }, (_, step) => {
+    const point = hillBoundaryPoint(boundaryIndex, startRatio + (1 - startRatio) * step / 24);
     return `${step === 0 ? 'M' : 'L'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`;
   }).join(' ');
   const hillRegionPath = (sectorIndex: number) => {
@@ -1226,10 +1226,10 @@ export function BubbleField({
           )}
           {mode === 'sectors' && sectorCount > 1 && sectorGeometry.map((_, idx) => (
             <g key={`hill-ridge-${idx}`} pointerEvents="none">
-              <path d={hillBoundaryPath(idx)} fill="none" stroke={sectorStroke}
+              <path d={hillBoundaryPath(idx, 0.12)} fill="none" stroke={sectorStroke}
                 strokeWidth={11} strokeOpacity={isLightTheme ? 0.07 : 0.09}
                 strokeLinecap="round" strokeLinejoin="round" />
-              <path className="sector-divider" d={hillBoundaryPath(idx)} fill="none"
+              <path className="sector-divider" d={hillBoundaryPath(idx, 0.12)} fill="none"
                 stroke={sectorStroke} strokeWidth={2.2}
                 strokeOpacity={isLightTheme ? 0.56 : 0.64}
                 strokeLinecap="round" strokeLinejoin="round" />
