@@ -32,7 +32,7 @@ test('search focus is released before opening the task sheet', async () => {
   const home=await read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/HomeScreen.kt');
   assert.match(home, /focusManager\.clearFocus\(force=true\)/);
   assert.match(home, /softwareKeyboard\?\.hide\(\)/);
-  assert.match(home, /snapshotFlow\{WindowInsets\.ime\.getBottom\(density\)\}\.first\{it==0\}/);
+  assert.match(home, /snapshotFlow\{imeInsets\.getBottom\(density\)\}\.first\{it==0\}/);
   assert.match(home, /pendingFocusTaskId=taskId/);
 });
 
