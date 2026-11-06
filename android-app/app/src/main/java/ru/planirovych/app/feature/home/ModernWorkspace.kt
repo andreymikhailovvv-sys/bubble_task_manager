@@ -213,6 +213,7 @@ fun ModernWorkspace(
                 filtered = period != PeriodFilter.ALL ||
                     sort != SortTasks.URGENCY || sectorFilterEnabled,
                 onFilter = { filtersOpen=true },
+                onPostpone = { vm.postponeOverdue() }, canPostpone = overdue && !state.taskBusy,
                 onOpenOverdue = { overdueOpen=true })
         }
         state.taskError?.let { error ->
@@ -572,7 +573,7 @@ private fun HabitsStrip(habits:List<Habit>, colors:WorkspaceColors, dark:Boolean
 @Composable
 private fun WorkspaceToolbar(
     colors:WorkspaceColors,dark:Boolean,mode:WorkspaceMode,filtered:Boolean,
-    onFilter:()->Unit,onOpenOverdue:()->Unit
+    onFilter:()->Unit,onPostpone:()->Unit,canPostpone:Boolean,onOpenOverdue:()->Unit
 ) {
     // No outer tinted container. Mini App renders these as independent chips.
     val filterInk=if(filtered)colors.purple else if(dark)Color(0xFFE2E8F0) else Color(0xFF24354F)
