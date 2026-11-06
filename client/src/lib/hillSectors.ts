@@ -33,10 +33,10 @@ export function hillBoundaryAngle(
   if (count <= 1) return baseAngle;
 
   // Limit distortion in a narrow region when task counts are unbalanced.
-  const amplitude = Math.min(0.235, Math.max(0, Math.min(preceding.span, following.span) * 0.15));
+  const amplitude = Math.min(0.39, Math.max(0, Math.min(preceding.span, following.span) * 0.19));
   const t = clamp01(radiusRatio);
   const shoulder = Math.sin(Math.PI * t);
-  const stagger = Math.cos(index * 2.399963229728653 + 0.55);
+  const stagger = count === 3 ? (index === 1 ? -0.94 : 0.94) : Math.cos(index * 2.399963229728653 + 0.55);
   const sweep = 0.82 + 0.18 * Math.cos(Math.PI * t);
   return baseAngle + amplitude * stagger * shoulder * sweep;
 }
