@@ -933,6 +933,7 @@ export default function App() {
   const isAiNotificationsDefaultEnabled = false;
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [isUpdatesOpen, setIsUpdatesOpen] = useState(false);
+  const [trainingOpenSignal, setTrainingOpenSignal] = useState(0);
   const [hasUnreadNews, setHasUnreadNews] = useState(false);
   const [isOnboardingOfferOpen, setIsOnboardingOfferOpen] = useState(false);
   const [activeTourStep, setActiveTourStep] = useState<TaskTourStep | AiTourStep | FeatureTourStep | WorkspaceTourStep>(null);
@@ -5373,20 +5374,8 @@ export default function App() {
         </div>,
         document.body
       ) : null}
-      <UpdatesMenu open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} onStartWorkspaceTour={startWorkspaceTour} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} completedLessonIds={currentUser.completedLessonIds ?? []} hasUnreadNews={hasUnreadNews} onNewsViewed={markLatestNewsRead} />
+      <UpdatesMenu open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} trainingOpenSignal={trainingOpenSignal} onStartWorkspaceTour={startWorkspaceTour} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} completedLessonIds={currentUser.completedLessonIds ?? []} hasUnreadNews={hasUnreadNews} onNewsViewed={markLatestNewsRead} />
       {trainingRewardMessage ? <div className="training-reward-toast focus-bonus-message focus-bonus-subtask" role="status">{trainingRewardMessage}</div> : null}
-      {isOnboardingOfferOpen ? (
-        <div className="modal-backdrop fixed inset-0 z-[240] flex items-center justify-center p-4 backdrop-blur-md">
-          <section className="surface-popover w-full max-w-lg rounded-3xl border p-6 text-center shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="onboarding-offer-title">
-            <h2 id="onboarding-offer-title" className="text-xl font-bold text-primary">Добро пожаловать в «Планировыч»!</h2>
-            <p className="mt-4 text-sm leading-relaxed text-muted">Пройдите обучение по использованию «Планировыча» и заработайте свой первый рейтинг.</p>
-            <div className="mt-6 flex flex-col-reverse justify-center gap-2 sm:flex-row">
-              <button type="button" className="surface-muted rounded-xl px-5 py-2.5 text-sm font-medium text-muted transition hover:text-primary" onClick={() => { localStorage.setItem(getOnboardingOfferStorageKey(currentUser.id), '1'); setIsOnboardingOfferOpen(false); }}>Нет, спасибо</button>
-              <button type="button" className="rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-500" onClick={() => { localStorage.setItem(getOnboardingOfferStorageKey(currentUser.id), '1'); setIsOnboardingOfferOpen(false); setIsUpdatesOpen(true); }}>Пройти обучение</button>
-            </div>
-          </section>
-        </div>
-      ) : null}
       {activeTourStep ? <TourOverlay activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-') ? WORKSPACE_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-') ? FEATURE_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} onComplete={completeTaskTour} /> : null}
       {isBubbleFullscreen && displayMode === 'bubbles' ? (
         <header data-tour="bubbles-fullscreen-toolbar"
@@ -6313,6 +6302,15 @@ export default function App() {
               className="h-full"
               fullscreen={isBubbleFullscreen}
               themeMode={effectiveThemeMode}
+              showTrainingInvitation={isOnboardingOfferOpen}
+              onOpenTraining={() => {
+                setTrainingOpenSignal(signal => signal + 1);
+                setIsUpdatesOpen(true);
+              }}
+              onDismissTraining={() => {
+                localStorage.setItem(getOnboardingOfferStorageKey(currentUser.id), '1');
+                setIsOnboardingOfferOpen(false);
+              }}
             tasks={visibleTasks}
             timelinePreviewTasks={activeTimelineItems}
             spheres={visibleSpheres}

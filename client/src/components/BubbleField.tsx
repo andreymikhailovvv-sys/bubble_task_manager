@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { TaskMonitoringBadge } from './TaskMonitoringBadge';
-import { CalendarDays, ChevronRight, Coins, Gauge, LoaderCircle, MessageCircle, Plus, Repeat, Sparkles } from 'lucide-react';
+import { CalendarDays, ChevronRight, Coins, Gauge, LoaderCircle, MessageCircle, Plus, Repeat, Sparkles, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { buildBubbles, buildSectorGeometry, getBubbleSectorIndex, getBubbleSectorSpheres, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
@@ -38,6 +38,9 @@ type Props = {
   onRescheduleTask?: (task: Task) => void;
   forceTaskContextMenuOpen?: boolean;
   isSearchFiltering?: boolean;
+  showTrainingInvitation?: boolean;
+  onOpenTraining?: () => void;
+  onDismissTraining?: () => void;
   themeMode?: 'dark' | 'light';
   /** Use the full viewport for the oval; hide the normal side information panel. */
   fullscreen?: boolean;
@@ -319,6 +322,9 @@ export function BubbleField({
   onRescheduleTask,
   forceTaskContextMenuOpen = false,
   isSearchFiltering = false,
+  showTrainingInvitation = false,
+  onOpenTraining,
+  onDismissTraining,
   themeMode = 'dark',
   fullscreen = false,
   className
@@ -1267,12 +1273,47 @@ export function BubbleField({
                 strokeDasharray="4 5" strokeLinecap="round" opacity={1} />
             </g>;
           })()}
+          {/* Persistent first-visit training invitation, anchored to the same
+              oval-relative coordinates and surface style as bubble notices. */}
+          {showTrainingInvitation && (
+            <foreignObject
+              x={BUBBLE_FIELD_CENTER_X - 335}
+              y={VIEWBOX_TOP + 8}
+              width={670}
+              height={76}
+            >
+              <div className="flex h-full w-full items-start justify-center px-3 pt-1">
+                <div className={`inline-flex max-w-full items-center gap-2 rounded-2xl border px-3 py-2.5 text-base font-medium leading-snug shadow-lg backdrop-blur-md ${
+                  isLightTheme
+                    ? 'border-sky-300/80 bg-white/95 text-slate-800 shadow-slate-300/30'
+                    : 'border-cyan-400/35 bg-slate-900/95 text-slate-100 shadow-slate-950/45'
+                }`}>
+                  <button
+                    type="button"
+                    className="rounded-lg px-2 py-0.5 font-semibold transition hover:text-cyan-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400"
+                    onClick={(event) => { event.stopPropagation(); onOpenTraining?.(); }}
+                  >
+                    Пройти обучение
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition hover:bg-slate-500/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-400"
+                    aria-label="Закрыть приглашение пройти обучение"
+                    title="Закрыть приглашение"
+                    onClick={(event) => { event.stopPropagation(); onDismissTraining?.(); }}
+                  >
+                    <X size={17} aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+            </foreignObject>
+          )}
           {/* Unified notifications anchored to the oval rather than the full
               canvas. Preview, sector changes, errors and successes use one place. */}
           {(dragView || bubbleActionPending || bubbleDragNotice) && (
             <foreignObject
               x={BUBBLE_FIELD_CENTER_X - 335}
-              y={VIEWBOX_TOP + 8}
+              y={VIEWBOX_TOP + (showTrainingInvitation ? 82 : 8)}
               width={670}
               height={76}
               pointerEvents="none"
