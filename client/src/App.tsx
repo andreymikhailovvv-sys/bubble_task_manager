@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, CalendarPlus, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Clock3, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Menu, MessageCircle, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, BellRing, Trash2, UserRound, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
+import { WorkspaceActionToast } from './components/WorkspaceActionToast';
 import { TaskMonitoringBadge } from './components/TaskMonitoringBadge';
 import { projectMonitoringTimeline, timelineProjectionKey } from './lib/monitoringTimeline';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -944,6 +945,12 @@ export default function App() {
   const [timelineHoverCard, setTimelineHoverCard] = useState<{ taskId: string; top: number; left: number } | null>(null);
   const [isTimelineOverdueModalOpen, setIsTimelineOverdueModalOpen] = useState(false);
   const [timelineOverdueBulkPostponeLoading, setTimelineOverdueBulkPostponeLoading] = useState<null | 'normal' | 'ai'>(null);
+  const [postponeNotice, setPostponeNotice] = useState<{ count: number; serial: number } | null>(null);
+  useEffect(() => {
+    if (!postponeNotice) return;
+    const timer = window.setTimeout(() => setPostponeNotice(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [postponeNotice]);
   useEffect(() => {
     if (!isTimelineOverdueModalOpen) return;
     const closeOutside = (event: MouseEvent) => {
@@ -4999,14 +5006,17 @@ export default function App() {
     setTimelineOverdueBulkPostponeLoading('normal');
     try {
       const today = new Date();
+      let postponedCount = 0;
       await Promise.all(timelineOverdueTasks.map(async (task) => {
         if (!task.dueDate) return;
         const next = new Date(task.dueDate);
         if (Number.isNaN(next.getTime())) return;
         next.setFullYear(today.getFullYear(), today.getMonth(), today.getDate());
         await api.updateTask(task.id, { dueDate: next.toISOString() });
+        postponedCount += 1;
       }));
       await load();
+      if (postponedCount > 0) setPostponeNotice({ count: postponedCount, serial: Date.now() });
     } finally {
       setTimelineOverdueBulkPostponeLoading(null);
     }
@@ -8705,6 +8715,8 @@ export default function App() {
           </button>
         </div>
       ), document.body) : null}
+
+      <WorkspaceActionToast count={postponeNotice?.count ?? null} light={effectiveThemeMode === 'light'} />
 
       {systemNotificationToast ? createPortal((
         <button key={systemNotificationToast.id} type="button" className="system-notification-toast fixed bottom-8 left-6 z-[2147483647] w-[min(22rem,calc(100vw-3rem))] rounded-2xl border px-4 py-3 text-left text-sm shadow-2xl backdrop-blur" onClick={() => { setSystemNotificationToast(null); openSystemNotification(systemNotificationToast); }}>

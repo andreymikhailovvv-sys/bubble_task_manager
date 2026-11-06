@@ -33,7 +33,7 @@ test('compact toolbar retains postponed actions and accessible filters; notes mo
   assert.doesNotMatch(toolbar, /miniapp-workspace-tool-notes|onNotesOpen/);
   assert.match(mini, /miniapp-bottom-navigation/);
   assert.match(mini, /<span>Заметки<\/span>/);
-  assert.match(toolbar, /disabled aria-disabled="true"/);
+  assert.match(toolbar, /onClick=\{onOpenOverdue\}/);
   assert.match(toolbar, /aria-label="Фильтры задач"/);
   assert.match(toolbar, /aria-expanded=\{open\}/);
   assert.match(toolbar, /onTimeFilterChange\('all'\)/);
@@ -71,10 +71,10 @@ test('compact toolbar retains themed controls and bottom navigation in both them
     read('../../client/src/styles.css')
   ]);
   assert.match(toolbar, /miniapp-workspace-tool-filter/);
-  assert.match(toolbar, /miniapp-workspace-tool-optimize/);
-  assert.match(toolbar, /disabled aria-disabled="true"/);
+  assert.match(toolbar, /miniapp-workspace-tool-overdue/);
+  assert.match(toolbar, /onClick=\{onOpenOverdue\}/);
   assert.match(css, /\.miniapp-workspace-tool \{[^}]*background: rgba\(100, 116, 139, \.16\);[^}]*color: #cbd5e1;/);
-  assert.match(css, /\.miniapp-workspace-tool-optimize \{[^}]*background: rgba\(244, 63, 94, \.15\);[^}]*color: #fda4af;/);
+  assert.match(css, /\.miniapp-workspace-tool-overdue \{[^}]*background: rgba\(244, 63, 94, \.15\);[^}]*color: #fda4af;/);
   assert.match(css, /\.miniapp-shell\.miniapp-light \.miniapp-bottom-navigation/);
   assert.match(css, /\.miniapp-shell \.miniapp-workspace-tools-compact/);
 });
@@ -160,7 +160,7 @@ test('timeline has independent layout blocks while keeping original controls and
   assert.match(timeline, /moveTimelinePeriod\(-1\)/);
   assert.match(timeline, /moveTimelinePeriod\(1\)/);
   assert.match(actions, /<Clock3 size=\{16\}/);
-  assert.match(actions, /<Sparkles size=\{16\}/);
+  assert.match(actions, /<Clock3 size=\{16\} aria-hidden="true" \/><span>Просроченные задачи<\/span>/);
   assert.match(actions, /<ListFilter size=\{16\}/);
   assert.match(styles, /\.miniapp-shell \.miniapp-timeline-section\.miniapp-timeline-independent-blocks/);
   assert.match(styles, /\.miniapp-timeline-independent-blocks > \.miniapp-timeline-actions-panel/);

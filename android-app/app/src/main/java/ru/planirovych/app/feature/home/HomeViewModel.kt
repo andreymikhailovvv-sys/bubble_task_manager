@@ -50,7 +50,10 @@ data class GeneralAiChatState(
         ?:project?.chats?.firstOrNull()
 }
 
+data class OverduePostponeNotice(val serial: Long, val count: Int)
+
 data class HomeState(val loading: Boolean = true, val user: CurrentUser? = null, val spheres: List<Sphere> = emptyList(), val tasks: List<Task> = emptyList(), val habits: List<Habit> = emptyList(), val query: String = "", val error: String? = null, val authError: String? = null, val authBusy: Boolean = false, val taskBusy: Boolean = false, val taskError: String? = null,
+    val postponeNotice: OverduePostponeNotice? = null,
     val recurrenceLoading:Boolean=false, val recurrenceError:String?=null, val habitBusy: Boolean = false,
     val habitHistoryId: String? = null,
     val habitHistory: List<HabitStat>? = null,
@@ -653,14 +656,23 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
         viewModelScope.launch {
             mutable.update { it.copy(taskBusy = true, taskError = null) }
             try {
-                repository.postponeOverdue(mutable.value.tasks)
+                val count = repository.postponeOverdue(mutable.value.tasks)
                 val tasks = repository.loadTasks()
-                mutable.update { it.copy(tasks = tasks, taskBusy = false) }
+                mutable.update { it.copy(
+                    tasks = tasks, taskBusy = false,
+                    postponeNotice = if (count > 0) OverduePostponeNotice(System.nanoTime(), count) else null
+                ) }
             } catch (error: Throwable) {
                 mutable.update { it.copy(taskBusy = false, taskError = error.userMessage()) }
             }
         }
     }
+    fun dismissPostponeNotice(serial: Long) {
+        mutable.update { current ->
+            if (current.postponeNotice?.serial == serial) current.copy(postponeNotice = null) else current
+        }
+    }
+
     fun completeHabit(id: String) = viewModelScope.launch {
         if (mutable.value.habitBusy) return@launch
         mutable.update { it.copy(habitBusy = true, taskError = null) }

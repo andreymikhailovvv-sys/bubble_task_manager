@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.window.Popup
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.graphics.Color
@@ -116,6 +117,7 @@ fun ModernWorkspace(
     var sectorFilterEnabled by rememberSaveable { mutableStateOf(false) }
     var timelineSector by rememberSaveable { mutableStateOf("all") }
     var filtersOpen by remember { mutableStateOf(false) }
+    var overdueOpen by remember { mutableStateOf(false) }
     var scoreOpen by remember { mutableStateOf(false) }
     var creditsOpen by remember { mutableStateOf(false) }
     var selectedHabitId by remember { mutableStateOf<String?>(null) }
@@ -123,8 +125,11 @@ fun ModernWorkspace(
     val sectors = remember(state.spheres) { state.spheres.associateBy { it.id } }
     val searchQuery = state.query.trim().lowercase(Locale.getDefault())
     val now = System.currentTimeMillis()
-    val overdue = state.tasks.any { it.status != TaskStatus.DONE && it.taskType == TaskType.TASK &&
-        it.dueDate != null && dueMillis(it.dueDate) < now }
+    val overdueTasks = state.tasks.filter {
+        it.status != TaskStatus.DONE && it.taskType != TaskType.EVENT &&
+            it.taskType != TaskType.REMINDER && it.dueDate != null && dueMillis(it.dueDate) < now
+    }.sortedBy { dueMillis(it.dueDate) }
+    val overdue = overdueTasks.isNotEmpty()
     val todayForHabits = LocalDate.now()
     val habits = remember(state.habits, todayForHabits) {
         state.habits.filter { habitScheduledToday(it, todayForHabits) }.sortedWith(
@@ -208,7 +213,8 @@ fun ModernWorkspace(
                 filtered = period != PeriodFilter.ALL ||
                     sort != SortTasks.URGENCY || sectorFilterEnabled,
                 onFilter = { filtersOpen=true },
-                onPostpone = { vm.postponeOverdue() }, canPostpone = overdue && !state.taskBusy)
+                onPostpone = { vm.postponeOverdue() }, canPostpone = overdue && !state.taskBusy,
+                onOpenOverdue = { overdueOpen=true })
         }
         state.taskError?.let { error ->
             item { Text(error, color=MaterialTheme.colorScheme.error,
@@ -282,10 +288,89 @@ fun ModernWorkspace(
                 onReset={period=PeriodFilter.ALL;sort=SortTasks.URGENCY;sectorFilterEnabled=false;timelineSector="all"})
         }
     }
+    if(overdueOpen) {
+        ModalBottomSheet(onDismissRequest={overdueOpen=false},containerColor=colors.panel,
+            contentColor=colors.text) {
+            Column(Modifier.fillMaxWidth().padding(start=16.dp,end=16.dp,bottom=24.dp)) {
+                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
+                    horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Просроченные задачи",fontSize=18.sp,fontWeight=FontWeight.SemiBold,color=colors.text)
+                        Text("Всего: ${overdueTasks.size}",fontSize=12.sp,color=colors.secondaryText)
+                    }
+                    TextButton(onClick={vm.postponeOverdue()},
+                        enabled=overdueTasks.isNotEmpty() && !state.taskBusy) {
+                        if(state.taskBusy) CircularProgressIndicator(Modifier.size(15.dp),strokeWidth=2.dp)
+                        else Icon(Icons.Default.Schedule,null,Modifier.size(17.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text("Отложить",fontWeight=FontWeight.SemiBold)
+                    }
+                    IconButton(onClick={overdueOpen=false}) {
+                        Icon(Icons.Default.Close,"Закрыть список",tint=colors.secondaryText)
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                if(overdueTasks.isEmpty()) {
+                    Text("Просроченных задач нет",Modifier.fillMaxWidth().padding(vertical=35.dp),
+                        textAlign=TextAlign.Center,color=colors.secondaryText)
+                } else {
+                    LazyColumn(Modifier.fillMaxWidth().heightIn(max=530.dp),
+                        verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                        items(overdueTasks,key={it.id}) { task ->
+                            Surface(modifier=Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                                    .clickable { overdueOpen=false; onOpenTask(task.id) },
+                                shape=RoundedCornerShape(16.dp),color=colors.card,
+                                border=BorderStroke(1.dp,colors.panelBorder)) {
+                                Row(Modifier.fillMaxWidth().padding(12.dp),
+                                    verticalAlignment=Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(task.title,fontSize=14.sp,fontWeight=FontWeight.SemiBold,
+                                            color=colors.text,maxLines=2,overflow=TextOverflow.Ellipsis)
+                                        if(task.parentTaskId != null) {
+                                            val parentTitle=state.tasks.firstOrNull { it.id==task.parentTaskId }?.title
+                                            Text(parentTitle ?: "Подзадача",fontSize=11.sp,
+                                                color=colors.secondaryText,maxLines=1,
+                                                overflow=TextOverflow.Ellipsis)
+                                        }
+                                        Text(friendlyDue(task.dueDate),fontSize=12.sp,
+                                            color=if(dark)Color(0xFFFB7185) else Color(0xFFE11D48))
+                                    }
+                                    Icon(Icons.Default.ChevronRight,null,
+                                        Modifier.size(18.dp),tint=colors.secondaryText)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     if(scoreOpen)NativeEfficiencyRatingDialog(state.user,dark){scoreOpen=false}
     if(creditsOpen)NativeAiCreditsDialog(vm,state.user,dark){creditsOpen=false}
     if (createHabitOpen) NativeHabitCreateSheet(vm=vm,dark=dark,
         onClose={createHabitOpen=false})
+    state.postponeNotice?.let { notice ->
+        LaunchedEffect(notice.serial) {
+            delay(3200)
+            vm.dismissPostponeNotice(notice.serial)
+        }
+        Popup(alignment=Alignment.TopCenter,offset=IntOffset(0,44)) {
+            Surface(modifier=Modifier.padding(horizontal=16.dp).widthIn(max=450.dp),
+                shape=RoundedCornerShape(16.dp),
+                color=if(dark)Color(0xFF18253A) else Color.White,
+                border=BorderStroke(1.dp,
+                    if(dark)Color(0xFF356A79) else Color(0xFF7DD3FC)),
+                shadowElevation=9.dp) {
+                Row(Modifier.padding(horizontal=16.dp,vertical=12.dp),
+                    horizontalArrangement=Arrangement.spacedBy(8.dp),
+                    verticalAlignment=Alignment.CenterVertically) {
+                    Text("✅",fontSize=18.sp)
+                    Text("Отложено ${notice.count} просроченных задач",
+                        fontSize=14.sp,fontWeight=FontWeight.Medium,color=colors.text)
+                }
+            }
+        }
+    }
     selectedHabitId?.let { id ->
         state.habits.firstOrNull { it.id == id }?.let {habit->
             NativeHabitDetailSheet(vm=vm,habit=habit,dark=dark,
@@ -488,7 +573,7 @@ private fun HabitsStrip(habits:List<Habit>, colors:WorkspaceColors, dark:Boolean
 @Composable
 private fun WorkspaceToolbar(
     colors:WorkspaceColors,dark:Boolean,mode:WorkspaceMode,filtered:Boolean,
-    onFilter:()->Unit,onPostpone:()->Unit,canPostpone:Boolean
+    onFilter:()->Unit,onPostpone:()->Unit,canPostpone:Boolean,onOpenOverdue:()->Unit
 ) {
     // No outer tinted container. Mini App renders these as independent chips.
     val filterInk=if(filtered)colors.purple else if(dark)Color(0xFFE2E8F0) else Color(0xFF24354F)
@@ -508,11 +593,11 @@ private fun WorkspaceToolbar(
                 tinted(Color(0xFF38BDF8),colors.panel,if(dark).14f else .09f),
                 tinted(Color(0xFF38BDF8),colors.panelBorder,.32f),
                 Modifier.weight(1.04f),onPostpone,enabled=canPostpone)
-            ToolbarButton("Оптимизировать",Icons.Default.AutoAwesome,
+            ToolbarButton("Просроченные задачи",Icons.Default.Schedule,
                 if(dark)Color(0xFFF9A8D4) else Color(0xFFBE185D),
                 tinted(Color(0xFFF472B6),colors.panel,if(dark).13f else .07f),
                 tinted(Color(0xFFF472B6),colors.panelBorder,.29f),
-                Modifier.weight(1.49f),{},enabled=false,dimDisabled=false)
+                Modifier.weight(1.65f),onOpenOverdue)
             ToolbarButton("Фильтры",Icons.Default.FilterList,
                 filterInk,filterFill,filterBorder,
                 Modifier.weight(1.03f),onFilter)
@@ -546,8 +631,10 @@ private fun WorkspaceToolbar(
         horizontalArrangement=Arrangement.Center,verticalAlignment=Alignment.CenterVertically) {
         Icon(icon,null,tint=iconInk,modifier=Modifier.size(15.dp))
         Spacer(Modifier.width(5.dp))
-        Text(label,color=iconInk,fontSize=11.sp,fontWeight=FontWeight.SemiBold,maxLines=1,
-            softWrap=false)
+        val isOverdueAction = label == "Просроченные задачи"
+        Text(label,color=iconInk,fontSize=if(isOverdueAction)10.sp else 11.sp,
+            fontWeight=FontWeight.SemiBold,maxLines=if(isOverdueAction)2 else 1,
+            lineHeight=12.sp,textAlign=TextAlign.Center,softWrap=isOverdueAction)
     }
 }
 

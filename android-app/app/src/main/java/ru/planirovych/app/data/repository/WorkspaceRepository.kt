@@ -68,10 +68,11 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
             put("importance", parent.importance.coerceIn(1, 5))
         })
     suspend fun deleteTask(id: String) { api.deleteTask(id, "me") }
-    suspend fun postponeOverdue(tasks: List<Task>) {
+    suspend fun postponeOverdue(tasks: List<Task>): Int {
         // Same calendar-day replacement as the Mini App; never move events/reminders.
         val today = java.time.LocalDate.now()
-        tasks.filter { it.status != TaskStatus.DONE && it.taskType == TaskType.TASK }
+        var postponedCount = 0
+        tasks.filter { it.status != TaskStatus.DONE && it.taskType != TaskType.EVENT && it.taskType != TaskType.REMINDER }
             .forEach { task ->
                 val due = runCatching { java.time.OffsetDateTime.parse(task.dueDate) }.getOrNull()
                     ?: return@forEach
@@ -80,7 +81,9 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
                 val next = local.withYear(today.year).withMonth(today.monthValue)
                     .withDayOfMonth(today.dayOfMonth).toInstant().toString()
                 api.updateTask(task.id, buildJsonObject { put("dueDate", next) })
+                postponedCount += 1
             }
+        return postponedCount
     }
 
     suspend fun loadTaskAttachments(taskId: String) = api.taskAttachments(taskId)

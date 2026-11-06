@@ -22,6 +22,7 @@ import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace'
 import { WorkspaceGlobalSearch } from './components/WorkspaceGlobalSearch';
 import { matchesWorkspaceText } from './lib/workspaceSearch';
 import { MiniWorkspaceTools } from './components/MiniWorkspaceTools';
+import { WorkspaceActionToast } from './components/WorkspaceActionToast';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { MiniTimelineWeek } from './components/MiniTimelineWeek';
 import { ResizableDescriptionSurface } from './components/ResizableDescriptionSurface';
@@ -788,6 +789,21 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const updatingFocusSubtasksRef = useRef<Set<string>>(new Set());
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isPostponingOverdue, setIsPostponingOverdue] = useState(false);
+  const [isOverdueTasksOpen, setIsOverdueTasksOpen] = useState(false);
+  const [postponeNotice, setPostponeNotice] = useState<{ count: number; serial: number } | null>(null);
+  useEffect(() => {
+    if (!postponeNotice) return;
+    const timer = window.setTimeout(() => setPostponeNotice(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [postponeNotice]);
+  useEffect(() => {
+    if (!isOverdueTasksOpen) return;
+    const onEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') setIsOverdueTasksOpen(false);
+    };
+    document.addEventListener('keydown', onEscape);
+    return () => document.removeEventListener('keydown', onEscape);
+  }, [isOverdueTasksOpen]);
   const [creatingSubtaskForId, setCreatingSubtaskForId] = useState<string | null>(null);
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
   const [createEditorType, setCreateEditorType] = useState<'task' | 'event'>('task');
@@ -1553,7 +1569,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     };
   }), [spheres, taskById, tasks]);
 
-  const overdueTasks = useMemo(() => tasks.filter((task) => task.taskType !== 'EVENT' && task.taskType !== 'REMINDER' && isOverdue(task)), [tasks]);
+  const overdueTasks = useMemo(() => tasks
+    .filter((task) => task.status !== 'DONE' && task.taskType !== 'EVENT' && task.taskType !== 'REMINDER' && isOverdue(task))
+    .sort((a, b) => new Date(a.dueDate as string).getTime() - new Date(b.dueDate as string).getTime()), [tasks]);
 
   const postponeAllOverdueToToday = async () => {
     if (isPostponingOverdue || overdueTasks.length === 0) return;
@@ -1561,12 +1579,16 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     setError(null);
     try {
       const today = new Date();
+      let postponedCount = 0;
       await Promise.all(overdueTasks.map(async (task) => {
         const nextDueDate = new Date(task.dueDate as string);
+        if (Number.isNaN(nextDueDate.getTime())) return;
         nextDueDate.setFullYear(today.getFullYear(), today.getMonth(), today.getDate());
         await api.updateTask(task.id, { dueDate: nextDueDate.toISOString() });
+        postponedCount += 1;
       }));
       await loadData();
+      if (postponedCount > 0) setPostponeNotice({ count: postponedCount, serial: Date.now() });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось перенести просроченные задачи');
     } finally {
@@ -4341,6 +4363,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               timelineSphereId={sphereFilter}
               onTimelineSphereChange={setSphereFilter}
               onPostpone={() => void postponeAllOverdueToToday()}
+              onOpenOverdue={() => setIsOverdueTasksOpen(true)}
+              overdueCount={overdueTasks.length}
               postponing={isPostponingOverdue}
               canPostpone={overdueTasks.length > 0}
             />
@@ -5868,6 +5892,65 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           </section>
         </div>
       ) : null}
+
+      <WorkspaceActionToast count={postponeNotice?.count ?? null} light={isLightTheme} />
+      {isOverdueTasksOpen ? createPortal((
+        <div className="fixed inset-0 z-[320] flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+          onClick={() => setIsOverdueTasksOpen(false)}>
+          <section role="dialog" aria-modal="true" aria-labelledby="mini-overdue-title"
+            className={isLightTheme
+              ? 'flex w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white text-slate-900 shadow-2xl sm:rounded-3xl'
+              : 'flex w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-slate-600 bg-slate-900 text-slate-100 shadow-2xl sm:rounded-3xl'}
+            style={{ maxHeight: 'min(83dvh, 740px)' }}
+            onClick={(event) => event.stopPropagation()}>
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-400/20 px-4 py-4">
+              <div className="min-w-0">
+                <h2 id="mini-overdue-title" className="text-base font-semibold">Просроченные задачи</h2>
+                <p className="mt-0.5 text-xs opacity-65">Всего: {overdueTasks.length}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button type="button" className="inline-flex items-center gap-1 rounded-xl border border-sky-400/40 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-500 disabled:opacity-40"
+                  disabled={isPostponingOverdue || overdueTasks.length === 0}
+                  onClick={() => void postponeAllOverdueToToday()}>
+                  {isPostponingOverdue ? <Loader2 size={14} className="animate-spin" /> : <Clock3 size={14} />}
+                  Отложить
+                </button>
+                <button type="button" className="rounded-lg p-2 opacity-70 hover:opacity-100" aria-label="Закрыть список"
+                  onClick={() => setIsOverdueTasksOpen(false)}><X size={18} /></button>
+              </div>
+            </div>
+            <div className="min-h-0 space-y-2 overflow-y-auto px-4 py-4">
+              {overdueTasks.map((task) => (
+                <button key={task.id} type="button"
+                  className={isLightTheme
+                    ? 'flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-left transition hover:bg-slate-100'
+                    : 'flex w-full items-center gap-3 rounded-2xl border border-slate-700 bg-slate-800/70 px-3 py-3 text-left transition hover:bg-slate-800'}
+                  onClick={() => {
+                    setIsOverdueTasksOpen(false);
+                    if (task.parentTaskId) openSubtaskModal(task);
+                    else openTaskModal(task);
+                  }}>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">{task.title}</span>
+                    {task.parentTaskId ? <span className="mt-0.5 block truncate text-xs opacity-65">
+                      {taskById.get(task.parentTaskId)?.title ?? 'Подзадача'}
+                    </span> : null}
+                  </span>
+                  <span className="shrink-0 text-right text-[11px] text-rose-500">
+                    {task.dueDate ? new Date(task.dueDate).toLocaleString('ru-RU', {
+                      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+                    }) : ''}
+                  </span>
+                  <ChevronRight size={15} className="shrink-0 opacity-50" />
+                </button>
+              ))}
+              {overdueTasks.length === 0 ? (
+                <p className="py-10 text-center text-sm opacity-65">Просроченных задач нет</p>
+              ) : null}
+            </div>
+          </section>
+        </div>
+      ), document.body) : null}
     </main>
   );
 }

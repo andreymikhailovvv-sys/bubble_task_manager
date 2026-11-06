@@ -9448,12 +9448,12 @@ body[data-theme='light'] .miniapp-ai-chat-message-user .ai-attachment-tiles-hist
   background: rgba(148, 163, 184, .23);
   border-color: rgba(148, 163, 184, .50);
 }
-.miniapp-workspace-tool-optimize {
+.miniapp-workspace-tool-overdue {
   border-color: rgba(251, 113, 133, .34);
   background: rgba(244, 63, 94, .15);
   color: #fda4af;
-  opacity: .78;
-  cursor: not-allowed;
+  opacity: 1;
+  cursor: pointer;
 }
 .miniapp-workspace-tool-filter {
   position: relative;
@@ -9528,12 +9528,12 @@ body[data-theme='light'] .miniapp-shell .miniapp-workspace-tool[aria-expanded='t
   border-color: rgba(100, 116, 139, .55);
   background: #e2e8f0;
 }
-body[data-theme='light'] .miniapp-shell .miniapp-workspace-tool-optimize,
-.miniapp-shell.miniapp-light .miniapp-workspace-tool-optimize {
+body[data-theme='light'] .miniapp-shell .miniapp-workspace-tool-overdue,
+.miniapp-shell.miniapp-light .miniapp-workspace-tool-overdue {
   border-color: rgba(244, 63, 94, .31);
   background: rgba(255, 228, 230, .94);
   color: #be123c;
-  opacity: .78;
+  opacity: 1;
 }
 body[data-theme='light'] .miniapp-shell .miniapp-workspace-filter-panel,
 .miniapp-shell.miniapp-light .miniapp-workspace-filter-panel {
@@ -9951,7 +9951,7 @@ body[data-theme='dark'] .workspace-global-search-panel-mobile {
 }
 .miniapp-shell .miniapp-workspace-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr) minmax(0, 1.48fr);
+  grid-template-columns: minmax(0, .95fr) minmax(0, 1.8fr) minmax(0, 1fr);
   align-items: stretch;
   gap: .55rem;
 }
@@ -9972,14 +9972,19 @@ body[data-theme='dark'] .workspace-global-search-panel-mobile {
   white-space: nowrap;
 }
 .miniapp-shell .miniapp-workspace-actions svg { flex-shrink: 0; }
-.miniapp-shell .miniapp-workspace-tool-optimize {
+.miniapp-shell .miniapp-workspace-tool-overdue > span {
+  white-space: normal;
+  text-align: center;
+  line-height: 1.12;
+}
+.miniapp-shell .miniapp-workspace-tool-overdue {
   opacity: 1;
   color: #f9a8d4;
   border-color: rgba(244, 114, 182, .35);
   background: linear-gradient(125deg, rgba(131, 52, 112, .24), rgba(244, 63, 94, .105));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
 }
-.miniapp-shell.miniapp-light .miniapp-workspace-tool-optimize {
+.miniapp-shell.miniapp-light .miniapp-workspace-tool-overdue {
   opacity: 1;
   color: #be185d;
   border-color: rgba(251, 113, 133, .24);

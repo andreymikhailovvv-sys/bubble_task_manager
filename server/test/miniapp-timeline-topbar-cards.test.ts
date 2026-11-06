@@ -45,7 +45,7 @@ test('list retains its original layout, and search focus does not repaint timeli
   const timelineStart = mini.indexOf('<section className="miniapp-timeline-section miniapp-timeline-independent-blocks">', listStart);
   assert.ok(listStart > -1 && timelineStart > listStart);
   assert.match(mini.slice(listStart, timelineStart), /<MiniWorkspaceTools/);
-  assert.match(shared, /miniapp-workspace-tool-optimize/); // list action preserved
+  assert.match(shared, /miniapp-workspace-tool-overdue/); // list action opens overdue tasks
   assert.match(shared, /miniapp-workspace-tool-filter/);
   assert.match(mini, /miniapp-list-topbar/);
   assert.match(css, /\.miniapp-workspace-utilities\.is-list/);
