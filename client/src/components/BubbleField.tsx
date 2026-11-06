@@ -1131,11 +1131,21 @@ export function BubbleField({
               <radialGradient key={`petal-fill-${index}`} id={`petal-sector-gradient-${index}`}
                 cx="48%" cy="45%" r="85%">
                 <stop offset="0%" stopColor={bubbleSectors[index]?.color ?? '#94a3b8'}
-                  stopOpacity={isLightTheme ? 0.08 : 0.045} />
+                  stopOpacity={isLightTheme ? 0.035 : 0.018} />
                 <stop offset="100%" stopColor={bubbleSectors[index]?.color ?? '#94a3b8'}
-                  stopOpacity={isLightTheme ? 0.14 : 0.09} />
+                  stopOpacity={isLightTheme ? 0.075 : 0.038} />
               </radialGradient>
             ))}
+            {/* Blur only the color wash. The outer clip preserves the oval edge
+                and keeps SVG bubbles, progress rings and controls razor-sharp. */}
+            <clipPath id="petal-sector-oval-clip">
+              <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y}
+                rx={ELLIPSE_RADIUS_X} ry={ELLIPSE_RADIUS_Y} />
+            </clipPath>
+            <filter id="petal-sector-feather" x="-20%" y="-20%" width="140%" height="140%"
+              colorInterpolationFilters="sRGB">
+              <feGaussianBlur stdDeviation={isLightTheme ? 19 : 24} />
+            </filter>
           </defs>
           <foreignObject
             x={fullscreen ? FULLSCREEN_TASK_INFO_PANEL_X : TASK_INFO_PANEL_X}
@@ -1230,13 +1240,18 @@ export function BubbleField({
             opacity={isLightTheme ? 0.94 : 0.86} />
           <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X + 22} ry={ELLIPSE_RADIUS_Y + 16} fill="url(#fieldHalo)" opacity={isLightTheme ? 0.48 : 0.7} />
 
-          {/* Petal-like sectors: pastel watercolor wash with one clean divider.
-              Their width and SVG paths use the exact same geometry as the
-              drag/drop hit areas and the existing bubble packing algorithm. */}
-          {mode === 'sectors' && sectorCount > 1 && sectorGeometry.map((_, idx) => (
-            <path key={`hill-area-${idx}`} d={hillRegionPath(idx)}
-              fill={`url(#petal-sector-gradient-${idx})`} pointerEvents="none" />
-          ))}
+          {/* Feather the tint across neighbouring sector boundaries without
+              changing their mathematical geometry or drag/drop hit areas. */}
+          {mode === 'sectors' && sectorCount > 1 && (
+            <g clipPath="url(#petal-sector-oval-clip)" pointerEvents="none">
+              <g filter="url(#petal-sector-feather)">
+                {sectorGeometry.map((_, idx) => (
+                  <path key={`hill-area-${idx}`} d={hillRegionPath(idx)}
+                    fill={`url(#petal-sector-gradient-${idx})`} />
+                ))}
+              </g>
+            </g>
+          )}
           {dragView?.changesSector && !dragView.target && sectorCount > 1 && (
             <path d={hillRegionPath(dragView.destinationSectorIndex)}
               fill={bubbleSectors[dragView.destinationSectorIndex]?.color ?? '#22d3ee'}
@@ -1247,15 +1262,14 @@ export function BubbleField({
             <path key={`hill-wall-${idx}`}
               d={hillBoundaryPath(idx)} fill="none"
               stroke={isLightTheme ? '#ffffff' : '#cbd5e1'}
-              strokeWidth={isLightTheme ? 3.6 : 2.5}
-              strokeOpacity={isLightTheme ? 0.94 : 0.48}
+              strokeWidth={isLightTheme ? 1.5 : 1.2}
+              strokeOpacity={isLightTheme ? 0.22 : 0.12}
               strokeLinecap="round" pointerEvents="none" />
           ))}
           {mode === 'sectors' && sectorCount > 2 && (
-            <circle cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} r={11}
+            <circle cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} r={7}
               fill={isLightTheme ? '#ffffff' : '#263448'}
-              stroke={isLightTheme ? '#e2e8f0' : '#64748b'}
-              strokeWidth={1.25} pointerEvents="none" />
+              fillOpacity={0.4} pointerEvents="none" />
           )}
 
           <AnimatePresence>
