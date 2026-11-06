@@ -1,3 +1,5 @@
+import { hillSectorAnglesAtRadius, hillSectorIndexAtAngle, type HillSectorAngles } from './hillSectors';
+
 export type VisualBubble = {
   id: string;
   x: number;
@@ -22,6 +24,8 @@ export type Bounds = {
   ellipse?: { cx: number; cy: number; rx: number; ry: number };
   /** Sector rays in the same stretched SVG coordinate system as the circles. */
   sectors?: Array<{ start: Point; end: Point }>;
+  /** Curved hill regions override straight ray constraints when supplied. */
+  hillSectors?: HillSectorAngles[];
   /** Pack even unlinked tasks, instead of retaining the former sparse automatic layout. */
   compact?: boolean;
 };
@@ -128,7 +132,7 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
   };
   const regionNormals = (bubble: VisualBubble) => {
     const region = bounds.sectors?.[sectorOf(bubble)];
-    if (!region || bounds.sectors?.length === 1) return null;
+    if (bounds.hillSectors?.length || !region || bounds.sectors?.length === 1) return null;
     const start = unit(region.start);
     const end = unit(region.end);
     return [
@@ -146,9 +150,24 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
       if (Math.hypot((candidate.x - cx) / safeRx, (candidate.y - cy) / safeRy) > 1.000001) return false;
     } else if (candidate.x < bounds.minX + margin || candidate.x > bounds.maxX - margin ||
                candidate.y < bounds.minY + margin || candidate.y > bounds.maxY - margin) return false;
-    const normals = regionNormals(bubble);
-    if (normals?.some((normal) =>
-      (candidate.x - centre.x) * normal.x + (candidate.y - centre.y) * normal.y < margin + 1.5)) return false;
+    if (bounds.hillSectors && bounds.hillSectors.length > 1 && bounds.ellipse) {
+      const dx = (candidate.x - bounds.ellipse.cx) / bounds.ellipse.rx;
+      const dy = (candidate.y - bounds.ellipse.cy) / bounds.ellipse.ry;
+      const ratio = Math.hypot(dx, dy);
+      const angle = Math.atan2(dy, dx);
+      const index = sectorOf(bubble);
+      if (hillSectorIndexAtAngle(angle, ratio, bounds.hillSectors) !== index) return false;
+      const sector = hillSectorAnglesAtRadius(bounds.hillSectors, index, ratio);
+      const angleIntoSector = ((angle - sector.start) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+      const angularMargin = Math.asin(Math.min(0.95,
+        margin / Math.max(1, ratio * Math.min(bounds.ellipse.rx, bounds.ellipse.ry))));
+      const padding = Math.min(Math.max(0, sector.span / 2 - 0.01), angularMargin);
+      if (angleIntoSector < padding || angleIntoSector > sector.span - padding) return false;
+    } else {
+      const normals = regionNormals(bubble);
+      if (normals?.some((normal) =>
+        (candidate.x - centre.x) * normal.x + (candidate.y - centre.y) * normal.y < margin + 1.5)) return false;
+    }
     return true;
   };
   const separation = (bubble: VisualBubble, candidate: Point, placed: Map<string, Point>) => {
@@ -222,8 +241,18 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
       const preferredDistance = Math.hypot(p.x - preferred.x, p.y - preferred.y);
       if (isPinned) return preferredDistance * 20 + normalCenterDistance(p) * 4;
       const radial = normalCenterDistance(p);
+      const hill = bounds.hillSectors?.[sectorOf(bubble)];
+      const hillTop = hill ? {
+        x: centre.x + Math.cos(hill.midAngle) * halfX * 0.52,
+        y: centre.y + Math.sin(hill.midAngle) * halfY * 0.52
+      } : null;
+      const hillDistance = hillTop
+        ? Math.hypot((p.x - hillTop.x) / halfX, (p.y - hillTop.y) / halfY)
+        : 0;
       const centreWeight = bounds.compact ? (highPriority(bubble) ? 205 : 245) : 0;
-      let result = radial * centreWeight + preferredDistance * (bounds.compact ? 0.085 : 1);
+      let result = hillTop && bounds.compact
+        ? hillDistance * (highPriority(bubble) ? 255 : 65) + preferredDistance * 0.24
+        : radial * centreWeight + preferredDistance * (bounds.compact ? 0.085 : 1);
       if (highPriorityPeers.length) {
         // Make separation from the core expensive, while retaining hard
         // collision/sector tests in consider() below.
@@ -295,8 +324,16 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
       }
       // Any candidate with a cost well below the next ring's minimum radial
       // penalty cannot be improved by examining the outer rings.
-      if (best && bounds.compact && !hasLink && bestScore < distance / halfY *
-        (highPriority(bubble) ? 205 : 245) - 4) break;
+      if (best && bounds.compact && !hasLink) {
+        if (bounds.hillSectors?.length) {
+          // After crossing the hilltop ring, no later ring can beat this cost.
+          // This preserves the packed layout's short-circuit performance.
+          const remainingLowerBound = Math.max(0, distance / halfY - 0.52) *
+            (highPriority(bubble) ? 255 : 65);
+          if (bestScore < remainingLowerBound - 4) break;
+        } else if (bestScore < distance / halfY *
+          (highPriority(bubble) ? 205 : 245) - 4) break;
+      }
     }
 
     if (!best) {

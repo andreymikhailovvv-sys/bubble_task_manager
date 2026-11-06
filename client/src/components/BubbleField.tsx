@@ -4,6 +4,7 @@ import { CalendarDays, ChevronRight, Coins, Gauge, LoaderCircle, MessageCircle, 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { buildBubbles, buildSectorGeometry, getBubbleSectorIndex, getBubbleSectorSpheres, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
+import { hillBoundaryAngle, hillSectorIndexAtAngle } from '../lib/hillSectors';
 import { noteHtmlToPlainText } from '../lib/notes';
 import { bubbleLinkSegment, detectBubbleDrop, getLinkedBubbleGroups, linkedBubblePositions, type DropIntent, type VisualBubble } from '../lib/bubbleInteractions';
 import { resolveSphereIcon } from '../lib/sphereIcons';
@@ -430,9 +431,10 @@ export function BubbleField({
     if (!matrix) return spheres[0] ?? null;
     const svgPoint = point.matrixTransform(matrix.inverse());
     if (sectorCount <= 1) return bubbleSectors[0] ?? null;
-    const angle = ((Math.atan2((svgPoint.y - BUBBLE_FIELD_CENTER_Y) / ELLIPSE_Y_SCALE, (svgPoint.x - BUBBLE_FIELD_CENTER_X) / ELLIPSE_X_SCALE) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-    const sectorIndex = sectorGeometry.findIndex((geometry) => angle >= geometry.startAngle && angle < geometry.endAngle);
-    return bubbleSectors[sectorIndex >= 0 ? sectorIndex : 0] ?? null;
+    const dx = (svgPoint.x - BUBBLE_FIELD_CENTER_X) / ELLIPSE_X_SCALE;
+    const dy = (svgPoint.y - BUBBLE_FIELD_CENTER_Y) / ELLIPSE_Y_SCALE;
+    const sectorIndex = hillSectorIndexAtAngle(Math.atan2(dy, dx), Math.hypot(dx, dy) / FIELD_RADIUS, sectorGeometry);
+    return bubbleSectors[sectorIndex] ?? null;
   };
 
   const showContextMenu = (event: MouseEvent, task: Task | null) => {
@@ -575,6 +577,7 @@ export function BubbleField({
       minY: VIEWBOX_TOP + 20, maxY: VIEWBOX_BOTTOM - 20,
       ellipse: { cx: BUBBLE_FIELD_CENTER_X, cy: BUBBLE_FIELD_CENTER_Y, rx: ELLIPSE_RADIUS_X, ry: ELLIPSE_RADIUS_Y },
       compact: true,
+      hillSectors: mode === 'sectors' && sectorCount > 1 ? sectorGeometry : undefined,
       sectors: mode === 'sectors' && sectorCount > 1
         ? sectorGeometry.map((geometry) => ({
           start: { x: Math.cos(geometry.startAngle) * ELLIPSE_X_SCALE,
@@ -589,11 +592,9 @@ export function BubbleField({
     bubbleVisualPositions.get(bubble.task.id) ?? mapToOval(bubble.x, bubble.y);
   const getSectorIndexAtPoint = (point: { x: number; y: number }) => {
     if (mode !== 'sectors' || sectorCount <= 1) return 0;
-    const angle = ((Math.atan2((point.y - BUBBLE_FIELD_CENTER_Y) / ELLIPSE_Y_SCALE,
-      (point.x - BUBBLE_FIELD_CENTER_X) / ELLIPSE_X_SCALE) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-    const index = sectorGeometry.findIndex((geometry) =>
-      angle >= geometry.startAngle && angle < geometry.endAngle);
-    return index >= 0 ? index : 0;
+    const dx = (point.x - BUBBLE_FIELD_CENTER_X) / ELLIPSE_X_SCALE;
+    const dy = (point.y - BUBBLE_FIELD_CENTER_Y) / ELLIPSE_Y_SCALE;
+    return hillSectorIndexAtAngle(Math.atan2(dy, dx), Math.hypot(dx, dy) / FIELD_RADIUS, sectorGeometry);
   };
   const eligibleBubbleTargets = (): VisualBubble[] => visibleBubbles
     .filter((bubble) => !bubble.task.isCollaborative && !bubble.task.parentTaskId && (bubble.task.taskType ?? 'TASK') === 'TASK')
@@ -792,6 +793,31 @@ export function BubbleField({
       clearTimeout(nativeCalendarCloseTimer.current);
     }
   }, []);
+
+  const hillBoundaryPoint = (boundaryIndex: number, radiusRatio: number) => {
+    const angle = hillBoundaryAngle(sectorGeometry, boundaryIndex, radiusRatio);
+    return mapToOval(
+      SIZE / 2 + Math.cos(angle) * FIELD_RADIUS * radiusRatio,
+      SIZE / 2 + Math.sin(angle) * FIELD_RADIUS * radiusRatio
+    );
+  };
+  // Both the highlighted drop region and its two shared valley lines use
+  // exactly the same curved geometry as pointer hit-testing.
+  const hillBoundaryPath = (boundaryIndex: number, startRatio = 0) => Array.from({ length: 25 }, (_, step) => {
+    const point = hillBoundaryPoint(boundaryIndex, startRatio + (1 - startRatio) * step / 24);
+    return `${step === 0 ? 'M' : 'L'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`;
+  }).join(' ');
+  const hillRegionPath = (sectorIndex: number) => {
+    const geometry = sectorGeometry[sectorIndex];
+    if (!geometry || sectorCount <= 1) return '';
+    const left = hillBoundaryPath(sectorIndex);
+    const arcEnd = hillBoundaryPoint((sectorIndex + 1) % sectorCount, 1);
+    const right = Array.from({ length: 24 }, (_, step) => {
+      const point = hillBoundaryPoint((sectorIndex + 1) % sectorCount, 1 - (step + 1) / 24);
+      return `L ${point.x.toFixed(2)} ${point.y.toFixed(2)}`;
+    }).join(' ');
+    return `${left} A ${ELLIPSE_RADIUS_X} ${ELLIPSE_RADIUS_Y} 0 ${geometry.span > Math.PI ? 1 : 0} 1 ${arcEnd.x.toFixed(2)} ${arcEnd.y.toFixed(2)} ${right} Z`;
+  };
 
   const sectorLabels = useMemo(() => {
     if (sectorCount === 1) return [];
@@ -1186,24 +1212,29 @@ export function BubbleField({
           <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X} ry={ELLIPSE_RADIUS_Y} fill="url(#bg)" opacity={isLightTheme ? 0.94 : 0.86} />
           <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X + 22} ry={ELLIPSE_RADIUS_Y + 16} fill="url(#fieldHalo)" opacity={isLightTheme ? 0.48 : 0.7} />
 
-          {dragView?.changesSector && !dragView.target && sectorCount > 1 && (() => {
-            const geometry = sectorGeometry[dragView.destinationSectorIndex];
-            if (!geometry) return null;
-            const first = mapToOval(SIZE / 2 + Math.cos(geometry.startAngle) * FIELD_RADIUS,
-              SIZE / 2 + Math.sin(geometry.startAngle) * FIELD_RADIUS);
-            const last = mapToOval(SIZE / 2 + Math.cos(geometry.endAngle) * FIELD_RADIUS,
-              SIZE / 2 + Math.sin(geometry.endAngle) * FIELD_RADIUS);
-            const sector = bubbleSectors[dragView.destinationSectorIndex];
-            return <path d={`M ${BUBBLE_FIELD_CENTER_X} ${BUBBLE_FIELD_CENTER_Y} L ${first.x} ${first.y} A ${ELLIPSE_RADIUS_X} ${ELLIPSE_RADIUS_Y} 0 ${geometry.span > Math.PI ? 1 : 0} 1 ${last.x} ${last.y} Z`}
-              fill={sector?.color ?? '#22d3ee'} fillOpacity={0.10} stroke={sector?.color ?? '#22d3ee'}
-              strokeWidth={2} strokeOpacity={0.55} strokeDasharray="9 9" pointerEvents="none" />;
-          })()}
-          {sectorGeometry.map((geometry, idx) => {
-            if (sectorCount === 1) return null;
-            const angle = geometry.startAngle;
-            const point = mapToOval(SIZE / 2 + Math.cos(angle) * FIELD_RADIUS, SIZE / 2 + Math.sin(angle) * FIELD_RADIUS);
-            return <line key={idx} className="sector-divider" x1={BUBBLE_FIELD_CENTER_X} y1={BUBBLE_FIELD_CENTER_Y} x2={point.x} y2={point.y} stroke={sectorStroke} strokeWidth="1.5" />;
-          })}
+          {/* Extremely soft sector tint adds depth without producing hard pie slices. */}
+          {mode === 'sectors' && sectorCount > 1 && sectorGeometry.map((_, idx) => (
+            <path key={`hill-area-${idx}`} d={hillRegionPath(idx)}
+              fill={bubbleSectors[idx]?.color ?? '#94a3b8'}
+              fillOpacity={isLightTheme ? 0.032 : 0.048} pointerEvents="none" />
+          ))}
+          {dragView?.changesSector && !dragView.target && sectorCount > 1 && (
+            <path d={hillRegionPath(dragView.destinationSectorIndex)}
+              fill={bubbleSectors[dragView.destinationSectorIndex]?.color ?? '#22d3ee'}
+              fillOpacity={0.13} stroke={bubbleSectors[dragView.destinationSectorIndex]?.color ?? '#22d3ee'}
+              strokeWidth={2} strokeOpacity={0.55} strokeDasharray="9 9" pointerEvents="none" />
+          )}
+          {mode === 'sectors' && sectorCount > 1 && sectorGeometry.map((_, idx) => (
+            <g key={`hill-ridge-${idx}`} pointerEvents="none">
+              <path d={hillBoundaryPath(idx, 0.12)} fill="none" stroke={sectorStroke}
+                strokeWidth={11} strokeOpacity={isLightTheme ? 0.07 : 0.09}
+                strokeLinecap="round" strokeLinejoin="round" />
+              <path className="sector-divider" d={hillBoundaryPath(idx, 0.12)} fill="none"
+                stroke={sectorStroke} strokeWidth={2.2}
+                strokeOpacity={isLightTheme ? 0.56 : 0.64}
+                strokeLinecap="round" strokeLinejoin="round" />
+            </g>
+          ))}
 
           <AnimatePresence>
             {orderedGroups.map(({ key, anchor, members, edges }) => {
