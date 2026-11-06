@@ -155,6 +155,8 @@ jobs:
         run: node --import tsx --test server/test/web-notes-postpone-bubbles-boot.test.ts
       - name: Verify curved hill sector walls, coefficient crest packing and drag/fullscreen parity
         run: node --import tsx --test server/test/organic-hill-sectors.test.ts
+      - name: Verify asynchronous bubble worker layout, geometry and mode cache
+        run: node --import tsx --test server/test/bubble-layout-worker.test.ts
       - name: Verify first-visit training invitation and starter tasks and sectors
         run: node --import tsx --test server/test/onboarding-training-defaults-ui.test.ts
       - name: Verify opaque overdue popover and neutral dark task-window outlines
