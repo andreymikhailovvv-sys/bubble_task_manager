@@ -1,4 +1,5 @@
 import type { Sphere, Task } from './types';
+import { hillPeakAngle, hillSectorAnglesAtRadius } from './hillSectors';
 
 export type BubbleRankingMode = 'urgency' | 'importance' | 'coefficient';
 
@@ -234,7 +235,9 @@ export function buildSectorGeometry(sectorCount: number, taskCounts: number[]): 
     });
   }
 
-  let cursor = 0;
+  // With three sectors, orient the three hilltops like a trefoil:
+  // upper-right, bottom, upper-left. Both standard/fullscreen use this view.
+  let cursor = sectorCount === 3 ? -Math.PI / 2 : 0;
   return spans.map((span) => {
     const startAngle = cursor;
     const endAngle = cursor + span;
@@ -253,17 +256,14 @@ function keepInSector(bubble: Bubble, center: number, maxDistance: number, secto
   let distance = Math.min(Math.hypot(dx, dy), safeMaxDistance);
   distance = Math.max(effectiveMinDistance, distance);
 
-  let angle = normalizeAngle(Math.atan2(dy, dx));
+  let angle = Math.atan2(dy, dx);
   if (sectorGeometry.length > 1) {
-    const sectorStart = geometry.startAngle;
-    const sectorEnd = geometry.endAngle;
-    const span = geometry.span;
-    const maxPadding = Math.max(0, span / 2 - 0.01);
+    const wall = hillSectorAnglesAtRadius(sectorGeometry, bubble.sectorIndex, distance / maxDistance);
+    const maxPadding = Math.max(0, wall.span / 2 - 0.01);
     const dynamicPadding = Math.asin(Math.min(0.95, (bubble.radius + 12) / Math.max(distance, bubble.radius + 12)));
     const padding = Math.min(maxPadding, dynamicPadding);
-    const minAngle = sectorStart + padding;
-    const maxAngle = sectorEnd - padding;
-    angle = Math.min(maxAngle, Math.max(minAngle, angle));
+    const unwrapped = wall.start + normalizeAngle(angle - wall.start);
+    angle = Math.min(wall.end - padding, Math.max(wall.start + padding, unwrapped));
   }
 
   bubble.x = center + Math.cos(angle) * distance;
@@ -469,6 +469,51 @@ function applyHierarchicalClustering(bubbles: Bubble[], center: number, maxDista
       resolveCollisions(sectorBubbles, center, maxDistance, sectorGeometry, 0, 1);
     }
   });
+}
+
+/**
+ * The old sector layout attracted large bubbles to the shared divider hub.
+ * Hill sectors instead have a separate, soft focus on each sector bisector.
+ * Keep the existing collision/size solver; only bias the leading coefficient
+ * group and never touch manually placed points (applied later).
+ */
+function settleHillPeaks(
+  bubbles: Bubble[],
+  center: number,
+  maxDistance: number,
+  sectorGeometry: SectorGeometry[],
+  subtaskMap: Record<string, Task[]>
+) {
+  if (sectorGeometry.length <= 1) return;
+  const targets = new Map<string, { x: number; y: number; weight: number }>();
+  for (let sectorIndex = 0; sectorIndex < sectorGeometry.length; sectorIndex += 1) {
+    const ranked = bubbles.filter(b => b.sectorIndex === sectorIndex)
+      .sort((a, b) => getTaskCoefficient(b.task, subtaskMap) -
+        getTaskCoefficient(a.task, subtaskMap) || b.radius - a.radius);
+    const coreCount = Math.max(1, Math.ceil(ranked.length * 0.34));
+    const peak = hillPeakAngle(sectorGeometry[sectorIndex]);
+    ranked.forEach((bubble, i) => {
+      if (i >= coreCount) return;
+      const coefficient = getTaskCoefficient(bubble.task, subtaskMap);
+      const angularOffset = i === 0 ? 0 : ((i % 2 ? 1 : -1) * Math.ceil(i / 2) * 0.13);
+      const distance = maxDistance * (0.49 + Math.min(0.11, i * 0.026));
+      targets.set(bubble.task.id, {
+        x: center + Math.cos(peak + angularOffset) * distance,
+        y: center + Math.sin(peak + angularOffset) * distance,
+        weight: 0.055 + coefficient * 0.055
+      });
+    });
+  }
+  for (let iteration = 0; iteration < 38; iteration += 1) {
+    for (const bubble of bubbles) {
+      const target = targets.get(bubble.task.id);
+      if (!target) continue;
+      bubble.x += (target.x - bubble.x) * target.weight;
+      bubble.y += (target.y - bubble.y) * target.weight;
+      keepInSector(bubble, center, maxDistance, sectorGeometry);
+    }
+    resolveCollisions(bubbles, center, maxDistance, sectorGeometry, 1, 1);
+  }
 }
 
 function compactGlobalLayout(bubbles: Bubble[], center: number, maxDistance: number) {
@@ -688,6 +733,7 @@ export function buildBubbles(
   applyHierarchicalClustering(result, center, maxDistance, sectorGeometry);
 
   resolveCollisions(result, center, maxDistance, sectorGeometry, 0, 100);
+  if (mode === 'sectors') settleHillPeaks(result, center, maxDistance, sectorGeometry, subtaskMap);
 
   result.forEach((bubble) => {
     // Manual positions only override the corresponding display mode.
