@@ -152,3 +152,50 @@ test('pastel petal sectors adapt to imbalanced counts and multiple sector number
     }
   }
 });
+
+test('large bubbles at the shared hub cannot cross either curved wall, including pinned positions', () => {
+  const geometry = buildSectorGeometry(3, [7, 12, 35]);
+  const ellipse = { cx: 450, cy: 450, rx: 425, ry: 425 };
+  // Both bubbles start on or very near the shared central junction.
+  // Previously the packer could accept a centre-safe position while the
+  // visible circumference extended across the parabolic divider.
+  const visuals = [
+    { id: 'pinned-hub', x: 450, y: 450, radius: 54, sectorIndex: 0, coefficient: 0.95, pinned: true },
+    { id: 'near-hub', x: 465, y: 460, radius: 38, sectorIndex: 1, coefficient: 0.78 },
+    { id: 'third', x: 420, y: 475, radius: 26, sectorIndex: 2, coefficient: 0.5 }
+  ];
+  const positions = linkedBubblePositions(visuals, {
+    minX: 20, maxX: 880, minY: 20, maxY: 880,
+    ellipse, hillSectors: geometry, compact: true
+  });
+  assert.equal(positions.size, visuals.length);
+  for (const bubble of visuals) {
+    const position = positions.get(bubble.id)!;
+    const dx = (position.x - ellipse.cx) / ellipse.rx;
+    const dy = (position.y - ellipse.cy) / ellipse.ry;
+    assert.equal(hillSectorIndexAtAngle(Math.atan2(dy, dx), Math.hypot(dx, dy), geometry), bubble.sectorIndex);
+    const gapToWall = (boundaryIndex: number) => {
+      const curve = hillBoundaryCurve(geometry, boundaryIndex);
+      let closest = Infinity;
+      for (let step = 0; step <= 1000; step++) {
+        const t = step / 1000;
+        const x = ellipse.cx + ellipse.rx * (2 * t * (1 - t) * curve.control.x + t * t * curve.end.x);
+        const y = ellipse.cy + ellipse.ry * (2 * t * (1 - t) * curve.control.y + t * t * curve.end.y);
+        closest = Math.min(closest, Math.hypot(position.x - x, position.y - y));
+      }
+      return closest;
+    };
+    const first = gapToWall(bubble.sectorIndex);
+    const second = gapToWall((bubble.sectorIndex + 1) % geometry.length);
+    assert.ok(first >= bubble.radius + 8, `${bubble.id} crosses the leading wall: ${first}`);
+    assert.ok(second >= bubble.radius + 8, `${bubble.id} crosses the trailing wall: ${second}`);
+  }
+  assert.notDeepEqual(positions.get('pinned-hub'), { x: 450, y: 450 });
+});
+
+test('sector fill is softer, especially for dark mode, without changing circle visuals', async () => {
+  const source = await readFile(new URL('../../client/src/components/BubbleField.tsx', import.meta.url), 'utf8');
+  assert.match(source, /stopOpacity=\{isLightTheme \? 0\.08 : 0\.045\}/);
+  assert.match(source, /stopOpacity=\{isLightTheme \? 0\.14 : 0\.09\}/);
+  assert.match(source, /fill=\{\`url\(#petal-sector-gradient-\$\{idx\}\)\`\}/);
+});
