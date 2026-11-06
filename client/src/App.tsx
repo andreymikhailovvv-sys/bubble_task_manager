@@ -64,7 +64,7 @@ import { TaskAiRecipientPicker } from './components/TaskAiRecipientPicker';
 import { SubtaskCommentsDialog } from './components/SubtaskCommentsDialog';
 import { TelegramIntegrationsMenu } from './components/TelegramIntegrationsMenu';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
-import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike, orderAiChatMessagesChronologically } from './lib/ai-chat-reconciliation';
+import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileQuickAiChatMessages, reconcileAiChatProjectOutline, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike, orderAiChatMessagesChronologically } from './lib/ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
 import { DEFAULT_QUICK_AI_CHAT_MODEL, DEFAULT_TASK_AI_CHAT_MODEL, DEFAULT_WEB_PROJECT_CHAT_MODEL, readSavedAiChatModel } from './lib/ai-chat-model';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
@@ -3296,9 +3296,14 @@ export default function App() {
             if (outlined !== previous) aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(outlined);
             return outlined;
           }
-          const merged = preserveLiveVoiceMessages(reconcileActiveAiChatMessages(
-              chat.messages, reconcileAiChatMessagesWithChips(chat.messages, remote), aiChatLoading
-            ), voiceChatMessagesRef.current[`${projectId}:${chatId}`] ?? []);
+          const reconciled = chatId === QUICK_AI_CHAT_ID
+            ? reconcileQuickAiChatMessages(chat.messages, remote, aiChatLoading, 20)
+            : reconcileActiveAiChatMessages(
+                chat.messages, reconcileAiChatMessagesWithChips(chat.messages, remote), aiChatLoading
+              );
+          const merged = preserveLiveVoiceMessages(
+            reconciled, voiceChatMessagesRef.current[`${projectId}:${chatId}`] ?? []
+          );
           if (merged === chat.messages) {
             if (outlined !== previous) aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(outlined);
             return outlined;

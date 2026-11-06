@@ -57,7 +57,7 @@ import { AiReadAloudAction, AiSpeechCostLine } from './components/AiReadAloudAct
 import type { LiveVoiceContext, LiveVoiceMessage, LiveVoiceToolCompletion, LiveVoiceProgressStatus } from './components/LiveVoiceDialog';
 import { voiceTranscriptMessage, voiceToolAssistantMessage, updateLiveVoiceProgress, preserveLiveVoiceMessages } from './lib/voice-chat-messages';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
-import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, mergeTelegramManagedMessages, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike, orderAiChatMessagesChronologically } from './lib/ai-chat-reconciliation';
+import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileQuickAiChatMessages, reconcileAiChatProjectOutline, mergeTelegramManagedMessages, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike, orderAiChatMessagesChronologically } from './lib/ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
 import { DEFAULT_MOBILE_PROJECT_CHAT_MODEL, DEFAULT_QUICK_AI_CHAT_MODEL, DEFAULT_TASK_AI_CHAT_MODEL, readSavedAiChatModel } from './lib/ai-chat-model';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
@@ -3084,9 +3084,12 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           // Keep the stable, already rendered order and interactive cards of
           // voice replies, even when the server returns a truncated snapshot.
           const spoken = voiceChatMessagesRef.current[`${projectId}:${chatId}`] ?? [];
-          const merged = spoken.length
-            ? reconcileAiChatMessagesWithChips(chat.messages, remote)
-            : reconcileActiveAiChatMessages(chat.messages, reconcileAiChatMessagesWithChips(chat.messages, remote), aiChatLoading);
+          const merged = chatId === QUICK_AI_CHAT_ID
+            ? reconcileQuickAiChatMessages(chat.messages, remote, aiChatLoading, 100)
+            : spoken.length
+              ? reconcileAiChatMessagesWithChips(chat.messages, remote)
+              : reconcileActiveAiChatMessages(chat.messages,
+                  reconcileAiChatMessagesWithChips(chat.messages, remote), aiChatLoading);
           if (merged === chat.messages) {
             if (outlined !== previous) aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(outlined);
             return outlined;

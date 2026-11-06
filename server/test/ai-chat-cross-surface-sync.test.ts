@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { mergeChatProjectSnapshots, canonicalizeTelegramAssistantProjects } from '../src/lib/ai-chat-project-sync.js';
 import { formatTelegramTaskChanges } from '../src/lib/telegram-task-change-receipt.js';
-import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike, isolateTaskProposalChips } from '../../client/src/lib/ai-chat-reconciliation.js';
+import { reconcileActiveAiChatMessages, reconcileQuickAiChatMessages, reconcileAiChatProjectOutline, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike, isolateTaskProposalChips } from '../../client/src/lib/ai-chat-reconciliation.js';
 
 const source = (relative: string) => readFileSync(new URL(relative, import.meta.url), 'utf8');
 
@@ -90,6 +90,47 @@ test('chat reconciliation does not rerender identical messages or replace unsent
   const changed = [{ ...local[0] }, { ...local[1], content: 'Новый ответ' }];
   assert.deepEqual(reconcileActiveAiChatMessages(local, changed, false), changed);
   assert.strictEqual(reconcileActiveAiChatMessages(local, changed, true), local);
+});
+
+test('quick chat polling never places 80 old server rows after a freshly rendered answer', () => {
+  const base = Date.parse('2026-11-06T07:40:00.000Z');
+  const server = Array.from({ length: 100 }, (_, i) => ({
+    id: `server-${i}`, role: i % 2 ? 'assistant' as const : 'user' as const,
+    content: `message-${i}`, createdAt: new Date(base + i * 1000).toISOString()
+  }));
+  const optimistic = [
+    { id: 'local-user', role: 'user' as const, content: 'Final question', createdAt: new Date(base + 100000).toISOString() },
+    { id: 'local-answer', role: 'assistant' as const, content: 'Final answer that was streamed',
+      createdAt: new Date(base + 101000).toISOString() }
+  ];
+  const local = [...server.slice(-18), ...optimistic];
+  // Server GET may briefly be one poll behind the streaming request.
+  const inFlightSync = reconcileQuickAiChatMessages(local, server, false, 20);
+  assert.equal(inFlightSync.length, 20);
+  assert.equal(inFlightSync.at(-1)?.content, 'Final answer that was streamed');
+  assert.equal(inFlightSync.at(-2)?.content, 'Final question');
+  assert.equal(inFlightSync.some(m => m.content === 'message-0'), false);
+
+  // Once the server rows arrive, their IDs differ from the browser IDs.
+  // Match by content, keep chronological tail and avoid duplicate bubbles.
+  const completedServer = [...server, ...optimistic.map((m, i) => ({ ...m, id: `persisted-${i}` }))];
+  const synced = reconcileQuickAiChatMessages(inFlightSync, completedServer, false, 20);
+  assert.equal(synced.length, 20);
+  assert.equal(synced.at(-1)?.content, 'Final answer that was streamed');
+  assert.equal(synced.filter(m => m.content === 'Final answer that was streamed').length, 1);
+  assert.equal(reconcileQuickAiChatMessages(synced, completedServer, false, 20), synced,
+    'identical polling result should preserve message references');
+});
+
+test('quick chat polling preserves the rendered assistant card from local history', () => {
+  const date = '2026-11-06T07:48:00.000Z';
+  const server = [{ id: 'stored', role: 'assistant' as const, content: 'Answer', createdAt: date }];
+  const local = [{ id: 'optimistic', role: 'assistant' as const, content: 'Answer', createdAt: date,
+    taskProposal: { id: 'proposal' } }];
+  const messages = reconcileQuickAiChatMessages(local, server, false, 20);
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].taskProposal?.id, 'proposal');
+  assert.equal(reconcileQuickAiChatMessages(local, server, true, 20), local);
 });
 
 test('project index reconciliation preserves every unchanged conversation and selected message object', () => {
