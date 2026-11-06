@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, Clock3, ListFilter, Loader2, Sparkles } from 'lucide-react';
+import { Check, ChevronDown, Clock3, ListFilter, Loader2 } from 'lucide-react';
 import type { Sphere } from '../lib/types';
 
 type TimeFilter = 'all' | 'today' | 'tomorrow' | 'week' | 'month';
@@ -26,6 +26,8 @@ type Props = {
   timelineSphereId: string;
   onTimelineSphereChange: (id: string) => void;
   onPostpone: () => void;
+  onOpenOverdue: () => void;
+  overdueCount: number;
   postponing: boolean;
   canPostpone: boolean;
 };
@@ -38,7 +40,7 @@ export function MiniWorkspaceTools({
   mode, timeFilter, onTimeFilterChange, sortMode, onSortChange,
   spheres, selectedSphereIds, onSelectAllSpheres, onToggleSphere,
   timelineSphereId, onTimelineSphereChange,
-  onPostpone, postponing, canPostpone
+  onPostpone, onOpenOverdue, overdueCount, postponing, canPostpone
 }: Props) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -74,9 +76,10 @@ export function MiniWorkspaceTools({
           {postponing ? <Loader2 size={16} className="animate-spin" /> : <Clock3 size={16} />}
           <span>Отложить</span>
         </button>
-        <button type="button" className="miniapp-workspace-tool miniapp-workspace-tool-optimize"
-          disabled aria-disabled="true" title="Оптимизация пока недоступна">
-          <Sparkles size={16} aria-hidden="true" /><span>Оптимизировать</span>
+        <button type="button" className="miniapp-workspace-tool miniapp-workspace-tool-overdue"
+          onClick={onOpenOverdue} title="Открыть список просроченных задач"
+          aria-label={`Просроченные задачи: ${overdueCount}`}>
+          <Clock3 size={16} aria-hidden="true" /><span>Просроченные задачи</span>
         </button>
         <div ref={rootRef} className="miniapp-workspace-filter-anchor relative">
           <button type="button" className={`miniapp-workspace-tool miniapp-workspace-tool-filter ${hasFilters ? 'is-filtered' : ''}`}
