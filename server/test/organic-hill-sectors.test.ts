@@ -203,10 +203,10 @@ test('sector wash is faint in both themes and feathers between regions without b
   assert.match(source, /<g clipPath="url\(#petal-sector-oval-clip\)" pointerEvents="none">\s*<g filter="url\(#petal-sector-feather\)">[\s\S]*?sectorGeometry\.map\(\(_, idx\) => \([\s\S]*?fill=\{\`url\(#petal-sector-gradient-\$\{idx\}\)\`\}/);
   // The filter closes before the dynamic drag target and before bubbles are rendered.
   const clippedStart = source.indexOf('<g clipPath="url(#petal-sector-oval-clip)"');
-  const filterEnd = source.indexOf('</g>\\n', clippedStart);
+  const filterEnd = source.indexOf('</g>\n            </g>', clippedStart);
   const dragTarget = source.indexOf('dragView?.changesSector && !dragView.target', clippedStart);
   const bubbleAnimation = source.indexOf('<AnimatePresence>', clippedStart);
-  assert.ok(clippedStart >= 0 && dragTarget > clippedStart && bubbleAnimation > dragTarget);
+  assert.ok(clippedStart >= 0 && filterEnd > clippedStart && dragTarget > filterEnd && bubbleAnimation > dragTarget);
   assert.match(source, /strokeWidth=\{isLightTheme \? 1\.5 : 1\.2\}/);
   assert.match(source, /strokeOpacity=\{isLightTheme \? 0\.22 : 0\.12\}/);
 });
