@@ -6,6 +6,7 @@ export const LATEST_NEWS_ID = '2026-10-20-task-completion-word-report';
 type UpdatesMenuProps = {
   open: boolean;
   onClose: () => void;
+  trainingOpenSignal?: number;
   onStartTaskTour: () => void;
   onStartAiTour: () => void;
   onStartFeatureTour: () => void;
@@ -15,8 +16,13 @@ type UpdatesMenuProps = {
   onNewsViewed?: () => void;
 };
 
-export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onStartFeatureTour, onStartWorkspaceTour, completedLessonIds, hasUnreadNews = false, onNewsViewed }: UpdatesMenuProps) {
+export function UpdatesMenu({ open, onClose, trainingOpenSignal = 0, onStartTaskTour, onStartAiTour, onStartFeatureTour, onStartWorkspaceTour, completedLessonIds, hasUnreadNews = false, onNewsViewed }: UpdatesMenuProps) {
   const [tab, setTab] = useState<'training' | 'news'>('training');
+
+  // The invitation must open Training even if the user last viewed News.
+  useEffect(() => {
+    if (trainingOpenSignal > 0) setTab('training');
+  }, [trainingOpenSignal]);
 
   useEffect(() => {
     if (open && tab === 'news') onNewsViewed?.();
