@@ -38,13 +38,13 @@ test('Android List and Timeline headers mirror Mini App topbar actions without o
   assert.match(toolbar, /No outer tinted container/);
   assert.match(toolbar, /if\(mode==WorkspaceMode\.TIMELINE\)/);
   assert.match(toolbar, /ToolbarButton\("Отложить"/);
-  assert.match(toolbar, /ToolbarButton\("Оптимизировать"/);
+  assert.match(toolbar, /ToolbarButton\("Просроченные задачи"/);
   assert.match(toolbar, /ToolbarButton\("Фильтры"/);
-  assert.match(toolbar, /enabled=false,dimDisabled=false/);
+  assert.match(toolbar, /onOpenOverdue/);
   assert.match(android, /onFilter\s*=\s*\{\s*filtersOpen=true\s*\}/);
   assert.match(android, /onPostpone\s*=\s*\{\s*vm\.postponeOverdue\(\)\s*\}/);
   assert.match(mini, /miniapp-workspace-utilities/);
   assert.match(mini, /miniapp-timeline-more-toggle/);
   assert.match(mini, /miniapp-timeline-postpone-button/);
-  assert.match(tools, /miniapp-workspace-tool-optimize/);
+  assert.match(tools, /miniapp-workspace-tool-overdue/);
 });
