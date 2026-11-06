@@ -32,6 +32,8 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
@@ -194,9 +196,11 @@ fun ModernWorkspace(
             .toList()
     }
     val workspaceScroll=rememberLazyListState()
-    // Keep the search/action row pinned; the empty area above it is reserved
-    // for a future native app control, without pulling the content upwards.
-    Box(Modifier.fillMaxSize()){
+    // Mini App's subtly blue-tinted background; task cards remain white.
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+        if(dark) listOf(Color(0xFF0E192B),Color(0xFF111C30))
+        else listOf(Color(0xFFF3F8FF),Color(0xFFEEF6FF),Color(0xFFF5F9FF))
+    ))){
     LazyColumn(
         state=workspaceScroll,
         modifier = Modifier.fillMaxSize(),
@@ -392,14 +396,15 @@ private fun WorkspaceTopbar(
     onCredits:()->Unit, onScore:()->Unit,
     onPostpone:()->Unit, canPostpone:Boolean
 ) {
-    val shape=RoundedCornerShape(13.dp)
-    val iconColor=if(dark)Color(0xFF94E4EC) else Color(0xFF0891B2)
+    val shape=RoundedCornerShape(18.dp)
+    val searchShape=RoundedCornerShape(21.dp)
+    val iconColor=if(dark)Color(0xFFFBBF24) else Color(0xFFEAB308)
     var moreOpen by remember(mode) { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.spacedBy(7.dp),
         verticalAlignment=Alignment.CenterVertically) {
         Surface(modifier=Modifier.weight(1f).height(44.dp),
-            shape=shape,color=colors.card,
-            border=BorderStroke(1.dp,colors.panelBorder),shadowElevation=2.dp) {
+            shape=searchShape,color=colors.card,
+            border=BorderStroke(1.dp,colors.panelBorder),shadowElevation=0.dp) {
             Row(Modifier.fillMaxSize().padding(start=11.dp,end=7.dp),
                 verticalAlignment=Alignment.CenterVertically) {
                 Icon(Icons.Default.Search, contentDescription=null, tint=colors.secondaryText,
@@ -432,7 +437,7 @@ private fun WorkspaceTopbar(
             val creditBorder=if(dark)Color(0xFF70405A) else Color(0xFFF2C5DD)
             Surface(modifier=Modifier.height(44.dp).clip(shape).clickable(onClick=onCredits),
                 shape=shape,color=creditFill,border=BorderStroke(1.dp,creditBorder),
-                shadowElevation=1.dp) {
+                shadowElevation=0.dp) {
                 Row(Modifier.padding(horizontal=9.dp),verticalAlignment=Alignment.CenterVertically,
                     horizontalArrangement=Arrangement.spacedBy(4.dp)) {
                     Icon(Icons.Default.Paid,"AI-кредиты",modifier=Modifier.size(16.dp),tint=creditColor)
@@ -443,21 +448,21 @@ private fun WorkspaceTopbar(
             Surface(modifier=Modifier.size(width=41.dp,height=44.dp)
                     .clip(shape).clickable(onClick=onScore),
                 shape=shape,color=colors.card,border=BorderStroke(1.dp,colors.panelBorder),
-                shadowElevation=1.dp) {
+                shadowElevation=0.dp) {
                 Box(contentAlignment=Alignment.Center) {
                     CircularProgressIndicator(progress={
                         ((state.user?.efficiencyScore ?: 0.0)/100.0).toFloat().coerceIn(0f,1f)
                     },modifier=Modifier.size(29.dp),strokeWidth=2.6.dp,
-                        color=Color(0xFF8B5CF6),trackColor=colors.panelBorder)
+                        color=Color(0xFF8B5CF6),trackColor=Color(0xFFA5B4FC).copy(alpha=.5f))
                     Icon(Icons.Default.Star,"Рейтинг эффективности",
-                        tint=if(dark)Color(0xFFD8B4FE) else Color(0xFF8B5CF6),
-                        modifier=Modifier.size(17.dp))
+                        tint=if(dark)Color(0xFF67E8F9) else Color(0xFF38BDF8),
+                        modifier=Modifier.size(19.dp))
                 }
             }
             Surface(modifier=Modifier.size(width=41.dp,height=44.dp)
                     .clip(shape).clickable(onClick=settings),
                 shape=shape,color=colors.card,border=BorderStroke(1.dp,colors.panelBorder),
-                shadowElevation=1.dp) {
+                shadowElevation=0.dp) {
                 Box(contentAlignment=Alignment.Center) {
                     Icon(Icons.Default.Settings,"Настройки",
                         modifier=Modifier.size(19.dp),tint=iconColor)
@@ -482,7 +487,7 @@ private fun WorkspaceTopbar(
                 Surface(modifier=Modifier.size(width=43.dp,height=44.dp)
                         .clip(shape).clickable { moreOpen=true },
                     shape=shape,color=colors.card,border=BorderStroke(1.dp,colors.panelBorder),
-                    shadowElevation=1.dp) {
+                    shadowElevation=0.dp) {
                     Box(contentAlignment=Alignment.Center) {
                         Icon(Icons.Default.MoreVert,"Кредиты, рейтинг и настройки",
                             tint=colors.text,modifier=Modifier.size(22.dp))
@@ -516,20 +521,22 @@ private fun WorkspaceTopbar(
 private fun HabitsStrip(habits:List<Habit>, colors:WorkspaceColors, dark:Boolean,
     onHabitClick:(Habit)->Unit, onAdd:()->Unit) {
     val shape=RoundedCornerShape(23.dp)
-    Surface(modifier=Modifier.shadow(if(dark)3.dp else 4.dp,shape,
-            ambientColor=if(dark)Color(0x22000000) else Color(0x1C394C6A),
-            spotColor=if(dark)Color(0x30000000) else Color(0x26394C6A)),
+    Surface(modifier=Modifier.shadow(if(dark)2.dp else 1.dp,shape,
+            ambientColor=if(dark)Color(0x15000000) else Color(0x0C394C6A),
+            spotColor=if(dark)Color(0x21000000) else Color(0x10394C6A)),
         shape=shape,color=colors.panel,
         border=BorderStroke(1.dp,colors.panelBorder),shadowElevation=0.dp) {
         Column(Modifier.fillMaxWidth().padding(15.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.SpaceBetween,
                 modifier=Modifier.fillMaxWidth()) {
-                Text("Привычки",style=MaterialTheme.typography.titleMedium,
+                Text("Привычки",fontSize=18.sp,
                     fontWeight=FontWeight.Bold,color=colors.text)
-                Surface(shape=CircleShape,color=colors.muted) {
+                val habitGreen=if(dark)Color(0xFF86EFAC) else Color(0xFF15803D)
+                Surface(shape=CircleShape,
+                    color=if(dark)Color(0xFF193A30) else Color(0xFFE7F6EF)) {
                     Text("Выполнено "+habits.count(::isHabitDoneToday)+" из "+habits.size,
                         modifier=Modifier.padding(horizontal=10.dp,vertical=6.dp),
-                        style=MaterialTheme.typography.labelSmall,color=colors.secondaryText)
+                        fontSize=12.sp,fontWeight=FontWeight.SemiBold,color=habitGreen)
                 }
             }
             LazyRow(horizontalArrangement=Arrangement.spacedBy(8.dp), contentPadding=PaddingValues(end=2.dp)) {
@@ -558,11 +565,18 @@ private fun HabitsStrip(habits:List<Habit>, colors:WorkspaceColors, dark:Boolean
                     }
                 }
                 item {
+                    val addGreen=if(dark)Color(0xFF6EE7B7) else Color(0xFF6DD9B6)
                     Box(Modifier.size(58.dp).clip(CircleShape)
-                        .border(1.dp,Color(0xFF34D399),CircleShape)
-                        .background(tinted(Color(0xFF34D399),colors.panel,.1f))
+                        .background(tinted(addGreen,colors.panel,.13f))
+                        .drawBehind {
+                            drawCircle(color=addGreen,radius=size.minDimension/2-1.dp.toPx(),
+                                style=Stroke(width=1.dp.toPx(),
+                                    pathEffect=PathEffect.dashPathEffect(
+                                        floatArrayOf(4.dp.toPx(),3.dp.toPx()),0f)))
+                        }
                         .clickable(onClick=onAdd),contentAlignment=Alignment.Center){
-                        Icon(Icons.Default.Add,"Добавить привычку",tint=Color(0xFF34D399),modifier=Modifier.size(19.dp))
+                        Icon(Icons.Default.Add,"Добавить привычку",
+                            tint=addGreen,modifier=Modifier.size(21.dp))
                     }
                 }
             }
@@ -620,11 +634,11 @@ private fun WorkspaceToolbar(
     ink:Color,fill:Color,border:Color,modifier:Modifier=Modifier,
     click:()->Unit,enabled:Boolean=true,dimDisabled:Boolean=true) {
     val iconInk=if(!enabled && dimDisabled)ink.copy(alpha=.55f) else ink
-    val shape=RoundedCornerShape(13.dp)
+    val shape=RoundedCornerShape(17.dp)
     // Never apply alpha to the entire chip: it reveals gray corners and
     // makes disabled "Отложить" look like it has extra blocks on both sides.
     Row(modifier.height(44.dp)
-        .shadow(1.dp,shape).clip(shape)
+        .clip(shape)
         .background(fill).border(1.dp,border,shape)
         .clickable(enabled=enabled,onClick=click)
         .padding(horizontal=4.dp),
@@ -678,18 +692,22 @@ private fun ModernTaskCard(task:Task,sphere:Sphere?,colors:WorkspaceColors,dark:
                             fontSize=12.sp,fontWeight=FontWeight.SemiBold,color=colors.text)
                     }
                 } else {
-                    Row(verticalAlignment=Alignment.CenterVertically) {
-                        Icon(Icons.Default.DateRange,null,modifier=Modifier.size(13.dp),tint=colors.secondaryText)
-                        Spacer(Modifier.width(5.dp))
-                        Text("Дедлайн: "+friendlyDue(task.dueDate),fontSize=12.sp,
-                            color=colors.secondaryText)
-                    }
-                    Row(verticalAlignment=Alignment.CenterVertically) {
-                        val tint=if(isOverdue) {if(dark)Color(0xFFFB7185) else Color(0xFFE11D48)}
-                            else if(dark)Color(0xFF7DD3FC) else Color(0xFF0369A1)
-                        Icon(Icons.Default.Schedule,null,modifier=Modifier.size(13.dp),tint=tint)
-                        Spacer(Modifier.width(5.dp))
-                        Text(remainingDue(task.dueDate),fontSize=12.sp,fontWeight=FontWeight.SemiBold,color=tint)
+                    // Preserve the title gap, tighten only the two metadata rows.
+                    Column(verticalArrangement=Arrangement.spacedBy(3.dp)) {
+                        Row(verticalAlignment=Alignment.CenterVertically) {
+                            Icon(Icons.Default.DateRange,null,modifier=Modifier.size(13.dp),tint=colors.secondaryText)
+                            Spacer(Modifier.width(5.dp))
+                            Text("Дедлайн: "+friendlyDue(task.dueDate),fontSize=12.sp,
+                                color=colors.secondaryText)
+                        }
+                        Row(verticalAlignment=Alignment.CenterVertically) {
+                            val tint=if(isOverdue) {if(dark)Color(0xFFFB7185) else Color(0xFFE11D48)}
+                                else if(dark)Color(0xFF7DD3FC) else Color(0xFF0369A1)
+                            Icon(Icons.Default.Schedule,null,modifier=Modifier.size(13.dp),tint=tint)
+                            Spacer(Modifier.width(5.dp))
+                            Text(remainingDue(task.dueDate),fontSize=12.sp,
+                                fontWeight=FontWeight.SemiBold,color=tint)
+                        }
                     }
                 }
             }
