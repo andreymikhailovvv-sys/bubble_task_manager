@@ -37,14 +37,15 @@ export function hillBoundaryCurve(
   const previous = geometries[(index + count - 1) % count];
   const current = geometries[index];
   const angle = current.startAngle;
-  // Gentle, one-sided quadratic arcs. With three sectors, the two lower
-  // boundaries bow away from each other like the user's simple hill sketch.
-  // Narrow sectors receive proportionally less bend to avoid crossings.
+  // Three soft petals around the oval. The walls bow gently away from the
+  // sector centre but retain their endpoints at the ellipse. Curvature scales
+  // with the *narrower* neighbouring sector: when one contains few tasks its
+  // borders cannot fold across each other.
   const safeAmplitude = count <= 1 ? 0
-    : Math.min(0.29, Math.min(previous.span, current.span) * 0.14);
+    : Math.min(0.34, Math.min(previous.span, current.span) * 0.17);
   const direction = count === 3
-    ? [0.18, 1, -1][index]
-    : (index % 2 === 0 ? 1 : -1);
+    ? [0.82, 0.78, -0.9][index]
+    : (index % 2 === 0 ? 0.8 : -0.8);
   const bow = safeAmplitude * direction;
   const c = Math.cos(angle);
   const s = Math.sin(angle);
