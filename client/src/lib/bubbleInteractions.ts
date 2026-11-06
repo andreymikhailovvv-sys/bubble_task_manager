@@ -324,8 +324,16 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
       }
       // Any candidate with a cost well below the next ring's minimum radial
       // penalty cannot be improved by examining the outer rings.
-      if (best && bounds.compact && !bounds.hillSectors?.length && !hasLink && bestScore < distance / halfY *
-        (highPriority(bubble) ? 205 : 245) - 4) break;
+      if (best && bounds.compact && !hasLink) {
+        if (bounds.hillSectors?.length) {
+          // After crossing the hilltop ring, no later ring can beat this cost.
+          // This preserves the packed layout's short-circuit performance.
+          const remainingLowerBound = Math.max(0, distance / halfY - 0.52) *
+            (highPriority(bubble) ? 255 : 65);
+          if (bestScore < remainingLowerBound - 4) break;
+        } else if (bestScore < distance / halfY *
+          (highPriority(bubble) ? 205 : 245) - 4) break;
+      }
     }
 
     if (!best) {
