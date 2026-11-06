@@ -436,7 +436,7 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
     positions.set(id, best ?? safeFallback ?? { ...preferred });
   }
 
-  if (bounds.compact && bounds.hillSectors?.length > 1) {
+  if (bounds.compact && bounds.hillSectors && bounds.hillSectors.length > 1) {
     // Final magnetic pass. Greedy packing can leave a long link when other
     // bubbles occupy the initially preferred space. Search the circumference
     // of each *already placed* neighbour for a closer valid docking spot.
@@ -483,12 +483,16 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
                   y: anchorPoint.y + Math.sin(angle) * dockRadius
                 };
                 if (!inside(mover, candidate)) continue;
-                const occupied = [...positions].some(([id, p]) => {
-                  if (id === mover.id) return false;
+                let occupied = false;
+                for (const [id, p] of positions) {
+                  if (id === mover.id) continue;
                   const other = byId.get(id)!;
-                  return Math.hypot(candidate.x - p.x, candidate.y - p.y) <
-                    mover.radius + other.radius + 13;
-                });
+                  if (Math.hypot(candidate.x - p.x, candidate.y - p.y) <
+                      mover.radius + other.radius + 13) {
+                    occupied = true;
+                    break;
+                  }
+                }
                 if (occupied) continue;
                 const gap = totalLinkGap(mover, candidate);
                 if (gap < bestGap - 2) {
