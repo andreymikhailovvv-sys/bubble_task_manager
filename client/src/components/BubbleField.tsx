@@ -3,10 +3,11 @@ import { TaskMonitoringBadge } from './TaskMonitoringBadge';
 import { CalendarDays, ChevronRight, Coins, Gauge, LoaderCircle, MessageCircle, Plus, Repeat, Sparkles, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { buildBubbles, buildSectorGeometry, getBubbleSectorIndex, getBubbleSectorSpheres, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
+import { buildSectorGeometry, getBubbleSectorIndex, getBubbleSectorSpheres, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
 import { hillBoundaryCurve, hillSectorIndexAtAngle } from '../lib/hillSectors';
 import { noteHtmlToPlainText } from '../lib/notes';
-import { bubbleLinkSegment, detectBubbleDrop, getLinkedBubbleGroups, linkedBubblePositions, type DropIntent, type VisualBubble } from '../lib/bubbleInteractions';
+import { bubbleLinkSegment, detectBubbleDrop, getLinkedBubbleGroups, type DropIntent, type VisualBubble } from '../lib/bubbleInteractions';
+import { useBubbleLayoutWorker } from '../hooks/useBubbleLayoutWorker';
 import { resolveSphereIcon } from '../lib/sphereIcons';
 import type { Sphere, Task } from '../lib/types';
 import { InlineDateTimePickerIcon } from './InlineDateTimePickerIcon';
@@ -550,66 +551,43 @@ export function BubbleField({
     [sectorCount, sectorTaskCounts]
   );
 
-  const bubbles = useMemo(() => {
-    const startedAt = performance.now();
-    const result = buildBubbles(tasks, spheres, mode, SIZE, rankingMode, subtaskMap);
-    const elapsedMs = performance.now() - startedAt;
-    if (elapsedMs > 80) {
-      console.warn('[BubbleLayoutSlow]', {
-        stage: 'initial', mode, taskCount: tasks.length, durationMs: Math.round(elapsedMs)
-      });
+  // First-pass physics and final magnetic packing both run in a Web Worker.
+  // Cached layouts also survive normal/fullscreen remounts, so switching back
+  // to an already visited mode does not repeat any expensive work.
+  const packedLayout = useBubbleLayoutWorker({
+    tasks, spheres, subtaskMap, rankingMode, mode, size: SIZE,
+    bounds: {
+      minX: BUBBLE_WORKSPACE_X + 10, maxX: VIEWBOX_RIGHT - 10,
+      minY: VIEWBOX_TOP + 20, maxY: VIEWBOX_BOTTOM - 20,
+      ellipse: { cx: BUBBLE_FIELD_CENTER_X, cy: BUBBLE_FIELD_CENTER_Y,
+        rx: ELLIPSE_RADIUS_X, ry: ELLIPSE_RADIUS_Y }
     }
-    return result;
-  }, [tasks, spheres, mode, rankingMode, subtaskMap]);
+  });
+  const bubbles = useMemo(() => {
+    if (!packedLayout) return [];
+    return packedLayout.bubbles.flatMap((packed) => {
+      const sourceTask = sourceTaskById.get(packed.id);
+      if (!sourceTask) return [];
+      const task = packed.effectiveDueDate === sourceTask.dueDate ? sourceTask
+        : { ...sourceTask, dueDate: packed.effectiveDueDate };
+      return [{
+        task,
+        x: packed.x, y: packed.y, radius: packed.radius,
+        color: packed.color, sectorIndex: packed.sectorIndex,
+        distanceRatio: packed.distanceRatio
+      }];
+    });
+  }, [packedLayout, sourceTaskById]);
   const mapToOval = useCallback((x: number, y: number) => ({
     x: BUBBLE_FIELD_CENTER_X + (x - SIZE / 2) * ELLIPSE_X_SCALE,
     y: BUBBLE_FIELD_CENTER_Y + (y - SIZE / 2) * ELLIPSE_Y_SCALE
   }), []);
 
   const visibleBubbles = bubbles;
-  const bubbleVisualPositions = useMemo(() => {
-    const startedAt = performance.now();
-    const diagnostics = { candidateChecks: 0, fallbackScans: 0 };
-    const result = linkedBubblePositions(
-    bubbles.map((bubble) => {
-      const point = mapToOval(bubble.x, bubble.y);
-      const savedX = mode === 'global' ? bubble.task.bubbleGlobalX : bubble.task.bubbleSectorX;
-      const savedY = mode === 'global' ? bubble.task.bubbleGlobalY : bubble.task.bubbleSectorY;
-      return {
-        id: bubble.task.id, x: point.x, y: point.y, radius: bubble.radius, sectorIndex: bubble.sectorIndex,
-        coefficient: getTaskCoefficient(bubble.task, subtaskMap),
-        linkedTaskIds: bubble.task.linkedTaskIds, bubbleLinkAnchorId: bubble.task.bubbleLinkAnchorId,
-        pinned: typeof savedX === 'number' && typeof savedY === 'number'
-      };
-    }),
-    {
-      minX: BUBBLE_WORKSPACE_X + 10, maxX: VIEWBOX_RIGHT - 10,
-      minY: VIEWBOX_TOP + 20, maxY: VIEWBOX_BOTTOM - 20,
-      ellipse: { cx: BUBBLE_FIELD_CENTER_X, cy: BUBBLE_FIELD_CENTER_Y, rx: ELLIPSE_RADIUS_X, ry: ELLIPSE_RADIUS_Y },
-      compact: true,
-      diagnostics,
-      hillSectors: mode === 'sectors' && sectorCount > 1 ? sectorGeometry : undefined,
-      sectors: mode === 'sectors' && sectorCount > 1
-        ? sectorGeometry.map((geometry) => ({
-          start: { x: Math.cos(geometry.startAngle) * ELLIPSE_X_SCALE,
-            y: Math.sin(geometry.startAngle) * ELLIPSE_Y_SCALE },
-          end: { x: Math.cos(geometry.endAngle) * ELLIPSE_X_SCALE,
-            y: Math.sin(geometry.endAngle) * ELLIPSE_Y_SCALE }
-        }))
-        : undefined
-    }
-    );
-    const elapsedMs = performance.now() - startedAt;
-    if (elapsedMs > 80) {
-      console.warn('[BubbleLayoutSlow]', {
-        stage: 'packing', mode, taskCount: bubbles.length,
-        durationMs: Math.round(elapsedMs),
-        candidateChecks: diagnostics.candidateChecks,
-        fallbackScans: diagnostics.fallbackScans
-      });
-    }
-    return result;
-  }, [bubbles, mapToOval, mode, sectorCount, sectorGeometry, subtaskMap]);
+  const bubbleVisualPositions = useMemo(
+    () => new Map(packedLayout?.positions ?? []),
+    [packedLayout]
+  );
   const getBubbleVisualPoint = (bubble: (typeof bubbles)[number]) =>
     bubbleVisualPositions.get(bubble.task.id) ?? mapToOval(bubble.x, bubble.y);
   const getSectorIndexAtPoint = (point: { x: number; y: number }) => {
@@ -1297,6 +1275,13 @@ export function BubbleField({
               pointerEvents="none" />
           )}
 
+          {!packedLayout && (
+            <text x={BUBBLE_FIELD_CENTER_X} y={BUBBLE_FIELD_CENTER_Y}
+              textAnchor="middle" fill="currentColor" opacity={0.5}
+              fontSize={18} pointerEvents="none">
+              Расставляем задачи…
+            </text>
+          )}
           <AnimatePresence>
             {orderedGroups.map(({ key, anchor, members, edges }) => {
               if (members.length === 1) return renderBubble(anchor);
