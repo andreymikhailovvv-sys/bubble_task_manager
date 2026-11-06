@@ -6,6 +6,8 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.rememberPagerState
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.*
 import androidx.compose.material.icons.Icons
@@ -16,6 +18,9 @@ import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,6 +39,12 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     notificationTaskId:String?=null,openGeneralAi:Boolean=false,
     quickAiMode:String?=null,quickAiRequestId:Int=0) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val focusManager=LocalFocusManager.current
+    val softwareKeyboard=LocalSoftwareKeyboardController.current
+    val density=LocalDensity.current
+    val imeInsets=WindowInsets.ime
+    // Do not mount a bottom sheet while the search IME is animating out.
+    var pendingFocusTaskId by remember{mutableStateOf<String?>(null)}
     var settings by remember { mutableStateOf(false) }
     var creationMenu by remember { mutableStateOf(false) }
     var creationType by remember { mutableStateOf<TaskType?>(null) }
@@ -71,6 +82,18 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     }
     var authMode by remember { mutableStateOf<AuthMode?>(null) }
     var openedTaskId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(pendingFocusTaskId){
+        val target=pendingFocusTaskId ?: return@LaunchedEffect
+        // Inset goes to zero when the keyboard has actually finished closing.
+        // The timeout avoids a stuck tap on OEM keyboards that never report zero.
+        withTimeoutOrNull(850L){
+            snapshotFlow{imeInsets.getBottom(density)}.first{it==0}
+        }
+        if(pendingFocusTaskId==target){
+            openedTaskId=target
+            pendingFocusTaskId=null
+        }
+    }
     var newSubtaskParentId by remember { mutableStateOf<String?>(null) }
     // Keep the parent focus sheet mounted while its subtask dialog is open.
     var overlaySubtaskId by remember { mutableStateOf<String?>(null) }
@@ -204,8 +227,15 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
             state.error != null -> ErrorState(state.error!!, vm::refresh, Modifier.padding(padding))
             else -> ModernWorkspace(
                 vm, state, dark, vm::search, { settings = true },
-                onOpenTask = {
-                    openedTaskId = it
+                onOpenTask = { taskId ->
+                    focusManager.clearFocus(force=true)
+                    softwareKeyboard?.hide()
+                    if(imeInsets.getBottom(density)>0){
+                        pendingFocusTaskId=taskId
+                    }else{
+                        openedTaskId=taskId
+                        pendingFocusTaskId=null
+                    }
                     subtaskReturnToTaskId = null
                     newSubtaskParentId = null
                     overlaySubtaskId = null

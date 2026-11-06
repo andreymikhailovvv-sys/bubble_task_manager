@@ -105,6 +105,7 @@ fun MiniAppTaskFocusSheet(
     var notifyMenu by remember{mutableStateOf(false)}
     var descriptionExpanded by remember{mutableStateOf(false)}
     val resizeDensity=LocalDensity.current
+    val imeVisible=WindowInsets.ime.getBottom(resizeDensity)>0
     val descriptionSizePrefs=remember(ctx) {
         ctx.getSharedPreferences("task_focus_description_sizes",Context.MODE_PRIVATE)
     }
@@ -221,7 +222,7 @@ fun MiniAppTaskFocusSheet(
             }
             .imePadding()){
             Row(Modifier.fillMaxWidth()
-                .padding(start=18.dp,end=18.dp,top=12.dp,bottom=15.dp),
+                .padding(start=18.dp,end=18.dp,top=4.dp,bottom=12.dp),
                 verticalAlignment=Alignment.Top,
                 horizontalArrangement=Arrangement.SpaceBetween){
                 BasicTextField(value=title,onValueChange={title=it;onClearError()},
@@ -406,7 +407,7 @@ fun MiniAppTaskFocusSheet(
                         confirmation="delete"
                     }
                 }
-                if(task.taskType!=TaskType.EVENT){
+                if(task.taskType!=TaskType.EVENT && !imeVisible){
                     Spacer(Modifier.height(9.dp))
                     FocusAction("Открыть диалог с ИИ",Icons.Default.SmartToy,c.purple,
                         Modifier.fillMaxWidth(),enabled=!busy,
@@ -497,6 +498,21 @@ fun MiniAppTaskFocusSheet(
                 }
                 error?.let{Text(it,color=c.red,fontSize=12.sp,
                     modifier=Modifier.padding(top=12.dp))}
+            }
+            // When editing the title, never bury the AI action under the IME.
+            // Otherwise it remains in its original position before subtasks.
+            if(imeVisible && task.taskType!=TaskType.EVENT){
+                Box(Modifier.fillMaxWidth()
+                    .padding(start=18.dp,end=18.dp,top=5.dp,bottom=8.dp)){
+                    FocusAction("Открыть диалог с ИИ",
+                        Icons.Default.SmartToy,c.purple,Modifier.fillMaxWidth(),
+                        enabled=!busy,
+                        gradient=Brush.horizontalGradient(listOf(
+                            Color(0xFFAF4BF3),Color(0xFF6559EE))),
+                        shine=true){
+                        saveThen { onOpenAiChat(task.id) }
+                    }
+                }
             }
         }
     }

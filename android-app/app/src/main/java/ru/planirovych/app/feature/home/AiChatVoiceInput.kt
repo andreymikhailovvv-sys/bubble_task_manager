@@ -307,17 +307,24 @@ internal fun AiChatMicrophoneButton(
 @Composable
 internal fun MiniAppAiSendIcon(tint:Color){
     Canvas(Modifier.size(21.dp).semantics{contentDescription="Отправить"}){
+        // Outlined SendHorizontal: a single non-intersecting contour and one
+        // center stroke. The previous crossed lines looked like a bent arrow.
         val w=size.width
         val h=size.height
-        val width=2.dp.toPx()
-        val tip=Offset(w*.89f,h*.5f)
-        val upper=Offset(w*.12f,h*.16f)
-        val lower=Offset(w*.12f,h*.84f)
-        val middle=Offset(w*.39f,h*.5f)
-        drawLine(tint,upper,tip,width,cap=StrokeCap.Round)
-        drawLine(tint,tip,lower,width,cap=StrokeCap.Round)
-        drawLine(tint,lower,middle,width,cap=StrokeCap.Round)
-        drawLine(tint,middle,tip,width,cap=StrokeCap.Round)
+        val thickness=1.9.dp.toPx()
+        val tip=Offset(w*.91f,h*.50f)
+        val middle=Offset(w*.25f,h*.50f)
+        val contour=androidx.compose.ui.graphics.Path().apply {
+            moveTo(w*.12f,h*.14f)
+            lineTo(middle.x,middle.y)
+            lineTo(w*.12f,h*.86f)
+            lineTo(tip.x,tip.y)
+            close()
+        }
+        drawPath(contour,tint,style=androidx.compose.ui.graphics.drawscope.Stroke(
+            width=thickness,cap=StrokeCap.Round,
+            join=androidx.compose.ui.graphics.StrokeJoin.Round))
+        drawLine(tint,middle,tip,thickness,cap=StrokeCap.Round)
     }
 }
 
