@@ -276,3 +276,94 @@ test('sector priority layers stay soft for pinned tasks and do not change global
   });
   assert.deepEqual(original.get('saved'), { x: pinned.x, y: pinned.y });
 });
+
+test('a dense sector behaves like the global circle: biggest coefficient stays in the inner nucleus', () => {
+  const geometry = buildSectorGeometry(3, [8, 8, 8]);
+  const ellipse = { cx: 450, cy: 450, rx: 425, ry: 425 };
+  const ranking = [
+    { coefficient: 0.98, radius: 60 },
+    { coefficient: 0.86, radius: 54 },
+    { coefficient: 0.75, radius: 45 },
+    { coefficient: 0.53, radius: 36 },
+    { coefficient: 0.32, radius: 27 },
+    { coefficient: 0.21, radius: 24 },
+    { coefficient: 0.11, radius: 21 },
+    { coefficient: 0.05, radius: 19 }
+  ];
+  const bubbles = geometry.flatMap((sector, sectorIndex) =>
+    ranking.map(({ coefficient, radius }, index) => {
+      const angle = sector.midAngle + (index % 2 === 0 ? 0.25 : -0.25);
+      return {
+        id: `${sectorIndex}-${index}`, sectorIndex, coefficient, radius,
+        x: ellipse.cx + Math.cos(angle) * ellipse.rx * 0.74,
+        y: ellipse.cy + Math.sin(angle) * ellipse.ry * 0.74
+      };
+    })
+  );
+  const placed = linkedBubblePositions(bubbles, {
+    minX: 15, maxX: 885, minY: 15, maxY: 885,
+    ellipse, hillSectors: geometry, compact: true
+  });
+  const distance = (id: string) => {
+    const p = placed.get(id)!;
+    return Math.hypot((p.x - ellipse.cx) / ellipse.rx, (p.y - ellipse.cy) / ellipse.ry);
+  };
+  for (let sectorIndex = 0; sectorIndex < 3; sectorIndex += 1) {
+    const innerAvg = (distance(`${sectorIndex}-0`) + distance(`${sectorIndex}-1`)) / 2;
+    const outerAvg = (distance(`${sectorIndex}-5`) + distance(`${sectorIndex}-6`) + distance(`${sectorIndex}-7`)) / 3;
+    assert.ok(innerAvg + 0.12 < outerAvg,
+      `sector ${sectorIndex} important tasks did not gather inside: ${innerAvg} vs ${outerAvg}`);
+  }
+});
+
+test('linked tasks stay physically close in the same sector even when initially scattered', () => {
+  const geometry = buildSectorGeometry(3, [7, 7, 7]);
+  const ellipse = { cx: 450, cy: 450, rx: 425, ry: 425 };
+  const chain = [0, 1, 2, 3].map(index => ({
+    id: `chain-${index}`, sectorIndex: 1,
+    coefficient: 0.92 - index * 0.16, radius: 33 - index * 3,
+    linkedTaskIds: [index > 0 ? `chain-${index - 1}` : '', index < 3 ? `chain-${index + 1}` : ''].filter(Boolean),
+    x: 140 + index * 168, y: 160 + (index % 2) * 420
+  }));
+  const placed = linkedBubblePositions(chain, {
+    minX: 15, maxX: 885, minY: 15, maxY: 885,
+    ellipse, hillSectors: geometry, compact: true
+  });
+  for (let index = 0; index < chain.length - 1; index++) {
+    const a = placed.get(chain[index].id)!;
+    const b = placed.get(chain[index + 1].id)!;
+    const gap = Math.hypot(a.x - b.x, a.y - b.y) -
+      chain[index].radius - chain[index + 1].radius;
+    assert.ok(gap >= 12.9 && gap <= 54,
+      `linked chain edge ${index} too long: ${gap}`);
+  }
+});
+
+test('a cross-sector link seeks the shared border instead of being ignored', () => {
+  const geometry = buildSectorGeometry(3, [5, 5, 5]);
+  const ellipse = { cx: 450, cy: 450, rx: 425, ry: 425 };
+  const a = {
+    id: 'work', sectorIndex: 0, coefficient: 0.7, radius: 34,
+    linkedTaskIds: ['personal'],
+    x: 740, y: 220
+  };
+  const b = {
+    id: 'personal', sectorIndex: 1, coefficient: 0.5, radius: 32,
+    linkedTaskIds: ['work'],
+    x: 250, y: 800
+  };
+  const placed = linkedBubblePositions([a, b], {
+    minX: 15, maxX: 885, minY: 15, maxY: 885,
+    ellipse, hillSectors: geometry, compact: true
+  });
+  const pa = placed.get(a.id)!;
+  const pb = placed.get(b.id)!;
+  const gap = Math.hypot(pa.x - pb.x, pa.y - pb.y) - a.radius - b.radius;
+  assert.ok(gap >= 12.9 && gap < 90, `cross-sector connected tasks are too far apart: ${gap}`);
+  for (const bubble of [a, b]) {
+    const p = placed.get(bubble.id)!;
+    const dx = (p.x - ellipse.cx) / ellipse.rx;
+    const dy = (p.y - ellipse.cy) / ellipse.ry;
+    assert.equal(hillSectorIndexAtAngle(Math.atan2(dy, dx), Math.hypot(dx, dy), geometry), bubble.sectorIndex);
+  }
+});
