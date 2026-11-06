@@ -57,7 +57,7 @@ test('both expensive passes are absent from React rendering and run in worker', 
   assert.match(field, /useBubbleLayoutWorker\(/);
   assert.match(hook, /new Worker\(new URL\(/);
   assert.match(hook, /mode === 'global' \? 'sectors' : 'global'/);
-  assert.match(hook, /worker\.terminate\(\)/);
+  assert.match(hook, /worker\?\.terminate\(\)/);
   assert.match(worker, /computeBubbleLayout\(/);
   assert.match(compute, /buildBubbles\(/);
   assert.match(compute, /linkedBubblePositions\(/);
