@@ -451,11 +451,19 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
     }
 
     if (!best) {
-      // Extremely crowded/physically infeasible inputs should remain finite.
-      // Search a finer spiral before conceding any overlap.
-      for (let distance = 0; distance < Math.max(halfX, halfY) && !best; distance += 5) {
-        for (let a = 0; a < 128; a++) {
-          const angle = a * Math.PI / 64;
+      // Retain a fine fallback for dense sectors, but never scan hundreds of
+      // angles belonging to OTHER sectors. Sampling the same Bézier geometry
+      // with an offset phase finds gaps missed by the coarse pass.
+      const fineStep = sectorPacking ? 6 : 5;
+      for (let distance = startRadius; distance < Math.max(halfX, halfY) && !best; distance += fineStep) {
+        const region = sectorPacking && bounds.hillSectors
+          ? hillSectorAnglesAtRadius(bounds.hillSectors, sectorOf(bubble), distance / Math.max(1, halfY))
+          : null;
+        const samples = region ? Math.max(40, Math.ceil(128 * region.span / (2 * Math.PI))) : 128;
+        for (let a = 0; a < samples; a++) {
+          const angle = region
+            ? region.start + region.span * (a + 0.25) / samples
+            : a * Math.PI / 64;
           consider({ x: centre.x + distance * Math.cos(angle) * halfX / Math.max(1, halfY),
             y: centre.y + distance * Math.sin(angle) });
         }
@@ -507,8 +515,8 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
 
             for (const offset of [0, 12, 28]) {
               const dockRadius = mover.radius + fixed.radius + LINK_GAP + offset;
-              for (let step = 0; step < 48; step += 1) {
-                const angle = 2 * Math.PI * step / 48;
+              for (let step = 0; step < 32; step += 1) {
+                const angle = 2 * Math.PI * step / 32;
                 const candidate = {
                   x: anchorPoint.x + Math.cos(angle) * dockRadius,
                   y: anchorPoint.y + Math.sin(angle) * dockRadius
