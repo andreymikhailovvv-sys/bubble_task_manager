@@ -15,6 +15,8 @@ import android.text.style.StyleSpan
 import android.text.style.UnderlineSpan
 import android.text.style.URLSpan
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.EditText
 import androidx.compose.foundation.*
@@ -50,6 +52,38 @@ private class RichNativeEditText(context:Context):EditText(context) {
     var dirty=false
     var sentHtml:String?=null
     private var internalChange=false
+    private var lastPointerY=0f
+    private var startPointerX=0f
+    private var startPointerY=0f
+    private var draggingContent=false
+    private val touchSlop=ViewConfiguration.get(context).scaledTouchSlop
+
+    // Keep native cursor placement/selection, while giving long text a faster
+    // vertical gesture. Apply extra scroll only for clearly vertical drags.
+    override fun onTouchEvent(event:MotionEvent):Boolean {
+        when(event.actionMasked){
+            MotionEvent.ACTION_DOWN->{
+                startPointerX=event.x;startPointerY=event.y
+                lastPointerY=event.y;draggingContent=false
+            }
+            MotionEvent.ACTION_MOVE->{
+                val dx=kotlin.math.abs(event.x-startPointerX)
+                val dy=kotlin.math.abs(event.y-startPointerY)
+                draggingContent=draggingContent ||
+                    (dy>touchSlop && dy>dx*1.3f)
+                val previous=lastPointerY
+                lastPointerY=event.y
+                val consumed=super.onTouchEvent(event)
+                if(draggingContent && !hasSelection() && canScrollVertically(
+                        if(previous>event.y)1 else -1)) {
+                    scrollBy(0,((previous-event.y)*1.2f).toInt())
+                }
+                return consumed
+            }
+            MotionEvent.ACTION_UP,MotionEvent.ACTION_CANCEL->draggingContent=false
+        }
+        return super.onTouchEvent(event)
+    }
 
     init {
         setSingleLine(false)
@@ -269,58 +303,79 @@ internal fun NativeRichTextEditor(
     onChange:(String)->Unit,
     dark:Boolean,
     modifier:Modifier=Modifier,
-    editorKey:String="description"
+    editorKey:String="description",
+    inline:Boolean=false
 ) {
     val latestChange by rememberUpdatedState(onChange)
     val state=remember(editorKey,dark){mutableStateOf<RichNativeEditText?>(null)}
     val ink=if(dark)Color(0xFFF1F5F9) else Color(0xFF172238)
     val border=if(dark)Color(0xFF45536D) else Color(0xFFD8E2EF)
     val surface=if(dark)Color(0xFF202C43) else Color(0xFFF8F8FF)
+    var listPickerOpen by remember { mutableStateOf(false) }
     Column(modifier){
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-            .background(surface).padding(horizontal=8.dp,vertical=8.dp),
-            horizontalArrangement=Arrangement.spacedBy(5.dp)){
+        if(!inline){
             val actions=listOf(
-                Triple("T","plain","Обычный текст"),
-                Triple("H1","h1","Заголовок 1"),
-                Triple("H2","h2","Заголовок 2"),
+                Triple("×","plain","Обычный текст"),
+                Triple("H₁","h1","Заголовок первого уровня"),
+                Triple("H₂","h2","Заголовок второго уровня"),
                 Triple("B","bold","Жирный"),
-                Triple("I","italic","Курсив"),
                 Triple("U","underline","Подчёркнутый"),
+                Triple("I","italic","Курсив"),
                 Triple("S","strike","Зачёркнутый"),
-                Triple("• ☰","bullets","Список точками"),
-                Triple("1. ☰","numbers","Нумерованный список"),
+                Triple("☷","list","Список"),
                 Triple("☑","checks","Чекбоксы")
             )
-            actions.forEach{(label,command,description)->
-                Surface(
-                    shape=RoundedCornerShape(18.dp),
-                    color=if(dark)Color(0xFF18243A) else Color.White,
-                    border=BorderStroke(1.dp,border)
-                ){
-                    Box(Modifier.defaultMinSize(minWidth=36.dp)
-                        .height(35.dp)
-                        .clickable { state.value?.format(command) }
-                        .padding(horizontal=9.dp),
-                        contentAlignment=androidx.compose.ui.Alignment.Center){
-                        Text(label,color=ink,fontSize=13.sp,
-                            fontWeight=FontWeight.SemiBold,maxLines=1)
+            Row(Modifier.fillMaxWidth()
+                .background(surface)
+                .padding(horizontal=6.dp,vertical=8.dp),
+                horizontalArrangement=Arrangement.spacedBy(3.dp)){
+                actions.forEach{(label,command,description)->
+                    Box(Modifier.weight(1f)){
+                        Box(Modifier.fillMaxWidth().height(36.dp)
+                            .border(1.dp,border.copy(alpha=.75f),RoundedCornerShape(50))
+                            .clickable {
+                                if(command=="list")listPickerOpen=true
+                                else state.value?.format(command)
+                            },contentAlignment=androidx.compose.ui.Alignment.Center){
+                            Text(label,color=ink,fontSize=if(label.startsWith("H"))11.sp else 15.sp,
+                                fontWeight=FontWeight.SemiBold,maxLines=1)
+                        }
+                        if(command=="list") {
+                            DropdownMenu(expanded=listPickerOpen,
+                                onDismissRequest={listPickerOpen=false}){
+                                DropdownMenuItem(text={Text("Маркированный список")},
+                                    onClick={
+                                        state.value?.format("bullets")
+                                        listPickerOpen=false
+                                    })
+                                DropdownMenuItem(text={Text("Нумерованный список")},
+                                    onClick={
+                                        state.value?.format("numbers")
+                                        listPickerOpen=false
+                                    })
+                            }
+                        }
                     }
                 }
             }
+            HorizontalDivider(color=border)
         }
-        HorizontalDivider(color=border)
-        Text("Выделите текст для форматирования или добавьте список в позиции курсора.",
-            color=if(dark)Color(0xFFA5B4CA) else Color(0xFF64748B),
-            fontSize=11.sp,modifier=Modifier.padding(start=12.dp,end=12.dp,top=8.dp,bottom=4.dp))
-        AndroidView(modifier=Modifier.fillMaxWidth().weight(1f),
+        AndroidView(modifier=if(inline)Modifier.fillMaxSize()
+            else Modifier.fillMaxWidth().weight(1f),
             factory={ctx->
                 RichNativeEditText(ctx).apply {
                     setTextColor(if(dark)android.graphics.Color.rgb(241,245,249)
                         else android.graphics.Color.rgb(23,34,56))
                     setHintTextColor(if(dark)android.graphics.Color.rgb(165,180,202)
                         else android.graphics.Color.rgb(100,116,139))
-                    hint="Пишите заметки, детали задачи, ссылки и план действий…"
+                    hint=if(inline)"Введите описание"
+                        else "Пишите заметки, детали задачи, ссылки и план действий…"
+                    if(inline){
+                        val d=resources.displayMetrics.density
+                        setPadding((12*d).toInt(),(10*d).toInt(),
+                            (12*d).toInt(),(10*d).toInt())
+                        textSize=14f
+                    }
                     layoutParams=ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT)
                     onHtmlEdited={latestChange(it)}
@@ -350,14 +405,17 @@ internal fun NativeRichDescriptionDialog(
     Dialog(onDismissRequest=onClose,
         properties=DialogProperties(usePlatformDefaultWidth=false)){
         Surface(Modifier.fillMaxSize().imePadding()
-            .padding(horizontal=9.dp,vertical=25.dp),
+            .padding(horizontal=0.dp,vertical=16.dp),
             shape=RoundedCornerShape(22.dp),color=bg){
             Column(Modifier.fillMaxSize()){
-                Row(Modifier.fillMaxWidth().padding(start=17.dp,end=10.dp,top=9.dp,bottom=8.dp),
-                    verticalAlignment=androidx.compose.ui.Alignment.CenterVertically){
-                    Text(title,Modifier.weight(1f),fontSize=17.sp,
-                        fontWeight=FontWeight.Bold,color=ink)
-                    TextButton(onClick=onClose){Text("Готово")}
+                Row(Modifier.fillMaxWidth().padding(start=17.dp,end=10.dp,top=10.dp,bottom=7.dp),
+                    verticalAlignment=androidx.compose.ui.Alignment.Top){
+                    Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)){
+                        Text(title,fontSize=18.sp,fontWeight=FontWeight.Bold,color=ink)
+                        Text("Выделите текст для форматирования или добавьте список/чекбоксы в текущую позицию курсора.",
+                            fontSize=11.sp,lineHeight=15.sp,
+                            color=if(dark)Color(0xFFA5B4CA) else Color(0xFF64748B))
+                    }
                     IconButton(onClick=onClose){
                         Icon(Icons.Default.Close,"Закрыть",tint=ink)
                     }
