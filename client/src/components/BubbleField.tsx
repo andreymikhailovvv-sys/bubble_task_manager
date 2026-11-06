@@ -550,17 +550,27 @@ export function BubbleField({
     [sectorCount, sectorTaskCounts]
   );
 
-  const bubbles = useMemo(
-    () => buildBubbles(tasks, spheres, mode, SIZE, rankingMode, subtaskMap),
-    [tasks, spheres, mode, rankingMode, subtaskMap]
-  );
+  const bubbles = useMemo(() => {
+    const startedAt = performance.now();
+    const result = buildBubbles(tasks, spheres, mode, SIZE, rankingMode, subtaskMap);
+    const elapsedMs = performance.now() - startedAt;
+    if (elapsedMs > 80) {
+      console.warn('[BubbleLayoutSlow]', {
+        stage: 'initial', mode, taskCount: tasks.length, durationMs: Math.round(elapsedMs)
+      });
+    }
+    return result;
+  }, [tasks, spheres, mode, rankingMode, subtaskMap]);
   const mapToOval = useCallback((x: number, y: number) => ({
     x: BUBBLE_FIELD_CENTER_X + (x - SIZE / 2) * ELLIPSE_X_SCALE,
     y: BUBBLE_FIELD_CENTER_Y + (y - SIZE / 2) * ELLIPSE_Y_SCALE
   }), []);
 
   const visibleBubbles = bubbles;
-  const bubbleVisualPositions = useMemo(() => linkedBubblePositions(
+  const bubbleVisualPositions = useMemo(() => {
+    const startedAt = performance.now();
+    const diagnostics = { candidateChecks: 0, fallbackScans: 0 };
+    const result = linkedBubblePositions(
     bubbles.map((bubble) => {
       const point = mapToOval(bubble.x, bubble.y);
       const savedX = mode === 'global' ? bubble.task.bubbleGlobalX : bubble.task.bubbleSectorX;
@@ -577,6 +587,7 @@ export function BubbleField({
       minY: VIEWBOX_TOP + 20, maxY: VIEWBOX_BOTTOM - 20,
       ellipse: { cx: BUBBLE_FIELD_CENTER_X, cy: BUBBLE_FIELD_CENTER_Y, rx: ELLIPSE_RADIUS_X, ry: ELLIPSE_RADIUS_Y },
       compact: true,
+      diagnostics,
       hillSectors: mode === 'sectors' && sectorCount > 1 ? sectorGeometry : undefined,
       sectors: mode === 'sectors' && sectorCount > 1
         ? sectorGeometry.map((geometry) => ({
@@ -587,7 +598,18 @@ export function BubbleField({
         }))
         : undefined
     }
-  ), [bubbles, mapToOval, mode, sectorCount, sectorGeometry, subtaskMap]);
+    );
+    const elapsedMs = performance.now() - startedAt;
+    if (elapsedMs > 80) {
+      console.warn('[BubbleLayoutSlow]', {
+        stage: 'packing', mode, taskCount: bubbles.length,
+        durationMs: Math.round(elapsedMs),
+        candidateChecks: diagnostics.candidateChecks,
+        fallbackScans: diagnostics.fallbackScans
+      });
+    }
+    return result;
+  }, [bubbles, mapToOval, mode, sectorCount, sectorGeometry, subtaskMap]);
   const getBubbleVisualPoint = (bubble: (typeof bubbles)[number]) =>
     bubbleVisualPositions.get(bubble.task.id) ?? mapToOval(bubble.x, bubble.y);
   const getSectorIndexAtPoint = (point: { x: number; y: number }) => {
