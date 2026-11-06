@@ -9452,8 +9452,8 @@ body[data-theme='light'] .miniapp-ai-chat-message-user .ai-attachment-tiles-hist
   border-color: rgba(251, 113, 133, .34);
   background: rgba(244, 63, 94, .15);
   color: #fda4af;
-  opacity: .78;
-  cursor: not-allowed;
+  opacity: 1;
+  cursor: pointer;
 }
 .miniapp-workspace-tool-filter {
   position: relative;
