@@ -852,7 +852,7 @@ internal fun NativeTaskAiProgressChip(status:String,c:TaskChatColors){
     val sweep by transition.animateFloat(initialValue=0f,targetValue=3f,
         animationSpec=infiniteRepeatable(tween(1250),RepeatMode.Restart),
         label="status-segment")
-    Row(Modifier.fillMaxWidth().padding(vertical=11.dp,start=7.dp),
+    Row(Modifier.fillMaxWidth().padding(start=7.dp,top=11.dp,bottom=11.dp),
         verticalAlignment=Alignment.CenterVertically,
         horizontalArrangement=Arrangement.spacedBy(11.dp)){
         Box(Modifier.size(38.dp).clip(CircleShape)
