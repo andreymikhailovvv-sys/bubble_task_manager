@@ -417,3 +417,15 @@ test('sector packing keeps the search budget bounded when switching a busy works
     }
   }
 });
+
+test('fullscreen dark bubble background preserves the ordinary subtle canvas gradient', async () => {
+  const styles = await readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8');
+  const flatDarkRule = styles.indexOf("body[data-theme='dark'] .app-shell {");
+  const fullscreenDarkRule = styles.indexOf("body[data-theme='dark'] .app-shell.bubble-fullscreen-shell {");
+  assert.ok(flatDarkRule >= 0, 'neutral dark background rule must stay in place for normal screens');
+  assert.ok(fullscreenDarkRule > flatDarkRule, 'fullscreen gradient must override the flat dark app shell');
+  assert.match(styles.slice(fullscreenDarkRule, fullscreenDarkRule + 220),
+    /background: var\(--bubble-field-bg\), var\(--canvas-bg\);/);
+  assert.match(styles, /\.bubble-field-container \{[\s\S]*?background: var\(--bubble-field-bg\), var\(--canvas-bg\);/);
+  assert.match(styles, /\.bubble-fullscreen-shell \.bubble-field-container \{\s*background: transparent;/);
+});
