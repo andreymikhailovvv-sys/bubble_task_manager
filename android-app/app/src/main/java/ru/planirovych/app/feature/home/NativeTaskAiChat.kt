@@ -266,7 +266,7 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
     var headerHidden by remember(task.id){mutableStateOf(false)}
     var composerHeightPx by remember(task.id){mutableIntStateOf(0)}
     val composerBottomPadding=with(LocalDensity.current){
-        if(composerHeightPx>0)composerHeightPx.toDp()+12.dp else 102.dp
+        if(composerHeightPx>0)composerHeightPx.toDp()+28.dp else 116.dp
     }
     var historyPositioned by remember(task.id){mutableStateOf(false)}
     LaunchedEffect(task.id){
@@ -332,7 +332,11 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
         properties=DialogProperties(usePlatformDefaultWidth=false)){
         Surface(Modifier.fillMaxSize().imePadding(),color=c.bg,
             shape=RoundedCornerShape(0.dp)){
-            Column(Modifier.fillMaxSize()){
+            Column(Modifier.fillMaxSize().background(
+                Brush.verticalGradient(if(dark)
+                    listOf(c.bg,Color(0xFF101B30))
+                    else listOf(Color(0xFFF2F7FF),Color(0xFFF0F4FF),Color(0xFFEDF5FF))
+                ))){
                 AnimatedVisibility(
                     visible=!headerHidden,
                     enter=expandVertically(animationSpec=tween(170))+fadeIn(),
@@ -521,22 +525,22 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                         }
                     }
                     Row(Modifier.fillMaxWidth()
-                        .shadow(7.dp,RoundedCornerShape(32.dp))
-                        .clip(RoundedCornerShape(32.dp))
-                        .background(c.panel)
-                        .border(1.dp,c.border.copy(alpha=if(dark).7f else .86f),
-                            RoundedCornerShape(32.dp))
-                        .padding(start=7.dp,end=7.dp,top=5.dp,bottom=5.dp),
+                        .shadow(elevation=3.dp,shape=CircleShape,
+                            ambientColor=Color(0x101F3F70),spotColor=Color(0x161F3F70))
+                        .clip(CircleShape)
+                        .background(if(dark)c.panel else Color.White)
+                        .border(1.dp,c.border.copy(alpha=.83f),CircleShape)
+                        .padding(horizontal=8.dp,vertical=8.dp),
                         verticalAlignment=Alignment.Bottom,
                         horizontalArrangement=Arrangement.spacedBy(6.dp)){
                         BasicTextField(value=draft,onValueChange={
                             draft=it;pendingRetry=false
-                        },modifier=Modifier.weight(1f).heightIn(min=42.dp,max=142.dp),
+                        },modifier=Modifier.weight(1f).heightIn(min=44.dp,max=142.dp),
                             textStyle=TextStyle(color=c.text,fontSize=14.sp,lineHeight=20.sp),
                             maxLines=6,enabled=!busy,cursorBrush=SolidColor(c.accent),
                             decorationBox={inner->
                                 Box(Modifier.fillMaxWidth()
-                                    .defaultMinSize(minHeight=42.dp)
+                                    .defaultMinSize(minHeight=44.dp)
                                     .padding(horizontal=11.dp,vertical=8.dp),
                                     contentAlignment=Alignment.CenterStart){
                                     if(draft.isEmpty())Text("Сообщение ИИ…",
@@ -544,9 +548,9 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                                     inner()
                                 }
                             })
-                        Box(Modifier.size(42.dp).clip(CircleShape)
-                            .background(if(dark)Color(0xFF253349) else Color(0xFFF8FAFC))
-                            .border(1.dp,c.border,CircleShape)
+                        Box(Modifier.size(44.dp).clip(CircleShape)
+                            .background(if(dark)Color(0xFF253349) else Color.White)
+                            .border(1.dp,c.border.copy(alpha=.88f),CircleShape)
                             .clickable(enabled=!busy&&!attaching){
                                 picker.launch(arrayOf("*/*"))
                             },contentAlignment=Alignment.Center){
@@ -557,17 +561,16 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                             background=if(dark)Color(0xFF253349) else Color(0xFFF8FAFC),
                             border=c.border,tint=c.secondary,onClick=speechInput
                         )
-                        Box(Modifier.size(42.dp).clip(CircleShape)
-                            .background(if(!busy&&(draft.isNotBlank()||files.isNotEmpty()))
-                                c.accent else c.border)
-                            .clickable(enabled=!busy&&!attaching&&
-                                (draft.isNotBlank()||files.isNotEmpty())){sendMessage()},
+                        val canSend=!busy&&!attaching&&(draft.isNotBlank()||files.isNotEmpty())
+                        Box(Modifier.size(44.dp).clip(CircleShape)
+                            .background(if(canSend)Brush.horizontalGradient(
+                                listOf(Color(0xFFB58BEF),Color(0xFFA477E8)))
+                                else Brush.linearGradient(listOf(c.border,c.border)))
+                            .clickable(enabled=canSend){sendMessage()},
                             contentAlignment=Alignment.Center){
-                            if(busy)CircularProgressIndicator(Modifier.size(18.dp),
-                                strokeWidth=2.dp,color=c.text)
-                            else Icon(Icons.Default.Send,"Отправить",
-                                tint=if(dark)Color(0xFF1A1633) else Color.White,
-                                modifier=Modifier.size(19.dp))
+                            if(busy)CircularProgressIndicator(Modifier.size(19.dp),
+                                strokeWidth=2.dp,color=Color.White)
+                            else MiniAppAiSendIcon(Color.White)
                         }
                     }
                     if(pendingRetry && !busy){
