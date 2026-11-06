@@ -118,7 +118,7 @@ test('the same hill SVG and drag/drop geometry render in regular and fullscreen 
   assert.match(src, /fullscreen = false/);
   assert.match(src, /petal-sector-gradient-/);
   assert.match(src, /fill=\{\`url\(#petal-sector-gradient-\$\{idx\}\)\`\}/);
-  assert.match(src, /r=\{11\}/);
+  assert.match(src, /r=\{7\}/);
   assert.match(src, /rounded-full border px-3 py-1\.5 text-sm font-semibold/);
   assert.doesNotMatch(src, /<line key=\{idx\} className="sector-divider"/);
   assert.doesNotMatch(src, /key=\{\`hill-wall-\$\{idx\}\`\} className="sector-divider"/);
@@ -193,9 +193,20 @@ test('large bubbles at the shared hub cannot cross either curved wall, including
   assert.notDeepEqual(positions.get('pinned-hub'), { x: 450, y: 450 });
 });
 
-test('sector fill is softer, especially for dark mode, without changing circle visuals', async () => {
+test('sector wash is faint in both themes and feathers between regions without blurring bubbles', async () => {
   const source = await readFile(new URL('../../client/src/components/BubbleField.tsx', import.meta.url), 'utf8');
-  assert.match(source, /stopOpacity=\{isLightTheme \? 0\.08 : 0\.045\}/);
-  assert.match(source, /stopOpacity=\{isLightTheme \? 0\.14 : 0\.09\}/);
-  assert.match(source, /fill=\{\`url\(#petal-sector-gradient-\$\{idx\}\)\`\}/);
+  assert.match(source, /stopOpacity=\{isLightTheme \? 0\.035 : 0\.018\}/);
+  assert.match(source, /stopOpacity=\{isLightTheme \? 0\.075 : 0\.038\}/);
+  assert.match(source, /<clipPath id="petal-sector-oval-clip">/);
+  assert.match(source, /<filter id="petal-sector-feather"/);
+  assert.match(source, /<feGaussianBlur stdDeviation=\{isLightTheme \? 19 : 24\}/);
+  assert.match(source, /<g clipPath="url\(#petal-sector-oval-clip\)" pointerEvents="none">\s*<g filter="url\(#petal-sector-feather\)">[\s\S]*?sectorGeometry\.map\(\(_, idx\) => \([\s\S]*?fill=\{\`url\(#petal-sector-gradient-\$\{idx\}\)\`\}/);
+  // The filter closes before the dynamic drag target and before bubbles are rendered.
+  const clippedStart = source.indexOf('<g clipPath="url(#petal-sector-oval-clip)"');
+  const filterEnd = source.indexOf('</g>\\n', clippedStart);
+  const dragTarget = source.indexOf('dragView?.changesSector && !dragView.target', clippedStart);
+  const bubbleAnimation = source.indexOf('<AnimatePresence>', clippedStart);
+  assert.ok(clippedStart >= 0 && dragTarget > clippedStart && bubbleAnimation > dragTarget);
+  assert.match(source, /strokeWidth=\{isLightTheme \? 1\.5 : 1\.2\}/);
+  assert.match(source, /strokeOpacity=\{isLightTheme \? 0\.22 : 0\.12\}/);
 });
