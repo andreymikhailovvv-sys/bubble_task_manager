@@ -367,3 +367,51 @@ test('a cross-sector link seeks the shared border instead of being ignored', () 
     assert.equal(hillSectorIndexAtAngle(Math.atan2(dy, dx), Math.hypot(dx, dy), geometry), bubble.sectorIndex);
   }
 });
+
+test('sector packing keeps the search budget bounded when switching a busy workspace', () => {
+  const counts = [16, 16, 16];
+  const geometry = buildSectorGeometry(3, counts);
+  const ellipse = { cx: 450, cy: 450, rx: 425, ry: 425 };
+  const bubbles = geometry.flatMap((sector, sectorIndex) =>
+    Array.from({ length: counts[sectorIndex] }, (_, index) => {
+      const id = `stress-${sectorIndex}-${index}`;
+      const fraction = (index + 0.5) / counts[sectorIndex];
+      const angle = sector.startAngle + sector.span * (0.18 + 0.64 * fraction);
+      const radial = 250 + (index * 43 % 130);
+      const linkedIndex = index % 8 === 0 ? index + 1 : index % 8 === 1 ? index - 1 : -1;
+      return {
+        id, sectorIndex, coefficient: 1 - index / counts[sectorIndex],
+        radius: 19 + (index * 11 + sectorIndex * 3) % 20,
+        x: ellipse.cx + Math.cos(angle) * radial,
+        y: ellipse.cy + Math.sin(angle) * radial,
+        linkedTaskIds: linkedIndex >= 0 ? [`stress-${sectorIndex}-${linkedIndex}`] : []
+      };
+    })
+  );
+  const diagnostics = { candidateChecks: 0, fallbackScans: 0 };
+  const placed = linkedBubblePositions(bubbles, {
+    minX: 15, maxX: 885, minY: 15, maxY: 885,
+    compact: true, ellipse, hillSectors: geometry, diagnostics
+  });
+  assert.equal(placed.size, bubbles.length);
+  // A deterministic work budget detects regressions to the previous full
+  // 360-degree and 100-neighbour sweeps without depending on CI machine speed.
+  assert.ok(diagnostics.candidateChecks < 90000,
+    `packing scanned ${diagnostics.candidateChecks} positions for ${bubbles.length} tasks`);
+  for (const bubble of bubbles) {
+    const point = placed.get(bubble.id)!;
+    const dx = (point.x - ellipse.cx) / ellipse.rx;
+    const dy = (point.y - ellipse.cy) / ellipse.ry;
+    assert.equal(hillSectorIndexAtAngle(Math.atan2(dy, dx), Math.hypot(dx, dy), geometry), bubble.sectorIndex,
+      `task ${bubble.id} crossed a curved wall`);
+  }
+  for (let i = 0; i < bubbles.length; i++) {
+    for (let j = i + 1; j < bubbles.length; j++) {
+      const a = placed.get(bubbles[i].id)!;
+      const b = placed.get(bubbles[j].id)!;
+      const gap = Math.hypot(a.x - b.x, a.y - b.y);
+      assert.ok(gap >= bubbles[i].radius + bubbles[j].radius + 12.9,
+        `collision between ${bubbles[i].id} and ${bubbles[j].id}`);
+    }
+  }
+});

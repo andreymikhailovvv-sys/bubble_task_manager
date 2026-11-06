@@ -1,4 +1,4 @@
-import { hillBoundaryCurve, hillSectorIndexAtAngle, type HillSectorAngles } from './hillSectors';
+import { hillBoundaryCurve, hillSectorAnglesAtRadius, hillSectorIndexAtAngle, type HillSectorAngles } from './hillSectors';
 
 export type VisualBubble = {
   id: string;
@@ -28,6 +28,8 @@ export type Bounds = {
   hillSectors?: HillSectorAngles[];
   /** Pack even unlinked tasks, instead of retaining the former sparse automatic layout. */
   compact?: boolean;
+  /** Optional counters for testing and diagnosing slow browser layouts. */
+  diagnostics?: { candidateChecks: number; fallbackScans: number };
 };
 
 export type LinkedBubbleGroup = {
@@ -88,6 +90,10 @@ export function getLinkedBubbleGroups(bubbles: VisualBubble[]): LinkedBubbleGrou
  * another task onto a neighbour or across a sector divider.
  */
 export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): Map<string, Point> {
+  if (bounds.diagnostics) {
+    bounds.diagnostics.candidateChecks = 0;
+    bounds.diagnostics.fallbackScans = 0;
+  }
   const original = new Map(bubbles.map((bubble) => [bubble.id, { x: bubble.x, y: bubble.y }]));
   if (!bubbles.some((bubble) => bubble.pinned || bubble.linkedTaskIds?.length) && !bounds.compact) return original;
   const byId = new Map(bubbles.map((bubble) => [bubble.id, bubble]));
@@ -235,8 +241,11 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
   const separation = (bubble: VisualBubble, candidate: Point, placed: Map<string, Point>) => {
     for (const [id, point] of placed) {
       const other = byId.get(id)!;
-      const distance = Math.hypot(candidate.x - point.x, candidate.y - point.y);
-      if (distance < bubble.radius + other.radius + 13 - 0.01) return false;
+      const gap = bubble.radius + other.radius + 13 - 0.01;
+      const dx = candidate.x - point.x;
+      const dy = candidate.y - point.y;
+      // Check cheap axis-aligned bounds before the squared distance.
+      if (Math.abs(dx) < gap && Math.abs(dy) < gap && dx * dx + dy * dy < gap * gap) return false;
     }
     return true;
   };
@@ -299,6 +308,15 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
       : [];
     const normalCenterDistance = (p: Point) =>
       Math.hypot((p.x - centre.x) / halfX, (p.y - centre.y) / halfY);
+    // The peer cluster is fixed for this bubble. Recomputing averages and
+    // allocating an array for each candidate was expensive during mode switches.
+    const peerCount = highPriorityPeers.length;
+    const peerMeanX = peerCount
+      ? highPriorityPeers.reduce((sum, item) => sum + item.point.x, 0) / peerCount : 0;
+    const peerMeanY = peerCount
+      ? highPriorityPeers.reduce((sum, item) => sum + item.point.y, 0) / peerCount : 0;
+    const peerMeanRadius = peerCount
+      ? highPriorityPeers.reduce((sum, item) => sum + item.peer.radius, 0) / peerCount : 0;
     const score = (p: Point) => {
       const preferredDistance = Math.hypot(p.x - preferred.x, p.y - preferred.y);
       if (isPinned) return preferredDistance * 20 + normalCenterDistance(p) * 4;
@@ -323,15 +341,15 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
       } else {
         result = radial * centreWeight + preferredDistance * (bounds.compact ? 0.085 : 1);
       }
-      if (highPriorityPeers.length) {
-        // Make separation from the core expensive, while retaining hard
-        // collision/sector tests in consider() below.
-        const nearestPeerGap = Math.min(...highPriorityPeers.map(({ peer, point }) =>
-          Math.max(0, Math.hypot(p.x - point.x, p.y - point.y) - bubble.radius - peer.radius - 13)));
-        const meanX = highPriorityPeers.reduce((total, item) => total + item.point.x, 0) / highPriorityPeers.length;
-        const meanY = highPriorityPeers.reduce((total, item) => total + item.point.y, 0) / highPriorityPeers.length;
-        const averageRadius = highPriorityPeers.reduce((total, item) => total + item.peer.radius, 0) / highPriorityPeers.length;
-        const centroidGap = Math.max(0, Math.hypot(p.x - meanX, p.y - meanY) - bubble.radius - averageRadius);
+      if (peerCount) {
+        let nearestPeerGap = Infinity;
+        for (const { peer, point } of highPriorityPeers) {
+          const gap = Math.max(0, Math.hypot(p.x - point.x, p.y - point.y) -
+            bubble.radius - peer.radius - 13);
+          if (gap < nearestPeerGap) nearestPeerGap = gap;
+        }
+        const centroidGap = Math.max(0, Math.hypot(p.x - peerMeanX, p.y - peerMeanY) -
+          bubble.radius - peerMeanRadius);
         result += nearestPeerGap * 1.9 + centroidGap * 0.55;
       }
       if (hasLink) {
@@ -351,6 +369,7 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
     let safeFallback: Point | null = null;
     let safeFallbackDistance = Infinity;
     const consider = (p: Point) => {
+      if (bounds.diagnostics) bounds.diagnostics.candidateChecks += 1;
       if (!inside(bubble, p)) return;
       // Crowded sectors may not admit a collision-free solution. Never fall
       // back to an unvalidated saved coordinate that crosses into a neighbour.
@@ -375,56 +394,84 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
 
     // Exact tangent candidates ensure a few pixels of breathing room and
     // prevent large empty holes between otherwise adjacent bubbles.
+    const linkedIds = new Set(neighbours.get(id) ?? []);
+    const sectorPacking = Boolean(bounds.hillSectors?.length && bounds.compact);
     const nearby = [...positions].sort((a, b) =>
+      Number(linkedIds.has(b[0])) - Number(linkedIds.has(a[0])) ||
       (highPriority(bubble)
         ? Number(highPriority(byId.get(b[0])!)) - Number(highPriority(byId.get(a[0])!))
         : 0) ||
-      Math.hypot(a[1].x - preferred.x, a[1].y - preferred.y) -
-      Math.hypot(b[1].x - preferred.x, b[1].y - preferred.y));
-    for (const [otherId, p] of nearby.slice(0, 100)) {
+      ((a[1].x - preferred.x) ** 2 + (a[1].y - preferred.y) ** 2) -
+      ((b[1].x - preferred.x) ** 2 + (b[1].y - preferred.y) ** 2));
+    // The old algorithm examined up to 100 neighbours × 32 angles per
+    // bubble, before doing a 64-angle FULL circle sweep for every radius.
+    // In sector mode limit tangents, always keeping real linked peers first.
+    const nearLimit = sectorPacking ? Math.max(20, linkedIds.size + 12) : 100;
+    const tangentSamples = sectorPacking ? 20 : 32;
+    for (const [otherId, p] of nearby.slice(0, nearLimit)) {
       const other = byId.get(otherId)!;
-      const radial = bubble.radius + other.radius + (neighbours.get(id)?.includes(otherId) ? LINK_GAP : 13.5);
+      const radial = bubble.radius + other.radius + (linkedIds.has(otherId) ? LINK_GAP : 13.5);
       const direction = Math.atan2(preferred.y - p.y, preferred.x - p.x);
-      for (let step = 0; step < 32; step++) {
-        const angle = direction + step * Math.PI / 16;
+      for (let step = 0; step < tangentSamples; step++) {
+        const angle = direction + step * 2 * Math.PI / tangentSamples;
         consider({ x: p.x + radial * Math.cos(angle), y: p.y + radial * Math.sin(angle) });
       }
     }
 
-    // Complete angular sweep inside the oval/sector if no tangent fits or
-    // a more central vacancy is available. Large tasks are placed first.
+    // Sweep only the bubble's own curved sector, not the entire 360° oval.
+    // Geometry is shared with SVG drawing and hit-testing, so these candidates
+    // are valid for any unequal sector widths. This removes most of the heavy
+    // wall and collision checks on every view switch.
     const angleStep = Math.PI / 32;
     const radialStep = Math.max(9, Math.min(21, bubble.radius * 0.42));
-    for (let distance = 0; distance < Math.max(halfX, halfY); distance += radialStep) {
-      const rx = distance;
-      for (let a = 0; a < 64; a++) {
-        const angle = a * angleStep;
+    const startRadius = sectorPacking
+      ? (bubble.radius + 12) * Math.max(1, halfY / Math.max(1, halfX))
+      : 0;
+    for (let distance = startRadius; distance < Math.max(halfX, halfY); distance += radialStep) {
+      const region = sectorPacking && bounds.hillSectors
+        ? hillSectorAnglesAtRadius(bounds.hillSectors, sectorOf(bubble), distance / Math.max(1, halfY))
+        : null;
+      // Keep adequate angular coverage for narrow sectors, even when there
+      // are very few valid positions near the shared centre.
+      const samples = region ? Math.max(20, Math.ceil(64 * region.span / (2 * Math.PI))) : 64;
+      for (let a = 0; a < samples; a++) {
+        const angle = region
+          ? region.start + region.span * (a + 0.5) / samples
+          : a * angleStep;
         consider({
-          x: centre.x + rx * Math.cos(angle) * halfX / Math.max(1, halfY),
-          y: centre.y + rx * Math.sin(angle)
+          x: centre.x + distance * Math.cos(angle) * halfX / Math.max(1, halfY),
+          y: centre.y + distance * Math.sin(angle)
         });
       }
-      // Any candidate with a cost well below the next ring's minimum radial
-      // penalty cannot be improved by examining the outer rings.
-      if (best && bounds.compact && !hasLink) {
+      if (best && bounds.compact) {
         if (bounds.hillSectors?.length) {
-          // The lower bound is only valid for unlinked tasks: linked
-          // candidates may have an arbitrarily large extra bond penalty.
+          // Every other score term is non-negative, including link costs:
+          // this radial lower bound also works for linked bubbles.
           const layer = radialLayers.get(bubble.id);
           const outerWeight = 720 + (1 - (layer?.rank ?? 0.5)) * 1100;
-          const remainingLowerBound = Math.max(0, distance / Math.max(1, halfY) - (layer?.target ?? 0.5)) * outerWeight;
+          const remainingLowerBound = Math.max(0,
+            distance / Math.max(1, halfY) - (layer?.target ?? 0.5)) * outerWeight;
           if (bestScore < remainingLowerBound - 4) break;
-        } else if (bestScore < distance / halfY *
+        } else if (!hasLink && bestScore < distance / halfY *
           (highPriority(bubble) ? 205 : 245) - 4) break;
       }
     }
 
     if (!best) {
-      // Extremely crowded/physically infeasible inputs should remain finite.
-      // Search a finer spiral before conceding any overlap.
-      for (let distance = 0; distance < Math.max(halfX, halfY) && !best; distance += 5) {
-        for (let a = 0; a < 128; a++) {
-          const angle = a * Math.PI / 64;
+      if (bounds.diagnostics) bounds.diagnostics.fallbackScans += 1;
+      // Retain a fine fallback for dense sectors, but never scan hundreds of
+      // angles belonging to OTHER sectors. Sampling the same Bézier geometry
+      // with an offset phase finds gaps missed by the coarse pass.
+      const fineStep = sectorPacking ? 6 : 5;
+      for (let distance = startRadius; distance < Math.max(halfX, halfY) && !best; distance += fineStep) {
+        const region = sectorPacking && bounds.hillSectors
+          ? hillSectorAnglesAtRadius(bounds.hillSectors, sectorOf(bubble), distance / Math.max(1, halfY))
+          : null;
+        const samples = region ? Math.max(40, Math.ceil(128 * region.span / (2 * Math.PI))) : 128;
+        for (let a = 0; a < samples; a++) {
+          const angle = region
+            ? region.start + region.span * (a + 0.25) / samples
+            : a * Math.PI / 64;
           consider({ x: centre.x + distance * Math.cos(angle) * halfX / Math.max(1, halfY),
             y: centre.y + distance * Math.sin(angle) });
         }
@@ -476,8 +523,8 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
 
             for (const offset of [0, 12, 28]) {
               const dockRadius = mover.radius + fixed.radius + LINK_GAP + offset;
-              for (let step = 0; step < 48; step += 1) {
-                const angle = 2 * Math.PI * step / 48;
+              for (let step = 0; step < 32; step += 1) {
+                const angle = 2 * Math.PI * step / 32;
                 const candidate = {
                   x: anchorPoint.x + Math.cos(angle) * dockRadius,
                   y: anchorPoint.y + Math.sin(angle) * dockRadius
