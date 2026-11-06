@@ -52,6 +52,26 @@ export function reconcileActiveAiChatMessages<T extends IdentifiedChatMessage>(
 }
 
 /**
+ * Quick AI history is server-authoritative, but the browser may already have
+ * newer optimistic text and richer inline cards. The general-dialog endpoint
+ * returns up to 100 chronological messages, whereas the web preview retains
+ * only 20. Appending previously unseen server messages to the local tail
+ * puts OLD history after the most recent answer; trimming then hides it.
+ *
+ * Merge in server order FIRST, enrich matches from local, chronologically sort
+ * and only then trim. Keep unmatched optimistic replies until the next server
+ * snapshot confirms them. This is shared by web and Mini App.
+ */
+export function reconcileQuickAiChatMessages<T extends IdentifiedChatMessage>(
+  local: T[], remote: T[], sending: boolean, limit: number
+): T[] {
+  if (sending || remote.length === 0) return local;
+  const enriched = reconcileAiChatMessagesWithChips(remote, local);
+  const chronological = orderAiChatMessagesChronologically(enriched).slice(-limit);
+  return reconcileActiveAiChatMessages(local, chronological, false);
+}
+
+/**
  * Historical project snapshots could copy one proposal chip into unrelated
  * conversations. A proposal belongs to a single chat, not every chat.
  * Keep its first occurrence (quick chat comes first in normalized projects)
