@@ -72,8 +72,8 @@ export function useBubbleLayoutWorker({
   const keyFor = (nextMode: BubbleLayoutMode) => `${revision}:${nextMode}`;
 
   useEffect(() => {
-    const modes: BubbleLayoutMode[] = [mode, mode === 'global' ? 'sectors' : 'global']
-      .filter((candidate) => !layoutCache.has(keyFor(candidate))) as BubbleLayoutMode[];
+    const candidates: BubbleLayoutMode[] = [mode, mode === 'global' ? 'sectors' : 'global'];
+    const modes = candidates.filter((candidate) => !layoutCache.has(keyFor(candidate)));
     if (modes.length === 0) return;
     let canceled = false;
     let worker: Worker | null = null;
