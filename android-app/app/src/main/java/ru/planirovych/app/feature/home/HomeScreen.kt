@@ -42,6 +42,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     val focusManager=LocalFocusManager.current
     val softwareKeyboard=LocalSoftwareKeyboardController.current
     val density=LocalDensity.current
+    val imeInsets=WindowInsets.ime
     // Do not mount a bottom sheet while the search IME is animating out.
     var pendingFocusTaskId by remember{mutableStateOf<String?>(null)}
     var settings by remember { mutableStateOf(false) }
@@ -86,7 +87,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
         // Inset goes to zero when the keyboard has actually finished closing.
         // The timeout avoids a stuck tap on OEM keyboards that never report zero.
         withTimeoutOrNull(850L){
-            snapshotFlow{WindowInsets.ime.getBottom(density)}.first{it==0}
+            snapshotFlow{imeInsets.getBottom(density)}.first{it==0}
         }
         if(pendingFocusTaskId==target){
             openedTaskId=target
@@ -229,7 +230,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                 onOpenTask = { taskId ->
                     focusManager.clearFocus(force=true)
                     softwareKeyboard?.hide()
-                    if(WindowInsets.ime.getBottom(density)>0){
+                    if(imeInsets.getBottom(density)>0){
                         pendingFocusTaskId=taskId
                     }else{
                         openedTaskId=taskId
