@@ -14975,8 +14975,11 @@ body[data-theme='dark'] .focused-task-editor-shell .focused-task-description-sur
 
 /* Draw the fullscreen toolbar and its bubble workspace over ONE continuous
    themed gradient, rather than painting separate canvases whose edges show
-   as a contrasting horizontal stripe beneath the toolbar. */
-.app-shell.bubble-fullscreen-shell {
+   as a contrasting horizontal stripe beneath the toolbar.
+   The dark-specific selector must beat the flat background from
+   body[data-theme='dark'] .app-shell (defined above). */
+.app-shell.bubble-fullscreen-shell,
+body[data-theme='dark'] .app-shell.bubble-fullscreen-shell {
   background: var(--bubble-field-bg), var(--canvas-bg);
   background-size: 100% 100%, 100% 100%;
   background-repeat: no-repeat;
