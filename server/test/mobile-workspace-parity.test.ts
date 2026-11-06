@@ -160,7 +160,7 @@ test('timeline has independent layout blocks while keeping original controls and
   assert.match(timeline, /moveTimelinePeriod\(-1\)/);
   assert.match(timeline, /moveTimelinePeriod\(1\)/);
   assert.match(actions, /<Clock3 size=\{16\}/);
-  assert.match(actions, /<Sparkles size=\{16\}/);
+  assert.match(actions, /<Clock3 size=\{16\} aria-hidden="true" \/><span>Просроченные задачи<\/span>/);
   assert.match(actions, /<ListFilter size=\{16\}/);
   assert.match(styles, /\.miniapp-shell \.miniapp-timeline-section\.miniapp-timeline-independent-blocks/);
   assert.match(styles, /\.miniapp-timeline-independent-blocks > \.miniapp-timeline-actions-panel/);
