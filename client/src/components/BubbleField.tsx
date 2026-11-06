@@ -1131,9 +1131,9 @@ export function BubbleField({
               <radialGradient key={`petal-fill-${index}`} id={`petal-sector-gradient-${index}`}
                 cx="48%" cy="45%" r="85%">
                 <stop offset="0%" stopColor={bubbleSectors[index]?.color ?? '#94a3b8'}
-                  stopOpacity={isLightTheme ? 0.11 : 0.09} />
+                  stopOpacity={isLightTheme ? 0.08 : 0.045} />
                 <stop offset="100%" stopColor={bubbleSectors[index]?.color ?? '#94a3b8'}
-                  stopOpacity={isLightTheme ? 0.19 : 0.16} />
+                  stopOpacity={isLightTheme ? 0.14 : 0.09} />
               </radialGradient>
             ))}
           </defs>
