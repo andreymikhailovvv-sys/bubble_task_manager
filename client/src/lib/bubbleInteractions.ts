@@ -1,4 +1,4 @@
-import { hillSectorAnglesAtRadius, hillSectorIndexAtAngle, type HillSectorAngles } from './hillSectors';
+import { hillBoundaryCurve, hillSectorIndexAtAngle, type HillSectorAngles } from './hillSectors';
 
 export type VisualBubble = {
   id: string;
@@ -105,6 +105,37 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
     : { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 };
   const halfX = bounds.ellipse?.rx ?? (bounds.maxX - bounds.minX) / 2;
   const halfY = bounds.ellipse?.ry ?? (bounds.maxY - bounds.minY) / 2;
+  // The angular margin previously used here only approximated the curved wall
+  // and could leave a bubble visibly crossing the centre junction. Cache the
+  // actual SVG quadratic boundaries as short, sub-pixel-accurate polylines.
+  // The heavy computation happens once per layout, never on pointer moves.
+  const hillBoundarySamples = bounds.ellipse && bounds.hillSectors && bounds.hillSectors.length > 1
+    ? bounds.hillSectors.map((_, index) => {
+      const curve = hillBoundaryCurve(bounds.hillSectors!, index);
+      return Array.from({ length: 17 }, (_, step) => {
+        const t = step / 16;
+        const x = 2 * t * (1 - t) * curve.control.x + t * t * curve.end.x;
+        const y = 2 * t * (1 - t) * curve.control.y + t * t * curve.end.y;
+        return { x: centre.x + x * halfX, y: centre.y + y * halfY };
+      });
+    })
+    : null;
+  const minDistanceSquaredToWall = (point: Point, wall: Point[]): number => {
+    let closestSquared = Infinity;
+    for (let index = 1; index < wall.length; index += 1) {
+      const a = wall[index - 1];
+      const b = wall[index];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const lengthSquared = dx * dx + dy * dy || 1;
+      const projection = Math.max(0, Math.min(1,
+        ((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSquared));
+      const gapX = point.x - a.x - projection * dx;
+      const gapY = point.y - a.y - projection * dy;
+      closestSquared = Math.min(closestSquared, gapX * gapX + gapY * gapY);
+    }
+    return closestSquared;
+  };
   const sectorOf = (bubble: VisualBubble) => bubble.sectorIndex ?? 0;
   const coefficientOf = (bubble: VisualBubble) => Math.min(1, Math.max(0, bubble.coefficient ?? 0));
   // Relative rank, not a fixed coefficient cutoff: otherwise most sectors
@@ -141,8 +172,9 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
     ];
   };
   const inside = (bubble: VisualBubble, candidate: Point) => {
-    // Progress rings protrude by about six pixels beyond the filled circle.
-    const margin = bubble.radius + 8;
+    // Progress rings protrude beyond the filled circle. For curved regions
+    // reserve a little extra space around the full outline, not just its hub.
+    const margin = bubble.radius + (hillBoundarySamples ? 12 : 8);
     if (bounds.ellipse) {
       const { cx, cy, rx, ry } = bounds.ellipse;
       const safeRx = Math.max(1, rx - margin);
@@ -150,19 +182,20 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
       if (Math.hypot((candidate.x - cx) / safeRx, (candidate.y - cy) / safeRy) > 1.000001) return false;
     } else if (candidate.x < bounds.minX + margin || candidate.x > bounds.maxX - margin ||
                candidate.y < bounds.minY + margin || candidate.y > bounds.maxY - margin) return false;
-    if (bounds.hillSectors && bounds.hillSectors.length > 1 && bounds.ellipse) {
+    if (hillBoundarySamples && bounds.hillSectors && bounds.ellipse) {
       const dx = (candidate.x - bounds.ellipse.cx) / bounds.ellipse.rx;
       const dy = (candidate.y - bounds.ellipse.cy) / bounds.ellipse.ry;
       const ratio = Math.hypot(dx, dy);
-      const angle = Math.atan2(dy, dx);
       const index = sectorOf(bubble);
-      if (hillSectorIndexAtAngle(angle, ratio, bounds.hillSectors) !== index) return false;
-      const sector = hillSectorAnglesAtRadius(bounds.hillSectors, index, ratio);
-      const angleIntoSector = ((angle - sector.start) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
-      const angularMargin = Math.asin(Math.min(0.95,
-        margin / Math.max(1, ratio * Math.min(bounds.ellipse.rx, bounds.ellipse.ry))));
-      const padding = Math.min(Math.max(0, sector.span / 2 - 0.01), angularMargin);
-      if (angleIntoSector < padding || angleIntoSector > sector.span - padding) return false;
+      if (hillSectorIndexAtAngle(Math.atan2(dy, dx), ratio, bounds.hillSectors) !== index) return false;
+      // Distance to BOTH shared quadratic walls in the rendered ellipse,
+      // not an angular approximation in the unstretched layout circle.
+      // Twelve extra pixels account for progress rings and curve sampling.
+      const previousWall = hillBoundarySamples[index];
+      const nextWall = hillBoundarySamples[(index + 1) % hillBoundarySamples.length];
+      const requiredSquared = margin * margin;
+      if (minDistanceSquaredToWall(candidate, previousWall) < requiredSquared ||
+          minDistanceSquaredToWall(candidate, nextWall) < requiredSquared) return false;
     } else {
       const normals = regionNormals(bubble);
       if (normals?.some((normal) =>
@@ -276,8 +309,18 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
     };
     let best: Point | null = null;
     let bestScore = Infinity;
+    let safeFallback: Point | null = null;
+    let safeFallbackDistance = Infinity;
     const consider = (p: Point) => {
-      if (!inside(bubble, p) || !separation(bubble, p, positions)) return;
+      if (!inside(bubble, p)) return;
+      // Crowded sectors may not admit a collision-free solution. Never fall
+      // back to an unvalidated saved coordinate that crosses into a neighbour.
+      const fallbackDistance = Math.hypot(p.x - preferred.x, p.y - preferred.y);
+      if (fallbackDistance < safeFallbackDistance) {
+        safeFallbackDistance = fallbackDistance;
+        safeFallback = p;
+      }
+      if (!separation(bubble, p, positions)) return;
       const cost = score(p);
       if (cost < bestScore - 0.00001) {
         bestScore = cost;
@@ -347,10 +390,10 @@ export function linkedBubblePositions(bubbles: VisualBubble[], bounds: Bounds): 
         }
       }
     }
-    // When the assigned sector is physically overfull, retain the best
-    // original point rather than producing NaN. Normal packed layouts always
-    // take the collision-free path above.
-    positions.set(id, best ?? { ...preferred });
+    // In extremely crowded layouts prefer a geometrically valid centre even
+    // if circles must be close; never escape the sector simply because packing
+    // failed to find non-overlapping space.
+    positions.set(id, best ?? safeFallback ?? { ...preferred });
   }
   return positions;
 }
