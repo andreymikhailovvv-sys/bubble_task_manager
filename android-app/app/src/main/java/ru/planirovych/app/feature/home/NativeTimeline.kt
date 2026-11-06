@@ -158,39 +158,38 @@ internal fun NativeTimelineWorkspace(
     }
     val label=if(zoom==TimelineZoom.MONTH)
         start.format(DateTimeFormatter.ofPattern("LLLL yyyy",Locale("ru")))
-    else if(start==end)start.format(DateTimeFormatter.ofPattern("d MMMM yyyy",Locale("ru")))
+    else if(start==end)start.format(DateTimeFormatter.ofPattern("dd MMMM",Locale("ru")))
     else start.format(DateTimeFormatter.ofPattern("d MMM",Locale("ru")))+" – "+
         end.format(DateTimeFormatter.ofPattern("d MMM yyyy",Locale("ru")))
-    Column(verticalArrangement=Arrangement.spacedBy(10.dp)){
+    Column(verticalArrangement=Arrangement.spacedBy(14.dp)){
         // This mirrors MiniApp's two independent navigation bars:
         // miniapp-timeline-view-switch and miniapp-timeline-date-nav.
         // Mini App: separate 20dp-rounded view panel, with a taller 3-way switch.
-        val switchShape=RoundedCornerShape(20.dp)
+        val switchShape=RoundedCornerShape(21.dp)
         Row(Modifier.fillMaxWidth()
-            .shadow(if(dark)3.dp else 4.dp,switchShape)
             .clip(switchShape)
             .background(colors.panel)
             .border(1.dp,colors.panelBorder,switchShape)
-            .padding(6.dp),
-            horizontalArrangement=Arrangement.spacedBy(2.dp)){
+            .padding(5.dp),
+            horizontalArrangement=Arrangement.spacedBy(4.dp)){
             TimelineZoom.entries.forEach{option->
                 val active=option==zoom
-                Box(Modifier.weight(1f).padding(horizontal=1.dp)
-                    .height(38.dp).clip(RoundedCornerShape(13.dp))
-                    .background(if(active)Color(0xFF7C3AED) else Color.Transparent)
+                val tabShape=RoundedCornerShape(17.dp)
+                Box(Modifier.weight(1f)
+                    .height(43.dp).clip(tabShape)
+                    .background(if(active)Color(0xFF6D28D9) else Color.Transparent)
                     .clickable{zoom=option},
                     contentAlignment=Alignment.Center){
                     Text(option.label,
                         color=if(active)Color.White
                             else if(dark)Color(0xFF94A3B8) else Color(0xFF334155),
-                        fontSize=11.sp,fontWeight=FontWeight.Bold)
+                        fontSize=12.sp,fontWeight=FontWeight.Bold)
                 }
             }
         }
-        val dateShape=RoundedCornerShape(14.dp)
+        val dateShape=RoundedCornerShape(18.dp)
         val arrowColor=if(dark)Color(0xFFC4B5FD) else Color(0xFF6D28D9)
         Row(Modifier.fillMaxWidth().height(52.dp)
-            .shadow(if(dark)3.dp else 4.dp,dateShape)
             .clip(dateShape)
             .background(if(dark)Color(0xFF22233E) else Color(0xFFFAF7FF))
             .border(1.dp,Color(0xFF8B5CF6).copy(alpha=if(dark).42f else .28f),
@@ -216,17 +215,19 @@ internal fun NativeTimelineWorkspace(
                     modifier=Modifier.size(16.dp))
                 Spacer(Modifier.width(8.dp))
                 Column(horizontalAlignment=Alignment.CenterHorizontally,
-                    verticalArrangement=Arrangement.spacedBy(1.dp)){
+                    verticalArrangement=Arrangement.spacedBy(0.dp)){
+                    val tightText=TextStyle(platformStyle=PlatformTextStyle(includeFontPadding=false))
                     Text(label.replaceFirstChar{it.uppercase()},
-                        fontSize=12.sp,fontWeight=FontWeight.Bold,
+                        fontSize=13.sp,lineHeight=16.sp,fontWeight=FontWeight.Bold,
                         color=if(dark)Color(0xFFF8FAFC) else Color(0xFF1E293B),
-                        textAlign=TextAlign.Center,maxLines=1,
+                        textAlign=TextAlign.Center,maxLines=1,style=tightText,
                         overflow=TextOverflow.Ellipsis)
                     Text(when(zoom){
                         TimelineZoom.DAY->"Выбранный день"
                         TimelineZoom.WEEK->"Выбранная неделя"
                         TimelineZoom.MONTH->"Выбранный месяц"
-                    },color=colors.secondaryText,fontSize=9.sp)
+                    },color=colors.secondaryText,fontSize=10.sp,
+                        lineHeight=12.sp,style=tightText)
                 }
             }
             Box(Modifier.width(1.dp).fillMaxHeight()

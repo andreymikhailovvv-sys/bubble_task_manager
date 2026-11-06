@@ -20,6 +20,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
@@ -290,12 +294,30 @@ internal fun rememberAiChatSpeechInput(
 internal fun AiChatMicrophoneButton(
     enabled:Boolean,background:Color,border:Color,tint:Color,onClick:()->Unit
 ){
-    Box(Modifier.size(42.dp).clip(CircleShape).background(background)
-        .border(1.dp,border,CircleShape)
+    Box(Modifier.size(44.dp).clip(CircleShape).background(background)
+        .border(1.dp,border.copy(alpha=.88f),CircleShape)
         .clickable(enabled=enabled,onClick=onClick),contentAlignment=Alignment.Center){
         Icon(Icons.Default.Mic,"Голосовой ввод GPT",
             tint=if(enabled)tint else tint.copy(alpha=.45f),
             modifier=Modifier.size(19.dp))
+    }
+}
+
+/** Thin outlined paper-plane, matching the Mini App's SendHorizontal glyph. */
+@Composable
+internal fun MiniAppAiSendIcon(tint:Color){
+    Canvas(Modifier.size(21.dp).semantics{contentDescription="Отправить"}){
+        val w=size.width
+        val h=size.height
+        val width=2.dp.toPx()
+        val tip=Offset(w*.89f,h*.5f)
+        val upper=Offset(w*.12f,h*.16f)
+        val lower=Offset(w*.12f,h*.84f)
+        val middle=Offset(w*.39f,h*.5f)
+        drawLine(tint,upper,tip,width,cap=StrokeCap.Round)
+        drawLine(tint,tip,lower,width,cap=StrokeCap.Round)
+        drawLine(tint,lower,middle,width,cap=StrokeCap.Round)
+        drawLine(tint,middle,tip,width,cap=StrokeCap.Round)
     }
 }
 

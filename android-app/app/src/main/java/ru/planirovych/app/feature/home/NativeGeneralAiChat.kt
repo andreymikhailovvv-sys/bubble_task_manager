@@ -272,7 +272,11 @@ internal fun NativeGeneralAiChatPage(
     LaunchedEffect(voiceSendSerial){
         if(voiceSendSerial>0)send()
     }
-    Box(Modifier.fillMaxSize().background(c.bg)){
+    Box(Modifier.fillMaxSize().background(
+        Brush.verticalGradient(if(dark)
+            listOf(c.bg,Color(0xFF101B30))
+            else listOf(Color(0xFFF2F7FF),Color(0xFFF0F4FF),Color(0xFFEDF5FF))
+        ))){
         Box(Modifier.fillMaxSize()){
             val headerBg=if(dark)Color(0xDD101B2F) else Color(0xEAF7F9FD)
             val controlBg=if(dark)Color(0xC71B2A43) else Color(0xEDFFFFFF)
@@ -412,7 +416,7 @@ internal fun NativeGeneralAiChatPage(
                     }
                 }
                 val bottomPadding=with(LocalDensity.current){
-                    if(composerHeightPx>0)composerHeightPx.toDp()+20.dp else 105.dp
+                    if(composerHeightPx>0)composerHeightPx.toDp()+28.dp else 116.dp
                 }
                 LazyColumn(state=listState,
                     modifier=Modifier.fillMaxSize().alpha(if(historyPositioned)1f else 0f),
@@ -491,21 +495,23 @@ internal fun NativeGeneralAiChatPage(
                         Text(msg,color=Color(0xFFFB7185),fontSize=11.sp)
                     }
                     Row(Modifier.fillMaxWidth()
-                        .shadow(6.dp,CircleShape).clip(CircleShape)
-                        .background(c.panel)
-                        .border(1.dp,c.border,CircleShape)
-                        .padding(horizontal=7.dp,vertical=6.dp),
+                        .shadow(elevation=3.dp,shape=CircleShape,
+                            ambientColor=Color(0x101F3F70),spotColor=Color(0x161F3F70))
+                        .clip(CircleShape)
+                        .background(if(dark)c.panel else Color.White)
+                        .border(1.dp,c.border.copy(alpha=.83f),CircleShape)
+                        .padding(horizontal=8.dp,vertical=8.dp),
                         verticalAlignment=Alignment.CenterVertically,
                         horizontalArrangement=Arrangement.spacedBy(5.dp)){
                         BasicTextField(value=draft,onValueChange={
                             draft=it;lastRequestHadError=false
-                        },modifier=Modifier.weight(1f).heightIn(min=42.dp,max=140.dp)
+                        },modifier=Modifier.weight(1f).heightIn(min=44.dp,max=140.dp)
                                 .focusRequester(draftFocus),
                             textStyle=TextStyle(color=c.text,fontSize=14.sp,lineHeight=20.sp),
                             maxLines=6,enabled=!isBusy&&!isTelegram,
                             cursorBrush=SolidColor(c.accent),
                             decorationBox={inner->
-                                Box(Modifier.defaultMinSize(minHeight=42.dp)
+                                Box(Modifier.defaultMinSize(minHeight=44.dp)
                                     .padding(horizontal=10.dp,vertical=9.dp),
                                     contentAlignment=Alignment.CenterStart){
                                     if(draft.isEmpty())Text(if(isTelegram)
@@ -515,8 +521,9 @@ internal fun NativeGeneralAiChatPage(
                                     inner()
                                 }
                             })
-                        Box(Modifier.size(42.dp).clip(CircleShape)
-                            .background(c.bg).border(1.dp,c.border,CircleShape)
+                        Box(Modifier.size(44.dp).clip(CircleShape)
+                            .background(if(dark)Color(0xFF253349) else Color.White)
+                            .border(1.dp,c.border.copy(alpha=.88f),CircleShape)
                             .clickable(enabled=!isBusy&&!attaching&&!isTelegram){
                                 picker.launch(arrayOf("*/*"))
                             },contentAlignment=Alignment.Center){
@@ -527,16 +534,17 @@ internal fun NativeGeneralAiChatPage(
                             background=if(dark)Color(0xFF253349) else Color(0xFFF8FAFC),
                             border=c.border,tint=c.secondary,onClick=speechInput
                         )
-                        Box(Modifier.size(42.dp).clip(CircleShape)
-                            .background(if(!isBusy&&(draft.isNotBlank()||files.isNotEmpty()))
-                                c.accent else c.border)
-                            .clickable(enabled=!isBusy&&!attaching&&!isTelegram&&
-                                (draft.isNotBlank()||files.isNotEmpty())){send()},
+                        val canSend=!isBusy&&!attaching&&!isTelegram&&
+                            (draft.isNotBlank()||files.isNotEmpty())
+                        Box(Modifier.size(44.dp).clip(CircleShape)
+                            .background(if(canSend) Brush.horizontalGradient(
+                                listOf(Color(0xFFB58BEF),Color(0xFFA477E8)))
+                                else Brush.linearGradient(listOf(c.border,c.border)))
+                            .clickable(enabled=canSend){send()},
                             contentAlignment=Alignment.Center){
                             if(state.busy)CircularProgressIndicator(
                                 Modifier.size(19.dp),strokeWidth=2.dp,color=Color.White)
-                            else Icon(Icons.Default.Send,"Отправить",tint=Color.White,
-                                modifier=Modifier.size(19.dp))
+                            else MiniAppAiSendIcon(Color.White)
                         }
                     }
                 }
