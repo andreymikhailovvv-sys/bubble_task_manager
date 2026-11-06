@@ -110,7 +110,9 @@ test('the same hill SVG and drag/drop geometry render in regular and fullscreen 
   assert.match(src, /const hillBoundaryPath =/);
   assert.match(src, /const hillRegionPath =/);
   assert.match(src, /hillSectorIndexAtAngle\(/);
-  assert.match(src, /hillSectors: mode === 'sectors'/);
+  const compute = await readFile(new URL('../../client/src/lib/bubbleLayoutCompute.ts', import.meta.url), 'utf8');
+  assert.match(compute, /hillSectors: mode === 'sectors'/);
+  assert.match(src, /useBubbleLayoutWorker\(/);
   assert.match(src, /d=\{hillBoundaryPath\(idx\)\}/);
   assert.match(src, /Q \${control\.x\.toFixed\(2\)\}/);
   assert.doesNotMatch(src, /strokeWidth=\{11\}|hill-ridge-/);
