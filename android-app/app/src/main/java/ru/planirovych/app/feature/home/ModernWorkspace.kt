@@ -631,8 +631,10 @@ private fun WorkspaceToolbar(
         horizontalArrangement=Arrangement.Center,verticalAlignment=Alignment.CenterVertically) {
         Icon(icon,null,tint=iconInk,modifier=Modifier.size(15.dp))
         Spacer(Modifier.width(5.dp))
-        Text(label,color=iconInk,fontSize=11.sp,fontWeight=FontWeight.SemiBold,maxLines=1,
-            softWrap=false)
+        val isOverdueAction = label == "Просроченные задачи"
+        Text(label,color=iconInk,fontSize=if(isOverdueAction)10.sp else 11.sp,
+            fontWeight=FontWeight.SemiBold,maxLines=if(isOverdueAction)2 else 1,
+            lineHeight=12.sp,textAlign=TextAlign.Center,softWrap=isOverdueAction)
     }
 }
 
