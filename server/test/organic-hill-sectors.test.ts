@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { buildBubbles, buildSectorGeometry, getBubbleSectorSpheres, getTaskCoefficient } from '../../client/src/lib/layout';
-import { hillBoundaryAngle, hillSectorIndexAtAngle, hillSectorAnglesAtRadius } from '../../client/src/lib/hillSectors';
+import { hillBoundaryAngle, hillBoundaryCurve, hillSectorIndexAtAngle, hillSectorAnglesAtRadius } from '../../client/src/lib/hillSectors';
 import { linkedBubblePositions } from '../../client/src/lib/bubbleInteractions';
 import type { Sphere, Task } from '../../client/src/lib/types';
 
@@ -32,10 +32,22 @@ test('shared hill walls are curved, continuous, gap-free and reversible at the r
   const geometry = buildSectorGeometry(3, [3, 6, 2]);
   for (let index = 0; index < geometry.length; index += 1) {
     const original = geometry[index].startAngle;
-    assert.ok(Math.abs(hillBoundaryAngle(geometry, index, 0) - original) < 1e-8);
+    const curve = hillBoundaryCurve(geometry, index);
     assert.ok(Math.abs(hillBoundaryAngle(geometry, index, 1) - original) < 1e-8);
+    assert.ok(Math.abs(hillBoundaryAngle(geometry, index, 0) -
+      (original + Math.atan2(2 * curve.bow, 1))) < 1e-8);
     assert.ok(Math.abs(hillBoundaryAngle(geometry, index, 0.5) - original) > 0.01,
-      `sector ${index} should visibly curve`);
+      `sector ${index} should use a visible quadratic, not a straight divider`);
+    // Sample the rendered quadratic in normalized ellipse coordinates, then
+    // verify that hit-testing resolves precisely to the same Bézier.
+    for (const t of [0.08, 0.2, 0.45, 0.7, 0.95]) {
+      const x = 2 * (1 - t) * t * curve.control.x + t * t * curve.end.x;
+      const y = 2 * (1 - t) * t * curve.control.y + t * t * curve.end.y;
+      const angle = Math.atan2(y, x);
+      const boundaryAngle = hillBoundaryAngle(geometry, index, Math.hypot(x, y));
+      const diff = Math.atan2(Math.sin(angle - boundaryAngle), Math.cos(angle - boundaryAngle));
+      assert.ok(Math.abs(diff) < 0.00002, `render/hit mismatch for ${index} at ${t}: ${diff}`);
+    }
   }
   for (const ratio of [0, 0.1, 0.25, 0.5, 0.85, 1]) {
     const angles = geometry.map((_, i) => hillSectorAnglesAtRadius(geometry, i, ratio));
@@ -100,6 +112,8 @@ test('the same hill SVG and drag/drop geometry render in regular and fullscreen 
   assert.match(src, /hillSectorIndexAtAngle\(/);
   assert.match(src, /hillSectors: mode === 'sectors'/);
   assert.match(src, /d=\{hillBoundaryPath\(idx, 0\.12\)\}/);
+  assert.match(src, /Q \${control\.x\.toFixed\(2\)\}/);
+  assert.doesNotMatch(src, /strokeWidth=\{11\}|hill-ridge-/);
   assert.match(src, /d=\{hillRegionPath\(dragView\.destinationSectorIndex\)\}/);
   assert.match(src, /fullscreen = false/);
   assert.doesNotMatch(src, /<line key=\{idx\} className="sector-divider"/);
