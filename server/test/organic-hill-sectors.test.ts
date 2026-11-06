@@ -193,13 +193,13 @@ test('large bubbles at the shared hub cannot cross either curved wall, including
   assert.notDeepEqual(positions.get('pinned-hub'), { x: 450, y: 450 });
 });
 
-test('sector wash is faint in both themes and feathers between regions without blurring bubbles', async () => {
+test('sector wash has readable light-theme boundaries and soft feathering without blurring bubbles', async () => {
   const source = await readFile(new URL('../../client/src/components/BubbleField.tsx', import.meta.url), 'utf8');
-  assert.match(source, /stopOpacity=\{isLightTheme \? 0\.035 : 0\.018\}/);
-  assert.match(source, /stopOpacity=\{isLightTheme \? 0\.075 : 0\.038\}/);
+  assert.match(source, /stopOpacity=\{isLightTheme \? 0\.057 : 0\.028\}/);
+  assert.match(source, /stopOpacity=\{isLightTheme \? 0\.108 : 0\.060\}/);
   assert.match(source, /<clipPath id="petal-sector-oval-clip">/);
   assert.match(source, /<filter id="petal-sector-feather"/);
-  assert.match(source, /<feGaussianBlur stdDeviation=\{isLightTheme \? 19 : 24\}/);
+  assert.match(source, /<feGaussianBlur stdDeviation=\{isLightTheme \? 15 : 20\}/);
   assert.match(source, /<g clipPath="url\(#petal-sector-oval-clip\)" pointerEvents="none">\s*<g filter="url\(#petal-sector-feather\)">[\s\S]*?sectorGeometry\.map\(\(_, idx\) => \([\s\S]*?fill=\{\`url\(#petal-sector-gradient-\$\{idx\}\)\`\}/);
   // The filter closes before the dynamic drag target and before bubbles are rendered.
   const clippedStart = source.indexOf('<g clipPath="url(#petal-sector-oval-clip)"');
@@ -207,6 +207,7 @@ test('sector wash is faint in both themes and feathers between regions without b
   const dragTarget = source.indexOf('dragView?.changesSector && !dragView.target', clippedStart);
   const bubbleAnimation = source.indexOf('<AnimatePresence>', clippedStart);
   assert.ok(clippedStart >= 0 && filterEnd > clippedStart && dragTarget > filterEnd && bubbleAnimation > dragTarget);
-  assert.match(source, /strokeWidth=\{isLightTheme \? 1\.5 : 1\.2\}/);
-  assert.match(source, /strokeOpacity=\{isLightTheme \? 0\.22 : 0\.12\}/);
+  assert.match(source, /stroke=\{isLightTheme \? '#7898ac' : '#cbd5e1'\}/);
+  assert.match(source, /strokeWidth=\{isLightTheme \? 1\.9 : 1\.5\}/);
+  assert.match(source, /strokeOpacity=\{isLightTheme \? 0\.48 : 0\.28\}/);
 });
