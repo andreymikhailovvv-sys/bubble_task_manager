@@ -22,6 +22,7 @@ import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace'
 import { WorkspaceGlobalSearch } from './components/WorkspaceGlobalSearch';
 import { matchesWorkspaceText } from './lib/workspaceSearch';
 import { MiniWorkspaceTools } from './components/MiniWorkspaceTools';
+import { WorkspaceActionToast } from './components/WorkspaceActionToast';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { MiniTimelineWeek } from './components/MiniTimelineWeek';
 import { ResizableDescriptionSurface } from './components/ResizableDescriptionSurface';
@@ -788,6 +789,21 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const updatingFocusSubtasksRef = useRef<Set<string>>(new Set());
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isPostponingOverdue, setIsPostponingOverdue] = useState(false);
+  const [isOverdueTasksOpen, setIsOverdueTasksOpen] = useState(false);
+  const [postponeNotice, setPostponeNotice] = useState<{ count: number; serial: number } | null>(null);
+  useEffect(() => {
+    if (!postponeNotice) return;
+    const timer = window.setTimeout(() => setPostponeNotice(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [postponeNotice]);
+  useEffect(() => {
+    if (!isOverdueTasksOpen) return;
+    const onEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') setIsOverdueTasksOpen(false);
+    };
+    document.addEventListener('keydown', onEscape);
+    return () => document.removeEventListener('keydown', onEscape);
+  }, [isOverdueTasksOpen]);
   const [creatingSubtaskForId, setCreatingSubtaskForId] = useState<string | null>(null);
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
   const [createEditorType, setCreateEditorType] = useState<'task' | 'event'>('task');
@@ -1553,7 +1569,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     };
   }), [spheres, taskById, tasks]);
 
-  const overdueTasks = useMemo(() => tasks.filter((task) => task.taskType !== 'EVENT' && task.taskType !== 'REMINDER' && isOverdue(task)), [tasks]);
+  const overdueTasks = useMemo(() => tasks
+    .filter((task) => task.status !== 'DONE' && task.taskType !== 'EVENT' && task.taskType !== 'REMINDER' && isOverdue(task))
+    .sort((a, b) => new Date(a.dueDate as string).getTime() - new Date(b.dueDate as string).getTime()), [tasks]);
 
   const postponeAllOverdueToToday = async () => {
     if (isPostponingOverdue || overdueTasks.length === 0) return;
@@ -1561,12 +1579,16 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     setError(null);
     try {
       const today = new Date();
+      let postponedCount = 0;
       await Promise.all(overdueTasks.map(async (task) => {
         const nextDueDate = new Date(task.dueDate as string);
+        if (Number.isNaN(nextDueDate.getTime())) return;
         nextDueDate.setFullYear(today.getFullYear(), today.getMonth(), today.getDate());
         await api.updateTask(task.id, { dueDate: nextDueDate.toISOString() });
+        postponedCount += 1;
       }));
       await loadData();
+      if (postponedCount > 0) setPostponeNotice({ count: postponedCount, serial: Date.now() });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось перенести просроченные задачи');
     } finally {
@@ -4341,6 +4363,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               timelineSphereId={sphereFilter}
               onTimelineSphereChange={setSphereFilter}
               onPostpone={() => void postponeAllOverdueToToday()}
+              onOpenOverdue={() => setIsOverdueTasksOpen(true)}
+              overdueCount={overdueTasks.length}
               postponing={isPostponingOverdue}
               canPostpone={overdueTasks.length > 0}
             />
