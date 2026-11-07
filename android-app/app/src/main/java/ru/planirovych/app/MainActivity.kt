@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -28,6 +29,10 @@ import kotlinx.coroutines.withContext
 import ru.planirovych.app.feature.home.HomeScreen
 import ru.planirovych.app.feature.home.HomeViewModel
 import ru.planirovych.app.notifications.AndroidNotificationDelivery
+import ru.planirovych.app.updates.AndroidAppRelease
+import ru.planirovych.app.updates.AndroidAppUpdateChecker
+import ru.planirovych.app.updates.AndroidAppUpdateDialog
+import ru.planirovych.app.updates.AndroidAppUpdateWorker
 import ru.planirovych.app.ui.theme.PlanirovychTheme
 
 class MainActivity:ComponentActivity(){
@@ -44,6 +49,7 @@ class MainActivity:ComponentActivity(){
     private var openGeneralAi by mutableStateOf(false)
     private var quickAiMode by mutableStateOf<String?>(null)
     private var quickAiRequestId by mutableIntStateOf(0)
+    private var availableUpdate by mutableStateOf<AndroidAppRelease?>(null)
 
     private val askNotifications=registerForActivityResult(
         ActivityResultContracts.RequestPermission()){granted->
@@ -90,6 +96,21 @@ class MainActivity:ComponentActivity(){
                 }
             }
         }
+        // APK updates are independent of authentication and never auto-install.
+        // In release builds check when the app is opened and periodically while
+        // it remains foregrounded. WorkManager covers longer background periods.
+        AndroidAppUpdateWorker.schedule(this)
+        if(!BuildConfig.DEBUG) lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while(isActive) {
+                    val latest=AndroidAppUpdateChecker.latest(this@MainActivity)
+                    if(latest!=null &&
+                        !AndroidAppUpdateChecker.dismissed(this@MainActivity,latest.versionCode))
+                        availableUpdate=latest
+                    delay(6 * 60 * 60_000L)
+                }
+            }
+        }
         val app=application as PlanirovychApplication
         setContent{
             val vm:HomeViewModel=viewModel(
@@ -102,6 +123,19 @@ class MainActivity:ComponentActivity(){
                         HomeScreen(vm,dark,notificationTaskId,openGeneralAi,
                             quickAiMode,quickAiRequestId)
                     }
+                }
+                availableUpdate?.let { release ->
+                    val dismiss={
+                        AndroidAppUpdateChecker.dismiss(this@MainActivity,release.versionCode)
+                        availableUpdate=null
+                    }
+                    AndroidAppUpdateDialog(release,
+                        onLater=dismiss,
+                        onUpdate={
+                            dismiss()
+                            startActivity(Intent(Intent.ACTION_VIEW,
+                                Uri.parse("https://planirovych.ru/android")))
+                        })
                 }
             }
         }
