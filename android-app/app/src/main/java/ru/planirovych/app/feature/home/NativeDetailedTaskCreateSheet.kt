@@ -10,6 +10,8 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -20,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -91,6 +94,18 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
     val c=remember(dark){createPalette(dark)}
     val ctx=LocalContext.current
     val scope=rememberCoroutineScope()
+    val keyboard=LocalSoftwareKeyboardController.current
+    val titleFocus=remember(type){FocusRequester()}
+    val createSheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)
+    // Request focus after the sheet has actually expanded. Requesting before
+    // that transition is lost on several Android keyboards.
+    LaunchedEffect(type,createSheetState.currentValue){
+        if(createSheetState.currentValue==SheetValue.Expanded){
+            withFrameNanos { }
+            titleFocus.requestFocus()
+            keyboard?.show()
+        }
+    }
     var title by remember(type){mutableStateOf("")}
     var description by remember(type){mutableStateOf("")}
     var descriptionExpanded by remember(type){mutableStateOf(false)}
@@ -146,7 +161,7 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
     ModalBottomSheet(
         onDismissRequest=onClose,containerColor=c.surface,contentColor=c.text,
         shape=RoundedCornerShape(topStart=29.dp,topEnd=29.dp),
-        sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),
+        sheetState=createSheetState,
         dragHandle={BottomSheetDefaults.DragHandle(color=c.muted)}
     ){
         Column(Modifier.fillMaxWidth()
@@ -166,7 +181,8 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
                 .verticalScroll(rememberScrollState()).padding(bottom=15.dp),
                 verticalArrangement=Arrangement.spacedBy(10.dp)){
                 BasicTextField(title,onValueChange={title=it},
-                    modifier=Modifier.fillMaxWidth().heightIn(min=64.dp),
+                    modifier=Modifier.fillMaxWidth().heightIn(min=64.dp)
+                        .focusRequester(titleFocus),
                     textStyle=TextStyle(color=c.text,fontSize=26.sp,lineHeight=32.sp,
                         fontWeight=FontWeight.Bold),
                     maxLines=3,cursorBrush=SolidColor(c.violet),
