@@ -141,11 +141,15 @@ fun MiniAppSubtaskEditorSheet(
     ) {
         // The keyboard reduces the dialog's available height, not its footer.
         // Keep Create/Complete/Delete outside the scrollable editor fields.
-        BoxWithConstraints(Modifier.fillMaxSize().imePadding(),
+        BoxWithConstraints(Modifier.fillMaxSize(),
             contentAlignment=Alignment.Center) {
-            val visibleMaxHeight=minOf(maxHeight,this.maxHeight-16.dp).coerceAtLeast(200.dp)
+            // Dialog window is adjustResize. Do not subtract IME insets again:
+            // the double reduction pushed the Create button below the viewport.
+            val visibleMaxHeight=minOf(maxHeight,this.maxHeight-12.dp)
+                .coerceAtLeast(180.dp)
             Surface(
-                modifier=Modifier.fillMaxWidth(.94f).heightIn(max=visibleMaxHeight),
+                modifier=Modifier.fillMaxWidth(.94f)
+                    .height(minOf(visibleMaxHeight,520.dp)),
                 shape=RoundedCornerShape(24.dp),
                 color=c.bg,
                 contentColor=c.ink,
@@ -153,7 +157,7 @@ fun MiniAppSubtaskEditorSheet(
                 shadowElevation=16.dp
             ) {
                 Column(Modifier.fillMaxWidth()) {
-                    Column(Modifier.weight(1f,fill=false)
+                    Column(Modifier.weight(1f)
                         .verticalScroll(rememberScrollState())
                         .padding(start=16.dp,end=16.dp,top=18.dp,bottom=4.dp)) {
                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.Top,
@@ -218,15 +222,10 @@ fun MiniAppSubtaskEditorSheet(
                 Spacer(Modifier.height(16.dp))
                 Surface(color=c.bg,shape=RoundedCornerShape(16.dp),
                     border=BorderStroke(1.dp,if(dark)Color(0xFF504771) else Color(0xFFD6D2E5))){
-                    Box(Modifier.fillMaxWidth().height(112.dp)
-                        .clickable(enabled=!busy){descriptionExpanded=true}
-                        .padding(horizontal=12.dp,vertical=10.dp)){
-                        Text(childReadDescription(description)
-                            .ifBlank{"Описание подзадачи"},
-                            color=if(description.isBlank())c.muted else c.ink,
-                            fontSize=14.sp,lineHeight=22.sp,
-                            maxLines=4,overflow=TextOverflow.Ellipsis)
-                    }
+                    NativeRichTextEditor(value=description,
+                        onChange={description=it;onClearError()},dark=dark,
+                        editorKey="child-inline-"+key,inline=true,
+                        modifier=Modifier.fillMaxWidth().height(112.dp))
                 }
                 if(!isNew){
                     Spacer(Modifier.height(9.dp))

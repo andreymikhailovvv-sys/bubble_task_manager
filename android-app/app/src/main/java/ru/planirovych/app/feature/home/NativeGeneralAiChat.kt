@@ -418,7 +418,7 @@ internal fun NativeGeneralAiChatPage(
                     }
                 }
                 val bottomPadding=with(LocalDensity.current){
-                    if(composerHeightPx>0)composerHeightPx.toDp()+28.dp else 116.dp
+                    if(composerHeightPx>0)composerHeightPx.toDp()+48.dp else 132.dp
                 }
                 LazyColumn(state=listState,
                     modifier=Modifier.fillMaxSize().alpha(if(historyPositioned)1f else 0f),

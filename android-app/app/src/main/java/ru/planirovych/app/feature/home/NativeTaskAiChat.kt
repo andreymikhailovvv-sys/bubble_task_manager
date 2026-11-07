@@ -17,6 +17,10 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -266,7 +270,7 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
     var headerHidden by remember(task.id){mutableStateOf(false)}
     var composerHeightPx by remember(task.id){mutableIntStateOf(0)}
     val composerBottomPadding=with(LocalDensity.current){
-        if(composerHeightPx>0)composerHeightPx.toDp()+28.dp else 116.dp
+        if(composerHeightPx>0)composerHeightPx.toDp()+48.dp else 132.dp
     }
     var historyPositioned by remember(task.id){mutableStateOf(false)}
     LaunchedEffect(task.id){
@@ -843,21 +847,32 @@ private val TASK_AI_PROGRESS_LABELS=mapOf(
 @Composable
 internal fun NativeTaskAiProgressChip(status:String,c:TaskChatColors){
     val title=TASK_AI_PROGRESS_LABELS[status] ?: "Обрабатываю запрос"
-    Row(Modifier.fillMaxWidth().padding(vertical=5.dp),
+    val cyan=if(c.bg==Color(0xFF0D1628))Color(0xFF67E8F9) else Color(0xFF0891B2)
+    val transition=rememberInfiniteTransition(label="ai-status-shimmer")
+    val sweep by transition.animateFloat(initialValue=0f,targetValue=3f,
+        animationSpec=infiniteRepeatable(tween(1250),RepeatMode.Restart),
+        label="status-segment")
+    Row(Modifier.fillMaxWidth().padding(start=7.dp,top=11.dp,bottom=11.dp),
         verticalAlignment=Alignment.CenterVertically,
-        horizontalArrangement=Arrangement.spacedBy(8.dp)){
-        Box(Modifier.size(26.dp).clip(CircleShape)
-            .background(c.accent.copy(alpha=.1f)),
+        horizontalArrangement=Arrangement.spacedBy(11.dp)){
+        Box(Modifier.size(38.dp).clip(CircleShape)
+            .background(cyan.copy(alpha=.16f)),
             contentAlignment=Alignment.Center){
             Icon(Icons.Default.AutoAwesome,null,
-                tint=c.accent,modifier=Modifier.size(14.dp))
+                tint=cyan,modifier=Modifier.size(21.dp))
         }
-        Column(verticalArrangement=Arrangement.spacedBy(3.dp)){
-            Text(title,color=c.text,fontSize=12.sp,
-                fontWeight=FontWeight.SemiBold)
-            LinearProgressIndicator(
-                modifier=Modifier.width(86.dp).height(2.dp),
-                color=c.accent,trackColor=c.border)
+        Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
+            Text(title,color=c.text,fontSize=14.sp,
+                fontWeight=FontWeight.Bold,lineHeight=19.sp)
+            Row(horizontalArrangement=Arrangement.spacedBy(5.dp)){
+                repeat(3){index->
+                    val intensity=(1f-kotlin.math.abs(sweep-index))
+                        .coerceIn(0f,1f)
+                    Box(Modifier.width(30.dp).height(4.dp)
+                        .clip(CircleShape)
+                        .background(cyan.copy(alpha=.2f+.8f*intensity)))
+                }
+            }
         }
     }
 }

@@ -199,16 +199,10 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
                 }
                 Surface(shape=RoundedCornerShape(17.dp),color=c.field,
                     border=BorderStroke(1.dp,c.border)){
-                    Box(Modifier.fillMaxWidth().height(126.dp)
-                        .clickable{descriptionExpanded=true}
-                        .padding(12.dp)){
-                        Text(if(description.isBlank())"Введите описание"
-                            else android.text.Html.fromHtml(description,
-                                android.text.Html.FROM_HTML_MODE_COMPACT).toString().trim(),
-                            fontSize=14.sp,lineHeight=23.sp,
-                            color=if(description.isBlank())c.muted else c.text,
-                            maxLines=5,overflow=TextOverflow.Ellipsis)
-                    }
+                    NativeRichTextEditor(value=description,
+                        onChange={description=it},dark=dark,
+                        editorKey="create-task-inline-"+type.name,inline=true,
+                        modifier=Modifier.fillMaxWidth().height(126.dp))
                 }
                 if(isEvent){
                     Row(verticalAlignment=Alignment.CenterVertically){

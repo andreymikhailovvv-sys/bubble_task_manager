@@ -43,6 +43,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     val softwareKeyboard=LocalSoftwareKeyboardController.current
     val density=LocalDensity.current
     val imeInsets=WindowInsets.ime
+    val keyboardOpen=imeInsets.getBottom(density)>0
     // Do not mount a bottom sheet while the search IME is animating out.
     var pendingFocusTaskId by remember{mutableStateOf<String?>(null)}
     var settings by remember { mutableStateOf(false) }
@@ -185,7 +186,9 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
             }
         },
         bottomBar = {
-            if(!state.loading && state.error == null) {
+            // Scaffold already reserves the navigation-bar height in its content.
+            // Keeping it while the IME is open double-offsets Quick AI composer.
+            if(!state.loading && state.error == null && !keyboardOpen) {
                 val tabs = listOf(
                     Triple("Список",Icons.Default.FormatListBulleted,"Задачи списком"),
                     Triple("Таймлайн",Icons.Default.CalendarViewWeek,"Таймлайн"),
@@ -223,7 +226,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
         }
     ) { padding ->
         when {
-            state.loading -> Loading(Modifier.padding(padding))
+            state.loading -> NativeLoadingSkeleton(Modifier.padding(padding),dark)
             state.error != null -> ErrorState(state.error!!, vm::refresh, Modifier.padding(padding))
             else -> ModernWorkspace(
                 vm, state, dark, vm::search, { settings = true },

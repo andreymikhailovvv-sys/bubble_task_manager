@@ -173,6 +173,8 @@ jobs:
         run: node --import tsx --test server/test/ai-checkup-manual.test.ts server/test/miniapp-habit-tracker-ui.test.ts
       - name: Verify workspace, AI and integrations training tutorials
         run: node --import tsx --test server/test/training-tours-2026.test.ts
+      - name: Verify native Android inline editing, keyboard and shimmer placeholders
+        run: node --import tsx --test server/test/android-inline-rich-editor-skeleton-status-2026.test.ts
       - name: Verify inline rich descriptions and subtask notes action
         run: node --import tsx --test server/test/web-inline-rich-description-2026.test.ts server/test/web-notes-and-description-resize.test.ts
       - name: Verify focus editor controls and managed assistant reply cards

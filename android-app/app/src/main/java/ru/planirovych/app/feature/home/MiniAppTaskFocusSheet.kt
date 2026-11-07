@@ -297,17 +297,12 @@ fun MiniAppTaskFocusSheet(
                     Surface(modifier=Modifier.fillMaxWidth(),
                         shape=RoundedCornerShape(18.dp),color=c.bg,
                         border=BorderStroke(1.dp,c.border)){
-                        Box(Modifier.fillMaxWidth().height(descriptionHeight)
-                            .clickable(enabled=!busy){descriptionExpanded=true}
-                            .padding(horizontal=13.dp,vertical=13.dp)){
-                            Text(focusReadableDescription(description)
-                                    .ifBlank{"Введите описание"},
-                                color=if(description.isBlank())c.muted else c.text,
-                                fontSize=14.sp,lineHeight=23.sp,
-                                maxLines=if(descriptionHeight>=210.dp)15 else
-                                    if(descriptionHeight>=155.dp)7 else 5,
-                                overflow=TextOverflow.Ellipsis)
-                        }
+                        NativeRichTextEditor(
+                            value=description,onChange={description=it;onClearError()},
+                            dark=dark,editorKey="focus-inline-"+task.id,
+                            inline=true,modifier=Modifier.fillMaxWidth()
+                                .height(descriptionHeight)
+                        )
                     }
                     // A real drag handle, independent of the sheet swipe and description editor.
                     Box(Modifier.align(Alignment.BottomCenter).offset(y=10.dp)
