@@ -150,7 +150,9 @@ fun MiniAppSubtaskEditorSheet(
         // Unlike the activity, a Dialog owns a separate Window. Explicitly
         // resize that window for the IME; a full-height window left our footer
         // underneath the keyboard as soon as the user typed the subtask title.
-        val dialogWindow=(LocalView.current.parent as? DialogWindowProvider)?.window
+        val hostView=LocalView.current
+        val dialogWindow=((hostView as? DialogWindowProvider)
+            ?: (hostView.parent as? DialogWindowProvider))?.window
         DisposableEffect(dialogWindow) {
             dialogWindow?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
             onDispose {}
