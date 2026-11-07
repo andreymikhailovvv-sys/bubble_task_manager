@@ -8,13 +8,20 @@ test('Quick AI composer no longer reserves navigation bar space when keyboard is
   const home=await read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/HomeScreen.kt');
   assert.match(home,/val keyboardOpen=imeInsets\.getBottom\(density\)>0/);
   assert.match(home,/!state\.loading && state\.error == null && !keyboardOpen/);
+  const general=await read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeGeneralAiChat.kt');
+  assert.match(general,/Box\(Modifier\.fillMaxSize\(\)\.background\(/);
+  assert.doesNotMatch(general,/Box\(Modifier\.fillMaxSize\(\)\.imePadding\(\)\.background/);
 });
 
-test('subtask dialog always reserves a stable area for the Create footer',async()=>{
+test('subtask dialog wraps its content, resizes for IME and preserves Create footer',async()=>{
   const s=await read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/MiniAppSubtaskEditorSheet.kt');
   assert.match(s,/BoxWithConstraints\(Modifier\.fillMaxSize\(\)/);
-  assert.match(s,/height\(minOf\(visibleMaxHeight,520\.dp\)\)/);
-  assert.match(s,/Column\(Modifier\.weight\(1f\)/);
+  assert.match(s,/heightIn\(max=visibleMaxHeight\)/);
+  assert.doesNotMatch(s,/height\(minOf\(visibleMaxHeight,520\.dp\)\)/);
+  assert.match(s,/Column\(Modifier\.weight\(1f,fill=false\)/);
+  assert.match(s,/SOFT_INPUT_ADJUST_RESIZE/);
+  assert.match(s,/titleFocus\.requestFocus\(\)/);
+  assert.match(s,/keyboard\?\.show\(\)/);
   const footer=s.indexOf('// Sticky actions remain reachable');
   assert.ok(footer>0);
   assert.match(s.slice(footer),/ChildAction\("Создать подзадачу"/);
@@ -63,4 +70,12 @@ test('launch loading uses shimmering future-card placeholders instead of a spinn
   assert.match(home,/state\.loading -> NativeLoadingSkeleton\(/);
   assert.match(loading,/rememberInfiniteTransition\(label="workspace-loading"\)/);
   assert.match(loading,/repeat\(3\)/);
+});
+
+test('new task focuses the title after the sheet has expanded',async()=>{
+  const source=await read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeDetailedTaskCreateSheet.kt');
+  assert.match(source,/createSheetState\.currentValue==SheetValue\.Expanded/);
+  assert.match(source,/titleFocus\.requestFocus\(\)/);
+  assert.match(source,/keyboard\?\.show\(\)/);
+  assert.match(source,/\.focusRequester\(titleFocus\)/);
 });

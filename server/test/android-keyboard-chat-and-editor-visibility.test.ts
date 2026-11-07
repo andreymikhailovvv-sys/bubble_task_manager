@@ -19,10 +19,11 @@ test('both AI conversations keep their composer and conversation above keyboard'
     read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeGeneralAiChat.kt'),
     read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeTaskAiChat.kt')
   ]);
-  assert.match(general, /Box\(Modifier\.fillMaxSize\(\)\.imePadding\(\)\.background/);
+  assert.match(general, /Box\(Modifier\.fillMaxSize\(\)\.background/);
+  assert.doesNotMatch(general, /Box\(Modifier\.fillMaxSize\(\)\.imePadding\(\)\.background/);
   assert.match(general, /MiniAppAiSendIcon\(Color\.White\)/);
   assert.match(task, /Surface\(Modifier\.fillMaxSize\(\)\.imePadding\(\)/);
-  assert.match(task, /composerHeightPx\.toDp\(\)\+28\.dp/);
+  assert.match(task, /composerHeightPx\.toDp\(\)\+48\.dp/);
   assert.match(task, /Color\(0xFFF2F7FF\)/);
   assert.match(task, /shadow\(elevation=3\.dp,shape=CircleShape/);
   assert.match(task, /MiniAppAiSendIcon\(Color\.White\)/);
@@ -45,7 +46,9 @@ test('subtask editor keeps create button fixed outside scrollable fields', async
   assert.match(child.slice(scroll,footer), /verticalScroll\(rememberScrollState\(\)\)/);
   assert.doesNotMatch(child.slice(scroll,footer), /ChildAction\("Создать подзадачу"/);
   assert.match(child.slice(footer,end), /ChildAction\("Создать подзадачу"/);
-  assert.match(child, /BoxWithConstraints\(Modifier\.fillMaxSize\(\)\.imePadding\(\)/);
+  assert.match(child, /BoxWithConstraints\(Modifier\.fillMaxSize\(\)/);
+  assert.match(child, /SOFT_INPUT_ADJUST_RESIZE/);
+  assert.match(child, /\.heightIn\(max=visibleMaxHeight\)/);
 });
 
 test('focus AI button is keyboard-sticky and sheet header has less wasted space', async () => {

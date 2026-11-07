@@ -272,9 +272,10 @@ internal fun NativeGeneralAiChatPage(
     LaunchedEffect(voiceSendSerial){
         if(voiceSendSerial>0)send()
     }
-    // Unlike the task chat's Dialog, this page lives inside Scaffold.
-    // Consume the IME inset here so the composer always clears the keyboard.
-    Box(Modifier.fillMaxSize().imePadding().background(
+    // MainActivity uses adjustResize and Scaffold's content is already resized by
+    // the keyboard. A second imePadding here subtracted the IME height again,
+    // leaving a screen-sized blank gap below the composer.
+    Box(Modifier.fillMaxSize().background(
         Brush.verticalGradient(if(dark)
             listOf(c.bg,Color(0xFF101B30))
             else listOf(Color(0xFFF2F7FF),Color(0xFFF0F4FF),Color(0xFFEDF5FF))

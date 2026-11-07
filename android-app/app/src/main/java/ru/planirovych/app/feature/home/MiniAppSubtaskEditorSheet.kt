@@ -8,6 +8,7 @@ import android.provider.CalendarContract
 import android.provider.OpenableColumns
 import android.text.Html
 import android.widget.Toast
+import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
@@ -15,6 +16,8 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -26,6 +29,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -33,6 +38,7 @@ import androidx.compose.ui.unit.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -69,6 +75,8 @@ fun MiniAppSubtaskEditorSheet(
     val scope=rememberCoroutineScope()
     val key=task?.id ?: "new-"+parent.id
     val isNew=task==null
+    val titleFocus=remember(key){FocusRequester()}
+    val keyboard=LocalSoftwareKeyboardController.current
     var title by remember(key){mutableStateOf(task?.title.orEmpty())}
     val initialDescription=remember(key){task?.description.orEmpty()}
     var description by remember(key){mutableStateOf(initialDescription)}
@@ -139,17 +147,32 @@ fun MiniAppSubtaskEditorSheet(
         onDismissRequest={if(isNew || title.isBlank())onBack() else saveThen(onBack)},
         properties=DialogProperties(usePlatformDefaultWidth=false)
     ) {
-        // The keyboard reduces the dialog's available height, not its footer.
-        // Keep Create/Complete/Delete outside the scrollable editor fields.
+        // Unlike the activity, a Dialog owns a separate Window. Explicitly
+        // resize that window for the IME; a full-height window left our footer
+        // underneath the keyboard as soon as the user typed the subtask title.
+        val hostView=LocalView.current
+        val dialogWindow=((hostView as? DialogWindowProvider)
+            ?: (hostView.parent as? DialogWindowProvider))?.window
+        DisposableEffect(dialogWindow) {
+            dialogWindow?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+            onDispose {}
+        }
+        LaunchedEffect(key,isNew) {
+            if(isNew) {
+                withFrameNanos { }
+                titleFocus.requestFocus()
+                keyboard?.show()
+            }
+        }
         BoxWithConstraints(Modifier.fillMaxSize(),
             contentAlignment=Alignment.Center) {
-            // Dialog window is adjustResize. Do not subtract IME insets again:
-            // the double reduction pushed the Create button below the viewport.
-            val visibleMaxHeight=minOf(maxHeight,this.maxHeight-12.dp)
+            // Natural dialog height prevents large dead space. The editable
+            // fields can shrink and scroll; the fixed footer cannot disappear.
+            val visibleMaxHeight=minOf(maxHeight,this.maxHeight-16.dp)
                 .coerceAtLeast(180.dp)
             Surface(
                 modifier=Modifier.fillMaxWidth(.94f)
-                    .height(minOf(visibleMaxHeight,520.dp)),
+                    .heightIn(max=visibleMaxHeight),
                 shape=RoundedCornerShape(24.dp),
                 color=c.bg,
                 contentColor=c.ink,
@@ -157,13 +180,14 @@ fun MiniAppSubtaskEditorSheet(
                 shadowElevation=16.dp
             ) {
                 Column(Modifier.fillMaxWidth()) {
-                    Column(Modifier.weight(1f)
+                    Column(Modifier.weight(1f,fill=false)
                         .verticalScroll(rememberScrollState())
                         .padding(start=16.dp,end=16.dp,top=18.dp,bottom=4.dp)) {
                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.Top,
                     horizontalArrangement=Arrangement.spacedBy(7.dp)){
                     BasicTextField(value=title,onValueChange={title=it;onClearError()},
-                        modifier=Modifier.weight(1f).padding(top=4.dp,end=3.dp),
+                        modifier=Modifier.weight(1f)
+                            .focusRequester(titleFocus).padding(top=4.dp,end=3.dp),
                         textStyle=TextStyle(color=c.ink,fontSize=24.sp,lineHeight=29.sp,
                             fontWeight=FontWeight.Bold),
                         maxLines=3,enabled=!busy,cursorBrush=SolidColor(c.purple),
