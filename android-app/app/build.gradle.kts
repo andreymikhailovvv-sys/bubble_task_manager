@@ -6,6 +6,18 @@ plugins {
     alias(libs.plugins.google.services)
 }
 
+// Use ONE permanently backed-up release keystore. No credentials or keys in Git.
+val releaseStorePath = providers.gradleProperty("PLANIROVYCH_RELEASE_STORE_FILE")
+    .orElse(providers.environmentVariable("PLANIROVYCH_RELEASE_STORE_FILE")).orNull
+val releaseStorePassword = providers.gradleProperty("PLANIROVYCH_RELEASE_STORE_PASSWORD")
+    .orElse(providers.environmentVariable("PLANIROVYCH_RELEASE_STORE_PASSWORD")).orNull
+val releaseKeyAlias = providers.gradleProperty("PLANIROVYCH_RELEASE_KEY_ALIAS")
+    .orElse(providers.environmentVariable("PLANIROVYCH_RELEASE_KEY_ALIAS")).orNull
+val releaseKeyPassword = providers.gradleProperty("PLANIROVYCH_RELEASE_KEY_PASSWORD")
+    .orElse(providers.environmentVariable("PLANIROVYCH_RELEASE_KEY_PASSWORD")).orNull
+val hasReleaseSigning = listOf(releaseStorePath,releaseStorePassword,releaseKeyAlias,
+    releaseKeyPassword).all { !it.isNullOrBlank() }
+
 android {
     namespace = "ru.planirovych.app"
     compileSdk = 36
@@ -14,14 +26,30 @@ android {
         applicationId = "ru.planirovych.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "API_BASE_URL", "\"${project.findProperty("API_BASE_URL") ?: "https://planirovych.ru/"}\"")
     }
+    signingConfigs {
+        if(hasReleaseSigning) {
+            create("planirovychRelease") {
+                storeFile = file(requireNotNull(releaseStorePath))
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
     buildTypes {
         debug { applicationIdSuffix = ".debug"; versionNameSuffix = "-debug" }
-        release { isMinifyEnabled = false; proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro") }
+        release {
+            isMinifyEnabled = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Android Studio's Generate Signed APK wizard also works if these
+            // variables are absent. Never create or auto-commit a signing key.
+            if(hasReleaseSigning) signingConfig=signingConfigs.getByName("planirovychRelease")
+        }
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

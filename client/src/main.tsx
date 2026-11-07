@@ -79,7 +79,8 @@ const isBusinessRoute = isWorkHost || isWorkPreview;
 const isMiniAppRoute = window.location.pathname.startsWith('/miniapp');
 const isTelegramAuthRoute = window.location.pathname === '/telegram-auth';
 const isAdminRoute = window.location.pathname === '/admin556215';
-const isPublicRoute = window.location.pathname === '/about'
+const isPublicRoute = window.location.pathname === '/android'
+  || window.location.pathname === '/about'
   || window.location.pathname === '/legal/privacy'
   || window.location.pathname === '/legal/cookies'
   || window.location.pathname === '/legal/terms'

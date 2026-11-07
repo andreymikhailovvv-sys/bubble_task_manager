@@ -1,4 +1,5 @@
 import type { PropsWithChildren } from 'react';
+import AndroidDownloadPage from './AndroidDownloadPage';
 import { PrivacyPolicyContent, PRIVACY_POLICY_REVISION_DATE } from './legal/privacy';
 import { CookiePolicyContent, COOKIE_POLICY_REVISION_DATE } from './legal/cookies';
 import { TermsContent, TERMS_REVISION_DATE } from './legal/terms';
@@ -169,6 +170,7 @@ function OfferPage() {
 }
 
 export default function PublicPages() {
+  if (window.location.pathname === '/android') return <PublicLayout><AndroidDownloadPage /></PublicLayout>;
   if (window.location.pathname === '/legal/privacy') return <PrivacyPage />;
   if (window.location.pathname === '/legal/cookies') return <CookiesPage />;
   if (window.location.pathname === '/legal/terms') return <TermsPage />;

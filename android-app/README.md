@@ -15,7 +15,7 @@
 2. Дождитесь Gradle Sync.
 3. Выберите устройство или эмулятор с Android 8.0+ и нажмите **Run**.
 
-Package id release-сборки: `ru.planirovych.app`. Версия: `0.1.0` (`versionCode 1`). Debug-вариант получает suffix `.debug`.
+Package id release-сборки: `ru.planirovych.app`. Первая подписанная версия: `1.0.0` (`versionCode 2`). Debug-вариант получает suffix `.debug`. Инструкция по выпуску и обновлению: [docs/android-apk-self-updates.md](../../docs/android-apk-self-updates.md).
 
 ## Backend
 
@@ -35,6 +35,8 @@ URL обязан оканчиваться `/`. Секреты и API-ключи 
 ```
 
 Debug APK появится в `app/build/outputs/apk/debug/app-debug.apk`.
+
+Для распространения создайте **Generate Signed APK → release**, используя неизменный и отдельно сохранённый ключ подписи. Обычный `Build APK(s)` — это debug-сборка, которую нельзя обновить поверх официальной версии. Новые выпуски размещаются в публичных GitHub Releases и доступны по адресу https://planirovych.ru/android .
 
 Текущая версия включает нативное рабочее пространство, Timeline, задачи, привычки, заметки, чат ИИ, общие проекты и чаты, системные уведомления и виджет быстрых запросов.
 

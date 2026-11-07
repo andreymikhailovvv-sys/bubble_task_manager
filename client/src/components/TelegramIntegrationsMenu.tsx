@@ -6,7 +6,7 @@ import { MailAssistantSettings } from './MailAssistantSettings';
 import { api, type TelegramIntegrationStatus } from '../lib/api';
 import './TelegramIntegrationsMenu.css';
 
-type Integration = 'bot' | 'messages' | 'assistant' | 'email';
+type Integration = 'bot' | 'android' | 'messages' | 'assistant' | 'email';
 type Props = { onConnectBot: () => void; tourIntegration?: 'messages' | 'assistant' | 'email' | null };
 const RUNNING = ['starting', 'qr', 'password_required', 'verifying_password'];
 type MenuPlacement = { left: number; top?: number; bottom?: number; width: number; maxHeight: number };
@@ -173,8 +173,9 @@ export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null 
             onFocus={cancelClose}>
             <h3 className="mb-2 px-1 text-sm font-bold">Интеграции</h3>
             <p className="integration-menu__muted mb-3 px-1 text-xs">Подключайте сервисы к своему аккаунту Планировыча.</p>
-            {(['bot', 'messages', 'assistant', 'email'] as const).map(kind => {
+            {(['bot', 'android', 'messages', 'assistant', 'email'] as const).map(kind => {
               const isBot = kind === 'bot';
+              const isAndroid = kind === 'android';
               const isAssistant = kind === 'assistant';
               const isEmail = kind === 'email';
               const enabled = isEmail ? mailConnected : isBot ? botConnected : isAssistant ? Boolean(status?.connected && status.readEnabled) : connected;
@@ -182,17 +183,17 @@ export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null 
                 <div key={kind} data-tour={kind === 'messages' ? 'integration-messages' : kind === 'assistant' ? 'integration-assistant' : kind === 'email' ? 'integration-email' : undefined} className="integration-menu__item mb-2 rounded-xl border">
                   <button type="button" className="flex w-full items-center gap-2 p-3 text-left" aria-expanded={expanded === kind}
                     onClick={() => expandIntegration(kind)}>
-                    <span className="integration-menu__symbol flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">{isEmail ? <Mail size={19}/> : isBot ? <Smartphone size={19}/> : isAssistant ? <Bot size={19}/> : <Send size={18}/>}</span>
-                    <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{isEmail ? 'Почтовый ИИ-ассистент' : isBot ? 'Telegram-бот' : isAssistant ? 'ИИ-ассистент Telegram' : 'Отправка в Telegram'}</span>
+                    <span className="integration-menu__symbol flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">{isAndroid ? <Smartphone size={19}/> : isEmail ? <Mail size={19}/> : isBot ? <Smartphone size={19}/> : isAssistant ? <Bot size={19}/> : <Send size={18}/>}</span>
+                    <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{isAndroid ? 'Android-приложение' : isEmail ? 'Почтовый ИИ-ассистент' : isBot ? 'Telegram-бот' : isAssistant ? 'ИИ-ассистент Telegram' : 'Отправка в Telegram'}</span>
                       <span className={`mt-1 flex items-center gap-1 text-xs ${enabled ? 'integration-menu__on' : 'integration-menu__muted'}`}>
-                        {enabled ? <CheckCircle2 size={12}/> : null}{isAssistant ? (enabled ? 'Доступно для настройки' : 'Требуется подключение') : (enabled ? 'Подключено' : 'Не подключено')}
+                        {!isAndroid && enabled ? <CheckCircle2 size={12}/> : null}{isAndroid ? 'Скачать APK и обновления' : isAssistant ? (enabled ? 'Доступно для настройки' : 'Требуется подключение') : (enabled ? 'Подключено' : 'Не подключено')}
                       </span>
                     </span>
                     <ChevronRight size={16} className={`integration-menu__muted transition-transform ${expanded === kind ? 'rotate-90' : ''}`}/>
                   </button>
                   {expanded === kind && (
                     <div className="integration-menu__details border-t px-3 pb-3 pt-2">
-                      <p className="integration-menu__muted text-xs leading-relaxed">{isEmail ? 'Подключите Яндекс Почту или Mail.ru: сводки новых писем, отслеживание обязательств и предложения задач. Только чтение через IMAP, без отправки писем.' : isBot
+                      <p className="integration-menu__muted text-xs leading-relaxed">{isAndroid ? 'Нативный Планировыч для Android: задачи, привычки и ИИ-чат. Скачать официальную APK или получить новую версию можно на странице приложения.' : isEmail ? 'Подключите Яндекс Почту или Mail.ru: сводки новых писем, отслеживание обязательств и предложения задач. Только чтение через IMAP, без отправки писем.' : isBot
                         ? 'Получайте уведомления, используйте Telegram Mini App и управляйте задачами через бота Планировыча.'
                         : isAssistant
                           ? 'Выберите личные и групповые чаты, укажите инструкции, уровень анализа, режим работы и лимиты кредитов. На первом этапе настройки сохраняются без фонового чтения и автоответов.'
@@ -201,11 +202,12 @@ export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null 
                         onClick={() => {
                           setOpen(false);
                           if (isBot) onConnectBot();
+                          else if (isAndroid) window.location.assign('/android');
                           else if (isAssistant) setAssistantDialogOpen(true);
                            else if (isEmail) setMailDialogOpen(true);
                           else { setDialogOpen(true); setError(''); setNotice(''); }
                         }}>
-                        {isAssistant || isEmail ? 'Настроить ассистента' : enabled && !isBot ? 'Управлять подключением' : isBot && enabled ? 'Открыть подключение' : 'Подключить'}
+                        {isAndroid ? 'Скачать для Android' : isAssistant || isEmail ? 'Настроить ассистента' : enabled && !isBot ? 'Управлять подключением' : isBot && enabled ? 'Открыть подключение' : 'Подключить'}
                       </button>
                     </div>
                   )}
