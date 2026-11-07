@@ -70,10 +70,34 @@ import { mailAssistant, MailAssistantError } from '../services/mail-assistant.se
 import { mailAssistantInboxFeed, deliverMailReply } from '../services/mail-assistant-inbox.service.js';
 import { rewriteMailQuickText } from '../services/telegram-quick-share-ai.service.js';
 import { getOwnerMailDraft, sendOwnerMailDraft } from '../services/ai-mail-tools.service.js';
+import { latestAndroidRelease } from '../services/android-release-catalog.service.js';
 import { emailAddress } from '../services/mail-smtp.service.js';
 
 
 export const apiRouter = Router();
+
+// Public, read-only catalog. Binaries are not stored on this server: Timeweb
+// deploys cannot remove a published APK. Never accept external URLs from users.
+apiRouter.get('/android/latest', async (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    const release = await latestAndroidRelease();
+    res.json(release?.public ?? { available: false });
+  } catch (error) {
+    console.warn('[AndroidRelease] catalog unavailable', error instanceof Error ? error.message : 'unknown');
+    res.status(503).json({ error: 'Проверка Android-версии временно недоступна' });
+  }
+});
+apiRouter.get('/android/download', async (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    const release = await latestAndroidRelease();
+    if (!release) { res.status(404).json({ error: 'APK ещё не опубликована' }); return; }
+    res.redirect(302, release.assetUrl);
+  } catch {
+    res.status(503).json({ error: 'Загрузка Android-приложения временно недоступна' });
+  }
+});
 const mailOrigin = (req: Request, res: Response, next: NextFunction) => {
   if (!telegramChatRequestIsSameOrigin(req.get('origin'), req.get('host'), req.get('sec-fetch-site'))) {
     res.status(403).json({ error: 'Недопустимый источник запроса' }); return;
