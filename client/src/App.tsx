@@ -5718,10 +5718,6 @@ export default function App() {
                   ))}
                   {timelineOverdueTasks.length === 0 ? <p className="py-3 text-center text-sm text-subtle">Просроченных задач нет</p> : null}
                 </div>
-
-                    <p className="mt-2 text-muted">Дедлайн: {formatTaskDueDate(hoveredOverdueTask.dueDate)} · {formatDeadlineLeft(hoveredOverdueTask.dueDate)}</p>
-                  </div>
-                ) : null}
               </section>
             ) : null}
           </div>
