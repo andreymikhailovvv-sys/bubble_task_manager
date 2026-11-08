@@ -69,7 +69,37 @@ test('Android shows updates only for signed release build and opens official sit
   assert.match(updater,/UPDATE_MANIFEST = "https:\/\/planirovych\.ru\/api\/android\/latest"/);
   assert.match(activity,/AndroidAppUpdateDialog/);
   assert.match(activity,/https:\/\/planirovych\.ru\/android/);
-  assert.match(gradle,/versionCode = 2/);
-  assert.match(gradle,/versionName = "1\.0\.0"/);
+  // Version numbers change with each release. Never hardcode v2 in CI.
+  const code = Number(gradle.match(/versionCode\\s*=\\s*(\\d+)/)?.[1]);
+  const version = gradle.match(/versionName\\s*=\\s*"(\\d+\\.\\d+\\.\\d+)"/)?.[1];
+  assert.ok(Number.isSafeInteger(code) && code >= 2);
+  assert.ok(version, 'release versionName must use x.y.z format');
   assert.match(gradle,/PLANIROVYCH_RELEASE_STORE_PASSWORD/);
+});
+
+test('Android update Later snoozes the current release for 24 hours, not forever',async()=>{
+  const [updater,activity]=await Promise.all([
+    read('../../android-app/app/src/main/java/ru/planirovych/app/updates/AndroidAppUpdates.kt'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/MainActivity.kt')
+  ]);
+  assert.match(updater,/REMINDER_INTERVAL_MS = TimeUnit\.HOURS\.toMillis\(24\)/);
+  assert.match(updater,/private const val SNOOZED_CODE/);
+  assert.match(updater,/prefs\.getInt\(SNOOZED_CODE,0\)==code/);
+  assert.match(updater,/nowMs < prefs\.getLong\(SNOOZED_UNTIL,0L\)/);
+  assert.match(updater,/\.putLong\(SNOOZED_UNTIL,nowMs\+REMINDER_INTERVAL_MS\)/);
+  assert.match(updater,/AndroidAppUpdateChecker\.snoozed\(applicationContext,release\.versionCode,now\)/);
+  assert.doesNotMatch(updater,/dismissed_version|fun dismissed\(|fun dismiss\(/);
+  assert.match(activity,/onLater=\{[\s\S]*?AndroidAppUpdateChecker\.snooze\(this@MainActivity,release\.versionCode\)/);
+  const onUpdate=activity.slice(activity.indexOf('onUpdate={'),activity.indexOf('onUpdate={')+580);
+  assert.match(onUpdate,/startActivity\(Intent\(Intent\.ACTION_VIEW/);
+  assert.doesNotMatch(onUpdate,/AndroidAppUpdateChecker\.snooze\(/);
+  assert.match(activity,/updatePageOpenedAtMs=System\.currentTimeMillis\(\)/);
+});
+
+test('background update notifications may reappear after a day, never during snooze',async()=>{
+  const updater=await read('../../android-app/app/src/main/java/ru/planirovych/app/updates/AndroidAppUpdates.kt');
+  assert.match(updater,/lastCode==release\.versionCode && lastSentAt>0L/);
+  assert.match(updater,/now-lastSentAt<REMINDER_INTERVAL_MS/);
+  assert.match(updater,/\.putLong\(LAST_NOTIFIED_AT,now\)/);
+  assert.match(updater,/\.cancel\(UPDATE_NOTIFICATION_ID\)/);
 });
