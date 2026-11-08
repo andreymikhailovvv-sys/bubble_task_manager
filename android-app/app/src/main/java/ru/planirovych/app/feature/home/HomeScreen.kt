@@ -327,6 +327,14 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                 busy = state.taskBusy,
                 error = state.taskError,
                 onBack = back,
+                onOpenParent = {
+                    // Direct entry from the timeline has no parent sheet beneath
+                    // this dialog. Replace the child with the parent focus task.
+                    openedTaskId = parent.id
+                    newSubtaskParentId = null
+                    subtaskReturnToTaskId = null
+                    vm.clearTaskError()
+                },
                 onSave = vm::saveTask,
                 onCreateSubtask = vm::createSubtask,
                 onChangeStatus = vm::changeStatus,
@@ -377,6 +385,16 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
             task=overlayChild,parent=overlayParent,dark=dark,vm=vm,
             busy=state.taskBusy,error=state.taskError,
             onBack={
+                overlaySubtaskId=null
+                overlayNewSubtaskParentId=null
+                vm.clearTaskError()
+            },
+            onOpenParent={
+                // The parent focus sheet is already mounted under this dialog.
+                // Reveal it directly, including for a child opened from its list.
+                openedTaskId=overlayParent.id
+                newSubtaskParentId=null
+                subtaskReturnToTaskId=null
                 overlaySubtaskId=null
                 overlayNewSubtaskParentId=null
                 vm.clearTaskError()
