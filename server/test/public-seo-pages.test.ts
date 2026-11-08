@@ -13,7 +13,7 @@ let server: ReturnType<ReturnType<typeof express>['listen']>;
 let baseUrl: string;
 
 before(async () => {
-  for (const file of ['index.html', 'seo-pages.css', 'task-manager/index.html', 'ai-planner/index.html', 'welcome/index.html', 'welcome/welcome.css', 'welcome/welcome.js']) {
+  for (const file of ['index.html', 'seo-pages.css', 'task-manager/index.html', 'ai-planner/index.html', 'welcome/index.html', 'welcome/welcome.css', 'welcome/welcome.js', 'android/index.html', 'android/android.css', 'android/android.js', 'android/qr.svg']) {
     assert.ok(existsSync(path.join(clientDist, file)), `Run the client build before this test (missing ${file})`);
   }
 
@@ -118,4 +118,48 @@ test('existing authenticated or guest session receives a welcome-skip cookie', a
   }
   const fresh = await fetch(baseUrl + '/');
   assert.equal(fresh.headers.get('set-cookie'), null);
+});
+
+test('Android download is a standalone static HTML entry at the existing deep link', async () => {
+  const response = await fetch(baseUrl + '/android?utm_source=qr');
+  const body = await response.text();
+  assert.equal(response.status, 200);
+  assert.ok((response.headers.get('content-type') ?? '').includes('text/html'));
+  assert.ok((response.headers.get('cache-control') ?? '').includes('no-store'));
+  for (const fragment of [
+    'Планировыч всегда под рукой',
+    'href="https://planirovych.ru/android"',
+    'src="/android/qr.svg"',
+    'src="/android/android.js"',
+    'href="/android/android.css"'
+  ]) assert.ok(body.includes(fragment), fragment);
+  for (const forbidden of [
+    '<div id="root">', 'type="module"', 'src="/assets/', 'telegram.org/js'
+  ]) assert.ok(!body.includes(forbidden), forbidden);
+});
+
+test('Android page redirects trailing slash to stable canonical without losing query parameters', async () => {
+  const response = await fetch(baseUrl + '/android/?utm_campaign=scan', { redirect: 'manual' });
+  assert.equal(response.status, 301);
+  assert.equal(response.headers.get('location'), '/android?utm_campaign=scan');
+});
+
+test('Android standalone assets do not include or trigger the main application', async () => {
+  const expectations = [
+    ['/android/android.css', 'text/css', '.qr-card'],
+    ['/android/android.js', 'javascript', "fetch('/api/android/latest'"],
+    ['/android/qr.svg', 'image/svg+xml', 'viewBox="0 0 37 37"']
+  ] as const;
+  for (const [url, type, fragment] of expectations) {
+    const response = await fetch(baseUrl + url);
+    const body = await response.text();
+    assert.equal(response.status, 200, url);
+    assert.ok((response.headers.get('content-type') ?? '').includes(type), url);
+    assert.ok(body.includes(fragment), url);
+    assert.ok(!body.includes('telegram.org/js'), url);
+  }
+  const script = await (await fetch(baseUrl + '/android/android.js')).text();
+  assert.ok(script.includes("getElementById('download-link')"));
+  assert.ok(!script.includes("from 'react'"));
+  assert.ok(!script.includes('import('));
 });

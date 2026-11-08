@@ -8,7 +8,9 @@ import path from 'node:path';
 const SEO_PAGE_DIRECTORIES: Record<string, string> = {
   '/task-manager/': 'task-manager',
   '/ai-planner/': 'ai-planner',
-  '/welcome/': 'welcome'
+  '/welcome/': 'welcome',
+  // APK page is intentionally independent of the main React entrypoint.
+  '/android': 'android'
 };
 
 export const createPublicSeoPagesMiddleware = (clientDist: string): RequestHandler => (req, res, next) => {
@@ -34,6 +36,15 @@ export const createPublicSeoPagesMiddleware = (clientDist: string): RequestHandl
     const queryStart = req.originalUrl.indexOf('?');
     const query = queryStart === -1 ? '' : req.originalUrl.slice(queryStart);
     res.redirect(301, `${req.path}/${query}`);
+    return;
+  }
+
+  // Keep the existing Android deep link (/android) canonical. A scanner
+  // always reaches one stable URL even as APK release assets change.
+  if (req.path === '/android/') {
+    const queryStart = req.originalUrl.indexOf('?');
+    const query = queryStart === -1 ? '' : req.originalUrl.slice(queryStart);
+    res.redirect(301, '/android' + query);
     return;
   }
 

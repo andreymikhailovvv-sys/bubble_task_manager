@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#eff5ff">
+  <meta name="description" content="Скачать официальное приложение Планировыч AI для Android в формате APK. Актуальная версия, QR-код и инструкция по установке.">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:site_name" content="Планировыч AI">
+  <meta property="og:title" content="Планировыч для Android — скачать APK">
+  <meta property="og:description" content="Официальная APK Планировыча. Скачайте на телефон или откройте страницу по QR-коду.">
+  <meta property="og:url" content="https://planirovych.ru/android">
+  <meta property="og:image" content="https://planirovych.ru/icon.png">
+  <link rel="canonical" href="https://planirovych.ru/android">
+  <link rel="icon" type="image/png" sizes="120x120" href="/favicon-120.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/android/android.css">
+  <title>Планировыч для Android — скачать APK</title>
+  <script src="/android/android.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">К содержимому</a>
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand" href="/" aria-label="Планировыч AI — на главную">
+        <img src="/icon.png" alt="" width="34" height="34" loading="eager">
+        <span>Планировыч <span class="brand-ai">AI</span></span>
+      </a>
+      <nav aria-label="Основная навигация">
+        <a href="/about">О сервисе</a>
+        <a class="nav-login" href="/">Войти</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="container">
+    <section class="hero" aria-labelledby="page-title">
+      <div class="hero-content">
+        <div class="eyebrow"><span class="indicator" aria-hidden="true"></span> Официальное Android-приложение</div>
+        <h1 id="page-title">Планировыч всегда под рукой</h1>
+        <p class="lead">Задачи, привычки, таймлайн и ИИ-помощник в одном приложении. Данные синхронизируются с вашим аккаунтом на сайте.</p>
+        <div class="download-row">
+          <a class="download-button" id="download-link" href="/api/android/download" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 17v3h14v-3"/></svg>
+            Скачать APK
+          </a>
+          <span class="download-pending" id="download-pending" role="status">Проверяем доступную версию…</span>
+          <span class="release-version" id="release-version" aria-live="polite"></span>
+        </div>
+        <p class="note" id="release-status" aria-live="polite">Скачивание бесплатно. Для Android 8.0 и новее.</p>
+      </div>
+
+      <aside class="qr-card" aria-labelledby="qr-title">
+        <div class="qr-label"><span aria-hidden="true">▦</span> Открыли на компьютере?</div>
+        <div class="qr-frame">
+          <img src="/android/qr.svg" width="210" height="210"
+            alt="QR-код для открытия страницы planirovych.ru/android на телефоне"
+            decoding="async">
+        </div>
+        <h2 id="qr-title">Сканируйте камерой телефона</h2>
+        <p>Откроется эта страница с актуальной версией APK.</p>
+        <a class="short-link" href="https://planirovych.ru/android">planirovych.ru/android</a>
+      </aside>
+    </section>
+
+    <section class="steps" aria-label="Как установить приложение">
+      <article class="step"><span class="step-num">01</span><h2>Скачайте</h2><p>Откройте страницу на Android-телефоне и нажмите «Скачать APK».</p></article>
+      <article class="step"><span class="step-num">02</span><h2>Установите</h2><p>Откройте файл и подтвердите установку. Если Android попросит, разрешите установку из браузера.</p></article>
+      <article class="step"><span class="step-num">03</span><h2>Обновляйтесь</h2><p>Приложение предложит новую версию и направит сюда для загрузки.</p></article>
+    </section>
+
+    <section class="info" aria-labelledby="info-title">
+      <div class="info-icon" aria-hidden="true">✓</div>
+      <div>
+        <h2 id="info-title">Официальные обновления без переустановки</h2>
+        <p>Android проверяет подпись приложения. Следующая release APK с тем же идентификатором и ключом подписи обновляет предыдущую версию поверх неё. Подтверждение установки остаётся за пользователем.</p>
+        <p>Если раньше была установлена тестовая debug-сборка, официальный выпуск будет отдельным приложением.</p>
+        <div id="release-notes" class="release-notes" hidden>
+          <h3>Что нового в <span id="release-notes-version"></span></h3>
+          <p id="release-notes-text"></p>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer class="footer">
+    <div class="container footer-inner">
+      <span>© Планировыч AI</span>
+      <nav aria-label="Правовая информация">
+        <a href="/legal/privacy">Конфиденциальность</a>
+        <a href="/legal/terms">Условия использования</a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>
