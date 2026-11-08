@@ -537,21 +537,14 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                         .padding(horizontal=8.dp,vertical=8.dp),
                         verticalAlignment=Alignment.Bottom,
                         horizontalArrangement=Arrangement.spacedBy(6.dp)){
-                        BasicTextField(value=draft,onValueChange={
-                            draft=it;pendingRetry=false
-                        },modifier=Modifier.weight(1f).heightIn(min=44.dp,max=142.dp),
-                            textStyle=TextStyle(color=c.text,fontSize=14.sp,lineHeight=20.sp),
-                            maxLines=6,enabled=!busy,cursorBrush=SolidColor(c.accent),
-                            decorationBox={inner->
-                                Box(Modifier.fillMaxWidth()
-                                    .defaultMinSize(minHeight=44.dp)
-                                    .padding(horizontal=11.dp,vertical=8.dp),
-                                    contentAlignment=Alignment.CenterStart){
-                                    if(draft.isEmpty())Text("Сообщение ИИ…",
-                                        color=c.secondary,fontSize=14.sp,lineHeight=20.sp)
-                                    inner()
-                                }
-                            })
+                        NativeAiComposerInput(
+                            value=draft,
+                            onValueChange={draft=it;pendingRetry=false},
+                            modifier=Modifier.weight(1f),
+                            enabled=!busy,
+                            colors=c,
+                            placeholder="Сообщение ИИ…"
+                        )
                         Box(Modifier.size(44.dp).clip(CircleShape)
                             .background(if(dark)Color(0xFF253349) else Color.White)
                             .border(1.dp,c.border.copy(alpha=.88f),CircleShape)

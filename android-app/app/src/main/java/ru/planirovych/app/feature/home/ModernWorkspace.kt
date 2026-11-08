@@ -31,6 +31,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.PathEffect
@@ -122,6 +123,15 @@ fun ModernWorkspace(
     var overdueOpen by remember { mutableStateOf(false) }
     var scoreOpen by remember { mutableStateOf(false) }
     var creditsOpen by remember { mutableStateOf(false) }
+    var searchExpanded by remember { mutableStateOf(false) }
+    var searchNoteTarget by remember { mutableStateOf<String?>(null) }
+    val searchPagerScope=rememberCoroutineScope()
+    LaunchedEffect(state.user?.id,state.query.isNotBlank()) {
+        // Search notes just once upon entering a nonempty query. Reuse existing
+        // cached state while typing; avoid an API request per keystroke.
+        if(state.query.isNotBlank()) vm.loadNotes()
+        else searchExpanded=false
+    }
     var selectedHabitId by remember { mutableStateOf<String?>(null) }
     var createHabitOpen by remember { mutableStateOf(false) }
     val sectors = remember(state.spheres) { state.spheres.associateBy { it.id } }
@@ -155,7 +165,9 @@ fun ModernWorkspace(
                 val pagerScope=rememberCoroutineScope()
                 NativeNotesPage(vm=vm,colors=colors,dark=dark,
                     modifier=Modifier.fillMaxSize(),
-                    onClose={pagerScope.launch{pagerState.animateScrollToPage(0)}})
+                    onClose={pagerScope.launch{pagerState.animateScrollToPage(0)}},
+                    openNoteId=searchNoteTarget,
+                    onNoteOpened={searchNoteTarget=null})
             }
             else -> {
                 val contentMode = if(page==1) WorkspaceMode.TIMELINE else WorkspaceMode.LIST
@@ -267,13 +279,31 @@ fun ModernWorkspace(
         }
     }
     Box(Modifier.align(Alignment.TopCenter)
+        .fillMaxWidth()
         .padding(start=14.dp,end=14.dp,top=35.dp)){
-        WorkspaceTopbar(state,colors,mode=contentMode,dark=dark,
-            search=search,settings=settings,
-            onCredits={creditsOpen=true},
-            onScore={scoreOpen=true},
-            onPostpone={vm.postponeOverdue()},
-            canPostpone=overdue && !state.taskBusy)
+        Column(Modifier.fillMaxWidth()) {
+            WorkspaceTopbar(state,colors,mode=contentMode,dark=dark,
+                search={text->search(text);searchExpanded=text.isNotBlank()},
+                onSearchFocus={if(state.query.isNotBlank()) searchExpanded=true},
+                settings=settings,
+                onCredits={creditsOpen=true},
+                onScore={scoreOpen=true},
+                onPostpone={vm.postponeOverdue()},
+                canPostpone=overdue && !state.taskBusy)
+            if(searchExpanded && searchQuery.isNotEmpty()) {
+                Spacer(Modifier.height(7.dp))
+                NativeWorkspaceGlobalSearch(
+                    query=state.query,tasks=state.tasks,notes=state.notes,
+                    notesLoading=state.notesLoading,dark=dark,
+                    onOpenTask=onOpenTask,
+                    onOpenNote={id->
+                        searchNoteTarget=id
+                        searchPagerScope.launch{pagerState.animateScrollToPage(3)}
+                    },
+                    onDismiss={searchExpanded=false}
+                )
+            }
+        }
     }
     }
             }
@@ -392,7 +422,7 @@ fun ModernWorkspace(
 @Composable
 private fun WorkspaceTopbar(
     state:HomeState, colors:WorkspaceColors, mode:WorkspaceMode, dark:Boolean,
-    search:(String)->Unit, settings:()->Unit,
+    search:(String)->Unit, onSearchFocus:()->Unit, settings:()->Unit,
     onCredits:()->Unit, onScore:()->Unit,
     onPostpone:()->Unit, canPostpone:Boolean
 ) {
@@ -411,7 +441,9 @@ private fun WorkspaceTopbar(
                     modifier=Modifier.size(18.dp))
                 Spacer(Modifier.width(7.dp))
                 BasicTextField(value=state.query,onValueChange=search,
-                    modifier=Modifier.weight(1f),singleLine=true,
+                    modifier=Modifier.weight(1f).onFocusChanged {
+                        if(it.isFocused)onSearchFocus()
+                    },singleLine=true,
                     textStyle=MaterialTheme.typography.bodyMedium.copy(
                         color=colors.text,fontSize=14.sp),
                     cursorBrush=androidx.compose.ui.graphics.SolidColor(colors.purple),
@@ -494,23 +526,27 @@ private fun WorkspaceTopbar(
                     }
                 }
                 DropdownMenu(expanded=moreOpen,onDismissRequest={moreOpen=false},
-                    modifier=Modifier.background(colors.panel)) {
-                    DropdownMenuItem(
-                        text={Row(verticalAlignment=Alignment.CenterVertically,
-                            horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                            Text("Кредиты",color=colors.text)
-                            Text((state.user?.aiCredits ?: 0).toString(),color=colors.secondaryText)
-                        }},
-                        leadingIcon={Icon(Icons.Default.Paid,null,tint=Color(0xFF22B8CF))},
-                        onClick={moreOpen=false;onCredits()})
-                    DropdownMenuItem(
-                        text={Text("Рейтинг",color=colors.text)},
-                        leadingIcon={Icon(Icons.Default.Star,null,tint=Color(0xFFA78BFA))},
-                        onClick={moreOpen=false;onScore()})
-                    DropdownMenuItem(
-                        text={Text("Настройки",color=colors.text)},
-                        leadingIcon={Icon(Icons.Default.Settings,null,tint=iconColor)},
-                        onClick={moreOpen=false;settings()})
+                    modifier=Modifier.width(272.dp)
+                        .clip(RoundedCornerShape(26.dp))
+                        .background(if(dark)Color(0xFF1E2844) else Color(0xFFF9F5FF))) {
+                    Column(Modifier.padding(horizontal=7.dp,vertical=5.dp),
+                        verticalArrangement=Arrangement.spacedBy(9.dp)) {
+                        val score=(state.user?.efficiencyScore ?: 0.0).coerceIn(0.0,100.0)
+                        val scoreText=if(score%1.0==0.0)score.toInt().toString()
+                            else String.format(Locale("ru"),"%.1f",score)
+                        WorkspaceUtilityMenuItem(
+                            label="Кредиты",value=(state.user?.aiCredits?:0).toString(),
+                            icon=Icons.Default.Paid,accent=Color(0xFF1B395D),
+                            dark=dark,onClick={moreOpen=false;onCredits()})
+                        WorkspaceUtilityMenuItem(
+                            label="Рейтинг",value=scoreText+"/100",
+                            icon=Icons.Default.Star,accent=Color(0xFF38BDF8),
+                            dark=dark,onClick={moreOpen=false;onScore()})
+                        WorkspaceUtilityMenuItem(
+                            label="Настройки",value=null,
+                            icon=Icons.Default.Settings,accent=Color(0xFFF4B400),
+                            dark=dark,onClick={moreOpen=false;settings()})
+                    }
                 }
             }
         }
@@ -580,6 +616,37 @@ private fun HabitsStrip(habits:List<Habit>, colors:WorkspaceColors, dark:Boolean
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun WorkspaceUtilityMenuItem(
+    label:String,value:String?,
+    icon:androidx.compose.ui.graphics.vector.ImageVector,
+    accent:Color,dark:Boolean,onClick:()->Unit
+) {
+    val ink=if(dark)Color(0xFFF1F5F9) else Color(0xFF273B58)
+    val border=if(dark)Color(0xFF42516B) else Color(0xFFE7DAF5)
+    val tile=if(dark)Color(0xFF273651) else Color.White
+    val shape=RoundedCornerShape(21.dp)
+    Row(Modifier.fillMaxWidth().clip(shape).background(tile)
+        .border(1.dp,border,shape)
+        .clickable(onClick=onClick)
+        .padding(horizontal=14.dp,vertical=13.dp),
+        verticalAlignment=Alignment.CenterVertically,
+        horizontalArrangement=Arrangement.spacedBy(13.dp)) {
+        Box(Modifier.size(32.dp),contentAlignment=Alignment.Center) {
+            Icon(icon,null,tint=accent,modifier=Modifier.size(27.dp))
+        }
+        Text(label,modifier=Modifier.weight(1f),color=ink,
+            fontSize=16.sp,fontWeight=FontWeight.Bold,maxLines=1)
+        if(value!=null) {
+            Text(value,color=if(dark)Color(0xFFD0B5FF) else Color(0xFF7E40B1),
+                fontSize=13.sp,fontWeight=FontWeight.Bold,maxLines=1,
+                modifier=Modifier.clip(RoundedCornerShape(14.dp))
+                    .background(if(dark)Color(0xFF453659) else Color(0xFFF3EAFE))
+                    .padding(horizontal=10.dp,vertical=9.dp))
         }
     }
 }

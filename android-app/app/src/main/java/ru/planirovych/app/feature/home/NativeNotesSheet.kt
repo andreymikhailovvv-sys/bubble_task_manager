@@ -31,7 +31,8 @@ import ru.planirovych.app.data.model.*
 /** Native notes board mirrors MiniApp's StandaloneNotesWorkspace and uses the same API. */
 @Composable
 internal fun NativeNotesPage(vm:HomeViewModel,colors:WorkspaceColors,
-    dark:Boolean,modifier:Modifier=Modifier,onClose:()->Unit={}){
+    dark:Boolean,modifier:Modifier=Modifier,onClose:()->Unit={},
+    openNoteId:String?=null,onNoteOpened:()->Unit={}){
     val state by vm.state.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
     val notesScroll=rememberLazyListState()
@@ -50,6 +51,14 @@ internal fun NativeNotesPage(vm:HomeViewModel,colors:WorkspaceColors,
     }.thenBy{it.name})
     val groupMap=remember(groups){groups.associateBy{it.id}}
     LaunchedEffect(state.user?.id){vm.loadNotes()}
+    // Search results can navigate to the actual note editor, not only the notes tab.
+    LaunchedEffect(openNoteId,state.notes) {
+        val target=openNoteId?.let{id->state.notes.firstOrNull{it.id==id}}
+            ?:return@LaunchedEffect
+        editing=target
+        editorOpen=true
+        onNoteOpened()
+    }
     val normalized=query.trim().lowercase().replace('ё','е')
     val filtered=remember(state.notes,excludedGroups,includeUngrouped,normalized){
         state.notes.asSequence()

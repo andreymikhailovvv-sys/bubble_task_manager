@@ -504,26 +504,18 @@ internal fun NativeGeneralAiChatPage(
                         .background(if(dark)c.panel else Color.White)
                         .border(1.dp,c.border.copy(alpha=.83f),CircleShape)
                         .padding(horizontal=8.dp,vertical=8.dp),
-                        verticalAlignment=Alignment.CenterVertically,
+                        verticalAlignment=Alignment.Bottom,
                         horizontalArrangement=Arrangement.spacedBy(5.dp)){
-                        BasicTextField(value=draft,onValueChange={
-                            draft=it;lastRequestHadError=false
-                        },modifier=Modifier.weight(1f).heightIn(min=44.dp,max=140.dp)
-                                .focusRequester(draftFocus),
-                            textStyle=TextStyle(color=c.text,fontSize=14.sp,lineHeight=20.sp),
-                            maxLines=6,enabled=!isBusy&&!isTelegram,
-                            cursorBrush=SolidColor(c.accent),
-                            decorationBox={inner->
-                                Box(Modifier.defaultMinSize(minHeight=44.dp)
-                                    .padding(horizontal=10.dp,vertical=9.dp),
-                                    contentAlignment=Alignment.CenterStart){
-                                    if(draft.isEmpty())Text(if(isTelegram)
-                                        "Чат Telegram управляется ассистентом"
-                                        else "Напишите сообщение…",
-                                        color=c.secondary,fontSize=14.sp)
-                                    inner()
-                                }
-                            })
+                        NativeAiComposerInput(
+                            value=draft,
+                            onValueChange={draft=it;lastRequestHadError=false},
+                            modifier=Modifier.weight(1f).focusRequester(draftFocus),
+                            enabled=!isBusy&&!isTelegram,
+                            colors=c,
+                            placeholder=if(isTelegram)
+                                "Чат Telegram управляется ассистентом"
+                                else "Напишите сообщение…"
+                        )
                         Box(Modifier.size(44.dp).clip(CircleShape)
                             .background(if(dark)Color(0xFF253349) else Color.White)
                             .border(1.dp,c.border.copy(alpha=.88f),CircleShape)

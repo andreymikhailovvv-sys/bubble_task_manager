@@ -75,55 +75,86 @@ private fun AccountFrame(
 @Composable
 internal fun NativeEfficiencyRatingDialog(
     user:CurrentUser?,dark:Boolean,onClose:()->Unit
-){
+) {
     val score=(user?.efficiencyScore?:0.0).coerceIn(0.0,100.0)
-    AccountFrame(dark,"Рейтинг эффективности",Icons.Default.Stars,onClose){
-        Column(Modifier.fillMaxWidth().padding(vertical=7.dp),
-            horizontalAlignment=Alignment.CenterHorizontally){
-            Box(Modifier.size(134.dp),contentAlignment=Alignment.Center){
-                Canvas(Modifier.fillMaxSize()){
-                    val stroke=10.dp.toPx()
-                    drawCircle(muted(dark).copy(alpha=.20f),
-                        style=androidx.compose.ui.graphics.drawscope.Stroke(stroke))
-                    drawArc(brush=Brush.sweepGradient(listOf(cyan,violet,rose)),
-                        startAngle=-90f,sweepAngle=(score*3.6).toFloat(),
-                        useCenter=false,
-                        style=androidx.compose.ui.graphics.drawscope.Stroke(
-                            width=stroke,cap=StrokeCap.Round))
+    val main=if(dark)Color(0xFFF2EEFF) else Color(0xFF172238)
+    val detail=if(dark)Color(0xFFB8C8DF) else Color(0xFF506179)
+    val card=if(dark)Color(0xFF1C2A41) else Color(0xFFF8FBFF)
+    val border=if(dark)Color(0xFF465774) else Color(0xFFDCE5F0)
+    val green=if(dark)Color(0xFF5AE5B7) else Color(0xFF008E65)
+    val gradient=if(dark)listOf(
+        Color(0xFF174155),Color(0xFF2A234C),Color(0xFF3F233D))
+        else listOf(Color(0xFFCDF8FF),Color(0xFFF7FAFF),Color(0xFFFFDFF2))
+    Dialog(onDismissRequest=onClose,
+        properties=DialogProperties(usePlatformDefaultWidth=false)){
+        Surface(Modifier.fillMaxWidth(.94f).widthIn(max=450.dp)
+            .heightIn(max=720.dp),
+            shape=RoundedCornerShape(31.dp),
+            color=if(dark)Color(0xFF142037) else Color.White,
+            border=BorderStroke(1.dp,if(dark)Color(0xFF534878)
+                else Color(0xFFE2C8FF)),
+            shadowElevation=20.dp) {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Column(Modifier.fillMaxWidth().background(
+                    Brush.linearGradient(gradient)).padding(
+                    start=22.dp,end=22.dp,top=13.dp,bottom=21.dp),
+                    horizontalAlignment=Alignment.CenterHorizontally) {
+                    Box(Modifier.fillMaxWidth(),contentAlignment=Alignment.CenterEnd) {
+                        IconButton(onClick=onClose,modifier=Modifier.size(30.dp)) {
+                            Icon(Icons.Default.Close,"Закрыть",
+                                tint=detail,modifier=Modifier.size(18.dp))
+                        }
+                    }
+                    Text(scoreLabel(score)+"/100",
+                        style=androidx.compose.ui.text.TextStyle(
+                            brush=Brush.horizontalGradient(listOf(
+                                Color(0xFF71C8F6),Color(0xFFA9ADFF),Color(0xFFDEA4ED))),
+                            fontSize=55.sp,fontWeight=FontWeight.ExtraBold
+                        ),maxLines=1)
+                    Text(when {
+                        score<30 -> "Средний рейтинг. Сделайте следующий маленький шаг."
+                        score<70 -> "Хороший рейтинг. Так держать."
+                        else -> "Отличный рейтинг! Продолжай в том же духе."
+                    },color=main,fontSize=16.sp,fontWeight=FontWeight.Bold,
+                        textAlign=TextAlign.Center,lineHeight=22.sp,
+                        modifier=Modifier.padding(top=4.dp,bottom=19.dp))
+                    // Real server-calculated components; never fake a total.
+                    val rows=listOf(
+                        Triple("Задачи",user?.efficiencyTaskScore?:0.0,""),
+                        Triple("Привычки",user?.efficiencyHabitScore?:0.0,""),
+                        Triple("Работа с ИИ",user?.efficiencyAiScore?:0.0,
+                            "+0,1 за запрос · +0,3 за ИИ-инструмент"),
+                        Triple("Режим концентрации (×2)",user?.efficiencyFocusScore?:0.0,"")
+                    )
+                    rows.forEachIndexed{index,(label,amount,hint)->
+                        val focus=index==3
+                        val shape=RoundedCornerShape(21.dp)
+                        val fill=if(focus)Brush.horizontalGradient(
+                            if(dark)listOf(Color(0xFF332552),Color(0xFF1D3A54))
+                            else listOf(Color(0xFFF2E5FF),Color(0xFFDEF3FF)))
+                            else Brush.linearGradient(listOf(card,card))
+                        Row(Modifier.fillMaxWidth()
+                            .padding(bottom=9.dp)
+                            .clip(shape).background(fill)
+                            .border(1.dp,if(focus)Color(0xFFC5A0FF) else border,shape)
+                            .padding(horizontal=16.dp,vertical=15.dp),
+                            verticalAlignment=Alignment.CenterVertically,
+                            horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                            Column(Modifier.weight(1f),
+                                verticalArrangement=Arrangement.spacedBy(3.dp)) {
+                                Text(label,color=if(focus)Color(0xFF9654DB) else main,
+                                    fontSize=14.sp,maxLines=2,
+                                    lineHeight=19.sp)
+                                if(hint.isNotBlank())Text(hint,color=detail,
+                                    fontSize=10.sp,lineHeight=15.sp)
+                            }
+                            Text("+"+scoreLabel(amount)+" рейтинга",
+                                color=if(focus)Color(0xFF9B49F0) else green,
+                                fontSize=12.sp,fontWeight=FontWeight.Bold,
+                                maxLines=1)
+                        }
+                    }
                 }
-                Column(horizontalAlignment=Alignment.CenterHorizontally){
-                    Icon(Icons.Default.Star,null,tint=rose,
-                        modifier=Modifier.size(31.dp))
-                    Text(scoreLabel(score)+"/100",color=fore(dark),
-                        fontSize=27.sp,fontWeight=FontWeight.Bold)
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            Text(when{
-                score<30->"Средний рейтинг. Сделайте следующий маленький шаг."
-                score<70->"Хороший рейтинг. Так держать."
-                else->"Отличный рейтинг! Продолжай в том же духе."
-            },color=fore(dark),fontWeight=FontWeight.SemiBold,
-                fontSize=13.sp,textAlign=TextAlign.Center)
-        }
-        listOf(
-            Triple("Задачи",user?.efficiencyTaskScore?:0.0,violet),
-            Triple("Привычки",user?.efficiencyHabitScore?:0.0,cyan),
-            Triple("Работа с ИИ",user?.efficiencyAiScore?:0.0,rose),
-            Triple("Режим концентрации (×2)",user?.efficiencyFocusScore?:0.0,
-                Color(0xFFF59E0B))
-        ).forEach{(title,value,accent)->
-            val shape=RoundedCornerShape(12.dp)
-            Row(Modifier.fillMaxWidth().clip(shape)
-                .background(lerp(panel(dark),accent,if(dark).13f else .08f))
-                .border(1.dp,accent.copy(alpha=.24f),shape)
-                .padding(horizontal=11.dp,vertical=11.dp),
-                verticalAlignment=Alignment.CenterVertically){
-                Box(Modifier.size(7.dp).clip(CircleShape).background(accent))
-                Spacer(Modifier.width(8.dp))
-                Text(title,Modifier.weight(1f),color=fore(dark),fontSize=12.sp)
-                Text("+"+scoreLabel(value)+" рейтинга",
-                    color=accent,fontWeight=FontWeight.Bold,fontSize=11.sp)
             }
         }
     }
