@@ -1,7 +1,6 @@
 package ru.planirovych.app.ui.theme
 
 import android.content.Context
-import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -14,19 +13,14 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
 class ThemePreferences(private val context: Context) {
     private val modeKey = stringPreferencesKey("theme_mode")
-    // Keep pre-existing manual choices made before system theme support.
-    private val legacyDarkKey = booleanPreferencesKey("dark_theme")
-
     val mode = context.dataStore.data.map { preferences ->
         when (preferences[modeKey]) {
             ThemeMode.SYSTEM.name -> ThemeMode.SYSTEM
             ThemeMode.LIGHT.name -> ThemeMode.LIGHT
             ThemeMode.DARK.name -> ThemeMode.DARK
-            else -> when (preferences[legacyDarkKey]) {
-                true -> ThemeMode.DARK
-                false -> ThemeMode.LIGHT
-                null -> ThemeMode.SYSTEM
-            }
+            // A newly introduced system mode is the default for every user,
+            // including installations with a legacy dark_theme switch saved.
+            else -> ThemeMode.SYSTEM
         }
     }
 
