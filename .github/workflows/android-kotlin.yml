@@ -44,10 +44,18 @@ jobs:
           chmod +x gradlew
           ./gradlew :app:compileDebugKotlin --no-daemon --console=plain --stacktrace 2>&1 | tee android-compile.log
           exit ${PIPESTATUS[0]}
-      - name: Upload compiler output
+      - name: Check release Lint (the same gate as signed APK generation)
+        run: |
+          ./gradlew :app:lintRelease --no-daemon --console=plain --stacktrace 2>&1 | tee android-lint-release.log
+          exit ${PIPESTATUS[0]}
+      - name: Upload Android compiler and release Lint output
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-compile-log
-          path: android-app/android-compile.log
+          name: android-compile-lint-logs
+          path: |
+            android-app/android-compile.log
+            android-app/android-lint-release.log
+            android-app/app/build/reports/lint-results-release.html
+            android-app/app/build/reports/lint-results-release.txt
           retention-days: 3
