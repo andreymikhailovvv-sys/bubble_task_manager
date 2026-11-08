@@ -12027,9 +12027,9 @@ body[data-theme='light'] .topbar-overdue-counter {
   background: rgba(225, 29, 72, .09);
 }
 .topbar-overdue-popover {
-  /* Viewport aligned: it should not cover the centre of the bubble field. */
-  position: fixed;
-  right: 12px;
+  /* Attach directly under the "Просроченные" trigger, aligned by its right edge. */
+  position: absolute;
+  right: 0;
   max-height: calc(100vh - 90px);
   overflow: visible;
   background: #f8fafc;
@@ -12223,25 +12223,12 @@ body[data-theme='dark'] .topbar-overdue-popover { box-shadow: 0 14px 34px rgba(2
   transition: border-color .16s ease, background-color .16s ease;
 }
 .topbar-overdue-popover .topbar-overdue-row:hover,
-.topbar-overdue-popover .topbar-overdue-row:focus-within,
-.topbar-overdue-popover .topbar-overdue-row-active {
+.topbar-overdue-popover .topbar-overdue-row:focus-within {
   border-color: transparent;
   background: color-mix(in srgb, #fb7185 12%, transparent);
 }
-.topbar-overdue-popover .topbar-overdue-row:hover .timeline-task-chip,
-.topbar-overdue-popover .topbar-overdue-row-active .timeline-task-chip {
+.topbar-overdue-popover .topbar-overdue-row:hover .timeline-task-chip {
   filter: brightness(1.08) !important;
-}
-.overdue-bubble-locator {
-  opacity: .11;
-  animation: overdue-bubble-soft-glow 2s ease-in-out infinite;
-}
-@keyframes overdue-bubble-soft-glow {
-  0%, 100% { opacity: .07; }
-  50% { opacity: .23; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .overdue-bubble-locator { animation: none; opacity: .16; }
 }
 
 
