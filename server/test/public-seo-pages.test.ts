@@ -124,17 +124,18 @@ test('Android download is a standalone static HTML entry at the existing deep li
   const response = await fetch(baseUrl + '/android?utm_source=qr');
   const body = await response.text();
   assert.equal(response.status, 200);
-  assert.match(response.headers.get('content-type') ?? '', /text\\/html/);
-  assert.match(response.headers.get('cache-control') ?? '', /no-store/);
-  assert.match(body, /Планировыч всегда под рукой/);
-  assert.match(body, /href="https:\\/\\/planirovych\\.ru\\/android"/);
-  assert.match(body, /src="\\/android\\/qr\\.svg"/);
-  assert.match(body, /src="\\/android\\/android\\.js"/);
-  assert.match(body, /href="\\/android\\/android\\.css"/);
-  assert.doesNotMatch(body, /<div id="root">/);
-  assert.doesNotMatch(body, /type="module"/);
-  assert.doesNotMatch(body, /src="\\/assets\\//);
-  assert.doesNotMatch(body, /telegram\\.org\\/js/);
+  assert.ok((response.headers.get('content-type') ?? '').includes('text/html'));
+  assert.ok((response.headers.get('cache-control') ?? '').includes('no-store'));
+  for (const fragment of [
+    'Планировыч всегда под рукой',
+    'href="https://planirovych.ru/android"',
+    'src="/android/qr.svg"',
+    'src="/android/android.js"',
+    'href="/android/android.css"'
+  ]) assert.ok(body.includes(fragment), fragment);
+  for (const forbidden of [
+    '<div id="root">', 'type="module"', 'src="/assets/', 'telegram.org/js'
+  ]) assert.ok(!body.includes(forbidden), forbidden);
 });
 
 test('Android page redirects trailing slash to stable canonical without losing query parameters', async () => {
@@ -143,21 +144,22 @@ test('Android page redirects trailing slash to stable canonical without losing q
   assert.equal(response.headers.get('location'), '/android?utm_campaign=scan');
 });
 
-test('Android download CSS, tiny release script and real self-hosted QR are served without SPA', async () => {
+test('Android standalone assets do not include or trigger the main application', async () => {
   const expectations = [
-    ['/android/android.css', /text\\/css/, /\\.qr-card/],
-    ['/android/android.js', /javascript/, /fetch\\('\/api\/android\/latest'/],
-    ['/android/qr.svg', /image\\/svg\\+xml/, /viewBox="0 0 37 37"/]
+    ['/android/android.css', 'text/css', '.qr-card'],
+    ['/android/android.js', 'javascript', "fetch('/api/android/latest'"],
+    ['/android/qr.svg', 'image/svg+xml', 'viewBox="0 0 37 37"']
   ] as const;
-  for (const [url, type, pattern] of expectations) {
+  for (const [url, type, fragment] of expectations) {
     const response = await fetch(baseUrl + url);
     const body = await response.text();
     assert.equal(response.status, 200, url);
-    assert.match(response.headers.get('content-type') ?? '', type, url);
-    assert.match(body, pattern, url);
-    assert.doesNotMatch(body, /telegram\\.org\\/js/, url);
+    assert.ok((response.headers.get('content-type') ?? '').includes(type), url);
+    assert.ok(body.includes(fragment), url);
+    assert.ok(!body.includes('telegram.org/js'), url);
   }
   const script = await (await fetch(baseUrl + '/android/android.js')).text();
-  assert.match(script, /href="\\/api\\/android\\/download"|id="download-link"|getElementById\\('download-link'\\)/);
-  assert.doesNotMatch(script, /from ['"]react|import\\(/);
+  assert.ok(script.includes("getElementById('download-link')"));
+  assert.ok(!script.includes("from 'react'"));
+  assert.ok(!script.includes('import('));
 });
