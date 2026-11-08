@@ -17,7 +17,12 @@ test('application API secrets encrypt with owner context and are not returned in
     assert.ok(!enc.includes(v.apiHash));
     assert.deepEqual(decryptTelegramAppCredentials('owner-123', enc), v);
     assert.throws(() => decryptTelegramAppCredentials('owner-other', enc));
-    assert.throws(() => decryptTelegramAppCredentials('owner-123', enc.slice(0,-2)+'zz'));
+    // A fixed suffix may coincidentally match the original (or only alter
+    // ignored base64url padding bits). Change an actual authenticated byte.
+    const parts = enc.split('.');
+    const corruptFirstChar = (value: string) => `${value[0] === 'A' ? 'B' : 'A'}${value.slice(1)}`;
+    assert.throws(() => decryptTelegramAppCredentials('owner-123', [parts[0], parts[1], corruptFirstChar(parts[2]), parts[3]].join('.')));
+    assert.throws(() => decryptTelegramAppCredentials('owner-123', [parts[0], parts[1], parts[2], corruptFirstChar(parts[3])].join('.')));
     assert.notEqual(encryptTelegramAppCredentials('owner-123', v), enc);
   } finally {
     if (saved === undefined) delete process.env.TELEGRAM_USER_SESSION_KEY; else process.env.TELEGRAM_USER_SESSION_KEY = saved;
