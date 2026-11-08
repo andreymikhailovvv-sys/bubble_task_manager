@@ -68,7 +68,8 @@ test('Android shows updates only for signed release build and opens official sit
   assert.match(updater,/AndroidAppUpdateWorker/);
   assert.match(updater,/UPDATE_MANIFEST = "https:\/\/planirovych\.ru\/api\/android\/latest"/);
   assert.match(activity,/AndroidAppUpdateDialog/);
-  assert.match(activity,/https:\/\/planirovych\.ru\/android/);
+  assert.match(activity,/AndroidApkInstaller/);
+  assert.match(activity,/beginNativeUpdate\(release\)/);
   // Version numbers change with each release. Never hardcode v2 in CI.
   const code = Number(gradle.match(/versionCode\s*=\s*(\d+)/)?.[1]);
   const version = gradle.match(/versionName\s*=\s*"(\d+\.\d+\.\d+)"/)?.[1];
@@ -91,7 +92,7 @@ test('Android update Later snoozes the current release for 24 hours, not forever
   assert.doesNotMatch(updater,/dismissed_version|fun dismissed\(|fun dismiss\(/);
   assert.match(activity,/onLater=\{[\s\S]*?AndroidAppUpdateChecker\.snooze\(this@MainActivity,release\.versionCode\)/);
   const onUpdate=activity.slice(activity.indexOf('onUpdate={'),activity.indexOf('onUpdate={')+580);
-  assert.match(onUpdate,/startActivity\(Intent\(Intent\.ACTION_VIEW/);
+  assert.match(onUpdate,/beginNativeUpdate\(release\)/);
   assert.doesNotMatch(onUpdate,/AndroidAppUpdateChecker\.snooze\(/);
   assert.match(activity,/updatePageOpenedAtMs=System\.currentTimeMillis\(\)/);
 });
@@ -102,4 +103,53 @@ test('background update notifications may reappear after a day, never during sno
   assert.match(updater,/now-lastSentAt<REMINDER_INTERVAL_MS/);
   assert.match(updater,/\.putLong\(LAST_NOTIFIED_AT,now\)/);
   assert.match(updater,/\.cancel\(UPDATE_NOTIFICATION_ID\)/);
+});
+
+test('native Android release update downloads verified APK and invokes user-approved installer',async()=>{
+  const [installer,activity,updater,manifest,paths] = await Promise.all([
+    read('../../android-app/app/src/main/java/ru/planirovych/app/updates/AndroidApkInstaller.kt'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/MainActivity.kt'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/updates/AndroidAppUpdates.kt'),
+    read('../../android-app/app/src/main/AndroidManifest.xml'),
+    read('../../android-app/app/src/main/res/xml/android_update_paths.xml')
+  ]);
+  assert.ok(installer.includes('https://planirovych.ru/api/android/download'));
+  assert.ok(installer.includes('MAX_APK_BYTES'));
+  assert.ok(installer.includes('followSslRedirects(false)'));
+  assert.ok(installer.includes('verifyOfficialUpdate(context, destination, release.versionCode)'));
+  assert.ok(installer.includes('archive.packageName != BuildConfig.APPLICATION_ID'));
+  assert.ok(installer.includes('archiveCode != expectedVersionCode.toLong()'));
+  assert.ok(installer.includes('signatures(archive) != signatures(installed)'));
+  assert.ok(installer.includes('FileProvider.getUriForFile('));
+  assert.ok(installer.includes('Intent.FLAG_GRANT_READ_URI_PERMISSION'));
+  assert.ok(installer.includes('canRequestPackageInstalls()'));
+  assert.ok(installer.includes('Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES'));
+  assert.ok(!installer.includes('INSTALL_PACKAGES'));
+  assert.ok(manifest.includes('android.permission.REQUEST_INSTALL_PACKAGES'));
+  assert.ok(manifest.includes('android:exported="false"'));
+  assert.ok(manifest.includes('android_update_paths'));
+  assert.ok(paths.includes('path="app-updates/"'));
+  assert.ok(!paths.includes('<external-path'));
+  assert.ok(activity.includes('AndroidApkInstaller.download('));
+  assert.ok(activity.includes('AndroidApkInstaller.showSystemInstaller('));
+  assert.ok(activity.includes('unknownSourcePermissionLauncher'));
+  assert.ok(activity.includes('updateDownloadProgress=percent'));
+  assert.ok(updater.includes('Загружено:'));
+  assert.ok(updater.includes('Скачать APK через браузер'));
+  assert.ok(updater.includes('Intent(applicationContext,MainActivity::class.java)'));
+  assert.ok(updater.includes('MainActivity.EXTRA_CHECK_ANDROID_UPDATE'));
+});
+
+test('native updating retains Later snooze and direct download browser fallback',async()=>{
+  const [activity,installer,updater] = await Promise.all([
+    read('../../android-app/app/src/main/java/ru/planirovych/app/MainActivity.kt'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/updates/AndroidApkInstaller.kt'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/updates/AndroidAppUpdates.kt')
+  ]);
+  assert.ok(activity.includes('AndroidAppUpdateChecker.snooze(this@MainActivity,release.versionCode)'));
+  assert.ok(activity.includes('onUpdate={ beginNativeUpdate(release) }'));
+  assert.ok(activity.includes('startActivity(AndroidApkInstaller.browserDownloadIntent())'));
+  assert.ok(installer.includes('Intent(Intent.ACTION_VIEW, Uri.parse(DOWNLOAD_URL))'));
+  assert.ok(updater.includes('REMINDER_INTERVAL_MS'));
+  assert.ok(!activity.includes('Uri.parse("https://planirovych.ru/android")'));
 });
