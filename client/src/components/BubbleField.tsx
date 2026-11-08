@@ -22,8 +22,6 @@ type Props = {
   mode: 'global' | 'sectors';
   rankingMode: BubbleRankingMode;
   selectedId?: string;
-  /** Bubble related to the hovered item in the overdue topbar. */
-  highlightedTaskId?: string | null;
   poppingTaskId?: string | null;
   hasAiNotification?: (taskId: string) => boolean;
   onSelect: (task: Task) => void;
@@ -330,7 +328,6 @@ export function BubbleField({
   onOpenTraining,
   onDismissTraining,
   themeMode = 'dark',
-  highlightedTaskId = null,
   fullscreen = false,
   className
 }: Props) {
@@ -912,9 +909,6 @@ export function BubbleField({
     const ownDeadlineOverdue = active && isOverdue(bubble.task);
     const subtaskDeadlineOverdue = active && bubbleSubtasks.some((subtask) =>
       subtask.status !== 'DONE' && isOverdue(subtask));
-    const isOverdueLocator = highlightedTaskId === bubble.task.id ||
-      Boolean(highlightedTaskId && bubble.task.linkedTaskIds?.includes(highlightedTaskId));
-    // Deadline tint remains static; only the temporary topbar locator pulses.
     const isHovered = hoveredTaskId === bubble.task.id;
     const isDragged = dragView?.taskId === bubble.task.id;
     const isDragTarget = dragView?.target?.targetId === bubble.task.id;
@@ -978,11 +972,6 @@ export function BubbleField({
           <circle cx={0} cy={0} r={bubble.radius - 1.5}
             fill={ownDeadlineOverdue ? 'url(#overdueTaskBlush)' : 'url(#overdueSubtaskBlush)'}
             stroke="none" pointerEvents="none" />
-        ) : null}
-        {isOverdueLocator ? (
-          <circle cx={0} cy={0} r={bubble.radius - 1.5}
-            fill="url(#overdueLocatorGlow)" stroke="none"
-            className="overdue-bubble-locator" pointerEvents="none" />
         ) : null}
         {/* All tasks share the same neutral progress track. No subtasks = 0%. */}
         <circle cx={0} cy={0} r={bubble.radius + 6} fill="none"
@@ -1100,26 +1089,20 @@ export function BubbleField({
         onContextMenu={(event) => showContextMenu(event, null)}>
         <motion.g initial={false}>
           <defs>
-            {/* Parent overdue: retain the sphere's original hue at the centre,
-                with a saturated, feathered crimson blush nearer the edge. */}
+            {/* Darker crimson at the rim stays distinguishable even on pink/orange
+                spheres, while the centre retains its original sector colour. */}
             <radialGradient id="overdueTaskBlush" cx="49%" cy="46%" r="72%">
-              <stop offset="0%" stopColor="#fb7185" stopOpacity={isLightTheme ? 0.025 : 0.04} />
-              <stop offset="48%" stopColor="#fb7185" stopOpacity={isLightTheme ? 0.075 : 0.09} />
-              <stop offset="80%" stopColor="#ef4444" stopOpacity={isLightTheme ? 0.24 : 0.26} />
-              <stop offset="100%" stopColor="#dc2626" stopOpacity={isLightTheme ? 0.37 : 0.39} />
+              <stop offset="0%" stopColor="#fb7185" stopOpacity={isLightTheme ? 0.06 : 0.08} />
+              <stop offset="48%" stopColor="#ef4444" stopOpacity={isLightTheme ? 0.15 : 0.17} />
+              <stop offset="80%" stopColor="#dc2626" stopOpacity={isLightTheme ? 0.39 : 0.42} />
+              <stop offset="100%" stopColor="#881337" stopOpacity={isLightTheme ? 0.59 : 0.62} />
             </radialGradient>
-            {/* Only child overdue: weaker edge blush, never replace the base colour. */}
+            {/* Overdue subtasks have a weaker edge blush than overdue parents. */}
             <radialGradient id="overdueSubtaskBlush" cx="50%" cy="48%" r="69%">
               <stop offset="0%" stopColor="#fb7185" stopOpacity="0" />
-              <stop offset="50%" stopColor="#fb7185" stopOpacity={isLightTheme ? 0.015 : 0.02} />
-              <stop offset="78%" stopColor="#ef4444" stopOpacity={isLightTheme ? 0.14 : 0.16} />
-              <stop offset="100%" stopColor="#dc2626" stopOpacity={isLightTheme ? 0.31 : 0.33} />
-            </radialGradient>
-            {/* Temporary hover locator illuminates the whole surface, without a sharp ring. */}
-            <radialGradient id="overdueLocatorGlow" cx="38%" cy="32%" r="88%">
-              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.8" />
-              <stop offset="68%" stopColor="#fff7ed" stopOpacity="0.55" />
-              <stop offset="100%" stopColor="#ffe4e6" stopOpacity="0.26" />
+              <stop offset="50%" stopColor="#fb7185" stopOpacity={isLightTheme ? 0.06 : 0.07} />
+              <stop offset="78%" stopColor="#dc2626" stopOpacity={isLightTheme ? 0.25 : 0.27} />
+              <stop offset="100%" stopColor="#881337" stopOpacity={isLightTheme ? 0.46 : 0.49} />
             </radialGradient>
             <radialGradient id="bg" cx="50%" cy="50%" r="60%">
               {isLightTheme ? (
