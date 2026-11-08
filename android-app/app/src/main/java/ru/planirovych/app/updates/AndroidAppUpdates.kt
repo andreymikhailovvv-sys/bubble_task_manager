@@ -103,6 +103,8 @@ fun AndroidAppUpdateDialog(release:AndroidAppRelease,onLater:()->Unit,onUpdate:(
                     Text(release.notes,modifier=Modifier.padding(top=12.dp))
                 Text("Android попросит подтвердить установку APK.",
                     modifier=Modifier.padding(top=10.dp))
+                Text("«Позже» отложит напоминание на 24 часа.",
+                    modifier=Modifier.padding(top=8.dp))
             }
         },
         confirmButton={TextButton(onClick=onUpdate){Text("Обновить")}},
