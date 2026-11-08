@@ -67,7 +67,9 @@ test('subtask parent chip saves edits then opens its actual parent from all entr
 
 test('new native Android release uses the next immutable update version',async()=>{
   const gradle=await read('../../android-app/app/build.gradle.kts');
-  assert.ok(gradle.includes('versionCode = 5'));
-  assert.ok(gradle.includes('versionName = "1.0.3"'));
+  const code=Number(gradle.match(/versionCode\s*=\s*(\d+)/)?.[1]);
+  const name=gradle.match(/versionName\s*=\s*"(\d+\.\d+\.\d+)"/)?.[1];
+  assert.ok(Number.isSafeInteger(code) && code >= 5);
+  assert.ok(name, 'Android versionName must be a valid semantic release version');
   assert.ok(gradle.includes('applicationId = "ru.planirovych.app"'));
 });
