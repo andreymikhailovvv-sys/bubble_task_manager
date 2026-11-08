@@ -36,8 +36,12 @@ import javax.net.ssl.HttpsURLConnection
 private const val UPDATE_MANIFEST = "https://planirovych.ru/api/android/latest"
 private const val UPDATE_PAGE = "https://planirovych.ru/android"
 private const val PREFS = "planirovych_apk_updates"
-private const val DISMISSED_CODE = "dismissed_version"
+private const val SNOOZED_CODE = "snoozed_version_code"
+private const val SNOOZED_UNTIL = "snoozed_until_epoch_ms"
 private const val NOTIFIED_CODE = "notified_version"
+private const val LAST_NOTIFIED_AT = "last_notified_at_epoch_ms"
+private val REMINDER_INTERVAL_MS = TimeUnit.HOURS.toMillis(24)
+private const val UPDATE_NOTIFICATION_ID = 2710
 private const val UPDATE_CHANNEL = "planirovych_app_updates"
 
 data class AndroidAppRelease(val versionCode:Int, val versionName:String, val notes:String)
@@ -66,12 +70,24 @@ object AndroidAppUpdateChecker {
         finally{connection.disconnect()}
     }
 
-    fun dismissed(context:Context,code:Int):Boolean =
-        context.getSharedPreferences(PREFS,Context.MODE_PRIVATE).getInt(DISMISSED_CODE,0)>=code
+    /**
+     * "Later" pauses reminders for this specific version for 24 hours.
+     * A newer release is never hidden by an older version's snooze.
+     */
+    fun snoozed(context:Context,code:Int,nowMs:Long=System.currentTimeMillis()):Boolean {
+        val prefs=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE)
+        return prefs.getInt(SNOOZED_CODE,0)==code &&
+            nowMs < prefs.getLong(SNOOZED_UNTIL,0L)
+    }
 
-    fun dismiss(context:Context,code:Int){
+    fun snooze(context:Context,code:Int,nowMs:Long=System.currentTimeMillis()){
         context.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit()
-            .putInt(DISMISSED_CODE,code).apply()
+            .putInt(SNOOZED_CODE,code)
+            .putLong(SNOOZED_UNTIL,nowMs+REMINDER_INTERVAL_MS)
+            .apply()
+        // Do not leave a background update notification visible after "Later".
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager)
+            ?.cancel(UPDATE_NOTIFICATION_ID)
     }
 }
 
@@ -101,8 +117,14 @@ class AndroidAppUpdateWorker(context:Context,params:WorkerParameters)
         val release=AndroidAppUpdateChecker.latest(applicationContext)
             ?: return Result.success()
         val prefs=applicationContext.getSharedPreferences(PREFS,Context.MODE_PRIVATE)
-        if(prefs.getInt(NOTIFIED_CODE,0)>=release.versionCode ||
-            AndroidAppUpdateChecker.dismissed(applicationContext,release.versionCode))
+        val now=System.currentTimeMillis()
+        if(AndroidAppUpdateChecker.snoozed(applicationContext,release.versionCode,now))
+            return Result.success()
+        // At most one reminder per release per 24 h, not one reminder forever.
+        val lastCode=prefs.getInt(NOTIFIED_CODE,0)
+        val lastSentAt=prefs.getLong(LAST_NOTIFIED_AT,0L)
+        if(lastCode==release.versionCode && lastSentAt>0L &&
+            now>=lastSentAt && now-lastSentAt<REMINDER_INTERVAL_MS)
             return Result.success()
         if(Build.VERSION.SDK_INT>=33 && ContextCompat.checkSelfPermission(
                 applicationContext,Manifest.permission.POST_NOTIFICATIONS)
@@ -126,8 +148,11 @@ class AndroidAppUpdateWorker(context:Context,params:WorkerParameters)
             .setContentIntent(pending)
             .setAutoCancel(true)
             .build()
-        manager.notify(2710,notification)
-        prefs.edit().putInt(NOTIFIED_CODE,release.versionCode).apply()
+        manager.notify(UPDATE_NOTIFICATION_ID,notification)
+        prefs.edit()
+            .putInt(NOTIFIED_CODE,release.versionCode)
+            .putLong(LAST_NOTIFIED_AT,now)
+            .apply()
         return Result.success()
     }
     companion object{
