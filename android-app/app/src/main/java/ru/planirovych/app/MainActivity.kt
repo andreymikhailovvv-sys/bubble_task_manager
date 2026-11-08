@@ -50,6 +50,10 @@ class MainActivity:ComponentActivity(){
     private var quickAiMode by mutableStateOf<String?>(null)
     private var quickAiRequestId by mutableIntStateOf(0)
     private var availableUpdate by mutableStateOf<AndroidAppRelease?>(null)
+    // Short-lived guard against reopening the same dialog immediately after
+    // returning from the browser. This is NOT a saved refusal or a snooze.
+    private var updatePageOpenedVersion=0
+    private var updatePageOpenedAtMs=0L
 
     private val askNotifications=registerForActivityResult(
         ActivityResultContracts.RequestPermission()){granted->
@@ -104,9 +108,18 @@ class MainActivity:ComponentActivity(){
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 while(isActive) {
                     val latest=AndroidAppUpdateChecker.latest(this@MainActivity)
+                    val now=System.currentTimeMillis()
+                    val justOpenedWebsite=latest!=null &&
+                        latest.versionCode==updatePageOpenedVersion &&
+                        now>=updatePageOpenedAtMs &&
+                        now-updatePageOpenedAtMs<15*60_000L
                     if(latest!=null &&
-                        !AndroidAppUpdateChecker.dismissed(this@MainActivity,latest.versionCode))
+                        !AndroidAppUpdateChecker.snoozed(this@MainActivity,latest.versionCode,now) &&
+                        !justOpenedWebsite) {
                         availableUpdate=latest
+                    } else {
+                        availableUpdate=null
+                    }
                     delay(6 * 60 * 60_000L)
                 }
             }
@@ -125,14 +138,17 @@ class MainActivity:ComponentActivity(){
                     }
                 }
                 availableUpdate?.let { release ->
-                    val dismiss={
-                        AndroidAppUpdateChecker.dismiss(this@MainActivity,release.versionCode)
-                        availableUpdate=null
-                    }
                     AndroidAppUpdateDialog(release,
-                        onLater=dismiss,
+                        onLater={
+                            AndroidAppUpdateChecker.snooze(this@MainActivity,release.versionCode)
+                            availableUpdate=null
+                        },
                         onUpdate={
-                            dismiss()
+                            // Opening the website is not proof of installation.
+                            // Never persist a refusal or snooze on Update.
+                            updatePageOpenedVersion=release.versionCode
+                            updatePageOpenedAtMs=System.currentTimeMillis()
+                            availableUpdate=null
                             startActivity(Intent(Intent.ACTION_VIEW,
                                 Uri.parse("https://planirovych.ru/android")))
                         })
