@@ -31,6 +31,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import java.util.Locale
 import ru.planirovych.app.data.model.*
+import ru.planirovych.app.ui.theme.ThemeMode
 
 private enum class AuthMode { LOGIN, REGISTER }
 
@@ -39,6 +40,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     notificationTaskId:String?=null,openGeneralAi:Boolean=false,
     quickAiMode:String?=null,quickAiRequestId:Int=0) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val themeMode by vm.themeMode.collectAsStateWithLifecycle()
     val focusManager=LocalFocusManager.current
     val softwareKeyboard=LocalSoftwareKeyboardController.current
     val density=LocalDensity.current
@@ -267,7 +269,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     if(createNote) NativeQuickNoteCreateSheet(vm=vm,dark=dark,
         onClose={createNote=false})
     if (settings) SettingsSheet(
-        state.user, dark, { vm.setDark(it) }, { settings = false },
+        state.user, dark, themeMode, vm::setThemeMode, { settings = false },
         { authMode = it; settings = false }, { vm.logout { settings = false } },
     )
     authMode?.let { mode ->
@@ -325,6 +327,14 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                 busy = state.taskBusy,
                 error = state.taskError,
                 onBack = back,
+                onOpenParent = {
+                    // Direct entry from the timeline has no parent sheet beneath
+                    // this dialog. Replace the child with the parent focus task.
+                    openedTaskId = parent.id
+                    newSubtaskParentId = null
+                    subtaskReturnToTaskId = null
+                    vm.clearTaskError()
+                },
                 onSave = vm::saveTask,
                 onCreateSubtask = vm::createSubtask,
                 onChangeStatus = vm::changeStatus,
@@ -375,6 +385,16 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
             task=overlayChild,parent=overlayParent,dark=dark,vm=vm,
             busy=state.taskBusy,error=state.taskError,
             onBack={
+                overlaySubtaskId=null
+                overlayNewSubtaskParentId=null
+                vm.clearTaskError()
+            },
+            onOpenParent={
+                // The parent focus sheet is already mounted under this dialog.
+                // Reveal it directly, including for a child opened from its list.
+                openedTaskId=overlayParent.id
+                newSubtaskParentId=null
+                subtaskReturnToTaskId=null
                 overlaySubtaskId=null
                 overlayNewSubtaskParentId=null
                 vm.clearTaskError()
@@ -529,15 +549,67 @@ private fun taskSortTime(value: String?): Long {
 
 @Composable private fun EmptyCard(text:String){Surface(Modifier.fillMaxWidth(),shape=RoundedCornerShape(20.dp),color=MaterialTheme.colorScheme.surfaceVariant){Column(Modifier.padding(28.dp).fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally){Icon(Icons.Default.CheckCircle,null,tint=MaterialTheme.colorScheme.primary);Spacer(Modifier.height(8.dp));Text(text)}}}
 
-@OptIn(ExperimentalMaterial3Api::class) @Composable private fun SettingsSheet(user:CurrentUser?,dark:Boolean,setDark:(Boolean)->Unit,close:()->Unit,auth:(AuthMode)->Unit,logout:()->Unit){ModalBottomSheet(onDismissRequest=close){Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){Text("Настройки",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold);Text(user?.displayName ?: "Профиль");Text(if(user?.hasAccount==true)"Аккаунт Планировыча" else "Локальный профиль устройства",color=MaterialTheme.colorScheme.onSurfaceVariant);Row(verticalAlignment=Alignment.CenterVertically){Icon(if(dark)Icons.Default.DarkMode else Icons.Default.LightMode,null);Text("Тёмная тема",Modifier.padding(start=10.dp).weight(1f));Switch(checked=dark,onCheckedChange=setDark,
-    colors=SwitchDefaults.colors(
-        checkedThumbColor=Color.White,
-        checkedTrackColor=if(dark)Color(0xFF7C3AED) else Color(0xFF6D28D9),
-        uncheckedThumbColor=Color(0xFF6D28D9),
-        uncheckedTrackColor=Color(0xFFE8E1F4),
-        uncheckedBorderColor=Color(0xFFB8A8D6),
-        uncheckedIconColor=Color(0xFF6D28D9)
-    ))};if(user?.hasAccount==true)OutlinedButton(logout,Modifier.fillMaxWidth()){Text("Выйти")}else Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){Button({auth(AuthMode.LOGIN)},Modifier.weight(1f)){Text("Войти")};OutlinedButton({auth(AuthMode.REGISTER)},Modifier.weight(1f)){Text("Регистрация")}};Spacer(Modifier.height(8.dp))}}}
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsSheet(
+    user: CurrentUser?,
+    dark: Boolean,
+    mode: ThemeMode,
+    setMode: (ThemeMode) -> Unit,
+    close: () -> Unit,
+    auth: (AuthMode) -> Unit,
+    logout: () -> Unit
+) {
+    ModalBottomSheet(onDismissRequest=close) {
+        Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+            Text("Настройки",style=MaterialTheme.typography.headlineSmall,
+                fontWeight=FontWeight.Bold)
+            Text(user?.displayName ?: "Профиль")
+            Text(if(user?.hasAccount==true)"Аккаунт Планировыча"
+                else "Локальный профиль устройства",
+                color=MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(verticalAlignment=Alignment.CenterVertically) {
+                Icon(Icons.Default.SettingsBrightness,null)
+                Column(Modifier.padding(start=10.dp).weight(1f)) {
+                    Text("Как на телефоне")
+                    Text("Автоматически переключать светлую и тёмную тему",
+                        style=MaterialTheme.typography.bodySmall,
+                        color=MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked=mode==ThemeMode.SYSTEM,
+                    onCheckedChange={follow->
+                        setMode(if(follow) ThemeMode.SYSTEM
+                            else if(dark) ThemeMode.DARK else ThemeMode.LIGHT)
+                    })
+            }
+            Row(verticalAlignment=Alignment.CenterVertically) {
+                Icon(if(dark) Icons.Default.DarkMode else Icons.Default.LightMode,null)
+                Text("Тёмная тема",Modifier.padding(start=10.dp).weight(1f))
+                Switch(checked=dark,enabled=mode!=ThemeMode.SYSTEM,
+                    onCheckedChange={setMode(if(it) ThemeMode.DARK else ThemeMode.LIGHT)},
+                    colors=SwitchDefaults.colors(
+                        checkedThumbColor=Color.White,
+                        checkedTrackColor=Color(0xFF7C3AED),
+                        uncheckedThumbColor=Color(0xFF6D28D9),
+                        uncheckedTrackColor=Color(0xFFE8E1F4),
+                        uncheckedBorderColor=Color(0xFFB8A8D6),
+                        uncheckedIconColor=Color(0xFF6D28D9)
+                    ))
+            }
+            if(user?.hasAccount==true) {
+                OutlinedButton(logout,Modifier.fillMaxWidth()){Text("Выйти")}
+            } else {
+                Row(horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+                    Button({auth(AuthMode.LOGIN)},Modifier.weight(1f)){Text("Войти")}
+                    OutlinedButton({auth(AuthMode.REGISTER)},Modifier.weight(1f)){
+                        Text("Регистрация")
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
 
 @Composable private fun AuthDialog(mode:AuthMode,busy:Boolean,error:String?,close:()->Unit,login:(String,String,()->Unit)->Unit,register:(String,String,String,Boolean,()->Unit)->Unit){var username by remember{mutableStateOf("")};var password by remember{mutableStateOf("")};var name by remember{mutableStateOf("")};var consent by remember{mutableStateOf(false)};val context=LocalContext.current;AlertDialog(onDismissRequest={if(!busy)close()},title={Text(if(mode==AuthMode.LOGIN)"Вход в аккаунт" else "Регистрация")},text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)){OutlinedTextField(username,{username=it},label={Text("Логин")},singleLine=true);if(mode==AuthMode.REGISTER)OutlinedTextField(name,{name=it},label={Text("Имя")},singleLine=true);OutlinedTextField(password,{password=it},label={Text("Пароль")},singleLine=true);if(mode==AuthMode.REGISTER){Row(verticalAlignment=Alignment.Top){Checkbox(consent,{consent=it});Text("Я согласен на обработку персональных данных",Modifier.padding(top=12.dp))};TextButton({context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://planirovych.ru/legal/consent")))}){Text("Прочитать согласие")};Row{TextButton({context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://planirovych.ru/legal/terms")))}){Text("Условия")};TextButton({context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://planirovych.ru/legal/privacy")))}){Text("Конфиденциальность")}}};error?.let{Text(it,color=MaterialTheme.colorScheme.error)}}},confirmButton={Button(onClick={if(mode==AuthMode.LOGIN){login(username,password,close)}else{register(username,password,name,consent,close)}},enabled=!busy&&username.isNotBlank()&&password.isNotBlank()&&(mode==AuthMode.LOGIN||consent)){if(busy)CircularProgressIndicator(Modifier.size(18.dp),strokeWidth=2.dp)else Text(if(mode==AuthMode.LOGIN)"Войти" else "Зарегистрироваться")}},dismissButton={TextButton(close,enabled=!busy){Text("Отмена")}})}
 private fun parseColor(value:String,fallback:Color)=runCatching{Color(android.graphics.Color.parseColor(value))}.getOrDefault(fallback)

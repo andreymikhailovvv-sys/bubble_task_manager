@@ -15,6 +15,7 @@ import ru.planirovych.app.data.model.*
 import ru.planirovych.app.data.repository.WorkspaceRepository
 import ru.planirovych.app.data.repository.userMessage
 import ru.planirovych.app.ui.theme.ThemePreferences
+import ru.planirovych.app.ui.theme.ThemeMode
 
 data class TaskCreationChild(val title:String,val description:String,val dueDate:String?)
 data class TaskCreationFile(val name:String,val mime:String,val bytes:ByteArray)
@@ -571,7 +572,7 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
     }
 
     val state = mutable.asStateFlow()
-    val isDark = themes.isDark.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+    val themeMode = themes.mode.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ThemeMode.SYSTEM)
     init { refresh() }
     // AI credit UI runs only while its dialog is visible. Purchases are always
     // initiated through the existing YooKassa backend, never via local balance.
@@ -957,7 +958,7 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
         }
 
     fun search(value: String) { mutable.update { it.copy(query=value) } }
-    fun setDark(value: Boolean) { viewModelScope.launch { themes.setDark(value) } }
+    fun setThemeMode(value: ThemeMode) { viewModelScope.launch { themes.setMode(value) } }
     fun clearAuthError() { mutable.update { it.copy(authError=null) } }
     fun login(login: String, password: String, done: () -> Unit) = authAction(done) { repository.login(login.trim(), password) }
     fun register(login: String, password: String, name: String, consent: Boolean, done: () -> Unit) = authAction(done) { repository.register(login.trim(), password, name.trim(), consent) }

@@ -8,6 +8,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.SideEffect
+import androidx.core.view.WindowCompat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -36,6 +39,7 @@ import ru.planirovych.app.updates.AndroidAppUpdateChecker
 import ru.planirovych.app.updates.AndroidAppUpdateDialog
 import ru.planirovych.app.updates.AndroidAppUpdateWorker
 import ru.planirovych.app.ui.theme.PlanirovychTheme
+import ru.planirovych.app.ui.theme.ThemeMode
 import java.io.File
 
 class MainActivity:ComponentActivity(){
@@ -128,7 +132,21 @@ class MainActivity:ComponentActivity(){
         setContent{
             val vm:HomeViewModel=viewModel(
                 factory=HomeViewModel.Factory(app.repository,app.themePreferences))
-            val dark by vm.isDark.collectAsStateWithLifecycle()
+            val preferredMode by vm.themeMode.collectAsStateWithLifecycle()
+            val deviceDark=isSystemInDarkTheme()
+            val dark=when(preferredMode) {
+                ThemeMode.SYSTEM -> deviceDark
+                ThemeMode.DARK -> true
+                ThemeMode.LIGHT -> false
+            }
+            // Edge-to-edge defaults to the PHONE theme, which may differ from
+            // the app's manual override. Reapply whenever our theme changes,
+            // including on the main tabs without any modal windows.
+            SideEffect {
+                val bars=WindowCompat.getInsetsController(window,window.decorView)
+                bars.isAppearanceLightStatusBars=!dark
+                bars.isAppearanceLightNavigationBars=!dark
+            }
             PlanirovychTheme(dark){
                 val nav=rememberNavController()
                 NavHost(navController=nav,startDestination="home"){

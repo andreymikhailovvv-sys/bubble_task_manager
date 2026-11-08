@@ -618,12 +618,15 @@ private fun CalendarDayCell(
     }
     val background=if(dark)Color(0xFF19263A)
         else if(today)Color(0xFFFAF8FF) else Color(0xFFFCFDFF)
+    // One click target for the entire month cell, including task previews
+    // and empty space. Task previews must never open task editors from Month.
     Column(modifier.height(106.dp).clip(shape).background(background)
         .border(1.dp,border,shape)
+        .clickable(onClick=onDay)
         .padding(horizontal=2.dp,vertical=4.dp),
         horizontalAlignment=Alignment.CenterHorizontally,
         verticalArrangement=Arrangement.spacedBy(2.dp)){
-        Box(Modifier.fillMaxWidth().height(23.dp).clickable(onClick=onDay),
+        Box(Modifier.fillMaxWidth().height(23.dp),
             contentAlignment=Alignment.Center){
             Box(Modifier.size(23.dp).clip(CircleShape)
                 .background(if(today)Color(0xFF7C3AED) else Color.Transparent),
@@ -637,17 +640,13 @@ private fun CalendarDayCell(
             }
         }
         entries.take(3).forEach{entry->
-            MiniAppCalendarEntry(entry,true,dark,colors){
-                if(entry.kind=="Напоминание")onDay()
-                else entry.taskId?.let(onTask)?:onDay()
-            }
+            MiniAppCalendarEntry(entry,true,dark,colors)
         }
         if(entries.size>3){
             Text("Ещё "+(entries.size-3),
                 color=if(dark)Color(0xFFC4B5FD) else Color(0xFF6D28D9),
                 fontSize=10.sp,fontWeight=FontWeight.Bold,
-                modifier=Modifier.fillMaxWidth().clickable(onClick=onDay)
-                    .padding(vertical=2.dp),
+                modifier=Modifier.fillMaxWidth().padding(vertical=2.dp),
                 textAlign=TextAlign.Center,maxLines=1)
         }
     }
@@ -657,7 +656,7 @@ private fun CalendarDayCell(
 @Composable
 private fun MiniAppCalendarEntry(
     entry:TimelineEntry,monthMode:Boolean,dark:Boolean,
-    colors:WorkspaceColors,onClick:()->Unit
+    colors:WorkspaceColors
 ){
     val subtask=entry.kind=="Подзадача"
     val event=entry.kind=="Событие"
@@ -681,7 +680,7 @@ private fun MiniAppCalendarEntry(
                     pathEffect=PathEffect.dashPathEffect(
                         floatArrayOf(5.dp.toPx(),4.dp.toPx()),0f)))
         }else Modifier.border(.7.dp,line,radius))
-        .clickable(onClick=onClick)
+        // Month chips are display-only; the enclosing day cell owns the tap.
         .heightIn(min=if(monthMode)18.dp else if(subtask)38.dp else 43.dp),
         verticalAlignment=Alignment.CenterVertically){
         Box(Modifier.width(3.dp).height(if(monthMode)13.dp else 30.dp)

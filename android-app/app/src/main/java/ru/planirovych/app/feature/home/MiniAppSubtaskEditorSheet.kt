@@ -64,7 +64,8 @@ else ChildColors(Color.White,Color(0xFF0F172A),Color(0xFF64748B),
 fun MiniAppSubtaskEditorSheet(
     task:Task?, parent:Task, dark:Boolean, vm:HomeViewModel,
     busy:Boolean,error:String?,
-    onBack:()->Unit, onSave:(String,JsonObject,()->Unit)->Unit,
+    onBack:()->Unit, onOpenParent:()->Unit,
+    onSave:(String,JsonObject,()->Unit)->Unit,
     onCreateSubtask:(String,String,String,String?,()->Unit)->Unit,
     onChangeStatus:(String,TaskStatus,()->Unit)->Unit,
     onDelete:(String,()->Unit)->Unit,onClearError:()->Unit
@@ -255,7 +256,11 @@ fun MiniAppSubtaskEditorSheet(
                     Spacer(Modifier.height(9.dp))
                     Row(Modifier.clip(CircleShape).background(c.panel)
                         .border(1.dp,c.line,CircleShape)
-                        .clickable{saveThen(onBack)}
+                        .clickable(enabled=!busy && !saving) {
+                            // Save pending subtask edits, then navigate to the
+                            // actual parent focus sheet instead of merely closing.
+                            saveThen(onOpenParent)
+                        }
                         .padding(horizontal=11.dp,vertical=7.dp),
                         verticalAlignment=Alignment.CenterVertically) {
                         Icon(Icons.Default.ArrowUpward,null,tint=c.teal,
