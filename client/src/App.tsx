@@ -948,8 +948,6 @@ export default function App() {
   const [timelineOptimizeLoading, setTimelineOptimizeLoading] = useState(false);
   const [timelineHoverCard, setTimelineHoverCard] = useState<{ taskId: string; top: number; left: number } | null>(null);
   const [isTimelineOverdueModalOpen, setIsTimelineOverdueModalOpen] = useState(false);
-  const [hoveredOverdueTaskId, setHoveredOverdueTaskId] = useState<string | null>(null);
-  const [overduePopoverTop, setOverduePopoverTop] = useState(72);
   const [timelineOverdueBulkPostponeLoading, setTimelineOverdueBulkPostponeLoading] = useState<null | 'normal' | 'ai'>(null);
   const [postponeNotice, setPostponeNotice] = useState<{ count: number; serial: number } | null>(null);
   useEffect(() => {
@@ -973,7 +971,8 @@ export default function App() {
     };
   }, [isTimelineOverdueModalOpen]);
   useEffect(() => {
-    if (!isTimelineOverdueModalOpen) setHoveredOverdueTaskId(null);
+    // Hover cards live in a portal: unmounting a menu does not fire mouseleave.
+    if (!isTimelineOverdueModalOpen) setTimelineHoverCard(null);
   }, [isTimelineOverdueModalOpen]);
   const [timelineOptimizePreviewEnabledByMode, setTimelineOptimizePreviewEnabledByMode] = useState<Record<'day'|'week'|'month', boolean>>({ day: false, week: false, month: false });
   const [timelineOptimizeStateByMode, setTimelineOptimizeStateByMode] = useState<Record<'day'|'week'|'month',{ plan: Array<{ taskId: string; dueDate: string | null }>; summary: string }>>({ day:{plan:[],summary:''}, week:{plan:[],summary:''}, month:{plan:[],summary:''} });
@@ -4788,7 +4787,7 @@ export default function App() {
       sphereColor
     };
   };
-  const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean; isSubtask?: boolean; disableHoverCard?: boolean; parentTaskTitle?: string; disableEffects?: boolean; disableOpenOnClick?: boolean; forceDraggable?: boolean; onDragStart?: () => void }) => {
+  const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean; isSubtask?: boolean; disableHoverCard?: boolean; hoverLeftOfOverduePanel?: boolean; parentTaskTitle?: string; disableEffects?: boolean; disableOpenOnClick?: boolean; forceDraggable?: boolean; onDragStart?: () => void }) => {
     const { taskSubtasks, hasOverdueState, sphereColor } = getTimelineTaskViewModel(task);
     const isEventChip = task.taskType === 'EVENT';
     const isReminderChip = task.taskType === 'REMINDER';
@@ -4862,8 +4861,18 @@ export default function App() {
           const top = openUpward ? Math.max(8, rect.top - cardHeight - margin) : Math.min(window.innerHeight - cardHeight - 8, rect.bottom + margin);
           const minLeft = 16;
           const maxLeft = window.innerWidth - cardWidth - 16;
-          const left = Math.max(minLeft, Math.min(rect.left + rect.width / 2 - cardWidth / 2, maxLeft));
-          setTimelineHoverCard({ taskId: task.id, top, left });
+          let left = Math.max(minLeft, Math.min(rect.left + rect.width / 2 - cardWidth / 2, maxLeft));
+          let cardTop = top;
+          if (options?.hoverLeftOfOverduePanel) {
+            // The same timeline hover card, placed beside the *whole panel*
+            // rather than obscuring the list of overdue tasks.
+            const panelRect = event.currentTarget.closest('#topbar-overdue-list')?.getBoundingClientRect();
+            if (panelRect && panelRect.left >= cardWidth + margin + 8) {
+              left = panelRect.left - cardWidth - margin;
+              cardTop = Math.max(8, Math.min(rect.top, window.innerHeight - cardHeight - 8));
+            }
+          }
+          setTimelineHoverCard({ taskId: task.id, top: cardTop, left });
         }}
         onMouseLeave={() => {
           setTimelineHoverCard((prev) => (prev?.taskId === task.id ? null : prev));
@@ -5037,19 +5046,6 @@ export default function App() {
   const timelineOverdueTasks = [...activeTasks, ...subtasks.filter((task) => task.status !== 'DONE')]
     .filter((task) => task.taskType !== 'EVENT' && task.taskType !== 'REMINDER' && isOverdue(task))
     .sort((a, b) => (a.dueDate ? new Date(a.dueDate).getTime() : 0) - (b.dueDate ? new Date(b.dueDate).getTime() : 0));
-  const hoveredOverdueTask = hoveredOverdueTaskId ? taskById.get(hoveredOverdueTaskId) ?? null : null;
-  const hoveredOverdueBubbleTaskId = (() => {
-    let current = hoveredOverdueTask;
-    const visited = new Set<string>();
-    while (current?.parentTaskId && !visited.has(current.id)) {
-      visited.add(current.id);
-      const parent = taskById.get(current.parentTaskId);
-      if (!parent) break;
-      current = parent;
-    }
-    return current?.id ?? null;
-  })();
-
   const postponeAllOverdueToToday = async () => {
     if (timelineOverdueBulkPostponeLoading) return;
     setTimelineOverdueBulkPostponeLoading('normal');
@@ -5669,11 +5665,7 @@ export default function App() {
           <div className="topbar-overdue-wrap relative shrink-0" ref={overduePopoverRef}>
             <button type="button"
               className="topbar-action-button topbar-overdue-trigger inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold"
-              onClick={(event) => {
-                // Align vertically with the trigger but pin the panel to the viewport's right edge.
-                setOverduePopoverTop(Math.max(8, Math.min(window.innerHeight - 120, event.currentTarget.getBoundingClientRect().bottom + 10)));
-                setIsTimelineOverdueModalOpen(open => !open);
-              }}
+              onClick={() => setIsTimelineOverdueModalOpen(open => !open)}
               aria-expanded={isTimelineOverdueModalOpen}
               aria-controls="topbar-overdue-list"
               title="Управление просроченными задачами во всех режимах"
@@ -5684,10 +5676,12 @@ export default function App() {
               <ChevronDown size={13} className={isTimelineOverdueModalOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
             </button>
             {isTimelineOverdueModalOpen ? (
-              <section id="topbar-overdue-list" className="timeline-overdue-panel topbar-overdue-popover fixed right-3 z-[85] w-[min(360px,calc(100vw-24px))] rounded-2xl border p-3 shadow-2xl" style={{ top: overduePopoverTop }} aria-label="Просроченные задачи" onMouseLeave={() => setHoveredOverdueTaskId(null)}>
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <section id="topbar-overdue-list" className="timeline-overdue-panel topbar-overdue-popover absolute right-0 top-[calc(100%+10px)] z-[85] w-[min(360px,calc(100vw-24px))] rounded-2xl border p-3 shadow-2xl" aria-label="Просроченные задачи">
+                <div className="mb-3 flex items-center justify-between gap-2 pr-8">
                   <h4 className="text-sm font-semibold text-primary">Просроченные задачи</h4>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" className="surface-muted absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded-lg text-xs" onClick={() => setIsTimelineOverdueModalOpen(false)} aria-label="Закрыть просроченные задачи"><X size={14}/></button>
+                </div>
+                <div className="mb-3 flex flex-wrap items-center gap-2">
                     <button type="button" className="secondary-button rounded-lg px-2 py-1.5 text-xs disabled:opacity-60"
                       onClick={() => void postponeAllOverdueToToday()}
                       disabled={timelineOverdueBulkPostponeLoading !== null}
@@ -5701,17 +5695,14 @@ export default function App() {
                       {timelineOverdueBulkPostponeLoading === 'ai' ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
                       Отложить (ИИ)
                     </button>
-                    <button type="button" className="surface-muted rounded-lg px-2 py-1.5 text-xs" onClick={() => setIsTimelineOverdueModalOpen(false)} aria-label="Закрыть просроченные задачи"><X size={13}/></button>
-                  </div>
                 </div>
                 <div className="topbar-overdue-items max-h-[min(360px,55vh)] space-y-1 overflow-y-auto pr-1">
                   {timelineOverdueTasks.map(task => (
-                    <div key={task.id} className={`topbar-overdue-row ${hoveredOverdueTaskId === task.id ? 'topbar-overdue-row-active' : ''}`}
-                      onMouseEnter={() => setHoveredOverdueTaskId(task.id)}
-                      onMouseLeave={() => setHoveredOverdueTaskId((previous) => previous === task.id ? null : previous)}>
+                    <div key={task.id} className="topbar-overdue-row">
                       {renderTimelineTaskChip(task, {
                         isSubtask: Boolean(task.parentTaskId),
                         disableEffects: true,
+                        hoverLeftOfOverduePanel: true,
                         parentTaskTitle: task.parentTaskId ? (taskById.get(task.parentTaskId)?.title ?? 'Без основной задачи') : undefined
                       })}
                     </div>
@@ -6364,7 +6355,6 @@ export default function App() {
             </button>
             <BubbleField
               className="h-full"
-              highlightedTaskId={isTimelineOverdueModalOpen ? hoveredOverdueBubbleTaskId : null}
               fullscreen={isBubbleFullscreen}
               themeMode={effectiveThemeMode}
               showTrainingInvitation={isOnboardingOfferOpen}
