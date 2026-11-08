@@ -78,6 +78,7 @@ export function useBubbleLayoutWorker({
     let canceled = false;
     let worker: Worker | null = null;
     let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    const startedAt = performance.now();
 
     const accept = (message: BubbleLayoutResponse) => {
       if (canceled || message.revision !== revision) return;
@@ -87,6 +88,15 @@ export function useBubbleLayoutWorker({
       }
       const snapshot = message.snapshot;
       remember(keyFor(message.mode), message.mode, snapshot);
+      if (message.mode === mode && performance.now() < 60_000) {
+        console.info('[WorkspaceBoot] bubble layout ready', {
+          elapsedSinceNavigationMs: Math.round(performance.now()),
+          workerWallMs: Math.round(performance.now() - startedAt),
+          taskCount: snapshot.bubbles.length,
+          initialMs: Math.round(snapshot.initialMs),
+          packingMs: Math.round(snapshot.packingMs)
+        });
+      }
       if (snapshot.initialMs > 80 || snapshot.packingMs > 80) {
         console.warn('[BubbleLayoutSlow]', {
           stage: 'worker', mode: message.mode, taskCount: snapshot.bubbles.length,
