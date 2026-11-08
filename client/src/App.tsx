@@ -949,6 +949,7 @@ export default function App() {
   const [timelineHoverCard, setTimelineHoverCard] = useState<{ taskId: string; top: number; left: number } | null>(null);
   const [isTimelineOverdueModalOpen, setIsTimelineOverdueModalOpen] = useState(false);
   const [hoveredOverdueTaskId, setHoveredOverdueTaskId] = useState<string | null>(null);
+  const [overduePopoverTop, setOverduePopoverTop] = useState(72);
   const [timelineOverdueBulkPostponeLoading, setTimelineOverdueBulkPostponeLoading] = useState<null | 'normal' | 'ai'>(null);
   const [postponeNotice, setPostponeNotice] = useState<{ count: number; serial: number } | null>(null);
   useEffect(() => {
@@ -1397,7 +1398,9 @@ export default function App() {
 
   async function load() {
     const requestId = ++loadRequestIdRef.current;
+    const startedAt = performance.now();
     const [sphereData, taskData, habitData] = await Promise.all([api.getSpheres(), api.getTasks(), api.getHabits()]);
+    if (requestId === 1) console.info('[WorkspaceBoot] API data received', { elapsedMs: Math.round(performance.now() - startedAt), taskCount: taskData.length });
     if (requestId !== loadRequestIdRef.current) return;
     setSpheres(sphereData);
     setTasks(taskData);
@@ -1584,7 +1587,9 @@ export default function App() {
     if (!currentUser) return;
     // Display last verified server response instantly, then always refresh from
     // the API. This does not change any task writes or cross-device syncing.
+    const snapshotStartedAt = performance.now();
     const snapshot = readWorkspaceSnapshot(currentUser.id);
+    console.info('[WorkspaceBoot] session snapshot', { hit: Boolean(snapshot), readMs: Math.round(performance.now() - snapshotStartedAt), taskCount: snapshot?.tasks.length ?? 0 });
     if (snapshot) {
       setSpheres(snapshot.spheres);
       setTasks(snapshot.tasks);
@@ -1603,6 +1608,13 @@ export default function App() {
     // The static HTML splash also covers bundle download and React startup.
     // Remove it only once auth and the first workspace request have settled.
     document.documentElement.classList.remove('web-workspace-preload');
+    const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+    requestAnimationFrame(() => console.info('[WorkspaceBoot] workspace ready for paint', {
+      elapsedSinceNavigationMs: Math.round(performance.now()),
+      htmlResponseEndMs: Math.round(navigation?.responseEnd ?? 0),
+      domContentLoadedMs: Math.round(navigation?.domContentLoadedEventEnd ?? 0),
+      snapshotOrApiReady: initialWorkspaceReady
+    }));
   }, [authLoading, currentUser?.id, initialWorkspaceReady]);
   useEffect(() => {
     if (!currentUser) return;
@@ -5657,7 +5669,11 @@ export default function App() {
           <div className="topbar-overdue-wrap relative shrink-0" ref={overduePopoverRef}>
             <button type="button"
               className="topbar-action-button topbar-overdue-trigger inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold"
-              onClick={() => setIsTimelineOverdueModalOpen(open => !open)}
+              onClick={(event) => {
+                // Align vertically with the trigger but pin the panel to the viewport's right edge.
+                setOverduePopoverTop(Math.max(8, Math.min(window.innerHeight - 120, event.currentTarget.getBoundingClientRect().bottom + 10)));
+                setIsTimelineOverdueModalOpen(open => !open);
+              }}
               aria-expanded={isTimelineOverdueModalOpen}
               aria-controls="topbar-overdue-list"
               title="Управление просроченными задачами во всех режимах"
@@ -5668,7 +5684,7 @@ export default function App() {
               <ChevronDown size={13} className={isTimelineOverdueModalOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
             </button>
             {isTimelineOverdueModalOpen ? (
-              <section id="topbar-overdue-list" className="timeline-overdue-panel topbar-overdue-popover absolute right-0 top-[calc(100%+10px)] z-[85] w-[min(360px,calc(100vw-24px))] rounded-2xl border p-3 shadow-2xl" aria-label="Просроченные задачи" onMouseLeave={() => setHoveredOverdueTaskId(null)}>
+              <section id="topbar-overdue-list" className="timeline-overdue-panel topbar-overdue-popover fixed right-3 z-[85] w-[min(360px,calc(100vw-24px))] rounded-2xl border p-3 shadow-2xl" style={{ top: overduePopoverTop }} aria-label="Просроченные задачи" onMouseLeave={() => setHoveredOverdueTaskId(null)}>
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <h4 className="text-sm font-semibold text-primary">Просроченные задачи</h4>
                   <div className="flex flex-wrap items-center gap-2">
@@ -5695,28 +5711,13 @@ export default function App() {
                       onMouseLeave={() => setHoveredOverdueTaskId((previous) => previous === task.id ? null : previous)}>
                       {renderTimelineTaskChip(task, {
                         isSubtask: Boolean(task.parentTaskId),
-                        disableEffects: true, disableHoverCard: true,
+                        disableEffects: true,
                         parentTaskTitle: task.parentTaskId ? (taskById.get(task.parentTaskId)?.title ?? 'Без основной задачи') : undefined
                       })}
                     </div>
                   ))}
                   {timelineOverdueTasks.length === 0 ? <p className="py-3 text-center text-sm text-subtle">Просроченных задач нет</p> : null}
                 </div>
-                {hoveredOverdueTask ? (
-                  <div className="topbar-overdue-details mt-3 rounded-xl border p-3 text-xs" role="status">
-                    <p className="break-words font-semibold text-primary">{hoveredOverdueTask.title}</p>
-                    <p className="mt-1 whitespace-pre-wrap break-words text-muted">
-                      <LinkifiedText text={(() => {
-                        const plain = noteHtmlToPlainText(hoveredOverdueTask.description ?? '', { trimEnd: true });
-                        return plain.length > 220 ? `${plain.slice(0, 220)}…` : plain;
-                      })()} fallback="Без описания" stopPropagationOnLinkClick />
-                    </p>
-                    {hoveredOverdueTask.parentTaskId ? (
-                      <p className="mt-2 text-subtle">Основная задача: {taskById.get(hoveredOverdueTask.parentTaskId)?.title ?? 'Без названия'}</p>
-                    ) : null}
-                    <p className="mt-2 text-muted">Дедлайн: {formatTaskDueDate(hoveredOverdueTask.dueDate)} · {formatDeadlineLeft(hoveredOverdueTask.dueDate)}</p>
-                  </div>
-                ) : null}
               </section>
             ) : null}
           </div>

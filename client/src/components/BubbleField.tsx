@@ -980,8 +980,8 @@ export function BubbleField({
             stroke="none" pointerEvents="none" />
         ) : null}
         {isOverdueLocator ? (
-          <circle cx={0} cy={0} r={bubble.radius - 3} fill="none"
-            stroke={isLightTheme ? '#be123c' : '#f8fafc'}
+          <circle cx={0} cy={0} r={bubble.radius - 1.5}
+            fill="url(#overdueLocatorGlow)" stroke="none"
             className="overdue-bubble-locator" pointerEvents="none" />
         ) : null}
         {/* All tasks share the same neutral progress track. No subtasks = 0%. */}
@@ -1100,18 +1100,26 @@ export function BubbleField({
         onContextMenu={(event) => showContextMenu(event, null)}>
         <motion.g initial={false}>
           <defs>
-            {/* Parent overdue: a restrained crimson wash across the whole bubble. */}
-            <radialGradient id="overdueTaskBlush" cx="48%" cy="43%" r="73%">
-              <stop offset="0%" stopColor="#fb7185" stopOpacity={isLightTheme ? 0.24 : 0.25} />
-              <stop offset="60%" stopColor="#f43f5e" stopOpacity={isLightTheme ? 0.32 : 0.34} />
-              <stop offset="100%" stopColor="#b91c1c" stopOpacity={isLightTheme ? 0.44 : 0.46} />
+            {/* Parent overdue: retain the sphere's original hue at the centre,
+                with a saturated, feathered crimson blush nearer the edge. */}
+            <radialGradient id="overdueTaskBlush" cx="49%" cy="46%" r="72%">
+              <stop offset="0%" stopColor="#fb7185" stopOpacity={isLightTheme ? 0.025 : 0.04} />
+              <stop offset="48%" stopColor="#fb7185" stopOpacity={isLightTheme ? 0.075 : 0.09} />
+              <stop offset="80%" stopColor="#ef4444" stopOpacity={isLightTheme ? 0.24 : 0.26} />
+              <stop offset="100%" stopColor="#dc2626" stopOpacity={isLightTheme ? 0.37 : 0.39} />
             </radialGradient>
-            {/* Subtask overdue: crimson only around the periphery; center stays legible. */}
-            <radialGradient id="overdueSubtaskBlush" cx="50%" cy="48%" r="67%">
-              <stop offset="0%" stopColor="#fee2e2" stopOpacity="0" />
-              <stop offset="42%" stopColor="#fda4af" stopOpacity={isLightTheme ? 0.07 : 0.06} />
-              <stop offset="76%" stopColor="#fb7185" stopOpacity={isLightTheme ? 0.26 : 0.27} />
-              <stop offset="100%" stopColor="#dc2626" stopOpacity={isLightTheme ? 0.46 : 0.48} />
+            {/* Only child overdue: weaker edge blush, never replace the base colour. */}
+            <radialGradient id="overdueSubtaskBlush" cx="50%" cy="48%" r="69%">
+              <stop offset="0%" stopColor="#fb7185" stopOpacity="0" />
+              <stop offset="50%" stopColor="#fb7185" stopOpacity={isLightTheme ? 0.015 : 0.02} />
+              <stop offset="78%" stopColor="#ef4444" stopOpacity={isLightTheme ? 0.14 : 0.16} />
+              <stop offset="100%" stopColor="#dc2626" stopOpacity={isLightTheme ? 0.31 : 0.33} />
+            </radialGradient>
+            {/* Temporary hover locator illuminates the whole surface, without a sharp ring. */}
+            <radialGradient id="overdueLocatorGlow" cx="38%" cy="32%" r="88%">
+              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.8" />
+              <stop offset="68%" stopColor="#fff7ed" stopOpacity="0.55" />
+              <stop offset="100%" stopColor="#ffe4e6" stopOpacity="0.26" />
             </radialGradient>
             <radialGradient id="bg" cx="50%" cy="50%" r="60%">
               {isLightTheme ? (
