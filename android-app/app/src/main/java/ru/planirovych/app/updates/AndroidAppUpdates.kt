@@ -10,8 +10,10 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,6 +30,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import ru.planirovych.app.BuildConfig
+import ru.planirovych.app.MainActivity
 import ru.planirovych.app.R
 import java.net.URL
 import java.util.concurrent.TimeUnit
@@ -92,7 +95,16 @@ object AndroidAppUpdateChecker {
 }
 
 @Composable
-fun AndroidAppUpdateDialog(release:AndroidAppRelease,onLater:()->Unit,onUpdate:()->Unit) {
+fun AndroidAppUpdateDialog(
+    release:AndroidAppRelease,
+    downloading:Boolean,
+    downloadProgress:Int?,
+    downloadError:String?,
+    needsInstallPermission:Boolean,
+    onLater:()->Unit,
+    onUpdate:()->Unit,
+    onBrowserFallback:()->Unit
+) {
     AlertDialog(
         onDismissRequest=onLater,
         title={Text("Новая версия Планировыча")},
@@ -101,14 +113,46 @@ fun AndroidAppUpdateDialog(release:AndroidAppRelease,onLater:()->Unit,onUpdate:(
                 Text("Доступна версия ${release.versionName}. Обновление устанавливается поверх приложения без удаления данных.")
                 if(release.notes.isNotBlank())
                     Text(release.notes,modifier=Modifier.padding(top=12.dp))
-                Text("Android попросит подтвердить установку APK.",
-                    modifier=Modifier.padding(top=10.dp))
-                Text("«Позже» отложит напоминание на 24 часа.",
-                    modifier=Modifier.padding(top=8.dp))
+                when {
+                    downloading -> {
+                        Text("Скачиваем APK прямо в приложении…",
+                            modifier=Modifier.padding(top=12.dp))
+                        LinearProgressIndicator(modifier=Modifier
+                            .fillMaxWidth().padding(top=10.dp))
+                        if(downloadProgress!=null)
+                            Text("Загружено: ${downloadProgress}%",
+                                modifier=Modifier.padding(top=8.dp))
+                    }
+                    needsInstallPermission -> {
+                        Text("Разрешите Планировычу установку приложений в настройках Android. После разрешения откроется системный установщик.",
+                            modifier=Modifier.padding(top=12.dp))
+                    }
+                    downloadError!=null -> {
+                        Text(downloadError,modifier=Modifier.padding(top=12.dp))
+                        TextButton(onClick=onBrowserFallback) {
+                            Text("Скачать APK через браузер")
+                        }
+                    }
+                    else -> {
+                        Text("APK загрузится внутри Планировыча. Затем Android попросит подтвердить установку.",
+                            modifier=Modifier.padding(top=12.dp))
+                        Text("«Позже» отложит напоминание на 24 часа.",
+                            modifier=Modifier.padding(top=8.dp))
+                    }
+                }
             }
         },
-        confirmButton={TextButton(onClick=onUpdate){Text("Обновить")}},
-        dismissButton={TextButton(onClick=onLater){Text("Позже")}}
+        confirmButton={
+            TextButton(onClick=onUpdate,enabled=!downloading) {
+                Text(when {
+                    downloading -> "Загружаем…"
+                    needsInstallPermission -> "Разрешить установку"
+                    downloadError!=null -> "Повторить"
+                    else -> "Обновить"
+                })
+            }
+        },
+        dismissButton={TextButton(onClick=onLater){Text(if(downloading) "Отмена" else "Позже")}}
     )
 }
 
@@ -138,15 +182,18 @@ class AndroidAppUpdateWorker(context:Context,params:WorkerParameters)
             manager.createNotificationChannel(NotificationChannel(UPDATE_CHANNEL,
                 "Обновления Планировыча",NotificationManager.IMPORTANCE_DEFAULT))
         }
-        val intent=Intent(Intent.ACTION_VIEW,Uri.parse(UPDATE_PAGE)).apply {
-            flags=Intent.FLAG_ACTIVITY_NEW_TASK
+        // Open our native updater instead of sending users through the web page.
+        val intent=Intent(applicationContext,MainActivity::class.java).apply {
+            flags=Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(MainActivity.EXTRA_CHECK_ANDROID_UPDATE,true)
         }
         val pending=PendingIntent.getActivity(applicationContext,2710,intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification=NotificationCompat.Builder(applicationContext,UPDATE_CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_planirovych)
             .setContentTitle("Доступно обновление Планировыча")
-            .setContentText("Версия ${release.versionName}. Нажмите, чтобы скачать APK с сайта.")
+            .setContentText("Версия ${release.versionName}. Нажмите, чтобы обновить приложение.")
             .setContentIntent(pending)
             .setAutoCancel(true)
             .build()
