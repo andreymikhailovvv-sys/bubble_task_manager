@@ -526,23 +526,27 @@ private fun WorkspaceTopbar(
                     }
                 }
                 DropdownMenu(expanded=moreOpen,onDismissRequest={moreOpen=false},
-                    modifier=Modifier.background(colors.panel)) {
-                    DropdownMenuItem(
-                        text={Row(verticalAlignment=Alignment.CenterVertically,
-                            horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                            Text("Кредиты",color=colors.text)
-                            Text((state.user?.aiCredits ?: 0).toString(),color=colors.secondaryText)
-                        }},
-                        leadingIcon={Icon(Icons.Default.Paid,null,tint=Color(0xFF22B8CF))},
-                        onClick={moreOpen=false;onCredits()})
-                    DropdownMenuItem(
-                        text={Text("Рейтинг",color=colors.text)},
-                        leadingIcon={Icon(Icons.Default.Star,null,tint=Color(0xFFA78BFA))},
-                        onClick={moreOpen=false;onScore()})
-                    DropdownMenuItem(
-                        text={Text("Настройки",color=colors.text)},
-                        leadingIcon={Icon(Icons.Default.Settings,null,tint=iconColor)},
-                        onClick={moreOpen=false;settings()})
+                    modifier=Modifier.width(272.dp)
+                        .clip(RoundedCornerShape(26.dp))
+                        .background(if(dark)Color(0xFF1E2844) else Color(0xFFF9F5FF))) {
+                    Column(Modifier.padding(horizontal=7.dp,vertical=5.dp),
+                        verticalArrangement=Arrangement.spacedBy(9.dp)) {
+                        val score=(state.user?.efficiencyScore ?: 0.0).coerceIn(0.0,100.0)
+                        val scoreText=if(score%1.0==0.0)score.toInt().toString()
+                            else String.format(Locale("ru"),"%.1f",score)
+                        WorkspaceUtilityMenuItem(
+                            label="Кредиты",value=(state.user?.aiCredits?:0).toString(),
+                            icon=Icons.Default.Paid,accent=Color(0xFF1B395D),
+                            dark=dark,onClick={moreOpen=false;onCredits()})
+                        WorkspaceUtilityMenuItem(
+                            label="Рейтинг",value=scoreText+"/100",
+                            icon=Icons.Default.Star,accent=Color(0xFF38BDF8),
+                            dark=dark,onClick={moreOpen=false;onScore()})
+                        WorkspaceUtilityMenuItem(
+                            label="Настройки",value=null,
+                            icon=Icons.Default.Settings,accent=Color(0xFFF4B400),
+                            dark=dark,onClick={moreOpen=false;settings()})
+                    }
                 }
             }
         }
@@ -612,6 +616,37 @@ private fun HabitsStrip(habits:List<Habit>, colors:WorkspaceColors, dark:Boolean
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun WorkspaceUtilityMenuItem(
+    label:String,value:String?,
+    icon:androidx.compose.ui.graphics.vector.ImageVector,
+    accent:Color,dark:Boolean,onClick:()->Unit
+) {
+    val ink=if(dark)Color(0xFFF1F5F9) else Color(0xFF273B58)
+    val border=if(dark)Color(0xFF42516B) else Color(0xFFE7DAF5)
+    val tile=if(dark)Color(0xFF273651) else Color.White
+    val shape=RoundedCornerShape(21.dp)
+    Row(Modifier.fillMaxWidth().clip(shape).background(tile)
+        .border(1.dp,border,shape)
+        .clickable(onClick=onClick)
+        .padding(horizontal=14.dp,vertical=13.dp),
+        verticalAlignment=Alignment.CenterVertically,
+        horizontalArrangement=Arrangement.spacedBy(13.dp)) {
+        Box(Modifier.size(32.dp),contentAlignment=Alignment.Center) {
+            Icon(icon,null,tint=accent,modifier=Modifier.size(27.dp))
+        }
+        Text(label,modifier=Modifier.weight(1f),color=ink,
+            fontSize=16.sp,fontWeight=FontWeight.Bold,maxLines=1)
+        if(value!=null) {
+            Text(value,color=if(dark)Color(0xFFD0B5FF) else Color(0xFF7E40B1),
+                fontSize=13.sp,fontWeight=FontWeight.Bold,maxLines=1,
+                modifier=Modifier.clip(RoundedCornerShape(14.dp))
+                    .background(if(dark)Color(0xFF453659) else Color(0xFFF3EAFE))
+                    .padding(horizontal=10.dp,vertical=9.dp))
         }
     }
 }
