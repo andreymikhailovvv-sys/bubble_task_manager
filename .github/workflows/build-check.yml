@@ -33,6 +33,8 @@ jobs:
         run: node --import tsx --test server/test/favicon-build.test.ts
       - name: Verify magnetic bubble layout and collision regression tests
         run: node --import tsx --test client/src/lib/bubbleInteractions.test.ts
+      - name: Verify session workspace cache isolation and expiry
+        run: node --import tsx --test client/src/lib/workspaceSnapshot.test.ts
       - name: Verify privacy-safe performance telemetry and bounded histograms
         run: node --import tsx --test server/test/performance-diagnostics.test.ts
       - name: Verify deduplicated task and reminder notifications
