@@ -70,8 +70,8 @@ test('Android shows updates only for signed release build and opens official sit
   assert.match(activity,/AndroidAppUpdateDialog/);
   assert.match(activity,/https:\/\/planirovych\.ru\/android/);
   // Version numbers change with each release. Never hardcode v2 in CI.
-  const code = Number(gradle.match(/versionCode\\s*=\\s*(\\d+)/)?.[1]);
-  const version = gradle.match(/versionName\\s*=\\s*"(\\d+\\.\\d+\\.\\d+)"/)?.[1];
+  const code = Number(gradle.match(/versionCode\s*=\s*(\d+)/)?.[1]);
+  const version = gradle.match(/versionName\s*=\s*"(\d+\.\d+\.\d+)"/)?.[1];
   assert.ok(Number.isSafeInteger(code) && code >= 2);
   assert.ok(version, 'release versionName must use x.y.z format');
   assert.match(gradle,/PLANIROVYCH_RELEASE_STORE_PASSWORD/);
