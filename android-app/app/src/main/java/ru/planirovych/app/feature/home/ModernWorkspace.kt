@@ -31,6 +31,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.PathEffect
@@ -122,6 +123,15 @@ fun ModernWorkspace(
     var overdueOpen by remember { mutableStateOf(false) }
     var scoreOpen by remember { mutableStateOf(false) }
     var creditsOpen by remember { mutableStateOf(false) }
+    var searchExpanded by remember { mutableStateOf(false) }
+    var searchNoteTarget by remember { mutableStateOf<String?>(null) }
+    val searchPagerScope=rememberCoroutineScope()
+    LaunchedEffect(state.user?.id,state.query.isNotBlank()) {
+        // Search notes just once upon entering a nonempty query. Reuse existing
+        // cached state while typing; avoid an API request per keystroke.
+        if(state.query.isNotBlank()) vm.loadNotes()
+        else searchExpanded=false
+    }
     var selectedHabitId by remember { mutableStateOf<String?>(null) }
     var createHabitOpen by remember { mutableStateOf(false) }
     val sectors = remember(state.spheres) { state.spheres.associateBy { it.id } }
@@ -155,7 +165,9 @@ fun ModernWorkspace(
                 val pagerScope=rememberCoroutineScope()
                 NativeNotesPage(vm=vm,colors=colors,dark=dark,
                     modifier=Modifier.fillMaxSize(),
-                    onClose={pagerScope.launch{pagerState.animateScrollToPage(0)}})
+                    onClose={pagerScope.launch{pagerState.animateScrollToPage(0)}},
+                    openNoteId=searchNoteTarget,
+                    onNoteOpened={searchNoteTarget=null})
             }
             else -> {
                 val contentMode = if(page==1) WorkspaceMode.TIMELINE else WorkspaceMode.LIST
@@ -267,13 +279,31 @@ fun ModernWorkspace(
         }
     }
     Box(Modifier.align(Alignment.TopCenter)
+        .fillMaxWidth()
         .padding(start=14.dp,end=14.dp,top=35.dp)){
-        WorkspaceTopbar(state,colors,mode=contentMode,dark=dark,
-            search=search,settings=settings,
-            onCredits={creditsOpen=true},
-            onScore={scoreOpen=true},
-            onPostpone={vm.postponeOverdue()},
-            canPostpone=overdue && !state.taskBusy)
+        Column(Modifier.fillMaxWidth()) {
+            WorkspaceTopbar(state,colors,mode=contentMode,dark=dark,
+                search={text->search(text);searchExpanded=text.isNotBlank()},
+                onSearchFocus={if(state.query.isNotBlank()) searchExpanded=true},
+                settings=settings,
+                onCredits={creditsOpen=true},
+                onScore={scoreOpen=true},
+                onPostpone={vm.postponeOverdue()},
+                canPostpone=overdue && !state.taskBusy)
+            if(searchExpanded && searchQuery.isNotEmpty()) {
+                Spacer(Modifier.height(7.dp))
+                NativeWorkspaceGlobalSearch(
+                    query=state.query,tasks=state.tasks,notes=state.notes,
+                    notesLoading=state.notesLoading,dark=dark,
+                    onOpenTask=onOpenTask,
+                    onOpenNote={id->
+                        searchNoteTarget=id
+                        searchPagerScope.launch{pagerState.animateScrollToPage(3)}
+                    },
+                    onDismiss={searchExpanded=false}
+                )
+            }
+        }
     }
     }
             }
@@ -392,7 +422,7 @@ fun ModernWorkspace(
 @Composable
 private fun WorkspaceTopbar(
     state:HomeState, colors:WorkspaceColors, mode:WorkspaceMode, dark:Boolean,
-    search:(String)->Unit, settings:()->Unit,
+    search:(String)->Unit, onSearchFocus:()->Unit, settings:()->Unit,
     onCredits:()->Unit, onScore:()->Unit,
     onPostpone:()->Unit, canPostpone:Boolean
 ) {
@@ -411,7 +441,9 @@ private fun WorkspaceTopbar(
                     modifier=Modifier.size(18.dp))
                 Spacer(Modifier.width(7.dp))
                 BasicTextField(value=state.query,onValueChange=search,
-                    modifier=Modifier.weight(1f),singleLine=true,
+                    modifier=Modifier.weight(1f).onFocusChanged {
+                        if(it.isFocused)onSearchFocus()
+                    },singleLine=true,
                     textStyle=MaterialTheme.typography.bodyMedium.copy(
                         color=colors.text,fontSize=14.sp),
                     cursorBrush=androidx.compose.ui.graphics.SolidColor(colors.purple),
