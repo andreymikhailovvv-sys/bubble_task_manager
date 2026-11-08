@@ -40,6 +40,7 @@ import { WorkspaceGlobalSearch } from './components/WorkspaceGlobalSearch';
 import { matchesWorkspaceText } from './lib/workspaceSearch';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
 import { noteHtmlToPlainText } from './lib/notes';
+import { readWorkspaceSnapshot, writeWorkspaceSnapshot, clearWorkspaceSnapshot } from './lib/workspaceSnapshot';
 import { LATEST_NEWS_ID, UpdatesMenu } from './components/UpdatesMenu';
 import { CalendarExportDialog } from './components/CalendarExportDialog';
 import { AutoGrowingTextarea } from './components/AutoGrowingTextarea';
@@ -823,6 +824,8 @@ function buildTimelineViewData(
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const workspaceUserIdRef = useRef<string | null>(null);
+  if (currentUser?.id) workspaceUserIdRef.current = currentUser.id;
   const browserNotificationsEnabledRef = useRef(true);
   browserNotificationsEnabledRef.current = currentUser?.browserNotificationsEnabled !== false;
   const [browserPermission, setBrowserPermission] = useState<NotificationPermission | 'unsupported'>(() => browserNotificationPermission());
@@ -945,6 +948,7 @@ export default function App() {
   const [timelineOptimizeLoading, setTimelineOptimizeLoading] = useState(false);
   const [timelineHoverCard, setTimelineHoverCard] = useState<{ taskId: string; top: number; left: number } | null>(null);
   const [isTimelineOverdueModalOpen, setIsTimelineOverdueModalOpen] = useState(false);
+  const [hoveredOverdueTaskId, setHoveredOverdueTaskId] = useState<string | null>(null);
   const [timelineOverdueBulkPostponeLoading, setTimelineOverdueBulkPostponeLoading] = useState<null | 'normal' | 'ai'>(null);
   const [postponeNotice, setPostponeNotice] = useState<{ count: number; serial: number } | null>(null);
   useEffect(() => {
@@ -966,6 +970,9 @@ export default function App() {
       document.removeEventListener('mousedown', closeOutside);
       document.removeEventListener('keydown', closeEscape);
     };
+  }, [isTimelineOverdueModalOpen]);
+  useEffect(() => {
+    if (!isTimelineOverdueModalOpen) setHoveredOverdueTaskId(null);
   }, [isTimelineOverdueModalOpen]);
   const [timelineOptimizePreviewEnabledByMode, setTimelineOptimizePreviewEnabledByMode] = useState<Record<'day'|'week'|'month', boolean>>({ day: false, week: false, month: false });
   const [timelineOptimizeStateByMode, setTimelineOptimizeStateByMode] = useState<Record<'day'|'week'|'month',{ plan: Array<{ taskId: string; dueDate: string | null }>; summary: string }>>({ day:{plan:[],summary:''}, week:{plan:[],summary:''}, month:{plan:[],summary:''} });
@@ -1395,6 +1402,10 @@ export default function App() {
     setSpheres(sphereData);
     setTasks(taskData);
     setHabits(habitData);
+    // The server is authoritative. A session snapshot is only a fast first paint.
+    if (workspaceUserIdRef.current) {
+      writeWorkspaceSnapshot(workspaceUserIdRef.current, { spheres: sphereData, tasks: taskData, habits: habitData });
+    }
   }
 
   useEffect(() => {
@@ -1509,6 +1520,10 @@ export default function App() {
   };
 
   const clearUserState = () => {
+    // Never leave another account's task snapshot available after sign-out.
+    if (workspaceUserIdRef.current) clearWorkspaceSnapshot(workspaceUserIdRef.current);
+    workspaceUserIdRef.current = null;
+    ++loadRequestIdRef.current;
     setCurrentUser(null);
     setInitialWorkspaceReady(false);
     setSpheres([]);
@@ -1567,6 +1582,15 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser) return;
+    // Display last verified server response instantly, then always refresh from
+    // the API. This does not change any task writes or cross-device syncing.
+    const snapshot = readWorkspaceSnapshot(currentUser.id);
+    if (snapshot) {
+      setSpheres(snapshot.spheres);
+      setTasks(snapshot.tasks);
+      setHabits(snapshot.habits);
+      setInitialWorkspaceReady(true);
+    }
     let live = true;
     void load()
       .catch((error) => console.error('[Workspace] initial data load failed', error))
@@ -5001,6 +5025,18 @@ export default function App() {
   const timelineOverdueTasks = [...activeTasks, ...subtasks.filter((task) => task.status !== 'DONE')]
     .filter((task) => task.taskType !== 'EVENT' && task.taskType !== 'REMINDER' && isOverdue(task))
     .sort((a, b) => (a.dueDate ? new Date(a.dueDate).getTime() : 0) - (b.dueDate ? new Date(b.dueDate).getTime() : 0));
+  const hoveredOverdueTask = hoveredOverdueTaskId ? taskById.get(hoveredOverdueTaskId) ?? null : null;
+  const hoveredOverdueBubbleTaskId = (() => {
+    let current = hoveredOverdueTask;
+    const visited = new Set<string>();
+    while (current?.parentTaskId && !visited.has(current.id)) {
+      visited.add(current.id);
+      const parent = taskById.get(current.parentTaskId);
+      if (!parent) break;
+      current = parent;
+    }
+    return current?.id ?? null;
+  })();
 
   const postponeAllOverdueToToday = async () => {
     if (timelineOverdueBulkPostponeLoading) return;
@@ -5051,6 +5087,12 @@ export default function App() {
     })()
   }));
   const timelineViewData = (() => {
+    // Bubble/list navigation must not rebuild an entire timeline on every
+    // hover, search, notification and state update.
+    if (!isTimelineMode) return {
+      title: '', tasksWithoutDate: [], tasksInRange: [],
+      dayGroups: [], hourGroups: [], monthCells: []
+    } satisfies TimelineViewData;
     try {
     return buildTimelineViewData([...timelineRenderTasks, ...timelineVisibleSubtasks], timelineAnchorDate, timelineViewMode);
     } catch (error) {
@@ -5626,7 +5668,7 @@ export default function App() {
               <ChevronDown size={13} className={isTimelineOverdueModalOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
             </button>
             {isTimelineOverdueModalOpen ? (
-              <section id="topbar-overdue-list" className="timeline-overdue-panel topbar-overdue-popover absolute right-0 top-[calc(100%+10px)] z-[85] w-[min(640px,calc(100vw-32px))] rounded-2xl border p-3 shadow-2xl" aria-label="Просроченные задачи">
+              <section id="topbar-overdue-list" className="timeline-overdue-panel topbar-overdue-popover absolute right-0 top-[calc(100%+10px)] z-[85] w-[min(360px,calc(100vw-24px))] rounded-2xl border p-3 shadow-2xl" aria-label="Просроченные задачи" onMouseLeave={() => setHoveredOverdueTaskId(null)}>
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <h4 className="text-sm font-semibold text-primary">Просроченные задачи</h4>
                   <div className="flex flex-wrap items-center gap-2">
@@ -5647,13 +5689,34 @@ export default function App() {
                   </div>
                 </div>
                 <div className="topbar-overdue-items max-h-[min(360px,55vh)] space-y-1 overflow-y-auto pr-1">
-                  {timelineOverdueTasks.map(task => renderTimelineTaskChip(task, {
-                    isSubtask: Boolean(task.parentTaskId),
-                    disableEffects: true, disableHoverCard: true,
-                    parentTaskTitle: task.parentTaskId ? (taskById.get(task.parentTaskId)?.title ?? 'Без основной задачи') : undefined
-                  }))}
+                  {timelineOverdueTasks.map(task => (
+                    <div key={task.id} className={`topbar-overdue-row ${hoveredOverdueTaskId === task.id ? 'topbar-overdue-row-active' : ''}`}
+                      onMouseEnter={() => setHoveredOverdueTaskId(task.id)}
+                      onMouseLeave={() => setHoveredOverdueTaskId((previous) => previous === task.id ? null : previous)}>
+                      {renderTimelineTaskChip(task, {
+                        isSubtask: Boolean(task.parentTaskId),
+                        disableEffects: true, disableHoverCard: true,
+                        parentTaskTitle: task.parentTaskId ? (taskById.get(task.parentTaskId)?.title ?? 'Без основной задачи') : undefined
+                      })}
+                    </div>
+                  ))}
                   {timelineOverdueTasks.length === 0 ? <p className="py-3 text-center text-sm text-subtle">Просроченных задач нет</p> : null}
                 </div>
+                {hoveredOverdueTask ? (
+                  <div className="topbar-overdue-details mt-3 rounded-xl border p-3 text-xs" role="status">
+                    <p className="break-words font-semibold text-primary">{hoveredOverdueTask.title}</p>
+                    <p className="mt-1 whitespace-pre-wrap break-words text-muted">
+                      <LinkifiedText text={(() => {
+                        const plain = noteHtmlToPlainText(hoveredOverdueTask.description ?? '', { trimEnd: true });
+                        return plain.length > 220 ? `${plain.slice(0, 220)}…` : plain;
+                      })()} fallback="Без описания" stopPropagationOnLinkClick />
+                    </p>
+                    {hoveredOverdueTask.parentTaskId ? (
+                      <p className="mt-2 text-subtle">Основная задача: {taskById.get(hoveredOverdueTask.parentTaskId)?.title ?? 'Без названия'}</p>
+                    ) : null}
+                    <p className="mt-2 text-muted">Дедлайн: {formatTaskDueDate(hoveredOverdueTask.dueDate)} · {formatDeadlineLeft(hoveredOverdueTask.dueDate)}</p>
+                  </div>
+                ) : null}
               </section>
             ) : null}
           </div>
@@ -6300,6 +6363,7 @@ export default function App() {
             </button>
             <BubbleField
               className="h-full"
+              highlightedTaskId={isTimelineOverdueModalOpen ? hoveredOverdueBubbleTaskId : null}
               fullscreen={isBubbleFullscreen}
               themeMode={effectiveThemeMode}
               showTrainingInvitation={isOnboardingOfferOpen}

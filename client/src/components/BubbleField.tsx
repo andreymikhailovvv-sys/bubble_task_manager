@@ -22,6 +22,8 @@ type Props = {
   mode: 'global' | 'sectors';
   rankingMode: BubbleRankingMode;
   selectedId?: string;
+  /** Bubble related to the hovered item in the overdue topbar. */
+  highlightedTaskId?: string | null;
   poppingTaskId?: string | null;
   hasAiNotification?: (taskId: string) => boolean;
   onSelect: (task: Task) => void;
@@ -328,6 +330,7 @@ export function BubbleField({
   onOpenTraining,
   onDismissTraining,
   themeMode = 'dark',
+  highlightedTaskId = null,
   fullscreen = false,
   className
 }: Props) {
@@ -906,10 +909,12 @@ export function BubbleField({
     const isPopping = poppingTaskId === bubble.task.id;
     const active = bubble.task.status !== 'DONE';
     const bubbleSubtasks = subtaskMap[bubble.task.id] ?? [];
-    const overdue = active && (isOverdue(bubble.task) ||
-      bubbleSubtasks.some((subtask) => subtask.status !== 'DONE' && isOverdue(subtask)));
-    // Hover only scales the bubble group. The overdue tint and reminder ring
-    // stay static, including on mouse enter (no pulsing glow).
+    const ownDeadlineOverdue = active && isOverdue(bubble.task);
+    const subtaskDeadlineOverdue = active && bubbleSubtasks.some((subtask) =>
+      subtask.status !== 'DONE' && isOverdue(subtask));
+    const isOverdueLocator = highlightedTaskId === bubble.task.id ||
+      Boolean(highlightedTaskId && bubble.task.linkedTaskIds?.includes(highlightedTaskId));
+    // Deadline tint remains static; only the temporary topbar locator pulses.
     const isHovered = hoveredTaskId === bubble.task.id;
     const isDragged = dragView?.taskId === bubble.task.id;
     const isDragTarget = dragView?.target?.targetId === bubble.task.id;
@@ -969,11 +974,15 @@ export function BubbleField({
           strokeOpacity={selectedId === bubble.task.id ? 1 : isLightTheme ? 0.78 : 0.65}
           strokeWidth={isDragTarget || isDragged ? 5 : selectedId === bubble.task.id ? 3.5 : 2.4}
         />
-        {overdue ? (
-          // A static red tint with gentle internal highlights. No red outer
-          // halo, shadow or animated glow: only the bubble's fill changes.
+        {ownDeadlineOverdue || subtaskDeadlineOverdue ? (
           <circle cx={0} cy={0} r={bubble.radius - 1.5}
-            fill="url(#overdueBubbleBlush)" stroke="none" pointerEvents="none" />
+            fill={ownDeadlineOverdue ? 'url(#overdueTaskBlush)' : 'url(#overdueSubtaskBlush)'}
+            stroke="none" pointerEvents="none" />
+        ) : null}
+        {isOverdueLocator ? (
+          <circle cx={0} cy={0} r={bubble.radius - 3} fill="none"
+            stroke={isLightTheme ? '#be123c' : '#f8fafc'}
+            className="overdue-bubble-locator" pointerEvents="none" />
         ) : null}
         {/* All tasks share the same neutral progress track. No subtasks = 0%. */}
         <circle cx={0} cy={0} r={bubble.radius + 6} fill="none"
@@ -1091,11 +1100,18 @@ export function BubbleField({
         onContextMenu={(event) => showContextMenu(event, null)}>
         <motion.g initial={false}>
           <defs>
-            <radialGradient id="overdueBubbleBlush" cx="29%" cy="23%" fx="27%" fy="21%" r="90%">
-              <stop offset="0%" stopColor="#fee2e2" stopOpacity={isLightTheme ? 0.04 : 0.03} />
-              <stop offset="32%" stopColor="#fca5a5" stopOpacity={isLightTheme ? 0.09 : 0.09} />
-              <stop offset="65%" stopColor="#fb7185" stopOpacity={isLightTheme ? 0.16 : 0.18} />
-              <stop offset="100%" stopColor="#dc2626" stopOpacity={isLightTheme ? 0.27 : 0.29} />
+            {/* Parent overdue: a restrained crimson wash across the whole bubble. */}
+            <radialGradient id="overdueTaskBlush" cx="48%" cy="43%" r="73%">
+              <stop offset="0%" stopColor="#fb7185" stopOpacity={isLightTheme ? 0.24 : 0.25} />
+              <stop offset="60%" stopColor="#f43f5e" stopOpacity={isLightTheme ? 0.32 : 0.34} />
+              <stop offset="100%" stopColor="#b91c1c" stopOpacity={isLightTheme ? 0.44 : 0.46} />
+            </radialGradient>
+            {/* Subtask overdue: crimson only around the periphery; center stays legible. */}
+            <radialGradient id="overdueSubtaskBlush" cx="50%" cy="48%" r="67%">
+              <stop offset="0%" stopColor="#fee2e2" stopOpacity="0" />
+              <stop offset="42%" stopColor="#fda4af" stopOpacity={isLightTheme ? 0.07 : 0.06} />
+              <stop offset="76%" stopColor="#fb7185" stopOpacity={isLightTheme ? 0.26 : 0.27} />
+              <stop offset="100%" stopColor="#dc2626" stopOpacity={isLightTheme ? 0.46 : 0.48} />
             </radialGradient>
             <radialGradient id="bg" cx="50%" cy="50%" r="60%">
               {isLightTheme ? (
