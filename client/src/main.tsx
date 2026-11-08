@@ -1,12 +1,14 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
-import MiniApp from './MiniApp';
-import AdminPage from './AdminPage';
+// Load only the selected route. The desktop workspace should not parse
+// Mini App, admin and public-page code before it can show the user's tasks.
+const App = React.lazy(() => import('./App'));
+const MiniApp = React.lazy(() => import('./MiniApp'));
+const AdminPage = React.lazy(() => import('./AdminPage'));
 const BusinessApp = React.lazy(() => import('./BusinessApp'));
-import PublicPages from './PublicPages';
+const PublicPages = React.lazy(() => import('./PublicPages'));
 import CookieBanner from './components/CookieBanner';
-import TelegramAuthPage from './TelegramAuthPage';
+const TelegramAuthPage = React.lazy(() => import('./TelegramAuthPage'));
 import { api } from './lib/api';
 import './styles.css';
 
@@ -92,6 +94,7 @@ const isCompactWorkspaceViewport = window.matchMedia('(max-width: 1024px)').matc
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <AppErrorBoundary>
+      <React.Suspense fallback={<main className="app-shell flex min-h-screen items-center justify-center bg-slate-950 p-4 text-slate-200">Загружаем интерфейс…</main>}>
       {isBusinessRoute
         ? <React.Suspense fallback={<main className="min-h-screen bg-slate-950 p-8 text-slate-200">Загружаем Планировыч Work…</main>}><BusinessApp /></React.Suspense>
         : isAdminRoute
@@ -105,6 +108,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             : isCompactWorkspaceViewport
               ? <MiniApp runtime="web" />
               : <App />}
+      </React.Suspense>
       {!isBusinessRoute && !isMiniAppRoute && !isTelegramAuthRoute && !isAdminRoute ? <CookieBanner /> : null}
     </AppErrorBoundary>
   </React.StrictMode>
