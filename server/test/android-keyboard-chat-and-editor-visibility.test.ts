@@ -15,9 +15,10 @@ test('AI send icon is a closed stroked contour rather than crossing lines', asyn
 });
 
 test('both AI conversations keep their composer and conversation above keyboard', async () => {
-  const [general,task]=await Promise.all([
+  const [general,task,composer]=await Promise.all([
     read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeGeneralAiChat.kt'),
-    read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeTaskAiChat.kt')
+    read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeTaskAiChat.kt'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeAiComposerInput.kt')
   ]);
   assert.match(general, /Box\(Modifier\.fillMaxSize\(\)\.background/);
   assert.doesNotMatch(general, /Box\(Modifier\.fillMaxSize\(\)\.imePadding\(\)\.background/);
@@ -25,7 +26,9 @@ test('both AI conversations keep their composer and conversation above keyboard'
   assert.match(task, /Surface\(Modifier\.fillMaxSize\(\)\.imePadding\(\)/);
   assert.match(task, /composerHeightPx\.toDp\(\)\+48\.dp/);
   assert.match(task, /Color\(0xFFF2F7FF\)/);
-  assert.match(task, /shadow\(elevation=3\.dp,shape=CircleShape/);
+  assert.match(composer, /shadow\(elevation=3\.dp,shape=shape/);
+  assert.match(task, /NativeAiComposerBar\(/);
+  assert.match(general, /NativeAiComposerBar\(/);
   assert.match(task, /MiniAppAiSendIcon\(Color\.White\)/);
 });
 
