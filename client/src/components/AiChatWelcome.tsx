@@ -4,7 +4,7 @@ import {
   AlarmClock, ArrowUpRight, BellRing, BookOpenText, CalendarClock,
   CalendarDays, CheckCheck, ChevronRight, ClipboardList, FilePenLine,
   FileSpreadsheet, FileText, Globe2, ImagePlus, ListTodo, Mail,
-  MessageCircle, NotebookPen, Search, Settings2, ShieldCheck, Sparkles,
+  MessageCircle, Search, Settings2, ShieldCheck, Sparkles,
   WandSparkles, X, type LucideIcon
 } from 'lucide-react';
 import './AiChatWelcome.css';
@@ -90,12 +90,14 @@ type Props = {
   kind: ChatKind;
   variant?: 'web' | 'miniapp';
   onOpenCheckups?: () => void;
+  themeMode?: 'dark' | 'light';
 };
 
-export function AiChatWelcome({ kind, variant = 'web', onOpenCheckups }: Props) {
+export function AiChatWelcome({ kind, variant = 'web', onOpenCheckups, themeMode }: Props) {
   const [showCapabilities, setShowCapabilities] = useState(false);
   const [integration, setIntegration] = useState<'telegram' | 'mail' | null>(null);
   const titleId = useId();
+  const resolvedTheme = themeMode ?? (typeof document !== 'undefined' && document.body.dataset.theme === 'light' ? 'light' : 'dark');
   const groups = kind === 'task' ? taskGroups : generalGroups;
 
   useEffect(() => {
@@ -106,8 +108,8 @@ export function AiChatWelcome({ kind, variant = 'web', onOpenCheckups }: Props) 
         setShowCapabilities(false);
       }
     };
-    document.addEventListener('keydown', onEscape);
-    return () => document.removeEventListener('keydown', onEscape);
+    document.addEventListener('keydown', onEscape, true);
+    return () => document.removeEventListener('keydown', onEscape, true);
   }, [showCapabilities]);
 
   const runAction = (action: Action) => {
@@ -129,7 +131,7 @@ export function AiChatWelcome({ kind, variant = 'web', onOpenCheckups }: Props) 
 
   return (
     <>
-      <section className={'ai-chat-welcome ai-chat-welcome--' + kind + ' ai-chat-welcome--' + variant} aria-label="Начало диалога с ИИ">
+      <section className={'ai-chat-welcome ai-chat-welcome--' + kind + ' ai-chat-welcome--' + variant} data-ai-theme={resolvedTheme} aria-label="Начало диалога с ИИ">
         <span className="ai-chat-welcome__icon" aria-hidden="true"><Sparkles size={26} strokeWidth={1.8} /></span>
         <strong>ИИ готов помочь</strong>
         <p>{kind === 'task'
@@ -141,7 +143,7 @@ export function AiChatWelcome({ kind, variant = 'web', onOpenCheckups }: Props) 
       </section>
 
       {showCapabilities && createPortal(
-        <div className="ai-capabilities-overlay" onMouseDown={event => {
+        <div className="ai-capabilities-overlay" data-ai-theme={resolvedTheme} onMouseDown={event => {
           if (event.target === event.currentTarget) setShowCapabilities(false);
         }}>
           <section className="ai-capabilities-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId}>
