@@ -5351,7 +5351,16 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               ) : null}
               {visibleAiChatMessages.length === 0 ? (
                 <AiChatWelcome kind="general" variant="miniapp" themeMode={effectiveMiniTheme}
-                  onOpenCheckups={() => { setIsAiChatOpen(false); setIsSettingsOpen(true); }} />
+                  onOpenCheckups={() => {
+                    setIsAiChatOpen(false);
+                    setIsSettingsOpen(true);
+                    requestAnimationFrame(() => {
+                      const section = document.querySelector<HTMLElement>('[data-tour="ai-checkup-settings"]');
+                      const toggle = section?.querySelector<HTMLButtonElement>('[aria-controls="ai-checkup-schedule-editor"]');
+                      if (toggle?.getAttribute('aria-expanded') === 'false') toggle.click();
+                      section?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    });
+                  }} />
               ) : null}
               {visibleAiChatMessages.map((message) => (
                 <div key={message.id} className={`ai-message-forward-group w-fit max-w-[88%] ${message.role === 'user' ? 'ml-auto' : 'mr-auto'}`}><div className={`miniapp-ai-chat-message miniapp-ai-chat-message-general w-full rounded-3xl px-4 py-3 ${message.role === 'user' ? 'miniapp-ai-chat-message-user rounded-br-lg' : 'miniapp-ai-chat-message-assistant rounded-bl-lg'}`}>
