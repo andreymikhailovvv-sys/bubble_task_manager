@@ -34,7 +34,7 @@ test('normal Chats AI tab access never replays the last one-shot widget input',a
     read(java+'feature/home/ModernWorkspace.kt'),
     read(java+'feature/home/NativeGeneralAiChat.kt')
   ]);
-  assert.ok(activity.includes('intent.removeExtra(EXTRA_OPEN_GENERAL_AI)'));
+  assert.ok(activity.includes('intent?.removeExtra(EXTRA_OPEN_GENERAL_AI)'));
   assert.ok(activity.includes('incoming.removeExtra(EXTRA_QUICK_AI_MODE)'));
   assert.ok(activity.includes('private fun consumeQuickAiCommand(id:Int)'));
   assert.ok(activity.includes('quickAiMode=null'));
