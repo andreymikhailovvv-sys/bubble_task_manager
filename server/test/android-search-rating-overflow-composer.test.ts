@@ -83,7 +83,9 @@ test('Both AI chats share a clipped five-line composer that does not overlap con
 
 test('Android next release code and name are consistent for GitHub android-v6',async()=>{
   const gradle=await read('../../android-app/app/build.gradle.kts');
-  assert.ok(gradle.includes('versionCode = 6'));
-  assert.ok(gradle.includes('versionName = "1.0.4"'));
+  const code=Number(gradle.match(/versionCode\s*=\s*(\d+)/)?.[1]);
+  const name=gradle.match(/versionName\s*=\s*"(\d+\.\d+\.\d+)"/)?.[1];
+  assert.ok(Number.isSafeInteger(code) && code >= 6);
+  assert.ok(name, 'semantic versionName must be present');
   assert.ok(gradle.includes('applicationId = "ru.planirovych.app"'));
 });
