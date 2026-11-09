@@ -74,20 +74,23 @@ test('mini app routes report downloads through Telegram bridge and closes comple
   assert.match(mini, /openedSubtask\.status === 'DONE' \? restoreOpenedSubtask\(openedSubtask\) : completeTask\(openedSubtask\.id\)/);
 });
 
-test('desktop task AI welcome card matches the Mini App and keeps no-results search state separate', async () => {
-  const [app, mini, shared] = await Promise.all([
+test('AI chat welcome is shared by task chats and Mini App while search no-results remains separate', async () => {
+  const [app, mini, taskWelcome, welcome, expanded] = await Promise.all([
     readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../../client/src/components/TaskAiEmptyState.tsx', import.meta.url), 'utf8')
+    readFile(new URL('../../client/src/components/TaskAiEmptyState.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/components/AiChatWelcome.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/components/ExpandedAiChat.tsx', import.meta.url), 'utf8')
   ]);
-  assert.equal((app.match(/<TaskAiEmptyState \/>/g) ?? []).length, 2);
-  assert.match(mini, /<TaskAiEmptyState variant="miniapp" \/>/);
-  assert.match(shared, /<Sparkles size=\{34\}/);
-  assert.match(shared, /ИИ готов помочь/);
-  assert.match(shared, /Спросите, как эффективнее выполнить эту задачу/);
+  assert.equal((app.match(/<TaskAiEmptyState themeMode=\{effectiveThemeMode\} \/>/g) ?? []).length, 2);
+  assert.match(mini, /<TaskAiEmptyState variant="miniapp" themeMode=\{effectiveMiniTheme\} \/>/);
+  assert.match(taskWelcome, /<AiChatWelcome kind="task"/);
+  assert.match(expanded, /<AiChatWelcome key=\{activeChat\?\.id\} kind="general"/);
+  assert.match(mini, /<AiChatWelcome kind="general" variant="miniapp"/);
+  assert.match(welcome, /ИИ готов помочь/);
+  assert.match(welcome, /Узнать возможности чата/);
   assert.match(app, /: <p className="text-xs text-subtle">Сообщения не найдены\.<\/p>/);
 });
-
 
 test('task report offer and Telegram /start use current user-facing product wording', async () => {
   const [dialog, telegram] = await Promise.all([
