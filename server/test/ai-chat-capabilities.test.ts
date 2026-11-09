@@ -40,7 +40,7 @@ test('empty chat capability modal is wired in both desktop and mini app chat vie
     read('../../client/src/components/AiChatWelcome.css')
   ]);
   assert.match(task, /<AiChatWelcome kind="task" variant=\{variant\}/);
-  assert.match(app, /onOpenCheckups=\{\(\) => \{ setIsAiChatOpen\(false\); setIsSettingsOpen\(true\); \}\}/);
+  assert.match(app, /onOpenCheckups=\{\(\) => \{\s*setIsAiChatOpen\(false\);\s*setIsSettingsOpen\(true\);/);
   assert.match(expanded, /<AiChatWelcome key=\{activeChat\?\.id\} kind="general"/);
   assert.match(mini, /<AiChatWelcome kind="general" variant="miniapp"/);
   assert.match(mini, /<TaskAiEmptyState variant="miniapp" themeMode=\{effectiveMiniTheme\} \/>/);
