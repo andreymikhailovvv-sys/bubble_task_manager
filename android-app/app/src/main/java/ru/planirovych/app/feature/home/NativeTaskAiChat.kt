@@ -445,6 +445,7 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                                 onReply={reply=ReplyTarget(message.id.orEmpty(),
                                     message.role,message.content)},
                                 proposalVm=vm,
+                                actionTaskId=task.id,actionTaskModel=model,
                                 onProposalAction={id,action,indices,finished->
                                     vm.applyTaskAiProposal(task.id,id,action,indices,finished)
                                 },
@@ -626,7 +627,8 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
     generalChat:Boolean=false,proposalVm:HomeViewModel?=null,
     taskTitles:Map<String,String> = emptyMap(),
     onOpenTaskReference:((String)->Unit)?=null,
-    onOpenMonitoredTaskAi:((String)->Unit)?=null){
+    onOpenMonitoredTaskAi:((String)->Unit)?=null,
+    actionTaskId:String?=null,actionTaskModel:String="gpt-6-luna"){
     val isUser=message.role=="user"
     val rawContent=messageDisplayContent(message.content)
     val (content,attachmentNames)=splitNativeAiMessageAttachments(rawContent)
@@ -752,9 +754,19 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                             }
                         }
                     }
-                    if(message.telegramSendDraft!=null||message.telegramReadDraft!=null)
-                        Text("Подтверждение действий Telegram доступно в Mini App.",
-                            fontSize=11.sp,color=c.secondary)
+                    // Native action cards share MiniApp's server-side
+                    // drafts, confirmation and idempotency checks.
+                    if(!isUser && !pending) proposalVm?.let { actions ->
+                        message.telegramSendDraft?.let {
+                            NativeTelegramSendCard(actions,it,c)
+                        }
+                        message.telegramReadDraft?.let {
+                            NativeTelegramReadCard(actions,it,c,actionTaskId,actionTaskModel)
+                        }
+                        message.mailSendDraft?.let {
+                            NativeMailSendCard(actions,it,c)
+                        }
+                    }
                     message.creditsSpentMilli?.takeIf{it>0}?.let{
                         Text("ИИ-кредиты: "+String.format(Locale.US,"%.3f",it/1000.0),
                             color=c.secondary,fontSize=9.sp)
