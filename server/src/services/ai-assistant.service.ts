@@ -62,6 +62,9 @@ export type ChatMessage = {
   webCitations?: TaskWebCitation[];
   generatedDocument?: GeneratedDocumentMeta;
   taskProposal?: TaskProposalView | null;
+  telegramSendDraft?: TelegramInlineSendDraft | null;
+  telegramReadDraft?: TelegramReadDraft | null;
+  mailSendDraft?: MailSendDraft | null;
 };
 type OpenAiTextMessage = {
   role: 'system' | 'user' | 'assistant';
@@ -1904,7 +1907,7 @@ export const aiAssistantService = {
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: 100,
-      select: { id: true, createdAt: true, role: true, content: true, creditsSpentMilli: true, aiTaskProposalId: true, monitoringTaskId: true, webSearchUsed: true, webSources: true, webCitations: true }
+      select: { id: true, createdAt: true, role: true, content: true, creditsSpentMilli: true, aiTaskProposalId: true, monitoringTaskId: true, webSearchUsed: true, webSources: true, webCitations: true, telegramSendDraft: true, telegramReadDraft: true, mailSendDraft: true }
     });
     messages.reverse();
 
@@ -1925,6 +1928,12 @@ export const aiAssistantService = {
         webSources: Array.isArray(message.webSources) ? message.webSources as TaskWebSource[] : [],
         webCitations: Array.isArray(message.webCitations) ? message.webCitations as TaskWebCitation[] : []
       } : {}),
+      ...(message.role === 'assistant' && message.telegramSendDraft
+        ? { telegramSendDraft: message.telegramSendDraft as TelegramInlineSendDraft } : {}),
+      ...(message.role === 'assistant' && message.telegramReadDraft
+        ? { telegramReadDraft: message.telegramReadDraft as TelegramReadDraft } : {}),
+      ...(message.role === 'assistant' && message.mailSendDraft
+        ? { mailSendDraft: message.mailSendDraft as MailSendDraft } : {}),
       ...(message.role === 'assistant' && message.creditsSpentMilli !== null ? { creditsSpentMilli: message.creditsSpentMilli } : {})
     }));
   },
@@ -1944,10 +1953,10 @@ export const aiAssistantService = {
     });
   },
 
-  appendGeneralDialogAssistantMessage: async (input: { userId: string; content: string; creditsSpentMilli: number; taskProposalId?: string | null; webSearchUsed?: boolean; webSources?: TaskWebSource[]; webCitations?: TaskWebCitation[] }) => {
+  appendGeneralDialogAssistantMessage: async (input: { userId: string; content: string; creditsSpentMilli: number; taskProposalId?: string | null; webSearchUsed?: boolean; webSources?: TaskWebSource[]; webCitations?: TaskWebCitation[]; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; mailSendDraft?: MailSendDraft | null }) => {
     const content = input.content.trim();
     if (!content) return;
-    return prisma.generalAiMessage.create({ data: { userId: input.userId, role: 'assistant', content, creditsSpentMilli: input.creditsSpentMilli, aiTaskProposalId: input.taskProposalId ?? null, webSearchUsed: input.webSearchUsed ?? false, ...(input.webSearchUsed ? { webSources: input.webSources ?? [], webCitations: input.webCitations ?? [] } : {}) } });
+    return prisma.generalAiMessage.create({ data: { userId: input.userId, role: 'assistant', content, creditsSpentMilli: input.creditsSpentMilli, aiTaskProposalId: input.taskProposalId ?? null, webSearchUsed: input.webSearchUsed ?? false, ...(input.webSearchUsed ? { webSources: input.webSources ?? [], webCitations: input.webCitations ?? [] } : {}), ...(input.telegramSendDraft ? { telegramSendDraft: { ...input.telegramSendDraft } } : {}), ...(input.telegramReadDraft ? { telegramReadDraft: { ...input.telegramReadDraft } } : {}), ...(input.mailSendDraft ? { mailSendDraft: { ...input.mailSendDraft } } : {}) } });
   },
 
   askTaskAssistant: async (input: AskTaskAssistantInput) => {
