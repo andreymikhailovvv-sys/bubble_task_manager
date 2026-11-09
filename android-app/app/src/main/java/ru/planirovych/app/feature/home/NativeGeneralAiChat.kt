@@ -69,6 +69,7 @@ private fun nativeProjectColor(value:String):Color=runCatching{
 internal fun NativeGeneralAiChatPage(
     vm:HomeViewModel,userId:String?,dark:Boolean,tasks:List<Task>,
     quickAiMode:String?=null,quickAiRequestId:Int=0,
+    onQuickAiHandled:(Int)->Unit={},
     chatVisible:Boolean=true,onExit:()->Unit,
     onOpenTask:(String)->Unit={},
     onOpenTaskAi:(String)->Unit={}
@@ -132,16 +133,19 @@ internal fun NativeGeneralAiChatPage(
         onError={message->attachError=message}
     )
     LaunchedEffect(quickAiRequestId,quickAiMode,chatVisible,thread?.id,state.loading){
-        if(quickAiRequestId<=0 || handledQuickLaunch==quickAiRequestId ||
+        if(quickAiMode==null || quickAiRequestId<=0 ||
+            handledQuickLaunch==quickAiRequestId ||
             !chatVisible || state.loading || thread?.id!=QUICK_AI_THREAD_ID ||
             isTelegram)return@LaunchedEffect
         // Wait for the current tab and its composer to be laid out.
         delay(140)
         if(quickAiMode=="voice"){
             handledQuickLaunch=quickAiRequestId
+            onQuickAiHandled(quickAiRequestId)
             speechInput()
         }else if(quickAiMode=="text"){
             handledQuickLaunch=quickAiRequestId
+            onQuickAiHandled(quickAiRequestId)
             draftFocus.requestFocus()
             keyboard?.show()
         }
