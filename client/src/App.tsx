@@ -7556,7 +7556,7 @@ export default function App() {
                   </label>
                 ) : null}
                 {filteredFocusedAiDialog.length === 0 ? (focusedAiDialog.length === 0
-                  ? <TaskAiEmptyState />
+                  ? <TaskAiEmptyState themeMode={effectiveThemeMode} />
                   : <p className="text-xs text-subtle">Сообщения не найдены.</p>) : null}
                 {filteredFocusedAiDialog.map((message, index) => (
                   <div
@@ -8362,7 +8362,7 @@ export default function App() {
                 </label>
               ) : null}
               {filteredFocusedAiDialog.length === 0 ? (focusedAiDialog.length === 0
-                ? <TaskAiEmptyState />
+                ? <TaskAiEmptyState themeMode={effectiveThemeMode} />
                 : <p className="text-sm text-subtle">Сообщения не найдены.</p>) : null}
               {filteredFocusedAiDialog.map((message, index) => (
                 <div
@@ -8815,6 +8815,17 @@ export default function App() {
           imageGenerating={aiChatLoading && (aiChatProgress === 'generating_image' || aiChatProgress === 'editing_image')}
           uploadProgress={aiChatUploadProgress}
           messageCount={activeAiChat?.messages.length ?? 0}
+          themeMode={effectiveThemeMode}
+          onOpenCheckups={() => {
+            setIsAiChatOpen(false);
+            setIsSettingsOpen(true);
+            requestAnimationFrame(() => {
+              const section = document.querySelector<HTMLElement>('[data-tour="ai-checkup-settings"]');
+              const toggle = section?.querySelector<HTMLButtonElement>('[aria-controls="ai-checkup-schedule-editor"]');
+              if (toggle?.getAttribute('aria-expanded') === 'false') toggle.click();
+              section?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
+          }}
           onClose={() => setIsAiChatOpen(false)}
           onCreateProject={openAiChatProjectDialog}
           onCreateChat={createAiChatThread}

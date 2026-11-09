@@ -8,6 +8,7 @@ import { clipboardImageFiles } from '../lib/aiClipboard';
 import { CustomSelect } from './CustomSelect';
 import type { AiChatModel } from '../lib/types';
 import { AiReplyPreview, type AiReplyTarget } from './AiMessageReply';
+import { AiChatWelcome } from './AiChatWelcome';
 
 export type ExpandedAiChatThread = { id: string; title: string; messages: unknown[] };
 export type ExpandedAiChatProject = { id: string; title: string; color: string; icon: string; chats: ExpandedAiChatThread[] };
@@ -24,6 +25,8 @@ type Props = {
   imageGenerating: boolean;
   uploadProgress?: number | null;
   messageCount: number;
+  themeMode?: 'dark' | 'light';
+  onOpenCheckups?: () => void;
   messages: ReactNode;
   status: ReactNode;
   onClose: () => void;
@@ -47,7 +50,7 @@ type Props = {
   onClearReply?: () => void;
 };
 
-export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, uploadProgress, messageCount, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend, onLiveMessage, onLiveToolResult, onLiveStatus, readOnlyStructure=false, attachmentsEnabled=true, replyTo, onClearReply }: Props) {
+export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, uploadProgress, messageCount, themeMode, onOpenCheckups, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend, onLiveMessage, onLiveToolResult, onLiveStatus, readOnlyStructure=false, attachmentsEnabled=true, replyTo, onClearReply }: Props) {
   const [draft, setDraft] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [headerHidden, setHeaderHidden] = useState(false);
@@ -213,7 +216,7 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
           <div ref={scrollRef} onScroll={handleScroll} className="ai-chat-expanded-thread">
             <div className="ai-chat-expanded-top-spacer" aria-hidden="true" />
             <div ref={threadContentRef}>
-              {messageCount === 0 ? <p className="text-sm text-subtle">Начните диалог: задайте вопрос, обсудите идею или попросите помочь с задачами.</p> : null}
+              {messageCount === 0 ? <AiChatWelcome key={activeChat?.id} kind="general" themeMode={themeMode} onOpenCheckups={onOpenCheckups} /> : null}
               {messages}{status}
             </div>
             <div className="ai-chat-expanded-bottom-spacer" aria-hidden="true" />
