@@ -32,16 +32,16 @@ import java.util.Locale
 private val actionPurple=Color(0xFF8963DF)
 private val actionCyan=Color(0xFF1AAED0)
 
-private fun JsonObject.cardString(key:String):String =
+internal fun JsonObject.cardString(key:String):String =
     (this[key] as? JsonPrimitive)?.contentOrNull.orEmpty()
-private fun JsonObject.cardObject(key:String):JsonObject?=this[key] as? JsonObject
-private fun JsonObject.cardArray(key:String):List<JsonObject> =
+internal fun JsonObject.cardObject(key:String):JsonObject?=this[key] as? JsonObject
+internal fun JsonObject.cardArray(key:String):List<JsonObject> =
     (this[key] as? JsonArray).orEmpty().mapNotNull{it as? JsonObject}
-private fun actionInk(c:TaskChatColors):Color=c.assistantText
-private fun actionMuted(c:TaskChatColors):Color=c.secondary
+internal fun actionInk(c:TaskChatColors):Color=c.assistantText
+internal fun actionMuted(c:TaskChatColors):Color=c.secondary
 
 @Composable
-private fun ActionPanel(
+internal fun ActionPanel(
     title:String,icon:androidx.compose.ui.graphics.vector.ImageVector,
     c:TaskChatColors,body:@Composable ColumnScope.()->Unit
 ) {
@@ -67,16 +67,16 @@ private fun ActionPanel(
     }
 }
 @Composable
-private fun ActionCaption(text:String,c:TaskChatColors) {
+internal fun ActionCaption(text:String,c:TaskChatColors) {
     Text(text,color=actionMuted(c),fontSize=11.sp,lineHeight=15.sp)
 }
 @Composable
-private fun ActionError(text:String,c:TaskChatColors) {
+internal fun ActionError(text:String,c:TaskChatColors) {
     if(text.isNotBlank())Text(text,color=Color(0xFFEF6488),
         fontSize=11.sp,lineHeight=16.sp)
 }
 @Composable
-private fun ActionButton(label:String,enabled:Boolean=true,busy:Boolean=false,
+internal fun ActionButton(label:String,enabled:Boolean=true,busy:Boolean=false,
     onClick:()->Unit) {
     Button(onClick=onClick,enabled=enabled&&!busy,
         modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(12.dp),
@@ -95,9 +95,9 @@ private fun telegramStatusLabel(job:JsonObject):String {
     return when(state) {
         "QUEUED","PROCESSING" -> "Отправка поставлена в очередь…"
         "DONE" -> when {
-            (job["sentCount"] as? JsonPrimitive)?.intOrNull ?: 0 > 0 ->
+            ((job["sentCount"] as? JsonPrimitive)?.intOrNull ?: 0) > 0 ->
                 "Отправлено в Telegram"
-            (job["unknownCount"] as? JsonPrimitive)?.intOrNull ?: 0 > 0 ->
+            ((job["unknownCount"] as? JsonPrimitive)?.intOrNull ?: 0) > 0 ->
                 "Результат неизвестен. Проверьте Telegram."
             else -> "Сообщение не отправлено"
         }
