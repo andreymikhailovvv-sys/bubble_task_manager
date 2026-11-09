@@ -125,7 +125,8 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
             taskProposal=item["taskProposal"] as? kotlinx.serialization.json.JsonObject,
             generatedDocument=item["generatedDocument"] as? kotlinx.serialization.json.JsonObject,
             telegramSendDraft=item["telegramSendDraft"] as? kotlinx.serialization.json.JsonObject,
-            telegramReadDraft=item["telegramReadDraft"] as? kotlinx.serialization.json.JsonObject
+            telegramReadDraft=item["telegramReadDraft"] as? kotlinx.serialization.json.JsonObject,
+            mailSendDraft=item["mailSendDraft"] as? kotlinx.serialization.json.JsonObject
         )
     }
     suspend fun registerAndroidPushDevice(installationId:String,token:String)=
@@ -134,6 +135,23 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
         })
     suspend fun unregisterAndroidPushDevice(installationId:String)=
         api.unregisterAndroidPushDevice(buildJsonObject{put("installationId",installationId)})
+
+    // Confirmed message and mail cards use this shared authenticated API.
+    suspend fun telegramSendTargets():JsonObject =
+        api.telegramSendTargets(buildJsonObject{})
+    suspend fun telegramQuickSend(payload:JsonObject):JsonObject =
+        api.telegramQuickSend(payload)
+    suspend fun telegramQuickSendStatus(requestId:String):JsonObject =
+        api.telegramQuickSendStatus(requestId)
+    suspend fun mailAccounts():JsonObject=api.mailAccounts()
+    suspend fun mailRecentRecipients():JsonObject=api.mailRecentRecipients()
+    suspend fun mailDraftStatus(id:String):JsonObject=api.mailDraftStatus(id)
+    suspend fun mailSendDraft(id:String,payload:JsonObject):JsonObject =
+        api.mailSendDraft(id,payload)
+    suspend fun mailRewriteText(text:String,instruction:String):JsonObject =
+        api.mailRewriteText(buildJsonObject{
+            put("text",text);put("instruction",instruction)
+        })
 
     suspend fun loadSystemNotifications():AndroidSystemNotificationFeed =
         api.systemNotifications()
@@ -157,7 +175,8 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
     suspend fun askGeneralAi(
         project:GeneralAiProject,thread:GeneralAiThread,
         history:List<JsonObject>,requestId:String,question:String,
-        attachments:List<TaskAiFile>,onText:(String)->Unit={},onProgress:(String)->Unit
+        attachments:List<TaskAiFile>,telegramRead:JsonObject?=null,
+        onText:(String)->Unit={},onProgress:(String)->Unit
     ):JsonObject {
         val payload=buildJsonObject {
             put("clientRequestId",requestId)
@@ -171,6 +190,7 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
             put("chatId",thread.id)
             put("clientSurface","miniapp")
             put("userTimeZone",java.time.ZoneId.systemDefault().id)
+            if(telegramRead!=null)put("telegramRead",telegramRead)
             put("history",JsonArray(if(thread.id==QUICK_AI_THREAD_ID)
                 history.filter{it.aiString("monitoringTaskId").isBlank()}.takeLast(20)
                     else history))
@@ -219,6 +239,7 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
     suspend fun sendTaskAiMessage(
         id:String,requestId:String,question:String,model:String,
         attachments:List<TaskAiFile>,userMessage:String=question,
+        telegramRead:JsonObject?=null,
         onProgress:(String)->Unit={},onText:(String)->Unit={}
     ):TaskAiReply {
         val payload=buildJsonObject {
@@ -230,6 +251,7 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
             put("clientSurface","miniapp")
             put("interactionContext","chat")
             put("userTimeZone",java.time.ZoneId.systemDefault().id)
+            if(telegramRead!=null)put("telegramRead",telegramRead)
             if(attachments.isNotEmpty())put("attachments",kotlinx.serialization.json.buildJsonArray{
                 attachments.forEach{file ->
                     add(buildJsonObject{
