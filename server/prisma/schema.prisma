@@ -869,6 +869,9 @@ model TaskAiConversationMemory {
 }
 
 model GeneralAiMessage {
+  telegramSendDraft Json?
+  telegramReadDraft Json?
+  mailSendDraft Json?
   webSearchUsed Boolean @default(false)
   webSources Json?
   webCitations Json?
