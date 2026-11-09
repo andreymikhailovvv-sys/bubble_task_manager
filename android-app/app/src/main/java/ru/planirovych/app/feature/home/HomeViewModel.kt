@@ -310,7 +310,9 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
     fun sendGeneralAi(
         projectId:String,chatId:String,requestId:String,question:String,
         messageContent:String,files:List<TaskAiFile>,model:String,
-        onDone:()->Unit={}
+        onDone:()->Unit={},
+        telegramRead:JsonObject?=null,includeUserMessage:Boolean=true,
+        onFailed:(String)->Unit={}
     ){
         val current=generalAiMutable.value
         val project=current.projects.firstOrNull{it.id==projectId} ?:return
@@ -322,13 +324,14 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
         }
         generalAiMutable.update{state->
             state.copy(busy=true,error=null,progressStatus="analyzing_request",streamText="",
-                pendingMessage=repository.readTaskAiMessage(optimistic))
+                pendingMessage=if(includeUserMessage)
+                    repository.readTaskAiMessage(optimistic) else null)
         }
         viewModelScope.launch {
             try{
                 val response=repository.askGeneralAi(project,
                     thread.copy(model=model),thread.messages,requestId,question,files,
-                    onText={text->generalAiMutable.update{state->
+                    telegramRead=telegramRead,onText={text->generalAiMutable.update{state->
                         if(state.busy)state.copy(streamText=text)else state
                     }}){status->
                     generalAiMutable.update{state->
@@ -356,7 +359,7 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                         }
                         listOf("webSearchUsed","webSources","webCitations",
                             "generatedDocument","taskProposal","telegramSendDraft",
-                            "telegramReadDraft","telegramSuggestedReply").forEach{key->
+                            "telegramReadDraft","mailSendDraft","telegramSuggestedReply").forEach{key->
                             response[key]?.let{put(key,it)}
                         }
                     }
@@ -372,7 +375,8 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                                             response.aiString("suggestedChatTitle")
                                                 .ifBlank{c.title} else c.title,
                                         messages=c.messages+
-                                            listOf(optimistic,assistant).filterNot{
+                                            (if(includeUserMessage)listOf(optimistic,assistant)
+                                                else listOf(assistant)).filterNot{
                                                 it.aiString("id") in ids
                                             })
                                 }
@@ -394,8 +398,51 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                 // prevents duplicate tool actions / credit charges.
                 generalAiMutable.update{it.copy(
                     busy=false,progressStatus=null,streamText="",pendingMessage=null,error=e.userMessage())}
+                onFailed(e.userMessage())
             }
         }
+    }
+
+    // Explicitly confirmed actions share MiniApp endpoints and durable statuses.
+    suspend fun telegramSendTargets()=repository.telegramSendTargets()
+    suspend fun telegramQuickSend(payload:JsonObject)=repository.telegramQuickSend(payload)
+    suspend fun telegramQuickSendStatus(id:String)=repository.telegramQuickSendStatus(id)
+    suspend fun mailAccounts()=repository.mailAccounts()
+    suspend fun mailRecentRecipients()=repository.mailRecentRecipients()
+    suspend fun mailDraftStatus(id:String)=repository.mailDraftStatus(id)
+    suspend fun mailSendDraft(id:String,payload:JsonObject)=repository.mailSendDraft(id,payload)
+    suspend fun mailRewriteText(text:String,instruction:String)=
+        repository.mailRewriteText(text,instruction)
+
+    fun continueGeneralAiTelegramRead(approval:JsonObject,onFinished:(String?)->Unit) {
+        val current=generalAiMutable.value
+        val project=current.project
+        val thread=current.chat
+        if(project==null || thread==null || current.busy || current.saving) {
+            onFinished("Дождитесь окончания текущего ответа ИИ")
+            return
+        }
+        sendGeneralAi(
+            project.id,thread.id,java.util.UUID.randomUUID().toString(),
+            "Продолжи предыдущий запрос по разрешённой Telegram-переписке.",
+            messageContent="",files=emptyList(),model=thread.model?:"gpt-6-luna",
+            onDone={onFinished(null)},telegramRead=approval,
+            includeUserMessage=false,onFailed={onFinished(it)}
+        )
+    }
+
+    fun continueTaskAiTelegramRead(
+        taskId:String,model:String,approval:JsonObject,onFinished:(String?)->Unit
+    ) {
+        if(taskAiMutable.value.busy || taskAiMutable.value.taskId!=taskId) {
+            onFinished("Дождитесь окончания текущего ответа ИИ")
+            return
+        }
+        sendTaskAi(taskId,java.util.UUID.randomUUID().toString(),
+            "Продолжи исходный запрос с разрешённой историей Telegram.",
+            model,attachments=emptyList(),userMessage="",
+            telegramRead=approval,
+            onSuccess={onFinished(null)},onFailed={onFinished(it)})
     }
 
     val taskAi=taskAiMutable.asStateFlow()
@@ -486,7 +533,8 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
     fun sendTaskAi(
         taskId:String,requestId:String,question:String,model:String,
         attachments:List<TaskAiFile>,
-        userMessage:String=question,onSuccess:()->Unit={}
+        userMessage:String=question,onSuccess:()->Unit={},
+        telegramRead:JsonObject?=null,onFailed:(String)->Unit={}
     ){
         if(taskAiMutable.value.busy || taskAiMutable.value.taskId!=taskId)return
         taskAiMutable.update{it.copy(busy=true,error=null,requestId=requestId,
@@ -494,7 +542,7 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
         viewModelScope.launch{
             try{
                 val reply=repository.sendTaskAiMessage(taskId,requestId,question,model,
-                    attachments,userMessage,onProgress={status->
+                    attachments,userMessage,telegramRead=telegramRead,onProgress={status->
                         taskAiMutable.update{
                             if(it.taskId==taskId && it.requestId==requestId)
                                 it.copy(progressStatus=status) else it
@@ -533,6 +581,7 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                         progressStatus=null,streamText="")
                     else it.copy(busy=false)
                 }
+                onFailed(error.userMessage())
             }
         }
     }
