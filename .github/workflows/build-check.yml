@@ -53,6 +53,8 @@ jobs:
         run: node --import tsx --test server/test/android-theme-month-parent-navigation.test.ts
       - name: Verify native Android global search, rating, utility menu and bounded AI composer
         run: node --import tsx --test server/test/android-search-rating-overflow-composer.test.ts
+      - name: Verify Android 1x1 voice widget and confirmed Telegram/mail AI cards
+        run: node --import tsx --test server/test/android-widget-telegram-mail-cards.test.ts
       - name: Verify Android List and Timeline header parity
         run: node --import tsx --test server/test/android-miniapp-workspace-header-parity.test.ts
       - name: Verify Mini App search toolbar is confined to List and Timeline

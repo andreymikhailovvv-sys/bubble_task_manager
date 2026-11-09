@@ -109,6 +109,7 @@ fun ModernWorkspace(
     pagerState: PagerState,
     quickAiMode:String?=null,
     quickAiRequestId:Int=0,
+    onQuickAiHandled:(Int)->Unit={},
     modifier: Modifier = Modifier,
 ) {
     val colors = remember(dark) { workspaceColors(dark) }
@@ -157,6 +158,7 @@ fun ModernWorkspace(
                 NativeGeneralAiChatPage(vm=vm,userId=state.user?.id,dark=dark,
                     tasks=state.tasks,quickAiMode=quickAiMode,
                     quickAiRequestId=quickAiRequestId,
+                    onQuickAiHandled=onQuickAiHandled,
                     chatVisible=pagerState.currentPage==2,
                     onExit={pagerScope.launch{pagerState.animateScrollToPage(0)}},
                     onOpenTask=onOpenTask,onOpenTaskAi=onOpenTaskAi)

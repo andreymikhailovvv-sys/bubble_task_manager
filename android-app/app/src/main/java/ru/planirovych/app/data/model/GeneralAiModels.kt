@@ -86,6 +86,7 @@ fun generalAiMessage(item:JsonObject):TaskAiChatMessage{
         webSources=sources,taskProposal=item["taskProposal"] as? JsonObject,
         generatedDocument=item["generatedDocument"] as? JsonObject,
         telegramSendDraft=item["telegramSendDraft"] as? JsonObject,
-        telegramReadDraft=item["telegramReadDraft"] as? JsonObject
+        telegramReadDraft=item["telegramReadDraft"] as? JsonObject,
+        mailSendDraft=item["mailSendDraft"] as? JsonObject
     )
 }

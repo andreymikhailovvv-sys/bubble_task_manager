@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="3dp">
+    <ImageView
+        android:id="@+id/widget_voice_only_target"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="13dp"
+        android:layout_gravity="center"
+        android:src="@drawable/ic_widget_microphone"
+        android:scaleType="fitCenter"
+        android:background="@drawable/widget_quick_ai_background"
+        android:contentDescription="Голосовой ввод в чате с ИИ"
+        android:importantForAccessibility="yes" />
+</FrameLayout>

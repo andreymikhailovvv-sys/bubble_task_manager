@@ -86,6 +86,20 @@ class MainActivity:ComponentActivity(){
         }
         openGeneralAi=quickAiMode!=null ||
             intent?.getBooleanExtra(EXTRA_OPEN_GENERAL_AI,false)==true
+        // AppWidget PendingIntents are durable. Their extras must not become
+        // sticky launch instructions after rotation, task restore or re-entry.
+        if(widgetMode!=null) intent?.let { incoming ->
+            incoming.action=null
+            incoming.removeExtra(EXTRA_QUICK_AI_MODE)
+        }
+        intent?.removeExtra(EXTRA_OPEN_GENERAL_AI)
+    }
+
+    private fun consumeQuickAiCommand(id:Int) {
+        if(id==quickAiRequestId) {
+            quickAiMode=null
+            openGeneralAi=false
+        }
     }
 
     override fun onNewIntent(intent:Intent){
@@ -152,7 +166,8 @@ class MainActivity:ComponentActivity(){
                 NavHost(navController=nav,startDestination="home"){
                     composable("home"){
                         HomeScreen(vm,dark,notificationTaskId,openGeneralAi,
-                            quickAiMode,quickAiRequestId)
+                            quickAiMode,quickAiRequestId,
+                            onQuickAiHandled=::consumeQuickAiCommand)
                     }
                 }
                 availableUpdate?.let { release ->
