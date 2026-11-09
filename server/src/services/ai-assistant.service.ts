@@ -3,7 +3,7 @@ import { deductEfficiencyPenalty } from './efficiency-rating.service.js';
 import { randomUUID } from 'node:crypto';
 import { FormData } from 'undici';
 import { openAiFetch } from '../lib/openai-fetch.js';
-import { getWebSearchProgressStatus, readOpenAiResponsesStreamWithRecovery, retrieveOpenAiResponse } from './openai-responses-stream.service.js';
+import { getWebSearchProgressStatus, readOpenAiResponsesStreamWithRecovery, retrieveOpenAiResponse, OpenAiResponseTerminalError } from './openai-responses-stream.service.js';
 import { IncrementalJsonAnswer } from './ai-stream-text.service.js';
 import { supportsReasoningEffort } from '../lib/openai-model-capabilities.js';
 import { askAiChatWithTools, AI_CHAT_OPENAI_TOOLS, AI_CHAT_WEB_SEARCH_TOOL, WEB_SEARCH_CALL_CREDITS_MILLI, type AssistantReplyToolContext } from './ai-chat-tools.service.js';
@@ -306,7 +306,10 @@ type AskTaskAssistantInput = {
   onTextReset?: () => void;
 };
 
-export const TASK_CHAT_MAX_OUTPUT_TOKENS = 4096;
+// Generous per-response safety ceiling for long document workflows. The model
+// may finish early; dynamic billing reserves at most this budget and settles
+// against actual provider usage. Previously 4096 cut off document generation.
+export const TASK_CHAT_MAX_OUTPUT_TOKENS = 65_536;
 export const TASK_CHAT_MIN_OUTPUT_TOKENS = 512;
 
 type GenerateSubtasksInput = {
@@ -2327,7 +2330,7 @@ export const aiAssistantService = {
             if (maxOutputTokens < TASK_CHAT_MIN_OUTPUT_TOKENS) throw new Error('Недостаточно AI кредитов');
           }
           const payload = createTaskChatOpenAiPayload(model, providerInput, maxOutputTokens, { reasoningEffort: reasoning, allowTools: !isForcedFinalRound, allowWebSearch, monitoringTools: monitoringEnabled, followupTools: followupToolsEnabled, forceWebSearch: forcedWebSearchRetry && allowWebSearch });
-          console.info('[AI] Sending OpenAI request', { requestId, providerCallIndex, mode: input.mode ?? 'fast', model, taskId: input.taskId, userId: input.userId });
+          console.info('[AI] Sending OpenAI request', { requestId, providerCallIndex, mode: input.mode ?? 'fast', model, taskId: input.taskId, userId: input.userId, maxOutputTokens: maxOutputTokens ?? null, billingMode: dynamicBilling ? 'dynamic' : 'legacy' });
           const openAiResponse = await openAiFetch('https://api.openai.com/v1/responses', {
             method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` }, body: JSON.stringify({ ...payload, ...(allowWebSearch ? { include: ['web_search_call.action.sources'] } : {}), stream: true })
           }, { requestId: `${requestId}:response:${providerCallIndex}`, model });
@@ -2818,6 +2821,7 @@ export const aiAssistantService = {
         });
 
         console.error('[AI] Failed to process OpenAI response', {
+          ...(normalizedError instanceof OpenAiResponseTerminalError ? { terminalStatus: normalizedError.status, terminalReason: normalizedError.reason } : {}),
           requestId,
           mode: input.mode ?? 'fast',
           model,
