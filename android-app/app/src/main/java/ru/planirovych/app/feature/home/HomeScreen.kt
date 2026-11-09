@@ -38,7 +38,8 @@ private enum class AuthMode { LOGIN, REGISTER }
 @Composable
 fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     notificationTaskId:String?=null,openGeneralAi:Boolean=false,
-    quickAiMode:String?=null,quickAiRequestId:Int=0) {
+    quickAiMode:String?=null,quickAiRequestId:Int=0,
+    onQuickAiHandled:(Int)->Unit={}) {
     val state by vm.state.collectAsStateWithLifecycle()
     val themeMode by vm.themeMode.collectAsStateWithLifecycle()
     val focusManager=LocalFocusManager.current
@@ -69,8 +70,8 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
         }
     }
     var quickNavigationHandled by remember(openGeneralAi,quickAiRequestId){mutableStateOf(false)}
-    LaunchedEffect(openGeneralAi,quickAiRequestId,sharedChat.projects){
-        if((openGeneralAi||quickAiRequestId>0) && !quickNavigationHandled){
+    LaunchedEffect(openGeneralAi,quickAiMode,quickAiRequestId,sharedChat.projects){
+        if((openGeneralAi || quickAiMode!=null) && !quickNavigationHandled){
             pagerState.scrollToPage(2)
             // Widget result and scheduled checkup alerts must open Quick Requests,
             // not whichever project conversation happened to be selected last.
@@ -118,9 +119,14 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
             settings=false
         }
     }
-    // The global create FAB overlaps the floating send button in the AI chat.
+    // Never resume a previously focused chat input just because the user
+    // switched back to Chats AI. A widget's explicit text command is different.
     LaunchedEffect(pagerState.currentPage) {
-        if(pagerState.currentPage==2)creationMenu=false
+        if(pagerState.currentPage==2) creationMenu=false
+        else {
+            focusManager.clearFocus(force=true)
+            softwareKeyboard?.hide()
+        }
     }
 
     // Never leave the previous account's task editor open after login/logout.
@@ -256,6 +262,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                 },
                 quickAiMode=quickAiMode,
                 quickAiRequestId=quickAiRequestId,
+                onQuickAiHandled=onQuickAiHandled,
                 modifier = Modifier.padding(padding),
             )
         }
