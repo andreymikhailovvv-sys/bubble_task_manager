@@ -88,9 +88,9 @@ class MainActivity:ComponentActivity(){
             intent?.getBooleanExtra(EXTRA_OPEN_GENERAL_AI,false)==true
         // AppWidget PendingIntents are durable. Their extras must not become
         // sticky launch instructions after rotation, task restore or re-entry.
-        if(widgetMode!=null) {
-            intent.action=null
-            intent.removeExtra(EXTRA_QUICK_AI_MODE)
+        if(widgetMode!=null) intent?.let { incoming ->
+            incoming.action=null
+            incoming.removeExtra(EXTRA_QUICK_AI_MODE)
         }
         intent?.removeExtra(EXTRA_OPEN_GENERAL_AI)
     }
