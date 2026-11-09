@@ -1,1 +1,1 @@
-<resources><string name="app_name">Планировыч</string><string name="widget_quick_ai_description">Полоска быстрого запроса ИИ: текст и голос</string></resources>
+<resources><string name="app_name">Планировыч</string><string name="widget_quick_ai_description">Полоска быстрого запроса ИИ: текст и голос</string><string name="widget_quick_ai_voice_only_description">Маленький виджет 1×1: сразу открыть голосовой ввод в общем чате с ИИ</string></resources>
