@@ -7,6 +7,7 @@ import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, stripAiChat
 import { NotesEditor } from './components/NotesEditor';
 import { TaskCompletionReportDialog } from './components/TaskCompletionReportDialog';
 import { TaskAiEmptyState } from './components/TaskAiEmptyState';
+import { AiChatWelcome } from './components/AiChatWelcome';
 import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
 
 import { TaskMonitoringStatuses } from './components/TaskMonitoringStatuses';
@@ -5170,7 +5171,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             <div className="miniapp-ai-chat-thread-wrap relative min-h-0 flex-1">
               <div ref={fullscreenAiDialogContainerRef} onScroll={(event) => updateAiChatHeaderVisibility(event.currentTarget.scrollTop, taskAiChatScrollTopRef, setIsTaskAiChatHeaderHidden)} className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
                 {openedTaskAiDialog.length === 0 ? (
-                  <TaskAiEmptyState variant="miniapp" />
+                  <TaskAiEmptyState variant="miniapp" themeMode={effectiveMiniTheme} />
                 ) : null}
                 {openedTaskAiDialog.map((message, index) => (
                   <div key={`mini-ai-full-${index}`} className={`ai-message-forward-group w-fit max-w-[88%] ${message.role === 'user' ? 'ml-auto' : 'mr-auto'}`}><div className={`miniapp-ai-chat-message miniapp-ai-chat-message-task w-full rounded-3xl px-4 py-3 ${message.role === 'user' ? `miniapp-ai-chat-message-user rounded-br-lg ${message.authorColor ? 'miniapp-ai-chat-message-authored' : ''}` : 'miniapp-ai-chat-message-assistant rounded-bl-lg'}`} style={message.role === 'user' && message.authorColor ? ({ '--message-author-color': message.authorColor } as CSSProperties) : undefined}>
@@ -5349,11 +5350,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 </div>
               ) : null}
               {visibleAiChatMessages.length === 0 ? (
-                <div className="miniapp-ai-chat-empty" role="status">
-                  <span className="miniapp-ai-chat-empty-icon" aria-hidden="true"><Sparkles size={34} strokeWidth={1.8} /></span>
-                  <strong>ИИ готов помочь</strong>
-                  <p>Задайте вопрос, обсудите идею или попросите составить план.</p>
-                </div>
+                <AiChatWelcome kind="general" variant="miniapp" themeMode={effectiveMiniTheme}
+                  onOpenCheckups={() => { setIsAiChatOpen(false); setIsSettingsOpen(true); }} />
               ) : null}
               {visibleAiChatMessages.map((message) => (
                 <div key={message.id} className={`ai-message-forward-group w-fit max-w-[88%] ${message.role === 'user' ? 'ml-auto' : 'mr-auto'}`}><div className={`miniapp-ai-chat-message miniapp-ai-chat-message-general w-full rounded-3xl px-4 py-3 ${message.role === 'user' ? 'miniapp-ai-chat-message-user rounded-br-lg' : 'miniapp-ai-chat-message-assistant rounded-bl-lg'}`}>
