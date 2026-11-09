@@ -110,6 +110,31 @@ interface PlanirovychApi {
     @GET("api/payments/yookassa/purchases/{id}")
     suspend fun creditPurchaseStatus(@Path("id") purchaseId:String):AiCreditPurchaseStatus
 
+    // Same first-party user-confirmed Telegram and mail actions as Mini App.
+    // No message is sent merely because a model returned a draft.
+    @Headers("Sec-Fetch-Site: same-origin")
+    @POST("api/telegram-user-client/chat/send-targets")
+    suspend fun telegramSendTargets(@Body payload:JsonObject):JsonObject
+    @Headers("Sec-Fetch-Site: same-origin")
+    @POST("api/telegram-user-client/chat/quick-send")
+    suspend fun telegramQuickSend(@Body payload:JsonObject):JsonObject
+    @GET("api/telegram-user-client/chat/quick-send/{requestId}")
+    suspend fun telegramQuickSendStatus(@Path("requestId") requestId:String):JsonObject
+
+    @GET("api/mail-assistant/accounts")
+    suspend fun mailAccounts():JsonObject
+    @GET("api/mail-assistant/recent-recipients")
+    suspend fun mailRecentRecipients():JsonObject
+    @GET("api/mail-assistant/drafts/{draftId}")
+    suspend fun mailDraftStatus(@Path("draftId") draftId:String):JsonObject
+    @Headers("Sec-Fetch-Site: same-origin")
+    @POST("api/mail-assistant/drafts/{draftId}/send")
+    suspend fun mailSendDraft(@Path("draftId") draftId:String,
+        @Body payload:JsonObject):JsonObject
+    @Headers("Sec-Fetch-Site: same-origin")
+    @POST("api/mail-assistant/quick-rewrite")
+    suspend fun mailRewriteText(@Body payload:JsonObject):JsonObject
+
     @GET("api/habits") suspend fun habits(): List<Habit>
     @POST("api/habits") suspend fun createHabit(@Body payload: JsonObject): Habit
     @POST("api/habits/{id}/complete") suspend fun completeHabit(@Path("id") id: String, @Body payload: JsonObject): Habit
