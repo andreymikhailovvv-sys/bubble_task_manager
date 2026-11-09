@@ -67,6 +67,10 @@ internal fun NativeAiComposerBar(
     controls:@Composable RowScope.()->Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
+    // Sending clears the draft from the ViewModel, not through onValueChange.
+    LaunchedEffect(value.isEmpty()) {
+        if(value.isEmpty())expanded=false
+    }
     val shape=RoundedCornerShape(if(expanded)25.dp else 50.dp)
     val update:(String)->Unit={newValue->
         if(newValue.isEmpty())expanded=false
