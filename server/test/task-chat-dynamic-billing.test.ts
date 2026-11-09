@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createTaskChatOpenAiPayload } from '../src/services/ai-assistant.service.js';
+import { createTaskChatOpenAiPayload, TASK_CHAT_MAX_OUTPUT_TOKENS } from '../src/services/ai-assistant.service.js';
+import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli } from '../src/services/ai-usage-metering.service.js';
 import { aiAssistantService } from '../src/services/ai-assistant.service.js';
 import { isDynamicTaskChatBillingEnabled } from '../src/controllers/ai.controller.js';
 import { prisma } from '../src/db/prisma.js';
@@ -16,6 +17,27 @@ test('task chat OpenAI payload включает одинаковый retrieval p
   const finalPayload = createTaskChatOpenAiPayload('gpt-6-luna', [message], 512, { allowTools: false });
   assert.equal(finalPayload.tool_choice, 'none');
   assert.equal('tools' in finalPayload, false);
+});
+
+test('document task chat uses a generous 65k output safety ceiling while reserving only an upper bound', () => {
+  const model = 'gpt-6-luna';
+  const inputTokens = 12_500;
+  assert.equal(TASK_CHAT_MAX_OUTPUT_TOKENS, 65_536);
+  const desired = calculateMaximumRequestCreditsMilli({
+    model, inputTokens, maxOutputTokens: TASK_CHAT_MAX_OUTPUT_TOKENS
+  });
+  const affordable = calculateAffordableOutputTokens(model, inputTokens, desired.outputCreditsMilli);
+  assert.ok(affordable >= TASK_CHAT_MAX_OUTPUT_TOKENS);
+  const budget = Math.min(TASK_CHAT_MAX_OUTPUT_TOKENS, affordable);
+  const payload = createTaskChatOpenAiPayload(model, [{ role: 'user', content: 'Проанализируй документ и создай новый' }], budget);
+  assert.equal(payload.max_output_tokens, 65_536);
+
+  // A smaller wallet reservation still limits spending; never promise an
+  // unbounded response that the user's available AI credits cannot cover.
+  const smallerReservation = calculateMaximumRequestCreditsMilli({ model, inputTokens, maxOutputTokens: 8_192 });
+  const limitedBudget = Math.min(TASK_CHAT_MAX_OUTPUT_TOKENS,
+    calculateAffordableOutputTokens(model, inputTokens, smallerReservation.outputCreditsMilli));
+  assert.ok(limitedBudget >= 8_192 && limitedBudget < TASK_CHAT_MAX_OUTPUT_TOKENS);
 });
 
 test('история хранит фактическую dynamic и legacy стоимость только у ответов ИИ', async () => {
