@@ -529,23 +529,14 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                             }
                         }
                     }
-                    Row(Modifier.fillMaxWidth()
-                        .shadow(elevation=3.dp,shape=CircleShape,
-                            ambientColor=Color(0x101F3F70),spotColor=Color(0x161F3F70))
-                        .clip(CircleShape)
-                        .background(if(dark)c.panel else Color.White)
-                        .border(1.dp,c.border.copy(alpha=.83f),CircleShape)
-                        .padding(horizontal=8.dp,vertical=8.dp),
-                        verticalAlignment=Alignment.Bottom,
-                        horizontalArrangement=Arrangement.spacedBy(6.dp)){
-                        NativeAiComposerInput(
-                            value=draft,
-                            onValueChange={draft=it;pendingRetry=false},
-                            modifier=Modifier.weight(1f),
-                            enabled=!busy,
-                            colors=c,
-                            placeholder="Сообщение ИИ…"
-                        )
+                    NativeAiComposerBar(
+                        value=draft,
+                        onValueChange={draft=it;pendingRetry=false},
+                        enabled=!busy,colors=c,placeholder="Сообщение ИИ…",
+                        background=if(dark)c.panel else Color.White,
+                        controlBorder=c.border,
+                        controlSpacing=6.dp
+                    ) {
                         Box(Modifier.size(44.dp).clip(CircleShape)
                             .background(if(dark)Color(0xFF253349) else Color.White)
                             .border(1.dp,c.border.copy(alpha=.88f),CircleShape)
@@ -692,18 +683,24 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                     message.monitoringTaskId?.takeIf{
                         generalChat && onOpenMonitoredTaskAi!=null
                     }?.let{monitoredTaskId->
-                        Row(Modifier.clip(RoundedCornerShape(11.dp))
-                            .background(c.accent.copy(alpha=.12f))
-                            .border(1.dp,c.accent.copy(alpha=.32f),
-                                RoundedCornerShape(11.dp))
+                        // Same compact white/ink chip as the AI task references.
+                        val light=c.assistantText.red<.5f
+                        val chipBg=if(light)Color.White else Color(0xFF1B4255)
+                        val chipInk=if(light)Color(0xFF172238) else Color(0xFFE0F7FF)
+                        val frame=RoundedCornerShape(18.dp)
+                        Row(Modifier.widthIn(max=310.dp).clip(frame)
+                            .background(chipBg)
+                            .border(1.dp,if(light)Color(0xFFDCE5EE)
+                                else Color(0xFF35778C),frame)
                             .clickable{onOpenMonitoredTaskAi?.invoke(monitoredTaskId)}
-                            .padding(horizontal=11.dp,vertical=9.dp),
-                            horizontalArrangement=Arrangement.spacedBy(7.dp),
-                            verticalAlignment=Alignment.CenterVertically){
-                            Icon(Icons.Default.OpenInNew,null,
-                                modifier=Modifier.size(15.dp),tint=c.accent)
-                            Text("Ответить в чате задачи",color=c.accent,
-                                fontWeight=FontWeight.SemiBold,fontSize=12.sp)
+                            .padding(horizontal=9.dp,vertical=5.dp),
+                            verticalAlignment=Alignment.CenterVertically,
+                            horizontalArrangement=Arrangement.spacedBy(5.dp)){
+                            Text("↗",fontSize=12.sp,color=chipInk,
+                                fontWeight=FontWeight.Bold)
+                            Text("Ответить в чате задачи",color=chipInk,
+                                fontWeight=FontWeight.SemiBold,fontSize=10.sp,
+                                maxLines=1,overflow=TextOverflow.Ellipsis)
                         }
                     }
                     if(message.messageKind=="MONITOR_ACTION"){
@@ -718,20 +715,26 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                             Text("Поиск в интернете",color=c.assistantText,
                                 fontSize=11.sp,fontWeight=FontWeight.SemiBold)
                         }
-                        if(message.webSources.isEmpty()){
+                        // MiniApp WebCitations: small underlined numbered links,
+                        // not a full-width list of article titles.
+                        val validSources=message.webSources.filter{(_,url)->
+                            Uri.parse(url).scheme.equals("https",ignoreCase=true)
+                        }
+                        if(validSources.isEmpty()){
                             Text("Поиск выполнен, но сервис не передал ссылки на источники.",
                                 color=c.secondary,fontSize=11.sp,lineHeight=15.sp)
-                        }
-                        message.webSources.take(10).forEachIndexed{index,(title,url)->
-                            if(url.startsWith("https://",ignoreCase=true)){
-                                Row(Modifier.fillMaxWidth().clickable{
-                                    runCatching{context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(url)))}
-                                },verticalAlignment=Alignment.CenterVertically){
-                                    Icon(Icons.Default.OpenInNew,null,tint=c.accent,
-                                        modifier=Modifier.size(12.dp))
-                                    Spacer(Modifier.width(5.dp))
-                                    Text("[${index+1}] "+title,color=c.accent,maxLines=2,
-                                        overflow=TextOverflow.Ellipsis,fontSize=11.sp)
+                        }else{
+                            FlowRow(horizontalArrangement=Arrangement.spacedBy(10.dp),
+                                verticalArrangement=Arrangement.spacedBy(4.dp)){
+                                validSources.forEachIndexed{index,(_,url)->
+                                    Text("[${index+1}]",
+                                        modifier=Modifier.clickable {
+                                            runCatching{context.startActivity(
+                                                Intent(Intent.ACTION_VIEW,Uri.parse(url)))}
+                                        },
+                                        color=c.assistantText,fontSize=12.sp,
+                                        textDecoration=androidx.compose.ui.text.style.TextDecoration.Underline,
+                                        maxLines=1)
                                 }
                             }
                         }
