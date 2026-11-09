@@ -501,25 +501,18 @@ internal fun NativeGeneralAiChatPage(
                     (attachError?:state.error)?.let{msg->
                         Text(msg,color=Color(0xFFFB7185),fontSize=11.sp)
                     }
-                    Row(Modifier.fillMaxWidth()
-                        .shadow(elevation=3.dp,shape=CircleShape,
-                            ambientColor=Color(0x101F3F70),spotColor=Color(0x161F3F70))
-                        .clip(CircleShape)
-                        .background(if(dark)c.panel else Color.White)
-                        .border(1.dp,c.border.copy(alpha=.83f),CircleShape)
-                        .padding(horizontal=8.dp,vertical=8.dp),
-                        verticalAlignment=Alignment.Bottom,
-                        horizontalArrangement=Arrangement.spacedBy(5.dp)){
-                        NativeAiComposerInput(
-                            value=draft,
-                            onValueChange={draft=it;lastRequestHadError=false},
-                            modifier=Modifier.weight(1f).focusRequester(draftFocus),
-                            enabled=!isBusy&&!isTelegram,
-                            colors=c,
-                            placeholder=if(isTelegram)
-                                "Чат Telegram управляется ассистентом"
-                                else "Напишите сообщение…"
-                        )
+                    NativeAiComposerBar(
+                        value=draft,
+                        onValueChange={draft=it;lastRequestHadError=false},
+                        enabled=!isBusy&&!isTelegram,colors=c,
+                        placeholder=if(isTelegram)
+                            "Чат Telegram управляется ассистентом"
+                            else "Напишите сообщение…",
+                        background=if(dark)c.panel else Color.White,
+                        controlBorder=c.border,
+                        focusModifier=Modifier.focusRequester(draftFocus),
+                        controlSpacing=5.dp
+                    ) {
                         Box(Modifier.size(44.dp).clip(CircleShape)
                             .background(if(dark)Color(0xFF253349) else Color.White)
                             .border(1.dp,c.border.copy(alpha=.88f),CircleShape)

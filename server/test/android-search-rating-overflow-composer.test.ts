@@ -61,7 +61,7 @@ test('Android overflow menu renders large utility cards with live badges',async(
   assert.ok(s.includes('moreOpen=false;settings()'));
 });
 
-test('Both AI chats share a clipped five-line composer that does not overlap controls',async()=>{
+test('Both AI chats use a stable expanding five-line composer without overlap',async()=>{
   const [shared,general,task]=await Promise.all([
     read(base+'NativeAiComposerInput.kt'),
     read(base+'NativeGeneralAiChat.kt'),
@@ -72,9 +72,14 @@ test('Both AI chats share a clipped five-line composer that does not overlap con
   assert.ok(shared.includes('minLines=1'));
   assert.ok(shared.includes('max=124.dp'));
   assert.ok((shared.match(/clipToBounds\(\)/g)||[]).length>=2);
-  assert.ok(general.includes('NativeAiComposerInput('));
-  assert.ok(task.includes('NativeAiComposerInput('));
-  assert.ok(general.includes('modifier=Modifier.weight(1f).focusRequester(draftFocus)'));
+  assert.ok(shared.includes('NativeAiComposerBar('));
+  assert.ok(shared.includes('onTextLayout={if(it.lineCount>1)onWrapped()}'));
+  assert.ok(shared.includes('if(!expanded)'));
+  assert.ok(shared.includes('if(expanded)'));
+  assert.ok(shared.includes('content=controls'));
+  assert.ok(general.includes('NativeAiComposerBar('));
+  assert.ok(task.includes('NativeAiComposerBar('));
+  assert.ok(general.includes('focusModifier=Modifier.focusRequester(draftFocus)'));
   assert.ok(general.includes('onValueChange={draft=it;lastRequestHadError=false}'));
   assert.ok(task.includes('onValueChange={draft=it;pendingRetry=false}'));
   assert.ok(!general.includes('BasicTextField(value=draft'));
@@ -88,4 +93,20 @@ test('Android next release code and name are consistent for GitHub android-v6',a
   assert.ok(Number.isSafeInteger(code) && code >= 6);
   assert.ok(name, 'semantic versionName must be present');
   assert.ok(gradle.includes('applicationId = "ru.planirovych.app"'));
+});
+
+test('Android web sources and monitored task buttons use MiniApp compact chips',async()=>{
+  const [bubble,web,rich]=await Promise.all([
+    read(base+'NativeTaskAiChat.kt'),
+    read('../../client/src/components/WebCitations.tsx'),
+    read(base+'NativeTaskAiRichText.kt')
+  ]);
+  assert.ok(bubble.includes('FlowRow('),'web links wrap instead of clipping');
+  assert.ok(bubble.includes('Text("[${index+1}]"'),'only short numbered links are rendered');
+  assert.ok(bubble.includes('TextDecoration.Underline'),'source links underlined');
+  assert.ok(!bubble.includes('message.webSources.take(10).forEachIndexed'));
+  assert.ok(web.includes('flex-wrap'));
+  assert.ok(bubble.includes('Text("Ответить в чате задачи",color=chipInk'));
+  assert.ok(bubble.includes('Row(Modifier.widthIn(max=310.dp).clip(frame)'));
+  assert.ok(rich.includes('val chipBg=if(light)Color.White else Color(0xFF1B4255)'));
 });

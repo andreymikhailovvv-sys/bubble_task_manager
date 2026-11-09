@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Planirovych calendar outline, based on the launcher foreground. -->
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="5.6" android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M40,31 H35 Q29,31 29,38 V75 Q29,81 35,81 H74 Q80,81 80,75 V39 Q80,32 74,32 H69" />
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="5.6" android:strokeLineCap="round"
+        android:pathData="M42,25 V36 M66,25 V36 M48,32 H60" />
+    <!-- White capsule and lower U-shaped microphone stem. -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M54,43 C50.7,43 48.2,45.5 48.2,48.8 V57.2 C48.2,60.5 50.7,63 54,63 C57.3,63 59.8,60.5 59.8,57.2 V48.8 C59.8,45.5 57.3,43 54,43 Z" />
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="4.4" android:strokeLineCap="round"
+        android:pathData="M43,56 V58 C43,64.5 47.6,69 54,69 C60.4,69 65,64.5 65,58 V56 M54,69 V75 M47,75 H61" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M81,23 C82,29 84,31 90,32 C84,33 82,35 81,41 C80,35 78,33 72,32 C78,31 80,29 81,23 Z" />
+</vector>

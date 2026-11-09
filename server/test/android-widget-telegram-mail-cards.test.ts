@@ -20,7 +20,7 @@ test('1x1 voice-only widget is separately registered and requests a fresh voice 
   assert.match(metadata,/targetCellHeight="1"/);
   assert.match(metadata,/resizeMode="none"/);
   assert.match(layout,/widget_voice_only_target/);
-  assert.match(layout,/ic_widget_microphone/);
+  assert.match(layout,/ic_widget_voice_planirovych/);
   assert.match(widget,/MainActivity\.QUICK_AI_VOICE/);
   assert.match(widget,/FLAG_ACTIVITY_SINGLE_TOP/);
   assert.match(widget,/FLAG_UPDATE_CURRENT or PendingIntent\.FLAG_IMMUTABLE/);
@@ -107,9 +107,47 @@ test('mail card is editable but only submits after confirmation and checks SMTP 
   assert.ok(api.includes('api/mail-assistant/recent-recipients'));
 });
 
-test('next Android release is 1.0.5 with increasing versionCode=7',async()=>{
+test('next Android release is 1.0.6 with increasing versionCode=8',async()=>{
   const gradle=await read('../../android-app/app/build.gradle.kts');
-  assert.ok(gradle.includes('versionCode = 7'));
-  assert.ok(gradle.includes('versionName = "1.0.5"'));
+  assert.ok(gradle.includes('versionCode = 8'));
+  assert.ok(gradle.includes('versionName = "1.0.6"'));
   assert.ok(gradle.includes('applicationId = "ru.planirovych.app"'));
+});
+
+test('Quick AI persists Telegram and mail cards in the server-owned chat history',async()=>{
+  const [schema,migration,service,controller,general]=await Promise.all([
+    read('../../server/prisma/schema.prisma'),
+    read('../../server/prisma/migrations/20261110001500_general_ai_action_drafts/migration.sql'),
+    read('../../server/src/services/ai-assistant.service.ts'),
+    read('../../server/src/controllers/ai.controller.ts'),
+    read(java+'data/model/GeneralAiModels.kt')
+  ]);
+  const model=schema.slice(schema.indexOf('model GeneralAiMessage {'),
+    schema.indexOf('\n}',schema.indexOf('model GeneralAiMessage {')));
+  const reader=service.slice(service.indexOf('listGeneralDialog:'),
+    service.indexOf('appendGeneralDialogMessages:'));
+  const writer=service.slice(service.indexOf('appendGeneralDialogAssistantMessage:'),
+    service.indexOf('askTaskAssistant:'));
+  for(const field of ['telegramSendDraft','telegramReadDraft','mailSendDraft']){
+    assert.ok(model.includes(field+' Json?'),field+' schema');
+    assert.ok(migration.includes('"'+field+'" JSONB'),field+' migration');
+    assert.ok(reader.includes(field+': true'),field+' history select');
+    assert.ok(reader.includes(field+': message.'+field),field+' history mapping');
+    assert.ok(writer.includes('input.'+field),field+' persistence');
+    assert.ok(controller.includes(field+': result.'+field),field+' controller');
+    assert.ok(general.includes(field+'=item["'+field+'"]'),field+' Android general mapping');
+  }
+});
+
+test('voice widget uses Planirovych calendar gradient and readable microphone',async()=>{
+  const [layout,art,bg]=await Promise.all([
+    read(main+'res/layout/widget_quick_ai_voice_only.xml'),
+    read(main+'res/drawable/ic_widget_voice_planirovych.xml'),
+    read(main+'res/drawable/widget_voice_favicon_background.xml')
+  ]);
+  assert.ok(layout.includes('@drawable/ic_widget_voice_planirovych'));
+  assert.ok(layout.includes('@drawable/widget_voice_favicon_background'));
+  assert.ok(art.includes('M54,43'));
+  assert.ok(art.includes('calendar outline'));
+  assert.ok(bg.includes('#05B9F3')&&bg.includes('#AF08F4'));
 });
