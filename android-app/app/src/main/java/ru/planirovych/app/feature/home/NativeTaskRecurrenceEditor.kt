@@ -1,5 +1,8 @@
 package ru.planirovych.app.feature.home
 
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
+
 import android.app.TimePickerDialog
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -194,6 +197,7 @@ internal fun NativeTaskRecurrenceEditor(
                 color=muted,fontSize=11.sp)
         }else{
             OutlinedTextField(value=prompt,onValueChange=onPrompt,
+                keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                 label={Text(if(isEvent)"Как повторяется событие"
                     else "Как повторяется задача")},
                 placeholder={Text("Каждый вторник в 17:00")},
