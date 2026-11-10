@@ -149,7 +149,7 @@ internal fun NativeTimelineWorkspace(
     hostScroll:LazyListState,active:Boolean
 ){
     var entryEpoch by remember{mutableIntStateOf(0)}
-    var nowRowWindowY by remember{mutableStateOf<Float?>(null)}
+    var observedHour by remember{mutableStateOf<Pair<String,Float>?>(null)}
     var centeredKey by remember{mutableStateOf("")}
     val density=LocalDensity.current
     val screenConfig=LocalConfiguration.current
@@ -163,10 +163,9 @@ internal fun NativeTimelineWorkspace(
     var zoom by rememberSaveable{mutableStateOf(TimelineZoom.DAY)}
     var anchorRaw by rememberSaveable{mutableStateOf(LocalDate.now().toString())}
     val anchor=runCatching{LocalDate.parse(anchorRaw)}.getOrDefault(LocalDate.now())
-    LaunchedEffect(zoom,anchorRaw,entryEpoch){nowRowWindowY=null}
     val scrollKey="$entryEpoch-${zoom.name}-$anchorRaw"
-    LaunchedEffect(active,zoom,anchorRaw,entryEpoch,nowRowWindowY){
-        val y=nowRowWindowY
+    LaunchedEffect(active,zoom,anchorRaw,entryEpoch,observedHour){
+        val y=observedHour?.takeIf{it.first==scrollKey}?.second
         if(active&&zoom==TimelineZoom.DAY&&anchor==LocalDate.now()&&
             y!=null&&centeredKey!=scrollKey){
             centeredKey=scrollKey
@@ -274,7 +273,7 @@ internal fun NativeTimelineWorkspace(
         }
         when(zoom){
             TimelineZoom.DAY->TimelineDay(anchor,tasks,allTasks,habits,spheres,colors,dark,onOpen,onOpenHabit,
-                onNowHourPosition={nowRowWindowY=it})
+                onNowHourPosition={observedHour=scrollKey to it})
             TimelineZoom.WEEK->TimelineWeek(start,tasks,allTasks,habits,spheres,colors,dark,
                 onOpen,onOpenHabit=onOpenHabit,active=active,entryEpoch=entryEpoch,
                 openDay={anchorRaw=it.toString();zoom=TimelineZoom.DAY})
