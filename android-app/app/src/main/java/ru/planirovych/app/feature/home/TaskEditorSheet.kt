@@ -1,5 +1,8 @@
 package ru.planirovych.app.feature.home
 
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
+
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.foundation.BorderStroke
@@ -197,6 +200,7 @@ fun TaskEditorSheet(
                     textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     minLines = 1,
                     maxLines = 3,
+                    keyboardOptions = KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                     enabled = !busy,
                     shape = RoundedCornerShape(16.dp),
                 )
@@ -226,6 +230,7 @@ fun TaskEditorSheet(
                     label = { Text("Описание / заметки") },
                     minLines = 4,
                     maxLines = 10,
+                    keyboardOptions = KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                     enabled = !busy,
                     shape = RoundedCornerShape(16.dp),
                 )
@@ -234,6 +239,7 @@ fun TaskEditorSheet(
                     if (task?.taskType == TaskType.EVENT) {
                         OutlinedTextField(
                             value = location, onValueChange = { location = it },
+                            keyboardOptions = KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("Место события") },
                             enabled = !busy,
