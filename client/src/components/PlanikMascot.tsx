@@ -217,14 +217,14 @@ export function PlanikMascot({
         </g>
 
         <g className="planik-hover">
-          <g className="planik-hover-left" ref={leftHand}>
+          <g className="planik-hover-left"><g ref={leftHand}>
             <path d="M129 194Q141 219 170 224" fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round" />
             <circle cx="170" cy="224" r="10" fill="#b2aaff" />
-          </g>
-          <g className="planik-hover-right" ref={rightHand}>
+          </g></g>
+          <g className="planik-hover-right"><g ref={rightHand}>
             <path d="M303 194Q283 218 254 225" fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round" />
             <circle cx="254" cy="225" r="10" fill="#b2aaff" />
-          </g>
+          </g></g>
         </g>
       </svg>
     </span>
