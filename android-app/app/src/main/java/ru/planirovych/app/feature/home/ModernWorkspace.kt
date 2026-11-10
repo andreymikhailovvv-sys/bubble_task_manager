@@ -277,7 +277,8 @@ fun ModernWorkspace(
         } else item {
             NativeTimelineWorkspace(rootTasks, state.tasks, state.habits,
                 state.spheres, colors, dark, onOpenTask,
-                onOpenHabit={selectedHabitId=it})
+                onOpenHabit={selectedHabitId=it},
+                hostScroll=workspaceScroll,active=pagerState.currentPage==1)
         }
     }
     Box(Modifier.align(Alignment.TopCenter)
