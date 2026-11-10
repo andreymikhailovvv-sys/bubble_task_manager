@@ -1,5 +1,8 @@
 package ru.planirovych.app.feature.home
 
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
+
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Intent
@@ -187,6 +190,7 @@ fun MiniAppSubtaskEditorSheet(
                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.Top,
                     horizontalArrangement=Arrangement.spacedBy(7.dp)){
                     BasicTextField(value=title,onValueChange={title=it;onClearError()},
+                        keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                         modifier=Modifier.weight(1f)
                             .focusRequester(titleFocus).padding(top=4.dp,end=3.dp),
                         textStyle=TextStyle(color=c.ink,fontSize=24.sp,lineHeight=29.sp,
