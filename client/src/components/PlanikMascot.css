@@ -220,7 +220,20 @@ body[data-theme='light'] .planik-ground-shadow {
 .planik-task-editor-companion {
   left: calc(50% + 24rem + .75rem);
 }
-@media (max-width: 1439px) {
+/* On ordinary laptop-sized desktops reserve just enough room at the
+   notes board's right edge without obscuring note cards or clipping Planik. */
+@media (min-width: 1200px) and (max-width: 1439px) {
+  .standalone-notes-backdrop:not(.standalone-notes-mobile) .standalone-notes-board {
+    max-width: min(72rem, calc(100vw - 232px));
+  }
+  .planik-notes-companion {
+    left: calc(50% + min(36rem, calc(50vw - 116px)) + .4rem);
+    width: 108px;
+    height: 96px;
+  }
+  .planik-notes-companion .planik-mascot--sidekick { width: 108px; height: 96px; }
+}
+@media (max-width: 1199px) {
   .planik-notes-companion { display: none; }
 }
 @media (max-width: 1139px) {
