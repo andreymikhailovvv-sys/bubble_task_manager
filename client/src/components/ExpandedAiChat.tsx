@@ -57,6 +57,7 @@ type Props = {
 
 export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, uploadProgress, messageCount, themeMode, notificationCount=0, celebrationKey=0, progress, showPlanik=false, onOpenCheckups, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend, onLiveMessage, onLiveToolResult, onLiveStatus, readOnlyStructure=false, attachmentsEnabled=true, replyTo, onClearReply }: Props) {
   const [draft, setDraft] = useState('');
+  const [typingSignal, setTypingSignal] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [headerHidden, setHeaderHidden] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -226,7 +227,7 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
             </div>
             <div className="ai-chat-expanded-bottom-spacer" aria-hidden="true" />
           </div>
-          {showPlanik ? <div className="planik-composer-float"><PlanikMascot size="composer" notificationCount={notificationCount} typingText={draft} busy={loading} progress={progress} celebrationKey={celebrationKey} /></div> : null}
+          {showPlanik ? <div className="planik-composer-float"><PlanikMascot size="composer" notificationCount={notificationCount} typingSignal={typingSignal} busy={loading} progress={progress} celebrationKey={celebrationKey} /></div> : null}
           <div ref={composerRef} className="ai-chat-expanded-composer-wrap">
             {replyTo ? <AiReplyPreview target={replyTo} onDismiss={onClearReply} /> : null}
             {attachmentsEnabled&&<AiAttachmentTiles files={pendingFiles} onRemove={onRemoveFile} busy={loading} uploadProgress={uploadProgress} />}
@@ -235,7 +236,12 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
                 if(!attachmentsEnabled)return;
                 const files = clipboardImageFiles(event.clipboardData);
                 if (files.length > 0) { event.preventDefault(); onAddFiles(files); }
-              }} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); submit(); } }} placeholder="Напишите сообщение…" />{attachmentsEnabled&&<input ref={fileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { onAddFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} />}{attachmentsEnabled&&<button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted" aria-label="Прикрепить файл" onClick={() => fileInputRef.current?.click()}><Paperclip size={17} /></button>}<VoiceInputButton liveContext={activeChat?.id ? { type: 'chat', projectId: activeProject?.id, chatId: activeChat.id, projectTitle: activeProject?.title, chatTitle: activeChat.title, model, history: (activeChat.messages as Array<{ id?: string; role?: string; content?: string }>).filter(item => (item.role === 'user' || item.role === 'assistant') && typeof item.content === 'string').map(item => ({ id: item.id || '', role: item.role as 'user' | 'assistant', content: item.content! })) } : undefined} onLiveMessage={onLiveMessage} onLiveToolResult={onLiveToolResult} onLiveStatus={onLiveStatus} disabled={loading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
+              }} onKeyDown={(event) => {
+                if (!event.ctrlKey && !event.metaKey && !event.altKey && (event.key.length === 1 || event.key === 'Backspace' || event.key === 'Delete')) {
+                  setTypingSignal((signal) => signal + 1);
+                }
+                if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); submit(); }
+              }} placeholder="Напишите сообщение…" />{attachmentsEnabled&&<input ref={fileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { onAddFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} />}{attachmentsEnabled&&<button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted" aria-label="Прикрепить файл" onClick={() => fileInputRef.current?.click()}><Paperclip size={17} /></button>}<VoiceInputButton liveContext={activeChat?.id ? { type: 'chat', projectId: activeProject?.id, chatId: activeChat.id, projectTitle: activeProject?.title, chatTitle: activeChat.title, model, history: (activeChat.messages as Array<{ id?: string; role?: string; content?: string }>).filter(item => (item.role === 'user' || item.role === 'assistant') && typeof item.content === 'string').map(item => ({ id: item.id || '', role: item.role as 'user' | 'assistant', content: item.content! })) } : undefined} onLiveMessage={onLiveMessage} onLiveToolResult={onLiveToolResult} onLiveStatus={onLiveStatus} disabled={loading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
     const next = [draft.trim(), text].filter(Boolean).join(' ');
     setDraft(next);
     if (immediate && !loading) { onSend(next); setDraft(''); }

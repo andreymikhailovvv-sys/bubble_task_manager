@@ -561,7 +561,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
               )}
             </div>
           </section>
-          {mode === 'widget' ? (
+          {mode === 'widget' && !editing ? (
             <div className="planik-notes-companion" aria-hidden="true">
               <PlanikMascot size="sidekick" />
             </div>

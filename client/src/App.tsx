@@ -1176,6 +1176,7 @@ export default function App() {
   const [aiChatPendingFiles, setAiChatPendingFiles] = useState<File[]>([]);
   const [aiChatUploadProgress, setAiChatUploadProgress] = useState<number | null>(null);
   const [quickAiChatDraft, setQuickAiChatDraft] = useState('');
+  const [quickAiTypingSignal, setQuickAiTypingSignal] = useState(0);
   const [planikCelebrationKey, setPlanikCelebrationKey] = useState(0);
   const [quickAiPendingFiles, setQuickAiPendingFiles] = useState<File[]>([]);
   const [quickAiChatLoading, setQuickAiChatLoading] = useState(false);
@@ -8651,7 +8652,7 @@ export default function App() {
         onHoverChange={hovered => { setQuickAiPreviewHovered(hovered); if(hovered){ scheduleQuickAiChatScrollToBottom(); markSystemNotificationsRead(); } }}
         onFocus={scheduleQuickAiChatScrollToBottom}
       >
-        <div className={`absolute bottom-[108px] right-0 w-80 transition duration-200 ${forceQuickAiPreviewOpen ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none translate-y-2 opacity-0 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100'}`}>
+        <div className={`planik-quick-ai-preview absolute bottom-[108px] right-0 w-80 transition duration-200 ${forceQuickAiPreviewOpen ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none translate-y-2 opacity-0 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100'}`}>
           <div data-tour="quick-ai" className="dialog-surface rounded-3xl border p-3 shadow-2xl backdrop-blur transition duration-200 hover:shadow-violet-500/20">
             <div ref={quickAiChatDialogContainerRef} className="quick-ai-chat-messages mb-2 max-h-72 overflow-y-auto overflow-x-hidden pr-1 text-xs" onScroll={(event) => {
                 const container = event.currentTarget;
@@ -8687,7 +8688,12 @@ export default function App() {
             {replyToQuickAi ? <AiReplyPreview target={replyToQuickAi} onDismiss={() => setReplyToQuickAi(null)} compact /> : null}
             <AiAttachmentTiles files={quickAiPendingFiles} onRemove={file => setQuickAiPendingFiles(previous => previous.filter(item => item !== file))} busy={quickAiChatLoading} uploadProgress={aiChatUploadProgress} />
             <div className="flex items-end gap-2">
-              <AutoGrowingTextarea maxHeight={144} className="form-field min-h-9 min-w-0 flex-1 resize-none rounded-2xl border px-3 py-2 text-sm leading-5 transition focus:ring-2 focus:ring-violet-300" value={quickAiChatDraft} onChange={(e) => setQuickAiChatDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); setQuickAiPendingFiles(previous => [...previous, ...files].slice(0, MAX_AI_ATTACHMENTS)); } }} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void sendAiChatQuestion(true); } }} placeholder="Спросить быстро…" />
+              <AutoGrowingTextarea maxHeight={144} className="form-field min-h-9 min-w-0 flex-1 resize-none rounded-2xl border px-3 py-2 text-sm leading-5 transition focus:ring-2 focus:ring-violet-300" value={quickAiChatDraft} onChange={(e) => setQuickAiChatDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); setQuickAiPendingFiles(previous => [...previous, ...files].slice(0, MAX_AI_ATTACHMENTS)); } }} onKeyDown={(e) => {
+                if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete')) {
+                  setQuickAiTypingSignal((signal) => signal + 1);
+                }
+                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void sendAiChatQuestion(true); }
+              }} placeholder="Спросить быстро…" />
               <VoiceInputButton liveContext={{ type: 'chat', projectId: aiChatProjects[0]?.id, chatId: QUICK_AI_CHAT_ID, projectTitle: aiChatProjects[0]?.title, chatTitle: 'Быстрые запросы', model: quickAiChatModel }}
     onLiveMessage={event => aiChatProjects[0] && appendLiveProjectMessage(aiChatProjects[0].id, QUICK_AI_CHAT_ID, event)}
     onLiveToolResult={event => aiChatProjects[0] && applyLiveProjectTool(aiChatProjects[0].id, QUICK_AI_CHAT_ID, event)}
@@ -8706,7 +8712,7 @@ export default function App() {
           aria-label="Открыть общий чат с ИИ"
           onClick={() => { setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}
         >
-          <PlanikMascot notificationCount={unreadSystemNotificationCount} typingText={quickAiChatDraft} busy={quickAiChatLoading} progress={aiChatProgress} celebrationKey={planikCelebrationKey} />
+          <PlanikMascot notificationCount={unreadSystemNotificationCount} typingSignal={quickAiTypingSignal} busy={quickAiChatLoading} progress={aiChatProgress} celebrationKey={planikCelebrationKey} />
         </button>
       </QuickAiLauncherFrame>
 
