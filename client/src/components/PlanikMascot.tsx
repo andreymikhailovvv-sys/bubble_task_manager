@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import './PlanikMascot.css';
 
 type PlanikMode = 'idle' | 'hover' | 'typing' | 'thinking' | 'searching' | 'celebrating';
@@ -14,7 +14,7 @@ const POPPER_CONFETTI = Array.from({ length: 24 }, (_, index) => ({
 
 type Props = {
   notificationCount?: number;
-  typingText?: string;
+  typingSignal?: number;
   busy?: boolean;
   progress?: string | null;
   celebrationKey?: number;
@@ -29,7 +29,7 @@ type Props = {
  */
 export function PlanikMascot({
   notificationCount = 0,
-  typingText = '',
+  typingSignal = 0,
   busy = false,
   progress,
   celebrationKey = 0,
@@ -40,23 +40,23 @@ export function PlanikMascot({
   const [typing, setTyping] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
-  const priorDraft = useRef(typingText);
+  const priorTypingSignal = useRef(typingSignal);
+  const svgRef = useRef<SVGSVGElement>(null);
   const priorCelebration = useRef(celebrationKey);
   const leftEye = useRef<SVGGElement>(null);
   const rightEye = useRef<SVGGElement>(null);
   const leftHand = useRef<SVGGElement>(null);
   const rightHand = useRef<SVGGElement>(null);
 
-  // Show typing only while text is actually being entered, not indefinitely
-  // for a nonempty draft the user left on screen.
+  // A real keydown signal starts typing; a focused input or a prefilled
+  // draft does not. Each additional key resets the short idle timeout.
   useEffect(() => {
-    if (priorDraft.current === typingText) return;
-    priorDraft.current = typingText;
-    if (!typingText.trim()) { setTyping(false); return; }
+    if (priorTypingSignal.current === typingSignal) return;
+    priorTypingSignal.current = typingSignal;
     setTyping(true);
-    const timer = window.setTimeout(() => setTyping(false), 1000);
+    const timer = window.setTimeout(() => setTyping(false), 520);
     return () => window.clearTimeout(timer);
-  }, [typingText]);
+  }, [typingSignal]);
 
   useEffect(() => {
     if (celebrationKey === priorCelebration.current) return;
@@ -75,14 +75,14 @@ export function PlanikMascot({
   const count = Math.max(0, Math.floor(Number.isFinite(notificationCount) ? notificationCount : 0));
   const badgeText = count > 99 ? '99+' : String(count);
 
-  const gaze = (x: number, y: number) => {
+  const gaze = useCallback((x: number, y: number) => {
     const transform = `translate(${x.toFixed(1)} ${y.toFixed(1)})`;
     leftEye.current?.setAttribute('transform', transform);
     rightEye.current?.setAttribute('transform', transform);
     // During a shy greeting both hands reach gently toward the pointer.
     leftHand.current?.setAttribute('transform', `translate(${(x * 0.8).toFixed(1)} ${(y * 0.7).toFixed(1)})`);
     rightHand.current?.setAttribute('transform', `translate(${(x * 0.8).toFixed(1)} ${(y * 0.7).toFixed(1)})`);
-  };
+  }, []);
 
   useEffect(() => {
     if (mode === 'searching') gaze(-9, 5);
@@ -91,13 +91,35 @@ export function PlanikMascot({
     else if (mode !== 'hover') gaze(0, 0);
   }, [mode]);
 
-  const followPointer = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (mode !== 'hover' && mode !== 'idle') return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = Math.max(-5, Math.min(5, (event.clientX - rect.left - rect.width * .49) / Math.max(1, rect.width) * 16));
-    const y = Math.max(-4, Math.min(4, (event.clientY - rect.top - rect.height * .52) / Math.max(1, rect.height) * 13));
-    gaze(x, y);
-  };
+  // Follow the cursor anywhere in the working area, including empty space
+  // and modal surfaces. Only the eyes move while idle; the reaching-hands
+  // animation still needs a pointer directly over Planik.
+  // One rAF per pointer frame avoids React rerenders on every move.
+  useEffect(() => {
+    if (mode !== 'idle' && mode !== 'hover') return;
+    if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+    let frame = 0;
+    let pointerX = 0;
+    let pointerY = 0;
+    const update = () => {
+      frame = 0;
+      const rect = svgRef.current?.getBoundingClientRect();
+      if (!rect?.width || !rect.height) return;
+      const x = Math.max(-5, Math.min(5, (pointerX - (rect.left + rect.width / 2)) / rect.width * 12));
+      const y = Math.max(-4, Math.min(4, (pointerY - (rect.top + rect.height / 2)) / rect.height * 10));
+      gaze(x, y);
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      pointerX = event.clientX;
+      pointerY = event.clientY;
+      if (!frame) frame = window.requestAnimationFrame(update);
+    };
+    document.addEventListener('pointermove', onPointerMove, { passive: true });
+    return () => {
+      document.removeEventListener('pointermove', onPointerMove);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [mode, gaze]);
 
   return (
     <span
@@ -109,13 +131,13 @@ export function PlanikMascot({
     >
       <span className="planik-ground-shadow" aria-hidden="true" />
       <svg
+        ref={svgRef}
         className="planik-svg"
         viewBox="35 32 345 275"
         xmlns="http://www.w3.org/2000/svg"
         aria-hidden="true"
         onPointerEnter={() => setHovered(true)}
-        onPointerMove={followPointer}
-        onPointerLeave={() => { setHovered(false); gaze(0, 0); }}
+        onPointerLeave={() => setHovered(false)}
       >
         <defs>
           <linearGradient id={`planik-body-${gradientSuffix}`} x1="125" y1="75" x2="300" y2="250" gradientUnits="userSpaceOnUse">
