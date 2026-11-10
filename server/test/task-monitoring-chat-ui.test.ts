@@ -188,7 +188,7 @@ test('web Planik fires confetti and flash in sync with a stationary shadow and l
   assert.match(styles, /animation: planik-confetti-burst [^;\n]* calc\(\.55s \+ var\(--planik-stagger/);
   assert.match(styles, /planik-ground-shadow\s*\{[\s\S]{0,500}position:\s*absolute/);
   assert.match(styles, /body\[data-theme='light'\] \.planik-body-stop-start/);
-  assert.match(notes, /mode === 'widget' \? \([\s\S]*?planik-notes-companion/);
+  assert.match(notes, /mode === 'widget' && !editing \? \([\s\S]*?planik-notes-companion/);
   assert.match(editor, /showPlanik=\{!task\?\.id && !externalSubtask\}/);
   assert.match(frame, /showPlanik \? <div className="planik-task-editor-companion"/);
 });
@@ -209,7 +209,30 @@ test('personal modal Planik companions stay bottom-right and react to cursor hov
   assert.match(positioning, /pointer-events:\s*auto;/);
   assert.doesNotMatch(positioning, /top:\s*50%|pointer-events:\s*none/);
   assert.match(mascot, /onPointerEnter=\{\(\) => setHovered\(true\)\}/);
-  assert.match(mascot, /onPointerMove=\{followPointer\}/);
+  assert.match(mascot, /document\.addEventListener\('pointermove', onPointerMove/);
   assert.match(notes, /className="planik-notes-companion"/);
   assert.match(frame, /className="planik-task-editor-companion"[^>]*onClick=\{event=>event\.stopPropagation\(\)\}/);
+});
+
+
+test('Planik modal hover reveals the SAME quick chat panel and typing responds to keys only', async () => {
+  const [app, expanded, mascot, mascotStyles] = await Promise.all([
+    read('../../client/src/App.tsx'),
+    read('../../client/src/components/ExpandedAiChat.tsx'),
+    read('../../client/src/components/PlanikMascot.tsx'),
+    read('../../client/src/components/PlanikMascot.css')
+  ]);
+  assert.match(app, /planik-quick-ai-preview absolute bottom-\[108px\]/);
+  assert.match(app, /sendAiChatQuestion\(true\)/);
+  assert.match(mascotStyles, /body:has\(\.planik-notes-companion, \.planik-task-editor-companion\)/);
+  assert.match(mascotStyles, /body:has\(\.planik-notes-companion:hover, \.planik-task-editor-companion:hover\)/);
+  assert.match(mascotStyles, /\.ai-chat-launcher:not\(\.work-ai-launcher\) \.planik-quick-ai-preview/);
+  assert.match(mascotStyles, /\.ai-chat-launcher:not\(\.work-ai-launcher\):focus-within \.planik-quick-ai-preview/);
+  assert.match(app, /setQuickAiTypingSignal\(\(signal\) => signal \+ 1\)/);
+  assert.match(expanded, /setTypingSignal\(\(signal\) => signal \+ 1\)/);
+  assert.match(mascot, /document\.addEventListener\('pointermove', onPointerMove, \{ passive: true \}\)/);
+  assert.match(mascot, /window\.requestAnimationFrame\(update\)/);
+  assert.match(mascot, /typingSignal = 0/);
+  assert.match(mascot, /setTyping\(false\), 520/);
+  assert.doesNotMatch(mascot, /typingText|priorDraft/);
 });
