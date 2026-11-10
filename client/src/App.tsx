@@ -53,6 +53,7 @@ import { AI_TOUR_STEPS, FEATURE_TOUR_STEPS, TASK_TOUR_STEPS, WORKSPACE_TOUR_STEP
 import { useCreditPurchase } from './lib/useCreditPurchase';
 import { ExpandedAiChat } from './components/ExpandedAiChat';
 import { QuickAiLauncherFrame } from './components/QuickAiLauncherFrame';
+import { PlanikMascot } from './components/PlanikMascot';
 import { FocusedTaskWindowFrame } from './components/FocusedTaskWindowFrame';
 import { FocusedSubtaskComposer } from './components/FocusedSubtaskComposer';
 import { AiModelChip } from './components/AiModelChip';
@@ -1175,6 +1176,7 @@ export default function App() {
   const [aiChatPendingFiles, setAiChatPendingFiles] = useState<File[]>([]);
   const [aiChatUploadProgress, setAiChatUploadProgress] = useState<number | null>(null);
   const [quickAiChatDraft, setQuickAiChatDraft] = useState('');
+  const [planikCelebrationKey, setPlanikCelebrationKey] = useState(0);
   const [quickAiPendingFiles, setQuickAiPendingFiles] = useState<File[]>([]);
   const [quickAiChatLoading, setQuickAiChatLoading] = useState(false);
   const [quickAiPreviewHovered, setQuickAiPreviewHovered] = useState(false);
@@ -4185,6 +4187,7 @@ export default function App() {
     setPoppingTaskId(task.id);
     await new Promise((resolve) => setTimeout(resolve, 680));
     await api.updateTask(task.id, { status: 'DONE', collaborationScope: scope ?? 'me' });
+    setPlanikCelebrationKey((key) => key + 1);
     void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneTask, 'task');
     if (isFocusBonusEligible(task.id)) pushFocusBonusMessage('task', EFFICIENCY_BONUSES.doneTask * (FOCUS_BONUS_MULTIPLIERS.task - 1));
     unmarkTaskAsClosing(task.id);
@@ -4265,6 +4268,7 @@ export default function App() {
     }
     await api.updateTask(subtask.id, { status: nextStatus });
     if (nextStatus === 'DONE') {
+      setPlanikCelebrationKey((key) => key + 1);
       void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneSubtask, 'task');
       if (isFocusBonusEligible(subtask.parentTaskId)) pushFocusBonusMessage('subtask', EFFICIENCY_BONUSES.doneSubtask * (FOCUS_BONUS_MULTIPLIERS.subtask - 1));
     }
@@ -8647,7 +8651,7 @@ export default function App() {
         onHoverChange={hovered => { setQuickAiPreviewHovered(hovered); if(hovered){ scheduleQuickAiChatScrollToBottom(); markSystemNotificationsRead(); } }}
         onFocus={scheduleQuickAiChatScrollToBottom}
       >
-        <div className={`absolute bottom-14 right-0 w-80 transition duration-200 ${forceQuickAiPreviewOpen ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none translate-y-2 opacity-0 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100'}`}>
+        <div className={`absolute bottom-[86px] right-0 w-80 transition duration-200 ${forceQuickAiPreviewOpen ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none translate-y-2 opacity-0 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100'}`}>
           <div data-tour="quick-ai" className="dialog-surface rounded-3xl border p-3 shadow-2xl backdrop-blur transition duration-200 hover:shadow-violet-500/20">
             <div ref={quickAiChatDialogContainerRef} className="quick-ai-chat-messages mb-2 max-h-72 overflow-y-auto overflow-x-hidden pr-1 text-xs" onScroll={(event) => {
                 const container = event.currentTarget;
@@ -8697,12 +8701,12 @@ export default function App() {
         </div>
         <button
           type="button"
-          className="ai-chat-launcher-button flex h-14 w-14 touch-none select-none items-center justify-center rounded-full text-2xl text-white shadow-2xl transition duration-200 hover:scale-105 hover:shadow-violet-500/40 active:scale-95"
+          className="planik-launcher-button touch-none select-none"
           title="Чат с ИИ"
+          aria-label="Открыть общий чат с ИИ"
           onClick={() => { setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}
         >
-          {unreadSystemNotificationCount > 0 ? <span className="absolute -left-1 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-rose-500 px-1 text-[10px] font-bold leading-none text-white shadow-lg">{unreadSystemNotificationCount > 99 ? '99+' : unreadSystemNotificationCount}</span> : null}
-          ✦
+          <PlanikMascot notificationCount={unreadSystemNotificationCount} typingText={quickAiChatDraft} busy={quickAiChatLoading} progress={aiChatProgress} celebrationKey={planikCelebrationKey} />
         </button>
       </QuickAiLauncherFrame>
 
@@ -8816,6 +8820,9 @@ export default function App() {
           uploadProgress={aiChatUploadProgress}
           messageCount={activeAiChat?.messages.length ?? 0}
           themeMode={effectiveThemeMode}
+          notificationCount={unreadSystemNotificationCount}
+          celebrationKey={planikCelebrationKey}
+          progress={aiChatProgress}
           onOpenCheckups={() => {
             setIsAiChatOpen(false);
             setIsSettingsOpen(true);
