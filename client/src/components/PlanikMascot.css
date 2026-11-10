@@ -235,3 +235,36 @@ body[data-theme='light'] .planik-ground-shadow {
 @media (max-width: 1139px) {
   .planik-task-editor-companion { display: none; }
 }
+
+/* The modal companions use the same live Quick AI hover panel as the
+   workspace launcher. While a personal modal is open, elevate the one
+   existing launcher above its backdrop. Keep its duplicate avatar invisible:
+   the visible clickable/hoverable avatar is the modal companion. */
+body:has(.planik-notes-companion, .planik-task-editor-companion)
+  .ai-chat-launcher:not(.work-ai-launcher) {
+  z-index: 280 !important;
+  right: max(1.5rem, env(safe-area-inset-right)) !important;
+  bottom: max(2rem, env(safe-area-inset-bottom)) !important;
+  pointer-events: none;
+}
+body:has(.planik-notes-companion, .planik-task-editor-companion)
+  .ai-chat-launcher:not(.work-ai-launcher) .planik-launcher-button {
+  visibility: hidden;
+  pointer-events: none;
+}
+/* Hover over the modal mascot opens the original shared quick-chat popover.
+   The popup overlaps its top edge slightly, so moving into the popup
+   preserves the regular .group:hover boundary and does not dismiss it. */
+body:has(.planik-notes-companion:hover, .planik-task-editor-companion:hover)
+  .ai-chat-launcher:not(.work-ai-launcher) .planik-quick-ai-preview,
+body:has(.planik-notes-companion, .planik-task-editor-companion)
+  .ai-chat-launcher:not(.work-ai-launcher):focus-within .planik-quick-ai-preview {
+  pointer-events: auto;
+  opacity: 1;
+  transform: translateY(0);
+}
+/* Do not let the normal absolute popup offset create a gap from the sidekick. */
+body:has(.planik-notes-companion, .planik-task-editor-companion)
+  .ai-chat-launcher:not(.work-ai-launcher) .planik-quick-ai-preview {
+  bottom: 108px;
+}
