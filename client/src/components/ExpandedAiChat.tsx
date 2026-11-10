@@ -9,6 +9,7 @@ import { CustomSelect } from './CustomSelect';
 import type { AiChatModel } from '../lib/types';
 import { AiReplyPreview, type AiReplyTarget } from './AiMessageReply';
 import { AiChatWelcome } from './AiChatWelcome';
+import { PlanikMascot } from './PlanikMascot';
 
 export type ExpandedAiChatThread = { id: string; title: string; messages: unknown[] };
 export type ExpandedAiChatProject = { id: string; title: string; color: string; icon: string; chats: ExpandedAiChatThread[] };
@@ -26,6 +27,9 @@ type Props = {
   uploadProgress?: number | null;
   messageCount: number;
   themeMode?: 'dark' | 'light';
+  notificationCount?: number;
+  celebrationKey?: number;
+  progress?: string;
   onOpenCheckups?: () => void;
   messages: ReactNode;
   status: ReactNode;
@@ -50,7 +54,7 @@ type Props = {
   onClearReply?: () => void;
 };
 
-export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, uploadProgress, messageCount, themeMode, onOpenCheckups, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend, onLiveMessage, onLiveToolResult, onLiveStatus, readOnlyStructure=false, attachmentsEnabled=true, replyTo, onClearReply }: Props) {
+export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, uploadProgress, messageCount, themeMode, notificationCount=0, celebrationKey=0, progress, onOpenCheckups, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend, onLiveMessage, onLiveToolResult, onLiveStatus, readOnlyStructure=false, attachmentsEnabled=true, replyTo, onClearReply }: Props) {
   const [draft, setDraft] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [headerHidden, setHeaderHidden] = useState(false);
@@ -222,6 +226,7 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
             <div className="ai-chat-expanded-bottom-spacer" aria-hidden="true" />
           </div>
           <div ref={composerRef} className="ai-chat-expanded-composer-wrap">
+             <div className="planik-composer-float"><PlanikMascot size="composer" notificationCount={notificationCount} typingText={draft} busy={loading} progress={progress} celebrationKey={celebrationKey} /></div>
             {replyTo ? <AiReplyPreview target={replyTo} onDismiss={onClearReply} /> : null}
             {attachmentsEnabled&&<AiAttachmentTiles files={pendingFiles} onRemove={onRemoveFile} busy={loading} uploadProgress={uploadProgress} />}
             <div className="ai-chat-composer flex items-end gap-2 rounded-3xl border p-2"><AutoGrowingTextarea className="max-h-32 min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2.5 text-sm leading-6 focus:outline-none focus:ring-0" value={draft} onChange={(event) => setDraft(event.target.value)}
