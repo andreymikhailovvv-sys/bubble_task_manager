@@ -154,14 +154,18 @@ internal fun NativeTimelineWorkspace(
     val density=LocalDensity.current
     val screenConfig=LocalConfiguration.current
     val centerPx=with(density){(screenConfig.screenHeightDp.dp*.48f).toPx()}
+    var zoom by rememberSaveable{mutableStateOf(TimelineZoom.DAY)}
+    var anchorRaw by rememberSaveable{mutableStateOf(LocalDate.now().toString())}
     LaunchedEffect(active){
         if(active){
+            // Each fresh visit to Timeline starts on the user's current date,
+            // rather than a previously browsed day/week. Manual navigation
+            // while the tab remains open is left untouched.
+            if(zoom!=TimelineZoom.MONTH)anchorRaw=LocalDate.now().toString()
             entryEpoch++
             hostScroll.scrollToItem(0)
         }
     }
-    var zoom by rememberSaveable{mutableStateOf(TimelineZoom.DAY)}
-    var anchorRaw by rememberSaveable{mutableStateOf(LocalDate.now().toString())}
     val anchor=runCatching{LocalDate.parse(anchorRaw)}.getOrDefault(LocalDate.now())
     val scrollKey="$entryEpoch-${zoom.name}-$anchorRaw"
     LaunchedEffect(active,zoom,anchorRaw,entryEpoch,observedHour){
