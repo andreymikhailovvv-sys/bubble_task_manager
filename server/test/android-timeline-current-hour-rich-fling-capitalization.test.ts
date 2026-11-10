@@ -19,6 +19,7 @@ test('Day timeline centers a measured current-time marker through its parent lis
   assert.ok(timeline.includes('hostScroll.scrollBy(y-centerPx)'));
   assert.ok(timeline.includes('centeredKey!=scrollKey'));
   assert.ok(timeline.includes('hostScroll.scrollToItem(0)'));
+  assert.ok(timeline.includes('if(zoom!=TimelineZoom.MONTH)anchorRaw=LocalDate.now().toString()'));
   assert.ok(workspace.includes('hostScroll=workspaceScroll,active=pagerState.currentPage==1'));
 });
 
