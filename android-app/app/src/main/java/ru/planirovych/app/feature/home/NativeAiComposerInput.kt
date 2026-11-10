@@ -5,6 +5,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +34,7 @@ internal fun NativeAiComposerInput(
         onTextLayout={if(it.lineCount>1)onWrapped()},
         modifier=modifier.heightIn(min=44.dp,max=124.dp).clipToBounds(),
         enabled=enabled,
+        keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
         singleLine=false,
         minLines=1,
         maxLines=5,
