@@ -22,6 +22,8 @@ import androidx.compose.foundation.shape.*
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -641,6 +643,7 @@ internal fun NativeGeneralAiChatPage(
         AlertDialog(onDismissRequest={renameTarget=null},
             title={Text("Переименовать чат")},
             text={OutlinedTextField(rename,onValueChange={rename=it},
+                keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                 modifier=Modifier.fillMaxWidth(),singleLine=true,
                 label={Text("Название")})},
             confirmButton={TextButton(onClick={
@@ -714,6 +717,7 @@ private fun GeneralAiProjectForm(initial:GeneralAiProject?,
                 Text(if(initial==null)"Новый проект" else "Настройка проекта",
                     color=c.text,fontSize=18.sp,fontWeight=FontWeight.Bold)
                 OutlinedTextField(value=title,onValueChange={title=it},
+                    keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                     modifier=Modifier.fillMaxWidth(),
                     label={Text("Название")},singleLine=true)
                 Text("Цвет",color=c.secondary,fontSize=12.sp)
