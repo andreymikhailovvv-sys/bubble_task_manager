@@ -77,6 +77,20 @@ test('monitoring unread events light up Planik phone without duplicate chat bubb
   assert.match(app, /markSystemNotificationsRead\(\)/);
 });
 
+
+test('Planik overlays the fullscreen composer without moving its input bar', async () => {
+  const [expanded, mascotCss, appCss] = await Promise.all([
+    read('../../client/src/components/ExpandedAiChat.tsx'),
+    read('../../client/src/components/PlanikMascot.css'),
+    read('../../client/src/styles.css')
+  ]);
+  assert.match(expanded, /className="planik-composer-float"[\s\S]{0,320}<\/div> : null\}\s*<div ref=\{composerRef\}/);
+  assert.match(appCss, /\.ai-chat-expanded-composer-wrap\s*\{[^}]*position:\s*absolute/);
+  assert.doesNotMatch(mascotCss, /\.ai-chat-expanded-composer-wrap\s*\{\s*position:\s*relative/);
+  assert.match(mascotCss, /bottom:\s*calc\(0\.75rem \+ var\(--ai-composer-height/);
+  assert.match(mascotCss, /\.planik-mascot--launcher\s*\{\s*width:\s*120px/);
+});
+
 test('expanded task chat has monitoring control to the left of clear button, not floating below icons', async () => {
   const app = await read('../../client/src/App.tsx');
   const expanded = app.slice(app.indexOf('focused-task-ai-expanded-panel relative'), app.indexOf('<AiModelChip value={focusedAiModel}', app.indexOf('focused-task-ai-expanded-panel relative')));
