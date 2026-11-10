@@ -16,9 +16,13 @@ import android.text.style.UnderlineSpan
 import android.text.style.URLSpan
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.ViewConfiguration
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
+import android.text.InputType
 import android.widget.EditText
+import android.widget.OverScroller
 import androidx.compose.foundation.*
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -56,37 +60,101 @@ private class RichNativeEditText(context:Context):EditText(context) {
     private var startPointerX=0f
     private var startPointerY=0f
     private var draggingContent=false
-    private val touchSlop=ViewConfiguration.get(context).scaledTouchSlop
+    private val gestureConfig=ViewConfiguration.get(context)
+    private val touchSlop=gestureConfig.scaledTouchSlop
+    private val minFlingVelocity=gestureConfig.scaledMinimumFlingVelocity
+    private val maxFlingVelocity=gestureConfig.scaledMaximumFlingVelocity
+    private val flingScroller=OverScroller(context)
+    private var velocityTracker:VelocityTracker?=null
 
-    // Keep native cursor placement/selection, while giving long text a faster
-    // vertical gesture. Apply extra scroll only for clearly vertical drags.
+    private fun maxScrollY():Int {
+        val contentHeight=layout?.height?:return 0
+        val visibleHeight=(height-compoundPaddingTop-compoundPaddingBottom)
+            .coerceAtLeast(0)
+        return (contentHeight-visibleHeight).coerceAtLeast(0)
+    }
+
+    // AndroidView must own the fling inside long descriptions and notes.
+    // Manual scrollBy on ACTION_MOVE alone stops dead on ACTION_UP.
     override fun onTouchEvent(event:MotionEvent):Boolean {
-        when(event.actionMasked){
-            MotionEvent.ACTION_DOWN->{
-                startPointerX=event.x;startPointerY=event.y
-                lastPointerY=event.y;draggingContent=false
-            }
-            MotionEvent.ACTION_MOVE->{
-                val dx=kotlin.math.abs(event.x-startPointerX)
-                val dy=kotlin.math.abs(event.y-startPointerY)
-                draggingContent=draggingContent ||
-                    (dy>touchSlop && dy>dx*1.3f)
-                val previous=lastPointerY
+        when(event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                flingScroller.forceFinished(true)
+                velocityTracker?.recycle()
+                velocityTracker=VelocityTracker.obtain()
+                startPointerX=event.x
+                startPointerY=event.y
                 lastPointerY=event.y
-                val consumed=super.onTouchEvent(event)
-                if(draggingContent && selectionStart==selectionEnd && canScrollVertically(
-                        if(previous>event.y)1 else -1)) {
-                    scrollBy(0,((previous-event.y)*1.2f).toInt())
-                }
-                return consumed
+                draggingContent=false
             }
-            MotionEvent.ACTION_UP,MotionEvent.ACTION_CANCEL->draggingContent=false
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                draggingContent=false
+                velocityTracker?.clear()
+            }
         }
-        return super.onTouchEvent(event)
+        velocityTracker?.addMovement(event)
+        if(event.actionMasked==MotionEvent.ACTION_MOVE){
+            val dx=kotlin.math.abs(event.x-startPointerX)
+            val dy=kotlin.math.abs(event.y-startPointerY)
+            draggingContent=draggingContent || (dy>touchSlop && dy>dx*1.3f)
+            val delta=lastPointerY-event.y
+            lastPointerY=event.y
+            if(draggingContent && selectionStart==selectionEnd) {
+                val direction=if(delta>0f)1 else -1
+                // Release the outer Compose sheet when this editor reaches an edge.
+                parent?.requestDisallowInterceptTouchEvent(
+                    canScrollVertically(direction))
+            }
+            val consumed=super.onTouchEvent(event)
+            if(draggingContent && selectionStart==selectionEnd &&
+                canScrollVertically(if(delta>0)1 else -1)) {
+                scrollBy(0,(delta*.25f).toInt())
+            }
+            return consumed
+        }
+        val consumed=super.onTouchEvent(event)
+        if(event.actionMasked==MotionEvent.ACTION_UP){
+            if(draggingContent && selectionStart==selectionEnd){
+                velocityTracker?.computeCurrentVelocity(1000,maxFlingVelocity.toFloat())
+                val fingerVelocity=velocityTracker?.yVelocity?:0f
+                val contentVelocity=-fingerVelocity
+                val direction=if(contentVelocity>0)1 else -1
+                val maxY=maxScrollY()
+                if(kotlin.math.abs(contentVelocity)>minFlingVelocity &&
+                    maxY>0 && canScrollVertically(direction)) {
+                    flingScroller.fling(0,scrollY,0,contentVelocity.toInt(),
+                        0,0,0,maxY)
+                    postInvalidateOnAnimation()
+                }
+            }
+            parent?.requestDisallowInterceptTouchEvent(false)
+            draggingContent=false
+            velocityTracker?.recycle()
+            velocityTracker=null
+        }else if(event.actionMasked==MotionEvent.ACTION_CANCEL){
+            parent?.requestDisallowInterceptTouchEvent(false)
+            draggingContent=false
+            velocityTracker?.recycle()
+            velocityTracker=null
+        }
+        return consumed
+    }
+
+    override fun computeScroll(){
+        super.computeScroll()
+        if(flingScroller.computeScrollOffset()){
+            scrollTo(0,flingScroller.currY.coerceIn(0,maxScrollY()))
+            postInvalidateOnAnimation()
+        }
     }
 
     init {
         setSingleLine(false)
+        // The IME, not the app, inserts sentence-initial capital letters.
+        inputType=inputType or InputType.TYPE_CLASS_TEXT or
+            InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+            InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        imeOptions=EditorInfo.IME_ACTION_NONE
         gravity=Gravity.TOP or Gravity.START
         setPadding(15.dpPx(),13.dpPx(),15.dpPx(),18.dpPx())
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
