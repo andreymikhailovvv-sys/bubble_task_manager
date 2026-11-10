@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Typeface
 import android.text.Editable
 import android.text.Html
+import android.text.InputType
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.TextWatcher
@@ -16,9 +17,11 @@ import android.text.style.UnderlineSpan
 import android.text.style.URLSpan
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.OverScroller
 import androidx.compose.foundation.*
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -56,37 +59,84 @@ private class RichNativeEditText(context:Context):EditText(context) {
     private var startPointerX=0f
     private var startPointerY=0f
     private var draggingContent=false
-    private val touchSlop=ViewConfiguration.get(context).scaledTouchSlop
+    private val touchConfiguration=ViewConfiguration.get(context)
+    private val touchSlop=touchConfiguration.scaledTouchSlop
+    private val flingScroller=OverScroller(context)
+    private var velocityTracker:VelocityTracker?=null
 
-    // Keep native cursor placement/selection, while giving long text a faster
-    // vertical gesture. Apply extra scroll only for clearly vertical drags.
+    private fun maxVerticalScroll():Int =
+        ((layout?.height ?: 0)+totalPaddingTop+totalPaddingBottom-height).coerceAtLeast(0)
+
+    override fun computeScroll(){
+        super.computeScroll()
+        if(flingScroller.computeScrollOffset()){
+            scrollTo(scrollX,flingScroller.currY.coerceIn(0,maxVerticalScroll()))
+            postInvalidateOnAnimation()
+        }
+    }
+
+    // AndroidView lives inside Compose scrollable sheets. Handle a vertical drag
+    // once (not additionally to TextView's own movement), then let the native
+    // OverScroller animate the fling after the finger has been lifted.
+    // Horizontal gestures and long-press selection stay with EditText.
     override fun onTouchEvent(event:MotionEvent):Boolean {
         when(event.actionMasked){
             MotionEvent.ACTION_DOWN->{
+                flingScroller.forceFinished(true)
+                velocityTracker?.recycle()
+                velocityTracker=VelocityTracker.obtain()
                 startPointerX=event.x;startPointerY=event.y
                 lastPointerY=event.y;draggingContent=false
             }
             MotionEvent.ACTION_MOVE->{
+                velocityTracker?.addMovement(event)
                 val dx=kotlin.math.abs(event.x-startPointerX)
                 val dy=kotlin.math.abs(event.y-startPointerY)
-                draggingContent=draggingContent ||
-                    (dy>touchSlop && dy>dx*1.3f)
-                val previous=lastPointerY
-                lastPointerY=event.y
-                val consumed=super.onTouchEvent(event)
-                if(draggingContent && selectionStart==selectionEnd && canScrollVertically(
-                        if(previous>event.y)1 else -1)) {
-                    scrollBy(0,((previous-event.y)*1.2f).toInt())
+                if(!draggingContent && selectionStart==selectionEnd &&
+                    dy>touchSlop && dy>dx*1.3f && maxVerticalScroll()>0){
+                    draggingContent=true
+                    parent?.requestDisallowInterceptTouchEvent(true)
                 }
-                return consumed
+                if(draggingContent){
+                    val delta=(lastPointerY-event.y).toInt()
+                    scrollTo(scrollX,(scrollY+delta).coerceIn(0,maxVerticalScroll()))
+                    lastPointerY=event.y
+                    return true
+                }
+                lastPointerY=event.y
             }
-            MotionEvent.ACTION_UP,MotionEvent.ACTION_CANCEL->draggingContent=false
+            MotionEvent.ACTION_UP->{
+                velocityTracker?.addMovement(event)
+                if(draggingContent){
+                    velocityTracker?.computeCurrentVelocity(
+                        1000,touchConfiguration.scaledMaximumFlingVelocity.toFloat())
+                    val velocity=velocityTracker?.yVelocity ?: 0f
+                    if(kotlin.math.abs(velocity)>touchConfiguration.scaledMinimumFlingVelocity){
+                        flingScroller.fling(scrollX,scrollY,0,-velocity.toInt(),
+                            scrollX,scrollX,0,maxVerticalScroll())
+                        postInvalidateOnAnimation()
+                    }
+                    draggingContent=false
+                    velocityTracker?.recycle()
+                    velocityTracker=null
+                    return true
+                }
+                velocityTracker?.recycle()
+                velocityTracker=null
+            }
+            MotionEvent.ACTION_CANCEL->{
+                draggingContent=false
+                velocityTracker?.recycle()
+                velocityTracker=null
+            }
         }
         return super.onTouchEvent(event)
     }
 
     init {
         setSingleLine(false)
+        inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+            InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         gravity=Gravity.TOP or Gravity.START
         setPadding(15.dpPx(),13.dpPx(),15.dpPx(),18.dpPx())
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
