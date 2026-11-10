@@ -268,3 +268,12 @@ body:has(.planik-notes-companion, .planik-task-editor-companion)
   .ai-chat-launcher:not(.work-ai-launcher) .planik-quick-ai-preview {
   bottom: 108px;
 }
+
+/* The compact notes-side mascot is 96px tall, so tuck the popup slightly
+   lower to keep a continuous hover path from robot to chat. */
+@media (min-width: 1200px) and (max-width: 1439px) {
+  body:has(.planik-notes-companion)
+    .ai-chat-launcher:not(.work-ai-launcher) .planik-quick-ai-preview {
+    bottom: 90px;
+  }
+}
