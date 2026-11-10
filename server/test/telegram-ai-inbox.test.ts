@@ -112,9 +112,9 @@ test('task proposals trigger unread system notifications and bot proposal cards'
   // that the phone is absent at zero or during other character animations.
   const mascot = src('../../client/src/components/PlanikMascot.tsx');
   const mascotStyles = src('../../client/src/components/PlanikMascot.css');
-  assert.match(app, /<PlanikMascot notificationCount=\\{unreadSystemNotificationCount\\}/);
-  assert.match(mascot, /data-has-notifs=\\{count > 0 \\? 'true' : 'false'\\}/);
-  assert.match(mascotStyles, /data-mode="idle"\\]\\[data-has-notifs="true"\\] \\.planik-phone/);
+  assert.match(app, /<PlanikMascot notificationCount=\{unreadSystemNotificationCount\}/);
+  assert.match(mascot, /data-has-notifs=\{count > 0 \? 'true' : 'false'\}/);
+  assert.match(mascotStyles, /data-mode="idle"\]\[data-has-notifs="true"\] \.planik-phone/);
 
   const text = telegramTaskProposalBotText('Чат <команда>', [{
     title: 'Встреча с коллегой', type: 'create_event',
