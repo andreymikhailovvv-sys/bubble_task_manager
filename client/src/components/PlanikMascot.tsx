@@ -1,7 +1,16 @@
-import { useEffect, useId, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import './PlanikMascot.css';
 
 type PlanikMode = 'idle' | 'hover' | 'typing' | 'thinking' | 'searching' | 'celebrating';
+
+// Fixed particle paths avoid creating random values or timers on every render.
+const POPPER_CONFETTI = Array.from({ length: 24 }, (_, index) => ({
+  dx: -(55 + (index % 6) * 20 + Math.floor(index / 6) * 14),
+  dy: (index % 2 === 0 ? -1 : 1) * (16 + ((index * 19) % 90)),
+  rotate: (index % 2 === 0 ? -1 : 1) * (180 + index * 43),
+  delay: (index % 5) * 0.025,
+  color: ['#ffdf76', '#f39ae5', '#85e6ef', '#a899ff', '#ffd0a0'][index % 5]
+}));
 
 type Props = {
   notificationCount?: number;
@@ -9,7 +18,7 @@ type Props = {
   busy?: boolean;
   progress?: string | null;
   celebrationKey?: number;
-  size?: 'launcher' | 'composer';
+  size?: 'launcher' | 'composer' | 'sidekick';
   className?: string;
 };
 
@@ -98,9 +107,10 @@ export function PlanikMascot({
       role="img"
       aria-label="Планик, анимированный помощник ИИ"
     >
+      <span className="planik-ground-shadow" aria-hidden="true" />
       <svg
         className="planik-svg"
-        viewBox={mode === 'celebrating' ? '90 32 360 275' : '35 32 345 275'}
+        viewBox="35 32 345 275"
         xmlns="http://www.w3.org/2000/svg"
         aria-hidden="true"
         onPointerEnter={() => setHovered(true)}
@@ -109,17 +119,15 @@ export function PlanikMascot({
       >
         <defs>
           <linearGradient id={`planik-body-${gradientSuffix}`} x1="125" y1="75" x2="300" y2="250" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#5e5ca3" /><stop offset=".55" stopColor="#373965" /><stop offset="1" stopColor="#242e51" />
+            <stop className="planik-body-stop-start" stopColor="#5e5ca3" /><stop className="planik-body-stop-mid" offset=".55" stopColor="#373965" /><stop className="planik-body-stop-end" offset="1" stopColor="#242e51" />
           </linearGradient>
           <linearGradient id={`planik-rim-${gradientSuffix}`} x1="125" y1="75" x2="300" y2="250" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#9ce4f5" /><stop offset=".52" stopColor="#afa8ff" /><stop offset="1" stopColor="#7a75ca" />
+            <stop className="planik-rim-stop-start" stopColor="#9ce4f5" /><stop className="planik-rim-stop-mid" offset=".52" stopColor="#afa8ff" /><stop className="planik-rim-stop-end" offset="1" stopColor="#7a75ca" />
           </linearGradient>
           <linearGradient id={`planik-screen-${gradientSuffix}`} x1="0" y1="0" x2="1" y2="1">
-            <stop stopColor="#212e50" /><stop offset="1" stopColor="#141d38" />
+            <stop className="planik-screen-stop-start" stopColor="#212e50" /><stop className="planik-screen-stop-end" offset="1" stopColor="#141d38" />
           </linearGradient>
         </defs>
-
-        <ellipse cx="215" cy="290" rx="93" ry="10" fill="#02091b" opacity=".3" />
 
         <g className="planik-phone">
           {/* Larger phone with a legible service-style rose badge, anchored to the left arm. */}
@@ -140,7 +148,7 @@ export function PlanikMascot({
         <circle className="planik-antenna" cx="215" cy="52" r="9" fill="#88e0ed" />
         <rect x="122" y="76" width="186" height="174" rx="65" fill={`url(#planik-body-${gradientSuffix})`} stroke={`url(#planik-rim-${gradientSuffix})`} strokeWidth="4" />
         <path d="M148 100Q163 83 192 83" fill="none" stroke="#d0eaff" strokeOpacity=".2" strokeLinecap="round" strokeWidth="4" />
-        <rect x="153" y="118" width="124" height="92" rx="44" fill={`url(#planik-screen-${gradientSuffix})`} stroke="#7f81b1" strokeOpacity=".35" strokeWidth="1" />
+        <rect className="planik-faceplate" x="153" y="118" width="124" height="92" rx="44" fill={`url(#planik-screen-${gradientSuffix})`} stroke="#7f81b1" strokeOpacity=".35" strokeWidth="1" />
         <g ref={leftEye}><ellipse className="planik-eye" cx="190" cy="162" rx="8" ry="12" fill="#f1f3ff" /></g>
         <g ref={rightEye}><ellipse className="planik-eye" cx="240" cy="162" rx="8" ry="12" fill="#f1f3ff" /></g>
 
@@ -211,12 +219,42 @@ export function PlanikMascot({
         </g>
 
         <g className="planik-celebrating">
+          {/* Both arms lift a real party popper, aimed toward the left. */}
           <g className="planik-celebrate-rig">
-            <path d="M301 183Q335 178 348 129" fill="none" stroke="#7272b3" strokeWidth="19" strokeLinecap="round" />
-            <circle cx="348" cy="130" r="10" fill="#b3aef6" />
-            <path d="M348 130V104" fill="none" stroke="#8e7cab" strokeWidth="6" strokeLinecap="round" />
-            <rect x="290" y="57" width="140" height="52" rx="12" fill="#f4de9b" stroke="#fff5d1" strokeWidth="3" />
-            <text x="360" y="89" textAnchor="middle" fill="#62481d" fontSize="15" fontFamily="Inter,Arial,sans-serif" fontWeight="800">МОЛОДЕЦ!</text>
+            <path d="M132 207Q146 235 173 224" fill="none" stroke="#7272b3" strokeWidth="19" strokeLinecap="round" />
+            <path d="M301 208Q281 237 258 230" fill="none" stroke="#7272b3" strokeWidth="19" strokeLinecap="round" />
+            <path d="M118 132Q103 140 104 163Q105 179 119 190L258 237Q273 232 267 219Z" fill="#8569d0" stroke="#c5a8ff" strokeWidth="3" />
+            <path d="M145 140L171 151L202 217L178 207Z" fill="#f5cd70" />
+            <path d="M198 176L219 190L241 231L223 224Z" fill="#f5cd70" />
+            <path d="M125 145L245 223" stroke="#e9ddff" strokeOpacity=".25" strokeWidth="4" fill="none" />
+            <ellipse cx="112" cy="161" rx="15" ry="29" transform="rotate(18 112 161)" fill="#9870e9" stroke="#ded0ff" strokeWidth="3" />
+            <ellipse cx="112" cy="161" rx="10" ry="22" transform="rotate(18 112 161)" fill="#292149" />
+            <circle cx="173" cy="224" r="11" fill="#a6a0ef" />
+            <circle cx="258" cy="230" r="11" fill="#a6a0ef" />
+          </g>
+          {/* Flash and confetti share the same CSS delay: exactly one firing event. */}
+          <g className="planik-popper-flash">
+            <path d="M105 125L115 146L138 157L115 168L105 193L96 168L73 157L96 146Z" fill="#ffe493" />
+            <circle cx="105" cy="157" r="7" fill="#fffdf0" />
+          </g>
+          <g className="planik-confetti-burst">
+            {POPPER_CONFETTI.map((piece, index) => (
+              <rect
+                key={index}
+                className="planik-popper-particle"
+                x="101" y="155"
+                width={index % 4 === 0 ? 12 : 6}
+                height={index % 4 === 0 ? 4 : 8}
+                rx="2"
+                fill={piece.color}
+                style={{
+                  '--planik-dx': piece.dx + 'px',
+                  '--planik-dy': piece.dy + 'px',
+                  '--planik-rotate': piece.rotate + 'deg',
+                  '--planik-stagger': piece.delay + 's'
+                } as CSSProperties}
+              />
+            ))}
           </g>
         </g>
 

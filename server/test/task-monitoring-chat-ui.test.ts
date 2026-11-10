@@ -170,3 +170,25 @@ test('all four task Help AI views preserve draggable scrolling beneath a translu
   assert.doesNotMatch(css, /\.focus-mode-shell \.focus-shared-task-ai-panel \.chat-thread\.focused-task-ai-thread-through \{\s*scrollbar-width: none;/);
   assert.doesNotMatch(css, /\.focus-mode-shell \.focus-shared-task-ai-panel \.focused-task-ai-composer \{[^}]*background: #fff !important;/);
 });
+
+test('web Planik fires confetti and flash in sync with a stationary shadow and light palette', async () => {
+  const [mascot, styles, notes, editor, frame] = await Promise.all([
+    read('../../client/src/components/PlanikMascot.tsx'),
+    read('../../client/src/components/PlanikMascot.css'),
+    read('../../client/src/components/StandaloneNotesWorkspace.tsx'),
+    read('../../client/src/components/TaskEditor.tsx'),
+    read('../../client/src/components/TaskEditorFrame.tsx')
+  ]);
+
+  assert.doesNotMatch(mascot, /МОЛОДЕЦ!/);
+  assert.match(mascot, /className="planik-popper-flash"/);
+  assert.match(mascot, /className="planik-popper-particle"/);
+  assert.match(mascot, /<span className="planik-ground-shadow"/);
+  assert.match(styles, /animation: planik-popper-flash [^;\n]* \.55s both/);
+  assert.match(styles, /animation: planik-confetti-burst [^;\n]* calc\(\.55s \+ var\(--planik-stagger/);
+  assert.match(styles, /planik-ground-shadow\s*\{[\s\S]{0,500}position:\s*absolute/);
+  assert.match(styles, /body\[data-theme='light'\] \.planik-body-stop-start/);
+  assert.match(notes, /mode === 'widget' \? \([\s\S]*?planik-notes-companion/);
+  assert.match(editor, /showPlanik=\{!task\?\.id && !externalSubtask\}/);
+  assert.match(frame, /showPlanik \? <div className="planik-task-editor-companion"/);
+});

@@ -10,6 +10,19 @@
 }
 .planik-mascot--launcher { width: 120px; height: 108px; }
 .planik-mascot--composer { width: 122px; height: 108px; }
+.planik-mascot--sidekick { width: 135px; height: 120px; }
+/* Shadow is a sibling of the floating SVG, so it never bobs with Planik. */
+.planik-ground-shadow {
+  position: absolute;
+  left: 52%;
+  bottom: 2%;
+  width: 36%;
+  height: 7%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(5, 12, 35, .28), transparent 78%);
+  pointer-events: none;
+}
 .planik-svg {
   display: block;
   width: 100%;
@@ -76,9 +89,25 @@
 .planik-mascot[data-mode="searching"] .planik-page-two { animation: planik-page-two 3.9s linear infinite; }
 .planik-mascot[data-mode="searching"] .planik-page-three { animation: planik-page-three 3.9s linear infinite; }
 .planik-mascot[data-mode="celebrating"] .planik-celebrate-rig {
-  transform-origin: 301px 183px;
+  transform-origin: 300px 206px;
   transform-box: view-box;
-  animation: planik-raise .55s cubic-bezier(.2,1.2,.32,1) both;
+  animation: planik-popper-lift .48s cubic-bezier(.2,1.1,.35,1) both;
+}
+/* Both begin at .55s. The flash cannot lag behind the first confetti. */
+.planik-popper-flash, .planik-popper-particle { opacity: 0; }
+.planik-popper-flash {
+  transform-box: view-box;
+  transform-origin: 105px 157px;
+}
+.planik-mascot[data-mode="celebrating"] .planik-popper-flash {
+  animation: planik-popper-flash .4s ease-out .55s both;
+}
+.planik-popper-particle {
+  transform-box: view-box;
+  transform-origin: 105px 157px;
+}
+.planik-mascot[data-mode="celebrating"] .planik-popper-particle {
+  animation: planik-confetti-burst 1.55s cubic-bezier(.14,.67,.42,1) calc(.55s + var(--planik-stagger, 0s)) both;
 }
 .planik-mascot[data-mode="celebrating"] .planik-svg { animation: planik-hop .48s ease-in-out 3; }
 
@@ -138,11 +167,75 @@ body[data-theme="light"] .planik-svg { filter: drop-shadow(0 7px 9px rgba(86, 70
 @keyframes planik-page-one { 0%, 29% { opacity: 1; transform: translateX(0); } 34%, 100% { opacity: 0; transform: translateX(-12px); } }
 @keyframes planik-page-two { 0%, 31% { opacity: 0; transform: translateX(12px); } 36%, 64% { opacity: 1; transform: translateX(0); } 69%, 100% { opacity: 0; transform: translateX(-12px); } }
 @keyframes planik-page-three { 0%, 66% { opacity: 0; transform: translateX(12px); } 71%, 97% { opacity: 1; transform: translateX(0); } 100% { opacity: 0; transform: translateX(-12px); } }
-@keyframes planik-raise { from { transform: rotate(-45deg) scale(.93); opacity: 0; } to { transform: rotate(0) scale(1); opacity: 1; } }
+@keyframes planik-popper-lift {
+  from { transform: translate(24px,32px) rotate(10deg) scale(.65); opacity: 0; }
+  to { transform: translate(0,0) rotate(0) scale(1); opacity: 1; }
+}
+@keyframes planik-popper-flash {
+  0% { opacity: 0; transform: scale(.4); }
+  12% { opacity: 1; transform: scale(1.1); }
+  80%, 100% { opacity: 0; transform: scale(1.8); }
+}
+@keyframes planik-confetti-burst {
+  0% { opacity: 0; transform: translate(0,0) scale(.45) rotate(0); }
+  8% { opacity: 1; }
+  65% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--planik-dx),var(--planik-dy)) scale(.85) rotate(var(--planik-rotate)); }
+}
 @keyframes planik-hop { 50% { transform: translateY(-12px); } }
 @media (prefers-reduced-motion: reduce) {
   .planik-svg, .planik-eye, .planik-scratch-arm, .planik-type-left, .planik-type-right,
   .planik-loupe, .planik-page-one, .planik-page-two, .planik-page-three,
-  .planik-celebrate-rig, .planik-hover-left, .planik-hover-right,
+  .planik-celebrate-rig, .planik-popper-flash, .planik-popper-particle, .planik-hover-left, .planik-hover-right,
   .planik-key-a, .planik-key-b { animation: none !important; }
+}
+
+/* Softer lavender, muted framing and a gentle ambient shadow in light mode. */
+body[data-theme='light'] .planik-body-stop-start { stop-color: #b8b3ec; }
+body[data-theme='light'] .planik-body-stop-mid { stop-color: #928fd6; }
+body[data-theme='light'] .planik-body-stop-end { stop-color: #686cb6; }
+body[data-theme='light'] .planik-rim-stop-start { stop-color: #d5f4fa; }
+body[data-theme='light'] .planik-rim-stop-mid { stop-color: #c7c0fa; }
+body[data-theme='light'] .planik-rim-stop-end { stop-color: #a8a0e7; }
+body[data-theme='light'] .planik-screen-stop-start { stop-color: #4a4a7b; }
+body[data-theme='light'] .planik-screen-stop-end { stop-color: #323a66; }
+body[data-theme='light'] .planik-svg { filter: drop-shadow(0 8px 11px rgba(111, 101, 159, .19)); }
+body[data-theme='light'] .planik-ground-shadow {
+  background: radial-gradient(ellipse, rgba(112, 105, 163, .2), transparent 78%);
+}
+
+/* These companions never participate in modal sizing or block dialog controls. */
+.planik-notes-companion,
+.planik-task-editor-companion {
+  position: absolute;
+  width: 135px;
+  height: 120px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.planik-notes-companion {
+  left: calc(50% + 36rem + .4rem);
+}
+.planik-task-editor-companion {
+  left: calc(50% + 24rem + .75rem);
+}
+/* On ordinary laptop-sized desktops reserve just enough room at the
+   notes board's right edge without obscuring note cards or clipping Planik. */
+@media (min-width: 1200px) and (max-width: 1439px) {
+  .standalone-notes-backdrop:not(.standalone-notes-mobile) .standalone-notes-board {
+    max-width: min(72rem, calc(100vw - 232px));
+  }
+  .planik-notes-companion {
+    left: calc(50% + min(36rem, calc(50vw - 116px)) + .4rem);
+    width: 108px;
+    height: 96px;
+  }
+  .planik-notes-companion .planik-mascot--sidekick { width: 108px; height: 96px; }
+}
+@media (max-width: 1199px) {
+  .planik-notes-companion { display: none; }
+}
+@media (max-width: 1139px) {
+  .planik-task-editor-companion { display: none; }
 }

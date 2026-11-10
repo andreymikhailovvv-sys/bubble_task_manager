@@ -4,6 +4,7 @@ import { CalendarDays, Check, ChevronDown, Maximize2, Plus, Search, Settings2, S
 import { api, type StandaloneNote, type StandaloneNoteGroup } from '../lib/api';
 import { noteHtmlToPlainText, noteValueToEditorHtml } from '../lib/notes';
 import { NotesEditor } from './NotesEditor';
+import { PlanikMascot } from './PlanikMascot';
 import { StandaloneNoteGroupManager, noteGroupStyle } from './StandaloneNoteGroupManager';
 
 type Props = { userId: string; requestedNote?: { id: string; serial: number } | null; mode?: 'widget' | 'mobile'; onClose?: () => void; mobileSafeAreaTop?: number; mobileSafeAreaBottom?: number; telegramMiniApp?: boolean };
@@ -560,6 +561,11 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
               )}
             </div>
           </section>
+          {mode === 'widget' ? (
+            <div className="planik-notes-companion" aria-hidden="true">
+              <PlanikMascot size="sidekick" />
+            </div>
+          ) : null}
         </div>, document.body) : null}
       {groupPicker ? createPortal(
         <div className={'fixed inset-0 ' + (editing ? 'z-[2147483647]' : 'z-[270]')} onMouseDown={() => setGroupPicker(null)}>
