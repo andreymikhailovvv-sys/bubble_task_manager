@@ -1,5 +1,8 @@
 package ru.planirovych.app.feature.home
 
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
+
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.provider.OpenableColumns
@@ -181,6 +184,7 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
                 .verticalScroll(rememberScrollState()).padding(bottom=15.dp),
                 verticalArrangement=Arrangement.spacedBy(10.dp)){
                 BasicTextField(title,onValueChange={title=it},
+                    keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                     modifier=Modifier.fillMaxWidth().heightIn(min=64.dp)
                         .focusRequester(titleFocus),
                     textStyle=TextStyle(color=c.text,fontSize=26.sp,lineHeight=32.sp,
@@ -193,6 +197,7 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
                         inner()
                     }})
                 if(isEvent)OutlinedTextField(value=location,onValueChange={location=it},
+                    keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                     modifier=Modifier.fillMaxWidth(),singleLine=true,
                     label={Text("Место события")},leadingIcon={Icon(Icons.Default.Place,null)},
                     shape=RoundedCornerShape(14.dp))
@@ -319,7 +324,9 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
                                     OutlinedTextField(child.title,onValueChange={
                                         if(index in children.indices)
                                             children[index]=child.copy(title=it)
-                                    },label={Text("Название подзадачи")},
+                                    },
+                                        keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
+                                        label={Text("Название подзадачи")},
                                         singleLine=true,modifier=Modifier.weight(1f),
                                         shape=RoundedCornerShape(10.dp))
                                     IconButton(onClick={children.remove(child)}){
