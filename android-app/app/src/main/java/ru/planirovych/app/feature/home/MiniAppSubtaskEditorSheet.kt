@@ -16,6 +16,8 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material.icons.Icons
@@ -192,6 +194,7 @@ fun MiniAppSubtaskEditorSheet(
                         textStyle=TextStyle(color=c.ink,fontSize=24.sp,lineHeight=29.sp,
                             fontWeight=FontWeight.Bold),
                         maxLines=3,enabled=!busy,cursorBrush=SolidColor(c.purple),
+                        keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                         decorationBox={inner->
                             Box{
                                 if(title.isBlank())Text("Название подзадачи",
