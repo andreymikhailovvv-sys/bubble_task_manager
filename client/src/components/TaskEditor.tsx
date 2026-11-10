@@ -877,7 +877,7 @@ export function TaskEditor({
 
   return (
     <>
-    <TaskEditorFrame onClose={() => void closeEditor()}
+    <TaskEditorFrame onClose={() => void closeEditor()} showPlanik={!task?.id && !externalSubtask}
       className={`task-edit-shell focused-task-editor-shell relative ${externalSubtask ? "work-subtask-original-editor" : ""} ${externalReadOnly ? "work-subtask-readonly" : ""} ${isEventEditor ? "h-[min(590px,calc(100vh-24px))]" : isSubtask ? (titleRows === 3 ? "h-[min(630px,calc(100dvh-24px))]" : "h-[min(560px,calc(100dvh-24px))]") : "h-[min(760px,calc(100dvh-24px))]"} w-full max-w-3xl overflow-hidden rounded-[2.3rem] border bg-white p-5 shadow-2xl`}>
         <button
           type="button"
