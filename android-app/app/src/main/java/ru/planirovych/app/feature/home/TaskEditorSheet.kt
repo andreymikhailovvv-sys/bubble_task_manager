@@ -21,6 +21,8 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -192,6 +194,7 @@ fun TaskEditorSheet(
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it; onClearError() },
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text(if (isSubtask) "Название подзадачи" else "Название") },
                     textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
@@ -222,6 +225,7 @@ fun TaskEditorSheet(
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it; onClearError() },
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     modifier = Modifier.fillMaxWidth().heightIn(min = 126.dp),
                     label = { Text("Описание / заметки") },
                     minLines = 4,
@@ -234,6 +238,7 @@ fun TaskEditorSheet(
                     if (task?.taskType == TaskType.EVENT) {
                         OutlinedTextField(
                             value = location, onValueChange = { location = it },
+                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("Место события") },
                             enabled = !busy,
