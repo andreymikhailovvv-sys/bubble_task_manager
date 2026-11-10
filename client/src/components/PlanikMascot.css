@@ -204,21 +204,18 @@ body[data-theme='light'] .planik-ground-shadow {
   background: radial-gradient(ellipse, rgba(112, 105, 163, .2), transparent 78%);
 }
 
-/* These companions never participate in modal sizing or block dialog controls. */
+/* Match the existing Quick AI launcher (bottom-8/right-6) in modal windows.
+   Position independently of each dialog's height and never block its layout.
+   Pointer events must reach Planik's SVG for the shy-eye/reaching-hands hover. */
 .planik-notes-companion,
 .planik-task-editor-companion {
-  position: absolute;
+  position: fixed;
+  right: max(1.5rem, env(safe-area-inset-right));
+  bottom: max(2rem, env(safe-area-inset-bottom));
   width: 135px;
   height: 120px;
-  top: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
-}
-.planik-notes-companion {
-  left: calc(50% + 36rem + .4rem);
-}
-.planik-task-editor-companion {
-  left: calc(50% + 24rem + .75rem);
+  pointer-events: auto;
+  z-index: 2;
 }
 /* On ordinary laptop-sized desktops reserve just enough room at the
    notes board's right edge without obscuring note cards or clipping Planik. */
@@ -227,7 +224,6 @@ body[data-theme='light'] .planik-ground-shadow {
     max-width: min(72rem, calc(100vw - 232px));
   }
   .planik-notes-companion {
-    left: calc(50% + min(36rem, calc(50vw - 116px)) + .4rem);
     width: 108px;
     height: 96px;
   }
