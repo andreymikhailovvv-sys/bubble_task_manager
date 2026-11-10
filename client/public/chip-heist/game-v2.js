@@ -668,7 +668,7 @@ function drawKa52(){
   label(speech,bx-18,by+22,11,'#803c3c','left',930);
   label('БОСС · РИСОВЫЙ АЛЛИГАТОР',x+80,y-50,15,'#ffe7be','center',900);
 }
-function drawPutin(){
+function drawFinalBoss(){
   if(!boss)return;
   const x=boss.x,y=boss.y;
   ctx.save();ctx.translate(x,y);
@@ -681,7 +681,6 @@ function drawPutin(){
   stroke(51,51,77,51,'#875d61',2);
   box(56,56,15,67,'#bb3f51');box(5,74,20,45,'#293b53');box(103,74,17,44,'#293b53');
   ctx.restore();
-  label('БОСС · ПУТИН',x+62,y-30,14,'#ffe7cd','center');
   if(boss.hp===0)label('ОХРАНА ОТКЛЮЧЕНА',x+62,y-52,12,'#a1ffe4','center');
 }
 function drawMiniMedvedev(s){
@@ -875,7 +874,7 @@ function render(){
   ctx.save();ctx.translate(-camX,-camY);
   if(isMaze())drawMaze();else landscape();
   if(stage===2)drawKa52();
-  if(stage===4)drawPutin();
+  if(stage===4)drawFinalBoss();
   if(stage===1)for(const e of enemies)if(e.alive){
     if(e.type==='tom')drawTom(e);else drawJerry(e);
   }
