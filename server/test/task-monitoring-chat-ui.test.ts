@@ -60,16 +60,20 @@ test('task-chat settings have a single monitoring entry with badges on all clien
 });
 
 
-test('monitoring unread events light up the round Quick AI launcher without duplicate chat bubbles', async () => {
-  const [app, delivery] = await Promise.all([
+test('monitoring unread events light up Planik phone without duplicate chat bubbles', async () => {
+  const [app, delivery, mascot, mascotStyles] = await Promise.all([
     read('../../client/src/App.tsx'),
-    read('../src/services/task-monitoring-delivery.service.ts')
+    read('../src/services/task-monitoring-delivery.service.ts'),
+    read('../../client/src/components/PlanikMascot.tsx'),
+    read('../../client/src/components/PlanikMascot.css')
   ]);
   assert.match(delivery, /systemNotification\.create\(/);
   assert.match(app, /const visibleNotifications = result.notifications;/);
   assert.match(app, /systemNotifications\.filter\(notification => !notification\.eventKey\?\.startsWith\('monitoring:'\)\)/);
   assert.match(app, /setUnreadSystemNotificationCount\(result\.notifications\.filter\(notification => notification\.readAt == null\)\.length\)/);
-  assert.match(app, /unreadSystemNotificationCount > 0 \? <span/);
+  assert.match(app, /<PlanikMascot notificationCount=\{unreadSystemNotificationCount\}/);
+  assert.match(mascot, /data-has-notifs=\{count > 0 \? 'true' : 'false'\}/);
+  assert.match(mascotStyles, /data-mode="idle"\]\[data-has-notifs="true"\] \.planik-phone/);
   assert.match(app, /markSystemNotificationsRead\(\)/);
 });
 
