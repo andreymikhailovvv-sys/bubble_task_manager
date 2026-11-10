@@ -1,5 +1,8 @@
 package ru.planirovych.app.feature.home
 
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
+
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -115,12 +118,14 @@ internal fun NativeMailSendCard(vm:HomeViewModel,draft:JsonObject,c:TaskChatColo
         }
         ActionCaption("Тема",c)
         OutlinedTextField(value=subject,onValueChange={subject=it.take(200)},
+            keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
             modifier=Modifier.fillMaxWidth(),enabled=!locked,
             textStyle=editableStyle,singleLine=true,
             placeholder={Text("Тема письма",fontSize=11.sp)},
             shape=RoundedCornerShape(11.dp))
         ActionCaption("Текст письма",c)
         OutlinedTextField(value=body,onValueChange={body=it.take(6000)},
+            keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
             modifier=Modifier.fillMaxWidth().heightIn(min=120.dp,max=180.dp),
             enabled=!locked,textStyle=editableStyle,maxLines=7,
             shape=RoundedCornerShape(11.dp))
@@ -133,6 +138,7 @@ internal fun NativeMailSendCard(vm:HomeViewModel,draft:JsonObject,c:TaskChatColo
             }
             if(rewriteOpen) {
                 OutlinedTextField(value=rewriteInstruction,
+                    keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                     onValueChange={rewriteInstruction=it.take(500)},
                     enabled=!locked,modifier=Modifier.fillMaxWidth(),
                     textStyle=editableStyle,maxLines=3,
