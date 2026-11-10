@@ -1,5 +1,8 @@
 package ru.planirovych.app.feature.home
 
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
+
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.text.Html
@@ -62,12 +65,15 @@ fun NativeQuickTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,
                 IconButton(onClick=onClose){Icon(Icons.Default.Close,"Закрыть")}
             }
             OutlinedTextField(value=title,onValueChange={title=it},
+                keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                 modifier=Modifier.fillMaxWidth(),label={Text("Название напоминания")},
                 singleLine=false,maxLines=2,shape=RoundedCornerShape(16.dp))
             OutlinedTextField(value=description,onValueChange={description=it},
+                keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                 modifier=Modifier.fillMaxWidth(),label={Text("Описание")},
                 minLines=2,maxLines=4,shape=RoundedCornerShape(16.dp))
             if(type==TaskType.EVENT)OutlinedTextField(value=location,onValueChange={location=it},
+                keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                 modifier=Modifier.fillMaxWidth(),label={Text("Место проведения")},singleLine=true)
             OutlinedButton(onClick=chooseDate,modifier=Modifier.fillMaxWidth(),
                 shape=RoundedCornerShape(15.dp)){
@@ -130,7 +136,8 @@ fun NativeQuickNoteCreateSheet(vm:HomeViewModel,dark:Boolean,onClose:()->Unit) {
                 Text("Новая заметка",fontSize=19.sp,fontWeight=FontWeight.Bold)
                 IconButton(onClick=onClose){Icon(Icons.Default.Close,"Закрыть")}
             }
-            OutlinedTextField(value=title,onValueChange={title=it},label={Text("Название")},
+            OutlinedTextField(value=title,onValueChange={title=it},
+                keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),label={Text("Название")},
                 modifier=Modifier.fillMaxWidth())
             Box{
                 OutlinedButton(onClick={groupsOpen=true},modifier=Modifier.fillMaxWidth()){
@@ -147,6 +154,7 @@ fun NativeQuickNoteCreateSheet(vm:HomeViewModel,dark:Boolean,onClose:()->Unit) {
                 }
             }
             OutlinedTextField(value=body,onValueChange={body=it},
+                keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                 label={Text("Содержимое")},modifier=Modifier.weight(1f).fillMaxWidth(),
                 minLines=5)
             state.notesError?.let{Text(it,color=MaterialTheme.colorScheme.error)}
