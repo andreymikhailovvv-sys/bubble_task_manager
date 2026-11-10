@@ -8,6 +8,8 @@ import androidx.compose.foundation.shape.*
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -427,6 +429,7 @@ private fun HabitSettingsDialog(habit:Habit?,c:HabitPalette,busy:Boolean,
                 Column(Modifier.weight(1f,fill=false).verticalScroll(rememberScrollState()),
                     verticalArrangement=Arrangement.spacedBy(12.dp)){
                     OutlinedTextField(value=name,onValueChange={name=it},
+                        keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                         label={Text("Название привычки")},modifier=Modifier.fillMaxWidth(),
                         singleLine=true)
                     Text("Иконка",color=c.muted,fontSize=12.sp)

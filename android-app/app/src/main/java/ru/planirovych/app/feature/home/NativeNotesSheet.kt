@@ -4,7 +4,10 @@ import android.text.Html
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -23,7 +26,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.planirovych.app.data.model.*
@@ -238,7 +240,9 @@ internal fun NativeNotesPage(vm:HomeViewModel,colors:WorkspaceColors,
                             .background(notesField)
                             .border(1.dp,if(dark)Color(0xFF40536F)
                                 else Color(0xFFD9DEF2),RoundedCornerShape(15.dp)),
-                        singleLine=true,textStyle=TextStyle(fontSize=16.sp,color=notesInk),
+                        singleLine=true,
+                        keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
+                        textStyle=TextStyle(fontSize=16.sp,color=notesInk),
                         cursorBrush=SolidColor(colors.purple),
                         decorationBox={inner->
                             Row(Modifier.fillMaxSize()
@@ -441,54 +445,82 @@ private fun NoteGroupChip(label:String,active:Boolean,colors:WorkspaceColors,
 private fun NoteEditorDialog(note:StandaloneNote?,groups:List<StandaloneNoteGroup>,
     colors:WorkspaceColors,dark:Boolean,busy:Boolean,error:String?,
     initialGroup:String?,onClose:()->Unit,onSave:(String,String,String?)->Unit) {
-    var title by remember(note?.id){ mutableStateOf(note?.title.orEmpty()) }
+    var title by remember(note?.id){mutableStateOf(note?.title.orEmpty())}
     val original=remember(note?.id){note?.content.orEmpty()}
     var text by remember(note?.id){mutableStateOf(original)}
     var group by remember(note?.id){mutableStateOf(note?.groupId?:initialGroup)}
     var groupsOpen by remember{mutableStateOf(false)}
+    val selectedGroup=groups.firstOrNull{it.id==group}
+    val ink=if(dark)Color(0xFFF0F4FF) else Color(0xFF17223A)
+    val muted=if(dark)Color(0xFFA5B4CA) else Color(0xFF64748B)
     androidx.compose.ui.window.Dialog(onDismissRequest=onClose,
         properties=androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth=false)){
-        Surface(Modifier.fillMaxWidth().fillMaxHeight(.87f)
-            .padding(horizontal=10.dp,vertical=19.dp),
-            color=colors.panel,shape=RoundedCornerShape(23.dp),
+        Surface(Modifier.fillMaxWidth().fillMaxHeight(.94f).imePadding()
+            .padding(horizontal=8.dp,vertical=8.dp),
+            color=colors.panel,shape=RoundedCornerShape(24.dp),
             border=BorderStroke(1.dp,colors.panelBorder)){
-            Column(Modifier.padding(15.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
-                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
-                    horizontalArrangement=Arrangement.SpaceBetween){
+            // Same hierarchy as the Mini App: title and group on one line,
+            // explanatory copy, formatting toolbar, then full-height editable page.
+            Column(Modifier.fillMaxSize()){
+                Row(Modifier.fillMaxWidth().padding(start=16.dp,end=7.dp,top=12.dp,bottom=7.dp),
+                    verticalAlignment=Alignment.CenterVertically){
                     Text(if(note==null)"Новая заметка" else "Редактирование заметки",
-                        fontWeight=FontWeight.Bold,color=colors.text,fontSize=16.sp)
-                    IconButton(onClick=onClose){Icon(Icons.Default.Close,"Закрыть")}
-                }
-                OutlinedTextField(value=title,onValueChange={title=it},
-                    label={Text("Название")},modifier=Modifier.fillMaxWidth())
-                Box{
-                    OutlinedButton(onClick={groupsOpen=true},modifier=Modifier.fillMaxWidth()){
-                        Text(groups.firstOrNull{it.id==group}?.name ?: "Без группы")
-                        Icon(Icons.Default.ArrowDropDown,null)
+                        modifier=Modifier.weight(1f),fontSize=17.sp,
+                        fontWeight=FontWeight.Bold,color=ink)
+                    IconButton(onClick=onClose){
+                        Icon(Icons.Default.Close,"Закрыть",tint=ink)
                     }
-                    DropdownMenu(expanded=groupsOpen,onDismissRequest={groupsOpen=false}){
-                        DropdownMenuItem(text={Text("Без группы")},onClick={
-                            group=null;groupsOpen=false
-                        })
-                        groups.forEach{g->
-                            DropdownMenuItem(text={Text(g.name)},onClick={
-                                group=g.id;groupsOpen=false
+                }
+                Row(Modifier.fillMaxWidth().padding(horizontal=14.dp),
+                    horizontalArrangement=Arrangement.spacedBy(8.dp),
+                    verticalAlignment=Alignment.CenterVertically){
+                    OutlinedTextField(value=title,onValueChange={title=it},
+                        placeholder={Text("Название заметки",maxLines=1)},
+                        singleLine=true,modifier=Modifier.weight(1f),
+                        keyboardOptions=KeyboardOptions(
+                            capitalization=KeyboardCapitalization.Sentences),
+                        shape=RoundedCornerShape(14.dp))
+                    Box(Modifier.widthIn(min=108.dp,max=157.dp)){
+                        OutlinedButton(onClick={groupsOpen=true},
+                            contentPadding=PaddingValues(horizontal=9.dp,vertical=10.dp),
+                            shape=RoundedCornerShape(14.dp)){
+                            Box(Modifier.size(9.dp).background(
+                                selectedGroup?.color?.let(::noteColor)?:colors.purple,CircleShape))
+                            Spacer(Modifier.width(6.dp))
+                            Text(selectedGroup?.name?:"Без группы",fontSize=12.sp,
+                                color=ink,maxLines=1,overflow=TextOverflow.Ellipsis,
+                                modifier=Modifier.weight(1f,fill=false))
+                            Icon(Icons.Default.ArrowDropDown,null,
+                                modifier=Modifier.size(16.dp))
+                        }
+                        DropdownMenu(expanded=groupsOpen,onDismissRequest={groupsOpen=false}){
+                            DropdownMenuItem(text={Text("Без группы")},onClick={
+                                group=null;groupsOpen=false
                             })
+                            groups.forEach{g->
+                                DropdownMenuItem(text={Text(g.name)},onClick={
+                                    group=g.id;groupsOpen=false
+                                })
+                            }
                         }
                     }
                 }
-                Surface(Modifier.fillMaxWidth().weight(1f),
-                    shape=RoundedCornerShape(13.dp),color=colors.card,
-                    border=BorderStroke(1.dp,colors.panelBorder)){
-                    NativeRichTextEditor(value=text,onChange={text=it},
-                        dark=dark,modifier=Modifier.fillMaxSize(),
-                        editorKey=note?.id?:"new-note")
+                Text("Выделите текст для форматирования или добавьте список/чекбоксы в текущую позицию курсора.",
+                    color=muted,fontSize=11.sp,lineHeight=16.sp,
+                    modifier=Modifier.fillMaxWidth().padding(
+                        start=16.dp,end=16.dp,top=9.dp,bottom=12.dp))
+                HorizontalDivider(color=colors.panelBorder)
+                NativeRichTextEditor(value=text,onChange={text=it},
+                    dark=dark,modifier=Modifier.fillMaxWidth().weight(1f),
+                    editorKey=note?.id?:"new-note")
+                error?.let{
+                    Text(it,color=MaterialTheme.colorScheme.error,fontSize=12.sp,
+                        modifier=Modifier.padding(horizontal=16.dp,vertical=5.dp))
                 }
-                error?.let{Text(it,color=MaterialTheme.colorScheme.error,fontSize=12.sp)}
-                Button(onClick={
-                    onSave(title.trim(),text,group)
-                },modifier=Modifier.fillMaxWidth(),enabled=!busy,
-                    shape=RoundedCornerShape(13.dp)){
+                Button(onClick={onSave(title.trim(),text,group)},
+                    modifier=Modifier.fillMaxWidth().padding(
+                        start=14.dp,end=14.dp,top=8.dp,bottom=12.dp),
+                    enabled=!busy,shape=RoundedCornerShape(13.dp)){
                     Text(if(busy)"Сохраняем…" else "Сохранить")
                 }
             }
@@ -608,6 +640,7 @@ private fun NoteGroupManager(vm:HomeViewModel,colors:WorkspaceColors,
                         Text(if(selected!=null)"Изменить группу" else "Новая группа",
                             fontSize=15.sp,color=ink,fontWeight=FontWeight.Bold)
                         OutlinedTextField(value=name,onValueChange={name=it.take(50)},
+                            keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                             label={Text("Название")},singleLine=true,
                             modifier=Modifier.fillMaxWidth(),
                             colors=OutlinedTextFieldDefaults.colors(

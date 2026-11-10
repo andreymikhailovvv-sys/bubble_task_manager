@@ -7,6 +7,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -115,12 +117,14 @@ internal fun NativeMailSendCard(vm:HomeViewModel,draft:JsonObject,c:TaskChatColo
         }
         ActionCaption("Тема",c)
         OutlinedTextField(value=subject,onValueChange={subject=it.take(200)},
+            keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
             modifier=Modifier.fillMaxWidth(),enabled=!locked,
             textStyle=editableStyle,singleLine=true,
             placeholder={Text("Тема письма",fontSize=11.sp)},
             shape=RoundedCornerShape(11.dp))
         ActionCaption("Текст письма",c)
         OutlinedTextField(value=body,onValueChange={body=it.take(6000)},
+            keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
             modifier=Modifier.fillMaxWidth().heightIn(min=120.dp,max=180.dp),
             enabled=!locked,textStyle=editableStyle,maxLines=7,
             shape=RoundedCornerShape(11.dp))
@@ -134,6 +138,7 @@ internal fun NativeMailSendCard(vm:HomeViewModel,draft:JsonObject,c:TaskChatColo
             if(rewriteOpen) {
                 OutlinedTextField(value=rewriteInstruction,
                     onValueChange={rewriteInstruction=it.take(500)},
+                    keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                     enabled=!locked,modifier=Modifier.fillMaxWidth(),
                     textStyle=editableStyle,maxLines=3,
                     placeholder={Text("Например: сделай короче и официальнее",

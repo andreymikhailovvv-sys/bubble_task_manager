@@ -10,6 +10,8 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material.icons.Icons
@@ -186,6 +188,7 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
                     textStyle=TextStyle(color=c.text,fontSize=26.sp,lineHeight=32.sp,
                         fontWeight=FontWeight.Bold),
                     maxLines=3,cursorBrush=SolidColor(c.violet),
+                    keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                     decorationBox={inner->Box{
                         if(title.isEmpty())Text(if(isEvent)"Введите название события"
                             else "Введите название",fontSize=25.sp,
@@ -194,6 +197,7 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
                     }})
                 if(isEvent)OutlinedTextField(value=location,onValueChange={location=it},
                     modifier=Modifier.fillMaxWidth(),singleLine=true,
+                    keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                     label={Text("Место события")},leadingIcon={Icon(Icons.Default.Place,null)},
                     shape=RoundedCornerShape(14.dp))
                 Row(verticalAlignment=Alignment.CenterVertically){
@@ -321,6 +325,7 @@ fun NativeDetailedTaskCreateSheet(type:TaskType,vm:HomeViewModel,dark:Boolean,on
                                             children[index]=child.copy(title=it)
                                     },label={Text("Название подзадачи")},
                                         singleLine=true,modifier=Modifier.weight(1f),
+                                        keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                                         shape=RoundedCornerShape(10.dp))
                                     IconButton(onClick={children.remove(child)}){
                                         Icon(Icons.Default.Close,"Удалить черновик",

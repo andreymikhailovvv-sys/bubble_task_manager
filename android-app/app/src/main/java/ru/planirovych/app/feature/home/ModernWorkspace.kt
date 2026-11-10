@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.*
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.Canvas
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -32,6 +33,10 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.PathEffect
@@ -210,8 +215,34 @@ fun ModernWorkspace(
             .toList()
     }
     val workspaceScroll=rememberLazyListState()
+    val timelineActive=pagerState.currentPage==1
+    val headerInsetPx=with(LocalDensity.current){92.dp.toPx()}
+    var timelineViewportCenter by remember{mutableFloatStateOf(0f)}
+    var currentTimeTarget by remember{mutableStateOf<Pair<String,Float>?>(null)}
+    var lastCenteredTimeKey by remember{mutableStateOf<String?>(null)}
+    LaunchedEffect(timelineActive){
+        if(!timelineActive)lastCenteredTimeKey=null
+    }
+    LaunchedEffect(timelineActive,currentTimeTarget?.first,timelineViewportCenter){
+        val target=currentTimeTarget
+        if(timelineActive && target!=null && timelineViewportCenter>0f &&
+            lastCenteredTimeKey!=target.first){
+            // Only one adjustment per opening/date: subsequent manual swipes
+            // must not be overridden by repeated layout callbacks.
+            lastCenteredTimeKey=target.first
+            workspaceScroll.scroll {
+                scrollBy(target.second-timelineViewportCenter)
+            }
+        }
+    }
     // Mini App's subtly blue-tinted background; task cards remain white.
-    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+    Box(Modifier.fillMaxSize()
+        .onGloballyPositioned{coords->
+            if(contentMode==WorkspaceMode.TIMELINE){
+                timelineViewportCenter=coords.positionInRoot().y+
+                    (coords.size.height+headerInsetPx)/2f
+            }
+        }.background(Brush.verticalGradient(
         if(dark) listOf(Color(0xFF0E192B),Color(0xFF111C30))
         else listOf(Color(0xFFF3F8FF),Color(0xFFEEF6FF),Color(0xFFF5F9FF))
     ))){
@@ -277,7 +308,9 @@ fun ModernWorkspace(
         } else item {
             NativeTimelineWorkspace(rootTasks, state.tasks, state.habits,
                 state.spheres, colors, dark, onOpenTask,
-                onOpenHabit={selectedHabitId=it})
+                onOpenHabit={selectedHabitId=it},
+                isActive=timelineActive,
+                onCurrentTimePosition={key,center->currentTimeTarget=key to center})
         }
     }
     Box(Modifier.align(Alignment.TopCenter)
@@ -446,6 +479,7 @@ private fun WorkspaceTopbar(
                     modifier=Modifier.weight(1f).onFocusChanged {
                         if(it.isFocused)onSearchFocus()
                     },singleLine=true,
+                    keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                     textStyle=MaterialTheme.typography.bodyMedium.copy(
                         color=colors.text,fontSize=14.sp),
                     cursorBrush=androidx.compose.ui.graphics.SolidColor(colors.purple),

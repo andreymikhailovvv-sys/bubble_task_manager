@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -228,6 +230,7 @@ fun MiniAppTaskFocusSheet(
                 BasicTextField(value=title,onValueChange={title=it;onClearError()},
                     modifier=Modifier.weight(1f).padding(top=4.dp,end=7.dp),
                     enabled=!busy,maxLines=2,
+                    keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                     textStyle=TextStyle(color=c.text,fontSize=24.sp,
                         fontWeight=FontWeight.Bold,lineHeight=29.sp),
                     cursorBrush=SolidColor(c.purple),

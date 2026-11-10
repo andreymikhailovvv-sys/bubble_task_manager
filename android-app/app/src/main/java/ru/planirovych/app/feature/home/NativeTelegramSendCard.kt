@@ -7,6 +7,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -163,6 +165,7 @@ internal fun NativeTelegramSendCard(vm:HomeViewModel,draft:JsonObject,c:TaskChat
         }
         if(pickerOpen && !locked) {
             OutlinedTextField(value=search,onValueChange={search=it},
+                keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                 modifier=Modifier.fillMaxWidth(),singleLine=true,
                 placeholder={Text("Поиск человека или беседы",fontSize=11.sp)},
                 textStyle=androidx.compose.ui.text.TextStyle(fontSize=12.sp),
