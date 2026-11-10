@@ -1,5 +1,8 @@
 package ru.planirovych.app.feature.home
 
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -29,6 +32,7 @@ internal fun NativeAiComposerInput(
     BasicTextField(
         value=value,
         onValueChange=onValueChange,
+        keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
         onTextLayout={if(it.lineCount>1)onWrapped()},
         modifier=modifier.heightIn(min=44.dp,max=124.dp).clipToBounds(),
         enabled=enabled,
