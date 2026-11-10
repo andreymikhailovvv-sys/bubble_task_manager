@@ -3,10 +3,14 @@ package ru.planirovych.app.feature.home
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.foundation.shape.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -141,11 +145,35 @@ private fun timelineDueLabel(raw:String?):String {
 internal fun NativeTimelineWorkspace(
     tasks:List<Task>,allTasks:List<Task>,habits:List<Habit>,spheres:List<Sphere>,
     colors:WorkspaceColors,dark:Boolean,onOpen:(String)->Unit,
-    onOpenHabit:(String)->Unit={}
+    onOpenHabit:(String)->Unit={},
+    hostScroll:LazyListState,active:Boolean
 ){
+    var entryEpoch by remember{mutableIntStateOf(0)}
+    var nowRowWindowY by remember{mutableStateOf<Float?>(null)}
+    var centeredKey by remember{mutableStateOf("")}
+    val density=LocalDensity.current
+    val screenConfig=LocalConfiguration.current
+    val centerPx=with(density){(screenConfig.screenHeightDp.dp*.48f).toPx()}
+    LaunchedEffect(active){
+        if(active){
+            entryEpoch++
+            hostScroll.scrollToItem(0)
+        }
+    }
     var zoom by rememberSaveable{mutableStateOf(TimelineZoom.DAY)}
     var anchorRaw by rememberSaveable{mutableStateOf(LocalDate.now().toString())}
     val anchor=runCatching{LocalDate.parse(anchorRaw)}.getOrDefault(LocalDate.now())
+    LaunchedEffect(zoom,anchorRaw,entryEpoch){nowRowWindowY=null}
+    val scrollKey="$entryEpoch-${zoom.name}-$anchorRaw"
+    LaunchedEffect(active,zoom,anchorRaw,entryEpoch,nowRowWindowY){
+        val y=nowRowWindowY
+        if(active&&zoom==TimelineZoom.DAY&&anchor==LocalDate.now()&&
+            y!=null&&centeredKey!=scrollKey){
+            centeredKey=scrollKey
+            // Scroll the host LazyColumn, never a nested vertical list.
+            hostScroll.scrollBy(y-centerPx)
+        }
+    }
     val start=when(zoom){
         TimelineZoom.DAY->anchor
         TimelineZoom.WEEK->anchor.minusDays((anchor.dayOfWeek.value-1).toLong())
@@ -245,9 +273,10 @@ internal fun NativeTimelineWorkspace(
             }
         }
         when(zoom){
-            TimelineZoom.DAY->TimelineDay(anchor,tasks,allTasks,habits,spheres,colors,dark,onOpen,onOpenHabit)
+            TimelineZoom.DAY->TimelineDay(anchor,tasks,allTasks,habits,spheres,colors,dark,onOpen,onOpenHabit,
+                onNowHourPosition={nowRowWindowY=it})
             TimelineZoom.WEEK->TimelineWeek(start,tasks,allTasks,habits,spheres,colors,dark,
-                onOpen,onOpenHabit=onOpenHabit,
+                onOpen,onOpenHabit=onOpenHabit,active=active,entryEpoch=entryEpoch,
                 openDay={anchorRaw=it.toString();zoom=TimelineZoom.DAY})
             TimelineZoom.MONTH->TimelineMonth(start,tasks,allTasks,habits,spheres,colors,dark,
                 onOpen=onOpen,
@@ -356,12 +385,14 @@ private fun DayTimelineCard(
 @Composable
 private fun TimelineDay(day:LocalDate,tasks:List<Task>,allTasks:List<Task>,
     habits:List<Habit>,spheres:List<Sphere>,colors:WorkspaceColors,dark:Boolean,
-    onOpen:(String)->Unit,onOpenHabit:(String)->Unit){
+    onOpen:(String)->Unit,onOpenHabit:(String)->Unit,
+    onNowHourPosition:(Float)->Unit){
     val entries=remember(day,tasks,allTasks,habits,spheres){
         timelineEntries(day,tasks,allTasks,habits,spheres)
     }
     val byHour=remember(entries){entries.groupBy{it.time.hour}.toSortedMap()}
-    if(entries.isEmpty()){
+    val currentHour=if(day==LocalDate.now())LocalTime.now().hour else null
+    if(entries.isEmpty() && currentHour==null){
         Surface(color=colors.panel,shape=RoundedCornerShape(15.dp),
             border=BorderStroke(1.dp,colors.panelBorder)){
             Text("На выбранный день нет записей.",color=colors.secondaryText,
@@ -369,6 +400,8 @@ private fun TimelineDay(day:LocalDate,tasks:List<Task>,allTasks:List<Task>,
         }
         return
     }
+    // Insert a current-hour anchor even when the hour contains no task.
+    val hours=(byHour.keys+listOfNotNull(currentHour)).distinct().sorted()
     val rail=if(dark)Color(0xFF46556F) else Color(0xFFE1E6EF)
     // All left-side markers use exactly the same neutral slate color,
     // independent of sector, task type and overdue state.
@@ -386,17 +419,26 @@ private fun TimelineDay(day:LocalDate,tasks:List<Task>,allTasks:List<Task>,
             },
         verticalArrangement=Arrangement.spacedBy(11.dp)
     ){
-        byHour.forEach{(hour,records)->
+        hours.forEach{hour->
+            val records=byHour[hour].orEmpty()
+            val isCurrent=hour==currentHour
             Row(
-                Modifier.fillMaxWidth(),
+                Modifier.fillMaxWidth().then(
+                    if(isCurrent)Modifier.onGloballyPositioned{
+                        onNowHourPosition(it.positionInWindow().y+it.size.height/2f)
+                    }else Modifier),
                 verticalAlignment=Alignment.Top
             ){
                 Box(Modifier.width(64.dp).height(48.dp)){
                     Text(
-                        String.format(Locale.US,"%02d:00",hour),
+                        if(isCurrent)LocalTime.now().format(
+                            DateTimeFormatter.ofPattern("HH:mm"))
+                            else String.format(Locale.US,"%02d:00",hour),
                         modifier=Modifier.align(Alignment.TopStart).padding(top=16.dp),
-                        color=if(dark)Color(0xFFB7C4D7) else Color(0xFF667895),
-                        fontSize=11.sp,fontWeight=FontWeight.Medium
+                        color=if(isCurrent)colors.purple else
+                            if(dark)Color(0xFFB7C4D7) else Color(0xFF667895),
+                        fontSize=11.sp,fontWeight=if(isCurrent)
+                            FontWeight.Bold else FontWeight.Medium
                     )
                     Box(
                         Modifier.align(Alignment.TopEnd)
@@ -408,6 +450,11 @@ private fun TimelineDay(day:LocalDate,tasks:List<Task>,allTasks:List<Task>,
                     Modifier.weight(1f).padding(start=13.dp),
                     verticalArrangement=Arrangement.spacedBy(9.dp)
                 ){
+                    if(isCurrent && records.isEmpty()) {
+                        Text("Сейчас",color=colors.purple,fontSize=11.sp,
+                            fontWeight=FontWeight.SemiBold,
+                            modifier=Modifier.padding(top=14.dp,bottom=16.dp))
+                    }
                     records.forEach{entry->
                         DayTimelineCard(entry,colors,dark,onOpen,onOpenHabit)
                     }
@@ -425,10 +472,10 @@ private fun TimelineWeek(
     monday:LocalDate,tasks:List<Task>,allTasks:List<Task>,
     habits:List<Habit>,spheres:List<Sphere>,colors:WorkspaceColors,dark:Boolean,
     onOpen:(String)->Unit,onOpenHabit:(String)->Unit,
-    openDay:(LocalDate)->Unit
+    active:Boolean,entryEpoch:Int,openDay:(LocalDate)->Unit
 ){
     MiniAppCalendarGrid(monday,false,tasks,allTasks,habits,spheres,
-        colors,dark,onOpen,onOpenHabit,openDay)
+        colors,dark,onOpen,onOpenHabit,openDay,active,entryEpoch)
 }
 @Composable
 private fun TimelineMonth(
@@ -444,7 +491,8 @@ private fun MiniAppCalendarGrid(
     first:LocalDate,monthMode:Boolean,
     tasks:List<Task>,allTasks:List<Task>,habits:List<Habit>,
     spheres:List<Sphere>,colors:WorkspaceColors,dark:Boolean,
-    onOpen:(String)->Unit,onOpenHabit:(String)->Unit,openDay:(LocalDate)->Unit
+    onOpen:(String)->Unit,onOpenHabit:(String)->Unit,openDay:(LocalDate)->Unit,
+    active:Boolean=false,entryEpoch:Int=0
 ){
     val gridStart=first.minusDays((first.dayOfWeek.value-1).toLong())
     // Keep the same 42 cells as Mini App, but compute their records once.
@@ -453,7 +501,8 @@ private fun MiniAppCalendarGrid(
             tasks,allTasks,if(monthMode)emptyList() else habits,spheres)
     }
     if(!monthMode){
-        ReadableWeekGrid(cells,colors,dark,onOpen,onOpenHabit,openDay)
+        ReadableWeekGrid(cells,colors,dark,onOpen,onOpenHabit,openDay,
+            active,entryEpoch)
         return
     }
     val labels=listOf("Пн","Вт","Ср","Чт","Пт","Сб","Вс")
@@ -483,7 +532,8 @@ private fun MiniAppCalendarGrid(
 private fun ReadableWeekGrid(
     days:List<Pair<LocalDate,List<TimelineEntry>>>,
     colors:WorkspaceColors,dark:Boolean,
-    onOpen:(String)->Unit,onHabit:(String)->Unit,openDay:(LocalDate)->Unit
+    onOpen:(String)->Unit,onHabit:(String)->Unit,openDay:(LocalDate)->Unit,
+    active:Boolean,entryEpoch:Int
 ){
     // LazyRow composes only visible columns. In contrast to the old eager
     // horizontalScroll Row, a busy week no longer lays out seven tall columns
@@ -493,7 +543,12 @@ private fun ReadableWeekGrid(
     val secondary=if(dark)Color(0xFFA9B9D0) else Color(0xFF657792)
     val border=if(dark)Color(0xFF40506A) else Color(0xFFE1E8F1)
     val selectedIndex by remember { derivedStateOf { weekScroll.firstVisibleItemIndex.coerceIn(0,6) } }
-    LaunchedEffect(days.firstOrNull()?.first) { weekScroll.scrollToItem(0) }
+    LaunchedEffect(days.firstOrNull()?.first,entryEpoch,active){
+        if(active){
+            val todayIndex=days.indexOfFirst{it.first==LocalDate.now()}
+            weekScroll.scrollToItem(todayIndex.coerceAtLeast(0))
+        }
+    }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val availableWidth=maxWidth
         val columnWidth=minOf(228.dp,availableWidth-12.dp).coerceAtLeast(176.dp)
