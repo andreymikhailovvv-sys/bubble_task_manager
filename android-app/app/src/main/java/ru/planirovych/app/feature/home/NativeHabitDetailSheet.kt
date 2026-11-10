@@ -1,5 +1,8 @@
 package ru.planirovych.app.feature.home
 
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
+
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.foundation.*
@@ -427,6 +430,7 @@ private fun HabitSettingsDialog(habit:Habit?,c:HabitPalette,busy:Boolean,
                 Column(Modifier.weight(1f,fill=false).verticalScroll(rememberScrollState()),
                     verticalArrangement=Arrangement.spacedBy(12.dp)){
                     OutlinedTextField(value=name,onValueChange={name=it},
+                        keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                         label={Text("Название привычки")},modifier=Modifier.fillMaxWidth(),
                         singleLine=true)
                     Text("Иконка",color=c.muted,fontSize=12.sp)
