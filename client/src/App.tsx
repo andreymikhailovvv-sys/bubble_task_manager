@@ -8808,6 +8808,7 @@ export default function App() {
 
       {isAiChatOpen ? (
         <ExpandedAiChat
+          showPlanik
           projects={aiChatProjects}
           activeProject={activeAiChatProject}
           activeChat={activeAiChat}
