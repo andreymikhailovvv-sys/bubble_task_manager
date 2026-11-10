@@ -192,3 +192,24 @@ test('web Planik fires confetti and flash in sync with a stationary shadow and l
   assert.match(editor, /showPlanik=\{!task\?\.id && !externalSubtask\}/);
   assert.match(frame, /showPlanik \? <div className="planik-task-editor-companion"/);
 });
+
+
+test('personal modal Planik companions stay bottom-right and react to cursor hover', async () => {
+  const [styles, mascot, frame, notes] = await Promise.all([
+    read('../../client/src/components/PlanikMascot.css'),
+    read('../../client/src/components/PlanikMascot.tsx'),
+    read('../../client/src/components/TaskEditorFrame.tsx'),
+    read('../../client/src/components/StandaloneNotesWorkspace.tsx')
+  ]);
+  const positioning = styles.match(/\.planik-notes-companion,\s*\.planik-task-editor-companion\s*\{([^}]+)\}/)?.[1];
+  assert.ok(positioning, 'both modal companions must share a positioning rule');
+  assert.match(positioning, /position:\s*fixed;/);
+  assert.match(positioning, /right:\s*max\(1\.5rem/);
+  assert.match(positioning, /bottom:\s*max\(2rem/);
+  assert.match(positioning, /pointer-events:\s*auto;/);
+  assert.doesNotMatch(positioning, /top:\s*50%|pointer-events:\s*none/);
+  assert.match(mascot, /onPointerEnter=\{\(\) => setHovered\(true\)\}/);
+  assert.match(mascot, /onPointerMove=\{followPointer\}/);
+  assert.match(notes, /className="planik-notes-companion"/);
+  assert.match(frame, /className="planik-task-editor-companion"[^>]*onClick=\{event=>event\.stopPropagation\(\)\}/);
+});
