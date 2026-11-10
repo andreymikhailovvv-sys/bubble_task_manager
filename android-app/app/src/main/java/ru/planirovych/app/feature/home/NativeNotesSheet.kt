@@ -4,6 +4,8 @@ import android.text.Html
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.animation.AnimatedVisibility
@@ -441,55 +443,120 @@ private fun NoteGroupChip(label:String,active:Boolean,colors:WorkspaceColors,
 private fun NoteEditorDialog(note:StandaloneNote?,groups:List<StandaloneNoteGroup>,
     colors:WorkspaceColors,dark:Boolean,busy:Boolean,error:String?,
     initialGroup:String?,onClose:()->Unit,onSave:(String,String,String?)->Unit) {
-    var title by remember(note?.id){ mutableStateOf(note?.title.orEmpty()) }
+    var title by remember(note?.id){mutableStateOf(note?.title.orEmpty())}
     val original=remember(note?.id){note?.content.orEmpty()}
     var text by remember(note?.id){mutableStateOf(original)}
     var group by remember(note?.id){mutableStateOf(note?.groupId?:initialGroup)}
     var groupsOpen by remember{mutableStateOf(false)}
-    androidx.compose.ui.window.Dialog(onDismissRequest=onClose,
-        properties=androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth=false)){
-        Surface(Modifier.fillMaxWidth().fillMaxHeight(.87f)
-            .padding(horizontal=10.dp,vertical=19.dp),
-            color=colors.panel,shape=RoundedCornerShape(23.dp),
-            border=BorderStroke(1.dp,colors.panelBorder)){
-            Column(Modifier.padding(15.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
-                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
-                    horizontalArrangement=Arrangement.SpaceBetween){
-                    Text(if(note==null)"Новая заметка" else "Редактирование заметки",
-                        fontWeight=FontWeight.Bold,color=colors.text,fontSize=16.sp)
-                    IconButton(onClick=onClose){Icon(Icons.Default.Close,"Закрыть")}
-                }
-                OutlinedTextField(value=title,onValueChange={title=it},
-                    label={Text("Название")},modifier=Modifier.fillMaxWidth())
-                Box{
-                    OutlinedButton(onClick={groupsOpen=true},modifier=Modifier.fillMaxWidth()){
-                        Text(groups.firstOrNull{it.id==group}?.name ?: "Без группы")
-                        Icon(Icons.Default.ArrowDropDown,null)
-                    }
-                    DropdownMenu(expanded=groupsOpen,onDismissRequest={groupsOpen=false}){
-                        DropdownMenuItem(text={Text("Без группы")},onClick={
-                            group=null;groupsOpen=false
-                        })
-                        groups.forEach{g->
-                            DropdownMenuItem(text={Text(g.name)},onClick={
-                                group=g.id;groupsOpen=false
-                            })
+    val selectedGroup=groups.firstOrNull{it.id==group}
+    val ink=if(dark)Color(0xFFF1F5F9) else Color(0xFF172238)
+    val muted=if(dark)Color(0xFFAAB9D2) else Color(0xFF66758A)
+    val bg=if(dark)Color(0xFF142137) else Color.White
+    val edge=if(dark)Color(0xFF3D4D68) else Color(0xFFD5DDE8)
+    val shape=RoundedCornerShape(topStart=26.dp,topEnd=26.dp)
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest=onClose,
+        properties=androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth=false)
+    ){
+        // The MiniApp editor is a full-height writing surface. Keep both
+        // the formatting toolbar and text at normal, readable width.
+        Surface(Modifier.fillMaxSize().imePadding()
+            .padding(top=8.dp),
+            color=bg,shape=shape,border=BorderStroke(1.dp,edge)){
+            Column(Modifier.fillMaxSize()){
+                Column(Modifier.fillMaxWidth()
+                    .padding(start=16.dp,end=12.dp,top=14.dp,bottom=12.dp),
+                    verticalArrangement=Arrangement.spacedBy(11.dp)){
+                    Row(Modifier.fillMaxWidth(),
+                        verticalAlignment=Alignment.CenterVertically,
+                        horizontalArrangement=Arrangement.SpaceBetween){
+                        Text(if(note==null)"Новая заметка" else "Редактирование заметки",
+                            fontWeight=FontWeight.Bold,color=ink,fontSize=19.sp)
+                        IconButton(onClick=onClose,
+                            modifier=Modifier.size(38.dp)
+                                .border(1.dp,edge,CircleShape)) {
+                            Icon(Icons.Default.Close,"Закрыть",tint=ink)
                         }
                     }
+                    Row(Modifier.fillMaxWidth(),
+                        verticalAlignment=Alignment.CenterVertically,
+                        horizontalArrangement=Arrangement.spacedBy(9.dp)){
+                        OutlinedTextField(
+                            value=title,onValueChange={title=it.take(250)},
+                            placeholder={Text("Название заметки",fontSize=14.sp)},
+                            modifier=Modifier.weight(1f),
+                            maxLines=1,singleLine=true,
+                            textStyle=TextStyle(color=ink,fontSize=14.sp,
+                                fontWeight=FontWeight.SemiBold),
+                            keyboardOptions=KeyboardOptions(
+                                capitalization=KeyboardCapitalization.Sentences),
+                            shape=RoundedCornerShape(15.dp),
+                            colors=OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor=colors.purple,
+                                unfocusedBorderColor=edge))
+                        Box {
+                            OutlinedButton(
+                                onClick={groupsOpen=true},
+                                shape=RoundedCornerShape(15.dp),
+                                contentPadding=PaddingValues(horizontal=9.dp,vertical=7.dp)
+                            ){
+                                Box(Modifier.size(8.dp)
+                                    .background(noteColor(selectedGroup?.color
+                                        ?:"#64748b"),CircleShape))
+                                Spacer(Modifier.width(6.dp))
+                                Text(selectedGroup?.name?:"Без группы",
+                                    fontSize=11.sp,color=ink,maxLines=1,
+                                    overflow=TextOverflow.Ellipsis,
+                                    modifier=Modifier.widthIn(max=95.dp))
+                                Icon(Icons.Default.KeyboardArrowDown,null,
+                                    Modifier.size(16.dp),tint=ink)
+                            }
+                            DropdownMenu(expanded=groupsOpen,
+                                onDismissRequest={groupsOpen=false},
+                                modifier=Modifier.background(bg)){
+                                DropdownMenuItem(
+                                    text={Text("Без группы",color=ink)},
+                                    onClick={group=null;groupsOpen=false})
+                                groups.forEach{g->
+                                    DropdownMenuItem(
+                                        text={Row(verticalAlignment=Alignment.CenterVertically,
+                                            horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                                            Box(Modifier.size(8.dp)
+                                                .background(noteColor(g.color),CircleShape))
+                                            Text(g.name,color=ink,maxLines=1)
+                                        }},
+                                        onClick={group=g.id;groupsOpen=false})
+                                }
+                            }
+                        }
+                    }
+                    Text("Выделите текст для форматирования или добавьте "+
+                        "список/чекбоксы в текущую позицию курсора.",
+                        color=muted,fontSize=12.sp,lineHeight=17.sp)
                 }
-                Surface(Modifier.fillMaxWidth().weight(1f),
-                    shape=RoundedCornerShape(13.dp),color=colors.card,
-                    border=BorderStroke(1.dp,colors.panelBorder)){
-                    NativeRichTextEditor(value=text,onChange={text=it},
-                        dark=dark,modifier=Modifier.fillMaxSize(),
-                        editorKey=note?.id?:"new-note")
-                }
-                error?.let{Text(it,color=MaterialTheme.colorScheme.error,fontSize=12.sp)}
-                Button(onClick={
-                    onSave(title.trim(),text,group)
-                },modifier=Modifier.fillMaxWidth(),enabled=!busy,
-                    shape=RoundedCornerShape(13.dp)){
-                    Text(if(busy)"Сохраняем…" else "Сохранить")
+                // No nested 112dp-sized box: the editor consumes the full
+                // available height below the shared formatting toolbar.
+                NativeRichTextEditor(
+                    value=text,onChange={text=it},dark=dark,
+                    modifier=Modifier.fillMaxWidth().weight(1f),
+                    editorKey=note?.id?:"new-note")
+                HorizontalDivider(color=edge)
+                Row(Modifier.fillMaxWidth()
+                    .padding(horizontal=16.dp,vertical=10.dp),
+                    verticalAlignment=Alignment.CenterVertically,
+                    horizontalArrangement=Arrangement.spacedBy(10.dp)){
+                    error?.let{
+                        Text(it,color=MaterialTheme.colorScheme.error,
+                            fontSize=11.sp,modifier=Modifier.weight(1f))
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Button(onClick={onSave(title.trim(),text,group)},
+                        enabled=!busy&&title.isNotBlank(),
+                        shape=RoundedCornerShape(13.dp)){
+                        Text(if(busy)"Сохраняем…" else "Сохранить",
+                            fontWeight=FontWeight.SemiBold)
+                    }
                 }
             }
         }
