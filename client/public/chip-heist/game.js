@@ -556,7 +556,6 @@ function drawFinalBoss() {
   ctx.fillStyle = '#b23d46'; ctx.beginPath(); ctx.moveTo(62, 125); ctx.lineTo(52, 104); ctx.lineTo(73, 104); ctx.fill();
   rr(0, 73, 23, 43, 12, '#24334b'); rr(103, 73, 19, 43, 11, '#24334b');
   ctx.restore();
-  text('БОСС · ПУТИН', x + 61, y - 23, 15, '#ffe3d0', 'center');
   if (boss.hp <= 0) text('ОГЛУШЁН', x + 61, y - 42, 13, '#8cfce1', 'center');
 }
 function drawProjectiles() {
