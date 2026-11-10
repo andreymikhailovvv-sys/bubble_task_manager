@@ -640,6 +640,7 @@ private fun NoteGroupManager(vm:HomeViewModel,colors:WorkspaceColors,
                         Text(if(selected!=null)"Изменить группу" else "Новая группа",
                             fontSize=15.sp,color=ink,fontWeight=FontWeight.Bold)
                         OutlinedTextField(value=name,onValueChange={name=it.take(50)},
+                            keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
                             label={Text("Название")},singleLine=true,
                             modifier=Modifier.fillMaxWidth(),
                             colors=OutlinedTextFieldDefaults.colors(
