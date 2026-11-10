@@ -8,7 +8,7 @@
   isolation: isolate;
   overflow: visible;
 }
-.planik-mascot--launcher { width: 96px; height: 86px; }
+.planik-mascot--launcher { width: 108px; height: 96px; }
 .planik-mascot--composer { width: 108px; height: 94px; }
 .planik-svg {
   display: block;
@@ -84,8 +84,8 @@
 
 .planik-launcher-button {
   display: flex;
-  width: 96px;
-  height: 86px;
+  width: 108px;
+  height: 96px;
   align-items: center;
   justify-content: center;
   border: 0;
