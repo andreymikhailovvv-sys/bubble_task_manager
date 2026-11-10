@@ -100,7 +100,7 @@ export function PlanikMascot({
     >
       <svg
         className="planik-svg"
-        viewBox={mode === 'celebrating' ? '90 32 360 275' : '50 32 345 275'}
+        viewBox={mode === 'celebrating' ? '90 32 360 275' : '35 32 345 275'}
         xmlns="http://www.w3.org/2000/svg"
         aria-hidden="true"
         onPointerEnter={() => setHovered(true)}
@@ -122,14 +122,18 @@ export function PlanikMascot({
         <ellipse cx="215" cy="290" rx="93" ry="10" fill="#02091b" opacity=".3" />
 
         <g className="planik-phone">
-          <path d="M136 184Q119 185 100 191" fill="none" stroke="#5e619b" strokeWidth="19" strokeLinecap="round" />
-          <circle cx="101" cy="190" r="10" fill="#a49eea" />
-          <rect x="65" y="136" width="43" height="76" rx="10" fill="#12182e" stroke="#a39deb" strokeWidth="3" />
-          <rect x="71" y="144" width="31" height="60" rx="6" fill="#27335d" />
-          <path d="M86.5 157C80 157 78 162 78 168v4l-3 5h23l-3-5v-4c0-6-2-11-8.5-11zM83 182q3.5 5 7 0" fill="none" stroke="#e4e6ff" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" />
-          <circle cx="87" cy="151" r="1.4" fill="#939ac3" />
-          <circle cx="103" cy="141" r="13" fill="#f43f5e" stroke="#fff" strokeWidth="2.5" />
-          <text x="103" y="144.3" textAnchor="middle" fill="#fff" fontFamily="Inter,Arial,sans-serif" fontWeight="700" fontSize={count > 99 ? 8.4 : 10}>{badgeText}</text>
+          {/* Larger phone with a legible service-style rose badge, anchored to the left arm. */}
+          <path d="M137 184Q120 183 109 195" fill="none" stroke="#6669a9" strokeWidth="20" strokeLinecap="round" />
+          <rect x="44" y="118" width="70" height="111" rx="15" fill="#10192e" stroke="#aea4fb" strokeWidth="4" />
+          <rect x="52" y="129" width="54" height="85" rx="9" fill="#29375e" />
+          <path d="M69 174h27l-5-8v-9c0-7-4-11-9-11s-9 4-9 11v9zM77 182q5 6 10 0"
+            fill="none" stroke="#f7f7ff" strokeWidth="3.8" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="79" cy="136" r="2" fill="#a1a7d6" />
+          <circle cx="78" cy="204" r="3.3" fill="#7484b5" />
+          <circle cx="111" cy="195" r="10" fill="#aaa4ee" />
+          <circle cx="98" cy="123" r="22" fill="#f43f5e" stroke="#fff" strokeWidth="3.5" />
+          <text x="98" y="131" textAnchor="middle" fill="#fff" fontFamily="Inter,Arial,sans-serif"
+            fontWeight="700" fontSize={count > 99 ? 18 : 24}>{badgeText}</text>
         </g>
 
         <path d="M215 77V58" stroke="#8c8ed3" strokeWidth="7" strokeLinecap="round" />

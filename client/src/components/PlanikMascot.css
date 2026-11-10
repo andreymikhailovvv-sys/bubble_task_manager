@@ -8,8 +8,8 @@
   isolation: isolate;
   overflow: visible;
 }
-.planik-mascot--launcher { width: 108px; height: 96px; }
-.planik-mascot--composer { width: 108px; height: 94px; }
+.planik-mascot--launcher { width: 120px; height: 108px; }
+.planik-mascot--composer { width: 122px; height: 108px; }
 .planik-svg {
   display: block;
   width: 100%;
@@ -84,8 +84,8 @@
 
 .planik-launcher-button {
   display: flex;
-  width: 108px;
-  height: 96px;
+  width: 120px;
+  height: 108px;
   align-items: center;
   justify-content: center;
   border: 0;
@@ -99,16 +99,18 @@
 .planik-launcher-button:hover { transform: scale(1.04); }
 .planik-launcher-button:active { transform: scale(.97); }
 .planik-launcher-button:focus-visible { outline: 2px solid #8b5cf6; outline-offset: 4px; border-radius: 18px; }
+/* Separate overlay inside .ai-chat-expanded-main, not a child of the composer.
+   The composer remains anchored by the existing absolute-position rule in
+   styles.css; Planik never contributes to its height or pushes it down. */
 .planik-composer-float {
   position: absolute;
-  z-index: 3;
-  right: 1px;
-  bottom: calc(100% + 3px);
-  height: 94px;
-  width: 108px;
+  z-index: 21;
+  right: 0.25rem;
+  bottom: calc(0.75rem + var(--ai-composer-height, 76px) + 4px);
+  height: 108px;
+  width: 122px;
   pointer-events: auto;
 }
-.ai-chat-expanded-composer-wrap { position: relative; overflow: visible; }
 body[data-theme="light"] .planik-svg { filter: drop-shadow(0 7px 9px rgba(86, 70, 141, .24)); }
 
 @media (min-width: 1024px) {
@@ -119,8 +121,8 @@ body[data-theme="light"] .planik-svg { filter: drop-shadow(0 7px 9px rgba(86, 70
   }
 }
 @media (max-width: 600px) {
-  .planik-mascot--composer { width: 86px; height: 75px; }
-  .planik-composer-float { width: 86px; height: 75px; right: 0; }
+  .planik-mascot--composer { width: 99px; height: 88px; }
+  .planik-composer-float { width: 99px; height: 88px; right: 0; }
 }
 @keyframes planik-float { 0%, 100% { transform: translateY(5px); } 50% { transform: translateY(-5px); } }
 @keyframes planik-blink { 0%, 42%, 46%, 100% { transform: scaleY(1); } 44% { transform: scaleY(.06); } }

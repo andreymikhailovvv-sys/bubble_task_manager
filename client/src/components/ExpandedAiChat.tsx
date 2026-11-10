@@ -30,6 +30,7 @@ type Props = {
   notificationCount?: number;
   celebrationKey?: number;
   progress?: string;
+  showPlanik?: boolean;
   onOpenCheckups?: () => void;
   messages: ReactNode;
   status: ReactNode;
@@ -54,7 +55,7 @@ type Props = {
   onClearReply?: () => void;
 };
 
-export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, uploadProgress, messageCount, themeMode, notificationCount=0, celebrationKey=0, progress, onOpenCheckups, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend, onLiveMessage, onLiveToolResult, onLiveStatus, readOnlyStructure=false, attachmentsEnabled=true, replyTo, onClearReply }: Props) {
+export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, uploadProgress, messageCount, themeMode, notificationCount=0, celebrationKey=0, progress, showPlanik=false, onOpenCheckups, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend, onLiveMessage, onLiveToolResult, onLiveStatus, readOnlyStructure=false, attachmentsEnabled=true, replyTo, onClearReply }: Props) {
   const [draft, setDraft] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [headerHidden, setHeaderHidden] = useState(false);
@@ -225,8 +226,8 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
             </div>
             <div className="ai-chat-expanded-bottom-spacer" aria-hidden="true" />
           </div>
+          {showPlanik ? <div className="planik-composer-float"><PlanikMascot size="composer" notificationCount={notificationCount} typingText={draft} busy={loading} progress={progress} celebrationKey={celebrationKey} /></div> : null}
           <div ref={composerRef} className="ai-chat-expanded-composer-wrap">
-             <div className="planik-composer-float"><PlanikMascot size="composer" notificationCount={notificationCount} typingText={draft} busy={loading} progress={progress} celebrationKey={celebrationKey} /></div>
             {replyTo ? <AiReplyPreview target={replyTo} onDismiss={onClearReply} /> : null}
             {attachmentsEnabled&&<AiAttachmentTiles files={pendingFiles} onRemove={onRemoveFile} busy={loading} uploadProgress={uploadProgress} />}
             <div className="ai-chat-composer flex items-end gap-2 rounded-3xl border p-2"><AutoGrowingTextarea className="max-h-32 min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2.5 text-sm leading-6 focus:outline-none focus:ring-0" value={draft} onChange={(event) => setDraft(event.target.value)}
