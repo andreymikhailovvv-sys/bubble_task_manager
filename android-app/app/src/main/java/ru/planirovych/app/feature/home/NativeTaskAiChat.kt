@@ -503,7 +503,7 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                         .padding(end = 13.dp, bottom = composerHeight + 1.dp),
                     onClick = {
                         ctx.startActivity(PlanikLiveActivity.intent(
-                            ctx, taskId = task.id
+                            ctx, taskId = task.id, expectedUserId = home.user?.id
                         ))
                     }
                 )
