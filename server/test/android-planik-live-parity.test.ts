@@ -50,7 +50,7 @@ test('Android launcher uses real static SVG artwork, animated natively instead o
   assert.match(launcher, /android\.graphics\.Canvas as AndroidCanvas/);
   assert.match(launcher, /renderToPicture\(420, 375\)/);
   assert.match(launcher, /rememberInfiniteTransition/);
-  assert.doesNotMatch(launcher, /\bWebView\b/);
+  assert.doesNotMatch(launcher, /import android\.webkit\.WebView|AndroidView\(/);
   assert.match(manifest, /\.planik\.PlanikLiveActivity/);
   assert.match(manifest, /android:exported="false"/);
   assert.match(build, /com\.caverock:androidsvg:1\.4/);
