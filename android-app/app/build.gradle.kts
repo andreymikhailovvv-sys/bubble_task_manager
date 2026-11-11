@@ -71,6 +71,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons)
+    // Render the actual Planik SVG natively instead of an unreliable transparent WebView.
+    implementation("com.caverock:androidsvg:1.4")
     implementation(libs.retrofit.core)
     implementation(libs.retrofit.serialization)
     implementation(libs.okhttp)
