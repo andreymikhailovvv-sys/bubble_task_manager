@@ -16,7 +16,7 @@ const RESERVED_MILLI = 450_000;
 const MAX_MESSAGE = 120_000;
 // The selected voice is validated on the server and tied to a single-use ticket.
 // Realtime cannot swap voices after speech begins; selection applies to a new call.
-export const PLANIK_REALTIME_VOICES = ['echo', 'ash', 'cedar'] as const;
+export const PLANIK_REALTIME_VOICES = ['echo'] as const;
 export type PlanikRealtimeVoice = typeof PLANIK_REALTIME_VOICES[number];
 const DEFAULT_PLANIK_VOICE: PlanikRealtimeVoice = 'echo';
 function resolvePlanikVoice(value: unknown): PlanikRealtimeVoice {
