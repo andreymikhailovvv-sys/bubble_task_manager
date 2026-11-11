@@ -596,7 +596,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
         </div>
         <footer className="planik-live-footer">
           <div className="planik-live-caption" aria-live="polite">
-            {caption && phase === 'speaking' ? caption.slice(-180) : phase === 'listening' ? 'Расскажите, чем помочь. Я вас слушаю.' : 'Планик готов работать с задачами, расписанием и сообщениями.'}
+            {phase === 'listening' ? 'Говорите свободно. Ваши слова и ответы появляются выше.' : 'Расшифровка разговора отображается над кнопками управления.'}
           </div>
           {error ? <p role="alert" className="planik-live-error">{error}</p> : null}
           <div className="planik-live-voice-preference">
