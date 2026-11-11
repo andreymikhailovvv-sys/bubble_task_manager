@@ -61,7 +61,7 @@ test('small Planik matches light/dark website palette with tight tap bounds and 
   assert.match(native, /dark: Boolean/);
   assert.match(native, /remember\(context, dark\)/);
   assert.match(native, /size\(width = 84\.dp, height = 90\.dp\)/);
-  assert.match(native, /Bitmap\.createBitmap\(full, 90, 29, 255, 275\)/);
+  assert.match(native, /Bitmap\.createBitmap\(full, 80, 12, 280, 300\)/);
   assert.match(native, /indication = null/);
   assert.match(native, /if \(dark\) "" else "_light"/);
   assert.match(general, /PlanikNativeLauncher\([\s\S]{0,70}dark = dark/);
