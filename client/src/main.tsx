@@ -79,6 +79,9 @@ const isWorkHost = window.location.hostname.toLowerCase() === 'work.planirovych.
 const isWorkPreview = import.meta.env.DEV && ['localhost','127.0.0.1'].includes(window.location.hostname) && window.location.pathname === '/business-preview';
 const isBusinessRoute = isWorkHost || isWorkPreview;
 const isMiniAppRoute = window.location.pathname.startsWith('/miniapp');
+// Android embeds this SAME MiniApp frontend for pixel-identical Realtime UI.
+// Runtime web uses existing authenticated session, never Telegram initData.
+const isAndroidPlanikRoute = window.location.pathname === '/android-planik';
 const isTelegramAuthRoute = window.location.pathname === '/telegram-auth';
 const isAdminRoute = window.location.pathname === '/admin556215';
 const isPublicRoute = window.location.pathname === '/android'
@@ -103,13 +106,15 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           ? <TelegramAuthPage />
         : isMiniAppRoute
           ? <MiniApp runtime="telegram" />
+        : isAndroidPlanikRoute
+          ? <MiniApp runtime="web" />
           : isPublicRoute
             ? <PublicPages />
             : isCompactWorkspaceViewport
               ? <MiniApp runtime="web" />
               : <App />}
       </React.Suspense>
-      {!isBusinessRoute && !isMiniAppRoute && !isTelegramAuthRoute && !isAdminRoute ? <CookieBanner /> : null}
+      {!isBusinessRoute && !isMiniAppRoute && !isAndroidPlanikRoute && !isTelegramAuthRoute && !isAdminRoute ? <CookieBanner /> : null}
     </AppErrorBoundary>
   </React.StrictMode>
 );
