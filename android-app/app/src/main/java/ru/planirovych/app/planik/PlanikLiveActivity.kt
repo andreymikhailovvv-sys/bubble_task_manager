@@ -265,7 +265,13 @@ class PlanikLiveActivity : ComponentActivity() {
         // but a delayed/missing callback kept WebView completely blank until
         // our 18-second timeout. Copy on the UI thread, flush synchronously,
         // and ALWAYS load the page exactly once.
-        if (cookies.isEmpty()) Log.w(TAG, "No native session cookies; browser may need login")
+        if (cookies.none { it.name == "btm_auth" || it.name == "btm_device" }) {
+            // Never create a fresh guest in the voice WebView and accidentally
+            // send AI requests to a different account than the native app.
+            Log.e(TAG, "Native session is missing auth/device cookie; refusing guest bootstrap")
+            showFailure("Не удалось передать авторизацию из Android. Войдите заново в Планировыч.")
+            return
+        }
         cookies.forEach { cookie -> manager.setCookie(host.toString(), cookie.toString()) }
         manager.flush()
         Log.i(TAG, "Planik navigation starting, sessionCookies=${cookies.size}")
