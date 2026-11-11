@@ -241,7 +241,18 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
                   setTypingSignal((signal) => signal + 1);
                 }
                 if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); submit(); }
-              }} placeholder="Напишите сообщение…" />{attachmentsEnabled&&<input ref={fileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { onAddFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} />}{attachmentsEnabled&&<button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted" aria-label="Прикрепить файл" onClick={() => fileInputRef.current?.click()}><Paperclip size={17} /></button>}<VoiceInputButton liveContext={activeChat?.id ? { type: 'chat', projectId: activeProject?.id, chatId: activeChat.id, projectTitle: activeProject?.title, chatTitle: activeChat.title, model, history: (activeChat.messages as Array<{ id?: string; role?: string; content?: string }>).filter(item => (item.role === 'user' || item.role === 'assistant') && typeof item.content === 'string').map(item => ({ id: item.id || '', role: item.role as 'user' | 'assistant', content: item.content! })) } : undefined} onLiveMessage={onLiveMessage} onLiveToolResult={onLiveToolResult} onLiveStatus={onLiveStatus} disabled={loading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
+              }} placeholder="Напишите сообщение…" />{attachmentsEnabled&&<input ref={fileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { onAddFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} />}{attachmentsEnabled&&<button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted" aria-label="Прикрепить файл" onClick={() => fileInputRef.current?.click()}><Paperclip size={17} /></button>}<VoiceInputButton liveContext={activeChat?.id ? { type: 'chat', projectId: activeProject?.id, chatId: activeChat.id, projectTitle: activeProject?.title, chatTitle: activeChat.title, model, history: (activeChat.messages as Array<{ id?: string; role?: string; content?: string }>).filter(item => (item.role === 'user' || item.role === 'assistant') && typeof item.content === 'string').map(item => ({ id: item.id || '', role: item.role as 'user' | 'assistant', content: item.content! })) } : undefined} onLiveMessage={onLiveMessage} onLiveToolResult={onLiveToolResult} onLiveStatus={onLiveStatus}
+   onLiveActionReveal={() => {
+     nearBottomRef.current = true;
+     const scrollToLatest = () => {
+       const container = scrollRef.current;
+       if (container) container.scrollTop = container.scrollHeight;
+     };
+     requestAnimationFrame(() => {
+       scrollToLatest();
+       requestAnimationFrame(scrollToLatest);
+     });
+   }} disabled={loading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
     const next = [draft.trim(), text].filter(Boolean).join(' ');
     setDraft(next);
     if (immediate && !loading) { onSend(next); setDraft(''); }
