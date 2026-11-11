@@ -919,6 +919,17 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     return { taskId, projectId, chatId };
   }, []);
   const androidPlanikLaunchStage = useRef<'pending' | 'opened' | 'started'>('pending');
+  useEffect(() => {
+    if (!androidPlanikLaunch) return;
+    const element = document.documentElement;
+    if (error && !loading) {
+      element.dataset.planikAndroid = 'error';
+      element.dataset.planikAndroidReason = 'workspace-data';
+    } else if (element.dataset.planikAndroid !== 'live' &&
+               element.dataset.planikAndroid !== 'voice-starting') {
+      element.dataset.planikAndroid = loading ? 'workspace-loading' : 'chat-opening';
+    }
+  }, [androidPlanikLaunch, error, loading]);
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
   const [creatingStandaloneNote, setCreatingStandaloneNote] = useState(false);
   const [newStandaloneNote, setNewStandaloneNote] = useState<StandaloneNote | null>(null);
@@ -1179,14 +1190,19 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       setAiCredits(user.aiCredits ?? 0);
       setCurrentUser(user);
 
+      // Native Android's Realtime surface only needs its chosen AI thread
+      // (and tasks when talking inside a specific task). Fetching the whole
+      // planner + Telegram/Mail inbox before showing a voice window made the
+      // WebView appear blank on slower devices and sessions.
+      const androidVoice = Boolean(androidPlanikLaunch);
       const [sphereList, taskList, habitList, quickHistory, syncedProjects, telegramInbox, mailInbox] = await Promise.all([
-        api.getSpheres(),
-        api.getTasks(),
-        api.getHabits(),
+        androidVoice ? Promise.resolve([] as Sphere[]) : api.getSpheres(),
+        androidVoice && !androidPlanikLaunch?.taskId ? Promise.resolve([] as Task[]) : api.getTasks(),
+        androidVoice ? Promise.resolve([] as Habit[]) : api.getHabits(),
         api.getGeneralAssistantHistory().catch(() => ({ messages: [] as ChatMessage[] })),
         api.getAiChatProjects<Partial<MiniAiChatProject>>(),
-        api.telegramAssistantInbox().catch(() => null),
-        api.mailAssistantInbox().catch(() => null)
+        androidVoice ? Promise.resolve(null) : api.telegramAssistantInbox().catch(() => null),
+        androidVoice ? Promise.resolve(null) : api.mailAssistantInbox().catch(() => null)
       ]);
       const quickMessages: MiniAiChatMessage[] = quickHistory.messages
         .filter((message) => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
@@ -3033,6 +3049,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       setIsAiChatOpen(true);
     }
     androidPlanikLaunchStage.current = 'opened';
+    document.documentElement.dataset.planikAndroid = 'chat-opening';
   }, [androidPlanikLaunch, loading, currentUser, aiChatProjects, tasks]);
 
   useEffect(() => {
@@ -3045,8 +3062,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       const composer = androidPlanikLaunch.taskId ? taskAiComposerRef.current : aiChatComposerRef.current;
       if (composer?.startLive()) {
         androidPlanikLaunchStage.current = 'started';
+        document.documentElement.dataset.planikAndroid = 'voice-starting';
         window.clearInterval(id);
       } else if (++tries > 40) {
+        document.documentElement.dataset.planikAndroid = 'error';
+        document.documentElement.dataset.planikAndroidReason = 'composer-not-mounted';
         window.clearInterval(id);
       }
     }, 100);
