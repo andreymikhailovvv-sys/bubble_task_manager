@@ -65,7 +65,8 @@ test('Realtime WebView has visible loading, diagnostics, first-party cookies and
   assert.match(activity, /onReceivedError\(/);
   assert.match(activity, /onRenderProcessGone\(/);
   assert.match(activity, /onReceivedHttpError\(/);
-  assert.match(activity, /showFailure\("Планик не загрузился/);
+  assert.match(activity, /showFailure\(reason\)/);
+  assert.match(activity, /"legacy" -> "Веб-часть Планика на сервере не обновлена/);
   assert.match(activity, /setAcceptThirdPartyCookies\(view, false\)/);
   assert.match(activity, /Persisten[t]CookieJar\(this\)\.loadForRequest\(host\)/);
   assert.match(activity, /querySelector\('\.planik-live-fullscreen, \.miniapp-ai-chat-composer'\)/);
