@@ -65,6 +65,14 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
   onLiveActionReveal?: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>('connecting');
+  useEffect(() => {
+    if (window.location.pathname !== '/android-planik') return;
+    // The Android host only removes its loading veil after the actual
+    // fullscreen/compact Realtime component has mounted. An ordinary SPA
+    // splash or login view must NEVER be treated as a successful launch.
+    document.documentElement.dataset.planikAndroid = 'live';
+    return () => { document.documentElement.dataset.planikAndroid = 'ended'; };
+  }, []);
   // Presentation only. The WebSocket, microphone and audio playback survive collapse.
   const [collapsed, setCollapsed] = useState(false);
   const [liveProgress, setLiveProgress] = useState<LiveVoiceProgressStatus | null>(null);
