@@ -487,7 +487,8 @@ internal fun NativeGeneralAiChatPage(
                             .padding(end = 13.dp, bottom = composerHeight + 1.dp),
                         onClick = {
                             context.startActivity(PlanikLiveActivity.intent(
-                                context, projectId = project?.id, chatId = thread.id
+                                context, projectId = project?.id, chatId = thread.id,
+                                expectedUserId = userId
                             ))
                         }
                     )
