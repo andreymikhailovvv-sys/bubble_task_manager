@@ -11,6 +11,8 @@ import ru.planirovych.app.data.repository.userMessage
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import android.util.Log
 import ru.planirovych.app.data.model.*
 import ru.planirovych.app.data.repository.WorkspaceRepository
 import ru.planirovych.app.data.repository.userMessage
@@ -661,8 +663,49 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
     fun refresh() = viewModelScope.launch {
         mutable.value = HomeState(loading = true)
         runCatching { repository.establishSession() to repository.loadWorkspace() }
-            .onSuccess { (user, workspace) -> mutable.value = HomeState(false, user, workspace.spheres, workspace.tasks, workspace.habits) }
+            .onSuccess { (user, workspace) ->
+                Log.i("PlanikWorkspace", "Initial workspace loaded taskCount=${workspace.tasks.size}")
+                mutable.value = HomeState(false, user, workspace.spheres, workspace.tasks, workspace.habits)
+            }
             .onFailure { mutable.value = HomeState(loading=false, error=it.userMessage()) }
+    }
+
+    /** The Planik WebView is an independent Activity. On return, refresh the
+     * native workspace without wiping its already loaded tasks or UI filters.
+     * One transient empty response must not masquerade as deleted tasks. */
+    fun reconcileAfterPlanik() = viewModelScope.launch {
+        val previous = mutable.value
+        if (previous.loading) return@launch
+        try {
+            val user = repository.establishSession()
+            if (previous.user != null && previous.user.id != user.id) {
+                Log.e("PlanikWorkspace", "Account changed while Realtime was open; full reload required")
+                refresh() // never mix another account's data into the existing workspace
+                return@launch
+            }
+            val first = repository.loadWorkspace()
+            val updated = if (previous.tasks.isNotEmpty() && first.tasks.isEmpty()) {
+                Log.w("PlanikWorkspace", "Suspicious empty task response after Realtime; retrying")
+                delay(400)
+                repository.loadWorkspace()
+            } else first
+            if (previous.tasks.isNotEmpty() && updated.tasks.isEmpty()) {
+                Log.e("PlanikWorkspace", "Two empty responses; retaining last known tasks for the same account")
+                mutable.update { it.copy(
+                    taskError="Список задач временно не подтвердился. Сохранён последний загруженный список."
+                ) }
+                return@launch
+            }
+            Log.i("PlanikWorkspace", "Workspace reconciled after Realtime: old=${previous.tasks.size} new=${updated.tasks.size}")
+            mutable.update { current ->
+                if (current.user?.id != user.id) current
+                else current.copy(user=user, tasks=updated.tasks, spheres=updated.spheres,
+                    habits=updated.habits, taskError=null)
+            }
+        } catch (error: Throwable) {
+            Log.e("PlanikWorkspace", "Post-Realtime workspace refresh failed", error)
+            mutable.update { it.copy(taskError="Не удалось обновить задачи после Планика: "+error.userMessage()) }
+        }
     }
     fun clearTaskError() { mutable.update { it.copy(taskError = null) } }
 
