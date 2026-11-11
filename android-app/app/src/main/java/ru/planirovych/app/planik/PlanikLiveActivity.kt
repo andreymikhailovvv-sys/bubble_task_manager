@@ -86,7 +86,6 @@ class PlanikLiveActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        PlanikWakeWordService.pauseForLiveSession()
         window.statusBarColor = Color.rgb(13, 19, 38)
         window.navigationBarColor = Color.rgb(9, 14, 27)
         window.decorView.systemUiVisibility = 0
@@ -321,7 +320,6 @@ class PlanikLiveActivity : ComponentActivity() {
             destroy()
         }
         browser = null
-        PlanikWakeWordService.resumeAfterLiveSession()
         super.onDestroy()
     }
 }
