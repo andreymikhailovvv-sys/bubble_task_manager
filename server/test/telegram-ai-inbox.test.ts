@@ -107,14 +107,13 @@ test('task proposals trigger unread system notifications and bot proposal cards'
   assert.match(inbox, /telegramService\.notifyTelegramAiTaskProposal/);
   assert.match(inbox, /await prepareTelegramProposal/);
   assert.match(app, /telegram-ai-tasks:/);
-  // The personal chat launcher now renders unread counts on Planik's phone.
-  // Keep verifying that notification counts reach the visible launcher and
-  // that the phone is absent at zero or during other character animations.
+  // Notification counts now live on the upper-left corner of Planik, not on a
+  // smartphone. The badge is visible in idle and discarded after reading.
   const mascot = src('../../client/src/components/PlanikMascot.tsx');
   const mascotStyles = src('../../client/src/components/PlanikMascot.css');
   assert.match(app, /<PlanikMascot notificationCount=\{unreadSystemNotificationCount\}/);
   assert.match(mascot, /data-has-notifs=\{count > 0 \? 'true' : 'false'\}/);
-  assert.match(mascotStyles, /data-mode="idle"\]\[data-has-notifs="true"\] \.planik-phone/);
+  assert.match(mascotStyles, /data-mode="idle"\]\[data-has-notifs="true"\] \.planik-notif-static/);
 
   const text = telegramTaskProposalBotText('Чат <команда>', [{
     title: 'Встреча с коллегой', type: 'create_event',
