@@ -11,6 +11,7 @@ type Props = {
   onLiveToolResult?: (result: LiveVoiceToolCompletion) => void;
   onLiveStatus?: (status: LiveVoiceProgressStatus | null) => void;
   onLiveSessionChange?: (active: boolean, context?: LiveVoiceContext) => void;
+  onLiveActionReveal?: () => void;
   disabled?: boolean;
   small?: boolean;
   className?: string;
@@ -18,7 +19,7 @@ type Props = {
 
 type VoiceState = 'idle' | 'recording' | 'transcribing';
 
-export function VoiceInputButton({ onTranscript, liveContext, activationMode = 'menu', onLiveMessage, onLiveToolResult, onLiveStatus, onLiveSessionChange, disabled = false, small = false, className = '' }: Props) {
+export function VoiceInputButton({ onTranscript, liveContext, activationMode = 'menu', onLiveMessage, onLiveToolResult, onLiveStatus, onLiveSessionChange, onLiveActionReveal, disabled = false, small = false, className = '' }: Props) {
   const [state, setState] = useState<VoiceState>('idle');
   const [error, setError] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -222,7 +223,7 @@ export function VoiceInputButton({ onTranscript, liveContext, activationMode = '
         </button>
       </div> : null}
       {liveOpen ? <LiveVoiceDialog liveContext={liveContext} audioContext={liveAudioContext}
-        onLiveMessage={onLiveMessage} onLiveToolResult={onLiveToolResult} onLiveStatus={onLiveStatus}
+        onLiveMessage={onLiveMessage} onLiveToolResult={onLiveToolResult} onLiveStatus={onLiveStatus} onLiveActionReveal={onLiveActionReveal}
         onClose={() => { setLiveSessionActive(false); setLiveOpen(false); setLiveAudioContext(null); }} /> : null}
     </span>
     {error && state === 'idle' ? <div role="alert" className="voice-input-error">{error}
