@@ -1,0 +1,209 @@
+/* Planik's realtime avatar. All layout changes leave the audio component mounted. */
+.planik-live-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 2800;
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  overflow: hidden;
+  color: #f3f5ff;
+  background:
+    radial-gradient(ellipse 70% 54% at 50% 42%, rgba(101, 91, 186, .3), transparent 83%),
+    radial-gradient(ellipse 48% 35% at 12% 12%, rgba(53, 184, 205, .12), transparent 90%),
+    linear-gradient(165deg, #111a34 0%, #131a33 46%, #070d1c 100%);
+  isolation: isolate;
+}
+.planik-live-fullscreen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: .55;
+  background-image: radial-gradient(#b7c3ff 1px, transparent 1px);
+  background-size: 89px 91px;
+  mask-image: linear-gradient(to bottom, #000, transparent 92%);
+}
+.planik-live-stage {
+  position: relative;
+  width: min(100%, 720px);
+  height: 100%;
+  height: 100dvh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: calc(26px + env(safe-area-inset-top, 0px)) 28px calc(24px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+  z-index: 1;
+}
+.planik-live-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.planik-live-brand { display: flex; align-items: center; gap: 12px; }
+.planik-live-brand-dot {
+  width: 38px; height: 38px; flex-shrink: 0; border-radius: 14px;
+  background: radial-gradient(circle at 35% 30%, #b3faff, #817ce1 66%, #484071);
+  box-shadow: 0 5px 20px rgba(118, 116, 225, .25);
+}
+.planik-live-brand span:last-child { display: flex; flex-direction: column; gap: 3px; }
+.planik-live-brand strong { font-size: 17px; line-height: 1.15; letter-spacing: .01em; }
+.planik-live-brand small { font-size: 11px; color: #aab6d6; }
+.planik-live-minimize {
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  padding: 9px 12px; border-radius: 12px; border: 1px solid rgba(178, 187, 244, .22);
+  background: rgba(255, 255, 255, .055); color: #eef0ff; font-size: 12px;
+}
+.planik-live-minimize:hover, .planik-live-control:hover { background: rgba(255, 255, 255, .14); }
+.planik-live-minimize:focus-visible, .planik-live-control:focus-visible,
+.planik-live-compact button:focus-visible { outline: 2px solid #8eeaf0; outline-offset: 3px; }
+.planik-live-center {
+  min-height: 0; flex: 1; position: relative; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 9px;
+}
+.planik-live-ambient {
+  position: absolute; width: min(82vw, 410px); height: min(82vw, 410px);
+  border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, rgba(123, 113, 236, .19), rgba(61, 133, 197, .06) 43%, transparent 72%);
+  filter: blur(10px);
+}
+.planik-live-avatar {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: min(58vw, 290px); height: min(52vw, 256px); flex: none;
+  transform: translateZ(0); isolation: isolate;
+}
+.planik-live-avatar .planik-mascot--sidekick { width: 100%; height: 100%; z-index: 1; }
+.planik-live-avatar .planik-svg { filter: drop-shadow(0 14px 25px rgba(7, 10, 34, .45)); }
+.planik-live-avatar-glow {
+  position: absolute; inset: 9% 15% 10%; border-radius: 50%;
+  background: radial-gradient(circle, rgba(130, 117, 248, .38), rgba(84, 210, 225, .07) 57%, transparent 72%);
+  filter: blur(24px); opacity: .65;
+}
+.planik-live-avatar-ring {
+  position: absolute; inset: 10% 14%; border: 1px solid rgba(129, 204, 242, .28);
+  border-radius: 50%; transform: scale(1.25); opacity: 0; pointer-events: none;
+}
+.planik-live-avatar[data-phase="listening"] .planik-live-avatar-ring {
+  opacity: .85; transform: scale(calc(1.23 + var(--voice-level, .06) * .22));
+  transition: transform .12s ease-out, opacity .18s ease;
+}
+.planik-live-avatar[data-phase="listening"] .planik-antenna { animation: planik-live-attention 1.15s infinite alternate ease-in-out; }
+.planik-live-avatar[data-phase="speaking"] .planik-live-avatar-ring {
+  opacity: .95; animation: planik-live-speech-ring 1.2s ease-in-out infinite;
+}
+.planik-live-avatar[data-phase="speaking"] .planik-svg {
+  animation: planik-live-speaking .72s ease-in-out infinite alternate;
+}
+.planik-live-avatar[data-phase="speaking"] .planik-eye { animation-duration: 2s; }
+.planik-live-avatar[data-phase="thinking"] .planik-live-avatar-glow { animation: planik-live-thinking 1.7s infinite alternate ease-in-out; }
+.planik-live-phase { display: flex; align-items: center; gap: 9px; z-index: 1; margin-top: 8px; }
+.planik-live-phase strong { font-size: clamp(16px, 3.5vw, 21px); font-weight: 650; }
+.planik-live-status-dot { width: 8px; height: 8px; background: #a69eef; border-radius: 50%; }
+.planik-live-status-dot.is-listening { background: #57ddce; box-shadow: 0 0 14px rgba(87, 221, 206, .7); }
+.planik-live-visualizer { display: flex; gap: 4px; height: 42px; align-items: center; z-index: 1; margin-top: 4px; }
+.planik-live-visualizer span {
+  width: 4px; height: var(--bar-height); border-radius: 999px;
+  background: linear-gradient(180deg, #63e6de, #a39aff);
+  opacity: .32; transform: scaleY(.45); transform-origin: center;
+}
+.planik-live-visualizer[data-phase="speaking"] span {
+  opacity: .95; animation: planik-live-bar .53s ease-in-out infinite alternate;
+  animation-delay: calc(var(--bar) * -35ms);
+}
+.planik-live-visualizer[data-phase="listening"] span {
+  opacity: .7; transform: scaleY(calc(.32 + var(--voice-level, .06) * 1.25));
+  transition: transform .1s ease-out;
+}
+.planik-live-footer { display: flex; flex-direction: column; align-items: center; gap: 20px; }
+.planik-live-caption {
+  color: #b8c5e0; font-size: 13px; line-height: 1.45; text-align: center;
+  min-height: 38px; max-width: 520px; overflow-wrap: anywhere;
+}
+.planik-live-error { max-width: 520px; font-size: 12px; line-height: 1.45; color: #ffb9ba; text-align: center; }
+.planik-live-controls { display: flex; flex-direction: row; justify-content: center; align-items: center; gap: 26px; }
+.planik-live-control {
+  width: 54px; height: 54px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; color: #eef0ff; border: 1px solid rgba(173, 185, 242, .23);
+  background: rgba(255, 255, 255, .075); transition: background .16s ease, transform .16s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.planik-live-control:disabled { opacity: .38; }
+.planik-live-control:active:not(:disabled) { transform: scale(.94); }
+.planik-live-hangup { background: #d94c65; border-color: #ed7d91; color: white; }
+.planik-live-hangup:hover { background: #bf3652; }
+.planik-live-meta { display: flex; align-items: center; gap: 16px; min-height: 18px; font-size: 11px; color: #94a4c8; }
+.planik-live-meta span { display: flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; }
+
+/* Collapsed mode is intentionally only the animated mascot, not another chat bar. */
+.planik-live-compact {
+  position: fixed; z-index: 2600;
+  right: max(9px, env(safe-area-inset-right, 0px));
+  bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; align-items: center; width: 146px;
+  pointer-events: none; filter: drop-shadow(0 10px 18px rgba(7, 14, 42, .24));
+}
+.planik-live-compact > * { pointer-events: auto; }
+.planik-live-compact-expand {
+  display: flex; flex-direction: column; align-items: center; width: 146px;
+  padding: 0; border: 0; background: none; color: #eef0ff;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.planik-live-compact .planik-live-avatar { width: 138px; height: 124px; }
+.planik-live-compact .planik-live-avatar-ring { inset: 5% 10%; }
+.planik-live-compact-state {
+  margin-top: -8px; position: relative; z-index: 2;
+  background: rgba(19, 26, 52, .91); color: #edf5ff; border-radius: 999px;
+  padding: 5px 12px; font-size: 11px; font-weight: 650;
+  border: 1px solid rgba(153, 164, 230, .2);
+}
+.planik-live-compact-tools { display: flex; align-items: center; gap: 9px; margin-top: 7px; }
+.planik-live-compact-tools button {
+  display: flex; justify-content: center; align-items: center;
+  width: 28px; height: 28px; border-radius: 50%;
+  color: #f1f5ff; background: #283556; border: 1px solid rgba(189, 200, 252, .25);
+}
+.planik-live-compact-tools .planik-live-compact-end { background: #c7465b; }
+.voice-mode-anchor--with-live { gap: 3px; }
+.planik-live-trigger { color: #8b5cf6; }
+.planik-live-trigger:hover { color: #a894ff; }
+
+@keyframes planik-live-speech-ring {
+  0%, 100% { transform: scale(1.14); opacity: .52; }
+  50% { transform: scale(1.37); opacity: .9; }
+}
+@keyframes planik-live-speaking {
+  from { transform: translateY(3px) scale(1); }
+  to { transform: translateY(-6px) scale(1.027); }
+}
+@keyframes planik-live-attention {
+  from { filter: brightness(.85); }
+  to { filter: brightness(1.55) drop-shadow(0 0 7px #83efff); }
+}
+@keyframes planik-live-thinking {
+  from { opacity: .35; }
+  to { opacity: .88; }
+}
+@keyframes planik-live-bar {
+  from { transform: scaleY(.35); }
+  to { transform: scaleY(1.13); }
+}
+@media (max-width: 520px) {
+  .planik-live-stage { padding: calc(14px + env(safe-area-inset-top, 0px)) 18px calc(22px + env(safe-area-inset-bottom, 0px)); }
+  .planik-live-center { gap: 4px; }
+  .planik-live-avatar { width: min(65vw, 260px); height: min(58vw, 232px); }
+  .planik-live-compact { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); right: 7px; }
+  .planik-live-compact .planik-live-avatar { width: 122px; height: 110px; }
+  .planik-live-compact, .planik-live-compact-expand { width: 132px; }
+  .planik-live-controls { gap: 20px; }
+  .planik-live-header { gap: 8px; }
+}
+@media (max-height: 610px) {
+  .planik-live-stage { padding-top: calc(10px + env(safe-area-inset-top,0px)); padding-bottom: calc(12px + env(safe-area-inset-bottom,0px)); }
+  .planik-live-avatar { height: min(34vh, 176px); width: min(38vh, 198px); }
+  .planik-live-footer { gap: 8px; }
+  .planik-live-center { gap: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .planik-live-avatar .planik-svg,
+  .planik-live-avatar-ring,
+  .planik-live-visualizer span,
+  .planik-live-avatar-glow,
+  .planik-live-avatar .planik-antenna { animation: none !important; transition: none !important; }
+}
