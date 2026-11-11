@@ -4,16 +4,30 @@ import { readFile } from 'node:fs/promises';
 
 const read = (path: string) => readFile(new URL(path, import.meta.url), 'utf8');
 
-test('miniapp exposes a separate realtime action without replacing dictation', async () => {
-  const [composer, input] = await Promise.all([
+test('miniapp retains three composer buttons and launches realtime from Planik above the bar', async () => {
+  const [composer, input, mini, launcher] = await Promise.all([
     read('../../client/src/components/MiniAiChatComposer.tsx'),
-    read('../../client/src/components/VoiceInputButton.tsx')
+    read('../../client/src/components/VoiceInputButton.tsx'),
+    read('../../client/src/MiniApp.tsx'),
+    read('../../client/src/components/PlanikMiniChatLauncher.css')
   ]);
   assert.match(composer, /activationMode="transcription"/);
-  assert.match(input, /activationMode === 'transcription' && liveContext/);
-  assert.match(input, /aria-label="Начать живое общение с Плаником"/);
-  assert.match(input, /onClick=\{startLive\}/);
+  assert.match(composer, /<Paperclip size=\{17\}/);
+  assert.match(composer, /<SendHorizontal size=\{17\}/);
+  assert.match(composer, /ref=\{voiceRef\} activationMode="transcription"/);
+  assert.match(composer, /startLive: \(\) => voiceRef\.current\?\.startLive\(\) \?\? false/);
+  assert.match(input, /forwardRef<VoiceInputButtonHandle, Props>/);
+  assert.match(input, /useImperativeHandle\(ref, \(\) => \(\{/);
+  assert.match(input, /if \(disabled \|\| !liveContext \|\| state !== 'idle' \|\| liveOpen\) return false/);
+  assert.doesNotMatch(input, /planik-live-trigger|activationMode === 'transcription' && liveContext/);
   assert.match(input, /onLiveSessionChangeRef\.current\?\.\(active, activeLiveContextRef\.current\)/);
+  assert.equal((mini.match(/className="miniapp-planik-live-launcher"/g) ?? []).length, 2);
+  assert.match(mini, /onClick=\{\(\) => taskAiComposerRef\.current\?\.startLive\(\)\}/);
+  assert.match(mini, /onClick=\{\(\) => aiChatComposerRef\.current\?\.startLive\(\)\}/);
+  assert.match(mini, /<PlanikMascot size="composer" \/>/);
+  assert.match(mini, /!miniLiveVoiceActive/);
+  assert.match(launcher, /position: absolute/);
+  assert.match(launcher, /bottom: calc\(100% - 9px\)/);
 });
 
 test('realtime presentation persists a single live session through collapse', async () => {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Loader2, Mic, MessageCircle, Radio, SendHorizontal, Square, X } from 'lucide-react';
 import { LiveVoiceDialog, type LiveVoiceContext, type LiveVoiceMessage, type LiveVoiceToolCompletion, type LiveVoiceProgressStatus } from './LiveVoiceDialog';
 import { api } from '../lib/api';
@@ -19,7 +19,9 @@ type Props = {
 
 type VoiceState = 'idle' | 'recording' | 'transcribing';
 
-export function VoiceInputButton({ onTranscript, liveContext, activationMode = 'menu', onLiveMessage, onLiveToolResult, onLiveStatus, onLiveSessionChange, onLiveActionReveal, disabled = false, small = false, className = '' }: Props) {
+export type VoiceInputButtonHandle = { startLive: () => boolean };
+
+export const VoiceInputButton = forwardRef<VoiceInputButtonHandle, Props>(function VoiceInputButton({ onTranscript, liveContext, activationMode = 'menu', onLiveMessage, onLiveToolResult, onLiveStatus, onLiveSessionChange, onLiveActionReveal, disabled = false, small = false, className = '' }, ref) {
   const [state, setState] = useState<VoiceState>('idle');
   const [error, setError] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -103,6 +105,16 @@ export function VoiceInputButton({ onTranscript, liveContext, activationMode = '
     setLiveSessionActive(true);
     setLiveOpen(true);
   };
+
+  // Keep activation inside the original tap handler (not a delayed effect):
+  // Telegram WebView must see a user gesture before allowing audio playback.
+  useImperativeHandle(ref, () => ({
+    startLive: () => {
+      if (disabled || !liveContext || state !== 'idle' || liveOpen) return false;
+      startLive();
+      return true;
+    }
+  }));
 
   const stop = (sendImmediately: boolean) => {
     immediateRef.current = sendImmediately;
@@ -200,20 +212,12 @@ export function VoiceInputButton({ onTranscript, liveContext, activationMode = '
   };
 
   return <>
-    <span className={`voice-mode-anchor ${activationMode === 'transcription' && liveContext ? 'voice-mode-anchor--with-live' : ''}`} ref={menuRef}>
+    <span className="voice-mode-anchor" ref={menuRef}>
       <button type="button" disabled={disabled || state !== 'idle' || liveOpen} onClick={() => { if (activationMode === 'transcription') void start(); else setMenuOpen(value => !value); }}
         className={`voice-input-trigger inline-flex ${small ? 'h-9 w-9' : 'h-11 w-11'} shrink-0 items-center justify-center rounded-full disabled:opacity-50 ${className}`}
         title={activationMode === 'transcription' ? 'Голосовой ввод' : 'Выбрать голосовой режим'} aria-label={activationMode === 'transcription' ? 'Голосовой ввод' : 'Выбрать голосовой режим'} aria-expanded={activationMode === 'menu' ? menuOpen : undefined}>
         <Mic size={small ? 16 : 17} />
       </button>
-      {activationMode === 'transcription' && liveContext ? (
-        <button type="button" disabled={disabled || state !== 'idle' || liveOpen}
-          className={`voice-input-trigger planik-live-trigger inline-flex ${small ? 'h-9 w-9' : 'h-11 w-11'} shrink-0 items-center justify-center rounded-full disabled:opacity-50 ${className}`}
-          title="Живое общение с Плаником" aria-label="Начать живое общение с Плаником"
-          onClick={startLive}>
-          <Radio size={small ? 16 : 17} />
-        </button>
-      ) : null}
       {activationMode === 'menu' && menuOpen ? <div className="voice-mode-menu dialog-surface" role="menu" aria-label="Голосовой режим">
         <button type="button" role="menuitem" onClick={startLive}>
           <Radio size={18} /><span><strong>Живое общение</strong><small>Говорите с ИИ без пауз на отправку</small></span>
@@ -245,4 +249,4 @@ export function VoiceInputButton({ onTranscript, liveContext, activationMode = '
       </div>
     </div> : null}
   </>;
-}
+});

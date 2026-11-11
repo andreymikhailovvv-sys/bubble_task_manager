@@ -202,9 +202,6 @@
   color: #f1f5ff; background: #283556; border: 1px solid rgba(189, 200, 252, .25);
 }
 .planik-live-compact-tools .planik-live-compact-end { background: #c7465b; }
-.voice-mode-anchor--with-live { gap: 3px; }
-.planik-live-trigger { color: #8b5cf6; }
-.planik-live-trigger:hover { color: #a894ff; }
 
 @keyframes planik-live-speech-ring {
   0%, 100% { transform: scale(1.14); opacity: .52; }

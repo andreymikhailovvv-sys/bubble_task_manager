@@ -1,0 +1,45 @@
+/* Reuse the website's SVG mascot above the Telegram/mobile composer.
+   It is intentionally outside the three-button input bar and does not
+   contribute to its height. The live dialog is still owned by VoiceInputButton. */
+.miniapp-planik-live-launcher {
+  position: absolute;
+  z-index: 4;
+  right: 12px;
+  bottom: calc(100% - 9px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 105px;
+  height: 94px;
+  padding: 0;
+  border: 0;
+  border-radius: 24px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .16s ease, filter .16s ease;
+}
+.miniapp-planik-live-launcher .planik-mascot--composer {
+  width: 105px;
+  height: 94px;
+}
+.miniapp-planik-live-launcher:hover:not(:disabled) { transform: translateY(-3px) scale(1.03); }
+.miniapp-planik-live-launcher:active:not(:disabled) { transform: scale(.96); }
+.miniapp-planik-live-launcher:disabled { cursor: default; opacity: .58; }
+.miniapp-planik-live-launcher:focus-visible {
+  outline: 2px solid var(--accent, #8b5cf6);
+  outline-offset: 1px;
+}
+@media (max-width: 600px) {
+  .miniapp-planik-live-launcher {
+    width: 99px;
+    height: 88px;
+    right: 12px;
+  }
+  .miniapp-planik-live-launcher .planik-mascot--composer { width: 99px; height: 88px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .miniapp-planik-live-launcher { transition: none; }
+}
