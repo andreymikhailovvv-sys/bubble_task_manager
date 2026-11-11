@@ -113,13 +113,13 @@ internal fun PlanikNativeLauncher(
             // than leaving an invisible but tappable 105 x 94 dp rectangle.
             Canvas(Modifier.fillMaxSize().offset(y = floatOffset.dp)) {
                 drawRoundRect(
-                    color = Color(0xFF7776BD),
+                    color = if (dark) Color(0xFF7776BD) else Color(0xFFAAA4E4),
                     topLeft = Offset(size.width * .22f, size.height * .26f),
                     size = androidx.compose.ui.geometry.Size(size.width * .56f, size.height * .60f),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height * .22f)
                 )
                 drawRoundRect(
-                    color = Color(0xFF253251),
+                    color = if (dark) Color(0xFF253251) else Color(0xFF4A4A7B),
                     topLeft = Offset(size.width * .30f, size.height * .40f),
                     size = androidx.compose.ui.geometry.Size(size.width * .40f, size.height * .28f),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height * .12f)
