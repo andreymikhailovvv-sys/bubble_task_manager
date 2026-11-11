@@ -56,6 +56,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.UUID
 import ru.planirovych.app.data.model.*
+import ru.planirovych.app.planik.PlanikLiveActivity
 
 private val GENERAL_PROJECT_COLORS=listOf("#8b5cf6","#06b6d4","#22c55e","#f97316",
     "#ec4899","#6366f1","#14b8a6","#f43f5e")
@@ -471,6 +472,24 @@ internal fun NativeGeneralAiChatPage(
                         NativeTaskAiProgressChip(state.progressStatus
                             ?:"analyzing_request",c)
                     }
+                }
+
+                // Identical animated SVG launcher, floating ABOVE the
+                // unchanged native paperclip / dictation / send composer.
+                if (!isTelegram && thread != null) {
+                    val composerHeight = with(LocalDensity.current) {
+                        composerHeightPx.toDp()
+                    }
+                    PlanikNativeLauncher(
+                        enabled = !isBusy,
+                        modifier = Modifier.align(Alignment.BottomEnd)
+                            .padding(end = 13.dp, bottom = composerHeight + 9.dp),
+                        onClick = {
+                            context.startActivity(PlanikLiveActivity.intent(
+                                context, projectId = project?.id, chatId = thread.id
+                            ))
+                        }
+                    )
                 }
 
                 Column(Modifier.align(Alignment.BottomCenter)

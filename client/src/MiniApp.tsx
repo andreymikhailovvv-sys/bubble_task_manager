@@ -907,6 +907,18 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     };
   };
   const [isAiChatOpen, setIsAiChatOpen] = useState(false);
+  // Native Android launches the existing Mini App Realtime screen rather than
+  // maintaining a second renderer with subtly different animation and cards.
+  const androidPlanikLaunch = useMemo(() => {
+    if (window.location.pathname !== '/android-planik') return null;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('openPlanik') !== '1') return null;
+    const taskId = params.get('taskId')?.trim() || null;
+    const projectId = params.get('projectId')?.trim() || null;
+    const chatId = params.get('chatId')?.trim() || null;
+    return { taskId, projectId, chatId };
+  }, []);
+  const androidPlanikLaunchStage = useRef<'pending' | 'opened' | 'started'>('pending');
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
   const [creatingStandaloneNote, setCreatingStandaloneNote] = useState(false);
   const [newStandaloneNote, setNewStandaloneNote] = useState<StandaloneNote | null>(null);
@@ -2995,6 +3007,52 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     if (event.result.taskDataChanged) void loadData({ refreshPlannerOnly: true });
     refreshAiCredits();
   };
+  // A dedicated Android WebView is restricted to this first-party origin.
+  // It receives the same session cookies as the native Retrofit client.
+  useEffect(() => {
+    if (!androidPlanikLaunch || loading || !currentUser ||
+        !aiChatProjectsSyncReadyRef.current || androidPlanikLaunchStage.current !== 'pending') return;
+    if (androidPlanikLaunch.taskId) {
+      const found = tasks.some(task => task.id === androidPlanikLaunch.taskId);
+      if (!found) return;
+      setOpenedTaskId(androidPlanikLaunch.taskId);
+      setIsAiDialogOpen(true);
+    } else {
+      const chosenProject = aiChatProjects.find(project =>
+        project.id === androidPlanikLaunch.projectId &&
+        project.chats.some(chat => chat.id === androidPlanikLaunch.chatId)) ??
+        aiChatProjects.find(project =>
+          project.chats.some(chat => chat.id === QUICK_AI_CHAT_ID && !project.id.startsWith('telegram') && !project.id.startsWith('mail')));
+      const chosenChat = chosenProject?.chats.find(chat => chat.id === androidPlanikLaunch.chatId) ??
+        chosenProject?.chats.find(chat => chat.id === QUICK_AI_CHAT_ID);
+      if (!chosenProject || !chosenChat ||
+          chosenChat.id.startsWith('telegram-ai-assistant:') ||
+          chosenChat.id.startsWith('mail-ai-assistant:')) return;
+      setActiveAiChatProjectId(chosenProject.id);
+      setActiveAiChatId(chosenChat.id);
+      setIsAiChatOpen(true);
+    }
+    androidPlanikLaunchStage.current = 'opened';
+  }, [androidPlanikLaunch, loading, currentUser, aiChatProjects, tasks]);
+
+  useEffect(() => {
+    if (!androidPlanikLaunch || androidPlanikLaunchStage.current !== 'opened') return;
+    if (androidPlanikLaunch.taskId ? !isAiDialogOpen : !isAiChatOpen) return;
+    let tries = 0;
+    // A live dialog must be mounted after the selected chat. Android's
+    // WebChromeClient handles a one-time microphone permission on launch.
+    const id = window.setInterval(() => {
+      const composer = androidPlanikLaunch.taskId ? taskAiComposerRef.current : aiChatComposerRef.current;
+      if (composer?.startLive()) {
+        androidPlanikLaunchStage.current = 'started';
+        window.clearInterval(id);
+      } else if (++tries > 40) {
+        window.clearInterval(id);
+      }
+    }, 100);
+    return () => window.clearInterval(id);
+  }, [androidPlanikLaunch, isAiDialogOpen, isAiChatOpen, openedTaskId, activeAiChatId]);
+
   const activeAiChatProject = aiChatProjects.find((project) => project.id === activeAiChatProjectId) ?? aiChatProjects[0];
   const activeAiChat = activeAiChatProject?.chats.find((chat) => chat.id === activeAiChatId) ?? activeAiChatProject?.chats[0];
   const activeLiveVoiceStatus = activeAiChatProject && activeAiChat

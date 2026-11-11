@@ -61,6 +61,7 @@ import kotlinx.serialization.json.*
 import java.util.Locale
 import java.util.UUID
 import ru.planirovych.app.data.model.*
+import ru.planirovych.app.planik.PlanikLiveActivity
 
 internal data class TaskChatColors(
     val bg:Color,val panel:Color,val text:Color,val secondary:Color,
@@ -490,6 +491,22 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                             NativeTaskAiProgressChip(ui.progressStatus?:"analyzing_request",c)
                         }
                     }
+                // The launcher shares the website SVG/CSS and does not take
+                // space inside the existing three-button Compose composer.
+                val composerHeight = with(LocalDensity.current) {
+                    composerHeightPx.toDp()
+                }
+                PlanikNativeLauncher(
+                    enabled = !busy,
+                    modifier = Modifier.align(Alignment.BottomEnd)
+                        .padding(end = 13.dp, bottom = composerHeight + 9.dp),
+                    onClick = {
+                        ctx.startActivity(PlanikLiveActivity.intent(
+                            ctx, taskId = task.id
+                        ))
+                    }
+                )
+
                 Column(Modifier.align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .padding(start=12.dp,end=12.dp,bottom=10.dp)

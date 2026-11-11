@@ -1,0 +1,507 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<style>html,body { margin:0; padding:0; width:100%; height:100%; background:transparent; overflow:hidden; }
+.planik-mascot--composer { display:block; width:100vw !important; height:100vh !important; }
+/* Website-only Planik. Keep animations on transforms and opacity for cheap
+   rendering, especially next to the bubble workspace. */
+.planik-mascot {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  vertical-align: middle;
+  isolation: isolate;
+  overflow: visible;
+}
+.planik-mascot--launcher { width: 120px; height: 108px; }
+.planik-mascot--composer { width: 122px; height: 108px; }
+.planik-mascot--sidekick { width: 135px; height: 120px; }
+/* Shadow is a sibling of the floating SVG, so it never bobs with Planik. */
+.planik-ground-shadow {
+  position: absolute;
+  left: 52%;
+  bottom: 2%;
+  width: 36%;
+  height: 7%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(5, 12, 35, .28), transparent 78%);
+  pointer-events: none;
+}
+.planik-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 8px 12px rgba(22, 16, 65, .26));
+  animation: planik-float 3.6s ease-in-out infinite;
+}
+.planik-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: planik-blink 5.4s infinite;
+}
+.planik-notif-static, .planik-notif-take-arm, .planik-notif-flying, .planik-notif-whoosh,
+.planik-typing, .planik-thinking,
+.planik-searching, .planik-celebrating, .planik-hover {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.planik-mascot[data-mode="idle"][data-has-notifs="true"] .planik-notif-static,
+.planik-mascot[data-mode="typing"] .planik-typing,
+.planik-mascot[data-mode="thinking"] .planik-thinking,
+.planik-mascot[data-mode="searching"] .planik-searching,
+.planik-mascot[data-mode="celebrating"] .planik-celebrating,
+.planik-mascot[data-mode="hover"] .planik-hover {
+  opacity: 1;
+  visibility: visible;
+}
+/* A service-style rose counter replaces the old handheld smartphone.
+   Only idle shows a live count. On a real >0 -> 0 transition, the previous
+   number remains visible long enough for Planik to pluck it off and toss it. */
+.planik-notif-take-arm {
+  transform-origin: 133px 190px;
+  transform-box: view-box;
+}
+.planik-notif-held { opacity: 0; }
+.planik-notif-flying {
+  transform-origin: 130px 94px;
+  transform-box: view-box;
+}
+.planik-mascot[data-mode="clearing"] .planik-notif-static,
+.planik-mascot[data-mode="clearing"] .planik-notif-take-arm,
+.planik-mascot[data-mode="clearing"] .planik-notif-flying,
+.planik-mascot[data-mode="clearing"] .planik-notif-whoosh {
+  visibility: visible;
+}
+.planik-mascot[data-mode="clearing"] .planik-notif-static {
+  animation: planik-notif-peel 1.66s steps(1, end) both;
+}
+.planik-mascot[data-mode="clearing"] .planik-notif-take-arm {
+  animation: planik-notif-reach 1.66s ease-in-out both;
+}
+.planik-mascot[data-mode="clearing"] .planik-notif-held {
+  animation: planik-notif-held 1.66s steps(1, end) both;
+}
+.planik-mascot[data-mode="clearing"] .planik-notif-flying {
+  animation: planik-notif-toss 1.66s cubic-bezier(.17,.50,.36,1) both;
+}
+.planik-mascot[data-mode="clearing"] .planik-notif-whoosh {
+  animation: planik-notif-whoosh 1.66s ease-out both;
+}
+.planik-mascot[data-mode="hover"] .planik-eye { animation: planik-shy-eye 1.35s ease-in-out infinite; }
+.planik-mascot[data-mode="hover"] .planik-hover-left {
+  transform-origin: 129px 194px;
+  transform-box: view-box;
+  animation: planik-reach-left .9s ease-in-out infinite alternate;
+}
+.planik-mascot[data-mode="hover"] .planik-hover-right {
+  transform-origin: 303px 194px;
+  transform-box: view-box;
+  animation: planik-reach-right .85s ease-in-out infinite alternate;
+}
+.planik-mascot[data-mode="thinking"] .planik-scratch-arm {
+  transform-origin: 302px 186px;
+  transform-box: view-box;
+  animation: planik-scratch .6s ease-in-out infinite alternate;
+}
+.planik-mascot[data-mode="thinking"] .planik-antenna { animation: planik-glow .75s ease-in-out infinite alternate; }
+.planik-mascot[data-mode="typing"] .planik-type-left {
+  transform-origin: 134px 211px;
+  transform-box: view-box;
+  animation: planik-tap-left .27s ease-in-out infinite alternate;
+}
+.planik-mascot[data-mode="typing"] .planik-type-right {
+  transform-origin: 297px 211px;
+  transform-box: view-box;
+  animation: planik-tap-right .31s ease-in-out .12s infinite alternate;
+}
+.planik-mascot[data-mode="typing"] .planik-key-a { animation: planik-key .55s steps(1) infinite; }
+.planik-mascot[data-mode="typing"] .planik-key-b { animation: planik-key .55s steps(1) .19s infinite; }
+.planik-mascot[data-mode="searching"] .planik-loupe {
+  transform-origin: 240px 245px;
+  transform-box: view-box;
+  animation: planik-scan 1.4s ease-in-out infinite alternate;
+}
+.planik-mascot[data-mode="searching"] .planik-page-one { animation: planik-page-one 3.9s linear infinite; }
+.planik-mascot[data-mode="searching"] .planik-page-two { animation: planik-page-two 3.9s linear infinite; }
+.planik-mascot[data-mode="searching"] .planik-page-three { animation: planik-page-three 3.9s linear infinite; }
+.planik-mascot[data-mode="celebrating"] .planik-celebrate-rig {
+  transform-origin: 300px 206px;
+  transform-box: view-box;
+  animation: planik-popper-lift .48s cubic-bezier(.2,1.1,.35,1) both;
+}
+/* Both begin at .55s. The flash cannot lag behind the first confetti. */
+.planik-popper-flash, .planik-popper-particle { opacity: 0; }
+.planik-popper-flash {
+  transform-box: view-box;
+  transform-origin: 105px 157px;
+}
+.planik-mascot[data-mode="celebrating"] .planik-popper-flash {
+  animation: planik-popper-flash .4s ease-out .55s both;
+}
+.planik-popper-particle {
+  transform-box: view-box;
+  transform-origin: 105px 157px;
+}
+.planik-mascot[data-mode="celebrating"] .planik-popper-particle {
+  animation: planik-confetti-burst 1.55s cubic-bezier(.14,.67,.42,1) calc(.55s + var(--planik-stagger, 0s)) both;
+}
+.planik-mascot[data-mode="celebrating"] .planik-svg { animation: planik-hop .48s ease-in-out 3; }
+
+.planik-launcher-button {
+  display: flex;
+  width: 120px;
+  height: 108px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+  transition: transform .2s ease;
+}
+.planik-launcher-button:hover { transform: scale(1.04); }
+.planik-launcher-button:active { transform: scale(.97); }
+.planik-launcher-button:focus-visible { outline: 2px solid #8b5cf6; outline-offset: 4px; border-radius: 18px; }
+/* Separate overlay inside .ai-chat-expanded-main, not a child of the composer.
+   The composer remains anchored by the existing absolute-position rule in
+   styles.css; Planik never contributes to its height or pushes it down. */
+.planik-composer-float {
+  position: absolute;
+  z-index: 21;
+  right: 0.25rem;
+  bottom: calc(0.75rem + var(--ai-composer-height, 76px) + 4px);
+  height: 108px;
+  width: 122px;
+  pointer-events: auto;
+}
+body[data-theme="light"] .planik-svg { filter: drop-shadow(0 7px 9px rgba(86, 70, 141, .24)); }
+
+@media (min-width: 1024px) {
+  /* The right-hand workspace side rail begins about 400px from the edge.
+     Give the larger Planik its own margin inside the workspace. */
+  /* Only the normal desktop workspace: not a focused task, Work,
+     fullscreen bubbles or modal sidekick. The right rail starts near 400px. */
+  .ai-chat-launcher:not(.work-ai-launcher):not(.ai-chat-launcher-task-open):not(.bubble-ai-fullscreen) {
+    right: 410px;
+  }
+  .ai-chat-launcher:not(.work-ai-launcher):not(.ai-chat-launcher-task-open):not(.bubble-ai-fullscreen) .planik-launcher-button,
+  .ai-chat-launcher:not(.work-ai-launcher):not(.ai-chat-launcher-task-open):not(.bubble-ai-fullscreen) .planik-mascot--launcher {
+    width: 108px;
+    height: 96px;
+  }
+  .ai-chat-launcher:not(.work-ai-launcher):not(.ai-chat-launcher-task-open):not(.bubble-ai-fullscreen) .planik-quick-ai-preview {
+    bottom: 96px;
+  }
+}
+@media (max-width: 600px) {
+  .planik-mascot--composer { width: 99px; height: 88px; }
+  .planik-composer-float { width: 99px; height: 88px; right: 0; }
+}
+/* The hand touches the badge at 38%, grabs it, then throws left at 60%.
+   Badge copies are phase-gated so no frame displays two red counters. */
+@keyframes planik-notif-peel {
+  0%, 37% { opacity: 1; }
+  38%, 100% { opacity: 0; }
+}
+@keyframes planik-notif-held {
+  0%, 37% { opacity: 0; }
+  38%, 59% { opacity: 1; }
+  60%, 100% { opacity: 0; }
+}
+@keyframes planik-notif-reach {
+  0%, 8% { opacity: 0; transform: rotate(-57deg); }
+  18%, 40% { opacity: 1; transform: rotate(0); }
+  58%, 66% { opacity: 1; transform: rotate(-50deg); }
+  86%, 100% { opacity: 0; transform: rotate(-10deg); }
+}
+@keyframes planik-notif-toss {
+  0%, 59% { opacity: 0; transform: translate(-60px, 50px) rotate(-15deg) scale(1); }
+  60% { opacity: 1; transform: translate(-60px, 50px) rotate(-15deg) scale(1); }
+  86% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-250px, -64px) rotate(-530deg) scale(.58); }
+}
+@keyframes planik-notif-whoosh {
+  0%, 55% { opacity: 0; }
+  61% { opacity: .8; }
+  81%, 100% { opacity: 0; }
+}
+@keyframes planik-float { 0%, 100% { transform: translateY(5px); } 50% { transform: translateY(-5px); } }
+@keyframes planik-blink { 0%, 42%, 46%, 100% { transform: scaleY(1); } 44% { transform: scaleY(.06); } }
+@keyframes planik-shy-eye { 0%, 100% { transform: scaleY(.75) rotate(-6deg); } 50% { transform: scaleY(.45) rotate(6deg); } }
+@keyframes planik-glow { from { opacity: .4; } to { opacity: 1; } }
+@keyframes planik-scratch { from { transform: rotate(-4deg); } to { transform: rotate(5deg); } }
+@keyframes planik-reach-left { from { transform: rotate(-6deg); } to { transform: rotate(9deg); } }
+@keyframes planik-reach-right { from { transform: rotate(6deg); } to { transform: rotate(-9deg); } }
+@keyframes planik-tap-left { from { transform: rotate(-4deg); } to { transform: rotate(5deg); } }
+@keyframes planik-tap-right { from { transform: rotate(4deg); } to { transform: rotate(-5deg); } }
+@keyframes planik-key { 0%, 49%, 100% { fill: #59649d; } 50%, 80% { fill: #bbadff; } }
+@keyframes planik-scan { from { transform: rotate(-7deg); } to { transform: rotate(6deg); } }
+@keyframes planik-page-one { 0%, 29% { opacity: 1; transform: translateX(0); } 34%, 100% { opacity: 0; transform: translateX(-12px); } }
+@keyframes planik-page-two { 0%, 31% { opacity: 0; transform: translateX(12px); } 36%, 64% { opacity: 1; transform: translateX(0); } 69%, 100% { opacity: 0; transform: translateX(-12px); } }
+@keyframes planik-page-three { 0%, 66% { opacity: 0; transform: translateX(12px); } 71%, 97% { opacity: 1; transform: translateX(0); } 100% { opacity: 0; transform: translateX(-12px); } }
+@keyframes planik-popper-lift {
+  from { transform: translate(24px,32px) rotate(10deg) scale(.65); opacity: 0; }
+  to { transform: translate(0,0) rotate(0) scale(1); opacity: 1; }
+}
+@keyframes planik-popper-flash {
+  0% { opacity: 0; transform: scale(.4); }
+  12% { opacity: 1; transform: scale(1.1); }
+  80%, 100% { opacity: 0; transform: scale(1.8); }
+}
+@keyframes planik-confetti-burst {
+  0% { opacity: 0; transform: translate(0,0) scale(.45) rotate(0); }
+  8% { opacity: 1; }
+  65% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--planik-dx),var(--planik-dy)) scale(.85) rotate(var(--planik-rotate)); }
+}
+@keyframes planik-hop { 50% { transform: translateY(-12px); } }
+@media (prefers-reduced-motion: reduce) {
+  .planik-svg, .planik-eye, .planik-scratch-arm, .planik-type-left, .planik-type-right,
+  .planik-loupe, .planik-page-one, .planik-page-two, .planik-page-three,
+  .planik-notif-static, .planik-notif-take-arm, .planik-notif-flying, .planik-notif-whoosh, .planik-notif-held,
+  .planik-celebrate-rig, .planik-popper-flash, .planik-popper-particle, .planik-hover-left, .planik-hover-right,
+  .planik-key-a, .planik-key-b { animation: none !important; }
+}
+
+/* Softer lavender, muted framing and a gentle ambient shadow in light mode. */
+body[data-theme='light'] .planik-body-stop-start { stop-color: #b8b3ec; }
+body[data-theme='light'] .planik-body-stop-mid { stop-color: #928fd6; }
+body[data-theme='light'] .planik-body-stop-end { stop-color: #686cb6; }
+body[data-theme='light'] .planik-rim-stop-start { stop-color: #d5f4fa; }
+body[data-theme='light'] .planik-rim-stop-mid { stop-color: #c7c0fa; }
+body[data-theme='light'] .planik-rim-stop-end { stop-color: #a8a0e7; }
+body[data-theme='light'] .planik-screen-stop-start { stop-color: #4a4a7b; }
+body[data-theme='light'] .planik-screen-stop-end { stop-color: #323a66; }
+body[data-theme='light'] .planik-svg { filter: drop-shadow(0 8px 11px rgba(111, 101, 159, .19)); }
+body[data-theme='light'] .planik-ground-shadow {
+  background: radial-gradient(ellipse, rgba(112, 105, 163, .2), transparent 78%);
+}
+
+/* Match the existing Quick AI launcher (bottom-8/right-6) in modal windows.
+   Position independently of each dialog's height and never block its layout.
+   Pointer events must reach Planik's SVG for the shy-eye/reaching-hands hover. */
+.planik-notes-companion,
+.planik-task-editor-companion {
+  position: fixed;
+  right: max(1.5rem, env(safe-area-inset-right));
+  bottom: max(2rem, env(safe-area-inset-bottom));
+  width: 135px;
+  height: 120px;
+  pointer-events: auto;
+  z-index: 2;
+}
+/* On ordinary laptop-sized desktops reserve just enough room at the
+   notes board's right edge without obscuring note cards or clipping Planik. */
+@media (min-width: 1200px) and (max-width: 1439px) {
+  .standalone-notes-backdrop:not(.standalone-notes-mobile) .standalone-notes-board {
+    max-width: min(72rem, calc(100vw - 232px));
+  }
+  .planik-notes-companion {
+    width: 108px;
+    height: 96px;
+  }
+  .planik-notes-companion .planik-mascot--sidekick { width: 108px; height: 96px; }
+}
+@media (max-width: 1199px) {
+  .planik-notes-companion { display: none; }
+}
+@media (max-width: 1139px) {
+  .planik-task-editor-companion { display: none; }
+}
+
+/* The modal companions use the same live Quick AI hover panel as the
+   workspace launcher. While a personal modal is open, elevate the one
+   existing launcher above its backdrop. Keep its duplicate avatar invisible:
+   the visible clickable/hoverable avatar is the modal companion. */
+body:has(.planik-notes-companion, .planik-task-editor-companion)
+  .ai-chat-launcher:not(.work-ai-launcher) {
+  z-index: 280 !important;
+  right: max(1.5rem, env(safe-area-inset-right)) !important;
+  bottom: max(2rem, env(safe-area-inset-bottom)) !important;
+  pointer-events: none;
+}
+body:has(.planik-notes-companion, .planik-task-editor-companion)
+  .ai-chat-launcher:not(.work-ai-launcher) .planik-launcher-button {
+  visibility: hidden;
+  pointer-events: none;
+}
+/* Hover over the modal mascot opens the original shared quick-chat popover.
+   The popup overlaps its top edge slightly, so moving into the popup
+   preserves the regular .group:hover boundary and does not dismiss it. */
+body:has(.planik-notes-companion:hover, .planik-task-editor-companion:hover)
+  .ai-chat-launcher:not(.work-ai-launcher) .planik-quick-ai-preview,
+body:has(.planik-notes-companion, .planik-task-editor-companion)
+  .ai-chat-launcher:not(.work-ai-launcher):focus-within .planik-quick-ai-preview {
+  pointer-events: auto;
+  opacity: 1;
+  transform: translateY(0);
+}
+/* Do not let the normal absolute popup offset create a gap from the sidekick. */
+body:has(.planik-notes-companion, .planik-task-editor-companion)
+  .ai-chat-launcher:not(.work-ai-launcher) .planik-quick-ai-preview {
+  bottom: 108px;
+}
+
+/* The compact notes-side mascot is 96px tall, so tuck the popup slightly
+   lower to keep a continuous hover path from robot to chat. */
+@media (min-width: 1200px) and (max-width: 1439px) {
+  body:has(.planik-notes-companion)
+    .ai-chat-launcher:not(.work-ai-launcher) .planik-quick-ai-preview {
+    bottom: 90px;
+  }
+}
+</style></head><body><span class="planik-mascot planik-mascot--composer" data-mode="idle" data-has-notifs="false"><span class="planik-ground-shadow"></span>      <svg
+        class="planik-svg"
+        viewBox="35 32 345 275"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true"
+      >
+        <defs>
+          <linearGradient id="planik-body-native" x1="125" y1="75" x2="300" y2="250" gradientUnits="userSpaceOnUse">
+            <stop class="planik-body-stop-start" stop-color="#5e5ca3" /><stop class="planik-body-stop-mid" offset=".55" stop-color="#373965" /><stop class="planik-body-stop-end" offset="1" stop-color="#242e51" />
+          </linearGradient>
+          <linearGradient id="planik-rim-native" x1="125" y1="75" x2="300" y2="250" gradientUnits="userSpaceOnUse">
+            <stop class="planik-rim-stop-start" stop-color="#9ce4f5" /><stop class="planik-rim-stop-mid" offset=".52" stop-color="#afa8ff" /><stop class="planik-rim-stop-end" offset="1" stop-color="#7a75ca" />
+          </linearGradient>
+          <linearGradient id="planik-screen-native" x1="0" y1="0" x2="1" y2="1">
+            <stop class="planik-screen-stop-start" stop-color="#212e50" /><stop class="planik-screen-stop-end" offset="1" stop-color="#141d38" />
+          </linearGradient>
+        </defs>
+
+        <path d="M215 77V58" stroke="#8c8ed3" stroke-width="7" stroke-linecap="round" />
+        <circle class="planik-antenna" cx="215" cy="52" r="9" fill="#88e0ed" />
+        <rect x="122" y="76" width="186" height="174" rx="65" fill="url(#planik-body-native)" stroke="url(#planik-rim-native)" stroke-width="4" />
+        <path d="M148 100Q163 83 192 83" fill="none" stroke="#d0eaff" stroke-opacity=".2" stroke-linecap="round" stroke-width="4" />
+        <rect class="planik-faceplate" x="153" y="118" width="124" height="92" rx="44" fill="url(#planik-screen-native)" stroke="#7f81b1" stroke-opacity=".35" stroke-width="1" />
+        <g><ellipse class="planik-eye" cx="190" cy="162" rx="10" ry="15" fill="#f1f3ff" /></g>
+        <g><ellipse class="planik-eye" cx="240" cy="162" rx="10" ry="15" fill="#f1f3ff" /></g>
+
+        
+        <g class="planik-notif-static">
+          <circle cx="130" cy="94" r="21" fill="#f43f5e" stroke="#fff" stroke-width="3.5" />
+          <text x="130" y="101.5" textAnchor="middle" fill="#fff" fontFamily="Inter,Arial,sans-serif"
+            fontWeight="800" font-size="22">0</text>
+        </g>
+        <g class="planik-notif-take-arm">
+          <path d="M133 190Q106 178 106 151Q107 126 125 113" fill="none" stroke="#7576b9"
+            stroke-width="18" stroke-linecap="round" stroke-linejoin="round" />
+          <circle cx="126" cy="112" r="10" fill="#aca6ef" />
+          <path d="M120 109L117 102M129 107L134 101" stroke="#d4ceff"
+            stroke-width="3.5" fill="none" stroke-linecap="round" />
+          <g class="planik-notif-held">
+            <circle cx="130" cy="94" r="21" fill="#f43f5e" stroke="#fff" stroke-width="3.5" />
+            <text x="130" y="101.5" textAnchor="middle" fill="#fff" fontFamily="Inter,Arial,sans-serif"
+              fontWeight="800" font-size="22">0</text>
+          </g>
+        </g>
+        <path class="planik-notif-whoosh" d="M72 156Q52 137 32 149M62 175Q40 172 25 183"
+          stroke="#aaa9f0" stroke-width="3" strokeDasharray="10 9" fill="none" stroke-linecap="round" />
+        <g class="planik-notif-flying">
+          <circle cx="130" cy="94" r="21" fill="#f43f5e" stroke="#fff" stroke-width="3.5" />
+          <text x="130" y="101.5" textAnchor="middle" fill="#fff" fontFamily="Inter,Arial,sans-serif"
+            fontWeight="800" font-size="22">0</text>
+        </g>
+
+        <g class="planik-typing">
+          <path d="M156 224H275L309 279H125Z" fill="#242e54" stroke="#a09de1" stroke-width="2.5" stroke-linejoin="round" />
+          <path d="M164 233H268L289 264H145Z" fill="#303d6b" />
+          <g fill="#59649d">
+            <rect x="162" y="238" width="18" height="7" rx="2" />
+            <rect class="planik-key-a" x="185" y="238" width="18" height="7" rx="2" />
+            <rect x="208" y="238" width="18" height="7" rx="2" />
+            <rect x="231" y="238" width="18" height="7" rx="2" />
+            <rect x="252" y="238" width="18" height="7" rx="2" />
+            <rect x="154" y="251" width="18" height="7" rx="2" />
+            <rect x="178" y="251" width="18" height="7" rx="2" />
+            <rect x="201" y="251" width="18" height="7" rx="2" />
+            <rect class="planik-key-b" x="224" y="251" width="18" height="7" rx="2" />
+            <rect x="246" y="251" width="18" height="7" rx="2" />
+            <rect x="178" y="267" width="92" height="6" rx="3" />
+          </g>
+          <g class="planik-type-left">
+            <path d="M133 211Q147 224 172 244" fill="none" stroke="#7777b8" stroke-width="16" stroke-linecap="round" />
+            <circle cx="176" cy="245" r="8" fill="#aaa6f0" />
+            <path d="M179 244L189 241" stroke="#c1bcff" stroke-width="6" stroke-linecap="round" />
+          </g>
+          <g class="planik-type-right">
+            <path d="M298 211Q282 224 264 244" fill="none" stroke="#7777b8" stroke-width="16" stroke-linecap="round" />
+            <circle cx="260" cy="245" r="8" fill="#aaa6f0" />
+            <path d="M258 244L248 253" stroke="#c1bcff" stroke-width="6" stroke-linecap="round" />
+          </g>
+        </g>
+
+        <g class="planik-thinking">
+          <g class="planik-scratch-arm">
+            <path d="M301 188Q327 185 330 163Q335 140 309 118" fill="none" stroke="#7274b4" stroke-width="18" stroke-linecap="round" />
+            <circle cx="306" cy="116" r="10" fill="#a8a3ed" />
+            <path d="M296 108L291 99M304 106V96M313 107L317 98" fill="none" stroke="#c3bfff" stroke-width="3.5" stroke-linecap="round" />
+          </g>
+        </g>
+
+        <g class="planik-searching">
+          <path d="M130 190Q104 191 102 216" fill="none" stroke="#7375b2" stroke-width="17" stroke-linecap="round" />
+          <rect x="80" y="151" width="103" height="100" rx="10" fill="#484d84" stroke="#a39cf0" stroke-width="2.5" />
+          <path d="M81 168H182" stroke="#c5c0ff" stroke-width="3" />
+          <circle cx="94" cy="159" r="2.8" fill="#efa9c9" /><circle cx="104" cy="159" r="2.8" fill="#e9d689" /><circle cx="114" cy="159" r="2.8" fill="#9ce4ed" />
+          <g class="planik-page-one">
+            <rect x="91" y="176" width="80" height="62" rx="4" fill="#e4e8fb" />
+            <rect x="99" y="184" width="25" height="18" rx="3" fill="#a2b4ef" />
+            <path d="M130 186h34M130 194h28M99 210h62M99 218h55M99 226h42" stroke="#9aa5cc" stroke-width="3" stroke-linecap="round" />
+          </g>
+          <g class="planik-page-two">
+            <rect x="91" y="176" width="80" height="62" rx="4" fill="#f2e6ff" />
+            <rect x="99" y="184" width="62" height="12" rx="3" fill="#b39ae7" />
+            <path d="M99 204h63M99 213h55M99 222h48M99 230h35" stroke="#b1a6cf" stroke-width="3" stroke-linecap="round" />
+          </g>
+          <g class="planik-page-three">
+            <rect x="91" y="176" width="80" height="62" rx="4" fill="#e5f6fb" />
+            <circle cx="116" cy="201" r="14" fill="#a1dce5" />
+            <path d="M136 188h27M136 198h25M99 221h63M99 230h45" stroke="#98bfc7" stroke-width="3" stroke-linecap="round" />
+          </g>
+          <circle cx="182" cy="222" r="9" fill="#a9a5ed" />
+          <path d="M301 191Q279 204 249 244" fill="none" stroke="#7778b8" stroke-width="18" stroke-linecap="round" />
+          <circle cx="248" cy="243" r="9" fill="#aaa5ee" />
+          <g class="planik-loupe">
+            <path d="M242 240L210 215" fill="none" stroke="#9e94ef" stroke-width="11" stroke-linecap="round" />
+            <circle cx="191" cy="195" r="25" fill="#a3d8f5" fill-opacity=".2" stroke="#cac3ff" stroke-width="7" />
+            <path d="M180 187Q188 180 196 185" fill="none" stroke="#fff" stroke-opacity=".9" stroke-width="3" stroke-linecap="round" />
+          </g>
+        </g>
+
+        <g class="planik-celebrating">
+          
+          <g class="planik-celebrate-rig">
+            <path d="M132 207Q146 235 173 224" fill="none" stroke="#7272b3" stroke-width="19" stroke-linecap="round" />
+            <path d="M301 208Q281 237 258 230" fill="none" stroke="#7272b3" stroke-width="19" stroke-linecap="round" />
+            <path d="M118 132Q103 140 104 163Q105 179 119 190L258 237Q273 232 267 219Z" fill="#8569d0" stroke="#c5a8ff" stroke-width="3" />
+            <path d="M145 140L171 151L202 217L178 207Z" fill="#f5cd70" />
+            <path d="M198 176L219 190L241 231L223 224Z" fill="#f5cd70" />
+            <path d="M125 145L245 223" stroke="#e9ddff" stroke-opacity=".25" stroke-width="4" fill="none" />
+            <ellipse cx="112" cy="161" rx="15" ry="29" transform="rotate(18 112 161)" fill="#9870e9" stroke="#ded0ff" stroke-width="3" />
+            <ellipse cx="112" cy="161" rx="10" ry="22" transform="rotate(18 112 161)" fill="#292149" />
+            <circle cx="173" cy="224" r="11" fill="#a6a0ef" />
+            <circle cx="258" cy="230" r="11" fill="#a6a0ef" />
+          </g>
+          
+          <g class="planik-popper-flash">
+            <path d="M105 125L115 146L138 157L115 168L105 193L96 168L73 157L96 146Z" fill="#ffe493" />
+            <circle cx="105" cy="157" r="7" fill="#fffdf0" />
+          </g>
+          <g class="planik-confetti-burst">
+                      </g>
+        </g>
+
+        <g class="planik-hover">
+          <g class="planik-hover-left"><g>
+            <path d="M129 194Q141 219 170 224" fill="none" stroke="#7777b8" stroke-width="17" stroke-linecap="round" />
+            <circle cx="170" cy="224" r="10" fill="#b2aaff" />
+          </g></g>
+          <g class="planik-hover-right"><g>
+            <path d="M303 194Q283 218 254 225" fill="none" stroke="#7777b8" stroke-width="17" stroke-linecap="round" />
+            <circle cx="254" cy="225" r="10" fill="#b2aaff" />
+          </g></g>
+        </g>
+      </svg></span></body></html>
