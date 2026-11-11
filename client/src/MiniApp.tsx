@@ -2961,6 +2961,24 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           ? chat.messages : [...chat.messages, message].slice(chatId === QUICK_AI_CHAT_ID ? -100 : -300) })
     })));
   };
+  // The live overlay deliberately avoids auto-scroll during normal speech.
+  // Once it reveals a confirmation card, pin only its source thread to the
+  // bottom AFTER the result has been rendered, without ending the voice call.
+  const scrollLiveActionIntoView = (scope: 'task' | 'chat') => {
+    if (scope === 'chat') generalAiChatNearBottomRef.current = true;
+    const scroll = () => {
+      const container = scope === 'task' ? fullscreenAiDialogContainerRef.current : aiChatDialogContainerRef.current;
+      if (!container) return;
+      container.scrollTop = container.scrollHeight;
+      if (scope === 'task') taskAiChatScrollTopRef.current = container.scrollTop;
+      else generalAiChatScrollTopRef.current = container.scrollTop;
+    };
+    window.requestAnimationFrame(() => {
+      scroll();
+      window.requestAnimationFrame(scroll);
+    });
+  };
+
   const applyLiveProjectTool = (projectId: string, chatId: string, event: LiveVoiceToolCompletion) => {
     const answer = voiceToolAssistantMessage(event);
     const key = `${projectId}:${chatId}`;
@@ -5247,6 +5265,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   liveContext={{ type: 'task', taskId: openedTask.id, model: openedTask.aiMonitoringEnabled ? (openedTask.aiMonitoringModel ?? DEFAULT_TASK_AI_CHAT_MODEL) : (selectedAiChatModel) }}
                   onLiveMessage={event => appendLiveTaskMessage(openedTask.id, event)}
                   onLiveToolResult={event => applyLiveTaskTool(openedTask.id, event)}
+                  onLiveActionReveal={() => scrollLiveActionIntoView('task')}
                   onLiveStatus={status => updateLiveTaskStatus(openedTask.id, status)}
                   onLiveSessionChange={onMiniLiveVoiceSessionChange}
                   initialDraft={taskAiDraftValueRef.current}
@@ -5397,6 +5416,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   liveContext={activeAiChat ? { type: 'chat', chatId: activeAiChat.id, projectId: activeAiChatProject?.id, projectTitle: activeAiChatProject?.title, chatTitle: activeAiChat.title, model: generalAiChatModel, history: activeAiChat.messages.filter(message => message.role === 'assistant' || message.role === 'user').map(message => ({ id: message.id, role: message.role as 'assistant' | 'user', content: message.content })) } : undefined}
                   onLiveMessage={event => activeAiChatProject && activeAiChat && appendLiveProjectMessage(activeAiChatProject.id, activeAiChat.id, event)}
                   onLiveToolResult={event => activeAiChatProject && activeAiChat && applyLiveProjectTool(activeAiChatProject.id, activeAiChat.id, event)}
+                  onLiveActionReveal={() => scrollLiveActionIntoView('chat')}
                   onLiveStatus={status => activeAiChatProject && activeAiChat && updateLiveChatStatus(activeAiChatProject.id, activeAiChat.id, status)}
                   onLiveSessionChange={onMiniLiveVoiceSessionChange}
                   initialDraft={aiChatDraftValueRef.current}

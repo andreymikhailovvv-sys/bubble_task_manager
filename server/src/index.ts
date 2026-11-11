@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import './lib/timestamp-console.js';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express from 'express';

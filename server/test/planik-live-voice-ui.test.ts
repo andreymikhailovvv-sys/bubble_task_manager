@@ -36,7 +36,9 @@ test('delegated cards collapse the presentation without ending the microphone or
   const toolBegin = voice.slice(voice.indexOf('const handleToolRequest'), voice.indexOf('useEffect(() => {', voice.indexOf('const handleToolRequest')));
   assert.match(toolBegin, /processingToolRef\.current = true;/);
   assert.doesNotMatch(toolBegin.split("const result = scope.type")[0], /setCollapsed\(true\)/);
-  assert.match(toolBegin, /if \(hasPlanikActionSurface\(result\)\) setCollapsed\(true\)/);
+  assert.match(toolBegin, /const actionVisibleInChat = hasPlanikActionSurface\(result\)/);
+  assert.match(toolBegin, /if \(actionVisibleInChat\) \{/);
+  assert.match(toolBegin, /onLiveActionRevealRef\.current\?\.\(\)/);
   assert.match(toolBegin, /onLiveToolResultRef\.current\?\.\(/);
   assert.doesNotMatch(toolBegin, /stopResourcesRef\.current\(\)/);
   assert.match(voice, /const finish = \(\) => \{/);
@@ -54,7 +56,7 @@ test('Planik keeps existing billing, VAD, and realtime model while adopting an o
 });
 
 test('voice stays fullscreen for informational tool results and shows cards only on actual actions', async () => {
-  const { hasPlanikActionSurface, normalizePlanikVoice } =
+  const { hasPlanikActionSurface } =
     await import('../../client/src/lib/planikLiveVoicePresentation.js');
   const plain = { answer: 'Завтра тепло.', taskDataChanged: false, model: 'gpt', webSearchUsed: false };
   assert.equal(hasPlanikActionSurface(plain), false);
@@ -64,12 +66,9 @@ test('voice stays fullscreen for informational tool results and shows cards only
   assert.equal(hasPlanikActionSurface({ ...plain, mailSendDraft: { id: 'draft' } as never }), true);
   assert.equal(hasPlanikActionSurface({ ...plain, taskProposal: { id: 'proposal' } as never }), true);
   assert.equal(hasPlanikActionSurface({ ...plain, generatedDocument: { id: 'doc' } as never }), true);
-  assert.equal(normalizePlanikVoice('echo'), 'echo');
-  assert.equal(normalizePlanikVoice('cedar'), 'cedar');
-  assert.equal(normalizePlanikVoice('bad'), 'echo');
 });
 
-test('Telegram safe area, visible live transcript and persisted voice selection', async () => {
+test('Telegram safe area, visible live transcript, and fixed Echo voice', async () => {
   const [voice, styles, api] = await Promise.all([
     read('../../client/src/components/LiveVoiceDialog.tsx'),
     read('../../client/src/components/PlanikLiveVoice.css'),
@@ -82,7 +81,44 @@ test('Telegram safe area, visible live transcript and persisted voice selection'
   assert.match(voice, /AiStreamingMessageBody content=\{message.text\}/);
   assert.match(voice, /AiStreamingMessageBody content=\{caption\}/);
   assert.match(voice, /setLiveMessages\(previous =>/);
-  assert.match(voice, /PLANIK_VOICE_STORAGE_KEY/);
-  assert.match(voice, /Применится в следующем разговоре/);
+  assert.match(voice, /'echo'/);
+  assert.doesNotMatch(voice, /planik-live-voice-preference|PLANIK_VOICE_STORAGE_KEY|PLANIK_VOICE_OPTIONS/);
+  assert.match(voice, /<strong>Планик<\/strong>/);
+  assert.doesNotMatch(voice, /Живое общение · Realtime|ИИ думает|ИИ говорит/);
   assert.match(api, /body: JSON.stringify\(\{ context, voice \}\)/);
+});
+
+test('Planik reveals only action cards and scrolls the matching chat after rendering', async () => {
+  const [voice, input, composer, expanded, mini] = await Promise.all([
+    read('../../client/src/components/LiveVoiceDialog.tsx'),
+    read('../../client/src/components/VoiceInputButton.tsx'),
+    read('../../client/src/components/MiniAiChatComposer.tsx'),
+    read('../../client/src/components/ExpandedAiChat.tsx'),
+    read('../../client/src/MiniApp.tsx')
+  ]);
+  assert.match(voice, /onLiveActionRevealRef\.current\?\.\(\)/);
+  assert.match(input, /onLiveActionReveal=\{onLiveActionReveal\}/);
+  assert.match(composer, /onLiveActionReveal=\{onLiveActionReveal\}/);
+  assert.match(expanded, /onLiveActionReveal=\{\(\) => \{/);
+  assert.match(expanded, /nearBottomRef\.current = true/);
+  assert.match(mini, /const scrollLiveActionIntoView = \(scope: 'task' \| 'chat'\)/);
+  assert.match(mini, /scope === 'task' \? fullscreenAiDialogContainerRef\.current : aiChatDialogContainerRef\.current/);
+  assert.match(mini, /onLiveActionReveal=\{\(\) => scrollLiveActionIntoView\('task'\)\}/);
+  assert.match(mini, /onLiveActionReveal=\{\(\) => scrollLiveActionIntoView\('chat'\)\}/);
+});
+
+test('Planik name and progress status are readable without redundant AI labels', async () => {
+  const [voice, css] = await Promise.all([
+    read('../../client/src/components/LiveVoiceDialog.tsx'),
+    read('../../client/src/components/PlanikLiveVoice.css')
+  ]);
+  assert.match(voice, /searching_tasks: 'Ищу задачи/);
+  assert.match(voice, /thinking: 'Думаю/);
+  assert.match(voice, /<strong>\{phaseLabel\}<\/strong>/);
+  assert.match(css, /\.planik-live-brand strong\s*\{/);
+  assert.match(css, /color:\s*#f8faff !important/);
+  assert.match(css, /font-size:\s*clamp\(23px/);
+  assert.doesNotMatch(css, /\.planik-live-voice-preference/);
+  const server = await read('../src/services/ai-live-voice.service.ts');
+  assert.match(server, /PLANIK_REALTIME_VOICES = \['echo'\]/);
 });

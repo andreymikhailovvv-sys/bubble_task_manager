@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Loader2, Maximize2, Mic, MicOff, Minimize2, PhoneOff, Radio } from 'lucide-react';
 import { PlanikMascot } from './PlanikMascot';
 import { AiStreamingMessageBody } from './AiStreamingMessageBody';
-import { hasPlanikActionSurface, normalizePlanikVoice, PLANIK_VOICE_OPTIONS, PLANIK_VOICE_STORAGE_KEY, type PlanikVoice } from '../lib/planikLiveVoicePresentation';
+import { hasPlanikActionSurface } from '../lib/planikLiveVoicePresentation';
 import './PlanikLiveVoice.css';
 import { api, type AiChatResult, type TaskAssistantResult, type AiChatProgressStatus, type TaskAiProgressStatus } from '../lib/api';
 import type { AiChatModel } from '../lib/types';
@@ -57,15 +57,17 @@ function decodePcm(base64: string) {
   return values;
 }
 
-export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMessage, onLiveToolResult, onLiveStatus }: {
+export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMessage, onLiveToolResult, onLiveStatus, onLiveActionReveal }: {
   onClose: () => void; audioContext: AudioContext | null; liveContext?: LiveVoiceContext;
   onLiveMessage?: (item: LiveVoiceMessage) => void;
   onLiveToolResult?: (result: LiveVoiceToolCompletion) => void;
   onLiveStatus?: (status: LiveVoiceProgressStatus | null) => void;
+  onLiveActionReveal?: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>('connecting');
   // Presentation only. The WebSocket, microphone and audio playback survive collapse.
   const [collapsed, setCollapsed] = useState(false);
+  const [liveProgress, setLiveProgress] = useState<LiveVoiceProgressStatus | null>(null);
   const processingToolRef = useRef(false);
   const toolQueueRef = useRef<Array<{ question: string; callId: string; ws: WebSocket }>>([]);
   const dialogHistoryRef = useRef(liveContext?.type === 'chat' ? [...(liveContext.history ?? [])] : []);
@@ -75,13 +77,6 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
   const [caption, setCaption] = useState('');
   const [liveMessages, setLiveMessages] = useState<LiveVoiceMessage[]>([]);
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
-  const [preferredVoice, setPreferredVoice] = useState<PlanikVoice>(() => {
-    try { return normalizePlanikVoice(localStorage.getItem(PLANIK_VOICE_STORAGE_KEY)); }
-    catch { return 'echo'; }
-  });
-  // Voice must be chosen before the upstream session starts producing audio.
-  // Subsequent picker changes apply to the NEXT conversation only.
-  const sessionVoiceRef = useRef<PlanikVoice>(preferredVoice);
   const telegramChrome = /Telegram/i.test(navigator.userAgent) ||
     Boolean((window as Window & { Telegram?: { WebApp?: unknown } }).Telegram?.WebApp);
   const [creditsSpentMilli, setCreditsSpentMilli] = useState(0);
@@ -113,15 +108,19 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
   const onLiveMessageRef = useRef(onLiveMessage);
   const onLiveToolResultRef = useRef(onLiveToolResult);
   const onLiveStatusRef = useRef(onLiveStatus);
+  const onLiveActionRevealRef = useRef(onLiveActionReveal);
   liveContextRef.current = liveContext;
   onLiveMessageRef.current = onLiveMessage;
   onLiveToolResultRef.current = onLiveToolResult;
   onLiveStatusRef.current = onLiveStatus;
+  onLiveActionRevealRef.current = onLiveActionReveal;
 
   // The same progress events drive typed and voice-delegated requests.
   // Keep the status in the underlying chat, not just the call overlay.
   const reportStatus = (status: LiveVoiceProgressStatus | null) => {
-    if (!stoppedRef.current) onLiveStatusRef.current?.(status);
+    if (stoppedRef.current) return;
+    setLiveProgress(status);
+    onLiveStatusRef.current?.(status);
   };
 
   const resumeListeningAfterPlayback = () => {
@@ -171,8 +170,14 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
         }, { onStatus: status => reportStatus(status) });
       if (!stoppedRef.current) {
         reportStatus('forming_answer');
-        if (hasPlanikActionSurface(result)) setCollapsed(true);
+        const actionVisibleInChat = hasPlanikActionSurface(result);
         onLiveToolResultRef.current?.({ kind: scope.type, question, result });
+        if (actionVisibleInChat) {
+          // Scroll the exact thread after React inserts the action card.
+          // Keeping the voice component mounted preserves the live audio session.
+          setCollapsed(true);
+          onLiveActionRevealRef.current?.();
+        }
         if (scope.type === 'chat') dialogHistoryRef.current.push({ id: crypto.randomUUID(), role: 'assistant', content: result.answer });
         if (ws.readyState === WebSocket.OPEN) {
           // Realtime must finish narrating the delegated result before mic uplink resumes.
@@ -276,7 +281,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
         restoreAudioSessionRef.current = preferTelegramLiveVoiceMediaSession();
         const { ticket } = await api.startLiveVoice(
           liveContext ? { ...liveContext, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone } : undefined,
-          sessionVoiceRef.current
+          'echo'
         );
         if (cancelled) return;
         const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -480,13 +485,6 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
     }
   }, [liveMessages, caption, collapsed]);
 
-  const changePreferredVoice = (value: string) => {
-    const next = normalizePlanikVoice(value);
-    setPreferredVoice(next);
-    try { localStorage.setItem(PLANIK_VOICE_STORAGE_KEY, next); }
-    catch { /* Browsers may disable persistent storage in private mode. */ }
-  };
-
   const toggleMuted = () => {
     const next = !mutedRef.current;
     mutedRef.current = next;
@@ -502,13 +500,37 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
   };
 
   const phaseText: Record<Phase, string> = {
-    connecting: 'Соединяем с голосовым ИИ…',
-    listening: muted ? 'Микрофон выключен' : 'Слушаю вас',
-    speaking: 'ИИ говорит',
-    thinking: 'ИИ думает…',
+    connecting: 'Подключаюсь…',
+    listening: muted ? 'Микрофон выключен' : 'Слушаю',
+    speaking: 'Говорю',
+    thinking: 'Думаю…',
     ended: 'Разговор завершён',
     error: 'Ошибка соединения'
   };
+  const progressLabels: Partial<Record<LiveVoiceProgressStatus, string>> = {
+    searching_tasks: 'Ищу задачи…',
+    listing_tasks: 'Проверяю задачи…',
+    reading_task: 'Читаю задачу…',
+    searching_subtasks: 'Ищу подзадачи…',
+    analyzing_subtasks: 'Проверяю подзадачи…',
+    searching_notes: 'Ищу заметки…',
+    reading_note: 'Читаю заметку…',
+    searching_workspace: 'Ищу информацию…',
+    searching_web: 'Ищу в интернете…',
+    reading_attachment: 'Читаю файл…',
+    searching_files: 'Ищу файлы…',
+    reading_file: 'Читаю файл…',
+    analyzing_retrieved_context: 'Анализирую…',
+    analyzing_request: 'Думаю…',
+    applying_changes: 'Вношу изменения…',
+    editing_document: 'Редактирую документ…',
+    forming_answer: 'Готовлю ответ…'
+  };
+  const phaseLabel = phase === 'thinking'
+    ? (liveProgress?.startsWith('reading_attachment:') || liveProgress?.startsWith('reading_file:')
+      ? 'Читаю файл…'
+      : (liveProgress ? progressLabels[liveProgress] : undefined) ?? phaseText.thinking)
+    : phaseText[phase];
 
   const sessionFinished = phase === 'ended' || phase === 'error';
   const minute = String(Math.floor(elapsed / 60)).padStart(2, '0');
@@ -533,7 +555,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
         aria-label="Развернуть разговор с Плаником">
         {voiceAvatar}
         <span className="planik-live-compact-state">
-          {phase === 'speaking' ? 'Говорю' : phase === 'listening' && !muted ? 'Слушаю' : phase === 'thinking' ? 'Думаю' : phase === 'connecting' ? 'Подключаюсь' : muted ? 'Без микрофона' : 'Откройте диалог'}
+          {muted ? 'Без микрофона' : phase === 'ended' || phase === 'error' ? 'Откройте диалог' : phaseLabel}
         </span>
       </button>
       <div className="planik-live-compact-tools">
@@ -551,7 +573,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
         <header className="planik-live-header">
           <div className="planik-live-brand">
             <span className="planik-live-brand-dot" aria-hidden="true" />
-            <span><strong>Планик</strong><small>Живое общение · Realtime</small></span>
+            <span><strong>Планик</strong></span>
           </div>
           <button type="button" className="planik-live-minimize"
             onClick={() => setCollapsed(true)} aria-label="Свернуть живое общение">
@@ -563,7 +585,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
           {voiceAvatar}
           <div className="planik-live-phase" aria-live="polite">
             <span className={`planik-live-status-dot ${phase === 'listening' && !muted ? 'is-listening' : ''}`} aria-hidden="true" />
-            <strong>{phaseText[phase]}</strong>
+            <strong>{phaseLabel}</strong>
           </div>
           <div className="planik-live-visualizer" aria-hidden="true" data-phase={mood}>
             {Array.from({ length: 17 }, (_, index) => (
@@ -599,14 +621,6 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
             {phase === 'listening' ? 'Говорите свободно. Ваши слова и ответы появляются выше.' : 'Расшифровка разговора отображается над кнопками управления.'}
           </div>
           {error ? <p role="alert" className="planik-live-error">{error}</p> : null}
-          <div className="planik-live-voice-preference">
-            <label htmlFor="planik-live-voice-select">Голос Планика</label>
-            <select id="planik-live-voice-select" value={preferredVoice}
-              onChange={event => changePreferredVoice(event.target.value)}>
-              {PLANIK_VOICE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-            {preferredVoice !== sessionVoiceRef.current ? <span>Применится в следующем разговоре</span> : null}
-          </div>
           <div className="planik-live-controls live-voice-inline-controls">
             <button type="button" className="planik-live-control planik-live-microphone"
               onClick={toggleMuted} disabled={sessionFinished}
