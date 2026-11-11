@@ -25,9 +25,10 @@ class PersistentCookieJar(context: Context) : CookieJar {
     }
 
     @Synchronized override fun loadForRequest(url: HttpUrl): List<Cookie> {
-        cookies.removeAll { it.expiresAt <= System.currentTimeMillis() }
-        persist()
-        return cookies.filter { it.matches(url) }
+        // Reads must never rewrite stored credentials. A second CookieJar
+        // instance (e.g. the separate Planik activity) can otherwise persist
+        // a stale snapshot over a recently refreshed native login.
+        return cookies.filter { it.expiresAt > System.currentTimeMillis() && it.matches(url) }
     }
 
     private fun persist() = preferences.edit().putString(KEY, json.encodeToString(cookies.map { StoredCookie(it.name, it.value, it.expiresAt, it.domain, it.path, it.secure, it.httpOnly, it.hostOnly) })).apply()
