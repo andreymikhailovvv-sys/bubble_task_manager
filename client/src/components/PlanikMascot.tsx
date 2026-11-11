@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import './PlanikMascot.css';
 
-type PlanikMode = 'idle' | 'hover' | 'typing' | 'thinking' | 'searching' | 'celebrating';
+type PlanikMode = 'idle' | 'hover' | 'typing' | 'thinking' | 'searching' | 'celebrating' | 'clearing';
 
 // Fixed particle paths avoid creating random values or timers on every render.
 const POPPER_CONFETTI = Array.from({ length: 24 }, (_, index) => ({
@@ -40,6 +40,12 @@ export function PlanikMascot({
   const [typing, setTyping] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
+  // Keep the previous number alive while the hand removes and discards it.
+  // Starting with zero (or fetching notifications for the first time)
+  // must never trigger a fake clearing animation.
+  const initialCount = Math.max(0, Math.floor(Number.isFinite(notificationCount) ? notificationCount : 0));
+  const priorNotificationCount = useRef(initialCount);
+  const [clearingCount, setClearingCount] = useState<number | null>(null);
   const priorTypingSignal = useRef(typingSignal);
   const svgRef = useRef<SVGSVGElement>(null);
   const priorCelebration = useRef(celebrationKey);
@@ -67,13 +73,30 @@ export function PlanikMascot({
     return () => window.clearTimeout(timer);
   }, [celebrationKey]);
 
+  const count = Math.max(0, Math.floor(Number.isFinite(notificationCount) ? notificationCount : 0));
+  useEffect(() => {
+    const previous = priorNotificationCount.current;
+    priorNotificationCount.current = count;
+    if (count > 0) {
+      // A new notification supersedes an unfinished throw, avoiding an
+      // invisible or incorrect number on the fresh badge.
+      setClearingCount(null);
+      return;
+    }
+    if (previous <= 0) return;
+    setClearingCount(previous);
+    const timer = window.setTimeout(() => setClearingCount(null), 1660);
+    return () => window.clearTimeout(timer);
+  }, [count]);
+
   const isSearching = progress === 'searching_web' || progress === 'analyzing_web_results';
-  const mode: PlanikMode = celebrating ? 'celebrating'
+  const mode: PlanikMode = clearingCount !== null ? 'clearing'
+    : celebrating ? 'celebrating'
     : busy ? (isSearching ? 'searching' : 'thinking')
     : typing ? 'typing'
     : hovered ? 'hover' : 'idle';
-  const count = Math.max(0, Math.floor(Number.isFinite(notificationCount) ? notificationCount : 0));
-  const badgeText = count > 99 ? '99+' : String(count);
+  const badgeNumber = clearingCount ?? count;
+  const badgeText = badgeNumber > 99 ? '99+' : String(badgeNumber);
 
   const gaze = useCallback((x: number, y: number) => {
     const transform = `translate(${x.toFixed(1)} ${y.toFixed(1)})`;
@@ -88,6 +111,7 @@ export function PlanikMascot({
     if (mode === 'searching') gaze(-9, 5);
     else if (mode === 'typing') gaze(0, 7);
     else if (mode === 'thinking') gaze(7, -4);
+    else if (mode === 'clearing') gaze(-5, 1);
     else if (mode !== 'hover') gaze(0, 0);
   }, [mode]);
 
@@ -151,28 +175,41 @@ export function PlanikMascot({
           </linearGradient>
         </defs>
 
-        <g className="planik-phone">
-          {/* Larger phone with a legible service-style rose badge, anchored to the left arm. */}
-          <path d="M137 184Q120 183 109 195" fill="none" stroke="#6669a9" strokeWidth="20" strokeLinecap="round" />
-          <rect x="44" y="118" width="70" height="111" rx="15" fill="#10192e" stroke="#aea4fb" strokeWidth="4" />
-          <rect x="52" y="129" width="54" height="85" rx="9" fill="#29375e" />
-          <path d="M69 174h27l-5-8v-9c0-7-4-11-9-11s-9 4-9 11v9zM77 182q5 6 10 0"
-            fill="none" stroke="#f7f7ff" strokeWidth="3.8" strokeLinecap="round" strokeLinejoin="round" />
-          <circle cx="79" cy="136" r="2" fill="#a1a7d6" />
-          <circle cx="78" cy="204" r="3.3" fill="#7484b5" />
-          <circle cx="111" cy="195" r="10" fill="#aaa4ee" />
-          <circle cx="98" cy="123" r="22" fill="#f43f5e" stroke="#fff" strokeWidth="3.5" />
-          <text x="98" y="131" textAnchor="middle" fill="#fff" fontFamily="Inter,Arial,sans-serif"
-            fontWeight="700" fontSize={count > 99 ? 18 : 24}>{badgeText}</text>
-        </g>
-
         <path d="M215 77V58" stroke="#8c8ed3" strokeWidth="7" strokeLinecap="round" />
         <circle className="planik-antenna" cx="215" cy="52" r="9" fill="#88e0ed" />
         <rect x="122" y="76" width="186" height="174" rx="65" fill={`url(#planik-body-${gradientSuffix})`} stroke={`url(#planik-rim-${gradientSuffix})`} strokeWidth="4" />
         <path d="M148 100Q163 83 192 83" fill="none" stroke="#d0eaff" strokeOpacity=".2" strokeLinecap="round" strokeWidth="4" />
         <rect className="planik-faceplate" x="153" y="118" width="124" height="92" rx="44" fill={`url(#planik-screen-${gradientSuffix})`} stroke="#7f81b1" strokeOpacity=".35" strokeWidth="1" />
-        <g ref={leftEye}><ellipse className="planik-eye" cx="190" cy="162" rx="8" ry="12" fill="#f1f3ff" /></g>
-        <g ref={rightEye}><ellipse className="planik-eye" cx="240" cy="162" rx="8" ry="12" fill="#f1f3ff" /></g>
+        <g ref={leftEye}><ellipse className="planik-eye" cx="190" cy="162" rx="10" ry="15" fill="#f1f3ff" /></g>
+        <g ref={rightEye}><ellipse className="planik-eye" cx="240" cy="162" rx="10" ry="15" fill="#f1f3ff" /></g>
+
+        {/* Red notification counter sits on the upper-left edge of Planik's body.
+            It is visible only while idle. The three animated copies below share
+            exactly the same number when notifications are marked read. */}
+        <g className="planik-notif-static">
+          <circle cx="130" cy="94" r="21" fill="#f43f5e" stroke="#fff" strokeWidth="3.5" />
+          <text x="130" y="101.5" textAnchor="middle" fill="#fff" fontFamily="Inter,Arial,sans-serif"
+            fontWeight="800" fontSize={badgeNumber > 99 ? 15 : badgeNumber > 9 ? 19 : 22}>{badgeText}</text>
+        </g>
+        <g className="planik-notif-take-arm">
+          <path d="M133 190Q106 178 106 151Q107 126 125 113" fill="none" stroke="#7576b9"
+            strokeWidth="18" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="126" cy="112" r="10" fill="#aca6ef" />
+          <path d="M120 109L117 102M129 107L134 101" stroke="#d4ceff"
+            strokeWidth="3.5" fill="none" strokeLinecap="round" />
+          <g className="planik-notif-held">
+            <circle cx="130" cy="94" r="21" fill="#f43f5e" stroke="#fff" strokeWidth="3.5" />
+            <text x="130" y="101.5" textAnchor="middle" fill="#fff" fontFamily="Inter,Arial,sans-serif"
+              fontWeight="800" fontSize={badgeNumber > 99 ? 15 : badgeNumber > 9 ? 19 : 22}>{badgeText}</text>
+          </g>
+        </g>
+        <path className="planik-notif-whoosh" d="M72 156Q52 137 32 149M62 175Q40 172 25 183"
+          stroke="#aaa9f0" strokeWidth="3" strokeDasharray="10 9" fill="none" strokeLinecap="round" />
+        <g className="planik-notif-flying">
+          <circle cx="130" cy="94" r="21" fill="#f43f5e" stroke="#fff" strokeWidth="3.5" />
+          <text x="130" y="101.5" textAnchor="middle" fill="#fff" fontFamily="Inter,Arial,sans-serif"
+            fontWeight="800" fontSize={badgeNumber > 99 ? 15 : badgeNumber > 9 ? 19 : 22}>{badgeText}</text>
+        </g>
 
         <g className="planik-typing">
           <path d="M156 224H275L309 279H125Z" fill="#242e54" stroke="#a09de1" strokeWidth="2.5" strokeLinejoin="round" />
