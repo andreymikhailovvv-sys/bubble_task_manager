@@ -23,4 +23,16 @@
         <rect class="planik-faceplate" x="153" y="118" width="124" height="92" rx="44" fill="url(#planik-screen-native)" stroke="#7f81b1" stroke-opacity=".35" stroke-width="1" />
         <g><ellipse class="planik-eye" cx="190" cy="162" rx="10" ry="15" fill="#f1f3ff" /></g>
         <g><ellipse class="planik-eye" cx="240" cy="162" rx="10" ry="15" fill="#f1f3ff" /></g>
+        <!-- Resting arms are part of Planik, not a notification animation.
+             These paths are copied from the shared PlanikMascot.tsx SVG. -->
+        <g class="planik-resting-arms">
+          <g class="planik-hover-left">
+            <path d="M129 194Q141 219 170 224" fill="none" stroke="#7777b8" stroke-width="17" stroke-linecap="round" />
+            <circle cx="170" cy="224" r="10" fill="#b2aaff" />
+          </g>
+          <g class="planik-hover-right">
+            <path d="M303 194Q283 218 254 225" fill="none" stroke="#7777b8" stroke-width="17" stroke-linecap="round" />
+            <circle cx="254" cy="225" r="10" fill="#b2aaff" />
+          </g>
+        </g>
 </svg>

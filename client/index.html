@@ -187,9 +187,25 @@
         #workspace-boot-splash .boot-loader::after { transform: translateX(60%); }
       }
     </style>
-    <!-- Keep Telegram's bridge available to Mini App, but never let network
-         latency on telegram.org block the HTML parser and first splash paint. -->
-    <script defer src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- The Android Realtime page uses the ordinary authenticated web UI, NOT
+         Telegram. A deferred, third-party SDK here can hold up all deferred/
+         module scripts in Android WebView, leaving React unmounted forever.
+         Keep the original parser-inserted defer order on existing routes. -->
+    <script>
+      if (location.pathname === '/android-planik') {
+        // Runs directly from HTML, even if the React bundle cannot start.
+        // Android can now distinguish an old deployment from a stalled JS load.
+        document.documentElement.dataset.planikAndroid = 'html';
+        window.addEventListener('error', function (event) {
+          if (event.target && event.target.tagName === 'SCRIPT') {
+            document.documentElement.dataset.planikAndroid = 'error';
+            document.documentElement.dataset.planikAndroidReason = 'script-load-failed';
+          }
+        }, true);
+      } else {
+        document.write('<script defer src="https://telegram.org/js/telegram-web-app.js"></scr' + 'ipt>');
+      }
+    </script>
   </head>
   <body class="bg-slate-950">
     <div id="workspace-boot-splash" role="status" aria-label="Загрузка Планировыча">

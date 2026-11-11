@@ -304,6 +304,8 @@ class PlanikLiveActivity : ComponentActivity() {
                 if (android.os.SystemClock.uptimeMillis() > deadline) {
                     val reason = when (lastWebStage) {
                         "legacy" -> "Веб-часть Планика на сервере не обновлена. Разверните последнюю версию сайта."
+                        "html" -> "HTML Планика получен, но JavaScript не запустился. Проверьте загрузку файлов сайта."
+                        "boot" -> "JavaScript Планика стартовал, но приложение не успело открыть чат."
                         "workspace-loading" -> "Не удалось загрузить данные аккаунта для Планика."
                         "chat-opening" -> "Чат открылся, но не удалось запустить голосовой режим."
                         "voice-starting" -> "Голосовой режим не появился на экране."
@@ -331,7 +333,7 @@ class PlanikLiveActivity : ComponentActivity() {
             var detail = document.documentElement.dataset.planikAndroidReason || '';
             var realtime = !!document.querySelector('.planik-live-fullscreen, .planik-live-compact');
             return [stage, detail, realtime ? '1' : '0', document.readyState,
-                root ? root.children.length : 0, location.pathname].join('|');
+                root ? root.children.length : 0, location.pathname, document.scripts.length].join('|');
         })();"""
         view.evaluateJavascript(code) { result ->
             if (loaded || failed) return@evaluateJavascript
@@ -346,12 +348,13 @@ class PlanikLiveActivity : ComponentActivity() {
             if (stage.isNotBlank() && (stage != lastWebStage || detail != lastWebDetail)) {
                 lastWebStage = stage
                 lastWebDetail = detail
-                Log.i(TAG, "Web stage=$stage detail=$detail rendered=$visible readyState=${parts.getOrNull(3)}")
+                Log.i(TAG, "Web stage=$stage detail=$detail rendered=$visible readyState=${parts.getOrNull(3)} rootChildren=${parts.getOrNull(4)} path=${parts.getOrNull(5)} scripts=${parts.getOrNull(6)}")
             }
             when {
                 visible && stage == "live" -> markReady()
                 stage == "error" -> showFailure(when (detail) {
                     "workspace-data" -> "Не удалось получить данные аккаунта. Проверьте авторизацию Планировыча."
+                    "script-load-failed" -> "Не удалось загрузить основной JavaScript Планика с сервера."
                     "composer-not-mounted" -> "Не удалось открыть голосовой чат. Проверьте обновление сайта."
                     else -> "Ошибка запуска живого общения с Плаником."
                 })

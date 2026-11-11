@@ -56,7 +56,7 @@ jobs:
       - name: Verify Android 1x1 voice widget and confirmed Telegram/mail AI cards
         run: node --import tsx --test server/test/android-widget-telegram-mail-cards.test.ts
       - name: Verify Android Planik shared live UI, boot handshake, visual parity and auth
-        run: node --import tsx --test server/test/android-planik-live-parity.test.ts server/test/android-planik-boot-theme-regression.test.ts
+        run: node --import tsx --test server/test/android-planik-live-parity.test.ts server/test/android-planik-boot-theme-regression.test.ts server/test/android-planik-telegram-bootstrap.test.ts
       - name: Verify Android List and Timeline header parity
         run: node --import tsx --test server/test/android-miniapp-workspace-header-parity.test.ts
       - name: Verify Mini App search toolbar is confined to List and Timeline
