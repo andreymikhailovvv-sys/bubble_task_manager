@@ -302,11 +302,50 @@ class PlanikLiveActivity : ComponentActivity() {
         }
     }
 
-    private fun loadWithVerifiedNativeSession(view: WebView, host: HttpUrl, cookies: List<Cookie>) {
+    private fun loadWithVerifiedNativeSession(
+        view: WebView, host: HttpUrl, cookies: List<Cookie>, approvedReplacement: Boolean = false
+    ) {
         val manager = CookieManager.getInstance()
         val origin = host.toString()
         manager.setAcceptCookie(true)
         manager.setAcceptThirdPartyCookies(view, false)
+
+        // An older WebView can be the ONLY remaining credential for a guest's
+        // workspace. Never erase another account's cookie silently.
+        val previousAuth = manager.getCookie(origin).orEmpty().split(';').mapNotNull { item ->
+            val part = item.trim()
+            val index = part.indexOf('=')
+            if (index <= 0) null else part.substring(0, index) to part.substring(index + 1)
+        }.filter { it.first == "btm_auth" || it.first == "btm_device" }
+        val nativeAuth = cookies.map { it.name to it.value }
+        if (!approvedReplacement && previousAuth.isNotEmpty() &&
+            (previousAuth.size != nativeAuth.size || previousAuth.toSet() != nativeAuth.toSet())) {
+            Log.w(TAG, "Different WebView and Android sessions found; preserving original credentials")
+            handler.removeCallbacksAndMessages(null)
+            android.app.AlertDialog.Builder(this)
+                .setTitle("Обнаружены два разных аккаунта")
+                .setMessage(
+                    "Планик сохранил сессию другого аккаунта. Возможно, именно там находятся ваши задачи. " +
+                    "Ничего не удалено. Если хотите сохранить возможность доступа к прежнему аккаунту, " +
+                    "нажмите «Отмена» и войдите в него в Android. Заменить сессию Планика текущим " +
+                    "Android-аккаунтом можно только вручную."
+                )
+                .setNegativeButton("Отмена") { _, _ ->
+                    showFailure("Аккаунты Android и Планика различаются. Войдите в аккаунт с вашими задачами.")
+                }
+                .setPositiveButton("Использовать Android") { _, _ ->
+                    if (!isFinishing && !isDestroyed && !failed) {
+                        deadline = android.os.SystemClock.uptimeMillis() + BOOT_TIMEOUT_MS
+                        startRootChecks()
+                        loadWithVerifiedNativeSession(view, host, cookies, approvedReplacement = true)
+                    }
+                }
+                .setOnCancelListener {
+                    showFailure("Аккаунты Android и Планика различаются. Войдите в аккаунт с вашими задачами.")
+                }
+                .show()
+            return
+        }
 
         // CookieManager is separate from the native OkHttp cookie jar.
         // Clearing its previous account is crucial: otherwise the embedded WebView
