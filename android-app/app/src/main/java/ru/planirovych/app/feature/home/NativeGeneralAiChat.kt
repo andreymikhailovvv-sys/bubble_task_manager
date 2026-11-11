@@ -482,8 +482,9 @@ internal fun NativeGeneralAiChatPage(
                     }
                     PlanikNativeLauncher(
                         enabled = !isBusy,
+                        dark = dark,
                         modifier = Modifier.align(Alignment.BottomEnd)
-                            .padding(end = 13.dp, bottom = composerHeight + 9.dp),
+                            .padding(end = 13.dp, bottom = composerHeight + 1.dp),
                         onClick = {
                             context.startActivity(PlanikLiveActivity.intent(
                                 context, projectId = project?.id, chatId = thread.id

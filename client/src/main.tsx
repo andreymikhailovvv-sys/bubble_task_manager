@@ -82,6 +82,11 @@ const isMiniAppRoute = window.location.pathname.startsWith('/miniapp');
 // Android embeds this SAME MiniApp frontend for pixel-identical Realtime UI.
 // Runtime web uses existing authenticated session, never Telegram initData.
 const isAndroidPlanikRoute = window.location.pathname === '/android-planik';
+if (isAndroidPlanikRoute) {
+  // Native Android inspects this marker without enabling a JavaScript bridge.
+  // A missing marker means an older website bundle is deployed on the server.
+  document.documentElement.dataset.planikAndroid = 'boot';
+}
 const isTelegramAuthRoute = window.location.pathname === '/telegram-auth';
 const isAdminRoute = window.location.pathname === '/admin556215';
 const isPublicRoute = window.location.pathname === '/android'
