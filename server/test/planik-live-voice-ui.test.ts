@@ -34,7 +34,9 @@ test('realtime presentation persists a single live session through collapse', as
 test('delegated cards collapse the presentation without ending the microphone or WebSocket', async () => {
   const voice = await read('../../client/src/components/LiveVoiceDialog.tsx');
   const toolBegin = voice.slice(voice.indexOf('const handleToolRequest'), voice.indexOf('useEffect(() => {', voice.indexOf('const handleToolRequest')));
-  assert.match(toolBegin, /processingToolRef\.current = true;[\s\S]*?setCollapsed\(true\);/);
+  assert.match(toolBegin, /processingToolRef\.current = true;/);
+  assert.doesNotMatch(toolBegin.split("const result = scope.type")[0], /setCollapsed\(true\)/);
+  assert.match(toolBegin, /if \(hasPlanikActionSurface\(result\)\) setCollapsed\(true\)/);
   assert.match(toolBegin, /onLiveToolResultRef\.current\?\.\(/);
   assert.doesNotMatch(toolBegin, /stopResourcesRef\.current\(\)/);
   assert.match(voice, /const finish = \(\) => \{/);
@@ -44,7 +46,43 @@ test('delegated cards collapse the presentation without ending the microphone or
 test('Planik keeps existing billing, VAD, and realtime model while adopting an optional friendly delivery', async () => {
   const server = await read('../src/services/ai-live-voice.service.ts');
   assert.match(server, /model: 'gpt-realtime-2\.1-mini'/);
-  assert.match(server, /voice: 'marin'/);
+  assert.match(server, /const DEFAULT_PLANIK_VOICE: PlanikRealtimeVoice = 'echo'/);
+  assert.match(server, /voice: resolvePlanikVoice\(voice\)/);
+  assert.match(server, /voice \}/);
   assert.match(server, /Ты Планик, небольшой дружелюбный робот-помощник/);
   assert.match(server, /Не имитируй голос настоящего ребёнка/);
+});
+
+test('voice stays fullscreen for informational tool results and shows cards only on actual actions', async () => {
+  const { hasPlanikActionSurface, normalizePlanikVoice } =
+    await import('../../client/src/lib/planikLiveVoicePresentation.js');
+  const plain = { answer: 'Завтра тепло.', taskDataChanged: false, model: 'gpt', webSearchUsed: false };
+  assert.equal(hasPlanikActionSurface(plain), false);
+  assert.equal(hasPlanikActionSurface({ ...plain, taskDataChanged: true }), false);
+  assert.equal(hasPlanikActionSurface({ ...plain, answer: 'Откройте [[task_ref:123|Задача]]' }), true);
+  assert.equal(hasPlanikActionSurface({ ...plain, telegramSendDraft: { id: 'draft' } as never }), true);
+  assert.equal(hasPlanikActionSurface({ ...plain, mailSendDraft: { id: 'draft' } as never }), true);
+  assert.equal(hasPlanikActionSurface({ ...plain, taskProposal: { id: 'proposal' } as never }), true);
+  assert.equal(hasPlanikActionSurface({ ...plain, generatedDocument: { id: 'doc' } as never }), true);
+  assert.equal(normalizePlanikVoice('echo'), 'echo');
+  assert.equal(normalizePlanikVoice('cedar'), 'cedar');
+  assert.equal(normalizePlanikVoice('bad'), 'echo');
+});
+
+test('Telegram safe area, visible live transcript and persisted voice selection', async () => {
+  const [voice, styles, api] = await Promise.all([
+    read('../../client/src/components/LiveVoiceDialog.tsx'),
+    read('../../client/src/components/PlanikLiveVoice.css'),
+    read('../../client/src/lib/api.ts')
+  ]);
+  assert.match(styles, /\.planik-live-fullscreen\[data-telegram="true"\] \.planik-live-stage/);
+  assert.match(styles, /--tg-content-safe-area-inset-top/);
+  assert.match(voice, /data-telegram=\{telegramChrome \? 'true' : 'false'\}/);
+  assert.match(voice, /className="planik-live-transcript"/);
+  assert.match(voice, /AiStreamingMessageBody content=\{message.text\}/);
+  assert.match(voice, /AiStreamingMessageBody content=\{caption\}/);
+  assert.match(voice, /setLiveMessages\(previous =>/);
+  assert.match(voice, /PLANIK_VOICE_STORAGE_KEY/);
+  assert.match(voice, /Применится в следующем разговоре/);
+  assert.match(api, /body: JSON.stringify\(\{ context, voice \}\)/);
 });

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, Maximize2, Mic, MicOff, Minimize2, PhoneOff, Radio } from 'lucide-react';
 import { PlanikMascot } from './PlanikMascot';
+import { AiStreamingMessageBody } from './AiStreamingMessageBody';
+import { hasPlanikActionSurface, normalizePlanikVoice, PLANIK_VOICE_OPTIONS, PLANIK_VOICE_STORAGE_KEY, type PlanikVoice } from '../lib/planikLiveVoicePresentation';
 import './PlanikLiveVoice.css';
 import { api, type AiChatResult, type TaskAssistantResult, type AiChatProgressStatus, type TaskAiProgressStatus } from '../lib/api';
 import type { AiChatModel } from '../lib/types';
@@ -71,6 +73,17 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
   const [muted, setMuted] = useState(false);
   const [level, setLevel] = useState(0.06);
   const [caption, setCaption] = useState('');
+  const [liveMessages, setLiveMessages] = useState<LiveVoiceMessage[]>([]);
+  const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
+  const [preferredVoice, setPreferredVoice] = useState<PlanikVoice>(() => {
+    try { return normalizePlanikVoice(localStorage.getItem(PLANIK_VOICE_STORAGE_KEY)); }
+    catch { return 'echo'; }
+  });
+  // Voice must be chosen before the upstream session starts producing audio.
+  // Subsequent picker changes apply to the NEXT conversation only.
+  const sessionVoiceRef = useRef<PlanikVoice>(preferredVoice);
+  const telegramChrome = /Telegram/i.test(navigator.userAgent) ||
+    Boolean((window as Window & { Telegram?: { WebApp?: unknown } }).Telegram?.WebApp);
   const [creditsSpentMilli, setCreditsSpentMilli] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
@@ -136,9 +149,8 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
       return;
     }
     processingToolRef.current = true;
-    // Let the user see action proposals, confirmation cards and updated tasks.
-    // Never close the live conversation here: its tool response still needs audio.
-    setCollapsed(true);
+    // A tool request may merely search or answer a question. Keep the
+    // conversation fullscreen unless the result actually contains a card/chip.
     uplinkPausedRef.current = true;
     responseDoneRef.current = false;
     setPhase('thinking');
@@ -159,7 +171,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
         }, { onStatus: status => reportStatus(status) });
       if (!stoppedRef.current) {
         reportStatus('forming_answer');
-        setCollapsed(true);
+        if (hasPlanikActionSurface(result)) setCollapsed(true);
         onLiveToolResultRef.current?.({ kind: scope.type, question, result });
         if (scope.type === 'chat') dialogHistoryRef.current.push({ id: crypto.randomUUID(), role: 'assistant', content: result.answer });
         if (ws.readyState === WebSocket.OPEN) {
@@ -262,7 +274,10 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
         // iOS Telegram supports an explicit media-playback audio category.
         // Android and unsupported browsers simply keep their existing route.
         restoreAudioSessionRef.current = preferTelegramLiveVoiceMediaSession();
-        const { ticket } = await api.startLiveVoice(liveContext ? { ...liveContext, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone } : undefined);
+        const { ticket } = await api.startLiveVoice(
+          liveContext ? { ...liveContext, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone } : undefined,
+          sessionVoiceRef.current
+        );
         if (cancelled) return;
         const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(`${scheme}//${location.host}/api/ai/audio/live?ticket=${encodeURIComponent(ticket)}`);
@@ -334,11 +349,16 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
           if (payload.type === 'user_message' && typeof payload.text === 'string') {
             const id = payload.id || crypto.randomUUID();
             if (liveContextRef.current?.type === 'chat') dialogHistoryRef.current.push({ id, role: 'user', content: payload.text });
+            setLiveMessages(previous => previous.some(item => item.id === id) ? previous :
+              [...previous, { role: 'user' as const, id, text: payload.text! }].slice(-32));
             onLiveMessageRef.current?.({ role: 'user', id, text: payload.text });
           }
           if (payload.type === 'assistant_message' && typeof payload.text === 'string') {
             const id = payload.id || crypto.randomUUID();
             if (liveContextRef.current?.type === 'chat') dialogHistoryRef.current.push({ id, role: 'assistant', content: payload.text });
+            setLiveMessages(previous => previous.some(item => item.id === id) ? previous :
+              [...previous, { role: 'assistant' as const, id, text: payload.text! }].slice(-32));
+            setCaption('');
             onLiveMessageRef.current?.({ role: 'assistant', id, text: payload.text });
           }
           if (payload.type === 'tool_request' && typeof payload.question === 'string' && typeof payload.callId === 'string') {
@@ -394,7 +414,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
             } catch { setError('Не удалось обработать фрагмент речи.'); }
           }
           if (payload.type === 'transcript' && typeof payload.text === 'string') {
-            setCaption(previous => (previous + payload.text).slice(-400));
+            setCaption(previous => (previous + payload.text).slice(-1500));
           }
           if (payload.type === 'usage' && typeof payload.creditsSpentMilli === 'number') {
             setCreditsSpentMilli(payload.creditsSpentMilli);
@@ -448,6 +468,24 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
     document.addEventListener('keydown', onEscape);
     return () => document.removeEventListener('keydown', onEscape);
   }, [collapsed]);
+
+  useEffect(() => {
+    if (collapsed) return;
+    const container = transcriptScrollRef.current;
+    if (!container) return;
+    // Do not yank the transcript while the user is reading an older message.
+    if (liveMessages.length <= 2 ||
+        container.scrollHeight - container.scrollTop - container.clientHeight < 110) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [liveMessages, caption, collapsed]);
+
+  const changePreferredVoice = (value: string) => {
+    const next = normalizePlanikVoice(value);
+    setPreferredVoice(next);
+    try { localStorage.setItem(PLANIK_VOICE_STORAGE_KEY, next); }
+    catch { /* Browsers may disable persistent storage in private mode. */ }
+  };
 
   const toggleMuted = () => {
     const next = !mutedRef.current;
@@ -508,7 +546,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
     </aside>
   ) : (
     <section className="planik-live-fullscreen" role="dialog" aria-modal="true"
-      aria-label="Живое общение с Плаником">
+      data-telegram={telegramChrome ? 'true' : 'false'} aria-label="Живое общение с Плаником">
       <div className="planik-live-stage">
         <header className="planik-live-header">
           <div className="planik-live-brand">
@@ -534,12 +572,41 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
               } as React.CSSProperties} />
             ))}
           </div>
+          <section className="planik-live-transcript" aria-label="Расшифровка голосового разговора">
+            <div className="planik-live-transcript-label">РАСШИФРОВКА РАЗГОВОРА</div>
+            <div className="planik-live-transcript-scroll" ref={transcriptScrollRef}
+              role="log" aria-label="Сообщения голосового разговора">
+              {liveMessages.length === 0 && !caption ? (
+                <p className="planik-live-transcript-empty">Здесь появятся ваши слова и ответы Планика.</p>
+              ) : null}
+              {liveMessages.map(message => (
+                <article key={message.id} className={`planik-live-transcript-message is-${message.role}`}>
+                  <div className="planik-live-transcript-author">{message.role === 'user' ? 'Вы' : 'Планик'}</div>
+                  <div className="planik-live-markdown"><AiStreamingMessageBody content={message.text} /></div>
+                </article>
+              ))}
+              {caption ? (
+                <article className="planik-live-transcript-message is-assistant is-streaming">
+                  <div className="planik-live-transcript-author">Планик · говорит</div>
+                  <div className="planik-live-markdown"><AiStreamingMessageBody content={caption} /></div>
+                </article>
+              ) : null}
+            </div>
+          </section>
         </div>
         <footer className="planik-live-footer">
           <div className="planik-live-caption" aria-live="polite">
-            {caption && phase === 'speaking' ? caption.slice(-180) : phase === 'listening' ? 'Расскажите, чем помочь. Я вас слушаю.' : 'Планик готов работать с задачами, расписанием и сообщениями.'}
+            {phase === 'listening' ? 'Говорите свободно. Ваши слова и ответы появляются выше.' : 'Расшифровка разговора отображается над кнопками управления.'}
           </div>
           {error ? <p role="alert" className="planik-live-error">{error}</p> : null}
+          <div className="planik-live-voice-preference">
+            <label htmlFor="planik-live-voice-select">Голос Планика</label>
+            <select id="planik-live-voice-select" value={preferredVoice}
+              onChange={event => changePreferredVoice(event.target.value)}>
+              {PLANIK_VOICE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+            {preferredVoice !== sessionVoiceRef.current ? <span>Применится в следующем разговоре</span> : null}
+          </div>
           <div className="planik-live-controls live-voice-inline-controls">
             <button type="button" className="planik-live-control planik-live-microphone"
               onClick={toggleMuted} disabled={sessionFinished}

@@ -36,6 +36,14 @@
   box-sizing: border-box;
   z-index: 1;
 }
+/* Telegram renders system and Mini App controls OVER fixed page overlays.
+   Use both OS and Telegram content insets; fall back for older WebViews that
+   do not expose --tg-content-safe-area-inset-top. */
+.planik-live-fullscreen[data-telegram="true"] .planik-live-stage {
+  padding-top: calc(18px + max(64px, calc(
+    var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px)
+  )));
+}
 .planik-live-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .planik-live-brand { display: flex; align-items: center; gap: 12px; }
 .planik-live-brand-dot {
@@ -111,7 +119,44 @@
   opacity: .7; transform: scaleY(calc(.32 + var(--voice-level, .06) * 1.25));
   transition: transform .1s ease-out;
 }
-.planik-live-footer { display: flex; flex-direction: column; align-items: center; gap: 20px; }
+.planik-live-transcript {
+  width: min(100%, 550px); min-height: 0; max-height: min(28dvh, 225px);
+  flex: 1 1 160px; display: flex; flex-direction: column;
+  margin: 16px auto 0; padding: 11px 13px; box-sizing: border-box;
+  border: 1px solid rgba(156, 173, 231, .17);
+  border-radius: 17px; background: rgba(7, 13, 30, .38);
+  backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px);
+}
+.planik-live-transcript-label {
+  flex: none; color: #8996b9; letter-spacing: .1em;
+  font-size: 9px; font-weight: 750; margin-bottom: 7px;
+}
+.planik-live-transcript-scroll {
+  min-height: 0; flex: 1; overflow: auto; overscroll-behavior: contain;
+  scrollbar-width: thin; scrollbar-color: #5b6390 transparent;
+  display: flex; flex-direction: column; gap: 11px; padding-right: 3px;
+}
+.planik-live-transcript-message { color: #eff3ff; font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
+.planik-live-transcript-message.is-user { color: #c4d2ed; }
+.planik-live-transcript-author { color: #8fdded; font-size: 10px; font-weight: 750; margin-bottom: 2px; }
+.planik-live-transcript-message.is-user .planik-live-transcript-author { color: #b7a9ff; }
+.planik-live-transcript-message.is-streaming { opacity: .87; }
+.planik-live-transcript-empty { color: #8e9dbc; font-size: 12px; line-height: 1.45; }
+.planik-live-markdown { text-align: left; }
+.planik-live-markdown strong { color: #fff; }
+.planik-live-markdown a { color: #90e6f3; }
+.planik-live-markdown pre { white-space: pre; max-width: 100%; overflow-x: auto; }
+.planik-live-voice-preference {
+  display: flex; flex-wrap: wrap; gap: 9px; align-items: center; justify-content: center;
+  color: #91a2c5; font-size: 11px;
+}
+.planik-live-voice-preference select {
+  max-width: 190px; padding: 6px 24px 6px 9px; color: #f5f4ff;
+  border: 1px solid rgba(148, 161, 225, .34); border-radius: 9px;
+  background: #1b2745; font-size: 11px;
+}
+.planik-live-voice-preference span { width: 100%; text-align: center; color: #f3d0a4; font-size: 10px; }
+.planik-live-footer { display: flex; flex-direction: column; align-items: center; gap: 13px; }
 .planik-live-caption {
   color: #b8c5e0; font-size: 13px; line-height: 1.45; text-align: center;
   min-height: 38px; max-width: 520px; overflow-wrap: anywhere;
@@ -192,12 +237,20 @@
   .planik-live-compact .planik-live-avatar { width: 122px; height: 110px; }
   .planik-live-compact, .planik-live-compact-expand { width: 132px; }
   .planik-live-controls { gap: 20px; }
+  .planik-live-transcript { max-height: min(25dvh, 175px); flex-basis: 120px; margin-top: 7px; }
+  .planik-live-center { gap: 2px; }
+  .planik-live-visualizer { height: 32px; }
+  .planik-live-visualizer span { max-height: 28px; }
+  .planik-live-footer { gap: 10px; }
   .planik-live-header { gap: 8px; }
 }
 @media (max-height: 610px) {
   .planik-live-stage { padding-top: calc(10px + env(safe-area-inset-top,0px)); padding-bottom: calc(12px + env(safe-area-inset-bottom,0px)); }
   .planik-live-avatar { height: min(34vh, 176px); width: min(38vh, 198px); }
   .planik-live-footer { gap: 8px; }
+  .planik-live-transcript { max-height: 112px; flex-basis: 78px; margin-top: 2px; padding: 7px 9px; }
+  .planik-live-voice-preference { gap: 5px; }
+  .planik-live-voice-preference select { padding-top: 3px; padding-bottom: 3px; }
   .planik-live-center { gap: 0; }
 }
 @media (prefers-reduced-motion: reduce) {

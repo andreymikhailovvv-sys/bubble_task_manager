@@ -9,19 +9,28 @@ import { realtimeSpeechCostMilli } from './ai-web-audio.service.js';
 
 // Only issue short-lived one-use tickets from an authenticated, same-origin API route.
 // Neither the OpenAI API key nor proxy credentials are ever sent to the browser.
-const tickets = new Map<string, { userId: string; expires: number; context: LiveVoicePreparedContext }>();
+const tickets = new Map<string, { userId: string; expires: number; context: LiveVoicePreparedContext; voice: PlanikRealtimeVoice }>();
 const sessions = new Set<string>();
 const MAX_SECONDS = 120;
 const RESERVED_MILLI = 450_000;
 const MAX_MESSAGE = 120_000;
+// The selected voice is validated on the server and tied to a single-use ticket.
+// Realtime cannot swap voices after speech begins; selection applies to a new call.
+export const PLANIK_REALTIME_VOICES = ['echo', 'ash', 'cedar'] as const;
+export type PlanikRealtimeVoice = typeof PLANIK_REALTIME_VOICES[number];
+const DEFAULT_PLANIK_VOICE: PlanikRealtimeVoice = 'echo';
+function resolvePlanikVoice(value: unknown): PlanikRealtimeVoice {
+  return typeof value === 'string' && PLANIK_REALTIME_VOICES.some(item => item === value)
+    ? value as PlanikRealtimeVoice : DEFAULT_PLANIK_VOICE;
+}
 
-export async function createLiveVoiceTicket(userId: string, scope?: unknown) {
+export async function createLiveVoiceTicket(userId: string, scope?: unknown, voice?: unknown) {
   for (const [key, item] of tickets) if (item.expires < Date.now()) tickets.delete(key);
   if (sessions.has(userId)) throw new Error('У вас уже открыт живой голосовой диалог.');
   if ([...tickets.values()].filter(x => x.userId === userId).length >= 3) throw new Error('Слишком много запросов на голосовой диалог.');
   const context = await prepareLiveVoiceContext(userId, scope);
   const ticket = crypto.randomBytes(28).toString('base64url');
-  tickets.set(ticket, { userId, expires: Date.now() + 30_000, context });
+  tickets.set(ticket, { userId, expires: Date.now() + 30_000, context, voice: resolvePlanikVoice(voice) });
   return { ticket, expiresInSeconds: 30, maxSeconds: MAX_SECONDS };
 }
 
@@ -127,11 +136,11 @@ export function handleLiveVoiceUpgrade(request: IncomingMessage, socket: Duplex,
   }
   sessions.add(registered.userId);
   const peer = acceptWebSocket(socket, key, head);
-  void startLiveSession(registered.userId, peer, registered.context);
+  void startLiveSession(registered.userId, peer, registered.context, registered.voice);
   return true;
 }
 
-async function startLiveSession(userId: string, peer: ClientPeer, context: LiveVoicePreparedContext) {
+async function startLiveSession(userId: string, peer: ClientPeer, context: LiveVoicePreparedContext, voice: PlanikRealtimeVoice) {
   let reservation: Awaited<ReturnType<typeof reserveAiCreditsMilli>> | null = null;
   let upstream: WebSocket | null = null;
   let dispatcher: ProxyAgent | undefined;
@@ -257,7 +266,7 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
       upstream?.send(JSON.stringify({ type: 'session.update', session: {
         type: 'realtime', model: 'gpt-realtime-2.1-mini',
         output_modalities: ['audio'],
-        instructions: ['Ты Планик, небольшой дружелюбный робот-помощник сервиса Планировыч, в НЕПРЕРЫВНОЙ сессии разговора. Говори по-русски мягко, живо, чуть более высоким голосом с едва заметной роботизированной интонацией. Не имитируй голос настоящего ребёнка, не переигрывай и не меняй факты ради образа. Не здоровайся повторно, не представляйся снова и не начинай новый диалог при каждом ответе. Отвечай на последнюю просьбу по-русски естественно и коротко. Если пользователь просит узнать актуальные задачи/заметки или подготовить действие, вызови execute_planirovych_request. Передай туда полную просьбу пользователя с обязательными ограничениями (сектор, срок, статус). Для просроченных задач: срок строго ДО текущего времени, исключая завершённые, если пользователь не указал нижнюю границу периода, не задавай dueFrom, чтобы не исключить старые просроченные задачи. Не придумывай результат запроса. Отдельные карточки подтверждаются пользователем в чате, не называй их исполненными заранее.', context.instructions].filter(Boolean).join('\n\n'),
+        instructions: ['Ты Планик, небольшой дружелюбный робот-помощник сервиса Планировыч, в НЕПРЕРЫВНОЙ сессии разговора. Говори по-русски молодым мужским голосом: мягко, живо, с лёгким дружелюбным роботизированным оттенком, естественным темпом и без чрезмерно низкого баса. Не имитируй голос настоящего ребёнка, не переигрывай и не меняй факты ради образа. Не здоровайся повторно, не представляйся снова и не начинай новый диалог при каждом ответе. Отвечай на последнюю просьбу по-русски естественно и коротко. Если пользователь просит узнать актуальные задачи/заметки или подготовить действие, вызови execute_planirovych_request. Передай туда полную просьбу пользователя с обязательными ограничениями (сектор, срок, статус). Для просроченных задач: срок строго ДО текущего времени, исключая завершённые, если пользователь не указал нижнюю границу периода, не задавай dueFrom, чтобы не исключить старые просроченные задачи. Не придумывай результат запроса. Отдельные карточки подтверждаются пользователем в чате, не называй их исполненными заранее.', context.instructions].filter(Boolean).join('\n\n'),
         tools: [{ type: 'function', name: 'execute_planirovych_request',
           description: 'Выполнить запрос пользователя к инструментам Планировыча: задачи, подзадачи, заметки, поиск, файлы, письма, Telegram и другие функции обычного текстового ИИ. Делегирует в существующий безопасный обработчик; результаты и карточки подтверждения отображаются в чате.',
           parameters: { type: 'object', additionalProperties: false, properties: { request: { type: 'string', description: 'Точная просьба пользователя на русском языке' } }, required: ['request'] } }],
@@ -266,7 +275,7 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
             type: 'server_vad', threshold: 0.55, silence_duration_ms: 1100, prefix_padding_ms: 450,
             create_response: true, interrupt_response: false
           } },
-          output: { format: { type: 'audio/pcm', rate: 24000 }, voice: 'marin' }
+          output: { format: { type: 'audio/pcm', rate: 24000 }, voice }
         }
       } }));
     });

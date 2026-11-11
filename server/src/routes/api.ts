@@ -1967,7 +1967,7 @@ apiRouter.post('/ai/task-proposals/:id/reject', requireAuth, taskProposalSameOri
 
 apiRouter.post('/ai/audio/live/ticket', requireAuth, taskProposalSameOrigin, asyncHandler(async (req, res) => {
   try {
-    res.set('Cache-Control', 'private, no-store').json(await createLiveVoiceTicket(req.user!.id, req.body?.context));
+    res.set('Cache-Control', 'private, no-store').json(await createLiveVoiceTicket(req.user!.id, req.body?.context, req.body?.voice));
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Не удалось открыть голосовой диалог.';
     res.status(429).json({ error: message });
