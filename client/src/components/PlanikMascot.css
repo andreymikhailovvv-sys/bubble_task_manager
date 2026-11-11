@@ -36,13 +36,14 @@
   transform-origin: center;
   animation: planik-blink 5.4s infinite;
 }
-.planik-phone, .planik-typing, .planik-thinking,
+.planik-notif-static, .planik-notif-take-arm, .planik-notif-flying, .planik-notif-whoosh,
+.planik-typing, .planik-thinking,
 .planik-searching, .planik-celebrating, .planik-hover {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
 }
-.planik-mascot[data-mode="idle"][data-has-notifs="true"] .planik-phone,
+.planik-mascot[data-mode="idle"][data-has-notifs="true"] .planik-notif-static,
 .planik-mascot[data-mode="typing"] .planik-typing,
 .planik-mascot[data-mode="thinking"] .planik-thinking,
 .planik-mascot[data-mode="searching"] .planik-searching,
@@ -50,6 +51,39 @@
 .planik-mascot[data-mode="hover"] .planik-hover {
   opacity: 1;
   visibility: visible;
+}
+/* A service-style rose counter replaces the old handheld smartphone.
+   Only idle shows a live count. On a real >0 -> 0 transition, the previous
+   number remains visible long enough for Planik to pluck it off and toss it. */
+.planik-notif-take-arm {
+  transform-origin: 133px 190px;
+  transform-box: view-box;
+}
+.planik-notif-held { opacity: 0; }
+.planik-notif-flying {
+  transform-origin: 130px 94px;
+  transform-box: view-box;
+}
+.planik-mascot[data-mode="clearing"] .planik-notif-static,
+.planik-mascot[data-mode="clearing"] .planik-notif-take-arm,
+.planik-mascot[data-mode="clearing"] .planik-notif-flying,
+.planik-mascot[data-mode="clearing"] .planik-notif-whoosh {
+  visibility: visible;
+}
+.planik-mascot[data-mode="clearing"] .planik-notif-static {
+  animation: planik-notif-peel 1.66s steps(1, end) both;
+}
+.planik-mascot[data-mode="clearing"] .planik-notif-take-arm {
+  animation: planik-notif-reach 1.66s ease-in-out both;
+}
+.planik-mascot[data-mode="clearing"] .planik-notif-held {
+  animation: planik-notif-held 1.66s steps(1, end) both;
+}
+.planik-mascot[data-mode="clearing"] .planik-notif-flying {
+  animation: planik-notif-toss 1.66s cubic-bezier(.17,.50,.36,1) both;
+}
+.planik-mascot[data-mode="clearing"] .planik-notif-whoosh {
+  animation: planik-notif-whoosh 1.66s ease-out both;
 }
 .planik-mascot[data-mode="hover"] .planik-eye { animation: planik-shy-eye 1.35s ease-in-out infinite; }
 .planik-mascot[data-mode="hover"] .planik-hover-left {
@@ -145,13 +179,51 @@ body[data-theme="light"] .planik-svg { filter: drop-shadow(0 7px 9px rgba(86, 70
 @media (min-width: 1024px) {
   /* The right-hand workspace side rail begins about 400px from the edge.
      Give the larger Planik its own margin inside the workspace. */
-  .ai-chat-launcher:not(.ai-chat-launcher-task-open):not(.bubble-ai-fullscreen) {
-    right: 430px;
+  /* Only the normal desktop workspace: not a focused task, Work,
+     fullscreen bubbles or modal sidekick. The right rail starts near 400px. */
+  .ai-chat-launcher:not(.work-ai-launcher):not(.ai-chat-launcher-task-open):not(.bubble-ai-fullscreen) {
+    right: 410px;
+  }
+  .ai-chat-launcher:not(.work-ai-launcher):not(.ai-chat-launcher-task-open):not(.bubble-ai-fullscreen) .planik-launcher-button,
+  .ai-chat-launcher:not(.work-ai-launcher):not(.ai-chat-launcher-task-open):not(.bubble-ai-fullscreen) .planik-mascot--launcher {
+    width: 108px;
+    height: 96px;
+  }
+  .ai-chat-launcher:not(.work-ai-launcher):not(.ai-chat-launcher-task-open):not(.bubble-ai-fullscreen) .planik-quick-ai-preview {
+    bottom: 96px;
   }
 }
 @media (max-width: 600px) {
   .planik-mascot--composer { width: 99px; height: 88px; }
   .planik-composer-float { width: 99px; height: 88px; right: 0; }
+}
+/* The hand touches the badge at 38%, grabs it, then throws left at 60%.
+   Badge copies are phase-gated so no frame displays two red counters. */
+@keyframes planik-notif-peel {
+  0%, 37% { opacity: 1; }
+  38%, 100% { opacity: 0; }
+}
+@keyframes planik-notif-held {
+  0%, 37% { opacity: 0; }
+  38%, 59% { opacity: 1; }
+  60%, 100% { opacity: 0; }
+}
+@keyframes planik-notif-reach {
+  0%, 8% { opacity: 0; transform: rotate(-57deg); }
+  18%, 40% { opacity: 1; transform: rotate(0); }
+  58%, 66% { opacity: 1; transform: rotate(-50deg); }
+  86%, 100% { opacity: 0; transform: rotate(-10deg); }
+}
+@keyframes planik-notif-toss {
+  0%, 59% { opacity: 0; transform: translate(-60px, 50px) rotate(-15deg) scale(1); }
+  60% { opacity: 1; transform: translate(-60px, 50px) rotate(-15deg) scale(1); }
+  86% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-250px, -64px) rotate(-530deg) scale(.58); }
+}
+@keyframes planik-notif-whoosh {
+  0%, 55% { opacity: 0; }
+  61% { opacity: .8; }
+  81%, 100% { opacity: 0; }
 }
 @keyframes planik-float { 0%, 100% { transform: translateY(5px); } 50% { transform: translateY(-5px); } }
 @keyframes planik-blink { 0%, 42%, 46%, 100% { transform: scaleY(1); } 44% { transform: scaleY(.06); } }
@@ -186,6 +258,7 @@ body[data-theme="light"] .planik-svg { filter: drop-shadow(0 7px 9px rgba(86, 70
 @media (prefers-reduced-motion: reduce) {
   .planik-svg, .planik-eye, .planik-scratch-arm, .planik-type-left, .planik-type-right,
   .planik-loupe, .planik-page-one, .planik-page-two, .planik-page-three,
+  .planik-notif-static, .planik-notif-take-arm, .planik-notif-flying, .planik-notif-whoosh, .planik-notif-held,
   .planik-celebrate-rig, .planik-popper-flash, .planik-popper-particle, .planik-hover-left, .planik-hover-right,
   .planik-key-a, .planik-key-b { animation: none !important; }
 }
