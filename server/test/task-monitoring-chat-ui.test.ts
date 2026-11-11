@@ -60,7 +60,7 @@ test('task-chat settings have a single monitoring entry with badges on all clien
 });
 
 
-test('monitoring unread events light up Planik phone without duplicate chat bubbles', async () => {
+test('monitoring unread events light up Planik badge without duplicate chat bubbles', async () => {
   const [app, delivery, mascot, mascotStyles] = await Promise.all([
     read('../../client/src/App.tsx'),
     read('../src/services/task-monitoring-delivery.service.ts'),
@@ -73,7 +73,7 @@ test('monitoring unread events light up Planik phone without duplicate chat bubb
   assert.match(app, /setUnreadSystemNotificationCount\(result\.notifications\.filter\(notification => notification\.readAt == null\)\.length\)/);
   assert.match(app, /<PlanikMascot notificationCount=\{unreadSystemNotificationCount\}/);
   assert.match(mascot, /data-has-notifs=\{count > 0 \? 'true' : 'false'\}/);
-  assert.match(mascotStyles, /data-mode="idle"\]\[data-has-notifs="true"\] \.planik-phone/);
+  assert.match(mascotStyles, /data-mode="idle"\]\[data-has-notifs="true"\] \.planik-notif-static/);
   assert.match(app, /markSystemNotificationsRead\(\)/);
 });
 
@@ -235,4 +235,33 @@ test('Planik modal hover reveals the SAME quick chat panel and typing responds t
   assert.match(mascot, /typingSignal = 0/);
   assert.match(mascot, /setTyping\(false\), 520/);
   assert.doesNotMatch(mascot, /typingText|priorDraft/);
+});
+
+
+test('Planik badge detaches at the real unread reset, and only the desktop workspace launcher is reduced', async () => {
+  const [mascot, styles, app] = await Promise.all([
+    read('../../client/src/components/PlanikMascot.tsx'),
+    read('../../client/src/components/PlanikMascot.css'),
+    read('../../client/src/App.tsx')
+  ]);
+  assert.doesNotMatch(mascot, /planik-phone/);
+  assert.match(mascot, /const priorNotificationCount = useRef\(initialCount\)/);
+  assert.match(mascot, /if \(previous <= 0\) return;/);
+  assert.match(mascot, /setClearingCount\(previous\)/);
+  assert.match(mascot, /setClearingCount\(null\), 1660/);
+  assert.match(mascot, /className="planik-notif-take-arm"/);
+  assert.match(mascot, /className="planik-notif-flying"/);
+  assert.match(mascot, /className="planik-notif-static"/);
+  assert.match(mascot, /cx="190" cy="162" rx="10" ry="15"/);
+  assert.match(mascot, /cx="240" cy="162" rx="10" ry="15"/);
+  assert.match(styles, /@keyframes planik-notif-peel/);
+  assert.match(styles, /@keyframes planik-notif-reach/);
+  assert.match(styles, /@keyframes planik-notif-toss/);
+  assert.match(styles, /data-mode="clearing"\] \.planik-notif-take-arm/);
+  assert.match(styles, /data-mode="clearing"\] \.planik-notif-flying/);
+  assert.match(styles, /ai-chat-launcher:not\(\.work-ai-launcher\):not\(\.ai-chat-launcher-task-open\):not\(\.bubble-ai-fullscreen\)/);
+  assert.match(styles, /right: 410px/);
+  assert.match(styles, /width: 108px;\s*height: 96px;/);
+  assert.match(styles, /\.planik-quick-ai-preview \{\s*bottom: 96px/);
+  assert.match(app, /setUnreadSystemNotificationCount\(0\)/);
 });
