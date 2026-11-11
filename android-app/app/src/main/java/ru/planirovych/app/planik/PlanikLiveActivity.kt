@@ -22,6 +22,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import org.json.JSONTokener
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -46,7 +47,7 @@ import ru.planirovych.app.core.network.PersistentCookieJar
 class PlanikLiveActivity : ComponentActivity() {
     companion object {
         private const val TAG = "PlanikLive"
-        private const val BOOT_TIMEOUT_MS = 18_000L
+        private const val BOOT_TIMEOUT_MS = 40_000L
         private const val CHECK_INTERVAL_MS = 550L
         private const val EXTRA_TASK_ID = "planik_task_id"
         private const val EXTRA_PROJECT_ID = "planik_project_id"
@@ -74,6 +75,9 @@ class PlanikLiveActivity : ComponentActivity() {
     private var failed = false
     private var deadline = 0L
     private var targetUrl = ""
+    private var lastWebStage = ""
+    private var lastWebDetail = ""
+    private var lastConsoleError = false
 
     private val microphoneLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -126,6 +130,11 @@ class PlanikLiveActivity : ComponentActivity() {
 
         val baseHost = base.host
         view.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                super.onPageStarted(view, url, favicon)
+                Log.i(TAG, "Web document started path=${Uri.parse(url).path}")
+            }
+
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest): Boolean {
                 val url = request.url
                 if (url.scheme == "https" && url.host == baseHost) return false
@@ -137,6 +146,7 @@ class PlanikLiveActivity : ComponentActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+                Log.i(TAG, "Web document finished path=${Uri.parse(url).path}")
                 if (!failed && !loaded) inspectReactRoot()
             }
 
@@ -145,7 +155,11 @@ class PlanikLiveActivity : ComponentActivity() {
             ) {
                 if (request?.isForMainFrame == true) {
                     Log.e(TAG, "Main document load failed: code=${error?.errorCode}")
-                    showFailure("Не удалось загрузить экран Планика. Проверьте интернет.")
+                    showFailure("Не удалось получить страницу Планика (сетевая ошибка ${error?.errorCode}).")
+                } else if (request?.url?.path?.startsWith("/assets/") == true &&
+                    (request.url.path.endsWith(".js") || request.url.path.endsWith(".css"))) {
+                    Log.e(TAG, "App bundle asset failed: ${request.url.lastPathSegment} code=${error?.errorCode}")
+                    showFailure("Не удалось загрузить файлы интерфейса Планика.")
                 }
             }
 
@@ -155,6 +169,11 @@ class PlanikLiveActivity : ComponentActivity() {
                 if (request?.isForMainFrame == true && (errorResponse?.statusCode ?: 0) >= 400) {
                     Log.e(TAG, "Planik page HTTP ${errorResponse?.statusCode}")
                     showFailure("Сервер не открыл экран Планика (HTTP ${errorResponse?.statusCode}).")
+                } else if ((errorResponse?.statusCode ?: 0) >= 400 &&
+                    request?.url?.path?.startsWith("/assets/") == true &&
+                    (request.url.path.endsWith(".js") || request.url.path.endsWith(".css"))) {
+                    Log.e(TAG, "App bundle asset HTTP ${errorResponse?.statusCode}: ${request.url.lastPathSegment}")
+                    showFailure("Не загрузились скрипты Планика (HTTP ${errorResponse?.statusCode}).")
                 }
             }
 
@@ -172,6 +191,7 @@ class PlanikLiveActivity : ComponentActivity() {
         view.webChromeClient = object : WebChromeClient() {
             override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
                 if (consoleMessage?.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
+                    lastConsoleError = true
                     Log.e(TAG, "Web runtime error at line ${consoleMessage.lineNumber()}: " +
                         consoleMessage.message().take(200))
                 }
@@ -241,21 +261,15 @@ class PlanikLiveActivity : ComponentActivity() {
         manager.setAcceptThirdPartyCookies(view, false)
         val host = base.newBuilder().encodedPath("/").query(null).build()
         val cookies = PersistentCookieJar(this).loadForRequest(host)
-        if (cookies.isEmpty()) {
-            Log.w(TAG, "No first-party session cookie available; opening login state.")
-            view.loadUrl(targetUrl)
-        } else {
-            var pending = cookies.size
-            cookies.forEach { cookie ->
-                manager.setCookie(host.toString(), cookie.toString()) {
-                    pending--
-                    if (pending == 0 && !isFinishing && !isDestroyed) {
-                        manager.flush()
-                        view.loadUrl(targetUrl)
-                    }
-                }
-            }
-        }
+        // CookieManager.setCookie callbacks were used as a navigation gate,
+        // but a delayed/missing callback kept WebView completely blank until
+        // our 18-second timeout. Copy on the UI thread, flush synchronously,
+        // and ALWAYS load the page exactly once.
+        if (cookies.isEmpty()) Log.w(TAG, "No native session cookies; browser may need login")
+        cookies.forEach { cookie -> manager.setCookie(host.toString(), cookie.toString()) }
+        manager.flush()
+        Log.i(TAG, "Planik navigation starting, sessionCookies=${cookies.size}")
+        view.loadUrl(targetUrl)
     }
 
     private fun showFailure(message: String) {
