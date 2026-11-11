@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Mic, MicOff, PhoneOff, Volume2 } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Loader2, Maximize2, Mic, MicOff, Minimize2, PhoneOff, Radio } from 'lucide-react';
+import { PlanikMascot } from './PlanikMascot';
+import './PlanikLiveVoice.css';
 import { api, type AiChatResult, type TaskAssistantResult, type AiChatProgressStatus, type TaskAiProgressStatus } from '../lib/api';
 import type { AiChatModel } from '../lib/types';
 import { formatCreditsSpent } from '../lib/credits';
@@ -59,6 +62,8 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
   onLiveStatus?: (status: LiveVoiceProgressStatus | null) => void;
 }) {
   const [phase, setPhase] = useState<Phase>('connecting');
+  // Presentation only. The WebSocket, microphone and audio playback survive collapse.
+  const [collapsed, setCollapsed] = useState(false);
   const processingToolRef = useRef(false);
   const toolQueueRef = useRef<Array<{ question: string; callId: string; ws: WebSocket }>>([]);
   const dialogHistoryRef = useRef(liveContext?.type === 'chat' ? [...(liveContext.history ?? [])] : []);
@@ -131,6 +136,9 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
       return;
     }
     processingToolRef.current = true;
+    // Let the user see action proposals, confirmation cards and updated tasks.
+    // Never close the live conversation here: its tool response still needs audio.
+    setCollapsed(true);
     uplinkPausedRef.current = true;
     responseDoneRef.current = false;
     setPhase('thinking');
@@ -151,6 +159,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
         }, { onStatus: status => reportStatus(status) });
       if (!stoppedRef.current) {
         reportStatus('forming_answer');
+        setCollapsed(true);
         onLiveToolResultRef.current?.({ kind: scope.type, question, result });
         if (scope.type === 'chat') dialogHistoryRef.current.push({ id: crypto.randomUUID(), role: 'assistant', content: result.answer });
         if (ws.readyState === WebSocket.OPEN) {
@@ -430,6 +439,16 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
     return () => window.clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    if (collapsed) return;
+    const onEscape = (event: KeyboardEvent) => {
+      // Minimize rather than hang up: the user may need to confirm a card.
+      if (event.key === 'Escape') setCollapsed(true);
+    };
+    document.addEventListener('keydown', onEscape);
+    return () => document.removeEventListener('keydown', onEscape);
+  }, [collapsed]);
+
   const toggleMuted = () => {
     const next = !mutedRef.current;
     mutedRef.current = next;
@@ -453,24 +472,96 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
     error: 'Ошибка соединения'
   };
 
-  return <section className="live-voice-inline dialog-surface" role="region" aria-label="Живое общение с ИИ">
-    <span className={`live-voice-inline-orb ${phase === 'speaking' ? 'is-speaking' : ''}`}
-      style={{ '--voice-level': level } as React.CSSProperties} aria-hidden="true">
-      {phase === 'connecting' ? <Loader2 size={18} className="ai-speech-loading-spin"/> : <Volume2 size={18}/>}
+  const sessionFinished = phase === 'ended' || phase === 'error';
+  const minute = String(Math.floor(elapsed / 60)).padStart(2, '0');
+  const second = String(elapsed % 60).padStart(2, '0');
+  const cost = creditsSpentMilli ? formatCreditsSpent(creditsSpentMilli) : '0 кредитов';
+  const mood = muted ? 'muted' : phase;
+  const voiceAvatar = (
+    <span className="planik-live-avatar" data-phase={mood}
+      style={{ '--voice-level': level } as React.CSSProperties}>
+      <span className="planik-live-avatar-glow" aria-hidden="true" />
+      <PlanikMascot size="sidekick" busy={phase === 'thinking'} />
+      <span className="planik-live-avatar-ring" aria-hidden="true" />
     </span>
-    <div className="live-voice-inline-status">
-      <strong>{phaseText[phase]}</strong>
-      <small title="До 450 кредитов временно резервируются. После завершения списывается фактический расход, остаток возвращается.">{String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')} · {creditsSpentMilli ? formatCreditsSpent(creditsSpentMilli) : '0 кредитов'}</small>
-      {caption && phase === 'speaking' ? <span className="live-voice-inline-caption" aria-live="polite">{caption.slice(-100)}</span> : null}
-      {error ? <span role="alert" className="live-voice-inline-error">{error}</span> : null}
-    </div>
-    <div className="live-voice-inline-controls">
-      <button className="live-voice-inline-button" type="button" onClick={toggleMuted} disabled={phase === 'ended' || phase === 'error'}
-        title={muted ? 'Включить микрофон' : 'Отключить микрофон'} aria-label={muted ? 'Включить микрофон' : 'Отключить микрофон'}>
-        {muted ? <MicOff size={17}/> : <Mic size={17}/>}
+  );
+
+  // A portal keeps the overlay outside scrollable chat/composer containers.
+  // Switching full/compact view never remounts this component or the audio session.
+  return createPortal(collapsed ? (
+    <aside className="planik-live-compact" data-phase={mood} aria-label="Планик: живое общение">
+      <button type="button" className="planik-live-compact-expand"
+        onClick={() => setCollapsed(false)} title="Развернуть разговор с Плаником"
+        aria-label="Развернуть разговор с Плаником">
+        {voiceAvatar}
+        <span className="planik-live-compact-state">
+          {phase === 'speaking' ? 'Говорю' : phase === 'listening' && !muted ? 'Слушаю' : phase === 'thinking' ? 'Думаю' : phase === 'connecting' ? 'Подключаюсь' : muted ? 'Без микрофона' : 'Откройте диалог'}
+        </span>
       </button>
-      <button className="live-voice-inline-button live-voice-inline-end" type="button" onClick={finish}
-        title="Завершить разговор" aria-label="Завершить разговор"><PhoneOff size={17}/></button>
-    </div>
-  </section>;
+      <div className="planik-live-compact-tools">
+        <button type="button" onClick={() => setCollapsed(false)} title="На весь экран" aria-label="Развернуть на весь экран">
+          <Maximize2 size={16} />
+        </button>
+        <button type="button" className="planik-live-compact-end" onClick={finish}
+          title="Завершить разговор" aria-label="Завершить разговор"><PhoneOff size={16}/></button>
+      </div>
+    </aside>
+  ) : (
+    <section className="planik-live-fullscreen" role="dialog" aria-modal="true"
+      aria-label="Живое общение с Плаником">
+      <div className="planik-live-stage">
+        <header className="planik-live-header">
+          <div className="planik-live-brand">
+            <span className="planik-live-brand-dot" aria-hidden="true" />
+            <span><strong>Планик</strong><small>Живое общение · Realtime</small></span>
+          </div>
+          <button type="button" className="planik-live-minimize"
+            onClick={() => setCollapsed(true)} aria-label="Свернуть живое общение">
+            <Minimize2 size={18}/><span>Свернуть</span>
+          </button>
+        </header>
+        <div className="planik-live-center">
+          <div className="planik-live-ambient" aria-hidden="true" />
+          {voiceAvatar}
+          <div className="planik-live-phase" aria-live="polite">
+            <span className={`planik-live-status-dot ${phase === 'listening' && !muted ? 'is-listening' : ''}`} aria-hidden="true" />
+            <strong>{phaseText[phase]}</strong>
+          </div>
+          <div className="planik-live-visualizer" aria-hidden="true" data-phase={mood}>
+            {Array.from({ length: 17 }, (_, index) => (
+              <span key={index} style={{
+                '--bar': index, '--bar-height': `${12 + ((index * 17) % 30)}px`, '--voice-level': level
+              } as React.CSSProperties} />
+            ))}
+          </div>
+        </div>
+        <footer className="planik-live-footer">
+          <div className="planik-live-caption" aria-live="polite">
+            {caption && phase === 'speaking' ? caption.slice(-180) : phase === 'listening' ? 'Расскажите, чем помочь. Я вас слушаю.' : 'Планик готов работать с задачами, расписанием и сообщениями.'}
+          </div>
+          {error ? <p role="alert" className="planik-live-error">{error}</p> : null}
+          <div className="planik-live-controls live-voice-inline-controls">
+            <button type="button" className="planik-live-control planik-live-microphone"
+              onClick={toggleMuted} disabled={sessionFinished}
+              title={muted ? 'Включить микрофон' : 'Отключить микрофон'}
+              aria-label={muted ? 'Включить микрофон' : 'Отключить микрофон'}>
+              {muted ? <MicOff size={22}/> : <Mic size={22}/>}
+            </button>
+            <button type="button" className="planik-live-control planik-live-collapse"
+              onClick={() => setCollapsed(true)} aria-label="Свернуть окно">
+              <Minimize2 size={21}/>
+            </button>
+            <button type="button" className="planik-live-control planik-live-hangup"
+              onClick={finish} title="Завершить живое общение" aria-label="Завершить живое общение">
+              <PhoneOff size={22}/>
+            </button>
+          </div>
+          <div className="planik-live-meta">
+            <span><Radio size={13}/> {minute}:{second}</span>
+            <span title="Списание кредитов рассчитывается по фактическому использованию.">{cost}</span>
+          </div>
+        </footer>
+      </div>
+    </section>
+  ), document.body);
 }

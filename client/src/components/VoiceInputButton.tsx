@@ -199,12 +199,20 @@ export function VoiceInputButton({ onTranscript, liveContext, activationMode = '
   };
 
   return <>
-    <span className="voice-mode-anchor" ref={menuRef}>
+    <span className={`voice-mode-anchor ${activationMode === 'transcription' && liveContext ? 'voice-mode-anchor--with-live' : ''}`} ref={menuRef}>
       <button type="button" disabled={disabled || state !== 'idle' || liveOpen} onClick={() => { if (activationMode === 'transcription') void start(); else setMenuOpen(value => !value); }}
         className={`voice-input-trigger inline-flex ${small ? 'h-9 w-9' : 'h-11 w-11'} shrink-0 items-center justify-center rounded-full disabled:opacity-50 ${className}`}
         title={activationMode === 'transcription' ? 'Голосовой ввод' : 'Выбрать голосовой режим'} aria-label={activationMode === 'transcription' ? 'Голосовой ввод' : 'Выбрать голосовой режим'} aria-expanded={activationMode === 'menu' ? menuOpen : undefined}>
         <Mic size={small ? 16 : 17} />
       </button>
+      {activationMode === 'transcription' && liveContext ? (
+        <button type="button" disabled={disabled || state !== 'idle' || liveOpen}
+          className={`voice-input-trigger planik-live-trigger inline-flex ${small ? 'h-9 w-9' : 'h-11 w-11'} shrink-0 items-center justify-center rounded-full disabled:opacity-50 ${className}`}
+          title="Живое общение с Плаником" aria-label="Начать живое общение с Плаником"
+          onClick={startLive}>
+          <Radio size={small ? 16 : 17} />
+        </button>
+      ) : null}
       {activationMode === 'menu' && menuOpen ? <div className="voice-mode-menu dialog-surface" role="menu" aria-label="Голосовой режим">
         <button type="button" role="menuitem" onClick={startLive}>
           <Radio size={18} /><span><strong>Живое общение</strong><small>Говорите с ИИ без пауз на отправку</small></span>
