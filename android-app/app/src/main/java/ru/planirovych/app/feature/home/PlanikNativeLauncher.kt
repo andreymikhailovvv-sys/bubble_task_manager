@@ -10,6 +10,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
@@ -45,21 +46,28 @@ import kotlinx.coroutines.delay
 @Composable
 internal fun PlanikNativeLauncher(
     enabled: Boolean = true,
+    dark: Boolean,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val frames = remember(context) {
+    val frames = remember(context, dark) {
         fun render(asset: String): Bitmap? = runCatching {
             context.assets.open(asset).use { stream ->
                 val picture = SVG.getFromInputStream(stream).renderToPicture(420, 375)
-                Bitmap.createBitmap(420, 375, Bitmap.Config.ARGB_8888).apply {
+                val full = Bitmap.createBitmap(420, 375, Bitmap.Config.ARGB_8888).apply {
                     AndroidCanvas(this).drawPicture(picture)
                 }
+                // The original 345×275 web viewBox includes large transparent
+                // side margins for gestures and props. Crop only those margins
+                // so the touch bounds match the visible robot, not empty space.
+                Bitmap.createBitmap(full, 90, 29, 255, 275).also { full.recycle() }
             }
         }.getOrNull()
-        Pair(render("planik_idle.svg"), render("planik_blink.svg"))
+        val suffix = if (dark) "" else "_light"
+        Pair(render("planik_idle${suffix}.svg"), render("planik_blink${suffix}.svg"))
     }
+    val pressInteraction = remember { MutableInteractionSource() }
 
     var blinking by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -82,9 +90,15 @@ internal fun PlanikNativeLauncher(
     )
 
     Box(
-        modifier.size(width = 105.dp, height = 94.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .clickable(enabled = enabled, onClick = onClick)
+        modifier.size(width = 84.dp, height = 90.dp)
+            .clip(RoundedCornerShape(24.dp))
+            // No rectangular ripple overlay around the much smaller mascot.
+            .clickable(
+                enabled = enabled,
+                interactionSource = pressInteraction,
+                indication = null,
+                onClick = onClick
+            )
             .semantics { contentDescription = "Поговорить с Плаником" }
     ) {
         val picture = if (blinking) frames.second ?: frames.first else frames.first
