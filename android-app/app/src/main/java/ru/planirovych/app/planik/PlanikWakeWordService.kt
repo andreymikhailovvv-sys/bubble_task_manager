@@ -153,6 +153,14 @@ class PlanikWakeWordService : Service(), RecognitionListener {
 
     private fun startListening() {
         main.removeCallbacks(restart)
+        // createOnDeviceSpeechRecognizer() was introduced in API 31. The
+        // explicit check is required for Android Lint's NewApi analysis; the
+        // capability check below additionally verifies the on-device engine.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            PlanikWakeWordSettings.setEnabled(this, false)
+            stopSelf()
+            return
+        }
         if (listening || conversationActive || wakePending ||
             !PlanikWakeWordSettings.enabled(this)) return
         if (!PlanikWakeWordSettings.supported(this)) {
