@@ -350,14 +350,14 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
             const id = payload.id || crypto.randomUUID();
             if (liveContextRef.current?.type === 'chat') dialogHistoryRef.current.push({ id, role: 'user', content: payload.text });
             setLiveMessages(previous => previous.some(item => item.id === id) ? previous :
-              [...previous, { role: 'user', id, text: payload.text! }].slice(-32));
+              [...previous, { role: 'user' as const, id, text: payload.text! }].slice(-32));
             onLiveMessageRef.current?.({ role: 'user', id, text: payload.text });
           }
           if (payload.type === 'assistant_message' && typeof payload.text === 'string') {
             const id = payload.id || crypto.randomUUID();
             if (liveContextRef.current?.type === 'chat') dialogHistoryRef.current.push({ id, role: 'assistant', content: payload.text });
             setLiveMessages(previous => previous.some(item => item.id === id) ? previous :
-              [...previous, { role: 'assistant', id, text: payload.text! }].slice(-32));
+              [...previous, { role: 'assistant' as const, id, text: payload.text! }].slice(-32));
             setCaption('');
             onLiveMessageRef.current?.({ role: 'assistant', id, text: payload.text });
           }
