@@ -58,10 +58,11 @@ internal fun PlanikNativeLauncher(
                 val full = Bitmap.createBitmap(420, 375, Bitmap.Config.ARGB_8888).apply {
                     AndroidCanvas(this).drawPicture(picture)
                 }
-                // The original 345×275 web viewBox includes large transparent
-                // side margins for gestures and props. Crop only those margins
-                // so the touch bounds match the visible robot, not empty space.
-                Bitmap.createBitmap(full, 90, 29, 255, 275).also { full.recycle() }
+                // Keep both arms and the full antenna. The old crop
+                // (90,29,255,275) amputated the left edge of the mascot.
+                // The new crop preserves the ~84:90 aspect ratio of the
+                // composer launcher while keeping the hit area compact.
+                Bitmap.createBitmap(full, 80, 12, 280, 300).also { full.recycle() }
             }
         }.getOrNull()
         val suffix = if (dark) "" else "_light"
