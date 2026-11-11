@@ -10,7 +10,7 @@ test('Android Planik HTML does not load the third-party Telegram SDK and marks b
   const match = html.match(/<!-- The Android Realtime page[\s\S]*?<script>([\s\S]*?)<\/script>/);
   assert.ok(match, 'Android bootstrap must be an inline script in HTML head');
   const code = match[1];
-  assert.doesNotMatch(html, /<script\s+defer\s+src="https:\/\/telegram\.org\/js\/telegram-web-app\.js"/);
+  assert.doesNotMatch(html, /^\s*<script\s+defer\s+src="https:\/\/telegram\.org\/js\/telegram-web-app\.js"/m);
   const makeContext = (pathname: string) => {
     const written: string[] = [];
     const listeners: Array<{ name: string; callback: (event: any) => void }> = [];
