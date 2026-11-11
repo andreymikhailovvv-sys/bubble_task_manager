@@ -37,6 +37,8 @@ import { noteHtmlToPlainText } from './lib/notes';
 import { CalendarExportDialog } from './components/CalendarExportDialog';
 import { AutoGrowingTextarea } from './components/AutoGrowingTextarea';
 import { MiniAiChatComposer, type MiniAiChatComposerHandle } from './components/MiniAiChatComposer';
+import { PlanikMascot } from './components/PlanikMascot';
+import './components/PlanikMiniChatLauncher.css';
 import { MiniGeneralAiChatHeader, type MiniAiContextPicker } from './components/MiniGeneralAiChatHeader';
 import { MiniTaskAiChatHeader } from './components/MiniTaskAiChatHeader';
 import type { AiChatModel, AiTaskProposal, ChatAttachmentPayload, ChatMessage, GeneratedDocument, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment, TaskComment } from './lib/types';
@@ -880,12 +882,15 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   // fresher than a 2.5-second server poll. Never replace the active transcript.
   const liveVoiceChatSessionsRef = useRef<Set<string>>(new Set());
   const liveVoiceTaskSessionsRef = useRef<Set<string>>(new Set());
+  const [miniLiveVoiceActive, setMiniLiveVoiceActive] = useState(false);
   const onMiniLiveVoiceSessionChange = (active: boolean, context?: LiveVoiceContext) => {
     if (!context) return;
     const set = context.type === 'chat' ? liveVoiceChatSessionsRef.current : liveVoiceTaskSessionsRef.current;
     const key = context.type === 'chat' ? `${context.projectId}:${context.chatId}` : context.taskId;
     if (active) set.add(key);
     else set.delete(key);
+    // Hide the composer launcher while the full or collapsed avatar is present.
+    setMiniLiveVoiceActive(active);
   };
   const [replyToTask, setReplyToTask] = useState<AiReplyTarget | null>(null);
   const [replyToGeneral, setReplyToGeneral] = useState<AiReplyTarget | null>(null);
@@ -5218,6 +5223,14 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               </div>
             </div>
             <div className="miniapp-ai-chat-composer absolute inset-x-0 bottom-0 z-20 p-3">
+              {!miniLiveVoiceActive && getTaskAiRecipientId(openedTask) === 'ai' ? (
+                <button type="button" className="miniapp-planik-live-launcher"
+                  aria-label="Поговорить с Плаником" title="Живое общение с Плаником"
+                  disabled={aiLoadingTaskId === openedTask.id}
+                  onClick={() => taskAiComposerRef.current?.startLive()}>
+                  <PlanikMascot size="composer" />
+                </button>
+              ) : null}
               <input
                 ref={aiAttachmentInputRef}
                 type="file"
@@ -5406,6 +5419,16 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               </div>
             </div>
             <div className="miniapp-ai-chat-composer absolute inset-x-0 bottom-0 z-20 p-3">
+              {!miniLiveVoiceActive && activeAiChat &&
+                !activeAiChat.id.startsWith('telegram-ai-assistant:') &&
+                !activeAiChat.id.startsWith('mail-ai-assistant:') ? (
+                <button type="button" className="miniapp-planik-live-launcher"
+                  aria-label="Поговорить с Плаником" title="Живое общение с Плаником"
+                  disabled={aiChatLoading}
+                  onClick={() => aiChatComposerRef.current?.startLive()}>
+                  <PlanikMascot size="composer" />
+                </button>
+              ) : null}
               {replyToGeneral ? <AiReplyPreview target={replyToGeneral} onDismiss={() => setReplyToGeneral(null)} /> : null}
               <AiAttachmentTiles files={aiChatPendingFiles} onRemove={(file) => setAiChatPendingFiles((prev) => prev.filter((item) => item !== file))} busy={aiChatLoading} uploadProgress={aiChatUploadProgress} />
               <div className="miniapp-ai-chat-composer-card miniapp-ai-chat-composer-card-general flex items-end gap-2 rounded-3xl border p-2">
