@@ -52,6 +52,8 @@ class MainActivity:ComponentActivity(){
         const val QUICK_AI_TEXT="text"
         const val QUICK_AI_VOICE="voice"
         const val EXTRA_CHECK_ANDROID_UPDATE="planirovych_check_android_update"
+        @Volatile var isInForeground: Boolean = false
+            private set
     }
     private var notificationTaskId by mutableStateOf<String?>(null)
     private var openGeneralAi by mutableStateOf(false)
@@ -100,6 +102,16 @@ class MainActivity:ComponentActivity(){
             quickAiMode=null
             openGeneralAi=false
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        isInForeground = true
+    }
+
+    override fun onPause() {
+        isInForeground = false
+        super.onPause()
     }
 
     override fun onNewIntent(intent:Intent){
