@@ -132,7 +132,7 @@ class PlanikLiveActivity : ComponentActivity() {
         view.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                 super.onPageStarted(view, url, favicon)
-                Log.i(TAG, "Web document started path=${Uri.parse(url).path}")
+                Log.i(TAG, "Web document started path=${url?.let { Uri.parse(it).path } ?: "unknown"}")
             }
 
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest): Boolean {
@@ -146,7 +146,7 @@ class PlanikLiveActivity : ComponentActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                Log.i(TAG, "Web document finished path=${Uri.parse(url).path}")
+                Log.i(TAG, "Web document finished path=${url?.let { Uri.parse(it).path } ?: "unknown"}")
                 if (!failed && !loaded) inspectReactRoot()
             }
 
@@ -294,7 +294,16 @@ class PlanikLiveActivity : ComponentActivity() {
             override fun run() {
                 if (loaded || failed || isFinishing || isDestroyed) return
                 if (android.os.SystemClock.uptimeMillis() > deadline) {
-                    showFailure("Планик не загрузился. Проверьте соединение и повторите.")
+                    val reason = when (lastWebStage) {
+                        "legacy" -> "Веб-часть Планика на сервере не обновлена. Разверните последнюю версию сайта."
+                        "workspace-loading" -> "Не удалось загрузить данные аккаунта для Планика."
+                        "chat-opening" -> "Чат открылся, но не удалось запустить голосовой режим."
+                        "voice-starting" -> "Голосовой режим не появился на экране."
+                        else -> if (lastConsoleError) "Ошибка сценария Планика. Проверьте Logcat: PlanikLive."
+                            else "Не удалось открыть живой диалог. Повторите попытку."
+                    }
+                    Log.e(TAG, "Realtime boot timeout: stage=$lastWebStage detail=$lastWebDetail")
+                    showFailure(reason)
                     return
                 }
                 inspectReactRoot()
@@ -305,21 +314,39 @@ class PlanikLiveActivity : ComponentActivity() {
 
     private fun inspectReactRoot() {
         val view = browser ?: return
-        // Do not hide loading just because the static HTML is downloaded.
-        // Wait until React paints the authenticated chat or voice dialog.
-        val code = """(function() {
+        // A mounted React root is not proof that the live dialog is usable:
+        // it may contain only the login view, splash or a stale web bundle.
+        // The frontend sets an explicit marker when LiveVoiceDialog mounts.
+        val code = """(function () {
             var root = document.getElementById('root');
-            if (!root || !root.children.length) return 'loading';
-            if (document.querySelector('.planik-live-fullscreen, .miniapp-ai-chat-composer')) return 'ready';
-            var text = (root.innerText || '').trim();
-            if (text.indexOf('Ошибка') >= 0 && text.length < 350) return 'error';
-            return text.length > 60 ? 'ready' : 'loading';
+            var stage = document.documentElement.dataset.planikAndroid || 'legacy';
+            var detail = document.documentElement.dataset.planikAndroidReason || '';
+            var realtime = !!document.querySelector('.planik-live-fullscreen, .planik-live-compact');
+            return [stage, detail, realtime ? '1' : '0', document.readyState,
+                root ? root.children.length : 0, location.pathname].join('|');
         })();"""
         view.evaluateJavascript(code) { result ->
             if (loaded || failed) return@evaluateJavascript
+            // evaluateJavascript returns a JSON-encoded JS string; do not
+            // parse it by substring or accidentally treat quotes as a stage.
+            val value = runCatching { JSONTokener(result).nextValue()?.toString().orEmpty() }
+                .getOrDefault("")
+            val parts = value.split('|')
+            val stage = parts.getOrNull(0).orEmpty()
+            val detail = parts.getOrNull(1).orEmpty()
+            val visible = parts.getOrNull(2) == "1"
+            if (stage.isNotBlank() && (stage != lastWebStage || detail != lastWebDetail)) {
+                lastWebStage = stage
+                lastWebDetail = detail
+                Log.i(TAG, "Web stage=$stage detail=$detail rendered=$visible readyState=${parts.getOrNull(3)}")
+            }
             when {
-                result.contains("ready") -> markReady()
-                result.contains("error") -> showFailure("Ошибка при запуске Планика. Попробуйте ещё раз.")
+                visible && stage == "live" -> markReady()
+                stage == "error" -> showFailure(when (detail) {
+                    "workspace-data" -> "Не удалось получить данные аккаунта. Проверьте авторизацию Планировыча."
+                    "composer-not-mounted" -> "Не удалось открыть голосовой чат. Проверьте обновление сайта."
+                    else -> "Ошибка запуска живого общения с Плаником."
+                })
             }
         }
     }
