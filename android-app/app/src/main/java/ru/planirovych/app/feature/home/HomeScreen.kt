@@ -1,6 +1,13 @@
 package ru.planirovych.app.feature.home
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import ru.planirovych.app.planik.PlanikWakeWordSettings
+import ru.planirovych.app.planik.PlanikWakeWordService
 import android.net.Uri
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -567,6 +574,18 @@ private fun SettingsSheet(
     auth: (AuthMode) -> Unit,
     logout: () -> Unit
 ) {
+    val context = LocalContext.current
+    val hotwordSupported = remember(context) { PlanikWakeWordSettings.supported(context) }
+    var hotwordEnabled by remember { mutableStateOf(PlanikWakeWordSettings.enabled(context)) }
+    var hotwordError by remember { mutableStateOf<String?>(null) }
+    val microphoneRequest = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hotwordEnabled = granted && PlanikWakeWordService.enable(context)
+        hotwordError = if (!granted) "Для «Эй, Планик» нужен доступ к микрофону."
+            else if (!hotwordEnabled) "Не удалось запустить распознавание. Проверьте настройки устройства."
+            else null
+    }
     ModalBottomSheet(onDismissRequest=close) {
         Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
             Text("Настройки",style=MaterialTheme.typography.headlineSmall,
@@ -603,6 +622,47 @@ private fun SettingsSheet(
                         uncheckedIconColor=Color(0xFF6D28D9)
                     ))
             }
+            HorizontalDivider()
+            Row(verticalAlignment=Alignment.CenterVertically,
+                horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+                Icon(Icons.Default.Mic,"Голосовая активация Планика",
+                    tint=Color(0xFF8B5CF6))
+                Column(Modifier.weight(1f),
+                    verticalArrangement=Arrangement.spacedBy(3.dp)) {
+                    Text("Эй, Планик",fontWeight=FontWeight.SemiBold)
+                    Text("Голосовое пробуждение · экспериментально",
+                        style=MaterialTheme.typography.bodySmall,
+                        color=MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(
+                    checked=hotwordEnabled,
+                    enabled=hotwordSupported,
+                    onCheckedChange={want->
+                        if (!want) {
+                            PlanikWakeWordService.disable(context)
+                            hotwordEnabled=false
+                            hotwordError=null
+                        } else if(ContextCompat.checkSelfPermission(context,
+                            Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED) {
+                            hotwordEnabled=PlanikWakeWordService.enable(context)
+                            hotwordError=if(hotwordEnabled)null
+                                else "Не удалось запустить фоновое распознавание."
+                        } else {
+                            microphoneRequest.launch(Manifest.permission.RECORD_AUDIO)
+                        }
+                    }
+                )
+            }
+            Text(if(!hotwordSupported)
+                    "Устройство не поддерживает локальное распознавание кодовой фразы Android 12+."
+                else "Включается вручную, показывает уведомление о микрофоне и может расходовать батарею. " +
+                    "При заблокированном экране нажмите уведомление Планика, чтобы открыть диалог. " +
+                    "Распознавание зависит от ограничений Android и производителя.",
+                style=MaterialTheme.typography.bodySmall,
+                color=MaterialTheme.colorScheme.onSurfaceVariant)
+            hotwordError?.let { Text(it,color=MaterialTheme.colorScheme.error,
+                style=MaterialTheme.typography.bodySmall) }
+            HorizontalDivider()
             if(user?.hasAccount==true) {
                 OutlinedButton(logout,Modifier.fillMaxWidth()){Text("Выйти")}
             } else {
