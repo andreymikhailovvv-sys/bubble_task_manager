@@ -252,10 +252,12 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
     };
     stopResourcesRef.current = stopResources;
     const start = async () => {
+      let startupStep = 'media-check';
       try {
         if (!navigator.mediaDevices?.getUserMedia || !window.AudioContext || !window.WebSocket) {
           throw new Error('Этот браузер не поддерживает живое общение.');
         }
+        startupStep = 'audio-context';
         const context = audioContext ?? new AudioContext();
         contextRef.current = context;
         await context.resume();
@@ -279,6 +281,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
           playbackBoostRef.current = boost;
           playbackLimiterRef.current = limiter;
         }
+        startupStep = 'microphone';
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
         });
@@ -287,12 +290,14 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
         // iOS Telegram supports an explicit media-playback audio category.
         // Android and unsupported browsers simply keep their existing route.
         restoreAudioSessionRef.current = preferTelegramLiveVoiceMediaSession();
+        startupStep = 'voice-ticket';
         const { ticket } = await api.startLiveVoice(
           liveContext ? { ...liveContext, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone } : undefined,
           'echo'
         );
         if (cancelled) return;
         const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        startupStep = 'websocket';
         const ws = new WebSocket(`${scheme}//${location.host}/api/ai/audio/live?ticket=${encodeURIComponent(ticket)}`);
         wsRef.current = ws;
         ws.onopen = () => { /* Wait for the authenticated upstream session.updated event. */ };
@@ -449,14 +454,30 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
             setPhase('error');
           }
         };
-        ws.onerror = () => { if (!cancelled) { reportStatus(null); setError('Не удалось подключиться к голосовому серверу.'); setPhase('error'); } };
+        ws.onerror = () => {
+          if (!cancelled) {
+            console.error('[PlanikLive] websocket connection failed', { state: ws.readyState, stage: startupStep });
+            reportStatus(null);
+            setError('Не удалось подключиться к голосовому серверу. Повторите попытку.');
+            setPhase('error');
+          }
+        };
         ws.onclose = () => {
           if (!cancelled) { reportStatus(null); setPhase(previous => previous === 'ended' || previous === 'error' ? previous : 'ended'); }
         };
       } catch (cause) {
         if (!cancelled) {
+          // Never log the one-time WebSocket ticket or audio payload.
+          console.error('[PlanikLive] startup failed', {
+            step: startupStep,
+            name: cause instanceof Error ? cause.name : 'unknown',
+            message: cause instanceof Error ? cause.message.slice(0, 140) : 'unknown'
+          });
+          const android = location.pathname === '/android-planik';
           setError(cause instanceof Error && cause.name === 'NotAllowedError'
-            ? 'Разрешите микрофон в Telegram или браузере.' : cause instanceof Error ? cause.message : 'Не удалось начать диалог.');
+            ? (android ? 'Разрешите доступ к микрофону для приложения Планировыч в настройках Android.'
+              : 'Разрешите микрофон в Telegram или браузере.')
+            : cause instanceof Error ? cause.message : 'Не удалось начать диалог.');
           setPhase('error');
         }
       }

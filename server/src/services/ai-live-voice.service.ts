@@ -124,6 +124,10 @@ export function handleLiveVoiceUpgrade(request: IncomingMessage, socket: Duplex,
   let originMatchesHost = false;
   try { originMatchesHost = !!origin && !!host && new URL(origin).host === host; } catch { /* invalid Origin */ }
   if (!originMatchesHost || request.headers.upgrade?.toLowerCase() !== 'websocket') {
+    // Include only the failure category, never ticket or cookie values.
+    console.warn('[AI live voice] upgrade rejected', {
+      reason: !originMatchesHost ? 'origin_mismatch' : 'invalid_upgrade'
+    });
     sendUpgradeRejection(socket, 403); return true;
   }
   const ticket = url.searchParams.get('ticket') ?? '';
@@ -132,6 +136,11 @@ export function handleLiveVoiceUpgrade(request: IncomingMessage, socket: Duplex,
   const key = request.headers['sec-websocket-key'];
   if (!registered || registered.expires < Date.now() || sessions.has(registered.userId) ||
     typeof key !== 'string' || !/^[A-Za-z0-9+/]{22}==$/.test(key) || request.headers['sec-websocket-version'] !== '13') {
+    console.warn('[AI live voice] upgrade rejected', {
+      reason: !registered ? 'missing_ticket' :
+        registered.expires < Date.now() ? 'expired_ticket' :
+        sessions.has(registered.userId) ? 'already_active' : 'invalid_websocket_headers'
+    });
     sendUpgradeRejection(socket, 403); return true;
   }
   sessions.add(registered.userId);

@@ -32,6 +32,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import okhttp3.Cookie
+import okhttp3.HttpUrl
+import ru.planirovych.app.PlanirovychApplication
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import ru.planirovych.app.BuildConfig
 import ru.planirovych.app.core.network.PersistentCookieJar
@@ -52,16 +57,22 @@ class PlanikLiveActivity : ComponentActivity() {
         private const val EXTRA_TASK_ID = "planik_task_id"
         private const val EXTRA_PROJECT_ID = "planik_project_id"
         private const val EXTRA_CHAT_ID = "planik_chat_id"
+        private const val EXTRA_EXPECTED_USER_ID = "planik_expected_user_id"
+        private const val COOKIE_READY_TIMEOUT_MS = 4_000L
 
         fun intent(
             context: Context,
             taskId: String? = null,
             projectId: String? = null,
-            chatId: String? = null
+            chatId: String? = null,
+            expectedUserId: String? = null
         ) = Intent(context, PlanikLiveActivity::class.java).apply {
             taskId?.takeIf { it.isNotBlank() }?.let { putExtra(EXTRA_TASK_ID, it) }
             projectId?.takeIf { it.isNotBlank() }?.let { putExtra(EXTRA_PROJECT_ID, it) }
             chatId?.takeIf { it.isNotBlank() }?.let { putExtra(EXTRA_CHAT_ID, it) }
+            // Internal-only value from the chat that was actually open.
+            // Never put user identity or session credentials into the website URL.
+            expectedUserId?.takeIf { it.isNotBlank() }?.let { putExtra(EXTRA_EXPECTED_USER_ID, it) }
         }
     }
 
@@ -78,12 +89,14 @@ class PlanikLiveActivity : ComponentActivity() {
     private var lastWebStage = ""
     private var lastWebDetail = ""
     private var lastConsoleError = false
+    private var navigationStarted = false
 
     private val microphoneLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         val request = voicePermission
         voicePermission = null
+        Log.i(TAG, "Android microphone runtime permission result granted=$granted")
         if (granted) request?.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
         else request?.deny()
     }
@@ -205,6 +218,7 @@ class PlanikLiveActivity : ComponentActivity() {
                     val origin = request.origin
                     val permitted = origin.scheme == "https" && origin.host == baseHost &&
                         request.resources.contentEquals(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
+                    Log.i(TAG, "WebView microphone permission request accepted=$permitted androidGranted=${ContextCompat.checkSelfPermission(this@PlanikLiveActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED}")
                     if (!permitted) {
                         request.deny()
                         return@runOnUiThread
@@ -256,27 +270,125 @@ class PlanikLiveActivity : ComponentActivity() {
         setContentView(root)
         deadline = android.os.SystemClock.uptimeMillis() + BOOT_TIMEOUT_MS
         startRootChecks()
-        // Cookie copy is required for the authenticated SPA. Never put
-        // credentials in the URL or expose them to JavaScript.
+        // Verify the native account BEFORE opening the embedded website.
+        // A stale WebView may still have a perfectly valid cookie for another user.
+        // Opening two accounts in the same UI makes existing tasks appear lost.
+        lifecycleScope.launch {
+            val currentUser = runCatching {
+                (application as PlanirovychApplication).repository.establishSession()
+            }.getOrElse { cause ->
+                Log.e(TAG, "Native session verification failed", cause)
+                showFailure("Не удалось проверить аккаунт Android. Проверьте подключение и повторите.")
+                return@launch
+            }
+            if (failed || isFinishing || isDestroyed) return@launch
+            val expectedUserId = intent.getStringExtra(EXTRA_EXPECTED_USER_ID)
+            if (!expectedUserId.isNullOrBlank() && currentUser.id != expectedUserId) {
+                Log.e(TAG, "Native session changed since the chat was opened; refusing cross-account Planik")
+                showFailure("Аккаунт Android изменился. Данные прежнего аккаунта не удалены. Войдите в нужный аккаунт и повторите.")
+                return@launch
+            }
+
+            val host = base.newBuilder().encodedPath("/").query(null).build()
+            val authCookies = PersistentCookieJar(this@PlanikLiveActivity)
+                .loadForRequest(host)
+                .filter { it.name == "btm_auth" || it.name == "btm_device" }
+            if (authCookies.isEmpty()) {
+                Log.e(TAG, "Native authentication cookies missing after session verification")
+                showFailure("Не удалось передать авторизацию Android. Войдите в аккаунт заново.")
+                return@launch
+            }
+            loadWithVerifiedNativeSession(view, host, authCookies)
+        }
+    }
+
+    private fun loadWithVerifiedNativeSession(
+        view: WebView, host: HttpUrl, cookies: List<Cookie>, approvedReplacement: Boolean = false
+    ) {
         val manager = CookieManager.getInstance()
+        val origin = host.toString()
         manager.setAcceptCookie(true)
         manager.setAcceptThirdPartyCookies(view, false)
-        val host = base.newBuilder().encodedPath("/").query(null).build()
-        val cookies = PersistentCookieJar(this).loadForRequest(host)
-        // CookieManager.setCookie callbacks were used as a navigation gate,
-        // but a delayed/missing callback kept WebView completely blank until
-        // our 18-second timeout. Copy on the UI thread, flush synchronously,
-        // and ALWAYS load the page exactly once.
-        if (cookies.none { it.name == "btm_auth" || it.name == "btm_device" }) {
-            // Never create a fresh guest in the voice WebView and accidentally
-            // send AI requests to a different account than the native app.
-            Log.e(TAG, "Native session is missing auth/device cookie; refusing guest bootstrap")
-            showFailure("Не удалось передать авторизацию из Android. Войдите заново в Планировыч.")
+
+        // An older WebView can be the ONLY remaining credential for a guest's
+        // workspace. Never erase another account's cookie silently.
+        val previousAuth = manager.getCookie(origin).orEmpty().split(';').mapNotNull { item ->
+            val part = item.trim()
+            val index = part.indexOf('=')
+            if (index <= 0) null else part.substring(0, index) to part.substring(index + 1)
+        }.filter { it.first == "btm_auth" || it.first == "btm_device" }
+        val nativeAuth = cookies.map { it.name to it.value }
+        if (!approvedReplacement && previousAuth.isNotEmpty() &&
+            (previousAuth.size != nativeAuth.size || previousAuth.toSet() != nativeAuth.toSet())) {
+            Log.w(TAG, "Different WebView and Android sessions found; preserving original credentials")
+            handler.removeCallbacksAndMessages(null)
+            android.app.AlertDialog.Builder(this)
+                .setTitle("Обнаружены два разных аккаунта")
+                .setMessage(
+                    "Планик сохранил сессию другого аккаунта. Возможно, именно там находятся ваши задачи. " +
+                    "Ничего не удалено. Если хотите сохранить возможность доступа к прежнему аккаунту, " +
+                    "нажмите «Отмена» и войдите в него в Android. Заменить сессию Планика текущим " +
+                    "Android-аккаунтом можно только вручную."
+                )
+                .setNegativeButton("Отмена") { _, _ ->
+                    showFailure("Аккаунты Android и Планика различаются. Войдите в аккаунт с вашими задачами.")
+                }
+                .setPositiveButton("Использовать Android") { _, _ ->
+                    if (!isFinishing && !isDestroyed && !failed) {
+                        deadline = android.os.SystemClock.uptimeMillis() + BOOT_TIMEOUT_MS
+                        startRootChecks()
+                        loadWithVerifiedNativeSession(view, host, cookies, approvedReplacement = true)
+                    }
+                }
+                .setOnCancelListener {
+                    showFailure("Аккаунты Android и Планика различаются. Войдите в аккаунт с вашими задачами.")
+                }
+                .show()
             return
         }
-        cookies.forEach { cookie -> manager.setCookie(host.toString(), cookie.toString()) }
-        manager.flush()
-        Log.i(TAG, "Planik navigation starting, sessionCookies=${cookies.size}")
+
+        // CookieManager is separate from the native OkHttp cookie jar.
+        // Clearing its previous account is crucial: otherwise the embedded WebView
+        // can authenticate as another user despite a successful native login.
+        manager.removeAllCookies {
+            if (failed || isFinishing || isDestroyed) return@removeAllCookies
+            var pending = cookies.size
+            cookies.forEach { cookie ->
+                manager.setCookie(origin, cookie.toString()) {
+                    if (failed || isFinishing || isDestroyed || navigationStarted) return@setCookie
+                    pending -= 1
+                    if (pending == 0) {
+                        loadIfCookiesMatch(view, origin, cookies)
+                    }
+                }
+            }
+        }
+        // On some vendor WebViews the callback is delayed or never delivered.
+        // Bounded retry verifies the actual cookies and never loads a stale session.
+        handler.postDelayed({
+            if (!navigationStarted && !failed && !isFinishing && !isDestroyed) {
+                loadIfCookiesMatch(view, origin, cookies)
+            }
+        }, COOKIE_READY_TIMEOUT_MS)
+    }
+
+    private fun loadIfCookiesMatch(view: WebView, origin: String, expected: List<Cookie>) {
+        if (failed || navigationStarted || isFinishing || isDestroyed) return
+        val actual = CookieManager.getInstance().getCookie(origin)
+            .orEmpty().split(';').mapNotNull { item ->
+                val part = item.trim()
+                val index = part.indexOf('=')
+                if (index <= 0) null else part.substring(0, index) to part.substring(index + 1)
+            }.filter { it.first == "btm_auth" || it.first == "btm_device" }
+        val expectedPairs = expected.map { it.name to it.value }
+        if (actual.size != expectedPairs.size || actual.toSet() != expectedPairs.toSet()) {
+            Log.e(TAG, "WebView authentication cookies do not match native session; blocking launch")
+            showFailure("Не удалось синхронизировать сессию Планика с Android. Повторите попытку.")
+            return
+        }
+        CookieManager.getInstance().flush()
+        navigationStarted = true
+        Log.i(TAG, "Planik navigation starting with verified native session")
         view.loadUrl(targetUrl)
     }
 

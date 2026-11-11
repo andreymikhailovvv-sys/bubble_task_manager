@@ -18,7 +18,7 @@ test('Android reuses exact Mini App React/SVG/Markdown realtime renderer', async
   assert.match(mini, /window\.location\.pathname !== '\/android-planik'/);
   assert.match(mini, /composer\?\.startLive\(\)/);
   assert.match(activity, /\.encodedPath\("\/android-planik"\)/);
-  assert.match(activity, /PersistentCookieJar\(this\)\.loadForRequest\(host\)/);
+  assert.match(activity, /PersistentCookieJar\(this@PlanikLiveActivity\)[\s\S]*?\.loadForRequest\(host\)/);
   assert.match(activity, /request\.resources\.contentEquals\(arrayOf\(PermissionRequest\.RESOURCE_AUDIO_CAPTURE\)\)/);
   assert.match(activity, /allowFileAccess = false/);
   assert.match(activity, /onBackPressedDispatcher\.addCallback/);
@@ -68,7 +68,7 @@ test('Realtime WebView has visible loading, diagnostics, first-party cookies and
   assert.match(activity, /showFailure\(reason\)/);
   assert.match(activity, /"legacy" -> "Веб-часть Планика на сервере не обновлена/);
   assert.match(activity, /setAcceptThirdPartyCookies\(view, false\)/);
-  assert.match(activity, /Persisten[t]CookieJar\(this\)\.loadForRequest\(host\)/);
+  assert.match(activity, /PersistentCookieJar\(this@PlanikLiveActivity\)[\s\S]*?\.loadForRequest\(host\)/);
   assert.match(activity, /querySelector\('\.planik-live-fullscreen, \.planik-live-compact'\)/);
   assert.match(activity, /retryButton = Button\(this\)/);
   assert.match(activity, /allowFileAccess = false/);
