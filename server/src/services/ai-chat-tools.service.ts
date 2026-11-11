@@ -109,12 +109,12 @@ export const AI_CHAT_OPENAI_TOOLS = [
   },
   {
     type: 'function', name: 'search_tasks', strict: true,
-    description: 'Найти реальные задачи и подзадачи пользователя. Формируй несколько характерных фраз и контекстных ключевых слов из всего диалога.',
+    description: 'Найти реальные задачи и подзадачи пользователя. Формируй до 4 разных характерных фраз и контекстные ключевые слова из всего диалога. Для поиска нескольких конкретных задач можно запросить до 25 совпадений. Если результат truncated=true, явно сообщи, что показана часть, и при необходимости уточни запрос. Для полного списка по датам, статусу или сектору используй list_tasks с пагинацией.',
     parameters: { type: 'object', additionalProperties: false, required: ['queries', 'keywords', 'sphereHints', 'itemType', 'statusScope', 'dueFrom', 'dueTo', 'limit'], properties: {
       queries: { type: 'array', minItems: 1, maxItems: 4, items: { type: 'string' } },
       keywords: { type: 'array', maxItems: 10, items: { type: 'string' } }, sphereHints: { type: 'array', items: { type: 'string' } },
       itemType: { type: 'string', enum: ['any', 'task', 'subtask'] }, statusScope: { type: 'string', enum: ['active', 'completed', 'all'] },
-      dueFrom: nullable('string'), dueTo: nullable('string'), limit: { type: 'number', minimum: 1, maximum: 10 }
+      dueFrom: nullable('string'), dueTo: nullable('string'), limit: { type: 'number', minimum: 1, maximum: 25 }
     } }
   },
   {
