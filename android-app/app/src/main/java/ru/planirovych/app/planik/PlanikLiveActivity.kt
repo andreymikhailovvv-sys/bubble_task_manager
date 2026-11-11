@@ -153,12 +153,13 @@ class PlanikLiveActivity : ComponentActivity() {
             override fun onReceivedError(
                 view: WebView?, request: WebResourceRequest?, error: WebResourceError?
             ) {
+                val assetPath = request?.url?.path.orEmpty()
                 if (request?.isForMainFrame == true) {
                     Log.e(TAG, "Main document load failed: code=${error?.errorCode}")
                     showFailure("Не удалось получить страницу Планика (сетевая ошибка ${error?.errorCode}).")
-                } else if (request?.url?.path?.startsWith("/assets/") == true &&
-                    (request.url.path.endsWith(".js") || request.url.path.endsWith(".css"))) {
-                    Log.e(TAG, "App bundle asset failed: ${request.url.lastPathSegment} code=${error?.errorCode}")
+                } else if (assetPath.startsWith("/assets/") &&
+                    (assetPath.endsWith(".js") || assetPath.endsWith(".css"))) {
+                    Log.e(TAG, "App bundle asset failed: ${request?.url?.lastPathSegment} code=${error?.errorCode}")
                     showFailure("Не удалось загрузить файлы интерфейса Планика.")
                 }
             }
@@ -166,13 +167,14 @@ class PlanikLiveActivity : ComponentActivity() {
             override fun onReceivedHttpError(
                 view: WebView?, request: WebResourceRequest?, errorResponse: WebResourceResponse?
             ) {
+                val assetPath = request?.url?.path.orEmpty()
                 if (request?.isForMainFrame == true && (errorResponse?.statusCode ?: 0) >= 400) {
                     Log.e(TAG, "Planik page HTTP ${errorResponse?.statusCode}")
                     showFailure("Сервер не открыл экран Планика (HTTP ${errorResponse?.statusCode}).")
                 } else if ((errorResponse?.statusCode ?: 0) >= 400 &&
-                    request?.url?.path?.startsWith("/assets/") == true &&
-                    (request.url.path.endsWith(".js") || request.url.path.endsWith(".css"))) {
-                    Log.e(TAG, "App bundle asset HTTP ${errorResponse?.statusCode}: ${request.url.lastPathSegment}")
+                    assetPath.startsWith("/assets/") &&
+                    (assetPath.endsWith(".js") || assetPath.endsWith(".css"))) {
+                    Log.e(TAG, "App bundle asset HTTP ${errorResponse?.statusCode}: ${request?.url?.lastPathSegment}")
                     showFailure("Не загрузились скрипты Планика (HTTP ${errorResponse?.statusCode}).")
                 }
             }
