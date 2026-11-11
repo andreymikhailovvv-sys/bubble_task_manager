@@ -28,9 +28,10 @@ test('Android reuses exact Mini App React/SVG/Markdown realtime renderer', async
   assert.match(task, /taskId = task\.id/);
 });
 
-test('native launcher bundles exact website mascot paths and animations, not a substitute icon', async () => {
-  const [asset, source, styles, launcher, manifest, build] = await Promise.all([
-    read('../../android-app/app/src/main/assets/planik_mascot.html'),
+test('Android launcher uses real static SVG artwork, animated natively instead of transparent WebView', async () => {
+  const [asset, blink, source, styles, launcher, manifest, build] = await Promise.all([
+    read('../../android-app/app/src/main/assets/planik_idle.svg'),
+    read('../../android-app/app/src/main/assets/planik_blink.svg'),
     read('../../client/src/components/PlanikMascot.tsx'),
     read('../../client/src/components/PlanikMascot.css'),
     read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/PlanikNativeLauncher.kt'),
@@ -42,13 +43,32 @@ test('native launcher bundles exact website mascot paths and animations, not a s
   assert.match(asset, /planik-body-native/);
   assert.match(asset, /planik-screen-native/);
   assert.match(asset, /planik-faceplate/);
-  assert.match(asset, /planik-notif-static/);
-  assert.match(asset, /@keyframes planik-float/);
   assert.match(styles, /@keyframes planik-float/);
-  assert.match(launcher, /file:\/\/\/android_asset\/planik_mascot\.html/);
-  assert.match(launcher, /settings\.javaScriptEnabled = false/);
+  assert.match(blink, /ry="1\.4"/);
+  assert.doesNotMatch(asset, /planik-notif-static|planik-celebrating|planik-typing/);
+  assert.match(launcher, /SVG\.getFromInputStream\(stream\)/);
+  assert.match(launcher, /android\.graphics\.Canvas as AndroidCanvas/);
+  assert.match(launcher, /renderToPicture\(420, 375\)/);
+  assert.match(launcher, /rememberInfiniteTransition/);
+  assert.doesNotMatch(launcher, /import android\.webkit\.WebView|AndroidView\(/);
   assert.match(manifest, /\.planik\.PlanikLiveActivity/);
   assert.match(manifest, /android:exported="false"/);
+  assert.match(build, /com\.caverock:androidsvg:1\.4/);
   assert.match(build, /versionCode = 9/);
   assert.match(build, /versionName = "1\.0\.7"/);
+});
+
+test('Realtime WebView has visible loading, diagnostics, first-party cookies and retry instead of blank', async () => {
+  const activity = await read('../../android-app/app/src/main/java/ru/planirovych/app/planik/PlanikLiveActivity.kt');
+  assert.match(activity, /loadingLabel\?\.text = message/);
+  assert.match(activity, /Web runtime error at line/);
+  assert.match(activity, /onReceivedError\(/);
+  assert.match(activity, /onRenderProcessGone\(/);
+  assert.match(activity, /onReceivedHttpError\(/);
+  assert.match(activity, /showFailure\("Планик не загрузился/);
+  assert.match(activity, /setAcceptThirdPartyCookies\(view, false\)/);
+  assert.match(activity, /Persisten[t]CookieJar\(this\)\.loadForRequest\(host\)/);
+  assert.match(activity, /querySelector\('\.planik-live-fullscreen, \.miniapp-ai-chat-composer'\)/);
+  assert.match(activity, /retryButton = Button\(this\)/);
+  assert.match(activity, /allowFileAccess = false/);
 });

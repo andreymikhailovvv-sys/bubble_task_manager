@@ -1,0 +1,26 @@
+<svg width="345" height="275"
+        class="planik-svg"
+        viewBox="35 32 345 275"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true"
+      >
+        <defs>
+          <linearGradient id="planik-body-native" x1="125" y1="75" x2="300" y2="250" gradientUnits="userSpaceOnUse">
+            <stop class="planik-body-stop-start" stop-color="#5e5ca3" /><stop class="planik-body-stop-mid" offset=".55" stop-color="#373965" /><stop class="planik-body-stop-end" offset="1" stop-color="#242e51" />
+          </linearGradient>
+          <linearGradient id="planik-rim-native" x1="125" y1="75" x2="300" y2="250" gradientUnits="userSpaceOnUse">
+            <stop class="planik-rim-stop-start" stop-color="#9ce4f5" /><stop class="planik-rim-stop-mid" offset=".52" stop-color="#afa8ff" /><stop class="planik-rim-stop-end" offset="1" stop-color="#7a75ca" />
+          </linearGradient>
+          <linearGradient id="planik-screen-native" x1="0" y1="0" x2="1" y2="1">
+            <stop class="planik-screen-stop-start" stop-color="#212e50" /><stop class="planik-screen-stop-end" offset="1" stop-color="#141d38" />
+          </linearGradient>
+        </defs>
+
+        <path d="M215 77V58" stroke="#8c8ed3" stroke-width="7" stroke-linecap="round" />
+        <circle class="planik-antenna" cx="215" cy="52" r="9" fill="#88e0ed" />
+        <rect x="122" y="76" width="186" height="174" rx="65" fill="url(#planik-body-native)" stroke="url(#planik-rim-native)" stroke-width="4" />
+        <path d="M148 100Q163 83 192 83" fill="none" stroke="#d0eaff" stroke-opacity=".2" stroke-linecap="round" stroke-width="4" />
+        <rect class="planik-faceplate" x="153" y="118" width="124" height="92" rx="44" fill="url(#planik-screen-native)" stroke="#7f81b1" stroke-opacity=".35" stroke-width="1" />
+        <g><ellipse class="planik-eye" cx="190" cy="162" rx="10" ry="15" fill="#f1f3ff" /></g>
+        <g><ellipse class="planik-eye" cx="240" cy="162" rx="10" ry="15" fill="#f1f3ff" /></g>
+</svg>

@@ -1,25 +1,46 @@
 package ru.planirovych.app.feature.home
 
-import android.graphics.Color
-import android.webkit.WebView
+import android.graphics.Bitmap
+import android.graphics.Canvas as AndroidCanvas
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
+import com.caverock.androidsvg.SVG
+import kotlinx.coroutines.delay
 
 /**
- * Identical local SVG and animation CSS, generated from PlanikMascot.tsx/CSS.
- * The invisible Compose hit target is layered ABOVE the presentation-only
- * WebView. WebView has no JavaScript or remote access and never handles input.
+ * Website Planik's EXACT gradients, head, faceplate and eyes rendered through
+ * AndroidSVG. No WebView: transparent hardware-accelerated WebView surfaces can
+ * disappear behind Compose even when the touch target is still present.
+ *
+ * Only the small composer launcher is rendered natively. Fullscreen Realtime
+ * still uses the shared live frontend so its cards/Markdown remain identical.
  */
 @Composable
 internal fun PlanikNativeLauncher(
@@ -28,25 +49,77 @@ internal fun PlanikNativeLauncher(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    Box(modifier.size(width = 105.dp, height = 94.dp)) {
-        AndroidView(
-            factory = {
-                WebView(context).apply {
-                    setBackgroundColor(Color.TRANSPARENT)
-                    isVerticalScrollBarEnabled = false
-                    isHorizontalScrollBarEnabled = false
-                    settings.javaScriptEnabled = false
-                    settings.allowFileAccess = true
-                    settings.allowContentAccess = false
-                    settings.blockNetworkLoads = true
-                    loadUrl("file:///android_asset/planik_mascot.html")
+    val frames = remember(context) {
+        fun render(asset: String): Bitmap? = runCatching {
+            context.assets.open(asset).use { stream ->
+                val picture = SVG.getFromInputStream(stream).renderToPicture(420, 375)
+                Bitmap.createBitmap(420, 375, Bitmap.Config.ARGB_8888).apply {
+                    AndroidCanvas(this).drawPicture(picture)
                 }
-            },
-            modifier = Modifier.fillMaxSize()
-        )
-        Box(Modifier.fillMaxSize()
+            }
+        }.getOrNull()
+        Pair(render("planik_idle.svg"), render("planik_blink.svg"))
+    }
+
+    var blinking by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(4900)
+            blinking = true
+            delay(115)
+            blinking = false
+        }
+    }
+    val floatTransition = rememberInfiniteTransition(label = "planik-float")
+    val floatOffset by floatTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = -3f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1800),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "planik-vertical-float"
+    )
+
+    Box(
+        modifier.size(width = 105.dp, height = 94.dp)
             .clip(RoundedCornerShape(20.dp))
             .clickable(enabled = enabled, onClick = onClick)
-            .semantics { contentDescription = "Поговорить с Плаником" })
+            .semantics { contentDescription = "Поговорить с Плаником" }
+    ) {
+        val picture = if (blinking) frames.second ?: frames.first else frames.first
+        if (picture != null) {
+            Image(
+                bitmap = picture.asImageBitmap(),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize().offset(y = floatOffset.dp)
+            )
+        } else {
+            // Fail visibly on any vendor-specific SVG decoder failure rather
+            // than leaving an invisible but tappable 105 x 94 dp rectangle.
+            Canvas(Modifier.fillMaxSize().offset(y = floatOffset.dp)) {
+                drawRoundRect(
+                    color = Color(0xFF7776BD),
+                    topLeft = Offset(size.width * .22f, size.height * .26f),
+                    size = androidx.compose.ui.geometry.Size(size.width * .56f, size.height * .60f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height * .22f)
+                )
+                drawRoundRect(
+                    color = Color(0xFF253251),
+                    topLeft = Offset(size.width * .30f, size.height * .40f),
+                    size = androidx.compose.ui.geometry.Size(size.width * .40f, size.height * .28f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height * .12f)
+                )
+                drawCircle(Color(0xFFF2F4FF), radius = size.width * .025f,
+                    center = Offset(size.width * .43f, size.height * .54f))
+                drawCircle(Color(0xFFF2F4FF), radius = size.width * .025f,
+                    center = Offset(size.width * .58f, size.height * .54f))
+                drawLine(Color(0xFF9C9DDB),
+                    Offset(size.width * .5f, size.height * .25f),
+                    Offset(size.width * .5f, size.height * .15f), strokeWidth = 5f)
+                drawCircle(Color(0xFF8BE4EB), radius = 5f,
+                    center = Offset(size.width * .5f, size.height * .13f))
+            }
+        }
     }
 }
