@@ -683,10 +683,11 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
         if (previous.loading) return@launch
         try {
             val user = repository.establishSession()
-            if (previous.user != null && previous.user.id != user.id) {
+            val previousUserId = previous.user?.id
+            if (previousUserId != null && previousUserId != user.id) {
                 Log.e("PlanikWorkspace", "Account changed while Realtime was open; preserving prior workspace and requiring authentication")
                 mutable.update { current ->
-                    if (current.user?.id == previous.user.id)
+                    if (current.user?.id == previousUserId)
                         current.copy(taskError="Сессия Android изменилась после Планика. Исходные задачи сохранены на экране. Проверьте авторизацию перед действиями.")
                     else current
                 }
