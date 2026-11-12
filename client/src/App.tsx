@@ -6319,6 +6319,18 @@ export default function App() {
             </button>
           ))}
         </div>
+        {displayMode !== 'bubbles' ? (
+          <button type="button" data-tour="workspace-fullscreen-enter"
+            className="topbar-action-button workspace-fullscreen-entry inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition"
+            onClick={() => {
+              setFullscreenDisplayModes([displayMode]);
+              setIsSphereFilterOpen(false);
+              setIsBubbleFullscreen(true);
+            }}
+            title="Развернуть выбранный режим на весь экран" aria-label="Открыть полноэкранный режим">
+            <Maximize2 size={16} /> <span>Полный экран</span>
+          </button>
+        ) : null}
 
         <div data-tour="workspace-filters" className="top-filter-cluster flex flex-wrap items-center gap-2 md:ml-4">
           <div className="relative min-w-48" data-sphere-filter-root="true">
