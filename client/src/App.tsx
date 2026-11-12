@@ -5,6 +5,7 @@ import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, CalendarPlus, Check
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { FullscreenModePicker, FullscreenWorkspaceSplit } from './components/FullscreenWorkspaceLayout';
+import { FullscreenPaneFilters, createDefaultWorkspacePaneFilter, type WorkspacePaneFilter } from './components/FullscreenPaneFilters';
 import { WorkspaceActionToast } from './components/WorkspaceActionToast';
 import { TaskMonitoringBadge } from './components/TaskMonitoringBadge';
 import { projectMonitoringTimeline, timelineProjectionKey } from './lib/monitoringTimeline';
@@ -844,6 +845,14 @@ export default function App() {
   const [isBubbleFullscreen, setIsBubbleFullscreen] = useState(false);
   const [fullscreenDisplayModes, setFullscreenDisplayModes] = useState<DisplayMode[]>(['bubbles']);
   const [fullscreenSplitRatio, setFullscreenSplitRatio] = useState(50);
+  // Each fullscreen view owns its own sector and time filters.
+  const [fullscreenPaneFilters, setFullscreenPaneFilters] = useState<Record<DisplayMode, WorkspacePaneFilter>>({
+    bubbles: createDefaultWorkspacePaneFilter(),
+    list: createDefaultWorkspacePaneFilter(),
+    timeline: createDefaultWorkspacePaneFilter()
+  });
+  const updateFullscreenPaneFilters = (mode: DisplayMode, next: WorkspacePaneFilter) =>
+    setFullscreenPaneFilters(prev => ({ ...prev, [mode]: next }));
   const [search, setSearch] = useState('');
   const [requestedStandaloneNote, setRequestedStandaloneNote] = useState<{ id: string; serial: number } | null>(null);
   const [selectedSphereIds, setSelectedSphereIds] = useState<string[]>([]);
@@ -3921,9 +3930,6 @@ export default function App() {
     };
   }, [draggedTimelineTaskId, isTimelineMode]);
 
-  const effectiveTimeFilter = isTimelineMode ? 'all' : timeFilter;
-  const shouldApplySphereFilter = !isTimelineMode;
-
   const efficiencyScore = useMemo(() => currentUser?.efficiencyScore ?? 0, [currentUser?.efficiencyScore]);
 
   const efficiencyGrade = useMemo(() => getEfficiencyGrade(efficiencyScore), [efficiencyScore]);
@@ -3975,9 +3981,11 @@ export default function App() {
     setCompletedVisibleCount(40);
   }, [completedFilter]);
 
-  const visibleTasks = useMemo(
-    () =>
-      (isTimelineMode ? activeTimelineItems : activeTasks).filter((task) => {
+  const filterTaskById = useMemo(() => new Map(tasks.map(task => [task.id, task])), [tasks]);
+  // Timeline can show events and reminders; List and Bubbles never can,
+  // even while sharing the screen with Timeline.
+  const filterWorkspaceTasks = (sourceTasks: Task[], filter: WorkspacePaneFilter, query = search) =>
+    sourceTasks.filter((task) => {
         const taskSubtasks = subtaskMap[task.id] ?? [];
         const parseDate = (value?: string | null) => {
           if (!value) return null;
@@ -3987,19 +3995,19 @@ export default function App() {
         const getBoundary = () => {
           const now = new Date();
           const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          if (effectiveTimeFilter === 'today') {
+          if (filter.timeFilter === 'today') {
             const endOfToday = new Date(startOfToday);
             endOfToday.setDate(endOfToday.getDate() + 1);
             return { start: startOfToday, end: endOfToday };
           }
-          if (effectiveTimeFilter === 'tomorrow') {
+          if (filter.timeFilter === 'tomorrow') {
             const startOfTomorrow = new Date(startOfToday);
             startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
             const endOfTomorrow = new Date(startOfTomorrow);
             endOfTomorrow.setDate(endOfTomorrow.getDate() + 1);
             return { start: startOfTomorrow, end: endOfTomorrow };
           }
-          if (effectiveTimeFilter === 'week') {
+          if (filter.timeFilter === 'week') {
             const day = startOfToday.getDay();
             const offsetToMonday = (day + 6) % 7;
             const startOfWeek = new Date(startOfToday);
@@ -4013,17 +4021,17 @@ export default function App() {
           return { start: startOfMonth, end: endOfMonth };
         };
         const isDateInRange = (date: Date, start: Date, end: Date) => {
-          if (effectiveTimeFilter === 'today') return date < end;
+          if (filter.timeFilter === 'today') return date < end;
           return date >= start && date < end;
         };
 
-        if (search && !matchesWorkspaceText(task.title, search)) return false;
-        const isFilteringBySubset = shouldApplySphereFilter && spheres.length > 0 && selectedSphereIds.length > 0 && selectedSphereIds.length < spheres.length;
-        if (isFilteringBySubset && (!task.sphereId || !selectedSphereIds.includes(task.sphereId))) return false;
-        if (effectiveTimeFilter === 'focus') {
+        if (query && !matchesWorkspaceText(task.title, query)) return false;
+        const sectorId = task.sphereId ?? (task.parentTaskId ? filterTaskById.get(task.parentTaskId)?.sphereId : null);
+        if (filter.sphereIds !== null && (!sectorId || !filter.sphereIds.includes(sectorId))) return false;
+        if (filter.timeFilter === 'focus') {
           const hasGlowingSubtask = taskSubtasks.some((subtask) => shouldTaskGlow(subtask));
           if (!shouldTaskGlow(task) && !hasGlowingSubtask) return false;
-        } else if (effectiveTimeFilter !== 'all') {
+        } else if (filter.timeFilter !== 'all') {
           const { start, end } = getBoundary();
           const ownDate = parseDate(task.dueDate ?? task.createdAt ?? task.updatedAt);
           const hasOwnDateMatch = ownDate ? isDateInRange(ownDate, start, end) : false;
@@ -4035,9 +4043,31 @@ export default function App() {
           if (!hasOwnDateMatch && !hasSubtaskDateMatch) return false;
         }
         return true;
-      }),
-    [activeTasks, activeTimelineItems, effectiveTimeFilter, isTimelineMode, search, selectedSphereIds, shouldApplySphereFilter, spheres.length, subtaskMap]
+    });
+  const visibleTasks = useMemo(
+    () => filterWorkspaceTasks(activeTasks, {
+      sphereIds: selectedSphereIds.length > 0 && selectedSphereIds.length < spheres.length ? selectedSphereIds : null,
+      timeFilter
+    }),
+    [activeTasks, selectedSphereIds, timeFilter, search, subtaskMap, filterTaskById, spheres.length, overdueTick]
   );
+  const fullscreenBubbleTasks = useMemo(
+    () => filterWorkspaceTasks(activeTasks, fullscreenPaneFilters.bubbles),
+    [activeTasks, fullscreenPaneFilters.bubbles, search, subtaskMap, filterTaskById, overdueTick]
+  );
+  const fullscreenListTasksFiltered = useMemo(
+    () => filterWorkspaceTasks(activeTasks, fullscreenPaneFilters.list),
+    [activeTasks, fullscreenPaneFilters.list, search, subtaskMap, filterTaskById, overdueTick]
+  );
+  const timelineFilteredRootTasks = useMemo(
+    () => filterWorkspaceTasks(activeTimelineItems,
+      isBubbleFullscreen ? fullscreenPaneFilters.timeline : createDefaultWorkspacePaneFilter()),
+    [activeTimelineItems, fullscreenPaneFilters.timeline, isBubbleFullscreen, search, subtaskMap, filterTaskById, overdueTick]
+  );
+  const fullscreenBubbleSpheres = useMemo(() => {
+    const sectorIds = fullscreenPaneFilters.bubbles.sphereIds;
+    return sectorIds === null ? spheres : spheres.filter(sphere => sectorIds.includes(sphere.id));
+  }, [fullscreenPaneFilters.bubbles, spheres]);
   const visibleSpheres = useMemo(() => {
     if (selectedSphereIds.length === 0) return spheres;
     const selectedSet = new Set(selectedSphereIds);
@@ -5035,14 +5065,7 @@ export default function App() {
     })
     .sort((a, b) => a.reminderTime.localeCompare(b.reminderTime));
 
-  const listTasks = [...visibleTasks].sort((a, b) => {
-    if (isTimelineMode) {
-      const aDue = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
-      const bDue = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
-      if (aDue !== bDue) return aDue - bDue;
-      return a.title.localeCompare(b.title, 'ru');
-    }
-
+  const sortWorkspaceList = (sourceTasks: Task[]) => [...sourceTasks].sort((a, b) => {
     if (rankingMode === 'coefficient') {
       const aCoefficient = getTaskCoefficient(a, displayedSubtaskMap);
       const bCoefficient = getTaskCoefficient(b, displayedSubtaskMap);
@@ -5065,17 +5088,28 @@ export default function App() {
     if (a.importance !== b.importance) return b.importance - a.importance;
     return a.title.localeCompare(b.title, 'ru');
   });
+  const listTasks = sortWorkspaceList(visibleTasks);
+  const fullscreenListTasks = sortWorkspaceList(fullscreenListTasksFiltered).filter(task => task.status !== 'DONE');
   const activeListTasks = listTasks.filter((task) => task.status !== 'DONE');
   const currentOptimizeState = timelineOptimizeStateByMode[timelineViewMode];
   const previewDueDateByTaskId = new Map(currentOptimizeState.plan.map((item) => [item.taskId, item.dueDate]));
   const isTimelineOptimizePreviewEnabled = timelineOptimizePreviewEnabledByMode[timelineViewMode];
+  const timelineRootTasks = [...timelineFilteredRootTasks].sort((a, b) => {
+    const aDue = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
+    const bDue = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
+    return aDue !== bDue ? aDue - bDue : a.title.localeCompare(b.title, 'ru');
+  });
   const timelineRenderTasks = isTimelineOptimizePreviewEnabled
-    ? listTasks.map((task) => (previewDueDateByTaskId.has(task.id) ? { ...task, dueDate: previewDueDateByTaskId.get(task.id) ?? null } : task))
-    : listTasks;
+    ? timelineRootTasks.map((task) => (previewDueDateByTaskId.has(task.id) ? { ...task, dueDate: previewDueDateByTaskId.get(task.id) ?? null } : task))
+    : timelineRootTasks;
   const timelineSubtasksForPreview = isTimelineOptimizePreviewEnabled
     ? subtasks.map((subtask) => (previewDueDateByTaskId.has(subtask.id) ? { ...subtask, dueDate: previewDueDateByTaskId.get(subtask.id) ?? null } : subtask))
     : subtasks;
+  const allowedFullscreenTimelineSubtaskIds = isBubbleFullscreen
+    ? new Set(filterWorkspaceTasks(timelineSubtasksForPreview, fullscreenPaneFilters.timeline, '').map(subtask => subtask.id))
+    : null;
   const timelineVisibleSubtasks = timelineSubtasksForPreview.filter((subtask) => {
+    if (allowedFullscreenTimelineSubtaskIds && !allowedFullscreenTimelineSubtaskIds.has(subtask.id)) return false;
     if (subtask.status === 'DONE' || !subtask.dueDate) return false;
     if (!search.trim()) return true;
     const query = search.toLowerCase();
@@ -5379,12 +5413,14 @@ export default function App() {
   );
   // Share the original, interactive mode renderers between ordinary workspace
   // and each fullscreen pane. Nothing is duplicated or displayed as a preview.
-  const renderWorkspaceMode = (workspaceMode: DisplayMode): ReactNode => (
+  const renderWorkspaceContent = (workspaceMode: DisplayMode): ReactNode => {
+    const modeListTasks = isBubbleFullscreen ? fullscreenListTasks : activeListTasks;
+    return (
     workspaceMode === 'bubbles' ? (
           <div data-tour="bubbles-workspace" className="relative h-full">
             <div data-tour="bubble-layout"
               className="bubble-layout-toggle absolute top-4 z-30 flex items-center gap-1 rounded-full border p-1 shadow-xl backdrop-blur"
-              style={{ right: '16px' }}
+              style={{ right: isBubbleFullscreen ? '78px' : '16px' }}
               role="group" aria-label="Режим отображения баблов">
               <button
                 type="button"
@@ -5431,9 +5467,9 @@ export default function App() {
                 localStorage.setItem(getOnboardingOfferStorageKey(currentUser.id), '1');
                 setIsOnboardingOfferOpen(false);
               }}
-            tasks={visibleTasks}
+            tasks={isBubbleFullscreen ? fullscreenBubbleTasks : visibleTasks}
             timelinePreviewTasks={activeTimelineItems}
-            spheres={visibleSpheres}
+            spheres={isBubbleFullscreen ? fullscreenBubbleSpheres : visibleSpheres}
             rankingMode="coefficient"
             subtaskMap={displayedSubtaskMap}
             isSubtaskFilterActive={subtaskFilterMode !== 'none'}
@@ -5476,12 +5512,12 @@ export default function App() {
         ) : workspaceMode === 'list' ? (
           <div data-tour="list-workspace" ref={isBubbleFullscreen && fullscreenDisplayModes.includes('timeline') ? undefined : timelineScrollContainerRef} onWheel={(event) => { if (draggedTimelineTaskId !== null) { event.currentTarget.scrollTop += event.deltaY; } }} className="list-mode-canvas h-full overflow-y-auto rounded-[2.2rem] border p-4 backdrop-blur-sm">
             <ul className="space-y-3 pr-1">
-              {activeListTasks.length === 0 ? (
+              {modeListTasks.length === 0 ? (
                 <li className="list-empty-state rounded-xl border px-4 py-3 text-sm">
                   Нет задач для выбранных фильтров
                 </li>
               ) : null}
-              {activeListTasks.map((task) => {
+              {modeListTasks.map((task) => {
                 const hasOverdueState = task.status !== 'DONE' && isOverdue(task);
                 const hasReminderState = task.status !== 'DONE' && !hasOverdueState && shouldTaskGlow(task);
                 const taskSubtasks = displayedSubtaskMap[task.id] ?? [];
@@ -5982,6 +6018,15 @@ export default function App() {
           </div>
         )
   );
+  };
+  const renderWorkspaceMode = (workspaceMode: DisplayMode): ReactNode => isBubbleFullscreen ? (
+    <div className="fullscreen-mode-surface relative h-full w-full min-h-0 min-w-0" data-fullscreen-mode={workspaceMode}>
+      <div className="fullscreen-mode-surface-content h-full w-full min-h-0">{renderWorkspaceContent(workspaceMode)}</div>
+      <FullscreenPaneFilters mode={workspaceMode} filter={fullscreenPaneFilters[workspaceMode]}
+        spheres={spheres} theme={effectiveThemeMode}
+        onChange={(next) => updateFullscreenPaneFilters(workspaceMode, next)} />
+    </div>
+  ) : renderWorkspaceContent(workspaceMode);
   return (
     <main
       className={isBubbleFullscreen
@@ -6140,43 +6185,7 @@ export default function App() {
             onOpenSubtask={(subtask) => setEditorState({ task: subtask })}
             onOpenNote={(id) => setRequestedStandaloneNote({ id, serial: Date.now() })}
           />
-          <div data-tour="bubbles-fullscreen-filters" className="top-filter-cluster flex min-w-0 flex-wrap items-center gap-2">
-            <div className="relative min-w-36 flex-1 sm:min-w-44" data-sphere-filter-root="true">
-              <button type="button"
-                className="topbar-select-button light-sector-filter-trigger flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm"
-                aria-label="Фильтр секторов" aria-expanded={isSphereFilterOpen}
-                onClick={() => setIsSphereFilterOpen((prev) => !prev)}>
-                <span className="truncate">{sphereFilterLabel}</span>
-                <ChevronDown size={15} className={`ml-2 shrink-0 transition ${isSphereFilterOpen ? 'rotate-180' : ''}`} />
-              </button>
-              {isSphereFilterOpen ? (
-                <div className="light-sector-filter-panel topbar-dropdown absolute left-0 top-[calc(100%+6px)] z-50 w-64 rounded-2xl border p-2 shadow-2xl backdrop-blur">
-                  <label className="light-sector-filter-item topbar-dropdown-item mb-1 flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm">
-                    <input type="checkbox" checked={isAllSpheresSelected}
-                      onChange={(event) => setSelectedSphereIds(event.target.checked ? spheres.map((sphere) => sphere.id) : [])} />
-                    <span>Все сектора</span>
-                  </label>
-                  <div className="max-h-44 space-y-1 overflow-y-auto">
-                    {spheres.map((sphere) => (
-                      <label key={sphere.id} className="light-sector-filter-item topbar-dropdown-item flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm">
-                        <input type="checkbox" checked={selectedSphereIds.includes(sphere.id)}
-                          onChange={() => toggleSphereSelection(sphere.id)} />
-                        <span className="truncate">{sphere.name}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-            <CustomSelect
-              value={timeFilter}
-              onChange={(value) => setTimeFilter(value as 'all' | 'today' | 'tomorrow' | 'week' | 'month' | 'focus')}
-              options={[{ value: 'all', label: 'За все время' }, { value: 'today', label: 'За сегодня' },
-                { value: 'tomorrow', label: 'За завтра' }, { value: 'week', label: 'За эту неделю' },
-                { value: 'month', label: 'За этот месяц' }, { value: 'focus', label: 'Фокус' }]}
-              className="min-w-36 sm:min-w-44" buttonClassName="topbar-select-button rounded-xl"
-              menuClassName="topbar-dropdown" ariaLabel="Фильтр по времени"
-            />
+          <div className="top-filter-cluster fullscreen-create-control flex items-center gap-2">
             <div className="add-menu-wrap relative shrink-0"
               onMouseEnter={() => setIsAddMenuOpen(true)}
               onMouseLeave={() => { if (!isTourAddMenuOpen) setIsAddMenuOpen(false); }}>
@@ -7007,7 +7016,7 @@ export default function App() {
               onRatioChange={setFullscreenSplitRatio}
             />
           ) : (
-            <div className={`fullscreen-workspace-single ${fullscreenDisplayModes[0] !== 'bubbles' ? 'fullscreen-workspace-single--framed' : ''}`}>
+            <div className="fullscreen-workspace-single">
               {renderWorkspaceMode(fullscreenDisplayModes[0] ?? 'bubbles')}
             </div>
           )

@@ -346,6 +346,7 @@ export function BubbleField({
   className
 }: Props) {
   const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null);
+  const [compactHoverPoint, setCompactHoverPoint] = useState<{ left: number; top: number } | null>(null);
   const isLightTheme = themeMode === 'light';
   const reducedMotion = useReducedMotion();
   const [completionBursts, setCompletionBursts] = useState<Array<{
@@ -674,6 +675,7 @@ export function BubbleField({
     event.stopPropagation();
     cancelHoverExit();
     setHoveredTaskId(null);
+    setCompactHoverPoint(null);
     const position = getBubbleVisualPoint(bubble);
     const center = { x: position.x + point.x - session.startSvgX, y: position.y + point.y - session.startSvgY };
     const target = detectBubbleDrop(center, session.taskId, bubble.radius, eligibleBubbleTargets());
@@ -997,8 +999,27 @@ export function BubbleField({
           if (!isPopping && !dragSessionRef.current) onSelect(bubble.task);
         }}
         onPointerDown={(event) => onBubblePointerDown(event, bubble)}
-         onMouseEnter={() => { if (!dragSessionRef.current) activateHover(bubble.task.id); }}
-        onMouseLeave={() => { if (!dragSessionRef.current) scheduleHoverExit(); }}
+         onMouseEnter={(event) => {
+          if (dragSessionRef.current) return;
+          activateHover(bubble.task.id);
+          if (compact) {
+            // Match the Timeline tooltip, but place it in the viewport so a
+            // narrow split pane cannot clip the task title or description.
+            const width = 288;
+            const height = 255;
+            const margin = 12;
+            setCompactHoverPoint({
+              left: Math.max(12, Math.min(event.clientX + 18, window.innerWidth - width - margin)),
+              top: event.clientY + height + margin < window.innerHeight
+                ? event.clientY + margin
+                : Math.max(12, event.clientY - height - margin)
+            });
+          }
+        }}
+        onMouseLeave={() => {
+          setCompactHoverPoint(null);
+          if (!dragSessionRef.current) scheduleHoverExit();
+        }}
         onContextMenu={(event) => showContextMenu(event, bubble.task)}
         className={bubble.task.isCollaborative || bubble.task.taskType === 'EVENT' || bubble.task.taskType === 'REMINDER' ? 'cursor-pointer' : isDragged ? 'cursor-grabbing' : 'cursor-grab'}
       >
@@ -1749,6 +1770,42 @@ export function BubbleField({
           ) : null}
         </motion.g>
       </svg>
+      {compact && hoveredBubble && compactHoverPoint && !dragSessionRef.current ? createPortal(
+        <div className="timeline-hover-card pointer-events-none fixed z-[2147483647] w-72 rounded-lg border p-2.5 text-[11px]"
+          style={{ left: compactHoverPoint.left, top: compactHoverPoint.top }} aria-label={`Информация о задаче: ${hoveredBubble.task.title}`}>
+          <p className="font-semibold text-primary">{hoveredBubble.task.title}</p>
+          <p className="mt-1 min-w-0 max-w-full whitespace-pre-wrap break-words text-muted [overflow-wrap:anywhere]">
+            <LinkifiedText
+              text={(() => {
+                const description = noteHtmlToPlainText(hoveredBubble.task.description ?? '', { trimEnd: true });
+                return description.length > 240 ? `${description.slice(0, 240)}...` : description;
+              })()}
+              fallback="Без описания" stopPropagationOnLinkClick />
+          </p>
+          <p className="mt-1 text-muted">{hoveredBubble.task.aiMonitoringEnabled
+            ? <span className="inline-flex items-center gap-1"><TaskMonitoringBadge /> На усмотрение ИИ</span>
+            : <>Дедлайн: {formatDueDate(hoveredBubble.task.dueDate)} · {formatDeadlineLeft(hoveredBubble.task.dueDate)}</>}</p>
+          <div className="timeline-hover-card-section mt-2 border-t pt-2">
+            <p className="text-[10px] uppercase tracking-wide text-subtle">Ближайшие подзадачи</p>
+            {hoveredSubtasks.length ? (
+              <ul className="mt-1 space-y-1.5">
+                {hoveredSubtasks.slice(0, 3).map(subtask => (
+                  <li key={subtask.id} className="rounded border border-[color:var(--timeline-grid-border)] bg-[color:var(--muted-bg)] px-2 py-1 text-muted">
+                    <span className="block whitespace-normal break-words leading-snug">• {subtask.title}</span>
+                    <span className="mt-0.5 block text-[10px] text-subtle">
+                      {hoveredBubble.task.aiMonitoringEnabled ? 'На усмотрение ИИ' : subtask.dueDate
+                        ? `Срок: ${formatDueDate(subtask.dueDate)} · ${formatDeadlineLeft(subtask.dueDate)}`
+                        : 'Срок не задан'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="mt-1 text-subtle">Нет активных подзадач</p>}
+            {hoveredSubtasks.length > 3 ? <p className="mt-1 text-subtle">+ ещё {hoveredSubtasks.length - 3} подзадач</p> : null}
+          </div>
+        </div>,
+        document.body
+      ) : null}
       {contextMenu ? createPortal(
         <div
           data-tour={forceTaskContextMenuOpen ? 'bubble-task-context-menu' : undefined}
