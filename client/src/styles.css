@@ -15520,3 +15520,205 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
     padding: 8px 10px 12px;
   }
 }
+
+
+/* Fullscreen v4: ONE horizontal navigation bar on desktop. The search field
+   gives up width before controls can be pushed into an unwanted second row. */
+.fullscreen-workspace-toolbar--one-row {
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: center;
+  width: calc(100% - 24px);
+  max-width: none;
+  min-height: 61px;
+  padding: 9px 12px;
+  gap: clamp(5px, .55vw, 11px);
+}
+.fullscreen-workspace-toolbar--one-row > .fullscreen-workspace-toolbar-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-flow: row nowrap;
+  align-items: center;
+  min-width: 0;
+  width: auto;
+  gap: clamp(4px, .48vw, 9px);
+}
+.fullscreen-workspace-toolbar--one-row .fullscreen-workspace-brand {
+  flex: 0 0 auto;
+  margin: 0 4px 0 0;
+  font-size: clamp(.91rem, .97vw, 1.1rem);
+  white-space: nowrap;
+}
+.fullscreen-workspace-toolbar--one-row .workspace-global-search-anchor {
+  flex: 0 1 156px !important;
+  width: 156px;
+  min-width: 85px !important;
+  max-width: 170px !important;
+}
+.fullscreen-workspace-toolbar--one-row .workspace-global-search-field {
+  min-width: 0;
+}
+.fullscreen-workspace-toolbar--one-row .integration-menu__trigger,
+.fullscreen-workspace-toolbar--one-row .public-nav-link {
+  white-space: nowrap;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+.fullscreen-workspace-toolbar--one-row .auth-actions {
+  flex: 0 1 auto;
+  min-width: 0;
+  gap: 4px;
+  white-space: nowrap;
+}
+.fullscreen-workspace-toolbar--one-row .auth-user-pill {
+  max-width: 135px;
+  min-width: 0;
+}
+.fullscreen-workspace-toolbar--one-row .auth-user-pill span {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fullscreen-workspace-toolbar--one-row > .fullscreen-create-control {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  z-index: 2;
+}
+.fullscreen-workspace-toolbar--one-row > .fullscreen-workspace-toolbar-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-flow: row nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  gap: clamp(4px, .4vw, 8px);
+  margin-left: auto;
+}
+.fullscreen-workspace-toolbar--one-row .fullscreen-mode-picker,
+.fullscreen-workspace-toolbar--one-row .fullscreen-workspace-exit {
+  flex: 0 0 auto;
+}
+.fullscreen-workspace-toolbar--one-row .fullscreen-mode-picker-trigger {
+  padding-left: 9px;
+  padding-right: 9px;
+}
+.fullscreen-workspace-toolbar--one-row .fullscreen-workspace-exit {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+}
+@media (min-width: 1600px) {
+  .fullscreen-workspace-toolbar--one-row > .fullscreen-create-control {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+  }
+}
+@media (min-width: 1101px) and (max-width: 1599px) {
+  .fullscreen-workspace-toolbar--one-row .workspace-global-search-anchor {
+    flex-basis: 120px !important;
+    width: 120px;
+  }
+  .fullscreen-workspace-toolbar--one-row .auth-user-pill {
+    max-width: 98px;
+  }
+}
+@media (max-width: 1390px) {
+  /* Preserve every action as an icon rather than breaking the desktop bar. */
+  .fullscreen-workspace-toolbar--one-row .integration-menu__trigger {
+    font-size: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+  }
+  .fullscreen-workspace-toolbar--one-row .public-nav-link[href="/about"] {
+    font-size: 0;
+    display: inline-flex;
+    width: 36px;
+    height: 36px;
+    align-items: center;
+    justify-content: center;
+  }
+  .fullscreen-workspace-toolbar--one-row .public-nav-link[href="/about"]::before {
+    content: 'ⓘ';
+    font-size: 21px;
+    line-height: 1;
+  }
+  .fullscreen-workspace-toolbar--one-row .auth-logout-button {
+    font-size: 0;
+    min-width: 34px;
+  }
+  .fullscreen-workspace-toolbar--one-row .auth-logout-button::before {
+    content: '⇥';
+    font-size: 19px;
+    line-height: 1;
+  }
+  .fullscreen-workspace-toolbar--one-row .topbar-overdue-trigger,
+  .fullscreen-workspace-toolbar--one-row .light-credit-badge {
+    padding-left: 7px;
+    padding-right: 7px;
+  }
+}
+/* Below laptop width, keep a single row with horizontal reachability rather
+   than forcing the whole desktop navigation into two rows. */
+@media (max-width: 1100px) {
+  .fullscreen-workspace-toolbar--one-row {
+    gap: 6px;
+  }
+  .fullscreen-workspace-toolbar--one-row > .fullscreen-workspace-toolbar-main {
+    flex: 1 1 auto;
+    gap: 4px;
+  }
+  .fullscreen-workspace-toolbar--one-row .workspace-global-search-anchor {
+    flex: 0 1 92px !important;
+    width: 92px;
+    min-width: 52px !important;
+  }
+  .fullscreen-workspace-toolbar--one-row .auth-user-pill {
+    max-width: 58px;
+  }
+  .fullscreen-workspace-toolbar--one-row .fullscreen-workspace-toolbar-actions {
+    gap: 3px;
+  }
+}
+/* The single-mode List/Timeline no longer sit inside a faux card. Their
+   content fills a wide open canvas, slightly inset relative to the top bar. */
+.fullscreen-workspace-single--open {
+  padding: 5px 0 10px;
+}
+.fullscreen-workspace-single--open > .fullscreen-mode-surface {
+  width: calc(100% - 56px);
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0 auto;
+}
+.fullscreen-workspace-single--open .fullscreen-mode-surface-content > :is(.list-mode-canvas, .timeline-canvas) {
+  padding: 8px 3px 20px;
+  margin: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+.fullscreen-workspace-single--open .fullscreen-mode-surface[data-fullscreen-mode='list'] .list-mode-canvas,
+.fullscreen-workspace-single--open .fullscreen-mode-surface[data-fullscreen-mode='timeline'] .timeline-canvas {
+  border: none !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+}
+@media (max-width: 900px) {
+  .fullscreen-workspace-single--open > .fullscreen-mode-surface {
+    width: calc(100% - 24px);
+  }
+}
