@@ -55,6 +55,6 @@ test('two panes have keyboard-accessible resizer; isolated list and timeline use
   assert.match(styles, /\.fullscreen-workspace-split \{[^}]*grid-template-columns/m);
   assert.match(styles, /@media \(max-width: 900px\) \{[\s\S]*?\.fullscreen-workspace-split \{[\s\S]*?grid-template-rows/);
   assert.match(app, /fullscreenDisplayModes\[0\] !== 'bubbles' \? 'fullscreen-workspace-single--framed'/);
-  assert.match(bubbles, /compact \? \$\{BUBBLE_WORKSPACE_X - 32\}/);
+  assert.match(bubbles, /compact\s*\?\s*`\$\{BUBBLE_WORKSPACE_X - 32\}/);
   assert.match(app, /compact=\{isBubbleFullscreen && fullscreenDisplayModes\.length === 2\}/);
 });
