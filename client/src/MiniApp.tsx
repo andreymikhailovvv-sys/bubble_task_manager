@@ -1191,17 +1191,17 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       setAiCredits(user.aiCredits ?? 0);
       setCurrentUser(user);
 
-      // Android Realtime MUST load the authenticated task catalog, even when
-      // opened from the general AI thread: the voice tool returns real task
-      // references and this same WebView renders their buttons and list tab.
-      // Only unrelated spheres/habits and external inboxes are skipped to
-      // keep the Planik startup fast. Empty placeholders here previously made
-      // real tasks appear deleted and every task chip say "Задача не найдена".
+      // The embedded Android Realtime WebView can reveal the entire workspace
+      // when its voice overlay collapses. It must therefore load the real
+      // planner snapshot, including sectors and habits, not fabricated empty
+      // arrays. Otherwise task buttons and the list/timeline are inconsistent
+      // with the server's authenticated search results. Only costly external
+      // Telegram/Mail inboxes are omitted from this voice-only bootstrap.
       const androidVoice = Boolean(androidPlanikLaunch);
       const [sphereList, taskList, habitList, quickHistory, syncedProjects, telegramInbox, mailInbox] = await Promise.all([
-        androidVoice ? Promise.resolve([] as Sphere[]) : api.getSpheres(),
+        api.getSpheres(),
         api.getTasks(),
-        androidVoice ? Promise.resolve([] as Habit[]) : api.getHabits(),
+        api.getHabits(),
         api.getGeneralAssistantHistory().catch(() => ({ messages: [] as ChatMessage[] })),
         api.getAiChatProjects<Partial<MiniAiChatProject>>(),
         androidVoice ? Promise.resolve(null) : api.telegramAssistantInbox().catch(() => null),
