@@ -24,7 +24,7 @@ test('miniapp retains three composer buttons and launches realtime from Planik a
   assert.equal((mini.match(/className="miniapp-planik-live-launcher"/g) ?? []).length, 2);
   assert.match(mini, /onClick=\{\(\) => taskAiComposerRef\.current\?\.startLive\(\)\}/);
   assert.match(mini, /onClick=\{\(\) => aiChatComposerRef\.current\?\.startLive\(\)\}/);
-  assert.match(mini, /<PlanikMascot size="composer" \/>/);
+  assert.match(mini, /<PlanikMascot size="composer" busy=/);
   assert.match(mini, /!miniLiveVoiceActive/);
   assert.match(launcher, /position: absolute/);
   assert.match(launcher, /bottom: calc\(100% - 9px\)/);
