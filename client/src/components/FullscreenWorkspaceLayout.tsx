@@ -13,16 +13,14 @@ const clampSplit = (value: number) => Math.max(25, Math.min(75, Math.round(value
 
 export function FullscreenModePicker({ modes, onChange }: {
   modes: FullscreenWorkspaceMode[];
-  onChange: (neexport function FullscreenModePicker({ modes, onChange }: {
-  modes: FullscreenWorkspaceMode[];
   onChange: (next: FullscreenWorkspaceMode[]) => void;
 }) {
   const toggle = (value: FullscreenWorkspaceMode) => {
     if (modes.includes(value)) {
-      // Keep at least one view active.
+      // Keep at least one active view.
       if (modes.length > 1) onChange(modes.filter(mode => mode !== value));
     } else if (modes.length === 2) {
-      // Anchor the first view, replace the second one when switching to a third.
+      // The first mode stays anchored when the third one replaces the second.
       onChange([modes[0], value]);
     } else {
       onChange([...modes, value]);
@@ -50,7 +48,8 @@ export function FullscreenModePicker({ modes, onChange }: {
   );
 }
 
-kspaceMode, FullscreenWorkspaceMode];
+export function FullscreenWorkspaceSplit({ modes, renderMode, ratio, onRatioChange }: {
+  modes: [FullscreenWorkspaceMode, FullscreenWorkspaceMode];
   renderMode: (mode: FullscreenWorkspaceMode) => ReactNode;
   ratio: number;
   onRatioChange: (ratio: number) => void;
