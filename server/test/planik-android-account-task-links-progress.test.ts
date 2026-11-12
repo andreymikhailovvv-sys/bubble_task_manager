@@ -60,9 +60,15 @@ test('task tool results with verified links uncover the chat without stopping Re
   assert.match(voice, /setCollapsed\(true\)/);
 });
 
-test('ten-second waiting acknowledgements are isolated, tool-free and do not discard tool results', async () => {
+test('five-second waiting acknowledgements are isolated, tool-free and wait for audio drain', async () => {
   const server = await read('../src/services/ai-live-voice.service.ts');
-  assert.match(server, /\}, 10_000\);/);
+  assert.match(server, /\}, 5_000\);/);
+  assert.match(server, /waitingAudioAwaitingAck = true/);
+  assert.match(server, /waiting_response_done/);
+  assert.match(server, /waiting_played/);
+  assert.match(server, /Секундочку\./);
+  assert.match(server, /Ищу\./);
+  assert.match(server, /resumeAfterWaitingPlayback\(\)/);
   assert.match(server, /conversation: 'none'/);
   assert.match(server, /metadata: \{ purpose: 'planik_tool_waiting' \}/);
   assert.match(server, /tools: \[\]/);
