@@ -46,7 +46,7 @@ test('Android launcher uses real static SVG artwork, animated natively instead o
   assert.match(styles, /@keyframes planik-float/);
   assert.match(blink, /ry="1\.4"/);
   assert.doesNotMatch(asset, /planik-notif-static|planik-celebrating|planik-typing/);
-  assert.match(launcher, /SVG\.getFromInputStream\(stream\)/);
+  assert.match(launcher, /SVG\.getFromString\(artwork\)/);
   assert.match(launcher, /android\.graphics\.Canvas as AndroidCanvas/);
   assert.match(launcher, /renderToPicture\(420, 375\)/);
   assert.match(launcher, /rememberInfiniteTransition/);
@@ -54,8 +54,8 @@ test('Android launcher uses real static SVG artwork, animated natively instead o
   assert.match(manifest, /\.planik\.PlanikLiveActivity/);
   assert.match(manifest, /android:exported="false"/);
   assert.match(build, /com\.caverock:androidsvg:1\.4/);
-  assert.match(build, /versionCode = 9/);
-  assert.match(build, /versionName = "1\.0\.7"/);
+  assert.match(build, /versionCode = 10/);
+  assert.match(build, /versionName = "1\.0\.8"/);
 });
 
 test('Realtime WebView has visible loading, diagnostics, first-party cookies and retry instead of blank', async () => {
