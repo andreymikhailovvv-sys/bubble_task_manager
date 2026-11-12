@@ -14980,3 +14980,16 @@ body[data-theme='light'] .miniapp-shell .miniapp-subtask-editor-panel .miniapp-f
   color: #fda4af;
   border-color: rgba(251, 113, 133, .48);
 }
+
+/* Android's /android-planik WebView may report zero safe-area insets when its
+   Realtime overlay collapses. Never let the chat selector bar slide underneath
+   the Android status shade, or let a stale hidden class disable its controls.
+   Restrict this override to the dedicated Android voice route only. */
+html[data-planik-android] .miniapp-shell .miniapp-ai-chat-panel-general .miniapp-ai-context-header {
+  top: max(0px, var(--miniapp-top-inset, 0px)) !important;
+  transform: translateY(0) !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  z-index: 60;
+}
