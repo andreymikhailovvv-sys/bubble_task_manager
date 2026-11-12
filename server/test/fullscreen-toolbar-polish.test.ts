@@ -25,18 +25,21 @@ test('fullscreen header shares regular navigation and anchors create task in the
   assert.match(header, /className="auth-logout-button"/);
   assert.match(header, /data-tour="fullscreen-workspace-settings"/);
   assert.match(header, /setIsSettingsOpen\(prev => !prev\)/);
-  assert.match(header, /className="fullscreen-workspace-toolbar-bottom"/);
+  assert.match(header, /fullscreen-workspace-toolbar--one-row/);
+  assert.doesNotMatch(header, /className="fullscreen-workspace-toolbar-bottom"/);
   assert.match(header, /className="fullscreen-create-control/);
   assert.match(header, /data-tour="bubbles-fullscreen-create-task"/);
   assert.match(header, /<FullscreenModePicker/);
   assert.match(header, /\{renderOverdueControl\(\)\}/);
   assert.match(header, /\{renderCreditsControl\(\)\}/);
-  assert.ok(header.indexOf('className="fullscreen-workspace-toolbar-actions') < header.indexOf('className="fullscreen-create-control'));
-  assert.ok(header.indexOf('className="fullscreen-create-control') < header.indexOf('data-tour="bubbles-fullscreen-exit"'));
+  assert.ok(header.indexOf('className="fullscreen-create-control') < header.indexOf('className="fullscreen-workspace-toolbar-actions'));
+  assert.ok(header.indexOf('className="fullscreen-create-control') < header.indexOf('<FullscreenModePicker'));
+  assert.ok(header.indexOf('<FullscreenModePicker') < header.indexOf('data-tour="bubbles-fullscreen-exit"'));
   assert.match(header, /<Minimize2 size=\{17\} \/>/);
   assert.doesNotMatch(header, /<span>Выйти<\/span>/);
   assert.match(css, /\.fullscreen-workspace-toolbar \{[^}]*max-width: none/);
-  assert.match(css, /\.fullscreen-workspace-toolbar-bottom \{[^}]*grid-template-columns: minmax\(0, 1fr\) auto minmax\(0, 1fr\)/);
+  assert.match(css, /\.fullscreen-workspace-toolbar--one-row \{[^}]*flex-flow: row nowrap/);
+  assert.match(css, /\.fullscreen-workspace-toolbar--one-row \.workspace-global-search-anchor \{[^}]*max-width: 170px !important/);
 });
 
 test('fullscreen bubbles have a single circle/sectors switch below per-pane filters', async () => {
@@ -54,14 +57,16 @@ test('fullscreen bubbles have a single circle/sectors switch below per-pane filt
   assert.match(app, /<FullscreenPaneFilters mode=\{workspaceMode\}/);
 });
 
-test('single list and timeline are balanced; Planik stays at bottom right in every fullscreen mode', async () => {
+test('single list and timeline use wide unframed surfaces; Planik stays at bottom right in every fullscreen mode', async () => {
   const [app, css, frame] = await Promise.all([
     load('../../client/src/App.tsx'),
     load('../../client/src/styles.css'),
     load('../../client/src/components/QuickAiLauncherFrame.tsx')
   ]);
-  assert.match(app, /fullscreenDisplayModes\[0\] === 'bubbles' \? '' : 'fullscreen-workspace-single--balanced'/);
-  assert.match(css, /\.fullscreen-workspace-single--balanced > \.fullscreen-mode-surface \{[^}]*max-width: min\(1320px, 86vw\)/m);
+  assert.match(app, /fullscreenDisplayModes\[0\] === 'bubbles' \? '' : 'fullscreen-workspace-single--open'/);
+  assert.match(css, /\.fullscreen-workspace-single--open > \.fullscreen-mode-surface \{[^}]*width: calc\(100% - 56px\);[^}]*max-width: none/m);
+  assert.match(css, /\.fullscreen-workspace-single--open \.fullscreen-mode-surface-content > :is\(\.list-mode-canvas, \.timeline-canvas\) \{[^}]*border: 0 !important/m);
+  assert.doesNotMatch(app, /'fullscreen-workspace-single--balanced'/);
   assert.match(app, /fullscreenBubbles=\{isBubbleFullscreen\}/);
   assert.doesNotMatch(app, /fullscreenBubbles=\{isBubbleFullscreen && displayMode === 'bubbles'\}/);
   assert.match(frame, /fullscreenBubbles\?'bubble-ai-fullscreen'/);

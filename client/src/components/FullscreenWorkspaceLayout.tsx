@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { CalendarDays, Check, ChevronDown, GripVertical, LayoutGrid, List, PanelsTopLeft } from 'lucide-react';
 
 export type FullscreenWorkspaceMode = 'bubbles' | 'list' | 'timeline';
@@ -17,10 +18,33 @@ export function FullscreenModePicker({ modes, onChange }: {
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [menuPosition, setMenuPosition] = useState<CSSProperties>({});
+  const updateMenuPosition = useCallback(() => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const width = Math.min(256, Math.max(160, window.innerWidth - 24));
+    const left = Math.max(12, Math.min(rect.right - width, window.innerWidth - width - 12));
+    const below = window.innerHeight - rect.bottom - 16;
+    const above = rect.top - 16;
+    const openAbove = below < 260 && above > below;
+    setMenuPosition({
+      position: 'fixed', width, left,
+      top: openAbove ? undefined : rect.bottom + 8,
+      bottom: openAbove ? window.innerHeight - rect.top + 8 : undefined,
+      maxHeight: Math.max(130, Math.min(390, openAbove ? above - 8 : below - 8)),
+      overflowY: 'auto'
+    });
+  }, []);
   useEffect(() => {
     if (!open) return;
+    updateMenuPosition();
+    const updateOnViewportChange = () => updateMenuPosition();
+    window.addEventListener('resize', updateOnViewportChange);
+    window.addEventListener('scroll', updateOnViewportChange, true);
     const closeOutside = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!rootRef.current?.contains(event.target as Node) && !panelRef.current?.contains(event.target as Node)) setOpen(false);
     };
     const closeEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpen(false);
@@ -30,8 +54,10 @@ export function FullscreenModePicker({ modes, onChange }: {
     return () => {
       document.removeEventListener('pointerdown', closeOutside);
       document.removeEventListener('keydown', closeEscape);
+      window.removeEventListener('resize', updateOnViewportChange);
+      window.removeEventListener('scroll', updateOnViewportChange, true);
     };
-  }, [open]);
+  }, [open, updateMenuPosition]);
 
   const toggle = (value: FullscreenWorkspaceMode) => {
     if (modes.includes(value)) {
@@ -46,15 +72,15 @@ export function FullscreenModePicker({ modes, onChange }: {
 
   return (
     <div className="fullscreen-mode-picker relative shrink-0" ref={rootRef}>
-      <button type="button" className="fullscreen-mode-picker-trigger topbar-action-button inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold"
+      <button ref={triggerRef} type="button" className="fullscreen-mode-picker-trigger topbar-action-button inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold"
         aria-label="Выбрать один или два режима отображения" aria-haspopup="true" aria-expanded={open}
-        onClick={() => setOpen(value => !value)}>
+        onClick={() => { if (!open) updateMenuPosition(); setOpen(value => !value); }}>
         <PanelsTopLeft size={17} />
         <span>Режимы <span className="fullscreen-mode-picker-count">{modes.length}/2</span></span>
         <ChevronDown size={14} className={open ? 'rotate-180 transition-transform' : 'transition-transform'} />
       </button>
-      {open ? (
-        <div className="fullscreen-mode-picker-menu topbar-dropdown absolute right-0 top-[calc(100%+9px)] z-[90] w-64 rounded-2xl border p-2.5 shadow-2xl"
+      {open ? createPortal(
+        <div ref={panelRef} className="fullscreen-mode-picker-menu topbar-dropdown fixed z-[2147483640] rounded-2xl border p-2.5 shadow-2xl" style={menuPosition}
           role="group" aria-label="Режимы рабочего пространства">
           <div className="px-2 pb-2 pt-1">
             <p className="text-xs font-bold text-primary">Отображение пространства</p>
@@ -82,7 +108,7 @@ export function FullscreenModePicker({ modes, onChange }: {
               : 'Второй режим откроется рядом с первым.'}
           </div>
         </div>
-      ) : null}
+      , document.body) : null}
     </div>
   );
 }

@@ -6183,9 +6183,9 @@ export default function App() {
       {activeTourStep ? <TourOverlay activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-') ? WORKSPACE_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-') ? FEATURE_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} onComplete={completeTaskTour} /> : null}
       {isBubbleFullscreen ? (
         <header data-tour="bubbles-fullscreen-toolbar"
-          className="fullscreen-workspace-toolbar surface-topbar light-glass-topbar relative z-40 mx-auto mt-3 mb-2 flex w-[calc(100%-24px)] shrink-0 flex-col rounded-2xl border px-3 py-2.5 shadow-lg backdrop-blur-lg">
-          <div className="fullscreen-workspace-toolbar-main flex min-w-0 flex-wrap items-center gap-2">
-<h1 className="mr-3 flex items-center gap-2 text-xl font-semibold">
+          className="fullscreen-workspace-toolbar fullscreen-workspace-toolbar--one-row surface-topbar light-glass-topbar relative z-40 mx-auto mt-3 mb-2 flex w-[calc(100%-24px)] shrink-0 flex-nowrap items-center gap-2 rounded-2xl border px-3 py-2.5 shadow-lg backdrop-blur-lg">
+          <div className="fullscreen-workspace-toolbar-main flex min-w-0 flex-nowrap items-center gap-2">
+<h1 className="fullscreen-workspace-brand mr-1 flex shrink-0 items-center gap-2 text-lg font-semibold">
           <img src="/icon.png" alt="" className="h-7 w-7 rounded-md" />
           <span>Планировыч AI</span>
         </h1>
@@ -6251,18 +6251,7 @@ export default function App() {
               </button>
             </div>
           </div>
-          <div className="fullscreen-workspace-toolbar-bottom">
-            <div className="fullscreen-workspace-toolbar-actions flex min-w-0 flex-wrap items-center gap-2">
-              <FullscreenModePicker modes={fullscreenDisplayModes} onChange={(nextModes) => {
-              setFullscreenDisplayModes(nextModes);
-              setDisplayMode(nextModes[0]);
-              setIsSphereFilterOpen(false);
-              setIsTimelineOverdueModalOpen(false);
-            }} />
-              {renderOverdueControl()}
-              {renderCreditsControl()}
-            </div>
-            <div className="fullscreen-create-control flex items-center justify-center">
+          <div className="fullscreen-create-control flex items-center justify-center">
             <div className="add-menu-wrap relative shrink-0"
               onMouseEnter={() => setIsAddMenuOpen(true)}
               onMouseLeave={() => { if (!isTourAddMenuOpen) setIsAddMenuOpen(false); }}>
@@ -6305,7 +6294,17 @@ export default function App() {
               ) : null}
             </div>
           </div>
-            <button type="button" data-tour="bubbles-fullscreen-exit"
+          <div className="fullscreen-workspace-toolbar-actions flex min-w-0 flex-nowrap items-center gap-2">
+              
+              {renderOverdueControl()}
+              {renderCreditsControl()}
+              <FullscreenModePicker modes={fullscreenDisplayModes} onChange={(nextModes) => {
+              setFullscreenDisplayModes(nextModes);
+              setDisplayMode(nextModes[0]);
+              setIsSphereFilterOpen(false);
+              setIsTimelineOverdueModalOpen(false);
+            }} />
+  <button type="button" data-tour="bubbles-fullscreen-exit"
               className="fullscreen-workspace-exit topbar-action-button inline-flex h-9 w-9 items-center justify-center rounded-xl border text-sm font-semibold"
               onClick={() => {
                 setDisplayMode(fullscreenDisplayModes[0] ?? 'bubbles');
@@ -6315,7 +6314,7 @@ export default function App() {
               }} title="Выйти из полноэкранного режима" aria-label="Выйти из полноэкранного режима">
               <Minimize2 size={17} />
             </button>
-          </div>
+</div>
         </header>
       ) : null}
       {!isBubbleFullscreen ? <header className="surface-topbar light-glass-topbar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-3 backdrop-blur">
@@ -7084,7 +7083,7 @@ export default function App() {
               onRatioChange={setFullscreenSplitRatio}
             />
           ) : (
-            <div className={`fullscreen-workspace-single ${fullscreenDisplayModes[0] === 'bubbles' ? '' : 'fullscreen-workspace-single--balanced'}`}>
+            <div className={`fullscreen-workspace-single ${fullscreenDisplayModes[0] === 'bubbles' ? '' : 'fullscreen-workspace-single--open'}`}>
               {renderWorkspaceMode(fullscreenDisplayModes[0] ?? 'bubbles')}
             </div>
           )
