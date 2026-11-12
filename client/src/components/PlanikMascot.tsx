@@ -91,7 +91,8 @@ export const PlanikMascot = memo(function PlanikMascot({
     return () => window.clearTimeout(timer);
   }, [count]);
 
-  const isSearching = progress === 'searching_web' || progress === 'analyzing_web_results';
+  const isSearching = Boolean(progress && (progress.startsWith('searching_') ||
+    ['listing_tasks', 'reading_task', 'reading_subtask', 'reading_note', 'reading_file', 'analyzing_web_results'].includes(progress)));
   const mode: PlanikMode = clearingCount !== null ? 'clearing'
     : celebrating ? 'celebrating'
     : busy ? (isSearching ? 'searching' : responding ? 'typing' : 'thinking')
