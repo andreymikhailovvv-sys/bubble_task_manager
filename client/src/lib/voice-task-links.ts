@@ -9,9 +9,17 @@ const WORD_CHAR = /[\p{L}\p{N}]/u;
  * authenticated user's real task catalog, never from generated prose.
  */
 export function linkVerifiedVoiceTaskMentions(
-  answer: string, tasks: ReadonlyArray<Pick<Task, 'id' | 'title'>>
+  answer: string, tasks: ReadonlyArray<Pick<Task, 'id' | 'title'>>,
+  allowJustCreatedIds = false
 ): string {
-  if (!answer.trim() || tasks.length === 0) return answer;
+  if (!answer.trim()) return answer;
+  const verifiedIds = new Set(tasks.map(task => task.id));
+  // Never render a broken or cross-account reference just because a model
+  // invented an ID. Newly created IDs are resolved on the next task refresh.
+  const validatedAnswer = answer.replace(TASK_REF_RE, (full, rawEq: string | undefined, rawLegacy: string | undefined) => (
+    verifiedIds.has((rawEq || rawLegacy || '').trim()) || allowJustCreatedIds ? full : ''
+  ));
+  if (tasks.length === 0) return validatedAnswer;
   const counts = new Map<string, number>();
   for (const task of tasks) {
     const title = task.title.trim().toLocaleLowerCase('ru');
@@ -24,7 +32,7 @@ export function linkVerifiedVoiceTaskMentions(
     })
     .sort((a, b) => b.title.length - a.title.length);
   let linked = 0;
-  return answer.split('\n').map(line => {
+  return validatedAnswer.split('\n').map(line => {
     if (linked >= 30) return line;
     const existing = new Set<string>();
     for (const match of line.matchAll(TASK_REF_RE)) existing.add(match[1] || match[2]);
