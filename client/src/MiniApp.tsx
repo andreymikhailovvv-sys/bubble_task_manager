@@ -2981,7 +2981,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     });
   };
   const applyLiveTaskTool = (taskId: string, event: LiveVoiceToolCompletion): boolean => {
-    const safeAnswer = linkVerifiedVoiceTaskMentions(event.result.answer, tasks);
+    const safeAnswer = linkVerifiedVoiceTaskMentions(event.result.answer, tasks, Boolean(event.result.taskDataChanged));
     const answer = voiceToolAssistantMessage({ ...event, result: { ...event.result, answer: safeAnswer } });
     voiceTaskMessagesRef.current[taskId] = [...(voiceTaskMessagesRef.current[taskId] ?? []), answer].slice(-80);
     setAiDialogByTask(previous => ({ ...previous, [taskId]: [...(previous[taskId] ?? []), answer] }));
@@ -3018,7 +3018,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   };
 
   const applyLiveProjectTool = (projectId: string, chatId: string, event: LiveVoiceToolCompletion): boolean => {
-    const safeAnswer = linkVerifiedVoiceTaskMentions(event.result.answer, tasks);
+    const safeAnswer = linkVerifiedVoiceTaskMentions(event.result.answer, tasks, Boolean(event.result.taskDataChanged));
     const answer = voiceToolAssistantMessage({ ...event, result: { ...event.result, answer: safeAnswer } });
     const key = `${projectId}:${chatId}`;
     voiceChatMessagesRef.current[key] = [...(voiceChatMessagesRef.current[key] ?? []), answer].slice(-80);
