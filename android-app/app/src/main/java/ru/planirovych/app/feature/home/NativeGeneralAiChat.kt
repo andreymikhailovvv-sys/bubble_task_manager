@@ -500,6 +500,13 @@ internal fun NativeGeneralAiChatPage(
                     PlanikNativeLauncher(
                         enabled = !isBusy,
                         dark = dark,
+                        mode = when {
+                            state.busy && (state.progressStatus.orEmpty().startsWith("searching_") ||
+                                state.progressStatus in listOf("listing_tasks", "reading_task", "reading_note", "reading_file", "analyzing_web_results")) -> "searching"
+                            state.busy && state.streamText.isNotBlank() -> "typing"
+                            state.busy -> "thinking"
+                            else -> "idle"
+                        },
                         modifier = Modifier.align(Alignment.BottomEnd)
                             .padding(end = 13.dp, bottom = composerHeight + 1.dp),
                         onClick = {

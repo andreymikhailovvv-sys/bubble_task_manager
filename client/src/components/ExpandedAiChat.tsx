@@ -227,7 +227,7 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
             </div>
             <div className="ai-chat-expanded-bottom-spacer" aria-hidden="true" />
           </div>
-          {showPlanik ? <div className="planik-composer-float"><PlanikMascot size="composer" notificationCount={notificationCount} typingSignal={typingSignal} busy={loading} progress={progress} celebrationKey={celebrationKey} /></div> : null}
+          {showPlanik ? <div className="planik-composer-float"><PlanikMascot size="composer" notificationCount={notificationCount} typingSignal={typingSignal} busy={loading} responding={progress === 'generating_response' || progress === 'writing_response' || progress === 'streaming'} progress={progress} celebrationKey={celebrationKey} /></div> : null}
           <div ref={composerRef} className="ai-chat-expanded-composer-wrap">
             {replyTo ? <AiReplyPreview target={replyTo} onDismiss={onClearReply} /> : null}
             {attachmentsEnabled&&<AiAttachmentTiles files={pendingFiles} onRemove={onRemoveFile} busy={loading} uploadProgress={uploadProgress} />}

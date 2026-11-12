@@ -58,7 +58,7 @@ function decodePcm(base64: string) {
   return values;
 }
 
-export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMessage, onLiveToolResult, onLiveStatus, onLiveActionReveal }: {
+export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveToolResult, onLiveStatus, onLiveActionReveal }: {
   onClose: () => void; audioContext: AudioContext | null; liveContext?: LiveVoiceContext;
   onLiveMessage?: (item: LiveVoiceMessage) => void;
   onLiveToolResult?: (result: LiveVoiceToolCompletion) => boolean | void;
@@ -131,12 +131,10 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
   };
   const stopResourcesRef = useRef<() => void>(() => {});
   const liveContextRef = useRef(liveContext);
-  const onLiveMessageRef = useRef(onLiveMessage);
   const onLiveToolResultRef = useRef(onLiveToolResult);
   const onLiveStatusRef = useRef(onLiveStatus);
   const onLiveActionRevealRef = useRef(onLiveActionReveal);
   liveContextRef.current = liveContext;
-  onLiveMessageRef.current = onLiveMessage;
   onLiveToolResultRef.current = onLiveToolResult;
   onLiveStatusRef.current = onLiveStatus;
   onLiveActionRevealRef.current = onLiveActionReveal;
@@ -389,7 +387,6 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
             if (liveContextRef.current?.type === 'chat') dialogHistoryRef.current.push({ id, role: 'user', content: payload.text });
             setLiveMessages(previous => previous.some(item => item.id === id) ? previous :
               [...previous, { role: 'user' as const, id, text: payload.text! }].slice(-32));
-            onLiveMessageRef.current?.({ role: 'user', id, text: payload.text });
           }
           if (payload.type === 'assistant_message' && typeof payload.text === 'string') {
             const id = payload.id || crypto.randomUUID();
@@ -397,7 +394,6 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
             setLiveMessages(previous => previous.some(item => item.id === id) ? previous :
               [...previous, { role: 'assistant' as const, id, text: payload.text! }].slice(-32));
             setCaption('');
-            onLiveMessageRef.current?.({ role: 'assistant', id, text: payload.text });
           }
           if (payload.type === 'tool_request' && typeof payload.question === 'string' && typeof payload.callId === 'string') {
             void handleToolRequest(payload.question, payload.callId, ws);

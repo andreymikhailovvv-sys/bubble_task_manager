@@ -502,6 +502,13 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                 PlanikNativeLauncher(
                     enabled = !busy,
                     dark = dark,
+                    mode = when {
+                        busy && (ui.progressStatus.orEmpty().startsWith("searching_") ||
+                            ui.progressStatus in listOf("listing_tasks", "reading_task", "reading_subtask", "reading_file", "analyzing_web_results")) -> "searching"
+                        busy && ui.streamText.isNotBlank() -> "typing"
+                        busy -> "thinking"
+                        else -> "idle"
+                    },
                     modifier = Modifier.align(Alignment.BottomEnd)
                         .padding(end = 13.dp, bottom = composerHeight + 1.dp),
                     onClick = {

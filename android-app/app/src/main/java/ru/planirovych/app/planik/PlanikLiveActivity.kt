@@ -5,6 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.graphics.Bitmap
+import android.graphics.Canvas as AndroidCanvas
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -26,7 +29,10 @@ import org.json.JSONTokener
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.ProgressBar
+import android.widget.ImageView
+import android.view.animation.AlphaAnimation
+import android.view.animation.Animation
+import com.caverock.androidsvg.SVG
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -79,7 +85,7 @@ class PlanikLiveActivity : ComponentActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private var voicePermission: PermissionRequest? = null
     private var browser: WebView? = null
-    private var loadingIndicator: ProgressBar? = null
+    private var loadingIndicator: View? = null
     private var loadingLabel: TextView? = null
     private var retryButton: Button? = null
     private var loaded = false
@@ -247,10 +253,48 @@ class PlanikLiveActivity : ComponentActivity() {
             setPadding(48, 28, 48, 28)
             setBackgroundColor(Color.rgb(13, 19, 38))
         }
-        loadingIndicator = ProgressBar(this)
-        overlay.addView(loadingIndicator)
+        // A native preview is visible while HTTPS, account cookies and React
+        // initialize. Do not block the screen behind a featureless spinner.
+        val density = resources.displayMetrics.density
+        fun dp(value: Int) = (density * value).toInt()
+        val preview = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+        }
+        val mascot = ImageView(this).apply {
+            val frame = runCatching {
+                assets.open("planik_idle.svg").use { stream ->
+                    val picture = SVG.getFromInputStream(stream).renderToPicture(420, 375)
+                    Bitmap.createBitmap(420, 375, Bitmap.Config.ARGB_8888).also {
+                        AndroidCanvas(it).drawPicture(picture)
+                    }
+                }
+            }.getOrNull()
+            if (frame != null) setImageBitmap(frame)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            contentDescription = "Планик"
+        }
+        preview.addView(mascot, LinearLayout.LayoutParams(dp(160), dp(150)))
+        intArrayOf(196, 150, 176).forEachIndexed { index, width ->
+            val bar = View(this).apply {
+                background = GradientDrawable().apply {
+                    cornerRadius = dp(9).toFloat()
+                    setColor(if (index == 1) Color.rgb(74, 83, 125) else Color.rgb(43, 57, 91))
+                }
+            }
+            preview.addView(bar, LinearLayout.LayoutParams(dp(width), dp(12)).apply {
+                topMargin = dp(12)
+            })
+        }
+        loadingIndicator = preview
+        overlay.addView(preview)
+        preview.startAnimation(AlphaAnimation(.52f, 1f).apply {
+            duration = 1100L
+            repeatMode = Animation.REVERSE
+            repeatCount = Animation.INFINITE
+        })
         loadingLabel = TextView(this).apply {
-            text = "Открываю Планика…"
+            text = "Подключаю голосовой чат…"
             setTextColor(Color.WHITE)
             textSize = 16f
             gravity = Gravity.CENTER
@@ -404,6 +448,7 @@ class PlanikLiveActivity : ComponentActivity() {
         failed = true
         handler.removeCallbacksAndMessages(null)
         loadingLabel?.text = message
+        loadingIndicator?.clearAnimation()
         loadingIndicator?.visibility = View.GONE
         retryButton?.visibility = View.VISIBLE
         Log.w(TAG, "Planik not ready: ${message.take(120)}")
@@ -413,6 +458,7 @@ class PlanikLiveActivity : ComponentActivity() {
         if (loaded || failed) return
         loaded = true
         handler.removeCallbacksAndMessages(null)
+        loadingIndicator?.clearAnimation()
         (loadingLabel?.parent as? View)?.visibility = View.GONE
     }
 

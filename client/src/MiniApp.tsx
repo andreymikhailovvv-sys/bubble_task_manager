@@ -5365,7 +5365,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   aria-label="Поговорить с Плаником" title="Живое общение с Плаником"
                   disabled={aiLoadingTaskId === openedTask.id}
                   onClick={() => taskAiComposerRef.current?.startLive()}>
-                  <PlanikMascot size="composer" />
+                  <PlanikMascot size="composer" busy={aiLoadingTaskId === openedTask.id} responding={Boolean(taskAiStreamingText[openedTask.id])} progress={aiProgressByTask[openedTask.id]} />
                 </button>
               ) : null}
               <input
@@ -5566,7 +5566,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   aria-label="Поговорить с Плаником" title="Живое общение с Плаником"
                   disabled={aiChatLoading}
                   onClick={() => aiChatComposerRef.current?.startLive()}>
-                  <PlanikMascot size="composer" />
+                  <PlanikMascot size="composer" busy={aiChatLoading} responding={Boolean(aiChatStreamingText)} progress={aiChatProgress} />
                 </button>
               ) : null}
               {replyToGeneral ? <AiReplyPreview target={replyToGeneral} onDismiss={() => setReplyToGeneral(null)} /> : null}

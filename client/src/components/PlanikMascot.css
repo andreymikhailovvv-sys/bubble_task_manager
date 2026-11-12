@@ -350,3 +350,9 @@ body:has(.planik-notes-companion, .planik-task-editor-companion)
     bottom: 90px;
   }
 }
+
+/* The robot's painted torso receives taps, not the transparent SVG corners.
+   Keep vertical scrolling available around the floating assistant. */
+.planik-mascot, .planik-svg, .planik-composer-float,
+.planik-launcher-button, .miniapp-planik-live-launcher { pointer-events: none; }
+.planik-body-surface { pointer-events: visiblePainted; cursor: pointer; }
