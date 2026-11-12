@@ -414,7 +414,18 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     taskAiChatId?.let{id->
         state.tasks.firstOrNull{it.id==id}?.let{aiTask->
             NativeTaskAiChat(task=aiTask,vm=vm,dark=dark,
-                onClose={taskAiChatId=null})
+                onClose={taskAiChatId=null},
+                onOpenTaskReference={referenceId->
+                    if(state.tasks.any{it.id==referenceId}){
+                        taskAiChatId=null
+                        openedTaskId=referenceId
+                        subtaskReturnToTaskId=null
+                        newSubtaskParentId=null
+                        overlaySubtaskId=null
+                        overlayNewSubtaskParentId=null
+                        vm.clearTaskError()
+                    }
+                })
         }
     }
 }

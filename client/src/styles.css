@@ -6525,9 +6525,10 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-model-cap,
 }
 
 .miniapp-shell .miniapp-ai-chat-message-user.miniapp-ai-chat-message-authored {
-  border-color: color-mix(in srgb, var(--message-author-color) 72%, white) !important;
-  background: var(--message-author-color) !important;
-  color: #fff !important;
+  /* Match desktop shared-task messages: tinted background, uniform frame. */
+  border-color: color-mix(in srgb, var(--message-author-color) 26%, #475569) !important;
+  background: color-mix(in srgb, var(--message-author-color) 34%, #111827) !important;
+  color: #f8fafc !important;
 }
 
 .miniapp-light .miniapp-focus-subtask-row,
@@ -7862,14 +7863,12 @@ body[data-theme='light'] .chat-message-user.collaboration-chat-message-authored 
 }
 .collaboration-comment-card {
   border-color: color-mix(in srgb, var(--panel-border) 82%, transparent);
-  border-left: 3px solid var(--comment-author-color);
   background: color-mix(in srgb, var(--comment-author-color) 11%, var(--card-bg));
   color: var(--text-primary);
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.07);
 }
 body[data-theme='dark'] .collaboration-comment-card {
   border-color: color-mix(in srgb, var(--comment-author-color) 22%, rgba(71, 85, 105, 0.76));
-  border-left-color: var(--comment-author-color);
   background: color-mix(in srgb, var(--comment-author-color) 15%, #111827);
   box-shadow: 0 5px 14px rgba(2, 6, 23, 0.24);
 }
@@ -7953,7 +7952,6 @@ body[data-theme='dark'] .collaboration-comment-author {
 .miniapp-shell.miniapp-light .miniapp-ai-chat-message-user.miniapp-ai-chat-message-authored,
 body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-message-user.miniapp-ai-chat-message-authored {
   border-color: color-mix(in srgb, var(--message-author-color) 28%, #cbd5e1) !important;
-  border-left: 3px solid var(--message-author-color) !important;
   background: color-mix(in srgb, var(--message-author-color) 13%, #ffffff) !important;
   color: #0f172a !important;
   box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08) !important;
@@ -7985,7 +7983,6 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-message-user.miniapp-ai
 }
 .miniapp-comment-card {
   border-color: color-mix(in srgb, var(--comment-author-color) 22%, rgba(71, 85, 105, 0.76));
-  border-left: 3px solid var(--comment-author-color);
   background: color-mix(in srgb, var(--comment-author-color) 14%, #111827);
   color: #f8fafc;
   box-shadow: 0 4px 12px rgba(2, 6, 23, 0.2);
@@ -8037,7 +8034,6 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-message-user.miniapp-ai
 }
 .miniapp-shell.miniapp-light .miniapp-comment-card {
   border-color: rgba(203, 213, 225, 0.88);
-  border-left-color: var(--comment-author-color);
   background: color-mix(in srgb, var(--comment-author-color) 8%, #ffffff);
   color: #0f172a;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
@@ -14998,4 +14994,17 @@ html[data-planik-android] .miniapp-shell .miniapp-ai-chat-panel-general .miniapp
   visibility: visible !important;
   pointer-events: auto !important;
   z-index: 60;
+}
+
+/* Completed AI task/subtask links are visually quiet but remain clickable.
+   Applied consistently in full desktop, mobile web and Telegram Mini App. */
+.ai-task-ref-chip--completed {
+  opacity: 0.62;
+  filter: saturate(0.7);
+}
+.ai-task-ref-chip--completed:is(:hover, :focus-visible) { opacity: 0.8; }
+.ai-task-ref-chip--completed .ai-task-ref-chip__title {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.4px;
+  text-decoration-color: currentColor;
 }

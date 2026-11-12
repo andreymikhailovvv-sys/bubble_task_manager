@@ -427,8 +427,8 @@ function SystemNotificationContent({ notification, tasks, onOpenTask, onOpenTask
   const task = notification.taskId ? tasks.find((item) => item.id === notification.taskId) : undefined;
   if (notification.eventKey?.startsWith('monitoring:') && task) {
     return <><span className="whitespace-pre-line">{notification.content.split(/\r?\n/).slice(0, 2).join('\n')}</span>{' '}
-      <button type="button" className="system-notification-task-button rounded-full bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white"
-        onClick={() => onOpenTaskAi(task)}>Ответить в чате задачи <ArrowUpRight size={12} className="inline" /></button>
+      <button type="button" className={`system-notification-task-button rounded-full bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white ${task.status === 'DONE' ? 'ai-task-ref-chip--completed' : ''}`}
+        onClick={() => onOpenTaskAi(task)}><span className="ai-task-ref-chip__title">Ответить в чате задачи</span> <ArrowUpRight size={12} className="inline" /></button>
     </>;
   }
   if (!task || !notification.content.includes(task.title)) return <>{notification.content}</>;
@@ -442,12 +442,12 @@ function SystemNotificationContent({ notification, tasks, onOpenTask, onOpenTask
       {isOverdueNotification ? '⏰Напоминание о задаче ' : textBeforeButton}
       <button
         type="button"
-        className="system-notification-task-button inline-flex items-center gap-1 rounded-full bg-cyan-600/90 px-2 py-1 align-middle text-[11px] font-semibold text-white transition hover:bg-cyan-500"
+        className={`system-notification-task-button inline-flex items-center gap-1 rounded-full bg-cyan-600/90 px-2 py-1 align-middle text-[11px] font-semibold text-white transition hover:bg-cyan-500 ${task.status === 'DONE' ? 'ai-task-ref-chip--completed' : ''}`}
         onClick={() => onOpenTask(task)}
         title={`Открыть задачу: ${task.title}`}
       >
         <ArrowUpRight size={12} className="shrink-0" />
-        <span className="min-w-0 truncate">{task.title}</span>
+        <span className="ai-task-ref-chip__title min-w-0 truncate">{task.title}</span>
       </button>
       {isOverdueNotification ? null : textAfterButton}
     </>
@@ -593,16 +593,17 @@ const AiMessageContentWithTaskRefs = memo(function AiMessageContentWithTaskRefs(
   const renderTaskButton = (reference: AiTaskReference, key: string) => {
     const matchedTask = taskById.get(reference.taskId);
     const buttonLabel = matchedTask?.title || reference.label;
+    const completed = matchedTask?.status === 'DONE';
     return (
       <button
         key={key}
         type="button"
-        className="inline-flex w-fit max-w-48 items-center gap-1 rounded-full bg-cyan-600/90 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-cyan-500"
+        className={`inline-flex w-fit max-w-48 items-center gap-1 rounded-full bg-cyan-600/90 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-cyan-500 ${completed ? 'ai-task-ref-chip--completed' : ''}`}
         onClick={() => openTask(reference.taskId, matchedTask)}
-        title={`Открыть задачу: ${buttonLabel}`}
+        title={`${completed ? 'Выполненная задача' : 'Открыть задачу'}: ${buttonLabel}`}
       >
         <ArrowUpRight size={12} />
-        <span className="min-w-0 truncate">{buttonLabel}</span>
+        <span className="ai-task-ref-chip__title min-w-0 truncate">{buttonLabel}</span>
       </button>
     );
   };
@@ -8696,9 +8697,9 @@ export default function App() {
                 <div key={`message-${item.message.id}`} className={`ai-message-forward-group w-fit max-w-[calc(100%-2rem)] ${item.message.role === 'user' ? 'ml-auto' : 'mr-auto'}`}><div className={`quick-ai-chat-message w-full rounded-2xl px-3 py-2 shadow-sm ${item.message.role === 'user' ? 'quick-ai-chat-message-user' : 'quick-ai-chat-message-assistant'}`}>
                   <b>{item.message.role === 'user' ? 'Вы' : 'ИИ'}:</b> {item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(item.message.content, item.message.attachmentPreviews, item.message.id)}</CollapsibleUserMessage>}
                   {item.message.monitoringTaskId && aiTaskReferenceTasks.some(task => task.id === item.message.monitoringTaskId) ? (
-                    <button type="button" className="task-monitor-chat-link mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold"
+                    <button type="button" className={`task-monitor-chat-link mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${aiTaskReferenceTasks.some(task => task.id === item.message.monitoringTaskId && task.status === 'DONE') ? 'ai-task-ref-chip--completed' : ''}`}
                       onClick={() => { setIsAiChatOpen(false); setFocusedTaskId(item.message.monitoringTaskId!); setIsAiExpanded(true); }}>
-                      <ArrowUpRight size={12} /> Ответить в чате задачи
+                      <ArrowUpRight size={12} /> <span className="ai-task-ref-chip__title">Ответить в чате задачи</span>
                     </button>
                   ) : null}
                   {item.message.role === 'assistant' && item.message.webSearchUsed ? <WebCitations sources={item.message.webSources} searched={item.message.webSearchUsed} /> : null}
@@ -8883,9 +8884,9 @@ export default function App() {
           onLiveToolResult={event => activeAiChatProject && activeAiChat && applyLiveProjectTool(activeAiChatProject.id, activeAiChat.id, event)}
           onLiveStatus={status => activeAiChatProject && activeAiChat && updateLiveChatStatus(activeAiChatProject.id, activeAiChat.id, status)}
           messages={(activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatTimeline : (activeAiChat?.messages ?? []).map((message, index) => ({ kind: 'message' as const, timestamp: index, message }))).map((item) => item.kind === 'notification' ? <div key={`notification-${item.notification.id}`} className="ai-system-notification-spacing flex justify-start"><div className="system-notification-message max-w-[86%] rounded-3xl rounded-bl-lg border px-4 py-3"><p className="system-notification-label mb-1 text-[11px] font-semibold uppercase tracking-wide">⚙️ Системное уведомление</p><div className="text-sm leading-relaxed"><SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={openTaskReferenceFromAi} onOpenTaskAi={(task) => { setFocusedTaskId(task.id); setIsAiExpanded(true); }} /></div></div></div> : <div key={`message-${item.message.id}`} className={`flex ${item.message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className="ai-message-forward-group w-fit max-w-[86%]"><div className={`ai-chat-message-bubble w-full rounded-3xl px-4 py-3 ${item.message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${item.message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{item.message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{item.message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${item.message.id}`, item.message.content)} className="chat-message-copy rounded-full p-1 hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${item.message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(item.message.content, item.message.attachmentPreviews, item.message.id)}</CollapsibleUserMessage>}</div>{activeAiChat?.id === QUICK_AI_CHAT_ID && item.message.monitoringTaskId && aiTaskReferenceTasks.some(task => task.id === item.message.monitoringTaskId) ? (
-            <button type="button" className="task-monitor-chat-link mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold"
+            <button type="button" className={`task-monitor-chat-link mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${aiTaskReferenceTasks.some(task => task.id === item.message.monitoringTaskId && task.status === 'DONE') ? 'ai-task-ref-chip--completed' : ''}`}
               onClick={() => { setIsAiChatOpen(false); setFocusedTaskId(item.message.monitoringTaskId!); setIsAiExpanded(true); }}>
-              <ArrowUpRight size={12} /> Ответить в чате задачи
+              <ArrowUpRight size={12} /> <span className="ai-task-ref-chip__title">Ответить в чате задачи</span>
             </button>
           ) : null}{item.message.role === 'assistant' && !item.message.taskProposal && item.message.taskSuggestions?.length && activeAiChat?.id.startsWith(TELEGRAM_AI_MANAGED_CHAT_PREFIX) ? (
             <div className="mt-3 flex flex-wrap gap-2">

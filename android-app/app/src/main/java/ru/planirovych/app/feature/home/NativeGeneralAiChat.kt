@@ -141,6 +141,9 @@ internal fun NativeGeneralAiChatPage(
     )
     val modelLabel=modelOptions.firstOrNull{it.first==model}?.second?:"GPT-6 Luna"
     val taskTitles=remember(tasks){tasks.associate{it.id to it.title}}
+    val completedTaskIds=remember(tasks){
+        tasks.filter{it.status==TaskStatus.DONE}.map{it.id}.toSet()
+    }
     var voiceSendSerial by remember { mutableIntStateOf(0) }
     val speechInput=rememberAiChatSpeechInput(
         dark=dark,transcribe=vm::transcribeVoice,
@@ -463,6 +466,7 @@ internal fun NativeGeneralAiChatPage(
                         Column(verticalArrangement=Arrangement.spacedBy(5.dp)){
                             TaskChatBubble(message,c,context,
                                 generalChat=true,taskTitles=taskTitles,
+                                completedTaskIds=completedTaskIds,
                                 onOpenTaskReference=onOpenTask,
                                 onOpenMonitoredTaskAi=if(thread?.id==QUICK_AI_THREAD_ID)
                                     onOpenTaskAi else null,
@@ -484,12 +488,14 @@ internal fun NativeGeneralAiChatPage(
                     if(state.pendingMessage!=null)item(key="pending-general-user"){
                         TaskChatBubble(state.pendingMessage!!,c,context,
                             generalChat=true,taskTitles=taskTitles,
+                                completedTaskIds=completedTaskIds,
                             onOpenTaskReference=onOpenTask,
                             onReply={},pending=true)
                     }
                     if(state.busy&&state.streamText.isNotEmpty())item(key="general-ai-stream"){
                         TaskChatBubble(TaskAiChatMessage(role="assistant",content=state.streamText),c,context,
                             generalChat=true,taskTitles=taskTitles,
+                                completedTaskIds=completedTaskIds,
                             onOpenTaskReference=onOpenTask,
                             onReply={},pending=true)
                     }

@@ -107,7 +107,8 @@ internal fun isChatAttachmentAllowed(name:String):Boolean =
     Regex("(?i)\\.(pdf|docx|xls|xlsx|png|jpe?g|webp|gif|txt)$").containsMatchIn(name)
 
 @Composable
-fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
+fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit,
+    onOpenTaskReference:((String)->Unit)={}){
     val c=remember(dark){chatColors(dark)}
     val ctx=LocalContext.current
     val planikLauncher = rememberLauncherForActivityResult(
@@ -115,6 +116,10 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
     ) { vm.reconcileAfterPlanik() }
     val ui by vm.taskAi.collectAsStateWithLifecycle()
     val home by vm.state.collectAsStateWithLifecycle()
+    val taskTitles=remember(home.tasks){home.tasks.associate{it.id to it.title}}
+    val completedTaskIds=remember(home.tasks){
+        home.tasks.filter{it.status==TaskStatus.DONE}.map{it.id}.toSet()
+    }
     val scope=rememberCoroutineScope()
     val listState= rememberLazyListState()
     var draft by remember(task.id){mutableStateOf("")}
@@ -454,6 +459,8 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                                     vm.applyTaskAiProposal(task.id,id,action,indices,finished)
                                 },
                                 actionBusy=ui.actionBusy,
+                                taskTitles=taskTitles,completedTaskIds=completedTaskIds,
+                                onOpenTaskReference=onOpenTaskReference,
                                 onOpenDocument={id->vm.getTaskAiDocumentLink(id){url->
                                     val parsed=Uri.parse(url)
                                     if(parsed.scheme=="https"||parsed.scheme=="http")
@@ -645,6 +652,7 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
     onOpenDocument:(String)->Unit={},
     generalChat:Boolean=false,proposalVm:HomeViewModel?=null,
     taskTitles:Map<String,String> = emptyMap(),
+    completedTaskIds:Set<String> = emptySet(),
     onOpenTaskReference:((String)->Unit)?=null,
     onOpenMonitoredTaskAi:((String)->Unit)?=null,
     actionTaskId:String?=null,actionTaskModel:String="gpt-6-luna"){
@@ -703,6 +711,7 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                         linkColor=if(c.bg.red>.5f)Color(0xFF0369A1) else Color(0xFF67E8F9),
                         fontSize=14.sp,
                         taskTitles=taskTitles,
+                        completedTaskIds=completedTaskIds,
                         onOpenTaskReference=onOpenTaskReference)
                     else Text(content,color=c.userText,fontSize=14.sp,lineHeight=22.sp)
                     if(attachmentNames.isNotEmpty()){
@@ -716,8 +725,9 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                         val chipBg=if(light)Color.White else Color(0xFF1B4255)
                         val chipInk=if(light)Color(0xFF172238) else Color(0xFFE0F7FF)
                         val frame=RoundedCornerShape(18.dp)
-                        Row(Modifier.widthIn(max=310.dp).clip(frame)
-                            .background(chipBg)
+                        Row(Modifier.widthIn(max=310.dp)
+                            .alpha(if(monitoredTaskId in completedTaskIds).62f else 1f)
+                            .clip(frame).background(chipBg)
                             .border(1.dp,if(light)Color(0xFFDCE5EE)
                                 else Color(0xFF35778C),frame)
                             .clickable{onOpenMonitoredTaskAi?.invoke(monitoredTaskId)}
@@ -728,6 +738,9 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                                 fontWeight=FontWeight.Bold)
                             Text("Ответить в чате задачи",color=chipInk,
                                 fontWeight=FontWeight.SemiBold,fontSize=10.sp,
+                                textDecoration=if(monitoredTaskId in completedTaskIds)
+                                    androidx.compose.ui.text.style.TextDecoration.LineThrough
+                                    else androidx.compose.ui.text.style.TextDecoration.None,
                                 maxLines=1,overflow=TextOverflow.Ellipsis)
                         }
                     }

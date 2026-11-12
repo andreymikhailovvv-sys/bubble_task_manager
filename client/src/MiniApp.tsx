@@ -607,19 +607,20 @@ function MiniAiMessageContentWithTaskRefs({ content, tasks, onOpenTask, onTasksR
                 {taskReferences.map((reference, referenceIndex) => {
                   const matchedTask = taskById.get(reference.taskId);
                   const label = matchedTask?.title || reference.label;
+                  const completed = matchedTask?.status === 'DONE';
                   return (
                     <button
                       key={`mini-ai-task-${lineIndex}-${reference.taskId}-${referenceIndex}`}
                       type="button"
-                      className="inline-flex max-w-full items-center gap-1 rounded-full bg-cyan-600/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow transition active:scale-95 disabled:opacity-60"
+                      className={`inline-flex max-w-full items-center gap-1 rounded-full bg-cyan-600/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow transition active:scale-95 disabled:opacity-60 ${completed ? 'ai-task-ref-chip--completed' : ''}`}
                       onClick={() => { void openTaskReference(reference.taskId); }}
                       disabled={checkingTaskId === reference.taskId}
-                      title={matchedTask ? `Открыть задачу: ${label}`
+                      title={matchedTask ? `${completed ? 'Выполненная задача' : 'Открыть задачу'}: ${label}`
                         : unavailableTaskIds.includes(reference.taskId) ? 'Задача недоступна в текущем аккаунте'
                         : `Проверить и открыть задачу: ${label}`}
                     >
                       <ArrowUpRight size={12} />
-                      <span className="truncate">{matchedTask ? label
+                      <span className="ai-task-ref-chip__title truncate">{matchedTask ? label
                         : unavailableTaskIds.includes(reference.taskId) ? 'Задача недоступна'
                         : checkingTaskId === reference.taskId ? 'Проверяю задачу…' : label}</span>
                     </button>
@@ -5352,9 +5353,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}{message.messageKind === 'HUMAN' && message.recipientName ? ` → ${message.recipientName}` : ''}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                     <div className="text-sm leading-relaxed">{message.messageKind === 'MONITOR_ACTION' ? <TaskMonitoringActionBadge content={message.content} /> : message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} onTasksReload={setTasks} expectedUserId={currentUser?.id} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}</div>
                     {message.monitoringTaskId ? <button type="button"
-                    className="task-monitor-chat-link mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold"
+                    className={`task-monitor-chat-link mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${tasks.some(task => task.id === message.monitoringTaskId && task.status === 'DONE') ? 'ai-task-ref-chip--completed' : ''}`}
                     onClick={() => { const target = tasks.find(task => task.id === message.monitoringTaskId && !task.parentTaskId); if (target) { setIsAiChatOpen(false); openTaskModal(target); setIsAiDialogOpen(true); } }}>
-                    <ArrowUpRight size={12} /> Ответить в чате задачи
+                    <ArrowUpRight size={12} /> <span className="ai-task-ref-chip__title">Ответить в чате задачи</span>
                   </button> : null}
                   {message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} searched={message.webSearchUsed} /> : null}
                     {message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} onDownload={downloadAiGeneratedDocument} /> : null}
@@ -5552,9 +5553,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 <div key={message.id} className={`ai-message-forward-group w-fit max-w-[88%] ${message.role === 'user' ? 'ml-auto' : 'mr-auto'}`}><div className={`miniapp-ai-chat-message miniapp-ai-chat-message-general w-full rounded-3xl px-4 py-3 ${message.role === 'user' ? 'miniapp-ai-chat-message-user rounded-br-lg' : 'miniapp-ai-chat-message-assistant rounded-bl-lg'}`}>
                   <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`mini-chat-${message.id}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `mini-chat-${message.id}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `mini-chat-${message.id}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                   <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} onTasksReload={setTasks} expectedUserId={currentUser?.id} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}</div>
-                  {message.monitoringTaskId && activeAiChat?.id === QUICK_AI_CHAT_ID ? <button type="button" className="task-monitor-chat-link mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold"
+                  {message.monitoringTaskId && activeAiChat?.id === QUICK_AI_CHAT_ID ? <button type="button" className={`task-monitor-chat-link mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${tasks.some(task => task.id === message.monitoringTaskId && task.status === 'DONE') ? 'ai-task-ref-chip--completed' : ''}`}
                     onClick={() => { const target = tasks.find(task => task.id === message.monitoringTaskId && !task.parentTaskId); if (target) { setIsAiChatOpen(false); openTaskModal(target); setIsAiDialogOpen(true); } }}>
-                    <ArrowUpRight size={12} /> Ответить в чате задачи
+                    <ArrowUpRight size={12} /> <span className="ai-task-ref-chip__title">Ответить в чате задачи</span>
                   </button> : null}
                   {message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} searched={message.webSearchUsed} /> : null}
                   {message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} onDownload={downloadAiGeneratedDocument} /> : null}
