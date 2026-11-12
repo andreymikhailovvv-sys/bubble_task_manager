@@ -186,7 +186,7 @@ export function FullscreenWorkspaceSingle({ panel, renderPanel, onChoose, tasks 
   tasks: readonly FullscreenTaskChoice[];
 }) {
   return (
-    <div className="fullscreen-workspace-single">
+    <div className={`fullscreen-workspace-single ${panel.kind === 'mode' && panel.mode !== 'bubbles' ? 'fullscreen-workspace-single--open' : ''}`}>
       <section className="fullscreen-workspace-single-content min-h-0 min-w-0 flex-1">
         {renderPanel(panel)}
       </section>
