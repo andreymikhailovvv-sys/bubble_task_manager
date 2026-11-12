@@ -178,7 +178,9 @@ test('Telegram deep-link chat header remains visible during auto scroll then fol
   assert.match(mini, /launchParams\.openQuickAi/);
   assert.match(mini, /generalAiChatUserScrollEnabledRef = useRef\(false\)/);
   assert.match(mini, /generalAiChatUserScrollEnabledRef\.current = false;\s*setIsGeneralAiChatHeaderHidden\(false\)/);
-  assert.match(mini, /if \(!generalAiChatUserScrollEnabledRef\.current\) \{[\s\S]*?return;\s*\}\s*(?:if \(telegramChatPicker\) setTelegramChatPicker\(null\);\s*)?updateAiChatHeaderVisibility/);
+  assert.match(mini, /if \(!generalAiChatUserScrollEnabledRef\.current\) \{[\s\S]*?return;\s*\}/);
+  assert.match(mini, /if \(miniLiveVoiceActive \|\| androidPlanikLaunch\) \{/);
+  assert.match(mini, /else updateAiChatHeaderVisibility\(container\.scrollTop, generalAiChatScrollTopRef, setIsGeneralAiChatHeaderHidden\)/);
   assert.match(mini, /onWheel=\{\(\) => \{ generalAiChatUserScrollEnabledRef\.current = true; \}\}/);
   assert.match(mini, /onTouchMove=\{\(\) => \{ generalAiChatUserScrollEnabledRef\.current = true; \}\}/);
   assert.match(mini, /setIsHidden\(delta > 0\)/);
