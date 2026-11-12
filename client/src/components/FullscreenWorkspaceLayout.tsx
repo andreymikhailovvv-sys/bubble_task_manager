@@ -77,7 +77,7 @@ export function FullscreenAddWindowMenu({ onAdd }: { onAdd: (kind: FullscreenAux
         aria-label="Добавить окно в рабочее пространство" aria-haspopup="menu" aria-expanded={open}
         onClick={() => setOpen(previous => !previous)}>
         <Plus size={16} aria-hidden="true" />
-        <span>Добавить окно</span>
+        <span>Окно</span>
         <ChevronDown size={13} aria-hidden="true" />
       </button>
       {open ? (
