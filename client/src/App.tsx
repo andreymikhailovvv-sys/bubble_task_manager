@@ -7621,7 +7621,8 @@ export default function App() {
       /> : null}
 
       {focusedTask && focusedDraft && !(isFocusModeOpen && isFocusedNotesEditorOpen) ? (
-        <FocusedTaskWindowFrame aiChatOpen={isAiChatOpen} focusModeOpen={isFocusModeOpen}>
+        <FocusedTaskWindowFrame aiChatOpen={isAiChatOpen} focusModeOpen={isFocusModeOpen}
+          embedded={embeddedFocusActive} inlineTarget={embeddedFocusActive ? fullscreenFocusTarget : null}>
 
         {timelineCreateMenu ? (
           <div
@@ -8859,7 +8860,7 @@ export default function App() {
       ) : null}
       {isTimelineOptimizeModalOpen ? (<div className="modal-backdrop fixed inset-0 z-[120] flex items-center justify-center p-4 backdrop-blur-sm"><div className="dialog-surface w-full max-w-lg rounded-2xl border p-4"><h3 className="text-lg font-semibold text-primary">Оптимизация таймлайна ИИ</h3><p className="mt-1 text-sm text-muted">Добавьте пожелания к перераспределению задач <span className="inline-flex items-center gap-1 text-rose-300">(1 <Coins size={12} />)</span>.</p><textarea className="form-field mt-3 min-h-28 w-full rounded-lg border p-2 text-sm" value={timelineOptimizeNote} onChange={(e)=>setTimelineOptimizeNote(e.target.value)} /><div className="mt-3 flex justify-end gap-2"><button className="surface-muted rounded px-3 py-2 text-sm" onClick={()=>setIsTimelineOptimizeModalOpen(false)}>Отмена</button><button className="rounded bg-rose-600 px-3 py-2 text-sm text-white" onClick={()=>void handleOptimizeTimeline()} disabled={timelineOptimizeLoading}>Оптимизировать</button></div></div></div>) : null}
 
-      <QuickAiLauncherFrame
+      {!hasGeneralAiPane ? <QuickAiLauncherFrame
         taskOpen={Boolean(focusedTask)}
         fullscreenBubbles={isBubbleFullscreen}
         onHoverChange={hovered => { setQuickAiPreviewHovered(hovered); if(hovered){ scheduleQuickAiChatScrollToBottom(); markSystemNotificationsRead(); } }}
@@ -8924,7 +8925,7 @@ export default function App() {
         >
           <PlanikMascot notificationCount={unreadSystemNotificationCount} busy={quickAiChatLoading} progress={aiChatProgress} celebrationKey={planikCelebrationKey} />
         </button>
-      </QuickAiLauncherFrame>
+      </QuickAiLauncherFrame> : null}
 
       {isCollaborationSettingsOpen && focusedTask?.isCollaborative ? (
         <div className="modal-backdrop fixed inset-0 z-[175] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsCollaborationSettingsOpen(false)}>
@@ -9022,8 +9023,9 @@ export default function App() {
         </div>
       ) : null}
 
-      {isAiChatOpen ? (
+      {(isAiChatOpen && !hasGeneralAiPane) || (hasGeneralAiPane && Boolean(fullscreenChatTarget)) ? (
         <ExpandedAiChat
+          inlineTarget={hasGeneralAiPane ? fullscreenChatTarget : null}
           showPlanik
           projects={aiChatProjects}
           activeProject={activeAiChatProject}
@@ -9050,7 +9052,12 @@ export default function App() {
               section?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             });
           }}
-          onClose={() => setIsAiChatOpen(false)}
+          onClose={() => {
+            if (hasGeneralAiPane) {
+              const index = fullscreenPanels.findIndex(panel => panel.kind === 'general-ai');
+              if (index >= 0) chooseFullscreenPanel(index as 0 | 1, { kind: 'mode', mode: fullscreenDisplayModes[0] ?? 'bubbles' });
+            } else setIsAiChatOpen(false);
+          }}
           onCreateProject={openAiChatProjectDialog}
           onCreateChat={createAiChatThread}
           onSelectProject={(project) => { setActiveAiChatProjectId(project.id); setActiveAiChatId(project.chats[0]?.id ?? ''); }}
