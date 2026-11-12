@@ -60,6 +60,7 @@ import { AiReplyAction, AiReplyPreview, AiReplyMessageBody, serializeAiReply, ty
 import { AiReadAloudAction, AiSpeechCostLine } from './components/AiReadAloudAction';
 import type { LiveVoiceContext, LiveVoiceMessage, LiveVoiceToolCompletion, LiveVoiceProgressStatus } from './components/LiveVoiceDialog';
 import { voiceTranscriptMessage, voiceToolAssistantMessage, updateLiveVoiceProgress, preserveLiveVoiceMessages } from './lib/voice-chat-messages';
+import { linkVerifiedVoiceTaskMentions } from './lib/voice-task-links';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
 import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileQuickAiChatMessages, reconcileAiChatProjectOutline, mergeTelegramManagedMessages, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike, orderAiChatMessagesChronologically } from './lib/ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
@@ -2979,12 +2980,14 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       return { ...previous, [taskId]: [...messages, entry] };
     });
   };
-  const applyLiveTaskTool = (taskId: string, event: LiveVoiceToolCompletion) => {
-    const answer = voiceToolAssistantMessage(event);
+  const applyLiveTaskTool = (taskId: string, event: LiveVoiceToolCompletion): boolean => {
+    const safeAnswer = linkVerifiedVoiceTaskMentions(event.result.answer, tasks);
+    const answer = voiceToolAssistantMessage({ ...event, result: { ...event.result, answer: safeAnswer } });
     voiceTaskMessagesRef.current[taskId] = [...(voiceTaskMessagesRef.current[taskId] ?? []), answer].slice(-80);
     setAiDialogByTask(previous => ({ ...previous, [taskId]: [...(previous[taskId] ?? []), answer] }));
     if (event.result.taskDataChanged) void loadData({ refreshPlannerOnly: true });
     refreshAiCredits();
+    return /\[\[task_ref(?:[:=])[^\]]+\]\]/.test(safeAnswer);
   };
   const appendLiveProjectMessage = (projectId: string, chatId: string, event: LiveVoiceMessage) => {
     const message = voiceTranscriptMessage(event);
@@ -3014,8 +3017,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     });
   };
 
-  const applyLiveProjectTool = (projectId: string, chatId: string, event: LiveVoiceToolCompletion) => {
-    const answer = voiceToolAssistantMessage(event);
+  const applyLiveProjectTool = (projectId: string, chatId: string, event: LiveVoiceToolCompletion): boolean => {
+    const safeAnswer = linkVerifiedVoiceTaskMentions(event.result.answer, tasks);
+    const answer = voiceToolAssistantMessage({ ...event, result: { ...event.result, answer: safeAnswer } });
     const key = `${projectId}:${chatId}`;
     voiceChatMessagesRef.current[key] = [...(voiceChatMessagesRef.current[key] ?? []), answer].slice(-80);
     setAiChatProjects(previous => previous.map(project => project.id !== projectId ? project : ({
@@ -3024,6 +3028,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     })));
     if (event.result.taskDataChanged) void loadData({ refreshPlannerOnly: true });
     refreshAiCredits();
+    return /\[\[task_ref(?:[:=])[^\]]+\]\]/.test(safeAnswer);
   };
   // A dedicated Android WebView is restricted to this first-party origin.
   // It receives the same session cookies as the native Retrofit client.
