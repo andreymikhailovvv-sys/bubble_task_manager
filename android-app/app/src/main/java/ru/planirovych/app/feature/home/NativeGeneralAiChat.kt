@@ -501,7 +501,8 @@ internal fun NativeGeneralAiChatPage(
                         enabled = !isBusy,
                         dark = dark,
                         mode = when {
-                            state.busy && (state.progressStatus == "searching_web" || state.progressStatus == "analyzing_web_results") -> "searching"
+                            state.busy && (state.progressStatus.orEmpty().startsWith("searching_") ||
+                                state.progressStatus in listOf("listing_tasks", "reading_task", "reading_note", "reading_file", "analyzing_web_results")) -> "searching"
                             state.busy && state.streamText.isNotBlank() -> "typing"
                             state.busy -> "thinking"
                             else -> "idle"
