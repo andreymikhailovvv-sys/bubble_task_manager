@@ -122,6 +122,13 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
   // interrupt the response without unplugging the microphone.
   const uplinkPausedRef = useRef(false);
   const responseDoneRef = useRef(false);
+  const waitingPlaybackAckRef = useRef(false);
+  const acknowledgeWaitingAfterPlayback = () => {
+    if (!waitingPlaybackAckRef.current || sourcesRef.current.size > 0) return;
+    waitingPlaybackAckRef.current = false;
+    const ws = wsRef.current;
+    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'waiting_played' }));
+  };
   const stopResourcesRef = useRef<() => void>(() => {});
   const liveContextRef = useRef(liveContext);
   const onLiveMessageRef = useRef(onLiveMessage);
@@ -423,6 +430,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
               source.connect(playbackBoostRef.current ?? context.destination);
               source.onended = () => {
                 sourcesRef.current.delete(source);
+                acknowledgeWaitingAfterPlayback();
                 // The final chunk can finish after response.done. Do not reopen
                 // mic between queued chunks or while a tool is still running.
                 if (sourcesRef.current.size === 0) resumeListeningAfterPlayback();
@@ -449,6 +457,13 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
           }
           // Historical servers may still stream provisional provider usage.
           // Ignore it: it is NOT the final amount charged to the wallet.
+          if (payload.type === 'waiting_response_done') {
+            // Waiting speech is an out-of-band response, not a main answer.
+            // The server must not start the actual answer until its PCM
+            // buffers have physically finished playing on this device.
+            waitingPlaybackAckRef.current = true;
+            acknowledgeWaitingAfterPlayback();
+          }
           if (payload.type === 'response_done') {
             if (!processingToolRef.current && toolQueueRef.current.length === 0) reportStatus(null);
             responseDoneRef.current = true;
