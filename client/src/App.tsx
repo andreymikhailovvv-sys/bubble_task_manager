@@ -4197,24 +4197,35 @@ export default function App() {
   };
 
   const completeTask = async (task: Task, scope?: 'me' | 'all') => {
+    if (closingTaskIds.includes(task.id)) return;
     if (task.isCollaborative && task.collaborationOwner && !scope) {
       setCollaborationAction({ task, action: 'complete' });
       return;
     }
     markTaskAsClosing(task.id);
     setPoppingTaskId(task.id);
-    await new Promise((resolve) => setTimeout(resolve, 680));
-    await api.updateTask(task.id, { status: 'DONE', collaborationScope: scope ?? 'me' });
-    setPlanikCelebrationKey((key) => key + 1);
-    void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneTask, 'task');
-    if (isFocusBonusEligible(task.id)) pushFocusBonusMessage('task', EFFICIENCY_BONUSES.doneTask * (FOCUS_BONUS_MULTIPLIERS.task - 1));
-    unmarkTaskAsClosing(task.id);
-    setEditorState((current) => current?.task?.id === task.id ? null : current);
-    setFocusedTaskId((current) => current === task.id ? null : current);
-    await load();
-    if (!task.parentTaskId && task.taskType !== 'EVENT' && task.taskType !== 'REMINDER'
-      && !task.isRecurring && currentUser?.offerTaskCompletionReport !== false) {
-      setReportPromptTask(task);
+    try {
+      // Keep the bubble invisible until the authoritative task list has updated.
+      // Clearing poppingTaskId before load() made it reappear for one render.
+      await new Promise((resolve) => setTimeout(resolve, 680));
+      await api.updateTask(task.id, { status: 'DONE', collaborationScope: scope ?? 'me' });
+      // A successful update is final even if refreshing the workspace is slow.
+      setTasks((current) => current.map((item) =>
+        item.id === task.id ? { ...item, status: 'DONE' as const } : item
+      ));
+      setPlanikCelebrationKey((key) => key + 1);
+      void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneTask, 'task');
+      if (isFocusBonusEligible(task.id)) pushFocusBonusMessage('task', EFFICIENCY_BONUSES.doneTask * (FOCUS_BONUS_MULTIPLIERS.task - 1));
+      setEditorState((current) => current?.task?.id === task.id ? null : current);
+      setFocusedTaskId((current) => current === task.id ? null : current);
+      await load();
+      if (!task.parentTaskId && task.taskType !== 'EVENT' && task.taskType !== 'REMINDER'
+        && !task.isRecurring && currentUser?.offerTaskCompletionReport !== false) {
+        setReportPromptTask(task);
+      }
+    } finally {
+      // A failed API update is the only case where the bubble may return.
+      unmarkTaskAsClosing(task.id);
     }
   };
 

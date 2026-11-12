@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { TaskMonitoringBadge } from './TaskMonitoringBadge';
 import { CalendarDays, ChevronRight, Coins, Gauge, LoaderCircle, MessageCircle, Plus, Repeat, Sparkles, X } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
@@ -80,6 +80,17 @@ const ELLIPSE_RADIUS_Y = VIEWBOX_HEIGHT / 2 - 38;
 const ELLIPSE_X_SCALE = ELLIPSE_RADIUS_X / FIELD_RADIUS;
 const ELLIPSE_Y_SCALE = ELLIPSE_RADIUS_Y / FIELD_RADIUS;
 const HOVER_EXIT_DELAY_MS = 120;
+// Deterministic, small particle burst. No continuous physics or random re-renders.
+const BUBBLE_COMPLETION_CONFETTI = Array.from({ length: 16 }, (_, index) => {
+  const angle = (index / 16) * Math.PI * 2;
+  const distance = 25 + (index % 4) * 11;
+  return {
+    x: Math.cos(angle) * distance,
+    y: Math.sin(angle) * distance - 8,
+    rotation: index % 2 ? -125 - index * 8 : 125 + index * 8,
+    color: ['#fcd34d', '#67e8f9', '#c4b5fd', '#f9a8d4', '#86efac'][index % 5]
+  };
+});
 const ENABLE_BUBBLE_HOVER_DETAILS = false;
 const SUBTASK_REMINDER_GLOW_STYLE =
   '0 0 0 1px rgba(56,189,248,0.24), inset 0 0 12px rgba(56,189,248,0.28)';
@@ -333,6 +344,12 @@ export function BubbleField({
 }: Props) {
   const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null);
   const isLightTheme = themeMode === 'light';
+  const reducedMotion = useReducedMotion();
+  const [completionBursts, setCompletionBursts] = useState<Array<{
+    id: string; x: number; y: number; radius: number
+  }>>([]);
+  const capturedCompletionIdRef = useRef<string | null>(null);
+  const completionBurstTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const [subtaskDrafts, setSubtaskDrafts] = useState<Record<string, SubtaskDraft>>({});
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [smartPostponeTaskId, setSmartPostponeTaskId] = useState<string | null>(null);
@@ -590,6 +607,31 @@ export function BubbleField({
   );
   const getBubbleVisualPoint = (bubble: (typeof bubbles)[number]) =>
     bubbleVisualPositions.get(bubble.task.id) ?? mapToOval(bubble.x, bubble.y);
+
+  useEffect(() => () => {
+    completionBurstTimersRef.current.forEach(clearTimeout);
+  }, []);
+
+  useEffect(() => {
+    if (!poppingTaskId) {
+      capturedCompletionIdRef.current = null;
+      return;
+    }
+    if (capturedCompletionIdRef.current === poppingTaskId || reducedMotion) return;
+    const bubble = bubbles.find((item) => item.task.id === poppingTaskId);
+    if (!bubble) return;
+    capturedCompletionIdRef.current = poppingTaskId;
+    // Snapshot the position before the worker packs the remaining bubbles.
+    const point = bubbleVisualPositions.get(bubble.task.id) ?? mapToOval(bubble.x, bubble.y);
+    const burst = { id: `${poppingTaskId}:${Date.now()}`, x: point.x, y: point.y, radius: bubble.radius };
+    setCompletionBursts((current) => [...current.slice(-3), burst]);
+    const timeout = setTimeout(() => {
+      setCompletionBursts((current) => current.filter((item) => item.id !== burst.id));
+      completionBurstTimersRef.current = completionBurstTimersRef.current.filter((item) => item !== timeout);
+    }, 1100);
+    completionBurstTimersRef.current.push(timeout);
+  }, [poppingTaskId, bubbles, bubbleVisualPositions, mapToOval, reducedMotion]);
+
   const getSectorIndexAtPoint = (point: { x: number; y: number }) => {
     if (mode !== 'sectors' || sectorCount <= 1) return 0;
     const dx = (point.x - BUBBLE_FIELD_CENTER_X) / ELLIPSE_X_SCALE;
@@ -942,7 +984,7 @@ export function BubbleField({
         data-bubble-task-id={bubble.task.id}
         initial={false}
         animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: isDragged ? 1.05 : isDragTarget ? 1.04 : isHovered ? 1.075 : 1, x: animatedPoint.x, y: animatedPoint.y }}
-        exit={isSearchFiltering ? { opacity: 0, scale: 0.96, x: animatedPoint.x, y: animatedPoint.y } : { opacity: 1, scale: 1, x: animatedPoint.x, y: animatedPoint.y }}
+        exit={isSearchFiltering ? { opacity: 0, scale: 0.96, x: animatedPoint.x, y: animatedPoint.y } : { opacity: 0, scale: isPopping ? 1.28 : 0.96, x: animatedPoint.x, y: animatedPoint.y }}
         transition={isDragged ? { duration: 0 } : isPopping
           ? { type: 'tween', duration: 0.33, ease: 'easeOut' }
           : { type: 'tween', duration: 0.34, ease: 'easeInOut' }}
@@ -1300,7 +1342,7 @@ export function BubbleField({
               return (
                 <motion.g key={key} initial={false}
                   animate={{ x: origin.x, y: origin.y }}
-                  exit={isSearchFiltering ? { opacity: 0, scale: 0.96 } : undefined}
+                  exit={isSearchFiltering ? { opacity: 0, scale: 0.96 } : { opacity: 0, scale: 0.98 }}
                   transition={transition}>
                   {edges.map(([firstId, secondId]) => {
                     const first = memberById.get(firstId)!;
@@ -1323,6 +1365,37 @@ export function BubbleField({
               );
             })}
           </AnimatePresence>
+          {/* A separate overlay holds the final location, so the completed bubble
+              and any reshuffling of linked groups cannot restart the particles. */}
+          {completionBursts.map((burst) => {
+            const size = Math.max(0.7, Math.min(1.3, burst.radius / 48));
+            return (
+              <g key={burst.id} transform={`translate(${burst.x} ${burst.y})`} pointerEvents="none" aria-hidden="true">
+                <motion.circle
+                  cx={0} cy={0} r={burst.radius * 0.45}
+                  fill="none" stroke="#fde68a" strokeWidth={2}
+                  initial={{ opacity: 0, scale: 0.7 }}
+                  animate={{ opacity: [0, 0.38, 0], scale: [0.7, 1.3, 1.65] }}
+                  transition={{ duration: 0.55, delay: 0.22, ease: 'easeOut' }}
+                  style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+                />
+                {BUBBLE_COMPLETION_CONFETTI.map((piece, index) => (
+                  <motion.rect key={index} x={-2.5} y={-2.5}
+                    width={index % 3 === 0 ? 7 : 4.5} height={index % 3 === 0 ? 3 : 5}
+                    rx={1} fill={piece.color}
+                    initial={{ opacity: 0, x: 0, y: 0, rotate: 0, scale: 0.65 }}
+                    animate={{
+                      opacity: [0, 0.92, 0.86, 0],
+                      x: piece.x * size, y: (piece.y + 12) * size,
+                      rotate: piece.rotation, scale: [0.65, 1, 0.9, 0.55]
+                    }}
+                    transition={{ duration: 0.72, delay: 0.23 + index * 0.006, ease: 'easeOut' }}
+                    style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+                  />
+                ))}
+              </g>
+            );
+          })}
           {/* This preview is intentionally ABOVE all circles. Large-to-large
               drops overlap both interiors and would hide any line below them. */}
           {dragView?.target && (() => {

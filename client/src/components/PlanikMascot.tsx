@@ -94,9 +94,9 @@ export const PlanikMascot = memo(function PlanikMascot({
     const transform = `translate(${x.toFixed(1)} ${y.toFixed(1)})`;
     leftEye.current?.setAttribute('transform', transform);
     rightEye.current?.setAttribute('transform', transform);
-    // During a shy greeting both hands reach gently toward the pointer.
-    leftHand.current?.setAttribute('transform', `translate(${(x * 0.8).toFixed(1)} ${(y * 0.7).toFixed(1)})`);
-    rightHand.current?.setAttribute('transform', `translate(${(x * 0.8).toFixed(1)} ${(y * 0.7).toFixed(1)})`);
+    // Hands extend only a few extra pixels toward the cursor, preserving the shy sway.
+    leftHand.current?.setAttribute('transform', `translate(${(x * 1.3).toFixed(1)} ${(y * 1.15).toFixed(1)})`);
+    rightHand.current?.setAttribute('transform', `translate(${(x * 1.3).toFixed(1)} ${(y * 1.15).toFixed(1)})`);
   }, []);
 
   useEffect(() => {
@@ -270,19 +270,35 @@ export const PlanikMascot = memo(function PlanikMascot({
         </g>
 
         <g className="planik-painting">
-          {/* Planik paints on a small glowing canvas while an image tool is active. */}
-          <path d="M132 200Q109 209 103 233" fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round" />
-          <rect x="74" y="150" width="119" height="117" rx="13" fill="#454b83" stroke="#a99bff" strokeWidth="3" />
-          <rect x="85" y="161" width="97" height="94" rx="7" fill="#e4eafc" />
-          <circle cx="158" cy="186" r="12" fill="#f9be87" />
-          <path d="M87 239L114 208L130 225L151 194L180 240Z" fill="#8dc8ce" />
-          <path className="planik-paint-stroke" d="M99 189Q116 178 125 194T157 211" fill="none" stroke="#ac78e8" strokeWidth="6" strokeLinecap="round" strokeDasharray="90" />
-          <path d="M301 195Q283 207 264 218" fill="none" stroke="#7778b8" strokeWidth="17" strokeLinecap="round" />
+          {/* A thin, borderless sheet of paper: no tablet rim, bezel or display. */}
+          <path d="M130 197Q109 206 105 233" fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round" />
+          <path d="M91 159L177 154L183 246L89 252Z" fill="#56608e" fillOpacity=".2" transform="translate(3 5)" />
+          <path d="M91 159L177 154L183 246L89 252Z" fill="#fffdf5" stroke="#c9c5e5" strokeWidth="2.3" strokeLinejoin="round" />
+          <path d="M165 155L177 154L178 167Z" fill="#f0e8dd" stroke="#d6cce2" strokeWidth="1" />
+          {/* The paper begins blank; the landscape is painted in short timed layers. */}
+          <g className="planik-paint-sky">
+            <path d="M98 179Q123 168 169 173" fill="none" stroke="#a3daf1" strokeWidth="6" strokeLinecap="round" />
+            <path d="M101 186Q137 182 172 186" fill="none" stroke="#c6e8f6" strokeWidth="4" strokeLinecap="round" />
+            <circle cx="152" cy="183" r="9" fill="#f2c879" />
+          </g>
+          <g className="planik-paint-mountains">
+            <path d="M97 227L119 197L134 214L149 194L173 229" fill="none" stroke="#8a9fd8" strokeWidth="5.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M97 230L119 202L134 217L149 199L174 232" fill="none" stroke="#b8cae8" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+          </g>
+          <g className="planik-paint-hills">
+            <path d="M96 234Q117 217 136 232T176 229" fill="none" stroke="#73b7a1" strokeWidth="7" strokeLinecap="round" />
+            <path d="M98 241Q127 229 149 238T177 235" fill="none" stroke="#a5cf94" strokeWidth="5" strokeLinecap="round" />
+          </g>
+          <g className="planik-paint-details">
+            <path d="M113 230V217M106 224L113 215L120 225M108 220L113 212L119 220" fill="none" stroke="#4b8f76" strokeWidth="2.7" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M159 237V223M153 230L159 219L165 230" fill="none" stroke="#4b8f76" strokeWidth="2.4" strokeLinecap="round" />
+          </g>
+          <path d="M300 196Q276 207 262 216" fill="none" stroke="#7778b8" strokeWidth="17" strokeLinecap="round" />
           <g className="planik-paint-brush">
-            <path d="M258 214L224 200" stroke="#bf9b6b" strokeWidth="10" strokeLinecap="round" />
-            <path d="M221 198L209 193L213 207L224 204Z" fill="#d4d8ff" stroke="#a99bff" strokeWidth="2" />
-            <path d="M210 193Q204 195 205 203L213 207Z" fill="#a76cea" />
-            <circle cx="263" cy="218" r="8" fill="#aaa5ee" />
+            <path d="M263 216L227 206" stroke="#b79a74" strokeWidth="9" strokeLinecap="round" />
+            <path d="M227 206L213 204L216 216L228 212Z" fill="#d4d8ff" stroke="#a99bff" strokeWidth="2" />
+            <path d="M213 204Q206 207 208 213L216 216Z" fill="#8476db" />
+            <circle cx="263" cy="216" r="8" fill="#aaa5ee" />
           </g>
         </g>
 
@@ -330,10 +346,12 @@ export const PlanikMascot = memo(function PlanikMascot({
           <g className="planik-hover-left"><g ref={leftHand}>
             <path d="M129 194Q141 219 170 224" fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round" />
             <circle cx="170" cy="224" r="10" fill="#b2aaff" />
+            <path d="M166 218L168 211M174 219L178 213" fill="none" stroke="#c5bfff" strokeWidth="3.5" strokeLinecap="round" />
           </g></g>
           <g className="planik-hover-right"><g ref={rightHand}>
             <path d="M303 194Q283 218 254 225" fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round" />
             <circle cx="254" cy="225" r="10" fill="#b2aaff" />
+            <path d="M251 219L246 212M258 219L259 212" fill="none" stroke="#c5bfff" strokeWidth="3.5" strokeLinecap="round" />
           </g></g>
         </g>
       </svg>

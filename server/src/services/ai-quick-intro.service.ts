@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { readOpenAiResponsesStream } from './openai-responses-stream.service.js';
-import { buildContextualAiIntro } from './ai-quick-intro-context.service.js';
 
 type IntroInput = {
   question: string;
@@ -13,6 +12,8 @@ export type IntroEvent = { type: 'delta'; text: string } | { type: 'reset' };
 export type IntroRequest = (input: IntroInput) => Promise<void>;
 
 const MAX_INTRO_CHARACTERS = 160;
+const INTRO_FALLBACK_TEXT = 'Работаю над вашим запросом..';
+const DEFAULT_INTRO_DEADLINE_MS = 5000;
 const INTRO_MODEL = process.env.OPENAI_AI_INTRO_MODEL?.trim() || 'gpt-5-nano';
 const INTRO_BACKUP_MODEL = 'gpt-5-mini';
 
@@ -84,8 +85,8 @@ async function requestShortIntro({ question, context, onText, signal }: IntroInp
 
 /**
  * A cheap model is the ONLY source of a normal introductory sentence.
- * The server-side contextual text is retained strictly as a failure fallback:
- * request error, unavailable models, empty answer, or deadline expiry.
+ * A single neutral server phrase is used strictly as a failure fallback:
+ * request error, unavailable models, empty answer, or the five-second deadline.
  * This prevents a distracting server-preview -> model-preview reset.
  *
  * The selected main model starts in parallel and never waits for the intro.
@@ -138,7 +139,7 @@ export function startAiIntroOverlay(options: {
   };
   const showFallback = (reason: string) => {
     if (stopped || mainStarted || introChosen) return;
-    showIntro(buildContextualAiIntro(options.question, options.context), 'fallback', reason);
+    showIntro(INTRO_FALLBACK_TEXT, 'fallback', reason);
   };
 
   const deadlineTimer = enabled ? setTimeout(() => {
@@ -146,7 +147,7 @@ export function startAiIntroOverlay(options: {
     console.warn('[AI quick intro] model deadline exceeded', { elapsedMs: Date.now() - startedAt });
     controller.abort();
     showFallback('timeout');
-  }, options.modelDeadlineMs ?? 2300) : null;
+  }, options.modelDeadlineMs ?? DEFAULT_INTRO_DEADLINE_MS) : null;
 
   if (enabled) {
     void (options.requestIntro ?? requestShortIntro)({

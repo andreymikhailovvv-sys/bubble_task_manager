@@ -55,3 +55,23 @@ test('окно ближайших подзадач имеет фиксирова
   assert.match(styles, /color: #0891b2 !important/);
   assert.match(styles, /\.upcoming-subtask-row \{[\s\S]*height: 7rem;[\s\S]*min-height: 7rem;/);
 });
+
+
+test('completed bubble never fades back in and confetti stays at its disappearance point', async () => {
+  const [app, bubble] = await Promise.all([
+    readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/components/BubbleField.tsx', import.meta.url), 'utf8')
+  ]);
+  const completeStart = app.indexOf('const completeTask = async');
+  const completeEnd = app.indexOf('const saveFocusedTask = async', completeStart);
+  const completion = app.slice(completeStart, completeEnd);
+  assert.ok(completeStart >= 0 && completeEnd > completeStart);
+  assert.ok(completion.indexOf('await load()') < completion.indexOf('unmarkTaskAsClosing(task.id)'));
+  assert.match(completion, /setTasks\(\(current\) => current\.map/);
+  assert.match(completion, /finally \{/);
+  assert.match(bubble, /exit=\{isSearchFiltering \? \{ opacity: 0[^\n]+: \{ opacity: 0, scale: isPopping/);
+  assert.match(bubble, /BUBBLE_COMPLETION_CONFETTI/);
+  assert.match(bubble, /capturedCompletionIdRef\.current === poppingTaskId/);
+  assert.match(bubble, /completionBursts\.map\(\(burst\) =>/);
+  assert.match(bubble, /reducedMotion\) return/);
+});
