@@ -6053,18 +6053,19 @@ export default function App() {
   const hasGeneralAiPane = isBubbleFullscreen && fullscreenPanels.some(panel => panel.kind === 'general-ai');
   const chooseFullscreenPanel = (index: 0 | 1, next: FullscreenWorkspacePanel) => {
     const replacing = fullscreenPanels[index];
+    const nextSlots = replaceFullscreenPanel(fullscreenPanels, index, next);
     if (replacing?.kind === 'task-ai' && next.kind !== 'task-ai'
-      && !fullscreenPanels.some((panel, side) => side !== index && panel.kind === 'task-ai')) {
-      setFocusedTaskId(null);
-    }
+      && !nextSlots.some(panel => panel.kind === 'task-ai')) setFocusedTaskId(null);
     if (next.kind === 'task-ai') {
       setFocusedTaskId(next.taskId);
       setIsAiExpanded(false);
+      setIsAiChatOpen(false);
     }
     if (next.kind === 'general-ai') setIsAiChatOpen(false);
-    setFullscreenPanelSlots(previous => replaceFullscreenPanel(
-      previous ?? resolveFullscreenPanels(fullscreenDisplayModes, null), index, next
-    ));
+    // Keep the mode filters and the toolbar checkboxes in sync with the
+    // visualizations actually displayed in the two workbench slots.
+    setFullscreenDisplayModes(nextSlots.filter(panel => panel.kind === 'mode').map(panel => panel.mode));
+    setFullscreenPanelSlots(nextSlots);
   };
   const renderFullscreenPanel = (panel: FullscreenWorkspacePanel): ReactNode => {
     if (panel.kind === 'mode') return renderWorkspaceMode(panel.mode);
@@ -6083,13 +6084,16 @@ export default function App() {
     if (panel.kind === 'notes') return (
       <StandaloneNotesWorkspace key={currentUser.id + ':fullscreen-notes'} userId={currentUser.id}
         mode="inline" requestedNote={requestedStandaloneNote}
-        onClose={() => setFullscreenPanelSlots(current => current?.length === 2
-          ? [current[0].kind === 'notes' ? { kind: 'mode', mode: fullscreenDisplayModes[0] ?? 'bubbles' } : current[0],
-             current[1].kind === 'notes' ? { kind: 'mode', mode: fullscreenDisplayModes[0] ?? 'bubbles' } : current[1]]
-          : null)} />
+        onClose={() => {
+          const index = fullscreenPanels.findIndex(item => item === panel);
+          if (index >= 0) chooseFullscreenPanel(index as 0 | 1, { kind: 'mode', mode: displayMode });
+        }} />
     );
     return <FullscreenUpcomingTasksPanel tasks={tasks}
-      onOpenTask={task => { setFocusedTaskId(task.parentTaskId ?? task.id); setIsAiChatOpen(false); }}
+      onOpenTask={task => {
+        const index = fullscreenPanels.findIndex(item => item === panel);
+        if (index >= 0) chooseFullscreenPanel(index as 0 | 1, { kind: 'task-ai', taskId: task.parentTaskId ?? task.id });
+      }}
       onComplete={async task => { await api.updateTask(task.id, { status: 'DONE' }); if (task.parentTaskId) await syncParentStatusBySubtasks(task.parentTaskId); await load(); }} />;
   };
   return (
@@ -6255,7 +6259,7 @@ export default function App() {
           onOpenSubtask={(subtask) => setEditorState({ task: subtask })}
           onOpenNote={(id) => setRequestedStandaloneNote({ id, serial: Date.now() })}
         />
-            <FullscreenModePicker modes={fullscreenDisplayModes} onChange={(nextModes) => {
+            <FullscreenModePicker modes={fullscreenPanels.filter(panel => panel.kind === 'mode').map(panel => panel.mode)} onChange={(nextModes) => {
               setFullscreenDisplayModes(nextModes);
               setFullscreenPanelSlots(null);
               setDisplayMode(nextModes[0]);
