@@ -6183,24 +6183,13 @@ export default function App() {
       {activeTourStep ? <TourOverlay activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-') ? WORKSPACE_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-') ? FEATURE_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} onComplete={completeTaskTour} /> : null}
       {isBubbleFullscreen ? (
         <header data-tour="bubbles-fullscreen-toolbar"
-          className="fullscreen-workspace-toolbar fullscreen-workspace-toolbar--one-row surface-topbar light-glass-topbar relative z-40 mx-auto mt-3 mb-2 flex w-[calc(100%-24px)] shrink-0 flex-nowrap items-center gap-2 rounded-2xl border px-3 py-2.5 shadow-lg backdrop-blur-lg">
+          className="fullscreen-workspace-toolbar fullscreen-workspace-toolbar--one-row surface-topbar light-glass-topbar relative z-40 mx-auto mt-3 mb-2 flex shrink-0 flex-nowrap items-center gap-2 rounded-2xl border px-3 py-2.5 shadow-lg backdrop-blur-lg">
           <div className="fullscreen-workspace-toolbar-main flex min-w-0 flex-nowrap items-center gap-2">
 <h1 className="fullscreen-workspace-brand mr-1 flex shrink-0 items-center gap-2 text-lg font-semibold">
           <img src="/icon.png" alt="" className="h-7 w-7 rounded-md" />
           <span>Планировыч AI</span>
         </h1>
-        <button
-          type="button"
-          data-tour="feature-telegram-button"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-cyan-400/40 bg-slate-900/85 text-cyan-200 transition hover:border-cyan-300 light-icon-button"
-          aria-label="Подключить Telegram"
-          title="Подключить Telegram"
-          onClick={() => void openTelegramLinkModal()}
-        >
-          <Smartphone size={18} />
-        </button>
-
-        <WorkspaceGlobalSearch
+<WorkspaceGlobalSearch
           key={currentUser.id}
           userId={currentUser.id}
           value={search}
@@ -6211,45 +6200,12 @@ export default function App() {
           onOpenSubtask={(subtask) => setEditorState({ task: subtask })}
           onOpenNote={(id) => setRequestedStandaloneNote({ id, serial: Date.now() })}
         />
-        <TelegramIntegrationsMenu tourIntegration={integrationTourKind} onConnectBot={() => void openTelegramLinkModal()} />
-        <a className="public-nav-link shrink-0 px-2 py-2 text-sm" href="/about">О сервисе</a>
-        <div className="auth-actions" aria-label="Управление аккаунтом">
-          {hasAccount ? (
-            <>
-              <button type="button" className="auth-user-pill" title={`${accountDisplayName} — изменить профиль`} onClick={openProfileModal}>
-                <UserRound size={16} aria-hidden="true" />
-                <span>{accountDisplayName}</span>
-              </button>
-              <button
-                type="button"
-                className="auth-logout-button"
-                onClick={async () => {
-                  try {
-                    await api.logout();
-                  } finally {
-                    const me = await api.getMe();
-                    setCurrentUser(me.user);
-                    setAuthError(null);
-                  }
-                }}
-              >
-                Выйти
-              </button>
-            </>
-          ) : (
-            <>
-              <button type="button" className="auth-login-button" onClick={() => setAuthModalMode('login')}>Войти</button>
-              <button type="button" className="auth-register-button" onClick={() => setAuthModalMode('register')}>Регистрация</button>
-            </>
-          )}
-        </div>
-            <div className="relative shrink-0" ref={settingsMenuRef}>
-              <button type="button" data-tour="fullscreen-workspace-settings"
-                className="surface-popover light-menu-trigger topbar-settings-button inline-flex h-10 w-10 items-center justify-center rounded-xl border transition hover:border-cyan-300/70"
-                onClick={() => setIsSettingsOpen(prev => !prev)} aria-label="Настройки" title="Настройки">
-                <Settings size={17} />
-              </button>
-            </div>
+            <FullscreenModePicker modes={fullscreenDisplayModes} onChange={(nextModes) => {
+              setFullscreenDisplayModes(nextModes);
+              setDisplayMode(nextModes[0]);
+              setIsSphereFilterOpen(false);
+              setIsTimelineOverdueModalOpen(false);
+            }} />
           </div>
           <div className="fullscreen-create-control flex items-center justify-center">
             <div className="add-menu-wrap relative shrink-0"
@@ -6295,16 +6251,48 @@ export default function App() {
             </div>
           </div>
           <div className="fullscreen-workspace-toolbar-actions flex min-w-0 flex-nowrap items-center gap-2">
-              
-              {renderOverdueControl()}
-              {renderCreditsControl()}
-              <FullscreenModePicker modes={fullscreenDisplayModes} onChange={(nextModes) => {
-              setFullscreenDisplayModes(nextModes);
-              setDisplayMode(nextModes[0]);
-              setIsSphereFilterOpen(false);
-              setIsTimelineOverdueModalOpen(false);
-            }} />
-  <button type="button" data-tour="bubbles-fullscreen-exit"
+            {renderOverdueControl()}
+            {renderCreditsControl()}
+        <TelegramIntegrationsMenu tourIntegration={integrationTourKind} onConnectBot={() => void openTelegramLinkModal()} />
+        <a className="public-nav-link shrink-0 px-2 py-2 text-sm" href="/about">О сервисе</a>
+        <div className="auth-actions" aria-label="Управление аккаунтом">
+          {hasAccount ? (
+            <>
+              <button type="button" className="auth-user-pill" title={`${accountDisplayName} — изменить профиль`} onClick={openProfileModal}>
+                <UserRound size={16} aria-hidden="true" />
+                <span>{accountDisplayName}</span>
+              </button>
+              <button
+                type="button"
+                className="auth-logout-button"
+                onClick={async () => {
+                  try {
+                    await api.logout();
+                  } finally {
+                    const me = await api.getMe();
+                    setCurrentUser(me.user);
+                    setAuthError(null);
+                  }
+                }}
+              >
+                Выйти
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="auth-login-button" onClick={() => setAuthModalMode('login')}>Войти</button>
+              <button type="button" className="auth-register-button" onClick={() => setAuthModalMode('register')}>Регистрация</button>
+            </>
+          )}
+        </div>
+            <div className="relative shrink-0" ref={settingsMenuRef}>
+              <button type="button" data-tour="fullscreen-workspace-settings"
+                className="surface-popover light-menu-trigger topbar-settings-button inline-flex h-10 w-10 items-center justify-center rounded-xl border transition hover:border-cyan-300/70"
+                onClick={() => setIsSettingsOpen(prev => !prev)} aria-label="Настройки" title="Настройки">
+                <Settings size={17} />
+              </button>
+            </div>
+            <button type="button" data-tour="bubbles-fullscreen-exit"
               className="fullscreen-workspace-exit topbar-action-button inline-flex h-9 w-9 items-center justify-center rounded-xl border text-sm font-semibold"
               onClick={() => {
                 setDisplayMode(fullscreenDisplayModes[0] ?? 'bubbles');
@@ -6314,7 +6302,7 @@ export default function App() {
               }} title="Выйти из полноэкранного режима" aria-label="Выйти из полноэкранного режима">
               <Minimize2 size={17} />
             </button>
-</div>
+          </div>
         </header>
       ) : null}
       {!isBubbleFullscreen ? <header className="surface-topbar light-glass-topbar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-3 backdrop-blur">
