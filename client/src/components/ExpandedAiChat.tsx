@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { PanelLeftClose, PanelLeftOpen, Paperclip, Plus, SendHorizontal, Sparkles, Star, Trash2, X } from 'lucide-react';
 import { AutoGrowingTextarea } from './AutoGrowingTextarea';
 import { AiAttachmentTiles } from './AiAttachmentTiles';
@@ -31,6 +32,7 @@ type Props = {
   celebrationKey?: number;
   progress?: string;
   showPlanik?: boolean;
+  inlineTarget?: HTMLElement | null;
   onOpenCheckups?: () => void;
   messages: ReactNode;
   status: ReactNode;
@@ -55,7 +57,7 @@ type Props = {
   onClearReply?: () => void;
 };
 
-export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, uploadProgress, messageCount, themeMode, notificationCount=0, celebrationKey=0, progress, showPlanik=false, onOpenCheckups, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend, onLiveMessage, onLiveToolResult, onLiveStatus, readOnlyStructure=false, attachmentsEnabled=true, replyTo, onClearReply }: Props) {
+export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, uploadProgress, messageCount, themeMode, notificationCount=0, celebrationKey=0, progress, showPlanik=false, onOpenCheckups, inlineTarget, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend, onLiveMessage, onLiveToolResult, onLiveStatus, readOnlyStructure=false, attachmentsEnabled=true, replyTo, onClearReply }: Props) {
   const [draft, setDraft] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [headerHidden, setHeaderHidden] = useState(false);
@@ -184,8 +186,9 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
     setDraft('');
   };
 
-  return (
-    <div className="ai-chat-expanded-backdrop fixed inset-0 z-[140] flex items-center justify-center p-3 sm:p-4" onClick={onClose}>
+  const chatSurface = (
+    <div className={`ai-chat-expanded-backdrop fixed inset-0 z-[140] flex items-center justify-center p-3 sm:p-4 ${inlineTarget ? 'ai-chat-expanded-embedded' : ''}`}
+      onClick={inlineTarget ? undefined : onClose}>
       <div data-tour="ai-full-chat" className={`ai-chat-expanded focus-mode-shell ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}`} onClick={(event) => event.stopPropagation()}>
         <aside className="ai-chat-expanded-sidebar focus-side-panel">
           <div className="flex items-center justify-between gap-2"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Проекты</p><div className="flex gap-1">{!readOnlyStructure&&<button className="surface-muted rounded-full p-1.5" onClick={onCreateProject} aria-label="Создать проект"><Plus size={14} /></button>}<button className="surface-muted rounded-full p-1.5" onClick={() => setSidebarCollapsed(true)} aria-label="Свернуть панель проектов"><PanelLeftClose size={15} /></button></div></div>
@@ -260,4 +263,5 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
       </div>
     </div>
   );
+  return inlineTarget ? createPortal(chatSurface, inlineTarget) : chatSurface;
 });
