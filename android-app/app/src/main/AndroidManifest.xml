@@ -7,7 +7,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- User-approved APK installs for releases distributed outside Google Play. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-    <application android:name=".PlanirovychApplication" android:allowBackup="true" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:label="Планировыч" android:theme="@style/Theme.Planirovych" android:usesCleartextTraffic="false">
+    <application android:name=".PlanirovychApplication" android:allowBackup="false" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:label="Планировыч" android:theme="@style/Theme.Planirovych" android:usesCleartextTraffic="false">
         <!-- Narrow grant-only content URI for privately downloaded APKs. -->
         <provider android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.update-files"

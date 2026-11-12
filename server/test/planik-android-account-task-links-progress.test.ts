@@ -33,7 +33,7 @@ test('valid task-title matches get buttons and invalid model-generated IDs never
   assert.doesNotMatch(duplicate, /task_ref/);
 });
 
-test('Realtime narration never receives a raw task_ref label or a UUID', () => {
+test('Realtime narration never receives a raw task_ref label or a UUID', async () => {
   const spoken = speechSafeVoiceToolAnswer('Проверил договор [[task_ref=task-1]]. ID задачи: 667efb92-43a0-4f7c-b543-5fc623e444ce.');
   assert.doesNotMatch(spoken, /task_ref|task-1|667efb92/);
   assert.match(spoken, /Проверил договор/);
@@ -60,9 +60,15 @@ test('task tool results with verified links uncover the chat without stopping Re
   assert.match(voice, /setCollapsed\(true\)/);
 });
 
-test('ten-second waiting acknowledgements are isolated, tool-free and do not discard tool results', async () => {
+test('five-second waiting acknowledgements are isolated, tool-free and wait for audio drain', async () => {
   const server = await read('../src/services/ai-live-voice.service.ts');
-  assert.match(server, /\}, 10_000\);/);
+  assert.match(server, /\}, 5_000\);/);
+  assert.match(server, /waitingAudioAwaitingAck = true/);
+  assert.match(server, /waiting_response_done/);
+  assert.match(server, /waiting_played/);
+  assert.match(server, /Секундочку\./);
+  assert.match(server, /Ищу\./);
+  assert.match(server, /resumeAfterWaitingPlayback\(\)/);
   assert.match(server, /conversation: 'none'/);
   assert.match(server, /metadata: \{ purpose: 'planik_tool_waiting' \}/);
   assert.match(server, /tools: \[\]/);

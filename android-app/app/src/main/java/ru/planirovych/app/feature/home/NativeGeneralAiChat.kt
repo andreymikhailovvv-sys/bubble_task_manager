@@ -46,6 +46,9 @@ import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -98,6 +101,17 @@ internal fun NativeGeneralAiChatPage(
     var attachError by remember{mutableStateOf<String?>(null)}
     var historyPositioned by remember{mutableStateOf(false)}
     var headerCollapsed by remember{mutableStateOf(false)}
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        // Returning from the dedicated Realtime Activity can restore a stale
+        // scroll-hide state. Always re-anchor the chat toolbar within the
+        // Scaffold's safeDrawing insets when the native screen resumes.
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) headerCollapsed = false
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     var lastVisibleCount by remember{mutableIntStateOf(0)}
     var composerHeightPx by remember{mutableIntStateOf(0)}
     var lastRequestId by remember{mutableStateOf<String?>(null)}

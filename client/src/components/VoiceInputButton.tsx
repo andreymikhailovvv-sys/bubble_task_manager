@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Loader2, Mic, MessageCircle, Radio, SendHorizontal, Square, X } from 'lucide-react';
-import { LiveVoiceDialog, type LiveVoiceContext, type LiveVoiceMessage, type LiveVoiceToolCompletion, type LiveVoiceProgressStatus } from './LiveVoiceDialog';
+import type { LiveVoiceContext, LiveVoiceMessage, LiveVoiceToolCompletion, LiveVoiceProgressStatus } from './LiveVoiceDialog';
+import { startPersistentPlanikLiveSession, planikLiveSessionActive, expandPersistentPlanikLiveSession } from '../lib/persistent-planik-live-session';
 import { api } from '../lib/api';
 
 type Props = {
@@ -8,7 +9,7 @@ type Props = {
   liveContext?: LiveVoiceContext;
   activationMode?: 'menu' | 'transcription';
   onLiveMessage?: (message: LiveVoiceMessage) => void;
-  onLiveToolResult?: (result: LiveVoiceToolCompletion) => void;
+  onLiveToolResult?: (result: LiveVoiceToolCompletion) => boolean | void;
   onLiveStatus?: (status: LiveVoiceProgressStatus | null) => void;
   onLiveSessionChange?: (active: boolean, context?: LiveVoiceContext) => void;
   onLiveActionReveal?: () => void;
@@ -26,7 +27,6 @@ export const VoiceInputButton = forwardRef<VoiceInputButtonHandle, Props>(functi
   const [error, setError] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [liveOpen, setLiveOpen] = useState(false);
-  const [liveAudioContext, setLiveAudioContext] = useState<AudioContext | null>(null);
   const menuRef = useRef<HTMLSpanElement | null>(null);
   const [seconds, setSeconds] = useState(0);
   const [levels, setLevels] = useState<number[]>(Array(25).fill(0.12));
@@ -67,11 +67,8 @@ export const VoiceInputButton = forwardRef<VoiceInputButtonHandle, Props>(functi
     aliveRef.current = true;
     return () => {
       aliveRef.current = false;
-      if (liveSessionActiveRef.current) {
-        liveSessionActiveRef.current = false;
-        onLiveSessionChangeRef.current?.(false, activeLiveContextRef.current);
-        activeLiveContextRef.current = undefined;
-      }
+      // Voice is hosted in an independent root, NOT inside this composer.
+      // Navigating away unmounts the button but must not hang up Realtime.
       cancelledRef.current = true;
       const recorder = recorderRef.current;
       if (recorder?.state === 'recording') recorder.stop();
@@ -95,21 +92,44 @@ export const VoiceInputButton = forwardRef<VoiceInputButtonHandle, Props>(functi
 
   const startLive = () => {
     setMenuOpen(false);
-    // Create/resume the playback context synchronously with the user's tap,
-    // before Telegram WebView/browser autoplay policies discard user activation.
+    if (planikLiveSessionActive()) {
+      expandPersistentPlanikLiveSession();
+      return;
+    }
+    // Create/resume playback in the original tap, before Telegram/WebView
+    // discards user activation. The voice root remains mounted across tabs.
+    let context: AudioContext | null = null;
     try {
-      const context = new AudioContext();
+      context = new AudioContext();
       void context.resume().catch(() => undefined);
-      setLiveAudioContext(context);
-    } catch { setLiveAudioContext(null); }
-    setLiveSessionActive(true);
-    setLiveOpen(true);
+    } catch { /* the dialog can create the audio context itself */ }
+    const didStart = startPersistentPlanikLiveSession({
+      liveContext, audioContext: context,
+      onLiveMessage: message => onLiveMessage?.(message),
+      onLiveToolResult: result => onLiveToolResult?.(result),
+      onLiveStatus: status => onLiveStatus?.(status),
+      onLiveActionReveal: () => onLiveActionReveal?.(),
+      onClose: () => {
+        // Even if the composer has unmounted, notify the MiniApp root so
+        // its launcher state and background chat progress are released.
+        setLiveSessionActive(false);
+        if (aliveRef.current) setLiveOpen(false);
+      }
+    });
+    if (didStart) {
+      setLiveSessionActive(true);
+      setLiveOpen(true);
+    } else void context?.close().catch(() => undefined);
   };
 
   // Keep activation inside the original tap handler (not a delayed effect):
   // Telegram WebView must see a user gesture before allowing audio playback.
   useImperativeHandle(ref, () => ({
     startLive: () => {
+      if (planikLiveSessionActive()) {
+        expandPersistentPlanikLiveSession();
+        return true;
+      }
       if (disabled || !liveContext || state !== 'idle' || liveOpen) return false;
       startLive();
       return true;
@@ -226,9 +246,6 @@ export const VoiceInputButton = forwardRef<VoiceInputButtonHandle, Props>(functi
           <MessageCircle size={18}/><span><strong>Запись голосом</strong><small>Продиктовать, расшифровать и отправить</small></span>
         </button>
       </div> : null}
-      {liveOpen ? <LiveVoiceDialog liveContext={liveContext} audioContext={liveAudioContext}
-        onLiveMessage={onLiveMessage} onLiveToolResult={onLiveToolResult} onLiveStatus={onLiveStatus} onLiveActionReveal={onLiveActionReveal}
-        onClose={() => { setLiveSessionActive(false); setLiveOpen(false); setLiveAudioContext(null); }} /> : null}
     </span>
     {error && state === 'idle' ? <div role="alert" className="voice-input-error">{error}
       <button type="button" title="Закрыть ошибку" onClick={() => setError('')}><X size={13} /></button>

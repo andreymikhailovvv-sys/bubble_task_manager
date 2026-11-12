@@ -179,17 +179,29 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
   // out-of-band Echo replies, without changing the default conversation.
   let pendingToolWaitTimer: NodeJS.Timeout | null = null;
   let waitingResponseInFlight = false;
+  let waitingAudioAwaitingAck = false;
+  let waitingPlaybackFallback: NodeJS.Timeout | null = null;
   let resumeAfterWaiting = false;
   const waitingResponseIds = new Set<string>();
   let waitingPhraseIndex = 0;
   const waitingPhrases = [
-    'Секунду, ещё сверяю задачи.',
-    'Сейчас, проверяю оставшиеся данные.',
-    'Ещё немного, уточняю результаты поиска.'
+    'Секундочку.',
+    'Ищу.',
+    'Проверяю.'
   ];
   const stopWaitingTimer = () => {
     if (pendingToolWaitTimer) clearInterval(pendingToolWaitTimer);
     pendingToolWaitTimer = null;
+  };
+  const resumeAfterWaitingPlayback = () => {
+    if (waitingPlaybackFallback) clearTimeout(waitingPlaybackFallback);
+    waitingPlaybackFallback = null;
+    waitingAudioAwaitingAck = false;
+    waitingResponseInFlight = false;
+    if (resumeAfterWaiting && pendingToolCalls.size === 0 && upstream?.readyState === WebSocket.OPEN) {
+      resumeAfterWaiting = false;
+      upstream.send(JSON.stringify({ type: 'response.create', response: { output_modalities: ['audio'] } }));
+    }
   };
   const startWaitingTimer = () => {
     if (pendingToolWaitTimer) return;
@@ -215,7 +227,7 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
       } catch {
         waitingResponseInFlight = false;
       }
-    }, 10_000);
+    }, 5_000);
     pendingToolWaitTimer.unref();
   };
   let receivedAudioBytes = 0;
@@ -240,6 +252,8 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
     });
     clearTimeout(timer);
     stopWaitingTimer();
+    if (waitingPlaybackFallback) clearTimeout(waitingPlaybackFallback);
+    waitingPlaybackFallback = null;
     try { upstream?.close(); } catch { /* already closed */ }
     void finalize();
   };
@@ -301,6 +315,12 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
           }
           return;
         }
+        if (packet.type === 'waiting_played' && waitingAudioAwaitingAck) {
+          // The main answer is only resumed after this device has played the
+          // short acknowledgement, not merely when generation is finished.
+          resumeAfterWaitingPlayback();
+          return;
+        }
         if (packet.type === 'tool_result' && typeof packet.callId === 'string' && pendingToolCalls.has(packet.callId)) {
           pendingToolCalls.delete(packet.callId);
           if (pendingToolCalls.size === 0) stopWaitingTimer();
@@ -357,7 +377,7 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
           // A nonessential progress utterance must never terminate a valid
           // voice session, including when upstream declines an OOB response.
           if (waitingResponseInFlight) {
-            waitingResponseInFlight = false;
+            resumeAfterWaitingPlayback();
             if (resumeAfterWaiting && upstream?.readyState === WebSocket.OPEN) {
               resumeAfterWaiting = false;
               upstream.send(JSON.stringify({ type: 'response.create', response: { output_modalities: ['audio'] } }));
@@ -446,7 +466,18 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
         }
         if (value.type === 'response.done') {
           const wasWaiting = value.response?.id ? waitingResponseIds.delete(value.response.id) : false;
-          if (wasWaiting) waitingResponseInFlight = false;
+          if (wasWaiting) {
+            // Wait for playback acknowledgement; Realtime generation completes
+            // before the final PCM buffers finish playing on the phone.
+            waitingAudioAwaitingAck = true;
+            send({ type: 'waiting_response_done' });
+            if (waitingPlaybackFallback) clearTimeout(waitingPlaybackFallback);
+            waitingPlaybackFallback = setTimeout(resumeAfterWaitingPlayback, 4_000);
+            waitingPlaybackFallback.unref();
+            if (value.response?.usage) usageMilli += realtimeSpeechCostMilli(value.response.usage);
+            assistantTranscript = '';
+            return;
+          }
           const completedText = value.response?.output?.flatMap(item => item.content || []).map(item => item.transcript || '').filter(Boolean).join(' ') || assistantTranscript;
           const wasInterrupted = value.response?.id && interruptedResponses.delete(value.response.id);
           if (activeResponseId === value.response?.id) activeResponseId = null;
@@ -465,10 +496,7 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
             if (usageMilli + transcriptionMilli >= RESERVED_MILLI - 10_000) stop('Лимит кредитов голосового диалога достигнут.');
           }
           send({ type: 'response_done' });
-          if (wasWaiting && resumeAfterWaiting && upstream?.readyState === WebSocket.OPEN) {
-            resumeAfterWaiting = false;
-            upstream.send(JSON.stringify({ type: 'response.create', response: { output_modalities: ['audio'] } }));
-          }
+
         }
       } catch { /* ignore malformed provider event */ }
     });
