@@ -26,7 +26,7 @@ test('both chat surfaces animate the mascot from real request progress', async (
   assert.match(mascot, /responding \? 'typing' : 'thinking'/);
   assert.match(mini, /responding=\{Boolean\(aiChatStreamingText\)\}/);
   assert.match(mini, /responding=\{Boolean\(taskAiStreamingText\[openedTask\.id\]\)\}/);
-  assert.match(native, /state\.progressStatus == "searching_web"/);
+  assert.match(native, /state\.progressStatus\.orEmpty\(\)\.startsWith\("searching_"\)/);
   assert.match(task, /ui\.streamText\.isNotBlank\(\)/);
   assert.match(launcher, /"typing" ->/);
   assert.match(launcher, /"thinking" ->/);
