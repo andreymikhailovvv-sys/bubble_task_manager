@@ -15883,3 +15883,94 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
     margin-left: 0;
   }
 }
+
+
+/* Fullscreen extended toolbar: keep the captions when the widened workspace
+   has room, and give each view toggle proper touch/click breathing space. */
+.fullscreen-mode-picker .fullscreen-mode-picker-option {
+  gap: 7px;
+  padding: 8px 11px;
+}
+.fullscreen-add-window-trigger {
+  min-height: 38px;
+  color: var(--text-primary);
+  border-color: var(--panel-border);
+  background: color-mix(in srgb, var(--card-bg) 84%, var(--accent-soft));
+  white-space: nowrap;
+}
+.fullscreen-add-window-trigger:hover,
+.fullscreen-add-window-trigger:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--panel-border));
+}
+.fullscreen-add-window-menu {
+  border-color: var(--panel-border);
+  background: var(--popover-bg);
+  color: var(--text-primary);
+  backdrop-filter: blur(18px);
+}
+.fullscreen-add-window-option:hover,
+.fullscreen-add-window-option:focus-visible {
+  background: color-mix(in srgb, var(--accent-soft) 70%, var(--card-bg));
+}
+.fullscreen-future-panel {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--card-bg) 65%, transparent);
+}
+.fullscreen-future-panel-close {
+  border-color: var(--panel-border);
+  background: var(--card-bg);
+  color: var(--text-primary);
+}
+.fullscreen-future-panel-close:hover {
+  border-color: var(--accent);
+}
+@media (min-width: 1200px) {
+  /* Undo the earlier icon-only substitutions, including those imposed at
+     1101–2200px. Keep the real button text rather than CSS pseudo-labels. */
+  .fullscreen-workspace-toolbar--one-row .integration-menu__trigger {
+    font-size: .82rem;
+    width: auto;
+    padding-inline: 8px;
+  }
+  .fullscreen-workspace-toolbar--one-row .public-nav-link[href="/about"] {
+    font-size: .82rem;
+    width: auto;
+    height: auto;
+    padding-inline: 8px;
+  }
+  .fullscreen-workspace-toolbar--one-row .public-nav-link[href="/about"]::before,
+  .fullscreen-workspace-toolbar--one-row .auth-logout-button::before {
+    content: none;
+  }
+  .fullscreen-workspace-toolbar--one-row .auth-logout-button {
+    font-size: .82rem;
+    min-width: 0;
+    padding-inline: 10px;
+  }
+}
+@media (min-width: 1200px) and (max-width: 1830px) {
+  .fullscreen-workspace-toolbar--one-row .workspace-global-search-anchor {
+    flex: 0 1 195px !important;
+    width: 195px;
+    min-width: 140px !important;
+    max-width: 205px !important;
+  }
+  .fullscreen-mode-picker .fullscreen-mode-picker-option {
+    gap: 6px;
+    padding-inline: 9px;
+  }
+  .fullscreen-workspace-toolbar--one-row {
+    gap: 5px;
+    padding-inline: 10px;
+  }
+  .fullscreen-workspace-toolbar--one-row > .fullscreen-workspace-toolbar-main {
+    gap: 5px;
+  }
+}
+@media (max-width: 1199px) {
+  /* Preserve labels where feasible; reserve icon-only mode buttons for
+     compact screens rather than sacrificing the whole desktop toolbar. */
+  .fullscreen-mode-picker .fullscreen-mode-picker-option {
+    padding-inline: 7px;
+  }
+}
