@@ -76,6 +76,14 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
   }, []);
   // Presentation only. The WebSocket, microphone and audio playback survive collapse.
   const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    // The active Realtime root outlives the tab that launched it. Tapping
+    // Planik in any subsequent tab can bring the same conversation forward.
+    const expand = () => setCollapsed(false);
+    window.addEventListener('planik-live-expand', expand);
+    return () => window.removeEventListener('planik-live-expand', expand);
+  }, []);
+
   const [liveProgress, setLiveProgress] = useState<LiveVoiceProgressStatus | null>(null);
   const processingToolRef = useRef(false);
   const toolQueueRef = useRef<Array<{ question: string; callId: string; ws: WebSocket }>>([]);
