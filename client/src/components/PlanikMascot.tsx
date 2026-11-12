@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react';
+import { memo, useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import './PlanikMascot.css';
 
 type PlanikMode = 'idle' | 'hover' | 'typing' | 'thinking' | 'searching' | 'celebrating' | 'clearing';
@@ -16,6 +16,7 @@ type Props = {
   notificationCount?: number;
   typingSignal?: number;
   busy?: boolean;
+  responding?: boolean;
   progress?: string | null;
   celebrationKey?: number;
   size?: 'launcher' | 'composer' | 'sidekick';
@@ -27,10 +28,11 @@ type Props = {
  * It is deliberately independent of task/chat API calls: parent components
  * provide the existing notification, draft, progress and completion signals.
  */
-export function PlanikMascot({
+export const PlanikMascot = memo(function PlanikMascot({
   notificationCount = 0,
   typingSignal = 0,
   busy = false,
+  responding = false,
   progress,
   celebrationKey = 0,
   size = 'launcher',
@@ -92,7 +94,7 @@ export function PlanikMascot({
   const isSearching = progress === 'searching_web' || progress === 'analyzing_web_results';
   const mode: PlanikMode = clearingCount !== null ? 'clearing'
     : celebrating ? 'celebrating'
-    : busy ? (isSearching ? 'searching' : 'thinking')
+    : busy ? (isSearching ? 'searching' : responding ? 'typing' : 'thinking')
     : typing ? 'typing'
     : hovered ? 'hover' : 'idle';
   const badgeNumber = clearingCount ?? count;
@@ -177,7 +179,7 @@ export function PlanikMascot({
 
         <path d="M215 77V58" stroke="#8c8ed3" strokeWidth="7" strokeLinecap="round" />
         <circle className="planik-antenna" cx="215" cy="52" r="9" fill="#88e0ed" />
-        <rect x="122" y="76" width="186" height="174" rx="65" fill={`url(#planik-body-${gradientSuffix})`} stroke={`url(#planik-rim-${gradientSuffix})`} strokeWidth="4" />
+        <rect className="planik-body-surface" x="122" y="76" width="186" height="174" rx="65" fill={`url(#planik-body-${gradientSuffix})`} stroke={`url(#planik-rim-${gradientSuffix})`} strokeWidth="4" />
         <path d="M148 100Q163 83 192 83" fill="none" stroke="#d0eaff" strokeOpacity=".2" strokeLinecap="round" strokeWidth="4" />
         <rect className="planik-faceplate" x="153" y="118" width="124" height="92" rx="44" fill={`url(#planik-screen-${gradientSuffix})`} stroke="#7f81b1" strokeOpacity=".35" strokeWidth="1" />
         <g ref={leftEye}><ellipse className="planik-eye" cx="190" cy="162" rx="10" ry="15" fill="#f1f3ff" /></g>
@@ -330,4 +332,4 @@ export function PlanikMascot({
       </svg>
     </span>
   );
-}
+});
