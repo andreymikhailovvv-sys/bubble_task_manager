@@ -107,6 +107,6 @@ test('Android web sources and monitored task buttons use MiniApp compact chips',
   assert.ok(!bubble.includes('message.webSources.take(10).forEachIndexed'));
   assert.ok(web.includes('flex-wrap'));
   assert.ok(bubble.includes('Text("Ответить в чате задачи",color=chipInk'));
-  assert.ok(bubble.includes('Row(Modifier.widthIn(max=310.dp).clip(frame)'));
+  assert.match(bubble, /Row\\(Modifier\\.widthIn\\(max=310\\.dp\\)\\s*\\.alpha\\(if\\(monitoredTaskId in completedTaskIds\\)\\.62f else 1f\\)\\s*\\.clip\\(frame\\)/);
   assert.ok(rich.includes('val chipBg=if(light)Color.White else Color(0xFF1B4255)'));
 });
