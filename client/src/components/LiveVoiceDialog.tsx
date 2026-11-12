@@ -87,7 +87,9 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
   const telegramChrome = /Telegram/i.test(navigator.userAgent) ||
     Boolean((window as Window & { Telegram?: { WebApp?: unknown } }).Telegram?.WebApp);
-  const [creditsSpentMilli, setCreditsSpentMilli] = useState(0);
+  // Only the settled wallet debit is presented to the user, never
+  // reserved credits or unconfirmed provider usage estimates.
+  const [creditsSpentMilli, setCreditsSpentMilli] = useState<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const contextRef = useRef<AudioContext | null>(null);
@@ -434,18 +436,18 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
           if (payload.type === 'transcript' && typeof payload.text === 'string') {
             setCaption(previous => (previous + payload.text).slice(-1500));
           }
-          if (payload.type === 'usage' && typeof payload.creditsSpentMilli === 'number') {
-            setCreditsSpentMilli(payload.creditsSpentMilli);
-          }
+          // Historical servers may still stream provisional provider usage.
+          // Ignore it: it is NOT the final amount charged to the wallet.
           if (payload.type === 'response_done') {
             if (!processingToolRef.current && toolQueueRef.current.length === 0) reportStatus(null);
             responseDoneRef.current = true;
             resumeListeningAfterPlayback();
           }
           if (payload.type === 'finished') {
+            // The server emits this only AFTER final wallet settlement.
             if (typeof payload.creditsSpentMilli === 'number') setCreditsSpentMilli(payload.creditsSpentMilli);
             stopResources();
-            onClose();
+            setPhase('ended');
           }
           if (payload.type === 'notice' && payload.message) setError(payload.message);
           if (payload.type === 'error') {
@@ -564,7 +566,9 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
   const sessionFinished = phase === 'ended' || phase === 'error';
   const minute = String(Math.floor(elapsed / 60)).padStart(2, '0');
   const second = String(elapsed % 60).padStart(2, '0');
-  const cost = creditsSpentMilli ? formatCreditsSpent(creditsSpentMilli) : '0 кредитов';
+  const cost = creditsSpentMilli === null
+    ? 'Списание после завершения'
+    : 'Списано: ' + formatCreditsSpent(creditsSpentMilli);
   const mood = muted ? 'muted' : phase;
   const voiceAvatar = (
     <span className="planik-live-avatar" data-phase={mood}
@@ -668,7 +672,9 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
           </div>
           <div className="planik-live-meta">
             <span><Radio size={13}/> {minute}:{second}</span>
-            <span title="Списание кредитов рассчитывается по фактическому использованию.">{cost}</span>
+            <span title={creditsSpentMilli === null
+              ? 'Предварительная оценка и зарезервированные кредиты не показываются. Итог после закрытия сеанса.'
+              : 'Фактическая сумма проведённого списания.'}>{cost}</span>
           </div>
         </footer>
       </div>

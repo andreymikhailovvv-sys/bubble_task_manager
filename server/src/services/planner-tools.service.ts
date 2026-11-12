@@ -115,7 +115,7 @@ export function rankPlannerSearchCandidates(candidates: PlannerCandidate[], inpu
     if (keywords.length) score += (matchedTerms.length / keywords.length) * 22;
     if (sphereHints.some((hint) => sphere.includes(hint) || plannerStringSimilarity(sphere, hint) >= 0.6)) score += 12;
     return { candidate, score: Math.round(score), matchedTerms };
-  }).filter((entry) => entry.score > 0).sort((a, b) => b.score - a.score || b.candidate.updatedAt.getTime() - a.candidate.updatedAt.getTime());
+  }).filter((entry) => entry.score >= 9).sort((a, b) => b.score - a.score || b.candidate.updatedAt.getTime() - a.candidate.updatedAt.getTime());
 }
 
 const errorResult = (code: string, message: string) => ({ ok: false as const, code, message });
@@ -180,12 +180,13 @@ export function createPlannerToolsService(db: any = prisma, mutations: Pick<type
       select: { id: true, title: true, description: true, status: true, dueDate: true, taskType: true, parentTaskId: true, updatedAt: true, sphere: { select: { id: true, name: true } }, parentTask: { select: { id: true, title: true, sphere: { select: { id: true, name: true } } } } }
     });
     const ranked = rankPlannerSearchCandidates(candidates, input);
-    const limit = Math.max(1, Math.min(10, Math.round(input.limit || 8)));
+    const limit = Math.max(1, Math.min(25, Math.round(input.limit || 12)));
     const selected = ranked.slice(0, limit);
     const [first, second] = selected;
     const ambiguous = Boolean(first && second && second.score >= 20 && (first.score - second.score <= Math.max(8, first.score * 0.12)));
     return {
       totalCandidates: ranked.length,
+      truncated: ranked.length > limit,
       ambiguous,
       results: selected.map(({ candidate, score, matchedTerms }) => ({
         id: candidate.id, kind: candidate.parentTaskId ? 'subtask' : 'task', title: candidate.title,

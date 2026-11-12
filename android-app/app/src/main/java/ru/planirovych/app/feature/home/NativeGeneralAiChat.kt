@@ -80,6 +80,9 @@ internal fun NativeGeneralAiChatPage(
     val state by vm.generalAi.collectAsStateWithLifecycle()
     val c=remember(dark){chatColors(dark)}
     val context=LocalContext.current
+    val planikLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { vm.reconcileAfterPlanik() }
     val scope=rememberCoroutineScope()
     val listState=rememberLazyListState()
     val draftFocus=remember{FocusRequester()}
@@ -486,7 +489,7 @@ internal fun NativeGeneralAiChatPage(
                         modifier = Modifier.align(Alignment.BottomEnd)
                             .padding(end = 13.dp, bottom = composerHeight + 1.dp),
                         onClick = {
-                            context.startActivity(PlanikLiveActivity.intent(
+                            planikLauncher.launch(PlanikLiveActivity.intent(
                                 context, projectId = project?.id, chatId = thread.id,
                                 expectedUserId = userId
                             ))

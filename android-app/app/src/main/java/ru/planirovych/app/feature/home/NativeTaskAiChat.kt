@@ -110,6 +110,9 @@ internal fun isChatAttachmentAllowed(name:String):Boolean =
 fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
     val c=remember(dark){chatColors(dark)}
     val ctx=LocalContext.current
+    val planikLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { vm.reconcileAfterPlanik() }
     val ui by vm.taskAi.collectAsStateWithLifecycle()
     val home by vm.state.collectAsStateWithLifecycle()
     val scope=rememberCoroutineScope()
@@ -502,7 +505,7 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit){
                     modifier = Modifier.align(Alignment.BottomEnd)
                         .padding(end = 13.dp, bottom = composerHeight + 1.dp),
                     onClick = {
-                        ctx.startActivity(PlanikLiveActivity.intent(
+                        planikLauncher.launch(PlanikLiveActivity.intent(
                             ctx, taskId = task.id, expectedUserId = home.user?.id
                         ))
                     }

@@ -45,7 +45,7 @@ test('Live voice tickets are one-time, short-lived and limited per user', async 
   const c = await createLiveVoiceTicket(user);
   assert.notEqual(a.ticket, b.ticket);
   assert.notEqual(b.ticket, c.ticket);
-  assert.equal(a.maxSeconds, 120);
+  assert.equal(a.maxSeconds, 300);
   assert.equal(a.expiresInSeconds, 30);
   await assert.rejects(() => createLiveVoiceTicket(user), /Слишком много запросов/);
 });

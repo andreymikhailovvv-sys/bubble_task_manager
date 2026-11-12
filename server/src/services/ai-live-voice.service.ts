@@ -11,7 +11,8 @@ import { realtimeSpeechCostMilli } from './ai-web-audio.service.js';
 // Neither the OpenAI API key nor proxy credentials are ever sent to the browser.
 const tickets = new Map<string, { userId: string; expires: number; context: LiveVoicePreparedContext; voice: PlanikRealtimeVoice }>();
 const sessions = new Set<string>();
-const MAX_SECONDS = 120;
+// One shared server cap for web, Telegram Mini App and Android Realtime.
+const MAX_SECONDS = 5 * 60;
 const RESERVED_MILLI = 450_000;
 const MAX_MESSAGE = 120_000;
 // The selected voice is validated on the server and tied to a single-use ticket.
@@ -174,7 +175,7 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
     sessionId, scope: context.storage?.kind ?? 'none',
     historyMessages: context.history.length
   });
-  const timer = setTimeout(() => stop('Лимит голосового диалога: 2 минуты.'), MAX_SECONDS * 1000);
+  const timer = setTimeout(() => stop('Лимит голосового диалога: 5 минут.'), MAX_SECONDS * 1000);
   const send = (payload: unknown) => { if (!closed) peer.send(payload); };
   const stop = (reason?: string) => {
     if (closed) return;
@@ -242,7 +243,7 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
             if (typeof packet.itemId === 'string' && packet.itemId === lastAudioItemId &&
                 typeof packet.audioEndMs === 'number' && Number.isFinite(packet.audioEndMs)) {
               upstream.send(JSON.stringify({ type: 'conversation.item.truncate', item_id: packet.itemId,
-                content_index: lastAudioContentIndex, audio_end_ms: Math.min(120000, Math.max(0, Math.floor(packet.audioEndMs))) }));
+                content_index: lastAudioContentIndex, audio_end_ms: Math.min(MAX_SECONDS * 1000, Math.max(0, Math.floor(packet.audioEndMs))) }));
             }
           }
           return;
@@ -354,7 +355,7 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
         }
         if (value.type === 'response.output_item.done' && value.item?.type === 'function_call' &&
             value.item.name === 'execute_planirovych_request' && typeof value.item.call_id === 'string') {
-          if (++delegatedTools > 6 || pendingToolCalls.size >= 2) {
+          if (++delegatedTools > 20 || pendingToolCalls.size >= 2) {
             upstream?.send(JSON.stringify({ type: 'conversation.item.create',
               item: { type: 'function_call_output', call_id: value.item.call_id, output: JSON.stringify({ error: 'Лимит инструментов голосового сеанса.' }) } }));
             upstream?.send(JSON.stringify({ type: 'response.create', response: { output_modalities: ['audio'] } }));
@@ -385,7 +386,9 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
           if (value.response?.usage) {
             const cost = realtimeSpeechCostMilli(value.response.usage);
             usageMilli += cost;
-            send({ type: 'usage', creditsSpentMilli: usageMilli + transcriptionMilli, breakdown: { speechMilli: usageMilli, transcriptionMilli } });
+            // Provider usage is provisional and wallet credits are only
+            // genuinely debited once the reservation has been settled.
+            // Do not send this estimate to the user's live-session counter.
             if (usageMilli + transcriptionMilli >= RESERVED_MILLI - 10_000) stop('Лимит кредитов голосового диалога достигнут.');
           }
           send({ type: 'response_done' });

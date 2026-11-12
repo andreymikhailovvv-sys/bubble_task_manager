@@ -122,7 +122,10 @@ fun ModernWorkspace(
     val completingTaskIds=remember { mutableStateListOf<String>() }
     var period by rememberSaveable { mutableStateOf(PeriodFilter.ALL) }
     var sort by rememberSaveable { mutableStateOf(SortTasks.URGENCY) }
-    var selectedSectors by remember { mutableStateOf(setOf<String>()) }
+    // Both values MUST survive Activity recreation together. Previously the
+    // toggle was saved but the sector IDs were not, so returning from Planik
+    // could restore "sector filter ON" with no selected sectors and hide ALL tasks.
+    var selectedSectors by rememberSaveable { mutableStateOf(listOf<String>()) }
     var sectorFilterEnabled by rememberSaveable { mutableStateOf(false) }
     var timelineSector by rememberSaveable { mutableStateOf("all") }
     var filtersOpen by remember { mutableStateOf(false) }
@@ -200,7 +203,8 @@ fun ModernWorkspace(
             .filter { task ->
                 if (contentMode == WorkspaceMode.LIST) {
                     task.parentTaskId == null && task.taskType == TaskType.TASK &&
-                        (!sectorFilterEnabled || (task.sphereId != null && selectedSectors.contains(task.sphereId)))
+                        (!sectorFilterEnabled || selectedSectors.isEmpty() ||
+                            (task.sphereId != null && selectedSectors.contains(task.sphereId)))
                 } else {
                     val sectorId = task.sphereId ?: if(task.parentTaskId!=null)
                         state.tasks.firstOrNull { it.id==task.parentTaskId }?.sphereId else null
@@ -270,7 +274,21 @@ fun ModernWorkspace(
                 style=MaterialTheme.typography.bodySmall) }
         }
         if (contentMode == WorkspaceMode.LIST) {
-            if (rootTasks.isEmpty()) item { EmptyWorkspaceMessage("Задачи не найдены.", colors) }
+            if (rootTasks.isEmpty()) item {
+                if (state.tasks.any { it.status != TaskStatus.DONE && it.parentTaskId == null && it.taskType == TaskType.TASK }) {
+                    Column(horizontalAlignment=Alignment.CenterHorizontally,
+                        modifier=Modifier.fillMaxWidth().padding(vertical=18.dp)) {
+                        EmptyWorkspaceMessage("По текущим фильтрам задачи не найдены.", colors)
+                        TextButton(onClick={
+                            period=PeriodFilter.ALL
+                            sort=SortTasks.URGENCY
+                            selectedSectors=emptyList()
+                            sectorFilterEnabled=false
+                            search("")
+                        }) { Text("Показать все задачи") }
+                    }
+                } else EmptyWorkspaceMessage("Задачи не найдены.", colors)
+            }
             items(rootTasks, key={it.id}) { task ->
                 val completing=task.id in completingTaskIds
                 Box(Modifier.fillMaxWidth().animateItem()){
@@ -348,9 +366,9 @@ fun ModernWorkspace(
         ModalBottomSheet(onDismissRequest={filtersOpen=false}, containerColor=colors.panel,
             contentColor=colors.text) {
             WorkspaceFilters(colors, if(pagerState.currentPage==1) WorkspaceMode.TIMELINE else WorkspaceMode.LIST, period, onPeriod={period=it}, sort, onSort={sort=it},
-                state.spheres, selectedSectors, sectorFilterEnabled,
+                state.spheres, selectedSectors.toSet(), sectorFilterEnabled,
                 onSectorEnabled={enabled -> sectorFilterEnabled=enabled
-                    if (enabled && selectedSectors.isEmpty()) selectedSectors=state.spheres.map { it.id }.toSet()
+                    if (enabled && selectedSectors.isEmpty()) selectedSectors=state.spheres.map { it.id }
                 },
                 onToggleSector={id -> selectedSectors= if (id in selectedSectors) selectedSectors-id else selectedSectors+id },
                 timelineSector, onTimelineSector={timelineSector=it},
