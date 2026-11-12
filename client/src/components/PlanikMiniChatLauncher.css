@@ -43,3 +43,6 @@
 @media (prefers-reduced-motion: reduce) {
   .miniapp-planik-live-launcher { transition: none; }
 }
+
+/* Empty corners pass through swipe events; the visible SVG torso stays tappable. */
+.miniapp-planik-live-launcher { pointer-events: none; }
