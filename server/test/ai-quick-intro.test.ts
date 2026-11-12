@@ -64,3 +64,11 @@ test('main text reset interrupts intro and preserves existing reset contract', a
   assert.deepEqual(events.at(-1),{type:'delta',text:'Итог'});
   overlay.stop();
 });
+
+test('default fast-intro wait is five seconds with one universal fallback phrase', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../src/services/ai-quick-intro.service.ts', import.meta.url), 'utf8');
+  assert.match(source, /DEFAULT_INTRO_DEADLINE_MS = 5000/);
+  assert.match(source, /const INTRO_FALLBACK_TEXT = 'Работаю над вашим запросом\.\.'/);
+  assert.match(source, /options\.modelDeadlineMs \?\? DEFAULT_INTRO_DEADLINE_MS/);
+});

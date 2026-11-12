@@ -51,7 +51,7 @@ test('successful fast model is the only source of intro; no server preview or in
   } finally { overlay.stop(); }
 });
 
-test('only provider errors trigger contextual server fallback', async () => {
+test('only provider errors trigger the fixed neutral server fallback', async () => {
   const events: IntroEvent[] = [];
   const overlay = startAiIntroOverlay({
     question: 'Новые письма Яндекс Почты', context: 'Почта',
@@ -61,14 +61,14 @@ test('only provider errors trigger contextual server fallback', async () => {
   });
   try {
     await sleep(100);
-    assert.match(collected(events), /Яндекс Почты/u);
+    assert.equal(collected(events), 'Работаю над вашим запросом..');
     assert.equal(events.some(item => item.type === 'reset'), false);
     overlay.onMainDelta('Писем нет.');
     assert.equal(events.filter(item => item.type === 'reset').length, 1);
   } finally { overlay.stop(); }
 });
 
-test('empty model response also triggers contextual fallback', async () => {
+test('empty model response also triggers the fixed server fallback', async () => {
   const events: IntroEvent[] = [];
   const overlay = startAiIntroOverlay({
     question: 'Составь краткую сводку', context: 'Личный чат',
@@ -78,7 +78,7 @@ test('empty model response also triggers contextual fallback', async () => {
   });
   try {
     await sleep(100);
-    assert.match(collected(events), /сводк/iu);
+    assert.equal(collected(events), 'Работаю над вашим запросом..');
     assert.equal(events.some(item => item.type === 'reset'), false);
   } finally { overlay.stop(); }
 });
@@ -102,7 +102,7 @@ test('model timeout yields fallback without late model text or a preview reset',
   try {
     await sleep(90);
     assert.equal(signal?.aborted, true);
-    assert.match(collected(events), /сводк/iu);
+    assert.equal(collected(events), 'Работаю над вашим запросом..');
     emitLateModel?.('Опоздавший ответ вспомогательной модели.');
     resolveLateModel?.();
     await sleep(15);
@@ -128,4 +128,22 @@ test('main answer arriving first prevents either model or server fallback from s
   await sleep(60);
   assert.deepEqual(events, [{ type: 'delta', text: 'Ответ без предварительного текста' }]);
   overlay.stop();
+});
+
+test('slow introductory model receives the entire configured window before fallback', async () => {
+  const events: IntroEvent[] = [];
+  let finishIntro: (() => void) | undefined;
+  const overlay = startAiIntroOverlay({
+    question: 'Разные задачи', context: 'Задачи',
+    tickMs: 1, modelDeadlineMs: 90,
+    send: event => events.push(event),
+    requestIntro: () => new Promise<void>(resolve => { finishIntro = resolve; })
+  });
+  try {
+    await sleep(25);
+    assert.equal(collected(events), '', 'no fallback before the deadline');
+    await sleep(150);
+    assert.equal(collected(events), 'Работаю над вашим запросом..');
+    finishIntro?.();
+  } finally { overlay.stop(); }
 });

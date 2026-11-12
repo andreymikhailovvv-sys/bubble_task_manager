@@ -124,12 +124,21 @@
 .planik-mascot[data-mode="searching"] .planik-page-two { animation: planik-page-two 3.9s linear infinite; }
 .planik-mascot[data-mode="searching"] .planik-page-three { animation: planik-page-three 3.9s linear infinite; }
 .planik-mascot[data-mode="painting"] .planik-paint-brush {
-  transform-origin: 259px 217px;
+  transform-origin: 263px 216px;
   transform-box: view-box;
-  animation: planik-paint-sweep 1.65s ease-in-out infinite;
+  animation: planik-paint-sweep 1.75s ease-in-out infinite;
 }
-.planik-mascot[data-mode="painting"] .planik-paint-stroke {
-  animation: planik-paint-reveal 1.65s ease-in-out infinite;
+.planik-mascot[data-mode="painting"] .planik-paint-sky {
+  animation: planik-paint-sky-reveal 1.75s steps(1, end) infinite;
+}
+.planik-mascot[data-mode="painting"] .planik-paint-mountains {
+  animation: planik-paint-mountains-reveal 1.75s steps(1, end) infinite;
+}
+.planik-mascot[data-mode="painting"] .planik-paint-hills {
+  animation: planik-paint-hills-reveal 1.75s steps(1, end) infinite;
+}
+.planik-mascot[data-mode="painting"] .planik-paint-details {
+  animation: planik-paint-details-reveal 1.75s steps(1, end) infinite;
 }
 .planik-mascot[data-mode="celebrating"] .planik-celebrate-rig {
   transform-origin: 300px 206px;
@@ -249,14 +258,23 @@ body[data-theme="light"] .planik-svg { filter: drop-shadow(0 7px 9px rgba(86, 70
 @keyframes planik-page-two { 0%, 31% { opacity: 0; transform: translateX(12px); } 36%, 64% { opacity: 1; transform: translateX(0); } 69%, 100% { opacity: 0; transform: translateX(-12px); } }
 @keyframes planik-page-three { 0%, 66% { opacity: 0; transform: translateX(12px); } 71%, 97% { opacity: 1; transform: translateX(0); } 100% { opacity: 0; transform: translateX(-12px); } }
 @keyframes planik-paint-sweep {
-  0%, 100% { transform: translate(5px, 3px) rotate(-8deg); }
-  45% { transform: translate(-66px, -24px) rotate(-22deg); }
-  75% { transform: translate(-38px, -11px) rotate(8deg); }
+  0%, 100% { transform: translate(12px, 8px) rotate(10deg); }
+  20% { transform: translate(-54px, -27px) rotate(-20deg); }
+  44% { transform: translate(-73px, -6px) rotate(-5deg); }
+  68% { transform: translate(-47px, 12px) rotate(12deg); }
+  84% { transform: translate(-59px, 20px) rotate(-11deg); }
 }
-@keyframes planik-paint-reveal {
-  0%, 12% { stroke-dashoffset: 90; opacity: .1; }
-  65%, 86% { stroke-dashoffset: 0; opacity: 1; }
-  100% { stroke-dashoffset: 90; opacity: .1; }
+@keyframes planik-paint-sky-reveal {
+  0%, 17% { opacity: 0; } 18%, 94% { opacity: 1; } 100% { opacity: 0; }
+}
+@keyframes planik-paint-mountains-reveal {
+  0%, 39% { opacity: 0; } 40%, 94% { opacity: 1; } 100% { opacity: 0; }
+}
+@keyframes planik-paint-hills-reveal {
+  0%, 63% { opacity: 0; } 64%, 94% { opacity: 1; } 100% { opacity: 0; }
+}
+@keyframes planik-paint-details-reveal {
+  0%, 79% { opacity: 0; } 80%, 94% { opacity: 1; } 100% { opacity: 0; }
 }
 @keyframes planik-popper-lift {
   from { transform: translate(24px,32px) rotate(10deg) scale(.65); opacity: 0; }
@@ -276,7 +294,7 @@ body[data-theme="light"] .planik-svg { filter: drop-shadow(0 7px 9px rgba(86, 70
 @keyframes planik-hop { 50% { transform: translateY(-12px); } }
 @media (prefers-reduced-motion: reduce) {
   .planik-svg, .planik-eye, .planik-scratch-arm, .planik-type-left, .planik-type-right,
-  .planik-paint-brush, .planik-paint-stroke, .planik-loupe, .planik-page-one, .planik-page-two, .planik-page-three,
+  .planik-paint-brush, .planik-paint-sky, .planik-paint-mountains, .planik-paint-hills, .planik-paint-details, .planik-loupe, .planik-page-one, .planik-page-two, .planik-page-three,
   .planik-notif-static, .planik-notif-take-arm, .planik-notif-flying, .planik-notif-whoosh, .planik-notif-held,
   .planik-celebrate-rig, .planik-popper-flash, .planik-popper-particle, .planik-hover-left, .planik-hover-right,
   .planik-key-a, .planik-key-b { animation: none !important; }
