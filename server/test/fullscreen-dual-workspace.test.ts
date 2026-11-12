@@ -37,6 +37,8 @@ test('fullscreen has the existing credits and overdue actions plus a functional 
   assert.match(header, /\{renderCreditsControl\(\)\}/);
   assert.match(header, /setIsBubbleFullscreen\(false\)/);
   assert.match(header, /data-tour="bubbles-fullscreen-exit"/);
+  assert.match(app, /data-tour="workspace-fullscreen-enter"/);
+  assert.match(app, /setFullscreenDisplayModes\(\[displayMode\]\)/);
 });
 
 test('two panes have keyboard-accessible resizer; isolated list and timeline use centered cards', async () => {
