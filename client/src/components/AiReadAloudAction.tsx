@@ -97,10 +97,11 @@ export function AiReadAloudAction({ text, messageKey }: { text: string; messageK
 
   return <span className="ai-read-aloud-holder">
     <button type="button" className="ai-message-reply-trigger ai-read-aloud-trigger" onClick={() => void toggle()}
-      title={state === 'playing' ? 'Остановить чтение' : 'Прочитать вслух (голос создан ИИ)'}
-      aria-label={state === 'playing' ? 'Остановить чтение' : 'Прочитать вслух'}
+      title={state === 'loading' ? 'Озвучка готовится. Нажмите, чтобы отменить' : state === 'playing' ? 'Остановить чтение' : 'Прочитать вслух (голос создан ИИ)'}
+      aria-label={state === 'loading' ? 'Готовим озвучку, нажмите для отмены' : state === 'playing' ? 'Остановить чтение' : 'Прочитать вслух'}
+      aria-busy={state === 'loading'}
       disabled={!text.trim()}>
-      {state === 'loading' ? <Loader2 size={16} className="ai-speech-loading-spin" /> : state === 'playing' ? <Square size={14}/> : <Volume2 size={17}/>}
+      {state === 'loading' ? <span className="ai-speech-loading-spin" role="status"><Loader2 size={16} /></span> : state === 'playing' ? <Square size={14}/> : <Volume2 size={17}/>}
     </button>
     {error ? <span role="alert" className="ai-read-aloud-message" title={error}>{error}</span> : null}
   </span>;

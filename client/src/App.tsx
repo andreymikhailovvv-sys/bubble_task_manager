@@ -1136,11 +1136,14 @@ export default function App() {
   const [aiProgressByTask, setAiProgressByTask] = useState<Record<string, TaskAiProgressStatus>>({});
   const [taskAiStreamingText, setTaskAiStreamingText] = useState<Record<string,string>>({});
   const textStreamForTask = (taskId: string) => {
+    // A new request must never render the previous request's fast introduction.
+    setTaskAiStreamingText(prev => ({ ...prev, [taskId]: '' }));
     let started = false;
     return {
       onTextDelta: (delta: string) => { const first = !started; started = true;
         setTaskAiStreamingText(prev => ({...prev,[taskId]: first ? delta : (prev[taskId] ?? '') + delta})); },
-      onTextReset: () => { started = false; setTaskAiStreamingText(prev => ({...prev,[taskId]:''})); }
+      // Keep the introduction visible until actual main-model text arrives.
+      onTextReset: () => { started = false; }
     };
   };
   const [aiSubtasksLoadingTaskId, setAiSubtasksLoadingTaskId] = useState<string | null>(null);
@@ -1176,7 +1179,6 @@ export default function App() {
   const [aiChatPendingFiles, setAiChatPendingFiles] = useState<File[]>([]);
   const [aiChatUploadProgress, setAiChatUploadProgress] = useState<number | null>(null);
   const [quickAiChatDraft, setQuickAiChatDraft] = useState('');
-  const [quickAiTypingSignal, setQuickAiTypingSignal] = useState(0);
   const [planikCelebrationKey, setPlanikCelebrationKey] = useState(0);
   const [quickAiPendingFiles, setQuickAiPendingFiles] = useState<File[]>([]);
   const [quickAiChatLoading, setQuickAiChatLoading] = useState(false);
@@ -1185,6 +1187,18 @@ export default function App() {
   const [aiChatLoading, setAiChatLoading] = useState(false);
   const [aiChatProgress, setAiChatProgress] = useState<AiChatProgressStatus>('analyzing_request');
   const [aiChatStreamingText, setAiChatStreamingText] = useState('');
+  const textStreamForGeneral = () => {
+    let started = false;
+    return {
+      onTextDelta: (delta: string) => {
+        const first = !started;
+        started = true;
+        setAiChatStreamingText(prev => first ? delta : prev + delta);
+      },
+      // Do not flash an empty bubble when the primary model takes over.
+      onTextReset: () => { started = false; }
+    };
+  };
   const [liveVoiceTaskProgress, setLiveVoiceTaskProgress] = useState<Record<string, LiveVoiceProgressStatus>>({});
   const [liveVoiceChatProgress, setLiveVoiceChatProgress] = useState<Record<string, LiveVoiceProgressStatus>>({});
   const [aiChatError, setAiChatError] = useState<string | null>(null);
@@ -2480,6 +2494,7 @@ export default function App() {
     setAiDraft('');
     setTaskAiUploadProgress(null);
     setAiError(null);
+    setTaskAiStreamingText(prev => ({ ...prev, [taskId]: '' }));
     setAiLoadingTaskId(taskId);
     setAiPendingFiles([]); // Attachment bytes already captured for the outgoing message.
     setAiProgressByTask((current) => ({ ...current, [taskId]: 'analyzing_request' }));
@@ -2957,6 +2972,7 @@ export default function App() {
     setFocusAiError(null);
     setFocusAiPendingFiles([]);
     setFocusAiLoading(true);
+    setTaskAiStreamingText(prev => ({ ...prev, [taskId]: '' }));
     setAiLoadingTaskId(taskId);
     setFocusAiProgress('analyzing_request');
     setAiProgressByTask(prev => ({ ...prev, [taskId]: 'analyzing_request' }));
@@ -3462,7 +3478,7 @@ export default function App() {
         clientSurface: 'web',
         attachments
       }, { onStatus: setAiChatProgress, onUploadProgress: setAiChatUploadProgress,
-        onTextDelta: delta => setAiChatStreamingText(prev => prev + delta), onTextReset: () => setAiChatStreamingText('') });
+        ...textStreamForGeneral() });
       // A completed response should always be visible after the user's request.
       if (quick) quickAiFollowBottomRef.current = true;
       const actionReports = result.actionReports ?? [];
@@ -3660,7 +3676,7 @@ export default function App() {
         model: quick ? quickAiChatModel : (readSavedAiChatModel(chat.model) ?? DEFAULT_WEB_PROJECT_CHAT_MODEL),
         projectTitle: project.title, chatTitle: chat.title, projectId, chatId,
         clientSurface: 'web'
-      }, { onStatus: setAiChatProgress, onTextDelta: delta => setAiChatStreamingText(prev => prev + delta), onTextReset: () => setAiChatStreamingText('') });
+      }, { onStatus: setAiChatProgress, ...textStreamForGeneral() });
       const reports = result.actionReports?.length ? '\n\nИзменения:\n- ' + result.actionReports.join('\n- ') : '';
       const response: AiChatMessage = {
         id: crypto.randomUUID(), role: 'assistant', content: normalizeAiMessageContent(result.answer) + reports,
@@ -3689,6 +3705,7 @@ export default function App() {
     if (aiLoadingTaskId === taskId || (focus && focusAiLoading)) {
       throw new Error('Дождитесь завершения предыдущего запроса');
     }
+    setTaskAiStreamingText(prev => ({ ...prev, [taskId]: '' }));
     if (focus) { setFocusAiLoading(true); setFocusAiProgress('analyzing_request'); }
     else {
       setAiLoadingTaskId(taskId);
@@ -5924,7 +5941,7 @@ export default function App() {
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(message.id)} /> : null}{message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.mailSendDraft ? <MailInlineSendCard draft={message.mailSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusActiveTask!.id, true)} /> : null}
                     </div><div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={(target) => setReplyToFocusAi(target)} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={focusActiveTask?.sphereId ?? null} /></div></div>)}
                   <TaskMonitoringTriggerChips taskId={focusActiveTask.id} />
-                  {aiLoadingTaskId === focusActiveTask.id && taskAiStreamingText[focusActiveTask.id] ? <div className="ai-chat-message-assistant rounded-2xl p-3 text-sm whitespace-pre-wrap"><AiStreamingMessageBody content={taskAiStreamingText[focusActiveTask.id]} /></div> : null}
+                  {aiLoadingTaskId === focusActiveTask.id && taskAiStreamingText[focusActiveTask.id] ? <div className="ai-message-forward-group w-fit max-w-[92%] mr-auto"><div className="chat-message chat-message-assistant w-full rounded-2xl p-3 text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]"><div className="mb-1"><p className="chat-message-label text-[11px] font-semibold uppercase tracking-wide">ИИ</p></div><AiStreamingMessageBody content={taskAiStreamingText[focusActiveTask.id]} /></div></div> : null}
                 {aiLoadingTaskId === focusActiveTask.id && focusAiProgress ? <TaskAiProgress status={focusAiProgress} /> : liveVoiceTaskProgress[focusActiveTask.id] ? <TaskAiProgress status={liveVoiceTaskProgress[focusActiveTask.id]} /> : focusActiveTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={focusActiveTask.id} /> : null}
                 </div>
               </div>
@@ -5992,7 +6009,7 @@ export default function App() {
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(message.id)} /> : null}{message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.mailSendDraft ? <MailInlineSendCard draft={message.mailSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusActiveTask!.id, true)} /> : null}
                     </div><div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={(target) => setReplyToFocusAi(target)} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={focusActiveTask?.sphereId ?? null} /></div></div>)}
                 <TaskMonitoringTriggerChips taskId={focusActiveTask.id} />
-                {aiLoadingTaskId === focusActiveTask.id && taskAiStreamingText[focusActiveTask.id] ? <div className="ai-chat-message-assistant rounded-2xl p-3 text-sm whitespace-pre-wrap"><AiStreamingMessageBody content={taskAiStreamingText[focusActiveTask.id]} /></div> : null}
+                {aiLoadingTaskId === focusActiveTask.id && taskAiStreamingText[focusActiveTask.id] ? <div className="ai-message-forward-group w-fit max-w-[82%] mr-auto"><div className="chat-message chat-message-assistant w-full rounded-2xl p-3 text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]"><div className="mb-1"><p className="chat-message-label text-[11px] font-semibold uppercase tracking-wide">ИИ</p></div><AiStreamingMessageBody content={taskAiStreamingText[focusActiveTask.id]} /></div></div> : null}
                 {aiLoadingTaskId === focusActiveTask.id && focusAiProgress ? <TaskAiProgress status={focusAiProgress} /> : liveVoiceTaskProgress[focusActiveTask.id] ? <TaskAiProgress status={liveVoiceTaskProgress[focusActiveTask.id]} /> : focusActiveTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={focusActiveTask.id} /> : null}
             </div>
             <div className="focused-task-ai-composer focused-task-ai-composer-expanded">
@@ -7581,7 +7598,7 @@ export default function App() {
                 </div>
                 ))}
                 <TaskMonitoringTriggerChips taskId={focusedTask.id} />
-                {aiLoadingTaskId === focusedTask.id && taskAiStreamingText[focusedTask.id] ? <div className="ai-chat-message-assistant rounded-2xl p-3 text-sm whitespace-pre-wrap"><AiStreamingMessageBody content={taskAiStreamingText[focusedTask.id]} /></div> : null}
+                {aiLoadingTaskId === focusedTask.id && taskAiStreamingText[focusedTask.id] ? <div className="ai-message-forward-group w-fit max-w-[88%] mr-auto"><div className="chat-message chat-message-assistant w-full rounded-xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere]"><div className="mb-1"><p className="chat-message-label text-[11px] font-semibold uppercase tracking-wide">ИИ</p></div><AiStreamingMessageBody content={taskAiStreamingText[focusedTask.id]} /></div></div> : null}
                 {aiLoadingTaskId === focusedTask.id ? <TaskAiProgress status={aiProgressByTask[focusedTask.id] ?? 'analyzing_request'} /> : liveVoiceTaskProgress[focusedTask.id] ? <TaskAiProgress status={liveVoiceTaskProgress[focusedTask.id]} /> : focusedTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={focusedTask.id} /> : null}
                 </div>
               </div>
@@ -8387,7 +8404,7 @@ export default function App() {
               </div>
               ))}
               <TaskMonitoringTriggerChips taskId={focusedTask.id} />
-                {aiLoadingTaskId === focusedTask.id && taskAiStreamingText[focusedTask.id] ? <div className="ai-chat-message-assistant rounded-2xl p-3 text-sm whitespace-pre-wrap"><AiStreamingMessageBody content={taskAiStreamingText[focusedTask.id]} /></div> : null}
+                {aiLoadingTaskId === focusedTask.id && taskAiStreamingText[focusedTask.id] ? <div className="ai-message-forward-group w-fit max-w-[72ch] mr-auto"><div className="chat-message chat-message-assistant w-full rounded-2xl px-4 py-3 text-sm leading-7 whitespace-pre-wrap break-words [overflow-wrap:anywhere]"><div className="mb-1"><p className="chat-message-label text-[11px] font-semibold uppercase tracking-wide">ИИ</p></div><AiStreamingMessageBody content={taskAiStreamingText[focusedTask.id]} /></div></div> : null}
                 {aiLoadingTaskId === focusedTask.id ? <TaskAiProgress status={aiProgressByTask[focusedTask.id] ?? 'analyzing_request'} /> : liveVoiceTaskProgress[focusedTask.id] ? <TaskAiProgress status={liveVoiceTaskProgress[focusedTask.id]} /> : focusedTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={focusedTask.id} /> : null}
             </div>
             <div className="focused-task-ai-composer focused-task-ai-composer-expanded">
@@ -8681,7 +8698,7 @@ export default function App() {
                 </div>
               ))}
               {quickAiChatMessages.length === 0 && systemNotifications.length === 0 ? <p className="text-subtle">Быстрый одноразовый вопрос. Хранится только последние 20 запросов.</p> : null}
-              {quickAiChatLoading && aiChatStreamingText ? <div className="quick-ai-chat-message quick-ai-chat-message-assistant rounded-2xl p-3 whitespace-pre-wrap"><AiStreamingMessageBody content={aiChatStreamingText} /></div> : null}
+              {quickAiChatLoading && aiChatStreamingText ? <div className="ai-message-forward-group w-fit max-w-[calc(100%-2rem)] mr-auto"><div className="quick-ai-chat-message quick-ai-chat-message-assistant w-full rounded-2xl px-3 py-2 shadow-sm whitespace-pre-wrap"><b>ИИ:</b> <AiStreamingMessageBody content={aiChatStreamingText} /></div></div> : null}
       {quickAiChatLoading ? <AiProgress status={aiChatProgress} /> : quickLiveVoiceStatus ? <AiProgress status={quickLiveVoiceStatus} /> : null}
               </div>
             </div>
@@ -8689,9 +8706,6 @@ export default function App() {
             <AiAttachmentTiles files={quickAiPendingFiles} onRemove={file => setQuickAiPendingFiles(previous => previous.filter(item => item !== file))} busy={quickAiChatLoading} uploadProgress={aiChatUploadProgress} />
             <div className="flex items-end gap-2">
               <AutoGrowingTextarea maxHeight={144} className="form-field min-h-9 min-w-0 flex-1 resize-none rounded-2xl border px-3 py-2 text-sm leading-5 transition focus:ring-2 focus:ring-violet-300" value={quickAiChatDraft} onChange={(e) => setQuickAiChatDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); setQuickAiPendingFiles(previous => [...previous, ...files].slice(0, MAX_AI_ATTACHMENTS)); } }} onKeyDown={(e) => {
-                if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete')) {
-                  setQuickAiTypingSignal((signal) => signal + 1);
-                }
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void sendAiChatQuestion(true); }
               }} placeholder="Спросить быстро…" />
               <VoiceInputButton liveContext={{ type: 'chat', projectId: aiChatProjects[0]?.id, chatId: QUICK_AI_CHAT_ID, projectTitle: aiChatProjects[0]?.title, chatTitle: 'Быстрые запросы', model: quickAiChatModel }}
@@ -8712,7 +8726,7 @@ export default function App() {
           aria-label="Открыть общий чат с ИИ"
           onClick={() => { setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}
         >
-          <PlanikMascot notificationCount={unreadSystemNotificationCount} typingSignal={quickAiTypingSignal} busy={quickAiChatLoading} progress={aiChatProgress} celebrationKey={planikCelebrationKey} />
+          <PlanikMascot notificationCount={unreadSystemNotificationCount} busy={quickAiChatLoading} progress={aiChatProgress} celebrationKey={planikCelebrationKey} />
         </button>
       </QuickAiLauncherFrame>
 
@@ -8874,7 +8888,7 @@ export default function App() {
               ))}
             </div>
           ) : null}{item.message.role === 'assistant' && item.message.webSearchUsed ? <WebCitations sources={item.message.webSources} searched={item.message.webSearchUsed} /> : null}{item.message.role === 'assistant' && item.message.generatedDocument ? <AiGeneratedDocumentButton document={item.message.generatedDocument} /> : null}{item.message.role === 'assistant' && item.message.taskProposal ? <AiTaskProposalCard proposal={item.message.taskProposal} onApplied={() => void load()} /> : null}{item.message.role === 'assistant' && item.message.telegramSendDraft ? <TelegramInlineSendCard draft={item.message.telegramSendDraft} /> : null}{item.message.role === 'assistant' && item.message.mailSendDraft ? <MailInlineSendCard draft={item.message.mailSendDraft} /> : null}{item.message.role === 'assistant' && item.message.telegramReadDraft ? <TelegramReadConsentCard draft={item.message.telegramReadDraft} onContinue={(approval) => continueTelegramReadAiChat(approval, activeAiChatProject!.id, activeAiChat!.id)} /> : null}{item.message.role === 'assistant' && item.message.creditsSpentMilli != null && item.message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(item.message.creditsSpentMilli)}</div> : null}{item.message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(item.message.id)} /> : null}</div><div className="ai-message-forward-actions">{item.message.role === 'assistant' ? <AiReadAloudAction text={item.message.content} messageKey={String(item.message.id)} /> : null}<AiReplyAction message={item.message} onReply={(target) => (activeAiChat?.id === QUICK_AI_CHAT_ID ? setReplyToQuickAi(target) : setReplyToAiChat(target))} /><TelegramMessageQuickShare text={item.message.content} compact /></div></div></div>)}
-          status={<>{aiChatLoading && aiChatStreamingText ? <div className="ai-chat-message-assistant rounded-2xl p-3 text-sm whitespace-pre-wrap"><AiStreamingMessageBody content={aiChatStreamingText} /></div> : null}{aiChatLoading ? <AiProgress status={aiChatProgress} /> : activeLiveVoiceStatus ? <AiProgress status={activeLiveVoiceStatus} /> : null}{aiChatError ? <p className="text-sm text-rose-400">{aiChatError}</p> : null}</>}
+          status={<>{aiChatLoading && aiChatStreamingText ? <div className="ai-message-forward-group w-fit max-w-[calc(100%-2rem)] mr-auto"><div className="ai-chat-message-assistant w-full rounded-2xl p-3 text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]"><AiStreamingMessageBody content={aiChatStreamingText} /></div></div> : null}{aiChatLoading ? <AiProgress status={aiChatProgress} /> : activeLiveVoiceStatus ? <AiProgress status={activeLiveVoiceStatus} /> : null}{aiChatError ? <p className="text-sm text-rose-400">{aiChatError}</p> : null}</>}
         />
       ) : null}
 

@@ -77,7 +77,7 @@ test('small Planik matches light/dark website palette with tight tap bounds and 
     read('../../android-app/app/build.gradle.kts')
   ]);
   assert.match(native, /dark: Boolean/);
-  assert.match(native, /remember\(context, dark\)/);
+  assert.match(native, /remember\(context, dark, mode\)/);
   assert.match(native, /size\(width = 84\.dp, height = 90\.dp\)/);
   assert.match(native, /Bitmap\.createBitmap\(full, 80, 12, 280, 300\)/);
   assert.match(native, /indication = null/);

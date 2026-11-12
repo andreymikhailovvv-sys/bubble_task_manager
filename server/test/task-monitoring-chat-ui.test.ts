@@ -215,7 +215,7 @@ test('personal modal Planik companions stay bottom-right and react to cursor hov
 });
 
 
-test('Planik modal hover reveals the SAME quick chat panel and typing responds to keys only', async () => {
+test('Planik modal hover reveals the same quick chat panel, and typing follows AI activity instead of user keys', async () => {
   const [app, expanded, mascot, mascotStyles] = await Promise.all([
     read('../../client/src/App.tsx'),
     read('../../client/src/components/ExpandedAiChat.tsx'),
@@ -228,12 +228,13 @@ test('Planik modal hover reveals the SAME quick chat panel and typing responds t
   assert.match(mascotStyles, /body:has\(\.planik-notes-companion:hover, \.planik-task-editor-companion:hover\)/);
   assert.match(mascotStyles, /\.ai-chat-launcher:not\(\.work-ai-launcher\) \.planik-quick-ai-preview/);
   assert.match(mascotStyles, /\.ai-chat-launcher:not\(\.work-ai-launcher\):focus-within \.planik-quick-ai-preview/);
-  assert.match(app, /setQuickAiTypingSignal\(\(signal\) => signal \+ 1\)/);
-  assert.match(expanded, /setTypingSignal\(\(signal\) => signal \+ 1\)/);
+  assert.doesNotMatch(app, /setQuickAiTypingSignal/);
+  assert.doesNotMatch(expanded, /setTypingSignal/);
   assert.match(mascot, /document\.addEventListener\('pointermove', onPointerMove, \{ passive: true \}\)/);
   assert.match(mascot, /window\.requestAnimationFrame\(update\)/);
-  assert.match(mascot, /typingSignal = 0/);
-  assert.match(mascot, /setTyping\(false\), 520/);
+  assert.match(mascot, /busy \? \(isPainting \? 'painting' : isSearching \? 'searching' : 'typing'\)/);
+  assert.match(mascot, /progress === 'generating_image' \|\| progress === 'editing_image'/);
+  assert.doesNotMatch(mascot, /setTyping\(true\)/);
   assert.doesNotMatch(mascot, /typingText|priorDraft/);
 });
 
