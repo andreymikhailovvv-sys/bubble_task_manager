@@ -57,6 +57,7 @@ test('the APK updater verifies downloaded APK identity and signer before request
     read('../../android-app/app/src/main/java/ru/planirovych/app/updates/AndroidApkInstaller.kt')
   ]);
   assert.match(manifest, /android\.permission\.REQUEST_INSTALL_PACKAGES/);
+  assert.match(manifest, /android:allowBackup="false"/);
   assert.match(installer, /verifyOfficialUpdate\(context, destination, release\.versionCode\)/);
   assert.match(installer, /signatures\(archive\) != signatures\(installed\)/);
   assert.match(installer, /archive\.packageName != BuildConfig\.APPLICATION_ID/);
