@@ -15726,8 +15726,12 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
 
 /* One shared reading column for fullscreen. Both split panes and individual
    canvases inherit these boundaries from the same workspace shell. */
-.bubble-fullscreen-shell {
-  --fullscreen-workspace-width: min(1540px, calc(100% - clamp(48px, 8vw, 200px)));
+.app-shell.bubble-fullscreen-shell {
+  /* The fullscreen shell must fill the actual viewport, not an inherited
+     desktop layout width. Both the toolbar and canvases use the same inset. */
+  width: 100vw;
+  max-width: none;
+  --fullscreen-workspace-width: calc(100vw - clamp(32px, 4vw, 80px));
 }
 .bubble-fullscreen-shell > .fullscreen-workspace-toolbar--one-row,
 .bubble-fullscreen-shell > .workspace-shell {
