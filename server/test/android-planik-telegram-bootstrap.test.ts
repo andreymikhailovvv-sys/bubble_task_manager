@@ -56,7 +56,7 @@ test('Native Planik rests without arms; activity artwork appears only during wor
     assert.doesNotMatch(asset, /planik-resting-arms|M129 194Q141 219 170 224/);
     assert.match(asset, /planik-faceplate/);
   }
-  assert.match(launcher, /planikActionSvg\\(mode, alternate\\)/);
+  assert.ok(launcher.includes('planikActionSvg(mode, alternate)'));
   assert.match(source, /M129 194Q141 219 170 224/);
   assert.match(source, /M303 194Q283 218 254 225/);
   assert.match(launcher, /Bitmap\.createBitmap\(full, 80, 12, 280, 300\)/);
