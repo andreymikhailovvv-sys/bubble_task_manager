@@ -42,7 +42,7 @@ test('Android Planik HTML does not load the third-party Telegram SDK and marks b
   assert.equal(android.dataset.planikAndroidReason, 'script-load-failed');
 });
 
-test('Native Planik ships both resting arms in all four real SVG frames and does not amputate them', async () => {
+test('Native Planik rests without arms; activity artwork appears only during work', async () => {
   const [source, launcher, idle, blink, light, lightBlink, activity] = await Promise.all([
     read('../../client/src/components/PlanikMascot.tsx'),
     read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/PlanikNativeLauncher.kt'),
@@ -53,12 +53,10 @@ test('Native Planik ships both resting arms in all four real SVG frames and does
     read('../../android-app/app/src/main/java/ru/planirovych/app/planik/PlanikLiveActivity.kt')
   ]);
   for (const asset of [idle, blink, light, lightBlink]) {
-    assert.match(asset, /planik-resting-arms/);
-    assert.match(asset, /M129 194Q141 219 170 224/);
-    assert.match(asset, /M303 194Q283 218 254 225/);
-    assert.match(asset, /cx="170" cy="224" r="10"/);
-    assert.match(asset, /cx="254" cy="225" r="10"/);
+    assert.doesNotMatch(asset, /planik-resting-arms|M129 194Q141 219 170 224/);
+    assert.match(asset, /planik-faceplate/);
   }
+  assert.match(launcher, /planikActionSvg\\(mode, alternate\\)/);
   assert.match(source, /M129 194Q141 219 170 224/);
   assert.match(source, /M303 194Q283 218 254 225/);
   assert.match(launcher, /Bitmap\.createBitmap\(full, 80, 12, 280, 300\)/);
