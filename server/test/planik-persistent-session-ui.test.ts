@@ -49,6 +49,10 @@ test('AI toolbar stays restored in Android and embedded WebView while talking', 
   assert.match(mini, /setMiniLiveVoiceActive\(active\)/);
   assert.match(mini, /if \(miniLiveVoiceActive \|\| androidPlanikLaunch\)/);
   assert.match(mini, /setIsGeneralAiChatHeaderHidden\(false\)/);
+  const css = await read('../../client/src/styles.css');
+  assert.match(css, /html\[data-planik-android\] \.miniapp-shell \.miniapp-ai-chat-panel-general \.miniapp-ai-context-header/);
+  assert.match(css, /transform: translateY\(0\) !important/);
+  assert.match(css, /pointer-events: auto !important/);
 });
 
 test('the APK updater verifies downloaded APK identity and signer before requesting installation', async () => {
