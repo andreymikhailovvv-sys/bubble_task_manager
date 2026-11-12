@@ -335,7 +335,7 @@ test('desktop list cards match the premium sector-chip design without red overdu
     read('../../client/src/App.tsx'),
     read('../../client/src/styles.css')
   ]);
-  const list = app.slice(app.indexOf('{activeListTasks.map((task) => {'), app.indexOf('            </ul>', app.indexOf('{activeListTasks.map((task) => {')));
+  const list = app.slice(app.indexOf('{modeListTasks.map((task) => {'), app.indexOf('            </ul>', app.indexOf('{modeListTasks.map((task) => {')));
   assert.match(list, /list-task-item-premium/);
   assert.match(list, /list-task-sector-badge/);
   assert.match(list, /--desktop-list-sector-color/);
