@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import './PlanikMascot.css';
 
-type PlanikMode = 'idle' | 'hover' | 'typing' | 'thinking' | 'searching' | 'celebrating' | 'clearing';
+type PlanikMode = 'idle' | 'hover' | 'typing' | 'thinking' | 'searching' | 'painting' | 'celebrating' | 'clearing';
 
 // Fixed particle paths avoid creating random values or timers on every render.
 const POPPER_CONFETTI = Array.from({ length: 24 }, (_, index) => ({
@@ -30,7 +30,6 @@ type Props = {
  */
 export const PlanikMascot = memo(function PlanikMascot({
   notificationCount = 0,
-  typingSignal = 0,
   busy = false,
   responding = false,
   progress,
@@ -39,7 +38,6 @@ export const PlanikMascot = memo(function PlanikMascot({
   className = ''
 }: Props) {
   const gradientSuffix = useId().replace(/:/g, '');
-  const [typing, setTyping] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
   // Keep the previous number alive while the hand removes and discards it.
@@ -48,23 +46,12 @@ export const PlanikMascot = memo(function PlanikMascot({
   const initialCount = Math.max(0, Math.floor(Number.isFinite(notificationCount) ? notificationCount : 0));
   const priorNotificationCount = useRef(initialCount);
   const [clearingCount, setClearingCount] = useState<number | null>(null);
-  const priorTypingSignal = useRef(typingSignal);
   const svgRef = useRef<SVGSVGElement>(null);
   const priorCelebration = useRef(celebrationKey);
   const leftEye = useRef<SVGGElement>(null);
   const rightEye = useRef<SVGGElement>(null);
   const leftHand = useRef<SVGGElement>(null);
   const rightHand = useRef<SVGGElement>(null);
-
-  // A real keydown signal starts typing; a focused input or a prefilled
-  // draft does not. Each additional key resets the short idle timeout.
-  useEffect(() => {
-    if (priorTypingSignal.current === typingSignal) return;
-    priorTypingSignal.current = typingSignal;
-    setTyping(true);
-    const timer = window.setTimeout(() => setTyping(false), 520);
-    return () => window.clearTimeout(timer);
-  }, [typingSignal]);
 
   useEffect(() => {
     if (celebrationKey === priorCelebration.current) return;
@@ -91,12 +78,14 @@ export const PlanikMascot = memo(function PlanikMascot({
     return () => window.clearTimeout(timer);
   }, [count]);
 
-  const isSearching = Boolean(progress && (progress.startsWith('searching_') ||
-    ['listing_tasks', 'reading_task', 'reading_subtask', 'reading_note', 'reading_file', 'analyzing_web_results'].includes(progress)));
+  const isPainting = progress === 'generating_image' || progress === 'editing_image';
+  const isSearching = Boolean(progress && (/^(searching_|reading_|listing_)/.test(progress) ||
+    ['checking_sectors', 'analyzing_subtasks', 'analyzing_web_results', 'analyzing_retrieved_context',
+      'editing_document', 'creating_document', 'generating_document', 'working_with_documents'].includes(progress)));
+  // Typing belongs to Planik's answer preparation, never the human draft.
   const mode: PlanikMode = clearingCount !== null ? 'clearing'
     : celebrating ? 'celebrating'
-    : busy ? (isSearching ? 'searching' : responding ? 'typing' : 'thinking')
-    : typing ? 'typing'
+    : busy ? (isPainting ? 'painting' : isSearching ? 'searching' : 'typing')
     : hovered ? 'hover' : 'idle';
   const badgeNumber = clearingCount ?? count;
   const badgeText = badgeNumber > 99 ? '99+' : String(badgeNumber);
@@ -113,6 +102,7 @@ export const PlanikMascot = memo(function PlanikMascot({
   useEffect(() => {
     if (mode === 'searching') gaze(-9, 5);
     else if (mode === 'typing') gaze(0, 7);
+    else if (mode === 'painting') gaze(-6, 4);
     else if (mode === 'thinking') gaze(7, -4);
     else if (mode === 'clearing') gaze(-5, 1);
     else if (mode !== 'hover') gaze(0, 0);
@@ -277,6 +267,23 @@ export const PlanikMascot = memo(function PlanikMascot({
             <path d="M242 240L210 215" fill="none" stroke="#9e94ef" strokeWidth="11" strokeLinecap="round" />
             <circle cx="191" cy="195" r="25" fill="#a3d8f5" fillOpacity=".2" stroke="#cac3ff" strokeWidth="7" />
             <path d="M180 187Q188 180 196 185" fill="none" stroke="#fff" strokeOpacity=".9" strokeWidth="3" strokeLinecap="round" />
+          </g>
+        </g>
+
+        <g className="planik-painting">
+          {/* Planik paints on a small glowing canvas while an image tool is active. */}
+          <path d="M132 200Q109 209 103 233" fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round" />
+          <rect x="74" y="150" width="119" height="117" rx="13" fill="#454b83" stroke="#a99bff" strokeWidth="3" />
+          <rect x="85" y="161" width="97" height="94" rx="7" fill="#e4eafc" />
+          <circle cx="158" cy="186" r="12" fill="#f9be87" />
+          <path d="M87 239L114 208L130 225L151 194L180 240Z" fill="#8dc8ce" />
+          <path className="planik-paint-stroke" d="M99 189Q116 178 125 194T157 211" fill="none" stroke="#ac78e8" strokeWidth="6" strokeLinecap="round" strokeDasharray="90" />
+          <path d="M301 195Q283 207 264 218" fill="none" stroke="#7778b8" strokeWidth="17" strokeLinecap="round" />
+          <g className="planik-paint-brush">
+            <path d="M258 214L224 200" stroke="#bf9b6b" strokeWidth="10" strokeLinecap="round" />
+            <path d="M221 198L209 193L213 207L224 204Z" fill="#d4d8ff" stroke="#a99bff" strokeWidth="2" />
+            <path d="M210 193Q204 195 205 203L213 207Z" fill="#a76cea" />
+            <circle cx="263" cy="218" r="8" fill="#aaa5ee" />
           </g>
         </g>
 

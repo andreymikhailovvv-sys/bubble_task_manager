@@ -38,7 +38,7 @@
 }
 .planik-notif-static, .planik-notif-take-arm, .planik-notif-flying, .planik-notif-whoosh,
 .planik-typing, .planik-thinking,
-.planik-searching, .planik-celebrating, .planik-hover {
+.planik-searching, .planik-painting, .planik-celebrating, .planik-hover {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -47,6 +47,7 @@
 .planik-mascot[data-mode="typing"] .planik-typing,
 .planik-mascot[data-mode="thinking"] .planik-thinking,
 .planik-mascot[data-mode="searching"] .planik-searching,
+.planik-mascot[data-mode="painting"] .planik-painting,
 .planik-mascot[data-mode="celebrating"] .planik-celebrating,
 .planik-mascot[data-mode="hover"] .planik-hover {
   opacity: 1;
@@ -122,6 +123,14 @@
 .planik-mascot[data-mode="searching"] .planik-page-one { animation: planik-page-one 3.9s linear infinite; }
 .planik-mascot[data-mode="searching"] .planik-page-two { animation: planik-page-two 3.9s linear infinite; }
 .planik-mascot[data-mode="searching"] .planik-page-three { animation: planik-page-three 3.9s linear infinite; }
+.planik-mascot[data-mode="painting"] .planik-paint-brush {
+  transform-origin: 259px 217px;
+  transform-box: view-box;
+  animation: planik-paint-sweep 1.65s ease-in-out infinite;
+}
+.planik-mascot[data-mode="painting"] .planik-paint-stroke {
+  animation: planik-paint-reveal 1.65s ease-in-out infinite;
+}
 .planik-mascot[data-mode="celebrating"] .planik-celebrate-rig {
   transform-origin: 300px 206px;
   transform-box: view-box;
@@ -239,6 +248,16 @@ body[data-theme="light"] .planik-svg { filter: drop-shadow(0 7px 9px rgba(86, 70
 @keyframes planik-page-one { 0%, 29% { opacity: 1; transform: translateX(0); } 34%, 100% { opacity: 0; transform: translateX(-12px); } }
 @keyframes planik-page-two { 0%, 31% { opacity: 0; transform: translateX(12px); } 36%, 64% { opacity: 1; transform: translateX(0); } 69%, 100% { opacity: 0; transform: translateX(-12px); } }
 @keyframes planik-page-three { 0%, 66% { opacity: 0; transform: translateX(12px); } 71%, 97% { opacity: 1; transform: translateX(0); } 100% { opacity: 0; transform: translateX(-12px); } }
+@keyframes planik-paint-sweep {
+  0%, 100% { transform: translate(5px, 3px) rotate(-8deg); }
+  45% { transform: translate(-66px, -24px) rotate(-22deg); }
+  75% { transform: translate(-38px, -11px) rotate(8deg); }
+}
+@keyframes planik-paint-reveal {
+  0%, 12% { stroke-dashoffset: 90; opacity: .1; }
+  65%, 86% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 90; opacity: .1; }
+}
 @keyframes planik-popper-lift {
   from { transform: translate(24px,32px) rotate(10deg) scale(.65); opacity: 0; }
   to { transform: translate(0,0) rotate(0) scale(1); opacity: 1; }
@@ -257,7 +276,7 @@ body[data-theme="light"] .planik-svg { filter: drop-shadow(0 7px 9px rgba(86, 70
 @keyframes planik-hop { 50% { transform: translateY(-12px); } }
 @media (prefers-reduced-motion: reduce) {
   .planik-svg, .planik-eye, .planik-scratch-arm, .planik-type-left, .planik-type-right,
-  .planik-loupe, .planik-page-one, .planik-page-two, .planik-page-three,
+  .planik-paint-brush, .planik-paint-stroke, .planik-loupe, .planik-page-one, .planik-page-two, .planik-page-three,
   .planik-notif-static, .planik-notif-take-arm, .planik-notif-flying, .planik-notif-whoosh, .planik-notif-held,
   .planik-celebrate-rig, .planik-popper-flash, .planik-popper-particle, .planik-hover-left, .planik-hover-right,
   .planik-key-a, .planik-key-b { animation: none !important; }

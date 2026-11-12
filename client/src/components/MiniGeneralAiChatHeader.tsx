@@ -1,5 +1,5 @@
 import {useEffect, useRef} from 'react';
-import {Check, ChevronDown, Menu, MessageCircle, Plus, Sparkles, Pencil, Trash2} from 'lucide-react';
+import {Check, ChevronDown, Menu, MessageCircle, Plus, Sparkles, Pencil, Star, Trash2} from 'lucide-react';
 import type {AiChatModel} from '../lib/types';
 
 type Chat = {id: string; title: string; messages: unknown[]};
@@ -60,7 +60,7 @@ export function MiniGeneralAiChatHeader({
           <MessageCircle size={18} className="miniapp-ai-context-chat-icon" aria-hidden="true"/>
           <span className="miniapp-ai-context-control-copy">
             <span className="miniapp-ai-context-control-label">ЧАТ</span>
-            <span className="miniapp-ai-context-control-value">{chat?.title ?? 'Новый чат'}</span>
+            <span className="miniapp-ai-context-control-value">{chat?.title ?? 'Новый чат'}{chat?.id === 'quick-ai-requests' ? <Star size={13} fill="currentColor" className="ml-1 inline-block align-middle text-amber-400" aria-label="Чат по умолчанию" /> : null}</span>
           </span>
           <ChevronDown size={15} className="miniapp-ai-context-chevron" aria-hidden="true"/>
         </button>
@@ -100,7 +100,7 @@ export function MiniGeneralAiChatHeader({
                 role="radio" aria-checked={chat?.id === item.id} onClick={() => onSelectChat(item.id)}>
                 <span className="miniapp-ai-context-option-symbol"><MessageCircle size={19}/></span>
                 <span className="miniapp-ai-context-option-copy">
-                  <span className="miniapp-ai-context-option-title">{item.title}</span>
+                  <span className="miniapp-ai-context-option-title">{item.title}{item.id === 'quick-ai-requests' ? <Star size={14} fill="currentColor" className="ml-1 inline-block align-middle text-amber-400" aria-label="Чат по умолчанию" /> : null}</span>
                   <span className="miniapp-ai-context-option-subtitle">
                     {item.id === 'quick-ai-requests' ? 'Основной чат' : item.messages.length + ' сообщ.'}
                   </span>

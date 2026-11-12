@@ -938,11 +938,13 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [aiProgressByTask, setAiProgressByTask] = useState<Record<string, TaskAiProgressStatus>>({});
   const [taskAiStreamingText, setTaskAiStreamingText] = useState<Record<string,string>>({});
   const textStreamForTask = (taskId: string) => {
+    setTaskAiStreamingText(prev => ({ ...prev, [taskId]: '' }));
     let started = false;
     return {
       onTextDelta: (delta: string) => { const first = !started; started = true;
         setTaskAiStreamingText(prev => ({...prev,[taskId]: first ? delta : (prev[taskId] ?? '') + delta})); },
-      onTextReset: () => { started = false; setTaskAiStreamingText(prev => ({...prev,[taskId]:''})); }
+      // Preserve the fast introduction until the main answer emits a fragment.
+      onTextReset: () => { started = false; }
     };
   };
   const [isAiChatOpen, setIsAiChatOpen] = useState(false);
@@ -1030,6 +1032,17 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [aiChatLoading, setAiChatLoading] = useState(false);
   const [aiChatProgress, setAiChatProgress] = useState<AiChatProgressStatus>('analyzing_request');
   const [aiChatStreamingText, setAiChatStreamingText] = useState('');
+  const textStreamForGeneral = () => {
+    let started = false;
+    return {
+      onTextDelta: (delta: string) => {
+        const first = !started;
+        started = true;
+        setAiChatStreamingText(prev => first ? delta : prev + delta);
+      },
+      onTextReset: () => { started = false; }
+    };
+  };
   const [liveVoiceTaskProgress, setLiveVoiceTaskProgress] = useState<Record<string, LiveVoiceProgressStatus>>({});
   const [liveVoiceChatProgress, setLiveVoiceChatProgress] = useState<Record<string, LiveVoiceProgressStatus>>({});
   const [aiChatError, setAiChatError] = useState<string | null>(null);
@@ -3377,7 +3390,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         history: activeAiChat.messages, telegramRead: approval,
         model: generalAiChatModel, projectTitle: activeAiChatProject?.title,
         chatTitle: activeAiChat.title, projectId, chatId, clientSurface
-      }, { onStatus: setAiChatProgress, onTextDelta: delta => setAiChatStreamingText(prev => prev + delta), onTextReset: () => setAiChatStreamingText('') });
+      }, { onStatus: setAiChatProgress, ...textStreamForGeneral() });
       const answer: MiniAiChatMessage = {
         id: crypto.randomUUID(), role: 'assistant', content: normalizeMiniAiMessageContent(result.answer),
         creditsSpentMilli: result.billing?.creditsSpentMilli,
@@ -3465,7 +3478,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         clientSurface,
         attachments: attachmentsPayload
       }, { onStatus: setAiChatProgress, onUploadProgress: setAiChatUploadProgress,
-        onTextDelta: delta => setAiChatStreamingText(prev => prev + delta), onTextReset: () => setAiChatStreamingText('') });
+        ...textStreamForGeneral() });
       generalAiChatNearBottomRef.current = true;
       if (result.actionReports?.some((item) => item.startsWith('Изменена заметка'))) {
          window.dispatchEvent(new Event('standalone-notes-updated'));
@@ -3936,6 +3949,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       return;
     }
     if (!question && aiPendingFiles.length === 0) return;
+    setTaskAiStreamingText(prev => ({ ...prev, [openedTask.id]: '' }));
     setAiLoadingTaskId(openedTask.id);
     setAiProgressByTask((current) => ({ ...current, [openedTask.id]: 'analyzing_request' }));
     setError(null);
@@ -5354,7 +5368,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 </div>
                 ))}
                 <TaskMonitoringTriggerChips taskId={openedTask.id} />
-                {aiLoadingTaskId === openedTask.id && taskAiStreamingText[openedTask.id] ? <div className="miniapp-ai-chat-message-assistant rounded-2xl p-3 text-sm whitespace-pre-wrap"><AiStreamingMessageBody content={taskAiStreamingText[openedTask.id]} /></div> : null}
+                {aiLoadingTaskId === openedTask.id && taskAiStreamingText[openedTask.id] ? <div className="ai-message-forward-group w-fit max-w-[88%] mr-auto"><div className="miniapp-ai-chat-message miniapp-ai-chat-message-task miniapp-ai-chat-message-assistant w-full rounded-3xl rounded-bl-lg px-4 py-3"><div className="mb-1 text-[10px] font-semibold uppercase">ИИ</div><div className="text-sm leading-relaxed"><AiStreamingMessageBody content={taskAiStreamingText[openedTask.id]} /></div></div></div> : null}
                 {aiLoadingTaskId === openedTask.id ? <TaskAiProgress status={aiProgressByTask[openedTask.id] ?? 'analyzing_request'} /> : liveVoiceTaskProgress[openedTask.id] ? <TaskAiProgress status={liveVoiceTaskProgress[openedTask.id]} /> : openedTask.aiMonitoringEnabled ? <TaskMonitoringIntroProgress taskId={openedTask.id} /> : null}
                 <div className="miniapp-ai-chat-bottom-spacer h-24" aria-hidden="true" />
               </div>
@@ -5552,7 +5566,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={setReplyToGeneral} /><TelegramMessageQuickShare text={message.content} compact /></div>
                 </div>
               ))}
-              {aiChatLoading && aiChatStreamingText ? <div className="miniapp-ai-chat-message-assistant rounded-2xl p-3 text-sm whitespace-pre-wrap"><AiStreamingMessageBody content={aiChatStreamingText} /></div> : null}
+              {aiChatLoading && aiChatStreamingText ? <div className="ai-message-forward-group w-fit max-w-[88%] mr-auto"><div className="miniapp-ai-chat-message miniapp-ai-chat-message-general miniapp-ai-chat-message-assistant w-full rounded-3xl rounded-bl-lg px-4 py-3"><div className="mb-1 text-[10px] font-semibold uppercase">ИИ</div><div className="text-sm leading-relaxed"><AiStreamingMessageBody content={aiChatStreamingText} /></div></div></div> : null}
               {aiChatLoading ? <AiProgress status={aiChatProgress} /> : activeLiveVoiceStatus ? <AiProgress status={activeLiveVoiceStatus} /> : null}
               {aiChatError ? <p className="text-sm text-rose-300">{aiChatError}</p> : null}
               <div className="miniapp-ai-chat-bottom-spacer h-24" aria-hidden="true" />

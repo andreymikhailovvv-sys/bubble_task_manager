@@ -346,13 +346,21 @@ internal fun NativeGeneralAiChatPage(
                                     color=c.text,fontSize=12.sp,fontWeight=FontWeight.Bold,
                                     maxLines=1,overflow=TextOverflow.Ellipsis)
                             }
+                            if(thread?.id==QUICK_AI_THREAD_ID)
+                                Icon(Icons.Default.Star,"Чат по умолчанию",tint=Color(0xFFFBBF24),modifier=Modifier.size(15.dp))
                             Icon(Icons.Default.ExpandMore,null,tint=c.secondary,
                                 modifier=Modifier.size(16.dp))
                         }
                         DropdownMenu(expanded=chatMenu,onDismissRequest={chatMenu=false},
                             modifier=Modifier.background(controlBg)){
                             project?.chats.orEmpty().forEach{item->
-                                DropdownMenuItem(text={Text(item.title,color=c.text,maxLines=1)},
+                                DropdownMenuItem(text={Row(verticalAlignment=Alignment.CenterVertically){
+                                    Text(item.title,color=c.text,maxLines=1,overflow=TextOverflow.Ellipsis)
+                                    if(item.id==QUICK_AI_THREAD_ID){
+                                        Spacer(Modifier.width(6.dp))
+                                        Icon(Icons.Default.Star,"Чат по умолчанию",tint=Color(0xFFFBBF24),modifier=Modifier.size(15.dp))
+                                    }
+                                }},
                                     leadingIcon={Icon(Icons.Default.ChatBubbleOutline,null,
                                         tint=if(thread?.id==item.id)c.accent else c.secondary)},
                                     trailingIcon={if(thread?.id==item.id)

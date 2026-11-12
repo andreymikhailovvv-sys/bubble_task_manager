@@ -23,7 +23,9 @@ test('both chat surfaces animate the mascot from real request progress', async (
     read('../../client/src/components/PlanikMascot.css'),
     read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/PlanikNativeLauncher.kt'),
   ]);
-  assert.match(mascot, /responding \? 'typing' : 'thinking'/);
+  assert.match(mascot, /busy \? \(isPainting \? 'painting' : isSearching \? 'searching' : 'typing'\)/);
+  assert.match(mascot, /planik-painting/);
+  assert.doesNotMatch(mascot, /setTyping\(true\)/);
   assert.match(mini, /responding=\{Boolean\(aiChatStreamingText\)\}/);
   assert.match(mini, /responding=\{Boolean\(taskAiStreamingText\[openedTask\.id\]\)\}/);
   assert.match(native, /state\.progressStatus\.orEmpty\(\)\.startsWith\("searching_"\)/);
@@ -32,6 +34,7 @@ test('both chat surfaces animate the mascot from real request progress', async (
   assert.match(launcher, /"thinking" ->/);
   assert.match(launcher, /"searching" ->/);
   assert.match(styles, /\.planik-body-surface \{ pointer-events: visiblePainted/);
+  assert.match(styles, /planik-paint-sweep/);
 });
 
 test('Android shows a skeleton preview and uses a monotonic release version', async () => {
@@ -46,4 +49,33 @@ test('Android shows a skeleton preview and uses a monotonic release version', as
   assert.match(launcher, /size\(width = 58\.dp, height = 56\.dp\)/);
   assert.match(build, /versionCode = 10/);
   assert.match(build, /versionName = "1\.0\.8"/);
+});
+
+test('quick chat is visibly starred in web, mini app and Android and audio loader has an active wrapper', async () => {
+  const [web, miniHeader, native, speech, styles] = await Promise.all([
+    read('../../client/src/components/ExpandedAiChat.tsx'),
+    read('../../client/src/components/MiniGeneralAiChatHeader.tsx'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeGeneralAiChat.kt'),
+    read('../../client/src/components/AiReadAloudAction.tsx'),
+    read('../../client/src/styles.css'),
+  ]);
+  assert.match(web, /chat\.id === quickChatId \? <Star/);
+  assert.match(miniHeader, /item\.id === 'quick-ai-requests' \? <Star/);
+  assert.match(native, /item\.id==QUICK_AI_THREAD_ID/);
+  assert.match(speech, /<span className="ai-speech-loading-spin" role="status">/);
+  assert.match(styles, /\.ai-speech-loading-spin \{/);
+});
+
+test('request-scoped streaming resets old text before loading and keeps the preview until primary text arrives', async () => {
+  const [web, mini] = await Promise.all([
+    read('../../client/src/App.tsx'),
+    read('../../client/src/MiniApp.tsx'),
+  ]);
+  for (const source of [web, mini]) {
+    assert.match(source, /setTaskAiStreamingText\(prev => \(\{ \.\.\.prev, \[taskId\]: '' \}\)\)/);
+    assert.match(source, /onTextReset: \(\) => \{ started = false; \}/);
+    assert.match(source, /\.\.\.textStreamForGeneral\(\)/);
+  }
+  assert.match(web, /chat-message-assistant w-full rounded-2xl/);
+  assert.match(mini, /miniapp-ai-chat-message-task miniapp-ai-chat-message-assistant/);
 });

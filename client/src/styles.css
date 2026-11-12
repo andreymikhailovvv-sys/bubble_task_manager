@@ -12222,11 +12222,17 @@ body[data-theme='dark'] .topbar-overdue-popover { box-shadow: 0 14px 34px rgba(2
 /* Dedicated loader animation: global utility classes are overridden in chat skins. */
 @keyframes ai-speech-loading-rotate { to { transform: rotate(360deg); } }
 .ai-speech-loading-spin {
-  display: inline-block;
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  transform-origin: 50% 50%;
+  transform-origin: center;
   animation: ai-speech-loading-rotate .8s linear infinite !important;
+  will-change: transform;
 }
+.ai-speech-loading-spin > svg { display: block; flex: none; }
 .ai-speech-cost-line { display:block; line-height:1.35; margin-top:5px; }
 .voice-mode-anchor { position:relative; display:inline-flex; flex-shrink:0; overflow:visible; }
 .voice-mode-menu {
