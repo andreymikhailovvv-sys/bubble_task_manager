@@ -926,6 +926,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     else set.delete(key);
     // Hide the composer launcher while the full or collapsed avatar is present.
     setMiniLiveVoiceActive(active);
+    // The voice overlay changes viewport/scroll state. Never leave the AI
+    // toolbar hidden when it collapses or the session is dismissed.
+    setIsGeneralAiChatHeaderHidden(false);
+    setIsTaskAiChatHeaderHidden(false);
   };
   const [replyToTask, setReplyToTask] = useState<AiReplyTarget | null>(null);
   const [replyToGeneral, setReplyToGeneral] = useState<AiReplyTarget | null>(null);
@@ -5499,7 +5503,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   return;
                 }
                 if (telegramChatPicker) setTelegramChatPicker(null);
-                updateAiChatHeaderVisibility(container.scrollTop, generalAiChatScrollTopRef, setIsGeneralAiChatHeaderHidden);
+                if (miniLiveVoiceActive || androidPlanikLaunch) {
+                  setIsGeneralAiChatHeaderHidden(false);
+                  generalAiChatScrollTopRef.current = container.scrollTop;
+                } else updateAiChatHeaderVisibility(container.scrollTop, generalAiChatScrollTopRef, setIsGeneralAiChatHeaderHidden);
               }}
                 onWheel={() => { generalAiChatUserScrollEnabledRef.current = true; }}
                 onTouchMove={() => { generalAiChatUserScrollEnabledRef.current = true; }}
