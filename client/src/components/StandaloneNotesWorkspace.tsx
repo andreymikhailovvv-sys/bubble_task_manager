@@ -7,7 +7,7 @@ import { NotesEditor } from './NotesEditor';
 import { PlanikMascot } from './PlanikMascot';
 import { StandaloneNoteGroupManager, noteGroupStyle } from './StandaloneNoteGroupManager';
 
-type Props = { userId: string; requestedNote?: { id: string; serial: number } | null; mode?: 'widget' | 'mobile'; onClose?: () => void; mobileSafeAreaTop?: number; mobileSafeAreaBottom?: number; telegramMiniApp?: boolean };
+type Props = { userId: string; requestedNote?: { id: string; serial: number } | null; mode?: 'widget' | 'mobile' | 'inline'; onClose?: () => void; mobileSafeAreaTop?: number; mobileSafeAreaBottom?: number; telegramMiniApp?: boolean };
 const sortNotes = (items: StandaloneNote[]) =>
   [...items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id));
 const titleOf = (note: StandaloneNote) => note.title.trim() || 'Без названия';
@@ -63,7 +63,8 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
   const [groupPicker, setGroupPicker] = useState<{ noteId: string; top: number; left: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [boardOpen, setBoardOpen] = useState(mode === 'mobile');
+  const [boardOpen, setBoardOpen] = useState(mode === 'mobile' || mode === 'inline');
+  const [inlineMount, setInlineMount] = useState<HTMLDivElement | null>(null);
   const [editing, setEditing] = useState<StandaloneNote | null>(null);
   useEffect(() => {
     if (!telegramMiniApp || !boardOpen) return;
@@ -134,7 +135,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     setGroupManager(null);
     setGroupCreateForNoteId(null);
     setGroupPicker(null);
-    setBoardOpen(mode === 'mobile');
+    setBoardOpen(mode === 'mobile' || mode === 'inline');
     setEditing(null);
     draftRef.current = null;
     dirtyRef.current = false;
@@ -367,11 +368,12 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     setGroupPicker(null);
     setMobileFiltersOpen(false);
     setBoardOpen(false);
-    if (mode === 'mobile') onClose?.();
+    if (mode === 'mobile' || mode === 'inline') onClose?.();
   };
 
   return (
     <>
+      {mode === 'inline' ? <div ref={setInlineMount} className="standalone-notes-inline-mount relative h-full min-h-0 w-full" /> : null}
       {mode === 'widget' ? <section className="workspace-widget-card standalone-notes-widget rounded-[1.35rem] border p-4" aria-label="Личные заметки">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h3 className="flex items-center gap-2 text-base font-bold tracking-[-0.01em]">
@@ -404,14 +406,14 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
           </button>
         ) : null}
       </section> : null}
-      {boardOpen ? createPortal(
-        <div className={`standalone-notes-backdrop fixed inset-0 z-[245] flex items-center justify-center p-3 sm:p-6 ${mode === 'mobile' ? 'standalone-notes-mobile' : ''} ${telegramMiniApp ? 'standalone-notes-telegram' : ''} ${mode === 'mobile' && !telegramMiniApp ? 'standalone-notes-web-collapsible' : ''}`}
+      {boardOpen && (mode !== 'inline' || inlineMount) ? createPortal(
+        <div className={`standalone-notes-backdrop fixed inset-0 z-[245] flex items-center justify-center p-3 sm:p-6 ${mode === 'mobile' ? 'standalone-notes-mobile' : ''} ${telegramMiniApp ? 'standalone-notes-telegram' : ''}  ${mode === 'inline' ? 'standalone-notes-inline' : ''} ${mode === 'mobile' && !telegramMiniApp ? 'standalone-notes-web-collapsible' : ''}`}
           style={mode === 'mobile' ? ({ '--miniapp-top-inset': `${mobileSafeAreaTop}px`, '--miniapp-bottom-inset': `${mobileSafeAreaBottom}px` } as CSSProperties) : undefined}
           onMouseDown={(event) => {
           if (event.target === event.currentTarget && !editing) closeBoard();
         }}>
           {telegramMiniApp ? <div className="standalone-notes-telegram-brand" aria-label="Планировыч AI">✦ Планировыч AI</div> : null}
-          <section className="standalone-notes-board flex h-[min(87dvh,880px)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border shadow-2xl" role="dialog" aria-modal="true" aria-label="Все заметки"
+          <section className="standalone-notes-board flex h-[min(87dvh,880px)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border shadow-2xl" role="dialog" aria-modal={mode !== 'inline'} aria-label="Все заметки"
             style={telegramMiniApp ? ({ '--notes-telegram-header-height': `${notesHeaderHeight}px` } as CSSProperties) : undefined}>
             <div ref={notesHeaderRef} className={`standalone-notes-board-header flex flex-col gap-2 border-b p-4 sm:px-6 ${mode === 'mobile' && !notesFiltersVisible ? 'standalone-notes-header-compact' : ''}`}>
               <div className="standalone-notes-header-title-row flex items-start justify-between gap-3">
@@ -566,7 +568,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
               <PlanikMascot size="sidekick" />
             </div>
           ) : null}
-        </div>, document.body) : null}
+        </div>, mode === 'inline' ? inlineMount! : document.body) : null}
       {groupPicker ? createPortal(
         <div className={'fixed inset-0 ' + (editing ? 'z-[2147483647]' : 'z-[270]')} onMouseDown={() => setGroupPicker(null)}>
           <div role="dialog" aria-label="Выбрать группу заметки" className="standalone-group-picker fixed w-[min(250px,calc(100vw-24px))] max-h-[min(280px,65vh)] overflow-y-auto rounded-xl border p-2 shadow-2xl"
@@ -603,6 +605,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
       ) : null}
       {editing ? (
         <NotesEditor
+          inlineTarget={mode === 'inline' ? inlineMount : undefined}
           key={editing.id}
           telegramSafeTop={telegramMiniApp ? mobileSafeAreaTop : undefined}
           miniAppSheet={telegramMiniApp}
