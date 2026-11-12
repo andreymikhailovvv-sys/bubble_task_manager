@@ -34,7 +34,8 @@ test('WebView verifies the current account and cookie values before navigation',
   ]);
   assert.match(activity, /repository\.establishSession\(\)/);
   assert.match(activity, /currentUser\.id != expectedUserId/);
-  assert.match(activity, /manager\.removeAllCookies/);
+  assert.doesNotMatch(activity, /manager\.removeAllCookies/);
+  assert.match(activity, /manager\.setCookie\(origin, "\$name=; Max-Age=0; Path=\/"\)/);
   assert.match(activity, /manager\.setCookie\(origin, cookie\.toString\(\)\)/);
   assert.match(activity, /loadIfCookiesMatch\(view, origin, cookies\)/);
   assert.match(activity, /actual\.size != expectedPairs\.size \|\| actual\.toSet\(\) != expectedPairs\.toSet\(\)/);
@@ -54,11 +55,11 @@ test('WebView verifies the current account and cookie values before navigation',
   assert.doesNotMatch(jar, /loadForRequest[\s\S]{0,180}persist\(\)/);
 });
 
-test('Android embedded Realtime loads a minimal chat context instead of all inboxes', async () => {
+test('Android Realtime loads its authenticated planner snapshot but skips unrelated inboxes', async () => {
   const mini = await read('../../client/src/MiniApp.tsx');
   assert.match(mini, /const androidVoice = Boolean\(androidPlanikLaunch\)/);
-  assert.match(mini, /androidVoice \? Promise\.resolve\(\[\] as Sphere\[\]\)/);
-  assert.match(mini, /androidVoice && !androidPlanikLaunch\?\.taskId/);
+  assert.match(mini, /api\.getSpheres\(\),\s*api\.getTasks\(\),\s*api\.getHabits\(\)/);
+  assert.doesNotMatch(mini, /androidVoice && !androidPlanikLaunch\?\.taskId/);
   assert.match(mini, /androidVoice \? Promise\.resolve\(null\) : api\.telegramAssistantInbox/);
   assert.match(mini, /androidVoice \? Promise\.resolve\(null\) : api\.mailAssistantInbox/);
 });
