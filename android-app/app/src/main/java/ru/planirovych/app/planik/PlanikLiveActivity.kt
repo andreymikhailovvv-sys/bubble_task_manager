@@ -347,18 +347,25 @@ class PlanikLiveActivity : ComponentActivity() {
             return
         }
 
-        // CookieManager is separate from the native OkHttp cookie jar.
-        // Clearing its previous account is crucial: otherwise the embedded WebView
-        // can authenticate as another user despite a successful native login.
-        manager.removeAllCookies {
-            if (failed || isFinishing || isDestroyed) return@removeAllCookies
-            var pending = cookies.size
-            cookies.forEach { cookie ->
-                manager.setCookie(origin, cookie.toString()) {
-                    if (failed || isFinishing || isDestroyed || navigationStarted) return@setCookie
-                    pending -= 1
-                    if (pending == 0) {
-                        loadIfCookiesMatch(view, origin, cookies)
+        // The native OkHttp jar and the embedded WebView have separate cookie
+        // stores. Never call removeAllCookies(): it logs out *every* WebView
+        // account and can make a return to the planner look like a sign-out.
+        // Replace only our two first-party authentication cookies, preserving
+        // unrelated WebView sessions and storage.
+        val names = listOf("btm_auth", "btm_device")
+        var removalsPending = names.size
+        names.forEach { name ->
+            manager.setCookie(origin, "$name=; Max-Age=0; Path=/") {
+                if (failed || isFinishing || isDestroyed) return@setCookie
+                removalsPending -= 1
+                if (removalsPending == 0) {
+                    var pending = cookies.size
+                    cookies.forEach { cookie ->
+                        manager.setCookie(origin, cookie.toString()) {
+                            if (failed || isFinishing || isDestroyed || navigationStarted) return@setCookie
+                            pending -= 1
+                            if (pending == 0) loadIfCookiesMatch(view, origin, cookies)
+                        }
                     }
                 }
             }
