@@ -15,6 +15,15 @@ const sessions = new Set<string>();
 const MAX_SECONDS = 5 * 60;
 const RESERVED_MILLI = 450_000;
 const MAX_MESSAGE = 120_000;
+// The underlying UI needs task_ref IDs for buttons. The audio model doesn't:
+// sanitizing here also protects older app clients that still send raw markers.
+function readableVoiceContext(text: string): string {
+  return text
+    .replace(/\[\[task_ref(?:=|:)[^\]]+\]\]/g, '')
+    .replace(/(?:task\s*id|id\s*задачи|идентификатор\s*задачи)\s*[:=]\s*[\w-]+/gi, '')
+    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '')
+    .trim();
+}
 // The selected voice is validated on the server and tied to a single-use ticket.
 // Realtime cannot swap voices after speech begins; selection applies to a new call.
 export const PLANIK_REALTIME_VOICES = ['echo'] as const;
@@ -299,7 +308,7 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
             sessionId, resultLength: typeof packet.answer === 'string' ? packet.answer.length : 0
           });
           if (!upstream || upstream.readyState !== WebSocket.OPEN) return;
-          const answer = typeof packet.answer === 'string' ? packet.answer.slice(0, 5000) : 'Инструмент завершился без ответа.';
+          const answer = typeof packet.answer === 'string' ? readableVoiceContext(packet.answer.slice(0, 5000)) : 'Инструмент завершился без ответа.';
           upstream.send(JSON.stringify({
             type: 'conversation.item.create',
             item: { type: 'function_call_output', call_id: packet.callId, output: JSON.stringify({ answer }) }
@@ -379,7 +388,7 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
               upstream?.send(JSON.stringify({
                 type: 'conversation.item.create',
                 item: { type: 'message', role: item.role, content: [
-                  { type: item.role === 'assistant' ? 'output_text' : 'input_text', text: item.content }
+                  { type: item.role === 'assistant' ? 'output_text' : 'input_text', text: readableVoiceContext(item.content) }
                 ] }
               }));
             }
