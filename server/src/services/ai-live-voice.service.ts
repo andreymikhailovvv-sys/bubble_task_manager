@@ -15,6 +15,15 @@ const sessions = new Set<string>();
 const MAX_SECONDS = 5 * 60;
 const RESERVED_MILLI = 450_000;
 const MAX_MESSAGE = 120_000;
+// The underlying UI needs task_ref IDs for buttons. The audio model doesn't:
+// sanitizing here also protects older app clients that still send raw markers.
+function readableVoiceContext(text: string): string {
+  return text
+    .replace(/\[\[task_ref(?:=|:)[^\]]+\]\]/g, '')
+    .replace(/(?:task\s*id|id\s*задачи|идентификатор\s*задачи)\s*[:=]\s*[\w-]+/gi, '')
+    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '')
+    .trim();
+}
 // The selected voice is validated on the server and tied to a single-use ticket.
 // Realtime cannot swap voices after speech begins; selection applies to a new call.
 export const PLANIK_REALTIME_VOICES = ['echo'] as const;
@@ -166,6 +175,49 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
   let delegatedTools = 0;
   const pendingToolCalls = new Set<string>();
   const sentTranscriptIds = new Set<string>();
+  // A long text-model search must not make Planik stay silent. Generate small
+  // out-of-band Echo replies, without changing the default conversation.
+  let pendingToolWaitTimer: NodeJS.Timeout | null = null;
+  let waitingResponseInFlight = false;
+  let resumeAfterWaiting = false;
+  const waitingResponseIds = new Set<string>();
+  let waitingPhraseIndex = 0;
+  const waitingPhrases = [
+    'Секунду, ещё сверяю задачи.',
+    'Сейчас, проверяю оставшиеся данные.',
+    'Ещё немного, уточняю результаты поиска.'
+  ];
+  const stopWaitingTimer = () => {
+    if (pendingToolWaitTimer) clearInterval(pendingToolWaitTimer);
+    pendingToolWaitTimer = null;
+  };
+  const startWaitingTimer = () => {
+    if (pendingToolWaitTimer) return;
+    pendingToolWaitTimer = setInterval(() => {
+      if (closed || !pendingToolCalls.size || waitingResponseInFlight ||
+          !upstream || upstream.readyState !== WebSocket.OPEN) return;
+      waitingResponseInFlight = true;
+      const phrase = waitingPhrases[waitingPhraseIndex++ % waitingPhrases.length];
+      try {
+        upstream.send(JSON.stringify({
+          type: 'response.create',
+          response: {
+            conversation: 'none',
+            metadata: { purpose: 'planik_tool_waiting' },
+            tools: [],
+            instructions: 'Ты Планик. Произнеси только короткую заданную фразу по-русски, мужским голосом Echo. Без технических идентификаторов и других фактов. Не обращайся к инструментам.',
+            input: [{ type: 'message', role: 'user',
+              content: [{ type: 'input_text', text: 'Скажи точно: ' + phrase }] }],
+            output_modalities: ['audio'],
+            max_output_tokens: 90
+          }
+        }));
+      } catch {
+        waitingResponseInFlight = false;
+      }
+    }, 10_000);
+    pendingToolWaitTimer.unref();
+  };
   let receivedAudioBytes = 0;
   let billed = false;
   const started = Date.now();
@@ -187,6 +239,7 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
       speechTurns: speechTurnCount, toolCalls: delegatedTools
     });
     clearTimeout(timer);
+    stopWaitingTimer();
     try { upstream?.close(); } catch { /* already closed */ }
     void finalize();
   };
@@ -250,16 +303,18 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
         }
         if (packet.type === 'tool_result' && typeof packet.callId === 'string' && pendingToolCalls.has(packet.callId)) {
           pendingToolCalls.delete(packet.callId);
+          if (pendingToolCalls.size === 0) stopWaitingTimer();
           console.info('[AI live voice] delegated tool result', {
             sessionId, resultLength: typeof packet.answer === 'string' ? packet.answer.length : 0
           });
           if (!upstream || upstream.readyState !== WebSocket.OPEN) return;
-          const answer = typeof packet.answer === 'string' ? packet.answer.slice(0, 5000) : 'Инструмент завершился без ответа.';
+          const answer = typeof packet.answer === 'string' ? readableVoiceContext(packet.answer.slice(0, 5000)) : 'Инструмент завершился без ответа.';
           upstream.send(JSON.stringify({
             type: 'conversation.item.create',
             item: { type: 'function_call_output', call_id: packet.callId, output: JSON.stringify({ answer }) }
           }));
-          upstream.send(JSON.stringify({ type: 'response.create', response: { output_modalities: ['audio'] } }));
+          if (waitingResponseInFlight) resumeAfterWaiting = true;
+          else upstream.send(JSON.stringify({ type: 'response.create', response: { output_modalities: ['audio'] } }));
           return;
         }
         if (!ready || !upstream || upstream.readyState !== WebSocket.OPEN) return;
@@ -276,7 +331,7 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
       upstream?.send(JSON.stringify({ type: 'session.update', session: {
         type: 'realtime', model: 'gpt-realtime-2.1-mini',
         output_modalities: ['audio'],
-        instructions: ['Ты Планик, небольшой дружелюбный робот-помощник сервиса Планировыч, в НЕПРЕРЫВНОЙ сессии разговора. Говори по-русски молодым мужским голосом: мягко, живо, с лёгким дружелюбным роботизированным оттенком, естественным темпом и без чрезмерно низкого баса. Не имитируй голос настоящего ребёнка, не переигрывай и не меняй факты ради образа. Не здоровайся повторно, не представляйся снова и не начинай новый диалог при каждом ответе. Отвечай на последнюю просьбу по-русски естественно и коротко. Если пользователь просит узнать актуальные задачи/заметки или подготовить действие, вызови execute_planirovych_request. Передай туда полную просьбу пользователя с обязательными ограничениями (сектор, срок, статус). Для просроченных задач: срок строго ДО текущего времени, исключая завершённые, если пользователь не указал нижнюю границу периода, не задавай dueFrom, чтобы не исключить старые просроченные задачи. Не придумывай результат запроса. Отдельные карточки подтверждаются пользователем в чате, не называй их исполненными заранее.', context.instructions].filter(Boolean).join('\n\n'),
+        instructions: ['Ты Планик, небольшой дружелюбный робот-помощник сервиса Планировыч, в НЕПРЕРЫВНОЙ сессии разговора. Говори по-русски молодым мужским голосом: мягко, живо, с лёгким дружелюбным роботизированным оттенком, естественным темпом и без чрезмерно низкого баса. Не имитируй голос настоящего ребёнка, не переигрывай и не меняй факты ради образа. Не здоровайся повторно, не представляйся снова и не начинай новый диалог при каждом ответе. Отвечай на последнюю просьбу по-русски естественно и коротко. Не произноси вслух task ID, UUID, CUID, внутренние идентификаторы и служебные метки [[task_ref=...]], называй только человеческие названия задач. Не пытайся читать технические метки по буквам. Если пользователь просит узнать актуальные задачи/заметки или подготовить действие, вызови execute_planirovych_request. Передай туда полную просьбу пользователя с обязательными ограничениями (сектор, срок, статус). Для просроченных задач: срок строго ДО текущего времени, исключая завершённые, если пользователь не указал нижнюю границу периода, не задавай dueFrom, чтобы не исключить старые просроченные задачи. Не придумывай результат запроса. Отдельные карточки подтверждаются пользователем в чате, не называй их исполненными заранее.', context.instructions].filter(Boolean).join('\n\n'),
         tools: [{ type: 'function', name: 'execute_planirovych_request',
           description: 'Выполнить запрос пользователя к инструментам Планировыча: задачи, подзадачи, заметки, поиск, файлы, письма, Telegram и другие функции обычного текстового ИИ. Делегирует в существующий безопасный обработчик; результаты и карточки подтверждения отображаются в чате.',
           parameters: { type: 'object', additionalProperties: false, properties: { request: { type: 'string', description: 'Точная просьба пользователя на русском языке' } }, required: ['request'] } }],
@@ -294,16 +349,31 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
       try {
         const value = JSON.parse(String(event.data)) as {
           type?: string; delta?: string; error?: { code?: string };
-          response?: { id?: string; status?: string; usage?: Parameters<typeof realtimeSpeechCostMilli>[0]; output?: Array<{ type?: string; content?: Array<{ transcript?: string }> }> };
+          response?: { id?: string; status?: string; metadata?: { purpose?: string }; usage?: Parameters<typeof realtimeSpeechCostMilli>[0]; output?: Array<{ type?: string; content?: Array<{ transcript?: string }> }> };
           response_id?: string; content_index?: number;
           item_id?: string; transcript?: string; item?: { type?: string; name?: string; call_id?: string; arguments?: string }; usage?: { type?: string; seconds?: number; input_tokens?: number; output_tokens?: number; input_token_details?: { text_tokens?: number; audio_tokens?: number } }
         };
         if (value.type === 'error') {
+          // A nonessential progress utterance must never terminate a valid
+          // voice session, including when upstream declines an OOB response.
+          if (waitingResponseInFlight) {
+            waitingResponseInFlight = false;
+            if (resumeAfterWaiting && upstream?.readyState === WebSocket.OPEN) {
+              resumeAfterWaiting = false;
+              upstream.send(JSON.stringify({ type: 'response.create', response: { output_modalities: ['audio'] } }));
+            }
+            console.warn('[AI live voice] optional waiting speech skipped', { code: value.error?.code ?? 'unknown' });
+            return;
+          }
           console.warn('[AI live voice] provider rejected event', { code: value.error?.code ?? 'unknown' });
           send({ type: 'error', message: 'Голосовая модель отклонила запрос.' }); stop(); return;
         }
         if (value.type === 'response.created' && value.response?.id) {
-          activeResponseId = value.response.id;
+          if (value.response.metadata?.purpose === 'planik_tool_waiting') {
+            waitingResponseIds.add(value.response.id);
+          } else {
+            activeResponseId = value.response.id;
+          }
         }
         if (value.type === 'session.updated') {
           // A late session.updated is not a new conversation or a request to
@@ -318,7 +388,7 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
               upstream?.send(JSON.stringify({
                 type: 'conversation.item.create',
                 item: { type: 'message', role: item.role, content: [
-                  { type: item.role === 'assistant' ? 'output_text' : 'input_text', text: item.content }
+                  { type: item.role === 'assistant' ? 'output_text' : 'input_text', text: readableVoiceContext(item.content) }
                 ] }
               }));
             }
@@ -368,12 +438,15 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
           } catch { /* provider supplied invalid arguments */ }
           if (!question) question = 'Помоги с последней просьбой пользователя в Планировыче.';
           pendingToolCalls.add(value.item.call_id);
+          startWaitingTimer();
           console.info('[AI live voice] delegated tool call', {
             sessionId, index: delegatedTools, questionLength: question.length
           });
           send({ type: 'tool_request', callId: value.item.call_id, question });
         }
         if (value.type === 'response.done') {
+          const wasWaiting = value.response?.id ? waitingResponseIds.delete(value.response.id) : false;
+          if (wasWaiting) waitingResponseInFlight = false;
           const completedText = value.response?.output?.flatMap(item => item.content || []).map(item => item.transcript || '').filter(Boolean).join(' ') || assistantTranscript;
           const wasInterrupted = value.response?.id && interruptedResponses.delete(value.response.id);
           if (activeResponseId === value.response?.id) activeResponseId = null;
@@ -392,6 +465,10 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
             if (usageMilli + transcriptionMilli >= RESERVED_MILLI - 10_000) stop('Лимит кредитов голосового диалога достигнут.');
           }
           send({ type: 'response_done' });
+          if (wasWaiting && resumeAfterWaiting && upstream?.readyState === WebSocket.OPEN) {
+            resumeAfterWaiting = false;
+            upstream.send(JSON.stringify({ type: 'response.create', response: { output_modalities: ['audio'] } }));
+          }
         }
       } catch { /* ignore malformed provider event */ }
     });

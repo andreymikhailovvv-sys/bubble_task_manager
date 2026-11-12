@@ -60,6 +60,7 @@ import { AiReplyAction, AiReplyPreview, AiReplyMessageBody, serializeAiReply, ty
 import { AiReadAloudAction, AiSpeechCostLine } from './components/AiReadAloudAction';
 import type { LiveVoiceContext, LiveVoiceMessage, LiveVoiceToolCompletion, LiveVoiceProgressStatus } from './components/LiveVoiceDialog';
 import { voiceTranscriptMessage, voiceToolAssistantMessage, updateLiveVoiceProgress, preserveLiveVoiceMessages } from './lib/voice-chat-messages';
+import { linkVerifiedVoiceTaskMentions } from './lib/voice-task-links';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
 import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileQuickAiChatMessages, reconcileAiChatProjectOutline, mergeTelegramManagedMessages, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike, orderAiChatMessagesChronologically } from './lib/ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
@@ -554,8 +555,38 @@ function parseMiniTaskReferencesInLine(content: string): Array<{ type: 'text'; v
   return chunks;
 }
 
-function MiniAiMessageContentWithTaskRefs({ content, tasks, onOpenTask }: { content: string; tasks: Task[]; onOpenTask: (task: Task) => void }) {
+function MiniAiMessageContentWithTaskRefs({ content, tasks, onOpenTask, onTasksReload, expectedUserId }: {
+  content: string; tasks: Task[];
+  onOpenTask: (task: Task) => void;
+  onTasksReload: (tasks: Task[]) => void;
+  expectedUserId?: string;
+}) {
   const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
+  const [checkingTaskId, setCheckingTaskId] = useState<string | null>(null);
+  const [unavailableTaskIds, setUnavailableTaskIds] = useState<string[]>([]);
+  const openTaskReference = async (id: string) => {
+    const known = taskById.get(id);
+    if (known) { onOpenTask(known); return; }
+    if (checkingTaskId) return;
+    setCheckingTaskId(id);
+    try {
+      // A task may have been created during this live turn, after our initial
+      // task snapshot. Ask the server before claiming that it does not exist.
+      const profile = await api.getMe();
+      if (expectedUserId && profile.user.id !== expectedUserId) {
+        throw new Error('Сессия изменилась: ссылка не будет открыта в другом аккаунте.');
+      }
+      const latest = await api.getTasks();
+      onTasksReload(latest);
+      const found = latest.find(task => task.id === id);
+      if (found) onOpenTask(found);
+      else setUnavailableTaskIds(previous => previous.includes(id) ? previous : [...previous, id]);
+    } catch {
+      setUnavailableTaskIds(previous => previous.includes(id) ? previous : [...previous, id]);
+    } finally {
+      setCheckingTaskId(null);
+    }
+  };
   const normalizedContent = useMemo(() => normalizeMiniAiMessageContent(content), [content]);
   return renderAiContentBlocks(normalizedContent, (text, blockKey) => (
     <div key={blockKey}>
@@ -581,12 +612,16 @@ function MiniAiMessageContentWithTaskRefs({ content, tasks, onOpenTask }: { cont
                       key={`mini-ai-task-${lineIndex}-${reference.taskId}-${referenceIndex}`}
                       type="button"
                       className="inline-flex max-w-full items-center gap-1 rounded-full bg-cyan-600/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow transition active:scale-95 disabled:opacity-60"
-                      onClick={() => { if (matchedTask) onOpenTask(matchedTask); }}
-                      disabled={!matchedTask}
-                      title={matchedTask ? `Открыть задачу: ${label}` : `Задача не найдена: ${reference.taskId}`}
+                      onClick={() => { void openTaskReference(reference.taskId); }}
+                      disabled={checkingTaskId === reference.taskId}
+                      title={matchedTask ? `Открыть задачу: ${label}`
+                        : unavailableTaskIds.includes(reference.taskId) ? 'Задача недоступна в текущем аккаунте'
+                        : `Проверить и открыть задачу: ${label}`}
                     >
                       <ArrowUpRight size={12} />
-                      <span className="truncate">{matchedTask ? label : 'Задача не найдена'}</span>
+                      <span className="truncate">{matchedTask ? label
+                        : unavailableTaskIds.includes(reference.taskId) ? 'Задача недоступна'
+                        : checkingTaskId === reference.taskId ? 'Проверяю задачу…' : label}</span>
                     </button>
                   );
                 })}
@@ -1148,9 +1183,23 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     // doing so unmounts consent cards exactly when their continuation succeeds.
     if (options.refreshPlannerOnly) {
       try {
-        const [sphereList, taskList, habitList] = await Promise.all([
+        const [sphereList, incomingTasks, habitList] = await Promise.all([
           api.getSpheres(), api.getTasks(), api.getHabits()
         ]);
+        let taskList = incomingTasks;
+        // After tool actions, a transient empty or wrong-session reply must
+        // not erase hundreds of authenticated tasks in the Planik WebView.
+        if (taskList.length === 0 && tasks.length > 0) {
+          const [profile, secondRead] = await Promise.all([api.getMe(), api.getTasks()]);
+          if (profile.user.id !== currentUser?.id || secondRead.length === 0) {
+            console.warn('[MiniApp] suspicious empty planner refresh after Planik; retaining prior task list', {
+              priorCount: tasks.length, accountMatches: profile.user.id === currentUser?.id
+            });
+            setError('Не удалось подтвердить список задач после Планика. Предыдущие задачи сохранены.');
+            return;
+          }
+          taskList = secondRead;
+        }
         setSpheres(sphereList);
         setTasks(taskList);
         setHabits(habitList);
@@ -1190,15 +1239,17 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       setAiCredits(user.aiCredits ?? 0);
       setCurrentUser(user);
 
-      // Native Android's Realtime surface only needs its chosen AI thread
-      // (and tasks when talking inside a specific task). Fetching the whole
-      // planner + Telegram/Mail inbox before showing a voice window made the
-      // WebView appear blank on slower devices and sessions.
+      // The embedded Android Realtime WebView can reveal the entire workspace
+      // when its voice overlay collapses. It must therefore load the real
+      // planner snapshot, including sectors and habits, not fabricated empty
+      // arrays. Otherwise task buttons and the list/timeline are inconsistent
+      // with the server's authenticated search results. Only costly external
+      // Telegram/Mail inboxes are omitted from this voice-only bootstrap.
       const androidVoice = Boolean(androidPlanikLaunch);
       const [sphereList, taskList, habitList, quickHistory, syncedProjects, telegramInbox, mailInbox] = await Promise.all([
-        androidVoice ? Promise.resolve([] as Sphere[]) : api.getSpheres(),
-        androidVoice && !androidPlanikLaunch?.taskId ? Promise.resolve([] as Task[]) : api.getTasks(),
-        androidVoice ? Promise.resolve([] as Habit[]) : api.getHabits(),
+        api.getSpheres(),
+        api.getTasks(),
+        api.getHabits(),
         api.getGeneralAssistantHistory().catch(() => ({ messages: [] as ChatMessage[] })),
         api.getAiChatProjects<Partial<MiniAiChatProject>>(),
         androidVoice ? Promise.resolve(null) : api.telegramAssistantInbox().catch(() => null),
@@ -2977,12 +3028,14 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       return { ...previous, [taskId]: [...messages, entry] };
     });
   };
-  const applyLiveTaskTool = (taskId: string, event: LiveVoiceToolCompletion) => {
-    const answer = voiceToolAssistantMessage(event);
+  const applyLiveTaskTool = (taskId: string, event: LiveVoiceToolCompletion): boolean => {
+    const safeAnswer = linkVerifiedVoiceTaskMentions(event.result.answer, tasks, Boolean(event.result.taskDataChanged));
+    const answer = voiceToolAssistantMessage({ ...event, result: { ...event.result, answer: safeAnswer } });
     voiceTaskMessagesRef.current[taskId] = [...(voiceTaskMessagesRef.current[taskId] ?? []), answer].slice(-80);
     setAiDialogByTask(previous => ({ ...previous, [taskId]: [...(previous[taskId] ?? []), answer] }));
     if (event.result.taskDataChanged) void loadData({ refreshPlannerOnly: true });
     refreshAiCredits();
+    return /\[\[task_ref(?:[:=])[^\]]+\]\]/.test(safeAnswer);
   };
   const appendLiveProjectMessage = (projectId: string, chatId: string, event: LiveVoiceMessage) => {
     const message = voiceTranscriptMessage(event);
@@ -3012,8 +3065,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     });
   };
 
-  const applyLiveProjectTool = (projectId: string, chatId: string, event: LiveVoiceToolCompletion) => {
-    const answer = voiceToolAssistantMessage(event);
+  const applyLiveProjectTool = (projectId: string, chatId: string, event: LiveVoiceToolCompletion): boolean => {
+    const safeAnswer = linkVerifiedVoiceTaskMentions(event.result.answer, tasks, Boolean(event.result.taskDataChanged));
+    const answer = voiceToolAssistantMessage({ ...event, result: { ...event.result, answer: safeAnswer } });
     const key = `${projectId}:${chatId}`;
     voiceChatMessagesRef.current[key] = [...(voiceChatMessagesRef.current[key] ?? []), answer].slice(-80);
     setAiChatProjects(previous => previous.map(project => project.id !== projectId ? project : ({
@@ -3022,6 +3076,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     })));
     if (event.result.taskDataChanged) void loadData({ refreshPlannerOnly: true });
     refreshAiCredits();
+    return /\[\[task_ref(?:[:=])[^\]]+\]\]/.test(safeAnswer);
   };
   // A dedicated Android WebView is restricted to this first-party origin.
   // It receives the same session cookies as the native Retrofit client.
@@ -5277,7 +5332,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 {openedTaskAiDialog.map((message, index) => (
                   <div key={`mini-ai-full-${index}`} className={`ai-message-forward-group w-fit max-w-[88%] ${message.role === 'user' ? 'ml-auto' : 'mr-auto'}`}><div className={`miniapp-ai-chat-message miniapp-ai-chat-message-task w-full rounded-3xl px-4 py-3 ${message.role === 'user' ? `miniapp-ai-chat-message-user rounded-br-lg ${message.authorColor ? 'miniapp-ai-chat-message-authored' : ''}` : 'miniapp-ai-chat-message-assistant rounded-bl-lg'}`} style={message.role === 'user' && message.authorColor ? ({ '--message-author-color': message.authorColor } as CSSProperties) : undefined}>
                     <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}{message.messageKind === 'HUMAN' && message.recipientName ? ` → ${message.recipientName}` : ''}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
-                    <div className="text-sm leading-relaxed">{message.messageKind === 'MONITOR_ACTION' ? <TaskMonitoringActionBadge content={message.content} /> : message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}</div>
+                    <div className="text-sm leading-relaxed">{message.messageKind === 'MONITOR_ACTION' ? <TaskMonitoringActionBadge content={message.content} /> : message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} onTasksReload={setTasks} expectedUserId={currentUser?.id} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}</div>
                     {message.monitoringTaskId ? <button type="button"
                     className="task-monitor-chat-link mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold"
                     onClick={() => { const target = tasks.find(task => task.id === message.monitoringTaskId && !task.parentTaskId); if (target) { setIsAiChatOpen(false); openTaskModal(target); setIsAiDialogOpen(true); } }}>
@@ -5475,7 +5530,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               {visibleAiChatMessages.map((message) => (
                 <div key={message.id} className={`ai-message-forward-group w-fit max-w-[88%] ${message.role === 'user' ? 'ml-auto' : 'mr-auto'}`}><div className={`miniapp-ai-chat-message miniapp-ai-chat-message-general w-full rounded-3xl px-4 py-3 ${message.role === 'user' ? 'miniapp-ai-chat-message-user rounded-br-lg' : 'miniapp-ai-chat-message-assistant rounded-bl-lg'}`}>
                   <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`mini-chat-${message.id}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `mini-chat-${message.id}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `mini-chat-${message.id}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
-                  <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}</div>
+                  <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} onTasksReload={setTasks} expectedUserId={currentUser?.id} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}</div>
                   {message.monitoringTaskId && activeAiChat?.id === QUICK_AI_CHAT_ID ? <button type="button" className="task-monitor-chat-link mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold"
                     onClick={() => { const target = tasks.find(task => task.id === message.monitoringTaskId && !task.parentTaskId); if (target) { setIsAiChatOpen(false); openTaskModal(target); setIsAiDialogOpen(true); } }}>
                     <ArrowUpRight size={12} /> Ответить в чате задачи
