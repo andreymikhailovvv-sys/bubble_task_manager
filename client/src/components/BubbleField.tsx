@@ -46,6 +46,8 @@ type Props = {
   themeMode?: 'dark' | 'light';
   /** Use the full viewport for the oval; hide the normal side information panel. */
   fullscreen?: boolean;
+  /** Crop the large desktop information rail when the oval is in a split pane. */
+  compact?: boolean;
   className?: string;
 };
 
@@ -340,6 +342,7 @@ export function BubbleField({
   onDismissTraining,
   themeMode = 'dark',
   fullscreen = false,
+  compact = false,
   className
 }: Props) {
   const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null);
@@ -1125,7 +1128,9 @@ export function BubbleField({
         onDragStart={(event) => event.preventDefault()}
         onPointerMove={onCanvasPointerMove} onPointerUp={onCanvasPointerUp}
         onPointerCancel={cancelCanvasPointer} onLostPointerCapture={cancelCanvasPointer}
-        viewBox={`${VIEWBOX_LEFT} ${VIEWBOX_TOP} ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
+        viewBox={compact
+          ? `${BUBBLE_WORKSPACE_X - 32} ${VIEWBOX_TOP} ${BUBBLE_WORKSPACE_WIDTH + 64} ${VIEWBOX_HEIGHT}`
+          : `${VIEWBOX_LEFT} ${VIEWBOX_TOP} ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
         preserveAspectRatio="xMidYMid meet"
         className={`bubble-field-stage relative z-20 h-full w-full ${fullscreen ? 'overflow-hidden' : 'overflow-visible'}`}
         onContextMenu={(event) => showContextMenu(event, null)}>
@@ -1196,7 +1201,7 @@ export function BubbleField({
               <feGaussianBlur stdDeviation={isLightTheme ? 15 : 20} />
             </filter>
           </defs>
-          <foreignObject
+          {!compact ? <foreignObject
             x={fullscreen ? FULLSCREEN_TASK_INFO_PANEL_X : TASK_INFO_PANEL_X}
             y={workspaceMin + 24}
             width={fullscreen ? FULLSCREEN_TASK_INFO_PANEL_WIDTH : TASK_INFO_PANEL_WIDTH}
@@ -1281,7 +1286,7 @@ export function BubbleField({
                 </div>
               )}
             </div>
-          </foreignObject>
+          </foreignObject> : null}
           <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X} ry={ELLIPSE_RADIUS_Y}
             fill={mode === 'sectors' && sectorCount > 1
               ? (isLightTheme ? '#f7fbff' : '#152034')
