@@ -13,6 +13,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
@@ -173,15 +174,16 @@ private fun parseAiTextBlocks(content:String):List<AiTextBlock>{
 internal fun NativeAiFormattedMessage(text:String,textColor:Color,linkColor:Color,
     fontSize:TextUnit=13.sp,
     taskTitles:Map<String,String> = emptyMap(),
+    completedTaskIds:Set<String> = emptySet(),
     onOpenTaskReference:((String)->Unit)?=null){
     val blocks=remember(text){parseAiTextBlocks(text)}
     Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
         blocks.forEach{block->
             when(block){
                 is AiTextBlock.Prose->NativeAiProseWithTaskRefs(block.content,textColor,linkColor,
-                    fontSize,taskTitles,onOpenTaskReference)
+                    fontSize,taskTitles,completedTaskIds,onOpenTaskReference)
                 is AiTextBlock.Table->NativeAiTable(block,textColor,linkColor,
-                    taskTitles,onOpenTaskReference)
+                    taskTitles,completedTaskIds,onOpenTaskReference)
             }
         }
     }
@@ -189,7 +191,8 @@ internal fun NativeAiFormattedMessage(text:String,textColor:Color,linkColor:Colo
 
 @Composable
 private fun NativeAiProseWithTaskRefs(text:String,textColor:Color,linkColor:Color,
-    fontSize:TextUnit,taskTitles:Map<String,String>,onOpenTaskReference:((String)->Unit)?){
+    fontSize:TextUnit,taskTitles:Map<String,String>,completedTaskIds:Set<String>,
+    onOpenTaskReference:((String)->Unit)?){
     if(onOpenTaskReference==null || !aiTaskReferencePattern.containsMatchIn(text)){
         NativeAiInlineText(text,textColor,linkColor,fontSize)
         return
@@ -208,12 +211,14 @@ private fun NativeAiProseWithTaskRefs(text:String,textColor:Color,linkColor:Colo
                     verticalArrangement=Arrangement.spacedBy(6.dp)){
                     refs.forEach{ref->
                         val title=taskTitles[ref.id]
+                        val completed=ref.id in completedTaskIds
                         val light=textColor.red<.5f
                         val chipBg=if(light)Color.White else Color(0xFF1B4255)
                         val chipInk=if(light)Color(0xFF172238) else Color(0xFFE0F7FF)
                         val frame=RoundedCornerShape(18.dp)
                         // Wrap to the title length, but never exceed the message.
                         Row(Modifier.widthIn(max=310.dp)
+                            .alpha(if(completed).62f else 1f)
                             .clip(frame).background(chipBg)
                             .border(1.dp,if(light)Color(0xFFDCE5EE)
                                 else Color(0xFF35778C),frame)
@@ -226,6 +231,7 @@ private fun NativeAiProseWithTaskRefs(text:String,textColor:Color,linkColor:Colo
                             Text(title?:"Задача не найдена",
                                 fontSize=10.sp,fontWeight=FontWeight.SemiBold,
                                 color=chipInk,maxLines=1,
+                                textDecoration=if(completed)TextDecoration.LineThrough else TextDecoration.None,
                                 overflow=TextOverflow.Ellipsis,softWrap=false)
                         }
                     }
@@ -260,7 +266,8 @@ private fun NativeAiInlineText(text:String,textColor:Color,linkColor:Color,
  */
 @Composable
 private fun NativeAiTable(table:AiTextBlock.Table,textColor:Color,linkColor:Color,
-    taskTitles:Map<String,String>,onOpenTaskReference:((String)->Unit)?){
+    taskTitles:Map<String,String>,completedTaskIds:Set<String>,
+    onOpenTaskReference:((String)->Unit)?){
     val frame=RoundedCornerShape(8.dp)
     val border=textColor.copy(alpha=.18f)
     val headerBg=textColor.copy(alpha=.075f)
@@ -280,7 +287,7 @@ private fun NativeAiTable(table:AiTextBlock.Table,textColor:Color,linkColor:Colo
                         if(onOpenTaskReference!=null &&
                             aiTaskReferencePattern.containsMatchIn(value)){
                             NativeAiProseWithTaskRefs(value,textColor,linkColor,11.sp,
-                                taskTitles,onOpenTaskReference)
+                                taskTitles,completedTaskIds,onOpenTaskReference)
                         }else{
                             androidx.compose.material3.Text(
                                 value,color=textColor,fontSize=11.sp,
@@ -298,7 +305,7 @@ private fun NativeAiTable(table:AiTextBlock.Table,textColor:Color,linkColor:Colo
                             .padding(horizontal=9.dp,vertical=7.dp),
                             contentAlignment=Alignment.CenterStart){
                             NativeAiProseWithTaskRefs(row.getOrElse(col){""},
-                                textColor,linkColor,12.sp,taskTitles,onOpenTaskReference)
+                                textColor,linkColor,12.sp,taskTitles,completedTaskIds,onOpenTaskReference)
                         }
                     }
                 }

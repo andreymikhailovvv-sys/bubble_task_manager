@@ -50,8 +50,6 @@ export const PlanikMascot = memo(function PlanikMascot({
   const priorCelebration = useRef(celebrationKey);
   const leftEye = useRef<SVGGElement>(null);
   const rightEye = useRef<SVGGElement>(null);
-  const leftHand = useRef<SVGGElement>(null);
-  const rightHand = useRef<SVGGElement>(null);
 
   useEffect(() => {
     if (celebrationKey === priorCelebration.current) return;
@@ -94,9 +92,7 @@ export const PlanikMascot = memo(function PlanikMascot({
     const transform = `translate(${x.toFixed(1)} ${y.toFixed(1)})`;
     leftEye.current?.setAttribute('transform', transform);
     rightEye.current?.setAttribute('transform', transform);
-    // Hands extend only a few extra pixels toward the cursor, preserving the shy sway.
-    leftHand.current?.setAttribute('transform', `translate(${(x * 1.3).toFixed(1)} ${(y * 1.15).toFixed(1)})`);
-    rightHand.current?.setAttribute('transform', `translate(${(x * 1.3).toFixed(1)} ${(y * 1.15).toFixed(1)})`);
+
   }, []);
 
   useEffect(() => {
@@ -343,15 +339,13 @@ export const PlanikMascot = memo(function PlanikMascot({
         </g>
 
         <g className="planik-hover">
-          <g className="planik-hover-left"><g ref={leftHand}>
+          <g className="planik-hover-left"><g>
             <path d="M129 194Q141 219 170 224" fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round" />
             <circle cx="170" cy="224" r="10" fill="#b2aaff" />
-            <path d="M166 218L168 211M174 219L178 213" fill="none" stroke="#c5bfff" strokeWidth="3.5" strokeLinecap="round" />
           </g></g>
-          <g className="planik-hover-right"><g ref={rightHand}>
+          <g className="planik-hover-right"><g>
             <path d="M303 194Q283 218 254 225" fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round" />
             <circle cx="254" cy="225" r="10" fill="#b2aaff" />
-            <path d="M251 219L246 212M258 219L259 212" fill="none" stroke="#c5bfff" strokeWidth="3.5" strokeLinecap="round" />
           </g></g>
         </g>
       </svg>
