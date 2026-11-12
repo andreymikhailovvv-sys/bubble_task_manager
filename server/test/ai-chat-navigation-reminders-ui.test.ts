@@ -23,8 +23,8 @@ test('desktop task references open above expanded general chat and notification 
     readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8'),
     readFile(new URL('../../client/src/components/FocusedTaskWindowFrame.tsx', import.meta.url), 'utf8')
   ]);
-  assert.match(source, /<FocusedTaskWindowFrame aiChatOpen=\\{isAiChatOpen\\} focusModeOpen=\\{isFocusModeOpen\\}/);
-  assert.match(source, /embedded=\\{embeddedFocusActive\\} inlineTarget=\\{embeddedFocusActive \\? fullscreenFocusTarget : null\\}/);
+  assert.ok(source.includes('<FocusedTaskWindowFrame aiChatOpen={isAiChatOpen} focusModeOpen={isFocusModeOpen}'));
+  assert.ok(source.includes('embedded={embeddedFocusActive} inlineTarget={embeddedFocusActive ? fullscreenFocusTarget : null}'));
   assert.ok(frame.includes("aiChatOpen ? 'z-[180]' : focusModeOpen ? 'z-[150]' : 'z-40'"));
   assert.match(styles, /\.system-notification-task-button\s*\{[^}]*width:\s*auto;/s);
   assert.doesNotMatch(styles, /\.system-notification-task-button\s*\{[^}]*width:\s*12\.5rem;/s);
