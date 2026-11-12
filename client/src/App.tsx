@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, CalendarPlus, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Clock3, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Menu, MessageCircle, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, BellRing, Trash2, UserRound, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
+import { FullscreenModePicker, FullscreenWorkspaceSplit } from './components/FullscreenWorkspaceLayout';
 import { WorkspaceActionToast } from './components/WorkspaceActionToast';
 import { TaskMonitoringBadge } from './components/TaskMonitoringBadge';
 import { projectMonitoringTimeline, timelineProjectionKey } from './lib/monitoringTimeline';
@@ -841,6 +842,8 @@ export default function App() {
   // Distraction-free viewport for bubbles. Keeps the same BubbleField instance,
   // filters and overlays; only the surrounding chrome is hidden.
   const [isBubbleFullscreen, setIsBubbleFullscreen] = useState(false);
+  const [fullscreenDisplayModes, setFullscreenDisplayModes] = useState<DisplayMode[]>(['bubbles']);
+  const [fullscreenSplitRatio, setFullscreenSplitRatio] = useState(50);
   const [search, setSearch] = useState('');
   const [requestedStandaloneNote, setRequestedStandaloneNote] = useState<{ id: string; serial: number } | null>(null);
   const [selectedSphereIds, setSelectedSphereIds] = useState<string[]>([]);
@@ -3778,8 +3781,10 @@ export default function App() {
     return diff <= notifyBefore;
   }
 
-  const isTimelineMode = displayMode === 'timeline';
-  const isBubblesMode = displayMode === 'bubbles';
+  const isTimelineMode = displayMode === 'timeline'
+    || (isBubbleFullscreen && fullscreenDisplayModes.includes('timeline'));
+  const isBubblesMode = displayMode === 'bubbles'
+    || (isBubbleFullscreen && fullscreenDisplayModes.includes('bubbles'));
 
   useEffect(() => {
     if (isBubblesMode && rankingMode !== 'coefficient') {
@@ -5317,6 +5322,666 @@ export default function App() {
     : activeTourStep === 'feature-integration-telegram-ai' ? 'assistant'
     : activeTourStep === 'feature-integration-mail' ? 'email' : null;
 
+  const renderOverdueControl = () => (
+          <div className="topbar-overdue-wrap relative shrink-0" ref={overduePopoverRef}>
+            <button type="button"
+              className="topbar-action-button topbar-overdue-trigger inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold"
+              onClick={() => setIsTimelineOverdueModalOpen(open => !open)}
+              aria-expanded={isTimelineOverdueModalOpen}
+              aria-controls="topbar-overdue-list"
+              title="Управление просроченными задачами во всех режимах"
+            >
+              <Clock3 size={15} />
+              <span>Просроченные</span>
+              <span className="topbar-overdue-counter rounded-full px-1.5 py-0.5 text-[11px] tabular-nums">{timelineOverdueTasks.length}</span>
+              <ChevronDown size={13} className={isTimelineOverdueModalOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
+            </button>
+            {isTimelineOverdueModalOpen ? (
+              <section id="topbar-overdue-list" className="timeline-overdue-panel topbar-overdue-popover absolute right-0 top-[calc(100%+10px)] z-[85] w-[min(360px,calc(100vw-24px))] rounded-2xl border p-3 shadow-2xl" aria-label="Просроченные задачи">
+                <div className="mb-3 flex items-center justify-between gap-2 pr-8">
+                  <h4 className="text-sm font-semibold text-primary">Просроченные задачи</h4>
+                  <button type="button" className="surface-muted absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded-lg text-xs" onClick={() => setIsTimelineOverdueModalOpen(false)} aria-label="Закрыть просроченные задачи"><X size={14}/></button>
+                </div>
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <button type="button" className="secondary-button rounded-lg px-2 py-1.5 text-xs disabled:opacity-60"
+                      onClick={() => void postponeAllOverdueToToday()}
+                      disabled={timelineOverdueBulkPostponeLoading !== null}
+                      title="Перенести на сегодня, сохранив время">
+                      {timelineOverdueBulkPostponeLoading === 'normal' ? <Loader2 size={12} className="animate-spin" /> : 'Отложить'}
+                    </button>
+                    <button type="button" className="inline-flex items-center gap-1 rounded-lg border border-pink-300/50 bg-pink-600/80 px-2 py-1.5 text-xs text-white disabled:opacity-60"
+                      onClick={() => void postponeAllOverdueByAi()}
+                      disabled={timelineOverdueBulkPostponeLoading !== null}
+                      title="Найти ближайшее свободное время с помощью ИИ, списываются кредиты">
+                      {timelineOverdueBulkPostponeLoading === 'ai' ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                      Отложить (ИИ)
+                    </button>
+                </div>
+                <div className="topbar-overdue-items max-h-[min(360px,55vh)] space-y-1 overflow-y-auto pr-1">
+                  {timelineOverdueTasks.map(task => (
+                    <div key={task.id} className="topbar-overdue-row">
+                      {renderTimelineTaskChip(task, {
+                        isSubtask: Boolean(task.parentTaskId),
+                        disableEffects: true,
+                        hoverLeftOfOverduePanel: true,
+                        parentTaskTitle: task.parentTaskId ? (taskById.get(task.parentTaskId)?.title ?? 'Без основной задачи') : undefined
+                      })}
+                    </div>
+                  ))}
+                  {timelineOverdueTasks.length === 0 ? <p className="py-3 text-center text-sm text-subtle">Просроченных задач нет</p> : null}
+                </div>
+              </section>
+            ) : null}
+          </div>
+  );
+  const renderCreditsControl = () => (
+          <button data-tour="credits" type="button" onClick={() => { if (currentUser?.isGuest) { setAuthError(null); setAuthModalMode('register'); } else { setCreditModalView('purchase'); setIsSubscriptionModalOpen(true); } }} className="light-credit-badge topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400" title={currentUser?.isGuest ? 'Зарегистрируйтесь, чтобы получить 100 ИИ-кредитов' : 'Посмотреть подписки и увеличить ИИ-кредиты'}><Coins size={15} /><span>Кредиты: {currentUser?.aiCredits ?? 0}</span></button>
+  );
+  // Share the original, interactive mode renderers between ordinary workspace
+  // and each fullscreen pane. Nothing is duplicated or displayed as a preview.
+  const renderWorkspaceMode = (workspaceMode: DisplayMode): ReactNode => (
+    workspaceMode === 'bubbles' ? (
+          <div data-tour="bubbles-workspace" className="relative h-full">
+            <div data-tour="bubble-layout"
+              className="bubble-layout-toggle absolute top-4 z-30 flex items-center gap-1 rounded-full border p-1 shadow-xl backdrop-blur"
+              style={{ right: '16px' }}
+              role="group" aria-label="Режим отображения баблов">
+              <button
+                type="button"
+                className={`bubble-layout-toggle-button inline-flex h-9 w-9 items-center justify-center rounded-full transition ${mode === 'global' ? 'bubble-layout-toggle-button-active' : ''}`}
+                onClick={() => setMode('global')}
+                title="Общий круг"
+                aria-label="Показать баблы общим кругом"
+                aria-pressed={mode === 'global'}
+              >
+                <CircleIcon size={19} strokeWidth={2.1} />
+              </button>
+              <button
+                type="button"
+                className={`bubble-layout-toggle-button inline-flex h-9 w-9 items-center justify-center rounded-full transition ${mode === 'sectors' ? 'bubble-layout-toggle-button-active' : ''}`}
+                onClick={() => setMode('sectors')}
+                title="Сектора"
+                aria-label="Показать баблы по секторам"
+                aria-pressed={mode === 'sectors'}
+              >
+                <PieChart size={19} strokeWidth={2.1} />
+              </button>
+            </div>
+            {!isBubbleFullscreen ? <button type="button"
+              data-tour="bubbles-fullscreen-enter"
+              onClick={() => { setIsSphereFilterOpen(false); setFullscreenDisplayModes(['bubbles']); setIsBubbleFullscreen(true); }}
+              className="bubble-layout-toggle absolute top-[4.55rem] z-30 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold shadow-lg backdrop-blur transition hover:brightness-110"
+              style={{ right: '16px' }}
+              title="Развернуть пространство пузырей на весь экран"
+              aria-label="Полноэкранный режим пузырей">
+              <Maximize2 size={16} />
+              <span>Полный экран</span>
+            </button> : null}
+            <BubbleField
+              className="h-full"
+              fullscreen={isBubbleFullscreen}
+              compact={isBubbleFullscreen && fullscreenDisplayModes.length === 2}
+              themeMode={effectiveThemeMode}
+              showTrainingInvitation={isOnboardingOfferOpen}
+              onOpenTraining={() => {
+                setTrainingOpenSignal(signal => signal + 1);
+                setIsUpdatesOpen(true);
+              }}
+              onDismissTraining={() => {
+                localStorage.setItem(getOnboardingOfferStorageKey(currentUser.id), '1');
+                setIsOnboardingOfferOpen(false);
+              }}
+            tasks={visibleTasks}
+            timelinePreviewTasks={activeTimelineItems}
+            spheres={visibleSpheres}
+            rankingMode="coefficient"
+            subtaskMap={displayedSubtaskMap}
+            isSubtaskFilterActive={subtaskFilterMode !== 'none'}
+            onToggleSubtaskFilter={() => setSubtaskFilterMode((prev) => (prev === 'none' ? 'urgency' : 'none'))}
+            mode={mode}
+            poppingTaskId={poppingTaskId}
+            hasAiNotification={hasUnreadAiMessage}
+            selectedId={editorState?.task?.id}
+            onSelect={(task) => {
+              openTaskWithFocusGuard(task);
+            }}
+            onSelectSubtask={(subtask) => setEditorState({ task: subtask })}
+            onCreateSubtask={async (parentTask, payload) => {
+              await createSubtaskForParent(parentTask, payload);
+            }}
+            onBubbleAction={async (task, payload) => {
+              await api.bubbleAction(task.id, payload);
+              await load();
+            }}
+            onToggleSubtaskDone={toggleSubtaskDone}
+            onUpdateSubtaskDueDate={async (subtask, dueDate) => {
+              await api.updateTask(subtask.id, { dueDate });
+              await load();
+            }}
+            onQuickCompleteTask={completeTask}
+            onQuickChangeTaskImportance={async (task, importanceDelta) => {
+              const nextImportance = Math.max(1, Math.min(5, task.importance + importanceDelta));
+              if (nextImportance === task.importance) return;
+              await api.updateTask(task.id, { importance: nextImportance });
+              await load();
+            }}
+            onQuickPostponeTask={async (task, option) => await quickPostponeTask(task, option)}
+            onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
+            onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
+            onRescheduleTask={(task) => setTimelineReschedulePicker({ taskId: task.id, signal: Date.now() })}
+            forceTaskContextMenuOpen={activeTourStep === 'task-context-menu'}
+            isSearchFiltering={Boolean(search.trim())}
+            />
+          </div>
+        ) : workspaceMode === 'list' ? (
+          <div data-tour="list-workspace" ref={isBubbleFullscreen && fullscreenDisplayModes.includes('timeline') ? undefined : timelineScrollContainerRef} onWheel={(event) => { if (draggedTimelineTaskId !== null) { event.currentTarget.scrollTop += event.deltaY; } }} className="list-mode-canvas h-full overflow-y-auto rounded-[2.2rem] border p-4 backdrop-blur-sm">
+            <ul className="space-y-3 pr-1">
+              {activeListTasks.length === 0 ? (
+                <li className="list-empty-state rounded-xl border px-4 py-3 text-sm">
+                  Нет задач для выбранных фильтров
+                </li>
+              ) : null}
+              {activeListTasks.map((task) => {
+                const hasOverdueState = task.status !== 'DONE' && isOverdue(task);
+                const hasReminderState = task.status !== 'DONE' && !hasOverdueState && shouldTaskGlow(task);
+                const taskSubtasks = displayedSubtaskMap[task.id] ?? [];
+                const hasOverdueSubtaskState = !hasOverdueState && taskSubtasks.some((subtask) => subtask.status !== 'DONE' && isOverdue(subtask));
+                const hasReminderSubtaskState = !hasOverdueState && !hasReminderState && !hasOverdueSubtaskState && taskSubtasks.some((subtask) => subtask.status !== 'DONE' && shouldTaskGlow(subtask));
+                const taskSphere = task.sphereId ? (sphereById.get(task.sphereId) ?? null) : null;
+                const sphereColor = taskSphere?.color ?? '#64748b';
+                const SphereIcon = resolveSphereIcon(taskSphere?.icon) ?? LayoutGrid;
+                const taskCoefficient = getTaskCoefficient(task, displayedSubtaskMap);
+                const hasAiNotificationState = hasUnreadAiMessage(task.id);
+                const isClosingTask = closingTaskIds.includes(task.id);
+                return (
+                  <motion.li
+                    key={task.id}
+                    layout
+                    className={`list-task-item list-task-item-premium relative flex cursor-pointer items-start gap-3 overflow-hidden rounded-lg border px-3 py-2 text-sm transition ${isClosingTask ? 'list-task-item-completing ring-1 ring-emerald-300/70' : ''} ${
+                      hasOverdueState
+                        ? 'list-task-item-overdue'
+                        : hasReminderState
+                          ? 'list-task-item-reminder'
+                          : hasOverdueSubtaskState
+                            ? 'list-task-item-subtask-overdue'
+                            : hasReminderSubtaskState
+                              ? 'list-task-item-subtask-reminder'
+                              : hasAiNotificationState
+                                ? 'list-task-item-ai'
+                                : ''
+                    }`}
+                    style={{ '--desktop-list-sector-color': sphereColor } as CSSProperties}
+                    title={taskSphere?.name ?? 'Без сектора'}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setListTaskContextMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY, { submenu: true }), taskId: task.id });
+                      setListTaskPostponeSubmenuOpen(false);
+                    }}
+                    onClick={() => { if (!isClosingTask) openTaskWithFocusGuard(task); }}
+                  >
+                    <input
+                      type="checkbox"
+                      className="list-task-checkbox mt-1"
+                      checked={task.status === 'DONE' || isClosingTask}
+                      onClick={(event) => event.stopPropagation()}
+                      onChange={async () => {
+                        if (task.status === 'DONE') {
+                          await api.updateTask(task.id, { status: 'TODO' });
+                          await load();
+                        } else {
+                          await completeTask(task);
+                        }
+                      }}
+                    />
+                    {isClosingTask ? <Check size={14} className="timeline-task-chip-success mt-1 shrink-0" /> : null}
+                    <div className="min-w-0 flex-1">
+                      <span className="list-task-sector-badge mb-1.5 inline-flex max-w-[min(100%,15rem)] items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold" title={taskSphere?.name ?? 'Без сектора'}>
+                        <SphereIcon size={12} className="shrink-0" aria-hidden="true" />
+                        <span className="truncate">{taskSphere?.name ?? 'Без сектора'}</span>
+                      </span>
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <span className={`min-w-0 flex-1 truncate text-base font-semibold ${task.status === 'DONE' || isClosingTask ? 'timeline-task-chip-completed text-subtle line-through opacity-70 decoration-2' : 'text-primary'}`}>
+                          <LinkifiedText text={task.title} stopPropagationOnLinkClick />
+                        </span>
+                        {task.isRecurring ? <span title="Повторяющаяся задача"><Repeat size={13} className="list-task-repeat-icon shrink-0" /></span> : null}
+                        {hasAiNotificationState ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={14} className="list-task-ai-icon shrink-0" /></span> : null}
+                      </div>
+                      {task.description?.trim() ? (
+                        <p className="mt-1 truncate text-xs text-muted">
+                          <LinkifiedText text={noteHtmlToPlainText(task.description ?? '', { trimEnd: true })} stopPropagationOnLinkClick />
+                        </p>
+                      ) : null}
+                      <p className={`list-task-deadline mt-1 inline-flex min-w-0 items-center gap-1.5 text-[11px] ${hasOverdueState ? 'list-task-deadline-overdue' : 'text-subtle'}`}>
+                        {task.aiMonitoringEnabled ? <><TaskMonitoringBadge /><span className="min-w-0 truncate">Дедлайн: На усмотрение ИИ</span></> : <><CalendarDays size={13} className="shrink-0" aria-hidden="true" /><span className="min-w-0 truncate">Дедлайн: {formatTaskDueDate(task.dueDate)}{task.dueDate ? ` · ${formatDeadlineLeft(task.dueDate)}` : ''}</span></>}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {renderWorkspaceCommentIndicator(task)}
+                      {renderWorkspaceAttachmentIndicator(task)}
+                      {rankingMode === 'coefficient' ? (
+                        <span
+                          className="list-task-coefficient-badge inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold"
+                          style={{ backgroundColor: getCoefficientBadgeColor(taskCoefficient, effectiveThemeMode) }}
+                          title="Коэффициент важности задачи"
+                        >
+                          <Gauge size={12} />
+                          {taskCoefficient.toFixed(2)}
+                        </span>
+                      ) : (
+                        <span
+                          className={`list-task-importance-badge rounded-full border px-2 py-0.5 text-[11px] ${IMPORTANCE_STYLES[task.importance] ?? IMPORTANCE_STYLES[3]}`}
+                          title="Важность задачи"
+                        >
+                          {task.importance}
+                        </span>
+                      )}
+                    </div>
+                  </motion.li>
+                );
+              })}
+            </ul>
+            {listTaskContextMenu ? createPortal((() => {
+              const contextTask = taskById.get(listTaskContextMenu.taskId);
+              if (!contextTask) return null;
+              return (
+                <div
+                  className="fixed z-[130]"
+                  style={{ left: listTaskContextMenu.x, top: listTaskContextMenu.y }}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="surface-popover relative min-w-44 rounded-xl border p-2 shadow-2xl">
+                    <button
+                      type="button"
+                      className="surface-muted flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:brightness-110"
+                      onMouseEnter={() => setListTaskPostponeSubmenuOpen(true)}
+                      onClick={() => setListTaskPostponeSubmenuOpen((prev) => !prev)}
+                    >
+                      <span>Отложить</span>
+                      <ChevronRight size={13} className="text-muted" />
+                    </button>
+                    <button
+                      type="button"
+                      className="primary-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm"
+                      onClick={() => {
+                        openCreateTaskFromListTask(contextTask);
+                        setListTaskContextMenu(null);
+                      }}
+                    >
+                      Добавить задачу
+                    </button>
+                    <button
+                      type="button"
+                      className="success-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm"
+                      onClick={() => {
+                        setListTaskContextMenu(null);
+                        setListTaskPostponeSubmenuOpen(false);
+                        void completeTask(contextTask);
+                      }}
+                    >
+                      Выполнить
+                    </button>
+                    <button
+                      type="button"
+                      className="timeline-pick-button mt-1.5 flex w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium"
+                      onClick={() => {
+                        setTimelineReschedulePicker({ taskId: contextTask.id, signal: Date.now() });
+                        setListTaskContextMenu(null);
+                        setListTaskPostponeSubmenuOpen(false);
+                      }}
+                    >
+                      <CalendarDays size={14} />
+                      Перенести
+                    </button>
+                    {listTaskPostponeSubmenuOpen ? (
+                      <div className="surface-popover absolute left-full top-[46px] ml-1 w-56 rounded-md border p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                        {QUICK_POSTPONE_OPTIONS.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-primary hover:brightness-110"
+                            onClick={async () => {
+                              setTimelinePostponeLoadingTaskId(contextTask.id);
+                              setListTaskContextMenu(null);
+                              setListTaskPostponeSubmenuOpen(false);
+                              try {
+                                await quickPostponeTask(contextTask, option.value);
+                              } finally {
+                                setTimelinePostponeLoadingTaskId((prev) => (prev === contextTask.id ? null : prev));
+                              }
+                            }}
+                          >
+                            <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })(), document.body) : null}
+          </div>
+        ) : (
+          <div data-tour="timeline-workspace" ref={timelineScrollContainerRef} className="timeline-canvas h-full overflow-y-auto rounded-[2.2rem] border p-4 backdrop-blur-sm">
+            <div className="space-y-4 pr-1">
+              <section className={`timeline-toolbar sticky top-0 z-20 rounded-3xl border px-3 py-3 shadow-2xl backdrop-blur-xl transition-all duration-300 ease-out sm:px-4 ${isTimelineToolbarHidden && !isTimelineOverdueModalOpen ? 'timeline-toolbar-hidden' : 'timeline-toolbar-visible'}`}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 p-1 shadow-inner">
+                    <button
+                      className="timeline-nav-button rounded-md border px-2 py-1 text-xs"
+                      onClick={() => {
+                        setTimelineAnchorDate((prev) => {
+                          const next = new Date(prev);
+                          if (timelineViewMode === 'day') next.setDate(next.getDate() - 1);
+                          else if (timelineViewMode === 'week') next.setDate(next.getDate() - 7);
+                          else next.setMonth(next.getMonth() - 1);
+                          return next;
+                        });
+                      }}
+                    >
+                      ←
+                    </button>
+                    <button
+                      className="timeline-nav-button rounded-md border px-2 py-1 text-xs"
+                      onClick={() => setTimelineAnchorDate(new Date())}
+                    >
+                      Сегодня
+                    </button>
+                    <button
+                      className="timeline-nav-button rounded-md border px-2 py-1 text-xs"
+                      onClick={() => {
+                        setTimelineAnchorDate((prev) => {
+                          const next = new Date(prev);
+                          if (timelineViewMode === 'day') next.setDate(next.getDate() + 1);
+                          else if (timelineViewMode === 'week') next.setDate(next.getDate() + 7);
+                          else next.setMonth(next.getMonth() + 1);
+                          return next;
+                        });
+                      }}
+                    >
+                      →
+                    </button>
+                  </div>
+                  <h3 className="timeline-title max-w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-center text-sm font-semibold capitalize tracking-tight shadow-inner sm:text-base">{timelineViewData.title}</h3>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+
+                    <button type="button" className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs ${isTimelineOptimizePreviewEnabled ? 'border-cyan-300 bg-cyan-700/60 text-cyan-50' : currentOptimizeState.plan.length>0 ? 'timeline-nav-button' : 'timeline-nav-button opacity-50'}`} disabled={currentOptimizeState.plan.length===0} onClick={() => setTimelineOptimizePreviewEnabledByMode((prev)=>({ ...prev, [timelineViewMode]: !prev[timelineViewMode] }))} title="Показать/скрыть ИИ-расклад"><Eye size={14} /></button>
+                    <button type="button" className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs ${isTimelineOptimizePreviewEnabled ? 'border-emerald-300 bg-emerald-700/70 text-emerald-50' : 'timeline-nav-button opacity-50'}`} disabled={!isTimelineOptimizePreviewEnabled} title="Принять ИИ-оптимизацию" onClick={async () => { await api.applyTimelineOptimization({ plan: currentOptimizeState.plan }); setTimelineOptimizePreviewEnabledByMode((prev)=>({ ...prev, [timelineViewMode]: false })); setTimelineOptimizeStateByMode((prev)=>({ ...prev, [timelineViewMode]: { plan: [], summary: '' } })); await load(); }}><Check size={14} /></button>
+                    <button type="button" className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs ${isTimelineOptimizePreviewEnabled ? 'border-rose-300 bg-rose-700/70 text-rose-50' : 'timeline-nav-button opacity-50'}`} disabled={!isTimelineOptimizePreviewEnabled} title="Отменить ИИ-оптимизацию" onClick={() => { setTimelineOptimizePreviewEnabledByMode((prev)=>({ ...prev, [timelineViewMode]: false })); setTimelineOptimizeStateByMode((prev)=>({ ...prev, [timelineViewMode]: { plan: [], summary: '' } })); }}><X size={14} /></button>
+                    <button type="button" data-tour="ai-optimize" className="rounded-md border border-rose-400 bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-500" onClick={() => setIsTimelineOptimizeModalOpen(true)} disabled={timelineOptimizeLoading}>
+                      {timelineOptimizeLoading ? <Loader2 size={14} className="animate-spin" /> : 'Оптимизировать ✨'}
+                    </button>
+                    <div data-tour="timeline-range" className="timeline-mode-switch flex items-center gap-1 rounded-lg border p-1">
+                      {([
+                        { key: 'day', label: 'День' },
+                        { key: 'week', label: 'Неделя' },
+                        { key: 'month', label: 'Месяц' }
+                      ] as const).map((mode) => (
+                        <button
+                          key={mode.key}
+                          className={`rounded-md px-2 py-1 text-xs transition ${
+                            timelineViewMode === mode.key
+                              ? 'timeline-mode-button-active'
+                              : 'timeline-mode-button-idle'
+                          }`}
+                          onClick={() => setTimelineViewMode(mode.key)}
+                        >
+                          {mode.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+              </section>
+
+              {timelineViewData.tasksInRange.length === 0 ? (
+                <div className="timeline-empty-state rounded-xl border px-4 py-3 text-sm">
+                  Нет задач с датой для выбранного режима
+                </div>
+              ) : null}
+
+              {timelineViewMode === 'month' ? (
+                <section className="timeline-panel rounded-2xl border p-3">
+                  <div className="mb-2 grid grid-cols-7 gap-2">
+                    {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((dayName, index) => (
+                      <div
+                        key={dayName}
+                        className={`text-center text-xs font-semibold uppercase tracking-wide ${index >= 5 ? 'timeline-weekday-weekend' : 'text-subtle'}`}
+                      >
+                        {dayName}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-7">
+                    {timelineViewData.monthCells.map((cell) => (
+                      <div
+                        key={cell.key}
+                        ref={cell.date && cell.date.toDateString() === new Date().toDateString() ? timelineCurrentDayRef : undefined}
+                        className={`timeline-month-cell min-h-32 rounded-xl border p-2 ${
+                          cell.date
+                            ? ((cell.date.getDay() === 0 || cell.date.getDay() === 6)
+                              ? 'timeline-month-cell-weekend'
+                              : 'timeline-month-cell-active')
+                            : 'timeline-month-cell-empty'
+                        } ${cell.date ? 'transition hover:ring-1 hover:ring-cyan-400/35' : ''} ${cell.date && cell.date.toDateString() === new Date().toDateString() ? 'timeline-month-cell-today ring-2' : ''} ${isTimelineDragging && cell.date ? 'ring-1 ring-cyan-500/30 transition' : ''}`}
+                        onDragOver={(event) => {
+                          if (!cell.date) return;
+                          event.preventDefault();
+                          event.dataTransfer.dropEffect = 'move';
+                        }}
+                        onContextMenu={(event) => {
+                          if (!cell.date) return;
+                          event.preventDefault();
+                          setTimelineCreateMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY), date: new Date(cell.date), hour: null });
+                        }}
+                        onClick={(event) => {
+                          if (!cell.date) return;
+                          const target = event.target as HTMLElement;
+                          if (target.closest('button, a, input, textarea')) return;
+                          setTimelineAnchorDate(new Date(cell.date));
+                          setTimelineViewMode('day');
+                        }}
+                        onDrop={async (event) => {
+                          if (!cell.date) return;
+                          event.preventDefault();
+                          const taskId = draggedTimelineTaskId ?? event.dataTransfer.getData('text/task-id');
+                          setDraggedTimelineTaskId(taskId || null);
+                          await handleTimelineTaskDrop({ date: cell.date, keepOriginalTime: true });
+                          setDraggedTimelineTaskId(null);
+                        }}
+                      >
+                        {cell.date ? (
+                          <>
+                            <p className="mb-2 text-xs font-semibold text-muted">{cell.date.getDate()}</p>
+                            <ul className="space-y-1">
+                              {cell.tasks.slice(0, 4).map((task) => renderTimelineTaskChip(task))}
+                              {cell.tasks.length > 4 ? (
+                                <li>
+                                  <button
+                                    type="button"
+                                    className="timeline-more-button rounded-md border px-2 py-0.5 text-[11px] transition"
+                                    onClick={() => {
+                                      if (!cell.date) return;
+                                      setTimelineAnchorDate(new Date(cell.date));
+                                      setTimelineViewMode('day');
+                                    }}
+                                  >
+                                    + ещё {cell.tasks.length - 4}
+                                  </button>
+                                </li>
+                              ) : null}
+                            </ul>
+                          </>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {timelineViewMode === 'week' ? (
+                <section className="timeline-panel overflow-x-auto rounded-2xl border">
+                  {(() => {
+                    const now = new Date();
+                    const lineHour = now.getHours();
+                    const lineOffsetPercent = (now.getMinutes() / 60) * 100;
+                    return (
+                  <div className="grid min-w-[980px] grid-cols-[80px_repeat(7,minmax(120px,1fr))]">
+                    <div className="timeline-grid-header border-b border-r p-2 text-xs">Время</div>
+                    {timelineViewData.dayGroups.map((day) => {
+                      const isWeekend = day.date.getDay() === 0 || day.date.getDay() === 6;
+                      const isToday = day.date.toDateString() === new Date().toDateString();
+                      return (
+                        <div
+                          key={`header-${day.key}`}
+                          className={`timeline-week-header border-b border-r p-2 text-center ${
+                            isToday ? 'timeline-week-header-today ring-1' : isWeekend ? 'timeline-week-header-weekend' : ''
+                          }`}
+                        >
+                          <p className={`text-xs ${isToday ? 'timeline-today-text' : isWeekend ? 'timeline-weekday-weekend' : 'text-subtle'}`}>
+                            {day.date.toLocaleDateString('ru-RU', { weekday: 'short' })}
+                          </p>
+                          <p className={`text-sm font-semibold ${isToday ? 'timeline-today-text' : isWeekend ? 'timeline-weekday-weekend' : 'text-primary'}`}>
+                            {day.date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                          </p>
+                        </div>
+                      );
+                    })}
+                    {Array.from({ length: 24 }, (_, hour) => hour).map((hour) => (
+                      <Fragment key={`week-hour-${hour}`}>
+                        <div className="timeline-grid-time border-b border-r px-2 py-2 text-xs">
+                          <div className="relative">
+                            {String(hour).padStart(2, '0')}:00
+                          </div>
+                        </div>
+                        {timelineViewData.dayGroups.map((day) => {
+                          const hourTasks = day.tasks.filter((task) => {
+                            if (!task.dueDate) return false;
+                            const dueDate = new Date(task.dueDate);
+                            return !Number.isNaN(dueDate.getTime()) && dueDate.getHours() === hour;
+                          });
+                          const isWeekend = day.date.getDay() === 0 || day.date.getDay() === 6;
+                          const isToday = day.date.toDateString() === new Date().toDateString();
+                          return (
+                            <div
+                              key={`${day.key}-${hour}`}
+                              className={`timeline-week-cell relative min-h-14 space-y-1 border-b border-r px-1.5 py-1.5 ${
+                                isWeekend ? 'timeline-week-cell-weekend' : ''
+                              } ${
+                                isToday ? 'timeline-week-cell-today border-l border-r' : ''
+                              } ${isTimelineDragging ? 'timeline-drop-target transition-colors' : ''}`}
+                              onDragOver={(event) => {
+                                event.preventDefault();
+                                event.dataTransfer.dropEffect = 'move';
+                              }}
+                              onContextMenu={(event) => {
+                                event.preventDefault();
+                                setTimelineCreateMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY), date: new Date(day.date), hour });
+                              }}
+                              onDrop={async (event) => {
+                                event.preventDefault();
+                                const taskId = draggedTimelineTaskId ?? event.dataTransfer.getData('text/task-id');
+                                setDraggedTimelineTaskId(taskId || null);
+                                await handleTimelineTaskDrop({ date: day.date, hour });
+                                setDraggedTimelineTaskId(null);
+                              }}
+                            >
+                              {isToday && hour === lineHour ? (
+                                <span
+                                  className="pointer-events-none absolute left-0 right-0 border-t border-red-500"
+                                  style={{ top: `${lineOffsetPercent}%` }}
+                                />
+                              ) : null}
+                              {hourTasks.map((task) => renderTimelineTaskChip(task, { showTime: false }))}
+                              {getTimelineHabitsForDateHour(day.date, hour).map(({ habit, reminderTime }) => renderTimelineHabitChip(habit, reminderTime, day.date))}
+                            </div>
+                          );
+                        })}
+                      </Fragment>
+                    ))}
+                  </div>
+                    );
+                  })()}
+                </section>
+              ) : null}
+
+              {timelineViewMode === 'day' ? (
+                <section className="timeline-panel overflow-hidden rounded-2xl border">
+                  {(() => {
+                    const now = new Date();
+                    const isCurrentDay = timelineAnchorDate.toDateString() === now.toDateString();
+                    const lineHour = now.getHours();
+                    const lineOffsetPercent = (now.getMinutes() / 60) * 100;
+                    return timelineViewData.hourGroups.map((hourGroup) => (
+                    <div key={hourGroup.hour} data-tour={hourGroup.hour === 10 ? 'timeline-hour' : undefined} className="timeline-day-row grid grid-cols-[70px_minmax(0,1fr)] border-b last:border-b-0">
+                      <div className="timeline-grid-time border-r px-2 py-2 text-xs">{String(hourGroup.hour).padStart(2, '0')}:00</div>
+                      <div className="timeline-day-slot-group relative">
+                        {isCurrentDay && hourGroup.hour === lineHour ? (
+                          <span
+                            className="pointer-events-none absolute left-0 right-0 z-10 border-t border-red-500"
+                            style={{ top: `${lineOffsetPercent}%` }}
+                          />
+                        ) : null}
+                        {hourGroup.quarters.map((quarter) => (
+                          <div
+                            key={`${hourGroup.hour}-${quarter.minute}`}
+                            data-tour={hourGroup.hour === 10 && quarter.minute === 0 ? 'timeline-context-slot' : undefined}
+                            className={`timeline-day-quarter-slot group relative px-2 transition-colors ${quarter.tasks.length > 0 ? 'timeline-day-quarter-slot-filled py-1.5' : 'timeline-day-quarter-slot-empty'} ${isTimelineDragging ? 'timeline-drop-target timeline-day-quarter-slot-drag-ready' : ''} ${activeTimelineDropSlot?.hour === hourGroup.hour && activeTimelineDropSlot.minute === quarter.minute ? 'timeline-day-quarter-slot-drag-active' : ''}`}
+                            title={`Слот ${String(hourGroup.hour).padStart(2, '0')}:${String(quarter.minute).padStart(2, '0')}`}
+                            aria-label={`Слот ${String(hourGroup.hour).padStart(2, '0')}:${String(quarter.minute).padStart(2, '0')}`}
+                            onDragEnter={(event) => {
+                              event.preventDefault();
+                              if (isTimelineDragging) setActiveTimelineDropSlot({ hour: hourGroup.hour, minute: quarter.minute });
+                            }}
+                            onDragOver={(event) => {
+                              event.preventDefault();
+                              event.dataTransfer.dropEffect = 'move';
+                              if (isTimelineDragging) setActiveTimelineDropSlot({ hour: hourGroup.hour, minute: quarter.minute });
+                            }}
+                            onDragLeave={(event) => {
+                              if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+                              setActiveTimelineDropSlot((current) => (
+                                current?.hour === hourGroup.hour && current.minute === quarter.minute ? null : current
+                              ));
+                            }}
+                            onContextMenu={(event) => {
+                              event.preventDefault();
+                              const dayDate = new Date(timelineAnchorDate);
+                              dayDate.setHours(0, 0, 0, 0);
+                              setTimelineCreateMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY), date: dayDate, hour: hourGroup.hour, minute: quarter.minute });
+                            }}
+                            onDrop={async (event) => {
+                              event.preventDefault();
+                              const taskId = draggedTimelineTaskId ?? event.dataTransfer.getData('text/task-id');
+                              setDraggedTimelineTaskId(taskId || null);
+                              const dayDate = new Date(timelineAnchorDate);
+                              dayDate.setHours(0, 0, 0, 0);
+                              await handleTimelineTaskDrop({ date: dayDate, hour: hourGroup.hour, minute: quarter.minute });
+                              setDraggedTimelineTaskId(null);
+                              setActiveTimelineDropSlot(null);
+                            }}
+                          >
+                            <span className="timeline-day-quarter-label pointer-events-none absolute right-2 top-1 text-[10px]">:{String(quarter.minute).padStart(2, '0')}</span>
+                            {quarter.tasks.length > 0 || (quarter.minute === 0 && getTimelineHabitsForDateHour(timelineAnchorDate, hourGroup.hour).length > 0) ? (
+                              <div className="space-y-1.5 pr-9">
+                                {quarter.tasks.map((task) => renderTimelineTaskChip(task, { showTime: true }))}
+                                {quarter.minute === 0 ? getTimelineHabitsForDateHour(timelineAnchorDate, hourGroup.hour).map(({ habit, reminderTime }) => renderTimelineHabitChip(habit, reminderTime, timelineAnchorDate, { showTime: true })) : null}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ));
+                  })()}
+                </section>
+              ) : null}
+            </div>
+          </div>
+        )
+  );
   return (
     <main
       className={isBubbleFullscreen
@@ -5461,9 +6126,9 @@ export default function App() {
       <UpdatesMenu open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} trainingOpenSignal={trainingOpenSignal} onStartWorkspaceTour={startWorkspaceTour} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} completedLessonIds={currentUser.completedLessonIds ?? []} hasUnreadNews={hasUnreadNews} onNewsViewed={markLatestNewsRead} />
       {trainingRewardMessage ? <div className="training-reward-toast focus-bonus-message focus-bonus-subtask" role="status">{trainingRewardMessage}</div> : null}
       {activeTourStep ? <TourOverlay activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-') ? WORKSPACE_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-') ? FEATURE_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} onComplete={completeTaskTour} /> : null}
-      {isBubbleFullscreen && displayMode === 'bubbles' ? (
+      {isBubbleFullscreen ? (
         <header data-tour="bubbles-fullscreen-toolbar"
-          className="surface-topbar light-glass-topbar relative z-40 mx-auto mt-3 mb-2 flex w-[calc(100%-24px)] max-w-[1080px] shrink-0 flex-wrap items-center gap-2 rounded-2xl border px-3 py-2.5 shadow-lg backdrop-blur-lg lg:flex-nowrap">
+          className="fullscreen-workspace-toolbar surface-topbar light-glass-topbar relative z-40 mx-auto mt-3 mb-2 flex w-[calc(100%-24px)] shrink-0 flex-wrap items-center gap-2 rounded-2xl border px-3 py-2.5 shadow-lg backdrop-blur-lg">
           <WorkspaceGlobalSearch
             key={currentUser.id}
             userId={currentUser.id}
@@ -5553,6 +6218,26 @@ export default function App() {
                 </div>
               ) : null}
             </div>
+          </div>
+          <div className="fullscreen-workspace-toolbar-actions ml-auto flex flex-wrap items-center justify-end gap-2">
+            <FullscreenModePicker modes={fullscreenDisplayModes} onChange={(nextModes) => {
+              setFullscreenDisplayModes(nextModes);
+              setDisplayMode(nextModes[0]);
+              setIsSphereFilterOpen(false);
+              setIsTimelineOverdueModalOpen(false);
+            }} />
+            {renderOverdueControl()}
+            {renderCreditsControl()}
+            <button type="button" data-tour="bubbles-fullscreen-exit"
+              className="fullscreen-workspace-exit topbar-action-button inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold"
+              onClick={() => {
+                setDisplayMode(fullscreenDisplayModes[0] ?? 'bubbles');
+                setIsBubbleFullscreen(false);
+                setIsSphereFilterOpen(false);
+                setIsTimelineOverdueModalOpen(false);
+              }} title="Выйти из полноэкранного режима" aria-label="Выйти из полноэкранного режима">
+              <Minimize2 size={16} /> <span>Выйти</span>
+            </button>
           </div>
         </header>
       ) : null}
@@ -5696,58 +6381,9 @@ export default function App() {
         </div>
 
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-          <div className="topbar-overdue-wrap relative shrink-0" ref={overduePopoverRef}>
-            <button type="button"
-              className="topbar-action-button topbar-overdue-trigger inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold"
-              onClick={() => setIsTimelineOverdueModalOpen(open => !open)}
-              aria-expanded={isTimelineOverdueModalOpen}
-              aria-controls="topbar-overdue-list"
-              title="Управление просроченными задачами во всех режимах"
-            >
-              <Clock3 size={15} />
-              <span>Просроченные</span>
-              <span className="topbar-overdue-counter rounded-full px-1.5 py-0.5 text-[11px] tabular-nums">{timelineOverdueTasks.length}</span>
-              <ChevronDown size={13} className={isTimelineOverdueModalOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
-            </button>
-            {isTimelineOverdueModalOpen ? (
-              <section id="topbar-overdue-list" className="timeline-overdue-panel topbar-overdue-popover absolute right-0 top-[calc(100%+10px)] z-[85] w-[min(360px,calc(100vw-24px))] rounded-2xl border p-3 shadow-2xl" aria-label="Просроченные задачи">
-                <div className="mb-3 flex items-center justify-between gap-2 pr-8">
-                  <h4 className="text-sm font-semibold text-primary">Просроченные задачи</h4>
-                  <button type="button" className="surface-muted absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded-lg text-xs" onClick={() => setIsTimelineOverdueModalOpen(false)} aria-label="Закрыть просроченные задачи"><X size={14}/></button>
-                </div>
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                    <button type="button" className="secondary-button rounded-lg px-2 py-1.5 text-xs disabled:opacity-60"
-                      onClick={() => void postponeAllOverdueToToday()}
-                      disabled={timelineOverdueBulkPostponeLoading !== null}
-                      title="Перенести на сегодня, сохранив время">
-                      {timelineOverdueBulkPostponeLoading === 'normal' ? <Loader2 size={12} className="animate-spin" /> : 'Отложить'}
-                    </button>
-                    <button type="button" className="inline-flex items-center gap-1 rounded-lg border border-pink-300/50 bg-pink-600/80 px-2 py-1.5 text-xs text-white disabled:opacity-60"
-                      onClick={() => void postponeAllOverdueByAi()}
-                      disabled={timelineOverdueBulkPostponeLoading !== null}
-                      title="Найти ближайшее свободное время с помощью ИИ, списываются кредиты">
-                      {timelineOverdueBulkPostponeLoading === 'ai' ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                      Отложить (ИИ)
-                    </button>
-                </div>
-                <div className="topbar-overdue-items max-h-[min(360px,55vh)] space-y-1 overflow-y-auto pr-1">
-                  {timelineOverdueTasks.map(task => (
-                    <div key={task.id} className="topbar-overdue-row">
-                      {renderTimelineTaskChip(task, {
-                        isSubtask: Boolean(task.parentTaskId),
-                        disableEffects: true,
-                        hoverLeftOfOverduePanel: true,
-                        parentTaskTitle: task.parentTaskId ? (taskById.get(task.parentTaskId)?.title ?? 'Без основной задачи') : undefined
-                      })}
-                    </div>
-                  ))}
-                  {timelineOverdueTasks.length === 0 ? <p className="py-3 text-center text-sm text-subtle">Просроченных задач нет</p> : null}
-                </div>
-              </section>
-            ) : null}
-          </div>
+          {renderOverdueControl()}
           <button data-tour="feature-focus-button" type="button" onClick={openFocusSetup} className="focus-mode-button topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-violet-300" title="Режим фокуса с ИИ"><Bot size={16} /> Фокус</button>
-          <button data-tour="credits" type="button" onClick={() => { if (currentUser?.isGuest) { setAuthError(null); setAuthModalMode('register'); } else { setCreditModalView('purchase'); setIsSubscriptionModalOpen(true); } }} className="light-credit-badge topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400" title={currentUser?.isGuest ? 'Зарегистрируйтесь, чтобы получить 100 ИИ-кредитов' : 'Посмотреть подписки и увеличить ИИ-кредиты'}><Coins size={15} /><span>Кредиты: {currentUser?.aiCredits ?? 0}</span></button>
+          {renderCreditsControl()}
           <div className="add-menu-wrap relative" onMouseEnter={() => setIsAddMenuOpen(true)} onMouseLeave={() => { if (!isTourAddMenuOpen) setIsAddMenuOpen(false); }}>
             <button data-tour="create-task" className="add-menu-trigger light-primary-action inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => setIsAddMenuOpen((prev) => !prev)}><Plus size={16} /> Новая задача <ChevronDown size={14} /></button>
             {isAddMenuOpen || isTourAddMenuOpen ? <div className="add-menu-popover topbar-dropdown absolute right-0 top-[calc(100%+0.5rem)] z-40 w-56 rounded-2xl border p-2 shadow-2xl"><button className="add-menu-option add-menu-option-task flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold" onClick={() => { setEditorState({ initialSphereId: spheres[0]?.id }); setIsAddMenuOpen(false); }}><FileText size={14} />Новая задача</button><button data-tour="create-event" className="add-menu-option add-menu-option-event mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold" onClick={() => { setEditorState({ task: { id: '', title: '', description: '', status: 'TODO', importance: 3, urgency: 3, priorityScore: 0, sphereId: spheres[0]?.id ?? null, dueDate: null, parentTaskId: null, taskType: 'EVENT', location: '', notifyBeforeMinutes: 0, isRecurring: false, aiNotificationsEnabled: false } }); setIsAddMenuOpen(false); }}><CalendarDays size={14} />Новое событие</button><button data-tour="create-sector" className="add-menu-option add-menu-option-sector mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50" disabled={spheres.length >= MAX_SPHERES} onClick={() => { setSectorEditorSphere({ id: '', name: '', color: HARMONIOUS_COLORS[0], icon: 'briefcase' }); setIsAddMenuOpen(false); }}><BriefcaseBusiness size={14} />Новый сектор</button></div> : null}
@@ -6350,606 +6986,20 @@ export default function App() {
         className={isBubbleFullscreen
           ? 'workspace-shell relative min-h-0 flex-1 overflow-hidden rounded-none p-0'
           : 'workspace-shell relative min-h-0 flex-1 overflow-hidden pr-[360px]'}>
-        {displayMode === 'bubbles' ? (
-          <div data-tour="bubbles-workspace" className="relative h-full">
-            <div data-tour="bubble-layout"
-              className="bubble-layout-toggle absolute top-4 z-30 flex items-center gap-1 rounded-full border p-1 shadow-xl backdrop-blur"
-              style={{ right: '16px' }}
-              role="group" aria-label="Режим отображения баблов">
-              <button
-                type="button"
-                className={`bubble-layout-toggle-button inline-flex h-9 w-9 items-center justify-center rounded-full transition ${mode === 'global' ? 'bubble-layout-toggle-button-active' : ''}`}
-                onClick={() => setMode('global')}
-                title="Общий круг"
-                aria-label="Показать баблы общим кругом"
-                aria-pressed={mode === 'global'}
-              >
-                <CircleIcon size={19} strokeWidth={2.1} />
-              </button>
-              <button
-                type="button"
-                className={`bubble-layout-toggle-button inline-flex h-9 w-9 items-center justify-center rounded-full transition ${mode === 'sectors' ? 'bubble-layout-toggle-button-active' : ''}`}
-                onClick={() => setMode('sectors')}
-                title="Сектора"
-                aria-label="Показать баблы по секторам"
-                aria-pressed={mode === 'sectors'}
-              >
-                <PieChart size={19} strokeWidth={2.1} />
-              </button>
-            </div>
-            <button type="button"
-              data-tour={isBubbleFullscreen ? 'bubbles-fullscreen-exit' : 'bubbles-fullscreen-enter'}
-              onClick={() => { setIsSphereFilterOpen(false); setIsBubbleFullscreen((prev) => !prev); }}
-              className="bubble-layout-toggle absolute top-[4.55rem] z-30 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold shadow-lg backdrop-blur transition hover:brightness-110"
-              style={{ right: '16px' }}
-              title={isBubbleFullscreen ? 'Выйти из полноэкранного режима' : 'Развернуть пространство пузырей на весь экран'}
-              aria-label={isBubbleFullscreen ? 'Выйти из полноэкранного режима' : 'Полноэкранный режим пузырей'}>
-              {isBubbleFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-              <span>{isBubbleFullscreen ? 'Выйти из полного экрана' : 'Полный экран'}</span>
-            </button>
-            <BubbleField
-              className="h-full"
-              fullscreen={isBubbleFullscreen}
-              themeMode={effectiveThemeMode}
-              showTrainingInvitation={isOnboardingOfferOpen}
-              onOpenTraining={() => {
-                setTrainingOpenSignal(signal => signal + 1);
-                setIsUpdatesOpen(true);
-              }}
-              onDismissTraining={() => {
-                localStorage.setItem(getOnboardingOfferStorageKey(currentUser.id), '1');
-                setIsOnboardingOfferOpen(false);
-              }}
-            tasks={visibleTasks}
-            timelinePreviewTasks={activeTimelineItems}
-            spheres={visibleSpheres}
-            rankingMode="coefficient"
-            subtaskMap={displayedSubtaskMap}
-            isSubtaskFilterActive={subtaskFilterMode !== 'none'}
-            onToggleSubtaskFilter={() => setSubtaskFilterMode((prev) => (prev === 'none' ? 'urgency' : 'none'))}
-            mode={mode}
-            poppingTaskId={poppingTaskId}
-            hasAiNotification={hasUnreadAiMessage}
-            selectedId={editorState?.task?.id}
-            onSelect={(task) => {
-              openTaskWithFocusGuard(task);
-            }}
-            onSelectSubtask={(subtask) => setEditorState({ task: subtask })}
-            onCreateSubtask={async (parentTask, payload) => {
-              await createSubtaskForParent(parentTask, payload);
-            }}
-            onBubbleAction={async (task, payload) => {
-              await api.bubbleAction(task.id, payload);
-              await load();
-            }}
-            onToggleSubtaskDone={toggleSubtaskDone}
-            onUpdateSubtaskDueDate={async (subtask, dueDate) => {
-              await api.updateTask(subtask.id, { dueDate });
-              await load();
-            }}
-            onQuickCompleteTask={completeTask}
-            onQuickChangeTaskImportance={async (task, importanceDelta) => {
-              const nextImportance = Math.max(1, Math.min(5, task.importance + importanceDelta));
-              if (nextImportance === task.importance) return;
-              await api.updateTask(task.id, { importance: nextImportance });
-              await load();
-            }}
-            onQuickPostponeTask={async (task, option) => await quickPostponeTask(task, option)}
-            onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
-            onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
-            onRescheduleTask={(task) => setTimelineReschedulePicker({ taskId: task.id, signal: Date.now() })}
-            forceTaskContextMenuOpen={activeTourStep === 'task-context-menu'}
-            isSearchFiltering={Boolean(search.trim())}
+        {isBubbleFullscreen ? (
+          fullscreenDisplayModes.length === 2 ? (
+            <FullscreenWorkspaceSplit
+              modes={fullscreenDisplayModes as [DisplayMode, DisplayMode]}
+              renderMode={renderWorkspaceMode}
+              ratio={fullscreenSplitRatio}
+              onRatioChange={setFullscreenSplitRatio}
             />
-          </div>
-        ) : displayMode === 'list' ? (
-          <div data-tour="list-workspace" ref={timelineScrollContainerRef} onWheel={(event) => { if (draggedTimelineTaskId !== null) { event.currentTarget.scrollTop += event.deltaY; } }} className="list-mode-canvas h-full overflow-y-auto rounded-[2.2rem] border p-4 backdrop-blur-sm">
-            <ul className="space-y-3 pr-1">
-              {activeListTasks.length === 0 ? (
-                <li className="list-empty-state rounded-xl border px-4 py-3 text-sm">
-                  Нет задач для выбранных фильтров
-                </li>
-              ) : null}
-              {activeListTasks.map((task) => {
-                const hasOverdueState = task.status !== 'DONE' && isOverdue(task);
-                const hasReminderState = task.status !== 'DONE' && !hasOverdueState && shouldTaskGlow(task);
-                const taskSubtasks = displayedSubtaskMap[task.id] ?? [];
-                const hasOverdueSubtaskState = !hasOverdueState && taskSubtasks.some((subtask) => subtask.status !== 'DONE' && isOverdue(subtask));
-                const hasReminderSubtaskState = !hasOverdueState && !hasReminderState && !hasOverdueSubtaskState && taskSubtasks.some((subtask) => subtask.status !== 'DONE' && shouldTaskGlow(subtask));
-                const taskSphere = task.sphereId ? (sphereById.get(task.sphereId) ?? null) : null;
-                const sphereColor = taskSphere?.color ?? '#64748b';
-                const SphereIcon = resolveSphereIcon(taskSphere?.icon) ?? LayoutGrid;
-                const taskCoefficient = getTaskCoefficient(task, displayedSubtaskMap);
-                const hasAiNotificationState = hasUnreadAiMessage(task.id);
-                const isClosingTask = closingTaskIds.includes(task.id);
-                return (
-                  <motion.li
-                    key={task.id}
-                    layout
-                    className={`list-task-item list-task-item-premium relative flex cursor-pointer items-start gap-3 overflow-hidden rounded-lg border px-3 py-2 text-sm transition ${isClosingTask ? 'list-task-item-completing ring-1 ring-emerald-300/70' : ''} ${
-                      hasOverdueState
-                        ? 'list-task-item-overdue'
-                        : hasReminderState
-                          ? 'list-task-item-reminder'
-                          : hasOverdueSubtaskState
-                            ? 'list-task-item-subtask-overdue'
-                            : hasReminderSubtaskState
-                              ? 'list-task-item-subtask-reminder'
-                              : hasAiNotificationState
-                                ? 'list-task-item-ai'
-                                : ''
-                    }`}
-                    style={{ '--desktop-list-sector-color': sphereColor } as CSSProperties}
-                    title={taskSphere?.name ?? 'Без сектора'}
-                    onContextMenu={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      setListTaskContextMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY, { submenu: true }), taskId: task.id });
-                      setListTaskPostponeSubmenuOpen(false);
-                    }}
-                    onClick={() => { if (!isClosingTask) openTaskWithFocusGuard(task); }}
-                  >
-                    <input
-                      type="checkbox"
-                      className="list-task-checkbox mt-1"
-                      checked={task.status === 'DONE' || isClosingTask}
-                      onClick={(event) => event.stopPropagation()}
-                      onChange={async () => {
-                        if (task.status === 'DONE') {
-                          await api.updateTask(task.id, { status: 'TODO' });
-                          await load();
-                        } else {
-                          await completeTask(task);
-                        }
-                      }}
-                    />
-                    {isClosingTask ? <Check size={14} className="timeline-task-chip-success mt-1 shrink-0" /> : null}
-                    <div className="min-w-0 flex-1">
-                      <span className="list-task-sector-badge mb-1.5 inline-flex max-w-[min(100%,15rem)] items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold" title={taskSphere?.name ?? 'Без сектора'}>
-                        <SphereIcon size={12} className="shrink-0" aria-hidden="true" />
-                        <span className="truncate">{taskSphere?.name ?? 'Без сектора'}</span>
-                      </span>
-                      <div className="flex min-w-0 items-center gap-1.5">
-                        <span className={`min-w-0 flex-1 truncate text-base font-semibold ${task.status === 'DONE' || isClosingTask ? 'timeline-task-chip-completed text-subtle line-through opacity-70 decoration-2' : 'text-primary'}`}>
-                          <LinkifiedText text={task.title} stopPropagationOnLinkClick />
-                        </span>
-                        {task.isRecurring ? <span title="Повторяющаяся задача"><Repeat size={13} className="list-task-repeat-icon shrink-0" /></span> : null}
-                        {hasAiNotificationState ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={14} className="list-task-ai-icon shrink-0" /></span> : null}
-                      </div>
-                      {task.description?.trim() ? (
-                        <p className="mt-1 truncate text-xs text-muted">
-                          <LinkifiedText text={noteHtmlToPlainText(task.description ?? '', { trimEnd: true })} stopPropagationOnLinkClick />
-                        </p>
-                      ) : null}
-                      <p className={`list-task-deadline mt-1 inline-flex min-w-0 items-center gap-1.5 text-[11px] ${hasOverdueState ? 'list-task-deadline-overdue' : 'text-subtle'}`}>
-                        {task.aiMonitoringEnabled ? <><TaskMonitoringBadge /><span className="min-w-0 truncate">Дедлайн: На усмотрение ИИ</span></> : <><CalendarDays size={13} className="shrink-0" aria-hidden="true" /><span className="min-w-0 truncate">Дедлайн: {formatTaskDueDate(task.dueDate)}{task.dueDate ? ` · ${formatDeadlineLeft(task.dueDate)}` : ''}</span></>}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      {renderWorkspaceCommentIndicator(task)}
-                      {renderWorkspaceAttachmentIndicator(task)}
-                      {rankingMode === 'coefficient' ? (
-                        <span
-                          className="list-task-coefficient-badge inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold"
-                          style={{ backgroundColor: getCoefficientBadgeColor(taskCoefficient, effectiveThemeMode) }}
-                          title="Коэффициент важности задачи"
-                        >
-                          <Gauge size={12} />
-                          {taskCoefficient.toFixed(2)}
-                        </span>
-                      ) : (
-                        <span
-                          className={`list-task-importance-badge rounded-full border px-2 py-0.5 text-[11px] ${IMPORTANCE_STYLES[task.importance] ?? IMPORTANCE_STYLES[3]}`}
-                          title="Важность задачи"
-                        >
-                          {task.importance}
-                        </span>
-                      )}
-                    </div>
-                  </motion.li>
-                );
-              })}
-            </ul>
-            {listTaskContextMenu ? createPortal((() => {
-              const contextTask = taskById.get(listTaskContextMenu.taskId);
-              if (!contextTask) return null;
-              return (
-                <div
-                  className="fixed z-[130]"
-                  style={{ left: listTaskContextMenu.x, top: listTaskContextMenu.y }}
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <div className="surface-popover relative min-w-44 rounded-xl border p-2 shadow-2xl">
-                    <button
-                      type="button"
-                      className="surface-muted flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:brightness-110"
-                      onMouseEnter={() => setListTaskPostponeSubmenuOpen(true)}
-                      onClick={() => setListTaskPostponeSubmenuOpen((prev) => !prev)}
-                    >
-                      <span>Отложить</span>
-                      <ChevronRight size={13} className="text-muted" />
-                    </button>
-                    <button
-                      type="button"
-                      className="primary-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm"
-                      onClick={() => {
-                        openCreateTaskFromListTask(contextTask);
-                        setListTaskContextMenu(null);
-                      }}
-                    >
-                      Добавить задачу
-                    </button>
-                    <button
-                      type="button"
-                      className="success-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm"
-                      onClick={() => {
-                        setListTaskContextMenu(null);
-                        setListTaskPostponeSubmenuOpen(false);
-                        void completeTask(contextTask);
-                      }}
-                    >
-                      Выполнить
-                    </button>
-                    <button
-                      type="button"
-                      className="timeline-pick-button mt-1.5 flex w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium"
-                      onClick={() => {
-                        setTimelineReschedulePicker({ taskId: contextTask.id, signal: Date.now() });
-                        setListTaskContextMenu(null);
-                        setListTaskPostponeSubmenuOpen(false);
-                      }}
-                    >
-                      <CalendarDays size={14} />
-                      Перенести
-                    </button>
-                    {listTaskPostponeSubmenuOpen ? (
-                      <div className="surface-popover absolute left-full top-[46px] ml-1 w-56 rounded-md border p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
-                        {QUICK_POSTPONE_OPTIONS.map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-primary hover:brightness-110"
-                            onClick={async () => {
-                              setTimelinePostponeLoadingTaskId(contextTask.id);
-                              setListTaskContextMenu(null);
-                              setListTaskPostponeSubmenuOpen(false);
-                              try {
-                                await quickPostponeTask(contextTask, option.value);
-                              } finally {
-                                setTimelinePostponeLoadingTaskId((prev) => (prev === contextTask.id ? null : prev));
-                              }
-                            }}
-                          >
-                            <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })(), document.body) : null}
-          </div>
-        ) : (
-          <div data-tour="timeline-workspace" ref={timelineScrollContainerRef} className="timeline-canvas h-full overflow-y-auto rounded-[2.2rem] border p-4 backdrop-blur-sm">
-            <div className="space-y-4 pr-1">
-              <section className={`timeline-toolbar sticky top-0 z-20 rounded-3xl border px-3 py-3 shadow-2xl backdrop-blur-xl transition-all duration-300 ease-out sm:px-4 ${isTimelineToolbarHidden && !isTimelineOverdueModalOpen ? 'timeline-toolbar-hidden' : 'timeline-toolbar-visible'}`}>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 p-1 shadow-inner">
-                    <button
-                      className="timeline-nav-button rounded-md border px-2 py-1 text-xs"
-                      onClick={() => {
-                        setTimelineAnchorDate((prev) => {
-                          const next = new Date(prev);
-                          if (timelineViewMode === 'day') next.setDate(next.getDate() - 1);
-                          else if (timelineViewMode === 'week') next.setDate(next.getDate() - 7);
-                          else next.setMonth(next.getMonth() - 1);
-                          return next;
-                        });
-                      }}
-                    >
-                      ←
-                    </button>
-                    <button
-                      className="timeline-nav-button rounded-md border px-2 py-1 text-xs"
-                      onClick={() => setTimelineAnchorDate(new Date())}
-                    >
-                      Сегодня
-                    </button>
-                    <button
-                      className="timeline-nav-button rounded-md border px-2 py-1 text-xs"
-                      onClick={() => {
-                        setTimelineAnchorDate((prev) => {
-                          const next = new Date(prev);
-                          if (timelineViewMode === 'day') next.setDate(next.getDate() + 1);
-                          else if (timelineViewMode === 'week') next.setDate(next.getDate() + 7);
-                          else next.setMonth(next.getMonth() + 1);
-                          return next;
-                        });
-                      }}
-                    >
-                      →
-                    </button>
-                  </div>
-                  <h3 className="timeline-title max-w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-center text-sm font-semibold capitalize tracking-tight shadow-inner sm:text-base">{timelineViewData.title}</h3>
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-
-                    <button type="button" className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs ${isTimelineOptimizePreviewEnabled ? 'border-cyan-300 bg-cyan-700/60 text-cyan-50' : currentOptimizeState.plan.length>0 ? 'timeline-nav-button' : 'timeline-nav-button opacity-50'}`} disabled={currentOptimizeState.plan.length===0} onClick={() => setTimelineOptimizePreviewEnabledByMode((prev)=>({ ...prev, [timelineViewMode]: !prev[timelineViewMode] }))} title="Показать/скрыть ИИ-расклад"><Eye size={14} /></button>
-                    <button type="button" className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs ${isTimelineOptimizePreviewEnabled ? 'border-emerald-300 bg-emerald-700/70 text-emerald-50' : 'timeline-nav-button opacity-50'}`} disabled={!isTimelineOptimizePreviewEnabled} title="Принять ИИ-оптимизацию" onClick={async () => { await api.applyTimelineOptimization({ plan: currentOptimizeState.plan }); setTimelineOptimizePreviewEnabledByMode((prev)=>({ ...prev, [timelineViewMode]: false })); setTimelineOptimizeStateByMode((prev)=>({ ...prev, [timelineViewMode]: { plan: [], summary: '' } })); await load(); }}><Check size={14} /></button>
-                    <button type="button" className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs ${isTimelineOptimizePreviewEnabled ? 'border-rose-300 bg-rose-700/70 text-rose-50' : 'timeline-nav-button opacity-50'}`} disabled={!isTimelineOptimizePreviewEnabled} title="Отменить ИИ-оптимизацию" onClick={() => { setTimelineOptimizePreviewEnabledByMode((prev)=>({ ...prev, [timelineViewMode]: false })); setTimelineOptimizeStateByMode((prev)=>({ ...prev, [timelineViewMode]: { plan: [], summary: '' } })); }}><X size={14} /></button>
-                    <button type="button" data-tour="ai-optimize" className="rounded-md border border-rose-400 bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-500" onClick={() => setIsTimelineOptimizeModalOpen(true)} disabled={timelineOptimizeLoading}>
-                      {timelineOptimizeLoading ? <Loader2 size={14} className="animate-spin" /> : 'Оптимизировать ✨'}
-                    </button>
-                    <div data-tour="timeline-range" className="timeline-mode-switch flex items-center gap-1 rounded-lg border p-1">
-                      {([
-                        { key: 'day', label: 'День' },
-                        { key: 'week', label: 'Неделя' },
-                        { key: 'month', label: 'Месяц' }
-                      ] as const).map((mode) => (
-                        <button
-                          key={mode.key}
-                          className={`rounded-md px-2 py-1 text-xs transition ${
-                            timelineViewMode === mode.key
-                              ? 'timeline-mode-button-active'
-                              : 'timeline-mode-button-idle'
-                          }`}
-                          onClick={() => setTimelineViewMode(mode.key)}
-                        >
-                          {mode.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-              </section>
-
-              {timelineViewData.tasksInRange.length === 0 ? (
-                <div className="timeline-empty-state rounded-xl border px-4 py-3 text-sm">
-                  Нет задач с датой для выбранного режима
-                </div>
-              ) : null}
-
-              {timelineViewMode === 'month' ? (
-                <section className="timeline-panel rounded-2xl border p-3">
-                  <div className="mb-2 grid grid-cols-7 gap-2">
-                    {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((dayName, index) => (
-                      <div
-                        key={dayName}
-                        className={`text-center text-xs font-semibold uppercase tracking-wide ${index >= 5 ? 'timeline-weekday-weekend' : 'text-subtle'}`}
-                      >
-                        {dayName}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-7">
-                    {timelineViewData.monthCells.map((cell) => (
-                      <div
-                        key={cell.key}
-                        ref={cell.date && cell.date.toDateString() === new Date().toDateString() ? timelineCurrentDayRef : undefined}
-                        className={`timeline-month-cell min-h-32 rounded-xl border p-2 ${
-                          cell.date
-                            ? ((cell.date.getDay() === 0 || cell.date.getDay() === 6)
-                              ? 'timeline-month-cell-weekend'
-                              : 'timeline-month-cell-active')
-                            : 'timeline-month-cell-empty'
-                        } ${cell.date ? 'transition hover:ring-1 hover:ring-cyan-400/35' : ''} ${cell.date && cell.date.toDateString() === new Date().toDateString() ? 'timeline-month-cell-today ring-2' : ''} ${isTimelineDragging && cell.date ? 'ring-1 ring-cyan-500/30 transition' : ''}`}
-                        onDragOver={(event) => {
-                          if (!cell.date) return;
-                          event.preventDefault();
-                          event.dataTransfer.dropEffect = 'move';
-                        }}
-                        onContextMenu={(event) => {
-                          if (!cell.date) return;
-                          event.preventDefault();
-                          setTimelineCreateMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY), date: new Date(cell.date), hour: null });
-                        }}
-                        onClick={(event) => {
-                          if (!cell.date) return;
-                          const target = event.target as HTMLElement;
-                          if (target.closest('button, a, input, textarea')) return;
-                          setTimelineAnchorDate(new Date(cell.date));
-                          setTimelineViewMode('day');
-                        }}
-                        onDrop={async (event) => {
-                          if (!cell.date) return;
-                          event.preventDefault();
-                          const taskId = draggedTimelineTaskId ?? event.dataTransfer.getData('text/task-id');
-                          setDraggedTimelineTaskId(taskId || null);
-                          await handleTimelineTaskDrop({ date: cell.date, keepOriginalTime: true });
-                          setDraggedTimelineTaskId(null);
-                        }}
-                      >
-                        {cell.date ? (
-                          <>
-                            <p className="mb-2 text-xs font-semibold text-muted">{cell.date.getDate()}</p>
-                            <ul className="space-y-1">
-                              {cell.tasks.slice(0, 4).map((task) => renderTimelineTaskChip(task))}
-                              {cell.tasks.length > 4 ? (
-                                <li>
-                                  <button
-                                    type="button"
-                                    className="timeline-more-button rounded-md border px-2 py-0.5 text-[11px] transition"
-                                    onClick={() => {
-                                      if (!cell.date) return;
-                                      setTimelineAnchorDate(new Date(cell.date));
-                                      setTimelineViewMode('day');
-                                    }}
-                                  >
-                                    + ещё {cell.tasks.length - 4}
-                                  </button>
-                                </li>
-                              ) : null}
-                            </ul>
-                          </>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {timelineViewMode === 'week' ? (
-                <section className="timeline-panel overflow-x-auto rounded-2xl border">
-                  {(() => {
-                    const now = new Date();
-                    const lineHour = now.getHours();
-                    const lineOffsetPercent = (now.getMinutes() / 60) * 100;
-                    return (
-                  <div className="grid min-w-[980px] grid-cols-[80px_repeat(7,minmax(120px,1fr))]">
-                    <div className="timeline-grid-header border-b border-r p-2 text-xs">Время</div>
-                    {timelineViewData.dayGroups.map((day) => {
-                      const isWeekend = day.date.getDay() === 0 || day.date.getDay() === 6;
-                      const isToday = day.date.toDateString() === new Date().toDateString();
-                      return (
-                        <div
-                          key={`header-${day.key}`}
-                          className={`timeline-week-header border-b border-r p-2 text-center ${
-                            isToday ? 'timeline-week-header-today ring-1' : isWeekend ? 'timeline-week-header-weekend' : ''
-                          }`}
-                        >
-                          <p className={`text-xs ${isToday ? 'timeline-today-text' : isWeekend ? 'timeline-weekday-weekend' : 'text-subtle'}`}>
-                            {day.date.toLocaleDateString('ru-RU', { weekday: 'short' })}
-                          </p>
-                          <p className={`text-sm font-semibold ${isToday ? 'timeline-today-text' : isWeekend ? 'timeline-weekday-weekend' : 'text-primary'}`}>
-                            {day.date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
-                          </p>
-                        </div>
-                      );
-                    })}
-                    {Array.from({ length: 24 }, (_, hour) => hour).map((hour) => (
-                      <Fragment key={`week-hour-${hour}`}>
-                        <div className="timeline-grid-time border-b border-r px-2 py-2 text-xs">
-                          <div className="relative">
-                            {String(hour).padStart(2, '0')}:00
-                          </div>
-                        </div>
-                        {timelineViewData.dayGroups.map((day) => {
-                          const hourTasks = day.tasks.filter((task) => {
-                            if (!task.dueDate) return false;
-                            const dueDate = new Date(task.dueDate);
-                            return !Number.isNaN(dueDate.getTime()) && dueDate.getHours() === hour;
-                          });
-                          const isWeekend = day.date.getDay() === 0 || day.date.getDay() === 6;
-                          const isToday = day.date.toDateString() === new Date().toDateString();
-                          return (
-                            <div
-                              key={`${day.key}-${hour}`}
-                              className={`timeline-week-cell relative min-h-14 space-y-1 border-b border-r px-1.5 py-1.5 ${
-                                isWeekend ? 'timeline-week-cell-weekend' : ''
-                              } ${
-                                isToday ? 'timeline-week-cell-today border-l border-r' : ''
-                              } ${isTimelineDragging ? 'timeline-drop-target transition-colors' : ''}`}
-                              onDragOver={(event) => {
-                                event.preventDefault();
-                                event.dataTransfer.dropEffect = 'move';
-                              }}
-                              onContextMenu={(event) => {
-                                event.preventDefault();
-                                setTimelineCreateMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY), date: new Date(day.date), hour });
-                              }}
-                              onDrop={async (event) => {
-                                event.preventDefault();
-                                const taskId = draggedTimelineTaskId ?? event.dataTransfer.getData('text/task-id');
-                                setDraggedTimelineTaskId(taskId || null);
-                                await handleTimelineTaskDrop({ date: day.date, hour });
-                                setDraggedTimelineTaskId(null);
-                              }}
-                            >
-                              {isToday && hour === lineHour ? (
-                                <span
-                                  className="pointer-events-none absolute left-0 right-0 border-t border-red-500"
-                                  style={{ top: `${lineOffsetPercent}%` }}
-                                />
-                              ) : null}
-                              {hourTasks.map((task) => renderTimelineTaskChip(task, { showTime: false }))}
-                              {getTimelineHabitsForDateHour(day.date, hour).map(({ habit, reminderTime }) => renderTimelineHabitChip(habit, reminderTime, day.date))}
-                            </div>
-                          );
-                        })}
-                      </Fragment>
-                    ))}
-                  </div>
-                    );
-                  })()}
-                </section>
-              ) : null}
-
-              {timelineViewMode === 'day' ? (
-                <section className="timeline-panel overflow-hidden rounded-2xl border">
-                  {(() => {
-                    const now = new Date();
-                    const isCurrentDay = timelineAnchorDate.toDateString() === now.toDateString();
-                    const lineHour = now.getHours();
-                    const lineOffsetPercent = (now.getMinutes() / 60) * 100;
-                    return timelineViewData.hourGroups.map((hourGroup) => (
-                    <div key={hourGroup.hour} data-tour={hourGroup.hour === 10 ? 'timeline-hour' : undefined} className="timeline-day-row grid grid-cols-[70px_minmax(0,1fr)] border-b last:border-b-0">
-                      <div className="timeline-grid-time border-r px-2 py-2 text-xs">{String(hourGroup.hour).padStart(2, '0')}:00</div>
-                      <div className="timeline-day-slot-group relative">
-                        {isCurrentDay && hourGroup.hour === lineHour ? (
-                          <span
-                            className="pointer-events-none absolute left-0 right-0 z-10 border-t border-red-500"
-                            style={{ top: `${lineOffsetPercent}%` }}
-                          />
-                        ) : null}
-                        {hourGroup.quarters.map((quarter) => (
-                          <div
-                            key={`${hourGroup.hour}-${quarter.minute}`}
-                            data-tour={hourGroup.hour === 10 && quarter.minute === 0 ? 'timeline-context-slot' : undefined}
-                            className={`timeline-day-quarter-slot group relative px-2 transition-colors ${quarter.tasks.length > 0 ? 'timeline-day-quarter-slot-filled py-1.5' : 'timeline-day-quarter-slot-empty'} ${isTimelineDragging ? 'timeline-drop-target timeline-day-quarter-slot-drag-ready' : ''} ${activeTimelineDropSlot?.hour === hourGroup.hour && activeTimelineDropSlot.minute === quarter.minute ? 'timeline-day-quarter-slot-drag-active' : ''}`}
-                            title={`Слот ${String(hourGroup.hour).padStart(2, '0')}:${String(quarter.minute).padStart(2, '0')}`}
-                            aria-label={`Слот ${String(hourGroup.hour).padStart(2, '0')}:${String(quarter.minute).padStart(2, '0')}`}
-                            onDragEnter={(event) => {
-                              event.preventDefault();
-                              if (isTimelineDragging) setActiveTimelineDropSlot({ hour: hourGroup.hour, minute: quarter.minute });
-                            }}
-                            onDragOver={(event) => {
-                              event.preventDefault();
-                              event.dataTransfer.dropEffect = 'move';
-                              if (isTimelineDragging) setActiveTimelineDropSlot({ hour: hourGroup.hour, minute: quarter.minute });
-                            }}
-                            onDragLeave={(event) => {
-                              if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-                              setActiveTimelineDropSlot((current) => (
-                                current?.hour === hourGroup.hour && current.minute === quarter.minute ? null : current
-                              ));
-                            }}
-                            onContextMenu={(event) => {
-                              event.preventDefault();
-                              const dayDate = new Date(timelineAnchorDate);
-                              dayDate.setHours(0, 0, 0, 0);
-                              setTimelineCreateMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY), date: dayDate, hour: hourGroup.hour, minute: quarter.minute });
-                            }}
-                            onDrop={async (event) => {
-                              event.preventDefault();
-                              const taskId = draggedTimelineTaskId ?? event.dataTransfer.getData('text/task-id');
-                              setDraggedTimelineTaskId(taskId || null);
-                              const dayDate = new Date(timelineAnchorDate);
-                              dayDate.setHours(0, 0, 0, 0);
-                              await handleTimelineTaskDrop({ date: dayDate, hour: hourGroup.hour, minute: quarter.minute });
-                              setDraggedTimelineTaskId(null);
-                              setActiveTimelineDropSlot(null);
-                            }}
-                          >
-                            <span className="timeline-day-quarter-label pointer-events-none absolute right-2 top-1 text-[10px]">:{String(quarter.minute).padStart(2, '0')}</span>
-                            {quarter.tasks.length > 0 || (quarter.minute === 0 && getTimelineHabitsForDateHour(timelineAnchorDate, hourGroup.hour).length > 0) ? (
-                              <div className="space-y-1.5 pr-9">
-                                {quarter.tasks.map((task) => renderTimelineTaskChip(task, { showTime: true }))}
-                                {quarter.minute === 0 ? getTimelineHabitsForDateHour(timelineAnchorDate, hourGroup.hour).map(({ habit, reminderTime }) => renderTimelineHabitChip(habit, reminderTime, timelineAnchorDate, { showTime: true })) : null}
-                              </div>
-                            ) : null}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ));
-                  })()}
-                </section>
-              ) : null}
+          ) : (
+            <div className={`fullscreen-workspace-single ${fullscreenDisplayModes[0] !== 'bubbles' ? 'fullscreen-workspace-single--framed' : ''}`}>
+              {renderWorkspaceMode(fullscreenDisplayModes[0] ?? 'bubbles')}
             </div>
-          </div>
-        )}
+          )
+        ) : renderWorkspaceMode(displayMode)}
 
         {timelineCreateMenu ? (
           <div
