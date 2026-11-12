@@ -169,6 +169,8 @@ jobs:
         run: node --import tsx --test server/test/organic-hill-sectors.test.ts
       - name: Verify asynchronous bubble worker layout, geometry and mode cache
         run: node --import tsx --test server/test/bubble-layout-worker.test.ts
+      - name: Verify fullscreen panel slots, toolbar and mode switching
+        run: node --import tsx --test server/test/fullscreen-dual-workspace.test.ts server/test/fullscreen-one-row-open-layout.test.ts server/test/fullscreen-toolbar-polish.test.ts server/test/fullscreen-view-filters.test.ts server/test/fullscreen-future-panels.test.ts
       - name: Verify first-visit training invitation and starter tasks and sectors
         run: node --import tsx --test server/test/onboarding-training-defaults-ui.test.ts
       - name: Verify opaque overdue popover and neutral dark task-window outlines

@@ -4,7 +4,8 @@ import { createPortal } from 'react-dom';
 import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, CalendarPlus, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Clock3, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Menu, MessageCircle, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, BellRing, Trash2, UserRound, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
-import { FullscreenModePicker, FullscreenWorkspaceSplit } from './components/FullscreenWorkspaceLayout';
+import { FullscreenAddWindowMenu, FullscreenFuturePanel, FullscreenModePicker, FullscreenWorkspaceSplit } from './components/FullscreenWorkspaceLayout';
+import { createAuxiliaryPanel, resolveFullscreenPanels, type FullscreenAuxiliaryPanel, type FullscreenWorkspacePanel } from './lib/fullscreenWorkspacePanels';
 import { FullscreenPaneFilters, createDefaultWorkspacePaneFilter, type WorkspacePaneFilter } from './components/FullscreenPaneFilters';
 import { WorkspaceActionToast } from './components/WorkspaceActionToast';
 import { TaskMonitoringBadge } from './components/TaskMonitoringBadge';
@@ -844,7 +845,9 @@ export default function App() {
   // filters and overlays; only the surrounding chrome is hidden.
   const [isBubbleFullscreen, setIsBubbleFullscreen] = useState(false);
   const [fullscreenDisplayModes, setFullscreenDisplayModes] = useState<DisplayMode[]>(['bubbles']);
+  const [fullscreenAuxiliaryPanel, setFullscreenAuxiliaryPanel] = useState<FullscreenAuxiliaryPanel | null>(null);
   const [fullscreenSplitRatio, setFullscreenSplitRatio] = useState(50);
+  const fullscreenPanels = resolveFullscreenPanels(fullscreenDisplayModes, fullscreenAuxiliaryPanel);
   // Each fullscreen view owns its own sector and time filters.
   const [fullscreenPaneFilters, setFullscreenPaneFilters] = useState<Record<DisplayMode, WorkspacePaneFilter>>({
     bubbles: createDefaultWorkspacePaneFilter(),
@@ -5455,7 +5458,7 @@ export default function App() {
             )}
             {!isBubbleFullscreen ? <button type="button"
               data-tour="bubbles-fullscreen-enter"
-              onClick={() => { setIsSphereFilterOpen(false); setFullscreenDisplayModes(['bubbles']); setIsBubbleFullscreen(true); }}
+              onClick={() => { setIsSphereFilterOpen(false); setFullscreenDisplayModes(['bubbles']); setFullscreenAuxiliaryPanel(null); setIsBubbleFullscreen(true); }}
               className="bubble-layout-toggle absolute top-[4.55rem] z-30 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold shadow-lg backdrop-blur transition hover:brightness-110"
               style={{ right: '16px' }}
               title="Развернуть пространство пузырей на весь экран"
@@ -5466,7 +5469,7 @@ export default function App() {
             <BubbleField
               className="h-full"
               fullscreen={isBubbleFullscreen}
-              compact={isBubbleFullscreen && fullscreenDisplayModes.length === 2}
+              compact={isBubbleFullscreen && (fullscreenDisplayModes.length === 2 || fullscreenAuxiliaryPanel !== null)}
               themeMode={effectiveThemeMode}
               showTrainingInvitation={isOnboardingOfferOpen}
               onOpenTraining={() => {
@@ -6037,6 +6040,10 @@ export default function App() {
         onChange={(next) => updateFullscreenPaneFilters(workspaceMode, next)} />
     </div>
   ) : renderWorkspaceContent(workspaceMode);
+  const renderFullscreenPanel = (panel: FullscreenWorkspacePanel): ReactNode =>
+    panel.kind === 'mode'
+      ? renderWorkspaceMode(panel.mode)
+      : <FullscreenFuturePanel panel={panel} onClose={() => setFullscreenAuxiliaryPanel(null)} />;
   return (
     <main
       className={isBubbleFullscreen
@@ -6202,9 +6209,16 @@ export default function App() {
         />
             <FullscreenModePicker modes={fullscreenDisplayModes} onChange={(nextModes) => {
               setFullscreenDisplayModes(nextModes);
+              setFullscreenAuxiliaryPanel(null);
               setDisplayMode(nextModes[0]);
               setIsSphereFilterOpen(false);
               setIsTimelineOverdueModalOpen(false);
+            }} />
+            <FullscreenAddWindowMenu onAdd={(kind) => {
+              // Until secondary windows gain their final design, occupy only the
+              // second slot and keep the first visualization interactive.
+              setFullscreenDisplayModes(prev => [prev[0] ?? 'bubbles']);
+              setFullscreenAuxiliaryPanel(createAuxiliaryPanel(kind));
             }} />
           </div>
           <div className="fullscreen-create-control flex items-center justify-center">
@@ -6388,6 +6402,7 @@ export default function App() {
             className="topbar-action-button workspace-fullscreen-entry inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition"
             onClick={() => {
               setFullscreenDisplayModes([displayMode]);
+              setFullscreenAuxiliaryPanel(null);
               setIsSphereFilterOpen(false);
               setIsBubbleFullscreen(true);
             }}
@@ -7063,16 +7078,16 @@ export default function App() {
           ? 'workspace-shell relative min-h-0 flex-1 overflow-hidden rounded-none p-0'
           : 'workspace-shell relative min-h-0 flex-1 overflow-hidden pr-[360px]'}>
         {isBubbleFullscreen ? (
-          fullscreenDisplayModes.length === 2 ? (
+          fullscreenPanels.length === 2 ? (
             <FullscreenWorkspaceSplit
-              modes={fullscreenDisplayModes as [DisplayMode, DisplayMode]}
-              renderMode={renderWorkspaceMode}
+              panels={fullscreenPanels as [FullscreenWorkspacePanel, FullscreenWorkspacePanel]}
+              renderPanel={renderFullscreenPanel}
               ratio={fullscreenSplitRatio}
               onRatioChange={setFullscreenSplitRatio}
             />
           ) : (
             <div className={`fullscreen-workspace-single ${fullscreenDisplayModes[0] === 'bubbles' ? '' : 'fullscreen-workspace-single--open'}`}>
-              {renderWorkspaceMode(fullscreenDisplayModes[0] ?? 'bubbles')}
+              {renderFullscreenPanel(fullscreenPanels[0])}
             </div>
           )
         ) : renderWorkspaceMode(displayMode)}

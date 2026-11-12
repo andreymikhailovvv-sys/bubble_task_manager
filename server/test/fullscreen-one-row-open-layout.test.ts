@@ -32,7 +32,7 @@ test('fullscreen toolbar keeps brand, search, three checkboxes, create task, acc
 test('mode selection is an inline, keyboard-accessible trio of actual checkboxes', async () => {
   const controls = await load('../../client/src/components/FullscreenWorkspaceLayout.tsx');
   const picker = controls.slice(controls.indexOf('export function FullscreenModePicker'),
-    controls.indexOf('export function FullscreenWorkspaceSplit'));
+    controls.indexOf('export function FullscreenAddWindowMenu'));
   assert.match(picker, /display-mode-toggle-group/);
   assert.match(picker, /VIEW_OPTIONS\.map/);
   assert.match(picker, /<input type="checkbox"/);
@@ -53,7 +53,7 @@ test('one shared viewport-width column constrains header, single modes and split
   assert.match(css, /\.bubble-fullscreen-shell > \.fullscreen-workspace-toolbar--one-row,\s*\.bubble-fullscreen-shell > \.workspace-shell \{[^}]*width: var\(--fullscreen-workspace-width\)/);
   assert.match(css, /\.fullscreen-workspace-single--open > \.fullscreen-mode-surface \{\s*width: 100%;\s*max-width: 100%;/);
   assert.match(css, /\.fullscreen-workspace-split \{[^}]*grid-template-columns/);
-  assert.match(app, /fullscreenDisplayModes\.length === 2 \? \(/);
+  assert.match(app, /fullscreenPanels\.length === 2 \? \(/);
   assert.match(app, /fullscreen-workspace-single--open/);
   assert.match(css, /\.fullscreen-workspace-single--open \.fullscreen-mode-surface-content > :is\(\.list-mode-canvas, \.timeline-canvas\) \{[^}]*border: 0 !important/);
 });
