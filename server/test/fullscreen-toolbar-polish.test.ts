@@ -4,10 +4,9 @@ import { readFile } from 'node:fs/promises';
 
 const load = (path: string) => readFile(new URL(path, import.meta.url), 'utf8');
 
-test('fullscreen header shares regular navigation and anchors create task in the centre', async () => {
+test('fullscreen toolbar retains all actions, with modes to the left of the create task', async () => {
   const [app, css] = await Promise.all([
-    load('../../client/src/App.tsx'),
-    load('../../client/src/styles.css')
+    load('../../client/src/App.tsx'), load('../../client/src/styles.css')
   ]);
   const begin = app.indexOf('data-tour="bubbles-fullscreen-toolbar"');
   const end = app.indexOf('</header>', begin);
@@ -26,26 +25,23 @@ test('fullscreen header shares regular navigation and anchors create task in the
   assert.match(header, /data-tour="fullscreen-workspace-settings"/);
   assert.match(header, /setIsSettingsOpen\(prev => !prev\)/);
   assert.match(header, /fullscreen-workspace-toolbar--one-row/);
-  assert.doesNotMatch(header, /className="fullscreen-workspace-toolbar-bottom"/);
   assert.match(header, /className="fullscreen-create-control/);
   assert.match(header, /data-tour="bubbles-fullscreen-create-task"/);
   assert.match(header, /<FullscreenModePicker/);
   assert.match(header, /\{renderOverdueControl\(\)\}/);
   assert.match(header, /\{renderCreditsControl\(\)\}/);
-  assert.ok(header.indexOf('className="fullscreen-create-control') < header.indexOf('className="fullscreen-workspace-toolbar-actions'));
-  assert.ok(header.indexOf('className="fullscreen-create-control') < header.indexOf('<FullscreenModePicker'));
-  assert.ok(header.indexOf('<FullscreenModePicker') < header.indexOf('data-tour="bubbles-fullscreen-exit"'));
+  assert.ok(header.indexOf('<FullscreenModePicker') < header.indexOf('className="fullscreen-create-control'));
+  assert.ok(header.indexOf('className="fullscreen-create-control') < header.indexOf('<TelegramIntegrationsMenu'));
+  assert.ok(header.indexOf('<TelegramIntegrationsMenu') < header.indexOf('data-tour="bubbles-fullscreen-exit"'));
+  assert.doesNotMatch(header, /data-tour="feature-telegram-button"/);
   assert.match(header, /<Minimize2 size=\{17\} \/>/);
-  assert.doesNotMatch(header, /<span>Выйти<\/span>/);
-  assert.match(css, /\.fullscreen-workspace-toolbar \{[^}]*max-width: none/);
   assert.match(css, /\.fullscreen-workspace-toolbar--one-row \{[^}]*flex-flow: row nowrap/);
-  assert.match(css, /\.fullscreen-workspace-toolbar--one-row \.workspace-global-search-anchor \{[^}]*max-width: 170px !important/);
+  assert.match(css, /\.bubble-fullscreen-shell > \.fullscreen-workspace-toolbar--one-row/);
 });
 
-test('fullscreen bubbles have a single circle/sectors switch below per-pane filters', async () => {
+test('fullscreen bubbles keep their toggle directly below pane filters', async () => {
   const [app, css] = await Promise.all([
-    load('../../client/src/App.tsx'),
-    load('../../client/src/styles.css')
+    load('../../client/src/App.tsx'), load('../../client/src/styles.css')
   ]);
   assert.match(app, /isBubbleFullscreen \? \(\s*<button type="button" data-tour="bubble-layout"/);
   assert.match(app, /className="fullscreen-bubble-mode-switch/);
@@ -57,23 +53,23 @@ test('fullscreen bubbles have a single circle/sectors switch below per-pane filt
   assert.match(app, /<FullscreenPaneFilters mode=\{workspaceMode\}/);
 });
 
-test('single list and timeline use wide unframed surfaces; Planik stays at bottom right in every fullscreen mode', async () => {
+test('solo list and timeline stay frameless and bounded; Planik remains in all fullscreen modes', async () => {
   const [app, css, frame] = await Promise.all([
     load('../../client/src/App.tsx'),
     load('../../client/src/styles.css'),
     load('../../client/src/components/QuickAiLauncherFrame.tsx')
   ]);
   assert.match(app, /fullscreenDisplayModes\[0\] === 'bubbles' \? '' : 'fullscreen-workspace-single--open'/);
-  assert.match(css, /\.fullscreen-workspace-single--open > \.fullscreen-mode-surface \{[^}]*width: calc\(100% - 56px\);[^}]*max-width: none/m);
-  assert.match(css, /\.fullscreen-workspace-single--open \.fullscreen-mode-surface-content > :is\(\.list-mode-canvas, \.timeline-canvas\) \{[^}]*border: 0 !important/m);
+  assert.match(css, /\.fullscreen-workspace-single--open > \.fullscreen-mode-surface \{\s*width: 100%;\s*max-width: 100%;/);
+  assert.match(css, /\.fullscreen-workspace-single--open \.fullscreen-mode-surface-content > :is\(\.list-mode-canvas, \.timeline-canvas\) \{[^}]*border: 0 !important/);
+  assert.match(css, /\.bubble-fullscreen-shell > \.workspace-shell \{[^}]*width: var\(--fullscreen-workspace-width\)/);
   assert.doesNotMatch(app, /'fullscreen-workspace-single--balanced'/);
   assert.match(app, /fullscreenBubbles=\{isBubbleFullscreen\}/);
-  assert.doesNotMatch(app, /fullscreenBubbles=\{isBubbleFullscreen && displayMode === 'bubbles'\}/);
   assert.match(frame, /fullscreenBubbles\?'bubble-ai-fullscreen'/);
   assert.match(css, /\.ai-chat-launcher\.bubble-ai-fullscreen \{\s*right: max\(16px, env\(safe-area-inset-right\)\)/);
 });
 
-test('time filter selection uses turquoise, leaving sector checkbox tint unchanged', async () => {
+test('time filters remain turquoise independently of sector checkbox styling', async () => {
   const css = await load('../../client/src/styles.css');
   const pos = css.lastIndexOf('.fullscreen-pane-filter-time.is-active {');
   assert.ok(pos >= 0);
