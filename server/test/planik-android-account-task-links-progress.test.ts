@@ -33,7 +33,7 @@ test('valid task-title matches get buttons and invalid model-generated IDs never
   assert.doesNotMatch(duplicate, /task_ref/);
 });
 
-test('Realtime narration never receives a raw task_ref label or a UUID', () => {
+test('Realtime narration never receives a raw task_ref label or a UUID', async () => {
   const spoken = speechSafeVoiceToolAnswer('Проверил договор [[task_ref=task-1]]. ID задачи: 667efb92-43a0-4f7c-b543-5fc623e444ce.');
   assert.doesNotMatch(spoken, /task_ref|task-1|667efb92/);
   assert.match(spoken, /Проверил договор/);
