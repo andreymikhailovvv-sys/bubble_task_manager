@@ -4,6 +4,7 @@ import { Loader2, Maximize2, Mic, MicOff, Minimize2, PhoneOff, Radio } from 'luc
 import { PlanikMascot } from './PlanikMascot';
 import { AiStreamingMessageBody } from './AiStreamingMessageBody';
 import { hasPlanikActionSurface } from '../lib/planikLiveVoicePresentation';
+import { speechSafeVoiceToolAnswer } from '../lib/voice-task-links';
 import './PlanikLiveVoice.css';
 import { api, type AiChatResult, type TaskAssistantResult, type AiChatProgressStatus, type TaskAiProgressStatus } from '../lib/api';
 import type { AiChatModel } from '../lib/types';
@@ -60,7 +61,7 @@ function decodePcm(base64: string) {
 export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMessage, onLiveToolResult, onLiveStatus, onLiveActionReveal }: {
   onClose: () => void; audioContext: AudioContext | null; liveContext?: LiveVoiceContext;
   onLiveMessage?: (item: LiveVoiceMessage) => void;
-  onLiveToolResult?: (result: LiveVoiceToolCompletion) => void;
+  onLiveToolResult?: (result: LiveVoiceToolCompletion) => boolean | void;
   onLiveStatus?: (status: LiveVoiceProgressStatus | null) => void;
   onLiveActionReveal?: () => void;
 }) {
@@ -180,8 +181,10 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
         }, { onStatus: status => reportStatus(status) });
       if (!stoppedRef.current) {
         reportStatus('forming_answer');
-        const actionVisibleInChat = hasPlanikActionSurface(result);
-        onLiveToolResultRef.current?.({ kind: scope.type, question, result });
+        // The host may add verified task-reference chips to the answer, even
+        // when the text model forgot its optional internal markers.
+        const linkedTasksInChat = onLiveToolResultRef.current?.({ kind: scope.type, question, result }) === true;
+        const actionVisibleInChat = hasPlanikActionSurface(result) || linkedTasksInChat;
         if (actionVisibleInChat) {
           // Scroll the exact thread after React inserts the action card.
           // Keeping the voice component mounted preserves the live audio session.
@@ -192,7 +195,7 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveMess
         if (ws.readyState === WebSocket.OPEN) {
           // Realtime must finish narrating the delegated result before mic uplink resumes.
           responseDoneRef.current = false;
-          ws.send(JSON.stringify({ type: 'tool_result', callId, answer: result.answer }));
+          ws.send(JSON.stringify({ type: 'tool_result', callId, answer: speechSafeVoiceToolAnswer(result.answer) }));
         }
       }
     } catch (cause) {
