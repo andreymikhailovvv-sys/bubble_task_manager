@@ -15346,3 +15346,177 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
   .fullscreen-pane-filter-time,
   .fullscreen-pane-filter-sector { transition: none; }
 }
+
+
+/* Fullscreen v3: compact navigation at the top and the creation action in the
+   visual centre. Keep enough room for long account names and translated labels. */
+.fullscreen-workspace-toolbar {
+  width: calc(100% - 24px);
+  max-width: none;
+  gap: 9px;
+  padding: 11px 15px 12px;
+}
+.fullscreen-workspace-toolbar-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  gap: 9px 12px;
+}
+.fullscreen-workspace-brand {
+  color: var(--text-primary);
+  white-space: nowrap;
+  letter-spacing: -.025em;
+  margin-right: 5px;
+}
+.fullscreen-workspace-toolbar-main .workspace-global-search-anchor {
+  flex: 1 1 220px;
+  min-width: 185px;
+  max-width: none;
+}
+.fullscreen-workspace-toolbar-main .auth-actions {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.fullscreen-workspace-toolbar-main .auth-user-pill {
+  max-width: clamp(110px, 13vw, 190px);
+}
+.fullscreen-workspace-toolbar-main .auth-user-pill span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fullscreen-workspace-toolbar-bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  width: 100%;
+  min-height: 41px;
+  gap: 10px;
+}
+.fullscreen-workspace-toolbar-bottom .fullscreen-workspace-toolbar-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 7px;
+}
+.fullscreen-workspace-toolbar-bottom .fullscreen-create-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+  min-width: 0;
+}
+.fullscreen-workspace-toolbar-bottom .fullscreen-workspace-exit {
+  justify-self: end;
+  width: 37px;
+  height: 37px;
+  min-height: 37px;
+  padding: 0;
+  flex: none;
+}
+.fullscreen-workspace-toolbar-bottom .fullscreen-workspace-exit svg {
+  flex: none;
+}
+
+/* In fullscreen bubbles the filter occupies the top-right corner; the single
+   circle/sectors switch sits DIRECTLY beneath it, never beside it. */
+.fullscreen-mode-surface[data-fullscreen-mode='bubbles'] .fullscreen-bubble-mode-switch {
+  top: 62px;
+  right: 14px;
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--panel-border));
+  background: color-mix(in srgb, var(--popover-bg) 95%, var(--accent-soft));
+  color: var(--text-primary);
+}
+.fullscreen-mode-surface[data-fullscreen-mode='bubbles'] .fullscreen-bubble-mode-switch:hover,
+.fullscreen-mode-surface[data-fullscreen-mode='bubbles'] .fullscreen-bubble-mode-switch:focus-visible {
+  border-color: color-mix(in srgb, #06b6d4 65%, var(--panel-border));
+  background: color-mix(in srgb, #06b6d4 12%, var(--popover-bg));
+}
+
+/* Balanced reading width, between the old 1080px card and an edge-to-edge
+   canvas. These limits apply ONLY to single List or Timeline fullscreen. */
+.fullscreen-workspace-single--balanced {
+  padding: clamp(12px, 2vh, 25px) clamp(20px, 3.3vw, 62px);
+}
+.fullscreen-workspace-single--balanced > .fullscreen-mode-surface {
+  width: min(100%, 1320px);
+  max-width: min(1320px, 86vw);
+  height: 100%;
+  max-height: 950px;
+  margin: auto;
+}
+.fullscreen-workspace-single--balanced .fullscreen-mode-surface-content > [data-tour] {
+  border-radius: 24px;
+  box-shadow: 0 16px 38px rgba(2, 6, 23, .09);
+}
+
+/* Turquoise highlight for the period chips. Sector checkboxes retain their
+   own accent, as requested. */
+.fullscreen-pane-filter-time.is-active {
+  border-color: color-mix(in srgb, #06b6d4 64%, var(--panel-border));
+  background: color-mix(in srgb, #06b6d4 19%, var(--card-bg));
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #14b8a6 19%, transparent);
+}
+.fullscreen-pane-filter-time.is-active:hover {
+  border-color: #14b8a6;
+  background: color-mix(in srgb, #06b6d4 26%, var(--card-bg));
+}
+
+@media (max-width: 1000px) {
+  .fullscreen-workspace-toolbar-main {
+    column-gap: 8px;
+  }
+  .fullscreen-workspace-toolbar-bottom {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .fullscreen-workspace-toolbar-bottom .fullscreen-workspace-toolbar-actions {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  .fullscreen-workspace-toolbar-bottom .fullscreen-create-control {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: center;
+  }
+  .fullscreen-workspace-toolbar-bottom .fullscreen-workspace-exit {
+    grid-column: 2;
+    grid-row: 2;
+  }
+}
+@media (max-width: 900px) {
+  .fullscreen-mode-surface[data-fullscreen-mode='bubbles'] .fullscreen-bubble-mode-switch {
+    top: 51px;
+    right: 9px;
+    width: 39px;
+    height: 39px;
+  }
+  .fullscreen-workspace-single--balanced {
+    padding: 14px clamp(12px, 4vw, 30px);
+  }
+  .fullscreen-workspace-single--balanced > .fullscreen-mode-surface {
+    max-width: 100%;
+  }
+}
+@media (max-width: 560px) {
+  .fullscreen-workspace-toolbar {
+    padding: 9px;
+  }
+  .fullscreen-workspace-brand {
+    font-size: 1rem;
+  }
+  .fullscreen-workspace-toolbar-bottom {
+    gap: 6px;
+  }
+  .fullscreen-workspace-toolbar-bottom .fullscreen-workspace-toolbar-actions {
+    gap: 6px;
+  }
+  .fullscreen-workspace-single--balanced {
+    padding: 8px 10px 12px;
+  }
+}

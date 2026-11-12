@@ -41,7 +41,7 @@ test('fullscreen has the existing credits and overdue actions plus a functional 
   assert.match(app, /setFullscreenDisplayModes\(\[displayMode\]\)/);
 });
 
-test('two panes retain keyboard-accessible resizer; single list and timeline fill the workspace', async () => {
+test('two panes retain keyboard-accessible resizer; single list and timeline use comfortable reading widths', async () => {
   const [app, controls, styles, bubbles] = await Promise.all([
     load('../../client/src/App.tsx'),
     load('../../client/src/components/FullscreenWorkspaceLayout.tsx'),
@@ -56,7 +56,8 @@ test('two panes retain keyboard-accessible resizer; single list and timeline fil
   assert.match(styles, /\.fullscreen-workspace-single > \.fullscreen-mode-surface \{/);
   assert.match(styles, /\.fullscreen-workspace-split \{[^}]*grid-template-columns/m);
   assert.match(styles, /@media \(max-width: 900px\) \{[\s\S]*?\.fullscreen-workspace-split \{[\s\S]*?grid-template-rows/);
-  assert.match(app, /<div className="fullscreen-workspace-single">/);
+  assert.match(app, /fullscreen-workspace-single--balanced/);
+  assert.match(styles, /\.fullscreen-workspace-single--balanced > \.fullscreen-mode-surface \{[^}]*max-width: min\(1320px, 86vw\)/m);
   assert.doesNotMatch(app, /fullscreenDisplayModes\[0\] !== 'bubbles' \? 'fullscreen-workspace-single--framed'/);
   assert.match(bubbles, /compact\s*\?\s*`\$\{BUBBLE_WORKSPACE_X - 32\}/);
   assert.match(app, /compact=\{isBubbleFullscreen && fullscreenDisplayModes\.length === 2\}/);
