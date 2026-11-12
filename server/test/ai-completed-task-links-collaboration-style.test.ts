@@ -52,6 +52,7 @@ test('participant messages and comment cards keep author tints without a left ac
   assert.ok(authored);
   assert.doesNotMatch(authored[1], /border-left/);
   assert.match(authored[1], /color-mix\(in srgb, var\(--message-author-color\) 34%/);
+  assert.match(css, /\.miniapp-shell:not\(\.miniapp-light\) \.miniapp-ai-chat-message-user\.miniapp-ai-chat-message-authored/);
   const lightAuthored = css.match(/body\[data-theme='light'\] \.miniapp-shell \.miniapp-ai-chat-message-user\.miniapp-ai-chat-message-authored \{([^}]+)\}/);
   assert.ok(lightAuthored);
   assert.doesNotMatch(lightAuthored[1], /border-left/);
