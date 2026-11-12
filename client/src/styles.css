@@ -14996,6 +14996,14 @@ html[data-planik-android] .miniapp-shell .miniapp-ai-chat-panel-general .miniapp
   z-index: 60;
 }
 
+/* Keep author tint over the later generic dark-theme user-bubble gradient.
+   Extra specificity is intentional: shared-task color must win in dark mode. */
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-message-user.miniapp-ai-chat-message-authored {
+  border-color: color-mix(in srgb, var(--message-author-color) 26%, #475569) !important;
+  background: color-mix(in srgb, var(--message-author-color) 34%, #111827) !important;
+  color: #f8fafc !important;
+}
+
 /* Completed AI task/subtask links are visually quiet but remain clickable.
    Applied consistently in full desktop, mobile web and Telegram Mini App. */
 .ai-task-ref-chip--completed {
