@@ -11,8 +11,8 @@ test('fullscreen checkboxes support two distinct views without cloning implement
   ]);
   assert.match(app, /const \[fullscreenDisplayModes, setFullscreenDisplayModes\] = useState<DisplayMode\[]>\(\['bubbles'\]\)/);
   assert.match(app, /<FullscreenModePicker modes=\{fullscreenDisplayModes\}/);
-  assert.match(app, /fullscreenDisplayModes\.length === 2 \? \(/);
-  assert.match(app, /<FullscreenWorkspaceSplit[\s\S]*?renderMode=\{renderWorkspaceMode\}/);
+  assert.match(app, /fullscreenPanels\.length === 2 \? \(/);
+  assert.match(app, /<FullscreenWorkspaceSplit[\s\S]*?renderPanel=\{renderFullscreenPanel\}/);
   assert.match(app, /const renderWorkspaceMode = \(workspaceMode: DisplayMode\): ReactNode/);
   assert.equal((app.match(/<BubbleField\b/g) ?? []).length, 1);
   assert.match(controls, /modes\.length === 2/);
@@ -58,5 +58,5 @@ test('split remains draggable and keyboard accessible, all modes use bounded wid
   assert.match(app, /fullscreen-workspace-single--open/);
   assert.match(styles, /\.fullscreen-workspace-single--open > \.fullscreen-mode-surface \{\s*width: 100%;\s*max-width: 100%;/);
   assert.match(bubbles, /compact\s*\?\s*`\$\{BUBBLE_WORKSPACE_X - 32\}/);
-  assert.match(app, /compact=\{isBubbleFullscreen && fullscreenDisplayModes\.length === 2\}/);
+  assert.match(app, /compact=\{isBubbleFullscreen && \(fullscreenDisplayModes\.length === 2 \|\| fullscreenAuxiliaryPanel !== null\)\}/);
 });
