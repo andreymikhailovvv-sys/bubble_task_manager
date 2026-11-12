@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 const load = (file: string) => readFile(new URL(file, import.meta.url), 'utf8');
 
-test('fullscreen mode dropdown supports two distinct views without duplicating the workspace implementation', async () => {
+test('fullscreen checkboxes support two distinct views without cloning implementations', async () => {
   const [app, controls] = await Promise.all([
     load('../../client/src/App.tsx'),
     load('../../client/src/components/FullscreenWorkspaceLayout.tsx')
@@ -14,16 +14,15 @@ test('fullscreen mode dropdown supports two distinct views without duplicating t
   assert.match(app, /fullscreenDisplayModes\.length === 2 \? \(/);
   assert.match(app, /<FullscreenWorkspaceSplit[\s\S]*?renderMode=\{renderWorkspaceMode\}/);
   assert.match(app, /const renderWorkspaceMode = \(workspaceMode: DisplayMode\): ReactNode/);
-  assert.equal((app.match(/<BubbleField\b/g) ?? []).length, 1,
-    'split mode renders the same interactive bubble field rather than cloning its JSX');
+  assert.equal((app.match(/<BubbleField\b/g) ?? []).length, 1);
   assert.match(controls, /modes\.length === 2/);
   assert.match(controls, /onChange\(\[modes\[0\], value\]\)/);
   assert.match(controls, /if \(modes\.length > 1\) onChange\(modes\.filter/);
-  assert.match(controls, /aria-pressed=\{selected\}/);
-  assert.match(controls, /aria-expanded=\{open\}/);
+  assert.match(controls, /<input type="checkbox"/);
+  assert.match(controls, /checked=\{selected\}/);
 });
 
-test('fullscreen has the existing credits and overdue actions plus a functional exit control', async () => {
+test('credits, overdue and exit controls remain functional', async () => {
   const app = await load('../../client/src/App.tsx');
   assert.match(app, /const renderOverdueControl = \(\) => \(/);
   assert.match(app, /timelineOverdueTasks\.map\(task =>/);
@@ -31,8 +30,8 @@ test('fullscreen has the existing credits and overdue actions plus a functional 
   assert.match(app, /postponeAllOverdueByAi/);
   assert.match(app, /const renderCreditsControl = \(\) => \(/);
   assert.match(app, /setIsSubscriptionModalOpen\(true\)/);
-  const header = app.slice(app.indexOf('data-tour="bubbles-fullscreen-toolbar"'),
-    app.indexOf('</header>', app.indexOf('data-tour="bubbles-fullscreen-toolbar"')));
+  const start = app.indexOf('data-tour="bubbles-fullscreen-toolbar"');
+  const header = app.slice(start, app.indexOf('</header>', start));
   assert.match(header, /\{renderOverdueControl\(\)\}/);
   assert.match(header, /\{renderCreditsControl\(\)\}/);
   assert.match(header, /setIsBubbleFullscreen\(false\)/);
@@ -41,7 +40,7 @@ test('fullscreen has the existing credits and overdue actions plus a functional 
   assert.match(app, /setFullscreenDisplayModes\(\[displayMode\]\)/);
 });
 
-test('two panes retain keyboard-accessible resizer; single list and timeline use wide unframed canvases', async () => {
+test('split remains draggable and keyboard accessible, all modes use bounded widths', async () => {
   const [app, controls, styles, bubbles] = await Promise.all([
     load('../../client/src/App.tsx'),
     load('../../client/src/components/FullscreenWorkspaceLayout.tsx'),
@@ -54,11 +53,10 @@ test('two panes retain keyboard-accessible resizer; single list and timeline use
   assert.match(controls, /if \(event\.key === 'Home'\) next = 25/);
   assert.match(controls, /else if \(event\.key === 'End'\) next = 75/);
   assert.match(styles, /\.fullscreen-workspace-single > \.fullscreen-mode-surface \{/);
-  assert.match(styles, /\.fullscreen-workspace-split \{[^}]*grid-template-columns/m);
+  assert.match(styles, /\.fullscreen-workspace-split \{[^}]*grid-template-columns/);
   assert.match(styles, /@media \(max-width: 900px\) \{[\s\S]*?\.fullscreen-workspace-split \{[\s\S]*?grid-template-rows/);
   assert.match(app, /fullscreen-workspace-single--open/);
-  assert.match(styles, /\.fullscreen-workspace-single--open > \.fullscreen-mode-surface \{[^}]*width: calc\(100% - 56px\);[^}]*max-width: none/m);
-  assert.doesNotMatch(app, /fullscreenDisplayModes\[0\] !== 'bubbles' \? 'fullscreen-workspace-single--framed'/);
+  assert.match(styles, /\.fullscreen-workspace-single--open > \.fullscreen-mode-surface \{\s*width: 100%;\s*max-width: 100%;/);
   assert.match(bubbles, /compact\s*\?\s*`\$\{BUBBLE_WORKSPACE_X - 32\}/);
   assert.match(app, /compact=\{isBubbleFullscreen && fullscreenDisplayModes\.length === 2\}/);
 });
