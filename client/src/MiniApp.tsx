@@ -1190,14 +1190,16 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       setAiCredits(user.aiCredits ?? 0);
       setCurrentUser(user);
 
-      // Native Android's Realtime surface only needs its chosen AI thread
-      // (and tasks when talking inside a specific task). Fetching the whole
-      // planner + Telegram/Mail inbox before showing a voice window made the
-      // WebView appear blank on slower devices and sessions.
+      // Android Realtime MUST load the authenticated task catalog, even when
+      // opened from the general AI thread: the voice tool returns real task
+      // references and this same WebView renders their buttons and list tab.
+      // Only unrelated spheres/habits and external inboxes are skipped to
+      // keep the Planik startup fast. Empty placeholders here previously made
+      // real tasks appear deleted and every task chip say "Задача не найдена".
       const androidVoice = Boolean(androidPlanikLaunch);
       const [sphereList, taskList, habitList, quickHistory, syncedProjects, telegramInbox, mailInbox] = await Promise.all([
         androidVoice ? Promise.resolve([] as Sphere[]) : api.getSpheres(),
-        androidVoice && !androidPlanikLaunch?.taskId ? Promise.resolve([] as Task[]) : api.getTasks(),
+        api.getTasks(),
         androidVoice ? Promise.resolve([] as Habit[]) : api.getHabits(),
         api.getGeneralAssistantHistory().catch(() => ({ messages: [] as ChatMessage[] })),
         api.getAiChatProjects<Partial<MiniAiChatProject>>(),
