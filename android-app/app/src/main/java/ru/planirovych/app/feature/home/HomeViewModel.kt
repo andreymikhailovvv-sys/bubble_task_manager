@@ -656,7 +656,12 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
     fun refreshCreditsBalance(){
         viewModelScope.launch{
             runCatching{repository.establishSession()}.onSuccess{profile->
-                mutable.update{it.copy(user=profile)}
+                mutable.update { current ->
+                    if (current.user != null && current.user.id != profile.id) {
+                        Log.e("PlanikWorkspace", "Account changed during credit refresh; preserving current workspace")
+                        current.copy(taskError="Аккаунт на сервере отличается от открытого в Android. Данные задач сохранены; войдите в исходный аккаунт.")
+                    } else current.copy(user=profile)
+                }
             }
         }
     }
@@ -679,8 +684,12 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
         try {
             val user = repository.establishSession()
             if (previous.user != null && previous.user.id != user.id) {
-                Log.e("PlanikWorkspace", "Account changed while Realtime was open; full reload required")
-                refresh() // never mix another account's data into the existing workspace
+                Log.e("PlanikWorkspace", "Account changed while Realtime was open; preserving prior workspace and requiring authentication")
+                mutable.update { current ->
+                    if (current.user?.id == previous.user.id)
+                        current.copy(taskError="Сессия Android изменилась после Планика. Исходные задачи сохранены на экране. Проверьте авторизацию перед действиями.")
+                    else current
+                }
                 return@launch
             }
             val first = repository.loadWorkspace()
