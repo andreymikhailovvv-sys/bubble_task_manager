@@ -4,8 +4,9 @@ import { createPortal } from 'react-dom';
 import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, CalendarPlus, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Clock3, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Menu, MessageCircle, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, BellRing, Trash2, UserRound, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
-import { FullscreenAddWindowMenu, FullscreenFuturePanel, FullscreenModePicker, FullscreenWorkspaceSplit } from './components/FullscreenWorkspaceLayout';
-import { createAuxiliaryPanel, resolveFullscreenPanels, type FullscreenAuxiliaryPanel, type FullscreenWorkspacePanel } from './lib/fullscreenWorkspacePanels';
+import { FullscreenModePicker, FullscreenWorkspaceSingle, FullscreenWorkspaceSplit } from './components/FullscreenWorkspaceLayout';
+import { replaceFullscreenPanel, resolveFullscreenPanels, type FullscreenWorkspacePanel } from './lib/fullscreenWorkspacePanels';
+import { FullscreenUpcomingTasksPanel } from './components/FullscreenUpcomingTasksPanel';
 import { FullscreenPaneFilters, createDefaultWorkspacePaneFilter, type WorkspacePaneFilter } from './components/FullscreenPaneFilters';
 import { WorkspaceActionToast } from './components/WorkspaceActionToast';
 import { TaskMonitoringBadge } from './components/TaskMonitoringBadge';
@@ -845,9 +846,13 @@ export default function App() {
   // filters and overlays; only the surrounding chrome is hidden.
   const [isBubbleFullscreen, setIsBubbleFullscreen] = useState(false);
   const [fullscreenDisplayModes, setFullscreenDisplayModes] = useState<DisplayMode[]>(['bubbles']);
-  const [fullscreenAuxiliaryPanel, setFullscreenAuxiliaryPanel] = useState<FullscreenAuxiliaryPanel | null>(null);
+  // Two independently replaceable fullscreen slots; the old view toggles stay
+  // a quick way to reset them to one or two visualization modes.
+  const [fullscreenPanelSlots, setFullscreenPanelSlots] = useState<FullscreenWorkspacePanel[] | null>(null);
+  const fullscreenPanels = fullscreenPanelSlots ?? resolveFullscreenPanels(fullscreenDisplayModes, null);
   const [fullscreenSplitRatio, setFullscreenSplitRatio] = useState(50);
-  const fullscreenPanels = resolveFullscreenPanels(fullscreenDisplayModes, fullscreenAuxiliaryPanel);
+  const [fullscreenChatTarget, setFullscreenChatTarget] = useState<HTMLDivElement | null>(null);
+  const [fullscreenFocusTarget, setFullscreenFocusTarget] = useState<HTMLDivElement | null>(null);
   // Each fullscreen view owns its own sector and time filters.
   const [fullscreenPaneFilters, setFullscreenPaneFilters] = useState<Record<DisplayMode, WorkspacePaneFilter>>({
     bubbles: createDefaultWorkspacePaneFilter(),
@@ -5458,7 +5463,7 @@ export default function App() {
             )}
             {!isBubbleFullscreen ? <button type="button"
               data-tour="bubbles-fullscreen-enter"
-              onClick={() => { setIsSphereFilterOpen(false); setFullscreenDisplayModes(['bubbles']); setFullscreenAuxiliaryPanel(null); setIsBubbleFullscreen(true); }}
+              onClick={() => { setIsSphereFilterOpen(false); setFullscreenDisplayModes(['bubbles']); setFullscreenPanelSlots(null); setIsBubbleFullscreen(true); }}
               className="bubble-layout-toggle absolute top-[4.55rem] z-30 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold shadow-lg backdrop-blur transition hover:brightness-110"
               style={{ right: '16px' }}
               title="Развернуть пространство пузырей на весь экран"
@@ -5469,7 +5474,7 @@ export default function App() {
             <BubbleField
               className="h-full"
               fullscreen={isBubbleFullscreen}
-              compact={isBubbleFullscreen && (fullscreenDisplayModes.length === 2 || fullscreenAuxiliaryPanel !== null)}
+              compact={isBubbleFullscreen && fullscreenPanels.length === 2}
               themeMode={effectiveThemeMode}
               showTrainingInvitation={isOnboardingOfferOpen}
               onOpenTraining={() => {
@@ -6040,10 +6045,53 @@ export default function App() {
         onChange={(next) => updateFullscreenPaneFilters(workspaceMode, next)} />
     </div>
   ) : renderWorkspaceContent(workspaceMode);
-  const renderFullscreenPanel = (panel: FullscreenWorkspacePanel): ReactNode =>
-    panel.kind === 'mode'
-      ? renderWorkspaceMode(panel.mode)
-      : <FullscreenFuturePanel panel={panel} onClose={() => setFullscreenAuxiliaryPanel(null)} />;
+  const fullscreenTaskChoices = rootTasks
+    .filter(task => task.status !== 'DONE' && task.taskType !== 'EVENT' && task.taskType !== 'REMINDER')
+    .map(task => ({ id: task.id, title: task.title }));
+  const focusedPane = fullscreenPanels.find(panel => panel.kind === 'task-ai');
+  const embeddedFocusActive = isBubbleFullscreen && focusedPane?.kind === 'task-ai' && !!focusedTask;
+  const hasGeneralAiPane = isBubbleFullscreen && fullscreenPanels.some(panel => panel.kind === 'general-ai');
+  const chooseFullscreenPanel = (index: 0 | 1, next: FullscreenWorkspacePanel) => {
+    const replacing = fullscreenPanels[index];
+    if (replacing?.kind === 'task-ai' && next.kind !== 'task-ai'
+      && !fullscreenPanels.some((panel, side) => side !== index && panel.kind === 'task-ai')) {
+      setFocusedTaskId(null);
+    }
+    if (next.kind === 'task-ai') {
+      setFocusedTaskId(next.taskId);
+      setIsAiExpanded(false);
+    }
+    if (next.kind === 'general-ai') setIsAiChatOpen(false);
+    setFullscreenPanelSlots(previous => replaceFullscreenPanel(
+      previous ?? resolveFullscreenPanels(fullscreenDisplayModes, null), index, next
+    ));
+  };
+  const renderFullscreenPanel = (panel: FullscreenWorkspacePanel): ReactNode => {
+    if (panel.kind === 'mode') return renderWorkspaceMode(panel.mode);
+    if (panel.kind === 'general-ai') return (
+      <div ref={setFullscreenChatTarget} className="fullscreen-embedded-ai relative h-full min-h-0 w-full" />
+    );
+    if (panel.kind === 'task-ai') return (
+      <div ref={setFullscreenFocusTarget} className="fullscreen-embedded-focus relative h-full min-h-0 w-full">
+        {!focusedTask || focusedTask.id !== panel.taskId ? (
+          <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted">
+            Выберите задачу через кнопку «+» рядом с разделителем.
+          </div>
+        ) : null}
+      </div>
+    );
+    if (panel.kind === 'notes') return (
+      <StandaloneNotesWorkspace key={currentUser.id + ':fullscreen-notes'} userId={currentUser.id}
+        mode="inline" requestedNote={requestedStandaloneNote}
+        onClose={() => setFullscreenPanelSlots(current => current?.length === 2
+          ? [current[0].kind === 'notes' ? { kind: 'mode', mode: fullscreenDisplayModes[0] ?? 'bubbles' } : current[0],
+             current[1].kind === 'notes' ? { kind: 'mode', mode: fullscreenDisplayModes[0] ?? 'bubbles' } : current[1]]
+          : null)} />
+    );
+    return <FullscreenUpcomingTasksPanel tasks={tasks}
+      onOpenTask={task => { setFocusedTaskId(task.parentTaskId ?? task.id); setIsAiChatOpen(false); }}
+      onComplete={async task => { await api.updateTask(task.id, { status: 'DONE' }); if (task.parentTaskId) await syncParentStatusBySubtasks(task.parentTaskId); await load(); }} />;
+  };
   return (
     <main
       className={isBubbleFullscreen
@@ -6209,16 +6257,10 @@ export default function App() {
         />
             <FullscreenModePicker modes={fullscreenDisplayModes} onChange={(nextModes) => {
               setFullscreenDisplayModes(nextModes);
-              setFullscreenAuxiliaryPanel(null);
+              setFullscreenPanelSlots(null);
               setDisplayMode(nextModes[0]);
               setIsSphereFilterOpen(false);
               setIsTimelineOverdueModalOpen(false);
-            }} />
-            <FullscreenAddWindowMenu onAdd={(kind) => {
-              // Until secondary windows gain their final design, occupy only the
-              // second slot and keep the first visualization interactive.
-              setFullscreenDisplayModes(prev => [prev[0] ?? 'bubbles']);
-              setFullscreenAuxiliaryPanel(createAuxiliaryPanel(kind));
             }} />
           </div>
           <div className="fullscreen-create-control flex items-center justify-center">
@@ -6402,7 +6444,7 @@ export default function App() {
             className="topbar-action-button workspace-fullscreen-entry inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition"
             onClick={() => {
               setFullscreenDisplayModes([displayMode]);
-              setFullscreenAuxiliaryPanel(null);
+              setFullscreenPanelSlots(null);
               setIsSphereFilterOpen(false);
               setIsBubbleFullscreen(true);
             }}
@@ -7082,13 +7124,14 @@ export default function App() {
             <FullscreenWorkspaceSplit
               panels={fullscreenPanels as [FullscreenWorkspacePanel, FullscreenWorkspacePanel]}
               renderPanel={renderFullscreenPanel}
+              onChoose={chooseFullscreenPanel}
+              tasks={fullscreenTaskChoices}
               ratio={fullscreenSplitRatio}
               onRatioChange={setFullscreenSplitRatio}
             />
           ) : (
-            <div className={`fullscreen-workspace-single ${fullscreenDisplayModes[0] === 'bubbles' ? '' : 'fullscreen-workspace-single--open'}`}>
-              {renderFullscreenPanel(fullscreenPanels[0])}
-            </div>
+            <FullscreenWorkspaceSingle panel={fullscreenPanels[0]} renderPanel={renderFullscreenPanel}
+              tasks={fullscreenTaskChoices} onChoose={next => chooseFullscreenPanel(1, next)} />
           )
         ) : renderWorkspaceMode(displayMode)}
 
