@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import './PlanikMascot.css';
 
-type PlanikMode = 'idle' | 'hover' | 'typing' | 'thinking' | 'searching' | 'painting' | 'celebrating' | 'clearing';
+type PlanikMode = 'idle' | 'hover' | 'typing' | 'searching' | 'painting' | 'celebrating' | 'clearing';
 
 // Fixed particle paths avoid creating random values or timers on every render.
 const POPPER_CONFETTI = Array.from({ length: 24 }, (_, index) => ({
@@ -103,7 +103,6 @@ export const PlanikMascot = memo(function PlanikMascot({
     if (mode === 'searching') gaze(-9, 5);
     else if (mode === 'typing') gaze(0, 7);
     else if (mode === 'painting') gaze(-6, 4);
-    else if (mode === 'thinking') gaze(7, -4);
     else if (mode === 'clearing') gaze(-5, 1);
     else if (mode !== 'hover') gaze(0, 0);
   }, [mode]);
