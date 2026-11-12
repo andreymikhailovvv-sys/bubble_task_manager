@@ -43,11 +43,13 @@ test('mode selection is an inline, keyboard-accessible trio of actual checkboxes
   assert.doesNotMatch(picker, /createPortal|aria-haspopup|aria-expanded/);
 });
 
-test('one shared max-width constrains header, single modes and split modes', async () => {
+test('one shared viewport-width column constrains header, single modes and split modes', async () => {
   const [app, css] = await Promise.all([
     load('../../client/src/App.tsx'), load('../../client/src/styles.css')
   ]);
-  assert.match(css, /--fullscreen-workspace-width: min\(1540px, calc\(100% - clamp\(48px, 8vw, 200px\)\)\)/);
+  assert.match(css, /\.app-shell\.bubble-fullscreen-shell \{[^}]*width: 100vw;[^}]*max-width: none;[^}]*--fullscreen-workspace-width: calc\(100vw - clamp\(32px, 4vw, 80px\)\)/);
+  // At the reference screenshot width the margins are roughly 35px on either side.
+  assert.equal(Math.round(Math.min(80, Math.max(32, 1745 * 0.04)) / 2), 35);
   assert.match(css, /\.bubble-fullscreen-shell > \.fullscreen-workspace-toolbar--one-row,\s*\.bubble-fullscreen-shell > \.workspace-shell \{[^}]*width: var\(--fullscreen-workspace-width\)/);
   assert.match(css, /\.fullscreen-workspace-single--open > \.fullscreen-mode-surface \{\s*width: 100%;\s*max-width: 100%;/);
   assert.match(css, /\.fullscreen-workspace-split \{[^}]*grid-template-columns/);
