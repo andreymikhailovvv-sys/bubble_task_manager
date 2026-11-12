@@ -15741,6 +15741,17 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
   min-width: 180px !important;
   max-width: 290px !important;
 }
+/* Keep creation centered as far as space permits WITHOUT absolute overlap
+   with the longer search and three mode toggles. */
+.fullscreen-workspace-toolbar--one-row > .fullscreen-workspace-toolbar-main {
+  flex: 0 1 auto;
+}
+.fullscreen-workspace-toolbar--one-row > .fullscreen-create-control {
+  position: static;
+  top: auto;
+  left: auto;
+  transform: none;
+}
 /* The three checkable views sit immediately after search, not in a menu. */
 .fullscreen-mode-picker {
   flex-wrap: nowrap;
@@ -15795,7 +15806,7 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
   padding-left: 0;
   padding-right: 0;
 }
-@media (min-width: 1101px) and (max-width: 1699px) {
+@media (min-width: 1101px) and (max-width: 2200px) {
   .fullscreen-workspace-toolbar--one-row .workspace-global-search-anchor {
     flex: 0 1 208px !important;
     width: 208px;
@@ -15830,6 +15841,14 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
     content: '⇥';
     font-size: 19px;
     line-height: 1;
+  }
+}
+@media (min-width: 1700px) {
+  .fullscreen-workspace-toolbar--one-row .workspace-global-search-anchor {
+    flex: 0 1 260px !important;
+    width: 260px;
+    min-width: 180px !important;
+    max-width: 290px !important;
   }
 }
 @media (max-width: 1100px) {
