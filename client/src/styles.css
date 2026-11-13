@@ -16300,3 +16300,121 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
   }
   .fullscreen-workspace-single-rail { flex-basis: 42px; }
 }
+
+
+/* Workbench as the primary view: preserve toolbar height and allocate a
+   compact navigation button before the brand without widening the toolbar. */
+.fullscreen-workspace-toolbar-main > .fullscreen-updates-trigger {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+}
+.fullscreen-workspace-toolbar-main > .fullscreen-updates-trigger:hover,
+.fullscreen-workspace-toolbar-main > .fullscreen-updates-trigger:focus-visible {
+  background: var(--accent-soft);
+}
+
+/* Let the real content fill the workbench. The draggable seam takes just
+   14px, a slight increase over 10px; plus controls overlap the pane edges
+   independently, never claiming an extra 60-80px of workspace. */
+.fullscreen-workspace-split {
+  grid-template-columns: minmax(0, calc(var(--fullscreen-split-ratio, 50%) - 7px)) 14px minmax(0, 1fr);
+}
+.fullscreen-workspace-pane {
+  z-index: 1;
+}
+.fullscreen-workspace-divider {
+  width: 14px;
+  z-index: 60;
+  isolation: isolate;
+  overflow: visible;
+}
+.fullscreen-workspace-divider > .fullscreen-add-window {
+  z-index: 3;
+  pointer-events: auto;
+}
+.fullscreen-workspace-divider > .fullscreen-add-window:first-child {
+  left: -30px;
+}
+.fullscreen-workspace-divider > .fullscreen-add-window:last-child {
+  right: -30px;
+}
+/* The plus is now just an icon, without a frame or border. The transparent
+   hitbox remains large enough to click, while hover/focus is clearly visible. */
+.fullscreen-add-window--compact .fullscreen-add-window-trigger {
+  width: 24px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 8px;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--accent-strong);
+  cursor: pointer;
+  pointer-events: auto;
+}
+.fullscreen-add-window--compact .fullscreen-add-window-trigger:hover,
+.fullscreen-add-window--compact .fullscreen-add-window-trigger:focus-visible,
+.fullscreen-add-window--compact .fullscreen-add-window-trigger[aria-expanded='true'] {
+  color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent-soft) 86%, var(--card-bg)) !important;
+  filter: brightness(1.15);
+  outline: none;
+}
+.fullscreen-add-window--compact .fullscreen-add-window-trigger:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 50%, transparent) !important;
+}
+/* Real modal overlays own the foreground: no lingering + hit targets or
+   filters visible through a centrally opened Focus/task/editor dialog. */
+.bubble-fullscreen-shell.fullscreen-overlay-active .fullscreen-workspace-divider > .fullscreen-add-window,
+.bubble-fullscreen-shell.fullscreen-overlay-active .fullscreen-workspace-single-rail .fullscreen-add-window,
+.bubble-fullscreen-shell.fullscreen-overlay-active .fullscreen-pane-filters-anchor {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Task-choice search keeps a caret without the big focus halo. Do not
+   autofocus-select text or restyle the rest of the application's inputs. */
+.fullscreen-add-window-search:focus-within,
+.fullscreen-add-window-search input:focus,
+.fullscreen-add-window-search input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-shadow: none !important;
+  --tw-ring-color: transparent !important;
+}
+.fullscreen-add-window-search:focus-within {
+  border-color: var(--field-border) !important;
+  background: var(--field-bg);
+}
+
+/* The mascot is lifted above the task chat's composer/send controls, but
+   stays in its previous position for every other workspace configuration. */
+.ai-chat-launcher.bubble-ai-fullscreen.ai-chat-launcher-task-embedded {
+  bottom: clamp(138px, 18vh, 186px) !important;
+}
+
+@media (max-width: 900px) {
+  .fullscreen-workspace-split {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, calc(var(--fullscreen-split-ratio, 50%) - 7px)) 14px minmax(0, 1fr);
+  }
+  .fullscreen-workspace-divider {
+    width: 100%;
+    height: 14px;
+  }
+  .fullscreen-workspace-divider > .fullscreen-add-window:first-child {
+    left: 50%;
+    top: -30px;
+    transform: translateX(-50%);
+  }
+  .fullscreen-workspace-divider > .fullscreen-add-window:last-child {
+    right: auto;
+    left: 50%;
+    top: auto;
+    bottom: -30px;
+    transform: translateX(-50%);
+  }
+}
