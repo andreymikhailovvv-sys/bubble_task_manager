@@ -3897,7 +3897,6 @@ export default function App() {
     const targetScrollTop = Math.min(maxScrollTop, Math.max(0, container.scrollHeight * dayRatio - container.clientHeight / 2));
     requestAnimationFrame(() => {
       timelineAutoScrollTargetRef.current = targetScrollTop;
-      timelineAutoScrollTargetRef.current = targetScrollTop;
       container.scrollTop = targetScrollTop;
       timelineLastScrollTopRef.current = targetScrollTop;
       setIsTimelineToolbarHidden(false);
@@ -3921,8 +3920,10 @@ export default function App() {
         Math.max(0, currentDayTop - (container.clientHeight - currentDayRect.height) / 2)
       );
 
+      timelineAutoScrollTargetRef.current = targetScrollTop;
       container.scrollTop = targetScrollTop;
       timelineLastScrollTopRef.current = targetScrollTop;
+      setIsTimelineToolbarHidden(false);
     });
 
     return () => cancelAnimationFrame(animationFrameId);
