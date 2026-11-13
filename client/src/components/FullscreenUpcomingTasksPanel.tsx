@@ -17,7 +17,7 @@ export function FullscreenUpcomingTasksPanel({ tasks, onOpenTask, onComplete, on
   const tomorrow = start + 86400000;
   const week = start + 7 * 86400000;
   const sorted = tasks
-    .filter(task => task.status !== 'DONE' && task.dueDate)
+    .filter(task => task.taskType === 'TASK' && task.status !== 'DONE' && task.dueDate)
     .filter(task => {
       const due = new Date(task.dueDate!).getTime();
       if (!Number.isFinite(due)) return false;
