@@ -103,7 +103,7 @@ const SUBTASK_OVERDUE_GLOW_STYLE =
 const MAX_SHINE_WINDOW_MINUTES = 180;
 const CONTEXT_MENU_VIEWPORT_MARGIN = 12;
 const CONTEXT_MENU_WITH_SUBMENU_WIDTH = 416;
-const CONTEXT_MENU_HEIGHT = 258;
+const CONTEXT_MENU_HEIGHT = 205;
 
 function getViewportSafeContextMenuPosition(x: number, y: number) {
   if (typeof window === 'undefined') return { x, y };
@@ -1807,12 +1807,13 @@ export function BubbleField({
       {contextMenu ? createPortal(
         <div
           data-tour={forceTaskContextMenuOpen ? 'bubble-task-context-menu' : undefined}
-          className="fixed z-[130]"
+          className={fullscreen ? 'fixed z-[130] fullscreen-task-context-menu' : 'fixed z-[130]'}
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onMouseDown={(event) => event.stopPropagation()}
           onClick={(event) => event.stopPropagation()}
         >
-          <div className="surface-popover relative min-w-44 rounded-xl border p-2 shadow-2xl">
+          <div className="surface-popover relative min-w-44 rounded-xl border p-2 shadow-2xl"
+            onMouseLeave={() => setContextPostponeSubmenuOpen(false)}>
             <button
               type="button"
               disabled={!contextMenu.task}
@@ -1830,6 +1831,7 @@ export function BubbleField({
               type="button"
               className="primary-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!contextMenu.sphere || !onAddTaskToSphere}
+              onMouseEnter={() => setContextPostponeSubmenuOpen(false)}
               onClick={() => {
                 if (!contextMenu.sphere || !onAddTaskToSphere) return;
                 onAddTaskToSphere(contextMenu.sphere);
@@ -1842,6 +1844,7 @@ export function BubbleField({
               (contextMenu.task.taskType ?? 'TASK') === 'TASK' ? (
               <button type="button"
                 className="surface-muted mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm hover:brightness-110"
+                onMouseEnter={() => setContextPostponeSubmenuOpen(false)}
                 onClick={() => {
                   onOpenInOtherPane(contextMenu.task!, contextMenu.sourcePaneIndex);
                   setContextMenu(null);
@@ -1852,6 +1855,7 @@ export function BubbleField({
               type="button"
               disabled={!contextMenu.task}
               className="success-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              onMouseEnter={() => setContextPostponeSubmenuOpen(false)}
               onClick={() => {
                 if (!contextMenu.task) return;
                 void onQuickCompleteTask(contextMenu.task);
@@ -1865,6 +1869,7 @@ export function BubbleField({
               type="button"
               disabled={!contextMenu.task || !onRescheduleTask}
               className="timeline-pick-button mt-1.5 flex w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+              onMouseEnter={() => setContextPostponeSubmenuOpen(false)}
               onClick={() => {
                 if (!contextMenu.task || !onRescheduleTask) return;
                 onRescheduleTask(contextMenu.task);
