@@ -72,7 +72,7 @@ import { rewriteMailQuickText } from '../services/telegram-quick-share-ai.servic
 import { getOwnerMailDraft, sendOwnerMailDraft } from '../services/ai-mail-tools.service.js';
 import { latestAndroidRelease } from '../services/android-release-catalog.service.js';
 import { emailAddress } from '../services/mail-smtp.service.js';
-import { accountEmailService, normalizeEmail } from '../services/account-email.service.js';
+import { accountEmailService, normalizeEmail, accountMailConfigurationIssues } from '../services/account-email.service.js';
 
 
 export const apiRouter = Router();
@@ -209,6 +209,7 @@ const emailVerificationLimiter = new FixedWindowRateLimiter(3, 60 * 60 * 1000);
 const emailPasswordResetIpLimiter = new FixedWindowRateLimiter(12, 60 * 60 * 1000);
 const emailPasswordResetAccountLimiter = new FixedWindowRateLimiter(3, 60 * 60 * 1000);
 const emailTokenUseLimiter = new FixedWindowRateLimiter(30, 15 * 60 * 1000);
+const emailCodeAttemptLimiter = new FixedWindowRateLimiter(8, 15 * 60 * 1000);
 const adminRequestLimiter = new FixedWindowRateLimiter(240, AUTH_RATE_WINDOW_MS);
 const notesRewriteLimiter = new FixedWindowRateLimiter(15, 10 * 60 * 1000);
 const adminPasswordFailureLimiter = new FixedWindowRateLimiter(8, AUTH_RATE_WINDOW_MS);
@@ -574,11 +575,8 @@ apiRouter.post('/auth/register', async (req, res) => {
     res.status(400).json({ error: 'Укажите корректную электронную почту' });
     return;
   }
-  if (email && !accountEmailService.accountMailConfigured()) {
-    res.status(503).json({ error: 'Подтверждение почты временно недоступно' });
-    return;
-  }
-
+  // Registration itself must remain available while SMTP is being configured.
+  // The address stays pending, never gets verified without mailbox proof.
   const login = sanitizeLogin(loginRaw);
   let user;
   try {
@@ -630,7 +628,7 @@ apiRouter.post('/auth/register', async (req, res) => {
       emailDelivery = 'SENT';
     } catch {
       emailDelivery = 'FAILED';
-      console.warn('[AuthEmail] registration mail delivery failed');
+      console.warn('[AuthEmail] registration mail delivery failed; configIssues=' + accountMailConfigurationIssues().join(','));
     }
   }
   console.info(`[Auth] register success userId=${user.id} ${authRequestContext(req)}`);
@@ -650,16 +648,26 @@ const findPasswordIdentity = async (login: string) => {
 apiRouter.post('/auth/email/request-verification', requireAuth, mailOrigin, async (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (!accountEmailService.accountMailConfigured()) {
-    res.status(503).json({ error: 'Отправка писем временно недоступна' }); return;
+    console.warn('[AuthEmail] request-verification blocked; configIssues=' + accountMailConfigurationIssues().join(','));
+    res.status(503).json({ error: 'Системная почта пока не настроена на сервере (SMTP_USER / SMTP_PASSWORD в Timeweb Cloud)', code: 'SMTP_NOT_CONFIGURED' }); return;
   }
   if (rejectOnRateLimit(res, emailVerificationLimiter.consume(accountRateLimitKey(req.user!.id)))) return;
   try {
     const status = await accountEmailService.requestVerification(req.user!.id);
     res.json({ status });
   } catch {
-    console.warn('[AuthEmail] verification email delivery failed');
+    console.warn('[AuthEmail] verification email delivery failed; configIssues=' + accountMailConfigurationIssues().join(','));
     res.status(503).json({ error: 'Не удалось отправить письмо. Попробуйте позже' });
   }
+});
+
+apiRouter.post('/auth/email/verify-code', requireAuth, mailOrigin, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (rejectOnRateLimit(res, emailCodeAttemptLimiter.consume(accountRateLimitKey(req.user!.id)))) return;
+  if (rejectOnRateLimit(res, emailTokenUseLimiter.consume(rateLimitIpKey(req)))) return;
+  const ok = await accountEmailService.verifyCode(req.user!.id, req.body?.code);
+  if (ok) emailCodeAttemptLimiter.reset(accountRateLimitKey(req.user!.id));
+  res.status(ok ? 200 : 400).json({ ok, error: ok ? undefined : 'Неверный или просроченный код. Проверьте письмо либо запросите новый код.' });
 });
 
 apiRouter.post('/auth/email/verify', mailOrigin, async (req, res) => {
@@ -672,7 +680,8 @@ apiRouter.post('/auth/email/verify', mailOrigin, async (req, res) => {
 apiRouter.post('/auth/email/forgot', mailOrigin, async (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (!accountEmailService.accountMailConfigured()) {
-    res.status(503).json({ error: 'Восстановление пароля временно недоступно' }); return;
+    console.warn('[AuthEmail] password reset blocked; configIssues=' + accountMailConfigurationIssues().join(','));
+    res.status(503).json({ error: 'Системная почта пока не настроена на сервере (SMTP_USER / SMTP_PASSWORD в Timeweb Cloud)', code: 'SMTP_NOT_CONFIGURED' }); return;
   }
   const generic = { ok: true, message: 'Если подтверждённый адрес найден, мы отправим письмо с инструкцией.' };
   const email = normalizeEmail(req.body?.email);
