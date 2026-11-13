@@ -9,6 +9,7 @@ import { apiRouter } from './routes/api.js';
 import { authSession } from './middleware/auth.js';
 import { accountMailConfigurationIssues } from './services/account-email.service.js';
 import { dispatchOneLegacyVerificationReminder } from './services/legacy-email-outreach.service.js';
+import { dispatchOneTelegramEmailVerificationOutreach } from './services/telegram-email-outreach.service.js';
 import { passport } from './auth/passport.js';
 import { telegramService } from './services/telegram.service.js';
 import { prisma } from './db/prisma.js';
@@ -263,6 +264,17 @@ const runLegacyEmailReminder = () =>
     .catch(() => console.warn('[AuthEmail] legacy reminder worker iteration failed'));
 setTimeout(runLegacyEmailReminder, 18_000).unref();
 setInterval(runLegacyEmailReminder, 15_000).unref();
+
+// One-time Telegram reminder for users without a verified email. The migration
+// snapshots recipients once. PostgreSQL atomically claims each recipient;
+// even multiple replicas/restarts cannot send a duplicate.
+// One user is processed per tick, without any recurring re-enrolment.
+const runTelegramEmailOutreach = () =>
+  measureBackground('telegram.email_verification_outreach',
+    () => dispatchOneTelegramEmailVerificationOutreach())
+    .catch(() => console.warn('[TelegramEmailOutreach] worker iteration failed'));
+setTimeout(runTelegramEmailOutreach, 25_000).unref();
+setInterval(runTelegramEmailOutreach, 15_000).unref();
 
 // Durable personal-Telegram quick-share worker. Jobs survive closing the web
 // window and container restarts; per-recipient audit makes delivery at-most-once.
