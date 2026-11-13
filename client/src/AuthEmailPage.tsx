@@ -4,7 +4,7 @@ import { api } from './lib/api';
 type Mode = 'verify' | 'reset' | 'forgot';
 const params = new URLSearchParams(window.location.search);
 const initialMode: Mode = params.get('mode') === 'verify' ? 'verify' : params.get('mode') === 'reset' ? 'reset' : 'forgot';
-const initialToken = params.get('token') ?? '';
+const initialToken = new URLSearchParams(window.location.hash.slice(1)).get('token') ?? params.get('token') ?? '';
 
 /** Separate public page. Visiting an email link never logs anyone in automatically. */
 export default function AuthEmailPage() {
