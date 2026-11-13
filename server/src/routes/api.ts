@@ -850,7 +850,10 @@ apiRouter.patch('/user/profile', requireAuth, async (req, res) => {
   }
 
   const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
-  if (!user || !(user.username || user.email || user.googleSub)) {
+  // A Telegram-linked account is an authenticated account as well, even
+  // when it was created before we required an email/username.
+  // Telegram Mini App logs in via signed initData and receives the same JWT.
+  if (!user || !(user.username || user.email || user.googleSub || user.telegramChatId)) {
     res.status(403).json({ error: 'Настройки профиля доступны только для аккаунта' });
     return;
   }

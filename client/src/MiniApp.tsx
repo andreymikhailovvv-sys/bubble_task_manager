@@ -1020,7 +1020,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
   useEffect(() => {
     const userId = currentUser?.id;
-    if (!isWebRuntime || !userId ||
+    if (!userId ||
         !(currentUser?.pendingEmail || (currentUser.email && !currentUser.emailVerified))) return;
     let mounted = true;
     let inFlight = false;
@@ -1038,6 +1038,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           return { ...previous, ...status };
         });
         if (status.emailVerified && !status.pendingEmail) {
+          setAiCredits(status.aiCredits);
+          setAccountEmailDraft(status.email ?? '');
           setAccountEmailMessage('Электронная почта подтверждена.');
           setEmailVerificationOpen(false);
         }
@@ -1055,15 +1057,22 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       if (document.visibilityState === 'visible') onFocus();
     };
     window.addEventListener('focus', onFocus);
+    window.addEventListener('pageshow', onFocus);
     document.addEventListener('visibilitychange', onVisible);
+    // Telegram's embedded WebView can resume without a browser focus event
+    // after the user opens the email link in an external mail/browser app.
+    const telegramWebApp = isTelegramRuntime ? (window as TelegramWindow).Telegram?.WebApp : undefined;
+    telegramWebApp?.onEvent?.('activated', onFocus);
     if (isSettingsOpen || emailVerificationOpen) void refreshMailStatus();
     return () => {
       mounted = false;
       unsubscribe();
       window.removeEventListener('focus', onFocus);
+      window.removeEventListener('pageshow', onFocus);
       document.removeEventListener('visibilitychange', onVisible);
+      telegramWebApp?.offEvent?.('activated', onFocus);
     };
-  }, [isWebRuntime, currentUser?.id, currentUser?.email, currentUser?.emailVerified,
+  }, [isTelegramRuntime, currentUser?.id, currentUser?.email, currentUser?.emailVerified,
       currentUser?.pendingEmail, isSettingsOpen, emailVerificationOpen]);
   useEffect(() => {
     setAccountEmailDraft(currentUser?.pendingEmail || currentUser?.email || '');
@@ -1413,6 +1422,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     || currentUser?.username?.trim()
     || currentUser?.email?.trim()
     || currentUser?.googleSub
+    || (isTelegramRuntime && currentUser?.id)
   );
   const accountDisplayName = currentUser?.name?.trim()
     || currentUser?.username?.trim()
@@ -4418,12 +4428,12 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   options={[{value:'enabled',label:'Включено'},{value:'disabled',label:'Выключено'}]}
                   ariaLabel="Предлагать отчёт" detachedPopup popupVariant="settings" />
               </div>
-              {isWebRuntime ? <div className="border-t border-[color:var(--panel-border)] pt-4">
+              {(isWebRuntime || isTelegramRuntime) ? <div className="border-t border-[color:var(--panel-border)] pt-4">
                 <p className="mb-2 text-sm font-semibold text-primary">Аккаунт</p>
                 {hasAccount ? (
                   <>
                     <p className="mb-2 break-words text-sm text-muted">{accountDisplayName}</p>
-                    <label className="mb-2 block text-xs text-muted">Адрес для входа и восстановления
+                    <label className="mb-2 block text-xs text-muted">{currentUser?.hasPassword ? 'Адрес для входа и восстановления' : 'Электронная почта аккаунта'}
                       <input type="email" autoComplete="email" name="email" placeholder={currentUser?.pendingEmail || currentUser?.email || 'name@example.com'}
                         value={accountEmailDraft} onChange={event => setAccountEmailDraft(event.target.value)}
                         className="mt-1 w-full rounded-xl border border-[color:var(--panel-border)] bg-[color:var(--muted-bg)] px-3 py-2 text-sm text-primary" />
@@ -4450,8 +4460,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                         }}>Ввести код подтверждения</button>
                     ) : null}
                     {accountEmailMessage ? <p className="mb-2 text-xs text-sky-500" role="status">{accountEmailMessage}</p> : null}
-                    <button type="button" className="surface-muted w-full rounded-xl px-3 py-2 text-sm text-primary"
-                      onClick={() => void logout()} disabled={logoutSubmitting}>{logoutSubmitting ? 'Выходим…' : 'Выйти'}</button>
+                    {isWebRuntime ? (
+                      <button type="button" className="surface-muted w-full rounded-xl px-3 py-2 text-sm text-primary"
+                        onClick={() => void logout()} disabled={logoutSubmitting}>{logoutSubmitting ? 'Выходим…' : 'Выйти'}</button>
+                    ) : null}
                   </>
                 ) : (
                   <div className="grid grid-cols-2 gap-2">
@@ -6238,7 +6250,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         </div>
       ) : null}
 
-      {isWebRuntime && emailVerificationOpen && currentUser ? createPortal((
+      {emailVerificationOpen && currentUser ? createPortal((
         <EmailVerificationDialog
           open={emailVerificationOpen}
           email={currentUser.pendingEmail || currentUser.email || authEmail}
@@ -6247,6 +6259,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           onVerified={async () => {
             const { user } = await api.getMe();
             setCurrentUser(user);
+            setAiCredits(user.aiCredits ?? 0);
             setAccountEmailDraft(user.email || '');
             setAccountEmailMessage('Почта успешно подтверждена.');
             setEmailVerificationOpen(false);

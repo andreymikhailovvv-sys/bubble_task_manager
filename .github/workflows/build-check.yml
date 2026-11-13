@@ -149,6 +149,8 @@ jobs:
         run: node --import tsx --test server/test/account-email-auth.test.ts
       - name: Verify one-time Telegram email activation outreach and deduplication
         run: node --import tsx --test server/test/telegram-email-outreach.test.ts
+      - name: Verify Telegram Mini App email setting, OTP modal and link activation
+        run: node --import tsx --test server/test/telegram-miniapp-email-verification.test.ts
       - name: Verify Telegram user-client cryptography and access gating
         run: node --import tsx --test server/test/telegram-user-client-security.test.ts
       - name: Verify image edit animation and attachment previews
