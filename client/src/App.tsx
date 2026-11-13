@@ -5040,7 +5040,7 @@ export default function App() {
           event.preventDefault();
           event.stopPropagation();
           setTimelineHoverCard((prev) => (prev?.taskId === task.id ? null : prev));
-          setTimelineCreateMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY, { submenu: true, height: 275 }), date: task.dueDate ? new Date(task.dueDate) : new Date(), hour: null, taskId: task.id, sourcePaneIndex: sourceFullscreenPaneIndex(event.currentTarget) });
+          setTimelineCreateMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY, { submenu: true, height: isBubbleFullscreen ? 205 : 188 }), date: task.dueDate ? new Date(task.dueDate) : new Date(), hour: null, taskId: task.id, sourcePaneIndex: sourceFullscreenPaneIndex(event.currentTarget) });
           setTimelinePostponeSubmenuOpen(false);
         }}
       >
@@ -5666,7 +5666,7 @@ export default function App() {
                     onContextMenu={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
-                      setListTaskContextMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY, { submenu: true, height: 275 }), taskId: task.id, sourcePaneIndex: sourceFullscreenPaneIndex(event.currentTarget) });
+                      setListTaskContextMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY, { submenu: true, height: isBubbleFullscreen ? 205 : 188 }), taskId: task.id, sourcePaneIndex: sourceFullscreenPaneIndex(event.currentTarget) });
                       setListTaskPostponeSubmenuOpen(false);
                     }}
                     onClick={() => { if (!isClosingTask) openTaskWithFocusGuard(task); }}
