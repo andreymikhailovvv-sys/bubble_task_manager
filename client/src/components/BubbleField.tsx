@@ -102,8 +102,8 @@ const SUBTASK_OVERDUE_GLOW_STYLE =
   '0 0 0 1px rgba(239,68,68,0.28), inset 0 0 12px rgba(239,68,68,0.3)';
 const MAX_SHINE_WINDOW_MINUTES = 180;
 const CONTEXT_MENU_VIEWPORT_MARGIN = 12;
-const CONTEXT_MENU_WITH_SUBMENU_WIDTH = 416;
-const CONTEXT_MENU_HEIGHT = 205;
+const CONTEXT_MENU_WITH_SUBMENU_WIDTH = 450;
+const CONTEXT_MENU_HEIGHT = 232;
 
 function getViewportSafeContextMenuPosition(x: number, y: number) {
   if (typeof window === 'undefined') return { x, y };
