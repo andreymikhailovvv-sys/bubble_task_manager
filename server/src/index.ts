@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { apiRouter } from './routes/api.js';
 import { authSession } from './middleware/auth.js';
+import { accountMailConfigurationIssues } from './services/account-email.service.js';
 import { passport } from './auth/passport.js';
 import { telegramService } from './services/telegram.service.js';
 import { prisma } from './db/prisma.js';
@@ -72,6 +73,13 @@ app.use(express.json({ limit: requestBodyLimit }));
 app.use(express.urlencoded({ extended: true, limit: requestBodyLimit }));
 app.use(cookieParser());
 app.use(passport.initialize());
+const authMailIssues = accountMailConfigurationIssues();
+if (authMailIssues.length) {
+  console.warn('[AuthEmail] transactional mail unavailable; issues=' + authMailIssues.join(',') +
+    '; add SMTP_USER and SMTP_PASSWORD to Timeweb backend environment and redeploy.');
+} else {
+  console.info('[AuthEmail] transactional SMTP settings present (delivery not yet tested).');
+}
 app.use(authSession);
 app.use('/api', apiRouter);
 
