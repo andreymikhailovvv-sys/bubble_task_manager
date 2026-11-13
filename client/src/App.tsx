@@ -1552,6 +1552,7 @@ export default function App() {
       window.location.assign('/?auth=login');
     } catch (error) {
       setSettingsError(error instanceof Error ? error.message : 'Не удалось удалить аккаунт');
+      setProfileError(error instanceof Error ? error.message : 'Не удалось удалить аккаунт');
       setIsDeletingAccount(false);
     }
   };
@@ -6409,18 +6410,6 @@ export default function App() {
                   disabled={settingsSavingKey === 'taskReport'}
                 />
               </div>
-              <div className="mt-3 border-t border-rose-500/30 pt-3">
-                <div className="mb-1 text-xs font-semibold text-rose-300">Удаление аккаунта</div>
-                <p className="mb-2 text-[11px] leading-snug text-subtle">Аккаунт и связанные с ним данные будут удалены без возможности восстановления.</p>
-                <button
-                  type="button"
-                  className="danger-button w-full rounded-lg px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={isDeletingAccount}
-                  onClick={() => void deleteAccount()}
-                >
-                  {isDeletingAccount ? 'Удаляем аккаунт…' : 'Удалить аккаунт'}
-                </button>
-              </div>
             </div>
           </section>
         </div>,
@@ -7316,6 +7305,14 @@ export default function App() {
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" className="profile-cancel-button" onClick={closeProfileModal} disabled={profileSaving}>Отмена</button>
               <button type="button" className="profile-save-button" onClick={() => void submitProfile()} disabled={profileSaving}>{profileSaving ? 'Сохраняем…' : 'Сохранить'}</button>
+            </div>
+            <div className="mt-5 border-t border-rose-500/30 pt-4">
+              <div className="mb-1 text-xs font-semibold text-rose-400">Удаление аккаунта</div>
+              <p className="mb-3 text-xs leading-5 text-muted">Удаление аккаунта и связанных данных необратимо.</p>
+              <button type="button" className="danger-button w-full rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-60"
+                disabled={isDeletingAccount} onClick={() => void deleteAccount()}>
+                {isDeletingAccount ? 'Удаляем аккаунт…' : 'Удалить аккаунт'}
+              </button>
             </div>
           </section>
         </div>
