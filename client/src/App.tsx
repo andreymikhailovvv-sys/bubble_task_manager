@@ -1286,6 +1286,7 @@ export default function App() {
   const [themeStorageUserId, setThemeStorageUserId] = useState<string | null>(null);
   const [autoThemeTick, setAutoThemeTick] = useState(0);
   const [authLogin, setAuthLogin] = useState('');
+  const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authName, setAuthName] = useState('');
   const [personalDataConsentAccepted, setPersonalDataConsentAccepted] = useState(false);
@@ -1336,6 +1337,7 @@ export default function App() {
   const [profileNewPassword, setProfileNewPassword] = useState('');
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSaved, setProfileSaved] = useState(false);
+  const [emailVerificationMessage, setEmailVerificationMessage] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
   const focusedTaskTitleInputRef = useRef<HTMLTextAreaElement | null>(null);
   const focusedSubtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
@@ -4682,7 +4684,7 @@ export default function App() {
     try {
       const result = authModalMode === 'login'
         ? await api.login({ login: authLogin, password: authPassword })
-        : await api.register({ login: authLogin, password: authPassword, name: authName, consentAccepted: personalDataConsentAccepted });
+        : await api.register({ login: authLogin, email: authEmail.trim() || undefined, password: authPassword, name: authName, consentAccepted: personalDataConsentAccepted });
       setCurrentUser(result.user);
       setAuthError(null);
       setAuthModalMode(null);
@@ -4700,7 +4702,8 @@ export default function App() {
 
   const openProfileModal = () => {
     setProfileName(currentUser?.name?.trim() ?? '');
-    setProfileEmail(currentUser?.email?.trim() ?? '');
+    setProfileEmail(currentUser?.pendingEmail?.trim() || currentUser?.email?.trim() || '');
+    setEmailVerificationMessage('');
     setProfileCurrentPassword('');
     setProfileNewPassword('');
     setProfileError(null);
@@ -4754,10 +4757,26 @@ export default function App() {
       setProfileCurrentPassword('');
       setProfileNewPassword('');
       setProfileSaved(true);
+      setEmailVerificationMessage(result.emailDelivery === 'SENT'
+        ? 'Отправили ссылку подтверждения на новый адрес.'
+        : result.emailDelivery === 'FAILED' ? 'Адрес сохранён, но письмо отправить не удалось. Повтори попытку ниже.'
+        : result.user.pendingEmail ? 'Новый адрес ожидает подтверждения.' : '');
     } catch (error) {
       setProfileError(error instanceof Error ? error.message : 'Не удалось сохранить изменения');
     } finally {
       setProfileSaving(false);
+    }
+  };
+
+  const sendEmailVerification = async () => {
+    setEmailVerificationMessage('');
+    try {
+      const result = await api.requestEmailVerification();
+      setEmailVerificationMessage(result.status === 'SENT'
+        ? 'Письмо отправлено. Проверь входящие и папку «Спам».'
+        : result.status === 'ALREADY_VERIFIED' ? 'Почта уже подтверждена.' : 'Сначала укажи адрес почты и сохрани профиль.');
+    } catch (error) {
+      setEmailVerificationMessage(error instanceof Error ? error.message : 'Не удалось отправить письмо.');
     }
   };
 
@@ -7131,11 +7150,13 @@ export default function App() {
             </div>
             {authModalMode === 'register' && currentUser?.isGuest ? <p className="mb-3 rounded-lg border border-violet-400/40 bg-violet-500/10 p-3 text-sm text-secondary">Зарегистрируйтесь, чтобы получить 100 пробных ИИ-кредитов и сохранить задачи этого гостевого аккаунта.</p> : null}
             <div className="space-y-2">
-              <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Логин" value={authLogin} onChange={(e) => setAuthLogin(e.target.value)} />
+              <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Логин или подтверждённая почта" value={authLogin} onChange={(e) => setAuthLogin(e.target.value)} />
               <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Пароль" type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} />
               {authModalMode === 'register' ? <p className="text-xs text-secondary">Пароль: не менее 6 символов. Цифры, буквы и спецсимволы допустимы.</p> : null}
+              {authModalMode === 'login' ? <a className="block text-right text-xs text-sky-400 underline" href="/auth/email?mode=forgot">Забыли пароль?</a> : null}
               {authModalMode === 'register' ? (
                 <>
+                  <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" type="email" autoComplete="email" placeholder="Email (для входа и восстановления, необязательно)" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} />
                   <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Имя (для регистрации)" value={authName} onChange={(e) => setAuthName(e.target.value)} />
                   <div className="flex items-start gap-2 pt-2 text-xs leading-5 text-secondary">
                     <input
@@ -7233,6 +7254,14 @@ export default function App() {
               <label className="profile-field-label">Почта
                 <input className="profile-field" value={profileEmail} maxLength={254} type="email" autoComplete="email" placeholder="name@example.com" onChange={(event) => setProfileEmail(event.target.value)} />
               </label>
+              {currentUser.pendingEmail ? <p className="text-xs text-amber-400">Ожидает подтверждения: {currentUser.pendingEmail}. До подтверждения для входа остаётся прежний адрес.</p>
+                : currentUser.email && !currentUser.emailVerified ? <p className="text-xs text-amber-400">Почта ещё не подтверждена. Для восстановления пароля нужна проверка адреса.</p> : null}
+              {(currentUser.pendingEmail || (currentUser.email && !currentUser.emailVerified)) ? (
+                <button type="button" className="profile-cancel-button rounded-xl px-3 py-2 text-xs" onClick={() => void sendEmailVerification()}>
+                  Отправить письмо подтверждения ещё раз
+                </button>
+              ) : null}
+              {emailVerificationMessage ? <p className="text-xs text-cyan-400" role="status">{emailVerificationMessage}</p> : null}
               {currentUser.hasPassword ? (
                 <label className="profile-field-label">Текущий пароль
                   <input className="profile-field" value={profileCurrentPassword} type="password" autoComplete="current-password" onChange={(event) => setProfileCurrentPassword(event.target.value)} />
