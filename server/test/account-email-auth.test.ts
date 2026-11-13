@@ -53,7 +53,7 @@ test('desktop and compact workspaces expose recovery and verification UI', () =>
   assert.match(desktop, /sendEmailVerification/);
   assert.match(compact, /Забыли пароль/);
   assert.match(compact, /saveAccountEmail/);
-  assert.match(page, /api\.resetPassword/);
+  assert.match(page, /accountRequest\('reset'/);
 });
 
 test('a single verification email offers both code and URL with shared replay protection', () => {
@@ -136,7 +136,7 @@ test('system warning for unverified accounts is deterministic and not a polling 
   assert.match(api, /account-email-verification-required:/);
   assert.match(api, /systemNotification\.upsert/);
   assert.match(api, /emailVerifiedAt/);
-  assert.match(api, /Настройки аккаунта/);
+  assert.match(api, /настройки аккаунта/);
 });
 
 test('old-account verification outreach is snapshotted once and is not replayed', () => {
