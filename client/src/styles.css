@@ -16557,10 +16557,26 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
   transform: none !important;
   pointer-events: auto !important;
 }
-.ai-chat-expanded-embedded .ai-chat-expanded-thread {
+.ai-chat-expanded-embedded .ai-chat-expanded-main {
+  /* In the classic dialog the header overlays the thread. Here the header
+     occupies normal flow, so a 100%-high thread would run under the composer
+     and extend below the clipped workbench pane. */
+  display: flex;
+  flex-direction: column;
   min-height: 0;
-  flex: 1 1 auto;
+}
+.ai-chat-expanded-embedded .ai-chat-expanded-thread {
+  height: auto;
+  min-height: 0;
+  flex: 1 1 0;
   overflow-y: auto;
+  scroll-padding-bottom: calc(var(--ai-composer-height, 76px) + 3.5rem);
+}
+.ai-chat-expanded-embedded .ai-chat-expanded-bottom-spacer {
+  /* Measured composer height includes attachments and the reply preview.
+     Leave additional breathing room for message actions and AI status. */
+  height: calc(var(--ai-composer-height, 76px) + 3.5rem);
+  flex-shrink: 0;
 }
 
 /* Subtask editor opens within the same Focus pane. Restrict the reused modal
@@ -16657,15 +16673,24 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
   box-shadow: none !important;
 }
 
-/* PC right-click menu: the fifth action should not make the fullscreen
-   popup substantially taller than its four-action classic counterpart. */
+/* Bubbles and List use the Timeline context-menu geometry: a compact
+   horizontal footprint but normal-size (36px+) action targets. Do not
+   compress the buttons just to make a fifth action fit. */
 .fullscreen-task-context-menu > .surface-popover {
-  padding: 6px !important;
+  box-sizing: border-box;
+  width: 226px;
+  min-width: 0;
+  max-width: calc(100vw - 24px);
+  padding: 8px !important;
 }
 .fullscreen-task-context-menu > .surface-popover > button {
-  margin-top: 3px !important;
-  padding-top: 5px !important;
-  padding-bottom: 5px !important;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 36px;
+  margin-top: 6px !important;
+  padding: 8px 12px !important;
+  font-size: .875rem;
+  line-height: 1.25rem;
 }
 .fullscreen-task-context-menu > .surface-popover > button:first-child {
   margin-top: 0 !important;

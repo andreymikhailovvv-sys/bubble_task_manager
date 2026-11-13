@@ -197,9 +197,9 @@ function shouldSendAiMessageOnEnter(event: ReactKeyboardEvent<HTMLTextAreaElemen
   return event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing;
 }
 
-function getViewportSafeContextMenuPosition(x: number, y: number, options?: { submenu?: boolean; height?: number }) {
+function getViewportSafeContextMenuPosition(x: number, y: number, options?: { submenu?: boolean; height?: number; width?: number }) {
   if (typeof window === 'undefined') return { x, y };
-  const width = options?.submenu ? CONTEXT_MENU_WITH_SUBMENU_WIDTH : CONTEXT_MENU_WIDTH;
+  const width = options?.width ?? (options?.submenu ? CONTEXT_MENU_WITH_SUBMENU_WIDTH : CONTEXT_MENU_WIDTH);
   const height = options?.height ?? CONTEXT_MENU_HEIGHT;
   return {
     x: Math.max(CONTEXT_MENU_VIEWPORT_MARGIN, Math.min(x, window.innerWidth - width - CONTEXT_MENU_VIEWPORT_MARGIN)),
@@ -5666,7 +5666,7 @@ export default function App() {
                     onContextMenu={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
-                      setListTaskContextMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY, { submenu: true, height: isBubbleFullscreen ? 205 : 188 }), taskId: task.id, sourcePaneIndex: sourceFullscreenPaneIndex(event.currentTarget) });
+                      setListTaskContextMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY, { submenu: true, height: isBubbleFullscreen ? 232 : 188, width: isBubbleFullscreen ? 450 : undefined }), taskId: task.id, sourcePaneIndex: sourceFullscreenPaneIndex(event.currentTarget) });
                       setListTaskPostponeSubmenuOpen(false);
                     }}
                     onClick={() => { if (!isClosingTask) openTaskWithFocusGuard(task); }}
