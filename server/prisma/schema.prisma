@@ -368,6 +368,7 @@ model User {
   emailVerifiedAt DateTime?
   pendingEmail String?
   passwordChangedAt DateTime?
+  authVersion Int @default(0)
   emailAuthTokens EmailAuthToken[]
   username     String?  @unique
   passwordHash String?
