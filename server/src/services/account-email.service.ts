@@ -177,30 +177,34 @@ export const accountEmailService = {
       `Здравствуйте!\n\nДля смены пароля Планировыча откройте ссылку:\n${linkFor('RESET', token)}\n\nСсылка действует 30 минут и может использоваться только один раз. Если вы не запрашивали смену пароля, проигнорируйте письмо.\n\nПланировыч AI\nhttps://planirovych.ru`);
   },
 
-  async resetPassword(rawToken: unknown, rawPassword: unknown): Promise<boolean> {
+  async resetPassword(rawToken: unknown, rawPassword: unknown): Promise<'SUCCESS' | 'INVALID' | 'SAME_PASSWORD'> {
     if (!validToken(rawToken) || typeof rawPassword !== 'string' ||
-        rawPassword.length < 8 || rawPassword.length > 128) return false;
+        rawPassword.length < 8 || rawPassword.length > 128) return 'INVALID';
     const hash = sha(rawToken);
     const now = new Date();
-    const passwordHash = authService.hashPassword(rawPassword);
     return prisma.$transaction(async tx => {
       const token = await tx.emailAuthToken.findUnique({ where: { tokenHash: hash } });
-      if (!token || token.purpose !== 'RESET' || token.usedAt || token.expiresAt <= now) return false;
+      if (!token || token.purpose !== 'RESET' || token.usedAt || token.expiresAt <= now) return 'INVALID';
       const user = await tx.user.findUnique({ where: { id: token.userId }, select: {
         email: true, emailVerifiedAt: true, passwordHash: true
       } });
-      if (!user?.emailVerifiedAt || !user.passwordHash || user.email !== token.email) return false;
+      if (!user?.emailVerifiedAt || !user.passwordHash || user.email !== token.email) return 'INVALID';
+      // Check the existing PBKDF2 hash *before* making any changes. Do not burn
+      // a still-valid reset link if the user accidentally submits the old password.
+      if (authService.verifyPassword(rawPassword, user.passwordHash)) return 'SAME_PASSWORD';
+      const passwordHash = authService.hashPassword(rawPassword);
       const used = await tx.emailAuthToken.updateMany({ where: {
         id: token.id, usedAt: null, expiresAt: { gt: now }
       }, data: { usedAt: now } });
-      if (used.count !== 1) return false;
+      if (used.count !== 1) return 'INVALID';
       await tx.user.update({ where: { id: token.userId }, data: {
         passwordHash, passwordChangedAt: now, authVersion: { increment: 1 }
       } });
       await tx.emailAuthToken.deleteMany({ where: {
         userId: token.userId, purpose: 'RESET', id: { not: token.id }
       } });
-      return true;
+      return 'SUCCESS';
     });
+
   }
 };
