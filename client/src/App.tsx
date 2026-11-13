@@ -4293,6 +4293,15 @@ export default function App() {
     setPoppingTaskId((prev) => (prev === taskId ? null : prev));
   };
 
+  // Both explicit completion and the last-subtask confirmation use one
+  // eligibility rule; bypassing completeTask must not bypass the report offer.
+  const maybeOfferTaskCompletionReport = (task: Task) => {
+    if (!task.parentTaskId && (task.taskType ?? 'TASK') === 'TASK'
+      && !task.isRecurring && currentUser?.offerTaskCompletionReport !== false) {
+      setReportPromptTask(task);
+    }
+  };
+
   const completeTask = async (task: Task, scope?: 'me' | 'all') => {
     if (closingTaskIds.includes(task.id)) return;
     if (task.isCollaborative && task.collaborationOwner && !scope) {
@@ -4316,10 +4325,7 @@ export default function App() {
       setEditorState((current) => current?.task?.id === task.id ? null : current);
       setFocusedTaskId((current) => current === task.id ? null : current);
       await load();
-      if (!task.parentTaskId && task.taskType !== 'EVENT' && task.taskType !== 'REMINDER'
-        && !task.isRecurring && currentUser?.offerTaskCompletionReport !== false) {
-        setReportPromptTask(task);
-      }
+      maybeOfferTaskCompletionReport(task);
     } finally {
       // A failed API update is the only case where the bubble may return.
       unmarkTaskAsClosing(task.id);
@@ -4405,6 +4411,11 @@ export default function App() {
         if (shouldCloseParent) {
           await api.updateTask(subtask.parentTaskId, { status: 'DONE' });
           void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneTask, 'task');
+          // This route completes the parent directly, without completeTask().
+          // Still show the same report proposal after server-confirmed completion.
+          const completedParent = tasks.find(task => task.id === subtask.parentTaskId)
+            ?? (await api.getTasks()).find(task => task.id === subtask.parentTaskId);
+          if (completedParent) maybeOfferTaskCompletionReport(completedParent);
           if (focusedTaskId === subtask.parentTaskId) {
             setFocusedTaskId(null);
             setFocusedDraft(null);
@@ -5726,12 +5737,13 @@ export default function App() {
               if (!contextTask) return null;
               return (
                 <div
-                  className="fixed z-[130]"
+                  className={isBubbleFullscreen ? 'fixed z-[130] fullscreen-task-context-menu' : 'fixed z-[130]'}
                   style={{ left: listTaskContextMenu.x, top: listTaskContextMenu.y }}
                   onMouseDown={(event) => event.stopPropagation()}
                   onClick={(event) => event.stopPropagation()}
                 >
-                  <div className="surface-popover relative min-w-44 rounded-xl border p-2 shadow-2xl">
+                  <div className="surface-popover relative min-w-44 rounded-xl border p-2 shadow-2xl"
+                    onMouseLeave={() => setListTaskPostponeSubmenuOpen(false)}>
                     <button
                       type="button"
                       className="surface-muted flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:brightness-110"
@@ -5744,6 +5756,7 @@ export default function App() {
                     <button
                       type="button"
                       className="primary-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm"
+                      onMouseEnter={() => setListTaskPostponeSubmenuOpen(false)}
                       onClick={() => {
                         openCreateTaskFromListTask(contextTask);
                         setListTaskContextMenu(null);
@@ -5754,6 +5767,7 @@ export default function App() {
                     <button
                       type="button"
                       className="success-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm"
+                      onMouseEnter={() => setListTaskPostponeSubmenuOpen(false)}
                       onClick={() => {
                         setListTaskContextMenu(null);
                         setListTaskPostponeSubmenuOpen(false);
@@ -5765,6 +5779,7 @@ export default function App() {
                     <button
                       type="button"
                       className="timeline-pick-button mt-1.5 flex w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium"
+                      onMouseEnter={() => setListTaskPostponeSubmenuOpen(false)}
                       onClick={() => {
                         setTimelineReschedulePicker({ taskId: contextTask.id, signal: Date.now() });
                         setListTaskContextMenu(null);
@@ -5776,6 +5791,7 @@ export default function App() {
                     </button>
                     {isBubbleFullscreen && !contextTask.parentTaskId && (contextTask.taskType ?? 'TASK') === 'TASK' ? (
                       <button type="button" className="surface-muted mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm hover:brightness-110"
+                        onMouseEnter={() => setListTaskPostponeSubmenuOpen(false)}
                         onClick={() => {
                           openTaskInOtherPane(contextTask, listTaskContextMenu.sourcePaneIndex);
                           setListTaskContextMenu(null);
