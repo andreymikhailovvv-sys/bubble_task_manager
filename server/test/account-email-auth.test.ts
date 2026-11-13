@@ -217,3 +217,17 @@ test('all browser email registration inputs are required and use autofill', () =
   assert.match(compact, /autoComplete="email" name="email" required/);
   assert.match(api, /registerTelegramWeb: \(payload: \{ initData: string; login: string; email: string/);
 });
+
+test('native Android and Telegram bot flows cannot bypass required email', () => {
+  const androidModel = read('../../android-app/app/src/main/java/ru/planirovych/app/data/model/Models.kt');
+  const androidRepo = read('../../android-app/app/src/main/java/ru/planirovych/app/data/repository/WorkspaceRepository.kt');
+  const androidViewModel = read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/HomeViewModel.kt');
+  const androidUi = read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/HomeScreen.kt');
+  const telegram = read('../src/services/telegram.service.ts');
+  assert.match(androidModel, /RegisterRequest\(val login: String, val email: String/);
+  assert.match(androidRepo, /RegisterRequest\(login,email,password/);
+  assert.match(androidViewModel, /repository\.register\(login\.trim\(\), password, email\.trim\(\)/);
+  assert.match(androidUi, /Электронная почта \(обязательно\)/);
+  assert.match(telegram, /promptRegistrationInWebApp/);
+  assert.doesNotMatch(telegram, /accountRegistrationService\.register/);
+});
