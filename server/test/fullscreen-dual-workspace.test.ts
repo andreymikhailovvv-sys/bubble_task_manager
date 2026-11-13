@@ -32,10 +32,10 @@ test('split divider handles pointer/keyboard drag and two independent add button
   for (const part of ['role="separator" tabIndex={0}', 'setPointerCapture(event.pointerId)',
     "root.style.setProperty('--fullscreen-split-ratio'", "closest('button')",
     'onChoose(0, next)', 'onChoose(1, next)']) assert.ok(controls.includes(part), part);
-  assert.match(css, /grid-template-columns: minmax\\(0, calc\\(var\\(--fullscreen-split-ratio, 50%\\) - 5px\\)\\) 10px minmax\\(0, 1fr\\)/);
-  assert.match(css, /\\.fullscreen-workspace-divider > \\.fullscreen-add-window:first-child \\{ left: -24px; \\}/);
-  assert.match(css, /\\.fullscreen-workspace-divider > \\.fullscreen-add-window:last-child \\{ right: -24px; \\}/);
-  assert.match(css, /grid-template-rows: minmax\\(0, calc\\(var\\(--fullscreen-split-ratio, 50%\\) - 5px\\)\\) 10px minmax\\(0, 1fr\\)/);
+  assert.match(css, /grid-template-columns: minmax\(0, calc\(var\(--fullscreen-split-ratio, 50%\) - 5px\)\) 10px minmax\(0, 1fr\)/);
+  assert.match(css, /\.fullscreen-workspace-divider > \.fullscreen-add-window:first-child \{ left: -24px; \}/);
+  assert.match(css, /\.fullscreen-workspace-divider > \.fullscreen-add-window:last-child \{ right: -24px; \}/);
+  assert.match(css, /grid-template-rows: minmax\(0, calc\(var\(--fullscreen-split-ratio, 50%\) - 5px\)\) 10px minmax\(0, 1fr\)/);
   assert.match(app, /<FullscreenWorkspaceSingle panel=\{fullscreenPanels\[0\]\}/);
   assert.match(app, /compact=\{isBubbleFullscreen && fullscreenPanels\.length === 2\}/);
 });
