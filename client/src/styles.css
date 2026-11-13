@@ -16020,14 +16020,18 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
   height: 100%;
   min-height: 0;
 }
+/* Keep the panes almost touching. The plus buttons float over the two pane
+   edges; only the original narrow draggable track consumes layout width. */
 .fullscreen-workspace-split {
-  grid-template-columns: minmax(0, calc(var(--fullscreen-split-ratio, 50%) - 38px)) 76px minmax(0, 1fr);
+  grid-template-columns: minmax(0, calc(var(--fullscreen-split-ratio, 50%) - 5px)) 10px minmax(0, 1fr);
   padding-left: 0;
   padding-right: 0;
 }
 .fullscreen-workspace-divider {
-  width: 76px;
-  gap: 4px;
+  width: 10px;
+  gap: 0;
+  z-index: 12;
+  overflow: visible;
 }
 .fullscreen-workspace-divider::before { width: 2px; height: 54px; }
 .fullscreen-workspace-divider-grip {
@@ -16036,18 +16040,26 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
   height: 42px;
   transform: none;
 }
+.fullscreen-workspace-divider > .fullscreen-add-window {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  transform: translateY(-50%);
+}
+.fullscreen-workspace-divider > .fullscreen-add-window:first-child { left: -24px; }
+.fullscreen-workspace-divider > .fullscreen-add-window:last-child { right: -24px; }
 .fullscreen-add-window--compact .fullscreen-add-window-trigger {
   position: relative;
-  width: 24px;
-  height: 26px;
-  min-height: 26px;
+  width: 22px;
+  height: 24px;
+  min-height: 24px;
   padding: 0;
-  border-radius: 8px;
+  border-radius: 7px;
   box-shadow: 0 3px 9px rgba(2, 6, 23, .16);
 }
 .fullscreen-add-window--compact .fullscreen-add-window-trigger svg {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
 }
 .fullscreen-add-window-menu { min-width: 240px; }
 .fullscreen-add-window-search {
@@ -16098,8 +16110,9 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
   grid-template-columns: 0 minmax(0, 1fr);
 }
 
-/* The existing Focus editor sits ABOVE its existing AI panel. Same task state,
-   same editable controls, only the outer frame is reoriented. */
+/* Embedded Focus retains the original side-by-side editor/assistant layout.
+   An independent slim keyboard-accessible divider controls this nested split;
+   normal Focus modals remain untouched. */
 .focused-task-modal-backdrop.fullscreen-task-embedded {
   position: absolute !important;
   inset: 0 !important;
@@ -16113,25 +16126,28 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
   backdrop-filter: none !important;
 }
 .fullscreen-task-embedded .focused-task-modal-layout {
-  flex-direction: column !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, calc(var(--focus-inner-ratio, 58%) - 5px)) 10px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   align-items: stretch !important;
   width: 100%;
   max-width: none !important;
   height: 100%;
   min-height: 0;
   min-width: 0;
-  gap: 8px;
+  gap: 0;
   overflow: hidden;
 }
 .fullscreen-task-embedded .focused-task-modal-panel-height {
-  height: auto !important;
+  height: 100% !important;
   max-height: none !important;
   min-height: 0 !important;
 }
 .fullscreen-task-embedded .focused-task-editor-shell {
+  grid-column: 1;
+  grid-row: 1;
   order: 1 !important;
   display: flex;
-  flex: 1 1 59%;
   flex-direction: column;
   width: 100% !important;
   max-width: none !important;
@@ -16143,9 +16159,10 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
   overflow-y: auto;
 }
 .fullscreen-task-embedded .focused-task-ai-panel {
+  grid-column: 3;
+  grid-row: 1;
   order: 2 !important;
   display: flex !important;
-  flex: 1 1 41%;
   flex-direction: column;
   width: 100% !important;
   max-width: none !important;
@@ -16153,6 +16170,49 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
   min-height: 0 !important;
   padding: 12px !important;
   border-radius: 18px !important;
+}
+.fullscreen-task-embedded .fullscreen-focus-inner-divider {
+  position: relative;
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 10px;
+  min-height: 0;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  outline: none;
+  z-index: 3;
+}
+.fullscreen-focus-inner-divider::before {
+  content: '';
+  position: absolute;
+  width: 2px;
+  height: 58px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 25%, var(--panel-border));
+  pointer-events: none;
+}
+.fullscreen-focus-inner-divider-grip {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: 0 0 16px;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 42px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--panel-border));
+  border-radius: 999px;
+  background: var(--popover-bg);
+  color: var(--accent-strong);
+  box-shadow: 0 3px 10px rgba(2, 6, 23, .13);
+}
+.fullscreen-focus-inner-divider:is(:hover, :focus-visible) .fullscreen-focus-inner-divider-grip {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 17%, transparent);
 }
 
 /* Board and rich-text editor share the same pane, including note selection. */
@@ -16213,11 +16273,11 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
 @media (max-width: 900px) {
   .fullscreen-workspace-split {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, calc(var(--fullscreen-split-ratio, 50%) - 38px)) 76px minmax(0, 1fr);
+    grid-template-rows: minmax(0, calc(var(--fullscreen-split-ratio, 50%) - 5px)) 10px minmax(0, 1fr);
   }
   .fullscreen-workspace-divider {
     width: 100%;
-    height: 76px;
+    height: 10px;
   }
   .fullscreen-workspace-divider::before {
     width: 54px;
@@ -16225,6 +16285,18 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
   }
   .fullscreen-workspace-divider-grip {
     transform: rotate(90deg);
+  }
+  .fullscreen-workspace-divider > .fullscreen-add-window:first-child {
+    left: 50%;
+    top: -24px;
+    transform: translateX(-50%);
+  }
+  .fullscreen-workspace-divider > .fullscreen-add-window:last-child {
+    right: auto;
+    left: 50%;
+    top: auto;
+    bottom: -24px;
+    transform: translateX(-50%);
   }
   .fullscreen-workspace-single-rail { flex-basis: 42px; }
 }
