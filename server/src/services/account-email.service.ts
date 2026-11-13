@@ -41,7 +41,7 @@ const sendAccountMail = async (recipient: string, subject: string, text: string)
 };
 
 const linkFor = (purpose: 'VERIFY' | 'RESET', token: string) =>
-  `${PUBLIC_APP_URL}/auth/email?mode=${purpose === 'VERIFY' ? 'verify' : 'reset'}&token=${encodeURIComponent(token)}`;
+  `${PUBLIC_APP_URL}/auth/email?mode=${purpose === 'VERIFY' ? 'verify' : 'reset'}#token=${encodeURIComponent(token)}`;
 
 export const accountEmailService = {
   normalizeEmail,
