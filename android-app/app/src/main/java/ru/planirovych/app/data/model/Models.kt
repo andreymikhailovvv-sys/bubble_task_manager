@@ -35,7 +35,7 @@ data class CurrentUser(
 
 @Serializable data class UserResponse(val user: CurrentUser)
 @Serializable data class LoginRequest(val login: String, val password: String)
-@Serializable data class RegisterRequest(val login: String, val password: String, val name: String? = null, val consentAccepted: Boolean)
+@Serializable data class RegisterRequest(val login: String, val email: String, val password: String, val name: String? = null, val consentAccepted: Boolean)
 @Serializable data class OkResponse(val ok: Boolean)
 
 @Serializable
