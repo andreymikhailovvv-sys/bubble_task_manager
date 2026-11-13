@@ -700,8 +700,13 @@ apiRouter.post('/auth/email/reset', mailOrigin, async (req, res) => {
   if (typeof req.body?.password !== 'string' || req.body.password.length < 8 || req.body.password.length > 128) {
     res.status(400).json({ error: 'Новый пароль должен содержать от 8 до 128 символов' }); return;
   }
-  const ok = await accountEmailService.resetPassword(req.body?.token, req.body.password);
-  if (!ok) { res.status(400).json({ error: 'Ссылка недействительна или устарела' }); return; }
+  const result = await accountEmailService.resetPassword(req.body?.token, req.body.password);
+  if (result === 'SAME_PASSWORD') {
+    res.status(400).json({ error: 'Новый пароль должен отличаться от предыдущего' }); return;
+  }
+  if (result !== 'SUCCESS') {
+    res.status(400).json({ error: 'Ссылка недействительна или устарела' }); return;
+  }
   res.clearCookie(AUTH_COOKIE_NAME, { ...authService.cookieOptions(), maxAge: undefined });
   res.clearCookie(DEVICE_COOKIE_NAME, { ...authService.deviceCookieOptions(), maxAge: undefined });
   res.json({ ok: true });
