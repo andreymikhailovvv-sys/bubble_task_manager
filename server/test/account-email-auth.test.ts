@@ -55,3 +55,50 @@ test('desktop and compact workspaces expose recovery and verification UI', () =>
   assert.match(compact, /saveAccountEmail/);
   assert.match(page, /api\.resetPassword/);
 });
+
+test('a single verification email offers both code and URL with shared replay protection', () => {
+  const service = read('../src/services/account-email.service.ts');
+  const schema = read('../prisma/schema.prisma');
+  const migration = read('../prisma/migrations/20261113232000_email_verification_code/migration.sql');
+  assert.match(service, /randomInt\(0, 1_000_000\)/);
+  assert.match(service, /codeExpiresAt: new Date/);
+  assert.match(service, /createHmac\('sha256'/);
+  assert.match(service, /timingSafeEqual/);
+  assert.match(service, /MAX_CODE_ATTEMPTS = 6/);
+  assert.match(service, /codeAttempts: \{ increment: 1 \}/);
+  assert.match(service, /return confirmVerification\(\{ userId, code: rawCode \}\)/);
+  assert.match(service, /return confirmVerification\(\{ tokenHash: sha\(raw\) \}\)/);
+  assert.match(service, /Код и ссылка подтверждения почты/);
+  assert.match(schema, /codeHash String\?/);
+  assert.match(migration, /ADD COLUMN "codeHash"/);
+  assert.match(migration, /ADD COLUMN "codeAttempts"/);
+});
+
+test('registration remains possible without mail secrets, but verification remains proof-based', () => {
+  const api = read('../src/routes/api.ts');
+  const registration = api.slice(api.indexOf("apiRouter.post('/auth/register'"), api.indexOf("apiRouter.post('/auth/login'"));
+  assert.doesNotMatch(registration.slice(0, 1700), /if \(email && !accountEmailService\.accountMailConfigured/);
+  assert.match(registration, /emailDelivery = 'FAILED'/);
+  assert.match(api, /auth\/email\/verify-code/);
+  assert.match(api, /emailCodeAttemptLimiter/);
+  assert.match(api, /accountMailConfigurationIssues/);
+  assert.match(api, /accountMailFailureDiagnostic/);
+  const service = read('../src/services/account-email.service.ts');
+  assert.match(service, /SMTP_USER_MISSING/);
+  assert.match(service, /SMTP_PASSWORD_MISSING/);
+  assert.doesNotMatch(service, /console\.log\(.*password/i);
+});
+
+test('both desktop and compact activation expose a code input and link option', () => {
+  const dialog = read('../../client/src/components/EmailVerificationDialog.tsx');
+  const desktop = read('../../client/src/App.tsx');
+  const compact = read('../../client/src/MiniApp.tsx');
+  assert.match(dialog, /autoComplete="one-time-code"/);
+  assert.match(dialog, /api\.verifyEmailCode\(code\)/);
+  assert.match(dialog, /Я перешёл по ссылке/);
+  assert.match(dialog, /Отправить письмо ещё раз/);
+  assert.match(desktop, /authModalMode === 'register' \? 'Логин'/);
+  assert.match(compact, /authModalMode === 'register' \? 'Логин'/);
+  assert.match(desktop, /EmailVerificationDialog/);
+  assert.match(compact, /EmailVerificationDialog/);
+});
