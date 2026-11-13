@@ -7956,9 +7956,9 @@ export default function App() {
                   })();
                 }} aria-label="Закрыть окно"><X size={16} /></button>
               </div>
-              <div className="mb-3 flex shrink-0 items-start justify-between gap-3 pr-32">
+              <div className="focused-task-ai-toolbar mb-3 flex shrink-0 items-start justify-between gap-3 pr-32">
                 <div>
-                  <p className="flex items-center gap-2 text-sm font-semibold ai-panel-title"><Bot size={16} /> Помощь ИИ</p>
+                  <p className="flex items-center gap-2 text-sm font-semibold ai-panel-title"><Bot size={16} /><span className="focused-task-ai-toolbar-title">Помощь ИИ</span></p>
                 </div>
                 <TaskMonitoringStatuses tourStage={activeTourStep === 'ai-monitor-model' ? 'model' : activeTourStep === 'ai-monitor-button' ? 'button' : null} taskId={focusedTask.id}
                   model={focusedTask.aiMonitoringModel}
