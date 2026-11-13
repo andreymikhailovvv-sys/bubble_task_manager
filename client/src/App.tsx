@@ -3840,6 +3840,14 @@ export default function App() {
     }
   }, [isBubblesMode, rankingMode]);
 
+  const soloTimelineWorkbench = isBubbleFullscreen && fullscreenPanels.length === 1
+    && fullscreenPanels[0].kind === 'mode' && fullscreenPanels[0].mode === 'timeline';
+  useEffect(() => {
+    // A previously hidden toolbar must not stay hidden when the Timeline
+    // becomes the only workbench window. This runs only on that transition.
+    if (soloTimelineWorkbench) setIsTimelineToolbarHidden(false);
+  }, [soloTimelineWorkbench]);
+
   useEffect(() => {
     if (!isTimelineMode) {
       setIsTimelineToolbarHidden(false);
