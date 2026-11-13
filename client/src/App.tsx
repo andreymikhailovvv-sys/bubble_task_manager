@@ -6607,7 +6607,7 @@ export default function App() {
             <button className="surface-popover light-menu-trigger topbar-settings-button inline-flex h-10 w-10 items-center justify-center rounded-xl border transition hover:border-cyan-300/70" onClick={() => setIsSettingsOpen((prev) => !prev)} aria-label="Настройки" title="Настройки"><Settings size={17} /></button>
           </div>
           <button type="button" data-tour="workspace-fullscreen-enter"
-            className="topbar-action-button workspace-fullscreen-entry inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition"
+            className="topbar-action-button workspace-fullscreen-entry inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border p-0 text-sm font-semibold transition"
             onClick={() => {
               setFullscreenDisplayModes([displayMode]);
               setFullscreenPanelSlots(null);
@@ -6615,7 +6615,7 @@ export default function App() {
               setIsBubbleFullscreen(true);
             }}
             title="Перейти в основной вид" aria-label="Перейти в основной вид">
-            <Maximize2 size={16} /> <span>Основной вид</span>
+            <Maximize2 size={18} />
           </button>
         </div>
       </section> : null}
