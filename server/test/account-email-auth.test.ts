@@ -102,3 +102,61 @@ test('both desktop and compact activation expose a code input and link option', 
   assert.match(desktop, /EmailVerificationDialog/);
   assert.match(compact, /EmailVerificationDialog/);
 });
+
+
+test('email verification and reset use a dedicated HTML entry, not workspace JS or CSS', () => {
+  const vite = read('../../client/vite.config.ts');
+  const html = read('../../client/auth-email.html');
+  const entry = read('../../client/src/auth-email-entry.tsx');
+  const page = read('../../client/src/AuthEmailPage.tsx');
+  const server = read('../src/index.ts');
+  assert.match(vite, /authEmail: fileURLToPath/);
+  assert.match(html, /src\/auth-email-entry\.tsx/);
+  assert.doesNotMatch(html, /src\/main\.tsx/);
+  assert.doesNotMatch(entry, /\.\/App/);
+  assert.doesNotMatch(entry, /\.\/MiniApp/);
+  assert.doesNotMatch(page, /\.\/lib\/api/);
+  assert.match(server, /app\.get\('\/auth\/email'/);
+  assert.match(server, /auth-email\.html/);
+});
+
+test('password reset disallows the current password without consuming its token', () => {
+  const service = read('../src/services/account-email.service.ts');
+  const api = read('../src/routes/api.ts');
+  const start = service.indexOf('async resetPassword(');
+  const reset = service.slice(start);
+  assert.match(reset, /authService\.verifyPassword\(rawPassword, user\.passwordHash\)/);
+  assert.match(reset, /return 'SAME_PASSWORD'/);
+  assert.ok(reset.indexOf("return 'SAME_PASSWORD'") < reset.indexOf('codeAttempts: { increment: 1 }') || reset.indexOf("return 'SAME_PASSWORD'") < reset.indexOf('await tx.emailAuthToken.updateMany'));
+  assert.match(api, /Новый пароль должен отличаться от предыдущего/);
+});
+
+test('system warning for unverified accounts is deterministic and not a polling flood', () => {
+  const api = read('../src/routes/api.ts');
+  assert.match(api, /account-email-verification-required:/);
+  assert.match(api, /systemNotification\.upsert/);
+  assert.match(api, /emailVerifiedAt/);
+  assert.match(api, /Настройки аккаунта/);
+});
+
+test('old-account verification outreach is snapshotted once and is not replayed', () => {
+  const schema = read('../prisma/schema.prisma');
+  const sql = read('../prisma/migrations/20261114102000_legacy_email_verification_outreach/migration.sql');
+  const worker = read('../src/services/legacy-email-outreach.service.ts');
+  assert.match(schema, /model EmailVerificationOutreach/);
+  assert.match(sql, /INSERT INTO "EmailVerificationOutreach"/);
+  assert.match(sql, /"emailVerifiedAt" IS NULL/);
+  assert.match(sql, /ON CONFLICT \("userId"\) DO NOTHING/);
+  assert.match(worker, /status: 'PENDING'/);
+  assert.match(worker, /status: 'CLAIMED'/);
+  assert.match(worker, /status: 'FAILED'/);
+  assert.doesNotMatch(worker, /status: 'PENDING'.*data: \{ status: 'PENDING' \}/s);
+});
+
+test('delete account is under account profile and not general settings', () => {
+  const desktop = read('../../client/src/App.tsx');
+  const profile = desktop.indexOf('{isProfileModalOpen && hasAccount ? (');
+  const del = desktop.indexOf('onClick={() => void deleteAccount()}');
+  assert.ok(profile >= 0 && del > profile);
+  assert.equal(desktop.split('onClick={() => void deleteAccount()}').length - 1, 1);
+});
