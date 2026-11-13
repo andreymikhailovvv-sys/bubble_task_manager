@@ -117,6 +117,7 @@ test('single timeline stays visible, embedded chat stays pinned and subtask edit
   ]);
   assert.ok(app.includes("isTimelineToolbarHidden && !isTimelineOverdueModalOpen ? 'timeline-toolbar-hidden' : 'timeline-toolbar-visible'"));
   assert.ok(app.includes('timelineAutoScrollTargetRef.current = targetScrollTop'));
+  assert.ok(app.includes('if (soloTimelineWorkbench) setIsTimelineToolbarHidden(false)'));
   assert.ok(app.includes('Math.abs(nextScrollTop - autoScrollTarget) <= 2'));
   assert.ok(css.includes('.fullscreen-workspace-single--open .fullscreen-workspace-single-content .timeline-toolbar'));
   assert.ok(!css.includes('opacity: 1 !important;\n  transform: none !important;\n  pointer-events: auto !important;\n}\n\n/* Full AI chat'));
