@@ -4433,7 +4433,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 {hasAccount ? (
                   <>
                     <p className="mb-2 break-words text-sm text-muted">{accountDisplayName}</p>
-                    <label className="mb-2 block text-xs text-muted">Адрес для входа и восстановления
+                    <label className="mb-2 block text-xs text-muted">{currentUser?.hasPassword ? 'Адрес для входа и восстановления' : 'Электронная почта аккаунта'}
                       <input type="email" autoComplete="email" name="email" placeholder={currentUser?.pendingEmail || currentUser?.email || 'name@example.com'}
                         value={accountEmailDraft} onChange={event => setAccountEmailDraft(event.target.value)}
                         className="mt-1 w-full rounded-xl border border-[color:var(--panel-border)] bg-[color:var(--muted-bg)] px-3 py-2 text-sm text-primary" />
