@@ -1063,7 +1063,7 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
     fun setThemeMode(value: ThemeMode) { viewModelScope.launch { themes.setMode(value) } }
     fun clearAuthError() { mutable.update { it.copy(authError=null) } }
     fun login(login: String, password: String, done: () -> Unit) = authAction(done) { repository.login(login.trim(), password) }
-    fun register(login: String, password: String, name: String, consent: Boolean, done: () -> Unit) = authAction(done) { repository.register(login.trim(), password, name.trim(), consent) }
+    fun register(login: String, password: String, email: String, name: String, consent: Boolean, done: () -> Unit) = authAction(done) { repository.register(login.trim(), password, email.trim(), name.trim(), consent) }
     private fun authAction(done: () -> Unit, action: suspend () -> CurrentUser) = viewModelScope.launch {
         mutable.update { it.copy(authBusy=true, authError=null) }
         runCatching { action() to repository.loadWorkspace() }.onSuccess { (user, workspace) -> mutable.value=HomeState(false,user,workspace.spheres,workspace.tasks,workspace.habits); done() }.onFailure { error -> mutable.update { it.copy(authBusy=false,authError=error.userMessage()) } }
