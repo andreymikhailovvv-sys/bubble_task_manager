@@ -102,13 +102,16 @@ export async function smtpReply(input: {
     stage='DATA_COMMAND'; await send('DATA', 354);
     const subject = input.subject.replace(/[\r\n\0]/g, ' ').slice(0, 150);
     const encodedSubject = '=?UTF-8?B?' + Buffer.from(input.system || /^Re:/i.test(subject) ? subject : 'Re: ' + subject).toString('base64') + '?=';
+    const fromHeader = input.system
+      ? '=?UTF-8?B?' + Buffer.from('Планировыч AI').toString('base64') + '?= <' + sender + '>'
+      : '<' + sender + '>';
     const headers = [
-      'From: <' + sender + '>', 'To: ' + destinations.map(x=>'<'+x+'>').join(', '),
+      'From: ' + fromHeader, 'To: ' + destinations.map(x=>'<'+x+'>').join(', '),
       'Subject: ' + encodedSubject,
       'Date: ' + new Date().toUTCString(),
       'MIME-Version: 1.0', 'Content-Type: text/plain; charset=UTF-8',
       'Content-Transfer-Encoding: base64',
-      'X-Mailer: PlanIrovych', '', Buffer.from(input.text).toString('base64').replace(/.{1,76}/g, '$&\r\n')
+      'X-Mailer: ' + (input.system ? 'Planirovych Auth' : 'PlanIrovych assistant'), '', Buffer.from(input.text).toString('base64').replace(/.{1,76}/g, '$&\r\n')
     ].join('\r\n').replace(/\r\n(?=\r\n\.)/g, '\r\n');
     dataWritten=true;
     socket.write(headers + '\r\n.\r\n');
