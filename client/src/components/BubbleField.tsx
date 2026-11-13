@@ -9,6 +9,7 @@ import { noteHtmlToPlainText } from '../lib/notes';
 import { bubbleLinkSegment, detectBubbleDrop, getLinkedBubbleGroups, type DropIntent, type VisualBubble } from '../lib/bubbleInteractions';
 import { useBubbleLayoutWorker } from '../hooks/useBubbleLayoutWorker';
 import { resolveSphereIcon } from '../lib/sphereIcons';
+import { compactBubbleHoverPlacement } from '../lib/bubbleHoverPlacement';
 import type { Sphere, Task } from '../lib/types';
 import { InlineDateTimePickerIcon } from './InlineDateTimePickerIcon';
 import { LinkifiedText } from './LinkifiedText';
@@ -111,38 +112,6 @@ function getViewportSafeContextMenuPosition(x: number, y: number) {
     y: Math.max(CONTEXT_MENU_VIEWPORT_MARGIN, Math.min(y, window.innerHeight - CONTEXT_MENU_HEIGHT - CONTEXT_MENU_VIEWPORT_MARGIN))
   };
 }
-/** Keep a compact hover card outside its bubble and within the viewport. */
-function compactBubbleHoverPlacement(rect: DOMRect, viewportWidth: number, viewportHeight: number) {
-  const margin = 12;
-  const gap = 16;
-  const preferredWidth = 288;
-  const preferredHeight = 315;
-  const viewportCardHeight = Math.min(preferredHeight, Math.max(0, viewportHeight - 2 * margin));
-  const rightSpace = viewportWidth - rect.right - gap - margin;
-  const leftSpace = rect.left - gap - margin;
-  if (Math.max(rightSpace, leftSpace) >= 190) {
-    const right = rightSpace >= leftSpace;
-    const width = Math.min(preferredWidth, right ? rightSpace : leftSpace);
-    return {
-      left: right ? rect.right + gap : rect.left - gap - width,
-      top: Math.max(margin, Math.min((rect.top + rect.bottom - viewportCardHeight) / 2, viewportHeight - viewportCardHeight - margin)),
-      width,
-      maxHeight: viewportCardHeight
-    };
-  }
-  const belowSpace = viewportHeight - rect.bottom - gap - margin;
-  const aboveSpace = rect.top - gap - margin;
-  const below = belowSpace >= aboveSpace;
-  const maxHeight = Math.min(preferredHeight, Math.max(0, below ? belowSpace : aboveSpace));
-  const width = Math.min(preferredWidth, Math.max(0, viewportWidth - 2 * margin));
-  return {
-    left: Math.max(margin, Math.min(rect.left + rect.width / 2 - width / 2, viewportWidth - width - margin)),
-    top: below ? rect.bottom + gap : rect.top - gap - maxHeight,
-    width,
-    maxHeight
-  };
-}
-
 const POSTPONE_OPTIONS = [
   { value: '15m', label: 'На 15 мин' },
   { value: '30m', label: 'На 30 мин' },
@@ -942,6 +911,7 @@ export function BubbleField({
     cancelHoverExit();
     hoverExitTimer.current = setTimeout(() => {
       setHoveredTaskId(null);
+      setCompactHoverPoint(null);
       setIsAddingSubtask(false);
     }, HOVER_EXIT_DELAY_MS);
   };
@@ -1045,7 +1015,6 @@ export function BubbleField({
           }
         }}
         onMouseLeave={() => {
-          setCompactHoverPoint(null);
           if (!dragSessionRef.current) scheduleHoverExit();
         }}
         onContextMenu={(event) => showContextMenu(event, bubble.task)}
@@ -1799,8 +1768,9 @@ export function BubbleField({
         </motion.g>
       </svg>
       {compact && hoveredBubble && compactHoverPoint && !dragSessionRef.current ? createPortal(
-        <div className="timeline-hover-card pointer-events-none fixed z-[2147483647] overflow-y-auto rounded-lg border p-2.5 text-[11px]"
-          style={compactHoverPoint} aria-label={`Информация о задаче: ${hoveredBubble.task.title}`}>
+        <div className="timeline-hover-card pointer-events-auto fixed z-[2147483647] overflow-y-auto rounded-lg border p-2.5 text-[11px]"
+          style={compactHoverPoint} onMouseEnter={cancelHoverExit} onMouseLeave={scheduleHoverExit}
+          aria-label={`Информация о задаче: ${hoveredBubble.task.title}`}>
           <p className="font-semibold text-primary">{hoveredBubble.task.title}</p>
           <p className="mt-1 min-w-0 max-w-full whitespace-pre-wrap break-words text-muted [overflow-wrap:anywhere]">
             <LinkifiedText
