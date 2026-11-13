@@ -72,7 +72,7 @@ import { rewriteMailQuickText } from '../services/telegram-quick-share-ai.servic
 import { getOwnerMailDraft, sendOwnerMailDraft } from '../services/ai-mail-tools.service.js';
 import { latestAndroidRelease } from '../services/android-release-catalog.service.js';
 import { emailAddress } from '../services/mail-smtp.service.js';
-import { accountEmailService, normalizeEmail, accountMailConfigurationIssues } from '../services/account-email.service.js';
+import { accountEmailService, normalizeEmail, accountMailConfigurationIssues, accountMailFailureDiagnostic } from '../services/account-email.service.js';
 
 
 export const apiRouter = Router();
@@ -626,9 +626,9 @@ apiRouter.post('/auth/register', async (req, res) => {
     try {
       await accountEmailService.requestVerification(user.id);
       emailDelivery = 'SENT';
-    } catch {
+    } catch (error) {
       emailDelivery = 'FAILED';
-      console.warn('[AuthEmail] registration mail delivery failed; configIssues=' + accountMailConfigurationIssues().join(','));
+      console.warn('[AuthEmail] registration mail delivery failed; ' + accountMailFailureDiagnostic(error));
     }
   }
   console.info(`[Auth] register success userId=${user.id} ${authRequestContext(req)}`);
@@ -655,9 +655,9 @@ apiRouter.post('/auth/email/request-verification', requireAuth, mailOrigin, asyn
   try {
     const status = await accountEmailService.requestVerification(req.user!.id);
     res.json({ status });
-  } catch {
-    console.warn('[AuthEmail] verification email delivery failed; configIssues=' + accountMailConfigurationIssues().join(','));
-    res.status(503).json({ error: 'Не удалось отправить письмо. Попробуйте позже' });
+  } catch (error) {
+    console.warn('[AuthEmail] verification email delivery failed; ' + accountMailFailureDiagnostic(error));
+    res.status(503).json({ error: 'Не удалось отправить письмо. Проверьте настройки системной почты на сервере.' });
   }
 });
 
@@ -690,7 +690,7 @@ apiRouter.post('/auth/email/forgot', mailOrigin, async (req, res) => {
   const acct = emailPasswordResetAccountLimiter.consume(accountRateLimitKey(email ?? 'invalid'));
   if (!ip.allowed || !acct.allowed || !email) { res.json(generic); return; }
   try { await accountEmailService.requestPasswordReset(email); }
-  catch { console.warn('[AuthEmail] password reset delivery failed'); }
+  catch (error) { console.warn('[AuthEmail] password reset delivery failed; ' + accountMailFailureDiagnostic(error)); }
   res.json(generic);
 });
 
@@ -855,9 +855,9 @@ apiRouter.patch('/user/profile', requireAuth, async (req, res) => {
       try {
         await accountEmailService.requestVerification(updatedUser.id);
         emailDelivery = 'SENT';
-      } catch {
+      } catch (error) {
         emailDelivery = 'FAILED';
-        console.warn('[AuthEmail] profile verification mail delivery failed');
+        console.warn('[AuthEmail] profile verification mail delivery failed; ' + accountMailFailureDiagnostic(error));
       }
     }
     res.json({ user: toAuthUser(updatedUser), emailDelivery });
