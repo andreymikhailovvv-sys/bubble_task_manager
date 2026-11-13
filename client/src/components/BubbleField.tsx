@@ -1881,7 +1881,7 @@ export function BubbleField({
               Перенести
             </button>
             {contextPostponeSubmenuOpen && contextMenu.task ? (
-              <div className="surface-popover absolute left-full top-[46px] ml-1 w-56 rounded-md border p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+              <div className="surface-popover absolute left-full top-[46px] ml-0 w-56 rounded-md border p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
                 {POSTPONE_OPTIONS.map((option) => (
                   <button
                     key={option.value}
