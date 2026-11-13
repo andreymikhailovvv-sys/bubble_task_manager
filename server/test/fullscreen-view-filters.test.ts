@@ -44,13 +44,16 @@ test('each fullscreen mode owns filters for sectors and time, including the time
   assert.doesNotMatch(header, /value=\{timeFilter\}/);
 });
 
-test('split bubbles display the same fixed Timeline-style hover card outside their clipped SVG canvas', async () => {
+test('split bubbles display scrollable viewport-safe hover cards outside clipped SVG canvas', async () => {
   const [bubbles, css] = await Promise.all([
     load('../../client/src/components/BubbleField.tsx'),
     load('../../client/src/styles.css')
   ]);
   assert.match(bubbles, /compact && hoveredBubble && compactHoverPoint/);
-  assert.match(bubbles, /timeline-hover-card pointer-events-none fixed/);
+  assert.match(bubbles, /timeline-hover-card pointer-events-auto fixed/);
+  assert.match(bubbles, /overflow-y-auto rounded-lg/);
+  assert.match(bubbles, /compactBubbleHoverPlacement\(/);
+  assert.match(bubbles, /onMouseEnter=\{cancelHoverExit\} onMouseLeave=\{scheduleHoverExit\}/);
   assert.match(bubbles, /noteHtmlToPlainText\(hoveredBubble\.task\.description/);
   assert.match(bubbles, /hoveredSubtasks\.slice\(0, 3\)/);
   assert.match(bubbles, /createPortal\([\s\S]*?document\.body/);
