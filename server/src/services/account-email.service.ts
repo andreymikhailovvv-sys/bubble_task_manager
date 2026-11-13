@@ -157,6 +157,22 @@ export const accountEmailService = {
     return confirmVerification({ userId, code: rawCode });
   },
 
+  /** Only a reminder: no confirmation credential is sent until the user requests it. */
+  async sendLegacyVerificationReminder(userId: string, queuedEmail: string): Promise<'SENT' | 'SKIPPED'> {
+    const destination = normalizeEmail(queuedEmail);
+    if (!destination || !accountMailConfigured()) return 'SKIPPED';
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: {
+      username: true, googleSub: true, email: true, pendingEmail: true, emailVerifiedAt: true
+    } });
+    if (!user || !(user.username || user.googleSub) || user.emailVerifiedAt) return 'SKIPPED';
+    const currentEmail = normalizeEmail(user.pendingEmail || user.email);
+    // Never contact a stale address when the account's email was changed.
+    if (currentEmail !== destination) return 'SKIPPED';
+    await sendAccountMail(destination, 'Подтвердите электронную почту в Планировыче',
+      `Здравствуйте!\\n\\nВ вашем аккаунте Планировыча указан адрес электронной почты, который ещё не подтверждён.\\n\\nДля защиты аккаунта откройте https://planirovych.ru, войдите в свой аккаунт, перейдите в «Настройки аккаунта» и нажмите подтверждение почты. Вы сможете выбрать код из письма или ссылку активации.\\n\\nЕсли вы не создавали аккаунт или не указывали эту почту, ничего делать не нужно.\\n\\nПланировыч AI\\nhttps://planirovych.ru`);
+    return 'SENT';
+  },
+
   async requestPasswordReset(rawEmail: unknown): Promise<void> {
     const email = normalizeEmail(rawEmail);
     if (!email || !accountMailConfigured()) return;
