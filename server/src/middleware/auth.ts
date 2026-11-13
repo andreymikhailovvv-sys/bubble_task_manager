@@ -10,6 +10,8 @@ const authLogContext = (req: Request) => {
 };
 
 export const authSession = async (req: Request, _res: Response, next: NextFunction) => {
+  // Static assets and public pages must never pay for a database session lookup.
+  if (!req.path.startsWith('/api/')) { next(); return; }
   const token = req.cookies?.[AUTH_COOKIE_NAME];
   if (!token) {
     req.user = undefined;
