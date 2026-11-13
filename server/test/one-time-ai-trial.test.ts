@@ -18,10 +18,13 @@ test('account conversion atomically checks guest and trial marker', async () => 
   assert.match(src, /input\.guestUserId && input\.verifiedGuestDeviceId/);
   assert.match(src, /aiTrialGrantedAt: null/);
   assert.match(src, /if \(upgraded\.count !== 1\)/);
-  assert.match(src, /aiBonusCreditsMilli: \{ increment: creditsToMilli\(100\) \}/);
+  assert.match(src, /trialCreditsPendingEmailVerification: true/);
+  assert.match(src, /pendingEmail: email/);
   assert.match(src, /await tx\.user\.findUniqueOrThrow/);
   assert.match(src, /aiIncludedCreditsMilli: 0/);
-  assert.match(src, /aiTrialGrantedAt: now/);
+  assert.doesNotMatch(src, /aiTrialGrantedAt: now/);
+  assert.match(src, /aiCredits: 0/);
+  assert.match(src, /aiBonusCreditsMilli: 0/);
 });
 
 test('migration marks existing registered users without modifying balances', async () => {
