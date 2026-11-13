@@ -3,6 +3,7 @@
 ALTER TABLE "User" ADD COLUMN "emailVerifiedAt" TIMESTAMP(3);
 ALTER TABLE "User" ADD COLUMN "pendingEmail" TEXT;
 ALTER TABLE "User" ADD COLUMN "passwordChangedAt" TIMESTAMP(3);
+ALTER TABLE "User" ADD COLUMN "authVersion" INTEGER NOT NULL DEFAULT 0;
 UPDATE "User" SET "emailVerifiedAt" = CURRENT_TIMESTAMP
 WHERE "googleSub" IS NOT NULL AND "email" IS NOT NULL;
 
