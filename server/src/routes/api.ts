@@ -1971,14 +1971,13 @@ apiRouter.get('/system-notifications', requireAuth, asyncHandler(async (req, res
   if (identity && (identity.username || identity.googleSub) && !identity.emailVerifiedAt) {
     // A single permanent eventKey prevents duplicate notifications on polls,
     // reloads and concurrent app servers. Reading it never creates another.
-    await prisma.systemNotification.upsert({
-      where: { eventKey: reminderEventKey },
-      create: {
+    await prisma.systemNotification.createMany({
+      data: [{
         userId: req.user!.id,
         eventKey: reminderEventKey,
         content: 'Подтвердите электронную почту. Откройте настройки аккаунта, укажите или проверьте адрес и подтвердите его по коду или ссылке из письма.'
-      },
-      update: {}
+      }],
+      skipDuplicates: true
     });
   } else if (identity?.emailVerifiedAt) {
     // An already completed step should not linger as an unread warning.
