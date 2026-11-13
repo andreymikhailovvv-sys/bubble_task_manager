@@ -287,7 +287,7 @@ export function FullscreenWorkspaceSplit({ panels, renderPanel, ratio, onRatioCh
     <div ref={rootRef} className="fullscreen-workspace-split"
       style={{ '--fullscreen-split-ratio': `${ratio}%` } as CSSProperties}
       aria-label="Рабочее пространство с двумя режимами">
-      <section className="fullscreen-workspace-pane" aria-label={`Окно: ${fullscreenPanelTitle(panels[0])}`}>
+      <section className="fullscreen-workspace-pane" data-fullscreen-pane-index="0" aria-label={`Окно: ${fullscreenPanelTitle(panels[0])}`}>
         {renderPanel(panels[0])}
       </section>
       <div className="fullscreen-workspace-divider" role="separator" tabIndex={0}
@@ -300,7 +300,7 @@ export function FullscreenWorkspaceSplit({ panels, renderPanel, ratio, onRatioCh
         <span className="fullscreen-workspace-divider-grip"><GripVertical size={16} /></span>
         <FullscreenAddWindowMenu side="right" tasks={tasks} onChoose={next => onChoose(1, next)} />
       </div>
-      <section className="fullscreen-workspace-pane" aria-label={`Окно: ${fullscreenPanelTitle(panels[1])}`}>
+      <section className="fullscreen-workspace-pane" data-fullscreen-pane-index="1" aria-label={`Окно: ${fullscreenPanelTitle(panels[1])}`}>
         {renderPanel(panels[1])}
       </section>
     </div>

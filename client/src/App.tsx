@@ -1112,9 +1112,9 @@ export default function App() {
     setHasUnreadNews(false);
   };
 
-  const [timelineCreateMenu, setTimelineCreateMenu] = useState<{ x: number; y: number; date: Date; hour?: number | null; minute?: number | null; taskId?: string | null } | null>(null);
+  const [timelineCreateMenu, setTimelineCreateMenu] = useState<{ x: number; y: number; date: Date; hour?: number | null; minute?: number | null; taskId?: string | null; sourcePaneIndex?: 0 | 1 } | null>(null);
   const [timelineReschedulePicker, setTimelineReschedulePicker] = useState<{ taskId: string; signal: number } | null>(null);
-  const [listTaskContextMenu, setListTaskContextMenu] = useState<{ x: number; y: number; taskId: string } | null>(null);
+  const [listTaskContextMenu, setListTaskContextMenu] = useState<{ x: number; y: number; taskId: string; sourcePaneIndex: 0 | 1 } | null>(null);
   const [listTaskPostponeSubmenuOpen, setListTaskPostponeSubmenuOpen] = useState(false);
   const [timelinePostponeSubmenuOpen, setTimelinePostponeSubmenuOpen] = useState(false);
   const [timelinePostponeLoadingTaskId, setTimelinePostponeLoadingTaskId] = useState<string | null>(null);
@@ -4903,6 +4903,19 @@ export default function App() {
     return nextDueDateIso;
   };
 
+  const sourceFullscreenPaneIndex = (target: EventTarget | null): 0 | 1 =>
+    target instanceof Element && target.closest('[data-fullscreen-pane-index]')?.getAttribute('data-fullscreen-pane-index') === '1' ? 1 : 0;
+  const openTaskInOtherPane = (task: Task, sourcePaneIndex: 0 | 1) => {
+    if (!isBubbleFullscreen || task.parentTaskId || (task.taskType ?? 'TASK') !== 'TASK') return;
+    const otherPane: 0 | 1 = sourcePaneIndex === 0 ? 1 : 0;
+    const nextSlots = replaceFullscreenPanel(fullscreenPanels, otherPane, { kind: 'task-ai', taskId: task.id });
+    setFullscreenPanelSlots(nextSlots);
+    setFullscreenDisplayModes(nextSlots.flatMap(panel => panel.kind === 'mode' ? [panel.mode] : []));
+    setFocusedTaskId(task.id);
+    setIsAiExpanded(false);
+    setIsAiChatOpen(false);
+  };
+
   const sphereById = new Map(spheres.map((sphere) => [sphere.id, sphere]));
   const taskById = new Map(tasks.map((task) => [task.id, task]));
   const aiTaskReferenceTasks = tasks;
@@ -5016,7 +5029,7 @@ export default function App() {
           event.preventDefault();
           event.stopPropagation();
           setTimelineHoverCard((prev) => (prev?.taskId === task.id ? null : prev));
-          setTimelineCreateMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY, { submenu: true }), date: task.dueDate ? new Date(task.dueDate) : new Date(), hour: null, taskId: task.id });
+          setTimelineCreateMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY, { submenu: true, height: 275 }), date: task.dueDate ? new Date(task.dueDate) : new Date(), hour: null, taskId: task.id, sourcePaneIndex: sourceFullscreenPaneIndex(event.currentTarget) });
           setTimelinePostponeSubmenuOpen(false);
         }}
       >
@@ -5595,6 +5608,7 @@ export default function App() {
             onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
             onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
             onRescheduleTask={(task) => setTimelineReschedulePicker({ taskId: task.id, signal: Date.now() })}
+             onOpenInOtherPane={openTaskInOtherPane}
             forceTaskContextMenuOpen={activeTourStep === 'task-context-menu'}
             isSearchFiltering={Boolean(search.trim())}
             />
@@ -5641,7 +5655,7 @@ export default function App() {
                     onContextMenu={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
-                      setListTaskContextMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY, { submenu: true }), taskId: task.id });
+                      setListTaskContextMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY, { submenu: true, height: 275 }), taskId: task.id, sourcePaneIndex: sourceFullscreenPaneIndex(event.currentTarget) });
                       setListTaskPostponeSubmenuOpen(false);
                     }}
                     onClick={() => { if (!isClosingTask) openTaskWithFocusGuard(task); }}
@@ -5760,6 +5774,14 @@ export default function App() {
                       <CalendarDays size={14} />
                       Перенести
                     </button>
+                    {isBubbleFullscreen && !contextTask.parentTaskId && (contextTask.taskType ?? 'TASK') === 'TASK' ? (
+                      <button type="button" className="surface-muted mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm hover:brightness-110"
+                        onClick={() => {
+                          openTaskInOtherPane(contextTask, listTaskContextMenu.sourcePaneIndex);
+                          setListTaskContextMenu(null);
+                          setListTaskPostponeSubmenuOpen(false);
+                        }}>Открыть в отдельном окне</button>
+                    ) : null}
                     {listTaskPostponeSubmenuOpen ? (
                       <div className="surface-popover absolute left-full top-[46px] ml-1 w-56 rounded-md border p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
                         {QUICK_POSTPONE_OPTIONS.map((option) => (
@@ -6133,7 +6155,7 @@ export default function App() {
   // behind true modal windows so they never float above their content.
   const workspaceOverlayActive = Boolean(
     editorState || (focusedTask && !embeddedFocusActive) || isAiExpanded ||
-    isAiChatOpen || isSettingsOpen || isUpdatesOpen || isFocusSetupOpen ||
+    isAiChatOpen || isSettingsOpen || isProfileModalOpen || isUpdatesOpen || isFocusSetupOpen ||
     isFocusModeOpen || isSubscriptionModalOpen || isUpcomingSubtasksModalOpen ||
     sectorEditorSphere
   );
@@ -7316,6 +7338,19 @@ export default function App() {
                 <CalendarDays size={14} />
                 Перенести
               </button>
+              {isBubbleFullscreen && timelineCreateMenu.taskId && taskById.has(timelineCreateMenu.taskId) &&
+                !taskById.get(timelineCreateMenu.taskId)?.parentTaskId &&
+                (taskById.get(timelineCreateMenu.taskId)?.taskType ?? 'TASK') === 'TASK' ? (
+                <button type="button"
+                  className="surface-muted mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm hover:brightness-110"
+                  onClick={() => {
+                    const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                    if (!task) return;
+                    openTaskInOtherPane(task, timelineCreateMenu.sourcePaneIndex ?? 0);
+                    setTimelineCreateMenu(null);
+                    setTimelinePostponeSubmenuOpen(false);
+                  }}>Открыть в отдельном окне</button>
+              ) : null}
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -7456,6 +7491,19 @@ export default function App() {
                 <CalendarDays size={14} />
                 Перенести
               </button>
+              {isBubbleFullscreen && timelineCreateMenu.taskId && taskById.has(timelineCreateMenu.taskId) &&
+                !taskById.get(timelineCreateMenu.taskId)?.parentTaskId &&
+                (taskById.get(timelineCreateMenu.taskId)?.taskType ?? 'TASK') === 'TASK' ? (
+                <button type="button"
+                  className="surface-muted mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm hover:brightness-110"
+                  onClick={() => {
+                    const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                    if (!task) return;
+                    openTaskInOtherPane(task, timelineCreateMenu.sourcePaneIndex ?? 0);
+                    setTimelineCreateMenu(null);
+                    setTimelinePostponeSubmenuOpen(false);
+                  }}>Открыть в отдельном окне</button>
+              ) : null}
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -7806,6 +7854,19 @@ export default function App() {
                 <CalendarDays size={14} />
                 Перенести
               </button>
+              {isBubbleFullscreen && timelineCreateMenu.taskId && taskById.has(timelineCreateMenu.taskId) &&
+                !taskById.get(timelineCreateMenu.taskId)?.parentTaskId &&
+                (taskById.get(timelineCreateMenu.taskId)?.taskType ?? 'TASK') === 'TASK' ? (
+                <button type="button"
+                  className="surface-muted mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm hover:brightness-110"
+                  onClick={() => {
+                    const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                    if (!task) return;
+                    openTaskInOtherPane(task, timelineCreateMenu.sourcePaneIndex ?? 0);
+                    setTimelineCreateMenu(null);
+                    setTimelinePostponeSubmenuOpen(false);
+                  }}>Открыть в отдельном окне</button>
+              ) : null}
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -8049,6 +8110,19 @@ export default function App() {
                 <CalendarDays size={14} />
                 Перенести
               </button>
+              {isBubbleFullscreen && timelineCreateMenu.taskId && taskById.has(timelineCreateMenu.taskId) &&
+                !taskById.get(timelineCreateMenu.taskId)?.parentTaskId &&
+                (taskById.get(timelineCreateMenu.taskId)?.taskType ?? 'TASK') === 'TASK' ? (
+                <button type="button"
+                  className="surface-muted mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm hover:brightness-110"
+                  onClick={() => {
+                    const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                    if (!task) return;
+                    openTaskInOtherPane(task, timelineCreateMenu.sourcePaneIndex ?? 0);
+                    setTimelineCreateMenu(null);
+                    setTimelinePostponeSubmenuOpen(false);
+                  }}>Открыть в отдельном окне</button>
+              ) : null}
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -8585,6 +8659,19 @@ export default function App() {
                 <CalendarDays size={14} />
                 Перенести
               </button>
+              {isBubbleFullscreen && timelineCreateMenu.taskId && taskById.has(timelineCreateMenu.taskId) &&
+                !taskById.get(timelineCreateMenu.taskId)?.parentTaskId &&
+                (taskById.get(timelineCreateMenu.taskId)?.taskType ?? 'TASK') === 'TASK' ? (
+                <button type="button"
+                  className="surface-muted mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm hover:brightness-110"
+                  onClick={() => {
+                    const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                    if (!task) return;
+                    openTaskInOtherPane(task, timelineCreateMenu.sourcePaneIndex ?? 0);
+                    setTimelineCreateMenu(null);
+                    setTimelinePostponeSubmenuOpen(false);
+                  }}>Открыть в отдельном окне</button>
+              ) : null}
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -8838,6 +8925,19 @@ export default function App() {
                 <CalendarDays size={14} />
                 Перенести
               </button>
+              {isBubbleFullscreen && timelineCreateMenu.taskId && taskById.has(timelineCreateMenu.taskId) &&
+                !taskById.get(timelineCreateMenu.taskId)?.parentTaskId &&
+                (taskById.get(timelineCreateMenu.taskId)?.taskType ?? 'TASK') === 'TASK' ? (
+                <button type="button"
+                  className="surface-muted mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm hover:brightness-110"
+                  onClick={() => {
+                    const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                    if (!task) return;
+                    openTaskInOtherPane(task, timelineCreateMenu.sourcePaneIndex ?? 0);
+                    setTimelineCreateMenu(null);
+                    setTimelinePostponeSubmenuOpen(false);
+                  }}>Открыть в отдельном окне</button>
+              ) : null}
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
