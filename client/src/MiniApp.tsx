@@ -1,4 +1,5 @@
 import { AiStreamingMessageBody } from './components/AiStreamingMessageBody';
+import EmailVerificationDialog from './components/EmailVerificationDialog';
 import { prepareAiChatImageFile } from './lib/ai-image-upload';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
@@ -1013,6 +1014,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [accountEmailPassword, setAccountEmailPassword] = useState('');
   const [accountEmailMessage, setAccountEmailMessage] = useState('');
   const [accountEmailBusy, setAccountEmailBusy] = useState(false);
+  const [emailVerificationOpen, setEmailVerificationOpen] = useState(false);
+  const [emailVerificationNotice, setEmailVerificationNotice] = useState('');
   useEffect(() => {
     setAccountEmailDraft(currentUser?.pendingEmail || currentUser?.email || '');
   }, [currentUser?.pendingEmail, currentUser?.email]);
@@ -1382,12 +1385,18 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       if (result.user.emailVerified && !result.user.pendingEmail) {
         setAccountEmailMessage('Адрес уже подтверждён.');
       } else if (result.emailDelivery === 'SENT') {
-        setAccountEmailMessage('Отправлено письмо со ссылкой подтверждения.');
+        setAccountEmailMessage('Код и ссылка отправлены.');
+        setEmailVerificationNotice('Письмо содержит код и ссылку подтверждения. Выберите удобный способ.');
+        setEmailVerificationOpen(true);
+      } else if (result.emailDelivery === 'FAILED') {
+        setAccountEmailMessage('Адрес сохранён, но письмо не отправлено. Проверьте настройки SMTP на сервере.');
       } else {
         const sent = await api.requestEmailVerification();
-        setAccountEmailMessage(sent.status === 'SENT'
-          ? 'Отправлено письмо со ссылкой подтверждения.'
-          : 'Проверь указанный адрес почты.');
+        setAccountEmailMessage(sent.status === 'SENT' ? 'Код и ссылка отправлены.' : 'Адрес уже подтверждён.');
+        if (sent.status === 'SENT') {
+          setEmailVerificationNotice('Письмо содержит код и ссылку подтверждения.');
+          setEmailVerificationOpen(true);
+        }
       }
     } catch (error) {
       setAccountEmailMessage(error instanceof Error ? error.message : 'Не удалось отправить письмо.');
@@ -1432,6 +1441,12 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       setAuthModalMode(null);
       setAuthPassword('');
       setAuthConsentAccepted(false);
+      if (authModalMode === 'register' && authEmail.trim()) {
+        setEmailVerificationNotice(('emailDelivery' in result ? result.emailDelivery : undefined) === 'SENT'
+          ? 'Код и ссылка подтверждения отправлены на указанный адрес.'
+          : 'Аккаунт создан, но письмо пока не отправлено. Проверьте SMTP_USER и SMTP_PASSWORD на сервере Timeweb.');
+        setEmailVerificationOpen(true);
+      }
       await loadData({ showInitialLoader: true });
     } catch (authFailure) {
       setAuthError(authFailure instanceof Error ? authFailure.message : 'Не удалось выполнить авторизацию.');
@@ -4369,6 +4384,13 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       : currentUser?.email && !currentUser.emailVerified ? <p className="mb-2 text-xs text-amber-500">Адрес ещё не подтверждён.</p> : null}
                     <button type="button" className="surface-muted mb-2 w-full rounded-xl px-3 py-2 text-sm text-primary" disabled={accountEmailBusy || !accountEmailDraft.trim()}
                       onClick={() => void saveAccountEmail()}>{accountEmailBusy ? 'Отправляем…' : 'Сохранить email и подтвердить'}</button>
+                    {(currentUser?.pendingEmail || (currentUser?.email && !currentUser.emailVerified)) ? (
+                      <button type="button" className="surface-muted mb-2 w-full rounded-xl px-3 py-2 text-sm text-primary"
+                        onClick={() => {
+                          setEmailVerificationNotice('Введите код из письма или перейдите по ссылке подтверждения.');
+                          setEmailVerificationOpen(true);
+                        }}>Ввести код подтверждения</button>
+                    ) : null}
                     {accountEmailMessage ? <p className="mb-2 text-xs text-sky-500" role="status">{accountEmailMessage}</p> : null}
                     <button type="button" className="surface-muted w-full rounded-xl px-3 py-2 text-sm text-primary"
                       onClick={() => void logout()} disabled={logoutSubmitting}>{logoutSubmitting ? 'Выходим…' : 'Выйти'}</button>
@@ -6117,7 +6139,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             {authModalMode === 'register' && currentUser?.isGuest ? <p className="mb-3 rounded-xl border border-violet-400/40 bg-violet-500/10 p-3 text-xs text-violet-100">Создайте аккаунт и получите 100 пробных ИИ-кредитов. Ваши гостевые задачи сохранятся.</p> : null}
             <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void submitAuth(); }}>
               <label className="block space-y-1 text-xs text-slate-300">
-                <span>Логин или подтверждённая почта</span>
+                <span>{authModalMode === 'register' ? 'Логин' : 'Логин или подтверждённая почта'}</span>
                 <input autoFocus autoComplete="username" required value={authLogin} onChange={(event) => setAuthLogin(event.target.value)} className="w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-3 text-base text-slate-100 outline-none focus:border-sky-400" />
               </label>
               {authModalMode === 'register' ? (
@@ -6157,6 +6179,22 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           </section>
         </div>
       ) : null}
+
+      {isWebRuntime && emailVerificationOpen && currentUser ? createPortal((
+        <EmailVerificationDialog
+          open={emailVerificationOpen}
+          email={currentUser.pendingEmail || currentUser.email || authEmail}
+          initialNotice={emailVerificationNotice}
+          onClose={() => setEmailVerificationOpen(false)}
+          onVerified={async () => {
+            const { user } = await api.getMe();
+            setCurrentUser(user);
+            setAccountEmailDraft(user.email || '');
+            setAccountEmailMessage('Почта успешно подтверждена.');
+            setEmailVerificationOpen(false);
+          }}
+        />
+      ), document.body) : null}
 
       <WorkspaceActionToast count={postponeNotice?.count ?? null} light={isLightTheme} />
       {isOverdueTasksOpen ? createPortal((

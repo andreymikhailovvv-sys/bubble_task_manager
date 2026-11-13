@@ -657,6 +657,7 @@ export const api = {
   register: (payload: { login: string; email?: string; password: string; name?: string; consentAccepted: boolean }) => request<{ user: CurrentUser; emailDelivery?: 'SENT' | 'FAILED' | 'NOT_REQUESTED' }>('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
   requestEmailVerification: () => request<{ status: 'SENT' | 'ALREADY_VERIFIED' | 'NO_EMAIL' }>('/api/auth/email/request-verification', { method: 'POST' }),
   verifyEmail: (token: string) => request<{ ok: true }>('/api/auth/email/verify', { method: 'POST', body: JSON.stringify({ token }) }),
+  verifyEmailCode: (code: string) => request<{ ok: true }>('/api/auth/email/verify-code', { method: 'POST', body: JSON.stringify({ code }) }),
   forgotPassword: (email: string) => request<{ ok: true; message: string }>('/api/auth/email/forgot', { method: 'POST', body: JSON.stringify({ email }) }),
   resetPassword: (token: string, password: string) => request<{ ok: true }>('/api/auth/email/reset', { method: 'POST', body: JSON.stringify({ token, password }) }),
   login: (payload: { login: string; password: string }) => request<{ user: CurrentUser }>('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),

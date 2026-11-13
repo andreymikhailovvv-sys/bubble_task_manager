@@ -7,6 +7,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { apiRouter } from './routes/api.js';
 import { authSession } from './middleware/auth.js';
+import { accountMailConfigurationIssues } from './services/account-email.service.js';
+import { dispatchOneLegacyVerificationReminder } from './services/legacy-email-outreach.service.js';
 import { passport } from './auth/passport.js';
 import { telegramService } from './services/telegram.service.js';
 import { prisma } from './db/prisma.js';
@@ -72,6 +74,13 @@ app.use(express.json({ limit: requestBodyLimit }));
 app.use(express.urlencoded({ extended: true, limit: requestBodyLimit }));
 app.use(cookieParser());
 app.use(passport.initialize());
+const authMailIssues = accountMailConfigurationIssues();
+if (authMailIssues.length) {
+  console.warn('[AuthEmail] transactional mail unavailable; issues=' + authMailIssues.join(',') +
+    '; add SMTP_USER and SMTP_PASSWORD to Timeweb backend environment and redeploy.');
+} else {
+  console.info('[AuthEmail] transactional SMTP settings present (delivery not yet tested).');
+}
 app.use(authSession);
 app.use('/api', apiRouter);
 
@@ -97,6 +106,13 @@ app.use(createPublicSeoPagesMiddleware(clientDist));
 
 // HTML must be revalidated after each Timeweb deployment. Bundled JS/CSS
 // filenames carry content hashes and may keep their ordinary static caching.
+// Route-specific HTML avoids loading main.tsx, workspace stores, animations or chat modules.
+app.get('/auth/email', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, must-revalidate');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.sendFile(path.join(clientDist, 'auth-email.html'));
+});
+
 app.use(express.static(clientDist, {
   index: false,
   setHeaders: (res, filePath) => {
@@ -238,6 +254,15 @@ telegramUpdateQueue.recoverStaleJobs()
   })
   .catch((error) => console.error('[TelegramWorker] recovery failed', error));
 setInterval(runTelegramWorker, Number(process.env.TELEGRAM_WORKER_POLL_INTERVAL_MS ?? 1_000)).unref();
+
+// One-time legacy account email reminder, snapshotted by the additive
+// migration. One attempt every 15s, idempotently claimed in PostgreSQL.
+// No re-send after an uncertain SMTP result, even across server replicas.
+const runLegacyEmailReminder = () =>
+  measureBackground('auth_email.legacy_outreach', () => dispatchOneLegacyVerificationReminder())
+    .catch(() => console.warn('[AuthEmail] legacy reminder worker iteration failed'));
+setTimeout(runLegacyEmailReminder, 18_000).unref();
+setInterval(runLegacyEmailReminder, 15_000).unref();
 
 // Durable personal-Telegram quick-share worker. Jobs survive closing the web
 // window and container restarts; per-recipient audit makes delivery at-most-once.

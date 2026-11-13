@@ -370,6 +370,7 @@ model User {
   passwordChangedAt DateTime?
   authVersion Int @default(0)
   emailAuthTokens EmailAuthToken[]
+  legacyEmailVerificationOutreach EmailVerificationOutreach?
   username     String?  @unique
   passwordHash String?
   deviceId     String?  @unique
@@ -1483,10 +1484,28 @@ model EmailAuthToken {
   purpose   String
   email     String
   tokenHash String   @unique
+  /** HMAC of a 6-digit code, bound to this challenge and user. Never store plaintext codes. */
+  codeHash String?
+  codeExpiresAt DateTime?
+  codeAttempts Int @default(0)
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime @default(now())
 
   @@index([userId, purpose, expiresAt])
   @@index([expiresAt])
+}
+
+
+/** Migration-snapshotted, one-time transactional notice to legacy unverified emails. */
+model EmailVerificationOutreach {
+  userId String @id
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email String
+  status String @default("PENDING")
+  createdAt DateTime @default(now())
+  claimedAt DateTime?
+  sentAt DateTime?
+
+  @@index([status, createdAt])
 }

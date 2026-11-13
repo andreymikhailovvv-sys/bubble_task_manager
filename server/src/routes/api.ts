@@ -72,7 +72,7 @@ import { rewriteMailQuickText } from '../services/telegram-quick-share-ai.servic
 import { getOwnerMailDraft, sendOwnerMailDraft } from '../services/ai-mail-tools.service.js';
 import { latestAndroidRelease } from '../services/android-release-catalog.service.js';
 import { emailAddress } from '../services/mail-smtp.service.js';
-import { accountEmailService, normalizeEmail } from '../services/account-email.service.js';
+import { accountEmailService, normalizeEmail, accountMailConfigurationIssues, accountMailFailureDiagnostic } from '../services/account-email.service.js';
 
 
 export const apiRouter = Router();
@@ -209,6 +209,7 @@ const emailVerificationLimiter = new FixedWindowRateLimiter(3, 60 * 60 * 1000);
 const emailPasswordResetIpLimiter = new FixedWindowRateLimiter(12, 60 * 60 * 1000);
 const emailPasswordResetAccountLimiter = new FixedWindowRateLimiter(3, 60 * 60 * 1000);
 const emailTokenUseLimiter = new FixedWindowRateLimiter(30, 15 * 60 * 1000);
+const emailCodeAttemptLimiter = new FixedWindowRateLimiter(8, 15 * 60 * 1000);
 const adminRequestLimiter = new FixedWindowRateLimiter(240, AUTH_RATE_WINDOW_MS);
 const notesRewriteLimiter = new FixedWindowRateLimiter(15, 10 * 60 * 1000);
 const adminPasswordFailureLimiter = new FixedWindowRateLimiter(8, AUTH_RATE_WINDOW_MS);
@@ -574,11 +575,8 @@ apiRouter.post('/auth/register', async (req, res) => {
     res.status(400).json({ error: 'Укажите корректную электронную почту' });
     return;
   }
-  if (email && !accountEmailService.accountMailConfigured()) {
-    res.status(503).json({ error: 'Подтверждение почты временно недоступно' });
-    return;
-  }
-
+  // Registration itself must remain available while SMTP is being configured.
+  // The address stays pending, never gets verified without mailbox proof.
   const login = sanitizeLogin(loginRaw);
   let user;
   try {
@@ -628,9 +626,9 @@ apiRouter.post('/auth/register', async (req, res) => {
     try {
       await accountEmailService.requestVerification(user.id);
       emailDelivery = 'SENT';
-    } catch {
+    } catch (error) {
       emailDelivery = 'FAILED';
-      console.warn('[AuthEmail] registration mail delivery failed');
+      console.warn('[AuthEmail] registration mail delivery failed; ' + accountMailFailureDiagnostic(error));
     }
   }
   console.info(`[Auth] register success userId=${user.id} ${authRequestContext(req)}`);
@@ -650,16 +648,26 @@ const findPasswordIdentity = async (login: string) => {
 apiRouter.post('/auth/email/request-verification', requireAuth, mailOrigin, async (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (!accountEmailService.accountMailConfigured()) {
-    res.status(503).json({ error: 'Отправка писем временно недоступна' }); return;
+    console.warn('[AuthEmail] request-verification blocked; configIssues=' + accountMailConfigurationIssues().join(','));
+    res.status(503).json({ error: 'Системная почта пока не настроена на сервере (SMTP_USER / SMTP_PASSWORD в Timeweb Cloud)', code: 'SMTP_NOT_CONFIGURED' }); return;
   }
   if (rejectOnRateLimit(res, emailVerificationLimiter.consume(accountRateLimitKey(req.user!.id)))) return;
   try {
     const status = await accountEmailService.requestVerification(req.user!.id);
     res.json({ status });
-  } catch {
-    console.warn('[AuthEmail] verification email delivery failed');
-    res.status(503).json({ error: 'Не удалось отправить письмо. Попробуйте позже' });
+  } catch (error) {
+    console.warn('[AuthEmail] verification email delivery failed; ' + accountMailFailureDiagnostic(error));
+    res.status(503).json({ error: 'Не удалось отправить письмо. Проверьте настройки системной почты на сервере.' });
   }
+});
+
+apiRouter.post('/auth/email/verify-code', requireAuth, mailOrigin, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (rejectOnRateLimit(res, emailCodeAttemptLimiter.consume(accountRateLimitKey(req.user!.id)))) return;
+  if (rejectOnRateLimit(res, emailTokenUseLimiter.consume(rateLimitIpKey(req)))) return;
+  const ok = await accountEmailService.verifyCode(req.user!.id, req.body?.code);
+  if (ok) emailCodeAttemptLimiter.reset(accountRateLimitKey(req.user!.id));
+  res.status(ok ? 200 : 400).json({ ok, error: ok ? undefined : 'Неверный или просроченный код. Проверьте письмо либо запросите новый код.' });
 });
 
 apiRouter.post('/auth/email/verify', mailOrigin, async (req, res) => {
@@ -672,7 +680,8 @@ apiRouter.post('/auth/email/verify', mailOrigin, async (req, res) => {
 apiRouter.post('/auth/email/forgot', mailOrigin, async (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (!accountEmailService.accountMailConfigured()) {
-    res.status(503).json({ error: 'Восстановление пароля временно недоступно' }); return;
+    console.warn('[AuthEmail] password reset blocked; configIssues=' + accountMailConfigurationIssues().join(','));
+    res.status(503).json({ error: 'Системная почта пока не настроена на сервере (SMTP_USER / SMTP_PASSWORD в Timeweb Cloud)', code: 'SMTP_NOT_CONFIGURED' }); return;
   }
   const generic = { ok: true, message: 'Если подтверждённый адрес найден, мы отправим письмо с инструкцией.' };
   const email = normalizeEmail(req.body?.email);
@@ -681,7 +690,7 @@ apiRouter.post('/auth/email/forgot', mailOrigin, async (req, res) => {
   const acct = emailPasswordResetAccountLimiter.consume(accountRateLimitKey(email ?? 'invalid'));
   if (!ip.allowed || !acct.allowed || !email) { res.json(generic); return; }
   try { await accountEmailService.requestPasswordReset(email); }
-  catch { console.warn('[AuthEmail] password reset delivery failed'); }
+  catch (error) { console.warn('[AuthEmail] password reset delivery failed; ' + accountMailFailureDiagnostic(error)); }
   res.json(generic);
 });
 
@@ -691,8 +700,13 @@ apiRouter.post('/auth/email/reset', mailOrigin, async (req, res) => {
   if (typeof req.body?.password !== 'string' || req.body.password.length < 8 || req.body.password.length > 128) {
     res.status(400).json({ error: 'Новый пароль должен содержать от 8 до 128 символов' }); return;
   }
-  const ok = await accountEmailService.resetPassword(req.body?.token, req.body.password);
-  if (!ok) { res.status(400).json({ error: 'Ссылка недействительна или устарела' }); return; }
+  const result = await accountEmailService.resetPassword(req.body?.token, req.body.password);
+  if (result === 'SAME_PASSWORD') {
+    res.status(400).json({ error: 'Новый пароль должен отличаться от предыдущего' }); return;
+  }
+  if (result !== 'SUCCESS') {
+    res.status(400).json({ error: 'Ссылка недействительна или устарела' }); return;
+  }
   res.clearCookie(AUTH_COOKIE_NAME, { ...authService.cookieOptions(), maxAge: undefined });
   res.clearCookie(DEVICE_COOKIE_NAME, { ...authService.deviceCookieOptions(), maxAge: undefined });
   res.json({ ok: true });
@@ -846,9 +860,9 @@ apiRouter.patch('/user/profile', requireAuth, async (req, res) => {
       try {
         await accountEmailService.requestVerification(updatedUser.id);
         emailDelivery = 'SENT';
-      } catch {
+      } catch (error) {
         emailDelivery = 'FAILED';
-        console.warn('[AuthEmail] profile verification mail delivery failed');
+        console.warn('[AuthEmail] profile verification mail delivery failed; ' + accountMailFailureDiagnostic(error));
       }
     }
     res.json({ user: toAuthUser(updatedUser), emailDelivery });
@@ -1949,6 +1963,29 @@ apiRouter.delete('/system-notifications/android-devices', requireAuth, asyncHand
 }));
 
 apiRouter.get('/system-notifications', requireAuth, asyncHandler(async (req, res) => {
+  const identity = await prisma.user.findUnique({
+    where: { id: req.user!.id },
+    select: { username: true, googleSub: true, emailVerifiedAt: true }
+  });
+  const reminderEventKey = 'account-email-verification-required:' + req.user!.id;
+  if (identity && (identity.username || identity.googleSub) && !identity.emailVerifiedAt) {
+    // A single permanent eventKey prevents duplicate notifications on polls,
+    // reloads and concurrent app servers. Reading it never creates another.
+    await prisma.systemNotification.createMany({
+      data: [{
+        userId: req.user!.id,
+        eventKey: reminderEventKey,
+        content: 'Подтвердите электронную почту. Откройте настройки аккаунта, укажите или проверьте адрес и подтвердите его по коду или ссылке из письма.'
+      }],
+      skipDuplicates: true
+    });
+  } else if (identity?.emailVerifiedAt) {
+    // An already completed step should not linger as an unread warning.
+    await prisma.systemNotification.updateMany({
+      where: { userId: req.user!.id, eventKey: reminderEventKey, readAt: null },
+      data: { readAt: new Date() }
+    });
+  }
   const [notifications, unreadCount] = await Promise.all([
     prisma.systemNotification.findMany({
       where: { userId: req.user!.id },

@@ -8,7 +8,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
-        work: fileURLToPath(new URL('./work.html', import.meta.url))
+        work: fileURLToPath(new URL('./work.html', import.meta.url)),
+        authEmail: fileURLToPath(new URL('./auth-email.html', import.meta.url))
       }
     }
   },
