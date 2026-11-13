@@ -2,12 +2,13 @@ import { Prisma } from '@prisma/client';
 import { authService } from '../auth/auth.service.js';
 import { prisma } from '../db/prisma.js';
 import { onboardingService } from './onboarding.service.js';
-import { currentAiCreditsPeriod, creditsToMilli } from './ai-credit-wallet.service.js';
+import { currentAiCreditsPeriod } from './ai-credit-wallet.service.js';
+import { normalizeEmail } from './account-email.service.js';
 
 export const normalizeAccountLogin = (value: string) => value.trim().toLowerCase();
 
 export class AccountRegistrationError extends Error {
-  constructor(public readonly code: 'INVALID_LOGIN' | 'INVALID_PASSWORD' | 'LOGIN_TAKEN' | 'CONSENT_REQUIRED' | 'GUEST_SESSION_INVALID') {
+  constructor(public readonly code: 'INVALID_LOGIN' | 'INVALID_PASSWORD' | 'LOGIN_TAKEN' | 'CONSENT_REQUIRED' | 'GUEST_SESSION_INVALID' | 'INVALID_EMAIL' | 'EMAIL_TAKEN') {
     super(code);
   }
 }
@@ -36,7 +37,7 @@ export const accountRegistrationService = {
 
   async register(input: {
     login: string;
-    email?: string;
+    email: string;
     password?: string;
     passwordHash?: string;
     name: string;
@@ -46,12 +47,21 @@ export const accountRegistrationService = {
     personalDataConsent?: { version: string; ipAddress?: string };
   }) {
     const login = validateAccountLogin(input.login);
+    const email = normalizeEmail(input.email);
+    if (!email) throw new AccountRegistrationError('INVALID_EMAIL');
     if (!input.passwordHash) validateAccountPassword(input.password ?? '');
     const passwordHash = input.passwordHash ?? authService.hashPassword(input.password as string);
 
     try {
       return await prisma.$transaction(async (tx) => {
         const now = new Date();
+        // A pending address is reserved for one signup. A verified email is
+        // protected by User.email's existing unique constraint.
+        const taken = await tx.user.findFirst({
+          where: { OR: [{ email }, { pendingEmail: email }] },
+          select: { id: true }
+        });
+        if (taken) throw new AccountRegistrationError('EMAIL_TAKEN');
         let user;
         if (input.guestUserId && input.verifiedGuestDeviceId) {
           // Only the server may set these fields, after checking BOTH a signed
@@ -70,13 +80,12 @@ export const accountRegistrationService = {
             },
             data: {
               username: login,
-              pendingEmail: input.email ?? null,
+              pendingEmail: email,
               passwordHash,
               name: input.name.trim() || login,
-              aiTrialGrantedAt: now,
+              trialCreditsPendingEmailVerification: true,
               aiCreditsPeriod: currentAiCreditsPeriod(now),
               aiIncludedCreditsMilli: 0,
-              aiBonusCreditsMilli: { increment: creditsToMilli(100) },
               ...(input.telegramChatId ? { telegramChatId: input.telegramChatId, telegramLinkedAt: now } : {})
             }
           });
@@ -90,14 +99,14 @@ export const accountRegistrationService = {
           user = await tx.user.create({
             data: {
               username: login,
-              pendingEmail: input.email ?? null,
+              pendingEmail: email,
               passwordHash,
               name: input.name.trim() || login,
-              aiCredits: 100,
+              aiCredits: 0,
               aiIncludedCreditsMilli: 0,
-              aiBonusCreditsMilli: creditsToMilli(100),
+              aiBonusCreditsMilli: 0,
               aiCreditsPeriod: currentAiCreditsPeriod(now),
-              aiTrialGrantedAt: now,
+              trialCreditsPendingEmailVerification: true,
               ...(input.telegramChatId ? { telegramChatId: input.telegramChatId, telegramLinkedAt: now } : {})
             }
           });
