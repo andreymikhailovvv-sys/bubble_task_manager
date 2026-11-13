@@ -287,6 +287,8 @@ async function askAiChatStreaming(payload: { clientRequestId?: string; question:
 export type CurrentUser = {
   id: string;
   email?: string | null;
+  emailVerified?: boolean;
+  pendingEmail?: string | null;
   username?: string | null;
   name?: string | null;
   avatarUrl?: string | null;
@@ -652,10 +654,14 @@ export const api = {
   generateAiCheckupNow: () => request<{ message: ChatMessage }>('/api/ai/checkup/generate', { method: 'POST', body: '{}' }),
   updateUserSettings: (payload: { timeZone?: string; morningAiCheckupEnabled?: boolean; browserNotificationsEnabled?: boolean; morningAiCheckupTime?: string; aiCheckupSchedules?: AiCheckupSchedule[]; offerTaskCompletionReport?: boolean }) =>
     request<{ user: CurrentUser }>('/api/user/settings', { method: 'PATCH', body: JSON.stringify(payload) }),
-  register: (payload: { login: string; password: string; name?: string; consentAccepted: boolean }) => request<{ user: CurrentUser }>('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
+  register: (payload: { login: string; email?: string; password: string; name?: string; consentAccepted: boolean }) => request<{ user: CurrentUser; emailDelivery?: 'SENT' | 'FAILED' | 'NOT_REQUESTED' }>('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
+  requestEmailVerification: () => request<{ status: 'SENT' | 'ALREADY_VERIFIED' | 'NO_EMAIL' }>('/api/auth/email/request-verification', { method: 'POST' }),
+  verifyEmail: (token: string) => request<{ ok: true }>('/api/auth/email/verify', { method: 'POST', body: JSON.stringify({ token }) }),
+  forgotPassword: (email: string) => request<{ ok: true; message: string }>('/api/auth/email/forgot', { method: 'POST', body: JSON.stringify({ email }) }),
+  resetPassword: (token: string, password: string) => request<{ ok: true }>('/api/auth/email/reset', { method: 'POST', body: JSON.stringify({ token, password }) }),
   login: (payload: { login: string; password: string }) => request<{ user: CurrentUser }>('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
   updateProfile: (payload: { name: string; email: string; currentPassword?: string; newPassword?: string }) =>
-    request<{ user: CurrentUser }>('/api/user/profile', { method: 'PATCH', body: JSON.stringify(payload) }),
+    request<{ user: CurrentUser; emailDelivery?: 'SENT' | 'FAILED' | 'NOT_REQUESTED' }>('/api/user/profile', { method: 'PATCH', body: JSON.stringify(payload) }),
   loginTelegramMiniApp: (payload: { initData: string }) =>
     request<{ user: CurrentUser }>('/api/auth/telegram-miniapp', { method: 'POST', body: JSON.stringify(payload) }),
   loginTelegramWeb: (payload: { initData: string; login: string; password: string }) =>
