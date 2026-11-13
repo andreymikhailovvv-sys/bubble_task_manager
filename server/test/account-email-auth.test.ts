@@ -134,7 +134,8 @@ test('password reset disallows the current password without consuming its token'
 test('system warning for unverified accounts is deterministic and not a polling flood', () => {
   const api = read('../src/routes/api.ts');
   assert.match(api, /account-email-verification-required:/);
-  assert.match(api, /systemNotification\.upsert/);
+  assert.match(api, /systemNotification\.createMany/);
+  assert.match(api, /skipDuplicates: true/);
   assert.match(api, /emailVerifiedAt/);
   assert.match(api, /настройки аккаунта/);
 });
