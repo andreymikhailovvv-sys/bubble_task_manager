@@ -654,10 +654,18 @@ export const api = {
   generateAiCheckupNow: () => request<{ message: ChatMessage }>('/api/ai/checkup/generate', { method: 'POST', body: '{}' }),
   updateUserSettings: (payload: { timeZone?: string; morningAiCheckupEnabled?: boolean; browserNotificationsEnabled?: boolean; morningAiCheckupTime?: string; aiCheckupSchedules?: AiCheckupSchedule[]; offerTaskCompletionReport?: boolean }) =>
     request<{ user: CurrentUser }>('/api/user/settings', { method: 'PATCH', body: JSON.stringify(payload) }),
-  register: (payload: { login: string; email?: string; password: string; name?: string; consentAccepted: boolean }) => request<{ user: CurrentUser; emailDelivery?: 'SENT' | 'FAILED' | 'NOT_REQUESTED' }>('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
+  register: (payload: { login: string; email: string; password: string; name?: string; consentAccepted: boolean }) => request<{ user: CurrentUser; emailDelivery?: 'SENT' | 'FAILED' | 'NOT_REQUESTED' }>('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
   requestEmailVerification: () => request<{ status: 'SENT' | 'ALREADY_VERIFIED' | 'NO_EMAIL' }>('/api/auth/email/request-verification', { method: 'POST' }),
   verifyEmail: (token: string) => request<{ ok: true }>('/api/auth/email/verify', { method: 'POST', body: JSON.stringify({ token }) }),
   verifyEmailCode: (code: string) => request<{ ok: true }>('/api/auth/email/verify-code', { method: 'POST', body: JSON.stringify({ code }) }),
+  getEmailVerificationStatus: () => request<{
+    email: string | null;
+    pendingEmail: string | null;
+    emailVerified: boolean;
+    aiCredits: number;
+    aiCreditsMilli: number;
+    aiCreditsPeriod: string;
+  }>('/api/auth/email/status'),
   forgotPassword: (email: string) => request<{ ok: true; message: string }>('/api/auth/email/forgot', { method: 'POST', body: JSON.stringify({ email }) }),
   resetPassword: (token: string, password: string) => request<{ ok: true }>('/api/auth/email/reset', { method: 'POST', body: JSON.stringify({ token, password }) }),
   login: (payload: { login: string; password: string }) => request<{ user: CurrentUser }>('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
@@ -667,8 +675,8 @@ export const api = {
     request<{ user: CurrentUser }>('/api/auth/telegram-miniapp', { method: 'POST', body: JSON.stringify(payload) }),
   loginTelegramWeb: (payload: { initData: string; login: string; password: string }) =>
     request<{ user: CurrentUser }>('/api/auth/telegram-web-login', { method: 'POST', body: JSON.stringify(payload) }),
-  registerTelegramWeb: (payload: { initData: string; login: string; password: string; name: string; consentAccepted: boolean }) =>
-    request<{ user: CurrentUser }>('/api/auth/telegram-web-register', { method: 'POST', body: JSON.stringify(payload) }),
+  registerTelegramWeb: (payload: { initData: string; login: string; email: string; password: string; name: string; consentAccepted: boolean }) =>
+    request<{ user: CurrentUser; emailDelivery: 'SENT' | 'FAILED' }>('/api/auth/telegram-web-register', { method: 'POST', body: JSON.stringify(payload) }),
   logMiniAppClientEvent: (payload: { event: string; data?: Record<string, unknown> }) =>
     request<{ ok: true }>('/api/miniapp/client-log', { method: 'POST', body: JSON.stringify(payload) }),
   loginWithGoogle: () => {

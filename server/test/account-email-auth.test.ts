@@ -74,10 +74,11 @@ test('a single verification email offers both code and URL with shared replay pr
   assert.match(migration, /ADD COLUMN "codeAttempts"/);
 });
 
-test('registration remains possible without mail secrets, but verification remains proof-based', () => {
+test('registration requires configured mail, while verification remains proof-based', () => {
   const api = read('../src/routes/api.ts');
   const registration = api.slice(api.indexOf("apiRouter.post('/auth/register'"), api.indexOf("apiRouter.post('/auth/login'"));
-  assert.doesNotMatch(registration.slice(0, 1700), /if \(email && !accountEmailService\.accountMailConfigured/);
+  assert.match(registration, /if \(!email\)/);
+  assert.match(registration, /!accountEmailService\.accountMailConfigured\(\)/);
   assert.match(registration, /emailDelivery = 'FAILED'/);
   assert.match(api, /auth\/email\/verify-code/);
   assert.match(api, /emailCodeAttemptLimiter/);
@@ -160,4 +161,73 @@ test('delete account is under account profile and not general settings', () => {
   const del = desktop.indexOf('onClick={() => void deleteAccount()}');
   assert.ok(profile >= 0 && del > profile);
   assert.equal(desktop.split('onClick={() => void deleteAccount()}').length - 1, 1);
+});
+
+test('new password registrations cannot receive their trial before verifying a unique email', () => {
+  const registration = read('../src/services/account-registration.service.ts');
+  const mail = read('../src/services/account-email.service.ts');
+  const schema = read('../prisma/schema.prisma');
+  const migration = read('../prisma/migrations/20261114010000_defer_registration_trial_until_verified_email/migration.sql');
+  const routes = read('../src/routes/api.ts');
+
+  assert.match(registration, /if \(!email\) throw new AccountRegistrationError\('INVALID_EMAIL'\)/);
+  assert.match(registration, /EMAIL_TAKEN/);
+  assert.match(registration, /pendingEmail: email/);
+  assert.match(registration, /trialCreditsPendingEmailVerification: true/);
+  assert.match(registration, /aiCredits: 0/);
+  assert.match(registration, /aiBonusCreditsMilli: 0/);
+  assert.match(mail, /trialCreditsPendingEmailVerification: false/);
+  assert.match(mail, /aiBonusCreditsMilli: \{ increment: creditsToMilli\(100\) \}/);
+  assert.match(mail, /aiTrialGrantedAt: now/);
+  assert.match(schema, /trialCreditsPendingEmailVerification Boolean @default\(false\)/);
+  assert.match(migration, /DEFAULT false/);
+  assert.match(routes, /Для регистрации необходимо указать корректную электронную почту/);
+  assert.match(routes, /apiRouter.post\('\/auth\/telegram-web-register'/);
+  assert.match(routes, /emailDelivery: 'SENT' \| 'FAILED'/);
+});
+
+test('email verification status sync is targeted and event-triggered, not polling', () => {
+  const desktop = read('../../client/src/App.tsx');
+  const compact = read('../../client/src/MiniApp.tsx');
+  const linkPage = read('../../client/src/AuthEmailPage.tsx');
+  const events = read('../../client/src/lib/account-email-status-events.ts');
+  const api = read('../src/routes/api.ts');
+  assert.match(desktop, /subscribeAccountEmailVerified/);
+  assert.match(compact, /subscribeAccountEmailVerified/);
+  assert.match(desktop, /getEmailVerificationStatus/);
+  assert.match(compact, /getEmailVerificationStatus/);
+  assert.match(desktop, /Почта подтверждена/);
+  assert.match(compact, /Почта подтверждена/);
+  assert.match(linkPage, /announceAccountEmailVerified/);
+  assert.match(events, /BroadcastChannel/);
+  assert.match(events, /window.addEventListener\('storage'/);
+  assert.match(api, /apiRouter.get\('\/auth\/email\/status'/);
+  assert.doesNotMatch(events, /setInterval/);
+});
+
+test('all browser email registration inputs are required and use autofill', () => {
+  const desktop = read('../../client/src/App.tsx');
+  const compact = read('../../client/src/MiniApp.tsx');
+  const telegram = read('../../client/src/TelegramAuthPage.tsx');
+  const api = read('../../client/src/lib/api.ts');
+  assert.match(desktop, /Электронная почта \(обязательно\)/);
+  assert.match(compact, /Электронная почта \(обязательно\)/);
+  assert.match(telegram, /autoComplete="email" required/);
+  assert.match(desktop, /autoComplete="email" name="email" required/);
+  assert.match(compact, /autoComplete="email" name="email" required/);
+  assert.match(api, /registerTelegramWeb: \(payload: \{ initData: string; login: string; email: string/);
+});
+
+test('native Android and Telegram bot flows cannot bypass required email', () => {
+  const androidModel = read('../../android-app/app/src/main/java/ru/planirovych/app/data/model/Models.kt');
+  const androidRepo = read('../../android-app/app/src/main/java/ru/planirovych/app/data/repository/WorkspaceRepository.kt');
+  const androidViewModel = read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/HomeViewModel.kt');
+  const androidUi = read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/HomeScreen.kt');
+  const telegram = read('../src/services/telegram.service.ts');
+  assert.match(androidModel, /RegisterRequest\(val login: String, val email: String/);
+  assert.match(androidRepo, /RegisterRequest\(login,email,password/);
+  assert.match(androidViewModel, /repository\.register\(login\.trim\(\), password, email\.trim\(\)/);
+  assert.match(androidUi, /Электронная почта \(обязательно\)/);
+  assert.match(telegram, /promptRegistrationInWebApp/);
+  assert.doesNotMatch(telegram, /accountRegistrationService\.register/);
 });

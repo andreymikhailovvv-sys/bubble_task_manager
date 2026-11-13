@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../lib/api';
+import { announceAccountEmailVerified } from '../lib/account-email-status-events';
 
 type Props = {
   open: boolean;
@@ -30,6 +31,7 @@ export default function EmailVerificationDialog({ open, email, initialNotice, on
     setError('');
     try {
       await api.verifyEmailCode(code);
+      announceAccountEmailVerified();
       await onVerified();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Не удалось подтвердить код.');

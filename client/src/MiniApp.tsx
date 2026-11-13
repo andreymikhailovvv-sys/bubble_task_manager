@@ -1,5 +1,6 @@
 import { AiStreamingMessageBody } from './components/AiStreamingMessageBody';
 import EmailVerificationDialog from './components/EmailVerificationDialog';
+import { subscribeAccountEmailVerified } from './lib/account-email-status-events';
 import { prepareAiChatImageFile } from './lib/ai-image-upload';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
@@ -1016,6 +1017,54 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [accountEmailBusy, setAccountEmailBusy] = useState(false);
   const [emailVerificationOpen, setEmailVerificationOpen] = useState(false);
   const [emailVerificationNotice, setEmailVerificationNotice] = useState('');
+
+  useEffect(() => {
+    const userId = currentUser?.id;
+    if (!isWebRuntime || !userId ||
+        !(currentUser?.pendingEmail || (currentUser.email && !currentUser.emailVerified))) return;
+    let mounted = true;
+    let inFlight = false;
+    const refreshMailStatus = async () => {
+      if (!mounted || inFlight) return;
+      inFlight = true;
+      try {
+        const status = await api.getEmailVerificationStatus();
+        if (!mounted) return;
+        setCurrentUser((previous) => {
+          if (!previous || previous.id !== userId) return previous;
+          if (previous.email === status.email && previous.pendingEmail === status.pendingEmail &&
+              previous.emailVerified === status.emailVerified &&
+              previous.aiCreditsMilli === status.aiCreditsMilli) return previous;
+          return { ...previous, ...status };
+        });
+        if (status.emailVerified && !status.pendingEmail) {
+          setAccountEmailMessage('Электронная почта подтверждена.');
+          setEmailVerificationOpen(false);
+        }
+      } catch {
+        // The workspace continues working if the status request fails.
+      } finally {
+        inFlight = false;
+      }
+    };
+    const unsubscribe = subscribeAccountEmailVerified(() => { void refreshMailStatus(); });
+    const onFocus = () => {
+      if (isSettingsOpen || emailVerificationOpen) void refreshMailStatus();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') onFocus();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    if (isSettingsOpen || emailVerificationOpen) void refreshMailStatus();
+    return () => {
+      mounted = false;
+      unsubscribe();
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [isWebRuntime, currentUser?.id, currentUser?.email, currentUser?.emailVerified,
+      currentUser?.pendingEmail, isSettingsOpen, emailVerificationOpen]);
   useEffect(() => {
     setAccountEmailDraft(currentUser?.pendingEmail || currentUser?.email || '');
   }, [currentUser?.pendingEmail, currentUser?.email]);
@@ -1427,6 +1476,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       setAuthError('Введите логин и пароль.');
       return;
     }
+    if (authModalMode === 'register' && !authEmail.trim()) {
+      setAuthError('Укажите электронную почту для подтверждения аккаунта.');
+      return;
+    }
     if (authModalMode === 'register' && !authConsentAccepted) {
       setAuthError('Необходимо согласиться на обработку персональных данных.');
       return;
@@ -1436,7 +1489,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     try {
       const result = authModalMode === 'login'
         ? await api.login({ login: authLogin.trim(), password: authPassword })
-        : await api.register({ login: authLogin.trim(), email: authEmail.trim() || undefined, password: authPassword, name: authName.trim(), consentAccepted: authConsentAccepted });
+        : await api.register({ login: authLogin.trim(), email: authEmail.trim(), password: authPassword, name: authName.trim(), consentAccepted: authConsentAccepted });
       setCurrentUser(result.user);
       setAuthModalMode(null);
       setAuthPassword('');
@@ -4371,7 +4424,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <>
                     <p className="mb-2 break-words text-sm text-muted">{accountDisplayName}</p>
                     <label className="mb-2 block text-xs text-muted">Адрес для входа и восстановления
-                      <input type="email" autoComplete="email" placeholder={currentUser?.pendingEmail || currentUser?.email || 'name@example.com'}
+                      <input type="email" autoComplete="email" name="email" placeholder={currentUser?.pendingEmail || currentUser?.email || 'name@example.com'}
                         value={accountEmailDraft} onChange={event => setAccountEmailDraft(event.target.value)}
                         className="mt-1 w-full rounded-xl border border-[color:var(--panel-border)] bg-[color:var(--muted-bg)] px-3 py-2 text-sm text-primary" />
                     </label>
@@ -4379,6 +4432,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       <input type="password" autoComplete="current-password" placeholder="Текущий пароль для смены почты"
                         value={accountEmailPassword} onChange={event => setAccountEmailPassword(event.target.value)}
                         className="mb-2 w-full rounded-xl border border-[color:var(--panel-border)] bg-[color:var(--muted-bg)] px-3 py-2 text-sm text-primary" />
+                    ) : null}
+                    {currentUser?.email && currentUser.emailVerified ? (
+                      <p className="mb-2 flex items-center gap-1.5 text-xs text-emerald-500" role="status">
+                        <CheckCircle2 size={14} aria-hidden="true" /> Почта подтверждена{currentUser.pendingEmail ? `: ${currentUser.email}` : ''}.
+                      </p>
                     ) : null}
                     {currentUser?.pendingEmail ? <p className="mb-2 text-xs text-amber-500">Ожидает подтверждения: {currentUser.pendingEmail}</p>
                       : currentUser?.email && !currentUser.emailVerified ? <p className="mb-2 text-xs text-amber-500">Адрес ещё не подтверждён.</p> : null}
@@ -6136,16 +6194,16 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               <h2 id="miniapp-auth-title" className="text-lg font-semibold">{authModalMode === 'login' ? 'Вход в аккаунт' : 'Регистрация'}</h2>
               <button type="button" onClick={closeAuthModal} disabled={authSubmitting} className="rounded-full p-2 text-slate-300 hover:bg-slate-800" aria-label="Закрыть"><X size={18} /></button>
             </div>
-            {authModalMode === 'register' && currentUser?.isGuest ? <p className="mb-3 rounded-xl border border-violet-400/40 bg-violet-500/10 p-3 text-xs text-violet-100">Создайте аккаунт и получите 100 пробных ИИ-кредитов. Ваши гостевые задачи сохранятся.</p> : null}
+            {authModalMode === 'register' && currentUser?.isGuest ? <p className="mb-3 rounded-xl border border-violet-400/40 bg-violet-500/10 p-3 text-xs text-violet-100">Подтвердите почту после регистрации, чтобы получить 100 пробных ИИ-кредитов. Гостевые задачи сохранятся.</p> : null}
             <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void submitAuth(); }}>
               <label className="block space-y-1 text-xs text-slate-300">
                 <span>{authModalMode === 'register' ? 'Логин' : 'Логин или подтверждённая почта'}</span>
-                <input autoFocus autoComplete="username" required value={authLogin} onChange={(event) => setAuthLogin(event.target.value)} className="w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-3 text-base text-slate-100 outline-none focus:border-sky-400" />
+                <input autoFocus autoComplete="username" name="username" required value={authLogin} onChange={(event) => setAuthLogin(event.target.value)} className="w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-3 text-base text-slate-100 outline-none focus:border-sky-400" />
               </label>
               {authModalMode === 'register' ? (
                 <label className="block space-y-1 text-xs text-slate-300">
-                  <span>Email для входа и восстановления (необязательно)</span>
-                  <input type="email" autoComplete="email" value={authEmail} onChange={(event) => setAuthEmail(event.target.value)}
+                  <span>Электронная почта (обязательно)</span>
+                  <input type="email" autoComplete="email" name="email" required value={authEmail} onChange={(event) => setAuthEmail(event.target.value)}
                     className="w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-3 text-base text-slate-100 outline-none focus:border-violet-400" />
                 </label>
               ) : null}
@@ -6157,7 +6215,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               ) : null}
               <label className="block space-y-1 text-xs text-slate-300">
                 <span>Пароль</span>
-                <input type="password" autoComplete={authModalMode === 'login' ? 'current-password' : 'new-password'} required value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} className="w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-3 text-base text-slate-100 outline-none focus:border-sky-400" />
+                <input type="password" name="password" autoComplete={authModalMode === 'login' ? 'current-password' : 'new-password'} required value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} className="w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-3 text-base text-slate-100 outline-none focus:border-sky-400" />
               </label>
               {authModalMode === 'login' ? <a href="/auth/email?mode=forgot" className="block text-right text-xs text-sky-300 underline">Забыли пароль?</a> : null}
               {authModalMode === 'register' ? (

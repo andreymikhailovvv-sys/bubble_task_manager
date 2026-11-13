@@ -1,5 +1,6 @@
 import { AiStreamingMessageBody } from './components/AiStreamingMessageBody';
 import EmailVerificationDialog from './components/EmailVerificationDialog';
+import { subscribeAccountEmailVerified } from './lib/account-email-status-events';
 import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, CalendarPlus, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Clock3, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Menu, MessageCircle, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, BellRing, Trash2, UserRound, X } from 'lucide-react';
@@ -1341,6 +1342,56 @@ export default function App() {
   const [emailVerificationMessage, setEmailVerificationMessage] = useState('');
   const [emailVerificationOpen, setEmailVerificationOpen] = useState(false);
   const [emailVerificationNotice, setEmailVerificationNotice] = useState('');
+
+  // One lightweight profile request per confirmation signal / tab return.
+  // Never reload the app or poll the server every few seconds.
+  useEffect(() => {
+    const userId = currentUser?.id;
+    if (!userId || !(currentUser?.pendingEmail || (currentUser.email && !currentUser.emailVerified))) return;
+    let mounted = true;
+    let inFlight = false;
+    const refreshMailStatus = async () => {
+      if (!mounted || inFlight) return;
+      inFlight = true;
+      try {
+        const status = await api.getEmailVerificationStatus();
+        if (!mounted) return;
+        setCurrentUser((previous) => {
+          if (!previous || previous.id !== userId) return previous;
+          if (previous.email === status.email && previous.pendingEmail === status.pendingEmail &&
+              previous.emailVerified === status.emailVerified &&
+              previous.aiCreditsMilli === status.aiCreditsMilli) return previous;
+          return { ...previous, ...status };
+        });
+        if (status.emailVerified && !status.pendingEmail) {
+          setEmailVerificationMessage('Электронная почта подтверждена.');
+          setEmailVerificationOpen(false);
+          setProfileEmail((previous) => previous.trim() ? previous : (status.email ?? ''));
+        }
+      } catch {
+        // A temporary network error must never disrupt the workspace.
+      } finally {
+        inFlight = false;
+      }
+    };
+    const unsubscribe = subscribeAccountEmailVerified(() => { void refreshMailStatus(); });
+    const onFocus = () => {
+      if (isProfileModalOpen || emailVerificationOpen) void refreshMailStatus();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') onFocus();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    if (isProfileModalOpen || emailVerificationOpen) void refreshMailStatus();
+    return () => {
+      mounted = false;
+      unsubscribe();
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [currentUser?.id, currentUser?.email, currentUser?.emailVerified,
+      currentUser?.pendingEmail, isProfileModalOpen, emailVerificationOpen]);
   const [profileSaving, setProfileSaving] = useState(false);
   const focusedTaskTitleInputRef = useRef<HTMLTextAreaElement | null>(null);
   const focusedSubtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
@@ -4677,6 +4728,10 @@ export default function App() {
 
   const submitAuth = async () => {
     if (!authModalMode) return;
+    if (authModalMode === 'register' && !authEmail.trim()) {
+      setAuthError('Укажите электронную почту для подтверждения аккаунта.');
+      return;
+    }
     if (authModalMode === 'register' && !personalDataConsentAccepted) {
       setAuthError('Необходимо согласиться на обработку персональных данных.');
       return;
@@ -4688,7 +4743,7 @@ export default function App() {
     try {
       const result = authModalMode === 'login'
         ? await api.login({ login: authLogin, password: authPassword })
-        : await api.register({ login: authLogin, email: authEmail.trim() || undefined, password: authPassword, name: authName, consentAccepted: personalDataConsentAccepted });
+        : await api.register({ login: authLogin, email: authEmail.trim(), password: authPassword, name: authName, consentAccepted: personalDataConsentAccepted });
       setCurrentUser(result.user);
       setAuthError(null);
       setAuthModalMode(null);
@@ -7170,15 +7225,15 @@ export default function App() {
               <h2 className="text-lg font-semibold text-primary">{authModalMode === 'login' ? 'Вход в аккаунт' : 'Регистрация'}</h2>
               <button className="secondary-button rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs" onClick={closeAuthModal}>Закрыть</button>
             </div>
-            {authModalMode === 'register' && currentUser?.isGuest ? <p className="mb-3 rounded-lg border border-violet-400/40 bg-violet-500/10 p-3 text-sm text-secondary">Зарегистрируйтесь, чтобы получить 100 пробных ИИ-кредитов и сохранить задачи этого гостевого аккаунта.</p> : null}
+            {authModalMode === 'register' && currentUser?.isGuest ? <p className="mb-3 rounded-lg border border-violet-400/40 bg-violet-500/10 p-3 text-sm text-secondary">Зарегистрируйтесь с подтверждением почты, чтобы получить 100 пробных ИИ-кредитов и сохранить гостевые задачи.</p> : null}
             <div className="space-y-2">
-              <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder={authModalMode === 'register' ? 'Логин' : 'Логин или подтверждённая почта'} value={authLogin} onChange={(e) => setAuthLogin(e.target.value)} />
-              <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Пароль" type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} />
+              <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder={authModalMode === 'register' ? 'Логин' : 'Логин или подтверждённая почта'} autoComplete="username" name="username" value={authLogin} onChange={(e) => setAuthLogin(e.target.value)} />
+              <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Пароль" type="password" name="password" autoComplete={authModalMode === 'login' ? 'current-password' : 'new-password'} value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} />
               {authModalMode === 'register' ? <p className="text-xs text-secondary">Пароль: не менее 6 символов. Цифры, буквы и спецсимволы допустимы.</p> : null}
               {authModalMode === 'login' ? <a className="block text-right text-xs text-sky-400 underline" href="/auth/email?mode=forgot">Забыли пароль?</a> : null}
               {authModalMode === 'register' ? (
                 <>
-                  <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" type="email" autoComplete="email" placeholder="Email (для входа и восстановления, необязательно)" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} />
+                  <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" type="email" autoComplete="email" name="email" required placeholder="Электронная почта (обязательно)" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} />
                   <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Имя (для регистрации)" value={authName} onChange={(e) => setAuthName(e.target.value)} />
                   <div className="flex items-start gap-2 pt-2 text-xs leading-5 text-secondary">
                     <input
@@ -7274,8 +7329,13 @@ export default function App() {
                 <input className="profile-field" value={profileName} maxLength={100} autoComplete="name" onChange={(event) => setProfileName(event.target.value)} />
               </label>
               <label className="profile-field-label">Почта
-                <input className="profile-field" value={profileEmail} maxLength={254} type="email" autoComplete="email" placeholder="name@example.com" onChange={(event) => setProfileEmail(event.target.value)} />
+                <input className="profile-field" value={profileEmail} maxLength={254} type="email" name="email" autoComplete="email" placeholder="name@example.com" onChange={(event) => setProfileEmail(event.target.value)} />
               </label>
+              {currentUser.email && currentUser.emailVerified ? (
+                <p className="flex items-center gap-1.5 text-xs text-emerald-500" role="status">
+                  <Check size={14} aria-hidden="true" /> Почта подтверждена{currentUser.pendingEmail ? `: ${currentUser.email}` : ''}.
+                </p>
+              ) : null}
               {currentUser.pendingEmail ? <p className="text-xs text-amber-400">Ожидает подтверждения: {currentUser.pendingEmail}. До подтверждения для входа остаётся прежний адрес.</p>
                 : currentUser.email && !currentUser.emailVerified ? <p className="text-xs text-amber-400">Почта ещё не подтверждена. Для восстановления пароля нужна проверка адреса.</p> : null}
               {(currentUser.pendingEmail || (currentUser.email && !currentUser.emailVerified)) ? (

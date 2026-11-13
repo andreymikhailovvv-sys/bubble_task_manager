@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { CheckCircle2, Eye, EyeOff, KeyRound, Loader2, LockKeyhole, ShieldCheck, UserRound } from 'lucide-react';
 import { api } from './lib/api';
+import EmailVerificationDialog from './components/EmailVerificationDialog';
 
 type TelegramAuthWindow = Window & {
   Telegram?: { WebApp?: { initData?: string; ready?: () => void; expand?: () => void; close?: () => void } };
@@ -9,6 +10,8 @@ type TelegramAuthWindow = Window & {
 export default function TelegramAuthPage() {
   const isRegistration = new URLSearchParams(window.location.search).get('mode') === 'register';
   const [login, setLogin] = useState('');
+  const [email, setEmail] = useState('');
+  const [verifyEmailOpen, setVerifyEmailOpen] = useState(false);
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [consentAccepted, setConsentAccepted] = useState(false);
@@ -44,13 +47,18 @@ export default function TelegramAuthPage() {
           setError('Пароль должен содержать не менее 6 символов. Цифры, буквы и спецсимволы допустимы.');
           return;
         }
-        await api.registerTelegramWeb({ initData, login: login.trim(), password, name: name.trim(), consentAccepted });
+        if (!email.trim()) {
+          setError('Укажите электронную почту для подтверждения аккаунта.');
+          return;
+        }
+        await api.registerTelegramWeb({ initData, login: login.trim(), email: email.trim(), password, name: name.trim(), consentAccepted });
+        setVerifyEmailOpen(true);
       } else {
         await api.loginTelegramWeb({ initData, login: login.trim(), password });
       }
       setSuccess(true);
       setPassword('');
-      window.setTimeout(() => telegram?.close?.(), 1400);
+      if (!isRegistration) window.setTimeout(() => telegram?.close?.(), 1400);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Не удалось войти. Попробуйте ещё раз.');
     } finally {
@@ -77,7 +85,9 @@ export default function TelegramAuthPage() {
           <div className="py-10 text-center" role="status">
             <CheckCircle2 className="mx-auto text-emerald-400" size={58} />
             <h2 className="mt-5 text-xl font-semibold">Готово!</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-300">{isRegistration ? 'Аккаунт создан и подключён к Telegram.' : 'Аккаунт подключён к Telegram.'} Это окно сейчас закроется.</p>
+            <p className="mt-2 text-sm leading-6 text-slate-300">{isRegistration
+              ? 'Аккаунт создан. Подтвердите email по коду или ссылке, чтобы получить пробные ИИ-кредиты.'
+              : 'Аккаунт подключён к Telegram. Это окно сейчас закроется.'}</p>
           </div>
         ) : (
           <form className="space-y-4" onSubmit={submit}>
@@ -89,6 +99,15 @@ export default function TelegramAuthPage() {
                 <input autoFocus autoComplete="username" required minLength={3} value={login} onChange={(event) => setLogin(event.target.value)} className="min-w-0 flex-1 bg-transparent py-3.5 text-base text-white outline-none placeholder:text-slate-500" placeholder="Ваш логин" />
               </span>
             </label>
+            {isRegistration ? (
+              <label className="block space-y-2 text-sm font-medium text-slate-200">
+                <span>Электронная почта (обязательно)</span>
+                <span className="telegram-auth-input flex items-center gap-3 rounded-2xl border px-4">
+                  <input type="email" name="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)}
+                    className="min-w-0 flex-1 bg-transparent py-3.5 text-base text-white outline-none" placeholder="name@example.com" />
+                </span>
+              </label>
+            ) : null}
             {isRegistration ? (
               <label className="block space-y-2 text-sm font-medium text-slate-200">
                 <span>Имя</span>
@@ -129,6 +148,18 @@ export default function TelegramAuthPage() {
           </form>
         )}
       </section>
+      <EmailVerificationDialog
+        open={verifyEmailOpen}
+        email={email}
+        onClose={() => setVerifyEmailOpen(false)}
+        initialNotice="На почту отправлены код и ссылка активации. До подтверждения пробные кредиты не начисляются."
+        onVerified={async () => {
+          const status = await api.getEmailVerificationStatus();
+          if (!status.emailVerified || status.pendingEmail) throw new Error('Подтверждение пока не завершено.');
+          setVerifyEmailOpen(false);
+          window.setTimeout(() => telegram?.close?.(), 1400);
+        }}
+      />
     </main>
   );
 }

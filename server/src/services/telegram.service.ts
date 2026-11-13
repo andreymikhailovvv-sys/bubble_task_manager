@@ -12,7 +12,7 @@ import { recordAppliedTelegramBotTask, undoTaskProposal, getTaskProposal, applyT
 import type { ChatMessage } from './ai-assistant.service.js';
 import { telegramFetch } from '../lib/telegram-fetch.js';
 import { FormData } from 'undici';
-import { AccountRegistrationError, accountRegistrationService, validateAccountLogin, validateAccountPassword } from './account-registration.service.js';
+
 import { formatCreditsSpent } from './ai-billing-notification.service.js';
 import { formatMonitoringAlert } from '../lib/monitoring-notification.js';
 import { formatTelegramTaskChanges } from '../lib/telegram-task-change-receipt.js';
@@ -848,57 +848,15 @@ const resetBotMenuState = async (chatId: string) => {
   await setSession(chatId, { mode: 'IDLE', activeTaskId: null, registrationLogin: null, registrationPasswordHash: null });
 };
 
-const handleRegistrationInput = async (chatId: string, text: string, session: { mode: string; registrationLogin: string | null; registrationPasswordHash: string | null }) => {
-  if (session.mode === 'AWAITING_REGISTRATION_LOGIN') {
-    try {
-      const login = validateAccountLogin(text);
-      if (!(await accountRegistrationService.isLoginAvailable(login))) throw new AccountRegistrationError('LOGIN_TAKEN');
-      await setSession(chatId, { mode: 'AWAITING_REGISTRATION_PASSWORD', registrationLogin: login, registrationPasswordHash: null });
-      await sendMessage(chatId, '🔑 Введите пароль (минимум 6 символов):');
-    } catch (error) {
-      const message = error instanceof AccountRegistrationError && error.code === 'LOGIN_TAKEN'
-        ? '❌ Этот логин уже занят. Введите другой логин:'
-        : '⚠️ Логин должен содержать минимум 3 символа. Введите другой логин:';
-      await sendMessage(chatId, message);
-    }
-    return;
-  }
-
-  if (session.mode === 'AWAITING_REGISTRATION_PASSWORD') {
-    try {
-      validateAccountPassword(text);
-      await setSession(chatId, { mode: 'AWAITING_REGISTRATION_NAME', registrationPasswordHash: authService.hashPassword(text) });
-      await sendMessage(chatId, '👤 Введите имя:');
-    } catch {
-      await sendMessage(chatId, '⚠️ Пароль должен содержать минимум 6 символов. Введите другой пароль:');
-    }
-    return;
-  }
-
-  if (!session.registrationLogin || !session.registrationPasswordHash) {
-    await setSession(chatId, { mode: 'AWAITING_REGISTRATION_LOGIN', registrationLogin: null, registrationPasswordHash: null });
-    await sendMessage(chatId, '⚠️ Не удалось продолжить регистрацию. Введите логин заново:');
-    return;
-  }
-
-  try {
-    const user = await accountRegistrationService.register({
-      login: session.registrationLogin,
-      passwordHash: session.registrationPasswordHash,
-      name: text,
-      telegramChatId: chatId
-    });
-    await resetBotMenuState(chatId);
-    await setSession(chatId, { userId: user.id });
-    await sendMessage(chatId, `✅ <b>Аккаунт создан.</b>\nДобро пожаловать, ${escapeHtml(user.name ?? user.username ?? '')}! Аккаунт доступен и в Telegram, и в веб-версии.`, keyboardReplyMain);
-  } catch (error) {
-    if (error instanceof AccountRegistrationError && error.code === 'LOGIN_TAKEN') {
-      await setSession(chatId, { mode: 'AWAITING_REGISTRATION_LOGIN', registrationLogin: null, registrationPasswordHash: null });
-      await sendMessage(chatId, '❌ Этот логин уже занят. Введите другой логин:');
-      return;
-    }
-    throw error;
-  }
+// Password-based bot signups must complete the email challenge in the
+// verified web form. The legacy text flow had no mailbox ownership check.
+const promptRegistrationInWebApp = async (chatId: string) => {
+  await resetBotMenuState(chatId);
+  const url = (TELEGRAM_AUTH_URL || 'https://planirovych.ru/telegram-auth') + '?mode=register';
+  await sendMessage(chatId,
+    'Для регистрации обязательно подтвердите электронную почту. Нажмите кнопку ниже, создайте аккаунт и введите код из письма.',
+    { inline_keyboard: [[{ text: '✉️ Создать аккаунт с подтверждением почты', web_app: { url } }]] }
+  );
 };
 
 const handleLoginInput = async (chatId: string, text: string) => {
@@ -1201,7 +1159,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
   }
 
   if (session && ['AWAITING_REGISTRATION_LOGIN', 'AWAITING_REGISTRATION_PASSWORD', 'AWAITING_REGISTRATION_NAME'].includes(session.mode)) {
-    await handleRegistrationInput(chatId, descriptionText, session);
+    await promptRegistrationInWebApp(chatId);
     return;
   }
 
@@ -1518,9 +1476,8 @@ const handleCallback = async (update: TelegramUpdate) => {
   }
 
   if (data === 'auth_register') {
-    await setSession(chatId, { mode: 'AWAITING_REGISTRATION_LOGIN', activeTaskId: null, registrationLogin: null, registrationPasswordHash: null });
     await answerCallback(callback.id);
-    await sendMessage(chatId, '✨ <b>Создание аккаунта</b>\n\nВведите логин (минимум 3 символа):');
+    await promptRegistrationInWebApp(chatId);
     return;
   }
 

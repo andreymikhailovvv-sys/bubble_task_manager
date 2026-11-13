@@ -370,6 +370,7 @@ model User {
   passwordChangedAt DateTime?
   authVersion Int @default(0)
   emailAuthTokens EmailAuthToken[]
+  trialCreditsPendingEmailVerification Boolean @default(false)
   legacyEmailVerificationOutreach EmailVerificationOutreach?
   username     String?  @unique
   passwordHash String?
