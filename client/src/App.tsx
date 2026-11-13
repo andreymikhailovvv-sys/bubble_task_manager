@@ -8567,7 +8567,14 @@ export default function App() {
                   <button type="button" className={`focused-task-ai-icon-button ${isFocusedAiSearchOpen ? 'focused-task-ai-icon-button-active' : ''}`}
                     onClick={() => setIsFocusedAiSearchOpen(prev => !prev)} title="Поиск по диалогу"><Search size={14} /></button>
                   <button type="button" className="focused-task-ai-icon-button" onClick={() => setIsAiExpanded(false)} title="Свернуть"><Minimize2 size={14} /></button>
-                  <button type="button" className="focused-task-ai-icon-button" onClick={() => { setIsAiExpanded(false); void closeFocusedTask(); }} title="Закрыть"><X size={14} /></button>
+                  <button type="button" className="focused-task-ai-icon-button"
+                    onClick={() => {
+                      setIsAiExpanded(false);
+                      // Closing the enlarged AI conversation must not clear the
+                      // selected task from its embedded fullscreen Focus slot.
+                      if (!embeddedFocusActive) void closeFocusedTask();
+                    }}
+                    title={embeddedFocusActive ? 'Закрыть диалог' : 'Закрыть'}><X size={14} /></button>
                 </div>
               </div>
             </div>
