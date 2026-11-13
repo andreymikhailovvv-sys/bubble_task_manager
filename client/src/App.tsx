@@ -844,7 +844,9 @@ export default function App() {
   const [mode, setMode] = useState<'global' | 'sectors'>('sectors');
   // Distraction-free viewport for bubbles. Keeps the same BubbleField instance,
   // filters and overlays; only the surrounding chrome is hidden.
-  const [isBubbleFullscreen, setIsBubbleFullscreen] = useState(false);
+  // The multi-pane workbench is the primary desktop layout. The classic
+  // planner remains available through the explicit 'Классический вид' action.
+  const [isBubbleFullscreen, setIsBubbleFullscreen] = useState(true);
   const [fullscreenDisplayModes, setFullscreenDisplayModes] = useState<DisplayMode[]>(['bubbles']);
   // Two independently replaceable fullscreen slots; the old view toggles stay
   // a quick way to reset them to one or two visualization modes.
@@ -5461,16 +5463,7 @@ export default function App() {
               </button>
             </div>
             )}
-            {!isBubbleFullscreen ? <button type="button"
-              data-tour="bubbles-fullscreen-enter"
-              onClick={() => { setIsSphereFilterOpen(false); setFullscreenDisplayModes(['bubbles']); setFullscreenPanelSlots(null); setIsBubbleFullscreen(true); }}
-              className="bubble-layout-toggle absolute top-[4.55rem] z-30 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold shadow-lg backdrop-blur transition hover:brightness-110"
-              style={{ right: '16px' }}
-              title="Развернуть пространство пузырей на весь экран"
-              aria-label="Полноэкранный режим пузырей">
-              <Maximize2 size={16} />
-              <span>Полный экран</span>
-            </button> : null}
+
             <BubbleField
               className="h-full"
               fullscreen={isBubbleFullscreen}
@@ -6040,9 +6033,11 @@ export default function App() {
   const renderWorkspaceMode = (workspaceMode: DisplayMode): ReactNode => isBubbleFullscreen ? (
     <div className="fullscreen-mode-surface relative h-full w-full min-h-0 min-w-0" data-fullscreen-mode={workspaceMode}>
       <div className="fullscreen-mode-surface-content h-full w-full min-h-0">{renderWorkspaceContent(workspaceMode)}</div>
-      <FullscreenPaneFilters mode={workspaceMode} filter={fullscreenPaneFilters[workspaceMode]}
-        spheres={spheres} theme={effectiveThemeMode}
-        onChange={(next) => updateFullscreenPaneFilters(workspaceMode, next)} />
+      {!workspaceOverlayActive ? (
+        <FullscreenPaneFilters mode={workspaceMode} filter={fullscreenPaneFilters[workspaceMode]}
+          spheres={spheres} theme={effectiveThemeMode}
+          onChange={(next) => updateFullscreenPaneFilters(workspaceMode, next)} />
+      ) : null}
     </div>
   ) : renderWorkspaceContent(workspaceMode);
   const fullscreenTaskChoices = rootTasks
@@ -6051,6 +6046,15 @@ export default function App() {
   const focusedPane = fullscreenPanels.find(panel => panel.kind === 'task-ai');
   const embeddedFocusActive = isBubbleFullscreen && focusedPane?.kind === 'task-ai' && !!focusedTask;
   const hasGeneralAiPane = isBubbleFullscreen && fullscreenPanels.some(panel => panel.kind === 'general-ai');
+  // A dialog opened over the workspace temporarily owns mouse/keyboard input.
+  // Keep inline Focus and inline notes active, but hide mode filters and pluses
+  // behind true modal windows so they never float above their content.
+  const workspaceOverlayActive = Boolean(
+    editorState || (focusedTask && !embeddedFocusActive) || isAiExpanded ||
+    isAiChatOpen || isSettingsOpen || isUpdatesOpen || isFocusSetupOpen ||
+    isFocusModeOpen || isSubscriptionModalOpen || isUpcomingSubtasksModalOpen ||
+    sectorEditorSphere
+  );
   const chooseFullscreenPanel = (index: 0 | 1, next: FullscreenWorkspacePanel) => {
     const replacing = fullscreenPanels[index];
     const nextSlots = replaceFullscreenPanel(fullscreenPanels, index, next);
@@ -6099,7 +6103,7 @@ export default function App() {
   return (
     <main
       className={isBubbleFullscreen
-        ? 'app-shell bubble-fullscreen-shell flex h-[100dvh] min-h-0 flex-col overflow-hidden p-0'
+        ? `app-shell bubble-fullscreen-shell flex h-[100dvh] min-h-0 flex-col overflow-hidden p-0 ${workspaceOverlayActive ? 'fullscreen-overlay-active' : ''}`
         : 'app-shell flex h-screen flex-col overflow-y-auto p-4 lg:p-6'}
       data-theme={effectiveThemeMode}
     >
@@ -6244,6 +6248,12 @@ export default function App() {
         <header data-tour="bubbles-fullscreen-toolbar"
           className="fullscreen-workspace-toolbar fullscreen-workspace-toolbar--one-row surface-topbar light-glass-topbar relative z-40 mx-auto mt-3 mb-2 flex shrink-0 flex-nowrap items-center gap-2 rounded-2xl border px-3 py-2.5 shadow-lg backdrop-blur-lg">
           <div className="fullscreen-workspace-toolbar-main flex min-w-0 flex-nowrap items-center gap-2">
+            <button type="button" className="updates-menu-trigger fullscreen-updates-trigger relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border"
+              onClick={() => setIsUpdatesOpen(true)}
+              aria-label="Открыть обновления и обучение" title="Обновления и обучение">
+              <Menu size={19} />
+              {hasUnreadNews ? <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">1</span> : null}
+            </button>
 <h1 className="fullscreen-workspace-brand mr-1 flex shrink-0 items-center gap-2 text-lg font-semibold">
           <img src="/icon.png" alt="" className="h-7 w-7 rounded-md" />
           <span>Планировыч AI</span>
@@ -6359,7 +6369,7 @@ export default function App() {
                 setIsBubbleFullscreen(false);
                 setIsSphereFilterOpen(false);
                 setIsTimelineOverdueModalOpen(false);
-              }} title="Выйти из полноэкранного режима" aria-label="Выйти из полноэкранного режима">
+              }} title="Классический вид" aria-label="Перейти в классический вид">
               <Minimize2 size={17} />
             </button>
           </div>
@@ -6443,19 +6453,7 @@ export default function App() {
             </button>
           ))}
         </div>
-        {displayMode !== 'bubbles' ? (
-          <button type="button" data-tour="workspace-fullscreen-enter"
-            className="topbar-action-button workspace-fullscreen-entry inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition"
-            onClick={() => {
-              setFullscreenDisplayModes([displayMode]);
-              setFullscreenPanelSlots(null);
-              setIsSphereFilterOpen(false);
-              setIsBubbleFullscreen(true);
-            }}
-            title="Развернуть выбранный режим на весь экран" aria-label="Открыть полноэкранный режим">
-            <Maximize2 size={16} /> <span>Полный экран</span>
-          </button>
-        ) : null}
+
 
         <div data-tour="workspace-filters" className="top-filter-cluster flex flex-wrap items-center gap-2 md:ml-4">
           <div className="relative min-w-48" data-sphere-filter-root="true">
@@ -6528,6 +6526,17 @@ export default function App() {
           <div className="relative shrink-0" ref={settingsMenuRef}>
             <button className="surface-popover light-menu-trigger topbar-settings-button inline-flex h-10 w-10 items-center justify-center rounded-xl border transition hover:border-cyan-300/70" onClick={() => setIsSettingsOpen((prev) => !prev)} aria-label="Настройки" title="Настройки"><Settings size={17} /></button>
           </div>
+          <button type="button" data-tour="workspace-fullscreen-enter"
+            className="topbar-action-button workspace-fullscreen-entry inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition"
+            onClick={() => {
+              setFullscreenDisplayModes([displayMode]);
+              setFullscreenPanelSlots(null);
+              setIsSphereFilterOpen(false);
+              setIsBubbleFullscreen(true);
+            }}
+            title="Перейти в основной вид" aria-label="Перейти в основной вид">
+            <Maximize2 size={16} /> <span>Основной вид</span>
+          </button>
         </div>
       </section> : null}
 
@@ -8873,6 +8882,7 @@ export default function App() {
 
       {!hasGeneralAiPane ? <QuickAiLauncherFrame
         taskOpen={Boolean(focusedTask)}
+        embeddedTaskFocus={embeddedFocusActive}
         fullscreenBubbles={isBubbleFullscreen}
         onHoverChange={hovered => { setQuickAiPreviewHovered(hovered); if(hovered){ scheduleQuickAiChatScrollToBottom(); markSystemNotificationsRead(); } }}
         onFocus={scheduleQuickAiChatScrollToBottom}
