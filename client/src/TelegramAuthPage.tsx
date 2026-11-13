@@ -108,6 +108,7 @@ export default function TelegramAuthPage() {
                 </button>
               </span>
             </label>
+            {!isRegistration ? <a href="/auth/email?mode=forgot" className="block text-right text-sm text-sky-300 underline">Забыли пароль?</a> : null}
             {isRegistration ? (
               <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-xs leading-5 text-slate-300">
                 <input type="checkbox" required checked={consentAccepted} onChange={(event) => setConsentAccepted(event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-sky-500" />
