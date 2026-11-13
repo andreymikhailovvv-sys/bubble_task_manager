@@ -16616,3 +16616,96 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
     min-height: 30px;
   }
 }
+
+/* Fullscreen workbench: a single rounded outline belongs to the outer pane.
+   Independently rounded nested dialogs and the 5px Focus inset previously left
+   light wedges, broken outlines and protruding inner edges in all four corners. */
+.fullscreen-workspace-pane > :is(.fullscreen-embedded-focus, .fullscreen-embedded-ai, .standalone-notes-inline-mount) {
+  border-radius: inherit;
+  overflow: hidden;
+}
+.fullscreen-workspace-pane .focused-task-modal-backdrop.fullscreen-task-embedded {
+  padding: 0 !important;
+  border-radius: inherit;
+  overflow: hidden !important;
+}
+.fullscreen-workspace-pane .fullscreen-task-embedded .focused-task-modal-layout {
+  border-radius: inherit;
+  overflow: hidden;
+}
+.fullscreen-workspace-pane .fullscreen-task-embedded :is(.focused-task-editor-shell, .focused-task-ai-panel) {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+.fullscreen-workspace-pane .ai-chat-expanded-backdrop.ai-chat-expanded-embedded {
+  border-radius: inherit;
+  overflow: hidden !important;
+}
+.fullscreen-workspace-pane .ai-chat-expanded-embedded > .ai-chat-expanded {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+.fullscreen-workspace-pane .standalone-notes-backdrop.standalone-notes-inline {
+  border-radius: inherit;
+  overflow: hidden;
+}
+.fullscreen-workspace-pane .standalone-notes-inline .standalone-notes-board {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+/* PC right-click menu: the fifth action should not make the fullscreen
+   popup substantially taller than its four-action classic counterpart. */
+.fullscreen-task-context-menu > .surface-popover {
+  padding: 6px !important;
+}
+.fullscreen-task-context-menu > .surface-popover > button {
+  margin-top: 3px !important;
+  padding-top: 5px !important;
+  padding-bottom: 5px !important;
+}
+.fullscreen-task-context-menu > .surface-popover > button:first-child {
+  margin-top: 0 !important;
+}
+/* Zero pointer gap between trigger and submenu: mouseleave can safely dismiss
+   the submenu without making the postpone options impossible to reach. */
+.fullscreen-task-context-menu > .surface-popover > .surface-popover.absolute {
+  margin-left: 0 !important;
+}
+
+/* In narrow embedded Focus assistant panes, show "А" instead of the long
+   monitoring caption. Other monitoring controls retain their full labels. */
+.task-monitor-button-compact-label {
+  display: none;
+}
+.fullscreen-task-embedded .focused-task-ai-panel {
+  container-type: inline-size;
+  container-name: focus-assistant;
+}
+@container focus-assistant (max-width: 290px) {
+  .task-monitor-status-anchor .task-monitor-button > svg,
+  .task-monitor-button-full-label,
+  .focused-task-ai-toolbar-title {
+    display: none;
+  }
+  .task-monitor-button-compact-label {
+    display: inline;
+  }
+  .task-monitor-status-anchor .task-monitor-button {
+    gap: 0;
+    padding-inline: 10px;
+    font-weight: 800;
+  }
+  .focused-task-ai-toolbar {
+    gap: 4px;
+    padding-right: 108px !important;
+  }
+}
+@container focus-assistant (max-width: 220px) {
+  .focused-task-ai-toolbar .ai-panel-title {
+    display: none;
+  }
+}
