@@ -387,9 +387,9 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
         AndroidNotificationDelivery.enqueueRefresh(context)
         return user
     }
-    suspend fun register(login: String, password: String, name: String, consent: Boolean):CurrentUser {
+    suspend fun register(login: String, password: String, email: String, name: String, consent: Boolean):CurrentUser {
         AndroidNotificationDelivery.clearIdentity(context)
-        val user=api.register(RegisterRequest(login,password,name.ifBlank { null },consent)).user
+        val user=api.register(RegisterRequest(login,email,password,name.ifBlank { null },consent)).user
         AndroidNotificationDelivery.enqueueRefresh(context)
         return user
     }
