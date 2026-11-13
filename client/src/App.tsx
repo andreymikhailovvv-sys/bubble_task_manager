@@ -4693,7 +4693,7 @@ export default function App() {
       setAuthModalMode(null);
       setPersonalDataConsentAccepted(false);
       if (authModalMode === 'register' && authEmail.trim()) {
-        setEmailVerificationNotice(result.emailDelivery === 'SENT'
+        setEmailVerificationNotice(('emailDelivery' in result ? result.emailDelivery : undefined) === 'SENT'
           ? 'Письмо с кодом и ссылкой отправлено. Выберите удобный способ подтверждения.'
           : 'Аккаунт создан, но письмо не отправлено. Проверьте SMTP_USER и SMTP_PASSWORD на сервере Timeweb, затем повторите отправку.');
         setEmailVerificationOpen(true);
