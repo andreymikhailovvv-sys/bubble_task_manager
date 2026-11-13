@@ -15974,3 +15974,257 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
     padding-inline: 7px;
   }
 }
+
+
+/* Fullscreen workbench v2: slightly taller header, lower starting position. */
+.app-shell.bubble-fullscreen-shell > .fullscreen-workspace-toolbar--one-row {
+  min-height: 72px;
+  margin-top: 18px;
+  margin-bottom: 11px;
+  padding-top: 13px;
+  padding-bottom: 13px;
+}
+
+/* The add control belongs to the workbench, not the navigation bar. */
+.fullscreen-workspace-single {
+  align-items: stretch;
+  justify-content: stretch;
+  padding: 5px 0 10px;
+}
+.fullscreen-workspace-single-content {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.fullscreen-workspace-single-rail {
+  position: relative;
+  display: flex;
+  flex: 0 0 56px;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+}
+.fullscreen-workspace-single-rail::before {
+  content: '';
+  position: absolute;
+  inset: 15% auto;
+  width: 1px;
+  background: linear-gradient(transparent, var(--panel-border), transparent);
+}
+.fullscreen-workspace-single-rail .fullscreen-add-window {
+  z-index: 1;
+}
+.fullscreen-workspace-single > .fullscreen-workspace-single-content > .fullscreen-mode-surface {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.fullscreen-workspace-split {
+  grid-template-columns: minmax(0, calc(var(--fullscreen-split-ratio, 50%) - 38px)) 76px minmax(0, 1fr);
+  padding-left: 0;
+  padding-right: 0;
+}
+.fullscreen-workspace-divider {
+  width: 76px;
+  gap: 4px;
+}
+.fullscreen-workspace-divider::before { width: 2px; height: 54px; }
+.fullscreen-workspace-divider-grip {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 42px;
+  transform: none;
+}
+.fullscreen-add-window--compact .fullscreen-add-window-trigger {
+  position: relative;
+  width: 24px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0;
+  border-radius: 8px;
+  box-shadow: 0 3px 9px rgba(2, 6, 23, .16);
+}
+.fullscreen-add-window--compact .fullscreen-add-window-trigger svg {
+  width: 14px;
+  height: 14px;
+}
+.fullscreen-add-window-menu { min-width: 240px; }
+.fullscreen-add-window-search {
+  background: var(--field-bg);
+  border-color: var(--field-border);
+  color: var(--text-primary);
+}
+.fullscreen-upcoming-filter {
+  border-color: var(--panel-border);
+  color: var(--text-muted);
+}
+.fullscreen-upcoming-filter.is-active {
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--panel-border));
+  background: var(--accent-soft);
+}
+.fullscreen-upcoming-complete {
+  color: var(--accent-strong);
+  border-color: var(--panel-border);
+}
+
+/* Reuse the real general AI chat and its composer Planik inside a pane. */
+.ai-chat-expanded-backdrop.ai-chat-expanded-embedded {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100%;
+  height: 100%;
+  padding: 0 !important;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  animation: none !important;
+}
+.ai-chat-expanded-embedded > .ai-chat-expanded {
+  width: 100% !important;
+  height: 100% !important;
+  max-height: none !important;
+  min-width: 0;
+  grid-template-columns: minmax(120px, 28%) minmax(0, 1fr);
+  border-radius: 19px;
+  animation: none !important;
+}
+.ai-chat-expanded-embedded .ai-chat-expanded-sidebar {
+  min-width: 0;
+  padding: 12px;
+}
+.ai-chat-expanded-embedded .ai-chat-expanded.is-sidebar-collapsed {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+
+/* The existing Focus editor sits ABOVE its existing AI panel. Same task state,
+   same editable controls, only the outer frame is reoriented. */
+.focused-task-modal-backdrop.fullscreen-task-embedded {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100%;
+  height: 100%;
+  align-items: stretch !important;
+  justify-content: stretch !important;
+  overflow: hidden !important;
+  padding: 5px !important;
+  background: transparent !important;
+  backdrop-filter: none !important;
+}
+.fullscreen-task-embedded .focused-task-modal-layout {
+  flex-direction: column !important;
+  align-items: stretch !important;
+  width: 100%;
+  max-width: none !important;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  gap: 8px;
+  overflow: hidden;
+}
+.fullscreen-task-embedded .focused-task-modal-panel-height {
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0 !important;
+}
+.fullscreen-task-embedded .focused-task-editor-shell {
+  order: 1 !important;
+  display: flex;
+  flex: 1 1 59%;
+  flex-direction: column;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0;
+  min-height: 0 !important;
+  padding: 12px !important;
+  border-radius: 18px !important;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.fullscreen-task-embedded .focused-task-ai-panel {
+  order: 2 !important;
+  display: flex !important;
+  flex: 1 1 41%;
+  flex-direction: column;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0;
+  min-height: 0 !important;
+  padding: 12px !important;
+  border-radius: 18px !important;
+}
+
+/* Board and rich-text editor share the same pane, including note selection. */
+.standalone-notes-inline-mount {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+.standalone-notes-backdrop.standalone-notes-inline {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 10;
+  width: 100%;
+  height: 100%;
+  padding: 0 !important;
+  background: transparent !important;
+  backdrop-filter: none !important;
+}
+.standalone-notes-inline .standalone-notes-board {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+  border-radius: 18px;
+}
+.standalone-notes-inline .standalone-notes-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 215px), 1fr));
+}
+.standalone-notes-inline .standalone-notes-board-filters {
+  flex-wrap: wrap;
+}
+.standalone-notes-inline .standalone-notes-search {
+  width: min(100%, 235px);
+}
+.notes-editor-backdrop.notes-editor-inline {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 90 !important;
+  padding: 6px;
+  backdrop-filter: blur(7px);
+}
+.notes-editor-inline .notes-editor-panel {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  min-height: 0;
+  border-radius: 16px;
+}
+
+@media (min-width: 1200px) {
+  /* Restored captions stay readable in the slightly roomier header. */
+  .fullscreen-mode-picker .fullscreen-mode-picker-option {
+    gap: 8px;
+    padding: 8px 12px;
+  }
+}
+@media (max-width: 900px) {
+  .fullscreen-workspace-split {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, calc(var(--fullscreen-split-ratio, 50%) - 38px)) 76px minmax(0, 1fr);
+  }
+  .fullscreen-workspace-divider {
+    width: 100%;
+    height: 76px;
+  }
+  .fullscreen-workspace-divider::before {
+    width: 54px;
+    height: 2px;
+  }
+  .fullscreen-workspace-divider-grip {
+    transform: rotate(90deg);
+  }
+  .fullscreen-workspace-single-rail { flex-basis: 42px; }
+}

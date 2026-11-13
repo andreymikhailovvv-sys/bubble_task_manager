@@ -11,6 +11,7 @@ type Props = {
   onChange: (value: string) => void;
   onClose: () => void;
   miniAppSheet?: boolean;
+  inlineTarget?: HTMLElement | null;
   /** Telegram system controls clearance; undefined outside Telegram. */
   telegramSafeTop?: number;
   heading?: string;
@@ -141,7 +142,7 @@ function createChecklistItem(line: string) {
   return item;
 }
 
-export function NotesEditor({ value, onChange, onClose, miniAppSheet = false, telegramSafeTop, heading = 'Заметки', titleEditor }: Props) {
+export function NotesEditor({ value, onChange, onClose, miniAppSheet = false, telegramSafeTop, heading = 'Заметки', titleEditor, inlineTarget }: Props) {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const savedRangeRef = useRef<Range | null>(null);
   const [hasSelection, setHasSelection] = useState(false);
@@ -394,7 +395,7 @@ export function NotesEditor({ value, onChange, onClose, miniAppSheet = false, te
   };
 
   return createPortal((
-    <div className={`notes-editor-backdrop fixed inset-0 z-[2147483646] flex items-center justify-center p-4 ${miniAppSheet ? 'miniapp-notes-editor-backdrop' : ''} ${telegramSafeTop !== undefined ? 'miniapp-telegram-safe-editor-backdrop' : ''}`}
+    <div className={`notes-editor-backdrop fixed inset-0 z-[2147483646] flex items-center justify-center p-4 ${inlineTarget ? 'notes-editor-inline' : ''} ${miniAppSheet ? 'miniapp-notes-editor-backdrop' : ''} ${telegramSafeTop !== undefined ? 'miniapp-telegram-safe-editor-backdrop' : ''}`}
       style={telegramSafeTop !== undefined ? ({ '--telegram-editor-top': `${Math.max(96, telegramSafeTop + 12)}px` } as CSSProperties) : undefined}
       onClick={onClose}>
       <section className={`notes-editor-panel relative flex h-[min(82vh,680px)] w-full max-w-4xl flex-col rounded-3xl border shadow-2xl ${miniAppSheet ? 'miniapp-notes-editor-panel' : ''}`} onClick={(event) => event.stopPropagation()}>
@@ -485,5 +486,5 @@ export function NotesEditor({ value, onChange, onClose, miniAppSheet = false, te
         />
       </section>
     </div>
-  ), document.body);
+  ), inlineTarget ?? document.body);
 }

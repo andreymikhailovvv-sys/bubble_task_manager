@@ -18,7 +18,7 @@ export type FullscreenWorkspacePanel =
 
 export const FULLSCREEN_AUXILIARY_OPTIONS: ReadonlyArray<{ kind: FullscreenAuxiliaryKind; title: string; description: string }> = [
   { kind: 'general-ai', title: 'Общий чат с ИИ', description: 'Отдельное окно общего помощника' },
-  { kind: 'task-ai', title: 'Чат ИИ по задаче', description: 'С привязкой к выбранной задаче' },
+  { kind: 'task-ai', title: 'Окно задачи', description: 'Focus задачи и ИИ-помощник' },
   { kind: 'notes', title: 'Заметки', description: 'Доска заметок рабочего пространства' },
   { kind: 'upcoming-tasks', title: 'Ближайшие задачи', description: 'Предстоящие задачи и сроки' }
 ];
@@ -46,4 +46,21 @@ export function resolveFullscreenPanels(
   if (auxiliary) return [primary, auxiliary];
   if (modes[1] && modes[1] !== modes[0]) return [primary, { kind: 'mode', mode: modes[1] }];
   return [primary];
+}
+
+
+/** Replace only the chosen side. The companion pane stays mounted and keeps
+ * its own state. A single pane gets a second slot only via the right add rail. */
+export function replaceFullscreenPanel(
+  current: readonly FullscreenWorkspacePanel[],
+  index: 0 | 1,
+  next: FullscreenWorkspacePanel
+): [FullscreenWorkspacePanel] | [FullscreenWorkspacePanel, FullscreenWorkspacePanel] {
+  const panels = [...current];
+  if (index === 0) panels[0] = next;
+  else if (panels.length === 1) panels.push(next);
+  else panels[1] = next;
+  return panels.length === 2
+    ? [panels[0], panels[1]]
+    : [panels[0]];
 }

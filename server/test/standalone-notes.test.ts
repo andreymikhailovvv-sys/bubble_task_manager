@@ -68,7 +68,7 @@ test('sidebar list opens rich editor and renders safely formatted board cards', 
     readFile(new URL('../../client/src/lib/notes.ts', import.meta.url), 'utf8'),
     readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8')
   ]);
-  const widget = app.indexOf('<StandaloneNotesWorkspace');
+  const widget = app.indexOf('<StandaloneNotesWorkspace', app.indexOf('Управление секторами'));
   assert.ok(widget > app.indexOf('Управление секторами'));
   assert.ok(widget < app.indexOf('</aside>', widget));
   assert.match(component, /notes\.slice\(0, 3\)/);
