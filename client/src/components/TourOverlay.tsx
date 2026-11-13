@@ -26,6 +26,33 @@ export const WORKSPACE_TOUR_STEPS: WorkspaceTourConfig[] = [
   { id: 'workspace-notes', selector: '[data-tour="workspace-notes"]', text: 'Создавайте заметки и сортируйте их по группам. Вы можете попросить в чате с ИИ найти заметку или создать или отредактировать новую на основе вашей переписки.' }
 ];
 
+/** The primary multi-pane workbench has a different toolbar and no classic
+ * side widgets. Use real controls that exist in its current layout. */
+export const PRIMARY_WORKSPACE_TOUR_STEPS: WorkspaceTourConfig[] = [
+  { id: 'workspace-overview', selector: '[data-tour="workspace"]',
+    text: 'Это основное рабочее пространство Планировыча. Здесь можно разместить одно или два независимых окна, изменять их размеры и работать с разными задачами одновременно.' },
+  { id: 'workspace-display-modes', selector: '.fullscreen-mode-picker',
+    text: 'Выберите Пузыри, Список или Таймлайн. Можно включить сразу два режима; каждый получит собственную рабочую область.' },
+  { id: 'workspace-bubbles', selector: '[data-tour="bubbles-workspace"]',
+    text: 'Пузыри визуально показывают задачи по важности и срочности. Размер и положение помогают увидеть приоритеты.' },
+  { id: 'workspace-bubble-layout', selector: '[data-tour="bubble-layout"]',
+    text: 'Здесь переключается общий круг пузырей и отображение с делением по секторам.' },
+  { id: 'workspace-list', selector: '[data-tour="list-workspace"]',
+    text: 'Режим «Список» отображает задачи последовательно. Сектора и сроки фильтруются через иконку фильтров внутри выбранной области.' },
+  { id: 'workspace-timeline', selector: '[data-tour="timeline-workspace"]',
+    text: 'Таймлайн показывает задачи и подзадачи в календаре. Его верхняя панель остаётся доступной даже после перехода к текущему времени.' },
+  { id: 'workspace-timeline-range', selector: '[data-tour="timeline-range"]',
+    text: 'Здесь выбирают день, неделю или месяц и переключают даты.' },
+  { id: 'workspace-credits', selector: '[data-tour="credits"]',
+    text: 'ИИ-кредиты находятся в верхней панели. Нажмите на них, чтобы узнать расход и доступные тарифы.' },
+  { id: 'workspace-settings', selector: '[data-tour="settings-panel"]',
+    text: 'В настройках можно сменить тему, часовой пояс, уведомления и параметры ИИ-чекапа.' },
+  { id: 'workspace-side-rail', selector: '.fullscreen-workspace-single-rail--right .fullscreen-add-window-trigger',
+    text: 'Круглый плюс на краю добавляет второе окно. Слева есть такой же. Когда окон два, плюсы возле разделителя заменяют конкретную сторону, а бегунок регулирует пропорции.' },
+  { id: 'workspace-notes', selector: '.standalone-notes-inline-mount',
+    text: '«Заметки» можно добавить как отдельную рабочую область. Выбранная заметка открывается внутри неё, не перекрывая весь экран.' }
+];
+
 export const TASK_TOUR_STEPS: TaskTourConfig[] = [
   { id: 'create-task', selector: '[data-tour="create-task"]', text: 'Здесь вы можете добавить новую задачу и настроить ее.' },
   { id: 'create-event', selector: '[data-tour="create-event"]', text: 'Создавайте события, чтобы всегда помнить о важных делах. Чтобы получать уведомления о задачах и событиях на телефон — подключите нашего телеграм-бота. Подробнее об этом в уроке «Фишки и интеграции».' },
