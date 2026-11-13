@@ -1,5 +1,6 @@
 import { type NextFunction, type Request, type Response } from 'express';
 import { AUTH_COOKIE_NAME, authService } from '../auth/auth.service.js';
+import { prisma } from '../db/prisma.js';
 
 const authLogContext = (req: Request) => {
   const origin = req.get('origin') ?? 'no-origin';
@@ -8,7 +9,9 @@ const authLogContext = (req: Request) => {
   return `method=${req.method} path=${req.originalUrl} host=${host} forwardedHost=${forwardedHost} origin=${origin}`;
 };
 
-export const authSession = (req: Request, _res: Response, next: NextFunction) => {
+export const authSession = async (req: Request, _res: Response, next: NextFunction) => {
+  // Static assets and public pages must never pay for a database session lookup.
+  if (!req.path.startsWith('/api/')) { next(); return; }
   const token = req.cookies?.[AUTH_COOKIE_NAME];
   if (!token) {
     req.user = undefined;
@@ -21,6 +24,16 @@ export const authSession = (req: Request, _res: Response, next: NextFunction) =>
 
   try {
     const authUser = authService.verify(token);
+    // Stored version makes a password reset invalidate all previous JWTs,
+    // including tokens minted before this feature existed.
+    const identity = await prisma.user.findUnique({
+      where: { id: authUser.sub }, select: { authVersion: true }
+    });
+    if (!identity || identity.authVersion !== (authUser.authVersion ?? 0)) {
+      req.user = undefined;
+      next();
+      return;
+    }
     req.user = {
       id: authUser.sub,
       email: authUser.email,

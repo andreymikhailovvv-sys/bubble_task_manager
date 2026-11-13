@@ -72,6 +72,7 @@ import { rewriteMailQuickText } from '../services/telegram-quick-share-ai.servic
 import { getOwnerMailDraft, sendOwnerMailDraft } from '../services/ai-mail-tools.service.js';
 import { latestAndroidRelease } from '../services/android-release-catalog.service.js';
 import { emailAddress } from '../services/mail-smtp.service.js';
+import { accountEmailService, normalizeEmail } from '../services/account-email.service.js';
 
 
 export const apiRouter = Router();
@@ -204,6 +205,10 @@ const AUTH_RATE_WINDOW_MS = 15 * 60 * 1000;
 const accountLoginLimiter = new FixedWindowRateLimiter(15, AUTH_RATE_WINDOW_MS);
 const ipLoginLimiter = new FixedWindowRateLimiter(300, AUTH_RATE_WINDOW_MS);
 const registrationLimiter = new FixedWindowRateLimiter(60, 60 * 60 * 1000);
+const emailVerificationLimiter = new FixedWindowRateLimiter(3, 60 * 60 * 1000);
+const emailPasswordResetIpLimiter = new FixedWindowRateLimiter(12, 60 * 60 * 1000);
+const emailPasswordResetAccountLimiter = new FixedWindowRateLimiter(3, 60 * 60 * 1000);
+const emailTokenUseLimiter = new FixedWindowRateLimiter(30, 15 * 60 * 1000);
 const adminRequestLimiter = new FixedWindowRateLimiter(240, AUTH_RATE_WINDOW_MS);
 const notesRewriteLimiter = new FixedWindowRateLimiter(15, 10 * 60 * 1000);
 const adminPasswordFailureLimiter = new FixedWindowRateLimiter(8, AUTH_RATE_WINDOW_MS);
@@ -261,6 +266,8 @@ const TRAINING_LESSON_REWARD = 5;
 const toAuthUser = (user: {
   id: string;
   email?: string | null;
+  emailVerifiedAt?: Date | null;
+  pendingEmail?: string | null;
   username?: string | null;
   name?: string | null;
   avatarUrl?: string | null;
@@ -296,6 +303,8 @@ const toAuthUser = (user: {
   return ({
   id: user.id,
   email: user.email,
+  emailVerified: Boolean(user.emailVerifiedAt),
+  pendingEmail: user.pendingEmail ?? null,
   username: user.username,
   name: user.name,
   avatarUrl: user.avatarUrl,
@@ -435,10 +444,12 @@ const setAuthCookies = (
     deviceId?: string | null;
     telegramChatId?: string | null;
     passwordHash?: string | null;
+    authVersion?: number;
   }
 ) => {
   const token = authService.sign({
     sub: user.id,
+    authVersion: user.authVersion ?? 0,
     email: user.email,
     username: user.username,
     name: user.name,
@@ -557,6 +568,16 @@ apiRouter.post('/auth/register', async (req, res) => {
   const loginRaw = String(req.body?.login ?? '');
   const passwordRaw = String(req.body?.password ?? '');
   const nameRaw = String(req.body?.name ?? '').trim();
+  const requestedEmail = req.body?.email === undefined ? '' : String(req.body.email).trim();
+  const email = requestedEmail ? normalizeEmail(requestedEmail) : null;
+  if (requestedEmail && !email) {
+    res.status(400).json({ error: 'Укажите корректную электронную почту' });
+    return;
+  }
+  if (email && !accountEmailService.accountMailConfigured()) {
+    res.status(503).json({ error: 'Подтверждение почты временно недоступно' });
+    return;
+  }
 
   const login = sanitizeLogin(loginRaw);
   let user;
@@ -576,6 +597,7 @@ apiRouter.post('/auth/register', async (req, res) => {
       : null;
     user = await accountRegistrationService.register({
       login,
+      ...(email ? { email } : {}),
       password: passwordRaw,
       name: nameRaw,
       ...(guestUser ? { guestUserId: guestUser.id, verifiedGuestDeviceId: verifiedGuestDeviceId! } : {}),
@@ -601,8 +623,79 @@ apiRouter.post('/auth/register', async (req, res) => {
   }
 
   setAuthCookies(res, user);
-  console.info(`[Auth] register success userId=${user.id} login=${login} ${authRequestContext(req)}`);
-  res.json({ user: toAuthUser(user) });
+  let emailDelivery: 'SENT' | 'FAILED' | 'NOT_REQUESTED' = 'NOT_REQUESTED';
+  if (email) {
+    try {
+      await accountEmailService.requestVerification(user.id);
+      emailDelivery = 'SENT';
+    } catch {
+      emailDelivery = 'FAILED';
+      console.warn('[AuthEmail] registration mail delivery failed');
+    }
+  }
+  console.info(`[Auth] register success userId=${user.id} ${authRequestContext(req)}`);
+  res.json({ user: toAuthUser(user), emailDelivery });
+});
+
+
+/** A verified email may be used as login; unverified profile emails never can. */
+const findPasswordIdentity = async (login: string) => {
+  if (login.includes('@')) {
+    const byEmail = await prisma.user.findUnique({ where: { email: login } });
+    if (byEmail?.emailVerifiedAt) return byEmail;
+  }
+  return prisma.user.findUnique({ where: { username: login } });
+};
+
+apiRouter.post('/auth/email/request-verification', requireAuth, mailOrigin, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!accountEmailService.accountMailConfigured()) {
+    res.status(503).json({ error: 'Отправка писем временно недоступна' }); return;
+  }
+  if (rejectOnRateLimit(res, emailVerificationLimiter.consume(accountRateLimitKey(req.user!.id)))) return;
+  try {
+    const status = await accountEmailService.requestVerification(req.user!.id);
+    res.json({ status });
+  } catch {
+    console.warn('[AuthEmail] verification email delivery failed');
+    res.status(503).json({ error: 'Не удалось отправить письмо. Попробуйте позже' });
+  }
+});
+
+apiRouter.post('/auth/email/verify', mailOrigin, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (rejectOnRateLimit(res, emailTokenUseLimiter.consume(rateLimitIpKey(req)))) return;
+  const ok = await accountEmailService.verify(req.body?.token);
+  res.status(ok ? 200 : 400).json({ ok, error: ok ? undefined : 'Ссылка недействительна или устарела' });
+});
+
+apiRouter.post('/auth/email/forgot', mailOrigin, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!accountEmailService.accountMailConfigured()) {
+    res.status(503).json({ error: 'Восстановление пароля временно недоступно' }); return;
+  }
+  const generic = { ok: true, message: 'Если подтверждённый адрес найден, мы отправим письмо с инструкцией.' };
+  const email = normalizeEmail(req.body?.email);
+  // Both limits have the same response, whether or not the address exists.
+  const ip = emailPasswordResetIpLimiter.consume(rateLimitIpKey(req));
+  const acct = emailPasswordResetAccountLimiter.consume(accountRateLimitKey(email ?? 'invalid'));
+  if (!ip.allowed || !acct.allowed || !email) { res.json(generic); return; }
+  try { await accountEmailService.requestPasswordReset(email); }
+  catch { console.warn('[AuthEmail] password reset delivery failed'); }
+  res.json(generic);
+});
+
+apiRouter.post('/auth/email/reset', mailOrigin, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (rejectOnRateLimit(res, emailTokenUseLimiter.consume(rateLimitIpKey(req)))) return;
+  if (typeof req.body?.password !== 'string' || req.body.password.length < 8 || req.body.password.length > 128) {
+    res.status(400).json({ error: 'Новый пароль должен содержать от 8 до 128 символов' }); return;
+  }
+  const ok = await accountEmailService.resetPassword(req.body?.token, req.body.password);
+  if (!ok) { res.status(400).json({ error: 'Ссылка недействительна или устарела' }); return; }
+  res.clearCookie(AUTH_COOKIE_NAME, { ...authService.cookieOptions(), maxAge: undefined });
+  res.clearCookie(DEVICE_COOKIE_NAME, { ...authService.deviceCookieOptions(), maxAge: undefined });
+  res.json({ ok: true });
 });
 
 apiRouter.post('/auth/login', async (req, res) => {
@@ -615,7 +708,7 @@ apiRouter.post('/auth/login', async (req, res) => {
     return;
   }
 
-  const user = await prisma.user.findUnique({ where: { username: login } });
+  const user = await findPasswordIdentity(login);
   if (!user?.passwordHash || !authService.verifyPassword(password, user.passwordHash)) {
     console.warn(`[Auth] login failed login=${login} reason=invalid_credentials ${authRequestContext(req)}`);
     res.status(401).json({ error: 'Неверный логин или пароль' });
@@ -724,18 +817,41 @@ apiRouter.patch('/user/profile', requireAuth, async (req, res) => {
     res.status(400).json({ error: 'Текущий пароль указан неверно' });
     return;
   }
+  if (emailRaw !== (user.pendingEmail ?? user.email ?? '') &&
+      user.passwordHash && !authService.verifyPassword(currentPassword, user.passwordHash)) {
+    res.status(400).json({ error: 'Для изменения почты укажите текущий пароль' });
+    return;
+  }
+
 
   try {
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: {
         name: name || null,
-        email: emailRaw || null,
-        ...(newPassword ? { passwordHash: authService.hashPassword(newPassword) } : {})
+        // The existing verified address remains active until the replacement is proven.
+        ...(emailRaw === (user.pendingEmail ?? user.email ?? '') ? {} : emailRaw
+          ? { pendingEmail: emailRaw }
+          : { email: null, pendingEmail: null, emailVerifiedAt: null }),
+        ...(newPassword ? {
+          passwordHash: authService.hashPassword(newPassword),
+          passwordChangedAt: new Date(),
+          authVersion: { increment: 1 }
+        } : {})
       }
     });
     setAuthCookies(res, updatedUser);
-    res.json({ user: toAuthUser(updatedUser) });
+    let emailDelivery: 'SENT' | 'FAILED' | 'NOT_REQUESTED' = 'NOT_REQUESTED';
+    if (updatedUser.pendingEmail && updatedUser.pendingEmail !== user.pendingEmail && accountEmailService.accountMailConfigured()) {
+      try {
+        await accountEmailService.requestVerification(updatedUser.id);
+        emailDelivery = 'SENT';
+      } catch {
+        emailDelivery = 'FAILED';
+        console.warn('[AuthEmail] profile verification mail delivery failed');
+      }
+    }
+    res.json({ user: toAuthUser(updatedUser), emailDelivery });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       res.status(409).json({ error: 'Эта почта уже используется' });
@@ -1355,7 +1471,7 @@ apiRouter.post('/auth/telegram-web-login', async (req, res) => {
     return;
   }
 
-  const user = await prisma.user.findUnique({ where: { username: login } });
+  const user = await findPasswordIdentity(login);
   if (!user?.passwordHash || !authService.verifyPassword(password, user.passwordHash)) {
     console.warn(`[TelegramWebLogin] invalid credentials chatId=${telegramChatId} login=${login}`);
     res.status(401).json({ error: 'Неверный логин или пароль' });

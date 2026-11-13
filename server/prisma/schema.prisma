@@ -365,6 +365,11 @@ enum HabitCompletionSource {
 model User {
   id           String   @id @default(cuid())
   email        String?  @unique
+  emailVerifiedAt DateTime?
+  pendingEmail String?
+  passwordChangedAt DateTime?
+  authVersion Int @default(0)
+  emailAuthTokens EmailAuthToken[]
   username     String?  @unique
   passwordHash String?
   deviceId     String?  @unique
@@ -1468,4 +1473,20 @@ model MailComposeDraft {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+/** Account-only one-time tokens. No plaintext credential is stored in Postgres. */
+model EmailAuthToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose   String
+  email     String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, purpose, expiresAt])
+  @@index([expiresAt])
 }

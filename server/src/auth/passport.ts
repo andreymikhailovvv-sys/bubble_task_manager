@@ -45,7 +45,8 @@ if (isGoogleAuthEnabled) {
                 name: displayName,
                 avatarUrl,
                 // Preserve the existing email when another user owns the new one.
-                ...(email && (!emailOwner || emailOwner.id === existingUser.id) ? { email } : {})
+                ...(email && (!emailOwner || emailOwner.id === existingUser.id)
+                  ? { email, emailVerifiedAt: new Date(), pendingEmail: null } : {})
               }
             });
             done(null, user);
@@ -68,6 +69,7 @@ if (isGoogleAuthEnabled) {
               const createdUser = await tx.user.create({
                 data: {
                   email,
+                  emailVerifiedAt: new Date(),
                   googleSub,
                   name: displayName,
                   avatarUrl,

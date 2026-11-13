@@ -36,6 +36,7 @@ export const accountRegistrationService = {
 
   async register(input: {
     login: string;
+    email?: string;
     password?: string;
     passwordHash?: string;
     name: string;
@@ -69,6 +70,7 @@ export const accountRegistrationService = {
             },
             data: {
               username: login,
+              pendingEmail: input.email ?? null,
               passwordHash,
               name: input.name.trim() || login,
               aiTrialGrantedAt: now,
@@ -88,6 +90,7 @@ export const accountRegistrationService = {
           user = await tx.user.create({
             data: {
               username: login,
+              pendingEmail: input.email ?? null,
               passwordHash,
               name: input.name.trim() || login,
               aiCredits: 100,

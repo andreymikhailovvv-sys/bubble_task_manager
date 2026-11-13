@@ -1008,6 +1008,14 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   };
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | null>(null);
   const [authLogin, setAuthLogin] = useState('');
+  const [authEmail, setAuthEmail] = useState('');
+  const [accountEmailDraft, setAccountEmailDraft] = useState('');
+  const [accountEmailPassword, setAccountEmailPassword] = useState('');
+  const [accountEmailMessage, setAccountEmailMessage] = useState('');
+  const [accountEmailBusy, setAccountEmailBusy] = useState(false);
+  useEffect(() => {
+    setAccountEmailDraft(currentUser?.pendingEmail || currentUser?.email || '');
+  }, [currentUser?.pendingEmail, currentUser?.email]);
   const [authPassword, setAuthPassword] = useState('');
   const [authName, setAuthName] = useState('');
   const [authConsentAccepted, setAuthConsentAccepted] = useState(false);
@@ -1359,6 +1367,35 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     || currentUser?.email?.trim()
     || 'Пользователь';
 
+  const saveAccountEmail = async () => {
+    if (!currentUser || !accountEmailDraft.trim() || accountEmailBusy) return;
+    setAccountEmailBusy(true);
+    setAccountEmailMessage('');
+    try {
+      const result = await api.updateProfile({
+        name: currentUser.name ?? '',
+        email: accountEmailDraft.trim(),
+        currentPassword: accountEmailPassword || undefined
+      });
+      setCurrentUser(result.user);
+      setAccountEmailPassword('');
+      if (result.user.emailVerified && !result.user.pendingEmail) {
+        setAccountEmailMessage('Адрес уже подтверждён.');
+      } else if (result.emailDelivery === 'SENT') {
+        setAccountEmailMessage('Отправлено письмо со ссылкой подтверждения.');
+      } else {
+        const sent = await api.requestEmailVerification();
+        setAccountEmailMessage(sent.status === 'SENT'
+          ? 'Отправлено письмо со ссылкой подтверждения.'
+          : 'Проверь указанный адрес почты.');
+      }
+    } catch (error) {
+      setAccountEmailMessage(error instanceof Error ? error.message : 'Не удалось отправить письмо.');
+    } finally {
+      setAccountEmailBusy(false);
+    }
+  };
+
   const openAuthModal = (mode: 'login' | 'register') => {
     setAuthModalMode(mode);
     setAuthError(null);
@@ -1390,7 +1427,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     try {
       const result = authModalMode === 'login'
         ? await api.login({ login: authLogin.trim(), password: authPassword })
-        : await api.register({ login: authLogin.trim(), password: authPassword, name: authName.trim(), consentAccepted: authConsentAccepted });
+        : await api.register({ login: authLogin.trim(), email: authEmail.trim() || undefined, password: authPassword, name: authName.trim(), consentAccepted: authConsentAccepted });
       setCurrentUser(result.user);
       setAuthModalMode(null);
       setAuthPassword('');
@@ -4318,6 +4355,21 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 {hasAccount ? (
                   <>
                     <p className="mb-2 break-words text-sm text-muted">{accountDisplayName}</p>
+                    <label className="mb-2 block text-xs text-muted">Адрес для входа и восстановления
+                      <input type="email" autoComplete="email" placeholder={currentUser?.pendingEmail || currentUser?.email || 'name@example.com'}
+                        value={accountEmailDraft} onChange={event => setAccountEmailDraft(event.target.value)}
+                        className="mt-1 w-full rounded-xl border border-[color:var(--panel-border)] bg-[color:var(--muted-bg)] px-3 py-2 text-sm text-primary" />
+                    </label>
+                    {currentUser?.hasPassword && accountEmailDraft.trim().toLowerCase() !== (currentUser?.pendingEmail || currentUser?.email || '').toLowerCase() ? (
+                      <input type="password" autoComplete="current-password" placeholder="Текущий пароль для смены почты"
+                        value={accountEmailPassword} onChange={event => setAccountEmailPassword(event.target.value)}
+                        className="mb-2 w-full rounded-xl border border-[color:var(--panel-border)] bg-[color:var(--muted-bg)] px-3 py-2 text-sm text-primary" />
+                    ) : null}
+                    {currentUser?.pendingEmail ? <p className="mb-2 text-xs text-amber-500">Ожидает подтверждения: {currentUser.pendingEmail}</p>
+                      : currentUser?.email && !currentUser.emailVerified ? <p className="mb-2 text-xs text-amber-500">Адрес ещё не подтверждён.</p> : null}
+                    <button type="button" className="surface-muted mb-2 w-full rounded-xl px-3 py-2 text-sm text-primary" disabled={accountEmailBusy || !accountEmailDraft.trim()}
+                      onClick={() => void saveAccountEmail()}>{accountEmailBusy ? 'Отправляем…' : 'Сохранить email и подтвердить'}</button>
+                    {accountEmailMessage ? <p className="mb-2 text-xs text-sky-500" role="status">{accountEmailMessage}</p> : null}
                     <button type="button" className="surface-muted w-full rounded-xl px-3 py-2 text-sm text-primary"
                       onClick={() => void logout()} disabled={logoutSubmitting}>{logoutSubmitting ? 'Выходим…' : 'Выйти'}</button>
                   </>
@@ -6065,9 +6117,16 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             {authModalMode === 'register' && currentUser?.isGuest ? <p className="mb-3 rounded-xl border border-violet-400/40 bg-violet-500/10 p-3 text-xs text-violet-100">Создайте аккаунт и получите 100 пробных ИИ-кредитов. Ваши гостевые задачи сохранятся.</p> : null}
             <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void submitAuth(); }}>
               <label className="block space-y-1 text-xs text-slate-300">
-                <span>Логин</span>
+                <span>Логин или подтверждённая почта</span>
                 <input autoFocus autoComplete="username" required value={authLogin} onChange={(event) => setAuthLogin(event.target.value)} className="w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-3 text-base text-slate-100 outline-none focus:border-sky-400" />
               </label>
+              {authModalMode === 'register' ? (
+                <label className="block space-y-1 text-xs text-slate-300">
+                  <span>Email для входа и восстановления (необязательно)</span>
+                  <input type="email" autoComplete="email" value={authEmail} onChange={(event) => setAuthEmail(event.target.value)}
+                    className="w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-3 text-base text-slate-100 outline-none focus:border-violet-400" />
+                </label>
+              ) : null}
               {authModalMode === 'register' ? (
                 <label className="block space-y-1 text-xs text-slate-300">
                   <span>Имя</span>
@@ -6078,6 +6137,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 <span>Пароль</span>
                 <input type="password" autoComplete={authModalMode === 'login' ? 'current-password' : 'new-password'} required value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} className="w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-3 text-base text-slate-100 outline-none focus:border-sky-400" />
               </label>
+              {authModalMode === 'login' ? <a href="/auth/email?mode=forgot" className="block text-right text-xs text-sky-300 underline">Забыли пароль?</a> : null}
               {authModalMode === 'register' ? (
                 <label className="flex items-start gap-2 rounded-xl border border-slate-700 bg-slate-800/70 p-3 text-xs leading-5 text-slate-300">
                   <input type="checkbox" required checked={authConsentAccepted} onChange={(event) => setAuthConsentAccepted(event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-violet-500" />

@@ -9,6 +9,7 @@ const BusinessApp = React.lazy(() => import('./BusinessApp'));
 const PublicPages = React.lazy(() => import('./PublicPages'));
 import CookieBanner from './components/CookieBanner';
 const TelegramAuthPage = React.lazy(() => import('./TelegramAuthPage'));
+const AuthEmailPage = React.lazy(() => import('./AuthEmailPage'))
 import { api } from './lib/api';
 import './styles.css';
 
@@ -88,6 +89,7 @@ if (isAndroidPlanikRoute) {
   document.documentElement.dataset.planikAndroid = 'boot';
 }
 const isTelegramAuthRoute = window.location.pathname === '/telegram-auth';
+const isAccountEmailRoute = window.location.pathname === '/auth/email';
 const isAdminRoute = window.location.pathname === '/admin556215';
 const isPublicRoute = window.location.pathname === '/android'
   || window.location.pathname === '/about'
@@ -109,6 +111,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           ? <AdminPage />
         : isTelegramAuthRoute
           ? <TelegramAuthPage />
+        : isAccountEmailRoute
+          ? <AuthEmailPage />
         : isMiniAppRoute
           ? <MiniApp runtime="telegram" />
         : isAndroidPlanikRoute

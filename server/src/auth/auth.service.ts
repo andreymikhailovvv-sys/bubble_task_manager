@@ -6,6 +6,7 @@ export const DEVICE_COOKIE_NAME = 'btm_device';
 
 export interface AuthTokenPayload {
   sub: string;
+  authVersion?: number;
   email?: string | null;
   username?: string | null;
   name?: string | null;
