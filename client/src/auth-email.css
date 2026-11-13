@@ -1,0 +1,20 @@
+:root { color-scheme: dark; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+.email-root { min-height: 100dvh; display: grid; place-items: center; padding: 36px 16px; color: #eef2ff; background: radial-gradient(ellipse at 20% 0%, #162044, #080d1b 64%); }
+.email-panel { width: 100%; max-width: 425px; border: 1px solid #334155; border-radius: 24px; padding: 28px; background: #121a2b; box-shadow: 0 20px 80px #0005; }
+.email-brand { display: inline-flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; color: white; text-decoration: none; }
+.email-logo { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; font-size: 25px; background: linear-gradient(135deg, #0e93de, #9a5dea); }
+h1 { margin: 32px 0 16px; font-size: 24px; line-height: 1.2; }
+.email-form { display: grid; gap: 16px; }
+.email-form p, .email-success p { margin: 0; color: #cbd5e1; line-height: 1.65; font-size: 14px; }
+.email-form label { display: grid; gap: 8px; font-size: 14px; }
+.email-form input { width: 100%; min-height: 48px; border: 1px solid #475569; border-radius: 12px; padding: 10px 13px; color: white; font: inherit; background: #1e293b; }
+.email-form input:focus { outline: 2px solid #38bdf8; outline-offset: 1px; }
+.email-primary { display: block; width: 100%; border: 0; border-radius: 12px; padding: 14px; background: linear-gradient(90deg, #0284c7, #7c3aed); color: white; font-size: 14px; font-weight: 700; cursor: pointer; text-align: center; }
+.email-primary:disabled { opacity: .55; cursor: wait; }
+.email-link { text-decoration: none; margin-top: 20px; }
+.email-secondary { border: 0; background: none; color: #7dd3fc; text-decoration: underline; text-align: center; font: inherit; font-size: 14px; cursor: pointer; }
+.email-success { display: grid; gap: 12px; }
+.email-error { border: 1px solid #be123c; border-radius: 12px; background: #4c1528; padding: 12px; color: #fecdd3 !important; }
+@media(max-width:420px) { .email-panel { padding: 22px; } }
