@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import { prisma } from '../db/prisma.js';
 import { authService } from '../auth/auth.service.js';
 import { smtpReply, emailAddress, MailSmtpError } from './mail-smtp.service.js';
+import { creditsToMilli } from './ai-credit-wallet.service.js';
 
 const VERIFY_TTL_MS = 24 * 60 * 60 * 1000;
 const RESET_TTL_MS = 30 * 60 * 1000;
@@ -78,7 +79,8 @@ const confirmVerification = async (input: { tokenHash?: string; userId?: string;
         }
       }
       const user = await tx.user.findUnique({ where: { id: token.userId }, select: {
-        id: true, email: true, pendingEmail: true, emailVerifiedAt: true
+        id: true, email: true, pendingEmail: true, emailVerifiedAt: true,
+        trialCreditsPendingEmailVerification: true
       } });
       if (!user || !(user.pendingEmail === token.email ||
           (!user.emailVerifiedAt && user.email === token.email))) return false;
@@ -87,7 +89,15 @@ const confirmVerification = async (input: { tokenHash?: string; userId?: string;
       }, data: { usedAt: now } });
       if (claimed.count !== 1) return false;
       await tx.user.update({ where: { id: user.id }, data: {
-        email: token.email, emailVerifiedAt: now, pendingEmail: null
+        email: token.email, emailVerifiedAt: now, pendingEmail: null,
+        ...(user.trialCreditsPendingEmailVerification ? {
+          // Only newly registered, previously uncredited accounts receive the
+          // trial. This transaction consumes the confirmation token atomically.
+          trialCreditsPendingEmailVerification: false,
+          aiTrialGrantedAt: now,
+          aiBonusCreditsMilli: { increment: creditsToMilli(100) },
+          aiCredits: { increment: 100 }
+        } : {})
       } });
       // A used link cannot leave behind a working code, or vice versa.
       await tx.emailAuthToken.deleteMany({ where: {
