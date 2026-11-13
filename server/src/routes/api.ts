@@ -570,13 +570,16 @@ apiRouter.post('/auth/register', async (req, res) => {
   const passwordRaw = String(req.body?.password ?? '');
   const nameRaw = String(req.body?.name ?? '').trim();
   const requestedEmail = req.body?.email === undefined ? '' : String(req.body.email).trim();
-  const email = requestedEmail ? normalizeEmail(requestedEmail) : null;
-  if (requestedEmail && !email) {
-    res.status(400).json({ error: 'Укажите корректную электронную почту' });
+  const email = normalizeEmail(requestedEmail);
+  if (!email) {
+    res.status(400).json({ error: 'Для регистрации необходимо указать корректную электронную почту' });
     return;
   }
-  // Registration itself must remain available while SMTP is being configured.
-  // The address stays pending, never gets verified without mailbox proof.
+  if (!accountEmailService.accountMailConfigured()) {
+    res.status(503).json({ error: 'Регистрация по почте временно недоступна. Попробуйте позже.' });
+    return;
+  }
+  // A new account has no trial credits before email verification.
   const login = sanitizeLogin(loginRaw);
   let user;
   try {
@@ -595,7 +598,7 @@ apiRouter.post('/auth/register', async (req, res) => {
       : null;
     user = await accountRegistrationService.register({
       login,
-      ...(email ? { email } : {}),
+      email,
       password: passwordRaw,
       name: nameRaw,
       ...(guestUser ? { guestUserId: guestUser.id, verifiedGuestDeviceId: verifiedGuestDeviceId! } : {}),
@@ -614,7 +617,11 @@ apiRouter.post('/auth/register', async (req, res) => {
           ? { status: 400, message: 'Необходимо согласие на обработку персональных данных' }
           : error.code === 'GUEST_SESSION_INVALID'
             ? { status: 409, message: 'Гостевая сессия устарела. Перезагрузите страницу и повторите регистрацию.' }
-            : { status: 409, message: 'Логин уже занят' };
+            : error.code === 'INVALID_EMAIL'
+              ? { status: 400, message: 'Укажите корректную электронную почту' }
+              : error.code === 'EMAIL_TAKEN'
+                ? { status: 409, message: 'Этот адрес почты уже используется другим аккаунтом' }
+                : { status: 409, message: 'Логин уже занят' };
     console.warn(`[Auth] register failed reason=${error.code.toLowerCase()} login=${login || 'empty'} ${authRequestContext(req)}`);
     res.status(response.status).json({ error: response.message });
     return;
@@ -644,6 +651,26 @@ const findPasswordIdentity = async (login: string) => {
   }
   return prisma.user.findUnique({ where: { username: login } });
 };
+
+// Lightweight profile-field sync: no task, chat, wallet reconciliation or page reload.
+apiRouter.get('/auth/email/status', requireAuth, asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id }, select: {
+    email: true, pendingEmail: true, emailVerifiedAt: true,
+    aiIncludedCreditsMilli: true, aiBonusCreditsMilli: true, aiPurchasedCreditsMilli: true,
+    aiCreditsPeriod: true
+  } });
+  if (!user) { res.status(404).json({ error: 'Аккаунт не найден' }); return; }
+  const aiCreditsMilli = user.aiIncludedCreditsMilli + user.aiBonusCreditsMilli + user.aiPurchasedCreditsMilli;
+  res.json({
+    email: user.email,
+    pendingEmail: user.pendingEmail,
+    emailVerified: Boolean(user.emailVerifiedAt),
+    aiCreditsMilli,
+    aiCredits: Math.floor(aiCreditsMilli / 1000),
+    aiCreditsPeriod: user.aiCreditsPeriod
+  });
+}));
 
 apiRouter.post('/auth/email/request-verification', requireAuth, mailOrigin, async (req, res) => {
   res.set('Cache-Control', 'no-store');
@@ -1504,6 +1531,15 @@ apiRouter.post('/auth/telegram-web-register', async (req, res) => {
   const login = sanitizeLogin(String(req.body?.login ?? ''));
   const password = String(req.body?.password ?? '');
   const name = String(req.body?.name ?? '').trim();
+  const email = normalizeEmail(req.body?.email);
+  if (!email) {
+    res.status(400).json({ error: 'Для регистрации необходимо указать корректную электронную почту' });
+    return;
+  }
+  if (!accountEmailService.accountMailConfigured()) {
+    res.status(503).json({ error: 'Регистрация по почте временно недоступна. Попробуйте позже.' });
+    return;
+  }
   const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
   if (!botToken || !initDataRaw) {
     res.status(400).json({ error: 'Откройте форму регистрации кнопкой в Telegram-боте' });
@@ -1524,6 +1560,7 @@ apiRouter.post('/auth/telegram-web-register', async (req, res) => {
     validatePersonalDataConsent(req.body?.consentAccepted);
     user = await accountRegistrationService.register({
       login,
+      email,
       password,
       name,
       personalDataConsent: { version: PERSONAL_DATA_CONSENT_VERSION, ipAddress: req.ip }
@@ -1538,15 +1575,26 @@ apiRouter.post('/auth/telegram-web-register', async (req, res) => {
           ? { status: 400, message: 'Необходимо согласие на обработку персональных данных' }
           : error.code === 'GUEST_SESSION_INVALID'
             ? { status: 409, message: 'Гостевая сессия устарела. Перезагрузите страницу и повторите регистрацию.' }
-            : { status: 409, message: 'Логин уже занят' };
+            : error.code === 'INVALID_EMAIL'
+              ? { status: 400, message: 'Укажите корректную электронную почту' }
+              : error.code === 'EMAIL_TAKEN'
+                ? { status: 409, message: 'Этот адрес почты уже используется другим аккаунтом' }
+                : { status: 409, message: 'Логин уже занят' };
     res.status(response.status).json({ error: response.message });
     return;
   }
 
   await telegramService.completeWebLogin(telegramChatId, user, true);
   setAuthCookies(res, user);
+  let emailDelivery: 'SENT' | 'FAILED' = 'FAILED';
+  try {
+    await accountEmailService.requestVerification(user.id);
+    emailDelivery = 'SENT';
+  } catch (error) {
+    console.warn('[AuthEmail] telegram registration mail delivery failed; ' + accountMailFailureDiagnostic(error));
+  }
   console.info(`[TelegramWebRegister] success chatId=${telegramChatId} userId=${user.id}`);
-  res.json({ user: toAuthUser(user) });
+  res.json({ user: toAuthUser(user), emailDelivery });
 });
 
 apiRouter.get('/spheres', requireAuth, sphereController.list);
