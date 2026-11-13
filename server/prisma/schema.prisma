@@ -1483,6 +1483,10 @@ model EmailAuthToken {
   purpose   String
   email     String
   tokenHash String   @unique
+  /** HMAC of a 6-digit code, bound to this challenge and user. Never store plaintext codes. */
+  codeHash String?
+  codeExpiresAt DateTime?
+  codeAttempts Int @default(0)
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime @default(now())
