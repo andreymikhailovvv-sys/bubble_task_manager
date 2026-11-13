@@ -16418,3 +16418,196 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
     transform: translateX(-50%);
   }
 }
+
+
+/* Workbench overlay correctness: the divider itself, not just its + controls,
+   must disappear below real modal layers. Keep its grid track as a spacer, so
+   neighboring panes do not jump when a task or subtask dialog opens. */
+.bubble-fullscreen-shell.fullscreen-overlay-active .fullscreen-workspace-divider,
+.bubble-fullscreen-shell.fullscreen-overlay-active .fullscreen-focus-inner-divider {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+.bubble-fullscreen-shell.fullscreen-overlay-active .fullscreen-pane-filters-anchor {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* Close the 14px seam visually without leaking content out of rounded panes.
+   Every nested window belongs to the pane's own clipped stacking context. */
+.fullscreen-workspace-pane {
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 24px;
+}
+.fullscreen-workspace-pane > :is(.fullscreen-mode-surface, .fullscreen-embedded-ai, .fullscreen-embedded-focus, .standalone-notes-inline-mount) {
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: inherit;
+  overflow: hidden;
+}
+.fullscreen-workspace-pane .ai-chat-expanded-embedded > .ai-chat-expanded,
+.fullscreen-workspace-pane .standalone-notes-inline .standalone-notes-board,
+.fullscreen-workspace-pane .fullscreen-task-embedded .focused-task-modal-layout {
+  max-width: 100%;
+  max-height: 100%;
+}
+.fullscreen-workspace-pane .fullscreen-mode-surface-content {
+  overflow: hidden;
+}
+
+/* Round buttons match the original draggable capsule. Compact hit areas stay
+   independent from the divider, which is the only resize target. */
+.fullscreen-workspace-divider > .fullscreen-add-window:first-child { left: -27px; }
+.fullscreen-workspace-divider > .fullscreen-add-window:last-child { right: -27px; }
+.fullscreen-add-window--compact .fullscreen-add-window-trigger {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--panel-border)) !important;
+  border-radius: 50% !important;
+  background: var(--popover-bg) !important;
+  box-shadow: 0 3px 10px rgba(2, 6, 23, .13) !important;
+  color: var(--accent-strong);
+  transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+}
+.fullscreen-add-window--compact .fullscreen-add-window-trigger:hover,
+.fullscreen-add-window--compact .fullscreen-add-window-trigger:focus-visible,
+.fullscreen-add-window--compact .fullscreen-add-window-trigger[aria-expanded='true'] {
+  border-color: var(--accent) !important;
+  background: color-mix(in srgb, var(--accent-soft) 85%, var(--popover-bg)) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 17%, transparent) !important;
+  filter: none;
+}
+.fullscreen-add-window--compact .fullscreen-add-window-trigger svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Symmetric rails for a single-pane workbench: the rails are the same size,
+   and the circular add controls are obvious on either side. */
+.fullscreen-workspace-single-rail {
+  flex: 0 0 46px;
+  padding: 0 6px;
+}
+.fullscreen-workspace-single-rail .fullscreen-add-window-trigger {
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  border: 1px solid color-mix(in srgb, var(--accent) 65%, var(--panel-border)) !important;
+  border-radius: 50% !important;
+  background: color-mix(in srgb, var(--accent-soft) 55%, var(--popover-bg)) !important;
+  color: var(--accent-strong) !important;
+  box-shadow: 0 4px 18px color-mix(in srgb, var(--accent) 17%, transparent) !important;
+}
+.fullscreen-workspace-single-rail .fullscreen-add-window-trigger svg {
+  width: 18px;
+  height: 18px;
+}
+.fullscreen-workspace-single-rail .fullscreen-add-window-trigger:hover,
+.fullscreen-workspace-single-rail .fullscreen-add-window-trigger:focus-visible {
+  border-color: var(--accent) !important;
+  background: var(--accent-soft) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent) !important;
+}
+.fullscreen-workspace-single-rail--left::before,
+.fullscreen-workspace-single-rail--right::before {
+  background: linear-gradient(transparent, var(--panel-border), transparent);
+}
+
+/* Single Timeline/List use the real full-width canvas INSIDE the new left/right
+   rails. Old selector expected a direct child and failed after the rail was
+   introduced, causing the timeline header/scroll region to clip. */
+.fullscreen-workspace-single--open .fullscreen-workspace-single-content > .fullscreen-mode-surface {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.fullscreen-workspace-single--open .fullscreen-workspace-single-content .timeline-canvas {
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+}
+.fullscreen-workspace-single--open .fullscreen-workspace-single-content .timeline-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 22;
+  opacity: 1 !important;
+  transform: none !important;
+  pointer-events: auto !important;
+}
+
+/* Full AI chat as a workbench pane keeps its own header fixed while only the
+   message thread scrolls. Header never slides away in embedded mode. */
+.ai-chat-expanded-embedded .ai-chat-expanded-header {
+  position: relative;
+  top: 0;
+  z-index: 30;
+  flex-shrink: 0;
+  opacity: 1 !important;
+  transform: none !important;
+  pointer-events: auto !important;
+}
+.ai-chat-expanded-embedded .ai-chat-expanded-thread {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+
+/* Subtask editor opens within the same Focus pane. Restrict the reused modal
+   to the pane's dimensions; its own close and save handlers remain unchanged. */
+.fullscreen-embedded-focus > .task-editor-inline-backdrop {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 220 !important;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  padding: 8px !important;
+  background: color-mix(in srgb, var(--canvas-bg) 58%, transparent);
+}
+.task-editor-inline-backdrop > .task-edit-shell {
+  width: 100% !important;
+  max-width: none !important;
+  max-height: 100% !important;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 16px !important;
+  overflow: hidden;
+}
+.fullscreen-panel-close-button { color: var(--text-muted); }
+.fullscreen-panel-close-button:hover,
+.fullscreen-panel-close-button:focus-visible {
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+@media (max-width: 900px) {
+  .fullscreen-workspace-pane { border-radius: 17px; }
+  .fullscreen-workspace-divider > .fullscreen-add-window:first-child {
+    top: -27px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .fullscreen-workspace-divider > .fullscreen-add-window:last-child {
+    bottom: -27px;
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .fullscreen-workspace-single-rail { flex-basis: 36px; padding: 0 3px; }
+  .fullscreen-workspace-single-rail .fullscreen-add-window-trigger {
+    width: 30px;
+    height: 30px;
+    min-height: 30px;
+  }
+}

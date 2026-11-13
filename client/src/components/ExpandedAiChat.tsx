@@ -152,6 +152,8 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
   }, []);
 
   const handleScroll = useCallback(() => {
+    // The header must remain pinned while the full AI chat occupies a workbench pane.
+    if (inlineTarget) return;
     if (scrollFrameRef.current !== null) return;
     scrollFrameRef.current = requestAnimationFrame(() => {
       scrollFrameRef.current = null;
@@ -171,7 +173,7 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
         setHeaderHidden(hidden);
       }
     });
-  }, []);
+  }, [inlineTarget]);
 
   const submit = () => {
     const value = draft.trim();
@@ -214,7 +216,7 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
             setDragActive(false);
             onAddFiles(Array.from(event.dataTransfer.files));
           }}>
-          <header className={`ai-chat-expanded-header ${headerHidden ? 'is-hidden' : ''}`}>
+          <header className={`ai-chat-expanded-header ${headerHidden && !inlineTarget ? 'is-hidden' : ''}`}>
             <button className={`ai-chat-header-button ${sidebarCollapsed ? '' : 'is-invisible'}`} onClick={() => setSidebarCollapsed(false)} aria-label="Показать панель проектов"><PanelLeftOpen size={18} /></button>
             <div className="min-w-0 flex-1"><div className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-semibold text-violet-700"><Sparkles size={13} /> Чат с ИИ</div><h2 className="mt-1 flex items-center gap-2 text-xl font-bold text-primary"><span className="truncate">{activeChat?.title ?? 'Новый чат'}</span>{activeChat?.id === quickChatId ? <Star size={17} fill="currentColor" className="shrink-0 text-amber-400" aria-label="Чат по умолчанию" /> : null}</h2><p className="truncate text-xs text-muted">{activeChat?.id === quickChatId ? 'Развернутая версия быстрых запросов к ИИ' : 'ИИ поможет с вопросами, задачами и расписанием'}</p></div>
             <CustomSelect value={model} options={modelOptions} onChange={(value) => onModelChange(value as AiChatModel)} className="ai-chat-expanded-model w-40" buttonClassName="ai-chat-model-cap-button rounded-xl border px-3 py-2 text-xs font-semibold text-primary" menuClassName="ai-chat-model-cap-menu surface-popover text-primary" ariaLabel="Выбрать модель чата" />

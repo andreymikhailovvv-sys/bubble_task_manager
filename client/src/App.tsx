@@ -53,7 +53,7 @@ import { AiProgress } from './components/AiProgress';
 import { AiAttachmentTiles, AiMessageAttachments, splitAiMessageAttachments, makeAiAttachmentPreviews } from './components/AiAttachmentTiles';
 import type { AiAttachmentPreview } from './components/AiAttachmentTiles';
 import { formatCreditsSpent } from './lib/credits';
-import { AI_TOUR_STEPS, FEATURE_TOUR_STEPS, TASK_TOUR_STEPS, WORKSPACE_TOUR_STEPS, TourOverlay, type AiTourStep, type FeatureTourStep, type TaskTourStep, type WorkspaceTourStep } from './components/TourOverlay';
+import { AI_TOUR_STEPS, FEATURE_TOUR_STEPS, TASK_TOUR_STEPS, WORKSPACE_TOUR_STEPS, PRIMARY_WORKSPACE_TOUR_STEPS, TourOverlay, type AiTourStep, type FeatureTourStep, type TaskTourStep, type WorkspaceTourStep } from './components/TourOverlay';
 import { useCreditPurchase } from './lib/useCreditPurchase';
 import { ExpandedAiChat } from './components/ExpandedAiChat';
 import { QuickAiLauncherFrame } from './components/QuickAiLauncherFrame';
@@ -964,7 +964,17 @@ export default function App() {
   const [hasUnreadNews, setHasUnreadNews] = useState(false);
   const [isOnboardingOfferOpen, setIsOnboardingOfferOpen] = useState(false);
   const [activeTourStep, setActiveTourStep] = useState<TaskTourStep | AiTourStep | FeatureTourStep | WorkspaceTourStep>(null);
-  const tourRestoreStateRef = useRef<{ displayMode: DisplayMode; timelineViewMode: 'day' | 'week' | 'month'; timelineAnchorDate: Date } | null>(null);
+  const [tourWorkspaceUsesPrimary, setTourWorkspaceUsesPrimary] = useState(false);
+  const tourRestoreStateRef = useRef<{
+    displayMode: DisplayMode;
+    timelineViewMode: 'day' | 'week' | 'month';
+    timelineAnchorDate: Date;
+    isBubbleFullscreen: boolean;
+    fullscreenDisplayModes: DisplayMode[];
+    fullscreenPanelSlots: FullscreenWorkspacePanel[] | null;
+    fullscreenSplitRatio: number;
+    focusedTaskId: string | null;
+  } | null>(null);
   const [draggedTimelineTaskId, setDraggedTimelineTaskId] = useState<string | null>(null);
   const [activeTimelineDropSlot, setActiveTimelineDropSlot] = useState<{ hour: number; minute: number } | null>(null);
   const [isTimelineOptimizeModalOpen, setIsTimelineOptimizeModalOpen] = useState(false);
@@ -1003,7 +1013,23 @@ export default function App() {
 
   useEffect(() => {
     if (!activeTourStep?.startsWith('workspace-')) return;
-    if (['workspace-overview', 'workspace-display-modes', 'workspace-bubbles', 'workspace-bubble-layout'].includes(activeTourStep)) {
+    if (tourWorkspaceUsesPrimary) {
+      // Guide the actual multi-pane UI, never the hidden classic sidebar.
+      let next: FullscreenWorkspacePanel | null = null;
+      if (['workspace-overview', 'workspace-display-modes', 'workspace-bubbles', 'workspace-bubble-layout', 'workspace-side-rail'].includes(activeTourStep)) {
+        next = { kind: 'mode', mode: 'bubbles' };
+      } else if (activeTourStep === 'workspace-list') {
+        next = { kind: 'mode', mode: 'list' };
+      } else if (['workspace-timeline', 'workspace-timeline-range', 'workspace-credits'].includes(activeTourStep)) {
+        next = { kind: 'mode', mode: 'timeline' };
+      } else if (activeTourStep === 'workspace-notes') {
+        next = { kind: 'notes' };
+      }
+      if (next) {
+        setFullscreenPanelSlots([next]);
+        setFullscreenDisplayModes(next.kind === 'mode' ? [next.mode] : []);
+      }
+    } else if (['workspace-overview', 'workspace-display-modes', 'workspace-bubbles', 'workspace-bubble-layout'].includes(activeTourStep)) {
       setDisplayMode('bubbles');
     } else if (activeTourStep === 'workspace-list') {
       setDisplayMode('list');
@@ -1012,7 +1038,7 @@ export default function App() {
     }
     setIsSettingsOpen(activeTourStep === 'workspace-settings');
     if (activeTourStep === 'workspace-timeline-range') setIsTimelineToolbarHidden(false);
-  }, [activeTourStep]);
+  }, [activeTourStep, tourWorkspaceUsesPrimary]);
 
   useEffect(() => {
     if (activeTourStep === 'sphere-add') {
@@ -5266,24 +5292,46 @@ export default function App() {
     }
   };
 
+  const rememberTourWorkspace = () => {
+    tourRestoreStateRef.current = {
+      displayMode, timelineViewMode, timelineAnchorDate: new Date(timelineAnchorDate),
+      isBubbleFullscreen, fullscreenDisplayModes: [...fullscreenDisplayModes],
+      fullscreenPanelSlots: fullscreenPanelSlots ? [...fullscreenPanelSlots] : null,
+      fullscreenSplitRatio,
+      focusedTaskId
+    };
+  };
   const startTaskTour = () => {
-    tourRestoreStateRef.current = { displayMode, timelineViewMode, timelineAnchorDate: new Date(timelineAnchorDate) };
+    rememberTourWorkspace();
+    setTourWorkspaceUsesPrimary(false);
+    // Legacy task controls live in the classic toolbar: show them for this
+    // lesson only, then restore the exact multi-pane composition on finish.
+    setIsBubbleFullscreen(false);
     setIsUpdatesOpen(false);
     setActiveTourStep(TASK_TOUR_STEPS[0].id);
   };
   const startWorkspaceTour = () => {
-    tourRestoreStateRef.current = { displayMode, timelineViewMode, timelineAnchorDate: new Date(timelineAnchorDate) };
+    rememberTourWorkspace();
+    setTourWorkspaceUsesPrimary(isBubbleFullscreen);
     setIsUpdatesOpen(false);
     setDisplayMode('bubbles');
+    if (isBubbleFullscreen) {
+      setFullscreenDisplayModes(['bubbles']);
+      setFullscreenPanelSlots([{ kind: 'mode', mode: 'bubbles' }]);
+    }
     setActiveTourStep(WORKSPACE_TOUR_STEPS[0].id);
   };
   const startAiTour = () => {
-    tourRestoreStateRef.current = { displayMode, timelineViewMode, timelineAnchorDate: new Date(timelineAnchorDate) };
+    rememberTourWorkspace();
+    setTourWorkspaceUsesPrimary(false);
+    setIsBubbleFullscreen(false);
     setIsUpdatesOpen(false);
     setActiveTourStep(AI_TOUR_STEPS[0].id);
   };
   const startFeatureTour = () => {
-    tourRestoreStateRef.current = { displayMode, timelineViewMode, timelineAnchorDate: new Date(timelineAnchorDate) };
+    rememberTourWorkspace();
+    setTourWorkspaceUsesPrimary(false);
+    setIsBubbleFullscreen(false);
     setIsUpdatesOpen(false);
     setActiveTourStep(FEATURE_TOUR_STEPS[0].id);
   };
@@ -5322,7 +5370,13 @@ export default function App() {
       setDisplayMode(restore.displayMode);
       setTimelineViewMode(restore.timelineViewMode);
       setTimelineAnchorDate(new Date(restore.timelineAnchorDate));
+      setIsBubbleFullscreen(restore.isBubbleFullscreen);
+      setFullscreenDisplayModes(restore.fullscreenDisplayModes);
+      setFullscreenPanelSlots(restore.fullscreenPanelSlots);
+      setFullscreenSplitRatio(restore.fullscreenSplitRatio);
+      setFocusedTaskId(restore.focusedTaskId);
     }
+    setTourWorkspaceUsesPrimary(false);
     tourRestoreStateRef.current = null;
   };
   const completeTaskTour = () => {
@@ -5343,7 +5397,7 @@ export default function App() {
   };
   const advanceTaskTour = () => {
     const configuredSteps = typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-')
-      ? WORKSPACE_TOUR_STEPS
+      ? (tourWorkspaceUsesPrimary ? PRIMARY_WORKSPACE_TOUR_STEPS : WORKSPACE_TOUR_STEPS)
       : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-')
       ? AI_TOUR_STEPS
       : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-')
@@ -5712,7 +5766,7 @@ export default function App() {
         ) : (
           <div data-tour="timeline-workspace" ref={timelineScrollContainerRef} className="timeline-canvas h-full overflow-y-auto rounded-[2.2rem] border p-4 backdrop-blur-sm">
             <div className="space-y-4 pr-1">
-              <section className={`timeline-toolbar sticky top-0 z-20 rounded-3xl border px-3 py-3 shadow-2xl backdrop-blur-xl transition-all duration-300 ease-out sm:px-4 ${isTimelineToolbarHidden && !isTimelineOverdueModalOpen ? 'timeline-toolbar-hidden' : 'timeline-toolbar-visible'}`}>
+              <section className={`timeline-toolbar sticky top-0 z-20 rounded-3xl border px-3 py-3 shadow-2xl backdrop-blur-xl transition-all duration-300 ease-out sm:px-4 ${isTimelineToolbarHidden && !isTimelineOverdueModalOpen && !isBubbleFullscreen ? 'timeline-toolbar-hidden' : 'timeline-toolbar-visible'}`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 p-1 shadow-inner">
                     <button
@@ -6044,7 +6098,10 @@ export default function App() {
     .filter(task => task.status !== 'DONE' && task.taskType !== 'EVENT' && task.taskType !== 'REMINDER')
     .map(task => ({ id: task.id, title: task.title }));
   const focusedPane = fullscreenPanels.find(panel => panel.kind === 'task-ai');
-  const embeddedFocusActive = isBubbleFullscreen && focusedPane?.kind === 'task-ai' && !!focusedTask;
+  // A different task opened from the calendar/bubbles is a real modal, not
+  // the task displayed in this Focus slot. Do not put its dialog behind the
+  // split divider or treat it as part of the wrong embedded pane.
+  const embeddedFocusActive = isBubbleFullscreen && focusedPane?.kind === 'task-ai' && !!focusedTask && focusedPane.taskId === focusedTask.id;
   const hasGeneralAiPane = isBubbleFullscreen && fullscreenPanels.some(panel => panel.kind === 'general-ai');
   // A dialog opened over the workspace temporarily owns mouse/keyboard input.
   // Keep inline Focus and inline notes active, but hide mode filters and pluses
@@ -6055,6 +6112,31 @@ export default function App() {
     isFocusModeOpen || isSubscriptionModalOpen || isUpcomingSubtasksModalOpen ||
     sectorEditorSphere
   );
+  /** Dismissing one of two panes collapses to the remaining pane, never
+   * manufactures a replacement BubbleField. The single-pane close falls back
+   * to the normal bubble workspace so the user always has a usable canvas. */
+  const closeFullscreenPanel = (index: 0 | 1) => {
+    const removed = fullscreenPanels[index];
+    const remaining = fullscreenPanels.filter((_, position) => position !== index);
+    const nextSlots: FullscreenWorkspacePanel[] = remaining.length
+      ? remaining : [{ kind: 'mode', mode: 'bubbles' }];
+    if (removed?.kind === 'task-ai' && !nextSlots.some(panel => panel.kind === 'task-ai')) {
+      setFocusedTaskId(null);
+      setIsAiExpanded(false);
+    }
+    setFullscreenDisplayModes(nextSlots.flatMap(panel => panel.kind === 'mode' ? [panel.mode] : []));
+    setFullscreenPanelSlots(nextSlots);
+  };
+  const addFullscreenSinglePanel = (side: 'left' | 'right', next: FullscreenWorkspacePanel) => {
+    if (next.kind === 'task-ai') {
+      setFocusedTaskId(next.taskId);
+      setIsAiExpanded(false);
+      setIsAiChatOpen(false);
+    }
+    const slots = side === 'left' ? [next, fullscreenPanels[0]] : [fullscreenPanels[0], next];
+    setFullscreenDisplayModes(slots.flatMap(panel => panel.kind === 'mode' ? [panel.mode] : []));
+    setFullscreenPanelSlots(slots);
+  };
   const chooseFullscreenPanel = (index: 0 | 1, next: FullscreenWorkspacePanel) => {
     const replacing = fullscreenPanels[index];
     const nextSlots = replaceFullscreenPanel(fullscreenPanels, index, next);
@@ -6090,10 +6172,14 @@ export default function App() {
         mode="inline" requestedNote={requestedStandaloneNote}
         onClose={() => {
           const index = fullscreenPanels.findIndex(item => item === panel);
-          if (index >= 0) chooseFullscreenPanel(index as 0 | 1, { kind: 'mode', mode: displayMode });
+          if (index >= 0) closeFullscreenPanel(index as 0 | 1);
         }} />
     );
     return <FullscreenUpcomingTasksPanel tasks={tasks}
+      onClose={() => {
+        const index = fullscreenPanels.findIndex(item => item === panel);
+        if (index >= 0) closeFullscreenPanel(index as 0 | 1);
+      }}
       onOpenTask={task => {
         const index = fullscreenPanels.findIndex(item => item === panel);
         if (index >= 0) chooseFullscreenPanel(index as 0 | 1, { kind: 'task-ai', taskId: task.parentTaskId ?? task.id });
@@ -6243,7 +6329,7 @@ export default function App() {
       ) : null}
       <UpdatesMenu open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} trainingOpenSignal={trainingOpenSignal} onStartWorkspaceTour={startWorkspaceTour} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} completedLessonIds={currentUser.completedLessonIds ?? []} hasUnreadNews={hasUnreadNews} onNewsViewed={markLatestNewsRead} />
       {trainingRewardMessage ? <div className="training-reward-toast focus-bonus-message focus-bonus-subtask" role="status">{trainingRewardMessage}</div> : null}
-      {activeTourStep ? <TourOverlay activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-') ? WORKSPACE_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-') ? FEATURE_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} onComplete={completeTaskTour} /> : null}
+      {activeTourStep ? <TourOverlay activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-') ? (tourWorkspaceUsesPrimary ? PRIMARY_WORKSPACE_TOUR_STEPS : WORKSPACE_TOUR_STEPS) : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-') ? FEATURE_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} onComplete={completeTaskTour} /> : null}
       {isBubbleFullscreen ? (
         <header data-tour="bubbles-fullscreen-toolbar"
           className="fullscreen-workspace-toolbar fullscreen-workspace-toolbar--one-row surface-topbar light-glass-topbar relative z-40 mx-auto mt-3 mb-2 flex shrink-0 flex-nowrap items-center gap-2 rounded-2xl border px-3 py-2.5 shadow-lg backdrop-blur-lg">
@@ -6527,7 +6613,7 @@ export default function App() {
             <button className="surface-popover light-menu-trigger topbar-settings-button inline-flex h-10 w-10 items-center justify-center rounded-xl border transition hover:border-cyan-300/70" onClick={() => setIsSettingsOpen((prev) => !prev)} aria-label="Настройки" title="Настройки"><Settings size={17} /></button>
           </div>
           <button type="button" data-tour="workspace-fullscreen-enter"
-            className="topbar-action-button workspace-fullscreen-entry inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-semibold transition"
+            className="topbar-action-button workspace-fullscreen-entry inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border p-0 text-sm font-semibold transition"
             onClick={() => {
               setFullscreenDisplayModes([displayMode]);
               setFullscreenPanelSlots(null);
@@ -6535,7 +6621,7 @@ export default function App() {
               setIsBubbleFullscreen(true);
             }}
             title="Перейти в основной вид" aria-label="Перейти в основной вид">
-            <Maximize2 size={16} /> <span>Основной вид</span>
+            <Maximize2 size={18} />
           </button>
         </div>
       </section> : null}
@@ -7144,7 +7230,7 @@ export default function App() {
             />
           ) : (
             <FullscreenWorkspaceSingle panel={fullscreenPanels[0]} renderPanel={renderFullscreenPanel}
-              tasks={fullscreenTaskChoices} onChoose={next => chooseFullscreenPanel(1, next)} />
+              tasks={fullscreenTaskChoices} onChoose={addFullscreenSinglePanel} />
           )
         ) : renderWorkspaceMode(displayMode)}
 
@@ -7576,6 +7662,7 @@ export default function App() {
       />}
       {editorState ? (
         <TaskEditor
+          inlineTarget={embeddedFocusActive && editorState.task?.parentTaskId === focusedTask?.id ? fullscreenFocusTarget : null}
           timelineTasks={timelinePickerTasks}
           task={editorState.task}
           subtasks={editorState.task?.id ? (subtaskMap[editorState.task.id] ?? []) : []}
@@ -7757,7 +7844,15 @@ export default function App() {
                 >
                   <Maximize2 size={14} />
                 </button>
-                <button type="button" className="focused-task-ai-icon-button" onClick={() => void closeFocusedTask()} aria-label="Закрыть окно"><X size={16} /></button>
+                <button type="button" className="focused-task-ai-icon-button" onClick={() => {
+                  if (!embeddedFocusActive) { void closeFocusedTask(); return; }
+                  void (async () => {
+                    if (!(await flushFocusedTaskSave())) return;
+                    const index = fullscreenPanels.findIndex(panel => panel.kind === 'task-ai');
+                    if (index >= 0) closeFullscreenPanel(index as 0 | 1);
+                    await load();
+                  })();
+                }} aria-label="Закрыть окно"><X size={16} /></button>
               </div>
               <div className="mb-3 flex shrink-0 items-start justify-between gap-3 pr-32">
                 <div>
@@ -9076,7 +9171,7 @@ export default function App() {
           onClose={() => {
             if (hasGeneralAiPane) {
               const index = fullscreenPanels.findIndex(panel => panel.kind === 'general-ai');
-              if (index >= 0) chooseFullscreenPanel(index as 0 | 1, { kind: 'mode', mode: fullscreenDisplayModes[0] ?? 'bubbles' });
+              if (index >= 0) closeFullscreenPanel(index as 0 | 1);
             } else setIsAiChatOpen(false);
           }}
           onCreateProject={openAiChatProjectDialog}

@@ -47,7 +47,9 @@ test('multi-pane view is the default; classic view remains reachable from both s
   assert.ok(app.includes('data-tour="workspace-fullscreen-enter"'));
   assert.equal(app.split('data-tour="workspace-fullscreen-enter"').length, 2);
   assert.ok(app.includes('title="Перейти в основной вид"'));
-  assert.ok(app.includes('<span>Основной вид</span>'));
+  assert.ok(!app.includes('<span>Основной вид</span>'));
+  assert.ok(app.includes('className="topbar-action-button workspace-fullscreen-entry inline-flex h-10 w-10'));
+  assert.ok(app.includes('title="Перейти в основной вид"'));
   assert.ok(!app.includes('data-tour="bubbles-fullscreen-enter"'));
   const regularControls = app.slice(app.indexOf('data-tour="display-modes"'),
     app.indexOf('</section> : null}', app.indexOf('data-tour="display-modes"')));

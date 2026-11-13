@@ -180,20 +180,24 @@ export function FullscreenAddWindowMenu({ onChoose, tasks, side, compact = true 
   );
 }
 
-/** A solo view leaves a narrow, full-height rail at its right edge. */
+/** In solo mode the user may add a new window on EITHER side of the current one.
+ * The left plus inserts before the active pane; the right plus appends after it. */
 export function FullscreenWorkspaceSingle({ panel, renderPanel, onChoose, tasks }: {
   panel: FullscreenWorkspacePanel;
   renderPanel: (panel: FullscreenWorkspacePanel) => ReactNode;
-  onChoose: (panel: FullscreenWorkspacePanel) => void;
+  onChoose: (side: 'left' | 'right', panel: FullscreenWorkspacePanel) => void;
   tasks: readonly FullscreenTaskChoice[];
 }) {
   return (
     <div className={`fullscreen-workspace-single ${panel.kind === 'mode' && panel.mode !== 'bubbles' ? 'fullscreen-workspace-single--open' : ''}`}>
+      <aside className="fullscreen-workspace-single-rail fullscreen-workspace-single-rail--left" aria-label="Добавить окно слева">
+        <FullscreenAddWindowMenu side="left" tasks={tasks} onChoose={next => onChoose('left', next)} />
+      </aside>
       <section className="fullscreen-workspace-single-content min-h-0 min-w-0 flex-1">
         {renderPanel(panel)}
       </section>
-      <aside className="fullscreen-workspace-single-rail" aria-label="Добавить второе рабочее окно">
-        <FullscreenAddWindowMenu side="right" tasks={tasks} onChoose={onChoose} />
+      <aside className="fullscreen-workspace-single-rail fullscreen-workspace-single-rail--right" aria-label="Добавить окно справа">
+        <FullscreenAddWindowMenu side="right" tasks={tasks} onChoose={next => onChoose('right', next)} />
       </aside>
     </div>
   );
