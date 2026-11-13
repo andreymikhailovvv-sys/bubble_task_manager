@@ -114,13 +114,15 @@ export function FullscreenAddWindowMenu({ onChoose, tasks, side, compact = true 
     .slice(0, 60);
 
   return (
-    <div ref={rootRef} className={`fullscreen-add-window relative shrink-0 ${compact ? 'fullscreen-add-window--compact' : ''}`}>
+    <div ref={rootRef} className={`fullscreen-add-window relative shrink-0 ${compact ? 'fullscreen-add-window--compact' : ''}`}
+      onPointerDown={event => event.stopPropagation()}
+      onDoubleClick={event => event.stopPropagation()}>
       <button type="button" className="fullscreen-add-window-trigger topbar-action-button inline-flex items-center justify-center gap-1.5 rounded-xl border p-1.5 text-sm font-semibold"
         aria-label={`Добавить или заменить ${side === 'left' ? 'левое' : 'правое'} окно`}
         title={`Добавить или заменить ${side === 'left' ? 'левое' : 'правое'} окно`}
         aria-haspopup="menu" aria-expanded={open}
         onPointerDown={event => event.stopPropagation()}
-        onClick={() => { setOpen(value => !value); setChooseTask(false); setQuery(''); }}>
+        onClick={event => { event.stopPropagation(); setOpen(value => !value); setChooseTask(false); setQuery(''); }}>
         <Plus size={15} aria-hidden="true" />
         {!compact ? <span>Добавить окно</span> : null}
       </button>
@@ -247,7 +249,7 @@ export function FullscreenWorkspaceSplit({ panels, renderPanel, ratio, onRatioCh
   };
 
   const onDividerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0 || (event.target as HTMLElement).closest('button')) return;
+    if (event.button !== 0 || (event.target as HTMLElement).closest('.fullscreen-add-window')) return;
     pointerIdRef.current = event.pointerId;
     pendingRatioRef.current = ratio;
     event.currentTarget.setPointerCapture(event.pointerId);
