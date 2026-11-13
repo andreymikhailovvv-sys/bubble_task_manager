@@ -83,7 +83,7 @@ export default function TelegramAuthPage() {
           <form className="space-y-4" onSubmit={submit}>
             <p className="mb-5 text-sm leading-6 text-slate-300">{isRegistration ? 'Заполните данные нового аккаунта прямо здесь.' : 'Введите данные от веб-версии.'} Бот не увидит пароль в переписке.</p>
             <label className="block space-y-2 text-sm font-medium text-slate-200">
-              <span>Логин</span>
+              <span>{isRegistration ? "Логин" : "Логин или подтверждённая почта"}</span>
               <span className="telegram-auth-input flex items-center gap-3 rounded-2xl border px-4">
                 <UserRound size={19} className="shrink-0 text-slate-400" aria-hidden="true" />
                 <input autoFocus autoComplete="username" required minLength={3} value={login} onChange={(event) => setLogin(event.target.value)} className="min-w-0 flex-1 bg-transparent py-3.5 text-base text-white outline-none placeholder:text-slate-500" placeholder="Ваш логин" />
