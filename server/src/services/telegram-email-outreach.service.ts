@@ -1,5 +1,6 @@
 import { prisma } from '../db/prisma.js';
 import { telegramService } from './telegram.service.js';
+import { telegramEmailOutreachEligibility } from '../lib/telegram-email-outreach-rules.js';
 
 /**
  * One-off, migration-snapshotted notification for Telegram-linked accounts.
@@ -36,12 +37,11 @@ export async function dispatchOneTelegramEmailVerificationOutreach(): Promise<vo
       }
     });
 
-    const stillNeedsVerification = Boolean(user &&
-      (!user.emailVerifiedAt || user.pendingEmail?.trim()));
-    // Binding may have been moved or revoked after the migration. Never send
-    // an account-specific message to a stale Telegram chat ID.
-    if (!user || !stillNeedsVerification || user.telegramChatId !== job.chatId ||
-        !/^[1-9][0-9]{0,19}$/.test(job.chatId)) {
+    // Binding may have moved or the user may have already verified their email.
+    // Reject either case instead of sending an account-status message to an
+    // unrelated Telegram chat.
+    const eligibility = telegramEmailOutreachEligibility(user, job.chatId);
+    if (!eligibility.shouldSend) {
       await prisma.telegramEmailVerificationOutreach.update({
         where: { userId: job.userId }, data: { status: 'SKIPPED' }
       });
@@ -49,8 +49,7 @@ export async function dispatchOneTelegramEmailVerificationOutreach(): Promise<vo
       return;
     }
 
-    const hasEmail = Boolean(user.pendingEmail?.trim() || user.email?.trim());
-    const accepted = await telegramService.sendEmailVerificationOutreach(job.chatId, hasEmail);
+    const accepted = await telegramService.sendEmailVerificationOutreach(job.chatId, eligibility.hasEmail);
     // A rejected API call is not retried automatically: the result may be
     // ambiguous if an upstream proxy disconnected after acceptance.
     await prisma.telegramEmailVerificationOutreach.update({
