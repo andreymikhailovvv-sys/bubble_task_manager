@@ -6095,7 +6095,10 @@ export default function App() {
     .filter(task => task.status !== 'DONE' && task.taskType !== 'EVENT' && task.taskType !== 'REMINDER')
     .map(task => ({ id: task.id, title: task.title }));
   const focusedPane = fullscreenPanels.find(panel => panel.kind === 'task-ai');
-  const embeddedFocusActive = isBubbleFullscreen && focusedPane?.kind === 'task-ai' && !!focusedTask;
+  // A different task opened from the calendar/bubbles is a real modal, not
+  // the task displayed in this Focus slot. Do not put its dialog behind the
+  // split divider or treat it as part of the wrong embedded pane.
+  const embeddedFocusActive = isBubbleFullscreen && focusedPane?.kind === 'task-ai' && !!focusedTask && focusedPane.taskId === focusedTask.id;
   const hasGeneralAiPane = isBubbleFullscreen && fullscreenPanels.some(panel => panel.kind === 'general-ai');
   // A dialog opened over the workspace temporarily owns mouse/keyboard input.
   // Keep inline Focus and inline notes active, but hide mode filters and pluses
