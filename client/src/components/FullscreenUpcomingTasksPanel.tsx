@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { CalendarDays, CheckCircle2, Clock3 } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Clock3, X } from 'lucide-react';
 import type { Task } from '../lib/types';
 import { noteHtmlToPlainText } from '../lib/notes';
 
 type Period = 'all' | 'today' | 'week';
 
-export function FullscreenUpcomingTasksPanel({ tasks, onOpenTask, onComplete }: {
+export function FullscreenUpcomingTasksPanel({ tasks, onOpenTask, onComplete, onClose }: {
   tasks: readonly Task[];
   onOpenTask: (task: Task) => void;
   onComplete: (task: Task) => void | Promise<void>;
+  onClose?: () => void;
 }) {
   const [period, setPeriod] = useState<Period>('all');
   const today = new Date();
@@ -29,12 +30,13 @@ export function FullscreenUpcomingTasksPanel({ tasks, onOpenTask, onComplete }: 
       aria-label="Ближайшие задачи и подзадачи">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-4">
         <h2 className="flex items-center gap-2 text-base font-semibold text-primary"><CalendarDays size={18}/> Ближайшие задачи</h2>
-        <div className="flex gap-1">
+        <div className="flex items-center gap-1">
           {([{ value: 'all', label: 'Все' }, { value: 'today', label: 'Сегодня' }, { value: 'week', label: 'Неделя' }] as const).map(option =>
             <button type="button" key={option.value} aria-pressed={period === option.value}
               className={`fullscreen-upcoming-filter rounded-lg border px-2.5 py-1.5 text-xs ${period === option.value ? 'is-active' : ''}`}
               onClick={() => setPeriod(option.value)}>{option.label}</button>
           )}
+          {onClose ? <button type="button" onClick={onClose} className="fullscreen-panel-close-button rounded-lg p-1.5" aria-label="Закрыть ближайшие задачи" title="Закрыть окно"><X size={16} /></button> : null}
         </div>
       </div>
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3 sm:px-4">
