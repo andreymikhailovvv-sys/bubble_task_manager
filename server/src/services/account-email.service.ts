@@ -5,7 +5,7 @@
 import crypto from 'node:crypto';
 import { prisma } from '../db/prisma.js';
 import { authService } from '../auth/auth.service.js';
-import { smtpReply, emailAddress } from './mail-smtp.service.js';
+import { smtpReply, emailAddress, MailSmtpError } from './mail-smtp.service.js';
 
 const VERIFY_TTL_MS = 24 * 60 * 60 * 1000;
 const RESET_TTL_MS = 30 * 60 * 1000;
@@ -33,6 +33,18 @@ export const accountMailConfigurationIssues = (): string[] => {
   return issues;
 };
 export const accountMailConfigured = () => accountMailConfigurationIssues().length === 0;
+
+/** Diagnostics can be logged without ever emitting mailbox credentials, tokens or recipients. */
+export const accountMailFailureDiagnostic = (error: unknown): string => {
+  const config = accountMailConfigurationIssues();
+  if (config.length) return 'configIssues=' + config.join(',');
+  if (error instanceof MailSmtpError) {
+    return 'smtpStage=' + error.stage + ' smtpCode=' + error.code +
+      ' smtpStatus=' + (error.smtpStatus ?? 'none') + ' deliveryUncertain=' + error.deliveryUncertain;
+  }
+  return 'smtpStage=unknown type=' +
+    (error instanceof Error && /^[A-Za-z]{1,50}$/.test(error.name) ? error.name : 'Unknown');
+};
 
 const verificationCodeHash = (id: string, userId: string, email: string, code: string): string => {
   const key = process.env.JWT_SECRET?.trim();
