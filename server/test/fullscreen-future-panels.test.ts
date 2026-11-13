@@ -115,7 +115,12 @@ test('single timeline stays visible, embedded chat stays pinned and subtask edit
     load('../../client/src/components/TaskEditor.tsx'), load('../../client/src/components/TaskEditorFrame.tsx'),
     load('../../client/src/styles.css')
   ]);
-  assert.ok(app.includes("!isBubbleFullscreen ? 'timeline-toolbar-hidden' : 'timeline-toolbar-visible'"));
+  assert.ok(app.includes("isTimelineToolbarHidden && !isTimelineOverdueModalOpen ? 'timeline-toolbar-hidden' : 'timeline-toolbar-visible'"));
+  assert.ok(app.includes('timelineAutoScrollTargetRef.current = targetScrollTop'));
+  assert.ok(app.includes('if (soloTimelineWorkbench) setIsTimelineToolbarHidden(false)'));
+  assert.ok(app.includes('Math.abs(nextScrollTop - autoScrollTarget) <= 2'));
+  assert.ok(css.includes('.fullscreen-workspace-single--open .fullscreen-workspace-single-content .timeline-toolbar'));
+  assert.ok(!css.includes('opacity: 1 !important;\n  transform: none !important;\n  pointer-events: auto !important;\n}\n\n/* Full AI chat'));
   assert.ok(app.includes("editorState.task?.parentTaskId === focusedTask?.id ? fullscreenFocusTarget : null"));
   assert.ok(editor.includes('inlineTarget={inlineTarget}'));
   assert.ok(frame.includes('inlineTarget ? createPortal(surface, inlineTarget) : surface'));
@@ -138,4 +143,25 @@ test('all training tours use visible UI and restore the original pane layout',as
   assert.ok(app.includes('setIsBubbleFullscreen(restore.isBubbleFullscreen);'));
   assert.ok(app.includes('setFullscreenPanelSlots(restore.fullscreenPanelSlots);'));
   assert.ok(app.includes('setFullscreenSplitRatio(restore.fullscreenSplitRatio);'));
+});
+
+test('upcoming panel includes only tasks and subtasks, never events or reminders',async()=>{
+  const panel=await load('../../client/src/components/FullscreenUpcomingTasksPanel.tsx');
+  assert.ok(panel.includes("task.taskType === 'TASK' && task.status !== 'DONE' && task.dueDate"));
+  assert.ok(panel.includes('onOpenTask(task)'));
+  assert.ok(panel.includes('onComplete(task)'));
+});
+
+test('embedded Focus subtask modal stays centered and smaller than its host pane',async()=>{
+  const [css,app,frame]=await Promise.all([
+    load('../../client/src/styles.css'),
+    load('../../client/src/App.tsx'),
+    load('../../client/src/components/TaskEditorFrame.tsx')
+  ]);
+  assert.ok(css.includes('.task-editor-inline-backdrop > .task-edit-shell'));
+  assert.ok(css.includes('width: min(88%, 540px) !important'));
+  assert.ok(css.includes('height: min(78%, 520px) !important'));
+  assert.ok(css.includes('margin: auto'));
+  assert.ok(app.includes('editorState.task?.parentTaskId === focusedTask?.id ? fullscreenFocusTarget : null'));
+  assert.ok(frame.includes('inlineTarget ? createPortal(surface, inlineTarget) : surface'));
 });

@@ -16537,13 +16537,13 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
   height: 100%;
   overflow-y: auto;
 }
+/* The solo Timeline toolbar follows the same auto-hide/reveal logic as
+   other Timeline views. It remains sticky only while visible; no perpetual
+   CSS override defeats the state when the user scrolls. */
 .fullscreen-workspace-single--open .fullscreen-workspace-single-content .timeline-toolbar {
   position: sticky;
   top: 0;
   z-index: 22;
-  opacity: 1 !important;
-  transform: none !important;
-  pointer-events: auto !important;
 }
 
 /* Full AI chat as a workbench pane keeps its own header fixed while only the
@@ -16575,13 +16575,18 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
   padding: 8px !important;
   background: color-mix(in srgb, var(--canvas-bg) 58%, transparent);
 }
+/* The subtask modal is centered inside the embedded Focus pane, using
+   the same card treatment as the normal editor but scaled for a half-width
+   workspace. Do not stretch it edge-to-edge like its parent backdrop. */
 .task-editor-inline-backdrop > .task-edit-shell {
-  width: 100% !important;
-  max-width: none !important;
-  max-height: 100% !important;
+  width: min(88%, 540px) !important;
+  max-width: calc(100% - 16px) !important;
+  height: min(78%, 520px) !important;
+  max-height: calc(100% - 16px) !important;
   min-width: 0;
   min-height: 0;
-  border-radius: 16px !important;
+  margin: auto;
+  border-radius: 24px !important;
   overflow: hidden;
 }
 .fullscreen-panel-close-button { color: var(--text-muted); }
