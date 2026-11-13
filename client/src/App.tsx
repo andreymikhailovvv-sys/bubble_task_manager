@@ -5712,7 +5712,7 @@ export default function App() {
         ) : (
           <div data-tour="timeline-workspace" ref={timelineScrollContainerRef} className="timeline-canvas h-full overflow-y-auto rounded-[2.2rem] border p-4 backdrop-blur-sm">
             <div className="space-y-4 pr-1">
-              <section className={`timeline-toolbar sticky top-0 z-20 rounded-3xl border px-3 py-3 shadow-2xl backdrop-blur-xl transition-all duration-300 ease-out sm:px-4 ${isTimelineToolbarHidden && !isTimelineOverdueModalOpen ? 'timeline-toolbar-hidden' : 'timeline-toolbar-visible'}`}>
+              <section className={`timeline-toolbar sticky top-0 z-20 rounded-3xl border px-3 py-3 shadow-2xl backdrop-blur-xl transition-all duration-300 ease-out sm:px-4 ${isTimelineToolbarHidden && !isTimelineOverdueModalOpen && !isBubbleFullscreen ? 'timeline-toolbar-hidden' : 'timeline-toolbar-visible'}`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 p-1 shadow-inner">
                     <button
@@ -6055,6 +6055,31 @@ export default function App() {
     isFocusModeOpen || isSubscriptionModalOpen || isUpcomingSubtasksModalOpen ||
     sectorEditorSphere
   );
+  /** Dismissing one of two panes collapses to the remaining pane, never
+   * manufactures a replacement BubbleField. The single-pane close falls back
+   * to the normal bubble workspace so the user always has a usable canvas. */
+  const closeFullscreenPanel = (index: 0 | 1) => {
+    const removed = fullscreenPanels[index];
+    const remaining = fullscreenPanels.filter((_, position) => position !== index);
+    const nextSlots: FullscreenWorkspacePanel[] = remaining.length
+      ? remaining : [{ kind: 'mode', mode: 'bubbles' }];
+    if (removed?.kind === 'task-ai' && !nextSlots.some(panel => panel.kind === 'task-ai')) {
+      setFocusedTaskId(null);
+      setIsAiExpanded(false);
+    }
+    setFullscreenDisplayModes(nextSlots.flatMap(panel => panel.kind === 'mode' ? [panel.mode] : []));
+    setFullscreenPanelSlots(nextSlots);
+  };
+  const addFullscreenSinglePanel = (side: 'left' | 'right', next: FullscreenWorkspacePanel) => {
+    if (next.kind === 'task-ai') {
+      setFocusedTaskId(next.taskId);
+      setIsAiExpanded(false);
+      setIsAiChatOpen(false);
+    }
+    const slots = side === 'left' ? [next, fullscreenPanels[0]] : [fullscreenPanels[0], next];
+    setFullscreenDisplayModes(slots.flatMap(panel => panel.kind === 'mode' ? [panel.mode] : []));
+    setFullscreenPanelSlots(slots);
+  };
   const chooseFullscreenPanel = (index: 0 | 1, next: FullscreenWorkspacePanel) => {
     const replacing = fullscreenPanels[index];
     const nextSlots = replaceFullscreenPanel(fullscreenPanels, index, next);
@@ -6090,10 +6115,14 @@ export default function App() {
         mode="inline" requestedNote={requestedStandaloneNote}
         onClose={() => {
           const index = fullscreenPanels.findIndex(item => item === panel);
-          if (index >= 0) chooseFullscreenPanel(index as 0 | 1, { kind: 'mode', mode: displayMode });
+          if (index >= 0) closeFullscreenPanel(index as 0 | 1);
         }} />
     );
     return <FullscreenUpcomingTasksPanel tasks={tasks}
+      onClose={() => {
+        const index = fullscreenPanels.findIndex(item => item === panel);
+        if (index >= 0) closeFullscreenPanel(index as 0 | 1);
+      }}
       onOpenTask={task => {
         const index = fullscreenPanels.findIndex(item => item === panel);
         if (index >= 0) chooseFullscreenPanel(index as 0 | 1, { kind: 'task-ai', taskId: task.parentTaskId ?? task.id });
@@ -7144,7 +7173,7 @@ export default function App() {
             />
           ) : (
             <FullscreenWorkspaceSingle panel={fullscreenPanels[0]} renderPanel={renderFullscreenPanel}
-              tasks={fullscreenTaskChoices} onChoose={next => chooseFullscreenPanel(1, next)} />
+              tasks={fullscreenTaskChoices} onChoose={addFullscreenSinglePanel} />
           )
         ) : renderWorkspaceMode(displayMode)}
 
@@ -7757,7 +7786,15 @@ export default function App() {
                 >
                   <Maximize2 size={14} />
                 </button>
-                <button type="button" className="focused-task-ai-icon-button" onClick={() => void closeFocusedTask()} aria-label="Закрыть окно"><X size={16} /></button>
+                <button type="button" className="focused-task-ai-icon-button" onClick={() => {
+                  if (!embeddedFocusActive) { void closeFocusedTask(); return; }
+                  void (async () => {
+                    if (!(await flushFocusedTaskSave())) return;
+                    const index = fullscreenPanels.findIndex(panel => panel.kind === 'task-ai');
+                    if (index >= 0) closeFullscreenPanel(index as 0 | 1);
+                    await load();
+                  })();
+                }} aria-label="Закрыть окно"><X size={16} /></button>
               </div>
               <div className="mb-3 flex shrink-0 items-start justify-between gap-3 pr-32">
                 <div>
@@ -9076,7 +9113,7 @@ export default function App() {
           onClose={() => {
             if (hasGeneralAiPane) {
               const index = fullscreenPanels.findIndex(panel => panel.kind === 'general-ai');
-              if (index >= 0) chooseFullscreenPanel(index as 0 | 1, { kind: 'mode', mode: fullscreenDisplayModes[0] ?? 'bubbles' });
+              if (index >= 0) closeFullscreenPanel(index as 0 | 1);
             } else setIsAiChatOpen(false);
           }}
           onCreateProject={openAiChatProjectDialog}
