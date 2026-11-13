@@ -817,6 +817,12 @@ apiRouter.patch('/user/profile', requireAuth, async (req, res) => {
     res.status(400).json({ error: 'Текущий пароль указан неверно' });
     return;
   }
+  if (emailRaw !== (user.pendingEmail ?? user.email ?? '') &&
+      user.passwordHash && !authService.verifyPassword(currentPassword, user.passwordHash)) {
+    res.status(400).json({ error: 'Для изменения почты укажите текущий пароль' });
+    return;
+  }
+
 
   try {
     const updatedUser = await prisma.user.update({
