@@ -323,6 +323,7 @@ export function TaskEditor({
   timelineTasks = [],
   editorType,
   timeZone = "Europe/Moscow",
+  inlineTarget,
 }: Props) {
   const isEditing = Boolean(task?.id);
   const isEventEditor = editorType === "event" || task?.taskType === "EVENT";
