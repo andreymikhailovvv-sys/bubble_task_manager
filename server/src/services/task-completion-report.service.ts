@@ -143,6 +143,7 @@ export async function generateTaskCompletionReport(input: { userId: string; task
   try {
     const content = safeResultJson(call.responseJson);
     const blocks: WordDocumentBlock[] = [
+      { type: 'paragraph', text: 'Отчёт сформирован сервисом «Планировыч AI».' },
       { type: 'heading', level: 1, text: 'Отчёт по задаче' },
       { type: 'paragraph', text: task.title },
       { type: 'paragraph', text: 'Статус: ' + task.status + '. Создана: ' + date(task.createdAt, timeZone) +
