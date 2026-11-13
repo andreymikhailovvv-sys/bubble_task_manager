@@ -172,7 +172,9 @@ export function TaskMonitoringStatuses({ taskId, enabled, tourStage = null, mode
       <button ref={buttonRef} type="button" onClick={() => { setLayout(null); setOpen(value => !value); }}
         className={`task-monitor-button ${allowed && monitorEnabled ? 'task-monitor-button-active' : ''} inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold`}
         aria-label={monitorEnabled && allowed ? 'Автомониторинг задачи включён' : 'Автомониторинг задачи выключен'} aria-expanded={open} aria-controls={open ? popoverId : undefined}>
-        <Radar size={14} aria-hidden="true" /> <span>Автомониторинг</span>
+        <Radar size={14} aria-hidden="true" />
+        <span className="task-monitor-button-full-label">Автомониторинг</span>
+        <span className="task-monitor-button-compact-label" aria-hidden="true">А</span>
       </button>
       {allowed && unread > 0 ? <span className="task-monitor-unread absolute -right-1 -top-2 flex min-h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold"
         aria-label={`Новых статусов: ${unread}`}>{unread > 99 ? '99+' : unread}</span> : null}
