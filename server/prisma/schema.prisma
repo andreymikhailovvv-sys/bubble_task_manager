@@ -372,6 +372,7 @@ model User {
   emailAuthTokens EmailAuthToken[]
   trialCreditsPendingEmailVerification Boolean @default(false)
   legacyEmailVerificationOutreach EmailVerificationOutreach?
+  telegramEmailVerificationOutreach TelegramEmailVerificationOutreach?
   username     String?  @unique
   passwordHash String?
   deviceId     String?  @unique
@@ -1507,6 +1508,23 @@ model EmailVerificationOutreach {
   createdAt DateTime @default(now())
   claimedAt DateTime?
   sentAt DateTime?
+
+  @@index([status, createdAt])
+}
+
+
+/**
+ * One-time Telegram email verification notice, snapshotted for pre-existing
+ * linked chat accounts at migration time. No retries after the claim.
+ */
+model TelegramEmailVerificationOutreach {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatId    String
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now())
+  claimedAt DateTime?
+  sentAt    DateTime?
 
   @@index([status, createdAt])
 }

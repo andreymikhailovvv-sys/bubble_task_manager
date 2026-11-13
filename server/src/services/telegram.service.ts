@@ -2046,6 +2046,39 @@ export const telegramService = {
   isEnabled,
   createTelegramLinkToken,
   sendAdminBroadcast,
+  /**
+   * One message per existing private chat. The durable outreach worker owns
+   * deduplication; this function only performs the Telegram send once.
+   */
+  async sendEmailVerificationOutreach(chatId: string, hasEmail: boolean): Promise<boolean> {
+    if (!/^[1-9][0-9]{0,19}$/.test(chatId) || !isEnabled()) return false;
+    const introduction = hasEmail
+      ? 'В вашем аккаунте уже указан адрес почты, но его нужно подтвердить (или подтвердить новый адрес, если вы его меняли).'
+      : 'В вашем аккаунте пока нет подтверждённого адреса почты. Укажите его, чтобы защитить доступ к Планировычу.';
+    const message = [
+      '✉️ <b>Планировыч AI: подтвердите почту</b>',
+      '',
+      introduction,
+      '',
+      '<b>Как это сделать:</b>',
+      '1. Нажмите «Открыть Планировыч» под этим сообщением и войдите в свой аккаунт.',
+      '2. Откройте ⚙️ Настройки → «Аккаунт» (в Telegram Mini App) или «Настройки аккаунта» (на сайте).',
+      '3. В разделе электронной почты укажите адрес, если его ещё нет, или проверьте указанный.',
+      '4. Нажмите «Сохранить email и подтвердить» либо отправьте письмо подтверждения повторно.',
+      '5. Откройте полученное письмо: введите шестизначный код в Планировыче или перейдите по ссылке активации.',
+      '',
+      'После подтверждения в настройках появится отметка «Почта подтверждена».',
+      'Если письмо не видно, проверьте папку «Спам». Никому не сообщайте код или пароль, в том числе в этот чат.',
+      '',
+      'https://planirovych.ru'
+    ].join('\n');
+    const miniAppUrl = MINI_APP_URL.startsWith('https://')
+      ? MINI_APP_URL
+      : 'https://planirovych.ru/miniapp';
+    return sendMessage(chatId, message, {
+      inline_keyboard: [[{ text: '📱 Открыть Планировыч', web_app: { url: miniAppUrl } }]]
+    });
+  },
   async completeWebLogin(chatId: string, user: { id: string; name: string | null; username: string | null }, isNewAccount = false) {
     await prisma.$transaction(async (tx) => {
       await tx.user.updateMany({ where: { telegramChatId: chatId, id: { not: user.id } }, data: { telegramChatId: null, telegramLinkedAt: null } });

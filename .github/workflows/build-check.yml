@@ -147,6 +147,8 @@ jobs:
         run: node --import tsx --test server/test/mail-smtp-diagnostics.test.ts
       - name: Verify verified-email login and recovery security invariants
         run: node --import tsx --test server/test/account-email-auth.test.ts
+      - name: Verify one-time Telegram email activation outreach and deduplication
+        run: node --import tsx --test server/test/telegram-email-outreach.test.ts
       - name: Verify Telegram user-client cryptography and access gating
         run: node --import tsx --test server/test/telegram-user-client-security.test.ts
       - name: Verify image edit animation and attachment previews
