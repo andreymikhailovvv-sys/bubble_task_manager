@@ -1442,7 +1442,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       setAuthPassword('');
       setAuthConsentAccepted(false);
       if (authModalMode === 'register' && authEmail.trim()) {
-        setEmailVerificationNotice(result.emailDelivery === 'SENT'
+        setEmailVerificationNotice(('emailDelivery' in result ? result.emailDelivery : undefined) === 'SENT'
           ? 'Код и ссылка подтверждения отправлены на указанный адрес.'
           : 'Аккаунт создан, но письмо пока не отправлено. Проверьте SMTP_USER и SMTP_PASSWORD на сервере Timeweb.');
         setEmailVerificationOpen(true);
