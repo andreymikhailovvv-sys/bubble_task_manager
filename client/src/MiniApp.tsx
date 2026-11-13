@@ -1010,6 +1010,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [authLogin, setAuthLogin] = useState('');
   const [authEmail, setAuthEmail] = useState('');
   const [accountEmailDraft, setAccountEmailDraft] = useState('');
+  const [accountEmailPassword, setAccountEmailPassword] = useState('');
   const [accountEmailMessage, setAccountEmailMessage] = useState('');
   const [accountEmailBusy, setAccountEmailBusy] = useState(false);
   useEffect(() => {
@@ -1373,9 +1374,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     try {
       const result = await api.updateProfile({
         name: currentUser.name ?? '',
-        email: accountEmailDraft.trim()
+        email: accountEmailDraft.trim(),
+        currentPassword: accountEmailPassword || undefined
       });
       setCurrentUser(result.user);
+      setAccountEmailPassword('');
       if (result.user.emailVerified && !result.user.pendingEmail) {
         setAccountEmailMessage('Адрес уже подтверждён.');
       } else if (result.emailDelivery === 'SENT') {
@@ -4357,6 +4360,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                         value={accountEmailDraft} onChange={event => setAccountEmailDraft(event.target.value)}
                         className="mt-1 w-full rounded-xl border border-[color:var(--panel-border)] bg-[color:var(--muted-bg)] px-3 py-2 text-sm text-primary" />
                     </label>
+                    {currentUser?.hasPassword && accountEmailDraft.trim().toLowerCase() !== (currentUser?.pendingEmail || currentUser?.email || '').toLowerCase() ? (
+                      <input type="password" autoComplete="current-password" placeholder="Текущий пароль для смены почты"
+                        value={accountEmailPassword} onChange={event => setAccountEmailPassword(event.target.value)}
+                        className="mb-2 w-full rounded-xl border border-[color:var(--panel-border)] bg-[color:var(--muted-bg)] px-3 py-2 text-sm text-primary" />
+                    ) : null}
                     {currentUser?.pendingEmail ? <p className="mb-2 text-xs text-amber-500">Ожидает подтверждения: {currentUser.pendingEmail}</p>
                       : currentUser?.email && !currentUser.emailVerified ? <p className="mb-2 text-xs text-amber-500">Адрес ещё не подтверждён.</p> : null}
                     <button type="button" className="surface-muted mb-2 w-full rounded-xl px-3 py-2 text-sm text-primary" disabled={accountEmailBusy || !accountEmailDraft.trim()}
