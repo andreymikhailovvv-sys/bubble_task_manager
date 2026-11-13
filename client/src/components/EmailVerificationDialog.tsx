@@ -78,7 +78,7 @@ export default function EmailVerificationDialog({ open, email, initialNotice, on
 
   return (
     <div className="fixed inset-0 z-[460] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm" onMouseDown={event => { if (event.target === event.currentTarget && !busy) onClose(); }}>
-      <section className="w-full max-w-md rounded-2xl border border-slate-600 bg-slate-900 p-5 text-slate-100 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="verify-email-title">
+      <section className="w-full max-w-md max-h-[min(86dvh,720px)] overflow-y-auto overscroll-contain rounded-2xl border border-slate-600 bg-slate-900 p-5 text-slate-100 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="verify-email-title">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 id="verify-email-title" className="text-lg font-semibold">Подтверждение электронной почты</h2>
