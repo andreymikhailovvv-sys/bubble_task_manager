@@ -73,3 +73,69 @@ test('closing enlarged task AI leaves the embedded Focus task selected',async()=
   assert.match(frame,/if \(embedded && !inlineTarget\) return null/);
   assert.match(frame,/embedded && inlineTarget \? createPortal\(surface, inlineTarget\) : surface/);
 });
+
+
+test('solo has symmetric add rails, and closing one of two panes keeps only the other', async () => {
+  const [app, controls, css, upcoming] = await Promise.all([
+    load('../../client/src/App.tsx'),
+    load('../../client/src/components/FullscreenWorkspaceLayout.tsx'),
+    load('../../client/src/styles.css'),
+    load('../../client/src/components/FullscreenUpcomingTasksPanel.tsx')
+  ]);
+  assert.ok(controls.includes('fullscreen-workspace-single-rail--left'));
+  assert.ok(controls.includes('fullscreen-workspace-single-rail--right'));
+  assert.ok(controls.includes("onChoose('left', next)"));
+  assert.ok(controls.includes("onChoose('right', next)"));
+  assert.ok(app.includes("side === 'left' ? [next, fullscreenPanels[0]] : [fullscreenPanels[0], next]"));
+  assert.ok(app.includes("const remaining = fullscreenPanels.filter((_, position) => position !== index)"));
+  assert.ok(app.includes("remaining.length"));
+  assert.ok(app.includes("closeFullscreenPanel(index as 0 | 1)"));
+  assert.ok(upcoming.includes('onClose?: () => void'));
+  assert.ok(css.includes('.fullscreen-workspace-single-rail .fullscreen-add-window-trigger'));
+  assert.ok(css.includes('width: 34px'));
+});
+
+test('modal overlay hides the entire outer divider; circular pluses keep independent hitboxes',async()=>{
+  const [app, layout, css] = await Promise.all([
+    load('../../client/src/App.tsx'), load('../../client/src/components/FullscreenWorkspaceLayout.tsx'),
+    load('../../client/src/styles.css')
+  ]);
+  assert.ok(css.includes('.bubble-fullscreen-shell.fullscreen-overlay-active .fullscreen-workspace-divider,'));
+  assert.ok(css.includes('.bubble-fullscreen-shell.fullscreen-overlay-active .fullscreen-focus-inner-divider'));
+  assert.ok(css.includes('visibility: hidden !important;'));
+  assert.ok(css.includes('.fullscreen-workspace-divider > .fullscreen-add-window:first-child { left: -27px; }'));
+  assert.ok(css.includes('border-radius: 50% !important;'));
+  assert.ok(layout.includes("closest('.fullscreen-add-window')"));
+  assert.ok(app.includes("focusedPane.taskId === focusedTask.id"));
+});
+
+test('single timeline stays visible, embedded chat stays pinned and subtask editor remains local',async()=>{
+  const [app, chat, editor, frame, css] = await Promise.all([
+    load('../../client/src/App.tsx'), load('../../client/src/components/ExpandedAiChat.tsx'),
+    load('../../client/src/components/TaskEditor.tsx'), load('../../client/src/components/TaskEditorFrame.tsx'),
+    load('../../client/src/styles.css')
+  ]);
+  assert.ok(app.includes("!isBubbleFullscreen ? 'timeline-toolbar-hidden' : 'timeline-toolbar-visible'"));
+  assert.ok(app.includes("editorState.task?.parentTaskId === focusedTask?.id ? fullscreenFocusTarget : null"));
+  assert.ok(editor.includes('inlineTarget={inlineTarget}'));
+  assert.ok(frame.includes('inlineTarget ? createPortal(surface, inlineTarget) : surface'));
+  assert.ok(css.includes('.fullscreen-embedded-focus > .task-editor-inline-backdrop'));
+  assert.ok(chat.includes('if (inlineTarget) return;'));
+  assert.ok(chat.includes("headerHidden && !inlineTarget"));
+  assert.ok(css.includes('.ai-chat-expanded-embedded .ai-chat-expanded-header'));
+});
+
+test('all training tours use visible UI and restore the original pane layout',async()=>{
+  const [app, tours] = await Promise.all([
+    load('../../client/src/App.tsx'), load('../../client/src/components/TourOverlay.tsx')
+  ]);
+  assert.ok(tours.includes('export const PRIMARY_WORKSPACE_TOUR_STEPS'));
+  assert.ok(tours.includes("selector: '.fullscreen-mode-picker'"));
+  assert.ok(tours.includes("selector: '.fullscreen-workspace-single-rail--right .fullscreen-add-window-trigger'"));
+  assert.ok(tours.includes("selector: '.standalone-notes-inline-mount'"));
+  assert.ok(app.includes("tourWorkspaceUsesPrimary ? PRIMARY_WORKSPACE_TOUR_STEPS : WORKSPACE_TOUR_STEPS"));
+  assert.ok(app.includes('setIsBubbleFullscreen(false);'));
+  assert.ok(app.includes('setIsBubbleFullscreen(restore.isBubbleFullscreen);'));
+  assert.ok(app.includes('setFullscreenPanelSlots(restore.fullscreenPanelSlots);'));
+  assert.ok(app.includes('setFullscreenSplitRatio(restore.fullscreenSplitRatio);'));
+});
