@@ -1963,6 +1963,30 @@ apiRouter.delete('/system-notifications/android-devices', requireAuth, asyncHand
 }));
 
 apiRouter.get('/system-notifications', requireAuth, asyncHandler(async (req, res) => {
+  const identity = await prisma.user.findUnique({
+    where: { id: req.user!.id },
+    select: { username: true, googleSub: true, emailVerifiedAt: true }
+  });
+  const reminderEventKey = 'account-email-verification-required:' + req.user!.id;
+  if (identity && (identity.username || identity.googleSub) && !identity.emailVerifiedAt) {
+    // A single permanent eventKey prevents duplicate notifications on polls,
+    // reloads and concurrent app servers. Reading it never creates another.
+    await prisma.systemNotification.upsert({
+      where: { eventKey: reminderEventKey },
+      create: {
+        userId: req.user!.id,
+        eventKey: reminderEventKey,
+        content: 'Подтвердите электронную почту. Откройте настройки аккаунта, укажите или проверьте адрес и подтвердите его по коду или ссылке из письма.'
+      },
+      update: {}
+    });
+  } else if (identity?.emailVerifiedAt) {
+    // An already completed step should not linger as an unread warning.
+    await prisma.systemNotification.updateMany({
+      where: { userId: req.user!.id, eventKey: reminderEventKey, readAt: null },
+      data: { readAt: new Date() }
+    });
+  }
   const [notifications, unreadCount] = await Promise.all([
     prisma.systemNotification.findMany({
       where: { userId: req.user!.id },
