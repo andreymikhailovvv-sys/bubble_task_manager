@@ -1,12 +1,10 @@
--- Existing profile emails are untrusted until explicitly verified. Google
--- identities are backed by Google verified_email, so mark only those verified.
+-- Existing profile emails are untrusted until explicitly verified.
+-- Even an old Google account may have edited its email without confirmation;
+-- its address will become verified after a fresh, verified Google OAuth login.
 ALTER TABLE "User" ADD COLUMN "emailVerifiedAt" TIMESTAMP(3);
 ALTER TABLE "User" ADD COLUMN "pendingEmail" TEXT;
 ALTER TABLE "User" ADD COLUMN "passwordChangedAt" TIMESTAMP(3);
 ALTER TABLE "User" ADD COLUMN "authVersion" INTEGER NOT NULL DEFAULT 0;
-UPDATE "User" SET "emailVerifiedAt" = CURRENT_TIMESTAMP
-WHERE "googleSub" IS NOT NULL AND "email" IS NOT NULL;
-
 CREATE TABLE "EmailAuthToken" (
   "id" TEXT NOT NULL,
   "userId" TEXT NOT NULL,
