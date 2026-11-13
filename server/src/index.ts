@@ -105,6 +105,13 @@ app.use(createPublicSeoPagesMiddleware(clientDist));
 
 // HTML must be revalidated after each Timeweb deployment. Bundled JS/CSS
 // filenames carry content hashes and may keep their ordinary static caching.
+// Route-specific HTML avoids loading main.tsx, workspace stores, animations or chat modules.
+app.get('/auth/email', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, must-revalidate');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.sendFile(path.join(clientDist, 'auth-email.html'));
+});
+
 app.use(express.static(clientDist, {
   index: false,
   setHeaders: (res, filePath) => {
