@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import './auth-email.css';
+import { announceAccountEmailVerified } from './lib/account-email-status-events';
 
 type Mode = 'verify' | 'reset' | 'forgot';
 const params = new URLSearchParams(window.location.search);
@@ -45,6 +46,7 @@ export default function AuthEmailPage() {
       } else if (mode === 'verify') {
         if (!token) throw new Error('Ссылка неполная. Запросите новое письмо в настройках аккаунта.');
         await accountRequest('verify', { token });
+        announceAccountEmailVerified();
       } else {
         if (!token) throw new Error('Ссылка неполная. Запросите новое письмо.');
         if (password.length < 8 || password.length > 128) throw new Error('Пароль должен содержать от 8 до 128 символов.');
