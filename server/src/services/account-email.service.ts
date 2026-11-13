@@ -141,7 +141,7 @@ export const accountEmailService = {
   },
 
   async verifyCode(userId: string, rawCode: unknown): Promise<boolean> {
-    if (typeof rawCode !== 'string' || !/^\\d{6}$/.test(rawCode)) return false;
+    if (typeof rawCode !== 'string' || !/^\d{6}$/.test(rawCode)) return false;
     return confirmVerification({ userId, code: rawCode });
   },
 
