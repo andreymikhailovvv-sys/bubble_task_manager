@@ -38,6 +38,7 @@ type Props = {
   onRenameSphere?: (sphere: Sphere) => void;
   onAddTaskToSphere?: (sphere: Sphere) => void;
   onRescheduleTask?: (task: Task) => void;
+  onOpenInOtherPane?: (task: Task, sourcePaneIndex: 0 | 1) => void;
   forceTaskContextMenuOpen?: boolean;
   isSearchFiltering?: boolean;
   showTrainingInvitation?: boolean;
@@ -101,7 +102,7 @@ const SUBTASK_OVERDUE_GLOW_STYLE =
 const MAX_SHINE_WINDOW_MINUTES = 180;
 const CONTEXT_MENU_VIEWPORT_MARGIN = 12;
 const CONTEXT_MENU_WITH_SUBMENU_WIDTH = 416;
-const CONTEXT_MENU_HEIGHT = 188;
+const CONTEXT_MENU_HEIGHT = 258;
 
 function getViewportSafeContextMenuPosition(x: number, y: number) {
   if (typeof window === 'undefined') return { x, y };
@@ -110,6 +111,38 @@ function getViewportSafeContextMenuPosition(x: number, y: number) {
     y: Math.max(CONTEXT_MENU_VIEWPORT_MARGIN, Math.min(y, window.innerHeight - CONTEXT_MENU_HEIGHT - CONTEXT_MENU_VIEWPORT_MARGIN))
   };
 }
+/** Keep a compact hover card outside its bubble and within the viewport. */
+function compactBubbleHoverPlacement(rect: DOMRect, viewportWidth: number, viewportHeight: number) {
+  const margin = 12;
+  const gap = 16;
+  const preferredWidth = 288;
+  const preferredHeight = 315;
+  const viewportCardHeight = Math.min(preferredHeight, Math.max(0, viewportHeight - 2 * margin));
+  const rightSpace = viewportWidth - rect.right - gap - margin;
+  const leftSpace = rect.left - gap - margin;
+  if (Math.max(rightSpace, leftSpace) >= 190) {
+    const right = rightSpace >= leftSpace;
+    const width = Math.min(preferredWidth, right ? rightSpace : leftSpace);
+    return {
+      left: right ? rect.right + gap : rect.left - gap - width,
+      top: Math.max(margin, Math.min((rect.top + rect.bottom - viewportCardHeight) / 2, viewportHeight - viewportCardHeight - margin)),
+      width,
+      maxHeight: viewportCardHeight
+    };
+  }
+  const belowSpace = viewportHeight - rect.bottom - gap - margin;
+  const aboveSpace = rect.top - gap - margin;
+  const below = belowSpace >= aboveSpace;
+  const maxHeight = Math.min(preferredHeight, Math.max(0, below ? belowSpace : aboveSpace));
+  const width = Math.min(preferredWidth, Math.max(0, viewportWidth - 2 * margin));
+  return {
+    left: Math.max(margin, Math.min(rect.left + rect.width / 2 - width / 2, viewportWidth - width - margin)),
+    top: below ? rect.bottom + gap : rect.top - gap - maxHeight,
+    width,
+    maxHeight
+  };
+}
+
 const POSTPONE_OPTIONS = [
   { value: '15m', label: 'На 15 мин' },
   { value: '30m', label: 'На 30 мин' },
@@ -119,7 +152,7 @@ const POSTPONE_OPTIONS = [
   { value: 'smart', label: '✦ Ближайшее окно' }
 ] as const;
 type PostponeOption = (typeof POSTPONE_OPTIONS)[number]['value'];
-type BubbleContextMenu = { x: number; y: number; task: Task | null; sphere: Sphere | null };
+type BubbleContextMenu = { x: number; y: number; task: Task | null; sphere: Sphere | null; sourcePaneIndex: 0 | 1 };
 type BubbleDragSession = {
   taskId: string;
   pointerId: number;
@@ -335,6 +368,7 @@ export function BubbleField({
   onRenameSphere,
   onAddTaskToSphere,
   onRescheduleTask,
+  onOpenInOtherPane,
   forceTaskContextMenuOpen = false,
   isSearchFiltering = false,
   showTrainingInvitation = false,
@@ -346,7 +380,7 @@ export function BubbleField({
   className
 }: Props) {
   const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null);
-  const [compactHoverPoint, setCompactHoverPoint] = useState<{ left: number; top: number } | null>(null);
+  const [compactHoverPoint, setCompactHoverPoint] = useState<{ left: number; top: number; width: number; maxHeight: number } | null>(null);
   const isLightTheme = themeMode === 'light';
   const reducedMotion = useReducedMotion();
   const [completionBursts, setCompletionBursts] = useState<Array<{
@@ -465,7 +499,8 @@ export function BubbleField({
     setContextMenu({
       ...getViewportSafeContextMenuPosition(event.clientX, event.clientY),
       task,
-      sphere: getSphereAtClientPoint(event.clientX, event.clientY, task)
+      sphere: getSphereAtClientPoint(event.clientX, event.clientY, task),
+      sourcePaneIndex: event.currentTarget.closest('[data-fullscreen-pane-index]')?.getAttribute('data-fullscreen-pane-index') === '1' ? 1 : 0
     });
     setContextPostponeSubmenuOpen(false);
   };
@@ -481,7 +516,8 @@ export function BubbleField({
       setContextMenu({
         ...getViewportSafeContextMenuPosition(anchorX, anchorY),
         task: tourContextMenuTask,
-        sphere: spheres.find((sphere) => sphere.id === tourContextMenuTask.sphereId) ?? null
+        sphere: spheres.find((sphere) => sphere.id === tourContextMenuTask.sphereId) ?? null,
+        sourcePaneIndex: bubble?.closest('[data-fullscreen-pane-index]')?.getAttribute('data-fullscreen-pane-index') === '1' ? 1 : 0
       });
       setContextPostponeSubmenuOpen(false);
     });
@@ -724,18 +760,18 @@ export function BubbleField({
     const normalizedX = SIZE / 2 + (px - BUBBLE_FIELD_CENTER_X) / ELLIPSE_X_SCALE;
     const normalizedY = SIZE / 2 + (py - BUBBLE_FIELD_CENTER_Y) / ELLIPSE_Y_SCALE;
     const distance = Math.hypot(normalizedX - SIZE / 2, normalizedY - SIZE / 2);
-    if (!session.target && distance > FIELD_RADIUS + bubble.radius) {
+    const destinationIndex = getSectorIndexAtPoint({ x: px, y: py });
+    const destinationSector = bubbleSectors[destinationIndex] ?? null;
+    const changesSector = mode === 'sectors' && sectorCount > 1 &&
+      (destinationSector?.id ?? null) !== (bubble.task.sphereId ?? null);
+    // A highlighted destination remains valid just outside the oval.
+    if (!session.target && distance > FIELD_RADIUS + bubble.radius && !changesSector) {
       showBubbleNotice('Отпустите пузырь внутри поля задач.', 'warning');
       return;
     }
     const x = clamp(normalizedX, 0, SIZE);
     const y = clamp(normalizedY, 0, SIZE);
     const target = session.target ? tasks.find((task) => task.id === session.target?.targetId) : null;
-    const finalPosition = { x: px, y: py };
-    const destinationIndex = getSectorIndexAtPoint(finalPosition);
-    const destinationSector = bubbleSectors[destinationIndex] ?? null;
-    const changesSector = mode === 'sectors' && sectorCount > 1 &&
-      (destinationSector?.id ?? null) !== (bubble.task.sphereId ?? null);
     const sectorChange = mode === 'sectors' ? { sphereId: destinationSector?.id ?? null } : {};
     const action = session.target
       ? { action: session.target.kind, targetTaskId: session.target.targetId }
@@ -1003,17 +1039,9 @@ export function BubbleField({
           if (dragSessionRef.current) return;
           activateHover(bubble.task.id);
           if (compact) {
-            // Match the Timeline tooltip, but place it in the viewport so a
-            // narrow split pane cannot clip the task title or description.
-            const width = 288;
-            const height = 255;
-            const margin = 12;
-            setCompactHoverPoint({
-              left: Math.max(12, Math.min(event.clientX + 18, window.innerWidth - width - margin)),
-              top: event.clientY + height + margin < window.innerHeight
-                ? event.clientY + margin
-                : Math.max(12, event.clientY - height - margin)
-            });
+            setCompactHoverPoint(compactBubbleHoverPlacement(
+              event.currentTarget.getBoundingClientRect(), window.innerWidth, window.innerHeight
+            ));
           }
         }}
         onMouseLeave={() => {
@@ -1771,8 +1799,8 @@ export function BubbleField({
         </motion.g>
       </svg>
       {compact && hoveredBubble && compactHoverPoint && !dragSessionRef.current ? createPortal(
-        <div className="timeline-hover-card pointer-events-none fixed z-[2147483647] w-72 rounded-lg border p-2.5 text-[11px]"
-          style={{ left: compactHoverPoint.left, top: compactHoverPoint.top }} aria-label={`Информация о задаче: ${hoveredBubble.task.title}`}>
+        <div className="timeline-hover-card pointer-events-none fixed z-[2147483647] overflow-y-auto rounded-lg border p-2.5 text-[11px]"
+          style={compactHoverPoint} aria-label={`Информация о задаче: ${hoveredBubble.task.title}`}>
           <p className="font-semibold text-primary">{hoveredBubble.task.title}</p>
           <p className="mt-1 min-w-0 max-w-full whitespace-pre-wrap break-words text-muted [overflow-wrap:anywhere]">
             <LinkifiedText
@@ -1840,6 +1868,16 @@ export function BubbleField({
             >
               Добавить задачу
             </button>
+            {fullscreen && onOpenInOtherPane && contextMenu.task && !contextMenu.task.parentTaskId &&
+              (contextMenu.task.taskType ?? 'TASK') === 'TASK' ? (
+              <button type="button"
+                className="surface-muted mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm hover:brightness-110"
+                onClick={() => {
+                  onOpenInOtherPane(contextMenu.task!, contextMenu.sourcePaneIndex);
+                  setContextMenu(null);
+                  setContextPostponeSubmenuOpen(false);
+                }}>Открыть в отдельном окне</button>
+            ) : null}
             <button
               type="button"
               disabled={!contextMenu.task}
