@@ -1,4 +1,5 @@
 import { AiStreamingMessageBody } from './components/AiStreamingMessageBody';
+import EmailVerificationDialog from './components/EmailVerificationDialog';
 import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, CalendarPlus, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Clock3, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Menu, MessageCircle, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, BellRing, Trash2, UserRound, X } from 'lucide-react';
@@ -1338,6 +1339,8 @@ export default function App() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSaved, setProfileSaved] = useState(false);
   const [emailVerificationMessage, setEmailVerificationMessage] = useState('');
+  const [emailVerificationOpen, setEmailVerificationOpen] = useState(false);
+  const [emailVerificationNotice, setEmailVerificationNotice] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
   const focusedTaskTitleInputRef = useRef<HTMLTextAreaElement | null>(null);
   const focusedSubtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
@@ -4689,6 +4692,12 @@ export default function App() {
       setAuthError(null);
       setAuthModalMode(null);
       setPersonalDataConsentAccepted(false);
+      if (authModalMode === 'register' && authEmail.trim()) {
+        setEmailVerificationNotice(result.emailDelivery === 'SENT'
+          ? 'Письмо с кодом и ссылкой отправлено. Выберите удобный способ подтверждения.'
+          : 'Аккаунт создан, но письмо не отправлено. Проверьте SMTP_USER и SMTP_PASSWORD на сервере Timeweb, затем повторите отправку.');
+        setEmailVerificationOpen(true);
+      }
     } catch (error) {
       setAuthError(
         authModalMode === 'login'
@@ -4758,9 +4767,13 @@ export default function App() {
       setProfileNewPassword('');
       setProfileSaved(true);
       setEmailVerificationMessage(result.emailDelivery === 'SENT'
-        ? 'Отправили ссылку подтверждения на новый адрес.'
-        : result.emailDelivery === 'FAILED' ? 'Адрес сохранён, но письмо отправить не удалось. Повтори попытку ниже.'
+        ? 'На новый адрес отправлены код и ссылка подтверждения.'
+        : result.emailDelivery === 'FAILED' ? 'Адрес сохранён, но письмо отправить не удалось. Проверьте серверные настройки SMTP.'
         : result.user.pendingEmail ? 'Новый адрес ожидает подтверждения.' : '');
+      if (result.user.pendingEmail && result.emailDelivery === 'SENT') {
+        setEmailVerificationNotice('На новую почту отправлены код и ссылка. Подтвердите одним из двух способов.');
+        setEmailVerificationOpen(true);
+      }
     } catch (error) {
       setProfileError(error instanceof Error ? error.message : 'Не удалось сохранить изменения');
     } finally {
@@ -4773,8 +4786,12 @@ export default function App() {
     try {
       const result = await api.requestEmailVerification();
       setEmailVerificationMessage(result.status === 'SENT'
-        ? 'Письмо отправлено. Проверь входящие и папку «Спам».'
-        : result.status === 'ALREADY_VERIFIED' ? 'Почта уже подтверждена.' : 'Сначала укажи адрес почты и сохрани профиль.');
+        ? 'Код и ссылка отправлены. Проверьте почту и папку «Спам».'
+        : result.status === 'ALREADY_VERIFIED' ? 'Почта уже подтверждена.' : 'Сначала укажите адрес и сохраните профиль.');
+      if (result.status === 'SENT') {
+        setEmailVerificationNotice('Письмо содержит код и ссылку активации. Выберите способ подтверждения.');
+        setEmailVerificationOpen(true);
+      }
     } catch (error) {
       setEmailVerificationMessage(error instanceof Error ? error.message : 'Не удалось отправить письмо.');
     }
@@ -7141,6 +7158,22 @@ export default function App() {
         </div>
       ) : null}
 
+      {emailVerificationOpen && currentUser ? (
+        <EmailVerificationDialog
+          open={emailVerificationOpen}
+          email={currentUser.pendingEmail || currentUser.email || authEmail}
+          initialNotice={emailVerificationNotice}
+          onClose={() => setEmailVerificationOpen(false)}
+          onVerified={async () => {
+            const { user } = await api.getMe();
+            setCurrentUser(user);
+            setProfileEmail(user.email || '');
+            setEmailVerificationMessage('Адрес успешно подтверждён.');
+            setEmailVerificationOpen(false);
+          }}
+        />
+      ) : null}
+
       {authModalMode ? (
         <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="modal-card w-full max-w-md rounded-2xl border border-slate-700/60 bg-slate-900/95 p-4 shadow-2xl">
@@ -7150,7 +7183,7 @@ export default function App() {
             </div>
             {authModalMode === 'register' && currentUser?.isGuest ? <p className="mb-3 rounded-lg border border-violet-400/40 bg-violet-500/10 p-3 text-sm text-secondary">Зарегистрируйтесь, чтобы получить 100 пробных ИИ-кредитов и сохранить задачи этого гостевого аккаунта.</p> : null}
             <div className="space-y-2">
-              <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Логин или подтверждённая почта" value={authLogin} onChange={(e) => setAuthLogin(e.target.value)} />
+              <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder={authModalMode === 'register' ? 'Логин' : 'Логин или подтверждённая почта'} value={authLogin} onChange={(e) => setAuthLogin(e.target.value)} />
               <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Пароль" type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} />
               {authModalMode === 'register' ? <p className="text-xs text-secondary">Пароль: не менее 6 символов. Цифры, буквы и спецсимволы допустимы.</p> : null}
               {authModalMode === 'login' ? <a className="block text-right text-xs text-sky-400 underline" href="/auth/email?mode=forgot">Забыли пароль?</a> : null}
@@ -7257,9 +7290,16 @@ export default function App() {
               {currentUser.pendingEmail ? <p className="text-xs text-amber-400">Ожидает подтверждения: {currentUser.pendingEmail}. До подтверждения для входа остаётся прежний адрес.</p>
                 : currentUser.email && !currentUser.emailVerified ? <p className="text-xs text-amber-400">Почта ещё не подтверждена. Для восстановления пароля нужна проверка адреса.</p> : null}
               {(currentUser.pendingEmail || (currentUser.email && !currentUser.emailVerified)) ? (
-                <button type="button" className="profile-cancel-button rounded-xl px-3 py-2 text-xs" onClick={() => void sendEmailVerification()}>
-                  Отправить письмо подтверждения ещё раз
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className="profile-cancel-button rounded-xl px-3 py-2 text-xs" onClick={() => void sendEmailVerification()}>
+                    Отправить письмо повторно
+                  </button>
+                  <button type="button" className="profile-cancel-button rounded-xl px-3 py-2 text-xs"
+                    onClick={() => {
+                      setEmailVerificationNotice('Введите код из письма или перейдите по ссылке активации.');
+                      setEmailVerificationOpen(true);
+                    }}>Ввести код подтверждения</button>
+                </div>
               ) : null}
               {emailVerificationMessage ? <p className="text-xs text-cyan-400" role="status">{emailVerificationMessage}</p> : null}
               {currentUser.hasPassword ? (
