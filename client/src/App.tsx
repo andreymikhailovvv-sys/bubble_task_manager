@@ -973,6 +973,7 @@ export default function App() {
     fullscreenDisplayModes: DisplayMode[];
     fullscreenPanelSlots: FullscreenWorkspacePanel[] | null;
     fullscreenSplitRatio: number;
+    focusedTaskId: string | null;
   } | null>(null);
   const [draggedTimelineTaskId, setDraggedTimelineTaskId] = useState<string | null>(null);
   const [activeTimelineDropSlot, setActiveTimelineDropSlot] = useState<{ hour: number; minute: number } | null>(null);
@@ -5296,7 +5297,8 @@ export default function App() {
       displayMode, timelineViewMode, timelineAnchorDate: new Date(timelineAnchorDate),
       isBubbleFullscreen, fullscreenDisplayModes: [...fullscreenDisplayModes],
       fullscreenPanelSlots: fullscreenPanelSlots ? [...fullscreenPanelSlots] : null,
-      fullscreenSplitRatio
+      fullscreenSplitRatio,
+      focusedTaskId
     };
   };
   const startTaskTour = () => {
@@ -5372,6 +5374,7 @@ export default function App() {
       setFullscreenDisplayModes(restore.fullscreenDisplayModes);
       setFullscreenPanelSlots(restore.fullscreenPanelSlots);
       setFullscreenSplitRatio(restore.fullscreenSplitRatio);
+      setFocusedTaskId(restore.focusedTaskId);
     }
     setTourWorkspaceUsesPrimary(false);
     tourRestoreStateRef.current = null;
