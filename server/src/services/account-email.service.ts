@@ -140,7 +140,7 @@ export const accountEmailService = {
       }, data: { usedAt: now } });
       if (used.count !== 1) return false;
       await tx.user.update({ where: { id: token.userId }, data: {
-        passwordHash, passwordChangedAt: now
+        passwordHash, passwordChangedAt: now, authVersion: { increment: 1 }
       } });
       await tx.emailAuthToken.deleteMany({ where: {
         userId: token.userId, purpose: 'RESET', id: { not: token.id }
