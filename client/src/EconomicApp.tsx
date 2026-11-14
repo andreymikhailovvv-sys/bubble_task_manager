@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, BookOpen, CalendarDays, Check, ChevronRight, CircleDollarSign, CreditCard, Landmark, LayoutDashboard, Loader2, MessageCircle, Pencil, Plus, Send, Settings2, Trash2, WalletCards, X } from 'lucide-react';
 import { api, type CurrentUser } from './lib/api';
 import ModuleRail from './components/ModuleRail';
+import { loadThemePreference, resolveThemeMode } from './lib/autoTheme';
 import { annuityEstimate, formatMinorRub as money, minorToRublesInput as inputMoney, rublesToMinor as parseMoney } from './lib/economicMoney';
 import './EconomicApp.css';
 
@@ -66,6 +67,7 @@ function EconomicMascot({ onClick, active }: { onClick: () => void; active: bool
 
 export default function EconomicApp() {
   const [user, setUser] = useState<CurrentUser | null>(null);
+  const [appearance, setAppearance] = useState<'light' | 'dark'>('dark');
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [section, setSection] = useState<Section>('overview');
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -104,6 +106,18 @@ export default function EconomicApp() {
     })();
     return () => { alive = false; };
   }, []);
+  useEffect(() => {
+    if (!user?.id) return;
+    const synchronize = () => {
+      const saved = loadThemePreference(localStorage, 'btm:' + user.id + ':theme-mode');
+      const timeZone = user.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
+      setAppearance(resolveThemeMode(saved, timeZone, new Date()));
+    };
+    synchronize();
+    const timer = window.setInterval(synchronize, 60_000);
+    window.addEventListener('storage', synchronize);
+    return () => { window.clearInterval(timer); window.removeEventListener('storage', synchronize); };
+  }, [user?.id, user?.timeZone]);
   const loadOperations = useCallback(async (append = false, cursor?: string | null) => {
     setOperationsBusy(true);
     try {
@@ -246,7 +260,7 @@ export default function EconomicApp() {
     accounts: () => openDialog('account'), operations: () => openDialog('operation'),
     debts: () => openDialog('debt'), loans: () => openDialog('loan'), categories: () => openDialog('category')
   };
-  return <div className="econ-root">
+  return <div className={'econ-root ' + (appearance === 'light' ? 'econ-light' : '')}>
     <ModuleRail active="economic"/>
     <div className="econ-shell">
       <aside className="econ-nav">
