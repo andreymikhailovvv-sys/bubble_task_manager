@@ -623,7 +623,6 @@ private fun WorkspaceHabitBubble(habit: Habit, dueToday: Boolean, colors: Worksp
     dark: Boolean, onClick: () -> Unit) {
     val count = if (dueToday) completedHabitToday(habit) else 0
     val target = habit.targetCount.coerceAtLeast(1)
-    val done = dueToday && count >= target
     val accent = if (dueToday) parseWorkspaceColor(habit.color) else Color(0xFF94A3B8)
     val core = when {
         !dueToday -> if (dark) Color(0xFF334155) else Color(0xFFF1F5F9)
