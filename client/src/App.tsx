@@ -1316,6 +1316,7 @@ export default function App() {
   const [accountAttachments, setAccountAttachments] = useState<AccountAttachment[]>([]);
   const [areAccountAttachmentsOpen, setAreAccountAttachmentsOpen] = useState(false);
   const [accountAttachmentsLoading, setAccountAttachmentsLoading] = useState(false);
+  const [accountAttachmentNotice, setAccountAttachmentNotice] = useState('');
   const [deletingAllAccountAttachments, setDeletingAllAccountAttachments] = useState(false);
   const [quotaToast, setQuotaToast] = useState('');
   useEffect(() => {
@@ -4777,6 +4778,7 @@ export default function App() {
     setProfileError(null);
     setProfileSaved(false);
     setAreAccountAttachmentsOpen(false);
+    setAccountAttachmentNotice('');
     setAccountAttachments([]);
     setAttachmentStorage(null);
     setIsProfileModalOpen(true);
@@ -4817,7 +4819,7 @@ export default function App() {
       await load();
       setProfileSaved(false);
       setProfileError(null);
-      window.alert(`Удалено вложений: ${result.deletedCount}.`);
+      setAccountAttachmentNotice(`Удалено вложений: ${result.deletedCount}.`);
     } catch (error) {
       setProfileError(error instanceof Error ? error.message : 'Не удалось удалить все вложения');
     } finally {
@@ -7347,6 +7349,7 @@ export default function App() {
                   </button>
                 ) : null}
                 </div>
+                {accountAttachmentNotice ? <p role="status" className="mt-2 text-xs text-emerald-500">{accountAttachmentNotice}</p> : null}
                 {areAccountAttachmentsOpen ? (
                   <div className="mt-2 max-h-56 space-y-2 overflow-y-auto">
                     {accountAttachmentsLoading ? <p className="text-xs text-muted">Загрузка вложений…</p> : null}
