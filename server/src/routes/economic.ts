@@ -6,6 +6,7 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { refundAiCreditReservation, reserveAiCreditsMilli, settleAiCreditReservation } from '../services/ai-credit-wallet.service.js';
+import { debtOperationKind, debtOperationTitle, economicSourceDelta, ECONOMIC_DEBT_OPERATION_KINDS, type EconomicDebtDirection } from '../lib/economic-debt.js';
 
 export const economicRouter = Router();
 economicRouter.use(requireAuth);
@@ -61,6 +62,20 @@ async function ensureMain(user: string) {
   });
 }
 
+
+// A debt is financed from the current primary account. Existing accounts are
+// never renamed or recreated; only a completely empty ledger gets its default.
+async function primaryAccountId(tx: Prisma.TransactionClient, owner: string) {
+  const account = await tx.economicAccount.findFirst({
+    where: { userId: owner }, orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }], select: { id: true }
+  });
+  if (account) return account.id;
+  return (await tx.economicAccount.upsert({
+    where: { userId_name: { userId: owner, name: 'Основной счёт' } },
+    create: { userId: owner, name: 'Основной счёт', isPrimary: true }, update: {}
+  })).id;
+}
+
 economicRouter.get('/snapshot', asyncHandler(async (req, res) => {
   const owner = userId(req);
   const existing = await prisma.economicAccount.findFirst({ where: { userId: owner }, select: { id: true } });
@@ -83,7 +98,7 @@ economicRouter.get('/snapshot', asyncHandler(async (req, res) => {
   const balances = new Map(accounts.map(a => [a.id, a.openingBalanceMinor]));
   for (const group of sources) {
     const sum = group._sum.amountMinor ?? 0n;
-    balances.set(group.sourceAccountId, (balances.get(group.sourceAccountId) ?? 0n) + (group.kind === 'INCOME' ? sum : -sum));
+    balances.set(group.sourceAccountId, (balances.get(group.sourceAccountId) ?? 0n) + economicSourceDelta(group.kind, sum));
   }
   for (const group of incoming) if (group.targetAccountId) {
     balances.set(group.targetAccountId, (balances.get(group.targetAccountId) ?? 0n) + (group._sum.amountMinor ?? 0n));
@@ -135,14 +150,16 @@ economicRouter.delete('/accounts/:id', asyncHandler(async (req, res) => {
 
 economicRouter.get('/operations', asyncHandler(async (req, res) => {
   const owner = userId(req);
-  const kind = ['INCOME', 'EXPENSE', 'TRANSFER'].includes(String(req.query.kind)) ? String(req.query.kind) : undefined;
+  const rawKind = String(req.query.kind ?? '');
+  const kind = ['INCOME', 'EXPENSE', 'TRANSFER', ...ECONOMIC_DEBT_OPERATION_KINDS].includes(rawKind) ? rawKind : undefined;
+  const debtKinds = rawKind === 'DEBTS' ? { in: [...ECONOMIC_DEBT_OPERATION_KINDS] } : undefined;
   const category = typeof req.query.category === 'string' && req.query.category.length <= 80 ? req.query.category : undefined;
   const accountId = typeof req.query.accountId === 'string' && req.query.accountId.length <= 120 ? req.query.accountId : undefined;
   const cursor = typeof req.query.cursor === 'string' && req.query.cursor.length <= 120 ? req.query.cursor : undefined;
   const found = cursor ? await prisma.economicOperation.findFirst({ where: { id: cursor, userId: owner }, select: { id: true } }) : null;
   if (cursor && !found) { error(res, 'Неверный курсор', 400); return; }
   const rows = await prisma.economicOperation.findMany({
-    where: { userId: owner, ...(kind ? { kind } : {}), ...(category ? { category } : {}),
+    where: { userId: owner, ...(kind ? { kind } : debtKinds ? { kind: debtKinds } : {}), ...(category ? { category } : {}),
       ...(accountId ? { OR: [{ sourceAccountId: accountId }, { targetAccountId: accountId }] } : {}) },
     orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 51, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
   });
@@ -175,6 +192,7 @@ economicRouter.patch('/operations/:id', asyncHandler(async (req, res) => {
   const owner = userId(req);
   const found = await prisma.economicOperation.findFirst({ where: { id: req.params.id, userId: owner } });
   if (!found) { error(res, 'Операция не найдена', 404); return; }
+  if (found.debtId) { error(res, 'Долговая операция редактируется через раздел «Долги»', 409); return; }
   const body = { ...found, ...req.body };
   // Reuse POST-like validation without ever trusting client-supplied ownership.
   if (!['INCOME','EXPENSE','TRANSFER'].includes(body.kind)) { error(res,'Некорректный тип'); return; }
@@ -195,8 +213,15 @@ economicRouter.patch('/operations/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 economicRouter.delete('/operations/:id', asyncHandler(async (req, res) => {
-  const removed = await prisma.economicOperation.deleteMany({ where: { id: req.params.id, userId: userId(req) } });
-  if (!removed.count) { error(res, 'Операция не найдена', 404); return; }
+  const owner = userId(req);
+  // Linked debt entries can only be removed by deleting the debt itself;
+  // otherwise the register and the account balance would disagree.
+  const found = await prisma.economicOperation.findFirst({
+    where: { id: req.params.id, userId: owner }, select: { id: true, debtId: true }
+  });
+  if (!found) { error(res, 'Операция не найдена', 404); return; }
+  if (found.debtId) { error(res, 'Долговая операция удаляется вместе с долгом', 409); return; }
+  await prisma.economicOperation.deleteMany({ where: { id: found.id, userId: owner, debtId: null } });
   res.json({ ok: true });
 }));
 
@@ -215,29 +240,103 @@ economicRouter.delete('/categories/:id', asyncHandler(async (req, res) => {
 }));
 
 economicRouter.post('/debts', asyncHandler(async (req, res) => {
+  const owner = userId(req);
   const direction = req.body?.direction, counterparty = text(req.body?.counterparty, 100);
   const amountMinor = money(req.body?.amountMinor);
   const note = optionalText(req.body?.note, 500);
   const dueAt = req.body?.dueAt ? toDate(req.body.dueAt) : null;
   if (!['OWE', 'OWED_TO_ME'].includes(direction) || !counterparty || !amountMinor || note === undefined ||
       (req.body?.dueAt && !dueAt)) { error(res, 'Укажите сторону долга, кому/кто, сумму и дату'); return; }
-  const debt = await prisma.economicDebt.create({ data: { userId: userId(req), direction, counterparty, amountMinor, note, dueAt } });
+  // Both the debt and its cash movement commit together or not at all.
+  const debt = await prisma.$transaction(async tx => {
+    const accountId = await primaryAccountId(tx, owner);
+    const created = await tx.economicDebt.create({
+      data: { userId: owner, direction, counterparty, amountMinor, note, dueAt }
+    });
+    await tx.economicOperation.create({
+      data: {
+        userId: owner, sourceAccountId: accountId, debtId: created.id, debtPhase: 'FUNDING',
+        kind: debtOperationKind(direction as EconomicDebtDirection, 'FUNDING'), amountMinor,
+        title: debtOperationTitle(direction as EconomicDebtDirection, 'FUNDING', counterparty),
+        category: 'Долги', occurredAt: created.createdAt
+      }
+    });
+    return created;
+  });
   res.status(201).json({ debt: debtOut(debt) });
 }));
+
 economicRouter.patch('/debts/:id', asyncHandler(async (req, res) => {
   const owner = userId(req);
   const found = await prisma.economicDebt.findFirst({ where: { id: req.params.id, userId: owner } });
   if (!found) { error(res, 'Долг не найден', 404); return; }
   const body = { ...found, ...req.body };
-  const counterparty = text(body.counterparty,100), amountMinor = money(String(body.amountMinor));
-  const note = optionalText(body.note,500), dueAt = body.dueAt ? (body.dueAt instanceof Date ? body.dueAt : toDate(body.dueAt)) : null;
-  if (!['OWE','OWED_TO_ME'].includes(body.direction) || !counterparty || !amountMinor || note === undefined ||
-    (body.dueAt && !dueAt) || typeof body.isClosed !== 'boolean') { error(res,'Некорректные данные долга'); return; }
-  await prisma.economicDebt.updateMany({ where: { id: found.id, userId: owner },
-    data: { direction: body.direction, counterparty, amountMinor, note, dueAt, isClosed: body.isClosed } });
+  const counterparty = text(body.counterparty, 100), amountMinor = money(String(body.amountMinor));
+  const note = optionalText(body.note, 500);
+  const dueAt = body.dueAt ? (body.dueAt instanceof Date ? body.dueAt : toDate(body.dueAt)) : null;
+  if (!['OWE', 'OWED_TO_ME'].includes(body.direction) || !counterparty || !amountMinor || note === undefined ||
+      (body.dueAt && !dueAt) || typeof body.isClosed !== 'boolean') {
+    error(res, 'Некорректные данные долга'); return;
+  }
+  await prisma.$transaction(async tx => {
+    await tx.economicDebt.updateMany({
+      where: { id: found.id, userId: owner },
+      data: { direction: body.direction, counterparty, amountMinor, note, dueAt, isClosed: body.isClosed }
+    });
+    const funding = await tx.economicOperation.findFirst({
+      where: { userId: owner, debtId: found.id, debtPhase: 'FUNDING' }
+    });
+    // Historical debts predate automatic accounting. Do not silently create
+    // a cash flow for them when the user merely edits the contact or due date.
+    if (!funding) return;
+    const direction = body.direction as EconomicDebtDirection;
+    await tx.economicOperation.updateMany({
+      where: { id: funding.id, userId: owner, debtId: found.id },
+      data: {
+        kind: debtOperationKind(direction, 'FUNDING'), amountMinor,
+        title: debtOperationTitle(direction, 'FUNDING', counterparty)
+      }
+    });
+    const settlement = await tx.economicOperation.findFirst({
+      where: { userId: owner, debtId: found.id, debtPhase: 'SETTLEMENT' }
+    });
+    if (body.isClosed) {
+      if (settlement) {
+        await tx.economicOperation.updateMany({
+          where: { id: settlement.id, userId: owner, debtId: found.id },
+          data: {
+            kind: debtOperationKind(direction, 'SETTLEMENT'), amountMinor,
+            title: debtOperationTitle(direction, 'SETTLEMENT', counterparty)
+          }
+        });
+      } else {
+        // Closing means full repayment. The reverse movement goes to the
+        // primary account at the moment the debt is marked paid.
+        const accountId = await primaryAccountId(tx, owner);
+        await tx.economicOperation.create({
+          data: {
+            userId: owner, sourceAccountId: accountId, debtId: found.id, debtPhase: 'SETTLEMENT',
+            kind: debtOperationKind(direction, 'SETTLEMENT'), amountMinor,
+            title: debtOperationTitle(direction, 'SETTLEMENT', counterparty),
+            category: 'Долги'
+          }
+        });
+      }
+    } else if (settlement) {
+      // Reopening a debt removes its automatically recorded settlement, not
+      // the original movement. Unique(debtId, debtPhase) stops duplicates.
+      await tx.economicOperation.deleteMany({
+        where: { id: settlement.id, userId: owner, debtId: found.id, debtPhase: 'SETTLEMENT' }
+      });
+    }
+  });
   res.json({ ok: true });
 }));
+
 economicRouter.delete('/debts/:id', asyncHandler(async (req, res) => {
+  // PostgreSQL cascade removes linked cash entries in the same transaction.
+  // Balances are computed from the ledger, so this reverses the original
+  // effect without introducing fake income/expense entries.
   const removed = await prisma.economicDebt.deleteMany({ where: { id: req.params.id, userId: userId(req) } });
   if (!removed.count) { error(res,'Долг не найден',404); return; }
   res.json({ ok: true });
@@ -304,7 +403,7 @@ economicRouter.post('/assistant/chat', asyncHandler(async (req, res) => {
   ]);
   const balances = new Map(accounts.map(a => [a.id, a.openingBalanceMinor]));
   for (const item of outgoing) balances.set(item.sourceAccountId,
-    (balances.get(item.sourceAccountId) ?? 0n) + (item.kind === 'INCOME' ? 1n : -1n) * (item._sum.amountMinor ?? 0n));
+    (balances.get(item.sourceAccountId) ?? 0n) + economicSourceDelta(item.kind, item._sum.amountMinor ?? 0n));
   for (const item of incoming) if (item.targetAccountId) balances.set(item.targetAccountId,
     (balances.get(item.targetAccountId) ?? 0n) + (item._sum.amountMinor ?? 0n));
   let reservation: Awaited<ReturnType<typeof reserveAiCreditsMilli>> | null = null;
