@@ -363,6 +363,12 @@ enum HabitCompletionSource {
 }
 
 model User {
+  economicAccounts EconomicAccount[]
+  economicOperations EconomicOperation[]
+  economicCategories EconomicCategory[]
+  economicDebts EconomicDebt[]
+  economicLoans EconomicLoan[]
+  economicAssistantMessages EconomicAssistantMessage[]
   id           String   @id @default(cuid())
   email        String?  @unique
   emailVerifiedAt DateTime?
@@ -1527,4 +1533,99 @@ model TelegramEmailVerificationOutreach {
   sentAt    DateTime?
 
   @@index([status, createdAt])
+}
+
+
+// Economic is a private personal ledger, independent from Finance Bot and Work.
+// Monetary amounts are always stored as integer minor units (kopecks).
+model EconomicAccount {
+  id                  String @id @default(cuid())
+  userId              String
+  user                User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                String
+  currency            String @default("RUB")
+  openingBalanceMinor BigInt @default(0)
+  isPrimary           Boolean @default(false)
+  outgoingOperations  EconomicOperation[] @relation("EconomicSourceAccount")
+  incomingTransfers   EconomicOperation[] @relation("EconomicTargetAccount")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([userId, name])
+  @@index([userId, isPrimary])
+}
+
+model EconomicOperation {
+  id                String @id @default(cuid())
+  userId            String
+  user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind              String
+  amountMinor       BigInt
+  sourceAccountId   String
+  sourceAccount     EconomicAccount @relation("EconomicSourceAccount", fields: [sourceAccountId], references: [id], onDelete: Restrict)
+  targetAccountId   String?
+  targetAccount     EconomicAccount? @relation("EconomicTargetAccount", fields: [targetAccountId], references: [id], onDelete: Restrict)
+  category          String?
+  title             String
+  note              String?
+  occurredAt        DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId, occurredAt, id])
+  @@index([userId, kind, occurredAt])
+  @@index([sourceAccountId, kind])
+  @@index([targetAccountId, kind])
+}
+
+model EconomicCategory {
+  id        String @id @default(cuid())
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  kind      String
+  createdAt DateTime @default(now())
+  @@unique([userId, kind, name])
+  @@index([userId, kind])
+}
+
+model EconomicDebt {
+  id          String @id @default(cuid())
+  userId      String
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  direction   String
+  counterparty String
+  amountMinor BigInt
+  note        String?
+  dueAt       DateTime?
+  isClosed    Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([userId, isClosed, dueAt])
+}
+
+model EconomicLoan {
+  id             String @id @default(cuid())
+  userId         String
+  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  lender         String?
+  principalMinor BigInt
+  annualRateBps  Int
+  termMonths     Int
+  startDate      DateTime
+  isClosed       Boolean @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  @@index([userId, isClosed])
+}
+
+model EconomicAssistantMessage {
+  id        String @id @default(cuid())
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String
+  content   String @db.Text
+  createdAt DateTime @default(now())
+  @@index([userId, createdAt])
 }

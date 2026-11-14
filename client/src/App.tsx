@@ -60,6 +60,7 @@ import { useCreditPurchase } from './lib/useCreditPurchase';
 import { ExpandedAiChat } from './components/ExpandedAiChat';
 import { QuickAiLauncherFrame } from './components/QuickAiLauncherFrame';
 import { PlanikMascot } from './components/PlanikMascot';
+import ModuleRail from './components/ModuleRail';
 import { FocusedTaskWindowFrame } from './components/FocusedTaskWindowFrame';
 import { FocusedSubtaskComposer } from './components/FocusedSubtaskComposer';
 import { AiModelChip } from './components/AiModelChip';
@@ -6380,6 +6381,7 @@ export default function App() {
         : 'app-shell flex h-screen flex-col overflow-y-auto p-4 lg:p-6'}
       data-theme={effectiveThemeMode}
     >
+      <ModuleRail active="planner" />
       {reportPromptTask ? (
         <TaskCompletionReportDialog
           taskId={reportPromptTask.id}
