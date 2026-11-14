@@ -286,24 +286,39 @@ economicRouter.post('/assistant/chat', asyncHandler(async (req, res) => {
   const now = Date.now();
   if (now - (assistantCooldown.get(owner) ?? 0) < 5000) { error(res, 'Повторите запрос через несколько секунд', 429); return; }
   assistantCooldown.set(owner, now);
-  const [accounts, debts, loans, aggregates, history] = await Promise.all([
+  // Generate balances by account, including incoming transfers, not just opening sums.
+  const monthStart = new Date();
+  monthStart.setUTCDate(1); monthStart.setUTCHours(0, 0, 0, 0);
+  const [accounts, debts, loans, outgoing, incoming, monthKinds, recent, history] = await Promise.all([
     prisma.economicAccount.findMany({ where: { userId: owner }, select: { name: true, openingBalanceMinor: true, id: true } }),
     prisma.economicDebt.findMany({ where: { userId: owner, isClosed: false }, select: { direction: true, counterparty: true, amountMinor: true }, take: 30 }),
     prisma.economicLoan.findMany({ where: { userId: owner, isClosed: false }, select: { name: true, principalMinor: true, annualRateBps: true, termMonths: true }, take: 30 }),
-    prisma.economicOperation.groupBy({ by: ['kind'], where: { userId: owner }, _sum: { amountMinor: true } }),
+    prisma.economicOperation.groupBy({ by: ['sourceAccountId', 'kind'], where: { userId: owner }, _sum: { amountMinor: true } }),
+    prisma.economicOperation.groupBy({ by: ['targetAccountId'], where: { userId: owner, kind: 'TRANSFER', targetAccountId: { not: null } }, _sum: { amountMinor: true } }),
+    prisma.economicOperation.groupBy({ by: ['kind'], where: { userId: owner, kind: { in: ['INCOME', 'EXPENSE'] }, occurredAt: { gte: monthStart } }, _sum: { amountMinor: true } }),
+    prisma.economicOperation.findMany({ where: { userId: owner }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 25,
+      select: { kind: true, amountMinor: true, title: true, category: true, occurredAt: true } }),
     prisma.economicAssistantMessage.findMany({ where: { userId: owner }, orderBy: { createdAt: 'desc' }, take: 8 })
   ]);
+  const balances = new Map(accounts.map(a => [a.id, a.openingBalanceMinor]));
+  for (const item of outgoing) balances.set(item.sourceAccountId,
+    (balances.get(item.sourceAccountId) ?? 0n) + (item.kind === 'INCOME' ? 1n : -1n) * (item._sum.amountMinor ?? 0n));
+  for (const item of incoming) if (item.targetAccountId) balances.set(item.targetAccountId,
+    (balances.get(item.targetAccountId) ?? 0n) + (item._sum.amountMinor ?? 0n));
   let reservation: Awaited<ReturnType<typeof reserveAiCreditsMilli>> | null = null;
   try {
     reservation = await reserveAiCreditsMilli(owner, 1000);
   } catch { error(res, 'Недостаточно ИИ-кредитов', 402); return; }
   try {
     const context = JSON.stringify({
-      accounts: accounts.map(a => ({ name: a.name, openingBalanceRub: Number(a.openingBalanceMinor) / 100 })),
-      totalsByType: aggregates.map(a => ({ kind: a.kind, rubles: Number(a._sum.amountMinor ?? 0n) / 100 })),
+      currency: 'RUB', moneyUnits: 'minor units are kopecks (100 per ruble)',
+      accounts: accounts.map(a => ({ name: a.name, openingBalanceMinor: a.openingBalanceMinor.toString(),
+        currentBalanceMinor: (balances.get(a.id) ?? 0n).toString() })),
+      month: monthKinds.map(row => ({ kind: row.kind, amountMinor: (row._sum.amountMinor ?? 0n).toString() })),
+      recentOperations: recent.map(row => ({ ...row, amountMinor: row.amountMinor.toString() })),
       debts: debts.map(d => ({ ...d, amountMinor: d.amountMinor.toString() })),
       loans: loans.map(l => ({ ...l, principalMinor: l.principalMinor.toString() }))
-    }).slice(0, 9000);
+    }).slice(0, 12000);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 45000);
     let response: Awaited<ReturnType<typeof openAiFetch>>;
