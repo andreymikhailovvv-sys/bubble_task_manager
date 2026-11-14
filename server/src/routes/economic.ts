@@ -1,0 +1,338 @@
+import { Router, type Request, type Response } from 'express';
+import { Prisma } from '@prisma/client';
+import { prisma } from '../db/prisma.js';
+import { requireAuth } from '../middleware/auth.js';
+import { asyncHandler } from '../middleware/async-handler.js';
+import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
+import { openAiFetch } from '../lib/openai-fetch.js';
+import { refundAiCreditReservation, reserveAiCreditsMilli, settleAiCreditReservation } from '../services/ai-credit-wallet.service.js';
+
+export const economicRouter = Router();
+economicRouter.use(requireAuth);
+economicRouter.use((req, res, next) => {
+  res.setHeader('Cache-Control', 'private, no-store');
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
+      !telegramChatRequestIsSameOrigin(req.get('origin'), req.get('host'), req.get('sec-fetch-site'))) {
+    res.status(403).json({ error: 'Недопустимый источник запроса' }); return;
+  }
+  next();
+});
+
+const userId = (req: Request) => req.user!.id;
+const text = (value: unknown, max = 120): string | null =>
+  typeof value === 'string' && value.trim().length > 0 && value.trim().length <= max &&
+  !/[\u0000-\u001f\u007f]/.test(value) ? value.trim() : null;
+const optionalText = (value: unknown, max = 500): string | null | undefined =>
+  value == null || value === '' ? null : text(value, max) ?? undefined;
+const money = (value: unknown, allowZero = false, allowNegative = false): bigint | null => {
+  if (typeof value !== 'string' || !/^-?\d{1,15}$/.test(value)) return null;
+  const n = BigInt(value);
+  return (!allowNegative && n < 0n) || (!allowZero && n === 0n) || n > 999999999999999n || n < -999999999999999n ? null : n;
+};
+const toDate = (value: unknown): Date | null => {
+  if (typeof value !== 'string' || value.length > 40) return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) && date.getUTCFullYear() >= 2000 && date.getUTCFullYear() <= 2200 ? date : null;
+};
+const error = (res: Response, message: string, status = 400) => res.status(status).json({ error: message });
+const conflict = (cause: unknown, res: Response) => {
+  if (cause instanceof Prisma.PrismaClientKnownRequestError && cause.code === 'P2002') {
+    error(res, 'Такое название уже используется', 409); return true;
+  }
+  if (cause instanceof Prisma.PrismaClientKnownRequestError && cause.code === 'P2003') {
+    error(res, 'Нельзя удалить запись, пока с ней связаны операции', 409); return true;
+  }
+  return false;
+};
+const accountOut = (row: { openingBalanceMinor: bigint; [key: string]: unknown }) =>
+  ({ ...row, openingBalanceMinor: row.openingBalanceMinor.toString() });
+const operationOut = (row: { amountMinor: bigint; [key: string]: unknown }) =>
+  ({ ...row, amountMinor: row.amountMinor.toString() });
+const debtOut = (row: { amountMinor: bigint; [key: string]: unknown }) =>
+  ({ ...row, amountMinor: row.amountMinor.toString() });
+const loanOut = (row: { principalMinor: bigint; [key: string]: unknown }) =>
+  ({ ...row, principalMinor: row.principalMinor.toString() });
+
+async function ensureMain(user: string) {
+  return prisma.economicAccount.upsert({
+    where: { userId_name: { userId: user, name: 'Основной счёт' } },
+    create: { userId: user, name: 'Основной счёт', isPrimary: true },
+    update: {}
+  });
+}
+
+economicRouter.get('/snapshot', asyncHandler(async (req, res) => {
+  const owner = userId(req);
+  const existing = await prisma.economicAccount.findFirst({ where: { userId: owner }, select: { id: true } });
+  if (!existing) await ensureMain(owner);
+  const monthStart = new Date();
+  monthStart.setUTCDate(1); monthStart.setUTCHours(0, 0, 0, 0);
+  const [accounts, sources, incoming, monthKinds, recent, categories, debts, loans, operationCount, messages] = await Promise.all([
+    prisma.economicAccount.findMany({ where: { userId: owner }, orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] }),
+    prisma.economicOperation.groupBy({ by: ['sourceAccountId', 'kind'], where: { userId: owner }, _sum: { amountMinor: true } }),
+    prisma.economicOperation.groupBy({ by: ['targetAccountId'], where: { userId: owner, kind: 'TRANSFER', targetAccountId: { not: null } }, _sum: { amountMinor: true } }),
+    prisma.economicOperation.groupBy({ by: ['kind'], where: { userId: owner, kind: { in: ['INCOME', 'EXPENSE'] }, occurredAt: { gte: monthStart } }, _sum: { amountMinor: true } }),
+    prisma.economicOperation.findMany({ where: { userId: owner }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 8 }),
+    prisma.economicCategory.findMany({ where: { userId: owner }, orderBy: { createdAt: 'asc' } }),
+    prisma.economicDebt.findMany({ where: { userId: owner }, orderBy: [{ isClosed: 'asc' }, { createdAt: 'desc' }], take: 200 }),
+    prisma.economicLoan.findMany({ where: { userId: owner }, orderBy: [{ isClosed: 'asc' }, { createdAt: 'desc' }], take: 200 }),
+    prisma.economicOperation.count({ where: { userId: owner } }),
+    prisma.economicAssistantMessage.findMany({ where: { userId: owner }, orderBy: { createdAt: 'desc' }, take: 24 })
+  ]);
+  const balances = new Map(accounts.map(a => [a.id, a.openingBalanceMinor]));
+  for (const group of sources) {
+    const sum = group._sum.amountMinor ?? 0n;
+    balances.set(group.sourceAccountId, (balances.get(group.sourceAccountId) ?? 0n) + (group.kind === 'INCOME' ? sum : -sum));
+  }
+  for (const group of incoming) if (group.targetAccountId) {
+    balances.set(group.targetAccountId, (balances.get(group.targetAccountId) ?? 0n) + (group._sum.amountMinor ?? 0n));
+  }
+  const totalMinor = [...balances.values()].reduce((sum, n) => sum + n, 0n);
+  const monthSum = (kind: string) => (monthKinds.find(row => row.kind === kind)?._sum.amountMinor ?? 0n).toString();
+  res.json({
+    accounts: accounts.map(a => ({ ...accountOut(a), balanceMinor: (balances.get(a.id) ?? 0n).toString() })),
+    totals: { balanceMinor: totalMinor.toString(), monthIncomeMinor: monthSum('INCOME'), monthExpenseMinor: monthSum('EXPENSE'), operationCount },
+    recent: recent.map(operationOut), categories, debts: debts.map(debtOut), loans: loans.map(loanOut),
+    assistantMessages: messages.reverse()
+  });
+}));
+
+economicRouter.post('/accounts', asyncHandler(async (req, res) => {
+  const name = text(req.body?.name, 60);
+  const opening = money(req.body?.openingBalanceMinor ?? '0', true, true);
+  if (!name || opening === null) { error(res, 'Введите название счёта и корректный начальный остаток'); return; }
+  try {
+    const account = await prisma.economicAccount.create({ data: { userId: userId(req), name, openingBalanceMinor: opening } });
+    res.status(201).json({ account: accountOut(account) });
+  } catch (cause) { if (!conflict(cause, res)) throw cause; }
+}));
+economicRouter.patch('/accounts/:id', asyncHandler(async (req, res) => {
+  const owner = userId(req);
+  const found = await prisma.economicAccount.findFirst({ where: { id: req.params.id, userId: owner } });
+  if (!found) { error(res, 'Счёт не найден', 404); return; }
+  const name = req.body?.name === undefined ? found.name : text(req.body.name, 60);
+  const opening = req.body?.openingBalanceMinor === undefined ? found.openingBalanceMinor : money(req.body.openingBalanceMinor, true, true);
+  if (!name || opening === null) { error(res, 'Некорректные данные счёта'); return; }
+  try {
+    await prisma.$transaction(async tx => {
+      if (req.body?.isPrimary === true) await tx.economicAccount.updateMany({ where: { userId: owner }, data: { isPrimary: false } });
+      await tx.economicAccount.update({ where: { id: found.id }, data: { name, openingBalanceMinor: opening, ...(req.body?.isPrimary === true ? { isPrimary: true } : {}) } });
+    });
+    res.json({ ok: true });
+  } catch (cause) { if (!conflict(cause, res)) throw cause; }
+}));
+economicRouter.delete('/accounts/:id', asyncHandler(async (req, res) => {
+  const owner = userId(req);
+  const found = await prisma.economicAccount.findFirst({ where: { id: req.params.id, userId: owner } });
+  if (!found) { error(res, 'Счёт не найден', 404); return; }
+  if (found.isPrimary) { error(res, 'Основной счёт удалить нельзя'); return; }
+  const count = await prisma.economicOperation.count({ where: { userId: owner, OR: [{ sourceAccountId: found.id }, { targetAccountId: found.id }] } });
+  if (count > 0) { error(res, 'Сначала перенесите или удалите связанные операции', 409); return; }
+  await prisma.economicAccount.deleteMany({ where: { id: found.id, userId: owner } });
+  res.json({ ok: true });
+}));
+
+economicRouter.get('/operations', asyncHandler(async (req, res) => {
+  const owner = userId(req);
+  const kind = ['INCOME', 'EXPENSE', 'TRANSFER'].includes(String(req.query.kind)) ? String(req.query.kind) : undefined;
+  const category = typeof req.query.category === 'string' && req.query.category.length <= 80 ? req.query.category : undefined;
+  const accountId = typeof req.query.accountId === 'string' && req.query.accountId.length <= 120 ? req.query.accountId : undefined;
+  const cursor = typeof req.query.cursor === 'string' && req.query.cursor.length <= 120 ? req.query.cursor : undefined;
+  const found = cursor ? await prisma.economicOperation.findFirst({ where: { id: cursor, userId: owner }, select: { id: true } }) : null;
+  if (cursor && !found) { error(res, 'Неверный курсор', 400); return; }
+  const rows = await prisma.economicOperation.findMany({
+    where: { userId: owner, ...(kind ? { kind } : {}), ...(category ? { category } : {}),
+      ...(accountId ? { OR: [{ sourceAccountId: accountId }, { targetAccountId: accountId }] } : {}) },
+    orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 51, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})
+  });
+  res.json({ operations: rows.slice(0, 50).map(operationOut), nextCursor: rows.length > 50 ? rows[49].id : null });
+}));
+economicRouter.post('/operations', asyncHandler(async (req, res) => {
+  const owner = userId(req), body = req.body ?? {};
+  const kind = body.kind;
+  const amountMinor = money(body.amountMinor), title = text(body.title, 160);
+  const note = optionalText(body.note, 500);
+  const occurredAt = body.occurredAt ? toDate(body.occurredAt) : new Date();
+  if (!['INCOME', 'EXPENSE', 'TRANSFER'].includes(kind) || amountMinor === null || !title || note === undefined || !occurredAt) {
+    error(res, 'Укажите тип, сумму, название и дату операции'); return;
+  }
+  const sourceAccountId = typeof body.sourceAccountId === 'string' ? body.sourceAccountId : '';
+  const targetAccountId = kind === 'TRANSFER' && typeof body.targetAccountId === 'string' ? body.targetAccountId : null;
+  if (targetAccountId && targetAccountId === sourceAccountId) { error(res, 'Нельзя переводить на тот же счёт'); return; }
+  if (kind === 'TRANSFER' && !targetAccountId) { error(res, 'Укажите счёт получателя'); return; }
+  const accountIds = [sourceAccountId, ...(targetAccountId ? [targetAccountId] : [])];
+  const linked = await prisma.economicAccount.findMany({ where: { userId: owner, id: { in: accountIds } }, select: { id: true, currency: true } });
+  if (linked.length !== accountIds.length || linked.some(a => a.currency !== 'RUB')) { error(res, 'Один из счетов не принадлежит пользователю'); return; }
+  const category = kind === 'TRANSFER' ? null : optionalText(body.category, 80);
+  if (category === undefined) { error(res, 'Некорректная категория'); return; }
+  const operation = await prisma.economicOperation.create({
+    data: { userId: owner, kind, amountMinor, sourceAccountId, targetAccountId, category, title, note, occurredAt }
+  });
+  res.status(201).json({ operation: operationOut(operation) });
+}));
+economicRouter.patch('/operations/:id', asyncHandler(async (req, res) => {
+  const owner = userId(req);
+  const found = await prisma.economicOperation.findFirst({ where: { id: req.params.id, userId: owner } });
+  if (!found) { error(res, 'Операция не найдена', 404); return; }
+  const body = { ...found, ...req.body };
+  // Reuse POST-like validation without ever trusting client-supplied ownership.
+  if (!['INCOME','EXPENSE','TRANSFER'].includes(body.kind)) { error(res,'Некорректный тип'); return; }
+  const amountMinor = money(String(body.amountMinor));
+  const title = text(body.title, 160), note = optionalText(body.note, 500);
+  const category = body.kind === 'TRANSFER' ? null : optionalText(body.category, 80);
+  const occurredAt = body.occurredAt instanceof Date ? body.occurredAt : toDate(body.occurredAt);
+  const sourceAccountId = body.sourceAccountId, targetAccountId = body.kind === 'TRANSFER' ? body.targetAccountId : null;
+  const ids = [sourceAccountId, ...(targetAccountId ? [targetAccountId] : [])];
+  if (!amountMinor || !title || note === undefined || category === undefined || !occurredAt ||
+      (body.kind === 'TRANSFER' && (!targetAccountId || sourceAccountId === targetAccountId))) {
+    error(res, 'Некорректные данные операции'); return;
+  }
+  const count = await prisma.economicAccount.count({ where: { userId: owner, id: { in: ids } } });
+  if (count !== ids.length) { error(res, 'Один из счетов не найден'); return; }
+  await prisma.economicOperation.updateMany({ where: { id: found.id, userId: owner },
+    data: { kind: body.kind, amountMinor, title, note, category, occurredAt, sourceAccountId, targetAccountId } });
+  res.json({ ok: true });
+}));
+economicRouter.delete('/operations/:id', asyncHandler(async (req, res) => {
+  const removed = await prisma.economicOperation.deleteMany({ where: { id: req.params.id, userId: userId(req) } });
+  if (!removed.count) { error(res, 'Операция не найдена', 404); return; }
+  res.json({ ok: true });
+}));
+
+economicRouter.post('/categories', asyncHandler(async (req, res) => {
+  const name = text(req.body?.name, 60), kind = req.body?.kind;
+  if (!name || !['INCOME', 'EXPENSE'].includes(kind)) { error(res, 'Некорректная категория'); return; }
+  try {
+    const category = await prisma.economicCategory.create({ data: { userId: userId(req), name, kind } });
+    res.status(201).json({ category });
+  } catch (cause) { if (!conflict(cause, res)) throw cause; }
+}));
+economicRouter.delete('/categories/:id', asyncHandler(async (req, res) => {
+  const removed = await prisma.economicCategory.deleteMany({ where: { id: req.params.id, userId: userId(req) } });
+  if (!removed.count) { error(res, 'Категория не найдена', 404); return; }
+  res.json({ ok: true });
+}));
+
+economicRouter.post('/debts', asyncHandler(async (req, res) => {
+  const direction = req.body?.direction, counterparty = text(req.body?.counterparty, 100);
+  const amountMinor = money(req.body?.amountMinor);
+  const note = optionalText(req.body?.note, 500);
+  const dueAt = req.body?.dueAt ? toDate(req.body.dueAt) : null;
+  if (!['OWE', 'OWED_TO_ME'].includes(direction) || !counterparty || !amountMinor || note === undefined ||
+      (req.body?.dueAt && !dueAt)) { error(res, 'Укажите сторону долга, кому/кто, сумму и дату'); return; }
+  const debt = await prisma.economicDebt.create({ data: { userId: userId(req), direction, counterparty, amountMinor, note, dueAt } });
+  res.status(201).json({ debt: debtOut(debt) });
+}));
+economicRouter.patch('/debts/:id', asyncHandler(async (req, res) => {
+  const owner = userId(req);
+  const found = await prisma.economicDebt.findFirst({ where: { id: req.params.id, userId: owner } });
+  if (!found) { error(res, 'Долг не найден', 404); return; }
+  const body = { ...found, ...req.body };
+  const counterparty = text(body.counterparty,100), amountMinor = money(String(body.amountMinor));
+  const note = optionalText(body.note,500), dueAt = body.dueAt ? (body.dueAt instanceof Date ? body.dueAt : toDate(body.dueAt)) : null;
+  if (!['OWE','OWED_TO_ME'].includes(body.direction) || !counterparty || !amountMinor || note === undefined ||
+    (body.dueAt && !dueAt) || typeof body.isClosed !== 'boolean') { error(res,'Некорректные данные долга'); return; }
+  await prisma.economicDebt.updateMany({ where: { id: found.id, userId: owner },
+    data: { direction: body.direction, counterparty, amountMinor, note, dueAt, isClosed: body.isClosed } });
+  res.json({ ok: true });
+}));
+economicRouter.delete('/debts/:id', asyncHandler(async (req, res) => {
+  const removed = await prisma.economicDebt.deleteMany({ where: { id: req.params.id, userId: userId(req) } });
+  if (!removed.count) { error(res,'Долг не найден',404); return; }
+  res.json({ ok: true });
+}));
+
+economicRouter.post('/loans', asyncHandler(async (req, res) => {
+  const name = text(req.body?.name, 100), lender = optionalText(req.body?.lender, 100);
+  const principalMinor = money(req.body?.principalMinor);
+  const annualRateBps = req.body?.annualRateBps, termMonths = req.body?.termMonths;
+  const startDate = toDate(req.body?.startDate);
+  if (!name || lender === undefined || !principalMinor || !Number.isInteger(annualRateBps) || annualRateBps < 0 ||
+      annualRateBps > 100000 || !Number.isInteger(termMonths) || termMonths < 1 || termMonths > 600 || !startDate) {
+    error(res, 'Укажите сумму, ставку, срок и дату кредита'); return;
+  }
+  const loan = await prisma.economicLoan.create({ data: { userId: userId(req), name, lender, principalMinor, annualRateBps, termMonths, startDate } });
+  res.status(201).json({ loan: loanOut(loan) });
+}));
+economicRouter.patch('/loans/:id', asyncHandler(async (req, res) => {
+  const owner = userId(req);
+  const found = await prisma.economicLoan.findFirst({ where: { id: req.params.id, userId: owner } });
+  if (!found) { error(res, 'Кредит не найден',404); return; }
+  const body = { ...found, ...req.body };
+  const name = text(body.name,100), lender = optionalText(body.lender,100), principalMinor = money(String(body.principalMinor));
+  const startDate = body.startDate instanceof Date ? body.startDate : toDate(body.startDate);
+  if (!name || lender === undefined || !principalMinor || !Number.isInteger(body.annualRateBps) || body.annualRateBps < 0 ||
+      body.annualRateBps > 100000 || !Number.isInteger(body.termMonths) || body.termMonths < 1 || body.termMonths > 600 ||
+      !startDate || typeof body.isClosed !== 'boolean') { error(res,'Некорректные данные кредита'); return; }
+  await prisma.economicLoan.updateMany({ where: { id: found.id, userId: owner },
+    data: { name, lender, principalMinor, annualRateBps: body.annualRateBps, termMonths: body.termMonths,
+      startDate, isClosed: body.isClosed } });
+  res.json({ ok: true });
+}));
+economicRouter.delete('/loans/:id', asyncHandler(async (req, res) => {
+  const removed = await prisma.economicLoan.deleteMany({ where: { id: req.params.id, userId: userId(req) } });
+  if (!removed.count) { error(res,'Кредит не найден',404); return; }
+  res.json({ ok: true });
+}));
+
+// Read-only, separate Economic assistant. Uses the existing user AI wallet and
+// never executes account mutations from a model response.
+const assistantCooldown = new Map<string, number>();
+economicRouter.post('/assistant/chat', asyncHandler(async (req, res) => {
+  const owner = userId(req);
+  const question = text(req.body?.question, 2000);
+  if (!question) { error(res, 'Введите вопрос (до 2000 символов)'); return; }
+  if (!process.env.OPENAI_API_KEY) { error(res, 'ИИ-помощник временно не настроен', 503); return; }
+  const now = Date.now();
+  if (now - (assistantCooldown.get(owner) ?? 0) < 5000) { error(res, 'Повторите запрос через несколько секунд', 429); return; }
+  assistantCooldown.set(owner, now);
+  const [accounts, debts, loans, aggregates, history] = await Promise.all([
+    prisma.economicAccount.findMany({ where: { userId: owner }, select: { name: true, openingBalanceMinor: true, id: true } }),
+    prisma.economicDebt.findMany({ where: { userId: owner, isClosed: false }, select: { direction: true, counterparty: true, amountMinor: true }, take: 30 }),
+    prisma.economicLoan.findMany({ where: { userId: owner, isClosed: false }, select: { name: true, principalMinor: true, annualRateBps: true, termMonths: true }, take: 30 }),
+    prisma.economicOperation.groupBy({ by: ['kind'], where: { userId: owner }, _sum: { amountMinor: true } }),
+    prisma.economicAssistantMessage.findMany({ where: { userId: owner }, orderBy: { createdAt: 'desc' }, take: 8 })
+  ]);
+  let reservation: Awaited<ReturnType<typeof reserveAiCreditsMilli>> | null = null;
+  try {
+    reservation = await reserveAiCreditsMilli(owner, 1000);
+  } catch { error(res, 'Недостаточно ИИ-кредитов', 402); return; }
+  try {
+    const context = JSON.stringify({
+      accounts: accounts.map(a => ({ name: a.name, openingBalanceRub: Number(a.openingBalanceMinor) / 100 })),
+      totalsByType: aggregates.map(a => ({ kind: a.kind, rubles: Number(a._sum.amountMinor ?? 0n) / 100 })),
+      debts: debts.map(d => ({ ...d, amountMinor: d.amountMinor.toString() })),
+      loans: loans.map(l => ({ ...l, principalMinor: l.principalMinor.toString() }))
+    }).slice(0, 9000);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 45000);
+    let response: Awaited<ReturnType<typeof openAiFetch>>;
+    try {
+      response = await openAiFetch('https://api.openai.com/v1/responses', {
+        method: 'POST', signal: controller.signal,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+        body: JSON.stringify({
+          model: process.env.OPENAI_MODEL || 'gpt-6-luna', store: false, max_output_tokens: 650,
+          instructions: 'Ты Economic, финансовый помощник сервиса Планировыч. Отвечай по-русски. Анализируй только предоставленные данные, никаких выдуманных остатков или операций. Суммы в контексте указаны в рублях или явно помечены в копейках. Не утверждай, что произвёл запись в базе. Не давай категоричных финансовых рекомендаций. Если для расчёта баланса не хватает данных, скажи об этом. Ответ краткий и полезный.',
+          input: [...history.reverse().map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content })),
+            { role: 'user', content: `Контекст Economic: ${context}\n\nВопрос: ${question}` }]
+        })
+      }, { model: process.env.OPENAI_MODEL || 'gpt-6-luna' });
+    } finally { clearTimeout(timeout); }
+    if (!response.ok) throw new Error(`Economic assistant HTTP ${response.status}`);
+    const payload = await response.json() as { output_text?: string; output?: Array<{ content?: Array<{ type?: string; text?: string }> }> };
+    const answer = (payload.output_text || payload.output?.flatMap(item => item.content ?? [])
+      .filter(item => item.type === 'output_text').map(item => item.text ?? '').join('') || '').trim();
+    if (!answer) throw new Error('Economic assistant returned an empty answer');
+    await prisma.$transaction([
+      prisma.economicAssistantMessage.create({ data: { userId: owner, role: 'user', content: question } }),
+      prisma.economicAssistantMessage.create({ data: { userId: owner, role: 'assistant', content: answer.slice(0, 10000) } })
+    ]);
+    await settleAiCreditReservation(reservation, 1000);
+    res.json({ answer, chargedCredits: 1 });
+  } catch (cause) {
+    console.error('[Economic] assistant failed', cause instanceof Error ? cause.message : 'unknown');
+    await refundAiCreditReservation(reservation).catch(err => console.error('[Economic] credit refund failed', err));
+    error(res, 'Не удалось получить ответ Economic. Кредиты возвращены, если списание было выполнено.', 503);
+  }
+}));
