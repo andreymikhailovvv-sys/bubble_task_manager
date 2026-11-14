@@ -623,10 +623,8 @@ private fun WorkspaceHabitBubble(habit: Habit, dueToday: Boolean, colors: Worksp
     dark: Boolean, onClick: () -> Unit) {
     val count = if (dueToday) completedHabitToday(habit) else 0
     val target = habit.targetCount.coerceAtLeast(1)
-    val done = dueToday && count >= target
     val accent = if (dueToday) parseWorkspaceColor(habit.color) else Color(0xFF94A3B8)
     val core = when {
-        done -> accent
         !dueToday -> if (dark) Color(0xFF334155) else Color(0xFFF1F5F9)
         dark -> Color(0xFF0F172A)
         else -> Color.White
@@ -636,12 +634,19 @@ private fun WorkspaceHabitBubble(habit: Habit, dueToday: Boolean, colors: Worksp
         Box(Modifier.align(Alignment.BottomCenter).size(58.dp).clip(CircleShape)
             .clickable(onClick=onClick), contentAlignment=Alignment.Center) {
             Canvas(Modifier.fillMaxSize()) {
-                drawCircle(color=if (dueToday) (if (dark) Color(0xFF1E293B) else Color(0xFFE2E8F0))
-                    else if (dark) Color(0xFF475569) else Color(0xFFE2E8F0))
-                drawArc(color=accent,
-                    startAngle=-90f,
-                    sweepAngle=(if (done) 1f else count.toFloat() / target).coerceIn(0f,1f)*360f,
-                    useCenter=true)
+                val ringWidth=5.dp.toPx()
+                val ringBounds=androidx.compose.ui.geometry.Size(
+                    size.width-ringWidth,size.height-ringWidth)
+                val trackColor=if (dueToday) (if (dark) Color(0xFF1E293B) else Color(0xFFE2E8F0))
+                    else if (dark) Color(0xFF475569) else Color(0xFFE2E8F0)
+                drawCircle(color=trackColor,radius=size.minDimension/2f-ringWidth/2f,
+                    style=Stroke(width=ringWidth))
+                val progress=(count.toFloat()/target).coerceIn(0f,1f)
+                if (progress>0f) {
+                    drawArc(color=accent,startAngle=-90f,sweepAngle=progress*360f,
+                        useCenter=false,topLeft=Offset(ringWidth/2f,ringWidth/2f),
+                        size=ringBounds,style=Stroke(width=ringWidth,cap=StrokeCap.Butt))
+                }
             }
             Column(Modifier.size(48.dp).clip(CircleShape).background(core),
                 horizontalAlignment=Alignment.CenterHorizontally,
@@ -651,7 +656,7 @@ private fun WorkspaceHabitBubble(habit: Habit, dueToday: Boolean, colors: Worksp
                 Spacer(Modifier.height(1.dp))
                 Text("${count.coerceAtMost(target)}/$target",fontSize=10.sp,
                     lineHeight=12.sp,fontWeight=FontWeight.Bold,
-                    color=if (done) Color.White else if (dueToday) colors.text else colors.secondaryText)
+                    color=if (dueToday) colors.text else colors.secondaryText)
             }
         }
         if (!dueToday) {

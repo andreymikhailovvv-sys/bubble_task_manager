@@ -61,20 +61,31 @@ test("Mini App groups today's and later habits with small next weekday badge, th
   assert.match(css, /\.miniapp-habit-circle-completed \.miniapp-habit-circle-core/);
 });
 
-test('Android habits group by schedule with weekend/interval logic and filled completion', () => {
+test('Android habits group by schedule and keep centers unfilled while progress rings close', () => {
   const ui=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/HomeScreen.kt');
   const primary=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/ModernWorkspace.kt');
   assert.match(primary, /state\.habits\.filter \{ !it\.isAutoCompleted && !it\.isArchived \}/);
   assert.match(primary, /val otherHabits = habits\.filterNot \{ habitScheduledToday\(it, today\) \}/);
   assert.match(primary, /workspaceHabitNextDay/);
   assert.match(primary, /other-day-divider/);
-  assert.match(primary, /if \(done\) Color\.White/);
+  const modernRing = primary.slice(primary.indexOf('private fun WorkspaceHabitBubble('),
+    primary.indexOf('private fun HabitsStrip('));
+  assert.match(modernRing, /val progress=\(count\.toFloat\(\)\/target\)\.coerceIn\(0f,1f\)/);
+  assert.match(modernRing, /drawArc\(color=accent,[\s\S]*sweepAngle=progress\*360f,[\s\S]*useCenter=false/);
+  assert.match(modernRing, /style=Stroke\(width=ringWidth,cap=StrokeCap\.Butt\)/);
+  assert.doesNotMatch(modernRing, /done -> accent|useCenter=true|if \(done\) Color\.White/);
+  assert.match(modernRing, /\.background\(core\)/);
   assert.match(ui, /private fun habitScheduledOn\(habit: Habit, date: LocalDate\)/);
   assert.match(ui, /HabitRecurrenceType\.WEEKDAYS -> habit\.weekdays\.contains\(date\.dayOfWeek\.value % 7\)/);
   assert.match(ui, /HabitRecurrenceType\.INTERVAL/);
   assert.match(ui, /val otherDays = active\.filterNot \{ habitScheduledOn\(it, today\) \}/);
   assert.match(ui, /other-days-divider/);
   assert.match(ui, /nextHabitWeekday/);
-  assert.match(ui, /done -> baseColor/);
+  const legacyRing = ui.slice(ui.indexOf('@Composable private fun HabitBubble('),
+    ui.indexOf('/** Compact, clickable card'));
+  assert.match(legacyRing, /val progress = \(amount\.toFloat\(\) \/ target\)\.coerceIn\(0f, 1f\)/);
+  assert.match(legacyRing, /drawArc\(color = baseColor,[\s\S]*sweepAngle = progress \* 360f,[\s\S]*useCenter = false/);
+  assert.match(legacyRing, /circleColor\.copy\(alpha = if \(scheduledToday\) \.2f else \.6f\)/);
+  assert.doesNotMatch(legacyRing, /done -> baseColor|if \(done\) Color\.White|border = if \(done\)/);
   assert.match(ui, /if \(scheduledToday\) 1f else \.24f/);
 });
