@@ -1565,6 +1565,9 @@ model EconomicOperation {
   sourceAccount     EconomicAccount @relation("EconomicSourceAccount", fields: [sourceAccountId], references: [id], onDelete: Restrict)
   targetAccountId   String?
   targetAccount     EconomicAccount? @relation("EconomicTargetAccount", fields: [targetAccountId], references: [id], onDelete: Restrict)
+  debtId            String?
+  debtPhase         String?
+  debt              EconomicDebt? @relation(fields: [debtId], references: [id], onDelete: Cascade)
   category          String?
   title             String
   note              String?
@@ -1576,6 +1579,8 @@ model EconomicOperation {
   @@index([userId, kind, occurredAt])
   @@index([sourceAccountId, kind])
   @@index([targetAccountId, kind])
+  @@unique([debtId, debtPhase])
+  @@index([userId, debtId])
 }
 
 model EconomicCategory {
@@ -1599,6 +1604,7 @@ model EconomicDebt {
   note        String?
   dueAt       DateTime?
   isClosed    Boolean @default(false)
+  operations  EconomicOperation[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   @@index([userId, isClosed, dueAt])
