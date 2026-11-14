@@ -85,6 +85,7 @@ test('Android habits group by schedule and keep centers unfilled while progress 
     ui.indexOf('/** Compact, clickable card'));
   assert.match(legacyRing, /val progress = \(amount\.toFloat\(\) \/ target\)\.coerceIn\(0f, 1f\)/);
   assert.match(legacyRing, /drawArc\(color = baseColor,[\s\S]*sweepAngle = progress \* 360f,[\s\S]*useCenter = false/);
+  assert.match(legacyRing, /circleColor\.copy\(alpha = if \(scheduledToday\) \.2f else \.6f\)/);
   assert.doesNotMatch(legacyRing, /done -> baseColor|if \(done\) Color\.White|border = if \(done\)/);
   assert.match(ui, /if \(scheduledToday\) 1f else \.24f/);
 });
