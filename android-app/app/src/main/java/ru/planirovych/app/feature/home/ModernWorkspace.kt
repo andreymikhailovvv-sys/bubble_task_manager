@@ -153,8 +153,10 @@ fun ModernWorkspace(
     val overdue = overdueTasks.isNotEmpty()
     val todayForHabits = LocalDate.now()
     val habits = remember(state.habits, todayForHabits) {
-        state.habits.filter { habitScheduledToday(it, todayForHabits) }.sortedWith(
-            compareBy<Habit> { h -> isHabitDoneToday(h) }.thenBy { it.createdAt ?: "" }
+        state.habits.filter { !it.isAutoCompleted && !it.isArchived }.sortedWith(
+            compareBy<Habit> { h -> !habitScheduledToday(h, todayForHabits) }
+                .thenBy { h -> habitScheduledToday(h, todayForHabits) && isHabitDoneToday(h) }
+                .thenBy { it.createdAt ?: "" }
         )
     }
     HorizontalPager(state=pagerState,userScrollEnabled=false,
@@ -607,9 +609,70 @@ private fun WorkspaceTopbar(
     }
 }
 
+private fun workspaceHabitNextDay(habit: Habit, today: LocalDate): String {
+    val labels = listOf("вс", "пн", "вт", "ср", "чт", "пт", "сб")
+    for (offset in 1L..370L) {
+        val date = today.plusDays(offset)
+        if (habitScheduledToday(habit, date)) return labels[date.dayOfWeek.value % 7]
+    }
+    return "—"
+}
+
+@Composable
+private fun WorkspaceHabitBubble(habit: Habit, dueToday: Boolean, colors: WorkspaceColors,
+    dark: Boolean, onClick: () -> Unit) {
+    val count = if (dueToday) completedHabitToday(habit) else 0
+    val target = habit.targetCount.coerceAtLeast(1)
+    val done = dueToday && count >= target
+    val accent = if (dueToday) parseWorkspaceColor(habit.color) else Color(0xFF94A3B8)
+    val core = when {
+        done -> accent
+        !dueToday -> if (dark) Color(0xFF334155) else Color(0xFFF1F5F9)
+        dark -> Color(0xFF0F172A)
+        else -> Color.White
+    }
+    val dayBadge = if (dueToday) "" else workspaceHabitNextDay(habit, LocalDate.now())
+    Box(Modifier.width(65.dp).height(67.dp), contentAlignment = Alignment.BottomCenter) {
+        Box(Modifier.align(Alignment.BottomCenter).size(58.dp).clip(CircleShape)
+            .clickable(onClick=onClick), contentAlignment=Alignment.Center) {
+            Canvas(Modifier.fillMaxSize()) {
+                drawCircle(color=if (dueToday) (if (dark) Color(0xFF1E293B) else Color(0xFFE2E8F0))
+                    else if (dark) Color(0xFF475569) else Color(0xFFE2E8F0))
+                drawArc(color=accent,
+                    startAngle=-90f,
+                    sweepAngle=(if (done) 1f else count.toFloat() / target).coerceIn(0f,1f)*360f,
+                    useCenter=true)
+            }
+            Column(Modifier.size(48.dp).clip(CircleShape).background(core),
+                horizontalAlignment=Alignment.CenterHorizontally,
+                verticalArrangement=Arrangement.Center) {
+                Text(habit.icon, modifier=Modifier.alpha(if (dueToday) 1f else .27f),
+                    fontSize=20.sp,lineHeight=21.sp,maxLines=1,textAlign=TextAlign.Center)
+                Spacer(Modifier.height(1.dp))
+                Text("${count.coerceAtMost(target)}/$target",fontSize=10.sp,
+                    lineHeight=12.sp,fontWeight=FontWeight.Bold,
+                    color=if (done) Color.White else if (dueToday) colors.text else colors.secondaryText)
+            }
+        }
+        if (!dueToday) {
+            Surface(modifier=Modifier.align(Alignment.TopEnd).offset(x=1.dp),
+                shape=RoundedCornerShape(7.dp),
+                color=if(dark) Color(0xFF273244) else Color(0xFFE2E8F0),
+                border=BorderStroke(1.dp,if(dark) Color(0xFF64748B) else Color(0xFFCBD5E1))) {
+                Text(dayBadge, Modifier.padding(horizontal=5.dp,vertical=3.dp),
+                    fontSize=10.sp,lineHeight=11.sp,fontWeight=FontWeight.Bold,
+                    color=if(dark) Color(0xFFD8E0E9) else Color(0xFF475569))
+            }
+        }
+    }
+}
+
 @Composable
 private fun HabitsStrip(habits:List<Habit>, colors:WorkspaceColors, dark:Boolean,
     onHabitClick:(Habit)->Unit, onAdd:()->Unit) {
+    val today = LocalDate.now()
+    val todayHabits = habits.filter { habitScheduledToday(it, today) }
+    val otherHabits = habits.filterNot { habitScheduledToday(it, today) }
     val shape=RoundedCornerShape(23.dp)
     Surface(modifier=Modifier.shadow(if(dark)2.dp else 1.dp,shape,
             ambientColor=if(dark)Color(0x15000000) else Color(0x0C394C6A),
@@ -617,44 +680,31 @@ private fun HabitsStrip(habits:List<Habit>, colors:WorkspaceColors, dark:Boolean
         shape=shape,color=colors.panel,
         border=BorderStroke(1.dp,colors.panelBorder),shadowElevation=0.dp) {
         Column(Modifier.fillMaxWidth().padding(15.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.SpaceBetween,
+            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween,
                 modifier=Modifier.fillMaxWidth()) {
-                Text("Привычки",fontSize=18.sp,
-                    fontWeight=FontWeight.Bold,color=colors.text)
+                Text("Привычки",fontSize=18.sp,fontWeight=FontWeight.Bold,color=colors.text)
                 val habitGreen=if(dark)Color(0xFF86EFAC) else Color(0xFF15803D)
-                Surface(shape=CircleShape,
-                    color=if(dark)Color(0xFF193A30) else Color(0xFFE7F6EF)) {
-                    Text("Выполнено "+habits.count(::isHabitDoneToday)+" из "+habits.size,
+                Surface(shape=CircleShape,color=if(dark)Color(0xFF193A30) else Color(0xFFE7F6EF)) {
+                    Text("Выполнено "+todayHabits.count(::isHabitDoneToday)+" из "+todayHabits.size,
                         modifier=Modifier.padding(horizontal=10.dp,vertical=6.dp),
                         fontSize=12.sp,fontWeight=FontWeight.SemiBold,color=habitGreen)
                 }
             }
-            LazyRow(horizontalArrangement=Arrangement.spacedBy(8.dp), contentPadding=PaddingValues(end=2.dp)) {
-                items(habits,key={it.id}) { habit ->
-                    val count = completedHabitToday(habit)
-                    val done = count >= habit.targetCount
-                    val ring = if (done) Color(0xFF94A3B8) else parseWorkspaceColor(habit.color)
-                    val core = if (dark) Color(0xFF0F172A) else if(done) Color(0xFFF1F5F9) else Color.White
-                    Box(Modifier.size(58.dp).clip(CircleShape).clickable{onHabitClick(habit)},contentAlignment=Alignment.Center) {
-                        Canvas(Modifier.fillMaxSize()) {
-                            drawCircle(color=if (dark) Color(0xFF1E293B) else Color(0xFFE2E8F0))
-                            drawArc(color=ring, startAngle=-90f,
-                                sweepAngle=(count.toFloat()/habit.targetCount.coerceAtLeast(1)).coerceIn(0f,1f)*360f,
-                                useCenter=true)
-                        }
-                        Column(Modifier.size(48.dp).clip(CircleShape).background(core),
-                            horizontalAlignment=Alignment.CenterHorizontally,
-                            verticalArrangement=Arrangement.Center) {
-                            Text(habit.icon, fontSize=20.sp,lineHeight=21.sp,
-                                maxLines=1,textAlign=TextAlign.Center)
-                            Spacer(Modifier.height(1.dp))
-                            Text(count.coerceAtMost(habit.targetCount).toString()+"/"+habit.targetCount,
-                                fontSize=10.sp,lineHeight=12.sp,fontWeight=FontWeight.Bold,
-                                color=if(done) colors.secondaryText else colors.text)
-                        }
+            LazyRow(horizontalArrangement=Arrangement.spacedBy(8.dp),contentPadding=PaddingValues(end=2.dp),
+                verticalAlignment=Alignment.CenterVertically) {
+                items(todayHabits,key={it.id}) { habit ->
+                    WorkspaceHabitBubble(habit,true,colors,dark){onHabitClick(habit)}
+                }
+                if(todayHabits.isNotEmpty() && otherHabits.isNotEmpty()) {
+                    item(key="other-day-divider") {
+                        Box(Modifier.padding(horizontal=3.dp).width(1.dp).height(39.dp)
+                            .background(if(dark)Color(0xFF506078) else Color(0xFFCBD5E1)))
                     }
                 }
-                item {
+                items(otherHabits,key={it.id}) { habit ->
+                    WorkspaceHabitBubble(habit,false,colors,dark){onHabitClick(habit)}
+                }
+                item(key="habit-add") {
                     val addGreen=if(dark)Color(0xFF6EE7B7) else Color(0xFF6DD9B6)
                     Box(Modifier.size(58.dp).clip(CircleShape)
                         .background(tinted(addGreen,colors.panel,.13f))
@@ -663,8 +713,7 @@ private fun HabitsStrip(habits:List<Habit>, colors:WorkspaceColors, dark:Boolean
                                 style=Stroke(width=1.dp.toPx(),
                                     pathEffect=PathEffect.dashPathEffect(
                                         floatArrayOf(4.dp.toPx(),3.dp.toPx()),0f)))
-                        }
-                        .clickable(onClick=onAdd),contentAlignment=Alignment.Center){
+                        }.clickable(onClick=onAdd),contentAlignment=Alignment.Center) {
                         Icon(Icons.Default.Add,"Добавить привычку",
                             tint=addGreen,modifier=Modifier.size(21.dp))
                     }
