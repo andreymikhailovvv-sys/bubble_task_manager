@@ -1012,6 +1012,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [authLogin, setAuthLogin] = useState('');
   const [authEmail, setAuthEmail] = useState('');
   const [accountEmailDraft, setAccountEmailDraft] = useState('');
+  const [accountUsernameDraft, setAccountUsernameDraft] = useState('');
   const [accountEmailPassword, setAccountEmailPassword] = useState('');
   const [accountEmailMessage, setAccountEmailMessage] = useState('');
   const [accountEmailBusy, setAccountEmailBusy] = useState(false);
@@ -1077,6 +1078,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   useEffect(() => {
     setAccountEmailDraft(currentUser?.pendingEmail || currentUser?.email || '');
   }, [currentUser?.pendingEmail, currentUser?.email]);
+  useEffect(() => {
+    setAccountUsernameDraft(currentUser?.username || '');
+  }, [currentUser?.username]);
   const [authPassword, setAuthPassword] = useState('');
   const [authName, setAuthName] = useState('');
   const [authConsentAccepted, setAuthConsentAccepted] = useState(false);
@@ -1428,6 +1432,34 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     || currentUser?.username?.trim()
     || currentUser?.email?.trim()
     || 'Пользователь';
+
+  const saveAccountUsername = async () => {
+    if (!currentUser || accountEmailBusy) return;
+    const username = accountUsernameDraft.trim();
+    if (username.length < 3 || username.length > 50) {
+      setAccountEmailMessage('Логин должен содержать от 3 до 50 символов.');
+      return;
+    }
+    if (username.toLowerCase() === (currentUser.username || '').toLowerCase()) return;
+    setAccountEmailBusy(true);
+    setAccountEmailMessage('');
+    try {
+      const result = await api.updateProfile({
+        name: currentUser.name ?? '',
+        email: currentUser.pendingEmail || currentUser.email || '',
+        username,
+        currentPassword: accountEmailPassword || undefined
+      });
+      setCurrentUser(result.user);
+      setAccountUsernameDraft(result.user.username || '');
+      setAccountEmailPassword('');
+      setAccountEmailMessage('Логин изменён.');
+    } catch (error) {
+      setAccountEmailMessage(error instanceof Error ? error.message : 'Не удалось изменить логин');
+    } finally {
+      setAccountEmailBusy(false);
+    }
+  };
 
   const saveAccountEmail = async () => {
     if (!currentUser || !accountEmailDraft.trim() || accountEmailBusy) return;
@@ -4433,12 +4465,26 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 {hasAccount ? (
                   <>
                     <p className="mb-2 break-words text-sm text-muted">{accountDisplayName}</p>
+                    <label className="mb-2 block text-xs text-muted">Логин
+                      <input type="text" name="username" autoComplete="username" minLength={3} maxLength={50}
+                        placeholder="Не менее 3 символов"
+                        value={accountUsernameDraft} onChange={event => setAccountUsernameDraft(event.target.value)}
+                        className="mt-1 w-full rounded-xl border border-[color:var(--panel-border)] bg-[color:var(--muted-bg)] px-3 py-2 text-sm text-primary" />
+                    </label>
+                    {accountUsernameDraft.trim().toLowerCase() !== (currentUser?.username || '').toLowerCase() ? (
+                      <button type="button" className="surface-muted mb-2 w-full rounded-xl px-3 py-2 text-sm text-primary"
+                        disabled={accountEmailBusy || accountUsernameDraft.trim().length < 3}
+                        onClick={() => void saveAccountUsername()}>{accountEmailBusy ? 'Сохраняем…' : 'Сохранить логин'}</button>
+                    ) : null}
                     <label className="mb-2 block text-xs text-muted">{currentUser?.hasPassword ? 'Адрес для входа и восстановления' : 'Электронная почта аккаунта'}
                       <input type="email" autoComplete="email" name="email" placeholder={currentUser?.pendingEmail || currentUser?.email || 'name@example.com'}
                         value={accountEmailDraft} onChange={event => setAccountEmailDraft(event.target.value)}
                         className="mt-1 w-full rounded-xl border border-[color:var(--panel-border)] bg-[color:var(--muted-bg)] px-3 py-2 text-sm text-primary" />
                     </label>
-                    {currentUser?.hasPassword && accountEmailDraft.trim().toLowerCase() !== (currentUser?.pendingEmail || currentUser?.email || '').toLowerCase() ? (
+                    {currentUser?.hasPassword && (
+                      accountEmailDraft.trim().toLowerCase() !== (currentUser?.pendingEmail || currentUser?.email || '').toLowerCase() ||
+                      accountUsernameDraft.trim().toLowerCase() !== (currentUser?.username || '').toLowerCase()
+                    ) ? (
                       <input type="password" autoComplete="current-password" placeholder="Текущий пароль для смены почты"
                         value={accountEmailPassword} onChange={event => setAccountEmailPassword(event.target.value)}
                         className="mb-2 w-full rounded-xl border border-[color:var(--panel-border)] bg-[color:var(--muted-bg)] px-3 py-2 text-sm text-primary" />
