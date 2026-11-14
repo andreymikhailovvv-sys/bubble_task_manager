@@ -871,7 +871,10 @@ apiRouter.patch('/user/profile', requireAuth, async (req, res) => {
     return;
   }
   if (usernameChanged) {
-    const owner = await prisma.user.findUnique({ where: { username: requestedUsername! }, select: { id: true } });
+    const owner = await prisma.user.findFirst({
+      where: { username: { equals: requestedUsername!, mode: 'insensitive' } },
+      select: { id: true }
+    });
     if (owner && owner.id !== user.id) {
       res.status(409).json({ error: 'Этот логин уже занят другим пользователем' });
       return;
