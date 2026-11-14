@@ -835,6 +835,14 @@ apiRouter.patch('/user/profile', requireAuth, async (req, res) => {
   const emailRaw = String(req.body?.email ?? '').trim().toLowerCase();
   const currentPassword = String(req.body?.currentPassword ?? '');
   const newPassword = String(req.body?.newPassword ?? '');
+  const usernameProvided = Object.prototype.hasOwnProperty.call(req.body ?? {}, 'username');
+  const requestedUsername = usernameProvided && typeof req.body.username === 'string'
+    ? normalizeAccountLogin(req.body.username) : null;
+  // Registration and profile edits use the same canonical lowercase login.
+  if (usernameProvided && (!requestedUsername || requestedUsername.length < 3 || requestedUsername.length > 50)) {
+    res.status(400).json({ error: 'Логин должен содержать от 3 до 50 символов' });
+    return;
+  }
 
   if (name.length > 100) {
     res.status(400).json({ error: 'Имя должно содержать не более 100 символов' });
@@ -857,6 +865,18 @@ apiRouter.patch('/user/profile', requireAuth, async (req, res) => {
     res.status(403).json({ error: 'Настройки профиля доступны только для аккаунта' });
     return;
   }
+  const usernameChanged = requestedUsername !== null && requestedUsername !== user.username;
+  if (usernameChanged && user.passwordHash && !authService.verifyPassword(currentPassword, user.passwordHash)) {
+    res.status(400).json({ error: 'Для изменения логина укажите текущий пароль' });
+    return;
+  }
+  if (usernameChanged) {
+    const owner = await prisma.user.findUnique({ where: { username: requestedUsername! }, select: { id: true } });
+    if (owner && owner.id !== user.id) {
+      res.status(409).json({ error: 'Этот логин уже занят другим пользователем' });
+      return;
+    }
+  }
   if (newPassword && user.passwordHash && !authService.verifyPassword(currentPassword, user.passwordHash)) {
     res.status(400).json({ error: 'Текущий пароль указан неверно' });
     return;
@@ -873,6 +893,7 @@ apiRouter.patch('/user/profile', requireAuth, async (req, res) => {
       where: { id: user.id },
       data: {
         name: name || null,
+        ...(usernameChanged ? { username: requestedUsername } : {}),
         // The existing verified address remains active until the replacement is proven.
         ...(emailRaw === (user.pendingEmail ?? user.email ?? '') ? {} : emailRaw
           ? { pendingEmail: emailRaw }
@@ -898,7 +919,8 @@ apiRouter.patch('/user/profile', requireAuth, async (req, res) => {
     res.json({ user: toAuthUser(updatedUser), emailDelivery });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      res.status(409).json({ error: 'Эта почта уже используется' });
+      const fields = Array.isArray(error.meta?.target) ? error.meta.target : [];
+      res.status(409).json({ error: fields.includes('username') ? 'Этот логин уже занят другим пользователем' : 'Эта почта уже используется' });
       return;
     }
     throw error;
