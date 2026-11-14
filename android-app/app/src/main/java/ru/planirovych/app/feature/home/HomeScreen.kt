@@ -3,6 +3,7 @@ package ru.planirovych.app.feature.home
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.rememberPagerState
 import kotlinx.coroutines.launch
@@ -18,6 +19,10 @@ import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -579,31 +584,40 @@ private fun nextHabitWeekday(habit: Habit, today: LocalDate): String {
     nextWeekday: String = "") {
     val amount = if (scheduledToday) habit.stats.filter { it.dateKey == today }.sumOf { it.amount } else 0
     val target = habit.targetCount.coerceAtLeast(1)
-    val done = scheduledToday && amount >= target
+    val progress = (amount.toFloat() / target).coerceIn(0f, 1f)
     val baseColor = parseColor(habit.color, MaterialTheme.colorScheme.primary)
     val circleColor = if (scheduledToday) baseColor else MaterialTheme.colorScheme.outline
-    val bg = when {
-        done -> baseColor
-        !scheduledToday -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .68f)
-        else -> baseColor.copy(alpha = .13f)
-    }
-    val contentColor = if (done) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+    val bg = if (!scheduledToday) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .68f)
+        else baseColor.copy(alpha = .13f)
+    val contentColor = MaterialTheme.colorScheme.onSurfaceVariant
     Column(Modifier.width(72.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.width(72.dp).height(70.dp), contentAlignment = Alignment.BottomCenter) {
-            Surface(
-                modifier = Modifier.align(Alignment.BottomCenter),
-                shape = CircleShape,
-                color = bg,
-                border = if (done) null else BorderStroke(2.dp, circleColor.copy(alpha = if (scheduledToday) 1f else .6f)),
-                shadowElevation = if (scheduledToday) 2.dp else 0.dp
-            ) {
-                Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(habit.icon, modifier = Modifier.alpha(if (scheduledToday) 1f else .24f),
-                            style = MaterialTheme.typography.titleLarge)
-                        Text("${amount.coerceAtMost(target)}/$target",
-                            color = contentColor.copy(alpha = if (scheduledToday) 1f else .65f),
-                            style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            Box(Modifier.align(Alignment.BottomCenter).size(60.dp)) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    shape = CircleShape,
+                    color = bg,
+                    border = BorderStroke(2.dp, circleColor.copy(alpha = if (scheduledToday) 1f else .6f)),
+                    shadowElevation = if (scheduledToday) 2.dp else 0.dp
+                ) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(habit.icon, modifier = Modifier.alpha(if (scheduledToday) 1f else .24f),
+                                style = MaterialTheme.typography.titleLarge)
+                            Text("${amount.coerceAtMost(target)}/$target",
+                                color = contentColor.copy(alpha = if (scheduledToday) 1f else .65f),
+                                style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                if (progress > 0f) {
+                    Canvas(Modifier.fillMaxSize()) {
+                        val ringWidth = 2.dp.toPx()
+                        drawArc(color = baseColor,
+                            startAngle = -90f, sweepAngle = progress * 360f,
+                            useCenter = false, topLeft = Offset(ringWidth / 2f, ringWidth / 2f),
+                            size = Size(size.width - ringWidth, size.height - ringWidth),
+                            style = Stroke(width = ringWidth, cap = StrokeCap.Butt))
                     }
                 }
             }
