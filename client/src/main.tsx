@@ -6,6 +6,7 @@ const App = React.lazy(() => import('./App'));
 const MiniApp = React.lazy(() => import('./MiniApp'));
 const AdminPage = React.lazy(() => import('./AdminPage'));
 const BusinessApp = React.lazy(() => import('./BusinessApp'));
+const EconomicApp = React.lazy(() => import('./EconomicApp'));
 const PublicPages = React.lazy(() => import('./PublicPages'));
 import CookieBanner from './components/CookieBanner';
 const TelegramAuthPage = React.lazy(() => import('./TelegramAuthPage'));
@@ -80,6 +81,7 @@ const isWorkHost = window.location.hostname.toLowerCase() === 'work.planirovych.
 const isWorkPreview = import.meta.env.DEV && ['localhost','127.0.0.1'].includes(window.location.hostname) && window.location.pathname === '/business-preview';
 const isBusinessRoute = isWorkHost || isWorkPreview;
 const isMiniAppRoute = window.location.pathname.startsWith('/miniapp');
+const isEconomicRoute = window.location.pathname === '/economic' || window.location.pathname === '/economic/';
 // Android embeds this SAME MiniApp frontend for pixel-identical Realtime UI.
 // Runtime web uses existing authenticated session, never Telegram initData.
 const isAndroidPlanikRoute = window.location.pathname === '/android-planik';
@@ -113,6 +115,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           ? <TelegramAuthPage />
         : isAccountEmailRoute
           ? <AuthEmailPage />
+        : isEconomicRoute
+          ? <EconomicApp />
         : isMiniAppRoute
           ? <MiniApp runtime="telegram" />
         : isAndroidPlanikRoute
