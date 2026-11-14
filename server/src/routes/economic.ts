@@ -67,11 +67,12 @@ economicRouter.get('/snapshot', asyncHandler(async (req, res) => {
   if (!existing) await ensureMain(owner);
   const monthStart = new Date();
   monthStart.setUTCDate(1); monthStart.setUTCHours(0, 0, 0, 0);
+  const monthEnd = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 1));
   const [accounts, sources, incoming, monthKinds, recent, categories, debts, loans, operationCount, messages] = await Promise.all([
     prisma.economicAccount.findMany({ where: { userId: owner }, orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] }),
     prisma.economicOperation.groupBy({ by: ['sourceAccountId', 'kind'], where: { userId: owner }, _sum: { amountMinor: true } }),
     prisma.economicOperation.groupBy({ by: ['targetAccountId'], where: { userId: owner, kind: 'TRANSFER', targetAccountId: { not: null } }, _sum: { amountMinor: true } }),
-    prisma.economicOperation.groupBy({ by: ['kind'], where: { userId: owner, kind: { in: ['INCOME', 'EXPENSE'] }, occurredAt: { gte: monthStart } }, _sum: { amountMinor: true } }),
+    prisma.economicOperation.groupBy({ by: ['kind'], where: { userId: owner, kind: { in: ['INCOME', 'EXPENSE'] }, occurredAt: { gte: monthStart, lt: monthEnd } }, _sum: { amountMinor: true } }),
     prisma.economicOperation.findMany({ where: { userId: owner }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 8 }),
     prisma.economicCategory.findMany({ where: { userId: owner }, orderBy: { createdAt: 'asc' } }),
     prisma.economicDebt.findMany({ where: { userId: owner }, orderBy: [{ isClosed: 'asc' }, { createdAt: 'desc' }], take: 200 }),
@@ -289,13 +290,14 @@ economicRouter.post('/assistant/chat', asyncHandler(async (req, res) => {
   // Generate balances by account, including incoming transfers, not just opening sums.
   const monthStart = new Date();
   monthStart.setUTCDate(1); monthStart.setUTCHours(0, 0, 0, 0);
+  const monthEnd = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 1));
   const [accounts, debts, loans, outgoing, incoming, monthKinds, recent, history] = await Promise.all([
     prisma.economicAccount.findMany({ where: { userId: owner }, select: { name: true, openingBalanceMinor: true, id: true } }),
     prisma.economicDebt.findMany({ where: { userId: owner, isClosed: false }, select: { direction: true, counterparty: true, amountMinor: true }, take: 30 }),
     prisma.economicLoan.findMany({ where: { userId: owner, isClosed: false }, select: { name: true, principalMinor: true, annualRateBps: true, termMonths: true }, take: 30 }),
     prisma.economicOperation.groupBy({ by: ['sourceAccountId', 'kind'], where: { userId: owner }, _sum: { amountMinor: true } }),
     prisma.economicOperation.groupBy({ by: ['targetAccountId'], where: { userId: owner, kind: 'TRANSFER', targetAccountId: { not: null } }, _sum: { amountMinor: true } }),
-    prisma.economicOperation.groupBy({ by: ['kind'], where: { userId: owner, kind: { in: ['INCOME', 'EXPENSE'] }, occurredAt: { gte: monthStart } }, _sum: { amountMinor: true } }),
+    prisma.economicOperation.groupBy({ by: ['kind'], where: { userId: owner, kind: { in: ['INCOME', 'EXPENSE'] }, occurredAt: { gte: monthStart, lt: monthEnd } }, _sum: { amountMinor: true } }),
     prisma.economicOperation.findMany({ where: { userId: owner }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 25,
       select: { kind: true, amountMinor: true, title: true, category: true, occurredAt: true } }),
     prisma.economicAssistantMessage.findMany({ where: { userId: owner }, orderBy: { createdAt: 'desc' }, take: 8 })
