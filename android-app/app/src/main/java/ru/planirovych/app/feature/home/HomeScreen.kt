@@ -597,7 +597,7 @@ private fun nextHabitWeekday(habit: Habit, today: LocalDate): String {
                     modifier = Modifier.fillMaxSize(),
                     shape = CircleShape,
                     color = bg,
-                    border = BorderStroke(2.dp, circleColor.copy(alpha = if (scheduledToday) 1f else .6f)),
+                    border = BorderStroke(2.dp, circleColor.copy(alpha = if (scheduledToday) .2f else .6f)),
                     shadowElevation = if (scheduledToday) 2.dp else 0.dp
                 ) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
