@@ -75,6 +75,6 @@ test('Android habits group by schedule with weekend/interval logic and filled co
   assert.match(ui, /val otherDays = active\.filterNot \{ habitScheduledOn\(it, today\) \}/);
   assert.match(ui, /other-days-divider/);
   assert.match(ui, /nextHabitWeekday/);
-  assert.match(ui, /if \(done\) baseColor/);
+  assert.match(ui, /done -> baseColor/);
   assert.match(ui, /if \(scheduledToday\) 1f else \.24f/);
 });
