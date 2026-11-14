@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, BookOpen, CalendarDays, Check, ChevronRight, CircleDollarSign, CreditCard, Landmark, LayoutDashboard, Loader2, MessageCircle, Pencil, Plus, Send, Settings2, Trash2, WalletCards, X } from 'lucide-react';
 import { api, type CurrentUser } from './lib/api';
 import ModuleRail from './components/ModuleRail';
+import { annuityEstimate, formatMinorRub as money, minorToRublesInput as inputMoney, rublesToMinor as parseMoney } from './lib/economicMoney';
 import './EconomicApp.css';
 
 type Kind = 'INCOME' | 'EXPENSE' | 'TRANSFER';
@@ -21,23 +22,6 @@ type Snapshot = {
 const baseCategories: Record<'INCOME' | 'EXPENSE', string[]> = {
   INCOME: ['Зарплата', 'Подработка', 'Бизнес', 'Подарки', 'Проценты', 'Другое'],
   EXPENSE: ['Продукты', 'Кафе и рестораны', 'Транспорт', 'Жильё', 'Покупки', 'Здоровье', 'Развлечения', 'Путешествия', 'Образование', 'Другое']
-};
-const money = (minor: string | number) => {
-  const n = BigInt(minor);
-  const positive = n < 0n ? -n : n;
-  return (n < 0n ? '−' : '') + (positive / 100n).toLocaleString('ru-RU') + ',' +
-    (positive % 100n).toString().padStart(2, '0') + ' ₽';
-};
-const inputMoney = (minor: string | number) => {
-  const n = BigInt(minor), absolute = n < 0n ? -n : n;
-  return (n < 0n ? '-' : '') + String(absolute / 100n) + ',' + String(absolute % 100n).padStart(2, '0');
-};
-const parseMoney = (raw: string, allowNegative = false) => {
-  const s = raw.trim().replace(',', '.');
-  if (!new RegExp(allowNegative ? '^-?\\d{1,12}(?:\\.\\d{1,2})?$' : '^\\d{1,12}(?:\\.\\d{1,2})?$').test(s)) throw new Error('Введите сумму в рублях, не более двух знаков после запятой');
-  const sign = s.startsWith('-') ? -1n : 1n;
-  const parts = s.replace('-', '').split('.');
-  return String(sign * (BigInt(parts[0]) * 100n + BigInt((parts[1] || '').padEnd(2, '0') || '0')));
 };
 const toDateInput = (value?: string | null) => value ? new Date(value).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
 const dateLabel = (value?: string | null) => value ? new Date(value).toLocaleDateString('ru-RU') : 'Без даты';
@@ -61,14 +45,7 @@ async function economicRequest<T>(path: string, method = 'GET', body?: unknown):
   if (!response.ok) throw new Error(result.error || 'Не удалось выполнить запрос');
   return result;
 }
-function loanFigures(loan: Loan) {
-  const principal = Number(loan.principalMinor) / 100;
-  const rate = loan.annualRateBps / 10000 / 12;
-  const payment = rate ? principal * rate / (1 - Math.pow(1 + rate, -loan.termMonths)) : principal / loan.termMonths;
-  const total = payment * loan.termMonths;
-  return { monthly: Math.round(payment * 100).toString(), total: Math.round(total * 100).toString(),
-    overpay: Math.max(0, Math.round((total - principal) * 100)).toString() };
-}
+const loanFigures = (loan: Loan) => annuityEstimate(loan);
 
 function EconomicMascot({ onClick, active }: { onClick: () => void; active: boolean }) {
   return <button className={'econ-mascot ' + (active ? 'active' : '')} type="button" onClick={onClick} aria-label={active ? 'Закрыть помощника Economic' : 'Открыть помощника Economic'} title="Помощник Economic">
