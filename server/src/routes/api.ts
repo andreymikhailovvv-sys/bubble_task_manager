@@ -45,6 +45,7 @@ import { businessOrganizationsRouter } from './business-organizations.js';
 import { workCompanyRouter } from './business-company-management.js';
 import { workProjectsRouter } from './business-projects.js';
 import { workAiRouter } from './business-ai.js';
+import { economicRouter } from './economic.js';
 import { grantCompanyCredits, validateCompanyCreditAmount } from '../services/work-ai-wallet.service.js';
 import { workInvitationRouter } from './business-invitations.js';
 import { validateTelegramWebAppInitData } from '../lib/telegram-webapp-auth.js';
@@ -76,6 +77,8 @@ import { accountEmailService, normalizeEmail, accountMailConfigurationIssues, ac
 
 
 export const apiRouter = Router();
+// Personal finance workspace shares login but not planner or Work data.
+apiRouter.use('/economic', economicRouter);
 
 // Public, read-only catalog. Binaries are not stored on this server: Timeweb
 // deploys cannot remove a published APK. Never accept external URLs from users.
