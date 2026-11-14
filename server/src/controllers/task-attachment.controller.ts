@@ -30,6 +30,10 @@ export const taskAttachmentController = {
     res.set('Cache-Control', 'private, no-store');
     res.json(await taskAttachmentService.listOwned(req.user!.id));
   },
+  removeAllOwned: async (req: Request, res: Response) => {
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await taskAttachmentService.removeAllOwned(req.user!.id));
+  },
   removeOwned: async (req: Request, res: Response) => {
     res.json(await taskAttachmentService.removeOwned(req.params.attachmentId, req.user!.id));
   },
