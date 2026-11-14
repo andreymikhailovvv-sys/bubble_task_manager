@@ -1722,6 +1722,7 @@ apiRouter.get('/ai-chat/uploaded-attachments/:messageId/:ordinal/download', requ
 }));
 apiRouter.get('/user/attachments/storage', requireAuth, asyncHandler(taskAttachmentController.storage));
 apiRouter.get('/user/attachments', requireAuth, asyncHandler(taskAttachmentController.listOwned));
+apiRouter.delete('/user/attachments', requireAuth, mailOrigin, asyncHandler(taskAttachmentController.removeAllOwned));
 apiRouter.delete('/user/attachments/:attachmentId', requireAuth, asyncHandler(taskAttachmentController.removeOwned));
 apiRouter.get('/tasks/:id/attachments', requireAuth, taskAttachmentController.list);
 apiRouter.get('/tasks/:id/attachments/:attachmentId/download', requireAuth, taskAttachmentController.download);
