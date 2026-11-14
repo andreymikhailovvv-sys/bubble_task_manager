@@ -62,6 +62,12 @@ test('Mini App groups today's and later habits with small next weekday badge, th
 
 test('Android habits group by schedule with weekend/interval logic and filled completion', () => {
   const ui=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/HomeScreen.kt');
+  const primary=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/ModernWorkspace.kt');
+  assert.match(primary, /state\.habits\.filter \{ !it\.isAutoCompleted && !it\.isArchived \}/);
+  assert.match(primary, /val otherHabits = habits\.filterNot \{ habitScheduledToday\(it, today\) \}/);
+  assert.match(primary, /workspaceHabitNextDay/);
+  assert.match(primary, /other-day-divider/);
+  assert.match(primary, /if \(done\) Color\.White/);
   assert.match(ui, /private fun habitScheduledOn\(habit: Habit, date: LocalDate\)/);
   assert.match(ui, /HabitRecurrenceType\.WEEKDAYS -> habit\.weekdays\.contains\(date\.dayOfWeek\.value % 7\)/);
   assert.match(ui, /HabitRecurrenceType\.INTERVAL/);
