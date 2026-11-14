@@ -669,7 +669,7 @@ export const api = {
   forgotPassword: (email: string) => request<{ ok: true; message: string }>('/api/auth/email/forgot', { method: 'POST', body: JSON.stringify({ email }) }),
   resetPassword: (token: string, password: string) => request<{ ok: true }>('/api/auth/email/reset', { method: 'POST', body: JSON.stringify({ token, password }) }),
   login: (payload: { login: string; password: string }) => request<{ user: CurrentUser }>('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
-  updateProfile: (payload: { name: string; email: string; currentPassword?: string; newPassword?: string }) =>
+  updateProfile: (payload: { name: string; email: string; username?: string; currentPassword?: string; newPassword?: string }) =>
     request<{ user: CurrentUser; emailDelivery?: 'SENT' | 'FAILED' | 'NOT_REQUESTED' }>('/api/user/profile', { method: 'PATCH', body: JSON.stringify(payload) }),
   loginTelegramMiniApp: (payload: { initData: string }) =>
     request<{ user: CurrentUser }>('/api/auth/telegram-miniapp', { method: 'POST', body: JSON.stringify(payload) }),
@@ -755,6 +755,7 @@ export const api = {
   getAttachmentStorage: () => request<AttachmentStorage>('/api/user/attachments/storage'),
   listAccountAttachments: () => request<AccountAttachment[]>('/api/user/attachments'),
   deleteAccountAttachment: (id: string) => request<{ ok: true }>(`/api/user/attachments/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  deleteAllAccountAttachments: () => request<{ ok: true; deletedCount: number }>('/api/user/attachments', { method: 'DELETE' }),
   getTaskAttachments: (taskId: string) => request<TaskAttachment[]>(`/api/tasks/${taskId}/attachments`),
   getTaskAttachmentDownloadUrl: (taskId: string, attachmentId: string) => `/api/tasks/${taskId}/attachments/${attachmentId}/download`,
   createTaskAttachmentDownloadLink: (taskId: string, attachmentId: string) =>
