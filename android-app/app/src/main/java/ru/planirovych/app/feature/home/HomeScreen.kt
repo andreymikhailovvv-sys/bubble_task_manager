@@ -16,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -26,6 +27,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.LocalDate
+import java.time.Instant
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
@@ -495,15 +499,136 @@ private fun Workspace(
 }
 @Composable private fun Metric(icon:androidx.compose.ui.graphics.vector.ImageVector,label:String,value:String,color:Color,modifier:Modifier){ Surface(modifier,shape=RoundedCornerShape(13.dp),color=color.copy(.12f),border=BorderStroke(1.dp,color.copy(.3f))){Row(Modifier.padding(10.dp),verticalAlignment=Alignment.CenterVertically){Icon(icon,null,tint=color);Spacer(Modifier.width(7.dp));Column{Text(label,style=MaterialTheme.typography.labelSmall);Text(value,fontWeight=FontWeight.Bold)}}}}
 
-@Composable private fun HabitsCard(habits:List<Habit>) {
-    val today=LocalDate.now().toString(); val complete=habits.count { h -> h.stats.filter{it.dateKey==today}.sumOf{it.amount} >= h.targetCount }
-    Surface(shape=RoundedCornerShape(22.dp), tonalElevation=2.dp, border=BorderStroke(1.dp,MaterialTheme.colorScheme.outline.copy(.6f))) { Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically){Text("Привычки",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold);Surface(shape=CircleShape,color=MaterialTheme.colorScheme.secondary.copy(.12f)){Text("Выполнено $complete из ${habits.size}",Modifier.padding(horizontal=10.dp,vertical=5.dp),style=MaterialTheme.typography.labelSmall)}}
-        if(habits.isEmpty()) Text("Привычек пока нет",color=MaterialTheme.colorScheme.onSurfaceVariant)
-        else LazyRow(horizontalArrangement=Arrangement.spacedBy(10.dp)){items(habits,key={it.id}){ HabitBubble(it,today) }}
-    }}
+/** Mirrors MiniApp recurrence semantics. Weekdays use JS day numbers (0=Sunday). */
+private fun habitScheduledOn(habit: Habit, date: LocalDate): Boolean {
+    if (habit.isArchived || habit.isAutoCompleted) return false
+    val created = habit.createdAt?.let { raw ->
+        runCatching { Instant.parse(raw).atZone(ZoneId.systemDefault()).toLocalDate() }
+            .recoverCatching { OffsetDateTime.parse(raw).atZoneSameInstant(ZoneId.systemDefault()).toLocalDate() }
+            .getOrNull()
+    } ?: date
+    if (date.isBefore(created)) return false
+    if (habit.durationMode == HabitDurationMode.UNTIL_DATE &&
+        habit.endDate?.take(10)?.let { date.toString() > it } == true) return false
+    return when (habit.recurrenceType) {
+        HabitRecurrenceType.DAILY -> true
+        HabitRecurrenceType.WEEKDAYS -> habit.weekdays.contains(date.dayOfWeek.value % 7)
+        HabitRecurrenceType.INTERVAL ->
+            ChronoUnit.DAYS.between(created, date) %
+                (habit.intervalDays ?: 1).coerceAtLeast(1) == 0L
+    }
 }
-@Composable private fun HabitBubble(habit:Habit,today:String){val amount=habit.stats.filter{it.dateKey==today}.sumOf{it.amount};val done=amount>=habit.targetCount;val color=parseColor(habit.color,MaterialTheme.colorScheme.primary);Column(Modifier.width(72.dp),horizontalAlignment=Alignment.CenterHorizontally){Surface(shape=CircleShape,color=color.copy(if(done).26f else .13f),border=BorderStroke(2.dp,if(done)Color(0xFF22C55E) else color),shadowElevation=2.dp){Box(Modifier.size(60.dp),contentAlignment=Alignment.Center){Column(horizontalAlignment=Alignment.CenterHorizontally){Text(habit.icon,style=MaterialTheme.typography.titleLarge);Text("${amount.coerceAtMost(habit.targetCount)}/${habit.targetCount}",style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.Bold)}}};Text(habit.name,Modifier.padding(top=5.dp),style=MaterialTheme.typography.labelSmall,maxLines=1,overflow=TextOverflow.Ellipsis)}}
+private fun nextHabitWeekday(habit: Habit, today: LocalDate): String {
+    val weekdayLabels = listOf("вс", "пн", "вт", "ср", "чт", "пт", "сб")
+    for (offset in 1L..370L) {
+        val date = today.plusDays(offset)
+        if (habitScheduledOn(habit, date)) return weekdayLabels[date.dayOfWeek.value % 7]
+    }
+    return "—"
+}
+
+@Composable private fun HabitsCard(habits: List<Habit>) {
+    val today = LocalDate.now()
+    val dayKey = today.toString()
+    val active = habits.filter { !it.isAutoCompleted && !it.isArchived }
+    val dueToday = active.filter { habitScheduledOn(it, today) }.sortedWith(
+        compareBy<Habit> { it.stats.filter { stat -> stat.dateKey == dayKey }.sumOf { stat -> stat.amount } >= it.targetCount }
+            .thenBy { it.createdAt ?: "" }
+    )
+    val otherDays = active.filterNot { habitScheduledOn(it, today) }
+    val complete = dueToday.count { habit ->
+        habit.stats.filter { it.dateKey == dayKey }.sumOf { it.amount } >= habit.targetCount
+    }
+    Surface(shape = RoundedCornerShape(22.dp), tonalElevation = 2.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = .6f))) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically) {
+                Text("Привычки", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondary.copy(alpha = .12f)) {
+                    Text("Выполнено $complete из ${dueToday.size}",
+                        Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        style = MaterialTheme.typography.labelSmall)
+                }
+            }
+            if (active.isEmpty()) {
+                Text("Привычек пока нет", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(9.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    items(dueToday, key = { it.id }) { habit ->
+                        HabitBubble(habit, dayKey, scheduledToday = true)
+                    }
+                    if (dueToday.isNotEmpty() && otherDays.isNotEmpty()) {
+                        item(key = "other-days-divider") {
+                            Box(Modifier.padding(horizontal = 3.dp).width(1.dp).height(41.dp)
+                                .background(MaterialTheme.colorScheme.outline.copy(alpha = .48f)))
+                        }
+                    }
+                    items(otherDays, key = { it.id }) { habit ->
+                        HabitBubble(habit, dayKey, scheduledToday = false,
+                            nextWeekday = nextHabitWeekday(habit, today))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable private fun HabitBubble(habit: Habit, today: String, scheduledToday: Boolean,
+    nextWeekday: String = "") {
+    val amount = if (scheduledToday) habit.stats.filter { it.dateKey == today }.sumOf { it.amount } else 0
+    val target = habit.targetCount.coerceAtLeast(1)
+    val done = scheduledToday && amount >= target
+    val baseColor = parseColor(habit.color, MaterialTheme.colorScheme.primary)
+    val circleColor = if (scheduledToday) baseColor else MaterialTheme.colorScheme.outline
+    val bg = when {
+        done -> baseColor
+        !scheduledToday -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .68f)
+        else -> baseColor.copy(alpha = .13f)
+    }
+    val contentColor = if (done) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+    Column(Modifier.width(72.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.width(72.dp).height(70.dp), contentAlignment = Alignment.BottomCenter) {
+            Surface(
+                modifier = Modifier.align(Alignment.BottomCenter),
+                shape = CircleShape,
+                color = bg,
+                border = if (done) null else BorderStroke(2.dp, circleColor.copy(alpha = if (scheduledToday) 1f else .6f)),
+                shadowElevation = if (scheduledToday) 2.dp else 0.dp
+            ) {
+                Box(Modifier.size(60.dp), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(habit.icon, modifier = Modifier.alpha(if (scheduledToday) 1f else .24f),
+                            style = MaterialTheme.typography.titleLarge)
+                        Text("${amount.coerceAtMost(target)}/$target",
+                            color = contentColor.copy(alpha = if (scheduledToday) 1f else .65f),
+                            style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            if (!scheduledToday) {
+                Surface(
+                    modifier = Modifier.align(Alignment.TopEnd).offset(x = 2.dp, y = 0.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = .6f)),
+                    shadowElevation = 1.dp
+                ) {
+                    Text(nextWeekday, Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+        Text(habit.name, Modifier.padding(top = 5.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = if (scheduledToday) MaterialTheme.colorScheme.onSurface
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
 
 /** Compact, clickable card following the Telegram MiniApp list, without status chips. */
 @Composable

@@ -76,6 +76,14 @@ export const taskAttachmentService = {
       parentTaskTitle: task.parentTask?.title ?? null
     }));
   },
+  /** Delete only task attachments owned by the current authenticated user.
+   * Single DB operation; no N separate attachment DELETE requests.
+   * Does not delete tasks, chat histories or attachments of collaborators.
+   */
+  removeAllOwned: async (userId: string) => {
+    const result = await prisma.taskAttachment.deleteMany({ where: { userId } });
+    return { ok: true, deletedCount: result.count };
+  },
   removeOwned: async (attachmentId: string, userId: string) => {
     const deleted = await prisma.taskAttachment.deleteMany({ where: { id: attachmentId, userId } });
     if (!deleted.count) throw new Error('Вложение не найдено или недоступно для удаления.');

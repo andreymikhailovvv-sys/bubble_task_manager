@@ -47,8 +47,8 @@ test('Android shows a skeleton preview and uses a monotonic release version', as
   assert.match(activity, /loadingIndicator = preview/);
   assert.doesNotMatch(activity, /ProgressBar/);
   assert.match(launcher, /size\(width = 58\.dp, height = 56\.dp\)/);
-  assert.match(build, /versionCode = 10/);
-  assert.match(build, /versionName = "1\.0\.8"/);
+  assert.match(build, /versionCode = 11/);
+  assert.match(build, /versionName = "1\.0\.9"/);
 });
 
 test('quick chat is visibly starred in web, mini app and Android and audio loader has an active wrapper', async () => {

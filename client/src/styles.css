@@ -16734,3 +16734,89 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
     display: none;
   }
 }
+
+
+/* Habits: keep today's actionable circles first, then a quiet grey section
+   for habits scheduled on other days. The weekday badge overlaps the rim. */
+.miniapp-habits-strip {
+  padding-top: 8px;
+  gap: 9px;
+}
+.miniapp-habit-days-divider {
+  width: 1px;
+  min-width: 1px;
+  height: 39px;
+  margin: 3px 7px 0 4px;
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 1px;
+}
+.miniapp-habit-circle-wrap {
+  padding-top: 7px;
+}
+.miniapp-habit-day-badge {
+  position: absolute;
+  z-index: 12;
+  top: 0;
+  right: -4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 25px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.58);
+  background: #273244;
+  color: #d8e0e9;
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: .01em;
+  box-shadow: 0 2px 6px rgba(0,0,0,.15);
+  pointer-events: none;
+}
+.miniapp-habit-circle--offday {
+  --habit-color: #94a3b8 !important;
+  --habit-track: #64748b;
+  --habit-core-bg: #334155;
+  filter: grayscale(1);
+  opacity: .73;
+  color: #cbd5e1;
+}
+.miniapp-habit-circle--offday .miniapp-habit-circle-core {
+  background: #334155;
+}
+/* A completed habit is a fully filled colour circle, not a disabled grey one. */
+.miniapp-habit-circle-completed {
+  --habit-progress: 100%;
+  --habit-track: var(--habit-color);
+  --habit-core-bg: var(--habit-color);
+  color: #ffffff;
+  filter: none;
+  opacity: 1;
+}
+.miniapp-habit-circle-completed .miniapp-habit-circle-core,
+.miniapp-light .miniapp-habit-circle-completed .miniapp-habit-circle-core {
+  background: var(--habit-color);
+}
+.miniapp-light .miniapp-habit-day-badge {
+  background: #e2e8f0;
+  color: #475569;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 5px rgba(15,23,42,.08);
+}
+.miniapp-light .miniapp-habit-days-divider {
+  background: rgba(100,116,139,.3);
+}
+.miniapp-light .miniapp-habit-circle--offday {
+  --habit-track: #e2e8f0;
+  --habit-core-bg: #f1f5f9;
+  color: #64748b;
+  opacity: .78;
+}
+.miniapp-light .miniapp-habit-circle--offday .miniapp-habit-circle-core {
+  background: #f1f5f9;
+}
+.miniapp-light .miniapp-habit-circle-completed {
+  color: #fff;
+}

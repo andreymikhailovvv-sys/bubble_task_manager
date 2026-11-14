@@ -409,6 +409,17 @@ function isHabitScheduledForDate(habit: Habit, date: Date) {
   return true;
 }
 
+// The compact habit strip shows the NEXT scheduled weekday on inactive days.
+const HABIT_WEEKDAY_SHORT = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'] as const;
+function nextHabitScheduledDate(habit: Habit, from: Date): Date | null {
+  // Includes weekly and interval recurrence without changing stored history.
+  for (let offset = 1; offset <= 370; offset++) {
+    const date = new Date(from.getFullYear(), from.getMonth(), from.getDate() + offset);
+    if (isHabitScheduledForDate(habit, date)) return date;
+  }
+  return null;
+}
+
 function formatHabitSchedule(draft: Pick<HabitDraft, 'recurrenceType' | 'intervalDays' | 'weekdays'>) {
   if (draft.recurrenceType === 'INTERVAL') return `Каждые ${draft.intervalDays || 1} дн.`;
   if (draft.recurrenceType === 'WEEKDAYS') {
@@ -1012,6 +1023,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [authLogin, setAuthLogin] = useState('');
   const [authEmail, setAuthEmail] = useState('');
   const [accountEmailDraft, setAccountEmailDraft] = useState('');
+  const [accountUsernameDraft, setAccountUsernameDraft] = useState('');
   const [accountEmailPassword, setAccountEmailPassword] = useState('');
   const [accountEmailMessage, setAccountEmailMessage] = useState('');
   const [accountEmailBusy, setAccountEmailBusy] = useState(false);
@@ -1077,6 +1089,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   useEffect(() => {
     setAccountEmailDraft(currentUser?.pendingEmail || currentUser?.email || '');
   }, [currentUser?.pendingEmail, currentUser?.email]);
+  useEffect(() => {
+    setAccountUsernameDraft(currentUser?.username || '');
+  }, [currentUser?.username]);
   const [authPassword, setAuthPassword] = useState('');
   const [authName, setAuthName] = useState('');
   const [authConsentAccepted, setAuthConsentAccepted] = useState(false);
@@ -1428,6 +1443,34 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     || currentUser?.username?.trim()
     || currentUser?.email?.trim()
     || 'Пользователь';
+
+  const saveAccountUsername = async () => {
+    if (!currentUser || accountEmailBusy) return;
+    const username = accountUsernameDraft.trim();
+    if (username.length < 3 || username.length > 50) {
+      setAccountEmailMessage('Логин должен содержать от 3 до 50 символов.');
+      return;
+    }
+    if (username.toLowerCase() === (currentUser.username || '').toLowerCase()) return;
+    setAccountEmailBusy(true);
+    setAccountEmailMessage('');
+    try {
+      const result = await api.updateProfile({
+        name: currentUser.name ?? '',
+        email: currentUser.pendingEmail || currentUser.email || '',
+        username,
+        currentPassword: accountEmailPassword || undefined
+      });
+      setCurrentUser(result.user);
+      setAccountUsernameDraft(result.user.username || '');
+      setAccountEmailPassword('');
+      setAccountEmailMessage('Логин изменён.');
+    } catch (error) {
+      setAccountEmailMessage(error instanceof Error ? error.message : 'Не удалось изменить логин');
+    } finally {
+      setAccountEmailBusy(false);
+    }
+  };
 
   const saveAccountEmail = async () => {
     if (!currentUser || !accountEmailDraft.trim() || accountEmailBusy) return;
@@ -1963,16 +2006,23 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   }, [timelineToday.timelineEntries, timelineToday.scheduledHabits]);
 
   const sortedHabits = useMemo(() => {
-    const dateKey = toDateKey(new Date());
-    return habits.filter((habit) => isHabitScheduledForDate(habit, new Date())).sort((a, b) => {
-      const aCompleted = getHabitCompletedForDate(a, dateKey) >= a.targetCount;
-      const bCompleted = getHabitCompletedForDate(b, dateKey) >= b.targetCount;
-      if (aCompleted !== bCompleted) return aCompleted ? 1 : -1;
+    const now = new Date();
+    const dateKey = toDateKey(now);
+    return habits.filter((habit) => !habit.isAutoCompleted && !habit.isArchived).sort((a, b) => {
+      const aToday = isHabitScheduledForDate(a, now);
+      const bToday = isHabitScheduledForDate(b, now);
+      if (aToday !== bToday) return aToday ? -1 : 1;
+      if (aToday && bToday) {
+        const aCompleted = getHabitCompletedForDate(a, dateKey) >= a.targetCount;
+        const bCompleted = getHabitCompletedForDate(b, dateKey) >= b.targetCount;
+        if (aCompleted !== bCompleted) return aCompleted ? 1 : -1;
+      }
       const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : 0;
       return aCreated - bCreated;
     });
   }, [habits]);
+  const todayHabitsCount = sortedHabits.filter((habit) => isHabitScheduledForDate(habit, new Date())).length;
 
   const timelineHabitPlacements = useMemo(() => {
     const placements = new Map<string, { top: number }>();
@@ -2749,6 +2799,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
   const startHabitPress = (habit: Habit) => {
     clearHabitLongPressTimer();
+    // On another day, the circle opens settings but cannot complete today's
+    // repetitions by a long press.
+    if (!isHabitScheduledForDate(habit, new Date())) return;
     habitLongPressTriggeredRef.current = false;
     habitLongPressTimerRef.current = window.setTimeout(() => {
       habitLongPressTriggeredRef.current = true;
@@ -4433,12 +4486,26 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 {hasAccount ? (
                   <>
                     <p className="mb-2 break-words text-sm text-muted">{accountDisplayName}</p>
+                    <label className="mb-2 block text-xs text-muted">Логин
+                      <input type="text" name="username" autoComplete="username" minLength={3} maxLength={50}
+                        placeholder="Не менее 3 символов"
+                        value={accountUsernameDraft} onChange={event => setAccountUsernameDraft(event.target.value)}
+                        className="mt-1 w-full rounded-xl border border-[color:var(--panel-border)] bg-[color:var(--muted-bg)] px-3 py-2 text-sm text-primary" />
+                    </label>
+                    {accountUsernameDraft.trim().toLowerCase() !== (currentUser?.username || '').toLowerCase() ? (
+                      <button type="button" className="surface-muted mb-2 w-full rounded-xl px-3 py-2 text-sm text-primary"
+                        disabled={accountEmailBusy || accountUsernameDraft.trim().length < 3}
+                        onClick={() => void saveAccountUsername()}>{accountEmailBusy ? 'Сохраняем…' : 'Сохранить логин'}</button>
+                    ) : null}
                     <label className="mb-2 block text-xs text-muted">{currentUser?.hasPassword ? 'Адрес для входа и восстановления' : 'Электронная почта аккаунта'}
                       <input type="email" autoComplete="email" name="email" placeholder={currentUser?.pendingEmail || currentUser?.email || 'name@example.com'}
                         value={accountEmailDraft} onChange={event => setAccountEmailDraft(event.target.value)}
                         className="mt-1 w-full rounded-xl border border-[color:var(--panel-border)] bg-[color:var(--muted-bg)] px-3 py-2 text-sm text-primary" />
                     </label>
-                    {currentUser?.hasPassword && accountEmailDraft.trim().toLowerCase() !== (currentUser?.pendingEmail || currentUser?.email || '').toLowerCase() ? (
+                    {currentUser?.hasPassword && (
+                      accountEmailDraft.trim().toLowerCase() !== (currentUser?.pendingEmail || currentUser?.email || '').toLowerCase() ||
+                      accountUsernameDraft.trim().toLowerCase() !== (currentUser?.username || '').toLowerCase()
+                    ) ? (
                       <input type="password" autoComplete="current-password" placeholder="Текущий пароль для смены почты"
                         value={accountEmailPassword} onChange={event => setAccountEmailPassword(event.target.value)}
                         className="mb-2 w-full rounded-xl border border-[color:var(--panel-border)] bg-[color:var(--muted-bg)] px-3 py-2 text-sm text-primary" />
@@ -4620,40 +4687,50 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold">Привычки</h2>
               <span className="miniapp-habits-summary rounded-full px-2.5 py-1 text-xs font-semibold">
-                Выполнено {sortedHabits.filter((habit) => getHabitCompletedForDate(habit, toDateKey(new Date())) >= habit.targetCount).length} из {sortedHabits.length}
+                Выполнено {sortedHabits.filter((habit) => isHabitScheduledForDate(habit, new Date()) && getHabitCompletedForDate(habit, toDateKey(new Date())) >= habit.targetCount).length} из {todayHabitsCount}
               </span>
             </div>
             <div className="miniapp-habits-strip flex items-center gap-2 overflow-x-auto pb-1">
-              {sortedHabits.map((habit) => {
-                const completed = getHabitCompletedForDate(habit, toDateKey(new Date()));
+              {sortedHabits.map((habit, index) => {
+                const scheduledToday = isHabitScheduledForDate(habit, new Date());
+                const nextDate = scheduledToday ? null : nextHabitScheduledDate(habit, new Date());
+                const dayLabel = nextDate ? HABIT_WEEKDAY_SHORT[nextDate.getDay()] : '—';
+                const completed = scheduledToday ? getHabitCompletedForDate(habit, toDateKey(new Date())) : 0;
                 const cappedCompleted = Math.min(completed, habit.targetCount);
                 const progress = Math.round((cappedCompleted / Math.max(1, habit.targetCount)) * 100);
-                const isCompleted = completed >= habit.targetCount;
+                const isCompleted = scheduledToday && completed >= habit.targetCount;
                 const isPulsing = completedHabitPulseId === habit.id;
                 return (
-                  <button
-                    key={habit.id}
-                    type="button"
-                    className={`miniapp-habit-circle relative inline-flex h-[58px] w-[58px] shrink-0 select-none items-center justify-center rounded-full border text-center transition-transform ${isCompleted ? 'miniapp-habit-circle-completed' : ''} ${isPulsing ? 'miniapp-habit-complete-pulse scale-110' : ''}`}
-                    style={{
-                      '--habit-color': isCompleted ? '#94a3b8' : habit.color,
-                      '--habit-progress': `${progress}%`
-                    } as CSSProperties}
-                    onMouseDown={() => startHabitPress(habit)}
-                    onMouseUp={() => finishHabitPress(habit)}
-                    onMouseLeave={cancelHabitPress}
-                    onTouchStart={() => startHabitPress(habit)}
-                    onTouchEnd={() => finishHabitPress(habit)}
-                    onTouchCancel={cancelHabitPress}
-                    aria-label={`${habit.name}: ${cappedCompleted} из ${habit.targetCount}`}
-                    title={isCompleted ? 'Привычка выполнена' : 'Нажмите для редактирования, зажмите для отметки'}
-                  >
-                    <span className="miniapp-habit-circle-core absolute inset-[5px] rounded-full" />
-                    <span className="relative z-10 flex flex-col items-center leading-none">
-                      <span className="text-lg">{habit.icon}</span>
-                      <span className="mt-1 text-[10px] font-semibold">{cappedCompleted}/{habit.targetCount}</span>
-                    </span>
-                  </button>
+                  <div key={habit.id} className="inline-flex shrink-0 items-center gap-2">
+                    {index === todayHabitsCount && todayHabitsCount > 0 ? (
+                      <span className="miniapp-habit-days-divider" aria-hidden="true" />
+                    ) : null}
+                    <div className="miniapp-habit-circle-wrap relative flex shrink-0 items-center justify-center">
+                      <button
+                        type="button"
+                        className={`miniapp-habit-circle relative inline-flex h-[58px] w-[58px] shrink-0 select-none items-center justify-center rounded-full border text-center transition-transform ${isCompleted ? 'miniapp-habit-circle-completed' : ''} ${!scheduledToday ? 'miniapp-habit-circle--offday' : ''} ${isPulsing ? 'miniapp-habit-complete-pulse scale-110' : ''}`}
+                        style={{
+                          '--habit-color': habit.color,
+                          '--habit-progress': `${isCompleted ? 100 : progress}%`
+                        } as CSSProperties}
+                        onMouseDown={() => startHabitPress(habit)}
+                        onMouseUp={() => finishHabitPress(habit)}
+                        onMouseLeave={cancelHabitPress}
+                        onTouchStart={() => startHabitPress(habit)}
+                        onTouchEnd={() => finishHabitPress(habit)}
+                        onTouchCancel={cancelHabitPress}
+                        aria-label={`${habit.name}: ${scheduledToday ? `${cappedCompleted} из ${habit.targetCount}` : `следующее выполнение ${nextDate?.toLocaleDateString('ru-RU') ?? 'не запланировано'}`}`}
+                        title={!scheduledToday ? `Следующее выполнение: ${nextDate?.toLocaleDateString('ru-RU') ?? 'не запланировано'}` : isCompleted ? 'Привычка выполнена' : 'Нажмите для редактирования, зажмите для отметки'}
+                      >
+                        <span className="miniapp-habit-circle-core absolute inset-[5px] rounded-full" />
+                        <span className="relative z-10 flex flex-col items-center leading-none">
+                          <span className="text-lg">{habit.icon}</span>
+                          <span className="mt-1 text-[10px] font-semibold">{cappedCompleted}/{habit.targetCount}</span>
+                        </span>
+                      </button>
+                      {!scheduledToday ? <span className="miniapp-habit-day-badge" aria-hidden="true">{dayLabel}</span> : null}
+                    </div>
+                  </div>
                 );
               })}
               <button
