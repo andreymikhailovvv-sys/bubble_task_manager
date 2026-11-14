@@ -16,7 +16,8 @@ test('profile login update canonicalizes, validates, checks ownership and relies
   assert.match(profile, /normalizeAccountLogin\(req\.body\.username\)/);
   assert.match(profile, /requestedUsername\.length < 3 \|\| requestedUsername\.length > 50/);
   assert.match(profile, /user\.passwordHash && !authService\.verifyPassword\(currentPassword, user\.passwordHash\)/);
-  assert.match(profile, /prisma\.user\.findUnique\(\{ where: \{ username: requestedUsername!/);
+  assert.match(profile, /prisma\.user\.findFirst\(/);
+  assert.match(profile, /mode: 'insensitive'/);
   assert.match(profile, /usernameChanged \? \{ username: requestedUsername \}/);
   assert.match(profile, /error\.code === 'P2002'/);
   assert.match(profile, /Этот логин уже занят другим пользователем/);
