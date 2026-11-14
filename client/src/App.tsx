@@ -1316,6 +1316,7 @@ export default function App() {
   const [accountAttachments, setAccountAttachments] = useState<AccountAttachment[]>([]);
   const [areAccountAttachmentsOpen, setAreAccountAttachmentsOpen] = useState(false);
   const [accountAttachmentsLoading, setAccountAttachmentsLoading] = useState(false);
+  const [deletingAllAccountAttachments, setDeletingAllAccountAttachments] = useState(false);
   const [quotaToast, setQuotaToast] = useState('');
   useEffect(() => {
     const handleLimit = (event: Event) => {
@@ -1334,6 +1335,7 @@ export default function App() {
     return () => window.clearTimeout(timeout);
   }, [quotaToast]);
   const [profileName, setProfileName] = useState('');
+  const [profileUsername, setProfileUsername] = useState('');
   const [profileEmail, setProfileEmail] = useState('');
   const [profileCurrentPassword, setProfileCurrentPassword] = useState('');
   const [profileNewPassword, setProfileNewPassword] = useState('');
@@ -4767,6 +4769,7 @@ export default function App() {
 
   const openProfileModal = () => {
     setProfileName(currentUser?.name?.trim() ?? '');
+    setProfileUsername(currentUser?.username?.trim() ?? '');
     setProfileEmail(currentUser?.pendingEmail?.trim() || currentUser?.email?.trim() || '');
     setEmailVerificationMessage('');
     setProfileCurrentPassword('');
@@ -4801,24 +4804,51 @@ export default function App() {
     }
   };
 
+  const deleteAllAccountAttachments = async () => {
+    if (deletingAllAccountAttachments || !attachmentStorage?.count) return;
+    const count = attachmentStorage.count;
+    if (!window.confirm(`Удалить все вложения (${count}) из ваших задач? Файлы будут безвозвратно удалены, восстановить их нельзя. Сами задачи останутся.`)) return;
+    setDeletingAllAccountAttachments(true);
+    setProfileError(null);
+    try {
+      const result = await api.deleteAllAccountAttachments();
+      setAccountAttachments([]);
+      setAttachmentStorage(await api.getAttachmentStorage());
+      await load();
+      setProfileSaved(false);
+      setProfileError(null);
+      window.alert(`Удалено вложений: ${result.deletedCount}.`);
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : 'Не удалось удалить все вложения');
+    } finally {
+      setDeletingAllAccountAttachments(false);
+    }
+  };
+
   const closeProfileModal = () => {
-    if (profileSaving) return;
+    if (profileSaving || deletingAllAccountAttachments) return;
     setIsProfileModalOpen(false);
     setProfileError(null);
   };
 
   const submitProfile = async () => {
+    if (!profileUsername.trim() && currentUser?.username) {
+      setProfileError('Логин нельзя оставить пустым.');
+      return;
+    }
     setProfileSaving(true);
     setProfileError(null);
     setProfileSaved(false);
     try {
       const result = await api.updateProfile({
         name: profileName,
+        username: profileUsername.trim() || undefined,
         email: profileEmail,
         currentPassword: profileCurrentPassword || undefined,
         newPassword: profileNewPassword || undefined
       });
       setCurrentUser(result.user);
+      setProfileUsername(result.user.username ?? '');
       setProfileCurrentPassword('');
       setProfileNewPassword('');
       setProfileSaved(true);
@@ -7305,10 +7335,18 @@ export default function App() {
                     {attachmentStorage.usedBytes >= attachmentStorage.limitBytes ? <p className="mt-1.5 text-xs text-amber-600">Лимит достигнут. Старые файлы сохранены; новые можно загрузить после освобождения места.</p> : null}
                   </>
                 ) : null}
-                <button type="button" className="profile-cancel-button mt-3 inline-flex items-center gap-2 px-3 py-1.5 text-xs" onClick={() => void toggleAccountAttachments()}>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button type="button" className="profile-cancel-button inline-flex items-center gap-2 px-3 py-1.5 text-xs" onClick={() => void toggleAccountAttachments()}>
                   <Paperclip size={13}/>{areAccountAttachmentsOpen ? 'Скрыть вложения' : 'Посмотреть вложения'}
                   <ChevronDown size={12} className={areAccountAttachmentsOpen ? 'rotate-180' : ''}/>
                 </button>
+                {Boolean(attachmentStorage?.count) ? (
+                  <button type="button" className="inline-flex items-center gap-1 rounded-lg border border-rose-500/35 px-3 py-1.5 text-xs font-medium text-rose-500 hover:bg-rose-500/10 disabled:opacity-50"
+                    onClick={() => void deleteAllAccountAttachments()} disabled={deletingAllAccountAttachments || accountAttachmentsLoading}>
+                    <Trash2 size={13}/>{deletingAllAccountAttachments ? 'Удаляем…' : 'Удалить все вложения'}
+                  </button>
+                ) : null}
+                </div>
                 {areAccountAttachmentsOpen ? (
                   <div className="mt-2 max-h-56 space-y-2 overflow-y-auto">
                     {accountAttachmentsLoading ? <p className="text-xs text-muted">Загрузка вложений…</p> : null}
@@ -7327,6 +7365,11 @@ export default function App() {
               </section>
               <label className="profile-field-label">Имя
                 <input className="profile-field" value={profileName} maxLength={100} autoComplete="name" onChange={(event) => setProfileName(event.target.value)} />
+              </label>
+              <label className="profile-field-label">Логин
+                <input className="profile-field" value={profileUsername} maxLength={50} minLength={3}
+                  name="username" autoComplete="username" placeholder="Не менее 3 символов"
+                  onChange={(event) => setProfileUsername(event.target.value)} />
               </label>
               <label className="profile-field-label">Почта
                 <input className="profile-field" value={profileEmail} maxLength={254} type="email" name="email" autoComplete="email" placeholder="name@example.com" onChange={(event) => setProfileEmail(event.target.value)} />
