@@ -42,7 +42,7 @@ test('bulk attachment removal only deletes signed-in user files after explicit c
   assert.match(app, /setAccountAttachments\(\[\]\)/);
 });
 
-test('Mini App groups today's and later habits with small next weekday badge, theme-aware styles', () => {
+test("Mini App groups today's and later habits with small next weekday badge, theme-aware styles", () => {
   const mini=read('../../client/src/MiniApp.tsx');
   const css=read('../../client/src/styles.css');
   const start=mini.indexOf('  const sortedHabits = useMemo(');
