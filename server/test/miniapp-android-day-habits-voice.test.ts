@@ -23,11 +23,16 @@ test('Mini App and mobile web mic start transcription without opening live mode 
   assert.ok(voice.includes('const startLive = () => {'), 'live voice must remain available for later UI placement');
 });
 
-test('Mini App habit list displays only entries scheduled for today', async () => {
+test('Mini App and native Android display other-day habits after the today group', async () => {
   const mini = await readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8');
   const android = await readFile(new URL('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/ModernWorkspace.kt', import.meta.url), 'utf8');
-  assert.ok(mini.includes('return habits.filter((habit) => isHabitScheduledForDate(habit, new Date())).sort'));
-  assert.ok(android.includes('state.habits.filter { habitScheduledToday(it, todayForHabits) }'));
+  assert.ok(mini.includes('return habits.filter((habit) => !habit.isAutoCompleted && !habit.isArchived).sort'));
+  assert.ok(mini.includes('miniapp-habit-days-divider'));
+  assert.ok(mini.includes('miniapp-habit-day-badge'));
+  assert.ok(android.includes('state.habits.filter { !it.isAutoCompleted && !it.isArchived }'));
+  assert.ok(android.includes('otherHabits = habits.filterNot { habitScheduledToday(it, today) }'));
+  assert.ok(android.includes('workspaceHabitNextDay'));
+  assert.ok(android.includes('WorkspaceHabitBubble'));
 });
 
 test('day timeline cards have no colored left-edge stripes in light or dark Mini App', async () => {
