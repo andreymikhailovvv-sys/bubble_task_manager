@@ -1,0 +1,8 @@
+.module-rail{position:fixed;z-index:76;top:50%;left:12px;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:8px;padding:9px 7px;border:1px solid rgba(148,163,184,.24);border-radius:18px;background:rgba(20,27,42,.85);backdrop-filter:blur(22px);box-shadow:0 14px 40px rgba(0,0,0,.22)}
+.module-rail-link{display:grid;width:40px;height:42px;place-items:center;border:1px solid transparent;border-radius:12px;color:#aebbd0;transition:background .2s,transform .2s,color .2s}
+.module-rail-link:hover{color:#fff;background:rgba(255,255,255,.10);transform:translateX(2px)}
+.module-rail-link.is-active{color:#fff;background:rgba(49,105,142,.35);border-color:rgba(157,205,241,.28)}
+.module-rail-economic.is-active{color:#ffe6ba;background:rgba(244,142,35,.20);border-color:rgba(255,168,60,.40)}
+.module-rail-separator{width:22px;height:1px;background:rgba(148,163,184,.23)}
+@media(max-width:720px){.module-rail{top:auto;bottom:16px;left:50%;transform:translateX(-50%);flex-direction:row;z-index:90;padding:5px 8px}.module-rail-separator{width:1px;height:22px}.module-rail-link{width:38px;height:38px}}
+@media(min-width:721px) and (max-width:1100px){.module-rail{left:6px}.module-rail-link{width:34px;height:38px}}
