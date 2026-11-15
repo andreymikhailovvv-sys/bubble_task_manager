@@ -41,6 +41,8 @@ export function reconcileActiveAiChatMessages<T extends IdentifiedChatMessage>(
     return other && messageIdentity(message) === messageIdentity(other) &&
       message.role === other.role && message.content === other.content &&
       message.creditsSpentMilli === other.creditsSpentMilli &&
+      message.generatedDocument?.id === other.generatedDocument?.id &&
+      message.generatedDocument?.mimeType === other.generatedDocument?.mimeType &&
       message.taskProposal?.id === other.taskProposal?.id &&
       message.taskProposal?.status === other.taskProposal?.status &&
       JSON.stringify(message.telegramSendDraft ?? null) === JSON.stringify(other.telegramSendDraft ?? null) &&
