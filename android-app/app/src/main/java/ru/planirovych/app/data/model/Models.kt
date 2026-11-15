@@ -69,9 +69,40 @@ data class Task(
     val status: TaskStatus = TaskStatus.TODO,
     val isCollaborative: Boolean = false,
     val collaborationOwner: Boolean = false,
+    val collaborationColor: String? = null,
+    val collaborationMembers: List<CollaborationMember> = emptyList(),
+    val creatorName: String? = null,
+    val creatorUserId: String? = null,
+    val creatorColor: String? = null,
+    val commentCount: Int = 0,
+    val unreadCommentCount: Int = 0,
     val createdAt: String? = null,
     val updatedAt: String? = null,
 )
+
+@Serializable
+data class CollaborationMember(
+    val userId: String,
+    val name: String,
+    val color: String,
+    val isOwner: Boolean = false
+)
+
+@Serializable
+data class TaskComment(
+    val id: String,
+    val taskId: String,
+    val userId: String,
+    val authorUserId: String,
+    val authorName: String,
+    val authorColor: String? = null,
+    val parentCommentId: String? = null,
+    val content: String,
+    val isOwn: Boolean = false,
+    val createdAt: String,
+    val updatedAt: String? = null
+)
+@Serializable data class TaskCommentsResponse(val comments: List<TaskComment> = emptyList())
 
 enum class HabitRecurrenceType { DAILY, INTERVAL, WEEKDAYS }
 enum class HabitDurationMode { FOREVER, UNTIL_DATE, REPEAT_COUNT }
