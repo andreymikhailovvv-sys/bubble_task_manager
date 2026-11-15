@@ -103,6 +103,8 @@ fun MiniAppTaskFocusSheet(
     var order by remember(task.id){mutableStateOf(FocusOrder.URGENCY)}
     var orderOpen by remember{mutableStateOf(false)}
     var settingsOpen by remember{mutableStateOf(false)}
+    var collaborationOpen by remember(task.id){mutableStateOf(false)}
+    var commentSubtaskId by remember(task.id){mutableStateOf<String?>(null)}
     var sectorMenu by remember{mutableStateOf(false)}
     var notifyMenu by remember{mutableStateOf(false)}
     var descriptionExpanded by remember{mutableStateOf(false)}
@@ -223,6 +225,23 @@ fun MiniAppTaskFocusSheet(
                 }
             }
             .imePadding()){
+            if(task.isCollaborative){
+                Row(Modifier.padding(start=18.dp,end=18.dp,top=4.dp,bottom=10.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFF59E0B).copy(alpha=.10f))
+                    .border(1.dp,Color(0xFFF59E0B).copy(alpha=.45f),CircleShape)
+                    .clickable {collaborationOpen=true}
+                    .padding(horizontal=13.dp,vertical=8.dp),
+                    verticalAlignment=Alignment.CenterVertically,
+                    horizontalArrangement=Arrangement.spacedBy(7.dp)){
+                    Icon(Icons.Default.Groups,null,
+                        tint=Color(0xFFF59E0B),modifier=Modifier.size(16.dp))
+                    Text("Совместная задача",color=Color(0xFFF59E0B),
+                        fontSize=12.sp,fontWeight=FontWeight.Bold)
+                    Icon(Icons.Default.ChevronRight,null,
+                        tint=Color(0xFFF59E0B),modifier=Modifier.size(15.dp))
+                }
+            }
             Row(Modifier.fillMaxWidth()
                 .padding(start=18.dp,end=18.dp,top=4.dp,bottom=12.dp),
                 verticalAlignment=Alignment.Top,
@@ -467,10 +486,11 @@ fun MiniAppTaskFocusSheet(
                     if(subtasks.isEmpty())Text(if(showDone)"Пока нет подзадач" else
                         "Активных подзадач пока нет",color=c.muted,fontSize=12.sp)
                     subtasks.forEach{item->
-                        FocusSubtask(item,c,busy,
+                        FocusSubtask(item,c,busy,collaborative=task.isCollaborative,
                             onToggle={onChangeStatus(item.id,if(item.status==TaskStatus.DONE)
                                 TaskStatus.TODO else TaskStatus.DONE){}},
-                            onOpen={saveThen{onOpenSubtask(item.id)}})
+                            onOpen={saveThen{onOpenSubtask(item.id)}},
+                            onComments={commentSubtaskId=item.id})
                         Spacer(Modifier.height(8.dp))
                     }
                     if(completedCount>0){
@@ -512,6 +532,16 @@ fun MiniAppTaskFocusSheet(
                     }
                 }
             }
+        }
+    }
+    if(collaborationOpen && task.isCollaborative) {
+        NativeCollaborationSettingsDialog(task=task,dark=dark,vm=vm,
+            onClose={collaborationOpen=false})
+    }
+    commentSubtaskId?.let{id->
+        tasks.firstOrNull{it.id==id}?.let{child->
+            NativeSubtaskCommentsDialog(subtask=child,dark=dark,vm=vm,
+                onClose={commentSubtaskId=null})
         }
     }
     if(settingsOpen) FocusTaskSettingsDialog(
@@ -794,7 +824,8 @@ private fun FocusTaskSettingsDialog(
     }
 }
 @Composable private fun FocusSubtask(task:Task,c:FocusColors,busy:Boolean,
-    onToggle:()->Unit,onOpen:()->Unit){
+    collaborative:Boolean=false,onToggle:()->Unit,onOpen:()->Unit,
+    onComments:()->Unit={}){
     Surface(shape=RoundedCornerShape(15.dp),color=c.card,
         border=BorderStroke(1.dp,c.border),shadowElevation=1.dp){
         Row(Modifier.fillMaxWidth().heightIn(min=58.dp)
@@ -822,6 +853,29 @@ private fun FocusTaskSettingsDialog(
                     fontSize=11.sp,fontWeight=FontWeight.SemiBold,maxLines=1,
                     color=if((focusEpoch(it)?:Long.MAX_VALUE)<System.currentTimeMillis())c.red else c.purple,
                     modifier=Modifier.clickable(onClick=onOpen))
+            }
+            if(collaborative){
+                task.creatorName?.let{name->
+                    Spacer(Modifier.width(6.dp))
+                    Box(Modifier.size(30.dp).clip(CircleShape)
+                        .background(memberColor(task.creatorColor)),contentAlignment=Alignment.Center){
+                        Text(name.trim().firstOrNull()?.uppercaseChar()?.toString()?:"?",
+                            color=Color.White,fontSize=12.sp,fontWeight=FontWeight.Bold)
+                    }
+                }
+                Spacer(Modifier.width(5.dp))
+                Box(Modifier.size(32.dp).clickable(enabled=!busy,onClick=onComments),
+                    contentAlignment=Alignment.Center){
+                    Icon(Icons.Default.ChatBubbleOutline,"Комментарии к подзадаче",
+                        tint=c.muted,modifier=Modifier.size(19.dp))
+                    if(task.unreadCommentCount>0){
+                        Box(Modifier.align(Alignment.TopEnd).size(15.dp)
+                            .background(c.purple,CircleShape),contentAlignment=Alignment.Center){
+                            Text(if(task.unreadCommentCount>9)"9+" else task.unreadCommentCount.toString(),
+                                color=Color.White,fontSize=8.sp,fontWeight=FontWeight.Bold)
+                        }
+                    }
+                }
             }
         }
     }
