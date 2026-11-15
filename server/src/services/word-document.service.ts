@@ -352,6 +352,20 @@ export const wordDocumentService = {
     return document;
   },
 
+  // Read metadata without loading the large base64 image into application memory.
+  // Use exactly the same owner/collaborator access rules as downloads.
+  getMetadataForDownload: async (userId: string, id: string) => prisma.aiGeneratedDocument.findFirst({
+    where: {
+      id,
+      OR: [
+        { userId },
+        { task: { userId } },
+        { task: { collaboration: { members: { some: { userId, isHidden: false } } } } }
+      ]
+    },
+    select: { id: true, fileName: true, mimeType: true, size: true }
+  }),
+
   getForDownload: async (userId: string, id: string) => prisma.aiGeneratedDocument.findFirst({
     where: {
       id,
