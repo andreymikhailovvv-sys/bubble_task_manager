@@ -1907,7 +1907,7 @@ export const aiAssistantService = {
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: 100,
-      select: { id: true, createdAt: true, role: true, content: true, creditsSpentMilli: true, aiTaskProposalId: true, monitoringTaskId: true, webSearchUsed: true, webSources: true, webCitations: true, telegramSendDraft: true, telegramReadDraft: true, mailSendDraft: true }
+      select: { id: true, createdAt: true, role: true, content: true, creditsSpentMilli: true, aiTaskProposalId: true, monitoringTaskId: true, webSearchUsed: true, webSources: true, webCitations: true, telegramSendDraft: true, telegramReadDraft: true, mailSendDraft: true, generatedDocument: true }
     });
     messages.reverse();
 
@@ -1923,6 +1923,11 @@ export const aiAssistantService = {
       content: message.content,
       ...(message.monitoringTaskId ? { monitoringTaskId: message.monitoringTaskId } : {}),
       ...(message.role === 'assistant' && message.aiTaskProposalId ? { taskProposal: byId.get(message.aiTaskProposalId) } : {}),
+      ...(message.role === 'assistant' && message.generatedDocument &&
+        typeof message.generatedDocument === 'object' && !Array.isArray(message.generatedDocument) &&
+        typeof (message.generatedDocument as { id?: unknown }).id === 'string'
+        ? { generatedDocument: message.generatedDocument as unknown as GeneratedDocumentMeta }
+        : {}),
       ...(message.role === 'assistant' && message.webSearchUsed ? {
         webSearchUsed: true,
         webSources: Array.isArray(message.webSources) ? message.webSources as TaskWebSource[] : [],
@@ -1953,10 +1958,15 @@ export const aiAssistantService = {
     });
   },
 
-  appendGeneralDialogAssistantMessage: async (input: { userId: string; content: string; creditsSpentMilli: number; taskProposalId?: string | null; webSearchUsed?: boolean; webSources?: TaskWebSource[]; webCitations?: TaskWebCitation[]; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; mailSendDraft?: MailSendDraft | null }) => {
+  appendGeneralDialogAssistantMessage: async (input: { userId: string; content: string; creditsSpentMilli: number; taskProposalId?: string | null; generatedDocument?: GeneratedDocumentMeta | null; webSearchUsed?: boolean; webSources?: TaskWebSource[]; webCitations?: TaskWebCitation[]; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; mailSendDraft?: MailSendDraft | null }) => {
     const content = input.content.trim();
     if (!content) return;
-    return prisma.generalAiMessage.create({ data: { userId: input.userId, role: 'assistant', content, creditsSpentMilli: input.creditsSpentMilli, aiTaskProposalId: input.taskProposalId ?? null, webSearchUsed: input.webSearchUsed ?? false, ...(input.webSearchUsed ? { webSources: input.webSources ?? [], webCitations: input.webCitations ?? [] } : {}), ...(input.telegramSendDraft ? { telegramSendDraft: { ...input.telegramSendDraft } } : {}), ...(input.telegramReadDraft ? { telegramReadDraft: { ...input.telegramReadDraft } } : {}), ...(input.mailSendDraft ? { mailSendDraft: { ...input.mailSendDraft } } : {}) } });
+    return prisma.generalAiMessage.create({ data: { userId: input.userId, role: 'assistant', content, creditsSpentMilli: input.creditsSpentMilli, aiTaskProposalId: input.taskProposalId ?? null,
+      ...(input.generatedDocument ? { generatedDocument: {
+        id: input.generatedDocument.id, fileName: input.generatedDocument.fileName,
+        mimeType: input.generatedDocument.mimeType, size: input.generatedDocument.size
+      } } : {}),
+      webSearchUsed: input.webSearchUsed ?? false, ...(input.webSearchUsed ? { webSources: input.webSources ?? [], webCitations: input.webCitations ?? [] } : {}), ...(input.telegramSendDraft ? { telegramSendDraft: { ...input.telegramSendDraft } } : {}), ...(input.telegramReadDraft ? { telegramReadDraft: { ...input.telegramReadDraft } } : {}), ...(input.mailSendDraft ? { mailSendDraft: { ...input.mailSendDraft } } : {}) } });
   },
 
   askTaskAssistant: async (input: AskTaskAssistantInput) => {
