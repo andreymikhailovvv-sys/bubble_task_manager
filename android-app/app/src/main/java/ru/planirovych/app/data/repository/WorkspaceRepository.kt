@@ -52,11 +52,11 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
     }
     suspend fun loadTasks(): List<Task> = api.tasks()
     suspend fun updateTask(id: String, changes: JsonObject): Task = api.updateTask(id, changes)
-    suspend fun updateStatus(id: String, status: TaskStatus): Task =
+    suspend fun updateStatus(id: String, status: TaskStatus, scope: String = "me"): Task =
         api.updateTask(id, buildJsonObject {
             put("status", status.name)
             // Mirror MiniApp's default collaborative scope: act on my own copy.
-            put("collaborationScope", "me")
+            put("collaborationScope", scope)
         })
     suspend fun createSubtask(parent: Task, title: String, description: String, dueDate: String?): Task =
         api.createTask(buildJsonObject {
@@ -67,7 +67,7 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
             if (parent.sphereId == null) put("sphereId", JsonNull) else put("sphereId", parent.sphereId)
             put("importance", parent.importance.coerceIn(1, 5))
         })
-    suspend fun deleteTask(id: String) { api.deleteTask(id, "me") }
+    suspend fun deleteTask(id: String, scope: String = "me") { api.deleteTask(id, scope) }
     suspend fun postponeOverdue(tasks: List<Task>): Int {
         // Same calendar-day replacement as the Mini App; never move events/reminders.
         val today = java.time.LocalDate.now()
