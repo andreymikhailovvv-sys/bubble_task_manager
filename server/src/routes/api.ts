@@ -2138,6 +2138,7 @@ apiRouter.put('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) =>
 }));
 
 apiRouter.get('/ai-documents/download', asyncHandler(aiGeneratedDocumentController.downloadWithToken));
+apiRouter.get('/ai-documents/:id/metadata', requireAuth, asyncHandler(aiGeneratedDocumentController.metadata));
 apiRouter.post('/ai-documents/:id/download-link', requireAuth, asyncHandler(aiGeneratedDocumentController.createDownloadLink));
 apiRouter.get('/ai-documents/:id/download', requireAuth, asyncHandler(aiGeneratedDocumentController.download));
 

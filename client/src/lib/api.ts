@@ -643,6 +643,8 @@ export const api = {
   getAiChatProjects: <T>() => request<{ projects: T[] | null }>('/api/ai-chat/projects'),
   getAiChatThreadMessages: (projectId: string, chatId: string) => request<{ messages: ChatMessage[]; projectsOutline: import('./ai-chat-reconciliation').AiChatProjectOutline[] }>(`/api/ai-chat/projects/${encodeURIComponent(projectId)}/chats/${encodeURIComponent(chatId)}/messages`),
   getAiGeneratedDocumentDownloadUrl: (id: string) => `/api/ai-documents/${encodeURIComponent(id)}/download`,
+  getAiGeneratedDocumentMetadata: (id: string) =>
+    request<GeneratedDocument>(`/api/ai-documents/${encodeURIComponent(id)}/metadata`),
   createAiGeneratedDocumentDownloadLink: (id: string) =>
     request<{ url: string; fileName: string }>(`/api/ai-documents/${encodeURIComponent(id)}/download-link`, { method: 'POST' }),
   getSystemNotifications: () => request<{ notifications: Array<{ id: string; eventKey?: string; taskId?: string | null; content: string; readAt?: string | null; createdAt: string }>; unreadCount: number }>('/api/system-notifications'),
