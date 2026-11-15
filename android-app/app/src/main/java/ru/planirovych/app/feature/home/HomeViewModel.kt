@@ -780,6 +780,12 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
 
     fun deleteTask(id: String, done: () -> Unit) =
         mutateTask({ repository.deleteTask(id) }, done)
+    // Mini App parity: a collaborative root owner may act on just their copy or everyone.
+    fun changeSharedTaskStatus(id: String, status: TaskStatus, scope: String, done: () -> Unit) =
+        mutateTask({ repository.updateStatus(id, status, scope) }, done)
+    fun deleteSharedTask(id: String, scope: String, done: () -> Unit) =
+        mutateTask({ repository.deleteTask(id, scope) }, done)
+
 
 
     fun postponeOverdue() {
