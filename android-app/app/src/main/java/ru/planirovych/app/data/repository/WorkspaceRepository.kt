@@ -86,6 +86,29 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
         return postponedCount
     }
 
+    suspend fun updateTaskCollaborationColor(taskId: String, color: String) {
+        api.updateTaskCollaboration(taskId, buildJsonObject { put("color", color) })
+    }
+    suspend fun removeTaskCollaborator(taskId: String, userId: String) {
+        api.removeTaskCollaborator(taskId, userId)
+    }
+    suspend fun disableTaskCollaboration(taskId: String) {
+        api.disableTaskCollaboration(taskId)
+    }
+    suspend fun loadTaskComments(subtaskId: String): List<TaskComment> =
+        api.taskComments(subtaskId).comments
+    suspend fun createTaskComment(subtaskId: String, content: String, parentId: String?): TaskComment =
+        api.createTaskComment(subtaskId, buildJsonObject {
+            put("content", content)
+            if (parentId != null) put("parentCommentId", parentId)
+        })
+    suspend fun markTaskCommentsRead(subtaskId: String, lastCommentId: String?) {
+        api.markTaskCommentsRead(subtaskId, buildJsonObject {
+            if (lastCommentId == null) put("lastCommentId", JsonNull)
+            else put("lastCommentId", lastCommentId)
+        })
+    }
+
     suspend fun loadTaskAttachments(taskId: String) = api.taskAttachments(taskId)
     suspend fun addTaskAttachment(taskId: String, name: String, mime: String, bytes: ByteArray) =
         api.addTaskAttachment(taskId, buildJsonObject {
