@@ -122,9 +122,10 @@ internal fun NativeAiGeneratedImageCard(
                     }
                     val options=BitmapFactory.Options().apply {inJustDecodeBounds=true}
                     BitmapFactory.decodeByteArray(data,0,data.size,options)
-                    val sample=generateSequence(1){it*2}
-                        .takeWhile{options.outWidth/it>1200 || options.outHeight/it>1200}
-                        .lastOrNull() ?: 1
+                    var sample=1
+                    while(options.outWidth/sample>1200 || options.outHeight/sample>1200){
+                        sample*=2
+                    }
                     BitmapFactory.decodeByteArray(data,0,data.size,
                         BitmapFactory.Options().apply{inSampleSize=sample})
                         ?.asImageBitmap() ?: error("Не удалось прочитать изображение")
