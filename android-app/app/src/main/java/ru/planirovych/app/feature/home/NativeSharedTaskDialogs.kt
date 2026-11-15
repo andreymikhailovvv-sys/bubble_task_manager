@@ -18,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -66,10 +67,12 @@ internal fun NativeCollaborationSettingsDialog(
 
     Dialog(onDismissRequest={if(!working)onClose()},
         properties=DialogProperties(usePlatformDefaultWidth=false)){
-        Surface(Modifier.fillMaxWidth().padding(horizontal=16.dp).widthIn(max=450.dp),
+        val maxHeight=(LocalConfiguration.current.screenHeightDp*.84f).dp
+        Surface(Modifier.fillMaxWidth().padding(horizontal=16.dp)
+            .widthIn(max=450.dp).heightIn(max=maxHeight),
             color=bg,shape=RoundedCornerShape(27.dp),
             border=BorderStroke(1.dp,memberColor(task.collaborationColor).copy(alpha=.3f))){
-            Column(Modifier.padding(20.dp)){
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp)){
                 Row(verticalAlignment=Alignment.Top){
                     Column(Modifier.weight(1f)){
                         Text("СОВМЕСТНАЯ ЗАДАЧА",fontSize=11.sp,fontWeight=FontWeight.Bold,
