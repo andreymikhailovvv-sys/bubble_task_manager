@@ -594,14 +594,33 @@ fun MiniAppTaskFocusSheet(
         AlertDialog(onDismissRequest={confirmation=null},
             title={Text(if(isFile)"Удалить вложение?" else if(action=="delete")
                 "Удалить задачу?" else "Выполнить задачу?")},
-            text={Text(if(isFile)"Вложение будет удалено из задачи." else
-                (if(action=="delete")"Удалить «" else "Выполнить «")+task.title+"»?")},
-            confirmButton={TextButton(onClick={
-                confirmation=null
-                if(isFile)vm.removeTaskAttachment(task.id,action.removePrefix("file:"))
-                else if(action=="delete")onDelete(task.id,onBack)
-                else saveThen{onChangeStatus(task.id,TaskStatus.DONE,onBack)}
-            }){Text(if(isFile || action=="delete")"Удалить" else "Выполнить")}},
+            text={Text(if(isFile)"Вложение будет удалено из задачи."
+                else if(task.isCollaborative && task.collaborationOwner)
+                    "Вы создатель. Применить действие только к своей копии или ко всем участникам?"
+                else (if(action=="delete")"Удалить «" else "Выполнить «")+task.title+"»?")},
+            confirmButton={
+                if(task.isCollaborative && task.collaborationOwner && !isFile){
+                    Column(horizontalAlignment=Alignment.End){
+                        TextButton(onClick={
+                            confirmation=null
+                            if(action=="delete")onDelete(task.id,onBack)
+                            else saveThen{onChangeStatus(task.id,TaskStatus.DONE,onBack)}
+                        }){Text(if(action=="delete")"Удалить только у меня" else "Выполнить только у меня")}
+                        TextButton(onClick={
+                            confirmation=null
+                            if(action=="delete")vm.deleteSharedTask(task.id,"all",onBack)
+                            else saveThen{vm.changeSharedTaskStatus(
+                                task.id,TaskStatus.DONE,"all",onBack)}
+                        }){Text(if(action=="delete")"Удалить у всех" else "Выполнить у всех",
+                            color=if(action=="delete")c.red else Color(0xFF059669))}
+                    }
+                } else TextButton(onClick={
+                    confirmation=null
+                    if(isFile)vm.removeTaskAttachment(task.id,action.removePrefix("file:"))
+                    else if(action=="delete")onDelete(task.id,onBack)
+                    else saveThen{onChangeStatus(task.id,TaskStatus.DONE,onBack)}
+                }){Text(if(isFile || action=="delete")"Удалить" else "Выполнить")}
+            },
             dismissButton={TextButton(onClick={confirmation=null}){Text("Отмена")}}
         )
     }
