@@ -25,6 +25,15 @@ const sendDocument = (res: Response, document: { fileName: string; mimeType: str
 };
 
 export const aiGeneratedDocumentController = {
+  metadata: async (req: Request, res: Response) => {
+    const document = await wordDocumentService.getMetadataForDownload(req.user!.id, req.params.id);
+    if (!document) {
+      res.status(404).json({ error: 'Файл не найден или доступ ограничен' });
+      return;
+    }
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.json(document);
+  },
   download: async (req: Request, res: Response) => {
     const document = await wordDocumentService.getForDownload(req.user!.id, req.params.id);
     if (!document) {
