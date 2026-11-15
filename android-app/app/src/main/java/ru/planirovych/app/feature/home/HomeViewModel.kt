@@ -717,6 +717,34 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
             mutable.update { it.copy(taskError="Не удалось обновить задачи после Планика: "+error.userMessage()) }
         }
     }
+    /** Preserve the open focus sheet while reflecting collaboration and comment changes. */
+    suspend fun reloadSharedTasks() {
+        val tasks = repository.loadTasks()
+        mutable.update { it.copy(tasks = tasks) }
+    }
+    suspend fun updateSharedTaskColor(taskId: String, color: String) {
+        repository.updateTaskCollaborationColor(taskId, color)
+        reloadSharedTasks()
+    }
+    suspend fun removeSharedTaskMember(taskId: String, userId: String) {
+        repository.removeTaskCollaborator(taskId, userId)
+        reloadSharedTasks()
+    }
+    suspend fun disableSharedTask(taskId: String) {
+        repository.disableTaskCollaboration(taskId)
+        reloadSharedTasks()
+    }
+    suspend fun loadSharedSubtaskComments(subtaskId: String): List<TaskComment> =
+        repository.loadTaskComments(subtaskId)
+    suspend fun postSharedSubtaskComment(subtaskId: String, content: String, parentId: String?): TaskComment {
+        val result=repository.createTaskComment(subtaskId, content, parentId)
+        reloadSharedTasks()
+        return result
+    }
+    suspend fun readSharedSubtaskComments(subtaskId: String, lastCommentId: String?) {
+        repository.markTaskCommentsRead(subtaskId, lastCommentId)
+        reloadSharedTasks()
+    }
     fun clearTaskError() { mutable.update { it.copy(taskError = null) } }
 
     private fun mutateTask(action: suspend () -> Unit, done: () -> Unit = {}) {
@@ -752,6 +780,12 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
 
     fun deleteTask(id: String, done: () -> Unit) =
         mutateTask({ repository.deleteTask(id) }, done)
+    // Mini App parity: a collaborative root owner may act on just their copy or everyone.
+    fun changeSharedTaskStatus(id: String, status: TaskStatus, scope: String, done: () -> Unit) =
+        mutateTask({ repository.updateStatus(id, status, scope) }, done)
+    fun deleteSharedTask(id: String, scope: String, done: () -> Unit) =
+        mutateTask({ repository.deleteTask(id, scope) }, done)
+
 
 
     fun postponeOverdue() {

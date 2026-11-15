@@ -481,6 +481,9 @@ internal fun NativeGeneralAiChatPage(
                                         runCatching{context.startActivity(
                                             Intent(Intent.ACTION_VIEW,Uri.parse(url)))}
                                     }
+                                },
+                                onResolveDocumentLink={id,ready->
+                                    vm.generalAiDocumentLink(id,ready)
                                 })
  
                         }

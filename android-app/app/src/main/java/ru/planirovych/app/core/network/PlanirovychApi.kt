@@ -27,6 +27,20 @@ interface PlanirovychApi {
     @POST("api/tasks") suspend fun createTask(@Body payload: JsonObject): Task
     @DELETE("api/tasks/{id}") suspend fun deleteTask(@Path("id") id: String, @Query("scope") scope: String = "me"): OkResponse
 
+    // Shared task management and threaded comments use the same routes as Mini App.
+    @PATCH("api/tasks/{id}/collaboration")
+    suspend fun updateTaskCollaboration(@Path("id") id: String, @Body payload: JsonObject): JsonObject
+    @DELETE("api/tasks/{id}/collaboration/members/{userId}")
+    suspend fun removeTaskCollaborator(@Path("id") id: String, @Path("userId") userId: String): OkResponse
+    @DELETE("api/tasks/{id}/collaboration")
+    suspend fun disableTaskCollaboration(@Path("id") id: String): OkResponse
+    @GET("api/tasks/{id}/comments")
+    suspend fun taskComments(@Path("id") id: String): TaskCommentsResponse
+    @POST("api/tasks/{id}/comments")
+    suspend fun createTaskComment(@Path("id") id: String, @Body payload: JsonObject): TaskComment
+    @POST("api/tasks/{id}/comments/read")
+    suspend fun markTaskCommentsRead(@Path("id") id: String, @Body payload: JsonObject): JsonObject
+
     @GET("api/tasks/{id}/attachments")
     suspend fun taskAttachments(@Path("id") id: String): List<TaskAttachment>
     @POST("api/tasks/{id}/attachments")

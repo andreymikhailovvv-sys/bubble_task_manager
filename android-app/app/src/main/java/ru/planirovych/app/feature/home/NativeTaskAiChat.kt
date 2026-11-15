@@ -466,7 +466,10 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit,
                                     if(parsed.scheme=="https"||parsed.scheme=="http")
                                         runCatching{ctx.startActivity(
                                             Intent(Intent.ACTION_VIEW,parsed))}
-                                }})
+                                }},
+                                onResolveDocumentLink={id,ready->
+                                    vm.getTaskAiDocumentLink(id,ready)
+                                })
                         }
                         if(ui.lastActionReports.isNotEmpty())item(key="ai-last-actions"){
                             Column(verticalArrangement=Arrangement.spacedBy(6.dp)){
@@ -650,6 +653,7 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
         {_,_,_,finished->finished(null)},
     actionBusy:Boolean=false,
     onOpenDocument:(String)->Unit={},
+    onResolveDocumentLink:(String,(String)->Unit)->Unit={_,_->},
     generalChat:Boolean=false,proposalVm:HomeViewModel?=null,
     taskTitles:Map<String,String> = emptyMap(),
     completedTaskIds:Set<String> = emptySet(),
@@ -789,12 +793,17 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                         val fileName=(doc["fileName"] as? JsonPrimitive)?.contentOrNull
                             ?: "Документ ИИ"
                         if(id!=null){
-                            OutlinedButton(onClick={onOpenDocument(id)},
-                                shape=RoundedCornerShape(10.dp)){
-                                Icon(Icons.Default.FileDownload,null,
-                                    modifier=Modifier.size(15.dp))
-                                Spacer(Modifier.width(5.dp))
-                                Text(fileName,fontSize=11.sp,maxLines=1)
+                            val mimeType=(doc["mimeType"] as? JsonPrimitive)?.contentOrNull.orEmpty()
+                            if(mimeType.startsWith("image/")){
+                                NativeAiGeneratedImageCard(id,fileName,onResolveDocumentLink)
+                            }else{
+                                OutlinedButton(onClick={onOpenDocument(id)},
+                                    shape=RoundedCornerShape(10.dp)){
+                                    Icon(Icons.Default.FileDownload,null,
+                                        modifier=Modifier.size(15.dp))
+                                    Spacer(Modifier.width(5.dp))
+                                    Text(fileName,fontSize=11.sp,maxLines=1)
+                                }
                             }
                         }
                     }
@@ -901,6 +910,7 @@ internal fun NativeTaskAiProgressChip(status:String,c:TaskChatColors){
     val sweep by transition.animateFloat(initialValue=0f,targetValue=3f,
         animationSpec=infiniteRepeatable(tween(1250),RepeatMode.Restart),
         label="status-segment")
+    Column {
     Row(Modifier.fillMaxWidth().padding(start=7.dp,top=11.dp,bottom=11.dp),
         verticalAlignment=Alignment.CenterVertically,
         horizontalArrangement=Arrangement.spacedBy(11.dp)){
@@ -923,6 +933,10 @@ internal fun NativeTaskAiProgressChip(status:String,c:TaskChatColors){
                 }
             }
         }
+    }
+    if(status=="generating_image" || status=="editing_image"){
+        NativeAiImageGeneratingCard()
+    }
     }
 }
 

@@ -52,11 +52,11 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
     }
     suspend fun loadTasks(): List<Task> = api.tasks()
     suspend fun updateTask(id: String, changes: JsonObject): Task = api.updateTask(id, changes)
-    suspend fun updateStatus(id: String, status: TaskStatus): Task =
+    suspend fun updateStatus(id: String, status: TaskStatus, scope: String = "me"): Task =
         api.updateTask(id, buildJsonObject {
             put("status", status.name)
             // Mirror MiniApp's default collaborative scope: act on my own copy.
-            put("collaborationScope", "me")
+            put("collaborationScope", scope)
         })
     suspend fun createSubtask(parent: Task, title: String, description: String, dueDate: String?): Task =
         api.createTask(buildJsonObject {
@@ -67,7 +67,7 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
             if (parent.sphereId == null) put("sphereId", JsonNull) else put("sphereId", parent.sphereId)
             put("importance", parent.importance.coerceIn(1, 5))
         })
-    suspend fun deleteTask(id: String) { api.deleteTask(id, "me") }
+    suspend fun deleteTask(id: String, scope: String = "me") { api.deleteTask(id, scope) }
     suspend fun postponeOverdue(tasks: List<Task>): Int {
         // Same calendar-day replacement as the Mini App; never move events/reminders.
         val today = java.time.LocalDate.now()
@@ -84,6 +84,29 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
                 postponedCount += 1
             }
         return postponedCount
+    }
+
+    suspend fun updateTaskCollaborationColor(taskId: String, color: String) {
+        api.updateTaskCollaboration(taskId, buildJsonObject { put("color", color) })
+    }
+    suspend fun removeTaskCollaborator(taskId: String, userId: String) {
+        api.removeTaskCollaborator(taskId, userId)
+    }
+    suspend fun disableTaskCollaboration(taskId: String) {
+        api.disableTaskCollaboration(taskId)
+    }
+    suspend fun loadTaskComments(subtaskId: String): List<TaskComment> =
+        api.taskComments(subtaskId).comments
+    suspend fun createTaskComment(subtaskId: String, content: String, parentId: String?): TaskComment =
+        api.createTaskComment(subtaskId, buildJsonObject {
+            put("content", content)
+            if (parentId != null) put("parentCommentId", parentId)
+        })
+    suspend fun markTaskCommentsRead(subtaskId: String, lastCommentId: String?) {
+        api.markTaskCommentsRead(subtaskId, buildJsonObject {
+            if (lastCommentId == null) put("lastCommentId", JsonNull)
+            else put("lastCommentId", lastCommentId)
+        })
     }
 
     suspend fun loadTaskAttachments(taskId: String) = api.taskAttachments(taskId)
