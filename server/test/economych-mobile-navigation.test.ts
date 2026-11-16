@@ -28,8 +28,8 @@ test('Mini App and Android have 5 compact icon-only tabs with a warm Economic la
   assert.match(home,/Modifier\.height\(56\.dp\)/);
   assert.match(home,/Spacer\(Modifier\.windowInsetsBottomHeight\(WindowInsets\.navigationBars\)\)/);
   assert.match(home,/selectedIconColor=if\(index==4\)/);
-  assert.match(workspace,/4 -> NativeEconomicPage\(userId=state\.user\?\.id,dark=dark\)/);
-  assert.match(androidVersion,/versionCode = 13/);
+  assert.match(workspace,/4 -> NativeEconomicPage\(userId=state\.user\?\.id,dark=dark,active=pagerState\.currentPage==4\)/);
+  assert.match(androidVersion,/versionCode = 14/);
 });
 
 test('both mobile surfaces reuse the actual responsive financial overview and editor',()=>{

@@ -6,6 +6,7 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { answerEconomicAssistant } from '../services/economic-assistant.service.js';
 import { applyEconomicProposal, rejectEconomicProposal, undoEconomicProposal, getEconomicProposalView, economicProposalView } from '../services/economic-ai-proposals.service.js';
 import { EconomicActionError } from '../services/economic-ai-action-validation.service.js';
+import { openingForTargetBalance } from '../services/economic-account-balance.service.js';
 import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
 import { debtOperationKind, debtOperationTitle, economicSourceDelta, ECONOMIC_DEBT_OPERATION_KINDS, type EconomicDebtDirection } from '../lib/economic-debt.js';
 
@@ -141,27 +142,46 @@ economicRouter.get('/snapshot', asyncHandler(async (req, res) => {
 
 economicRouter.post('/accounts', asyncHandler(async (req, res) => {
   const name = text(req.body?.name, 60);
-  const opening = money(req.body?.openingBalanceMinor ?? '0', true, true);
-  if (!name || opening === null) { error(res, 'Введите название счёта и корректный начальный остаток'); return; }
+  if (req.body?.balanceMinor !== undefined && req.body?.openingBalanceMinor !== undefined) {
+    error(res, 'Передайте только текущий баланс'); return;
+  }
+  // Old clients may still send openingBalanceMinor; new clients use balanceMinor.
+  const balance = money(req.body?.balanceMinor ?? req.body?.openingBalanceMinor ?? '0', true, true);
+  if (!name || balance === null) { error(res, 'Введите название счёта и корректный баланс'); return; }
   try {
-    const account = await prisma.economicAccount.create({ data: { userId: userId(req), name, openingBalanceMinor: opening } });
+    const account = await prisma.economicAccount.create({
+      data: { userId: userId(req), name, openingBalanceMinor: balance }
+    });
     res.status(201).json({ account: accountOut(account) });
   } catch (cause) { if (!conflict(cause, res)) throw cause; }
 }));
 economicRouter.patch('/accounts/:id', asyncHandler(async (req, res) => {
   const owner = userId(req);
-  const found = await prisma.economicAccount.findFirst({ where: { id: req.params.id, userId: owner } });
-  if (!found) { error(res, 'Счёт не найден', 404); return; }
-  const name = req.body?.name === undefined ? found.name : text(req.body.name, 60);
-  const opening = req.body?.openingBalanceMinor === undefined ? found.openingBalanceMinor : money(req.body.openingBalanceMinor, true, true);
-  if (!name || opening === null) { error(res, 'Некорректные данные счёта'); return; }
+  if (req.body?.balanceMinor !== undefined && req.body?.openingBalanceMinor !== undefined) {
+    error(res, 'Передайте только текущий баланс'); return;
+  }
+  const desired = req.body?.balanceMinor === undefined ? undefined : money(req.body.balanceMinor, true, true);
+  const legacy = req.body?.openingBalanceMinor === undefined ? undefined : money(req.body.openingBalanceMinor, true, true);
+  if (desired === null || legacy === null) { error(res, 'Некорректный баланс'); return; }
   try {
     await prisma.$transaction(async tx => {
-      if (req.body?.isPrimary === true) await tx.economicAccount.updateMany({ where: { userId: owner }, data: { isPrimary: false } });
-      await tx.economicAccount.update({ where: { id: found.id }, data: { name, openingBalanceMinor: opening, ...(req.body?.isPrimary === true ? { isPrimary: true } : {}) } });
-    });
+      const found = await tx.economicAccount.findFirst({ where: { id: req.params.id, userId: owner } });
+      if (!found) throw new EconomicActionError('Счёт не найден',404);
+      const name = req.body?.name === undefined ? found.name : text(req.body.name, 60);
+      if (!name) throw new EconomicActionError('Некорректное название счёта');
+      const openingBalanceMinor = desired === undefined
+        ? (legacy ?? found.openingBalanceMinor)
+        : await openingForTargetBalance(tx, owner, found.id, desired);
+      if (req.body?.isPrimary === true)
+        await tx.economicAccount.updateMany({ where: { userId: owner }, data: { isPrimary: false } });
+      await tx.economicAccount.update({ where: { id: found.id, userId: owner },
+        data: { name, openingBalanceMinor, ...(req.body?.isPrimary === true ? { isPrimary: true } : {}) } });
+    },{ isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     res.json({ ok: true });
-  } catch (cause) { if (!conflict(cause, res)) throw cause; }
+  } catch (cause) {
+    if (cause instanceof EconomicActionError) { error(res,cause.message,cause.status); return; }
+    if (!conflict(cause, res)) throw cause;
+  }
 }));
 economicRouter.delete('/accounts/:id', asyncHandler(async (req, res) => {
   const owner = userId(req);

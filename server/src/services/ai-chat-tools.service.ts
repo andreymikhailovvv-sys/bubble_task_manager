@@ -23,6 +23,11 @@ import { AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, executeAiFileTool, resolveCatalog
 import { TELEGRAM_REQUEST_READ_TOOL, prepareTelegramAiReadRequest, type TelegramReadDraft } from './telegram-ai-read-consent.service.js';
 import { TELEGRAM_PREPARE_SEND_TOOL, prepareTelegramInlineSendDraft, type TelegramInlineSendDraft } from './telegram-inline-send-draft.service.js';
 import { SEARCH_MAIL_TOOL, PREPARE_MAIL_TOOL, searchOwnerMailbox, prepareOwnerMailSend, type MailSendDraft } from './ai-mail-tools.service.js';
+import { FINANCE_TOOL, FINANCE_LOOKUP_TOOL } from './economic-assistant.service.js';
+import { readPlannerEconomicOverview } from './planner-economic-overview.service.js';
+import { findEconomicRecords } from './economic-ai-record-search.service.js';
+import { EconomicActionError, parseEconomicToolActions } from './economic-ai-action-validation.service.js';
+import { applyEconomicProposal, prepareEconomicProposals, saveEconomicProposals, type PreparedEconomicProposal } from './economic-ai-proposals.service.js';
 
 /**
  * A dedicated reply-preparation tool for owner-authenticated managed assistant
@@ -51,7 +56,15 @@ export const WEB_SEARCH_CALL_CREDITS_MILLI = providerNanoUsdToMilliCredits(OPENA
 export const AI_CHAT_WEB_SEARCH_TOOL = { type: 'web_search', search_context_size: 'low' } as const;
 const nullable = (type: 'string' | 'number') => ({ type: [type, 'null'] });
 
+export const PLANNER_FINANCE_CONTEXT_TOOL = {
+  type:'function',name:'read_economic_overview',strict:true,
+  description:'Получить актуальные счета, текущие балансы, категории, операции, долги и кредиты владельца. Перед финансовым действием обязательно вызвать, все суммы в копейках.',
+  parameters:{type:'object',properties:{},required:[],additionalProperties:false}
+} as const;
 export const AI_CHAT_OPENAI_TOOLS = [
+  PLANNER_FINANCE_CONTEXT_TOOL,
+  FINANCE_LOOKUP_TOOL,
+  FINANCE_TOOL,
   {
     type: 'function', name: 'search_workspace', strict: true,
     description: 'Общий поиск сразу по задачам, подзадачам и личным заметкам пользователя. Вызывай первым для неопределённых запросов «я где-то записывал», «найди, что писал про», «мы обсуждали/планировали», когда источник не указан. Результаты помечены source=tasks или source=notes. После поиска прочитай подходящие записи через get_task или read_note.',
@@ -323,6 +336,9 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
   const resolvedItemIds = new Set<string>(); const resolvedSphereIds = new Set<string>();
   const preparedTaskActions: Array<PlannerActionInput | NoteProposalAction | CreateNoteProposalAction | CreateHabitProposalAction> = [];
   const resolvedNoteIds = new Set<string>();
+  const observedFinancialVersions = new Map<string,string>();
+  let readFinancialContext = false;
+  let preparedFinancialActions: PreparedEconomicProposal[] = [];
   const readNoteIds = new Set<string>();
   const readNoteVersions = new Map<string, string>();
   const updatedNoteIds = new Set<string>();
@@ -477,6 +493,9 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           search_mailbox: 'analyzing_retrieved_context',
           prepare_mail_send: 'forming_answer',
           prepare_assistant_reply: 'forming_answer',
+          read_economic_overview: 'analyzing_retrieved_context',
+          find_economic_records: 'analyzing_retrieved_context',
+          propose_economic_changes: 'applying_changes',
           request_telegram_chat_read: 'forming_answer'
         };
         const progress = progressByTool[name];
@@ -489,6 +508,73 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         }
         console.info('[AI chat tool] call', { requestId, userId: input.userId, providerCallIndex: providerCallCount, toolCallIndex: round, operation: name });
         if (!value || typeof value !== 'object' || Array.isArray(value)) return { ok: false, code: 'INVALID_ARGUMENTS', message: 'Аргументы tool должны быть объектом.' };
+        if (name === 'read_economic_overview') {
+          const overview = await readPlannerEconomicOverview(input.userId);
+          readFinancialContext = true;
+          for(const a of overview.accounts) observedFinancialVersions.set('account:'+a.id,a.updatedAt);
+          for(const o of overview.recentOperations) observedFinancialVersions.set('operation:'+o.id,o.updatedAt);
+          for(const d of overview.debts) observedFinancialVersions.set('debt:'+d.id,d.updatedAt);
+          for(const l of overview.loans) observedFinancialVersions.set('loan:'+l.id,l.updatedAt);
+          for(const c of overview.categories) observedFinancialVersions.set('category:'+c.id,
+            JSON.stringify({kind:c.kind,name:c.name,createdAt:c.createdAt}));
+          return {ok:true,overview};
+        }
+        if (name === 'find_economic_records') {
+          if(!readFinancialContext)return {ok:false,code:'READ_FINANCES_FIRST',message:'Сначала вызови read_economic_overview.'};
+          try {
+            const records=await findEconomicRecords(input.userId,value);
+            for(const row of records) {
+              if(row.updatedAt)observedFinancialVersions.set(row.entity+':'+row.id,row.updatedAt);
+              else if(row.entity==='category'&&row.categoryKind&&row.categoryName&&row.createdAt)
+                observedFinancialVersions.set('category:'+row.id,
+                  JSON.stringify({kind:row.categoryKind,name:row.categoryName,createdAt:row.createdAt}));
+            }
+            return {ok:true,records};
+          }catch(cause){
+            if(cause instanceof EconomicActionError)return {ok:false,code:'INVALID_LOOKUP',message:cause.message};
+            throw cause;
+          }
+        }
+        if (name === 'propose_economic_changes') {
+          if(!readFinancialContext)return {ok:false,code:'READ_FINANCES_FIRST',
+            message:'Сначала вызови read_economic_overview и используй реальные ID счетов.'};
+          if(preparedFinancialActions.length)return {ok:false,code:'FINANCE_ALREADY_PREPARED',
+            message:'За запрос можно подготовить один пакет финансовых изменений.'};
+          try {
+            const actions=parseEconomicToolActions((value as {actions_json?:unknown}).actions_json);
+            for(const action of actions) {
+              if(action.action==='update'&&!observedFinancialVersions.has(action.entity+':'+action.targetId))
+                throw new EconomicActionError('Сначала найди запись через read_economic_overview или find_economic_records.');
+              if(action.entity==='operation'){
+                for(const field of ['sourceAccountId','targetAccountId'] as const){
+                  const id=action.payload[field];
+                  if(typeof id==='string'&&!observedFinancialVersions.has('account:'+id))
+                    throw new EconomicActionError('Сначала найди счёт операции; нельзя придумывать ID.');
+                }
+              }
+              if(action.entity==='debt'&&typeof action.payload.accountId==='string'&&
+                 !observedFinancialVersions.has('account:'+action.payload.accountId))
+                throw new EconomicActionError('Сначала найди счёт для долга.');
+            }
+            const prepared=await prepareEconomicProposals(input.userId,actions);
+            for(const row of prepared){
+              if(row.action.action!=='update')continue;
+              const version=observedFinancialVersions.get(row.action.entity+':'+row.action.targetId);
+              const before=row.before;
+              const current=row.action.entity==='category'
+                ? JSON.stringify({kind:before?.kind,name:before?.name,createdAt:before?.createdAt})
+                : before?.updatedAt;
+              if(!version||version!==current)
+                throw new EconomicActionError('Финансовая запись изменена. Получите свежие данные перед редактированием.');
+            }
+            preparedFinancialActions=prepared;
+            return {ok:true,status:'prepared',count:prepared.length,confirmationRequired:true,
+              message:'Предложение ожидает подтверждения в Экономыч → Обзор. Не называй запись внесённой до подтверждения.'};
+          }catch(cause){
+            if(cause instanceof EconomicActionError)return {ok:false,code:'FINANCE_VALIDATION',message:cause.message};
+            throw cause;
+          }
+        }
         if (name === 'prepare_assistant_reply') {
           const context = input.assistantReplyContext;
           if (!context) return { ok: false, code: 'NOT_AN_ASSISTANT_CHAT' };
@@ -809,6 +895,41 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
     }
     const webSearchCallsBilled = webSearchUsed ? MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST : 0;
     const webSearchCreditsMilliBilled = webSearchCallsBilled * WEB_SEARCH_CALL_CREDITS_MILLI;
+    let financialResult = '';
+    if(preparedFinancialActions.length){
+      const saved=await prisma.$transaction(async tx=>{
+        const message=await tx.economicAssistantMessage.create({data:{
+          userId:input.userId,role:'assistant',
+          content:'[Планировыч] Финансовые изменения подготовлены в общем чате.',
+          createdAt:new Date()
+        }});
+        return saveEconomicProposals(tx,input.userId,message.id,preparedFinancialActions);
+      });
+      const autoApply=(await prisma.user.findUnique({
+        where:{id:input.userId},select:{economicAiAutoApply:true}
+      }))?.economicAiAutoApply===true;
+      let applied=0,failed=0;
+      if(autoApply){
+        for(const proposal of saved){
+          try{
+            const row=await applyEconomicProposal(input.userId,proposal.id,true);
+            if(row.status==='APPLIED')applied++;else failed++;
+          }catch(cause){
+            failed++;
+            const detail=cause instanceof Error?cause.message:'Неизвестная ошибка';
+            await prisma.economicAiProposal.updateMany({
+              where:{id:proposal.id,userId:input.userId,status:'PENDING'},
+              data:{error:('Автоприменение не удалось: '+detail).slice(0,500)}
+            }).catch(()=>undefined);
+          }
+        }
+      }
+      financialResult=autoApply&&failed===0
+        ? 'Финансовые изменения внесены: '+applied+'. Они отражены в Экономыче.'
+        : 'Подготовлено финансовых изменений: '+saved.length+
+          (autoApply ? ' (применено '+applied+', осталось '+failed+').' : '.')+
+          ' Откройте вкладку «Экономыч» → «Обзор», чтобы проверить и подтвердить предложения.';
+    }
     const taskProposal = preparedTaskActions.length
       ? await prepareTaskProposal({
           userId: input.userId, requestId: input.actionRequestId, source: input.autoApplyTaskActions ? 'telegram_bot' : 'planner',
@@ -818,13 +939,13 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           userTimeZone: input.userTimeZone
         })
       : null;
-    return { answer: taskProposal
+    return { answer: (taskProposal
       ? (taskProposal.status === 'APPLIED'
         ? 'Изменения применены автоматически. Подробности в карточке.'
         : taskProposal.status === 'PENDING'
           ? 'Подготовил изменения. Просмотрите карточку и нажмите «Принять».'
           : 'Изменения не применены: ' + (taskProposal.error || 'Не удалось выполнить операцию.') + ' Задача не создана, повторно подтверждать нечего.')
-      : loop.answer, telegramSendDraft, telegramReadDraft, mailSendDraft, mailReadUsed, taskProposal, model: input.model, taskDataChanged: taskProposal?.status === 'APPLIED', actionReports, undoOperations, generatedDocument, imageCreditsSpentMilli: imageCreditsSpentMilli + fileEditCreditsSpentMilli, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
+      : loop.answer) + (financialResult ? '\n\n'+financialResult : ''), telegramSendDraft, telegramReadDraft, mailSendDraft, mailReadUsed, taskProposal, model: input.model, taskDataChanged: taskProposal?.status === 'APPLIED', actionReports, undoOperations, generatedDocument, imageCreditsSpentMilli: imageCreditsSpentMilli + fileEditCreditsSpentMilli, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
   } catch (error) {
     await Promise.all(dynamicCalls.map((call) => refundDynamicResponsesCall(call)));
     if (webReservation) await refundAiCreditReservation(webReservation);

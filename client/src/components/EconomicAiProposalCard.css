@@ -41,3 +41,26 @@
   outline:2px solid #ffbd6a;outline-offset:2px
 }
 @media(prefers-reduced-motion:reduce){.econ-finance-proposal *{animation:none!important}}
+
+
+/* Reuse the same confirmation card on the white mobile Economic overview. */
+.econ-root.econ-light .econ-finance-proposal{
+  background:#fff;border-color:#ead6bb;color:#293444;
+  box-shadow:0 3px 12px rgba(32,43,61,.05)
+}
+.econ-root.econ-light .econ-finance-proposal-title strong,
+.econ-root.econ-light .econ-finance-description{color:#293444}
+.econ-root.econ-light .econ-finance-proposal-title small,
+.econ-root.econ-light .econ-finance-autoapply{color:#667386}
+.econ-root.econ-light .econ-finance-proposal-icon{
+  background:#fff3e4;color:#a15c16;border-color:#f1d7b6
+}
+.econ-root.econ-light .econ-finance-proposal-details{
+  background:#f8f9fb;border-color:#e6e9ed;color:#526073
+}
+.econ-root.econ-light .econ-finance-secondary,
+.econ-root.econ-light .econ-finance-undo{
+  background:#fffaf3;border-color:#ecd7b9;color:#95591d
+}
+.econ-root.econ-light .econ-finance-autoapply{border-color:#e6e9ed}
+.econ-root.econ-light .econ-finance-proposal-error{color:#ab3f38}

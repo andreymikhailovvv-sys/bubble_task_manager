@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
+import { openingForTargetBalance } from './economic-account-balance.service.js';
 import { debtOperationKind, debtOperationTitle, type EconomicDebtDirection } from '../lib/economic-debt.js';
 import { canonicalEconomicAction, EconomicActionError, type EconomicAction, type EconomicEntity } from './economic-ai-action-validation.service.js';
 
@@ -115,7 +116,12 @@ async function mutate(tx:Tx,owner:string,action:EconomicAction,record:Snapshot|n
   const d={...record,...action.payload} as Record<string,unknown>;
   if(action.entity==='account'){
     if(typeof d.name!=='string'||!d.name.trim())no('Укажите название счёта.');
-    const values={name:d.name as string,openingBalanceMinor:BigInt(String(d.openingBalanceMinor??'0'))};
+    const openingBalanceMinor=action.payload.balanceMinor !== undefined
+      ? (action.action==='create'
+        ? BigInt(String(action.payload.balanceMinor))
+        : await openingForTargetBalance(tx,owner,action.targetId!,BigInt(String(action.payload.balanceMinor))))
+      : BigInt(String(d.openingBalanceMinor??'0'));
+    const values={name:d.name as string,openingBalanceMinor};
     if(action.action==='create')return (await tx.economicAccount.create({data:{userId:owner,...values}})).id;
     await tx.economicAccount.update({where:{id:action.targetId!,userId:owner},data:values});
     return action.targetId!;
@@ -176,13 +182,13 @@ export function economicProposalView(row:{
   const d=(row.payload&&typeof row.payload==='object'?row.payload:{}) as Record<string,unknown>;
   const old=(row.before&&typeof row.before==='object'?row.before:{}) as Record<string,unknown>;
   const name=String(d.name??d.title??d.counterparty??old.name??old.title??old.counterparty??'');
-  const value=d.amountMinor??d.principalMinor??d.openingBalanceMinor??d.paidMinor;
+  const value=d.amountMinor??d.principalMinor??d.balanceMinor??d.openingBalanceMinor??d.paidMinor;
   const amount=typeof value==='string'&&/^-?\d+$/.test(value)
     ? (Number(BigInt(value))/100).toLocaleString('ru-RU',{maximumFractionDigits:2})+' ₽' : null;
   const description=[name,amount].filter(Boolean).join(' · ');
   const fieldNames:Record<string,string>={
     name:'Название',title:'Название',counterparty:'Контрагент',
-    kind:'Тип',direction:'Направление',openingBalanceMinor:'Начальный остаток',
+    kind:'Тип',direction:'Направление',balanceMinor:'Баланс',openingBalanceMinor:'Баланс',
     amountMinor:'Сумма',principalMinor:'Сумма кредита',paidMinor:'Выплачено',
     category:'Категория',note:'Примечание',dueAt:'Срок возврата',
     annualRateBps:'Ставка (б.п.)',termMonths:'Срок (месяцев)',startDate:'Дата начала',

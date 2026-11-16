@@ -29,14 +29,14 @@ const HISTORY_TOOL = {
   }, required: ['query'], additionalProperties: false }, strict: true
 };
 
-const FINANCE_TOOL = {
+export const FINANCE_TOOL = {
   type: 'function', name: 'propose_economic_changes',
   description: 'Предложить создание или изменение счетов, операций, категорий, долгов и банковских кредитов. Действия только подготавливаются в чипах и по умолчанию НЕ выполняются, пользователь подтверждает. Можно предложить максимум 5 действий.',
   parameters: { type: 'object', properties: {
-    actions_json: { type: 'string', description: 'JSON-массив из 1–5 объектов: entity (account|operation|category|debt|loan), action (create|update), targetId (null для create, id из контекста для update), payload с разрешёнными полями. Все суммы задаются в КОПЕЙКАХ десятичной строкой. Поля для account: name, openingBalanceMinor. operation: kind, amountMinor, sourceAccountId, targetAccountId, title, category, note, occurredAt. category: kind, name (для update только name). debt: direction, counterparty, amountMinor, paidMinor, note, dueAt, postedToAccount, accountId. loan: name, lender, principalMinor, paidMinor, annualRateBps (базисные пункты, например 15% = 1500), termMonths, startDate, monthlyPaymentOverrideMinor, paymentDate, remindersEnabled, isClosed. Не придумывать ID и обязательные сведения.' }
+    actions_json: { type: 'string', description: 'JSON-массив из 1–5 объектов: entity (account|operation|category|debt|loan), action (create|update), targetId (null для create, id из контекста для update), payload с разрешёнными полями. Все суммы задаются в КОПЕЙКАХ десятичной строкой. Поля для account: name, balanceMinor (текущий баланс); старый openingBalanceMinor допустим только для совместимости. operation: kind, amountMinor, sourceAccountId, targetAccountId, title, category, note, occurredAt. category: kind, name (для update только name). debt: direction, counterparty, amountMinor, paidMinor, note, dueAt, postedToAccount, accountId. loan: name, lender, principalMinor, paidMinor, annualRateBps (базисные пункты, например 15% = 1500), termMonths, startDate, monthlyPaymentOverrideMinor, paymentDate, remindersEnabled, isClosed. Не придумывать ID и обязательные сведения.' }
   }, required: ['actions_json'], additionalProperties: false }, strict: true
 };
-const FINANCE_LOOKUP_TOOL = {
+export const FINANCE_LOOKUP_TOOL = {
   type: 'function', name: 'find_economic_records',
   description: 'Найти старые операции, счета, долги, кредиты или категории по названию или контрагенту, если их ID не виден в текущем финансовом контексте. Только чтение, максимум 10 результатов, всегда только записи владельца.',
   parameters: { type: 'object', properties: {
@@ -118,6 +118,7 @@ export async function answerEconomicAssistant(input: {
     'Ты Экономыч AI, финансовый помощник сервиса Планировыч.',
     'Отвечай по-русски, коротко, точно и ясно. Нельзя выдумывать суммы, счета или операции.',
     'Суммы с суффиксом Minor обозначают копейки. Объясняй рубли пользователю.',
+    'При изменении баланса счёта используй поле balanceMinor, которое означает текущий баланс с учётом уже записанных операций. Не используй openingBalanceMinor для нового действия.',
     'Если пользователь просит создать или изменить финансовую запись и все обязательные сведения известны, вызови propose_economic_changes.',
     'Для операций допустимы INCOME, EXPENSE и TRANSFER. Для долгов direction OWE (я должен) и OWED_TO_ME (мне должны).',
     'ID для изменений и счетов бери только из приведённого контекста, никогда не выдумывай. При недостатке обязательных данных задай уточнение вместо фиктивных значений.',
