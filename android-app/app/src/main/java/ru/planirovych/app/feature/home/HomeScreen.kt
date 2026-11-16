@@ -612,7 +612,7 @@ private fun nextHabitWeekday(habit: Habit, today: LocalDate): String {
                             Text(habit.icon, modifier = Modifier
                                     .habitEmojiCompletionFilter(scheduledToday && amount>=target)
                                     .alpha(if (!scheduledToday) .24f else if (amount>=target) .72f else 1f),
-                                style = MaterialTheme.typography.titleLarge
+                                style = MaterialTheme.typography.titleLarge)
                             Text("${amount.coerceAtMost(target)}/$target",
                                 color = contentColor.copy(alpha = if (scheduledToday) 1f else .65f),
                                 style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
