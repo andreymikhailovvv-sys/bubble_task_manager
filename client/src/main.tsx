@@ -118,6 +118,10 @@ const isPublicRoute = window.location.pathname === '/android'
   || window.location.pathname === '/legal/offer';
 // Choose the workspace once at startup so resizing does not unmount it and lose state.
 const isCompactWorkspaceViewport = window.matchMedia('(max-width: 1024px)').matches;
+const economicParams = new URLSearchParams(window.location.search);
+const isCompactEconomicViewport = window.matchMedia('(max-width: 700px)').matches;
+const economicThemeOverride = economicParams.get('mobileTheme') === 'light' ? 'light' :
+  economicParams.get('mobileTheme') === 'dark' ? 'dark' : undefined;
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
@@ -132,7 +136,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         : isAccountEmailRoute
           ? <AuthEmailPage />
         : isEconomicRoute
-          ? <EconomicApp mobile={new URLSearchParams(window.location.search).get('mobile') === '1'} />
+          ? <EconomicApp mobile={economicParams.get('mobile') === '1' || isCompactEconomicViewport}
+              themeOverride={economicThemeOverride} />
         : isMiniAppRoute
           ? <MiniApp runtime="telegram" />
         : isAndroidPlanikRoute
