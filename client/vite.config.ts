@@ -9,8 +9,9 @@ export default defineConfig({
       name: 'economic-clean-entry-dev',
       configureServer(server) {
         server.middlewares.use((req, _res, next) => {
-          if (req.url && /^\\/economic\\/?(?:\\?|$)/.test(req.url)) {
-            req.url = req.url.replace(/^\\/economic\\/?/, '/economic.html');
+          const [pathname, query] = (req.url || '').split('?', 2);
+          if (pathname === '/economic' || pathname === '/economic/') {
+            req.url = '/economic.html' + (query ? '?' + query : '');
           }
           next();
         });
