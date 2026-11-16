@@ -587,3 +587,36 @@
 .econ-dialog-layer.econ-light .econ-form .econ-help-button{color:#a45d10}
 .econ-dialog-layer.econ-light .econ-inline-category-form button{color:#78450d}
 @media(prefers-reduced-motion:reduce){.econ-mobile-add-fab{transition:none}}
+
+/* The mobile WebView content used to stop at its last card and reveal the
+   dark HTML body underneath. Paint the complete viewport in both modes. */
+html:has(.econ-root.econ-light),body:has(.econ-root.econ-light),
+body:has(.econ-root.econ-light) #root{background:#f7f8fa;color-scheme:light}
+html:has(.econ-root.econ-mobile-workspace),
+body:has(.econ-root.econ-mobile-workspace),
+body:has(.econ-root.econ-mobile-workspace) #root{min-height:100dvh}
+.econ-root.econ-mobile-workspace{min-height:100dvh}
+.econ-mobile-workspace .econ-shell,.econ-mobile-workspace .econ-main{min-height:100dvh}
+.econ-root.econ-light .econ-stat.featured{box-shadow:0 3px 14px rgba(25,35,55,.035)}
+.econ-planner-proposals{margin-top:15px}
+.econ-planner-proposal-list{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr))}
+.econ-planner-proposals .econ-card-header{margin-bottom:12px}
+/* Gentle transform+opacity animations, no costly blur/reflow on each frame. */
+@keyframes econ-pop-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes econ-dialog-in{from{opacity:0;transform:translateY(14px) scale(.987)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes econ-fade-in{from{opacity:0}to{opacity:1}}
+.econ-section-content,.econ-intro,.econ-stats,.econ-dashboard-grid,.econ-recent,
+.econ-planner-proposals{animation:econ-pop-in .24s cubic-bezier(.2,.7,.2,1) both}
+.econ-modal-backdrop{animation:econ-fade-in .16s ease-out both}
+.econ-dialog-layer .econ-modal{animation:econ-dialog-in .23s cubic-bezier(.2,.7,.2,1) both}
+.econ-mobile-sections button,.econ-nav-links button,
+.econ-mini-account,.econ-obligation-preview,.econ-row-actions button{
+ transition:background-color .16s ease,border-color .16s ease,color .16s ease,transform .16s ease
+}
+.econ-mobile-sections button:active,.econ-nav-links button:active{transform:scale(.975)}
+@media(prefers-reduced-motion:reduce){
+ .econ-section-content,.econ-intro,.econ-stats,.econ-dashboard-grid,.econ-recent,
+ .econ-planner-proposals,.econ-modal-backdrop,.econ-dialog-layer .econ-modal{animation:none}
+ .econ-mobile-sections button,.econ-nav-links button,
+ .econ-mini-account,.econ-obligation-preview,.econ-row-actions button{transition:none}
+}
