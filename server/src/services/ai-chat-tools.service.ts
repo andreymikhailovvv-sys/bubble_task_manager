@@ -23,6 +23,11 @@ import { AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, executeAiFileTool, resolveCatalog
 import { TELEGRAM_REQUEST_READ_TOOL, prepareTelegramAiReadRequest, type TelegramReadDraft } from './telegram-ai-read-consent.service.js';
 import { TELEGRAM_PREPARE_SEND_TOOL, prepareTelegramInlineSendDraft, type TelegramInlineSendDraft } from './telegram-inline-send-draft.service.js';
 import { SEARCH_MAIL_TOOL, PREPARE_MAIL_TOOL, searchOwnerMailbox, prepareOwnerMailSend, type MailSendDraft } from './ai-mail-tools.service.js';
+import { FINANCE_TOOL, FINANCE_LOOKUP_TOOL } from './economic-assistant.service.js';
+import { readPlannerEconomicOverview } from './planner-economic-overview.service.js';
+import { findEconomicRecords } from './economic-ai-record-search.service.js';
+import { EconomicActionError, parseEconomicToolActions } from './economic-ai-action-validation.service.js';
+import { applyEconomicProposal, prepareEconomicProposals, saveEconomicProposals, type PreparedEconomicProposal } from './economic-ai-proposals.service.js';
 
 /**
  * A dedicated reply-preparation tool for owner-authenticated managed assistant
@@ -51,7 +56,15 @@ export const WEB_SEARCH_CALL_CREDITS_MILLI = providerNanoUsdToMilliCredits(OPENA
 export const AI_CHAT_WEB_SEARCH_TOOL = { type: 'web_search', search_context_size: 'low' } as const;
 const nullable = (type: 'string' | 'number') => ({ type: [type, 'null'] });
 
+export const PLANNER_FINANCE_CONTEXT_TOOL = {
+  type:'function',name:'read_economic_overview',strict:true,
+  description:'Получить актуальные счета, текущие балансы, категории, операции, долги и кредиты владельца. Перед финансовым действием обязательно вызвать, все суммы в копейках.',
+  parameters:{type:'object',properties:{},required:[],additionalProperties:false}
+} as const;
 export const AI_CHAT_OPENAI_TOOLS = [
+  PLANNER_FINANCE_CONTEXT_TOOL,
+  FINANCE_LOOKUP_TOOL,
+  FINANCE_TOOL,
   {
     type: 'function', name: 'search_workspace', strict: true,
     description: 'Общий поиск сразу по задачам, подзадачам и личным заметкам пользователя. Вызывай первым для неопределённых запросов «я где-то записывал», «найди, что писал про», «мы обсуждали/планировали», когда источник не указан. Результаты помечены source=tasks или source=notes. После поиска прочитай подходящие записи через get_task или read_note.',
@@ -323,6 +336,9 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
   const resolvedItemIds = new Set<string>(); const resolvedSphereIds = new Set<string>();
   const preparedTaskActions: Array<PlannerActionInput | NoteProposalAction | CreateNoteProposalAction | CreateHabitProposalAction> = [];
   const resolvedNoteIds = new Set<string>();
+  const observedFinancialVersions = new Map<string,string>();
+  let readFinancialContext = false;
+  let preparedFinancialActions: PreparedEconomicProposal[] = [];
   const readNoteIds = new Set<string>();
   const readNoteVersions = new Map<string, string>();
   const updatedNoteIds = new Set<string>();
@@ -477,6 +493,9 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           search_mailbox: 'analyzing_retrieved_context',
           prepare_mail_send: 'forming_answer',
           prepare_assistant_reply: 'forming_answer',
+          read_economic_overview: 'analyzing_retrieved_context',
+          find_economic_records: 'analyzing_retrieved_context',
+          propose_economic_changes: 'applying_changes',
           request_telegram_chat_read: 'forming_answer'
         };
         const progress = progressByTool[name];
