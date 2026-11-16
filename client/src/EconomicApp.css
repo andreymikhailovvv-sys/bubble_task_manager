@@ -98,3 +98,5 @@
  .econ-inline-category-form button{margin-left:auto}
  .econ-tooltip-panel{right:-70px;width:min(290px,80vw)}
 }
+
+.econ-obligation-preview-list{max-height:410px;overflow-y:auto;align-content:start;padding:2px}
