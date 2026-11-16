@@ -45,6 +45,7 @@ export function reconcileActiveAiChatMessages<T extends IdentifiedChatMessage>(
       message.generatedDocument?.mimeType === other.generatedDocument?.mimeType &&
       message.taskProposal?.id === other.taskProposal?.id &&
       message.taskProposal?.status === other.taskProposal?.status &&
+      JSON.stringify(message.economicProposals ?? null) === JSON.stringify(other.economicProposals ?? null) &&
       JSON.stringify(message.telegramSendDraft ?? null) === JSON.stringify(other.telegramSendDraft ?? null) &&
       JSON.stringify(message.mailSendDraft ?? null) === JSON.stringify(other.mailSendDraft ?? null) &&
       JSON.stringify(message.telegramReadDraft ?? null) === JSON.stringify(other.telegramReadDraft ?? null);
@@ -262,6 +263,8 @@ export function reconcileAiChatMessagesWithChips<T extends IdentifiedChatMessage
         ? { mailSendDraft: original.mailSendDraft } : {}),
       ...(message.taskProposal == null && original.taskProposal
         ? { taskProposal: original.taskProposal } : {}),
+      ...(message.economicProposals == null && original.economicProposals
+        ? { economicProposals: original.economicProposals } : {}),
       ...(message.generatedDocument == null && original.generatedDocument
         ? { generatedDocument: original.generatedDocument } : {}) } as T;
     // Usually polling returns identical primitive fields. Skip serializing

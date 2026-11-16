@@ -69,6 +69,12 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
     private val taskAiMutable=MutableStateFlow(TaskAiChatState())
     private val taskProposalAutoApplyMutable=MutableStateFlow<Boolean?>(null)
     val taskProposalAutoApply=taskProposalAutoApplyMutable.asStateFlow()
+    suspend fun economicProposalDetails(id:String):JsonObject=repository.economicProposal(id)
+    suspend fun economicProposalAction(id:String,action:String):JsonObject=
+        repository.economicProposalAction(id,action)
+    suspend fun economicAutoApply():Boolean=repository.economicPreferences()
+    suspend fun setEconomicAutoApply(enabled:Boolean):Boolean=
+        repository.setEconomicPreferences(enabled)
     suspend fun taskProposalDetails(id:String):JsonObject =
         repository.getTaskAiProposal(id)
     suspend fun loadTaskProposalAutoApply():Boolean{
@@ -360,7 +366,7 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                             put("creditsSpentMilli",it)
                         }
                         listOf("webSearchUsed","webSources","webCitations",
-                            "generatedDocument","taskProposal","telegramSendDraft",
+                            "generatedDocument","taskProposal","economicProposals","telegramSendDraft",
                             "telegramReadDraft","mailSendDraft","telegramSuggestedReply").forEach{key->
                             response[key]?.let{put(key,it)}
                         }

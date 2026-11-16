@@ -146,6 +146,7 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
             webSearchUsed=(item["webSearchUsed"] as? JsonPrimitive)?.booleanOrNull==true,
             webSources=sources,
             taskProposal=item["taskProposal"] as? kotlinx.serialization.json.JsonObject,
+            economicProposals=item["economicProposals"] as? kotlinx.serialization.json.JsonArray,
             generatedDocument=item["generatedDocument"] as? kotlinx.serialization.json.JsonObject,
             telegramSendDraft=item["telegramSendDraft"] as? kotlinx.serialization.json.JsonObject,
             telegramReadDraft=item["telegramReadDraft"] as? kotlinx.serialization.json.JsonObject,
@@ -178,6 +179,19 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
 
     suspend fun loadSystemNotifications():AndroidSystemNotificationFeed =
         api.systemNotifications()
+
+    suspend fun economicProposal(id:String):JsonObject=api.economicProposal(id)
+    suspend fun economicPreferences():Boolean=
+        (api.economicPreferences()["autoApply"] as? JsonPrimitive)?.booleanOrNull==true
+    suspend fun setEconomicPreferences(enabled:Boolean):Boolean=
+        (api.setEconomicPreferences(buildJsonObject{put("autoApply",enabled)})["autoApply"]
+            as? JsonPrimitive)?.booleanOrNull==true
+    suspend fun economicProposalAction(id:String,action:String):JsonObject=when(action){
+        "approve"->api.approveEconomicProposal(id,buildJsonObject{})
+        "reject"->api.rejectEconomicProposal(id,buildJsonObject{})
+        "undo"->api.undoEconomicProposal(id,buildJsonObject{})
+        else->throw IllegalArgumentException("Неизвестное финансовое действие")
+    }
 
     suspend fun loadGeneralAiProjects():List<GeneralAiProject> =
         parseGeneralAiProjects(api.generalAiProjects())

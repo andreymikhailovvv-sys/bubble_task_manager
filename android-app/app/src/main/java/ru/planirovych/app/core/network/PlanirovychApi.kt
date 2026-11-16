@@ -96,6 +96,23 @@ interface PlanirovychApi {
     @GET("api/tasks/{id}/monitoring/statuses")
     suspend fun taskMonitoringStatuses(@Path("id") taskId:String):List<TaskMonitoringStatus>
 
+    // Existing Economic server approval / undo flow, also used by general AI.
+    @GET("api/economic/assistant/proposals/{id}")
+    suspend fun economicProposal(@Path("id") id:String):JsonObject
+    @GET("api/economic/assistant/preferences")
+    suspend fun economicPreferences():JsonObject
+    @Headers("Sec-Fetch-Site: same-origin")
+    @PUT("api/economic/assistant/preferences")
+    suspend fun setEconomicPreferences(@Body payload:JsonObject):JsonObject
+    @Headers("Sec-Fetch-Site: same-origin")
+    @POST("api/economic/assistant/proposals/{id}/approve")
+    suspend fun approveEconomicProposal(@Path("id") id:String,@Body payload:JsonObject):JsonObject
+    @Headers("Sec-Fetch-Site: same-origin")
+    @POST("api/economic/assistant/proposals/{id}/reject")
+    suspend fun rejectEconomicProposal(@Path("id") id:String,@Body payload:JsonObject):JsonObject
+    @Headers("Sec-Fetch-Site: same-origin")
+    @POST("api/economic/assistant/proposals/{id}/undo")
+    suspend fun undoEconomicProposal(@Path("id") id:String,@Body payload:JsonObject):JsonObject
     @GET("api/ai/task-proposals/{id}")
     suspend fun getTaskAiProposal(@Path("id") id:String):JsonObject
     @GET("api/ai/task-proposals/preferences")

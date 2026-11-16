@@ -185,6 +185,7 @@ data class TaskAiChatMessage(
     val webSearchUsed:Boolean = false,
     val webSources:List<Pair<String,String>> = emptyList(),
     val taskProposal: kotlinx.serialization.json.JsonObject? = null,
+    val economicProposals: kotlinx.serialization.json.JsonArray?=null,
     val generatedDocument: kotlinx.serialization.json.JsonObject?=null,
     val telegramSendDraft: kotlinx.serialization.json.JsonObject?=null,
     val telegramReadDraft: kotlinx.serialization.json.JsonObject?=null,

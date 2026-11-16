@@ -788,6 +788,15 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                         proposalVm?.let{NativeAiTaskProposalCard(
                             proposal,c,actionBusy,it,onProposalAction)}
                     }
+                    if(generalChat && !isUser && !pending) {
+                        message.economicProposals?.forEach { entry ->
+                            (entry as? JsonObject)?.let { proposal ->
+                                proposalVm?.let { vm ->
+                                    NativeEconomicAiProposalCard(proposal,c,vm)
+                                }
+                            }
+                        }
+                    }
                     message.generatedDocument?.let{doc->
                         val id=(doc["id"] as? JsonPrimitive)?.contentOrNull
                         val fileName=(doc["fileName"] as? JsonPrimitive)?.contentOrNull
