@@ -1,0 +1,26 @@
+/* Financial chips in the ordinary Planner AI bubbles: warm amber, responsive. */
+.ai-inline-economic-proposals{display:grid;gap:8px;width:100%;min-width:0;margin-top:10px;max-width:100%}
+.ai-inline-economic-proposals .econ-finance-proposal{margin-top:0;min-width:0;max-width:100%;box-sizing:border-box}
+.ai-inline-economic-proposals .econ-finance-proposal-actions{flex-wrap:wrap}
+.ai-inline-economic-proposals .econ-finance-proposal-actions button{min-width:100px}
+.ai-inline-economic-error{color:#d38b37;font-size:11px;padding:7px 0}
+/* The financial card already uses dark amber in the dedicated module;
+   override only on the light surfaces of the general chat. */
+:where(.miniapp-light, .app-light, [data-theme='light']) .ai-inline-economic-proposals .econ-finance-proposal{
+  background:#fff;border:1px solid #ead1a9;color:#263141;
+  box-shadow:0 4px 16px rgba(31,42,61,.06)
+}
+:where(.miniapp-light, .app-light, [data-theme='light']) .ai-inline-economic-proposals .econ-finance-proposal-title strong,
+:where(.miniapp-light, .app-light, [data-theme='light']) .ai-inline-economic-proposals .econ-finance-description{color:#263141}
+:where(.miniapp-light, .app-light, [data-theme='light']) .ai-inline-economic-proposals .econ-finance-proposal-title small,
+:where(.miniapp-light, .app-light, [data-theme='light']) .ai-inline-economic-proposals .econ-finance-autoapply{color:#647181}
+:where(.miniapp-light, .app-light, [data-theme='light']) .ai-inline-economic-proposals .econ-finance-proposal-details{
+  background:#f8f9fb;border-color:#e4e7ec;color:#49586d
+}
+:where(.miniapp-light, .app-light, [data-theme='light']) .ai-inline-economic-proposals .econ-finance-proposal-icon{
+  color:#99510e;background:#fff2e1;border-color:#e9c38d
+}
+:where(.miniapp-light, .app-light, [data-theme='light']) .ai-inline-economic-proposals .econ-finance-secondary,
+:where(.miniapp-light, .app-light, [data-theme='light']) .ai-inline-economic-proposals .econ-finance-undo{
+  background:#fff7ed;border-color:#e9c38d;color:#864a10
+}
