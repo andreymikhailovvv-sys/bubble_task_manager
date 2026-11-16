@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, BookOpen, Check, ChevronRight, CircleDollarSign, CreditCard, Landmark, LayoutDashboard, Loader2, MessageCircle, Pencil, Plus, Send, Settings2, Trash2, WalletCards, X } from 'lucide-react';
+import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, BookOpen, Check, ChevronRight, CircleDollarSign, CreditCard, Landmark, LayoutDashboard, Loader2, MessageCircle, Pencil, Plus, Send, Settings2, Sparkles, Trash2, WalletCards, X } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import ModuleRail from './components/ModuleRail';
+import { PlanikMascot } from './components/PlanikMascot';
 import { loadThemePreference, resolveThemeMode } from './lib/autoTheme';
 import { annuityEstimate, formatMinorRub as money, minorToRublesInput as inputMoney, rublesToMinor as parseMoney } from './lib/economicMoney';
 import './EconomicApp.css';
@@ -68,20 +69,15 @@ function RepaymentProgress({ paid, total }: { paid: string; total: string }) {
   </div>;
 }
 
-function EconomicMascot({ onClick, active }: { onClick: () => void; active: boolean }) {
-  return <button className={'econ-mascot ' + (active ? 'active' : '')} type="button" onClick={onClick} aria-label={active ? 'Закрыть помощника Экономыч AI' : 'Открыть помощника Экономыч AI'} title="Помощник Экономыч AI">
-    <svg viewBox="0 0 98 100" width="80" height="80" aria-hidden="true">
-      <defs><linearGradient id="econ-robot-metal" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#fff0d5"/><stop offset=".5" stopColor="#f9b34b"/><stop offset="1" stopColor="#9e500a"/></linearGradient></defs>
-      <path d="M15 48 Q8 48 8 56 L8 70 Q8 77 15 77 L21 73 L21 52Z" fill="#c17b31"/>
-      <path d="M83 48 Q90 48 90 56 L90 70 Q90 77 83 77 L77 73 L77 52Z" fill="#c17b31"/>
-      <rect x="21" y="29" width="56" height="54" rx="19" fill="url(#econ-robot-metal)" stroke="#ffda9a" strokeWidth="2"/>
-      <rect x="29" y="42" width="40" height="25" rx="11" fill="#28202b"/>
-      <ellipse cx="40" cy="54" rx="5" ry="7" fill="#ffc66b"/><ellipse cx="58" cy="54" rx="5" ry="7" fill="#ffc66b"/>
-      <path d="M43 74 Q49 78 55 74" fill="none" stroke="#824a1b" strokeWidth="2.5" strokeLinecap="round"/>
-      <circle cx="49" cy="20" r="16" fill="#f7bf54" stroke="#ffe6a3" strokeWidth="3"/><text x="49" y="27" fill="#854704" fontSize="23" fontWeight="800" textAnchor="middle">₽</text>
-      <path d="M34 84 L30 93 M64 84 L68 93" stroke="#eeb362" strokeWidth="6" strokeLinecap="round"/>
-    </svg>
-    <span className="econ-mascot-pulse"/>
+function EconomicMascot({ onClick, active, busy, progress }: {
+  onClick: () => void; active: boolean; busy: boolean; progress: string | null;
+}) {
+  return <button className={'econ-mascot ' + (active ? 'active' : '')}
+    type="button" onClick={onClick}
+    aria-label={active ? 'Закрыть помощника Экономыч AI' : 'Открыть помощника Экономыч AI'}
+    aria-expanded={active} aria-controls="econ-assistant-dialog" title="Помощник Экономыч AI">
+    <PlanikMascot variant="economic" size="launcher" busy={busy} progress={progress} />
+    <span className="econ-mascot-pulse" aria-hidden="true" />
   </button>;
 }
 
@@ -98,6 +94,7 @@ export default function EconomicApp() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantQuestion, setAssistantQuestion] = useState('');
   const [assistantBusy, setAssistantBusy] = useState(false);
+  const [assistantStage, setAssistantStage] = useState<'analyzing_request' | 'refreshing_finances' | null>(null);
   const [operations, setOperations] = useState<Operation[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [operationsBusy, setOperationsBusy] = useState(false);
@@ -298,19 +295,22 @@ export default function EconomicApp() {
     event.preventDefault();
     const question = assistantQuestion.trim();
     if (!question || assistantBusy) return;
-    setAssistantBusy(true); setError('');
+    setAssistantBusy(true); setAssistantStage('analyzing_request'); setError('');
     setAssistantQuestion('');
     // Optimistic local bubble, replaced with database history on success.
     const optimistic = { id: 'pending-user', role: 'user', content: question, createdAt: new Date().toISOString() };
     setSnapshot(prev => prev ? { ...prev, assistantMessages: [...prev.assistantMessages, optimistic] } : prev);
     try {
       await economicRequest<{ answer: string }>('/assistant/chat', 'POST', { question });
+      // The model replied; now retrieve the persisted conversation. This is a
+      // real lifecycle event, not a simulated timer-based progress status.
+      setAssistantStage('refreshing_finances');
       await refresh();
     } catch (cause) {
       setSnapshot(prev => prev ? { ...prev, assistantMessages: prev.assistantMessages.filter(x => x.id !== 'pending-user') } : prev);
       setAssistantQuestion(question);
       setError(cause instanceof Error ? cause.message : 'ИИ недоступен');
-    } finally { setAssistantBusy(false); }
+    } finally { setAssistantBusy(false); setAssistantStage(null); }
   };
   const categories = (kind: 'INCOME' | 'EXPENSE') => Array.from(new Set([
     ...baseCategories[kind], ...(snapshot?.categories.filter(c => c.kind === kind).map(c => c.name) || [])
@@ -459,7 +459,7 @@ export default function EconomicApp() {
                 <button type="button" className="econ-action" onClick={() => openDialog('debt')}><Plus size={16}/> Долг</button>
                 <button type="button" className="econ-action" onClick={() => openDialog('loan')}><Plus size={16}/> Кредит</button>
               </>}
-              {actions[section] && <button type="button" className="econ-action" onClick={actions[section]}>
+              {section !== 'operations' && actions[section] && <button type="button" className="econ-action" onClick={actions[section]}>
                 <Plus size={17}/> {section === 'operations' ? 'Операция' : section === 'accounts' ? 'Счёт' : 'Категория'}
               </button>}
             </div>
@@ -484,11 +484,11 @@ export default function EconomicApp() {
       </main>
     </div>
 
-    <EconomicMascot active={assistantOpen} onClick={() => setAssistantOpen(v => !v)}/>
-    {assistantOpen && <section className="econ-assistant" role="dialog" aria-label="Экономыч AI, финансовый помощник"><div className="econ-assistant-head"><div><span className="econ-assistant-avatar">₽</span><div><strong>Экономыч AI</strong><small>Финансовый помощник</small></div></div><button type="button" onClick={() => setAssistantOpen(false)} aria-label="Закрыть"><X size={18}/></button></div><div className="econ-assistant-body">
-      <div className="econ-insight-table"><table><caption>Брюс Хуй</caption><thead><tr><th>Счёт</th><th>Остаток</th></tr></thead><tbody>{snapshot.accounts.map(a => <tr key={a.id}><td>{a.name}</td><td>{money(a.balanceMinor)}</td></tr>)}</tbody></table></div>
+    <EconomicMascot active={assistantOpen} busy={assistantBusy} progress={assistantStage} onClick={() => setAssistantOpen(v => !v)}/>
+    {assistantOpen && <section id="econ-assistant-dialog" className="econ-assistant" role="dialog" aria-label="Экономыч AI, финансовый помощник"><div className="econ-assistant-head"><div><span className="econ-assistant-avatar">₽</span><div><strong>Экономыч AI</strong><small>Финансовый помощник</small></div></div><button type="button" onClick={() => setAssistantOpen(false)} aria-label="Закрыть"><X size={18}/></button></div><div className="econ-assistant-body">
+      <div className="econ-insight-table"><table><caption>Ваши счета</caption><thead><tr><th>Счёт</th><th>Остаток</th></tr></thead><tbody>{snapshot.accounts.map(a => <tr key={a.id}><td>{a.name}</td><td>{money(a.balanceMinor)}</td></tr>)}</tbody></table></div>
       {snapshot.assistantMessages.length === 0 && <div className="econ-assistant-welcome"><MessageCircle size={21}/><strong>Чем помочь с финансами?</strong><p>Спросите о доходах, расходах, кредитах или способах вести бюджет. ИИ отвечает на основе ваших данных, но не меняет их.</p></div>}
-      <div className="econ-chat-messages">{snapshot.assistantMessages.map(m => <div key={m.id} className={'econ-chat-bubble ' + (m.role === 'user' ? 'mine' : 'assistant')}>{m.content}</div>)}{assistantBusy && <div className="econ-chat-bubble assistant"><Loader2 className="econ-spin" size={17}/> Анализирую…</div>}</div>
+      <div className="econ-chat-messages">{snapshot.assistantMessages.map(m => <div key={m.id} className={'econ-chat-bubble ' + (m.role === 'user' ? 'mine' : 'assistant')}>{m.content}</div>)}{assistantBusy && <div className="econ-ai-progress" role="status" aria-live="polite" aria-atomic="true"><span className="econ-ai-progress-icon" aria-hidden="true"><Sparkles size={19} strokeWidth={2}/></span><div className="econ-ai-progress-details"><span key={assistantStage} className="econ-ai-progress-text">{assistantStage === 'refreshing_finances' ? 'Обновляю финансовые данные' : 'Анализирую запрос'}</span><div key={'econ-progress-' + assistantStage} className="econ-ai-progress-track" aria-hidden="true"><span/><span/><span/></div></div></div>}</div>
     </div><form className="econ-assistant-composer" onSubmit={askAssistant}><input aria-label="Вопрос Economic" placeholder="Спросить об операциях и бюджете" value={assistantQuestion} onChange={e => setAssistantQuestion(e.target.value)} maxLength={2000} disabled={assistantBusy}/><button type="submit" disabled={assistantBusy || !assistantQuestion.trim()} aria-label="Отправить вопрос"><Send size={18}/></button></form><div className="econ-assistant-note">1 ИИ-кредит за запрос · Экономыч AI не изменяет операции</div></section>}
 
     {dialog && <div className="econ-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !saving) setDialog(null); }}><section className="econ-modal" role="dialog" aria-modal="true" aria-label="Редактирование Economic"><header><div><span className="econ-eyebrow">{dialog.id ? 'РЕДАКТИРОВАНИЕ' : 'НОВАЯ ЗАПИСЬ'}</span><h2>{dialog.kind === 'operation' ? 'Операция' : dialog.kind === 'account' ? 'Счёт' : dialog.kind === 'debt' ? 'Долг' : dialog.kind === 'loan' ? 'Кредит' : 'Категория'}</h2></div><button type="button" onClick={() => setDialog(null)} aria-label="Закрыть"><X size={19}/></button></header>
