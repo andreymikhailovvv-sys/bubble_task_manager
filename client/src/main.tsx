@@ -26,10 +26,9 @@ class AppErrorBoundary extends React.Component<React.PropsWithChildren, AppError
   }
 
   componentDidCatch(error: Error) {
-    // Unmask the error boundary if the Work lazy chunk failed to load.
-    if (window.location.hostname.toLowerCase() === 'work.planirovych.ru') {
-      document.documentElement.classList.remove('work-workspace-preload');
-    }
+    // A React render / lazy-chunk failure must never be hidden under the
+    // static bootstrap splash, on either the personal planner or Work.
+    document.documentElement.classList.remove('web-workspace-preload', 'work-workspace-preload');
     console.error('Ошибка рендера приложения', error);
     void api.reportClientError({
       source: 'error-boundary',
@@ -75,6 +74,23 @@ window.addEventListener('unhandledrejection', (event) => {
     stack,
     url: window.location.href
   });
+});
+
+// A deployment can replace hashed chunks while an older HTML is cached.
+// Give that one automatic reload; a persistent failure falls through to the
+// error boundary, now guaranteed to uncover the real error.
+window.addEventListener('vite:preloadError', (event) => {
+  const retryKey = 'btm:startup-chunk-retry';
+  try {
+    const lastRetry = Number(sessionStorage.getItem(retryKey) || '0');
+    if (!lastRetry || Date.now() - lastRetry > 60_000) {
+      sessionStorage.setItem(retryKey, String(Date.now()));
+      event.preventDefault();
+      window.location.reload();
+    }
+  } catch {
+    // Restricted storage: preserve Vite's default error handling.
+  }
 });
 
 const isWorkHost = window.location.hostname.toLowerCase() === 'work.planirovych.ru';

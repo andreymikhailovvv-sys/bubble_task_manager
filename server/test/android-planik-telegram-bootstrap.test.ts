@@ -7,7 +7,7 @@ const read = (path: string) => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('Android Planik HTML does not load the third-party Telegram SDK and marks boot before React', async () => {
   const html = await read('../../client/index.html');
-  const match = html.match(/<!-- The Android Realtime page[\s\S]*?<script>([\s\S]*?)<\/script>/);
+  const match = html.match(/<!-- Telegram's external SDK[\s\S]*?<script>([\s\S]*?)<\/script>/);
   assert.ok(match, 'Android bootstrap must be an inline script in HTML head');
   const code = match[1];
   assert.doesNotMatch(html, /^\s*<script\s+defer\s+src="https:\/\/telegram\.org\/js\/telegram-web-app\.js"/m);
@@ -36,7 +36,8 @@ test('Android Planik HTML does not load the third-party Telegram SDK and marks b
   assert.equal(telegram.written[0],
     '<script defer src="https://telegram.org/js/telegram-web-app.js"></script>',
     'Mini App must retain the same deferred Telegram SDK behavior');
-  assert.equal(makeContext('/').written.length, 1);
+  assert.equal(makeContext('/').written.length, 0, 'Desktop planner must not wait for Telegram SDK');
+  assert.equal(makeContext('/telegram-auth').written.length, 1, 'Telegram auth must retain SDK');
   android.listeners[0].callback({ target: { tagName: 'SCRIPT' } });
   assert.equal(android.dataset.planikAndroid, 'error');
   assert.equal(android.dataset.planikAndroidReason, 'script-load-failed');

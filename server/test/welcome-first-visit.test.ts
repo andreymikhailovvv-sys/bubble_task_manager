@@ -108,7 +108,7 @@ test('Work has its own boot splash with required branding and a React dismissal'
   assert.match(rootHtml, /Твоя компания под контролем/);
   assert.match(rootHtml, /Загрузка не завершилась/);
   assert.match(businessApp, /classList\.remove\('work-workspace-preload'\)/);
-  assert.match(main, /classList\.remove\('work-workspace-preload'\)/);
+  assert.match(main, /classList\.remove\('web-workspace-preload', 'work-workspace-preload'\)/);
   // Personal loader and its original dismissal are untouched.
   assert.match(rootHtml, /web-workspace-preload/);
   assert.match(rootHtml, /Твой день под контролем/);
