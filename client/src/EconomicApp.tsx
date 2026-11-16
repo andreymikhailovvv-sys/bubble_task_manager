@@ -87,7 +87,7 @@ function EconomicMascot({ onClick, active, busy, progress }: {
   </button>;
 }
 
-export default function EconomicApp() {
+export default function EconomicApp({ mobile = false }: { mobile?: boolean }) {
   const [user, setUser] = useState<EconomicUser | null>(null);
   const [appearance, setAppearance] = useState<'light' | 'dark'>('dark');
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
@@ -485,23 +485,31 @@ export default function EconomicApp() {
     </button>;
   };
 
-  if (loading) return <main className="econ-root econ-loading"><Loader2 className="econ-spin" size={26}/> Загружаем Экономыч AI…</main>;
+  if (loading) return <main className={'econ-root econ-loading' + (mobile ? ' econ-mobile-workspace' : '')}><Loader2 className="econ-spin" size={26}/> Загружаем Экономыч AI…</main>;
   if (!snapshot || !user) return <main className="econ-root econ-loading"><h1>Экономыч AI</h1><p>{error || 'Для начала войдите в Планировыч.'}</p><a className="econ-primary-link" href="/">Вернуться в Планировыч</a></main>;
 
   const actions: Partial<Record<Section, () => void>> = {
     accounts: () => openDialog('account'), operations: () => openDialog('operation'),
     categories: () => openDialog('category')
   };
-  return <div className={'econ-root ' + (appearance === 'light' ? 'econ-light' : '')}>
-    <ModuleRail active="economic"/>
+  return <div className={'econ-root ' + (appearance === 'light' ? 'econ-light' : '') + (mobile ? ' econ-mobile-workspace' : '')}>
+    {!mobile && <ModuleRail active="economic"/>}
     <div className="econ-shell">
-      <aside className="econ-nav">
+      {!mobile && <aside className="econ-nav">
         <div className="econ-nav-brand"><span className="econ-brand-logo"><CircleDollarSign size={25}/></span><div><strong>Экономыч AI</strong><small>Ваши финансы</small></div></div>
         <div className="econ-nav-caption">РАБОЧЕЕ ПРОСТРАНСТВО</div>
         <div className="econ-nav-links">{nav.map(({ section: value, icon: Icon }) => <button key={value} type="button" className={section === value ? 'selected' : ''} onClick={() => { setSection(value); setError(''); }}><Icon size={18}/><span>{sectionTitles[value]}</span>{section === value && <ChevronRight size={15}/>}</button>)}</div>
         <div className="econ-nav-foot"><span className="econ-avatar">{(user.name || user.username || 'П')[0].toUpperCase()}</span><div><strong>{user.name || user.username || 'Пользователь'}</strong><small>Личный бюджет · RUB</small></div></div>
-      </aside>
+      </aside>}
       <main className="econ-main">
+        {mobile && <nav className="econ-mobile-sections" aria-label="Разделы финансов">
+          {nav.map(({section:value,icon:Icon})=><button type="button" key={value}
+            className={section===value?'active':''}
+            aria-current={section===value?'page':undefined}
+            onClick={()=>{setSection(value);setError('');}}>
+            <Icon size={17}/>{sectionTitles[value]}
+          </button>)}
+        </nav>}
         <header className="econ-topbar"><div><div className="econ-eyebrow">ПЛАНИРОВЫЧ / ЭКОНОМЫЧ AI</div><h1>{section === 'overview' ? 'Экономыч AI' : sectionTitles[section]}</h1></div><div className="econ-top-actions"><button className="econ-add-global" type="button" onClick={() => openDialog('operation')}><Plus size={18}/> Новая операция</button></div></header>
         {error && <div className="econ-error" role="alert"><span>{error}</span><button type="button" aria-label="Скрыть ошибку" onClick={() => setError('')}><X size={16}/></button></div>}
         {section === 'overview' && <>
@@ -566,8 +574,8 @@ export default function EconomicApp() {
       </main>
     </div>
 
-    <EconomicMascot active={assistantOpen} busy={assistantBusy} progress={assistantStage} onClick={() => setAssistantOpen(v => !v)}/>
-    {assistantOpen && <section id="econ-assistant-dialog" className="econ-assistant" role="dialog" aria-label="Экономыч AI, финансовый помощник">
+    {!mobile && <EconomicMascot active={assistantOpen} busy={assistantBusy} progress={assistantStage} onClick={() => setAssistantOpen(v => !v)}/>}
+    {!mobile && assistantOpen && <section id="econ-assistant-dialog" className="econ-assistant" role="dialog" aria-label="Экономыч AI, финансовый помощник">
       <div className="econ-assistant-head">
         <div><span className="econ-assistant-avatar">₽</span>
           <div><strong>Экономыч AI</strong><small>Финансовый помощник</small></div>
