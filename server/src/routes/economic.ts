@@ -458,7 +458,7 @@ economicRouter.delete('/loans/:id', asyncHandler(async (req, res) => {
 const assistantCooldown = new Map<string, number>();
 economicRouter.post('/assistant/chat', asyncHandler(async (req, res) => {
   const owner = userId(req);
-  const question = text(req.body?.question, 2000);
+  const question = typeof req.body?.question === 'string' && req.body.question.trim().length <= 2000 &&\n    !/[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f]/.test(req.body.question)\n      ? req.body.question.trim() : null;
   const rawFiles = req.body?.attachments;
   if (!question && (!Array.isArray(rawFiles) || rawFiles.length === 0)) {
     error(res, 'Введите вопрос или прикрепите файл (до 2000 символов)'); return;
@@ -469,7 +469,7 @@ economicRouter.post('/assistant/chat', asyncHandler(async (req, res) => {
   assistantCooldown.set(owner, now);
   const streaming = req.get('accept')?.includes('text/event-stream') === true;
   const emit = (event: string, data: unknown) => {
-    if (!res.writableEnded && !res.destroyed) res.write('event: ' + event + '\\n' + 'data: ' + JSON.stringify(data) + '\\n\\n');
+    if (!res.writableEnded && !res.destroyed) res.write('event: ' + event + '\n' + 'data: ' + JSON.stringify(data) + '\n\n');
   };
   if (streaming) {
     res.status(200).set({
