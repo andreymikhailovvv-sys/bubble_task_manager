@@ -80,7 +80,11 @@ export const aiController = {
     const writeStreamEvent = (event: unknown) => { if (res.writableEnded || res.destroyed) return; res.write(`${JSON.stringify(event)}\n`); (res as Response & { flush?: () => void }).flush?.(); };
     let introOverlay: ReturnType<typeof startAiIntroOverlay> | null = null;
     try {
-      const question = typeof req.body?.question === 'string' ? req.body.question : '';
+      let question = typeof req.body?.question === 'string' ? req.body.question : '';
+      // Photos of receipts can be sent without text. A generic prompt asks the
+      // model to inspect the file, not blindly record an expense.
+      if(!question.trim() && Array.isArray(req.body?.attachments) && req.body.attachments.length>0)
+        question='Изучи приложенный файл. Если это реальный чек или подтверждение покупки с однозначной суммой, подготовь запись расхода в Экономыче на основной счёт с чипом подтверждения. Иначе опиши файл или уточни недостающие данные.';
       const telegramContinuation = req.body?.telegramRead != null;
       if (telegramContinuation && !telegramChatRequestIsSameOrigin(req.get('origin') || undefined, req.get('host') || undefined, req.get('sec-fetch-site') || undefined)) {
         res.status(403).json({ error: 'Подтверждение чтения Telegram доступно только на сайте Планировыча' });
