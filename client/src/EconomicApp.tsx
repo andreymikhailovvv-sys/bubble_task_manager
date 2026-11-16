@@ -9,6 +9,7 @@ const EconomicVoiceInput = lazy(() => import('./components/VoiceInputButton').th
 
 import { loadThemePreference, resolveThemeMode } from './lib/autoTheme';
 import { annuityEstimate, formatMinorRub as money, minorToRublesInput as inputMoney, rublesToMinor as parseMoney } from './lib/economicMoney';
+import { formatCreditsSpent } from './lib/credits';
 import './EconomicApp.css';
 
 type Kind = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'DEBT_BORROWED' | 'DEBT_LENT' | 'DEBT_REPAID' | 'DEBT_RETURNED';
@@ -561,14 +562,16 @@ export default function EconomicApp() {
           </div>}
         <div className="econ-chat-messages">
           {snapshot.assistantMessages.map(m =>
-            <div key={m.id} className={'econ-chat-bubble ' + (m.role === 'user' ? 'mine' : 'assistant')}>
-              {m.content && <span>{m.content}</span>}
-              {Boolean(m.attachmentNames?.length) &&
-                <div className="econ-message-files">{m.attachmentNames?.map((name,i) =>
-                  <span key={name + i} title={name}><Paperclip size={12}/>{name}</span>)}</div>}
+            <div key={m.id} className={'econ-chat-message ' + (m.role === 'user' ? 'mine' : 'assistant')}>
+              <div className={'econ-chat-bubble ' + (m.role === 'user' ? 'mine' : 'assistant')}>
+                {m.content && <span>{m.content}</span>}
+                {Boolean(m.attachmentNames?.length) &&
+                  <div className="econ-message-files">{m.attachmentNames?.map((name,i) =>
+                    <span key={name + i} title={name}><Paperclip size={12}/>{name}</span>)}</div>}
+              </div>
               {m.role === 'assistant' && typeof m.creditsSpentMilli === 'number' && m.creditsSpentMilli > 0 &&
-                <div className="econ-message-credits">
-                  <Sparkles size={11}/> {(m.creditsSpentMilli / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 3 })} ИИ-кредита
+                <div className="econ-message-credits" aria-label="Стоимость ответа ИИ">
+                  <Sparkles size={11}/> Потрачено: {formatCreditsSpent(m.creditsSpentMilli)}
                 </div>}
             </div>
           )}
