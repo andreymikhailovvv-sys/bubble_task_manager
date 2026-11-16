@@ -117,7 +117,7 @@ economicRouter.get('/snapshot', asyncHandler(async (req, res) => {
     prisma.economicDebt.findMany({ where: { userId: owner }, orderBy: [{ isClosed: 'asc' }, { createdAt: 'desc' }], take: 200 }),
     prisma.economicLoan.findMany({ where: { userId: owner }, orderBy: [{ isClosed: 'asc' }, { createdAt: 'desc' }], take: 200 }),
     prisma.economicOperation.count({ where: { userId: owner } }),
-    prisma.economicAssistantMessage.findMany({ where: { userId: owner }, orderBy: { createdAt: 'desc' }, take: 24 })
+    prisma.economicAssistantMessage.findMany({ where: { userId: owner }, orderBy: [{ createdAt: 'desc' }, { role: 'asc' }, { id: 'desc' }], take: 24 })
   ]);
   const balances = new Map(accounts.map(a => [a.id, a.openingBalanceMinor]));
   for (const group of sources) {
