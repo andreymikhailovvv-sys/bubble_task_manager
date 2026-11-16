@@ -11,7 +11,7 @@ import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Wallet
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -74,7 +74,7 @@ fun NativeEconomicPage(userId:String?,dark:Boolean) {
                             "(function(){return !!document.querySelector('.econ-mobile-workspace .econ-main');})()"
                         ){ result->
                             if(result=="true")stage="ready"
-                            else if(attempt<12 && stage=="loading")view.postDelayed({verify(attempt+1)},650)
+                            else if(attempt<12 && stage=="loading")view?.postDelayed({verify(attempt+1)},650)
                             else if(stage=="loading"){
                                 stage="error"
                                 detail="Не удалось открыть финансовый обзор. Проверьте авторизацию и обновите страницу."
@@ -172,7 +172,7 @@ fun NativeEconomicPage(userId:String?,dark:Boolean) {
                         color=gold
                     )
                 } else {
-                    Icon(Icons.Default.Wallet,null,tint=gold)
+                    Icon(Icons.Default.AccountBalanceWallet,null,tint=gold)
                     Spacer(Modifier.height(10.dp))
                     Text(if(stage=="conflict")"Аккаунты различаются" else detail,
                         color=if(dark)Color(0xFFF2D8B0) else Color(0xFF754A1A))
