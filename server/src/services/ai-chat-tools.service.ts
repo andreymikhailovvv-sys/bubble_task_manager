@@ -895,6 +895,41 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
     }
     const webSearchCallsBilled = webSearchUsed ? MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST : 0;
     const webSearchCreditsMilliBilled = webSearchCallsBilled * WEB_SEARCH_CALL_CREDITS_MILLI;
+    let financialResult = '';
+    if(preparedFinancialActions.length){
+      const saved=await prisma.$transaction(async tx=>{
+        const message=await tx.economicAssistantMessage.create({data:{
+          userId:input.userId,role:'assistant',
+          content:'[Планировыч] Финансовые изменения подготовлены в общем чате.',
+          createdAt:new Date()
+        }});
+        return saveEconomicProposals(tx,input.userId,message.id,preparedFinancialActions);
+      });
+      const autoApply=(await prisma.user.findUnique({
+        where:{id:input.userId},select:{economicAiAutoApply:true}
+      }))?.economicAiAutoApply===true;
+      let applied=0,failed=0;
+      if(autoApply){
+        for(const proposal of saved){
+          try{
+            const row=await applyEconomicProposal(input.userId,proposal.id,true);
+            if(row.status==='APPLIED')applied++;else failed++;
+          }catch(cause){
+            failed++;
+            const detail=cause instanceof Error?cause.message:'Неизвестная ошибка';
+            await prisma.economicAiProposal.updateMany({
+              where:{id:proposal.id,userId:input.userId,status:'PENDING'},
+              data:{error:('Автоприменение не удалось: '+detail).slice(0,500)}
+            }).catch(()=>undefined);
+          }
+        }
+      }
+      financialResult=autoApply&&failed===0
+        ? 'Финансовые изменения внесены: '+applied+'. Они отражены в Экономыче.'
+        : 'Подготовлено финансовых изменений: '+saved.length+
+          (autoApply ? ' (применено '+applied+', осталось '+failed+').' : '.')+
+          ' Откройте вкладку «Экономыч» → «Обзор», чтобы проверить и подтвердить предложения.';
+    }
     const taskProposal = preparedTaskActions.length
       ? await prepareTaskProposal({
           userId: input.userId, requestId: input.actionRequestId, source: input.autoApplyTaskActions ? 'telegram_bot' : 'planner',
@@ -904,13 +939,13 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           userTimeZone: input.userTimeZone
         })
       : null;
-    return { answer: taskProposal
+    return { answer: (taskProposal
       ? (taskProposal.status === 'APPLIED'
         ? 'Изменения применены автоматически. Подробности в карточке.'
         : taskProposal.status === 'PENDING'
           ? 'Подготовил изменения. Просмотрите карточку и нажмите «Принять».'
           : 'Изменения не применены: ' + (taskProposal.error || 'Не удалось выполнить операцию.') + ' Задача не создана, повторно подтверждать нечего.')
-      : loop.answer, telegramSendDraft, telegramReadDraft, mailSendDraft, mailReadUsed, taskProposal, model: input.model, taskDataChanged: taskProposal?.status === 'APPLIED', actionReports, undoOperations, generatedDocument, imageCreditsSpentMilli: imageCreditsSpentMilli + fileEditCreditsSpentMilli, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
+      : loop.answer) + (financialResult ? '\n\n'+financialResult : ''), telegramSendDraft, telegramReadDraft, mailSendDraft, mailReadUsed, taskProposal, model: input.model, taskDataChanged: taskProposal?.status === 'APPLIED', actionReports, undoOperations, generatedDocument, imageCreditsSpentMilli: imageCreditsSpentMilli + fileEditCreditsSpentMilli, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
   } catch (error) {
     await Promise.all(dynamicCalls.map((call) => refundDynamicResponsesCall(call)));
     if (webReservation) await refundAiCreditReservation(webReservation);
