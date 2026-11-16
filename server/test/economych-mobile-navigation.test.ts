@@ -22,7 +22,7 @@ test('Mini App and Android have 5 compact icon-only tabs with a warm Economic la
   assert.match(miniCss,/data-active-tab='economic'/);
   assert.match(miniCss,/\.miniapp-economic-screen\{/);
   assert.match(home,/pageCount=\{5\}/);
-  assert.match(home,/Triple\("Экономыч",Icons\.Default\.AccountBalanceWallet/);
+  assert.match(home,/Triple\("Экономыч",Icons\.Default\.MonetizationOn/);
   assert.match(home,/label=null,/);
   assert.match(home,/alwaysShowLabel=false/);
   assert.match(home,/Modifier\.height\(56\.dp\)/);
@@ -81,4 +81,24 @@ test('financial dialogs escape the tab scroller and expose the actions on small 
   assert.match(android,/EconomicSkeleton\(dark\)/);
   assert.match(android,/addQueryParameter\("mobileTheme",if\(dark\)/);
   assert.match(home,/pagerState\.currentPage!=4/);
+});
+
+test('native economic route reads Android theme and uses the shared operation form',()=>{
+  const androidEntry=read('../../client/src/economic-main.tsx');
+  assert.match(androidEntry,/economicParams\.get\('mobile'\) === '1'/);
+  assert.match(androidEntry,/mobile=\{isMobileEconomic\} themeOverride=\{economicThemeOverride\}/);
+  assert.match(economic,/data-economic-create-operation/);
+  assert.match(economicCss,/\.econ-mobile-workspace \.econ-top-actions\{display:none\}/);
+  assert.match(android,/document\.querySelector\('\[data-economic-create-operation\]'\)/);
+  assert.match(android,/FloatingActionButton\(/);
+  assert.match(economic,/embeddedInMiniApp && !dialog/);
+  assert.match(economicCss,/\.econ-mobile-add-fab\{/);
+});
+
+test('finance light mode uses neutral surfaces and a matching light editor',()=>{
+  assert.match(economicCss,/\.econ-root\.econ-light\{[\s\S]*?--ec-bg:#f7f8fa/);
+  assert.match(economicCss,/\.econ-dialog-layer\.econ-light \.econ-modal\{[\s\S]*?background:#fff/);
+  assert.match(economicCss,/\.econ-dialog-layer\.econ-light \.econ-form-actions\{background:#fff/);
+  assert.match(android,/android\.graphics\.Color\.WHITE/);
+  assert.match(miniCss,/\.miniapp-light \.miniapp-economic-screen\{background:#f7f8fa\}/);
 });
