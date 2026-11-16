@@ -71,6 +71,8 @@ test('financial dialogs escape the tab scroller and expose the actions on small 
   assert.match(economic,/document\.body\)/);
   assert.match(economic,/econ-miniapp-dialog-layer/);
   assert.match(economicCss,/econ-miniapp-dialog-layer/);
+  assert.match(economicCss,/--econ-mobile-safe-bottom/);
+  assert.match(mini,/mobileSafeBottom=\{isTelegramRuntime \? telegramViewport\.bottom : 0\}/);
   assert.match(economicCss,/position:sticky;bottom:0/);
   assert.match(economicCss,/overflow-y:auto;overscroll-behavior:contain/);
   assert.match(economicCss,/\.econ-dialog-layer \.econ-form-actions button/);
