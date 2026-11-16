@@ -211,7 +211,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                     Triple("Таймлайн",Icons.Default.CalendarViewWeek,"Таймлайн"),
                     Triple("Чат с ИИ",Icons.Default.SmartToy,"Общий чат с ИИ"),
                     Triple("Заметки",Icons.Default.StickyNote2,"Заметки"),
-                    Triple("Экономыч",Icons.Default.AccountBalanceWallet,"Экономыч AI, финансы")
+                    Triple("Экономыч",Icons.Default.MonetizationOn,"Экономыч AI, финансы")
                 )
                 // One uninterrupted surface behind the five tabs AND the Android
                 // gesture area. No extra border around the bottom system inset.
