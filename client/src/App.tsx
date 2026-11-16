@@ -2626,7 +2626,7 @@ export default function App() {
         : '';
       setAiDialogByTask((prev) => ({
         ...prev,
-        [taskId]: [...(prev[taskId] ?? nextDialog), { id: crypto.randomUUID(), role: 'assistant', content: `${result.answer}${actionSummary}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, mailSendDraft: result.mailSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, economicProposals: result.economicProposals ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined }]
+        [taskId]: [...(prev[taskId] ?? nextDialog), { id: crypto.randomUUID(), role: 'assistant', content: `${result.answer}${actionSummary}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, mailSendDraft: result.mailSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined }]
       }));
       try {
         await load();
