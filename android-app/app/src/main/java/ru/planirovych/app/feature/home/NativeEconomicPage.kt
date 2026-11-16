@@ -37,7 +37,7 @@ import ru.planirovych.app.core.network.PersistentCookieJar
  * Different WebView/native user sessions never mix without user approval.
  */
 @Composable
-fun NativeEconomicPage(userId:String?,dark:Boolean) {
+fun NativeEconomicPage(userId:String?,dark:Boolean,active:Boolean=true) {
     val context=LocalContext.current
     val gold=Color(0xFFF4A943)
     val origin=remember { BuildConfig.API_BASE_URL.toHttpUrlOrNull()
@@ -190,6 +190,9 @@ fun NativeEconomicPage(userId:String?,dark:Boolean) {
         browser.setBackgroundColor(if(dark) android.graphics.Color.rgb(22,21,28) else android.graphics.Color.WHITE)
         syncSession(false)
     }
+    LaunchedEffect(active,browser){
+        if(active) browser.evaluateJavascript("window.dispatchEvent(new Event('economic-activate'));",null)
+    }
     if(conflict){
         AlertDialog(
             onDismissRequest={conflict=false},
@@ -200,7 +203,7 @@ fun NativeEconomicPage(userId:String?,dark:Boolean) {
             containerColor=if(dark)Color(0xFF29252B) else Color(0xFFFFF8F0)
         )
     }
-    Box(Modifier.fillMaxSize()){
+    Box(Modifier.fillMaxSize().background(if(dark)Color(0xFF15151C) else Color(0xFFF7F8FA))){
         AndroidView(factory={browser},modifier=Modifier.fillMaxSize())
         // The native FAB opens the existing React operation editor.
         if(stage=="ready" && !editorOpen){
