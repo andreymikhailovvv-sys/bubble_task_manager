@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, BookOpen, Check, ChevronRight, CircleDollarSign, CreditCard, Landmark, LayoutDashboard, Loader2, MessageCircle, Pencil, Plus, Send, Settings2, Sparkles, Trash2, WalletCards, X } from 'lucide-react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ChangeEvent } from 'react';
+import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, BookOpen, Check, ChevronRight, CircleDollarSign, CreditCard, Landmark, LayoutDashboard, Loader2, MessageCircle, Paperclip, Mic, Pencil, Plus, Send, Settings2, Sparkles, Trash2, WalletCards, X } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import ModuleRail from './components/ModuleRail';
 import { PlanikMascot } from './components/PlanikMascot';
+import { askEconomicStream, ECONOMIC_ACCEPTED_FILE_TYPES, validateEconomicFiles, type EconomicAssistantStage } from './lib/economicAssistantStream';
+// Load the existing Planik transcription dialog only when Economic chat opens.
+const EconomicVoiceInput = lazy(() => import('./components/VoiceInputButton').then(m => ({ default: m.VoiceInputButton })));
+
 import { loadThemePreference, resolveThemeMode } from './lib/autoTheme';
 import { annuityEstimate, formatMinorRub as money, minorToRublesInput as inputMoney, rublesToMinor as parseMoney } from './lib/economicMoney';
 import './EconomicApp.css';
@@ -16,7 +20,7 @@ type Debt = { id: string; direction: 'OWE' | 'OWED_TO_ME'; counterparty: string;
 type Loan = { id: string; name: string; lender: string | null; principalMinor: string; paidMinor: string; monthlyPaymentOverrideMinor: string | null; paymentDate: string | null; remindersEnabled: boolean; annualRateBps: number; termMonths: number; startDate: string; isClosed: boolean };
 type EconomicUser = { id: string; name: string | null; username: string | null; timeZone: string | null; telegramLinked: boolean };
 type Category = { id: string; name: string; kind: 'INCOME' | 'EXPENSE' };
-type ChatMessage = { id: string; role: string; content: string; createdAt: string };
+type ChatMessage = { id: string; role: string; content: string; createdAt: string; creditsSpentMilli?: number; inputTokens?: number; outputTokens?: number; attachmentNames?: string[] };
 type Snapshot = {
   accounts: Account[]; recent: Operation[]; debts: Debt[]; loans: Loan[]; categories: Category[];
   assistantMessages: ChatMessage[];
@@ -94,7 +98,19 @@ export default function EconomicApp() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantQuestion, setAssistantQuestion] = useState('');
   const [assistantBusy, setAssistantBusy] = useState(false);
-  const [assistantStage, setAssistantStage] = useState<'analyzing_request' | 'refreshing_finances' | null>(null);
+  const [assistantStage, setAssistantStage] = useState<EconomicAssistantStage | 'reading_files' | 'refreshing_finances' | null>(null);
+  const [assistantError, setAssistantError] = useState('');
+  const [assistantFiles, setAssistantFiles] = useState<File[]>([]);
+  const assistantScrollRef = useRef<HTMLDivElement>(null);
+  const assistantFilePickerRef = useRef<HTMLInputElement>(null);
+  const assistantPendingRef = useRef(false);
+  // Optimistic messages appear before network work, so scroll before browser
+  // paint. Also keep the live stage and final reply visible at the bottom.
+  useLayoutEffect(() => {
+    if (!assistantOpen) return;
+    const node = assistantScrollRef.current;
+    if (node) node.scrollTop = node.scrollHeight;
+  }, [assistantOpen, snapshot?.assistantMessages.length, assistantBusy, assistantStage, assistantError]);
   const [operations, setOperations] = useState<Operation[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [operationsBusy, setOperationsBusy] = useState(false);
@@ -291,26 +307,66 @@ export default function EconomicApp() {
       if (type === 'operations') await loadOperations();
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Не удалось удалить запись'); }
   };
-  const askAssistant = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const question = assistantQuestion.trim();
-    if (!question || assistantBusy) return;
-    setAssistantBusy(true); setAssistantStage('analyzing_request'); setError('');
+  const addAssistantFiles = (event: ChangeEvent<HTMLInputElement>) => {
+    const next = [...assistantFiles, ...Array.from(event.target.files || [])];
+    event.target.value = '';
+    const reason = validateEconomicFiles(next);
+    if (reason) { setAssistantError(reason); return; }
+    setAssistantError('');
+    setAssistantFiles(next);
+  };
+  const sendAssistantMessage = async (text: string, files: File[] = assistantFiles) => {
+    const question = text.trim();
+    if ((!question && !files.length) || assistantPendingRef.current) return;
+    const reason = validateEconomicFiles(files);
+    if (reason) { setAssistantError(reason); return; }
+    assistantPendingRef.current = true;
+    setAssistantBusy(true); setAssistantStage(files.length ? 'reading_files' : 'reading_finances');
+    setAssistantError(''); setError('');
     setAssistantQuestion('');
-    // Optimistic local bubble, replaced with database history on success.
-    const optimistic = { id: 'pending-user', role: 'user', content: question, createdAt: new Date().toISOString() };
+    setAssistantFiles([]);
+    const pendingId = 'economic-pending:' + Date.now();
+    const optimistic: ChatMessage = {
+      id: pendingId, role: 'user', content: question,
+      attachmentNames: files.map(f => f.name), createdAt: new Date().toISOString()
+    };
     setSnapshot(prev => prev ? { ...prev, assistantMessages: [...prev.assistantMessages, optimistic] } : prev);
+    // useLayoutEffect scrolls as soon as the optimistic bubble enters the DOM.
     try {
-      await economicRequest<{ answer: string }>('/assistant/chat', 'POST', { question });
-      // The model replied; now retrieve the persisted conversation. This is a
-      // real lifecycle event, not a simulated timer-based progress status.
+      const reply = await askEconomicStream(question, files, stage => setAssistantStage(stage));
       setAssistantStage('refreshing_finances');
-      await refresh();
+      // Keep the actual answer visible if the subsequent snapshot refresh fails.
+      setSnapshot(prev => prev ? { ...prev,
+        assistantMessages: [...prev.assistantMessages, {
+          id: 'economic-answer:' + pendingId, role: 'assistant',
+          content: reply.answer, creditsSpentMilli: reply.creditsSpentMilli,
+          inputTokens: reply.inputTokens, outputTokens: reply.outputTokens,
+          createdAt: new Date().toISOString()
+        }] } : prev);
+      try { await refresh(); }
+      catch { setAssistantError('Ответ получен, но история пока не синхронизирована. Обновите страницу позже.'); }
     } catch (cause) {
-      setSnapshot(prev => prev ? { ...prev, assistantMessages: prev.assistantMessages.filter(x => x.id !== 'pending-user') } : prev);
+      setSnapshot(prev => prev ? { ...prev,
+        assistantMessages: prev.assistantMessages.filter(m => m.id !== pendingId) } : prev);
       setAssistantQuestion(question);
-      setError(cause instanceof Error ? cause.message : 'ИИ недоступен');
-    } finally { setAssistantBusy(false); setAssistantStage(null); }
+      setAssistantFiles(files);
+      setAssistantError(cause instanceof Error ? cause.message : 'ИИ недоступен');
+    } finally {
+      assistantPendingRef.current = false;
+      setAssistantBusy(false);
+      setAssistantStage(null);
+    }
+  };
+  const askAssistant = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void sendAssistantMessage(assistantQuestion);
+  };
+  const voiceTranscript = (spoken: string, sendImmediately: boolean) => {
+    const phrase = spoken.trim();
+    if (!phrase) return;
+    const full = [assistantQuestion.trim(), phrase].filter(Boolean).join(' ');
+    setAssistantQuestion(full);
+    if (sendImmediately) void sendAssistantMessage(full);
   };
   const categories = (kind: 'INCOME' | 'EXPENSE') => Array.from(new Set([
     ...baseCategories[kind], ...(snapshot?.categories.filter(c => c.kind === kind).map(c => c.name) || [])
@@ -485,11 +541,85 @@ export default function EconomicApp() {
     </div>
 
     <EconomicMascot active={assistantOpen} busy={assistantBusy} progress={assistantStage} onClick={() => setAssistantOpen(v => !v)}/>
-    {assistantOpen && <section id="econ-assistant-dialog" className="econ-assistant" role="dialog" aria-label="Экономыч AI, финансовый помощник"><div className="econ-assistant-head"><div><span className="econ-assistant-avatar">₽</span><div><strong>Экономыч AI</strong><small>Финансовый помощник</small></div></div><button type="button" onClick={() => setAssistantOpen(false)} aria-label="Закрыть"><X size={18}/></button></div><div className="econ-assistant-body">
-      <div className="econ-insight-table"><table><caption>Ваши счета</caption><thead><tr><th>Счёт</th><th>Остаток</th></tr></thead><tbody>{snapshot.accounts.map(a => <tr key={a.id}><td>{a.name}</td><td>{money(a.balanceMinor)}</td></tr>)}</tbody></table></div>
-      {snapshot.assistantMessages.length === 0 && <div className="econ-assistant-welcome"><MessageCircle size={21}/><strong>Чем помочь с финансами?</strong><p>Спросите о доходах, расходах, кредитах или способах вести бюджет. ИИ отвечает на основе ваших данных, но не меняет их.</p></div>}
-      <div className="econ-chat-messages">{snapshot.assistantMessages.map(m => <div key={m.id} className={'econ-chat-bubble ' + (m.role === 'user' ? 'mine' : 'assistant')}>{m.content}</div>)}{assistantBusy && <div className="econ-ai-progress" role="status" aria-live="polite" aria-atomic="true"><span className="econ-ai-progress-icon" aria-hidden="true"><Sparkles size={19} strokeWidth={2}/></span><div className="econ-ai-progress-details"><span key={assistantStage} className="econ-ai-progress-text">{assistantStage === 'refreshing_finances' ? 'Обновляю финансовые данные' : 'Анализирую запрос'}</span><div key={'econ-progress-' + assistantStage} className="econ-ai-progress-track" aria-hidden="true"><span/><span/><span/></div></div></div>}</div>
-    </div><form className="econ-assistant-composer" onSubmit={askAssistant}><input aria-label="Вопрос Economic" placeholder="Спросить об операциях и бюджете" value={assistantQuestion} onChange={e => setAssistantQuestion(e.target.value)} maxLength={2000} disabled={assistantBusy}/><button type="submit" disabled={assistantBusy || !assistantQuestion.trim()} aria-label="Отправить вопрос"><Send size={18}/></button></form><div className="econ-assistant-note">1 ИИ-кредит за запрос · Экономыч AI не изменяет операции</div></section>}
+    {assistantOpen && <section id="econ-assistant-dialog" className="econ-assistant" role="dialog" aria-label="Экономыч AI, финансовый помощник">
+      <div className="econ-assistant-head">
+        <div><span className="econ-assistant-avatar">₽</span>
+          <div><strong>Экономыч AI</strong><small>Финансовый помощник</small></div>
+        </div>
+        <button type="button" onClick={() => setAssistantOpen(false)} aria-label="Закрыть"><X size={18}/></button>
+      </div>
+      <div className="econ-assistant-body" ref={assistantScrollRef}>
+        <div className="econ-insight-table">
+          <table><caption>Ваши счета</caption><thead><tr><th>Счёт</th><th>Остаток</th></tr></thead>
+            <tbody>{snapshot.accounts.map(a => <tr key={a.id}><td>{a.name}</td><td>{money(a.balanceMinor)}</td></tr>)}</tbody>
+          </table>
+        </div>
+        {snapshot.assistantMessages.length === 0 &&
+          <div className="econ-assistant-welcome"><MessageCircle size={21}/>
+            <strong>Чем помочь с финансами?</strong>
+            <p>Спросите о доходах, расходах, кредитах или способах вести бюджет. Помощник анализирует ваши данные и прикреплённые файлы. Изменять записи через чат можно будет после следующего обновления.</p>
+          </div>}
+        <div className="econ-chat-messages">
+          {snapshot.assistantMessages.map(m =>
+            <div key={m.id} className={'econ-chat-bubble ' + (m.role === 'user' ? 'mine' : 'assistant')}>
+              {m.content && <span>{m.content}</span>}
+              {Boolean(m.attachmentNames?.length) &&
+                <div className="econ-message-files">{m.attachmentNames?.map((name,i) =>
+                  <span key={name + i} title={name}><Paperclip size={12}/>{name}</span>)}</div>}
+              {m.role === 'assistant' && typeof m.creditsSpentMilli === 'number' && m.creditsSpentMilli > 0 &&
+                <div className="econ-message-credits">
+                  <Sparkles size={11}/> {(m.creditsSpentMilli / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 3 })} ИИ-кредита
+                </div>}
+            </div>
+          )}
+          {assistantBusy && <div className="econ-ai-progress" role="status" aria-live="polite" aria-atomic="true">
+            <span className="econ-ai-progress-icon" aria-hidden="true"><Sparkles size={19} strokeWidth={2}/></span>
+            <div className="econ-ai-progress-details">
+              <span key={assistantStage} className="econ-ai-progress-text">{({
+                reading_files: 'Подготавливаю вложения',
+                reading_finances: 'Изучаю финансовые данные',
+                reading_history: 'Учитываю историю диалога',
+                counting_tokens: 'Подсчитываю контекст',
+                forming_answer: 'Формирую ответ',
+                searching_history: 'Ищу в истории переписки',
+                saving_conversation: 'Сохраняю ответ',
+                refreshing_finances: 'Обновляю финансовые данные'
+              } as Record<string,string>)[assistantStage || ''] || 'Анализирую запрос'}</span>
+              <div key={'econ-progress-' + assistantStage} className="econ-ai-progress-track" aria-hidden="true"><span/><span/><span/></div>
+            </div>
+          </div>}
+          {assistantError && <div className="econ-chat-error" role="alert">{assistantError}</div>}
+        </div>
+      </div>
+      <div className="econ-chat-input-zone">
+        {assistantFiles.length > 0 && <div className="econ-attachment-chips" aria-label="Выбранные вложения">
+          {assistantFiles.map((file,i) => <div className="econ-attachment-chip" key={file.name + i}>
+            <Paperclip size={13}/><span title={file.name}>{file.name}</span>
+            <button type="button" disabled={assistantBusy} title="Убрать вложение" aria-label={'Убрать ' + file.name}
+              onClick={() => setAssistantFiles(prev => prev.filter((_,index) => index !== i))}><X size={13}/></button>
+          </div>)}
+        </div>}
+        <form className="econ-assistant-composer" onSubmit={askAssistant}>
+          <input ref={assistantFilePickerRef} className="econ-hidden-file" type="file" multiple
+            accept={ECONOMIC_ACCEPTED_FILE_TYPES} onChange={addAssistantFiles} aria-label="Файлы для финансового помощника"/>
+          <button type="button" className="econ-attach-button" disabled={assistantBusy}
+            onClick={() => assistantFilePickerRef.current?.click()} title="Прикрепить файл"
+            aria-label="Прикрепить файл"><Paperclip size={17}/></button>
+          <textarea aria-label="Вопрос Экономычу AI" placeholder="Спросить об операциях и бюджете"
+            value={assistantQuestion} onChange={e => setAssistantQuestion(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault(); void sendAssistantMessage(assistantQuestion); } }}
+            maxLength={2000} disabled={assistantBusy} rows={1}/>
+          <Suspense fallback={<span className="econ-voice-placeholder" aria-hidden="true"><Mic size={16}/></span>}>
+            <EconomicVoiceInput activationMode="transcription" small disabled={assistantBusy}
+              onTranscript={voiceTranscript} className="econ-voice-trigger"/>
+          </Suspense>
+          <button type="submit" disabled={assistantBusy || (!assistantQuestion.trim() && !assistantFiles.length)}
+            title="Отправить сообщение" aria-label="Отправить сообщение"><Send size={18}/></button>
+        </form>
+        <div className="econ-assistant-note">Стоимость рассчитывается по фактическим токенам · Голосовой ввод оплачивается отдельно</div>
+      </div>
+    </section>}
 
     {dialog && <div className="econ-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !saving) setDialog(null); }}><section className="econ-modal" role="dialog" aria-modal="true" aria-label="Редактирование Economic"><header><div><span className="econ-eyebrow">{dialog.id ? 'РЕДАКТИРОВАНИЕ' : 'НОВАЯ ЗАПИСЬ'}</span><h2>{dialog.kind === 'operation' ? 'Операция' : dialog.kind === 'account' ? 'Счёт' : dialog.kind === 'debt' ? 'Долг' : dialog.kind === 'loan' ? 'Кредит' : 'Категория'}</h2></div><button type="button" onClick={() => setDialog(null)} aria-label="Закрыть"><X size={19}/></button></header>
       <form className="econ-form" onSubmit={submitDialog}>

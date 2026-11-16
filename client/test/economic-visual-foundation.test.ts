@@ -40,8 +40,8 @@ test('Economic mascot reuses the real Planik SVG and animations with its own pal
 });
 
 test('visible Economic statuses reflect real async request stages and animate', () => {
-  assert.match(economic, /setAssistantStage\('analyzing_request'\)/);
-  assert.match(economic, /await economicRequest<\{ answer: string \}>\('\/assistant\/chat'/);
+  assert.match(economic, /setAssistantStage\(files\.length \? 'reading_files' : 'reading_finances'\)/);
+  assert.match(economic, /await askEconomicStream\(question, files, stage => setAssistantStage\(stage\)\)/);
   assert.match(economic, /setAssistantStage\('refreshing_finances'\)/);
   assert.match(economic, /role="status" aria-live="polite" aria-atomic="true"/);
   assert.match(economicCss, /@keyframes econ-status-beat/);

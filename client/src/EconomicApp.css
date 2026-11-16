@@ -175,3 +175,108 @@
 @media(prefers-reduced-motion:reduce){
   .econ-ai-progress *{animation:none!important}
 }
+
+
+/* Economic chat composer. Attachments, dictation and scrollable history share
+   the original isolated Economic entry; the heavyweight recorder loads lazily. */
+.econ-chat-input-zone{flex:none;border-top:1px solid rgba(255,206,131,.14);background:rgba(28,27,35,.98)}
+.econ-assistant-composer{border:0;align-items:flex-end;padding:10px 11px 7px}
+.econ-assistant-composer textarea{
+  flex:1;resize:none;width:0;min-width:0;min-height:40px;max-height:130px;
+  padding:11px 10px;line-height:1.4;
+  border:1px solid rgba(255,202,132,.21);border-radius:12px;
+  background:#292831;color:#fff0de;font-size:12px;outline:none;
+}
+.econ-assistant-composer textarea:focus{border-color:rgba(244,169,63,.7)}
+.econ-assistant-composer textarea::placeholder{color:#a99b8a}
+.econ-assistant-composer button[type=submit]{flex:none;height:40px}
+.econ-assistant-composer .econ-attach-button,
+.econ-assistant-composer .voice-input-trigger{
+  display:grid;place-items:center;flex:none;
+  width:37px;height:40px;padding:0;border-radius:11px;
+  background:rgba(252,190,99,.1);color:#f3bd72;border:1px solid rgba(252,190,99,.18);
+}
+.econ-assistant-composer .voice-mode-anchor{display:inline-flex;flex:none;position:relative}
+.econ-assistant-composer .econ-voice-placeholder{
+  display:grid;place-items:center;flex:none;width:37px;height:40px;color:#cc9960;
+}
+.econ-assistant-composer .voice-input-trigger:hover,
+.econ-assistant-composer .econ-attach-button:hover{background:rgba(252,190,99,.19);color:#ffe0ab}
+.econ-hidden-file{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.econ-attachment-chips{
+  display:flex;gap:6px;flex-wrap:wrap;
+  padding:10px 12px 0;max-height:76px;overflow-y:auto;
+}
+.econ-attachment-chip,
+.econ-message-files span{
+  display:inline-flex;align-items:center;gap:5px;min-width:0;max-width:100%;
+  padding:5px 7px;border-radius:9px;border:1px solid rgba(244,172,82,.27);
+  background:rgba(242,160,64,.11);color:#ffe0ac;font-size:11px;
+}
+.econ-attachment-chip>span,.econ-message-files span{
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.econ-attachment-chip>span{max-width:140px}
+.econ-attachment-chip button{
+  flex:none;display:grid;place-items:center;border:0;padding:2px;
+  background:none;color:#ecc094;
+}
+.econ-message-files{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
+.econ-message-files span{max-width:100%;font-size:10px}
+.econ-message-credits{
+  display:flex;align-items:center;gap:4px;margin-top:9px;
+  padding-top:7px;border-top:1px solid rgba(255,224,175,.11);
+  font-size:10px;font-weight:600;color:#d8b57d;
+}
+.econ-chat-bubble{display:block}
+.econ-chat-bubble.mine .econ-message-files span{color:#fff1d2}
+.econ-chat-error{
+  align-self:stretch;padding:10px 12px;
+  border-radius:11px;border:1px solid rgba(251,126,99,.36);
+  color:#ffbaad;background:rgba(160,55,41,.12);
+  font-size:12px;line-height:1.45;
+}
+/* Reuse the real Planner microphone popup, but without importing the entire
+   500KB global Planner CSS into the independent Economic route. */
+.econ-root .voice-record-backdrop{
+  position:fixed;inset:0;z-index:310;
+  display:flex;justify-content:center;align-items:flex-end;
+  padding:20px 12px calc(94px + env(safe-area-inset-bottom,0px));
+  background:rgba(13,9,8,.57);
+}
+.econ-root .voice-record-panel{
+  display:flex;flex-direction:column;align-items:center;gap:12px;
+  width:min(100%,440px);padding:20px 16px 17px;
+  border:1px solid rgba(255,190,99,.35);border-radius:23px;
+  background:linear-gradient(145deg,#32291f,#1d1c28);
+  color:#fff0d6;box-shadow:0 22px 75px rgba(0,0,0,.45);
+  animation:voice-panel-enter .2s ease-out;
+}
+.econ-root .voice-record-title{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;color:#ffd18b}
+.econ-root .voice-record-wave{width:100%;height:66px;display:flex;align-items:center;justify-content:center;gap:4px;overflow:hidden}
+.econ-root .voice-record-wave span{
+  flex:0 0 4px;min-height:5px;max-height:60px;border-radius:999px;
+  background:linear-gradient(180deg,#ffdc91,#c17627);transition:height .075s linear;
+}
+.econ-root .voice-record-timer{font-variant-numeric:tabular-nums;color:#ccbda9;font-size:12px}
+.econ-root .voice-record-buttons{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;width:100%}
+.econ-root .voice-record-buttons button{
+  display:inline-flex;gap:6px;align-items:center;justify-content:center;
+  min-height:39px;padding:8px 13px;border-radius:99px;font-size:12px;font-weight:700;
+}
+.econ-root .voice-record-cancel,.econ-root .voice-record-stop{color:#fff0d6;background:rgba(194,155,110,.17)}
+.econ-root .voice-record-send{color:#2d1907;background:#edaa51}
+.econ-root .voice-record-note{color:#b5a597;font-size:11px;text-align:center;line-height:1.5;margin:0}
+.econ-root .voice-input-error{
+  position:fixed;z-index:320;right:16px;bottom:115px;
+  display:flex;align-items:center;gap:9px;max-width:min(340px,calc(100vw - 32px));
+  padding:11px;border-radius:12px;background:#32291f;
+  border:1px solid rgba(248,160,57,.38);color:#f5dec6;font-size:11px;
+  box-shadow:0 12px 28px rgba(0,0,0,.29);
+}
+.econ-root .voice-input-error button{background:transparent;border:0;color:#ffe0b1}
+@keyframes voice-panel-enter{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){
+ .econ-root .voice-record-panel{animation:none}
+ .econ-root .voice-record-wave span{transition:none}
+}
