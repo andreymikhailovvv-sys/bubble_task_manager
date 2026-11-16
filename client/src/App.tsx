@@ -3106,7 +3106,7 @@ export default function App() {
         webSources: result.webSources, webCitations: result.webCitations,
         generatedDocument: result.generatedDocument ?? undefined,
         telegramSendDraft: result.telegramSendDraft ?? undefined, mailSendDraft: result.mailSendDraft ?? undefined,
-        taskProposal: result.taskProposal ?? undefined, economicProposals: result.economicProposals ?? undefined,
+        taskProposal: result.taskProposal ?? undefined,
         telegramReadDraft: result.telegramReadDraft ?? undefined
       }] }));
       await refreshAiCredits();
@@ -3752,7 +3752,7 @@ export default function App() {
         : '';
       setGeneralAiMessages((prev) => [
         ...prev,
-        { id: crypto.randomUUID(), role: 'assistant', content: `${result.answer}${serviceReport}`, creditsSpentMilli: result.billing?.creditsSpentMilli, taskProposal: result.taskProposal ?? undefined, economicProposals: result.economicProposals ?? undefined }
+        { id: crypto.randomUUID(), role: 'assistant', content: `${result.answer}${serviceReport}`, creditsSpentMilli: result.billing?.creditsSpentMilli, taskProposal: result.taskProposal ?? undefined }
       ]);
       setLastGeneralAiUndoOperations(result.undoOperations);
       await refreshAiCredits();
@@ -3844,7 +3844,7 @@ export default function App() {
         webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations,
         generatedDocument: result.generatedDocument ?? undefined,
         telegramSendDraft: result.telegramSendDraft ?? undefined, mailSendDraft: result.mailSendDraft ?? undefined,
-        taskProposal: result.taskProposal ?? undefined, economicProposals: result.economicProposals ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined
+        taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined
       };
       setAiDialogByTask(prev => ({ ...prev, [taskId]: [...(prev[taskId] ?? []), response] }));
       await refreshAiCredits();
