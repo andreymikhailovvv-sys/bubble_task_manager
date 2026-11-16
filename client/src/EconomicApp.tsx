@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, BookOpen, Check, ChevronRight, CircleDollarSign, CreditCard, Landmark, LayoutDashboard, Loader2, MessageCircle, Pencil, Plus, Send, Settings2, Sparkles, Trash2, WalletCards, X } from 'lucide-react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ChangeEvent } from 'react';
+import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, BookOpen, Check, ChevronRight, CircleDollarSign, CreditCard, Landmark, LayoutDashboard, Loader2, MessageCircle, Paperclip, Mic, Pencil, Plus, Send, Settings2, Sparkles, Trash2, WalletCards, X } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import ModuleRail from './components/ModuleRail';
 import { PlanikMascot } from './components/PlanikMascot';
+import { askEconomicStream, ECONOMIC_ACCEPTED_FILE_TYPES, validateEconomicFiles, type EconomicAssistantStage } from './lib/economicAssistantStream';
+// Load the existing Planik transcription dialog only when Economic chat opens.
+const EconomicVoiceInput = lazy(() => import('./components/VoiceInputButton').then(m => ({ default: m.VoiceInputButton })));
+
 import { loadThemePreference, resolveThemeMode } from './lib/autoTheme';
 import { annuityEstimate, formatMinorRub as money, minorToRublesInput as inputMoney, rublesToMinor as parseMoney } from './lib/economicMoney';
 import './EconomicApp.css';
@@ -16,7 +20,7 @@ type Debt = { id: string; direction: 'OWE' | 'OWED_TO_ME'; counterparty: string;
 type Loan = { id: string; name: string; lender: string | null; principalMinor: string; paidMinor: string; monthlyPaymentOverrideMinor: string | null; paymentDate: string | null; remindersEnabled: boolean; annualRateBps: number; termMonths: number; startDate: string; isClosed: boolean };
 type EconomicUser = { id: string; name: string | null; username: string | null; timeZone: string | null; telegramLinked: boolean };
 type Category = { id: string; name: string; kind: 'INCOME' | 'EXPENSE' };
-type ChatMessage = { id: string; role: string; content: string; createdAt: string };
+type ChatMessage = { id: string; role: string; content: string; createdAt: string; creditsSpentMilli?: number; inputTokens?: number; outputTokens?: number; attachmentNames?: string[] };
 type Snapshot = {
   accounts: Account[]; recent: Operation[]; debts: Debt[]; loans: Loan[]; categories: Category[];
   assistantMessages: ChatMessage[];
@@ -94,7 +98,19 @@ export default function EconomicApp() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantQuestion, setAssistantQuestion] = useState('');
   const [assistantBusy, setAssistantBusy] = useState(false);
-  const [assistantStage, setAssistantStage] = useState<'analyzing_request' | 'refreshing_finances' | null>(null);
+  const [assistantStage, setAssistantStage] = useState<EconomicAssistantStage | 'reading_files' | 'refreshing_finances' | null>(null);
+  const [assistantError, setAssistantError] = useState('');
+  const [assistantFiles, setAssistantFiles] = useState<File[]>([]);
+  const assistantScrollRef = useRef<HTMLDivElement>(null);
+  const assistantFilePickerRef = useRef<HTMLInputElement>(null);
+  const assistantPendingRef = useRef(false);
+  // Optimistic messages appear before network work, so scroll before browser
+  // paint. Also keep the live stage and final reply visible at the bottom.
+  useLayoutEffect(() => {
+    if (!assistantOpen) return;
+    const node = assistantScrollRef.current;
+    if (node) node.scrollTop = node.scrollHeight;
+  }, [assistantOpen, snapshot?.assistantMessages.length, assistantBusy, assistantStage, assistantError]);
   const [operations, setOperations] = useState<Operation[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [operationsBusy, setOperationsBusy] = useState(false);
@@ -291,26 +307,66 @@ export default function EconomicApp() {
       if (type === 'operations') await loadOperations();
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Не удалось удалить запись'); }
   };
-  const askAssistant = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const question = assistantQuestion.trim();
-    if (!question || assistantBusy) return;
-    setAssistantBusy(true); setAssistantStage('analyzing_request'); setError('');
+  const addAssistantFiles = (event: ChangeEvent<HTMLInputElement>) => {
+    const next = [...assistantFiles, ...Array.from(event.target.files || [])];
+    event.target.value = '';
+    const reason = validateEconomicFiles(next);
+    if (reason) { setAssistantError(reason); return; }
+    setAssistantError('');
+    setAssistantFiles(next);
+  };
+  const sendAssistantMessage = async (text: string, files: File[] = assistantFiles) => {
+    const question = text.trim();
+    if ((!question && !files.length) || assistantPendingRef.current) return;
+    const reason = validateEconomicFiles(files);
+    if (reason) { setAssistantError(reason); return; }
+    assistantPendingRef.current = true;
+    setAssistantBusy(true); setAssistantStage(files.length ? 'reading_files' : 'reading_finances');
+    setAssistantError(''); setError('');
     setAssistantQuestion('');
-    // Optimistic local bubble, replaced with database history on success.
-    const optimistic = { id: 'pending-user', role: 'user', content: question, createdAt: new Date().toISOString() };
+    setAssistantFiles([]);
+    const pendingId = 'economic-pending:' + Date.now();
+    const optimistic: ChatMessage = {
+      id: pendingId, role: 'user', content: question,
+      attachmentNames: files.map(f => f.name), createdAt: new Date().toISOString()
+    };
     setSnapshot(prev => prev ? { ...prev, assistantMessages: [...prev.assistantMessages, optimistic] } : prev);
+    // useLayoutEffect scrolls as soon as the optimistic bubble enters the DOM.
     try {
-      await economicRequest<{ answer: string }>('/assistant/chat', 'POST', { question });
-      // The model replied; now retrieve the persisted conversation. This is a
-      // real lifecycle event, not a simulated timer-based progress status.
+      const reply = await askEconomicStream(question, files, stage => setAssistantStage(stage));
       setAssistantStage('refreshing_finances');
-      await refresh();
+      // Keep the actual answer visible if the subsequent snapshot refresh fails.
+      setSnapshot(prev => prev ? { ...prev,
+        assistantMessages: [...prev.assistantMessages, {
+          id: 'economic-answer:' + pendingId, role: 'assistant',
+          content: reply.answer, creditsSpentMilli: reply.creditsSpentMilli,
+          inputTokens: reply.inputTokens, outputTokens: reply.outputTokens,
+          createdAt: new Date().toISOString()
+        }] } : prev);
+      try { await refresh(); }
+      catch { setAssistantError('Ответ получен, но история пока не синхронизирована. Обновите страницу позже.'); }
     } catch (cause) {
-      setSnapshot(prev => prev ? { ...prev, assistantMessages: prev.assistantMessages.filter(x => x.id !== 'pending-user') } : prev);
+      setSnapshot(prev => prev ? { ...prev,
+        assistantMessages: prev.assistantMessages.filter(m => m.id !== pendingId) } : prev);
       setAssistantQuestion(question);
-      setError(cause instanceof Error ? cause.message : 'ИИ недоступен');
-    } finally { setAssistantBusy(false); setAssistantStage(null); }
+      setAssistantFiles(files);
+      setAssistantError(cause instanceof Error ? cause.message : 'ИИ недоступен');
+    } finally {
+      assistantPendingRef.current = false;
+      setAssistantBusy(false);
+      setAssistantStage(null);
+    }
+  };
+  const askAssistant = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void sendAssistantMessage(assistantQuestion);
+  };
+  const voiceTranscript = (spoken: string, sendImmediately: boolean) => {
+    const phrase = spoken.trim();
+    if (!phrase) return;
+    const full = [assistantQuestion.trim(), phrase].filter(Boolean).join(' ');
+    setAssistantQuestion(full);
+    if (sendImmediately) void sendAssistantMessage(full);
   };
   const categories = (kind: 'INCOME' | 'EXPENSE') => Array.from(new Set([
     ...baseCategories[kind], ...(snapshot?.categories.filter(c => c.kind === kind).map(c => c.name) || [])
