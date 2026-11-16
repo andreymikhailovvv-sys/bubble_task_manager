@@ -168,9 +168,30 @@ export function economicProposalView(row:{
   const amount=typeof value==='string'&&/^-?\d+$/.test(value)
     ? (Number(BigInt(value))/100).toLocaleString('ru-RU',{maximumFractionDigits:2})+' ₽' : null;
   const description=[name,amount].filter(Boolean).join(' · ');
+  const fieldNames:Record<string,string>={
+    name:'Название',title:'Название',counterparty:'Контрагент',
+    kind:'Тип',direction:'Направление',openingBalanceMinor:'Начальный остаток',
+    amountMinor:'Сумма',principalMinor:'Сумма кредита',paidMinor:'Выплачено',
+    category:'Категория',note:'Примечание',dueAt:'Срок возврата',
+    annualRateBps:'Ставка (б.п.)',termMonths:'Срок (месяцев)',startDate:'Дата начала',
+    occurredAt:'Дата операции',lender:'Кредитор',paymentDate:'Дата платежа',
+    postedToAccount:'Проводка по счёту',remindersEnabled:'Напоминания',isClosed:'Закрыт'
+  };
+  const display=(key:string,value:unknown)=>{
+    if(value===null)return 'не указано';
+    if(typeof value==='boolean')return value?'да':'нет';
+    if(key.endsWith('Minor')&&typeof value==='string'&&/^-?\d+$/.test(value))
+      return (Number(BigInt(value))/100).toLocaleString('ru-RU',{maximumFractionDigits:2})+' ₽';
+    return String(value);
+  };
+  const details=Object.entries(d).filter(([k])=>fieldNames[k]).map(([key,value])=>
+    (fieldNames[key]??key)+': '+
+      (row.action==='update'&&old[key]!==undefined?display(key,old[key])+' → ':'')+
+      display(key,value)
+  ).slice(0,8);
   return {id:row.id,messageId:row.messageId,entity:row.entity,action:row.action,
     status:row.status,autoApplied:row.autoApplied,error:row.error,description,
-    title:(row.action==='create'?'Создание ':'Изменение ')+(TITLES[row.entity as EconomicEntity]??'данных'),
+    title:(row.action==='create'?'Создание ':'Изменение ')+(TITLES[row.entity as EconomicEntity]??'данных'),details,
     createdAt:row.createdAt.toISOString(),appliedEntityId:row.appliedEntityId};
 }
 export type PreparedEconomicProposal={action:EconomicAction;before:Snapshot|null};
