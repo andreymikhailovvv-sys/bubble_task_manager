@@ -74,31 +74,43 @@
       })();
     </script>
     <script>
-      // Show before the JS bundle downloads, only for the desktop planner.
-      if (location.hostname?.toLowerCase() === 'work.planirovych.ru') {
-        // Display the business splash immediately, on both desktop and mobile.
-        document.documentElement.classList.add('work-workspace-preload');
-        // Never leave an infinite animation if the JavaScript bundle fails to load.
-        window.setTimeout(function () {
-          if (!document.documentElement.classList.contains('work-workspace-preload')) return;
+      // The preloader is painted before React. It must not be capable of
+      // obscuring a failed or unavailable application indefinitely.
+      (function () {
+        var isWork = location.hostname.toLowerCase() === 'work.planirovych.ru';
+        var isDesktopPlanner = location.pathname === '/' && matchMedia('(min-width: 1025px)').matches;
+        if (!isWork && !isDesktopPlanner) return;
+        var bootClass = isWork ? 'work-workspace-preload' : 'web-workspace-preload';
+        document.documentElement.classList.add(bootClass);
+        function showRecovery(reason) {
+          if (!document.documentElement.classList.contains(bootClass)) return;
           var splash = document.getElementById('workspace-boot-splash');
-          if (!splash) return;
+          if (!splash || splash.querySelector('.boot-retry')) return;
           var caption = splash.querySelector('.boot-caption');
-          if (caption) caption.textContent = 'Загрузка не завершилась. Обновите страницу, чтобы повторить попытку.';
+          if (caption) caption.textContent = reason ||
+            'Приложение не запустилось. Проверьте соединение и повторите попытку.';
           var progress = splash.querySelector('.boot-loader');
           if (progress) progress.style.display = 'none';
-          if (!splash.querySelector('.boot-retry')) {
-            var retry = document.createElement('button');
-            retry.type = 'button';
-            retry.className = 'boot-retry';
-            retry.textContent = 'Обновить страницу';
-            retry.addEventListener('click', function () { location.reload(); });
-            splash.querySelector('.boot-core')?.appendChild(retry);
-          }
-        }, 20000);
-      } else if (location.pathname === '/' && matchMedia('(min-width: 1025px)').matches) {
-        document.documentElement.classList.add('web-workspace-preload');
-      }
+          var retry = document.createElement('button');
+          retry.type = 'button';
+          retry.className = 'boot-retry';
+          retry.textContent = 'Повторить загрузку';
+          retry.addEventListener('click', function () { location.reload(); });
+          var core = splash.querySelector('.boot-core');
+          if (core) core.appendChild(retry);
+        }
+        // Timer executes even when a failed external resource blocks DOMContentLoaded.
+        window.setTimeout(function () { showRecovery(); }, 15000);
+        window.addEventListener('error', function (event) {
+          var target = event.target;
+          if (!target || target.tagName !== 'SCRIPT') return;
+          var src = String(target.src || '');
+          if (src.indexOf('/assets/') === -1 && src.indexOf('/src/main.tsx') === -1) return;
+          window.setTimeout(function () {
+            showRecovery('Не удалось загрузить код приложения. Повторите попытку.');
+          }, 0);
+        }, true);
+      })();
     </script>
     <style>
       /* Inline, render-blocking CSS is intentional: paint the splash before any app bundles. */
@@ -187,24 +199,26 @@
         #workspace-boot-splash .boot-loader::after { transform: translateX(60%); }
       }
     </style>
-    <!-- The Android Realtime page uses the ordinary authenticated web UI, NOT
-         Telegram. A deferred, third-party SDK here can hold up all deferred/
-         module scripts in Android WebView, leaving React unmounted forever.
-         Keep the original parser-inserted defer order on existing routes. -->
+    <!-- Telegram's external SDK is needed only inside Telegram Mini App and
+         Telegram auth. Deferring it on the public planner page blocks Vite's
+         module entry when telegram.org is slow or unreachable. -->
     <script>
-      if (location.pathname === '/android-planik') {
-        // Runs directly from HTML, even if the React bundle cannot start.
-        // Android can now distinguish an old deployment from a stalled JS load.
-        document.documentElement.dataset.planikAndroid = 'html';
-        window.addEventListener('error', function (event) {
-          if (event.target && event.target.tagName === 'SCRIPT') {
-            document.documentElement.dataset.planikAndroid = 'error';
-            document.documentElement.dataset.planikAndroidReason = 'script-load-failed';
-          }
-        }, true);
-      } else {
-        document.write('<script defer src="https://telegram.org/js/telegram-web-app.js"></scr' + 'ipt>');
-      }
+      (function () {
+        var path = location.pathname;
+        if (path === '/android-planik') {
+          document.documentElement.dataset.planikAndroid = 'html';
+          window.addEventListener('error', function (event) {
+            if (event.target && event.target.tagName === 'SCRIPT') {
+              document.documentElement.dataset.planikAndroid = 'error';
+              document.documentElement.dataset.planikAndroidReason = 'script-load-failed';
+            }
+          }, true);
+          return;
+        }
+        if (path === '/miniapp' || path.indexOf('/miniapp/') === 0 || path === '/telegram-auth') {
+          document.write('<script defer src="https://telegram.org/js/telegram-web-app.js"></scr' + 'ipt>');
+        }
+      })();
     </script>
   </head>
   <body class="bg-slate-950">
