@@ -63,6 +63,20 @@ test('Economic AI applies and reverses real PostgreSQL ledger changes without cr
     await undoEconomicProposal(a.id,created.id);
     assert.equal(await prisma.economicAccount.count({where:{id:newAccount.appliedEntityId!}}),0);
 
+    // Editing the *current* balance adjusts the accounting baseline, never
+    // deletes or fabricates an expense and remains reversible.
+    const grocery=await prisma.economicOperation.create({data:{
+      userId:a.id,kind:'EXPENSE',title:'Продукты',amountMinor:25000n,
+      sourceAccountId:account.id
+    }});
+    const currentBalance=await propose(a.id,action('account','update',{balanceMinor:'33000'},account.id));
+    assert.equal((await applyEconomicProposal(a.id,currentBalance.id)).status,'APPLIED');
+    assert.equal((await prisma.economicAccount.findUniqueOrThrow({where:{id:account.id}})).openingBalanceMinor,58000n);
+    assert.equal(await prisma.economicOperation.count({where:{id:grocery.id}}),1);
+    assert.equal((await undoEconomicProposal(a.id,currentBalance.id)).status,'UNDONE');
+    assert.equal((await prisma.economicAccount.findUniqueOrThrow({where:{id:account.id}})).openingBalanceMinor,100000n);
+    await prisma.economicOperation.delete({where:{id:grocery.id}});
+
     // 4. A stale edit must never overwrite a newer manual change.
     const stale=await propose(a.id,action('account','update',{name:'Старое имя'},account.id));
     await prisma.economicAccount.update({where:{id:account.id},data:{name:'Переименовано вручную'}});
