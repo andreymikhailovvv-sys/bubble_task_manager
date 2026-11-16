@@ -160,6 +160,9 @@ class MainActivity:ComponentActivity(){
                 val bars=WindowCompat.getInsetsController(window,window.decorView)
                 bars.isAppearanceLightStatusBars=!dark
                 bars.isAppearanceLightNavigationBars=!dark
+                // Android 10+ otherwise paints a contrast scrim over the gesture
+                // area, creating a visible seam beneath the light tab bar.
+                if(Build.VERSION.SDK_INT>=29)window.isNavigationBarContrastEnforced=false
             }
             PlanirovychTheme(dark){
                 val nav=rememberNavController()

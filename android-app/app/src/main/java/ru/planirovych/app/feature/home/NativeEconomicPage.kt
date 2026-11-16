@@ -9,6 +9,10 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.animation.core.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.AccountBalanceWallet
@@ -70,18 +74,37 @@ fun NativeEconomicPage(userId:String?,dark:Boolean) {
                 }
                 override fun onPageFinished(view:WebView?,url:String?){
                     fun verify(attempt:Int){
-                        view?.evaluateJavascript(
-                            "(function(){return !!document.querySelector('.econ-mobile-workspace .econ-main');})()"
-                        ){ result->
-                            if(result=="true")stage="ready"
-                            else if(attempt<12 && stage=="loading")view?.postDelayed({verify(attempt+1)},650)
+                        // Verify actual financial content, NOT an optional mobile CSS
+                        // class. The old check showed a false error *over* balances.
+                        // The JS fallback also hides desktop chrome if an older
+                        // website bundle is briefly served by the deployment.
+                        val check = """
+                            (function(){
+                              var root=document.querySelector('.econ-root');
+                              var main=document.querySelector('.econ-root .econ-main');
+                              if(root && main && !root.classList.contains('econ-mobile-workspace')){
+                                root.classList.add('econ-mobile-workspace');
+                                if(!document.getElementById('android-economic-fallback')){
+                                  var css=document.createElement('style');
+                                  css.id='android-economic-fallback';
+                                  css.textContent='.econ-mobile-workspace .module-rail,.econ-mobile-workspace .econ-nav,.econ-mobile-workspace .econ-mascot,.econ-mobile-workspace .econ-assistant{display:none!important}.econ-mobile-workspace .econ-shell{padding-left:0!important;display:block!important}.econ-mobile-workspace .econ-main{width:100%!important;max-width:100%!important}';
+                                  document.head.appendChild(css);
+                                }
+                              }
+                              return main ? 'ready' : 'waiting';
+                            })();
+                        """.trimIndent()
+                        view?.evaluateJavascript(check){result->
+                            if(result=="\"ready\"")stage="ready"
+                            else if(attempt<50 && stage=="loading")
+                                view.postDelayed({verify(attempt+1)},650)
                             else if(stage=="loading"){
                                 stage="error"
-                                detail="Не удалось открыть финансовый обзор. Проверьте авторизацию и обновите страницу."
+                                detail="Страница финансов не завершила загрузку. Проверьте подключение и повторите."
                             }
                         }
                     }
-                    view?.postDelayed({verify(0)},450)
+                    view?.postDelayed({verify(0)},300)
                 }
                 override fun onReceivedError(view:WebView?,request:WebResourceRequest?,error:WebResourceError?){
                     if(request?.isForMainFrame==true){
@@ -129,7 +152,9 @@ fun NativeEconomicPage(userId:String?,dark:Boolean) {
             }
             manager.flush()
             browser.loadUrl(host.newBuilder().encodedPath("/economic")
-                .addQueryParameter("mobile","1").build().toString())
+                .addQueryParameter("mobile","1")
+                .addQueryParameter("mobileTheme",if(dark)"dark" else "light")
+                .build().toString())
         }
         fun install(index:Int){
             if(index==cookies.size){finish();return}
@@ -144,7 +169,7 @@ fun NativeEconomicPage(userId:String?,dark:Boolean) {
         }
         remove(0)
     }
-    LaunchedEffect(userId,origin,browser){syncSession(false)}
+    LaunchedEffect(userId,origin,browser,dark){syncSession(false)}
     if(conflict){
         AlertDialog(
             onDismissRequest={conflict=false},
@@ -157,25 +182,24 @@ fun NativeEconomicPage(userId:String?,dark:Boolean) {
     }
     Box(Modifier.fillMaxSize()){
         AndroidView(factory={browser},modifier=Modifier.fillMaxSize())
-        if(stage!="ready"){
-            Column(modifier=Modifier.fillMaxSize(),
+        // An opaque shimmer, not a translucent spinner/error over actual
+        // financial data. The overlay disappears only once real content exists.
+        when(stage){
+            "loading" -> EconomicSkeleton(dark)
+            "ready" -> Unit
+            else -> Column(
+                modifier=Modifier.fillMaxSize()
+                    .background(if(dark)Color(0xFF15151C) else Color(0xFFFFF9F0))
+                    .padding(25.dp),
                 verticalArrangement=Arrangement.Center,
-                horizontalAlignment=Alignment.CenterHorizontally){
-                if(stage=="loading"){
-                    CircularProgressIndicator(color=gold)
+                horizontalAlignment=Alignment.CenterHorizontally
+            ){
+                Icon(Icons.Default.AccountBalanceWallet,null,tint=gold)
+                Spacer(Modifier.height(12.dp))
+                Text(if(stage=="conflict")"Аккаунты различаются" else detail,
+                    color=if(dark)Color(0xFFF2D8B0) else Color(0xFF754A1A))
+                if(stage!="conflict"){
                     Spacer(Modifier.height(12.dp))
-                    Text("Загружаем Экономыч AI…",
-                        color=if(dark)Color(0xFFF2D8B0) else Color(0xFF754A1A))
-                    if(progress in 1..99)LinearProgressIndicator(
-                        progress={progress/100f},
-                        modifier=Modifier.width(180.dp).padding(top=12.dp),
-                        color=gold
-                    )
-                } else {
-                    Icon(Icons.Default.AccountBalanceWallet,null,tint=gold)
-                    Spacer(Modifier.height(10.dp))
-                    Text(if(stage=="conflict")"Аккаунты различаются" else detail,
-                        color=if(dark)Color(0xFFF2D8B0) else Color(0xFF754A1A))
                     TextButton(onClick={syncSession(false)}){
                         Icon(Icons.Default.Refresh,null)
                         Spacer(Modifier.width(6.dp))
@@ -184,5 +208,34 @@ fun NativeEconomicPage(userId:String?,dark:Boolean) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun EconomicSkeleton(dark:Boolean){
+    val animation=rememberInfiniteTransition(label="Economic cards preview")
+    val shimmer by animation.animateFloat(
+        initialValue=.45f,targetValue=.85f,
+        animationSpec=infiniteRepeatable(tween(1150),RepeatMode.Reverse),
+        label="Economic shimmer"
+    )
+    val background=if(dark)Color(0xFF15151C) else Color(0xFFFFF9F0)
+    val panel=if(dark)Color(0xFF57412F) else Color(0xFFF6D7AD)
+    @Composable fun preview(width:Modifier=Modifier,height:androidx.compose.ui.unit.Dp){
+        Box(width.height(height).clip(RoundedCornerShape(17.dp))
+            .background(panel.copy(alpha=shimmer)))
+    }
+    Column(Modifier.fillMaxSize().background(background).padding(15.dp),
+        verticalArrangement=Arrangement.spacedBy(13.dp)){
+        Spacer(Modifier.height(12.dp))
+        preview(Modifier.fillMaxWidth(.63f),28.dp)
+        preview(Modifier.fillMaxWidth(),142.dp)
+        preview(Modifier.fillMaxWidth(),105.dp)
+        Row(horizontalArrangement=Arrangement.spacedBy(11.dp)){
+            preview(Modifier.weight(1f),99.dp)
+            preview(Modifier.weight(1f),99.dp)
+        }
+        preview(Modifier.fillMaxWidth(),80.dp)
+        preview(Modifier.fillMaxWidth(),80.dp)
     }
 }

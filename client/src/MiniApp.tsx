@@ -6293,7 +6293,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         <section className="miniapp-economic-screen" aria-label="Экономыч AI, обзор финансов"
           style={{ top: isTelegramRuntime ? `var(--miniapp-top-inset, 0px)` : 0 }}>
           <Suspense fallback={<div className="miniapp-economic-loading"><Loader2 size={22} className="animate-spin"/> Открываем Экономыч AI…</div>}>
-            <MobileEconomicApp mobile />
+            <MobileEconomicApp mobile embeddedInMiniApp mobileSafeTop={isTelegramRuntime ? telegramViewport.top : 0} mobileSafeBottom={isTelegramRuntime ? telegramViewport.bottom : 0} themeOverride={isLightTheme ? 'light' : 'dark'} />
           </Suspense>
         </section>
       ) : null}

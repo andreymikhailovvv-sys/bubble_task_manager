@@ -1,6 +1,7 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ChangeEvent } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ChangeEvent, type CSSProperties } from 'react';
 import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, BookOpen, Check, ChevronRight, CircleDollarSign, CreditCard, Landmark, LayoutDashboard, Loader2, MessageCircle, Paperclip, Mic, Pencil, Plus, Send, Settings2, Sparkles, Trash2, WalletCards, X } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
 import ModuleRail from './components/ModuleRail';
 import { PlanikMascot } from './components/PlanikMascot';
 import { EconomicAiProposalCard, type EconomicAiProposal } from './components/EconomicAiProposalCard';
@@ -87,9 +88,12 @@ function EconomicMascot({ onClick, active, busy, progress }: {
   </button>;
 }
 
-export default function EconomicApp({ mobile = false }: { mobile?: boolean }) {
+export default function EconomicApp({ mobile = false, embeddedInMiniApp = false, themeOverride, mobileSafeTop = 0, mobileSafeBottom = 0 }: {
+  mobile?: boolean; embeddedInMiniApp?: boolean; themeOverride?: 'light' | 'dark'; mobileSafeTop?: number; mobileSafeBottom?: number;
+}) {
   const [user, setUser] = useState<EconomicUser | null>(null);
   const [appearance, setAppearance] = useState<'light' | 'dark'>('dark');
+  const effectiveAppearance = themeOverride ?? appearance;
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [section, setSection] = useState<Section>('overview');
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -485,14 +489,20 @@ export default function EconomicApp({ mobile = false }: { mobile?: boolean }) {
     </button>;
   };
 
-  if (loading) return <main className={'econ-root econ-loading' + (mobile ? ' econ-mobile-workspace' : '')}><Loader2 className="econ-spin" size={26}/> Загружаем Экономыч AI…</main>;
-  if (!snapshot || !user) return <main className="econ-root econ-loading"><h1>Экономыч AI</h1><p>{error || 'Для начала войдите в Планировыч.'}</p><a className="econ-primary-link" href="/">Вернуться в Планировыч</a></main>;
+  if (loading) return <main className={'econ-root econ-loading' + (mobile ? ' econ-mobile-workspace' : '') + (effectiveAppearance === 'light' ? ' econ-light' : '')}>
+    {mobile ? <div className="econ-mobile-skeleton" aria-label="Загружаем финансовые данные">
+      <div className="econ-skeleton-title"/><div className="econ-skeleton-banner"/>
+      <div className="econ-skeleton-balance"/><div className="econ-skeleton-grid"><span/><span/></div>
+      <div className="econ-skeleton-row"/><div className="econ-skeleton-row"/>
+    </div> : <><Loader2 className="econ-spin" size={26}/> Загружаем Экономыч AI…</>}
+  </main>;
+  if (!snapshot || !user) return <main className={'econ-root econ-loading' + (mobile ? ' econ-mobile-workspace' : '') + (effectiveAppearance === 'light' ? ' econ-light' : '')}><h1>Экономыч AI</h1><p>{error || 'Для начала войдите в Планировыч.'}</p><a className="econ-primary-link" href="/">Вернуться в Планировыч</a></main>;
 
   const actions: Partial<Record<Section, () => void>> = {
     accounts: () => openDialog('account'), operations: () => openDialog('operation'),
     categories: () => openDialog('category')
   };
-  return <div className={'econ-root ' + (appearance === 'light' ? 'econ-light' : '') + (mobile ? ' econ-mobile-workspace' : '')}>
+  return <div className={'econ-root ' + (effectiveAppearance === 'light' ? 'econ-light' : '') + (mobile ? ' econ-mobile-workspace' : '')}>
     {!mobile && <ModuleRail active="economic"/>}
     <div className="econ-shell">
       {!mobile && <aside className="econ-nav">
@@ -666,7 +676,10 @@ export default function EconomicApp({ mobile = false }: { mobile?: boolean }) {
       </div>
     </section>}
 
-    {dialog && <div className="econ-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !saving) setDialog(null); }}><section className="econ-modal" role="dialog" aria-modal="true" aria-label="Редактирование Economic"><header><div><span className="econ-eyebrow">{dialog.id ? 'РЕДАКТИРОВАНИЕ' : 'НОВАЯ ЗАПИСЬ'}</span><h2>{dialog.kind === 'operation' ? 'Операция' : dialog.kind === 'account' ? 'Счёт' : dialog.kind === 'debt' ? 'Долг' : dialog.kind === 'loan' ? 'Кредит' : 'Категория'}</h2></div><button type="button" onClick={() => setDialog(null)} aria-label="Закрыть"><X size={19}/></button></header>
+    {dialog && createPortal(<div
+      className={'econ-root econ-dialog-layer ' + (effectiveAppearance === 'light' ? 'econ-light ' : '') + (mobile ? 'econ-mobile-dialog-layer ' : '') + (embeddedInMiniApp ? 'econ-miniapp-dialog-layer' : '')}
+      style={embeddedInMiniApp ? { '--econ-mobile-safe-top': mobileSafeTop + 'px', '--econ-mobile-safe-bottom': mobileSafeBottom + 'px' } as CSSProperties : undefined}>
+      <div className="econ-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !saving) setDialog(null); }}><section className="econ-modal" role="dialog" aria-modal="true" aria-label="Редактирование Economic"><header><div><span className="econ-eyebrow">{dialog.id ? 'РЕДАКТИРОВАНИЕ' : 'НОВАЯ ЗАПИСЬ'}</span><h2>{dialog.kind === 'operation' ? 'Операция' : dialog.kind === 'account' ? 'Счёт' : dialog.kind === 'debt' ? 'Долг' : dialog.kind === 'loan' ? 'Кредит' : 'Категория'}</h2></div><button type="button" onClick={() => setDialog(null)} aria-label="Закрыть"><X size={19}/></button></header>
       <form className="econ-form" onSubmit={submitDialog}>
         {dialog.kind === 'operation' && <>
           <label>Тип операции<select value={form.kind} onChange={e => { formSet('kind', e.target.value); formSet('category', ''); setNewCategoryOpen(false); }}>
@@ -781,6 +794,6 @@ export default function EconomicApp({ mobile = false }: { mobile?: boolean }) {
         {dialog.kind === 'category' && <><label>Тип<select value={form.kind} onChange={e => formSet('kind',e.target.value)}><option value="EXPENSE">Расходы</option><option value="INCOME">Доходы</option></select></label><label>Название<input required maxLength={60} value={form.name} onChange={e => formSet('name',e.target.value)} placeholder="Например, питомцы"/></label></>}
         {error && <div className="econ-error" role="alert">{error}</div>}
         <div className="econ-form-actions"><button type="button" disabled={saving} onClick={() => setDialog(null)}>Отмена</button><button type="submit" disabled={saving}>{saving ? <Loader2 className="econ-spin" size={17}/> : <Check size={17}/>} Сохранить</button></div>
-      </form></section></div>}
+      </form></section></div></div>, document.body)}
   </div>;
 }
