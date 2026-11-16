@@ -10636,7 +10636,7 @@ body[data-theme='light'] .upcoming-subtasks-list .upcoming-subtask-row:hover {
   left: 0;
   z-index: 35;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: .2rem;
   padding: .6rem .65rem calc(.5rem + var(--miniapp-bottom-inset, env(safe-area-inset-bottom, 0px)));
   border-top: 1px solid rgba(148, 163, 184, .2);
@@ -12442,7 +12442,7 @@ body[data-theme='dark'] .topbar-overdue-popover { box-shadow: 0 14px 34px rgba(2
   left: var(--miniapp-bottom-nav-padding-x);
   height: 2.1rem;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--miniapp-bottom-nav-gap);
   pointer-events: none;
 }
