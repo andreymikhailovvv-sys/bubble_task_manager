@@ -88,7 +88,7 @@
           if (!splash || splash.querySelector('.boot-retry')) return;
           var caption = splash.querySelector('.boot-caption');
           if (caption) caption.textContent = reason ||
-            'Приложение не запустилось. Проверьте соединение и повторите попытку.';
+            'Загрузка не завершилась. Приложение не запустилось. Проверьте соединение и повторите попытку.';
           var progress = splash.querySelector('.boot-loader');
           if (progress) progress.style.display = 'none';
           var retry = document.createElement('button');
