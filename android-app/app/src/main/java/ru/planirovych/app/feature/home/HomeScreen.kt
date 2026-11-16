@@ -161,7 +161,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     Scaffold(contentWindowInsets = WindowInsets.safeDrawing,
         containerColor = MaterialTheme.colorScheme.background,
         floatingActionButton = {
-            if(!state.loading && state.error==null && pagerState.currentPage!=2 && pagerState.currentPage!=3) {
+            if(!state.loading && state.error==null && pagerState.currentPage!=2 && pagerState.currentPage!=3 && pagerState.currentPage!=4) {
                 Box {
                     FloatingActionButton(
                         onClick={creationMenu=!creationMenu},
@@ -213,11 +213,15 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                     Triple("Заметки",Icons.Default.StickyNote2,"Заметки"),
                     Triple("Экономыч",Icons.Default.AccountBalanceWallet,"Экономыч AI, финансы")
                 )
-                NavigationBar(
-                    modifier=Modifier.navigationBarsPadding().height(64.dp).border(
-                        width=if(dark)0.dp else 1.dp,
-                        color=if(dark)Color.Transparent else Color(0xFFDDE2F0)),
-                    containerColor=if(dark)Color(0xFF121827) else Color.White,
+                // One uninterrupted surface behind the five tabs AND the Android
+                // gesture area. No extra border around the bottom system inset.
+                val navBackground=if(dark)Color(0xFF121827) else Color.White
+                Column(modifier=Modifier.fillMaxWidth().background(navBackground)) {
+                  HorizontalDivider(thickness=1.dp,
+                      color=if(dark)Color(0xFF263044) else Color(0xFFE4E8F0))
+                  NavigationBar(
+                    modifier=Modifier.height(56.dp),
+                    containerColor=navBackground,
                     contentColor=if(dark)Color(0xFFE2E8F0) else Color(0xFF172238),
                     tonalElevation=0.dp,
                     windowInsets=WindowInsets(0,0,0,0)
@@ -239,6 +243,8 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                             ),
                         )
                     }
+                  }
+                  Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
                 }
             }
         }
