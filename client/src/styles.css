@@ -10636,7 +10636,7 @@ body[data-theme='light'] .upcoming-subtasks-list .upcoming-subtask-row:hover {
   left: 0;
   z-index: 35;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: .2rem;
   padding: .6rem .65rem calc(.5rem + var(--miniapp-bottom-inset, env(safe-area-inset-bottom, 0px)));
   border-top: 1px solid rgba(148, 163, 184, .2);
@@ -12442,7 +12442,7 @@ body[data-theme='dark'] .topbar-overdue-popover { box-shadow: 0 14px 34px rgba(2
   left: var(--miniapp-bottom-nav-padding-x);
   height: 2.1rem;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--miniapp-bottom-nav-gap);
   pointer-events: none;
 }
@@ -16819,4 +16819,63 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
 }
 .miniapp-light .miniapp-habit-circle-completed {
   color: #fff;
+}
+
+/* Five compact icon-only tabs; financial module has an independent warm
+   active surface, with the same gliding indicator as the original four. */
+.miniapp-shell .miniapp-bottom-navigation{
+  --miniapp-bottom-nav-gap:.16rem;
+  --miniapp-bottom-nav-padding-x:.45rem;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:var(--miniapp-bottom-nav-gap);
+  padding:.34rem var(--miniapp-bottom-nav-padding-x) calc(.28rem + var(--miniapp-bottom-inset,env(safe-area-inset-bottom,0px)));
+}
+.miniapp-shell .miniapp-bottom-navigation-item{
+  min-height:2.6rem;gap:0;padding:.15rem 0;
+  flex-direction:row;border-radius:12px;
+}
+.miniapp-shell .miniapp-bottom-navigation-icon{width:100%;height:2.15rem;min-width:0}
+.miniapp-shell .miniapp-bottom-navigation-indicator{
+  top:.49rem;height:2.05rem;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+}
+.miniapp-shell .miniapp-bottom-navigation-indicator-pill::before{
+  width:3rem;height:2.05rem;max-width:calc(100% - .1rem);
+}
+.miniapp-shell .miniapp-bottom-navigation[data-active-tab='economic'] .miniapp-bottom-navigation-indicator-pill{
+  transform:translate3d(calc(400% + 4 * var(--miniapp-bottom-nav-gap)),0,0);
+}
+.miniapp-shell .miniapp-bottom-navigation[data-active-tab='economic'] .miniapp-bottom-navigation-indicator-pill::before{
+  background:linear-gradient(125deg,rgba(246,176,67,.3),rgba(232,132,25,.22));
+  box-shadow:inset 0 0 0 1px rgba(248,182,81,.34),0 2px 14px rgba(239,150,32,.16);
+}
+.miniapp-shell.miniapp-light .miniapp-bottom-navigation[data-active-tab='economic'] .miniapp-bottom-navigation-indicator-pill::before{
+  background:linear-gradient(120deg,#ffe0b1,#ffd196);
+  box-shadow:inset 0 0 0 1px rgba(188,99,14,.2);
+}
+.miniapp-shell .miniapp-economic-tab{color:#e3ab65}
+.miniapp-shell .miniapp-economic-tab.is-active{color:#ffc87a}
+.miniapp-shell.miniapp-light .miniapp-economic-tab{color:#ae722b}
+.miniapp-shell.miniapp-light .miniapp-economic-tab.is-active{color:#9b4f05}
+.miniapp-shell .miniapp-economic-tab .miniapp-bottom-navigation-icon svg{stroke-width:2.15}
+.miniapp-economic-screen{
+  position:fixed;z-index:29;inset-inline:0;
+  bottom:calc(3.25rem + var(--miniapp-bottom-inset,env(safe-area-inset-bottom,0px)));
+  overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;
+  background:#15151c;-webkit-overflow-scrolling:touch;
+}
+.miniapp-economic-screen .econ-root{min-height:100%;height:auto}
+.miniapp-economic-screen .econ-mobile-workspace .econ-main{padding-bottom:22px}
+.miniapp-economic-loading{
+  min-height:52vh;display:flex;gap:10px;align-items:center;justify-content:center;
+  color:#efb86b;font-size:13px;background:#191923;
+}
+@media(max-width:360px){
+ .miniapp-shell .miniapp-bottom-navigation{
+  --miniapp-bottom-nav-padding-x:.28rem;--miniapp-bottom-nav-gap:0px;
+ }
+ .miniapp-shell .miniapp-bottom-navigation-item{min-height:2.55rem}
+}
+@media(prefers-reduced-motion:reduce){
+ .miniapp-shell .miniapp-bottom-navigation[data-active-tab='economic'] .miniapp-bottom-navigation-indicator-pill{transition:none}
 }

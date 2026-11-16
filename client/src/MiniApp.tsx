@@ -2,9 +2,9 @@ import { AiStreamingMessageBody } from './components/AiStreamingMessageBody';
 import EmailVerificationDialog from './components/EmailVerificationDialog';
 import { subscribeAccountEmailVerified } from './lib/account-email-status-events';
 import { prepareAiChatImageFile } from './lib/ai-image-upload';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Edit3, Menu, MessageCircle, Minus, MoreVertical, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, StickyNote, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CircleDollarSign, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Edit3, Menu, MessageCircle, Minus, MoreVertical, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, StickyNote, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, stripAiChatProjectDisplayPreviews, type CreditPack, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus, type StandaloneNote } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { TaskCompletionReportDialog } from './components/TaskCompletionReportDialog';
@@ -22,6 +22,8 @@ import { TaskMonitoringActionBadge } from './components/TaskMonitoringActionBadg
 import { AiCheckupScheduleSettings } from './components/AiCheckupScheduleSettings';
 import { MiniAppStandaloneNoteEditor } from './components/MiniAppStandaloneNoteEditor';
 import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace';
+// The separate Economic route is loaded only when the financial tab is opened.
+const MobileEconomicApp = lazy(() => import('./EconomicApp'));
 import { WorkspaceGlobalSearch } from './components/WorkspaceGlobalSearch';
 import { matchesWorkspaceText } from './lib/workspaceSearch';
 import { MiniWorkspaceTools } from './components/MiniWorkspaceTools';
@@ -798,6 +800,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [listSortMode, setListSortMode] = useState<ListSortMode>('urgency');
   const [listSelectedSphereIds, setListSelectedSphereIds] = useState<string[] | null>(null);
   const [isStandaloneNotesOpen, setIsStandaloneNotesOpen] = useState(false);
+  const [isEconomicOpen, setIsEconomicOpen] = useState(false);
   const [requestedStandaloneNote, setRequestedStandaloneNote] = useState<{ id: string; serial: number } | null>(null);
   const [miniThemeMode, setMiniThemeMode] = useState<ThemePreference>(() => {
     return loadThemePreference(localStorage, 'btm:miniapp-theme-mode');
@@ -1156,8 +1159,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [quickAiTabNavigationSerial, setQuickAiTabNavigationSerial] = useState(0);
   useEffect(() => { setReplyToGeneral(null); setTelegramChatPicker(null); }, [activeAiChatId, activeAiChatProjectId]);
   useEffect(() => {
-    if (isAiChatOpen || isStandaloneNotesOpen) setIsSearchBarFloating(false);
-  }, [isAiChatOpen, isStandaloneNotesOpen]);
+    if (isAiChatOpen || isStandaloneNotesOpen || isEconomicOpen) setIsSearchBarFloating(false);
+  }, [isAiChatOpen, isStandaloneNotesOpen, isEconomicOpen]);
   const aiChatDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiChatScrollTopRef = useRef(0);
   // Auto-scrolling to the newest message must not masquerade as a swipe and
@@ -4273,7 +4276,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const MiniNavigationControl = isTelegramRuntime ? 'div' : 'button';
   // Derive the indicator position from the actual active view, so closing
   // Notes/AI or navigating programmatically animates to the correct tab.
-  const activeBottomNavigationTab = isStandaloneNotesOpen ? 'notes' : isAiChatOpen ? 'ai' : displayMode === 'timeline' ? 'timeline' : 'list';
+  const activeBottomNavigationTab = isEconomicOpen ? 'economic' : isStandaloneNotesOpen ? 'notes' : isAiChatOpen ? 'ai' : displayMode === 'timeline' ? 'timeline' : 'list';
   const handleMiniNavigationKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
     if (isTelegramRuntime && (event.key === 'Enter' || event.key === ' ')) {
       event.preventDefault();
@@ -4282,7 +4285,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   };
   // The global search/credits/rating/settings toolbar belongs to the workspace,
   // never to a task/subtask focus sheet, AI/notes, or any standalone editor.
-  const showWorkspaceSearchBar = !isAiChatOpen && !isStandaloneNotesOpen &&
+  const showWorkspaceSearchBar = !isEconomicOpen && !isAiChatOpen && !isStandaloneNotesOpen &&
     !openedTaskId && !openedSubtaskId &&
     !isAiDialogOpen && !isCreateTaskModalOpen && !isHabitModalOpen &&
     !isQuickCreateOpen && !isSettingsOpen && !authModalMode &&
@@ -4997,20 +5000,18 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         <span className="miniapp-bottom-navigation-indicator" aria-hidden="true">
           <span className="miniapp-bottom-navigation-indicator-pill" />
         </span>
-        <MiniNavigationControl role={isTelegramRuntime ? 'button' : undefined} tabIndex={isTelegramRuntime ? 0 : undefined} onKeyDown={handleMiniNavigationKeyDown} className={`miniapp-bottom-navigation-item ${!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'list' ? 'is-active' : ''}`}
-          aria-current={!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'list' ? 'page' : undefined}
-          onClick={(event) => { setIsAiChatOpen(false); setIsStandaloneNotesOpen(false); setIsAiChatMenuOpen(false); setDisplayMode('list'); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); event.currentTarget.blur(); }}>
+        <MiniNavigationControl role={isTelegramRuntime ? 'button' : undefined} tabIndex={isTelegramRuntime ? 0 : undefined} onKeyDown={handleMiniNavigationKeyDown} className={`miniapp-bottom-navigation-item ${!isEconomicOpen && !isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'list' ? 'is-active' : ''}`}
+          aria-label="Список задач" aria-current={!isEconomicOpen && !isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'list' ? 'page' : undefined}
+          onClick={(event) => { setIsEconomicOpen(false); setIsAiChatOpen(false); setIsStandaloneNotesOpen(false); setIsAiChatMenuOpen(false); setDisplayMode('list'); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); event.currentTarget.blur(); }}>
           <span className="miniapp-bottom-navigation-icon"><List size={20} strokeWidth={2} /></span>
-          <span>Список</span>
         </MiniNavigationControl>
-        <MiniNavigationControl role={isTelegramRuntime ? 'button' : undefined} tabIndex={isTelegramRuntime ? 0 : undefined} onKeyDown={handleMiniNavigationKeyDown} className={`miniapp-bottom-navigation-item ${!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'timeline' ? 'is-active' : ''}`}
-          aria-current={!isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'timeline' ? 'page' : undefined}
-          onClick={(event) => { setIsAiChatOpen(false); setIsStandaloneNotesOpen(false); setIsAiChatMenuOpen(false); setDisplayMode('timeline'); setTimelineView('day'); setTimelineAnchorDate(new Date()); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); event.currentTarget.blur(); }}>
+        <MiniNavigationControl role={isTelegramRuntime ? 'button' : undefined} tabIndex={isTelegramRuntime ? 0 : undefined} onKeyDown={handleMiniNavigationKeyDown} className={`miniapp-bottom-navigation-item ${!isEconomicOpen && !isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'timeline' ? 'is-active' : ''}`}
+          aria-label="Таймлайн" aria-current={!isEconomicOpen && !isAiChatOpen && !isStandaloneNotesOpen && displayMode === 'timeline' ? 'page' : undefined}
+          onClick={(event) => { setIsEconomicOpen(false); setIsAiChatOpen(false); setIsStandaloneNotesOpen(false); setIsAiChatMenuOpen(false); setDisplayMode('timeline'); setTimelineView('day'); setTimelineAnchorDate(new Date()); setIsQuickCreateOpen(false); mainScrollRef.current?.scrollTo({ top: 0 }); event.currentTarget.blur(); }}>
           <span className="miniapp-bottom-navigation-icon"><CalendarDays size={20} strokeWidth={2} /></span>
-          <span>Таймлайн</span>
         </MiniNavigationControl>
-        <MiniNavigationControl role={isTelegramRuntime ? 'button' : undefined} tabIndex={isTelegramRuntime ? 0 : undefined} onKeyDown={handleMiniNavigationKeyDown} className={`miniapp-bottom-navigation-item ${isAiChatOpen && !isStandaloneNotesOpen ? 'is-active' : ''}`}
-          aria-current={isAiChatOpen && !isStandaloneNotesOpen ? 'page' : undefined}
+        <MiniNavigationControl role={isTelegramRuntime ? 'button' : undefined} tabIndex={isTelegramRuntime ? 0 : undefined} onKeyDown={handleMiniNavigationKeyDown} className={`miniapp-bottom-navigation-item ${!isEconomicOpen && isAiChatOpen && !isStandaloneNotesOpen ? 'is-active' : ''}`}
+          aria-label="Общий чат с ИИ" aria-current={!isEconomicOpen && isAiChatOpen && !isStandaloneNotesOpen ? 'page' : undefined}
           onClick={(event) => {
             const quickProject = aiChatProjects.find(project => project.chats.some(chat => chat.id === QUICK_AI_CHAT_ID));
             generalAiChatNearBottomRef.current = true;
@@ -5020,6 +5021,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             setQuickAiTabNavigationSerial(serial => serial + 1);
             setTelegramChatPicker(null);
             setIsStandaloneNotesOpen(false);
+            setIsEconomicOpen(false);
             setIsQuickCreateOpen(false);
             setIsAiChatMenuOpen(false);
             setClosingMiniWindow(null);
@@ -5027,13 +5029,26 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             event.currentTarget.blur();
           }}>
           <span className="miniapp-bottom-navigation-icon"><Bot size={20} strokeWidth={2} /></span>
-          <span>Чат с ИИ</span>
         </MiniNavigationControl>
-        <MiniNavigationControl role={isTelegramRuntime ? 'button' : undefined} tabIndex={isTelegramRuntime ? 0 : undefined} onKeyDown={handleMiniNavigationKeyDown} className={`miniapp-bottom-navigation-item ${isStandaloneNotesOpen ? 'is-active' : ''}`}
-          aria-current={isStandaloneNotesOpen ? 'page' : undefined}
-          onClick={(event) => { setIsAiChatOpen(false); setIsAiChatMenuOpen(false); setIsQuickCreateOpen(false); setRequestedStandaloneNote(null); setIsStandaloneNotesOpen(true); event.currentTarget.blur(); }}>
+        <MiniNavigationControl role={isTelegramRuntime ? 'button' : undefined} tabIndex={isTelegramRuntime ? 0 : undefined} onKeyDown={handleMiniNavigationKeyDown} className={`miniapp-bottom-navigation-item ${!isEconomicOpen && isStandaloneNotesOpen ? 'is-active' : ''}`}
+          aria-label="Заметки" aria-current={!isEconomicOpen && isStandaloneNotesOpen ? 'page' : undefined}
+          onClick={(event) => { setIsEconomicOpen(false); setIsAiChatOpen(false); setIsAiChatMenuOpen(false); setIsQuickCreateOpen(false); setRequestedStandaloneNote(null); setIsStandaloneNotesOpen(true); event.currentTarget.blur(); }}>
           <span className="miniapp-bottom-navigation-icon"><StickyNote size={20} strokeWidth={2} /></span>
-          <span>Заметки</span>
+        </MiniNavigationControl>
+        <MiniNavigationControl role={isTelegramRuntime ? 'button' : undefined} tabIndex={isTelegramRuntime ? 0 : undefined}
+          onKeyDown={handleMiniNavigationKeyDown}
+          aria-label="Экономыч AI, финансы" aria-current={isEconomicOpen ? 'page' : undefined}
+          className={`miniapp-bottom-navigation-item miniapp-economic-tab ${isEconomicOpen ? 'is-active' : ''}`}
+          onClick={(event) => {
+            setIsAiChatOpen(false);
+            setIsStandaloneNotesOpen(false);
+            setIsAiChatMenuOpen(false);
+            setIsQuickCreateOpen(false);
+            setIsEconomicOpen(true);
+            mainScrollRef.current?.scrollTo({top:0});
+            event.currentTarget.blur();
+          }}>
+          <span className="miniapp-bottom-navigation-icon"><CircleDollarSign size={21} strokeWidth={2}/></span>
         </MiniNavigationControl>
       </nav>
 
@@ -5674,7 +5689,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         </div>
       ) : null}
 
-      <div className={`miniapp-quick-create fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2 ${isQuickCreateOpen ? 'is-open' : ''} ${isAiChatOpen || isStandaloneNotesOpen ? 'miniapp-quick-create-hidden' : ''}`}>
+      <div className={`miniapp-quick-create fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2 ${isQuickCreateOpen ? 'is-open' : ''} ${isAiChatOpen || isStandaloneNotesOpen || isEconomicOpen ? 'miniapp-quick-create-hidden' : ''}`}>
         <div className="miniapp-quick-create-actions flex flex-col items-end gap-2" aria-hidden={!isQuickCreateOpen}>
           <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={() => { setIsQuickCreateOpen(false); openCreateTaskModal(undefined, 'event'); }} className="miniapp-quick-create-action miniapp-quick-create-event inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
             <span>Добавить событие</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><CalendarDays size={18} /></span>
@@ -6272,6 +6287,15 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {isEconomicOpen && currentUser ? (
+        <section className="miniapp-economic-screen" aria-label="Экономыч AI, обзор финансов"
+          style={{ top: isTelegramRuntime ? `var(--miniapp-top-inset, 0px)` : 0 }}>
+          <Suspense fallback={<div className="miniapp-economic-loading"><Loader2 size={22} className="animate-spin"/> Открываем Экономыч AI…</div>}>
+            <MobileEconomicApp mobile />
+          </Suspense>
+        </section>
       ) : null}
 
       {isStandaloneNotesOpen && currentUser ? (

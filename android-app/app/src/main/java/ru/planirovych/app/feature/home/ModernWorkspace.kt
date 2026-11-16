@@ -163,6 +163,7 @@ fun ModernWorkspace(
         modifier=modifier.fillMaxSize(),
         beyondViewportPageCount=1) { page ->
         when(page) {
+            4 -> NativeEconomicPage(userId=state.user?.id,dark=dark)
             2 -> {
                 val pagerScope=rememberCoroutineScope()
                 NativeGeneralAiChatPage(vm=vm,userId=state.user?.id,dark=dark,
