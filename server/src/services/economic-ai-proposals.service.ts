@@ -22,7 +22,19 @@ const snapshot = (entity:EconomicEntity,row:any):Snapshot => {
     paymentDate:iso(row.paymentDate),remindersEnabled:row.remindersEnabled,
     isClosed:row.isClosed,updatedAt:iso(row.updatedAt)};
 };
-const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
+// PostgreSQL JSONB normalizes object key order. A byte-for-byte JSON.stringify
+// comparison falsely reports conflicts after a successful write. Compare the
+// canonical structure, not the insertion order of the snapshot's properties.
+function stable(value:unknown):string{
+  if(Array.isArray(value))return '['+value.map(stable).join(',')+']';
+  if(value!==null&&typeof value==='object'){
+    const obj=value as Record<string,unknown>;
+    return '{'+Object.keys(obj).sort()
+      .map(key=>JSON.stringify(key)+':'+stable(obj[key])).join(',')+'}';
+  }
+  return JSON.stringify(value);
+}
+const same=(a:unknown,b:unknown)=>stable(a)===stable(b);
 const owned=async(tx:Tx,owner:string,ids:string[])=>{
   const unique=[...new Set(ids)];
   if(unique.length!==ids.length)no('Счета операции должны различаться.');
