@@ -569,7 +569,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
             }
             preparedFinancialActions=prepared;
             return {ok:true,status:'prepared',count:prepared.length,confirmationRequired:true,
-              message:'Предложение ожидает подтверждения в Экономыч → Обзор. Не называй запись внесённой до подтверждения.'};
+              message:'Финансовая карточка появится прямо в текущем сообщении общего ИИ. Не называй запись внесённой до подтверждения.'};
           }catch(cause){
             if(cause instanceof EconomicActionError)return {ok:false,code:'FINANCE_VALIDATION',message:cause.message};
             throw cause;
