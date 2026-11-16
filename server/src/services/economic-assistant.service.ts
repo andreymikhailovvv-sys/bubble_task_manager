@@ -152,7 +152,7 @@ export async function answerEconomicAssistant(input: {
         proposed = await prepareEconomicProposals(input.owner,parseEconomicToolActions(args.actions_json));
         answer = 'Подготовил ' + proposed.length + ' ' +
           (proposed.length === 1 ? 'финансовое изменение' : 'финансовых изменений') +
-          '. Проверьте чипы ниже: действия ожидают подтверждения.';
+          '. Результат и текущий статус каждого действия показаны в чипах ниже.';
       } catch (cause) {
         if (!(cause instanceof EconomicActionError)) throw cause;
         answer = 'Не удалось подготовить изменения: ' + cause.message +
