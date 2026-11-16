@@ -3590,11 +3590,10 @@ body[data-theme='light'] .notes-editor-list-option:hover {
 }
 
 .miniapp-habit-circle-completed {
-  --habit-core-bg: rgba(100, 116, 139, 0.94);
-  --habit-track: rgba(71, 85, 105, 0.82);
+  /* Completion leaves the progress ring coloured and the core neutral. */
   color: #e2e8f0;
-  filter: grayscale(0.95) saturate(0.35);
-  opacity: 0.72;
+  filter: none;
+  opacity: 1;
 }
 
 .miniapp-habit-circle-core {
@@ -16786,18 +16785,20 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
 .miniapp-habit-circle--offday .miniapp-habit-circle-core {
   background: #334155;
 }
-/* A completed habit is a fully filled colour circle, not a disabled grey one. */
+/* Completion closes only the outer ring; the center never fills green.
+   Desaturate only the emoji, not the progress ring or N/N counter. */
 .miniapp-habit-circle-completed {
   --habit-progress: 100%;
-  --habit-track: var(--habit-color);
-  --habit-core-bg: var(--habit-color);
-  color: #ffffff;
   filter: none;
   opacity: 1;
 }
 .miniapp-habit-circle-completed .miniapp-habit-circle-core,
 .miniapp-light .miniapp-habit-circle-completed .miniapp-habit-circle-core {
-  background: var(--habit-color);
+  background: var(--habit-core-bg, rgba(15, 23, 42, 0.96));
+}
+.miniapp-habit-circle-completed .miniapp-habit-emoji {
+  filter: grayscale(1);
+  opacity: .62;
 }
 .miniapp-light .miniapp-habit-day-badge {
   background: #e2e8f0;
@@ -16818,7 +16819,7 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
   background: #f1f5f9;
 }
 .miniapp-light .miniapp-habit-circle-completed {
-  color: #fff;
+  color: #0f172a;
 }
 
 /* Five compact icon-only tabs; financial module has an independent warm
