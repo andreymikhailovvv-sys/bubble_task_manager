@@ -235,8 +235,16 @@ export async function answerEconomicAssistant(input: {
     const initial=await listEconomicProposalViews(input.owner,saved.id);
     for(const item of initial) {
       try { await applyEconomicProposal(input.owner,item.id,true); }
-      catch (cause) { console.warn('[Economic] automatic proposal failed',
-        {proposalId:item.id,error:cause instanceof Error?cause.message:'unknown'}); }
+      catch (cause) {
+        const message=cause instanceof Error?cause.message:'Неизвестная ошибка';
+        console.warn('[Economic] automatic proposal failed',
+          {proposalId:item.id,error:message});
+        // Remain pending instead of pretending the action succeeded.
+        await prisma.economicAiProposal.updateMany({
+          where:{id:item.id,userId:input.owner,status:'PENDING'},
+          data:{error:('Автоприменение не удалось: '+message).slice(0,500)}
+        }).catch(()=>undefined);
+      }
     }
   }
   const proposals=await listEconomicProposalViews(input.owner,saved.id);
