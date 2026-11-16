@@ -368,3 +368,130 @@
  .econ-mobile-workspace .econ-stats{grid-template-columns:1fr}
  .econ-mobile-workspace .econ-stat.featured{grid-column:auto}
 }
+
+/* Editors must escape the scrolled workspace's stacking context.  The
+   full-screen portal is mounted below body, not inside the tab scroller. */
+.econ-root.econ-dialog-layer{
+  position:fixed;inset:0;z-index:350;min-height:0;height:auto;
+  background:transparent;pointer-events:none;
+}
+.econ-dialog-layer .econ-modal-backdrop{
+  position:absolute;inset:0;pointer-events:auto;
+  display:flex;align-items:center;justify-content:center;
+  padding:12px max(10px,env(safe-area-inset-right)) 12px;
+}
+.econ-mobile-dialog-layer .econ-modal-backdrop{
+  align-items:flex-end;
+  padding:8px 0 0;
+}
+.econ-miniapp-dialog-layer{
+  bottom:calc(3.25rem + env(safe-area-inset-bottom,0px)) !important;
+  top:var(--econ-mobile-safe-top, 0px) !important;
+}
+.econ-dialog-layer .econ-modal{
+  box-sizing:border-box;display:flex;flex-direction:column;
+  max-height:calc(100% - 8px);min-height:0;
+  overflow:hidden;overscroll-behavior:contain;
+}
+.econ-mobile-dialog-layer .econ-modal{
+  max-height:100%;width:100%;max-width:720px;
+  border-radius:22px 22px 0 0;
+}
+.econ-dialog-layer .econ-modal header{
+  flex:none;padding:17px 19px 13px;
+}
+.econ-dialog-layer .econ-form{
+  display:flex;flex-direction:column;align-items:stretch;
+  gap:13px;flex:1 1 auto;min-height:0;
+  overflow-y:auto;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  padding:15px 17px 0;
+}
+.econ-dialog-layer .econ-form > label,
+.econ-dialog-layer .econ-form > div:not(.econ-form-actions),
+.econ-dialog-layer .econ-form > p{
+  flex:none;
+}
+.econ-dialog-layer .econ-form-actions{
+  position:sticky;bottom:0;z-index:2;flex:none;
+  margin-top:auto;padding:12px 0 max(12px,env(safe-area-inset-bottom,0px));
+  border-top:1px solid var(--ec-border);
+  background:#23212b;
+}
+.econ-dialog-layer .econ-form-actions button{
+  min-height:43px;min-width:0;
+}
+.econ-mobile-dialog-layer .econ-form-actions button{
+  flex:1;padding-inline:10px;
+}
+.econ-mobile-dialog-layer .econ-form input,
+.econ-mobile-dialog-layer .econ-form select{
+  min-height:44px;font-size:16px;
+}
+@media(min-width:700px){
+ .econ-mobile-dialog-layer .econ-modal-backdrop{align-items:center;padding:16px}
+ .econ-mobile-dialog-layer .econ-modal{border-radius:20px;max-height:95%}
+}
+@media(max-height:620px){
+ .econ-dialog-layer .econ-modal header{padding:11px 17px}
+ .econ-dialog-layer .econ-form{gap:10px;padding-top:10px}
+}
+/* Compact loading preview, no full-screen spinner and no transparent error
+   overlay over already loaded account balances. */
+.econ-root.econ-mobile-workspace.econ-loading{
+  justify-content:flex-start;min-height:100%;padding:16px 12px;
+  background:var(--ec-bg);
+}
+.econ-mobile-skeleton{width:100%;max-width:650px;display:grid;gap:13px;margin:auto}
+.econ-mobile-skeleton > div,.econ-mobile-skeleton .econ-skeleton-grid span{
+  background:linear-gradient(100deg,var(--ec-panel2) 8%,rgba(244,174,85,.2) 48%,var(--ec-panel2) 83%);
+  background-size:220% 100%;animation:econ-skeleton-wave 1.55s ease-in-out infinite;
+  border:1px solid var(--ec-border);border-radius:15px;
+}
+.econ-skeleton-title{height:31px;width:65%}
+.econ-skeleton-banner{height:138px}
+.econ-skeleton-balance{height:95px}
+.econ-skeleton-grid{height:88px;display:grid;grid-template-columns:repeat(2,1fr);gap:9px;background:none!important;border:0!important;animation:none!important}
+.econ-skeleton-grid span{display:block}
+.econ-skeleton-row{height:68px}
+@keyframes econ-skeleton-wave{
+  0%{background-position:170% 0}100%{background-position:-50% 0}
+}
+/* Mobile light mode retains amber accents but must not keep dark account
+   panels or unreadable muted labels from the desktop dark palette. */
+.econ-mobile-workspace.econ-light{
+  --ec-panel:#ffffff;--ec-panel2:#fff5e8;--ec-input:#fff9f1;
+  --ec-border:rgba(120,77,35,.18);
+  --ec-text:#312922;--ec-muted:#756557;
+}
+.econ-mobile-workspace.econ-light .econ-mini-account.main{
+  background:linear-gradient(125deg,#ffecd0,#fff8ee);color:#412b18;
+}
+.econ-mobile-workspace.econ-light .econ-stat:not(.featured){
+  color:#34291d;background:#fffaf2;
+}
+.econ-mobile-workspace.econ-light .econ-stat.featured{
+  color:#452c14;background:linear-gradient(120deg,#ffebc9,#f9d6a4);
+}
+.econ-mobile-workspace.econ-light .econ-stat-label,
+.econ-mobile-workspace.econ-light .econ-stat small,
+.econ-mobile-workspace.econ-light .econ-operation-body small{
+  color:#76634e;
+}
+.econ-mobile-workspace.econ-light .econ-footer,
+.econ-mobile-workspace.econ-light .econ-category-list small{color:#846b56}
+.econ-mobile-workspace.econ-light .econ-operation-amount.TRANSFER{color:#5755a0}
+.econ-mobile-workspace.econ-light .econ-operation-amount.EXPENSE{color:#a45230}
+.econ-mobile-workspace.econ-light .econ-obligation-preview{color:#493525}
+/* The financial form keeps the intentional darker contrast-neutral editor in
+   light mode, matching the website's fields and controls. */
+.econ-dialog-layer.econ-light .econ-modal{color:#f4efe8;background:#23212b}
+.econ-dialog-layer.econ-light .econ-form label{color:#e2d2c4}
+.econ-dialog-layer.econ-light .econ-form-hint{color:#c5b8ae}
+.econ-dialog-layer.econ-light .econ-form input,
+.econ-dialog-layer.econ-light .econ-form select{color:#fff1de;background:#302e39}
+.econ-dialog-layer.econ-light .econ-form-actions button{color:#f4e9dc}
+.econ-dialog-layer.econ-light .econ-form-actions button[type=submit]{color:#2b1806}
+@media(prefers-reduced-motion:reduce){
+ .econ-mobile-skeleton > div,.econ-mobile-skeleton .econ-skeleton-grid span{animation:none}
+}
