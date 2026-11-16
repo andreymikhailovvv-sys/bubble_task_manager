@@ -14,7 +14,7 @@ export class EconomicActionError extends Error {
   constructor(message: string, public readonly status = 400) { super(message); }
 }
 const FIELDS: Record<EconomicEntity, readonly string[]> = {
-  account: ['name','openingBalanceMinor'],
+  account: ['name','openingBalanceMinor','balanceMinor'],
   operation: ['kind','amountMinor','sourceAccountId','targetAccountId','category','title','note','occurredAt'],
   debt: ['direction','counterparty','amountMinor','paidMinor','note','dueAt','postedToAccount','accountId'],
   loan: ['name','lender','principalMinor','paidMinor','annualRateBps','termMonths','startDate',
@@ -71,7 +71,7 @@ export function canonicalEconomicAction(value:unknown):EconomicAction {
     if(key.endsWith('Minor')){
       if(typeof raw!=='string' || !/^-?\d{1,15}$/.test(raw))throw new EconomicActionError('Укажите сумму в копейках строкой.');
       const minor=BigInt(raw);
-      if(key==='openingBalanceMinor' ? minor < -999999999999999n || minor>999999999999999n :
+      if(key==='openingBalanceMinor'||key==='balanceMinor' ? minor < -999999999999999n || minor>999999999999999n :
         (key==='paidMinor' ? minor<0n : minor<=0n))
         throw new EconomicActionError('Недопустимая сумма.');
       result[key]=minor.toString();continue;
@@ -103,6 +103,8 @@ export function canonicalEconomicAction(value:unknown):EconomicAction {
       throw new EconomicActionError('Неверный идентификатор счёта.');
     result[key]=raw.trim();
   }
+  if(target==='account' && result.balanceMinor !== undefined && result.openingBalanceMinor !== undefined)
+    throw new EconomicActionError('Укажите только текущий баланс, не одновременно начальный остаток.');
   if(target==='category' && result.kind && !['INCOME','EXPENSE'].includes(String(result.kind)))
     throw new EconomicActionError('Категория может быть только доходом или расходом.');
   if(target==='operation' && result.kind==='TRANSFER' && operation==='create' &&
