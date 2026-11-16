@@ -1,3 +1,4 @@
+import { GeneralFinanceSession, GENERAL_ECONOMIC_TOOLS } from './economic-general-chat.service.js';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../db/prisma.js';
 import { telegramUserChatCapability } from './telegram-user-client-chat-access.service.js';
@@ -52,6 +53,7 @@ export const AI_CHAT_WEB_SEARCH_TOOL = { type: 'web_search', search_context_size
 const nullable = (type: 'string' | 'number') => ({ type: [type, 'null'] });
 
 export const AI_CHAT_OPENAI_TOOLS = [
+  ...GENERAL_ECONOMIC_TOOLS,
   {
     type: 'function', name: 'search_workspace', strict: true,
     description: 'Общий поиск сразу по задачам, подзадачам и личным заметкам пользователя. Вызывай первым для неопределённых запросов «я где-то записывал», «найди, что писал про», «мы обсуждали/планировали», когда источник не указан. Результаты помечены source=tasks или source=notes. После поиска прочитай подходящие записи через get_task или read_note.',
@@ -322,6 +324,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
   const dateResolutionNow = new Date(startedAt);
   const resolvedItemIds = new Set<string>(); const resolvedSphereIds = new Set<string>();
   const preparedTaskActions: Array<PlannerActionInput | NoteProposalAction | CreateNoteProposalAction | CreateHabitProposalAction> = [];
+  const finance = new GeneralFinanceSession(input.userId);
   const resolvedNoteIds = new Set<string>();
   const readNoteIds = new Set<string>();
   const readNoteVersions = new Map<string, string>();
@@ -454,6 +457,9 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         toolOperations.push(name);
         
         const progressByTool: Record<string, import('./ai-chat-progress.js').AiChatProgressStatus> = {
+          get_economic_overview: 'analyzing_retrieved_context',
+          find_economic_records: 'analyzing_retrieved_context',
+          propose_economic_changes: 'applying_changes',
           search_workspace: 'searching_workspace',
           search_notes: 'searching_notes',
           read_note: 'reading_note',
@@ -489,6 +495,18 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         }
         console.info('[AI chat tool] call', { requestId, userId: input.userId, providerCallIndex: providerCallCount, toolCallIndex: round, operation: name });
         if (!value || typeof value !== 'object' || Array.isArray(value)) return { ok: false, code: 'INVALID_ARGUMENTS', message: 'Аргументы tool должны быть объектом.' };
+        if(name==='get_economic_overview'){
+          return finance.overview().then(overview=>({ok:true,...overview}))
+            .catch(error=>({ok:false,message:error instanceof Error?error.message:'Не удалось прочитать финансы'}));
+        }
+        if(name==='find_economic_records'){
+          return finance.find(value).then(matches=>({ok:true,matches}))
+            .catch(error=>({ok:false,message:error instanceof Error?error.message:'Не удалось найти запись'}));
+        }
+        if(name==='propose_economic_changes'){
+          return finance.propose(value)
+            .catch(error=>({ok:false,message:error instanceof Error?error.message:'Не удалось подготовить изменения'}));
+        }
         if (name === 'prepare_assistant_reply') {
           const context = input.assistantReplyContext;
           if (!context) return { ok: false, code: 'NOT_AN_ASSISTANT_CHAT' };
@@ -809,6 +827,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
     }
     const webSearchCallsBilled = webSearchUsed ? MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST : 0;
     const webSearchCreditsMilliBilled = webSearchCallsBilled * WEB_SEARCH_CALL_CREDITS_MILLI;
+    const economicProposals = await finance.persist(input.actionRequestId);
     const taskProposal = preparedTaskActions.length
       ? await prepareTaskProposal({
           userId: input.userId, requestId: input.actionRequestId, source: input.autoApplyTaskActions ? 'telegram_bot' : 'planner',
@@ -824,7 +843,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         : taskProposal.status === 'PENDING'
           ? 'Подготовил изменения. Просмотрите карточку и нажмите «Принять».'
           : 'Изменения не применены: ' + (taskProposal.error || 'Не удалось выполнить операцию.') + ' Задача не создана, повторно подтверждать нечего.')
-      : loop.answer, telegramSendDraft, telegramReadDraft, mailSendDraft, mailReadUsed, taskProposal, model: input.model, taskDataChanged: taskProposal?.status === 'APPLIED', actionReports, undoOperations, generatedDocument, imageCreditsSpentMilli: imageCreditsSpentMilli + fileEditCreditsSpentMilli, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
+      : economicProposals.length ? 'Подготовил финансовые изменения. Проверьте оранжевые карточки и подтвердите нужные действия.' : loop.answer, economicProposals, telegramSendDraft, telegramReadDraft, mailSendDraft, mailReadUsed, taskProposal, model: input.model, taskDataChanged: taskProposal?.status === 'APPLIED', actionReports, undoOperations, generatedDocument, imageCreditsSpentMilli: imageCreditsSpentMilli + fileEditCreditsSpentMilli, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
   } catch (error) {
     await Promise.all(dynamicCalls.map((call) => refundDynamicResponsesCall(call)));
     if (webReservation) await refundAiCreditReservation(webReservation);
