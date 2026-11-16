@@ -25,7 +25,8 @@ test('Mini App and Android have 5 compact icon-only tabs with a warm Economic la
   assert.match(home,/Triple\("Экономыч",Icons\.Default\.AccountBalanceWallet/);
   assert.match(home,/label=null,/);
   assert.match(home,/alwaysShowLabel=false/);
-  assert.match(home,/Modifier\.navigationBarsPadding\(\)\.height\(64\.dp\)/);
+  assert.match(home,/Modifier\.height\(56\.dp\)/);
+  assert.match(home,/Spacer\(Modifier\.windowInsetsBottomHeight\(WindowInsets\.navigationBars\)\)/);
   assert.match(home,/selectedIconColor=if\(index==4\)/);
   assert.match(workspace,/4 -> NativeEconomicPage\(userId=state\.user\?\.id,dark=dark\)/);
   assert.match(androidVersion,/versionCode = 12/);
@@ -33,9 +34,11 @@ test('Mini App and Android have 5 compact icon-only tabs with a warm Economic la
 
 test('both mobile surfaces reuse the actual responsive financial overview and editor',()=>{
   assert.match(mini,/const MobileEconomicApp = lazy\(\(\) => import\('\.\/EconomicApp'\)\)/);
-  assert.match(mini,/<MobileEconomicApp mobile \/>/);
-  assert.match(entry,/EconomicApp mobile=\{new URLSearchParams\(window\.location\.search\)\.get\('mobile'\) === '1'\}/);
-  assert.match(economic,/function EconomicApp\(\{ mobile = false \}/);
+  assert.match(mini,/<MobileEconomicApp mobile embeddedInMiniApp/);
+  assert.match(mini,/themeOverride=\{isLightTheme \? 'light' : 'dark'\}/);
+  assert.match(entry,/EconomicApp mobile=\{economicParams\.get\('mobile'\) === '1' \|\| isCompactEconomicViewport\}/);
+  assert.match(entry,/themeOverride=\{economicThemeOverride\}/);
+  assert.match(economic,/function EconomicApp\(\{ mobile = false, embeddedInMiniApp = false/);
   assert.match(economic,/className="econ-mobile-sections"/);
   assert.match(economic,/mobile \? ' econ-mobile-workspace'/);
   assert.match(economic,/!mobile && <ModuleRail active="economic"\/>/);
@@ -44,7 +47,9 @@ test('both mobile surfaces reuse the actual responsive financial overview and ed
   assert.match(economic,/openDialog\('account'/);
   assert.match(economic,/openDialog\('loan'/);
   assert.match(economicCss,/\.econ-mobile-workspace \.econ-modal-backdrop/);
-  assert.match(economicCss,/max-height:min\(92dvh,900px\)/);
+  assert.match(economicCss,/econ-dialog-layer \.econ-modal/);
+  assert.match(economicCss,/max-height:100%/);
+  assert.match(economicCss,/\.econ-dialog-layer \.econ-form-actions/);
 });
 
 test('Android WebView never silently takes over a different account',()=>{
@@ -59,4 +64,19 @@ test('Android WebView never silently takes over a different account',()=>{
   assert.match(android,/target\.scheme=="https"/);
   assert.match(android,/target\.path\?\.startsWith\("\/economic"\)/);
   assert.match(android,/MIXED_CONTENT_NEVER_ALLOW/);
+});
+
+test('financial dialogs escape the tab scroller and expose the actions on small screens',()=>{
+  assert.match(economic,/createPortal\(<div/);
+  assert.match(economic,/document\.body\)/);
+  assert.match(economic,/econ-miniapp-dialog-layer/);
+  assert.match(economicCss,/econ-miniapp-dialog-layer/);
+  assert.match(economicCss,/position:sticky;bottom:0/);
+  assert.match(economicCss,/overflow-y:auto;overscroll-behavior:contain/);
+  assert.match(economicCss,/\.econ-dialog-layer \.econ-form-actions button/);
+  assert.match(android,/document\.querySelector\('\.econ-root \.econ-main'\)/);
+  assert.doesNotMatch(android,/querySelector\('\.econ-mobile-workspace \.econ-main'\)/);
+  assert.match(android,/EconomicSkeleton\(dark\)/);
+  assert.match(android,/addQueryParameter\("mobileTheme",if\(dark\)/);
+  assert.match(home,/pagerState\.currentPage!=4/);
 });
