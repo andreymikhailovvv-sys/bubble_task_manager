@@ -4731,7 +4731,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       >
                         <span className="miniapp-habit-circle-core absolute inset-[5px] rounded-full" />
                         <span className="relative z-10 flex flex-col items-center leading-none">
-                          <span className="text-lg">{habit.icon}</span>
+                          <span className="miniapp-habit-emoji text-lg">{habit.icon}</span>
                           <span className="mt-1 text-[10px] font-semibold">{cappedCompleted}/{habit.targetCount}</span>
                         </span>
                       </button>
@@ -5933,7 +5933,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   style={{ '--habit-color': habitDraft.color, '--habit-progress': '0%' } as CSSProperties}
                 >
                   <span className="miniapp-habit-circle-core absolute inset-[6px] rounded-full" />
-                  <span className="relative z-10 text-2xl">{habitDraft.icon}</span>
+                  <span className="miniapp-habit-emoji relative z-10 text-2xl">{habitDraft.icon}</span>
                 </div>
                 <div className="min-w-0 space-y-2">
                   <label className="block text-xs text-slate-300">Название привычки</label>
@@ -6026,9 +6026,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               ) : null}
               <div className="miniapp-habit-editor-content min-h-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden pr-1">
                 <div className="grid grid-cols-[68px_minmax(0,1fr)] items-center gap-3">
-                  <div className="miniapp-habit-circle relative inline-flex h-[68px] w-[68px] items-center justify-center rounded-full border" style={{ '--habit-color': habitDraft.color, '--habit-progress': `${Math.round((habitModalCompleted / Math.max(1, parseHabitTargetCount(habitDraft.targetCount))) * 100)}%` } as CSSProperties}>
+                  <div className={`miniapp-habit-circle relative inline-flex h-[68px] w-[68px] items-center justify-center rounded-full border ${habitModalCompleted >= parseHabitTargetCount(habitDraft.targetCount) ? 'miniapp-habit-circle-completed' : ''}`} style={{ '--habit-color': habitDraft.color, '--habit-progress': `${Math.round((habitModalCompleted / Math.max(1, parseHabitTargetCount(habitDraft.targetCount))) * 100)}%` } as CSSProperties}>
                     <span className="miniapp-habit-circle-core absolute inset-[6px] rounded-full" />
-                    <span className="relative z-10 text-2xl">{habitDraft.icon}</span>
+                    <span className="miniapp-habit-emoji relative z-10 text-2xl">{habitDraft.icon}</span>
                   </div>
                   <div className="min-w-0 space-y-2">
                     <label className="block text-xs text-slate-300">Название привычки</label>
