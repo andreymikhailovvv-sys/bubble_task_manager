@@ -139,15 +139,6 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
     const node = assistantScrollRef.current;
     if (node) node.scrollTop = node.scrollHeight;
   }, [assistantOpen, snapshot?.assistantMessages.length, assistantBusy, assistantStage, assistantError]);
-  // Native Android pager keeps WebView warm while other tabs are open.
-  // Re-read finance when its tab becomes active, including proposals prepared
-  // by the general AI voice widget while the finance tab was out of view.
-  useEffect(() => {
-    if(!user?.id)return;
-    const activated=()=>{void refresh().catch(()=>undefined)};
-    window.addEventListener('economic-activate',activated);
-    return ()=>window.removeEventListener('economic-activate',activated);
-  },[user?.id,refresh]);
   const [operations, setOperations] = useState<Operation[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [operationsBusy, setOperationsBusy] = useState(false);
@@ -161,6 +152,16 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   const refresh = useCallback(async () => {
     setSnapshot(await economicRequest<Snapshot>('/snapshot'));
   }, []);
+  // Native Android pager keeps WebView warm while other tabs are open.
+  // Re-read finance when its tab becomes active, including proposals prepared
+  // by the general AI voice widget while the finance tab was out of view.
+  useEffect(() => {
+    if(!user?.id)return;
+    const activated=()=>{void refresh().catch(()=>undefined)};
+    window.addEventListener('economic-activate',activated);
+    return ()=>window.removeEventListener('economic-activate',activated);
+  },[user?.id,refresh]);
+
   useEffect(() => {
     let alive = true;
     document.title = 'Экономыч AI';
