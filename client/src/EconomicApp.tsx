@@ -332,56 +332,151 @@ export default function EconomicApp() {
     </div>;
   };
 
-  if (loading) return <main className="econ-root econ-loading"><Loader2 className="econ-spin" size={26}/> Загружаем Economic…</main>;
-  if (!snapshot || !user) return <main className="econ-root econ-loading"><h1>Economic</h1><p>{error || 'Для начала войдите в Планировыч.'}</p><a className="econ-primary-link" href="/">Вернуться в Планировыч</a></main>;
+  const debtCard = (d: Debt) => <article className={'econ-card econ-obligation ' + (d.isClosed ? 'closed' : '')} key={d.id}>
+    <div className="econ-obligation-type">{d.direction === 'OWE' ? 'Я должен' : 'Мне должны'}{d.isClosed && <span className="econ-tag">Закрыт</span>}</div>
+    <h3>{d.counterparty}</h3><strong>{money(d.amountMinor)}</strong>
+    <p>{d.dueAt ? 'Вернуть до ' + dateLabel(d.dueAt) : 'Срок не указан'}</p>
+    <p>{d.postedToAccount ? 'Учтён на счёте: ' + accountName(d.accountId) : 'Без движения по счёту'}</p>
+    {d.note && <p>{d.note}</p>}
+    <RepaymentProgress paid={d.paidMinor} total={d.amountMinor}/>
+    <div className="econ-row-actions">
+      <button type="button" onClick={() => openDialog('debt', d)}><Pencil size={15}/> Изменить</button>
+      <button type="button" onClick={() => void remove('debts', d.id)}><Trash2 size={15}/></button>
+    </div>
+  </article>;
+  const loanCard = (l: Loan) => {
+    const figures = loanFigures(l);
+    const monthly = l.monthlyPaymentOverrideMinor ?? figures.monthly;
+    return <article className={'econ-card econ-obligation ' + (l.isClosed ? 'closed' : '')} key={l.id}>
+      <div className="econ-obligation-type">Кредит {l.isClosed && <span className="econ-tag">Закрыт</span>}</div>
+      <h3>{l.name}</h3>
+      <div className="econ-monthly-payment">
+        <strong>{money(monthly)} <small>/ мес.</small></strong>
+        <button type="button" title="Изменить ежемесячный платёж" aria-label={'Изменить ежемесячный платёж: ' + l.name}
+          onClick={() => { openDialog('loan', l); window.requestAnimationFrame(() => document.getElementById('econ-monthly-override')?.focus()); }}>
+          <Pencil size={15}/>
+        </button>
+      </div>
+      <div className="econ-loan-stats">
+        <span>Сумма кредита <b>{money(l.principalMinor)}</b></span>
+        <span>Ставка <b>{String(l.annualRateBps / 100).replace('.', ',')}% годовых</b></span>
+        <span>Срок <b>{l.termMonths} мес.</b></span>
+        <span>Переплата (оценка) <b>{money(figures.overpay)}</b></span>
+        <span>Всего выплат (оценка) <b>{money(figures.total)}</b></span>
+      </div>
+      <p>Начало: {dateLabel(l.startDate)}. {l.paymentDate ? 'Платёж: ' + new Date(l.paymentDate).getUTCDate() + '-го числа.' : 'Дата платежа не задана.'}
+        {' '}Без комиссий, страховок и досрочного погашения.
+      </p>
+      <RepaymentProgress paid={l.paidMinor} total={figures.total}/>
+      <div className="econ-row-actions">
+        <button type="button" onClick={() => openDialog('loan', l)}><Pencil size={15}/> Изменить</button>
+        <button type="button" onClick={() => void remove('loans', l.id)}><Trash2 size={15}/></button>
+      </div>
+    </article>;
+  };
+  const obligationPreview = (item: Debt | Loan, kind: 'debt' | 'loan') => {
+    const isDebt = kind === 'debt';
+    const title = isDebt ? (item as Debt).counterparty : (item as Loan).name;
+    const total = isDebt ? (item as Debt).amountMinor : loanFigures(item as Loan).total;
+    return <button type="button" className="econ-obligation-preview" key={kind + item.id}
+      onClick={() => openDialog(isDebt ? 'debt' : 'loan', item)}>
+      <div className="econ-preview-top">
+        {isDebt ? <BookOpen size={17}/> : <CreditCard size={17}/>}
+        <span>{isDebt ? (item as Debt).direction === 'OWE' ? 'Я должен' : 'Мне должны' : 'Кредит'}</span>
+      </div>
+      <strong>{title}</strong>
+      <small>{isDebt ? money(total) : money((item as Loan).monthlyPaymentOverrideMinor ?? loanFigures(item as Loan).monthly) + ' / мес.'}</small>
+      <RepaymentProgress paid={item.paidMinor} total={total}/>
+    </button>;
+  };
+
+  if (loading) return <main className="econ-root econ-loading"><Loader2 className="econ-spin" size={26}/> Загружаем Экономыч AI…</main>;
+  if (!snapshot || !user) return <main className="econ-root econ-loading"><h1>Экономыч AI</h1><p>{error || 'Для начала войдите в Планировыч.'}</p><a className="econ-primary-link" href="/">Вернуться в Планировыч</a></main>;
 
   const actions: Partial<Record<Section, () => void>> = {
     accounts: () => openDialog('account'), operations: () => openDialog('operation'),
-    debts: () => openDialog('debt'), loans: () => openDialog('loan'), categories: () => openDialog('category')
+    categories: () => openDialog('category')
   };
   return <div className={'econ-root ' + (appearance === 'light' ? 'econ-light' : '')}>
     <ModuleRail active="economic"/>
     <div className="econ-shell">
       <aside className="econ-nav">
-        <div className="econ-nav-brand"><span className="econ-brand-logo"><CircleDollarSign size={25}/></span><div><strong>Economic</strong><small>Ваши финансы</small></div></div>
+        <div className="econ-nav-brand"><span className="econ-brand-logo"><CircleDollarSign size={25}/></span><div><strong>Экономыч AI</strong><small>Ваши финансы</small></div></div>
         <div className="econ-nav-caption">РАБОЧЕЕ ПРОСТРАНСТВО</div>
         <div className="econ-nav-links">{nav.map(({ section: value, icon: Icon }) => <button key={value} type="button" className={section === value ? 'selected' : ''} onClick={() => { setSection(value); setError(''); }}><Icon size={18}/><span>{sectionTitles[value]}</span>{section === value && <ChevronRight size={15}/>}</button>)}</div>
         <div className="econ-nav-foot"><span className="econ-avatar">{(user.name || user.username || 'П')[0].toUpperCase()}</span><div><strong>{user.name || user.username || 'Пользователь'}</strong><small>Личный бюджет · RUB</small></div></div>
       </aside>
       <main className="econ-main">
-        <header className="econ-topbar"><div><div className="econ-eyebrow">ПЛАНИРОВЫЧ / ECONOMIC</div><h1>{section === 'overview' ? 'Economic' : sectionTitles[section]}</h1></div><div className="econ-top-actions"><span className="econ-today"><CalendarDays size={15}/>{new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</span><button className="econ-add-global" type="button" onClick={() => openDialog('operation')}><Plus size={18}/> Новая операция</button></div></header>
+        <header className="econ-topbar"><div><div className="econ-eyebrow">ПЛАНИРОВЫЧ / ЭКОНОМЫЧ AI</div><h1>{section === 'overview' ? 'Экономыч AI' : sectionTitles[section]}</h1></div><div className="econ-top-actions"><button className="econ-add-global" type="button" onClick={() => openDialog('operation')}><Plus size={18}/> Новая операция</button></div></header>
         {error && <div className="econ-error" role="alert"><span>{error}</span><button type="button" aria-label="Скрыть ошибку" onClick={() => setError('')}><X size={16}/></button></div>}
         {section === 'overview' && <>
-          <div className="econ-intro"><div><span className="econ-kicker"><span className="econ-intro-star">✦</span> Личные финансы без хаоса</span><h2>Держите деньги<br/><em>под контролем.</em></h2><p>Баланс, повседневные траты, долги и кредиты в одном спокойном пространстве.</p><button type="button" onClick={() => openDialog('operation')}>Добавить операцию <ArrowUpRight size={17}/></button></div><div className="econ-intro-illustration" aria-hidden="true"><div className="econ-coin-big">₽</div><div className="econ-coin-small">₽</div><div className="econ-intro-orbit"/></div></div>
+          <div className="econ-intro"><div><span className="econ-kicker"><span className="econ-intro-star">✦</span> Личные финансы без хаоса</span><h2>Держите деньги<br/><em>под контролем.</em></h2><p>Баланс, повседневные траты, долги и кредиты в одном спокойном пространстве.</p></div><div className="econ-intro-illustration" aria-hidden="true"><div className="econ-coin-big">₽</div><div className="econ-coin-small">₽</div><div className="econ-intro-orbit"/></div></div>
           <div className="econ-stats">
             <article className="econ-stat featured"><div className="econ-stat-label"><WalletCards size={18}/> Общий баланс</div><strong>{money(snapshot.totals.balanceMinor)}</strong><small>Все ваши счета</small></article>
             <article className="econ-stat"><div className="econ-stat-label"><ArrowDownLeft size={18}/> Доходы за месяц</div><strong className="econ-positive">{money(snapshot.totals.monthIncomeMinor)}</strong><small>Без переводов между счетами</small></article>
             <article className="econ-stat"><div className="econ-stat-label"><ArrowUpRight size={18}/> Расходы за месяц</div><strong>{money(snapshot.totals.monthExpenseMinor)}</strong><small>Без переводов между счетами</small></article>
           </div>
           <div className="econ-dashboard-grid">
-            <section className="econ-card"><div className="econ-card-header"><div><h2>Мои счета</h2><p>Остатки с учётом всех операций</p></div><button type="button" onClick={() => setSection('accounts')}>Все счета <ChevronRight size={16}/></button></div><div className="econ-account-grid">{snapshot.accounts.slice(0, 4).map(a => <button type="button" className={'econ-mini-account ' + (a.isPrimary ? 'main' : '')} key={a.id} onClick={() => setSection('accounts')}><WalletCards size={20}/><span>{a.name}{a.isPrimary && <small>Основной</small>}</span><strong>{money(a.balanceMinor)}</strong></button>)}</div><button className="econ-inline-add" type="button" onClick={() => openDialog('account')}><Plus size={16}/> Добавить счёт</button></section>
-            <section className="econ-card"><div className="econ-card-header"><div><h2>Долги и кредиты</h2><p>Текущие обязательства</p></div></div><div className="econ-side-metrics"><div><BookOpen size={19}/><span>Активные долги</span><strong>{snapshot.debts.filter(d => !d.isClosed).length}</strong></div><div><CreditCard size={19}/><span>Активные кредиты</span><strong>{snapshot.loans.filter(l => !l.isClosed).length}</strong></div></div><div className="econ-quick-links"><button type="button" onClick={() => openDialog('debt')}><Plus size={15}/> Долг</button><button type="button" onClick={() => openDialog('loan')}><Plus size={15}/> Кредит</button></div></section>
+            <section className="econ-card"><div className="econ-card-header"><div><h2>Мои счета</h2><p>Остатки с учётом всех операций</p></div><button type="button" onClick={() => setSection('accounts')}>Все счета <ChevronRight size={16}/></button></div><div className="econ-account-grid">{snapshot.accounts.slice(0, 4).map(a => <button type="button" className={'econ-mini-account ' + (a.isPrimary ? 'main' : '')} key={a.id} onClick={() => openDialog('account', a)}><WalletCards size={20}/><span>{a.name}{a.isPrimary && <small>Основной</small>}</span><strong>{money(a.balanceMinor)}</strong></button>)}</div><button className="econ-inline-add" type="button" onClick={() => openDialog('account')}><Plus size={16}/> Добавить счёт</button></section>
+            <section className="econ-card">
+              <div className="econ-card-header"><div><h2>Долги и кредиты</h2><p>Платежи и прогресс погашения</p></div>
+                <button type="button" onClick={() => setSection('debts')}>Все записи <ChevronRight size={16}/></button></div>
+              <div className="econ-obligation-preview-list">
+                {snapshot.debts.filter(x => !x.isClosed).slice(0, 2).map(d => obligationPreview(d, 'debt'))}
+                {snapshot.loans.filter(x => !x.isClosed).slice(0, 2).map(l => obligationPreview(l, 'loan'))}
+                {!snapshot.debts.some(d => !d.isClosed) && !snapshot.loans.some(l => !l.isClosed) &&
+                  <div className="econ-empty">Активных долгов и кредитов пока нет</div>}
+              </div>
+              <div className="econ-quick-links">
+                <button type="button" onClick={() => openDialog('debt')}><Plus size={15}/> Долг</button>
+                <button type="button" onClick={() => openDialog('loan')}><Plus size={15}/> Кредит</button>
+              </div>
+            </section>
           </div>
           <section className="econ-card econ-recent"><div className="econ-card-header"><div><h2>Последние операции</h2><p>{snapshot.totals.operationCount ? snapshot.totals.operationCount + ' записей всего' : 'Здесь появятся доходы и расходы'}</p></div><button type="button" onClick={() => setSection('operations')}>Все операции <ChevronRight size={16}/></button></div>{snapshot.recent.length ? snapshot.recent.map(operationRow) : <div className="econ-empty">Пока нет операций. Начните с первой записи.</div>}</section>
         </>}
         {section !== 'overview' && <div className="econ-section-content">
-          <div className="econ-section-heading"><p>{section === 'accounts' ? 'Управляйте счетами и начальными остатками.' : section === 'operations' ? 'История доходов, расходов, переводов и долговых движений.' : section === 'debts' ? 'Кому вы должны и кто должен вам.' : section === 'loans' ? 'Расчёт аннуитетных платежей и переплаты.' : 'Создавайте свои категории доходов и расходов.'}</p>{actions[section] && <button type="button" className="econ-action" onClick={actions[section]}><Plus size={17}/> {section === 'operations' ? 'Операция' : section === 'accounts' ? 'Счёт' : section === 'debts' ? 'Долг' : section === 'loans' ? 'Кредит' : 'Категория'}</button>}</div>
+          <div className="econ-section-heading">
+            <p>{section === 'accounts' ? 'Управляйте счетами и начальными остатками.' :
+              section === 'operations' ? 'История доходов, расходов, переводов и долговых движений.' :
+              section === 'debts' ? 'Кому вы должны, кто должен вам и платежи по кредитам.' :
+              'Создавайте свои категории доходов и расходов.'}</p>
+            <div className="econ-heading-actions">
+              {section === 'debts' && <>
+                <button type="button" className="econ-action" onClick={() => openDialog('debt')}><Plus size={16}/> Долг</button>
+                <button type="button" className="econ-action" onClick={() => openDialog('loan')}><Plus size={16}/> Кредит</button>
+              </>}
+              {actions[section] && <button type="button" className="econ-action" onClick={actions[section]}>
+                <Plus size={17}/> {section === 'operations' ? 'Операция' : section === 'accounts' ? 'Счёт' : 'Категория'}
+              </button>}
+            </div>
+          </div>
           {section === 'accounts' && <div className="econ-collection-grid">{snapshot.accounts.map(a => <article className="econ-card econ-account-detail" key={a.id}><div className="econ-card-top"><span className="econ-account-symbol"><Landmark size={22}/></span>{a.isPrimary && <span className="econ-tag">Основной</span>}</div><h3>{a.name}</h3><strong>{money(a.balanceMinor)}</strong><p>Начальный остаток: {money(a.openingBalanceMinor)}</p><div className="econ-row-actions"><button type="button" onClick={() => openDialog('account', a)}><Pencil size={15}/> Изменить</button>{!a.isPrimary && <><button type="button" onClick={() => void economicRequest('/accounts/' + a.id, 'PATCH', { isPrimary: true }).then(refresh).catch(e => setError(e.message))}><Check size={15}/> Основным</button><button type="button" onClick={() => void remove('accounts', a.id)}><Trash2 size={15}/></button></>}</div></article>)}</div>}
           {section === 'operations' && <section className="econ-card econ-operations-list"><div className="econ-filters"><select value={kindFilter} onChange={e => setKindFilter(e.target.value)} aria-label="Тип операции"><option value="">Все типы</option><option value="EXPENSE">Расходы</option><option value="INCOME">Доходы</option><option value="TRANSFER">Переводы</option><option value="DEBTS">Долговые операции</option></select><select value={accountFilter} onChange={e => setAccountFilter(e.target.value)} aria-label="Счёт"><option value="">Все счета</option>{snapshot.accounts.map(a => <option value={a.id} key={a.id}>{a.name}</option>)}</select><select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} aria-label="Категория"><option value="">Все категории</option>{[...new Set([...categories('EXPENSE'), ...categories('INCOME')])].map(c => <option value={c} key={c}>{c}</option>)}</select></div>{operations.length ? operations.map(operationRow) : <div className="econ-empty">{operationsBusy ? 'Загружаем…' : 'Нет операций по выбранным фильтрам'}</div>}{nextCursor && <button className="econ-load-more" disabled={operationsBusy} type="button" onClick={() => void loadOperations(true, nextCursor)}>{operationsBusy ? 'Загрузка…' : 'Показать ещё 50 операций'}</button>}</section>}
-          {section === 'debts' && <div className="econ-collection-grid">{snapshot.debts.map(d => <article className={'econ-card econ-obligation ' + (d.isClosed ? 'closed' : '')} key={d.id}><div className="econ-obligation-type">{d.direction === 'OWE' ? 'Я должен' : 'Мне должны'}{d.isClosed && <span className="econ-tag">Закрыт</span>}</div><h3>{d.counterparty}</h3><strong>{money(d.amountMinor)}</strong><p>{d.dueAt ? 'Вернуть до ' + dateLabel(d.dueAt) : 'Срок не указан'}</p>{d.note && <p>{d.note}</p>}<div className="econ-row-actions"><button type="button" onClick={() => openDialog('debt', d)}><Pencil size={15}/> Изменить</button><button type="button" onClick={() => void remove('debts', d.id)}><Trash2 size={15}/></button></div></article>)}{!snapshot.debts.length && <div className="econ-empty econ-card">Долгов пока нет</div>}</div>}
-          {section === 'loans' && <div className="econ-collection-grid">{snapshot.loans.map(l => { const figures = loanFigures(l); return <article className={'econ-card econ-obligation ' + (l.isClosed ? 'closed' : '')} key={l.id}><div className="econ-obligation-type">Аннуитетный расчёт {l.isClosed && <span className="econ-tag">Закрыт</span>}</div><h3>{l.name}</h3><strong>{money(figures.monthly)} <small>/ мес.</small></strong><div className="econ-loan-stats"><span>Сумма кредита <b>{money(l.principalMinor)}</b></span><span>Ставка <b>{String(l.annualRateBps / 100).replace('.', ',')}% годовых</b></span><span>Срок <b>{l.termMonths} мес.</b></span><span>Переплата (оценка) <b>{money(figures.overpay)}</b></span><span>Всего выплат (оценка) <b>{money(figures.total)}</b></span></div><p>Начало: {dateLabel(l.startDate)}. Без комиссий, страховок и досрочного погашения.</p><div className="econ-row-actions"><button type="button" onClick={() => openDialog('loan', l)}><Pencil size={15}/> Изменить</button><button type="button" onClick={() => void remove('loans', l.id)}><Trash2 size={15}/></button></div></article>; })}{!snapshot.loans.length && <div className="econ-empty econ-card">Кредитов пока нет</div>}</div>}
+          {section === 'debts' && <>
+            <div className="econ-subsection-heading"><BookOpen size={19}/><h2>Долги</h2><small>{snapshot.debts.length}</small></div>
+            <div className="econ-collection-grid">
+              {snapshot.debts.map(debtCard)}
+              {!snapshot.debts.length && <div className="econ-empty econ-card">Долгов пока нет</div>}
+            </div>
+            <div className="econ-subsection-heading"><CreditCard size={19}/><h2>Кредиты</h2><small>{snapshot.loans.length}</small></div>
+            <div className="econ-collection-grid">
+              {snapshot.loans.map(loanCard)}
+              {!snapshot.loans.length && <div className="econ-empty econ-card">Кредитов пока нет</div>}
+            </div>
+          </>}
           {section === 'categories' && <div className="econ-collection-grid">{(['EXPENSE', 'INCOME'] as const).map(kind => <section className="econ-card" key={kind}><div className="econ-card-header"><h2>{kind === 'EXPENSE' ? 'Категории расходов' : 'Категории доходов'}</h2></div><div className="econ-category-list">{categories(kind).map(name => { const custom = snapshot.categories.find(c => c.kind === kind && c.name === name); return <div key={name}><span>{name}</span>{custom ? <button type="button" title="Удалить пользовательскую категорию" onClick={() => void remove('categories', custom.id)}><Trash2 size={14}/></button> : <small>Базовая</small>}</div>; })}</div><button className="econ-inline-add" type="button" onClick={() => { openDialog('category'); setForm({ kind, name: '' }); }}><Plus size={15}/> Своя категория</button></section>)}</div>}
         </div>}
-        <footer className="econ-footer">Economic · Персональные данные видны только владельцу аккаунта. RUB · Учёт вручную.</footer>
+        <footer className="econ-footer">Экономыч AI · Персональные данные видны только владельцу аккаунта. RUB · Учёт вручную.</footer>
       </main>
     </div>
 
     <EconomicMascot active={assistantOpen} onClick={() => setAssistantOpen(v => !v)}/>
-    {assistantOpen && <section className="econ-assistant" role="dialog" aria-label="Economic, финансовый помощник"><div className="econ-assistant-head"><div><span className="econ-assistant-avatar">₽</span><div><strong>Economic AI</strong><small>Финансовый помощник</small></div></div><button type="button" onClick={() => setAssistantOpen(false)} aria-label="Закрыть"><X size={18}/></button></div><div className="econ-assistant-body">
+    {assistantOpen && <section className="econ-assistant" role="dialog" aria-label="Экономыч AI, финансовый помощник"><div className="econ-assistant-head"><div><span className="econ-assistant-avatar">₽</span><div><strong>Экономыч AI</strong><small>Финансовый помощник</small></div></div><button type="button" onClick={() => setAssistantOpen(false)} aria-label="Закрыть"><X size={18}/></button></div><div className="econ-assistant-body">
       <div className="econ-insight-table"><table><caption>Брюс Хуй</caption><thead><tr><th>Счёт</th><th>Остаток</th></tr></thead><tbody>{snapshot.accounts.map(a => <tr key={a.id}><td>{a.name}</td><td>{money(a.balanceMinor)}</td></tr>)}</tbody></table></div>
       {snapshot.assistantMessages.length === 0 && <div className="econ-assistant-welcome"><MessageCircle size={21}/><strong>Чем помочь с финансами?</strong><p>Спросите о доходах, расходах, кредитах или способах вести бюджет. ИИ отвечает на основе ваших данных, но не меняет их.</p></div>}
       <div className="econ-chat-messages">{snapshot.assistantMessages.map(m => <div key={m.id} className={'econ-chat-bubble ' + (m.role === 'user' ? 'mine' : 'assistant')}>{m.content}</div>)}{assistantBusy && <div className="econ-chat-bubble assistant"><Loader2 className="econ-spin" size={17}/> Анализирую…</div>}</div>
-    </div><form className="econ-assistant-composer" onSubmit={askAssistant}><input aria-label="Вопрос Economic" placeholder="Спросить об операциях и бюджете" value={assistantQuestion} onChange={e => setAssistantQuestion(e.target.value)} maxLength={2000} disabled={assistantBusy}/><button type="submit" disabled={assistantBusy || !assistantQuestion.trim()} aria-label="Отправить вопрос"><Send size={18}/></button></form><div className="econ-assistant-note">1 ИИ-кредит за запрос · Economic AI не изменяет операции</div></section>}
+    </div><form className="econ-assistant-composer" onSubmit={askAssistant}><input aria-label="Вопрос Economic" placeholder="Спросить об операциях и бюджете" value={assistantQuestion} onChange={e => setAssistantQuestion(e.target.value)} maxLength={2000} disabled={assistantBusy}/><button type="submit" disabled={assistantBusy || !assistantQuestion.trim()} aria-label="Отправить вопрос"><Send size={18}/></button></form><div className="econ-assistant-note">1 ИИ-кредит за запрос · Экономыч AI не изменяет операции</div></section>}
 
     {dialog && <div className="econ-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !saving) setDialog(null); }}><section className="econ-modal" role="dialog" aria-modal="true" aria-label="Редактирование Economic"><header><div><span className="econ-eyebrow">{dialog.id ? 'РЕДАКТИРОВАНИЕ' : 'НОВАЯ ЗАПИСЬ'}</span><h2>{dialog.kind === 'operation' ? 'Операция' : dialog.kind === 'account' ? 'Счёт' : dialog.kind === 'debt' ? 'Долг' : dialog.kind === 'loan' ? 'Кредит' : 'Категория'}</h2></div><button type="button" onClick={() => setDialog(null)} aria-label="Закрыть"><X size={19}/></button></header>
       <form className="econ-form" onSubmit={submitDialog}>
