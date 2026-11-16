@@ -1,7 +1,7 @@
 export type EconomicAssistantStage =
   | 'reading_finances' | 'reading_history' | 'counting_tokens'
   | 'forming_answer' | 'searching_history' | 'saving_conversation'
-  | 'preparing_finances' | 'applying_finances';
+  | 'preparing_finances' | 'applying_finances' | 'searching_finances';
 export type EconomicAssistantAttachment = {
   name: string; mimeType: string; size: number; contentBase64: string;
 };
