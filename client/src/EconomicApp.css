@@ -385,7 +385,7 @@
   padding:8px 0 0;
 }
 .econ-miniapp-dialog-layer{
-  bottom:calc(3.25rem + env(safe-area-inset-bottom,0px)) !important;
+  bottom:calc(3.25rem + var(--econ-mobile-safe-bottom,env(safe-area-inset-bottom,0px))) !important;
   top:var(--econ-mobile-safe-top, 0px) !important;
 }
 .econ-dialog-layer .econ-modal{
