@@ -51,6 +51,8 @@ test('finance proposals are durable and auto-apply opt-in is false by default',(
   assert.match(migration,/"economicAiAutoApply" BOOLEAN NOT NULL DEFAULT false/);
   assert.match(migration,/FOREIGN KEY \("userId"\)/);
   assert.match(assistant,/prepareEconomicProposals\(/);
+  assert.match(assistant,/seenVersions\.get\(key\)/);
+  assert.match(assistant,/if\(stale\)throw new EconomicActionError/);
   assert.match(assistant,/saveEconomicProposals\(/);
   assert.match(assistant,/applyEconomicProposal\(/);
   assert.match(router,/economicRouter\.put\('\/assistant\/preferences'/);
