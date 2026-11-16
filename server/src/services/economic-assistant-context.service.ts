@@ -64,7 +64,7 @@ export function prepareEconomicAttachments(value: unknown): {
       try { decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
       catch { throw new Error('Текстовый файл должен быть в UTF-8.'); }
       if (decoded.length > 36_000) throw new Error('Слишком большой текстовый файл: максимум 36 000 символов.');
-      content.push({ type: 'input_text', text: 'Вложение «' + name + '»:\\n' + decoded });
+      content.push({ type: 'input_text', text: 'Вложение «' + name + '»:\n' + decoded });
     } else {
       const expected = extension === 'pdf' ? '%PDF-' : 'PK';
       if (bytes.toString('ascii',0,expected.length) !== expected) throw new Error('Неверный формат документа.');
