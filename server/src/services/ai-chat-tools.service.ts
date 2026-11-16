@@ -508,6 +508,73 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         }
         console.info('[AI chat tool] call', { requestId, userId: input.userId, providerCallIndex: providerCallCount, toolCallIndex: round, operation: name });
         if (!value || typeof value !== 'object' || Array.isArray(value)) return { ok: false, code: 'INVALID_ARGUMENTS', message: 'Аргументы tool должны быть объектом.' };
+        if (name === 'read_economic_overview') {
+          const overview = await readPlannerEconomicOverview(input.userId);
+          readFinancialContext = true;
+          for(const a of overview.accounts) observedFinancialVersions.set('account:'+a.id,a.updatedAt);
+          for(const o of overview.recentOperations) observedFinancialVersions.set('operation:'+o.id,o.updatedAt);
+          for(const d of overview.debts) observedFinancialVersions.set('debt:'+d.id,d.updatedAt);
+          for(const l of overview.loans) observedFinancialVersions.set('loan:'+l.id,l.updatedAt);
+          for(const c of overview.categories) observedFinancialVersions.set('category:'+c.id,
+            JSON.stringify({kind:c.kind,name:c.name,createdAt:c.createdAt}));
+          return {ok:true,overview};
+        }
+        if (name === 'find_economic_records') {
+          if(!readFinancialContext)return {ok:false,code:'READ_FINANCES_FIRST',message:'Сначала вызови read_economic_overview.'};
+          try {
+            const records=await findEconomicRecords(input.userId,value);
+            for(const row of records) {
+              if(row.updatedAt)observedFinancialVersions.set(row.entity+':'+row.id,row.updatedAt);
+              else if(row.entity==='category'&&row.categoryKind&&row.categoryName&&row.createdAt)
+                observedFinancialVersions.set('category:'+row.id,
+                  JSON.stringify({kind:row.categoryKind,name:row.categoryName,createdAt:row.createdAt}));
+            }
+            return {ok:true,records};
+          }catch(cause){
+            if(cause instanceof EconomicActionError)return {ok:false,code:'INVALID_LOOKUP',message:cause.message};
+            throw cause;
+          }
+        }
+        if (name === 'propose_economic_changes') {
+          if(!readFinancialContext)return {ok:false,code:'READ_FINANCES_FIRST',
+            message:'Сначала вызови read_economic_overview и используй реальные ID счетов.'};
+          if(preparedFinancialActions.length)return {ok:false,code:'FINANCE_ALREADY_PREPARED',
+            message:'За запрос можно подготовить один пакет финансовых изменений.'};
+          try {
+            const actions=parseEconomicToolActions((value as {actions_json?:unknown}).actions_json);
+            for(const action of actions) {
+              if(action.action==='update'&&!observedFinancialVersions.has(action.entity+':'+action.targetId))
+                throw new EconomicActionError('Сначала найди запись через read_economic_overview или find_economic_records.');
+              if(action.entity==='operation'){
+                for(const field of ['sourceAccountId','targetAccountId'] as const){
+                  const id=action.payload[field];
+                  if(typeof id==='string'&&!observedFinancialVersions.has('account:'+id))
+                    throw new EconomicActionError('Сначала найди счёт операции; нельзя придумывать ID.');
+                }
+              }
+              if(action.entity==='debt'&&typeof action.payload.accountId==='string'&&
+                 !observedFinancialVersions.has('account:'+action.payload.accountId))
+                throw new EconomicActionError('Сначала найди счёт для долга.');
+            }
+            const prepared=await prepareEconomicProposals(input.userId,actions);
+            for(const row of prepared){
+              if(row.action.action!=='update')continue;
+              const version=observedFinancialVersions.get(row.action.entity+':'+row.action.targetId);
+              const before=row.before;
+              const current=row.action.entity==='category'
+                ? JSON.stringify({kind:before?.kind,name:before?.name,createdAt:before?.createdAt})
+                : before?.updatedAt;
+              if(!version||version!==current)
+                throw new EconomicActionError('Финансовая запись изменена. Получите свежие данные перед редактированием.');
+            }
+            preparedFinancialActions=prepared;
+            return {ok:true,status:'prepared',count:prepared.length,confirmationRequired:true,
+              message:'Предложение ожидает подтверждения в Экономыч → Обзор. Не называй запись внесённой до подтверждения.'};
+          }catch(cause){
+            if(cause instanceof EconomicActionError)return {ok:false,code:'FINANCE_VALIDATION',message:cause.message};
+            throw cause;
+          }
+        }
         if (name === 'prepare_assistant_reply') {
           const context = input.assistantReplyContext;
           if (!context) return { ok: false, code: 'NOT_AN_ASSISTANT_CHAT' };
