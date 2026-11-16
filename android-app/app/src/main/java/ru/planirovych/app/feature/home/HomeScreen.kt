@@ -63,7 +63,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     var creationType by remember { mutableStateOf<TaskType?>(null) }
     var createHabit by remember { mutableStateOf(false) }
     var createNote by remember { mutableStateOf(false) }
-    val pagerState = rememberPagerState(initialPage=0,pageCount={4})
+    val pagerState = rememberPagerState(initialPage=0,pageCount={5})
     val pagerScope = rememberCoroutineScope()
     val sharedChat by vm.generalAi.collectAsStateWithLifecycle()
     var requestPersonalChat by remember { mutableStateOf(false) }
@@ -210,15 +210,17 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                     Triple("Список",Icons.Default.FormatListBulleted,"Задачи списком"),
                     Triple("Таймлайн",Icons.Default.CalendarViewWeek,"Таймлайн"),
                     Triple("Чат с ИИ",Icons.Default.SmartToy,"Общий чат с ИИ"),
-                    Triple("Заметки",Icons.Default.StickyNote2,"Заметки")
+                    Triple("Заметки",Icons.Default.StickyNote2,"Заметки"),
+                    Triple("Экономыч",Icons.Default.AccountBalanceWallet,"Экономыч AI, финансы")
                 )
                 NavigationBar(
-                    modifier=Modifier.border(
+                    modifier=Modifier.height(64.dp).border(
                         width=if(dark)0.dp else 1.dp,
                         color=if(dark)Color.Transparent else Color(0xFFDDE2F0)),
                     containerColor=if(dark)Color(0xFF121827) else Color.White,
                     contentColor=if(dark)Color(0xFFE2E8F0) else Color(0xFF172238),
-                    tonalElevation=0.dp
+                    tonalElevation=0.dp,
+                    windowInsets=WindowInsets(0,0,0,0)
                 ) {
                     tabs.forEachIndexed { index,tab ->
                         NavigationBarItem(
@@ -226,14 +228,13 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                             onClick={pagerScope.launch { pagerState.animateScrollToPage(index) }},
                             icon={Icon(tab.second,contentDescription=tab.third,
                                 modifier=Modifier.size(21.dp))},
-                            label={Text(tab.first,maxLines=1,
-                                style=MaterialTheme.typography.labelSmall)},
-                            alwaysShowLabel=true,
+                            label=null,
+                            alwaysShowLabel=false,
                             colors=NavigationBarItemDefaults.colors(
-                                selectedIconColor=if(dark)Color(0xFFD8B4FE) else Color(0xFF6828C6),
+                                selectedIconColor=if(index==4)Color(0xFFF6B95F) else if(dark)Color(0xFFD8B4FE) else Color(0xFF6828C6),
                                 selectedTextColor=if(dark)Color(0xFFF1E8FF) else Color(0xFF5420A7),
-                                indicatorColor=if(dark)Color(0xFF34264E) else Color(0xFFECE0FF),
-                                unselectedIconColor=if(dark)Color(0xFF9CA3AF) else Color(0xFF55647E),
+                                indicatorColor=if(index==4) (if(dark)Color(0xFF56371F) else Color(0xFFFFE4BF)) else if(dark)Color(0xFF34264E) else Color(0xFFECE0FF),
+                                unselectedIconColor=if(index==4) (if(dark)Color(0xFFD6A05B) else Color(0xFFB16D22)) else if(dark)Color(0xFF9CA3AF) else Color(0xFF55647E),
                                 unselectedTextColor=if(dark)Color(0xFF9CA3AF) else Color(0xFF55647E)
                             ),
                         )
