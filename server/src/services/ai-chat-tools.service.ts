@@ -27,7 +27,7 @@ import { FINANCE_TOOL, FINANCE_LOOKUP_TOOL } from './economic-assistant.service.
 import { readPlannerEconomicOverview } from './planner-economic-overview.service.js';
 import { findEconomicRecords } from './economic-ai-record-search.service.js';
 import { EconomicActionError, parseEconomicToolActions } from './economic-ai-action-validation.service.js';
-import { applyEconomicProposal, prepareEconomicProposals, saveEconomicProposals, type PreparedEconomicProposal } from './economic-ai-proposals.service.js';
+import { applyEconomicProposal, prepareEconomicProposals, saveEconomicProposals, getEconomicProposalView, type PreparedEconomicProposal } from './economic-ai-proposals.service.js';
 
 /**
  * A dedicated reply-preparation tool for owner-authenticated managed assistant
@@ -896,6 +896,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
     const webSearchCallsBilled = webSearchUsed ? MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST : 0;
     const webSearchCreditsMilliBilled = webSearchCallsBilled * WEB_SEARCH_CALL_CREDITS_MILLI;
     let financialResult = '';
+    let economicProposals: Array<Awaited<ReturnType<typeof getEconomicProposalView>>> = [];
     if(preparedFinancialActions.length){
       const saved=await prisma.$transaction(async tx=>{
         const message=await tx.economicAssistantMessage.create({data:{
@@ -924,11 +925,16 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           }
         }
       }
+      // The same Economic proposal views used by the dedicated financial chat
+      // must travel with this exact general-chat reply, not as a link to Overview.
+      // Read again after auto-apply so the inline chips have authoritative status.
+      economicProposals=await Promise.all(saved.map(item=>
+        getEconomicProposalView(input.userId,item.id)));
       financialResult=autoApply&&failed===0
-        ? 'Финансовые изменения внесены: '+applied+'. Они отражены в Экономыче.'
+        ? 'Финансовые изменения внесены: '+applied+'. Карточки доступны прямо под ответом.'
         : 'Подготовлено финансовых изменений: '+saved.length+
           (autoApply ? ' (применено '+applied+', осталось '+failed+').' : '.')+
-          ' Откройте вкладку «Экономыч» → «Обзор», чтобы проверить и подтвердить предложения.';
+          ' Карточки для проверки и подтверждения находятся прямо под этим ответом.';
     }
     const taskProposal = preparedTaskActions.length
       ? await prepareTaskProposal({
@@ -945,7 +951,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         : taskProposal.status === 'PENDING'
           ? 'Подготовил изменения. Просмотрите карточку и нажмите «Принять».'
           : 'Изменения не применены: ' + (taskProposal.error || 'Не удалось выполнить операцию.') + ' Задача не создана, повторно подтверждать нечего.')
-      : loop.answer) + (financialResult ? '\n\n'+financialResult : ''), telegramSendDraft, telegramReadDraft, mailSendDraft, mailReadUsed, taskProposal, model: input.model, taskDataChanged: taskProposal?.status === 'APPLIED', actionReports, undoOperations, generatedDocument, imageCreditsSpentMilli: imageCreditsSpentMilli + fileEditCreditsSpentMilli, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
+      : loop.answer) + (financialResult ? '\n\n'+financialResult : ''), economicProposals, telegramSendDraft, telegramReadDraft, mailSendDraft, mailReadUsed, taskProposal, model: input.model, taskDataChanged: taskProposal?.status === 'APPLIED', actionReports, undoOperations, generatedDocument, imageCreditsSpentMilli: imageCreditsSpentMilli + fileEditCreditsSpentMilli, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
   } catch (error) {
     await Promise.all(dynamicCalls.map((call) => refundDynamicResponsesCall(call)));
     if (webReservation) await refundAiCreditReservation(webReservation);
