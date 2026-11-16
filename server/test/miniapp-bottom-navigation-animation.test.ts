@@ -12,7 +12,7 @@ test('Mini App and mobile website share one fluid active bottom tab indicator', 
   // The two mobile runtimes must use the same component and animation.
   assert.match(entry, /<MiniApp runtime="telegram"/);
   assert.match(entry, /<MiniApp runtime="web"/);
-  assert.match(mini, /const activeBottomNavigationTab = isEconomicOpen \\? 'economic' : isStandaloneNotesOpen \? 'notes' : isAiChatOpen \? 'ai' : displayMode === 'timeline' \? 'timeline' : 'list'/);
+  assert.match(mini, /const activeBottomNavigationTab = isEconomicOpen \? 'economic' : isStandaloneNotesOpen \? 'notes' : isAiChatOpen \? 'ai' : displayMode === 'timeline' \? 'timeline' : 'list'/);
   assert.match(mini, /aria-label="Разделы Планировыча" data-active-tab=\{activeBottomNavigationTab\}/);
   assert.match(mini, /<span className="miniapp-bottom-navigation-indicator" aria-hidden="true">\s*<span className="miniapp-bottom-navigation-indicator-pill" \/>\s*<\/span>/);
   assert.equal((mini.match(/<MiniNavigationControl/g) ?? []).length, 5);
@@ -25,7 +25,7 @@ test('Mini App and mobile website share one fluid active bottom tab indicator', 
   const indicator = css.match(/\.miniapp-shell \.miniapp-bottom-navigation-indicator \{([^}]+)\}/)?.[1] ?? '';
   assert.match(indicator, /position: absolute;/);
   assert.match(indicator, /pointer-events: none;/);
-  assert.match(indicator, /grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
+  assert.match(indicator, /grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);/);
   const glide = css.match(/\.miniapp-shell \.miniapp-bottom-navigation-indicator-pill \{([^}]+)\}/)?.[1] ?? '';
   assert.match(glide, /transition: transform \.46s cubic-bezier/);
   for (const state of ['timeline', 'ai', 'notes', 'economic']) {
