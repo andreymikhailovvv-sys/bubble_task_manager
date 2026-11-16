@@ -16882,5 +16882,5 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
 
 /* The Economic tab inherits the active Mini App theme.  The portal for its
    editor sits outside this scroller so it cannot be clipped by the nav bar. */
-.miniapp-light .miniapp-economic-screen{background:#fff9ee}
-.miniapp-light .miniapp-economic-loading{background:#fff9ee;color:#975714}
+.miniapp-light .miniapp-economic-screen{background:#f7f8fa}
+.miniapp-light .miniapp-economic-loading{background:#f7f8fa;color:#975714}
