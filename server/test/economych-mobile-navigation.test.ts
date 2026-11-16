@@ -25,7 +25,7 @@ test('Mini App and Android have 5 compact icon-only tabs with a warm Economic la
   assert.match(home,/Triple\("Экономыч",Icons\.Default\.AccountBalanceWallet/);
   assert.match(home,/label=null,/);
   assert.match(home,/alwaysShowLabel=false/);
-  assert.match(home,/Modifier\.height\(64\.dp\)/);
+  assert.match(home,/Modifier\.navigationBarsPadding\(\)\.height\(64\.dp\)/);
   assert.match(home,/selectedIconColor=if\(index==4\)/);
   assert.match(workspace,/4 -> NativeEconomicPage\(userId=state\.user\?\.id,dark=dark\)/);
   assert.match(androidVersion,/versionCode = 12/);
