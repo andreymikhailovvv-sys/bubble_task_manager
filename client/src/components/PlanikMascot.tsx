@@ -20,6 +20,7 @@ type Props = {
   progress?: string | null;
   celebrationKey?: number;
   size?: 'launcher' | 'composer' | 'sidekick';
+  variant?: 'planner' | 'economic';
   className?: string;
 };
 
@@ -35,6 +36,7 @@ export const PlanikMascot = memo(function PlanikMascot({
   progress,
   celebrationKey = 0,
   size = 'launcher',
+  variant = 'planner',
   className = ''
 }: Props) {
   const gradientSuffix = useId().replace(/:/g, '');
@@ -79,7 +81,7 @@ export const PlanikMascot = memo(function PlanikMascot({
   const isPainting = progress === 'generating_image' || progress === 'editing_image';
   const isSearching = Boolean(progress && (/^(searching_|reading_|listing_)/.test(progress) ||
     ['checking_sectors', 'analyzing_subtasks', 'analyzing_web_results', 'analyzing_retrieved_context',
-      'editing_document', 'creating_document', 'generating_document', 'working_with_documents'].includes(progress)));
+      'editing_document', 'creating_document', 'generating_document', 'working_with_documents', 'refreshing_finances'].includes(progress)));
   // Typing belongs to Planik's answer preparation, never the human draft.
   const mode: PlanikMode = clearingCount !== null ? 'clearing'
     : celebrating ? 'celebrating'
@@ -135,11 +137,11 @@ export const PlanikMascot = memo(function PlanikMascot({
 
   return (
     <span
-      className={`planik-mascot planik-mascot--${size} ${className}`}
+      className={`planik-mascot planik-mascot--${size} ${variant === 'economic' ? 'planik-mascot--economic' : ''} ${className}`}
       data-mode={mode}
       data-has-notifs={count > 0 ? 'true' : 'false'}
       role="img"
-      aria-label="Планик, анимированный помощник ИИ"
+      aria-label={variant === 'economic' ? 'Экономыч, анимированный финансовый помощник' : 'Планик, анимированный помощник ИИ'}
     >
       <span className="planik-ground-shadow" aria-hidden="true" />
       <svg

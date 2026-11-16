@@ -393,3 +393,39 @@ body:has(.planik-notes-companion, .planik-task-editor-companion)
 .planik-mascot, .planik-svg, .planik-composer-float,
 .planik-launcher-button, .miniapp-planik-live-launcher { pointer-events: none; }
 .planik-body-surface { pointer-events: visiblePainted; cursor: pointer; }
+
+
+/* Economic uses the exact same rig, timing, blinking and gestures as Planik.
+   Recolor only the surfaces; the planner variant remains entirely unchanged. */
+.planik-mascot--economic .planik-body-stop-start{stop-color:#ffe1a4}
+.planik-mascot--economic .planik-body-stop-mid{stop-color:#da9a4b}
+.planik-mascot--economic .planik-body-stop-end{stop-color:#7a431c}
+.planik-mascot--economic .planik-rim-stop-start{stop-color:#fff0c6}
+.planik-mascot--economic .planik-rim-stop-mid{stop-color:#ffd27d}
+.planik-mascot--economic .planik-rim-stop-end{stop-color:#bb742c}
+.planik-mascot--economic .planik-screen-stop-start{stop-color:#382b27}
+.planik-mascot--economic .planik-screen-stop-end{stop-color:#181923}
+.planik-mascot--economic .planik-antenna{fill:#ffcd72}
+.planik-mascot--economic .planik-eye{fill:#ffefce}
+.planik-mascot--economic .planik-faceplate{stroke:#f9c77c;stroke-opacity:.3}
+.planik-mascot--economic .planik-svg{filter:drop-shadow(0 8px 13px rgba(156,88,27,.24))}
+.planik-mascot--economic .planik-ground-shadow{background:radial-gradient(ellipse,rgba(122,74,32,.25),transparent 78%)}
+.planik-mascot--economic .planik-svg [stroke="#7777b8"],
+.planik-mascot--economic .planik-svg [stroke="#7778b8"],
+.planik-mascot--economic .planik-svg [stroke="#7274b4"],
+.planik-mascot--economic .planik-svg [stroke="#7272b3"],
+.planik-mascot--economic .planik-svg [stroke="#7375b2"],
+.planik-mascot--economic .planik-svg [stroke="#7576b9"]{stroke:#b67a44}
+.planik-mascot--economic .planik-svg [fill="#aaa5ee"],
+.planik-mascot--economic .planik-svg [fill="#aaa6f0"],
+.planik-mascot--economic .planik-svg [fill="#a8a3ed"],
+.planik-mascot--economic .planik-svg [fill="#a9a5ed"],
+.planik-mascot--economic .planik-svg [fill="#b2aaff"]{fill:#f3bc74}
+.planik-mascot--economic .planik-svg [stroke="#a09de1"],
+.planik-mascot--economic .planik-svg [stroke="#9e94ef"],
+.planik-mascot--economic .planik-svg [stroke="#cac3ff"]{stroke:#ffd28c}
+.planik-mascot--economic .planik-svg [fill="#484d84"]{fill:#8c5f38}
+.planik-mascot--economic .planik-svg [stroke="#a39cf0"]{stroke:#efd09a}
+.planik-mascot--economic .planik-svg [fill="#242e54"]{fill:#483129}
+.planik-mascot--economic .planik-svg [fill="#303d6b"]{fill:#75503a}
+.planik-mascot--economic .planik-svg [fill="#59649d"]{fill:#b7854f}

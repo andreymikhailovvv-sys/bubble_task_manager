@@ -1,20 +1,109 @@
-.module-rail{position:fixed;z-index:90;left:0;top:50%;transform:translateY(-50%);display:flex;align-items:center;max-width:220px;color:#d3dbe6;font-family:Inter,system-ui,-apple-system,'Segoe UI',sans-serif}
-.module-rail-handle{flex:none;width:19px;height:73px;display:grid;place-items:center;border:1px solid rgba(174,190,210,.35);border-left:0;border-radius:0 13px 13px 0;background:rgba(30,39,54,.88);color:#ffcd85;cursor:pointer;box-shadow:3px 5px 18px rgba(0,0,0,.18);backdrop-filter:blur(17px)}
-.module-rail-panel{display:flex;flex-direction:column;box-sizing:border-box;width:0;max-width:0;opacity:0;overflow:hidden;pointer-events:none;padding:0;gap:6px;border:0 solid rgba(148,163,184,.24);border-radius:0 16px 16px 0;background:rgba(20,27,42,.96);box-shadow:none;backdrop-filter:blur(22px);transition:max-width .22s ease,width .22s ease,opacity .17s ease,padding .22s ease}
-.module-rail:hover .module-rail-panel,.module-rail:focus-within .module-rail-panel{width:181px;max-width:181px;opacity:1;pointer-events:auto;padding:9px;border-width:1px;border-left:0;box-shadow:0 14px 40px rgba(0,0,0,.22)}
-.module-rail:hover .module-rail-handle svg,.module-rail:focus-within .module-rail-handle svg{transform:rotate(180deg)}
-.module-rail-handle svg{transition:transform .2s}
-.module-rail-link{display:flex;align-items:center;gap:10px;box-sizing:border-box;min-height:43px;width:162px;padding:0 9px;border:1px solid transparent;border-radius:11px;color:#aebbd0;font-size:12px;font-weight:700;white-space:nowrap;text-decoration:none;transition:background .2s,color .2s}
+/* One connected module picker: the handle and the tray share a single silhouette. */
+.module-rail{
+  --module-rail-bg:rgba(20,27,42,.96);
+  --module-rail-border:rgba(148,163,184,.29);
+  --module-rail-ink:#d3dbe6;
+  --module-rail-hover:rgba(255,255,255,.09);
+  --module-rail-active:rgba(49,105,142,.35);
+  position:fixed;z-index:90;left:0;top:50%;transform:translateY(-50%);
+  display:flex;align-items:center;max-width:240px;color:var(--module-rail-ink);
+  font-family:Inter,system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+.module-rail-handle{
+  flex:none;box-sizing:border-box;width:32px;height:72px;padding:0;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--module-rail-border);border-left:0;
+  border-radius:0 15px 15px 0;
+  background:var(--module-rail-bg);color:#f6bc69;cursor:pointer;
+  box-shadow:3px 5px 18px rgba(0,0,0,.18);backdrop-filter:blur(20px);
+  transition:border-radius .2s ease,background .2s ease;
+}
+.module-rail-handle svg{display:block;flex:none;transition:transform .22s ease}
+.module-rail-panel{
+  display:flex;flex-direction:column;box-sizing:border-box;
+  width:0;max-width:0;opacity:0;overflow:hidden;pointer-events:none;
+  padding:0;gap:6px;border:0 solid var(--module-rail-border);
+  border-radius:0 16px 16px 0;background:var(--module-rail-bg);
+  box-shadow:none;backdrop-filter:blur(20px);
+  transition:max-width .22s ease,width .22s ease,opacity .17s ease,padding .22s ease;
+}
+.module-rail:hover .module-rail-panel,
+.module-rail:focus-within .module-rail-panel{
+  width:187px;max-width:187px;opacity:1;pointer-events:auto;
+  padding:9px;border-width:1px;border-left:0;
+  box-shadow:8px 14px 40px rgba(0,0,0,.21);
+}
+.module-rail:hover .module-rail-handle,
+.module-rail:focus-within .module-rail-handle{
+  border-right:0;border-radius:0;background:var(--module-rail-bg);
+  box-shadow:none;
+}
+.module-rail:hover .module-rail-handle svg,
+.module-rail:focus-within .module-rail-handle svg{transform:rotate(180deg)}
+.module-rail-link{
+  display:flex;align-items:center;gap:10px;box-sizing:border-box;
+  min-height:43px;width:168px;padding:0 10px;border:1px solid transparent;
+  border-radius:11px;color:var(--module-rail-ink);
+  font-size:12px;font-weight:700;white-space:nowrap;text-decoration:none;
+  transition:background .2s,color .2s,border-color .2s;
+}
 .module-rail-link svg{flex:none}
-.module-rail-link:hover{color:#fff;background:rgba(255,255,255,.10)}
-.module-rail-link.is-active{color:#fff;background:rgba(49,105,142,.35);border-color:rgba(157,205,241,.28)}
-.module-rail-economic.is-active{color:#ffe6ba;background:rgba(244,142,35,.20);border-color:rgba(255,168,60,.40)}
-.module-rail-separator{width:calc(100% - 20px);height:1px;margin:0 auto;background:rgba(148,163,184,.23)}
+.module-rail-link:hover{color:inherit;background:var(--module-rail-hover)}
+.module-rail-link.is-active{
+  color:#fff;background:var(--module-rail-active);
+  border-color:rgba(157,205,241,.29);
+}
+/* Economic is gold even when the Planner is selected. */
+.module-rail-economic{color:#ffd18b;background:rgba(235,153,48,.09)}
+.module-rail-economic svg{color:#f5b45a}
+.module-rail-economic:hover{color:#ffdfaa;background:rgba(244,158,49,.17)}
+.module-rail-economic.is-active{
+  color:#ffe5b9;background:rgba(244,142,35,.23);
+  border-color:rgba(255,168,60,.42);
+}
+.module-rail-separator{
+  width:calc(100% - 20px);height:1px;margin:0 auto;
+  background:var(--module-rail-border);
+}
+/* Planner and Economic each supply their actual saved theme on their root. */
+.app-shell[data-theme="light"] .module-rail,
+.econ-light .module-rail{
+  --module-rail-bg:rgba(255,251,243,.97);
+  --module-rail-border:rgba(137,108,73,.3);
+  --module-rail-ink:#554d4a;
+  --module-rail-hover:rgba(147,108,66,.1);
+  --module-rail-active:rgba(93,136,172,.12);
+}
+.app-shell[data-theme="light"] .module-rail-handle,
+.econ-light .module-rail-handle{color:#a76720}
+.app-shell[data-theme="light"] .module-rail-link.is-active,
+.econ-light .module-rail-link.is-active{
+  color:#36516a;border-color:rgba(94,141,174,.25);
+}
+.app-shell[data-theme="light"] .module-rail-economic,
+.econ-light .module-rail-economic{
+  color:#986019;background:rgba(232,155,57,.1);
+}
+.app-shell[data-theme="light"] .module-rail-economic svg,
+.econ-light .module-rail-economic svg{color:#ae6b15}
+.app-shell[data-theme="light"] .module-rail-economic.is-active,
+.econ-light .module-rail-economic.is-active{
+  color:#874809;background:rgba(241,154,45,.2);
+  border-color:rgba(194,119,22,.39);
+}
 @media(max-width:720px){
- .module-rail{top:auto;bottom:12px;left:50%;transform:translateX(-50%);max-width:none;z-index:95}
- .module-rail-handle{display:none}
- .module-rail-panel{width:auto;max-width:none;opacity:1;overflow:visible;pointer-events:auto;flex-direction:row;align-items:center;padding:5px 8px;border:1px solid rgba(148,163,184,.24);border-radius:15px;box-shadow:0 12px 40px rgba(0,0,0,.32)}
- .module-rail-link{width:auto;min-height:40px;padding:0 11px;font-size:11px}
- .module-rail-separator{width:1px;height:23px;margin:0 3px}
+  .module-rail{
+    top:auto;bottom:max(12px,env(safe-area-inset-bottom));
+    left:50%;transform:translateX(-50%);max-width:none;z-index:95;
+  }
+  .module-rail-handle{display:none}
+  .module-rail-panel{
+    width:auto;max-width:none;opacity:1;overflow:visible;pointer-events:auto;
+    flex-direction:row;align-items:center;padding:5px 8px;
+    border:1px solid var(--module-rail-border);border-radius:15px;
+    box-shadow:0 12px 40px rgba(0,0,0,.24);
+  }
+  .module-rail-link{width:auto;min-height:40px;padding:0 11px;font-size:11px}
+  .module-rail-separator{width:1px;height:23px;margin:0 3px}
 }
 @media(prefers-reduced-motion:reduce){.module-rail *{transition:none!important}}
