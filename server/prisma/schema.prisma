@@ -1641,11 +1641,15 @@ model EconomicLoan {
 }
 
 model EconomicAssistantMessage {
-  id        String @id @default(cuid())
-  userId    String
-  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      String
-  content   String @db.Text
-  createdAt DateTime @default(now())
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role              String
+  content           String   @db.Text
+  attachmentNames   String[] @default([])
+  creditsSpentMilli Int      @default(0)
+  inputTokens       Int      @default(0)
+  outputTokens      Int      @default(0)
+  createdAt         DateTime @default(now())
   @@index([userId, createdAt])
 }
