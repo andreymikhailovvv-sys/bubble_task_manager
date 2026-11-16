@@ -366,7 +366,7 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                             put("creditsSpentMilli",it)
                         }
                         listOf("webSearchUsed","webSources","webCitations",
-                            "generatedDocument","taskProposal","telegramSendDraft",
+                            "generatedDocument","taskProposal","economicProposals","telegramSendDraft",
                             "telegramReadDraft","mailSendDraft","telegramSuggestedReply").forEach{key->
                             response[key]?.let{put(key,it)}
                         }
