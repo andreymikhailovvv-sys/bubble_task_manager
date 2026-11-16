@@ -27,3 +27,74 @@
 .econ-light .econ-tag{color:#a26119}.econ-light .econ-loan-stats b{color:#43362e}
 .econ-light .econ-assistant,.econ-light .econ-modal{--ec-text:#f4efe8;--ec-muted:#aaa5a1;--ec-border:rgba(227,216,198,.11);color:#f4efe8}
 .econ-light .econ-assistant{background:#1c1b23}.econ-light .econ-modal{background:#23212b}
+
+
+/* Correct the banner contrast regardless of saved light/dark appearance. */
+.econ-intro h2,.econ-light .econ-intro h2{color:#fff5e7}
+.econ-intro h2 em,.econ-light .econ-intro h2 em{color:#ffbf73}
+
+/* Account previews are now actionable edit targets. */
+.econ-mini-account{transition:border-color .18s ease,background .18s ease,transform .18s ease,box-shadow .18s ease}
+.econ-mini-account:hover,.econ-mini-account:focus-visible{border-color:rgba(248,177,79,.8);background:linear-gradient(130deg,#55402c,#292831);box-shadow:0 7px 24px rgba(244,148,40,.18);transform:translateY(-2px)}
+.econ-light .econ-mini-account:hover,.econ-light .econ-mini-account:focus-visible{background:linear-gradient(130deg,#ffdfb0,#fff4e8);border-color:#e9a84e}
+
+/* Payment progress, including compact overview cards. */
+.econ-payment-progress{display:grid;gap:8px;margin:18px 0 15px}
+.econ-progress-caption{display:flex;justify-content:space-between;align-items:flex-start;gap:9px;font-size:11px;line-height:1.5;color:var(--ec-muted)}
+.econ-progress-caption strong{flex:none;color:var(--ec-orange2);font-size:12px}
+.econ-progress-track{width:100%;height:8px;overflow:hidden;border-radius:99px;background:rgba(176,144,113,.18)}
+.econ-progress-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#da8731,#ffcc73);transition:width .35s ease;box-shadow:0 0 12px rgba(242,157,59,.35)}
+.econ-subsection-heading{display:flex;gap:11px;align-items:center;margin:30px 0 14px;color:var(--ec-orange2)}
+.econ-subsection-heading:first-of-type{margin-top:8px}
+.econ-subsection-heading h2{font-size:19px;margin:0;color:var(--ec-text)}
+.econ-subsection-heading small{font-size:12px;color:var(--ec-muted)}
+.econ-heading-actions{display:flex;gap:9px;flex-wrap:wrap}
+.econ-monthly-payment{display:flex;align-items:center;gap:9px}
+.econ-monthly-payment>strong{font-size:25px;font-weight:770;letter-spacing:-.5px;min-width:0;overflow-wrap:anywhere}
+.econ-monthly-payment>strong small{font-size:12px;color:var(--ec-muted)}
+.econ-monthly-payment>button{width:31px;height:31px;flex:none;display:grid;place-items:center;border:1px solid var(--ec-border);border-radius:10px;color:var(--ec-orange2)}
+.econ-monthly-payment>button:hover{border-color:rgba(247,172,70,.55);background:rgba(247,172,70,.10)}
+.econ-obligation-preview-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.econ-obligation-preview{display:flex;flex-direction:column;text-align:left;gap:6px;min-width:0;border:1px solid var(--ec-border);border-radius:13px;background:var(--ec-panel2);padding:12px;color:var(--ec-text);transition:border-color .2s ease,transform .2s ease}
+.econ-obligation-preview:hover{border-color:rgba(247,170,67,.6);transform:translateY(-2px)}
+.econ-obligation-preview>strong{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%}
+.econ-obligation-preview>small{color:var(--ec-muted);font-size:11px}
+.econ-preview-top{display:flex;align-items:center;gap:6px;color:var(--ec-orange2);font-size:10px}
+.econ-obligation-preview .econ-payment-progress{margin:7px 0 0;gap:5px;width:100%}
+.econ-obligation-preview .econ-progress-caption{font-size:9px;flex-wrap:wrap}
+.econ-obligation-preview .econ-progress-caption strong{font-size:10px}
+.econ-obligation-preview .econ-progress-track{height:5px}
+.econ-light .econ-obligation-preview{border-color:rgba(117,72,31,.16)}
+.econ-light .econ-obligation-preview:hover{background:#fff0d7}
+.econ-light .econ-progress-caption strong{color:#b26c20}
+
+/* In-operation category creation without leaving the original dialog. */
+.econ-category-controls{display:grid;gap:9px}
+.econ-inline-category-button{display:inline-flex;align-items:center;gap:6px;justify-self:start;font-size:11px;font-weight:750;color:var(--ec-orange2)}
+.econ-inline-category-button:hover{text-decoration:underline}
+.econ-inline-category-form{display:flex;align-items:center;gap:8px}
+.econ-inline-category-form input{min-width:0;flex:1}
+.econ-inline-category-form button{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(245,166,69,.45);background:rgba(243,163,66,.14);border-radius:9px;padding:10px;color:#ffd69d;font-size:11px;font-weight:750}
+
+/* Accessible checkbox row and a hover/focus help panel with a live link. */
+.econ-form label.econ-checkbox-row{display:flex;align-items:center;gap:10px;color:#f1d8b8;cursor:pointer;font-size:12px;font-weight:650}
+.econ-form label.econ-checkbox-row input{width:17px;height:17px;flex:none;accent-color:#f6a83f;margin:0}
+.econ-reminder-row{display:flex;align-items:center;gap:10px;position:relative}
+.econ-tooltip-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center}
+.econ-help-button{display:grid;place-items:center;width:22px;height:22px;border:1px solid rgba(253,183,94,.46);border-radius:50%;color:#ffcf8b;font-size:12px;font-weight:800}
+.econ-tooltip-panel{position:absolute;z-index:400;right:-8px;bottom:calc(100% + 8px);visibility:hidden;opacity:0;pointer-events:none;transform:translateY(3px);width:min(290px,75vw);padding:14px;border:1px solid rgba(249,183,93,.4);border-radius:12px;background:#32291f;color:#ffefd9;box-shadow:0 14px 42px rgba(0,0,0,.45);font-size:11px;font-weight:500;line-height:1.6;transition:opacity .15s ease,transform .15s ease}
+.econ-tooltip-wrap:hover .econ-tooltip-panel,.econ-tooltip-wrap:focus-within .econ-tooltip-panel{visibility:visible;opacity:1;pointer-events:auto;transform:translateY(0)}
+.econ-telegram-status{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px;color:#d2b99d}
+.econ-telegram-status strong{color:#fff1d9}
+.econ-tooltip-panel a{display:inline-flex;align-items:center;gap:5px;margin-top:9px;padding:7px 10px;border-radius:8px;background:#e9a043;color:#231608;font-size:11px;font-weight:800;text-decoration:none}
+.econ-tooltip-panel a:hover{background:#ffc77b}
+
+@media(max-width:1160px){.econ-obligation-preview-list{grid-template-columns:1fr}}
+@media(max-width:570px){
+ .econ-obligation-preview-list{grid-template-columns:1fr}
+ .econ-heading-actions{width:100%}
+ .econ-heading-actions .econ-action{flex:1}
+ .econ-inline-category-form{flex-wrap:wrap}
+ .econ-inline-category-form button{margin-left:auto}
+ .econ-tooltip-panel{right:-70px;width:min(290px,80vw)}
+}
