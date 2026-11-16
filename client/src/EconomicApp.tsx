@@ -502,7 +502,8 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
     accounts: () => openDialog('account'), operations: () => openDialog('operation'),
     categories: () => openDialog('category')
   };
-  return <div className={'econ-root ' + (effectiveAppearance === 'light' ? 'econ-light' : '') + (mobile ? ' econ-mobile-workspace' : '')}>
+  return <div className={'econ-root ' + (effectiveAppearance === 'light' ? 'econ-light' : '') + (mobile ? ' econ-mobile-workspace' : '')}
+    style={embeddedInMiniApp ? { '--econ-mobile-safe-bottom': mobileSafeBottom + 'px' } as CSSProperties : undefined}>
     {!mobile && <ModuleRail active="economic"/>}
     <div className="econ-shell">
       {!mobile && <aside className="econ-nav">
@@ -520,7 +521,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
             <Icon size={17}/>{sectionTitles[value]}
           </button>)}
         </nav>}
-        <header className="econ-topbar"><div><div className="econ-eyebrow">ПЛАНИРОВЫЧ / ЭКОНОМЫЧ AI</div><h1>{section === 'overview' ? 'Экономыч AI' : sectionTitles[section]}</h1></div><div className="econ-top-actions"><button className="econ-add-global" type="button" onClick={() => openDialog('operation')}><Plus size={18}/> Новая операция</button></div></header>
+        <header className="econ-topbar"><div><div className="econ-eyebrow">ПЛАНИРОВЫЧ / ЭКОНОМЫЧ AI</div><h1>{section === 'overview' ? 'Экономыч AI' : sectionTitles[section]}</h1></div><div className="econ-top-actions"><button className="econ-add-global" data-economic-create-operation type="button" onClick={() => openDialog('operation')}><Plus size={18}/> Новая операция</button></div></header>
         {error && <div className="econ-error" role="alert"><span>{error}</span><button type="button" aria-label="Скрыть ошибку" onClick={() => setError('')}><X size={16}/></button></div>}
         {section === 'overview' && <>
           <div className="econ-intro"><div><span className="econ-kicker"><span className="econ-intro-star">✦</span> Личные финансы без хаоса</span><h2>Держите деньги<br/><em>под контролем.</em></h2><p>Баланс, повседневные траты, долги и кредиты в одном спокойном пространстве.</p></div><div className="econ-intro-illustration" aria-hidden="true"><div className="econ-coin-big">₽</div><div className="econ-coin-small">₽</div><div className="econ-intro-orbit"/></div></div>
@@ -676,6 +677,9 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
       </div>
     </section>}
 
+    {mobile && embeddedInMiniApp && !dialog && <button type="button"
+      className="econ-mobile-add-fab" aria-label="Новая операция" title="Новая операция"
+      onClick={() => openDialog('operation')}><Plus size={27}/></button>}
     {dialog && createPortal(<div
       className={'econ-root econ-dialog-layer ' + (effectiveAppearance === 'light' ? 'econ-light ' : '') + (mobile ? 'econ-mobile-dialog-layer ' : '') + (embeddedInMiniApp ? 'econ-miniapp-dialog-layer' : '')}
       style={embeddedInMiniApp ? { '--econ-mobile-safe-top': mobileSafeTop + 'px', '--econ-mobile-safe-bottom': mobileSafeBottom + 'px' } as CSSProperties : undefined}>
