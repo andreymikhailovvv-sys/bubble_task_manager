@@ -77,6 +77,7 @@ test('Android habits group by schedule and keep centers unfilled while progress 
   assert.match(modernRing, /style=Stroke\(width=ringWidth,cap=StrokeCap\.Butt\)/);
   assert.doesNotMatch(modernRing, /done -> accent|useCenter=true|if \(done\) Color\.White/);
   assert.match(modernRing, /\.background\(core\)/);
+  assert.match(modernRing, /habitEmojiCompletionFilter\(dueToday && count>=target\)/);
   assert.match(ui, /private fun habitScheduledOn\(habit: Habit, date: LocalDate\)/);
   assert.match(ui, /HabitRecurrenceType\.WEEKDAYS -> habit\.weekdays\.contains\(date\.dayOfWeek\.value % 7\)/);
   assert.match(ui, /HabitRecurrenceType\.INTERVAL/);
@@ -89,5 +90,5 @@ test('Android habits group by schedule and keep centers unfilled while progress 
   assert.match(legacyRing, /drawArc\(color = baseColor,[\s\S]*sweepAngle = progress \* 360f,[\s\S]*useCenter = false/);
   assert.match(legacyRing, /circleColor\.copy\(alpha = if \(scheduledToday\) \.2f else \.6f\)/);
   assert.doesNotMatch(legacyRing, /done -> baseColor|if \(done\) Color\.White|border = if \(done\)/);
-  assert.match(ui, /if \(scheduledToday\) 1f else \.24f/);
+  assert.match(ui, /habitEmojiCompletionFilter\(scheduledToday && amount>=target\)/);
 });
