@@ -214,7 +214,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                     Triple("Экономыч",Icons.Default.AccountBalanceWallet,"Экономыч AI, финансы")
                 )
                 NavigationBar(
-                    modifier=Modifier.height(64.dp).border(
+                    modifier=Modifier.navigationBarsPadding().height(64.dp).border(
                         width=if(dark)0.dp else 1.dp,
                         color=if(dark)Color.Transparent else Color(0xFFDDE2F0)),
                     containerColor=if(dark)Color(0xFF121827) else Color.White,
