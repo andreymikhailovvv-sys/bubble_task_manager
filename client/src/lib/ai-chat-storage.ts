@@ -33,6 +33,7 @@ export function persistAiChatProjectsCache(
         ...(message.creditsSpentMilli != null ? { creditsSpentMilli: message.creditsSpentMilli } : {}),
         ...(message.generatedDocument ? { generatedDocument: message.generatedDocument } : {}),
         ...(message.taskProposal ? { taskProposal: message.taskProposal } : {}),
+        ...(message.economicProposals?.length ? { economicProposals: message.economicProposals } : {}),
         ...(message.telegramSendDraft ? { telegramSendDraft: message.telegramSendDraft } : {}),
         ...(message.mailSendDraft ? { mailSendDraft: message.mailSendDraft } : {}),
         ...(message.telegramReadDraft ? { telegramReadDraft: message.telegramReadDraft } : {})
