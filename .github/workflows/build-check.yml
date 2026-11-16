@@ -33,6 +33,8 @@ jobs:
         run: node --import tsx --test client/src/lib/economicMoney.test.ts
       - name: Verify Economic debt cashflow and balance signs
         run: node --import tsx --test server/test/economic-debt-cashflow.test.ts
+      - name: Verify Economic payment reminders and isolated entry
+        run: node --import tsx --test server/test/economic-loan-reminder.test.ts client/test/economic-entry-isolation.test.ts
       - name: Verify optimized favicons are built and linked consistently
         run: node --import tsx --test server/test/favicon-build.test.ts
       - name: Verify magnetic bubble layout and collision regression tests
