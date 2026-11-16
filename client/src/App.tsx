@@ -4886,6 +4886,41 @@ export default function App() {
     }
   };
 
+  // React hooks must be invoked before the authentication early returns.
+  // Keeping this Telegram integration effect below the guard changes the
+  // number of hooks when authLoading flips, crashing the whole workspace.
+  const openTelegramLinkModal = async () => {
+    setIsTelegramModalOpen(true);
+    setTelegramLinkError(null);
+    setIsTelegramLinkLoading(true);
+    try {
+      const result = await api.createTelegramLinkToken();
+      setTelegramLinkUrl(result.deepLinkUrl);
+      setTelegramLinkExpiresIn(result.expiresInSeconds);
+    } catch (error) {
+      const messageRaw = error instanceof Error ? error.message : 'Не удалось создать ссылку';
+      const message = messageRaw.includes('Telegram link login is not configured')
+        ? 'Telegram не настроен на сервере: отсутствуют TELEGRAM_BOT_TOKEN и/или TELEGRAM_BOT_USERNAME.'
+        : messageRaw;
+      setTelegramLinkError(message);
+      setTelegramLinkUrl(null);
+    } finally {
+      setIsTelegramLinkLoading(false);
+    }
+  };
+  // Direct link from Экономыч AI's payment reminder settings. Start the same
+  // existing Telegram bot connection flow in the main planner workspace.
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('connectTelegram') !== '1') return;
+    params.delete('connectTelegram');
+    window.history.replaceState(window.history.state, '', window.location.pathname +
+      (params.toString() ? '?' + params.toString() : '') + window.location.hash);
+    void openTelegramLinkModal();
+  }, [currentUser?.id]);
+
+
   if (authLoading) {
     return (
       <main className="app-shell flex h-screen items-center justify-center p-4" data-theme={effectiveThemeMode}>
@@ -5509,37 +5544,6 @@ export default function App() {
     setIsUpdatesOpen(false);
     setActiveTourStep(FEATURE_TOUR_STEPS[0].id);
   };
-  const openTelegramLinkModal = async () => {
-    setIsTelegramModalOpen(true);
-    setTelegramLinkError(null);
-    setIsTelegramLinkLoading(true);
-    try {
-      const result = await api.createTelegramLinkToken();
-      setTelegramLinkUrl(result.deepLinkUrl);
-      setTelegramLinkExpiresIn(result.expiresInSeconds);
-    } catch (error) {
-      const messageRaw = error instanceof Error ? error.message : 'Не удалось создать ссылку';
-      const message = messageRaw.includes('Telegram link login is not configured')
-        ? 'Telegram не настроен на сервере: отсутствуют TELEGRAM_BOT_TOKEN и/или TELEGRAM_BOT_USERNAME.'
-        : messageRaw;
-      setTelegramLinkError(message);
-      setTelegramLinkUrl(null);
-    } finally {
-      setIsTelegramLinkLoading(false);
-    }
-  };
-  // Direct link from Экономыч AI's payment reminder settings. Start the same
-  // existing Telegram bot connection flow in the main planner workspace.
-  useEffect(() => {
-    if (!currentUser?.id) return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('connectTelegram') !== '1') return;
-    params.delete('connectTelegram');
-    window.history.replaceState(window.history.state, '', window.location.pathname +
-      (params.toString() ? '?' + params.toString() : '') + window.location.hash);
-    void openTelegramLinkModal();
-  }, [currentUser?.id]);
-
   const finishTaskTour = () => {
     const restore = tourRestoreStateRef.current;
     setActiveTourStep(null);
