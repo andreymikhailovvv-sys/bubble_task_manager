@@ -129,3 +129,34 @@ test('large unchanged chat reconciliation keeps original array and message refer
   assert.strictEqual(next, local);
   assert.strictEqual(next[300], local[300]);
 });
+
+
+test('financial approval chips survive quick-chat reconciliation and compact cache',()=>{
+  const pending = {
+    id:'economic-1',messageId:'economic-message-1',entity:'operation',action:'create',
+    title:'Создание операции',description:'Продукты · 375 ₽',
+    details:['Тип: EXPENSE','Сумма: 375 ₽'],status:'PENDING',
+    autoApplied:false,error:null,createdAt:'2026-11-17T00:00:00Z',appliedEntityId:null
+  };
+  const local: Array<ChatMessage & {id:string}>=[{
+    id:'local',role:'assistant',content:'Подготовил изменение',
+    economicProposals:[pending]
+  }];
+  const oldServer: Array<ChatMessage & {id:string}>=[{
+    id:'server',role:'assistant',content:'Подготовил изменение'
+  }];
+  const merged=reconcileAiChatMessagesWithChips(local,oldServer);
+  assert.equal(merged[0].economicProposals?.[0].id,'economic-1');
+  const applied=[{...pending,status:'APPLIED',appliedEntityId:'operation-1'}];
+  const fresh: Array<ChatMessage & {id:string}>=[{...oldServer[0],economicProposals:applied}];
+  const updated=reconcileAiChatMessagesWithChips(merged,fresh);
+  assert.equal(updated[0].economicProposals?.[0].status,'APPLIED');
+  assert.notStrictEqual(reconcileActiveAiChatMessages(local,updated,false),local);
+  let cache='';
+  persistAiChatProjectsCache({setItem(_key,value){cache=value}},'finance',
+    [{id:'project',title:'Личный проект',color:'#f90',icon:'$',chats:[
+      {id:'quick-ai-requests',title:'Быстрые запросы',messages:updated}
+    ]}]);
+  const saved=JSON.parse(cache);
+  assert.equal(saved[0].chats[0].messages[0].economicProposals[0].status,'APPLIED');
+});
