@@ -1,0 +1,1 @@
+ALTER TABLE "GeneralAiMessage" ADD COLUMN "economicProposals" JSONB;
