@@ -4,6 +4,8 @@ import { prisma } from '../db/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { answerEconomicAssistant } from '../services/economic-assistant.service.js';
+import { applyEconomicProposal, rejectEconomicProposal, undoEconomicProposal, getEconomicProposalView, economicProposalView } from '../services/economic-ai-proposals.service.js';
+import { EconomicActionError } from '../services/economic-ai-action-validation.service.js';
 import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
 import { debtOperationKind, debtOperationTitle, economicSourceDelta, ECONOMIC_DEBT_OPERATION_KINDS, type EconomicDebtDirection } from '../lib/economic-debt.js';
 
@@ -117,7 +119,7 @@ economicRouter.get('/snapshot', asyncHandler(async (req, res) => {
     prisma.economicDebt.findMany({ where: { userId: owner }, orderBy: [{ isClosed: 'asc' }, { createdAt: 'desc' }], take: 200 }),
     prisma.economicLoan.findMany({ where: { userId: owner }, orderBy: [{ isClosed: 'asc' }, { createdAt: 'desc' }], take: 200 }),
     prisma.economicOperation.count({ where: { userId: owner } }),
-    prisma.economicAssistantMessage.findMany({ where: { userId: owner }, orderBy: [{ createdAt: 'desc' }, { role: 'asc' }, { id: 'desc' }], take: 24 })
+    prisma.economicAssistantMessage.findMany({ where: { userId: owner }, orderBy: [{ createdAt: 'desc' }, { role: 'asc' }, { id: 'desc' }], take: 24, include: { proposals: { orderBy: { createdAt: 'asc' } } } })
   ]);
   const balances = new Map(accounts.map(a => [a.id, a.openingBalanceMinor]));
   for (const group of sources) {
@@ -133,7 +135,7 @@ economicRouter.get('/snapshot', asyncHandler(async (req, res) => {
     accounts: accounts.map(a => ({ ...accountOut(a), balanceMinor: (balances.get(a.id) ?? 0n).toString() })),
     totals: { balanceMinor: totalMinor.toString(), monthIncomeMinor: monthSum('INCOME'), monthExpenseMinor: monthSum('EXPENSE'), operationCount },
     recent: recent.map(operationOut), categories, debts: debts.map(debtOut), loans: loans.map(loanOut),
-    assistantMessages: messages.reverse()
+    assistantMessages: messages.reverse().map(m => ({...m,proposals:m.proposals.map(economicProposalView)}))
   });
 }));
 
@@ -453,7 +455,46 @@ economicRouter.delete('/loans/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// The assistant is read-only until phase 3. Each provider call uses the same
+// AI actions are always persisted as owner-bound proposals; the model cannot
+// call these endpoints without an authenticated, same-origin user session.
+const proposalFailure = (res: Response, cause: unknown) => {
+  if(cause instanceof EconomicActionError){error(res,cause.message,cause.status);return;}
+  if(cause instanceof Prisma.PrismaClientKnownRequestError &&
+    ['P2002','P2003','P2025','P2034'].includes(cause.code)){
+    error(res,'Данные изменились или действие конфликтует с существующими записями. Обновите чат.',409);return;
+  }
+  console.error('[Economic] proposal operation failed',cause instanceof Error?cause.message:'unknown');
+  error(res,'Не удалось изменить финансовые данные. Повторите попытку.',503);
+};
+economicRouter.get('/assistant/preferences',asyncHandler(async(req,res)=>{
+  const row=await prisma.user.findUnique({where:{id:userId(req)},select:{economicAiAutoApply:true}});
+  if(!row){error(res,'Пользователь не найден',404);return;}
+  res.json({autoApply:row.economicAiAutoApply});
+}));
+economicRouter.put('/assistant/preferences',asyncHandler(async(req,res)=>{
+  if(typeof req.body?.autoApply!=='boolean'){error(res,'Настройка должна быть включена или выключена');return;}
+  const updated=await prisma.user.update({where:{id:userId(req)},
+    data:{economicAiAutoApply:req.body.autoApply},select:{economicAiAutoApply:true}});
+  res.json({autoApply:updated.economicAiAutoApply});
+}));
+economicRouter.get('/assistant/proposals/:id',asyncHandler(async(req,res)=>{
+  try{res.json(await getEconomicProposalView(userId(req),req.params.id));}
+  catch(cause){proposalFailure(res,cause);}
+}));
+economicRouter.post('/assistant/proposals/:id/approve',asyncHandler(async(req,res)=>{
+  try{res.json(await applyEconomicProposal(userId(req),req.params.id));}
+  catch(cause){proposalFailure(res,cause);}
+}));
+economicRouter.post('/assistant/proposals/:id/reject',asyncHandler(async(req,res)=>{
+  try{res.json(await rejectEconomicProposal(userId(req),req.params.id));}
+  catch(cause){proposalFailure(res,cause);}
+}));
+economicRouter.post('/assistant/proposals/:id/undo',asyncHandler(async(req,res)=>{
+  try{res.json(await undoEconomicProposal(userId(req),req.params.id));}
+  catch(cause){proposalFailure(res,cause);}
+}));
+
+// The assistant uses real billing and explicit model-proposed finance actions. Each provider call uses the same
 // real token/markup wallet path as the Planner, including history retrieval.
 const assistantCooldown = new Map<string, number>();
 economicRouter.post('/assistant/chat', asyncHandler(async (req, res) => {
