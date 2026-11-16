@@ -124,9 +124,9 @@ test('Telegram fullscreen uses safe insets and bottom tabs replace the old displ
   assert.match(mini, /contentSafeAreaChanged/);
   assert.match(mini, /const fullscreenClass = isTelegramRuntime/);
   assert.match(mini, /aria-label="Разделы Планировыча"/);
-  assert.match(mini, /<span>Список<\/span>/);
-  assert.match(mini, /<span>Таймлайн<\/span>/);
-  assert.match(mini, /<span>Чат с ИИ<\/span>/);
+  assert.match(mini, /aria-label="Список задач"/);
+  assert.match(mini, /aria-label="Таймлайн"/);
+  assert.match(mini, /aria-label="Общий чат с ИИ"/);
   assert.match(mini, /aria-label="Заметки"/);
   assert.match(mini, /setDisplayMode\('list'\)/);
   assert.match(mini, /setDisplayMode\('timeline'\)/);
@@ -230,7 +230,7 @@ test('Telegram native selectors and safe-area colors do not alter mobile web cha
   assert.match(mini, /telegramFullscreen=\{useTelegramCompactChatHeader\}/);
   assert.match(header, /toggle\('models'\)/);
   assert.match(mini, /showTelegramBrand/);
-  assert.match(mini, /isAiChatOpen \|\| isStandaloneNotesOpen\) setIsSearchBarFloating\(false\)/);
+  assert.match(mini, /isAiChatOpen \|\| isStandaloneNotesOpen \|\| isEconomicOpen\) setIsSearchBarFloating\(false\)/);
   assert.match(css, /\.miniapp-ai-context-picker-option/);
   assert.match(css, /\.miniapp-shell\.miniapp-telegram-fullscreen::before/);
   assert.match(css, /\.miniapp-ai-chat-panel-general\.miniapp-ai-header-collapsed/);
@@ -265,7 +265,7 @@ test('Telegram project picker, navigation and attachment theme refinements remai
   assert.match(css, /\.miniapp-shell:not\(\.miniapp-light\) \.miniapp-ai-chat-panel-general \.miniapp-ai-chat-attach \{/);
 });
 
-test('fullscreen search and all four tabs respect safe areas and keep the shared navigation', async () => {
+test('fullscreen search and all five tabs respect safe areas and keep the shared navigation', async () => {
   const [mini, styles, notes] = await Promise.all([
     read('../../client/src/MiniApp.tsx'),
     read('../../client/src/styles.css'),
@@ -280,9 +280,9 @@ test('fullscreen search and all four tabs respect safe areas and keep the shared
   assert.match(styles, /\.miniapp-shell \.miniapp-premium-topbar-floating,[\s\S]*?position: fixed/);
   assert.match(styles, /top: calc\(var\(--miniapp-top-inset, 0px\) \+ \.5rem\)/);
   assert.doesNotMatch(mini, /sticky z-30 miniapp-premium-topbar/);
-  assert.match(mini, /isAiChatOpen && !isStandaloneNotesOpen \? 'is-active'/);
+  assert.match(mini, /!isEconomicOpen && isAiChatOpen && !!isEconomicOpen && isStandaloneNotesOpen \? 'is-active'/);
   assert.match(mini, /isStandaloneNotesOpen \? 'is-active'/);
-  assert.match(mini, /setIsAiChatOpen\(false\); setIsStandaloneNotesOpen\(false\)/);
+  assert.match(mini, /setIsEconomicOpen\(false\); setIsAiChatOpen\(false\); setIsStandaloneNotesOpen\(false\)/);
   assert.match(mini, /mobileSafeAreaTop=\{telegramViewport\.top\}/);
   assert.match(notes, /style=\{mode === 'mobile' \?/);
   assert.match(styles, /\.miniapp-shell \.miniapp-bottom-navigation \{\s*z-index: 260/);
@@ -369,7 +369,7 @@ test('Telegram focus task has a bounded scroll viewport without covering native 
 test('AI bottom tab opens Quick Requests and scrolls to its end even on repeated taps', async () => {
   const mini = await read('../../client/src/MiniApp.tsx');
   const nav = mini.slice(mini.indexOf('aria-label="Разделы Планировыча"'), mini.indexOf('      </nav>', mini.indexOf('aria-label="Разделы Планировыча"')));
-  const tab = nav.slice(nav.indexOf('aria-current={isAiChatOpen'), nav.indexOf('<span>Чат с ИИ</span>'));
+  const tab = nav.slice(nav.indexOf('aria-label="Общий чат с ИИ"'), nav.indexOf('aria-label="Заметки"'));
   assert.match(tab, /setActiveAiChatProjectId\(quickProject\?\.id/);
   assert.match(tab, /setActiveAiChatId\(QUICK_AI_CHAT_ID\)/);
   assert.match(tab, /setQuickAiTabNavigationSerial\(serial => serial \+ 1\)/);
