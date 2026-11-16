@@ -11,11 +11,13 @@ import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.animation.core.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.MonetizationOn
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -44,6 +46,7 @@ fun NativeEconomicPage(userId:String?,dark:Boolean) {
     var detail by remember(userId){mutableStateOf("")}
     var conflict by remember(userId){mutableStateOf(false)}
     var progress by remember(userId){mutableIntStateOf(0)}
+    var editorOpen by remember(userId){mutableStateOf(false)}
     val browser=remember(userId){
         WebView(context).apply {
             settings.javaScriptEnabled=true
@@ -53,7 +56,20 @@ fun NativeEconomicPage(userId:String?,dark:Boolean) {
             settings.setSupportMultipleWindows(false)
             settings.mixedContentMode=android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
             isVerticalScrollBarEnabled=false
-            setBackgroundColor(android.graphics.Color.rgb(22,21,28))
+            // A React editor uses a body-level portal. Hide the native FAB while
+            // any financial dialog is active so it cannot cover Save/Cancel.
+            fun syncEditorVisibility(){
+                evaluateJavascript(
+                    "Boolean(document.querySelector('.econ-dialog-layer .econ-modal'))"
+                ){editorOpen=it=="true"}
+            }
+            setOnTouchListener { _,event->
+                if(event.action==android.view.MotionEvent.ACTION_UP){
+                    postDelayed({syncEditorVisibility()},140)
+                }
+                false
+            }
+            setBackgroundColor(if(dark) android.graphics.Color.rgb(22,21,28) else android.graphics.Color.WHITE)
             webChromeClient=object:WebChromeClient(){
                 override fun onProgressChanged(view:WebView?,newProgress:Int){ progress=newProgress }
             }
@@ -70,6 +86,7 @@ fun NativeEconomicPage(userId:String?,dark:Boolean) {
                     return !allowed
                 }
                 override fun onPageStarted(view:WebView?,url:String?,favicon:Bitmap?){
+                    editorOpen=false
                     stage="loading"
                 }
                 override fun onPageFinished(view:WebView?,url:String?){
@@ -169,7 +186,10 @@ fun NativeEconomicPage(userId:String?,dark:Boolean) {
         }
         remove(0)
     }
-    LaunchedEffect(userId,origin,browser,dark){syncSession(false)}
+    LaunchedEffect(userId,origin,browser,dark){
+        browser.setBackgroundColor(if(dark) android.graphics.Color.rgb(22,21,28) else android.graphics.Color.WHITE)
+        syncSession(false)
+    }
     if(conflict){
         AlertDialog(
             onDismissRequest={conflict=false},
@@ -182,6 +202,28 @@ fun NativeEconomicPage(userId:String?,dark:Boolean) {
     }
     Box(Modifier.fillMaxSize()){
         AndroidView(factory={browser},modifier=Modifier.fillMaxSize())
+        // The native FAB opens the existing React operation editor.
+        if(stage=="ready" && !editorOpen){
+            FloatingActionButton(
+                onClick={
+                    editorOpen=true
+                    browser.evaluateJavascript(
+                        "document.querySelector('[data-economic-create-operation]')?.click();",null)
+                    browser.postDelayed({
+                        browser.evaluateJavascript(
+                            "Boolean(document.querySelector('.econ-dialog-layer .econ-modal'))"
+                        ){editorOpen=it=="true"}
+                    },300)
+                },
+                modifier=Modifier.align(Alignment.BottomEnd).padding(end=18.dp,bottom=18.dp),
+                shape=CircleShape,
+                containerColor=Color(0xFFF5A52E),
+                contentColor=Color(0xFF2B1B08),
+                elevation=FloatingActionButtonDefaults.elevation(defaultElevation=6.dp)
+            ){
+                Icon(Icons.Default.Add,"Новая операция",modifier=Modifier.size(27.dp))
+            }
+        }
         // An opaque shimmer, not a translucent spinner/error over actual
         // financial data. The overlay disappears only once real content exists.
         when(stage){
@@ -189,12 +231,12 @@ fun NativeEconomicPage(userId:String?,dark:Boolean) {
             "ready" -> Unit
             else -> Column(
                 modifier=Modifier.fillMaxSize()
-                    .background(if(dark)Color(0xFF15151C) else Color(0xFFFFF9F0))
+                    .background(if(dark)Color(0xFF15151C) else Color(0xFFF7F8FA))
                     .padding(25.dp),
                 verticalArrangement=Arrangement.Center,
                 horizontalAlignment=Alignment.CenterHorizontally
             ){
-                Icon(Icons.Default.AccountBalanceWallet,null,tint=gold)
+                Icon(Icons.Default.MonetizationOn,null,tint=gold)
                 Spacer(Modifier.height(12.dp))
                 Text(if(stage=="conflict")"Аккаунты различаются" else detail,
                     color=if(dark)Color(0xFFF2D8B0) else Color(0xFF754A1A))
@@ -219,8 +261,8 @@ private fun EconomicSkeleton(dark:Boolean){
         animationSpec=infiniteRepeatable(tween(1150),RepeatMode.Reverse),
         label="Economic shimmer"
     )
-    val background=if(dark)Color(0xFF15151C) else Color(0xFFFFF9F0)
-    val panel=if(dark)Color(0xFF57412F) else Color(0xFFF6D7AD)
+    val background=if(dark)Color(0xFF15151C) else Color(0xFFF7F8FA)
+    val panel=if(dark)Color(0xFF57412F) else Color(0xFFE6E8EC)
     @Composable fun preview(width:Modifier=Modifier,height:androidx.compose.ui.unit.Dp){
         Box(width.height(height).clip(RoundedCornerShape(17.dp))
             .background(panel.copy(alpha=shimmer)))

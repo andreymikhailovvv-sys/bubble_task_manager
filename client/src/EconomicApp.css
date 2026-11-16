@@ -495,3 +495,95 @@
 @media(prefers-reduced-motion:reduce){
  .econ-mobile-skeleton > div,.econ-mobile-skeleton .econ-skeleton-grid span{animation:none}
 }
+
+
+/* A neutral light finance palette for the website, Telegram and Android. */
+.econ-root.econ-light{
+  --ec-bg:#f7f8fa;--ec-panel:#fff;--ec-panel2:#f8f9fb;
+  --ec-input:#f7f8fa;--ec-border:rgba(42,53,69,.13);
+  --ec-text:#202a38;--ec-muted:#647181;--ec-orange:#df8b25;
+  --ec-orange2:#ae681b;color:var(--ec-text);color-scheme:light;
+  background:#f7f8fa;
+}
+.econ-root.econ-mobile-workspace.econ-light{background:#f7f8fa}
+.econ-root.econ-light .econ-card,.econ-root.econ-light .econ-stat{
+  background:#fff;color:var(--ec-text);border-color:var(--ec-border);
+  box-shadow:0 3px 14px rgba(25,35,55,.035);
+}
+.econ-root.econ-light .econ-stat.featured{
+  background:#fff;border-color:rgba(224,153,61,.36);
+  box-shadow:inset 3px 0 0 #e9a24d,0 3px 14px rgba(25,35,55,.035);
+}
+.econ-root.econ-light .econ-stat small,
+.econ-root.econ-light .econ-stat-label,
+.econ-root.econ-light .econ-operation-body small{color:#647181}
+.econ-root.econ-light .econ-mini-account.main{
+  background:#fffaf4;border-color:rgba(222,155,74,.28);color:#202a38;
+}
+.econ-root.econ-light .econ-mini-account:hover,
+.econ-root.econ-light .econ-mini-account:focus-visible{
+  background:#f5f7fa;border-color:#d9aa72;
+}
+.econ-root.econ-light .econ-obligation-preview{border-color:var(--ec-border)}
+.econ-root.econ-light .econ-obligation-preview:hover{background:#f7f8fa}
+.econ-root.econ-light .econ-intro{
+  background:linear-gradient(110deg,#fff,#fff9f0);
+  border-color:rgba(221,162,90,.28);
+}
+.econ-root.econ-light .econ-intro h2{color:#263141}
+.econ-root.econ-light .econ-intro h2 em{color:#b96c14}
+.econ-root.econ-light .econ-intro .econ-kicker{color:#a86013}
+.econ-root.econ-light .econ-intro p{color:#687484}
+.econ-root.econ-light .econ-coin-big,
+.econ-root.econ-light .econ-coin-small{opacity:.78}
+.econ-root.econ-light .econ-operation-amount.EXPENSE{color:#ae5d37}
+.econ-root.econ-light .econ-error{
+  color:#9e342b;background:#fff2ef;border-color:#e9b7af;
+}
+/* Mobile top navigation replaces the New Operation button.
+   Android draws a native FAB; the Telegram Mini App uses a floating button. */
+.econ-mobile-workspace .econ-top-actions{display:none}
+.econ-mobile-workspace .econ-topbar{margin:10px 0 17px}
+.econ-mobile-workspace .econ-mobile-sections{padding:3px 0 7px}
+.econ-root.econ-light .econ-mobile-sections button{
+  background:#fff;color:#566174;border-color:#e1e5eb;
+}
+.econ-root.econ-light .econ-mobile-sections button.active{
+  background:#fff3e3;border-color:#e9b66b;color:#94530e;
+}
+.econ-mobile-add-fab{
+  position:fixed;z-index:120;right:18px;
+  bottom:calc(4.5rem + var(--econ-mobile-safe-bottom,0px));
+  width:56px;height:56px;display:grid;place-items:center;
+  background:#f5a52e;color:#291704;border:0;border-radius:50%;
+  box-shadow:0 6px 18px rgba(150,86,14,.24);
+}
+.econ-mobile-add-fab:hover{background:#ec981c}
+.econ-mobile-add-fab:active{transform:scale(.96)}
+.econ-mobile-add-fab:focus-visible{outline:3px solid #a55d17;outline-offset:3px}
+/* Editors and sticky Save/Cancel controls follow the light theme too. */
+.econ-dialog-layer.econ-light .econ-modal{
+  --ec-text:#202a38;--ec-muted:#647181;--ec-border:rgba(42,53,69,.14);
+  background:#fff;color:#202a38;border-color:#e2e5ea;
+  box-shadow:0 18px 60px rgba(20,30,45,.21);color-scheme:light;
+}
+.econ-dialog-layer.econ-light .econ-modal header button{color:#475569}
+.econ-dialog-layer.econ-light .econ-form label,
+.econ-dialog-layer.econ-light .econ-form label.econ-checkbox-row{color:#344054}
+.econ-dialog-layer.econ-light .econ-form-hint{color:#667385}
+.econ-dialog-layer.econ-light .econ-form input,
+.econ-dialog-layer.econ-light .econ-form select{
+  background:#f8f9fb;color:#253246;border-color:#dbe0e6;
+}
+.econ-dialog-layer.econ-light .econ-form input::placeholder{color:#8692a0}
+.econ-dialog-layer.econ-light .econ-form-actions{background:#fff;border-color:#e2e5ea}
+.econ-dialog-layer.econ-light .econ-form-actions button{
+  color:#253246;background:#f8f9fb;border-color:#dce0e5;
+}
+.econ-dialog-layer.econ-light .econ-form-actions button[type=submit]{
+  background:#f4a645;color:#2a1806;border-color:#e99e3d;
+}
+.econ-dialog-layer.econ-light .econ-inline-category-button,
+.econ-dialog-layer.econ-light .econ-form .econ-help-button{color:#a45d10}
+.econ-dialog-layer.econ-light .econ-inline-category-form button{color:#78450d}
+@media(prefers-reduced-motion:reduce){.econ-mobile-add-fab{transition:none}}
