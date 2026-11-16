@@ -3,12 +3,14 @@ import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, BookOpen, Check, ChevronRi
 import type { KeyboardEvent } from 'react';
 import ModuleRail from './components/ModuleRail';
 import { PlanikMascot } from './components/PlanikMascot';
+import { EconomicAiProposalCard, type EconomicAiProposal } from './components/EconomicAiProposalCard';
 import { askEconomicStream, ECONOMIC_ACCEPTED_FILE_TYPES, validateEconomicFiles, type EconomicAssistantStage } from './lib/economicAssistantStream';
 // Load the existing Planik transcription dialog only when Economic chat opens.
 const EconomicVoiceInput = lazy(() => import('./components/VoiceInputButton').then(m => ({ default: m.VoiceInputButton })));
 
 import { loadThemePreference, resolveThemeMode } from './lib/autoTheme';
 import { annuityEstimate, formatMinorRub as money, minorToRublesInput as inputMoney, rublesToMinor as parseMoney } from './lib/economicMoney';
+import { formatCreditsSpent } from './lib/credits';
 import './EconomicApp.css';
 
 type Kind = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'DEBT_BORROWED' | 'DEBT_LENT' | 'DEBT_REPAID' | 'DEBT_RETURNED';
@@ -20,7 +22,7 @@ type Debt = { id: string; direction: 'OWE' | 'OWED_TO_ME'; counterparty: string;
 type Loan = { id: string; name: string; lender: string | null; principalMinor: string; paidMinor: string; monthlyPaymentOverrideMinor: string | null; paymentDate: string | null; remindersEnabled: boolean; annualRateBps: number; termMonths: number; startDate: string; isClosed: boolean };
 type EconomicUser = { id: string; name: string | null; username: string | null; timeZone: string | null; telegramLinked: boolean };
 type Category = { id: string; name: string; kind: 'INCOME' | 'EXPENSE' };
-type ChatMessage = { id: string; role: string; content: string; createdAt: string; creditsSpentMilli?: number; inputTokens?: number; outputTokens?: number; attachmentNames?: string[] };
+type ChatMessage = { id: string; role: string; content: string; createdAt: string; creditsSpentMilli?: number; inputTokens?: number; outputTokens?: number; attachmentNames?: string[]; proposals?: EconomicAiProposal[] };
 type Snapshot = {
   accounts: Account[]; recent: Operation[]; debts: Debt[]; loans: Loan[]; categories: Category[];
   assistantMessages: ChatMessage[];
@@ -101,6 +103,28 @@ export default function EconomicApp() {
   const [assistantStage, setAssistantStage] = useState<EconomicAssistantStage | 'reading_files' | 'refreshing_finances' | null>(null);
   const [assistantError, setAssistantError] = useState('');
   const [assistantFiles, setAssistantFiles] = useState<File[]>([]);
+  const [economicAutoApply, setEconomicAutoApply] = useState(false);
+  // User's preference is stored on User.economicAiAutoApply, not browser
+  // localStorage. Read it after opening and sync across all action chips.
+  useEffect(() => {
+    if(!assistantOpen)return;
+    let alive=true;
+    void fetch('/api/economic/assistant/preferences',{credentials:'include',cache:'no-store'})
+      .then(async response=>{
+        const data=await response.json() as {autoApply?:boolean};
+        if(response.ok&&alive)setEconomicAutoApply(data.autoApply===true);
+      }).catch(()=>undefined);
+    return()=>{alive=false;};
+  },[assistantOpen]);
+  const changeEconomicAutoApply=async(next:boolean)=>{
+    const response=await fetch('/api/economic/assistant/preferences',{
+      method:'PUT',credentials:'include',cache:'no-store',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({autoApply:next})
+    });
+    const data=await response.json().catch(()=>({})) as {autoApply?:boolean;error?:string};
+    if(!response.ok)throw new Error(data.error||'Не удалось сохранить настройку.');
+    setEconomicAutoApply(data.autoApply===true);
+  };
   const assistantScrollRef = useRef<HTMLDivElement>(null);
   const assistantFilePickerRef = useRef<HTMLInputElement>(null);
   const assistantPendingRef = useRef(false);
@@ -334,6 +358,7 @@ export default function EconomicApp() {
     // useLayoutEffect scrolls as soon as the optimistic bubble enters the DOM.
     try {
       const reply = await askEconomicStream(question, files, stage => setAssistantStage(stage));
+      if (typeof reply.autoApply === 'boolean') setEconomicAutoApply(reply.autoApply);
       setAssistantStage('refreshing_finances');
       // Keep the actual answer visible if the subsequent snapshot refresh fails.
       setSnapshot(prev => prev ? { ...prev,
@@ -341,6 +366,7 @@ export default function EconomicApp() {
           id: 'economic-answer:' + pendingId, role: 'assistant',
           content: reply.answer, creditsSpentMilli: reply.creditsSpentMilli,
           inputTokens: reply.inputTokens, outputTokens: reply.outputTokens,
+          proposals: reply.proposals ?? [],
           createdAt: new Date().toISOString()
         }] } : prev);
       try { await refresh(); }
@@ -561,14 +587,22 @@ export default function EconomicApp() {
           </div>}
         <div className="econ-chat-messages">
           {snapshot.assistantMessages.map(m =>
-            <div key={m.id} className={'econ-chat-bubble ' + (m.role === 'user' ? 'mine' : 'assistant')}>
-              {m.content && <span>{m.content}</span>}
-              {Boolean(m.attachmentNames?.length) &&
-                <div className="econ-message-files">{m.attachmentNames?.map((name,i) =>
-                  <span key={name + i} title={name}><Paperclip size={12}/>{name}</span>)}</div>}
+            <div key={m.id} className={'econ-chat-message ' + (m.role === 'user' ? 'mine' : 'assistant')}>
+              <div className={'econ-chat-bubble ' + (m.role === 'user' ? 'mine' : 'assistant')}>
+                {m.content && <span>{m.content}</span>}
+                {Boolean(m.attachmentNames?.length) &&
+                  <div className="econ-message-files">{m.attachmentNames?.map((name,i) =>
+                    <span key={name + i} title={name}><Paperclip size={12}/>{name}</span>)}</div>}
+              </div>
+              {m.role === 'assistant' && m.proposals?.map(item=>
+                <EconomicAiProposalCard key={item.id} initial={item}
+                  autoApply={economicAutoApply}
+                  onAutoApplyChange={changeEconomicAutoApply}
+                  onRefresh={refresh}/>
+              )}
               {m.role === 'assistant' && typeof m.creditsSpentMilli === 'number' && m.creditsSpentMilli > 0 &&
-                <div className="econ-message-credits">
-                  <Sparkles size={11}/> {(m.creditsSpentMilli / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 3 })} ИИ-кредита
+                <div className="econ-message-credits" aria-label="Стоимость ответа ИИ">
+                  <Sparkles size={11}/> Потрачено: {formatCreditsSpent(m.creditsSpentMilli)}
                 </div>}
             </div>
           )}
@@ -583,6 +617,9 @@ export default function EconomicApp() {
                 forming_answer: 'Формирую ответ',
                 searching_history: 'Ищу в истории переписки',
                 saving_conversation: 'Сохраняю ответ',
+                preparing_finances: 'Готовлю финансовые изменения',
+                searching_finances: 'Ищу финансовые записи',
+                applying_finances: 'Применяю подтверждённые настройки',
                 refreshing_finances: 'Обновляю финансовые данные'
               } as Record<string,string>)[assistantStage || ''] || 'Анализирую запрос'}</span>
               <div key={'econ-progress-' + assistantStage} className="econ-ai-progress-track" aria-hidden="true"><span/><span/><span/></div>

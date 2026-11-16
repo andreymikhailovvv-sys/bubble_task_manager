@@ -1,0 +1,43 @@
+.econ-finance-proposal{
+  width:100%;min-width:0;padding:12px;margin-top:9px;border-radius:16px;
+  border:1px solid rgba(236,171,83,.38);
+  background:linear-gradient(125deg,rgba(114,72,36,.25),rgba(42,35,37,.78));
+  box-shadow:0 8px 24px rgba(0,0,0,.12);color:#f8e4c8;font-size:12px;
+}
+.econ-finance-proposal-head{display:flex;align-items:center;gap:9px}
+.econ-finance-proposal-icon{
+  display:grid;place-items:center;flex:none;width:34px;height:34px;border-radius:11px;
+  color:#ffd18a;background:rgba(253,179,80,.15);border:1px solid rgba(249,188,95,.24)
+}
+.econ-finance-proposal-title{min-width:0;flex:1;display:grid;gap:4px}
+.econ-finance-proposal-title strong{font-size:12px;color:#ffe4af}
+.econ-finance-proposal-title small{font-size:10px;color:#cbb391}
+.econ-finance-success{color:#7fcb99;flex:none}
+.econ-finance-warn{color:#ffbe72;flex:none}
+.econ-finance-description{margin:10px 0 7px;overflow-wrap:anywhere;font-weight:700;color:#fff2d9}
+.econ-finance-proposal-details{
+  display:grid;gap:4px;padding:9px 10px;border:1px solid rgba(247,183,83,.13);
+  border-radius:10px;background:rgba(19,18,23,.23);color:#d9be9c;font-size:11px;
+  line-height:1.45;overflow-wrap:anywhere
+}
+.econ-finance-proposal-actions{display:flex;gap:8px;margin-top:11px}
+.econ-finance-proposal-actions button,
+.econ-finance-undo{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  min-height:36px;padding:8px 12px;border-radius:10px;font-weight:700;font-size:11px
+}
+.econ-finance-primary{flex:1;background:#eda54d;color:#261608;border:1px solid #efb566}
+.econ-finance-secondary,.econ-finance-undo{background:rgba(249,190,95,.09);border:1px solid rgba(249,190,95,.28);color:#f6cd96}
+.econ-finance-undo{width:100%;margin-top:10px}
+.econ-finance-autoapply{
+  display:flex;gap:9px;align-items:center;margin-top:12px;padding-top:10px;
+  border-top:1px solid rgba(255,199,127,.15);cursor:pointer;
+  font-size:10px;line-height:1.4;color:#c5b098
+}
+.econ-finance-autoapply input{width:15px;height:15px;flex:none;accent-color:#dd9947}
+.econ-finance-proposal-error{margin:8px 0;color:#ffa7a7;font-size:11px}
+.econ-finance-proposal button:disabled{opacity:.53;cursor:not-allowed}
+.econ-finance-proposal button:focus-visible,.econ-finance-proposal input:focus-visible{
+  outline:2px solid #ffbd6a;outline-offset:2px
+}
+@media(prefers-reduced-motion:reduce){.econ-finance-proposal *{animation:none!important}}

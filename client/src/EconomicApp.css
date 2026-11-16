@@ -280,3 +280,14 @@
  .econ-root .voice-record-panel{animation:none}
  .econ-root .voice-record-wave span{transition:none}
 }
+
+/* Economic messages follow the same bubble + bottom billing footer hierarchy
+   as Planner. No billing text inside the AI bubble. */
+.econ-chat-message{display:flex;flex-direction:column;align-items:flex-start;max-width:92%;gap:5px;min-width:0}
+.econ-chat-message.mine{align-self:flex-end;align-items:flex-end}
+.econ-chat-message.assistant{align-self:flex-start}
+.econ-chat-message .econ-chat-bubble{width:fit-content;max-width:100%;align-self:auto}
+.econ-chat-message .econ-message-credits{
+  display:flex;align-items:center;gap:4px;padding:0 2px;margin:0;
+  border:0;background:none;color:#c8a675;font-size:10px;font-weight:550;
+}
