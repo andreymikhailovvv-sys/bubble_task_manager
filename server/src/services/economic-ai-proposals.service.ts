@@ -5,7 +5,7 @@ import { canonicalEconomicAction, EconomicActionError, type EconomicAction, type
 
 type Tx = Prisma.TransactionClient;
 type Snapshot = Record<string,string|number|boolean|null>;
-const no = (message:string, status=409):never => { throw new EconomicActionError(message,status); };
+function no(message:string,status=409):never { throw new EconomicActionError(message,status); }
 const iso=(d:Date|null)=>d?.toISOString()??null;
 const snapshot = (entity:EconomicEntity,row:any):Snapshot => {
   if(entity==='account')return {id:row.id,name:row.name,openingBalanceMinor:row.openingBalanceMinor.toString(),updatedAt:iso(row.updatedAt)};
@@ -38,8 +38,8 @@ export async function readEconomicEntity(tx:Tx,owner:string,entity:EconomicEntit
   if(entity==='debt'){const row=await tx.economicDebt.findFirst({where:{id,userId:owner}});return row?snapshot(entity,row):null;}
   const row=await tx.economicLoan.findFirst({where:{id,userId:owner}});return row?snapshot(entity,row):null;
 }
-const without=(data:Snapshot,keys:string[]):Record<string,unknown> =>
-  Object.fromEntries(Object.entries(data).filter(([key])=>keys.includes(key)));
+const without=(data:Record<string,unknown>,keys:string[]):EconomicAction['payload'] =>
+  Object.fromEntries(Object.entries(data).filter(([key])=>keys.includes(key))) as EconomicAction['payload'];
 const dates=(input:unknown)=>input===null||input===undefined?null:new Date(String(input));
 function checkLoan(body:Record<string,unknown>){
   const amount=BigInt(String(body.principalMinor));
@@ -103,14 +103,14 @@ async function mutate(tx:Tx,owner:string,action:EconomicAction,record:Snapshot|n
   const d={...record,...action.payload} as Record<string,unknown>;
   if(action.entity==='account'){
     if(typeof d.name!=='string'||!d.name.trim())no('Укажите название счёта.');
-    const values={name:d.name,openingBalanceMinor:BigInt(String(d.openingBalanceMinor??'0'))};
+    const values={name:d.name as string,openingBalanceMinor:BigInt(String(d.openingBalanceMinor??'0'))};
     if(action.action==='create')return (await tx.economicAccount.create({data:{userId:owner,...values}})).id;
     await tx.economicAccount.update({where:{id:action.targetId!,userId:owner},data:values});
     return action.targetId!;
   }
   if(action.entity==='category'){
     if(!['INCOME','EXPENSE'].includes(String(d.kind))||typeof d.name!=='string')no('Некорректная категория.');
-    const values={name:d.name,kind:String(d.kind)};
+    const values={name:d.name as string,kind:String(d.kind)};
     if(action.action==='create')return (await tx.economicCategory.create({data:{userId:owner,...values}})).id;
     await tx.economicCategory.update({where:{id:action.targetId!,userId:owner},
       data:{name:values.name}});return action.targetId!;
@@ -121,9 +121,10 @@ async function mutate(tx:Tx,owner:string,action:EconomicAction,record:Snapshot|n
     const transferred=d.kind==='TRANSFER';
     const target=transferred?String(d.targetAccountId??''):null;
     if(transferred&&!target)no('Для перевода нужен счёт получателя.');
-    await owned(tx,owner,[d.sourceAccountId,...(target?[target]:[])]);
+    const sourceAccountId=d.sourceAccountId as string;
+    await owned(tx,owner,[sourceAccountId,...(target?[target]:[])]);
     const values={
-      kind:String(d.kind),sourceAccountId:d.sourceAccountId,targetAccountId:target,
+      kind:String(d.kind),sourceAccountId,targetAccountId:target,
       amountMinor:BigInt(String(d.amountMinor)),title:String(d.title),
       note:d.note==null?null:String(d.note),category:transferred?null:d.category==null?null:String(d.category),
       occurredAt:dates(d.occurredAt)??new Date()
