@@ -369,6 +369,8 @@ model User {
   economicDebts EconomicDebt[]
   economicLoans EconomicLoan[]
   economicAssistantMessages EconomicAssistantMessage[]
+  economicAiProposals EconomicAiProposal[]
+  economicAiAutoApply Boolean @default(false)
   id           String   @id @default(cuid())
   email        String?  @unique
   emailVerifiedAt DateTime?
@@ -1651,5 +1653,31 @@ model EconomicAssistantMessage {
   inputTokens       Int      @default(0)
   outputTokens      Int      @default(0)
   createdAt         DateTime @default(now())
+  proposals         EconomicAiProposal[]
   @@index([userId, createdAt])
+}
+
+model EconomicAiProposal {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messageId       String?
+  message         EconomicAssistantMessage? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  entity          String
+  action          String
+  targetId        String?
+  payload         Json
+  before          Json?
+  after           Json?
+  appliedEntityId String?
+  status          String @default("PENDING")
+  autoApplied     Boolean @default(false)
+  error           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  appliedAt       DateTime?
+  undoneAt        DateTime?
+
+  @@index([userId, createdAt])
+  @@index([messageId])
 }
