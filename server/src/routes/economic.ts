@@ -49,10 +49,22 @@ const accountOut = (row: { openingBalanceMinor: bigint; [key: string]: unknown }
   ({ ...row, openingBalanceMinor: row.openingBalanceMinor.toString() });
 const operationOut = (row: { amountMinor: bigint; [key: string]: unknown }) =>
   ({ ...row, amountMinor: row.amountMinor.toString() });
-const debtOut = (row: { amountMinor: bigint; [key: string]: unknown }) =>
-  ({ ...row, amountMinor: row.amountMinor.toString() });
-const loanOut = (row: { principalMinor: bigint; [key: string]: unknown }) =>
-  ({ ...row, principalMinor: row.principalMinor.toString() });
+const debtOut = (row: { amountMinor: bigint; paidMinor: bigint; [key: string]: unknown }) =>
+  ({ ...row, amountMinor: row.amountMinor.toString(), paidMinor: row.paidMinor.toString() });
+// Same rounded monthly-annuity convention as the client calculator.
+function loanTotalMinor(principal: bigint, annualRateBps: number, termMonths: number): bigint {
+  if (!Number.isSafeInteger(annualRateBps) || !Number.isSafeInteger(termMonths) ||
+      annualRateBps < 0 || annualRateBps > 100000 || termMonths < 1 || termMonths > 600) return 0n;
+  const monthlyRate = annualRateBps / 10000 / 12;
+  const amount = Number(principal);
+  const monthly = monthlyRate
+    ? amount * monthlyRate / (1 - Math.pow(1 + monthlyRate, -termMonths))
+    : amount / termMonths;
+  const total = BigInt(Math.round(monthly)) * BigInt(termMonths);
+  return total > principal ? total : principal;
+}
+const loanOut = (row: { principalMinor: bigint; paidMinor: bigint; monthlyPaymentOverrideMinor: bigint | null; [key: string]: unknown }) =>
+  ({ ...row, principalMinor: row.principalMinor.toString(), paidMinor: row.paidMinor.toString(), monthlyPaymentOverrideMinor: row.monthlyPaymentOverrideMinor?.toString() ?? null });
 
 async function ensureMain(user: string) {
   return prisma.economicAccount.upsert({
@@ -75,6 +87,19 @@ async function primaryAccountId(tx: Prisma.TransactionClient, owner: string) {
     create: { userId: owner, name: 'Основной счёт', isPrimary: true }, update: {}
   })).id;
 }
+
+// Tiny auth/status endpoint: Economic does not need the planner's user bootstrap.
+economicRouter.get('/session', asyncHandler(async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId(req) },
+    select: { id: true, name: true, username: true, timeZone: true, telegramChatId: true }
+  });
+  if (!user) { error(res, 'Необходима авторизация', 401); return; }
+  res.json({ user: {
+    id: user.id, name: user.name, username: user.username, timeZone: user.timeZone,
+    telegramLinked: Boolean(user.telegramChatId)
+  } });
+}));
 
 economicRouter.get('/snapshot', asyncHandler(async (req, res) => {
   const owner = userId(req);
@@ -143,7 +168,8 @@ economicRouter.delete('/accounts/:id', asyncHandler(async (req, res) => {
   if (!found) { error(res, 'Счёт не найден', 404); return; }
   if (found.isPrimary) { error(res, 'Основной счёт удалить нельзя'); return; }
   const count = await prisma.economicOperation.count({ where: { userId: owner, OR: [{ sourceAccountId: found.id }, { targetAccountId: found.id }] } });
-  if (count > 0) { error(res, 'Сначала перенесите или удалите связанные операции', 409); return; }
+  const linkedDebts = await prisma.economicDebt.count({ where: { userId: owner, accountId: found.id } });
+  if (count > 0 || linkedDebts > 0) { error(res, 'Сначала перенесите или удалите связанные операции', 409); return; }
   await prisma.economicAccount.deleteMany({ where: { id: found.id, userId: owner } });
   res.json({ ok: true });
 }));
@@ -239,31 +265,54 @@ economicRouter.delete('/categories/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// Only linked debt operations change balances. The amount repaid is posted as
+// a partial settlement and never double-counted as earned income/expenses.
 economicRouter.post('/debts', asyncHandler(async (req, res) => {
   const owner = userId(req);
   const direction = req.body?.direction, counterparty = text(req.body?.counterparty, 100);
   const amountMinor = money(req.body?.amountMinor);
+  const paidMinor = money(req.body?.paidMinor ?? '0', true);
   const note = optionalText(req.body?.note, 500);
   const dueAt = req.body?.dueAt ? toDate(req.body.dueAt) : null;
-  if (!['OWE', 'OWED_TO_ME'].includes(direction) || !counterparty || !amountMinor || note === undefined ||
-      (req.body?.dueAt && !dueAt)) { error(res, 'Укажите сторону долга, кому/кто, сумму и дату'); return; }
-  // Both the debt and its cash movement commit together or not at all.
-  const debt = await prisma.$transaction(async tx => {
-    const accountId = await primaryAccountId(tx, owner);
-    const created = await tx.economicDebt.create({
-      data: { userId: owner, direction, counterparty, amountMinor, note, dueAt }
-    });
-    await tx.economicOperation.create({
+  const postedToAccount = req.body?.postedToAccount !== false;
+  if (!['OWE', 'OWED_TO_ME'].includes(direction) || !counterparty || !amountMinor ||
+      paidMinor === null || paidMinor > amountMinor || note === undefined ||
+      (req.body?.dueAt && !dueAt) || (req.body?.postedToAccount !== undefined && typeof req.body.postedToAccount !== 'boolean')) {
+    error(res, 'Укажите корректные данные долга и сумму погашения'); return;
+  }
+  const accountId = postedToAccount && typeof req.body?.accountId === 'string' ? req.body.accountId : null;
+  if (accountId && !(await prisma.economicAccount.count({ where: { id: accountId, userId: owner } }))) {
+    error(res, 'Счёт не найден'); return;
+  }
+  const created = await prisma.$transaction(async tx => {
+    const selectedAccountId = postedToAccount ? (accountId || await primaryAccountId(tx, owner)) : null;
+    const debt = await tx.economicDebt.create({
       data: {
-        userId: owner, sourceAccountId: accountId, debtId: created.id, debtPhase: 'FUNDING',
-        kind: debtOperationKind(direction as EconomicDebtDirection, 'FUNDING'), amountMinor,
-        title: debtOperationTitle(direction as EconomicDebtDirection, 'FUNDING', counterparty),
-        category: 'Долги', occurredAt: created.createdAt
+        userId: owner, direction, counterparty, amountMinor, paidMinor, note, dueAt,
+        postedToAccount, accountId: selectedAccountId, isClosed: paidMinor === amountMinor
       }
     });
-    return created;
+    if (selectedAccountId) {
+      await tx.economicOperation.create({
+        data: {
+          userId: owner, sourceAccountId: selectedAccountId, debtId: debt.id, debtPhase: 'FUNDING',
+          kind: debtOperationKind(direction as EconomicDebtDirection, 'FUNDING'), amountMinor,
+          title: debtOperationTitle(direction as EconomicDebtDirection, 'FUNDING', counterparty),
+          category: 'Долги', occurredAt: debt.createdAt
+        }
+      });
+      if (paidMinor > 0n) await tx.economicOperation.create({
+        data: {
+          userId: owner, sourceAccountId: selectedAccountId, debtId: debt.id, debtPhase: 'SETTLEMENT',
+          kind: debtOperationKind(direction as EconomicDebtDirection, 'SETTLEMENT'), amountMinor: paidMinor,
+          title: debtOperationTitle(direction as EconomicDebtDirection, 'SETTLEMENT', counterparty),
+          category: 'Долги'
+        }
+      });
+    }
+    return debt;
   });
-  res.status(201).json({ debt: debtOut(debt) });
+  res.status(201).json({ debt: debtOut(created) });
 }));
 
 economicRouter.patch('/debts/:id', asyncHandler(async (req, res) => {
@@ -274,60 +323,58 @@ economicRouter.patch('/debts/:id', asyncHandler(async (req, res) => {
   const counterparty = text(body.counterparty, 100), amountMinor = money(String(body.amountMinor));
   const note = optionalText(body.note, 500);
   const dueAt = body.dueAt ? (body.dueAt instanceof Date ? body.dueAt : toDate(body.dueAt)) : null;
-  if (!['OWE', 'OWED_TO_ME'].includes(body.direction) || !counterparty || !amountMinor || note === undefined ||
-      (body.dueAt && !dueAt) || typeof body.isClosed !== 'boolean') {
+  const postedToAccount = body.postedToAccount;
+  let paidMinor = money(String(body.paidMinor), true);
+  if (!amountMinor || paidMinor === null || !['OWE','OWED_TO_ME'].includes(body.direction) ||
+      !counterparty || note === undefined || (body.dueAt && !dueAt) ||
+      typeof body.isClosed !== 'boolean' || typeof postedToAccount !== 'boolean') {
     error(res, 'Некорректные данные долга'); return;
   }
+  // The old "mark as closed" action still means 100% repaid.
+  if (body.isClosed && req.body?.paidMinor === undefined) paidMinor = amountMinor;
+  if (paidMinor > amountMinor || (body.isClosed && paidMinor !== amountMinor)) {
+    error(res, 'Погашение не может превышать сумму долга'); return;
+  }
+  const isClosed = paidMinor === amountMinor;
+  const accountId = postedToAccount && typeof body.accountId === 'string' ? body.accountId : null;
+  if (accountId && !(await prisma.economicAccount.count({ where: { id: accountId, userId: owner } }))) {
+    error(res, 'Счёт не найден'); return;
+  }
   await prisma.$transaction(async tx => {
+    const selectedAccountId = postedToAccount ? (accountId || await primaryAccountId(tx, owner)) : null;
     await tx.economicDebt.updateMany({
       where: { id: found.id, userId: owner },
-      data: { direction: body.direction, counterparty, amountMinor, note, dueAt, isClosed: body.isClosed }
-    });
-    const funding = await tx.economicOperation.findFirst({
-      where: { userId: owner, debtId: found.id, debtPhase: 'FUNDING' }
-    });
-    // Historical debts predate automatic accounting. Do not silently create
-    // a cash flow for them when the user merely edits the contact or due date.
-    if (!funding) return;
-    const direction = body.direction as EconomicDebtDirection;
-    await tx.economicOperation.updateMany({
-      where: { id: funding.id, userId: owner, debtId: found.id },
       data: {
-        kind: debtOperationKind(direction, 'FUNDING'), amountMinor,
-        title: debtOperationTitle(direction, 'FUNDING', counterparty)
+        direction: body.direction, counterparty, amountMinor, paidMinor, note, dueAt,
+        postedToAccount, accountId: selectedAccountId, isClosed
       }
     });
-    const settlement = await tx.economicOperation.findFirst({
-      where: { userId: owner, debtId: found.id, debtPhase: 'SETTLEMENT' }
+    if (!selectedAccountId) {
+      await tx.economicOperation.deleteMany({ where: { userId: owner, debtId: found.id } });
+      return;
+    }
+    const direction = body.direction as EconomicDebtDirection;
+    const funding = await tx.economicOperation.findFirst({ where: { userId: owner, debtId: found.id, debtPhase: 'FUNDING' } });
+    const fundingData = {
+      sourceAccountId: selectedAccountId, kind: debtOperationKind(direction, 'FUNDING'),
+      amountMinor, title: debtOperationTitle(direction, 'FUNDING', counterparty)
+    };
+    if (funding) await tx.economicOperation.update({ where: { id: funding.id }, data: fundingData });
+    else await tx.economicOperation.create({
+      data: { ...fundingData, userId: owner, debtId: found.id, debtPhase: 'FUNDING', category: 'Долги' }
     });
-    if (body.isClosed) {
-      if (settlement) {
-        await tx.economicOperation.updateMany({
-          where: { id: settlement.id, userId: owner, debtId: found.id },
-          data: {
-            kind: debtOperationKind(direction, 'SETTLEMENT'), amountMinor,
-            title: debtOperationTitle(direction, 'SETTLEMENT', counterparty)
-          }
-        });
-      } else {
-        // Closing means full repayment. The reverse movement goes to the
-        // primary account at the moment the debt is marked paid.
-        const accountId = await primaryAccountId(tx, owner);
-        await tx.economicOperation.create({
-          data: {
-            userId: owner, sourceAccountId: accountId, debtId: found.id, debtPhase: 'SETTLEMENT',
-            kind: debtOperationKind(direction, 'SETTLEMENT'), amountMinor,
-            title: debtOperationTitle(direction, 'SETTLEMENT', counterparty),
-            category: 'Долги'
-          }
-        });
-      }
-    } else if (settlement) {
-      // Reopening a debt removes its automatically recorded settlement, not
-      // the original movement. Unique(debtId, debtPhase) stops duplicates.
-      await tx.economicOperation.deleteMany({
-        where: { id: settlement.id, userId: owner, debtId: found.id, debtPhase: 'SETTLEMENT' }
+    const settlement = await tx.economicOperation.findFirst({ where: { userId: owner, debtId: found.id, debtPhase: 'SETTLEMENT' } });
+    if (paidMinor > 0n) {
+      const settlementData = {
+        sourceAccountId: selectedAccountId, kind: debtOperationKind(direction, 'SETTLEMENT'),
+        amountMinor: paidMinor, title: debtOperationTitle(direction, 'SETTLEMENT', counterparty)
+      };
+      if (settlement) await tx.economicOperation.update({ where: { id: settlement.id }, data: settlementData });
+      else await tx.economicOperation.create({
+        data: { ...settlementData, userId: owner, debtId: found.id, debtPhase: 'SETTLEMENT', category: 'Долги' }
       });
+    } else if (settlement) {
+      await tx.economicOperation.delete({ where: { id: settlement.id } });
     }
   });
   res.json({ ok: true });
@@ -343,30 +390,62 @@ economicRouter.delete('/debts/:id', asyncHandler(async (req, res) => {
 }));
 
 economicRouter.post('/loans', asyncHandler(async (req, res) => {
-  const name = text(req.body?.name, 100), lender = optionalText(req.body?.lender, 100);
-  const principalMinor = money(req.body?.principalMinor);
-  const annualRateBps = req.body?.annualRateBps, termMonths = req.body?.termMonths;
-  const startDate = toDate(req.body?.startDate);
-  if (!name || lender === undefined || !principalMinor || !Number.isInteger(annualRateBps) || annualRateBps < 0 ||
-      annualRateBps > 100000 || !Number.isInteger(termMonths) || termMonths < 1 || termMonths > 600 || !startDate) {
-    error(res, 'Укажите сумму, ставку, срок и дату кредита'); return;
+  const owner = userId(req), body = req.body ?? {};
+  const name = text(body.name, 100), lender = optionalText(body.lender, 100);
+  const principalMinor = money(body.principalMinor), paidMinor = money(body.paidMinor ?? '0', true);
+  const monthlyPaymentOverrideMinor = body.monthlyPaymentOverrideMinor == null ? null : money(body.monthlyPaymentOverrideMinor);
+  const annualRateBps = body.annualRateBps, termMonths = body.termMonths;
+  const startDate = toDate(body.startDate);
+  const paymentDate = body.paymentDate ? toDate(body.paymentDate) : null;
+  const remindersEnabled = body.remindersEnabled === true;
+  if (!name || lender === undefined || !principalMinor || paidMinor === null ||
+      monthlyPaymentOverrideMinor === null && body.monthlyPaymentOverrideMinor != null ||
+      !Number.isInteger(annualRateBps) || annualRateBps < 0 || annualRateBps > 100000 ||
+      !Number.isInteger(termMonths) || termMonths < 1 || termMonths > 600 || !startDate ||
+      paidMinor > loanTotalMinor(principalMinor, annualRateBps, termMonths) ||
+      (body.paymentDate && !paymentDate) || (body.remindersEnabled !== undefined && typeof body.remindersEnabled !== 'boolean') ||
+      (remindersEnabled && !paymentDate)) {
+    error(res, 'Укажите корректные параметры кредита, сумму выплаты и дату напоминания'); return;
   }
-  const loan = await prisma.economicLoan.create({ data: { userId: userId(req), name, lender, principalMinor, annualRateBps, termMonths, startDate } });
+  if (remindersEnabled && !(await prisma.user.count({ where: { id: owner, telegramChatId: { not: null } } }))) {
+    error(res, 'Подключите Telegram-бот Планировыч AI для напоминаний'); return;
+  }
+  const loan = await prisma.economicLoan.create({
+    data: {
+      userId: owner, name, lender, principalMinor, paidMinor, monthlyPaymentOverrideMinor,
+      annualRateBps, termMonths, startDate, paymentDate, remindersEnabled
+    }
+  });
   res.status(201).json({ loan: loanOut(loan) });
 }));
 economicRouter.patch('/loans/:id', asyncHandler(async (req, res) => {
   const owner = userId(req);
   const found = await prisma.economicLoan.findFirst({ where: { id: req.params.id, userId: owner } });
-  if (!found) { error(res, 'Кредит не найден',404); return; }
+  if (!found) { error(res, 'Кредит не найден', 404); return; }
   const body = { ...found, ...req.body };
-  const name = text(body.name,100), lender = optionalText(body.lender,100), principalMinor = money(String(body.principalMinor));
+  const name = text(body.name, 100), lender = optionalText(body.lender, 100);
+  const principalMinor = money(String(body.principalMinor)), paidMinor = money(String(body.paidMinor), true);
+  const monthlyPaymentOverrideMinor = body.monthlyPaymentOverrideMinor == null ? null : money(String(body.monthlyPaymentOverrideMinor));
   const startDate = body.startDate instanceof Date ? body.startDate : toDate(body.startDate);
-  if (!name || lender === undefined || !principalMinor || !Number.isInteger(body.annualRateBps) || body.annualRateBps < 0 ||
-      body.annualRateBps > 100000 || !Number.isInteger(body.termMonths) || body.termMonths < 1 || body.termMonths > 600 ||
-      !startDate || typeof body.isClosed !== 'boolean') { error(res,'Некорректные данные кредита'); return; }
+  const paymentDate = body.paymentDate ? (body.paymentDate instanceof Date ? body.paymentDate : toDate(body.paymentDate)) : null;
+  if (!name || lender === undefined || !principalMinor || paidMinor === null ||
+      (body.monthlyPaymentOverrideMinor != null && monthlyPaymentOverrideMinor === null) ||
+      !Number.isInteger(body.annualRateBps) || body.annualRateBps < 0 || body.annualRateBps > 100000 ||
+      !Number.isInteger(body.termMonths) || body.termMonths < 1 || body.termMonths > 600 ||
+      paidMinor > loanTotalMinor(principalMinor, body.annualRateBps, body.termMonths) ||
+      !startDate || (body.paymentDate && !paymentDate) || typeof body.remindersEnabled !== 'boolean' ||
+      (body.remindersEnabled && !paymentDate) || typeof body.isClosed !== 'boolean') {
+    error(res, 'Некорректные данные кредита'); return;
+  }
+  if (body.remindersEnabled && !(await prisma.user.count({ where: { id: owner, telegramChatId: { not: null } } }))) {
+    error(res, 'Подключите Telegram-бот Планировыч AI для напоминаний'); return;
+  }
   await prisma.economicLoan.updateMany({ where: { id: found.id, userId: owner },
-    data: { name, lender, principalMinor, annualRateBps: body.annualRateBps, termMonths: body.termMonths,
-      startDate, isClosed: body.isClosed } });
+    data: {
+      name, lender, principalMinor, paidMinor, monthlyPaymentOverrideMinor, paymentDate,
+      remindersEnabled: body.remindersEnabled, annualRateBps: body.annualRateBps, termMonths: body.termMonths,
+      startDate, isClosed: body.isClosed
+    } });
   res.json({ ok: true });
 }));
 economicRouter.delete('/loans/:id', asyncHandler(async (req, res) => {
