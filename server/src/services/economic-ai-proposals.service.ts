@@ -198,6 +198,12 @@ export function economicProposalView(row:{
   const display=(key:string,value:unknown)=>{
     if(value===null)return 'не указано';
     if(typeof value==='boolean')return value?'да':'нет';
+    // The user-facing financial chip must never display EXPENSE / INCOME enums.
+    if(key==='kind'){
+      if(row.entity==='operation')return 'Финансовая операция';
+      const localized:Record<string,string>={INCOME:'Доход',EXPENSE:'Расход',TRANSFER:'Перевод'};
+      return localized[String(value)]??String(value);
+    }
     if(key.endsWith('Minor')&&typeof value==='string'&&/^-?\d+$/.test(value))
       return (Number(BigInt(value))/100).toLocaleString('ru-RU',{maximumFractionDigits:2})+' ₽';
     return String(value);

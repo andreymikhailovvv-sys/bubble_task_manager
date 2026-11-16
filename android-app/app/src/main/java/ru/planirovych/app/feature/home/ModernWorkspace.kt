@@ -652,7 +652,9 @@ private fun WorkspaceHabitBubble(habit: Habit, dueToday: Boolean, colors: Worksp
             Column(Modifier.size(48.dp).clip(CircleShape).background(core),
                 horizontalAlignment=Alignment.CenterHorizontally,
                 verticalArrangement=Arrangement.Center) {
-                Text(habit.icon, modifier=Modifier.alpha(if (dueToday) 1f else .27f),
+                Text(habit.icon, modifier=Modifier
+                        .habitEmojiCompletionFilter(dueToday && count>=target)
+                        .alpha(if (!dueToday) .27f else if (count>=target) .72f else 1f),
                     fontSize=20.sp,lineHeight=21.sp,maxLines=1,textAlign=TextAlign.Center)
                 Spacer(Modifier.height(1.dp))
                 Text("${count.coerceAtMost(target)}/$target",fontSize=10.sp,

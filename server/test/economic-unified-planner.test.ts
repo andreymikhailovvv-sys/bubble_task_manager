@@ -39,7 +39,9 @@ test('shared Planner assistant can read, search and propose owner-scoped finance
   assert.match(chatTools,/applyEconomicProposal\(input\.userId,proposal\.id,true\)/);
   assert.match(chatPrompt,/Ты также управляешь финансами пользователя из модуля Экономыч/);
   assert.match(readOnly,/where:\{userId:owner\}/);
-  assert.match(economic,/Подтверждение финансовых изменений/);
+  // The overview is data-only: approvals remain inline in their original chats.
+  assert.doesNotMatch(economic,/Подтверждение финансовых изменений/);
+  assert.doesNotMatch(economic,/econ-planner-proposals/);
   assert.match(economic,/EconomicAiProposalCard key=\{item\.id\}/);
 });
 

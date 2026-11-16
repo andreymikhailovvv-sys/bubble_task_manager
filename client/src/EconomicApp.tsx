@@ -540,15 +540,6 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
             <article className="econ-stat"><div className="econ-stat-label"><ArrowDownLeft size={18}/> Доходы за месяц</div><strong className="econ-positive">{money(snapshot.totals.monthIncomeMinor)}</strong><small>Без переводов между счетами</small></article>
             <article className="econ-stat"><div className="econ-stat-label"><ArrowUpRight size={18}/> Расходы за месяц</div><strong>{money(snapshot.totals.monthExpenseMinor)}</strong><small>Без переводов между счетами</small></article>
           </div>
-          {snapshot.assistantMessages.some(m => m.content.startsWith('[Планировыч]') && m.proposals?.some(p => p.status === 'PENDING' || p.status === 'APPLIED')) && <section className="econ-card econ-planner-proposals">
-            <div className="econ-card-header"><div><h2>Подтверждение финансовых изменений</h2><p>Предложения основного помощника Планировыча</p></div></div>
-            <div className="econ-planner-proposal-list">
-              {snapshot.assistantMessages.filter(m => m.content.startsWith('[Планировыч]')).flatMap(m =>
-                (m.proposals ?? []).filter(p => p.status === 'PENDING' || p.status === 'APPLIED')
-              ).map(item => <EconomicAiProposalCard key={item.id} initial={item} autoApply={economicAutoApply}
-                onAutoApplyChange={changeEconomicAutoApply} onRefresh={refresh}/>)}
-            </div>
-          </section>}
           <div className="econ-dashboard-grid">
             <section className="econ-card"><div className="econ-card-header"><div><h2>Мои счета</h2><p>Остатки с учётом всех операций</p></div><button type="button" onClick={() => setSection('accounts')}>Все счета <ChevronRight size={16}/></button></div><div className="econ-account-grid">{snapshot.accounts.slice(0, 4).map(a => <button type="button" className={'econ-mini-account ' + (a.isPrimary ? 'main' : '')} key={a.id} onClick={() => openDialog('account', a)}><WalletCards size={20}/><span>{a.name}{a.isPrimary && <small>Основной</small>}</span><strong>{money(a.balanceMinor)}</strong></button>)}</div><button className="econ-inline-add" type="button" onClick={() => openDialog('account')}><Plus size={16}/> Добавить счёт</button></section>
             <section className="econ-card">

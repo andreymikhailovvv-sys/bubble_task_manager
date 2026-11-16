@@ -609,7 +609,9 @@ private fun nextHabitWeekday(habit: Habit, today: LocalDate): String {
                 ) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(habit.icon, modifier = Modifier.alpha(if (scheduledToday) 1f else .24f),
+                            Text(habit.icon, modifier = Modifier
+                                    .habitEmojiCompletionFilter(scheduledToday && amount>=target)
+                                    .alpha(if (!scheduledToday) .24f else if (amount>=target) .72f else 1f),
                                 style = MaterialTheme.typography.titleLarge)
                             Text("${amount.coerceAtMost(target)}/$target",
                                 color = contentColor.copy(alpha = if (scheduledToday) 1f else .65f),
