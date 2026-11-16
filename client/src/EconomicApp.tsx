@@ -139,6 +139,15 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
     const node = assistantScrollRef.current;
     if (node) node.scrollTop = node.scrollHeight;
   }, [assistantOpen, snapshot?.assistantMessages.length, assistantBusy, assistantStage, assistantError]);
+  // Native Android pager keeps WebView warm while other tabs are open.
+  // Re-read finance when its tab becomes active, including proposals prepared
+  // by the general AI voice widget while the finance tab was out of view.
+  useEffect(() => {
+    if(!user?.id)return;
+    const activated=()=>{void refresh().catch(()=>undefined)};
+    window.addEventListener('economic-activate',activated);
+    return ()=>window.removeEventListener('economic-activate',activated);
+  },[user?.id,refresh]);
   const [operations, setOperations] = useState<Operation[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [operationsBusy, setOperationsBusy] = useState(false);
@@ -530,11 +539,11 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
             <article className="econ-stat"><div className="econ-stat-label"><ArrowDownLeft size={18}/> Доходы за месяц</div><strong className="econ-positive">{money(snapshot.totals.monthIncomeMinor)}</strong><small>Без переводов между счетами</small></article>
             <article className="econ-stat"><div className="econ-stat-label"><ArrowUpRight size={18}/> Расходы за месяц</div><strong>{money(snapshot.totals.monthExpenseMinor)}</strong><small>Без переводов между счетами</small></article>
           </div>
-          {snapshot.assistantMessages.some(m => m.content.startsWith('[Планировыч]') && m.proposals?.some(p => p.status === 'PENDING')) && <section className="econ-card econ-planner-proposals">
+          {snapshot.assistantMessages.some(m => m.content.startsWith('[Планировыч]') && m.proposals?.some(p => p.status === 'PENDING' || p.status === 'APPLIED')) && <section className="econ-card econ-planner-proposals">
             <div className="econ-card-header"><div><h2>Подтверждение финансовых изменений</h2><p>Предложения основного помощника Планировыча</p></div></div>
             <div className="econ-planner-proposal-list">
               {snapshot.assistantMessages.filter(m => m.content.startsWith('[Планировыч]')).flatMap(m =>
-                (m.proposals ?? []).filter(p => p.status === 'PENDING')
+                (m.proposals ?? []).filter(p => p.status === 'PENDING' || p.status === 'APPLIED')
               ).map(item => <EconomicAiProposalCard key={item.id} initial={item} autoApply={economicAutoApply}
                 onAutoApplyChange={changeEconomicAutoApply} onRefresh={refresh}/>)}
             </div>
