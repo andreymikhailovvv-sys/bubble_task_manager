@@ -6,6 +6,7 @@ const read=(path:string)=>readFileSync(new URL(path,import.meta.url),'utf8');
 const service=read('../src/services/economic-ai-proposals.service.ts');
 const assistant=read('../src/services/economic-assistant.service.ts');
 const router=read('../src/routes/economic.ts');
+const lookup=read('../src/services/economic-ai-record-search.service.ts');
 const schema=read('../prisma/schema.prisma');
 const migration=read('../prisma/migrations/20261116213000_economic_ai_finance_proposals/migration.sql');
 
@@ -63,4 +64,14 @@ test('assistant messages have explicit user-before-assistant timestamps',()=>{
   assert.match(assistant,/role: 'user'[\s\S]*?createdAt: userAt/);
   assert.match(assistant,/role: 'assistant'[\s\S]*?createdAt: assistantAt/);
   assert.match(router,/orderBy: \[\{ createdAt: 'desc' \}, \{ role: 'asc' \}, \{ id: 'desc' \}\]/);
+});
+
+test('older records are retrieved by a separate owner-scoped, metered read-only tool',()=>{
+  assert.match(assistant,/name: 'find_economic_records'/);
+  assert.match(assistant,/findEconomicRecords\(input\.owner/);
+  assert.match(assistant,/seenVersions\.set\(row\.entity\+':'\+row\.id/);
+  assert.match(assistant,/for \(let callIndex = 1; callIndex <= 3; callIndex\+\+\)/);
+  assert.match(lookup,/userId:owner/g);
+  assert.match(lookup,/take:10/g);
+  assert.doesNotMatch(lookup,/\.update\(|\.create\(|\.delete\(/);
 });
