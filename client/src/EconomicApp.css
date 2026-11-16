@@ -291,3 +291,80 @@
   display:flex;align-items:center;gap:4px;padding:0 2px;margin:0;
   border:0;background:none;color:#c8a675;font-size:10px;font-weight:550;
 }
+
+/* Same financial overview and editor for the native Android WebView and the
+   Telegram Mini App. Only the desktop rail/assistant disappears on mobile. */
+.econ-root.econ-mobile-workspace{
+  min-height:100%;height:auto;max-width:100%;overflow-x:hidden;
+  background:radial-gradient(ellipse at 87% 0%,rgba(238,149,47,.18),transparent 46%),
+    linear-gradient(145deg,#181920,#101117 78%);
+}
+.econ-root.econ-mobile-workspace.econ-light{
+  background:linear-gradient(165deg,#fff9ef,#f8f3ea);
+}
+.econ-mobile-workspace .econ-shell{max-width:700px;min-height:100%;margin:0 auto;padding:0;display:block}
+.econ-mobile-workspace .econ-main{width:100%;max-width:100%;padding:12px 13px 30px}
+.econ-mobile-workspace .econ-topbar{flex-direction:row;align-items:center;gap:8px;margin:15px 0 15px}
+.econ-mobile-workspace .econ-topbar h1{font-size:22px;letter-spacing:-.65px;margin-top:3px}
+.econ-mobile-workspace .econ-eyebrow{font-size:9px;letter-spacing:.8px}
+.econ-mobile-workspace .econ-add-global{padding:9px;border-radius:11px;font-size:11px;gap:4px}
+.econ-mobile-workspace .econ-add-global svg{width:15px;height:15px}
+.econ-mobile-workspace .econ-intro{min-height:160px;padding:18px;border-radius:19px}
+.econ-mobile-workspace .econ-intro h2{font-size:24px;margin:10px 0 8px}
+.econ-mobile-workspace .econ-intro p{max-width:255px;font-size:11px;line-height:1.5}
+.econ-mobile-workspace .econ-intro-illustration{position:absolute;right:-75px;top:0;opacity:.26;pointer-events:none}
+.econ-mobile-workspace .econ-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.econ-mobile-workspace .econ-stat.featured{grid-column:span 2}
+.econ-mobile-workspace .econ-stat{min-width:0;padding:14px;border-radius:15px}
+.econ-mobile-workspace .econ-stat strong{font-size:clamp(16px,4vw,23px);overflow-wrap:anywhere}
+.econ-mobile-workspace .econ-card{padding:14px;border-radius:17px}
+.econ-mobile-workspace .econ-card-header h2{font-size:15px}
+.econ-mobile-workspace .econ-card-header p{font-size:10px}
+.econ-mobile-workspace .econ-dashboard-grid,.econ-mobile-workspace .econ-collection-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:11px}
+.econ-mobile-workspace .econ-account-grid{display:grid;grid-template-columns:minmax(0,1fr)}
+.econ-mobile-workspace .econ-operation-row{min-width:0}
+.econ-mobile-workspace .econ-operation-body{min-width:0}
+.econ-mobile-workspace .econ-section-content{margin-top:14px}
+.econ-mobile-workspace .econ-footer{font-size:10px;text-align:center;padding:12px 0}
+.econ-mobile-sections{
+  display:flex;gap:6px;align-items:center;overflow-x:auto;
+  scrollbar-width:none;padding:2px 0 9px;scroll-snap-type:x proximity;
+}
+.econ-mobile-sections::-webkit-scrollbar{display:none}
+.econ-mobile-sections button{
+  flex:none;display:inline-flex;gap:5px;align-items:center;min-height:36px;
+  border:1px solid rgba(232,166,89,.19);border-radius:12px;
+  padding:7px 10px;color:#bcac9a;background:rgba(255,190,104,.05);
+  font-size:11px;font-weight:650;scroll-snap-align:start;
+}
+.econ-mobile-sections button.active{
+  color:#ffd89e;background:rgba(244,154,48,.2);
+  border-color:rgba(248,170,62,.36);
+}
+.econ-light .econ-mobile-sections button{color:#835d37;background:#fff6eb}
+.econ-light .econ-mobile-sections button.active{
+  color:#814200;background:#ffe6c1;border-color:#e3ad71;
+}
+/* Editor is a real focus-trapped-ish modal surface, with keyboard clearance,
+   scrollable forms and the same controls and validation as desktop. */
+.econ-mobile-workspace .econ-modal-backdrop{
+  align-items:flex-end;padding:0 0 env(safe-area-inset-bottom,0px);
+}
+.econ-mobile-workspace .econ-modal{
+  width:100%;max-width:700px;max-height:min(92dvh,900px);
+  border-radius:23px 23px 0 0;overflow-y:auto;overscroll-behavior:contain;
+  padding:20px max(16px,env(safe-area-inset-left,0px)) 21px;
+}
+.econ-mobile-workspace .econ-form-actions{
+  position:sticky;bottom:0;z-index:1;padding:10px 0 0;
+  background:inherit;
+}
+@media(min-width:600px){
+ .econ-mobile-workspace .econ-modal-backdrop{align-items:center;padding:16px}
+ .econ-mobile-workspace .econ-modal{border-radius:22px}
+}
+@media(max-width:350px){
+ .econ-mobile-workspace .econ-topbar h1{font-size:19px}
+ .econ-mobile-workspace .econ-stats{grid-template-columns:1fr}
+ .econ-mobile-workspace .econ-stat.featured{grid-column:auto}
+}
