@@ -42,5 +42,5 @@ test('desktop, Mini App, native Android and voice render actionable finance chip
     assert.match(androidUi,new RegExp('action\\("'+action+'"\\)'));
     assert.match(androidRepo,new RegExp('"'+action+'"->api\\.'));
   }
-  assert.match(voice,/economicProposals: result\.economicProposals/);
+  assert.match(voice,/economicProposals: 'economicProposals' in result/);
 });
