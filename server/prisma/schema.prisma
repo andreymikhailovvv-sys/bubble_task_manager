@@ -885,6 +885,8 @@ model TaskAiConversationMemory {
 }
 
 model GeneralAiMessage {
+  // IDs of owner-scoped financial proposals attached to this Quick AI reply.
+  economicProposalIds Json?
   // Verified AI-created file metadata for durable Quick AI history on all clients.
   // Private file bytes are NEVER stored in chat messages.
   generatedDocument Json?
