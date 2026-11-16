@@ -280,8 +280,8 @@ test('fullscreen search and all five tabs respect safe areas and keep the shared
   assert.match(styles, /\.miniapp-shell \.miniapp-premium-topbar-floating,[\s\S]*?position: fixed/);
   assert.match(styles, /top: calc\(var\(--miniapp-top-inset, 0px\) \+ \.5rem\)/);
   assert.doesNotMatch(mini, /sticky z-30 miniapp-premium-topbar/);
-  assert.match(mini, /!isEconomicOpen && isAiChatOpen && !!isEconomicOpen && isStandaloneNotesOpen \? 'is-active'/);
-  assert.match(mini, /isStandaloneNotesOpen \? 'is-active'/);
+  assert.match(mini, /!isEconomicOpen && isAiChatOpen && !isStandaloneNotesOpen \? 'is-active'/);
+  assert.match(mini, /!isEconomicOpen && isStandaloneNotesOpen \? 'is-active'/);
   assert.match(mini, /setIsEconomicOpen\(false\); setIsAiChatOpen\(false\); setIsStandaloneNotesOpen\(false\)/);
   assert.match(mini, /mobileSafeAreaTop=\{telegramViewport\.top\}/);
   assert.match(notes, /style=\{mode === 'mobile' \?/);
