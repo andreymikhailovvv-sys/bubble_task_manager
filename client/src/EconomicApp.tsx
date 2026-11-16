@@ -611,7 +611,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
         {snapshot.assistantMessages.length === 0 &&
           <div className="econ-assistant-welcome"><MessageCircle size={21}/>
             <strong>Чем помочь с финансами?</strong>
-            <p>Спросите о доходах, расходах, кредитах или способах вести бюджет. Помощник анализирует ваши данные и прикреплённые файлы. Изменять записи через чат можно будет после следующего обновления.</p>
+            <p>Спросите о доходах, расходах, кредитах или способах вести бюджет. Помощник анализирует ваши данные и прикреплённые файлы. Создание и изменение финансовых записей доступны с подтверждением.</p>
           </div>}
         <div className="econ-chat-messages">
           {snapshot.assistantMessages.map(m =>
