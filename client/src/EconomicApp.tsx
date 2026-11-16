@@ -593,16 +593,16 @@ export default function EconomicApp() {
                   <div className="econ-message-files">{m.attachmentNames?.map((name,i) =>
                     <span key={name + i} title={name}><Paperclip size={12}/>{name}</span>)}</div>}
               </div>
-              {m.role === 'assistant' && typeof m.creditsSpentMilli === 'number' && m.creditsSpentMilli > 0 &&
-                <div className="econ-message-credits" aria-label="Стоимость ответа ИИ">
-                  <Sparkles size={11}/> Потрачено: {formatCreditsSpent(m.creditsSpentMilli)}
-                </div>}
               {m.role === 'assistant' && m.proposals?.map(item=>
                 <EconomicAiProposalCard key={item.id} initial={item}
                   autoApply={economicAutoApply}
                   onAutoApplyChange={changeEconomicAutoApply}
                   onRefresh={refresh}/>
               )}
+              {m.role === 'assistant' && typeof m.creditsSpentMilli === 'number' && m.creditsSpentMilli > 0 &&
+                <div className="econ-message-credits" aria-label="Стоимость ответа ИИ">
+                  <Sparkles size={11}/> Потрачено: {formatCreditsSpent(m.creditsSpentMilli)}
+                </div>}
             </div>
           )}
           {assistantBusy && <div className="econ-ai-progress" role="status" aria-live="polite" aria-atomic="true">
