@@ -104,7 +104,8 @@ export async function answerEconomicAssistant(input: {
     };
     // Existing shared dynamic billing: exact provider preflight, wallet
     // reservation, provider-reported token usage, markup, and refund unused.
-    inform('forming_answer');\n    const call = await runDynamicResponsesCall({
+    inform('forming_answer');
+    const call = await runDynamicResponsesCall({
       userId: input.owner, actionId, providerCallIndex: callIndex,
       feature: 'general_assistant', apiKey, payload, maxOutputTokensCap: 2048,
       onProviderEvent: () => undefined
