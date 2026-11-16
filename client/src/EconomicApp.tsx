@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, BookOpen, CalendarDays, Check, ChevronRight, CircleDollarSign, CreditCard, Landmark, LayoutDashboard, Loader2, MessageCircle, Pencil, Plus, Send, Settings2, Trash2, WalletCards, X } from 'lucide-react';
+import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, BookOpen, Check, ChevronRight, CircleDollarSign, CreditCard, Landmark, LayoutDashboard, Loader2, MessageCircle, Pencil, Plus, Send, Settings2, Trash2, WalletCards, X } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import ModuleRail from './components/ModuleRail';
 import { loadThemePreference, resolveThemeMode } from './lib/autoTheme';
@@ -144,6 +144,19 @@ export default function EconomicApp() {
     window.addEventListener('storage', synchronize);
     return () => { window.clearInterval(timer); window.removeEventListener('storage', synchronize); };
   }, [user?.id, user?.timeZone]);
+  // The user may connect the Telegram bot in another tab; refresh the
+  // integration status without reloading the entire financial snapshot.
+  useEffect(() => {
+    if (!user?.id) return;
+    const checkConnection = () => {
+      void economicRequest<{ user: EconomicUser }>('/session')
+        .then(result => { if (result.user.id === user.id) setUser(result.user); })
+        .catch(() => undefined);
+    };
+    window.addEventListener('focus', checkConnection);
+    return () => window.removeEventListener('focus', checkConnection);
+  }, [user?.id]);
+
   const loadOperations = useCallback(async (append = false, cursor?: string | null) => {
     setOperationsBusy(true);
     try {
@@ -422,8 +435,8 @@ export default function EconomicApp() {
               <div className="econ-card-header"><div><h2>Долги и кредиты</h2><p>Платежи и прогресс погашения</p></div>
                 <button type="button" onClick={() => setSection('debts')}>Все записи <ChevronRight size={16}/></button></div>
               <div className="econ-obligation-preview-list">
-                {snapshot.debts.filter(x => !x.isClosed).slice(0, 2).map(d => obligationPreview(d, 'debt'))}
-                {snapshot.loans.filter(x => !x.isClosed).slice(0, 2).map(l => obligationPreview(l, 'loan'))}
+                {snapshot.debts.filter(x => !x.isClosed).map(d => obligationPreview(d, 'debt'))}
+                {snapshot.loans.filter(x => !x.isClosed).map(l => obligationPreview(l, 'loan'))}
                 {!snapshot.debts.some(d => !d.isClosed) && !snapshot.loans.some(l => !l.isClosed) &&
                   <div className="econ-empty">Активных долгов и кредитов пока нет</div>}
               </div>
