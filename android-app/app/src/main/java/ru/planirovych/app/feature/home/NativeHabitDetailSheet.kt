@@ -156,7 +156,7 @@ fun NativeHabitDetailSheet(vm:HomeViewModel,habit:Habit,dark:Boolean,onClose:()-
                     Text(habit.icon,modifier=Modifier
                         .habitEmojiCompletionFilter(amount>=habit.targetCount.coerceAtLeast(1))
                         .alpha(if (amount>=habit.targetCount.coerceAtLeast(1)) .72f else 1f),
-                        fontSize=29.sp,textAlign=TextAlign.Center
+                        fontSize=29.sp,textAlign=TextAlign.Center)
                 }
                 Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(8.dp)){
                     Text(habit.name,fontSize=18.sp,fontWeight=FontWeight.Bold,color=c.text)
