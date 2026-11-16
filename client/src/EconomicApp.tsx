@@ -480,10 +480,116 @@ export default function EconomicApp() {
 
     {dialog && <div className="econ-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !saving) setDialog(null); }}><section className="econ-modal" role="dialog" aria-modal="true" aria-label="Редактирование Economic"><header><div><span className="econ-eyebrow">{dialog.id ? 'РЕДАКТИРОВАНИЕ' : 'НОВАЯ ЗАПИСЬ'}</span><h2>{dialog.kind === 'operation' ? 'Операция' : dialog.kind === 'account' ? 'Счёт' : dialog.kind === 'debt' ? 'Долг' : dialog.kind === 'loan' ? 'Кредит' : 'Категория'}</h2></div><button type="button" onClick={() => setDialog(null)} aria-label="Закрыть"><X size={19}/></button></header>
       <form className="econ-form" onSubmit={submitDialog}>
-        {dialog.kind === 'operation' && <><label>Тип операции<select value={form.kind} onChange={e => {formSet('kind', e.target.value);formSet('category','');}}><option value="EXPENSE">Расход</option><option value="INCOME">Доход</option><option value="TRANSFER">Перевод между счетами</option></select></label><label>Название<input required maxLength={160} value={form.title} onChange={e => formSet('title',e.target.value)} placeholder="Что купили или получили"/></label><label>Сумма, ₽<input required inputMode="decimal" value={form.amount} onChange={e => formSet('amount',e.target.value)} placeholder="0,00"/></label><label>{form.kind === 'TRANSFER' ? 'Счёт списания' : 'Счёт'}<select required value={form.sourceAccountId} onChange={e => formSet('sourceAccountId',e.target.value)}>{snapshot.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>{form.kind === 'TRANSFER' && <label>Счёт зачисления<select required value={form.targetAccountId} onChange={e => formSet('targetAccountId',e.target.value)}><option value="">Выберите счёт</option>{snapshot.accounts.filter(a => a.id !== form.sourceAccountId).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>}{form.kind !== 'TRANSFER' && <label>Категория<select value={form.category} onChange={e => formSet('category',e.target.value)}><option value="">Без категории</option>{categories(form.kind as 'INCOME' | 'EXPENSE').map(c => <option key={c} value={c}>{c}</option>)}</select></label>}<label>Дата<input required type="date" value={form.date} onChange={e => formSet('date',e.target.value)}/></label><label>Примечание<input maxLength={500} value={form.note} onChange={e => formSet('note',e.target.value)} placeholder="Необязательно"/></label></>}
+        {dialog.kind === 'operation' && <>
+          <label>Тип операции<select value={form.kind} onChange={e => { formSet('kind', e.target.value); formSet('category', ''); setNewCategoryOpen(false); }}>
+            <option value="EXPENSE">Расход</option><option value="INCOME">Доход</option><option value="TRANSFER">Перевод между счетами</option>
+          </select></label>
+          <label>Название<input required maxLength={160} value={form.title} onChange={e => formSet('title', e.target.value)} placeholder="Что купили или получили"/></label>
+          <label>Сумма, ₽<input required inputMode="decimal" value={form.amount} onChange={e => formSet('amount', e.target.value)} placeholder="0,00"/></label>
+          <label>{form.kind === 'TRANSFER' ? 'Счёт списания' : 'Счёт'}
+            <select required value={form.sourceAccountId} onChange={e => formSet('sourceAccountId', e.target.value)}>
+              {snapshot.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </label>
+          {form.kind === 'TRANSFER' && <label>Счёт зачисления
+            <select required value={form.targetAccountId} onChange={e => formSet('targetAccountId', e.target.value)}>
+              <option value="">Выберите счёт</option>
+              {snapshot.accounts.filter(a => a.id !== form.sourceAccountId).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </label>}
+          {form.kind !== 'TRANSFER' && <div className="econ-category-controls">
+            <label>Категория<select value={form.category} onChange={e => formSet('category', e.target.value)}>
+              <option value="">Без категории</option>
+              {categories(form.kind as 'INCOME' | 'EXPENSE').map(name => <option key={name} value={name}>{name}</option>)}
+            </select></label>
+            <button type="button" className="econ-inline-category-button" onClick={() => setNewCategoryOpen(v => !v)}>
+              <Plus size={14}/> Новая категория
+            </button>
+            {newCategoryOpen && <div className="econ-inline-category-form">
+              <input aria-label="Новая категория" placeholder="Название категории" maxLength={60}
+                value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)}
+                onKeyDown={categoryInputKeyDown}/>
+              <button type="button" disabled={newCategorySaving || !newCategoryName.trim()}
+                onClick={() => void createInlineCategory()}>
+                {newCategorySaving ? <Loader2 size={15} className="econ-spin"/> : <Check size={15}/>} Добавить
+              </button>
+            </div>}
+          </div>}
+          <label>Дата<input required type="date" value={form.date} onChange={e => formSet('date', e.target.value)}/></label>
+          <label>Примечание<input maxLength={500} value={form.note} onChange={e => formSet('note', e.target.value)} placeholder="Необязательно"/></label>
+        </>}
         {dialog.kind === 'account' && <><label>Название счёта<input required maxLength={60} value={form.name} onChange={e => formSet('name',e.target.value)} placeholder="Наличные, карта, накопления"/></label><label>Начальный остаток, ₽<input required inputMode="decimal" value={form.opening} onChange={e => formSet('opening',e.target.value)}/></label>{dialog.id && form.isPrimary !== 'yes' && <label>Статус<select value={form.isPrimary} onChange={e => formSet('isPrimary', e.target.value)}><option value="no">Дополнительный</option><option value="yes">Сделать основным</option></select></label>}<p className="econ-form-hint">Вводите только стартовый остаток. Текущий баланс рассчитывается автоматически по операциям.</p></>}
-        {dialog.kind === 'debt' && <><label>Направление<select value={form.direction} onChange={e => formSet('direction', e.target.value)}><option value="OWE">Я получил деньги в долг</option><option value="OWED_TO_ME">Я дал деньги в долг</option></select></label><label>Кому или кто<input required maxLength={100} value={form.counterparty} onChange={e => formSet('counterparty',e.target.value)} placeholder="Имя человека или организация"/></label><label>Сумма, ₽<input required inputMode="decimal" value={form.amount} onChange={e => formSet('amount',e.target.value)}/></label><label>Срок возврата (необязательно)<input type="date" value={form.date} onChange={e => formSet('date',e.target.value)}/></label><label>Примечание<input maxLength={500} value={form.note} onChange={e => formSet('note',e.target.value)}/></label>{dialog.id && <label>Состояние<select value={form.isClosed} onChange={e => formSet('isClosed', e.target.value)}><option value="no">Активный долг</option><option value="yes">Долг погашен полностью</option></select></label>}<p className="econ-form-hint">При создании долга сумма автоматически {form.direction === 'OWE' ? 'прибавится к основному счёту' : 'спишется с основного счёта'}. При полном погашении система создаст обратную операцию. Это движения денег, а не доходы и расходы.</p></>}
-        {dialog.kind === 'loan' && <><label>Название кредита<input required maxLength={100} value={form.name} onChange={e => formSet('name',e.target.value)} placeholder="Автокредит, ипотека…"/></label><label>Банк / кредитор<input maxLength={100} value={form.lender} onChange={e => formSet('lender',e.target.value)}/></label><label>Сумма кредита, ₽<input required inputMode="decimal" value={form.amount} onChange={e => formSet('amount',e.target.value)}/></label><label>Ставка, % годовых<input required inputMode="decimal" value={form.rate} onChange={e => formSet('rate',e.target.value)} placeholder="12,5"/></label><label>Срок, месяцев<input required type="number" min={1} max={600} step={1} value={form.months} onChange={e => formSet('months',e.target.value)}/></label><label>Начало кредита<input required type="date" value={form.date} onChange={e => formSet('date',e.target.value)}/></label>{dialog.id && <label>Статус<select value={form.isClosed} onChange={e => formSet('isClosed', e.target.value)}><option value="no">Активен</option><option value="yes">Закрыт</option></select></label>}<p className="econ-form-hint">Расчёт аннуитетный, ориентировочный. Банковские комиссии, страховки и досрочные погашения не учитываются.</p></>}
+        {dialog.kind === 'debt' && <>
+          <label>Направление<select value={form.direction} onChange={e => formSet('direction', e.target.value)}>
+            <option value="OWE">Я получил деньги в долг</option>
+            <option value="OWED_TO_ME">Я дал деньги в долг</option>
+          </select></label>
+          <label>Кому или кто<input required maxLength={100} value={form.counterparty} onChange={e => formSet('counterparty', e.target.value)} placeholder="Имя человека или организация"/></label>
+          <label>Сумма долга, ₽<input required inputMode="decimal" value={form.amount} onChange={e => formSet('amount', e.target.value)}/></label>
+          <label className="econ-checkbox-row"><input type="checkbox" checked={form.postedToAccount === 'yes'}
+              onChange={e => formSet('postedToAccount', e.target.checked ? 'yes' : 'no')}/>
+            <span>Зачислить долг на счёт {form.direction === 'OWED_TO_ME' ? '(списать при выдаче)' : ''}</span>
+          </label>
+          {form.postedToAccount === 'yes' && <label>Счёт для учёта долга
+            <select required value={form.accountId} onChange={e => formSet('accountId', e.target.value)}>
+              {snapshot.accounts.map(a => <option key={a.id} value={a.id}>{a.name}{a.isPrimary ? ' (основной)' : ''}</option>)}
+            </select>
+          </label>}
+          <label>Сколько уже возвращено, ₽<input required inputMode="decimal" value={form.paid} onChange={e => formSet('paid', e.target.value)}/></label>
+          <label>Срок возврата (необязательно)<input type="date" value={form.date} onChange={e => formSet('date', e.target.value)}/></label>
+          <label>Примечание<input maxLength={500} value={form.note} onChange={e => formSet('note', e.target.value)}/></label>
+          {dialog.id && <label>Состояние<select value={form.isClosed} onChange={e => setForm(prev => ({
+              ...prev, isClosed: e.target.value, paid: e.target.value === 'yes' ? prev.amount : prev.paid
+            }))}>
+              <option value="no">Активный долг</option><option value="yes">Долг погашен полностью</option>
+            </select></label>}
+          <p className="econ-form-hint">При активном учёте долг изменяет выбранный счёт:
+            {form.direction === 'OWE' ? ' полученные деньги прибавятся к балансу.' : ' выданные деньги спишутся с баланса.'}
+            {' '}Возвраты учитываются отдельно и не являются доходом или расходом.
+          </p>
+        </>}
+        {dialog.kind === 'loan' && <>
+          <label>Название кредита<input required maxLength={100} value={form.name} onChange={e => formSet('name', e.target.value)} placeholder="Автокредит, ипотека…"/></label>
+          <label>Банк / кредитор<input maxLength={100} value={form.lender} onChange={e => formSet('lender', e.target.value)}/></label>
+          <label>Сумма кредита, ₽<input required inputMode="decimal" value={form.amount} onChange={e => formSet('amount', e.target.value)}/></label>
+          <label>Сколько уже внесено, ₽<input required inputMode="decimal" value={form.paid} onChange={e => formSet('paid', e.target.value)}/></label>
+          <label>Ставка, % годовых<input required inputMode="decimal" value={form.rate} onChange={e => formSet('rate', e.target.value)} placeholder="12,5"/></label>
+          <label>Срок, месяцев<input required type="number" min={1} max={600} step={1} value={form.months} onChange={e => formSet('months', e.target.value)}/></label>
+          <label>Ежемесячный платёж, ₽ (необязательно)
+            <input id="econ-monthly-override" inputMode="decimal" value={form.monthlyOverride}
+              onChange={e => formSet('monthlyOverride', e.target.value)} placeholder="Автоматический расчёт"/>
+          </label>
+          <p className="econ-form-hint">Оставьте поле пустым, чтобы использовать расчёт Экономыча AI.</p>
+          <label>Начало кредита<input required type="date" value={form.date} onChange={e => formSet('date', e.target.value)}/></label>
+          <label>Дата платежа (необязательно)<input type="date" value={form.paymentDate} onChange={e => formSet('paymentDate', e.target.value)}/></label>
+          <div className="econ-reminder-row">
+            <label className="econ-checkbox-row"><input type="checkbox"
+              checked={form.remindersEnabled === 'yes'}
+              onChange={e => formSet('remindersEnabled', e.target.checked ? 'yes' : 'no')}/>
+              <span>Напоминания о платеже</span>
+            </label>
+            <div className="econ-tooltip-wrap">
+              <button type="button" className="econ-help-button" aria-label="Как работают напоминания" aria-describedby="econ-reminder-info">?</button>
+              <div id="econ-reminder-info" className="econ-tooltip-panel" role="note">
+                В дату платежа придёт уведомление в телеграм-бот «Планировыч AI».
+                <div className="econ-telegram-status">Статус подключения:
+                  <strong>{user.telegramLinked ? 'Подключен' : 'Не подключен'}</strong>
+                </div>
+                {!user.telegramLinked && <a href="/?connectTelegram=1" target="_blank" rel="noopener noreferrer">
+                  Подключить <ArrowUpRight size={14}/>
+                </a>}
+              </div>
+            </div>
+          </div>
+          {form.remindersEnabled === 'yes' && !form.paymentDate &&
+            <p className="econ-form-hint">Укажите дату платежа, чтобы включить уведомления.</p>}
+          {dialog.id && <label>Статус<select value={form.isClosed} onChange={e => formSet('isClosed', e.target.value)}>
+            <option value="no">Активен</option><option value="yes">Закрыт</option>
+          </select></label>}
+          <p className="econ-form-hint">В прогрессе учитывается плановая сумма выплат с процентами.
+            Расчёт аннуитетный, ориентировочный, без комиссий, страховок и досрочного погашения.
+          </p>
+        </>}
         {dialog.kind === 'category' && <><label>Тип<select value={form.kind} onChange={e => formSet('kind',e.target.value)}><option value="EXPENSE">Расходы</option><option value="INCOME">Доходы</option></select></label><label>Название<input required maxLength={60} value={form.name} onChange={e => formSet('name',e.target.value)} placeholder="Например, питомцы"/></label></>}
         {error && <div className="econ-error" role="alert">{error}</div>}
         <div className="econ-form-actions"><button type="button" disabled={saving} onClick={() => setDialog(null)}>Отмена</button><button type="submit" disabled={saving}>{saving ? <Loader2 className="econ-spin" size={17}/> : <Check size={17}/>} Сохранить</button></div>
