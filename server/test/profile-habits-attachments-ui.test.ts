@@ -59,6 +59,8 @@ test("Mini App groups today's and later habits with small next weekday badge, th
   assert.match(css, /\.miniapp-light \.miniapp-habit-day-badge/);
   assert.match(css, /\.miniapp-light \.miniapp-habit-circle--offday/);
   assert.match(css, /\.miniapp-habit-circle-completed \.miniapp-habit-circle-core/);
+  assert.match(css, /\.miniapp-habit-circle-completed \.miniapp-habit-emoji/);
+  assert.match(mini, /miniapp-habit-emoji text-lg/);
 });
 
 test('Android habits group by schedule and keep centers unfilled while progress rings close', () => {
