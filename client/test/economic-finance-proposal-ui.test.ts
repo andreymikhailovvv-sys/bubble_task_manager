@@ -11,7 +11,7 @@ test('assistant messages use a separate billing footer below bubble and chips',(
   assert.match(app,/formatCreditsSpent\(m\.creditsSpentMilli\)/);
   assert.match(app,/<EconomicAiProposalCard key=\{item\.id\}/);
   const message=app.slice(app.indexOf('snapshot.assistantMessages.map(m =>'));
-  assert.ok(message.indexOf('className="econ-message-credits"')<message.indexOf('<EconomicAiProposalCard'));
+  assert.ok(message.indexOf('className="econ-message-credits"')>message.indexOf('<EconomicAiProposalCard'));
 });
 
 test('finance chips offer confirm, reject, undo and persisted off-by-default preference',()=>{
