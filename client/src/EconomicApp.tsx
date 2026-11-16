@@ -88,8 +88,8 @@ function EconomicMascot({ onClick, active, busy, progress }: {
   </button>;
 }
 
-export default function EconomicApp({ mobile = false, embeddedInMiniApp = false, themeOverride, mobileSafeTop = 0 }: {
-  mobile?: boolean; embeddedInMiniApp?: boolean; themeOverride?: 'light' | 'dark'; mobileSafeTop?: number;
+export default function EconomicApp({ mobile = false, embeddedInMiniApp = false, themeOverride, mobileSafeTop = 0, mobileSafeBottom = 0 }: {
+  mobile?: boolean; embeddedInMiniApp?: boolean; themeOverride?: 'light' | 'dark'; mobileSafeTop?: number; mobileSafeBottom?: number;
 }) {
   const [user, setUser] = useState<EconomicUser | null>(null);
   const [appearance, setAppearance] = useState<'light' | 'dark'>('dark');
@@ -678,7 +678,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
 
     {dialog && createPortal(<div
       className={'econ-root econ-dialog-layer ' + (effectiveAppearance === 'light' ? 'econ-light ' : '') + (mobile ? 'econ-mobile-dialog-layer ' : '') + (embeddedInMiniApp ? 'econ-miniapp-dialog-layer' : '')}
-      style={embeddedInMiniApp ? { '--econ-mobile-safe-top': mobileSafeTop + 'px' } as CSSProperties : undefined}>
+      style={embeddedInMiniApp ? { '--econ-mobile-safe-top': mobileSafeTop + 'px', '--econ-mobile-safe-bottom': mobileSafeBottom + 'px' } as CSSProperties : undefined}>
       <div className="econ-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !saving) setDialog(null); }}><section className="econ-modal" role="dialog" aria-modal="true" aria-label="Редактирование Economic"><header><div><span className="econ-eyebrow">{dialog.id ? 'РЕДАКТИРОВАНИЕ' : 'НОВАЯ ЗАПИСЬ'}</span><h2>{dialog.kind === 'operation' ? 'Операция' : dialog.kind === 'account' ? 'Счёт' : dialog.kind === 'debt' ? 'Долг' : dialog.kind === 'loan' ? 'Кредит' : 'Категория'}</h2></div><button type="button" onClick={() => setDialog(null)} aria-label="Закрыть"><X size={19}/></button></header>
       <form className="econ-form" onSubmit={submitDialog}>
         {dialog.kind === 'operation' && <>
