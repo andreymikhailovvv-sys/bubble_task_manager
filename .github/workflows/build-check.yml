@@ -41,6 +41,18 @@ jobs:
         run: node --import tsx --test server/test/economic-assistant-context.test.ts client/test/economic-assistant-chat.test.ts
       - name: Verify Economic finance AI proposal owner isolation, undo and UI
         run: node --import tsx --test server/test/economic-ai-finance-proposals.test.ts client/test/economic-finance-proposal-ui.test.ts
+      - name: Verify Economic finance proposals against real PostgreSQL
+        env:
+          DATABASE_URL: postgresql://postgres:economic_test_password@localhost:15437/economic_ci?schema=public
+        run: |
+          docker run --rm --name economic-ai-test-pg -e POSTGRES_PASSWORD=economic_test_password -e POSTGRES_DB=economic_ci -p 15437:5432 -d postgres:16-alpine
+          trap 'docker rm -f economic-ai-test-pg >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 40); do
+            if docker exec economic-ai-test-pg pg_isready -U postgres -d economic_ci >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          cd server && ../node_modules/.bin/prisma migrate deploy && cd ..
+          node --import tsx --test server/test/economic-ai-proposals.integration.test.ts
       - name: Verify personal Planner boot without Telegram SDK blocking
         run: node --import tsx --test client/test/planner-startup-splash.test.ts
       - name: Verify Planner auth hook order against React render crashes
