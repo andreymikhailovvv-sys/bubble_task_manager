@@ -358,6 +358,7 @@ export default function EconomicApp() {
     // useLayoutEffect scrolls as soon as the optimistic bubble enters the DOM.
     try {
       const reply = await askEconomicStream(question, files, stage => setAssistantStage(stage));
+      if (typeof reply.autoApply === 'boolean') setEconomicAutoApply(reply.autoApply);
       setAssistantStage('refreshing_finances');
       // Keep the actual answer visible if the subsequent snapshot refresh fails.
       setSnapshot(prev => prev ? { ...prev,
