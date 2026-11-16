@@ -617,6 +617,7 @@ export default function EconomicApp() {
                 searching_history: 'Ищу в истории переписки',
                 saving_conversation: 'Сохраняю ответ',
                 preparing_finances: 'Готовлю финансовые изменения',
+                searching_finances: 'Ищу финансовые записи',
                 applying_finances: 'Применяю подтверждённые настройки',
                 refreshing_finances: 'Обновляю финансовые данные'
               } as Record<string,string>)[assistantStage || ''] || 'Анализирую запрос'}</span>
