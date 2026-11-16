@@ -253,7 +253,7 @@ test('Telegram project picker, navigation and attachment theme refinements remai
   // Telegram WebView uses focus-safe accessible controls; mobile web remains a button.
   assert.match(mini, /MiniNavigationControl = isTelegramRuntime \? 'div' : 'button'/);
   assert.match(mini, /handleMiniNavigationKeyDown/);
-  assert.equal((mini.match(/<MiniNavigationControl role=/g) ?? []).length, 4);
+  assert.equal((mini.match(/<MiniNavigationControl role=/g) ?? []).length, 5);
   assert.match(css, /\.miniapp-shell\.miniapp-telegram-fullscreen \.miniapp-bottom-navigation-item \{/);
   assert.match(css, /-webkit-tap-highlight-color: transparent !important/);
   // Miniapp side menu is below Telegram system controls.
