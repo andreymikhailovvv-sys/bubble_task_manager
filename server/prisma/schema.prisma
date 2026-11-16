@@ -1637,6 +1637,7 @@ model EconomicLoan {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   @@index([userId, isClosed])
+  @@index([remindersEnabled, isClosed])
 }
 
 model EconomicAssistantMessage {
