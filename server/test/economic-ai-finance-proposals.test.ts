@@ -23,7 +23,7 @@ test('only allowlisted finance entities and safe user-intended fields are accept
 test('up to five actions can be planned; model cannot directly delete records',()=>{
   const action={entity:'category',action:'create',targetId:null,payload:{name:'Командировки',kind:'EXPENSE'}};
   assert.equal(parseEconomicToolActions(JSON.stringify([action])).length,1);
-  assert.throws(()=>parseEconomicToolActions(JSON.stringify(Array(6).fill(action))),/пяти/);
+  assert.throws(()=>parseEconomicToolActions(JSON.stringify(Array(6).fill(action))),/1 до 5/);
   assert.throws(()=>canonicalEconomicAction({...action,action:'delete'}),/Неизвестный/);
   assert.equal(canonicalEconomicAction({entity:'loan',action:'update',targetId:'c123456789',
     payload:{monthlyPaymentOverrideMinor:null,paidMinor:'2000'}}).payload.paidMinor,'2000');
