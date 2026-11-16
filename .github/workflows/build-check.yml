@@ -37,6 +37,8 @@ jobs:
         run: node --import tsx --test server/test/economic-loan-reminder.test.ts client/test/economic-entry-isolation.test.ts
       - name: Verify Economic navigation, shared mascot and request feedback
         run: node --import tsx --test client/test/economic-visual-foundation.test.ts
+      - name: Verify Economic assistant token context and multimodal file safety
+        run: node --import tsx --test server/test/economic-assistant-context.test.ts client/test/economic-assistant-chat.test.ts
       - name: Verify personal Planner boot without Telegram SDK blocking
         run: node --import tsx --test client/test/planner-startup-splash.test.ts
       - name: Verify Planner auth hook order against React render crashes
