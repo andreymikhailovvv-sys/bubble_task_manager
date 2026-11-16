@@ -1551,6 +1551,7 @@ model EconomicAccount {
   isPrimary           Boolean @default(false)
   outgoingOperations  EconomicOperation[] @relation("EconomicSourceAccount")
   incomingTransfers   EconomicOperation[] @relation("EconomicTargetAccount")
+  debts              EconomicDebt[] @relation("EconomicDebtAccount")
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -1608,6 +1609,10 @@ model EconomicDebt {
   dueAt       DateTime?
   isClosed    Boolean @default(false)
   operations  EconomicOperation[]
+  postedToAccount Boolean @default(true)
+  accountId   String?
+  account     EconomicAccount? @relation("EconomicDebtAccount", fields: [accountId], references: [id], onDelete: Restrict)
+  paidMinor   BigInt @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   @@index([userId, isClosed, dueAt])
@@ -1623,10 +1628,16 @@ model EconomicLoan {
   annualRateBps  Int
   termMonths     Int
   startDate      DateTime
+  paidMinor      BigInt @default(0)
+  monthlyPaymentOverrideMinor BigInt?
+  paymentDate    DateTime?
+  remindersEnabled Boolean @default(false)
+  lastReminderPeriod String?
   isClosed       Boolean @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   @@index([userId, isClosed])
+  @@index([remindersEnabled, isClosed])
 }
 
 model EconomicAssistantMessage {

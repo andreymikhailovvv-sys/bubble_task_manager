@@ -5528,6 +5528,18 @@ export default function App() {
       setIsTelegramLinkLoading(false);
     }
   };
+  // Direct link from Экономыч AI's payment reminder settings. Start the same
+  // existing Telegram bot connection flow in the main planner workspace.
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('connectTelegram') !== '1') return;
+    params.delete('connectTelegram');
+    window.history.replaceState(window.history.state, '', window.location.pathname +
+      (params.toString() ? '?' + params.toString() : '') + window.location.hash);
+    void openTelegramLinkModal();
+  }, [currentUser?.id]);
+
   const finishTaskTour = () => {
     const restore = tourRestoreStateRef.current;
     setActiveTourStep(null);

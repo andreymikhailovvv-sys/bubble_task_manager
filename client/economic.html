@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <meta name="theme-color" content="#16171f" />
+  <meta name="application-name" content="Экономыч AI" />
+  <meta name="description" content="Экономыч AI — личные финансы, счета, долги и кредиты." />
+  <link rel="icon" type="image/png" href="/favicon-120.png" />
+  <title>Экономыч AI</title>
+  <style>
+    html,body{margin:0;min-height:100%;background:#13141b;color:#f7e4ce;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+    #economic-boot-splash{position:fixed;z-index:1000;inset:0;display:grid;place-items:center;overflow:hidden;background:radial-gradient(ellipse at 50% 39%,rgba(200,111,24,.18),transparent 55%),linear-gradient(135deg,#1e1b1b,#101119);transition:opacity .25s,visibility .25s}
+    #economic-boot-splash[hidden]{display:none}
+    .economic-splash-core{position:relative;z-index:1;text-align:center;display:grid;justify-items:center;gap:12px;padding:28px}
+    .economic-splash-orbit{position:absolute;width:min(72vw,420px);aspect-ratio:1;border-radius:50%;border:1px solid rgba(240,165,73,.14);box-shadow:0 0 90px rgba(241,150,46,.11);animation:econ-orbit 8s linear infinite}
+    .economic-splash-orbit:before{content:"";position:absolute;left:10%;top:13%;width:12px;height:12px;border-radius:50%;background:#f4b75b;box-shadow:0 0 24px #f4b75b}
+    .economic-splash-emblem{width:92px;height:92px;border-radius:28px;display:grid;place-items:center;background:linear-gradient(135deg,#fff0b6,#f8b44c 48%,#b76814);box-shadow:0 0 80px rgba(236,155,52,.27);color:#663507;font-size:59px;font-weight:900}
+    .economic-splash-name{font-size:clamp(28px,6vw,44px);font-weight:830;letter-spacing:-1.9px;margin:8px 0 0}
+    .economic-splash-subtitle{font-size:13px;color:#c7ab89;margin:0}
+    .economic-splash-track{width:190px;height:4px;overflow:hidden;background:rgba(249,178,89,.14);border-radius:50px;margin-top:18px}
+    .economic-splash-track:after{content:"";display:block;height:100%;width:32%;border-radius:50px;background:linear-gradient(90deg,#e88e2b,#ffe1a5);animation:econ-load 1.5s ease-in-out infinite}
+    .economic-splash-caption{color:#8c7f73;font-size:11px;margin:0}
+    @keyframes econ-load{0%{transform:translateX(-110%)}100%{transform:translateX(620%)}}
+    @keyframes econ-orbit{to{transform:rotate(360deg)}}
+    @media(prefers-reduced-motion:reduce){.economic-splash-orbit,.economic-splash-track:after{animation:none}}
+  </style>
+</head>
+<body>
+  <div id="economic-boot-splash" role="status" aria-label="Загрузка Экономыч AI">
+    <div class="economic-splash-orbit" aria-hidden="true"></div>
+    <div class="economic-splash-core">
+      <div class="economic-splash-emblem" aria-hidden="true">₽</div>
+      <h1 class="economic-splash-name">Экономыч AI</h1>
+      <p class="economic-splash-subtitle">Ваши деньги под контролем</p>
+      <div class="economic-splash-track" aria-hidden="true"></div>
+      <p class="economic-splash-caption">Открываем финансовое пространство</p>
+    </div>
+  </div>
+  <div id="root"></div>
+  <script type="module" src="/src/economic-main.tsx"></script>
+</body>
+</html>

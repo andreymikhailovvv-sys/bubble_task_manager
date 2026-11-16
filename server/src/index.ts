@@ -12,6 +12,7 @@ import { dispatchOneLegacyVerificationReminder } from './services/legacy-email-o
 import { dispatchOneTelegramEmailVerificationOutreach } from './services/telegram-email-outreach.service.js';
 import { passport } from './auth/passport.js';
 import { telegramService } from './services/telegram.service.js';
+import { sendEconomicLoanPaymentReminders } from './services/economic-loan-reminder.service.js';
 import { prisma } from './db/prisma.js';
 import { reconcilePendingCreditPurchases } from './services/credit-purchase-recovery.service.js';
 import { createAiCheckup } from './services/ai-checkup-delivery.service.js';
@@ -108,6 +109,11 @@ app.use(createPublicSeoPagesMiddleware(clientDist));
 // HTML must be revalidated after each Timeweb deployment. Bundled JS/CSS
 // filenames carry content hashes and may keep their ordinary static caching.
 // Route-specific HTML avoids loading main.tsx, workspace stores, animations or chat modules.
+app.get(['/economic', '/economic/'], (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, must-revalidate');
+  res.sendFile(path.join(clientDist, 'economic.html'));
+});
+
 app.get('/auth/email', (_req, res) => {
   res.setHeader('Cache-Control', 'no-store, must-revalidate');
   res.setHeader('Referrer-Policy', 'no-referrer');
@@ -147,6 +153,18 @@ const runPaymentRecovery = async () => {
 };
 setTimeout(() => { void runPaymentRecovery(); }, 15_000).unref();
 setInterval(() => { void runPaymentRecovery(); }, 60_000).unref();
+
+// Durable, once-per-month per loan; respects the owner's local calendar day.
+let economicReminderRunning = false;
+const runEconomicReminders = async () => {
+  if (economicReminderRunning) return;
+  economicReminderRunning = true;
+  try { await measureBackground('economic.loan_reminders', () => sendEconomicLoanPaymentReminders()); }
+  catch (err) { console.error('[Economic] reminder scheduler failed', err); }
+  finally { economicReminderRunning = false; }
+};
+setTimeout(runEconomicReminders, 15_000).unref();
+setInterval(runEconomicReminders, 60_000).unref();
 
 const telegramPollIntervalMs = Number(process.env.TELEGRAM_POLL_INTERVAL_MS ?? 60_000);
 setInterval(() => {
