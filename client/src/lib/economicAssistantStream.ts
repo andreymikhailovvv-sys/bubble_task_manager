@@ -1,11 +1,15 @@
 export type EconomicAssistantStage =
   | 'reading_finances' | 'reading_history' | 'counting_tokens'
-  | 'forming_answer' | 'searching_history' | 'saving_conversation';
+  | 'forming_answer' | 'searching_history' | 'saving_conversation'
+  | 'preparing_finances' | 'applying_finances';
 export type EconomicAssistantAttachment = {
   name: string; mimeType: string; size: number; contentBase64: string;
 };
+import type { EconomicAiProposal } from '../components/EconomicAiProposalCard';
 export type EconomicAssistantReply = {
   answer: string;
+  proposals?: EconomicAiProposal[];
+  autoApply?: boolean;
   creditsSpentMilli: number;
   inputTokens: number;
   outputTokens: number;
