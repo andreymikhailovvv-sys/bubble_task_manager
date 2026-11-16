@@ -46,6 +46,7 @@ fun NativeEconomicPage(userId:String?,dark:Boolean) {
     var detail by remember(userId){mutableStateOf("")}
     var conflict by remember(userId){mutableStateOf(false)}
     var progress by remember(userId){mutableIntStateOf(0)}
+    var editorOpen by remember(userId){mutableStateOf(false)}
     val browser=remember(userId){
         WebView(context).apply {
             settings.javaScriptEnabled=true
@@ -55,6 +56,19 @@ fun NativeEconomicPage(userId:String?,dark:Boolean) {
             settings.setSupportMultipleWindows(false)
             settings.mixedContentMode=android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
             isVerticalScrollBarEnabled=false
+            // A React editor uses a body-level portal. Hide the native FAB while
+            // any financial dialog is active so it cannot cover Save/Cancel.
+            fun syncEditorVisibility(){
+                evaluateJavascript(
+                    "Boolean(document.querySelector('.econ-dialog-layer .econ-modal'))"
+                ){editorOpen=it=="true"}
+            }
+            setOnTouchListener { _,event->
+                if(event.action==android.view.MotionEvent.ACTION_UP){
+                    postDelayed({syncEditorVisibility()},140)
+                }
+                false
+            }
             setBackgroundColor(if(dark) android.graphics.Color.rgb(22,21,28) else android.graphics.Color.WHITE)
             webChromeClient=object:WebChromeClient(){
                 override fun onProgressChanged(view:WebView?,newProgress:Int){ progress=newProgress }
@@ -72,6 +86,7 @@ fun NativeEconomicPage(userId:String?,dark:Boolean) {
                     return !allowed
                 }
                 override fun onPageStarted(view:WebView?,url:String?,favicon:Bitmap?){
+                    editorOpen=false
                     stage="loading"
                 }
                 override fun onPageFinished(view:WebView?,url:String?){
@@ -188,11 +203,17 @@ fun NativeEconomicPage(userId:String?,dark:Boolean) {
     Box(Modifier.fillMaxSize()){
         AndroidView(factory={browser},modifier=Modifier.fillMaxSize())
         // The native FAB opens the existing React operation editor.
-        if(stage=="ready"){
+        if(stage=="ready" && !editorOpen){
             FloatingActionButton(
                 onClick={
+                    editorOpen=true
                     browser.evaluateJavascript(
                         "document.querySelector('[data-economic-create-operation]')?.click();",null)
+                    browser.postDelayed({
+                        browser.evaluateJavascript(
+                            "Boolean(document.querySelector('.econ-dialog-layer .econ-modal'))"
+                        ){editorOpen=it=="true"}
+                    },300)
                 },
                 modifier=Modifier.align(Alignment.BottomEnd).padding(end=18.dp,bottom=18.dp),
                 shape=CircleShape,
