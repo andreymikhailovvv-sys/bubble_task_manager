@@ -100,3 +100,8 @@
 }
 
 .econ-obligation-preview-list{max-height:410px;overflow-y:auto;align-content:start;padding:2px}
+
+/* The edge switcher is overlay-only, so do not reserve an empty left gutter. */
+.econ-root .econ-shell{padding-left:0}
+/* Overlap the help trigger by two pixels so the hover panel remains clickable. */
+.econ-tooltip-panel{bottom:calc(100% - 2px)}
