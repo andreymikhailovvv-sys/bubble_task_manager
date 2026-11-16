@@ -59,17 +59,28 @@ export async function answerEconomicAssistant(input: {
   monthStart.setUTCDate(1); monthStart.setUTCHours(0, 0, 0, 0);
   const monthEnd = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 1));
   const [accounts, debts, loans, outgoing, incoming, monthKinds, recent, histories, categories] = await Promise.all([
-    prisma.economicAccount.findMany({ where: { userId: input.owner }, select: { name: true, openingBalanceMinor: true, id: true } }),
-    prisma.economicDebt.findMany({ where: { userId: input.owner, isClosed: false }, select: { id: true, direction: true, counterparty: true, amountMinor: true, paidMinor: true, postedToAccount: true, accountId: true, dueAt: true }, take: 30 }),
-    prisma.economicLoan.findMany({ where: { userId: input.owner, isClosed: false }, select: { id: true, name: true, principalMinor: true, paidMinor: true, annualRateBps: true, termMonths: true, startDate: true }, take: 30 }),
+    prisma.economicAccount.findMany({ where: { userId: input.owner }, select: { name: true, openingBalanceMinor: true, id: true, updatedAt: true } }),
+    prisma.economicDebt.findMany({ where: { userId: input.owner, isClosed: false }, select: { id: true, direction: true, counterparty: true, amountMinor: true, paidMinor: true, postedToAccount: true, accountId: true, dueAt: true, updatedAt: true }, take: 30 }),
+    prisma.economicLoan.findMany({ where: { userId: input.owner, isClosed: false }, select: { id: true, name: true, principalMinor: true, paidMinor: true, annualRateBps: true, termMonths: true, startDate: true, updatedAt: true }, take: 30 }),
     prisma.economicOperation.groupBy({ by: ['sourceAccountId', 'kind'], where: { userId: input.owner }, _sum: { amountMinor: true } }),
     prisma.economicOperation.groupBy({ by: ['targetAccountId'], where: { userId: input.owner, kind: 'TRANSFER', targetAccountId: { not: null } }, _sum: { amountMinor: true } }),
     prisma.economicOperation.groupBy({ by: ['kind'], where: { userId: input.owner, kind: { in: ['INCOME', 'EXPENSE'] }, occurredAt: { gte: monthStart, lt: monthEnd } }, _sum: { amountMinor: true } }),
     prisma.economicOperation.findMany({ where: { userId: input.owner }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 25,
-      select: { id: true, kind: true, amountMinor: true, title: true, category: true, occurredAt: true, sourceAccountId: true, targetAccountId: true, debtId: true } }),
+      select: { id: true, kind: true, amountMinor: true, title: true, category: true, occurredAt: true, sourceAccountId: true, targetAccountId: true, debtId: true, updatedAt: true } }),
     prisma.economicAssistantMessage.findMany({ where: { userId: input.owner }, orderBy: [{ createdAt: 'desc' }, { role: 'asc' }, { id: 'desc' }], take: 120 }),
-    prisma.economicCategory.findMany({ where: { userId: input.owner }, select: { id: true, kind: true, name: true }, take: 100 })
+    prisma.economicCategory.findMany({ where: { userId: input.owner }, select: { id: true, kind: true, name: true, createdAt: true }, take: 100 })
   ]);
+  // Immutable snapshot of the records the model actually saw. Proposals made
+  // against a stale financial view are rejected before they're even displayed.
+  // Apply and undo also verify the snapshots under a SERIALIZABLE transaction.
+  const seenVersions = new Map<string,string>();
+  for(const a of accounts)seenVersions.set('account:'+a.id,a.updatedAt.toISOString());
+  for(const d of debts)seenVersions.set('debt:'+d.id,d.updatedAt.toISOString());
+  for(const l of loans)seenVersions.set('loan:'+l.id,l.updatedAt.toISOString());
+  for(const o of recent)seenVersions.set('operation:'+o.id,o.updatedAt.toISOString());
+  for(const cat of categories)seenVersions.set('category:'+cat.id,JSON.stringify({
+    kind:cat.kind,name:cat.name,createdAt:cat.createdAt.toISOString()
+  }));
   const balances = new Map(accounts.map(a => [a.id, a.openingBalanceMinor]));
   for (const item of outgoing) balances.set(item.sourceAccountId,
     (balances.get(item.sourceAccountId) ?? 0n) + economicSourceDelta(item.kind, item._sum.amountMinor ?? 0n));
@@ -150,6 +161,20 @@ export async function answerEconomicAssistant(input: {
       try {
         const args = JSON.parse(financeCall.arguments || '{}') as { actions_json?: unknown };
         proposed = await prepareEconomicProposals(input.owner,parseEconomicToolActions(args.actions_json));
+        const stale=proposed.find(item=>{
+          if(item.action.action!=='update')return false;
+          const old=item.before;
+          if(!old)return true;
+          const key=item.action.entity+':'+item.action.targetId;
+          const seen=seenVersions.get(key);
+          if(!seen)return true;
+          if(item.action.entity==='category')
+            return seen!==JSON.stringify({kind:old.kind,name:old.name,createdAt:old.createdAt});
+          return seen!==old.updatedAt;
+        });
+        if(stale)throw new EconomicActionError(
+          'Финансовые данные изменились за время ответа или запись не была в исходном контексте. Повторите запрос.'
+        );
         answer = 'Подготовил ' + proposed.length + ' ' +
           (proposed.length === 1 ? 'финансовое изменение' : 'финансовых изменений') +
           '. Результат и текущий статус каждого действия показаны в чипах ниже.';
