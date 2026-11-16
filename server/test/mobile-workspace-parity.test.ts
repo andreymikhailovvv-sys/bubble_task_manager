@@ -32,7 +32,7 @@ test('compact toolbar retains postponed actions and accessible filters; notes mo
   assert.match(toolbar, /miniapp-workspace-tools-compact/);
   assert.doesNotMatch(toolbar, /miniapp-workspace-tool-notes|onNotesOpen/);
   assert.match(mini, /miniapp-bottom-navigation/);
-  assert.match(mini, /<span>Заметки<\/span>/);
+  assert.match(mini, /aria-label="Заметки"/);
   assert.match(toolbar, /onClick=\{onOpenOverdue\}/);
   assert.match(toolbar, /aria-label="Фильтры задач"/);
   assert.match(toolbar, /aria-expanded=\{open\}/);
@@ -127,7 +127,7 @@ test('Telegram fullscreen uses safe insets and bottom tabs replace the old displ
   assert.match(mini, /<span>Список<\/span>/);
   assert.match(mini, /<span>Таймлайн<\/span>/);
   assert.match(mini, /<span>Чат с ИИ<\/span>/);
-  assert.match(mini, /<span>Заметки<\/span>/);
+  assert.match(mini, /aria-label="Заметки"/);
   assert.match(mini, /setDisplayMode\('list'\)/);
   assert.match(mini, /setDisplayMode\('timeline'\)/);
   assert.match(mini, /setIsAiChatOpen\(true\)/);
