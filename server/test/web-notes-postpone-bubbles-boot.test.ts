@@ -77,13 +77,15 @@ test('загрузочный экран сайта появляется до з�
   assert.match(html, /workspace-boot-splash/);
   // The old synchronous Telegram SDK blocked HTML parsing ahead of the splash.
   // The critical CSS/class activation must not wait for any remote script.
-  // Telegram SDK is injected only outside /android-planik; a static defer
-  // would block the embedded Android UI on network-restricted devices.
+  // Telegram SDK is injected only into the Telegram Mini App and auth page.
+  // Both Android and the ordinary Planner stay independent of that CDN.
   assert.match(html, /document\.write\('<script defer src="https:\/\/telegram\.org\/js\/telegram-web-app\.js"/);
-  assert.match(html, /location\.pathname === '\/android-planik'/);
+  assert.match(html, /path === '\/android-planik'/);
   assert.match(html, /document\.documentElement\.dataset\.planikAndroid = 'html'/);
   assert.doesNotMatch(html, /<script src="https:\/\/telegram\.org\/js\/telegram-web-app\.js"><\/script>/);
-  assert.ok(html.indexOf("document.documentElement.classList.add('web-workspace-preload')") < html.indexOf('telegram-web-app.js'));
+  assert.match(html, /var isDesktopPlanner = location\.pathname === '\/' && matchMedia/);
+  assert.ok(html.indexOf('document.documentElement.classList.add(bootClass)') >= 0);
+  assert.ok(html.indexOf('document.documentElement.classList.add(bootClass)') < html.indexOf('telegram-web-app.js'));
   assert.ok(html.indexOf('#workspace-boot-splash { display: none; }') < html.indexOf('telegram-web-app.js'));
   assert.ok(html.indexOf('telegram-web-app.js') < html.indexOf('<div id="workspace-boot-splash"'));
   assert.ok(html.indexOf('<div id="workspace-boot-splash"') < html.indexOf('<script type="module"'));
