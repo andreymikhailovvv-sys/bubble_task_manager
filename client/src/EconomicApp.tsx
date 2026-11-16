@@ -541,11 +541,85 @@ export default function EconomicApp() {
     </div>
 
     <EconomicMascot active={assistantOpen} busy={assistantBusy} progress={assistantStage} onClick={() => setAssistantOpen(v => !v)}/>
-    {assistantOpen && <section id="econ-assistant-dialog" className="econ-assistant" role="dialog" aria-label="Экономыч AI, финансовый помощник"><div className="econ-assistant-head"><div><span className="econ-assistant-avatar">₽</span><div><strong>Экономыч AI</strong><small>Финансовый помощник</small></div></div><button type="button" onClick={() => setAssistantOpen(false)} aria-label="Закрыть"><X size={18}/></button></div><div className="econ-assistant-body">
-      <div className="econ-insight-table"><table><caption>Ваши счета</caption><thead><tr><th>Счёт</th><th>Остаток</th></tr></thead><tbody>{snapshot.accounts.map(a => <tr key={a.id}><td>{a.name}</td><td>{money(a.balanceMinor)}</td></tr>)}</tbody></table></div>
-      {snapshot.assistantMessages.length === 0 && <div className="econ-assistant-welcome"><MessageCircle size={21}/><strong>Чем помочь с финансами?</strong><p>Спросите о доходах, расходах, кредитах или способах вести бюджет. ИИ отвечает на основе ваших данных, но не меняет их.</p></div>}
-      <div className="econ-chat-messages">{snapshot.assistantMessages.map(m => <div key={m.id} className={'econ-chat-bubble ' + (m.role === 'user' ? 'mine' : 'assistant')}>{m.content}</div>)}{assistantBusy && <div className="econ-ai-progress" role="status" aria-live="polite" aria-atomic="true"><span className="econ-ai-progress-icon" aria-hidden="true"><Sparkles size={19} strokeWidth={2}/></span><div className="econ-ai-progress-details"><span key={assistantStage} className="econ-ai-progress-text">{assistantStage === 'refreshing_finances' ? 'Обновляю финансовые данные' : 'Анализирую запрос'}</span><div key={'econ-progress-' + assistantStage} className="econ-ai-progress-track" aria-hidden="true"><span/><span/><span/></div></div></div>}</div>
-    </div><form className="econ-assistant-composer" onSubmit={askAssistant}><input aria-label="Вопрос Economic" placeholder="Спросить об операциях и бюджете" value={assistantQuestion} onChange={e => setAssistantQuestion(e.target.value)} maxLength={2000} disabled={assistantBusy}/><button type="submit" disabled={assistantBusy || !assistantQuestion.trim()} aria-label="Отправить вопрос"><Send size={18}/></button></form><div className="econ-assistant-note">1 ИИ-кредит за запрос · Экономыч AI не изменяет операции</div></section>}
+    {assistantOpen && <section id="econ-assistant-dialog" className="econ-assistant" role="dialog" aria-label="Экономыч AI, финансовый помощник">
+      <div className="econ-assistant-head">
+        <div><span className="econ-assistant-avatar">₽</span>
+          <div><strong>Экономыч AI</strong><small>Финансовый помощник</small></div>
+        </div>
+        <button type="button" onClick={() => setAssistantOpen(false)} aria-label="Закрыть"><X size={18}/></button>
+      </div>
+      <div className="econ-assistant-body" ref={assistantScrollRef}>
+        <div className="econ-insight-table">
+          <table><caption>Ваши счета</caption><thead><tr><th>Счёт</th><th>Остаток</th></tr></thead>
+            <tbody>{snapshot.accounts.map(a => <tr key={a.id}><td>{a.name}</td><td>{money(a.balanceMinor)}</td></tr>)}</tbody>
+          </table>
+        </div>
+        {snapshot.assistantMessages.length === 0 &&
+          <div className="econ-assistant-welcome"><MessageCircle size={21}/>
+            <strong>Чем помочь с финансами?</strong>
+            <p>Спросите о доходах, расходах, кредитах или способах вести бюджет. Помощник анализирует ваши данные и прикреплённые файлы. Изменять записи через чат можно будет после следующего обновления.</p>
+          </div>}
+        <div className="econ-chat-messages">
+          {snapshot.assistantMessages.map(m =>
+            <div key={m.id} className={'econ-chat-bubble ' + (m.role === 'user' ? 'mine' : 'assistant')}>
+              {m.content && <span>{m.content}</span>}
+              {Boolean(m.attachmentNames?.length) &&
+                <div className="econ-message-files">{m.attachmentNames?.map((name,i) =>
+                  <span key={name + i} title={name}><Paperclip size={12}/>{name}</span>)}</div>}
+              {m.role === 'assistant' && typeof m.creditsSpentMilli === 'number' && m.creditsSpentMilli > 0 &&
+                <div className="econ-message-credits">
+                  <Sparkles size={11}/> {(m.creditsSpentMilli / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 3 })} ИИ-кредита
+                </div>}
+            </div>
+          )}
+          {assistantBusy && <div className="econ-ai-progress" role="status" aria-live="polite" aria-atomic="true">
+            <span className="econ-ai-progress-icon" aria-hidden="true"><Sparkles size={19} strokeWidth={2}/></span>
+            <div className="econ-ai-progress-details">
+              <span key={assistantStage} className="econ-ai-progress-text">{({
+                reading_files: 'Подготавливаю вложения',
+                reading_finances: 'Изучаю финансовые данные',
+                reading_history: 'Учитываю историю диалога',
+                counting_tokens: 'Подсчитываю контекст',
+                forming_answer: 'Формирую ответ',
+                searching_history: 'Ищу в истории переписки',
+                saving_conversation: 'Сохраняю ответ',
+                refreshing_finances: 'Обновляю финансовые данные'
+              } as Record<string,string>)[assistantStage || ''] || 'Анализирую запрос'}</span>
+              <div key={'econ-progress-' + assistantStage} className="econ-ai-progress-track" aria-hidden="true"><span/><span/><span/></div>
+            </div>
+          </div>}
+          {assistantError && <div className="econ-chat-error" role="alert">{assistantError}</div>}
+        </div>
+      </div>
+      <div className="econ-chat-input-zone">
+        {assistantFiles.length > 0 && <div className="econ-attachment-chips" aria-label="Выбранные вложения">
+          {assistantFiles.map((file,i) => <div className="econ-attachment-chip" key={file.name + i}>
+            <Paperclip size={13}/><span title={file.name}>{file.name}</span>
+            <button type="button" disabled={assistantBusy} title="Убрать вложение" aria-label={'Убрать ' + file.name}
+              onClick={() => setAssistantFiles(prev => prev.filter((_,index) => index !== i))}><X size={13}/></button>
+          </div>)}
+        </div>}
+        <form className="econ-assistant-composer" onSubmit={askAssistant}>
+          <input ref={assistantFilePickerRef} className="econ-hidden-file" type="file" multiple
+            accept={ECONOMIC_ACCEPTED_FILE_TYPES} onChange={addAssistantFiles} aria-label="Файлы для финансового помощника"/>
+          <button type="button" className="econ-attach-button" disabled={assistantBusy}
+            onClick={() => assistantFilePickerRef.current?.click()} title="Прикрепить файл"
+            aria-label="Прикрепить файл"><Paperclip size={17}/></button>
+          <textarea aria-label="Вопрос Экономычу AI" placeholder="Спросить об операциях и бюджете"
+            value={assistantQuestion} onChange={e => setAssistantQuestion(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault(); void sendAssistantMessage(assistantQuestion); } }}
+            maxLength={2000} disabled={assistantBusy} rows={1}/>
+          <Suspense fallback={<span className="econ-voice-placeholder" aria-hidden="true"><Mic size={16}/></span>}>
+            <EconomicVoiceInput activationMode="transcription" small disabled={assistantBusy}
+              onTranscript={voiceTranscript} className="econ-voice-trigger"/>
+          </Suspense>
+          <button type="submit" disabled={assistantBusy || (!assistantQuestion.trim() && !assistantFiles.length)}
+            title="Отправить сообщение" aria-label="Отправить сообщение"><Send size={18}/></button>
+        </form>
+        <div className="econ-assistant-note">Стоимость рассчитывается по фактическим токенам · Голосовой ввод оплачивается отдельно</div>
+      </div>
+    </section>}
 
     {dialog && <div className="econ-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !saving) setDialog(null); }}><section className="econ-modal" role="dialog" aria-modal="true" aria-label="Редактирование Economic"><header><div><span className="econ-eyebrow">{dialog.id ? 'РЕДАКТИРОВАНИЕ' : 'НОВАЯ ЗАПИСЬ'}</span><h2>{dialog.kind === 'operation' ? 'Операция' : dialog.kind === 'account' ? 'Счёт' : dialog.kind === 'debt' ? 'Долг' : dialog.kind === 'loan' ? 'Кредит' : 'Категория'}</h2></div><button type="button" onClick={() => setDialog(null)} aria-label="Закрыть"><X size={19}/></button></header>
       <form className="econ-form" onSubmit={submitDialog}>
