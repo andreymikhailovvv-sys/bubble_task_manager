@@ -460,7 +460,7 @@ export default function EconomicApp() {
                 <button type="button" className="econ-action" onClick={() => openDialog('loan')}><Plus size={16}/> Кредит</button>
               </>}
               {section !== 'operations' && actions[section] && <button type="button" className="econ-action" onClick={actions[section]}>
-                <Plus size={17}/> {section === 'operations' ? 'Операция' : section === 'accounts' ? 'Счёт' : 'Категория'}
+                <Plus size={17}/> {section === 'accounts' ? 'Счёт' : 'Категория'}
               </button>}
             </div>
           </div>
