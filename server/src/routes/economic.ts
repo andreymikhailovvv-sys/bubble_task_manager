@@ -3,9 +3,8 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/async-handler.js';
+import { answerEconomicAssistant } from '../services/economic-assistant.service.js';
 import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
-import { openAiFetch } from '../lib/openai-fetch.js';
-import { refundAiCreditReservation, reserveAiCreditsMilli, settleAiCreditReservation } from '../services/ai-credit-wallet.service.js';
 import { debtOperationKind, debtOperationTitle, economicSourceDelta, ECONOMIC_DEBT_OPERATION_KINDS, type EconomicDebtDirection } from '../lib/economic-debt.js';
 
 export const economicRouter = Router();
@@ -454,80 +453,54 @@ economicRouter.delete('/loans/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// Read-only, separate Economic assistant. Uses the existing user AI wallet and
-// never executes account mutations from a model response.
+// The assistant is read-only until phase 3. Each provider call uses the same
+// real token/markup wallet path as the Planner, including history retrieval.
 const assistantCooldown = new Map<string, number>();
 economicRouter.post('/assistant/chat', asyncHandler(async (req, res) => {
   const owner = userId(req);
   const question = text(req.body?.question, 2000);
-  if (!question) { error(res, 'Введите вопрос (до 2000 символов)'); return; }
+  const rawFiles = req.body?.attachments;
+  if (!question && (!Array.isArray(rawFiles) || rawFiles.length === 0)) {
+    error(res, 'Введите вопрос или прикрепите файл (до 2000 символов)'); return;
+  }
   if (!process.env.OPENAI_API_KEY) { error(res, 'ИИ-помощник временно не настроен', 503); return; }
   const now = Date.now();
   if (now - (assistantCooldown.get(owner) ?? 0) < 5000) { error(res, 'Повторите запрос через несколько секунд', 429); return; }
   assistantCooldown.set(owner, now);
-  // Generate balances by account, including incoming transfers, not just opening sums.
-  const monthStart = new Date();
-  monthStart.setUTCDate(1); monthStart.setUTCHours(0, 0, 0, 0);
-  const monthEnd = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 1));
-  const [accounts, debts, loans, outgoing, incoming, monthKinds, recent, history] = await Promise.all([
-    prisma.economicAccount.findMany({ where: { userId: owner }, select: { name: true, openingBalanceMinor: true, id: true } }),
-    prisma.economicDebt.findMany({ where: { userId: owner, isClosed: false }, select: { direction: true, counterparty: true, amountMinor: true }, take: 30 }),
-    prisma.economicLoan.findMany({ where: { userId: owner, isClosed: false }, select: { name: true, principalMinor: true, annualRateBps: true, termMonths: true }, take: 30 }),
-    prisma.economicOperation.groupBy({ by: ['sourceAccountId', 'kind'], where: { userId: owner }, _sum: { amountMinor: true } }),
-    prisma.economicOperation.groupBy({ by: ['targetAccountId'], where: { userId: owner, kind: 'TRANSFER', targetAccountId: { not: null } }, _sum: { amountMinor: true } }),
-    prisma.economicOperation.groupBy({ by: ['kind'], where: { userId: owner, kind: { in: ['INCOME', 'EXPENSE'] }, occurredAt: { gte: monthStart, lt: monthEnd } }, _sum: { amountMinor: true } }),
-    prisma.economicOperation.findMany({ where: { userId: owner }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 25,
-      select: { kind: true, amountMinor: true, title: true, category: true, occurredAt: true } }),
-    prisma.economicAssistantMessage.findMany({ where: { userId: owner }, orderBy: { createdAt: 'desc' }, take: 8 })
-  ]);
-  const balances = new Map(accounts.map(a => [a.id, a.openingBalanceMinor]));
-  for (const item of outgoing) balances.set(item.sourceAccountId,
-    (balances.get(item.sourceAccountId) ?? 0n) + economicSourceDelta(item.kind, item._sum.amountMinor ?? 0n));
-  for (const item of incoming) if (item.targetAccountId) balances.set(item.targetAccountId,
-    (balances.get(item.targetAccountId) ?? 0n) + (item._sum.amountMinor ?? 0n));
-  let reservation: Awaited<ReturnType<typeof reserveAiCreditsMilli>> | null = null;
+  const streaming = req.get('accept')?.includes('text/event-stream') === true;
+  const emit = (event: string, data: unknown) => {
+    if (!res.writableEnded && !res.destroyed) res.write('event: ' + event + '\\n' + 'data: ' + JSON.stringify(data) + '\\n\\n');
+  };
+  if (streaming) {
+    res.status(200).set({
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'private, no-store, no-transform',
+      'X-Accel-Buffering': 'no',
+      'Connection': 'keep-alive'
+    });
+    res.flushHeaders();
+  }
   try {
-    reservation = await reserveAiCreditsMilli(owner, 1000);
-  } catch { error(res, 'Недостаточно ИИ-кредитов', 402); return; }
-  try {
-    const context = JSON.stringify({
-      currency: 'RUB', moneyUnits: 'minor units are kopecks (100 per ruble)',
-      accounts: accounts.map(a => ({ name: a.name, openingBalanceMinor: a.openingBalanceMinor.toString(),
-        currentBalanceMinor: (balances.get(a.id) ?? 0n).toString() })),
-      month: monthKinds.map(row => ({ kind: row.kind, amountMinor: (row._sum.amountMinor ?? 0n).toString() })),
-      recentOperations: recent.map(row => ({ ...row, amountMinor: row.amountMinor.toString() })),
-      debts: debts.map(d => ({ ...d, amountMinor: d.amountMinor.toString() })),
-      loans: loans.map(l => ({ ...l, principalMinor: l.principalMinor.toString() }))
-    }).slice(0, 12000);
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 45000);
-    let response: Awaited<ReturnType<typeof openAiFetch>>;
-    try {
-      response = await openAiFetch('https://api.openai.com/v1/responses', {
-        method: 'POST', signal: controller.signal,
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-        body: JSON.stringify({
-          model: process.env.OPENAI_MODEL || 'gpt-6-luna', store: false, max_output_tokens: 650,
-          instructions: 'Ты Economic, финансовый помощник сервиса Планировыч. Отвечай по-русски. Анализируй только предоставленные данные, никаких выдуманных остатков или операций. Суммы в контексте указаны в рублях или явно помечены в копейках. Не утверждай, что произвёл запись в базе. Не давай категоричных финансовых рекомендаций. Если для расчёта баланса не хватает данных, скажи об этом. Ответ краткий и полезный.',
-          input: [...history.reverse().map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content })),
-            { role: 'user', content: `Контекст Economic: ${context}\n\nВопрос: ${question}` }]
-        })
-      }, { model: process.env.OPENAI_MODEL || 'gpt-6-luna' });
-    } finally { clearTimeout(timeout); }
-    if (!response.ok) throw new Error(`Economic assistant HTTP ${response.status}`);
-    const payload = await response.json() as { output_text?: string; output?: Array<{ content?: Array<{ type?: string; text?: string }> }> };
-    const answer = (payload.output_text || payload.output?.flatMap(item => item.content ?? [])
-      .filter(item => item.type === 'output_text').map(item => item.text ?? '').join('') || '').trim();
-    if (!answer) throw new Error('Economic assistant returned an empty answer');
-    await prisma.$transaction([
-      prisma.economicAssistantMessage.create({ data: { userId: owner, role: 'user', content: question } }),
-      prisma.economicAssistantMessage.create({ data: { userId: owner, role: 'assistant', content: answer.slice(0, 10000) } })
-    ]);
-    await settleAiCreditReservation(reservation, 1000);
-    res.json({ answer, chargedCredits: 1 });
+    const output = await answerEconomicAssistant({
+      owner, question: question || 'Изучи приложенные документы и объясни основные факты.',
+      attachments: rawFiles,
+      onStatus: (stage) => { if (streaming) emit('status', { stage }); }
+    });
+    if (streaming) {
+      emit('result', output); res.end();
+    } else res.json(output);
   } catch (cause) {
-    console.error('[Economic] assistant failed', cause instanceof Error ? cause.message : 'unknown');
-    await refundAiCreditReservation(reservation).catch(err => console.error('[Economic] credit refund failed', err));
-    error(res, 'Не удалось получить ответ Economic. Кредиты возвращены, если списание было выполнено.', 503);
+    const message = cause instanceof Error ? cause.message : 'Ошибка ИИ';
+    console.error('[Economic] assistant request failed', {
+      userId: owner, error: message.slice(0, 180)
+    });
+    const invalid = /вложен|файл|формат|размер|UTF-8|больше трёх/i.test(message);
+    const insufficient = /Недостаточно.*кредит/i.test(message);
+    const publicMessage = insufficient ? 'Недостаточно ИИ-кредитов'
+      : invalid ? message
+      : /пустой ответ|токенов|не настроен/i.test(message) ? message
+      : 'Не удалось получить ответ Экономыча AI. Попробуйте ещё раз.';
+    if (streaming) { emit('error', { error: publicMessage }); res.end(); }
+    else error(res, publicMessage, insufficient ? 402 : invalid ? 400 : 503);
   }
 }));
