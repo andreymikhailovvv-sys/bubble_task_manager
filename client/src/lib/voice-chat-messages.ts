@@ -20,7 +20,7 @@ export function voiceToolAssistantMessage(entry: LiveVoiceToolCompletion): ChatM
     createdAt: new Date().toISOString(),
     creditsSpentMilli: result.billing?.creditsSpentMilli,
     taskProposal: result.taskProposal ?? undefined,
-    economicProposals: result.economicProposals ?? undefined,
+    economicProposals: 'economicProposals' in result ? result.economicProposals : undefined,
     generatedDocument: result.generatedDocument ?? undefined,
     telegramSendDraft: result.telegramSendDraft ?? undefined,
     mailSendDraft: result.mailSendDraft ?? undefined,
