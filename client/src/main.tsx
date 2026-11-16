@@ -132,7 +132,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         : isAccountEmailRoute
           ? <AuthEmailPage />
         : isEconomicRoute
-          ? <EconomicApp />
+          ? <EconomicApp mobile={new URLSearchParams(window.location.search).get('mobile') === '1'} />
         : isMiniAppRoute
           ? <MiniApp runtime="telegram" />
         : isAndroidPlanikRoute
