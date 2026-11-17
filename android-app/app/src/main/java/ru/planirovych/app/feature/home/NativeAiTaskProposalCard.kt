@@ -107,14 +107,32 @@ internal fun NativeAiTaskProposalCard(
     var preferenceBusy by remember(id){mutableStateOf(false)}
     var localError by remember(id){mutableStateOf<String?>(null)}
     var confirmation by remember(id){mutableStateOf<String?>(null)}
+    val drafts=remember(id){mutableStateMapOf<Int,Map<String,JsonElement>>()}
+    var spheres by remember(id){mutableStateOf<List<Pair<String,String>>>(emptyList())}
     val scope=rememberCoroutineScope()
+    fun resetDrafts(current:JsonObject){
+        drafts.clear()
+        (current["operations"] as? JsonArray).orEmpty().forEachIndexed{index,item->
+            val fields=(item as? JsonObject)?.let(::taskChipEditable)
+            if(fields!=null)drafts[index]=fields.toMap()
+        }
+    }
     val preference by vm.taskProposalAutoApply.collectAsStateWithLifecycle()
-    LaunchedEffect(original){proposal=original}
+    LaunchedEffect(original){proposal=original;resetDrafts(original)}
     val source=proposal.pText("source").orEmpty()
     val telegram=source in setOf("telegram_assistant","telegram_bot","telegram_bot_task")
     val checkup=source=="daily_checkup"
     LaunchedEffect(id){
-        runCatching{vm.taskProposalDetails(id)}.getOrNull()?.let{proposal=it}
+        runCatching{vm.taskProposalDetails(id)}.getOrNull()?.let{
+            proposal=it;resetDrafts(it)
+        }
+        runCatching{vm.taskChipOptions()}.getOrNull()?.let{options->
+            spheres=(options["spheres"] as? JsonArray).orEmpty().mapNotNull{item->
+                val obj=item as? JsonObject?:return@mapNotNull null
+                val key=obj.pText("id")?:return@mapNotNull null
+                key to (obj.pText("name")?:key)
+            }
+        }
         if(!telegram&&!checkup)runCatching{vm.loadTaskProposalAutoApply()}
     }
     val status=proposal.pText("status")?:"PENDING"
@@ -141,10 +159,38 @@ internal fun NativeAiTaskProposalCard(
         if(working)return
         localBusy=true;localError=null
         val indices=if(checkup&&action=="approve")selected.sorted() else null
-        onAction(id,action,indices){result->
-            if(result!=null)proposal=result
-            else localError="Не удалось выполнить действие. Проверьте состояние предложения."
-            localBusy=false
+        scope.launch{
+            try{
+                var current=proposal
+                if(action=="approve"||action=="revise"){
+                    for(index in drafts.keys.sorted()){
+                        val fields=(current["operations"] as? JsonArray)
+                            ?.getOrNull(index) as? JsonObject ?:continue
+                        val existing=taskChipEditable(fields)?:continue
+                        val changed=drafts[index]?:continue
+                        val values=taskChipDraftPayload(changed)
+                        if(values==existing)continue
+                        val revision=current.pText("revision")
+                            ?:throw IllegalStateException("Карточка устарела. Обновите чат.")
+                        current=vm.editTaskAiProposal(id,index,revision,values)
+                    }
+                    proposal=current
+                    resetDrafts(current)
+                }
+                if(action=="revise"){
+                    vm.refresh();localBusy=false
+                }else onAction(id,action,indices){result->
+                    if(result!=null){proposal=result;resetDrafts(result)}
+                    else localError="Не удалось выполнить действие. Проверьте состояние предложения."
+                    localBusy=false
+                }
+            }catch(t:Throwable){
+                runCatching{vm.taskProposalDetails(id)}.getOrNull()?.let{
+                    proposal=it;resetDrafts(it)
+                }
+                localError=t.message?:"Не удалось изменить задачу"
+                localBusy=false
+            }
         }
     }
     Surface(shape=RoundedCornerShape(18.dp),color=surface,
@@ -203,16 +249,27 @@ internal fun NativeAiTaskProposalCard(
                             Column(Modifier.weight(1f),
                                 verticalArrangement=Arrangement.spacedBy(5.dp)){
                                 Text(operationTitles[kind]?:kind,color=muted,fontSize=11.sp)
-                                Text(item.pText("title")?:"Изменение",color=ink,
+                                Text((if(status in setOf("PENDING","APPLIED"))
+                                    (drafts[index]?.get("title") as? JsonPrimitive)?.contentOrNull
+                                    else null)?:item.pText("title")?:"Изменение",color=ink,
                                     fontSize=13.sp,lineHeight=18.sp,
                                     fontWeight=FontWeight.Bold)
                                 item.pText("parentTitle")?.let{
                                     Text("В задаче «"+it+"»",color=muted,fontSize=11.sp)
                                 }
-                                proposalDescription(item)?.let{
-                                    Text(it,color=muted,fontSize=11.sp,lineHeight=16.sp)
-                                }
-                                (item["details"] as? JsonArray).orEmpty().forEach{detail->
+                                if(!(status in setOf("PENDING","APPLIED")
+                                        && taskChipEditable(item)!=null))
+                                    proposalDescription(item)?.let{
+                                        Text(it,color=muted,fontSize=11.sp,lineHeight=16.sp)
+                                    }
+                                if(status in setOf("PENDING","APPLIED")
+                                    && taskChipEditable(item)!=null){
+                                    val editable=drafts[index]
+                                        ?:taskChipEditable(item)!!.toMap()
+                                    NativeTaskChipFields(editable,spheres,!working,dark){
+                                        key,value->drafts[index]=editable+(key to value)
+                                    }
+                                }else (item["details"] as? JsonArray).orEmpty().forEach{detail->
                                     val value=(detail as? JsonPrimitive)?.contentOrNull
                                     if(!value.isNullOrBlank())Text(value,
                                         color=muted,fontSize=11.sp,lineHeight=16.sp)
@@ -257,12 +314,24 @@ internal fun NativeAiTaskProposalCard(
                         Text("Отклонить",fontSize=11.sp,maxLines=1)
                     }
                 }
-                "APPLIED"->OutlinedButton(onClick={confirmation="undo"},
-                    modifier=Modifier.fillMaxWidth(),enabled=!working,
-                    shape=RoundedCornerShape(12.dp)){
-                    Icon(Icons.Default.Undo,null,modifier=Modifier.size(15.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Вернуть",fontSize=12.sp)
+                "APPLIED"->Row(Modifier.fillMaxWidth(),
+                    horizontalArrangement=Arrangement.spacedBy(7.dp)){
+                    if(ops.any{(it as? JsonObject)?.let(::taskChipEditable)!=null}){
+                        Button(onClick={submit("revise")},enabled=!working,
+                            modifier=Modifier.weight(1f),shape=RoundedCornerShape(12.dp),
+                            colors=ButtonDefaults.buttonColors(containerColor=Color(0xFF7954DB))){
+                            Icon(Icons.Default.Check,null,modifier=Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Изменить",fontSize=11.sp)
+                        }
+                    }
+                    OutlinedButton(onClick={confirmation="undo"},
+                        modifier=Modifier.weight(1f),enabled=!working,
+                        shape=RoundedCornerShape(12.dp)){
+                        Icon(Icons.Default.Undo,null,modifier=Modifier.size(15.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Вернуть",fontSize=11.sp)
+                    }
                 }
                 else->Text(proposalStatusTitles[status]?:status,
                     color=muted,fontSize=11.sp)

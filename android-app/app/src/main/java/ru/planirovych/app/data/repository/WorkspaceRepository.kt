@@ -344,6 +344,9 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
         api.taskMonitoringStatuses(id)
 
     suspend fun getTaskAiProposal(id:String):JsonObject=api.getTaskAiProposal(id)
+    suspend fun taskChipOptions():JsonObject=api.taskChipOptions()
+    suspend fun editTaskAiProposal(id:String,payload:JsonObject):JsonObject=
+        api.editTaskAiProposal(id,payload)
     suspend fun getTaskAiAutoApplyPreference():Boolean =
         api.getTaskAiProposalPreferences()["autoApply"]?.jsonPrimitive?.booleanOrNull ?: false
     suspend fun setTaskAiAutoApplyPreference(enabled:Boolean):Boolean =

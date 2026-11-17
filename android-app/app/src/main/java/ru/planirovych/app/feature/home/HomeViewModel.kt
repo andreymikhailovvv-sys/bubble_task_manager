@@ -80,6 +80,11 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
         repository.setEconomicPreferences(enabled)
     suspend fun taskProposalDetails(id:String):JsonObject =
         repository.getTaskAiProposal(id)
+    suspend fun taskChipOptions():JsonObject=repository.taskChipOptions()
+    suspend fun editTaskAiProposal(id:String,index:Int,revision:String,values:JsonObject):JsonObject=
+        repository.editTaskAiProposal(id,buildJsonObject{
+            put("index",index);put("revision",revision);put("values",values)
+        })
     suspend fun loadTaskProposalAutoApply():Boolean{
         val remote=repository.getTaskAiAutoApplyPreference()
         taskProposalAutoApplyMutable.value=remote

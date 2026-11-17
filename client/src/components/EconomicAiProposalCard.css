@@ -111,3 +111,31 @@
 .econ-root.econ-light .econ-assistant .econ-finance-edit-row>select{
   color:#fff0d9;background:rgba(18,16,19,.42);border-color:rgba(245,179,99,.27)
 }
+
+/* The Economic assistant stays dark inside a light-site workspace: no
+   bright checkbox, white footer divider or native white scrollbar. */
+.econ-root.econ-light .econ-assistant .econ-finance-autoapply{
+  border-top-color:rgba(255,199,127,.15);color:#cbb391
+}
+.econ-root.econ-light .econ-assistant .econ-finance-autoapply input[type='checkbox']{
+  appearance:none;-webkit-appearance:none;width:15px;height:15px;
+  border:1px solid #b98b57;border-radius:4px;background:#30251d;
+  display:grid;place-content:center;flex:none;cursor:pointer
+}
+.econ-root.econ-light .econ-assistant .econ-finance-autoapply input[type='checkbox']:checked{
+  background:#dda04f;border-color:#dda04f
+}
+.econ-root.econ-light .econ-assistant .econ-finance-autoapply input[type='checkbox']:checked:after{
+  content:'';width:7px;height:4px;transform:rotate(-45deg) translate(1px,-1px);
+  border-left:2px solid #281807;border-bottom:2px solid #281807
+}
+.econ-root .econ-assistant .econ-finance-editable-fields{
+  scrollbar-width:thin;scrollbar-color:#99764e #2d251f;color-scheme:dark
+}
+.econ-root .econ-assistant .econ-finance-editable-fields::-webkit-scrollbar{width:5px}
+.econ-root .econ-assistant .econ-finance-editable-fields::-webkit-scrollbar-track{
+  background:#2d251f;border-radius:6px
+}
+.econ-root .econ-assistant .econ-finance-editable-fields::-webkit-scrollbar-thumb{
+  background:#99764e;border-radius:6px
+}

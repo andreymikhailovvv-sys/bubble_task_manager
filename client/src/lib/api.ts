@@ -910,6 +910,11 @@ export const api = {
       method: 'POST', body: '{}'
     }),
   aiTaskProposal: (id: string) => request<import('./types').AiTaskProposal>(`/api/ai/task-proposals/${encodeURIComponent(id)}`),
+  aiTaskProposalOptions: () => request<{spheres:Array<{id:string;name:string}>}>('/api/ai/task-proposals/options'),
+  editAiTaskProposal: (id:string,index:number,revision:string,values:Record<string,unknown>) =>
+    request<import('./types').AiTaskProposal>(`/api/ai/task-proposals/${encodeURIComponent(id)}`,{
+      method:'PATCH',body:JSON.stringify({index,revision,values})
+    }),
   approveAiTaskProposal: (id: string, selectedIndices?: number[]) => request<import('./types').AiTaskProposal>(`/api/ai/task-proposals/${encodeURIComponent(id)}/approve`, { method: 'POST', body: JSON.stringify(selectedIndices === undefined ? {} : { selectedIndices }) }),
   undoAiTaskProposal: (id: string) => request<import('./types').AiTaskProposal>(`/api/ai/task-proposals/${encodeURIComponent(id)}/undo`, { method: 'POST', body: '{}' }),
   rejectAiTaskProposal: (id: string) => request<import('./types').AiTaskProposal>(`/api/ai/task-proposals/${encodeURIComponent(id)}/reject`, { method: 'POST', body: '{}' }),

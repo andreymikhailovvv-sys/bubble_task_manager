@@ -47,6 +47,8 @@ jobs:
         run: node --import tsx --test server/test/economic-unified-planner.test.ts
       - name: Verify Economic finance AI proposal owner isolation, undo and UI
         run: node --import tsx --test server/test/economic-ai-finance-proposals.test.ts client/test/economic-finance-proposal-ui.test.ts
+      - name: Verify editable task proposals and automatic receipt classification
+        run: node --import tsx --test server/test/ai-task-chip-edit.test.ts
       - name: Verify Economic finance proposals against real PostgreSQL
         env:
           DATABASE_URL: postgresql://postgres:economic_test_password@localhost:15437/economic_ci?schema=public
@@ -58,7 +60,7 @@ jobs:
             sleep 1
           done
           cd server && ../node_modules/.bin/prisma migrate deploy && cd ..
-          node --import tsx --test server/test/economic-ai-proposals.integration.test.ts
+          node --import tsx --test server/test/economic-ai-proposals.integration.test.ts server/test/ai-task-chip-edit.integration.test.ts
       - name: Verify personal Planner boot without Telegram SDK blocking
         run: node --import tsx --test client/test/planner-startup-splash.test.ts
       - name: Verify Planner auth hook order against React render crashes
