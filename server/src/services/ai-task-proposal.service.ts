@@ -1,4 +1,5 @@
 import { captureProposalBefore, captureProposalAfter, undoStoredProposal } from './ai-task-proposal-undo.service.js';
+import { createHash } from 'node:crypto';
 import { prisma } from '../db/prisma.js';
 import { taskAccessWhere } from '../lib/task-access.js';
 import { plannerToolsService, type PlannerActionInput } from './planner-tools.service.js';
@@ -53,6 +54,16 @@ function afterValue(action: TaskProposalAction): string {
 function isCreate(action: TaskProposalAction): boolean {
   return ['create_task', 'create_event', 'create_reminder', 'create_subtask', 'telegram_suggestion'].includes(label(action));
 }
+/** Hash the persisted command as well as the clock: PostgreSQL can store two
+ * very rapid edits with the same millisecond updatedAt timestamp. */
+function taskProposalRevision(row:{
+  status:string;updatedAt?:Date;operations?:unknown
+}):string{
+  return createHash('sha256').update(JSON.stringify({
+    status:row.status,updatedAt:row.updatedAt?.toISOString()??null,
+    operations:row.operations??null
+  })).digest('hex').slice(0,32);
+}
 export function proposalView(row: {
   id: string; status: string; source: string; autoApplied: boolean; display: unknown; result: unknown; error: string | null;
   operations?:unknown; updatedAt?:Date;
@@ -61,7 +72,7 @@ export function proposalView(row: {
   const actions=Array.isArray(row.operations)?row.operations as TaskProposalAction[]:[];
   return {
     id: row.id, status: row.status, source: row.source, autoApplied: row.autoApplied,
-    revision:row.updatedAt?.toISOString()??'',
+    revision:taskProposalRevision(row),
     operations:display.map((item,index)=>({
       ...item,...(item.editable?{
         editable:{...item.editable,...(actions[index]?.__chipEdit as TaskChipValues??{})}
@@ -238,7 +249,7 @@ export async function editTaskProposal(userId:string,id:string,input:unknown):Pr
   if(!row)throw new Error('Предложение не найдено.');
   if(!['PENDING','APPLIED'].includes(row.status))
     throw new Error('Эту карточку больше нельзя менять.');
-  if(row.updatedAt.toISOString()!==data.revision)
+  if(taskProposalRevision(row)!==data.revision)
     throw new Error('Чип изменился в другом окне. Обновите его.');
   const display=Array.isArray(row.display)?row.display as TaskProposalView['operations']:[];
   const actions=Array.isArray(row.operations)?row.operations as TaskProposalAction[]:[];
