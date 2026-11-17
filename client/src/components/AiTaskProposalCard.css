@@ -25,9 +25,11 @@ body[data-theme='dark'] .ai-task-proposal {
 
 /* Keep the task proposal's original footprint: scroll fields inside its tile. */
 .ai-task-proposal__editable{
- display:grid;gap:6px;margin-top:8px;padding:7px;border-radius:10px;
- background:color-mix(in srgb,var(--atp-bg) 80%,var(--atp-text) 5%);
- border:1px solid var(--atp-border);max-height:174px;overflow-y:auto;
+ /* The operation tile is the only panel inside the chip. Inputs sit directly
+    in it, exactly as in the compact Economic financial proposals. */
+ display:grid;gap:6px;margin-top:8px;padding:1px 1px 1px 0;
+ border:0;border-radius:0;background:transparent;
+ max-height:184px;min-width:0;overflow-y:auto;
  overscroll-behavior:contain;scrollbar-width:thin;
  scrollbar-color:color-mix(in srgb,var(--atp-muted) 70%,transparent) transparent
 }
@@ -48,3 +50,8 @@ body[data-theme='dark'] .ai-task-proposal__field>select,
 body[data-theme='dark'] .ai-task-proposal__field>textarea{color-scheme:dark}
 .ai-task-proposal__field>textarea{min-height:29px;resize:vertical}
 .ai-task-proposal__field>select option{background:var(--atp-bg);color:var(--atp-text)}
+
+/* Match the financial proposal's balanced, horizontal action group. */
+.ai-task-proposal__actions button{min-height:36px;font-size:12px;white-space:nowrap}
+.ai-task-proposal__actions .ai-task-proposal__secondary{background:transparent}
+@media(max-width:380px){.ai-task-proposal__actions button{font-size:11px;padding-inline:6px}}
