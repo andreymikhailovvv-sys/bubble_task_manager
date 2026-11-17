@@ -4,7 +4,7 @@ import { aiAssistantService } from '../services/ai-assistant.service.js';
 import { transcribeWebAudio, readMessageAloud, WebAudioError } from '../services/ai-web-audio.service.js';
 import { createAiCheckup } from '../services/ai-checkup-delivery.service.js';
 import { resolveAiCheckupSchedules, validateAiCheckupSchedules } from '../lib/ai-checkup-schedules.js';
-import { getTaskProposal, applyTaskProposal, rejectTaskProposal, undoTaskProposal } from '../services/ai-task-proposal.service.js';
+import { getTaskProposal, applyTaskProposal, rejectTaskProposal, undoTaskProposal, editTaskProposal, taskChipOptions } from '../services/ai-task-proposal.service.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import crypto from 'node:crypto';
 import { Prisma } from '@prisma/client';
@@ -2180,6 +2180,20 @@ apiRouter.patch('/ai/task-proposals/preferences', requireAuth, taskProposalSameO
 apiRouter.get('/ai/task-proposals/:id', requireAuth, asyncHandler(async (req, res) => {
   try { res.set('Cache-Control', 'no-store, private').json(await getTaskProposal(req.user!.id, req.params.id)); }
   catch { res.status(404).json({ error: 'Предложение не найдено' }); }
+}));
+apiRouter.get('/ai/task-proposals/options', requireAuth, asyncHandler(async(req,res)=>{
+  res.set('Cache-Control','private, no-store').json(await taskChipOptions(req.user!.id));
+}));
+apiRouter.patch('/ai/task-proposals/:id', requireAuth, taskProposalSameOrigin, asyncHandler(async(req,res)=>{
+  try{
+    res.set('Cache-Control','private, no-store').json(
+      await editTaskProposal(req.user!.id,req.params.id,req.body)
+    );
+  }catch(cause){
+    const message=cause instanceof Error?cause.message:'Не удалось изменить карточку.';
+    res.status(message==='Предложение не найдено.'?404:
+      /изменил|изменилось|недоступна|актуальную/.test(message)?409:400).json({error:message});
+  }
 }));
 apiRouter.post('/ai/task-proposals/:id/approve', requireAuth, taskProposalSameOrigin, asyncHandler(async (req, res) => {
   try {
