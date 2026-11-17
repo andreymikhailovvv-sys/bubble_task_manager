@@ -260,7 +260,15 @@ internal fun NativeEconomicAiProposalCard(
                             value,selections,editable&&!busy&&
                                 (key !in listOf("sourceAccountId","targetAccountId","accountId")||options!=null)&&
                                 !(key=="category"&&kind=="TRANSFER"),
-                            light,Modifier.weight(.61f)){chosen->draft[key]=chosen}
+                            light,Modifier.weight(.61f)){chosen->
+                            draft[key]=chosen
+                            if(key=="kind"&&(proposal["entity"] as? JsonPrimitive)
+                                ?.contentOrNull=="operation"){
+                                draft["category"]=""
+                                if(chosen=="TRANSFER"&&!draft.containsKey("targetAccountId"))
+                                    draft["targetAccountId"]=""
+                            }
+                        }
                         else BasicTextField(value=value,
                             onValueChange={draft[key]=it},
                             enabled=editable&&!busy,
