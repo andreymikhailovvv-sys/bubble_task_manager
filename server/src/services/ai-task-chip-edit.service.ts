@@ -19,7 +19,7 @@ const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
 export const isTaskChipAction=(action:Record<string,unknown>):boolean=>{
   const kind=String(action.operation??action.type??'');
   return !['create_note','update_note','create_habit','delete','rebalance_today',
-    'telegram_suggestion'].includes(kind) && (
+    'telegram_suggestion'].includes(kind) && !kind.startsWith('delete') && (
       Boolean(action.operation) || Boolean(action.type) &&
       /task|subtask|event|reminder|rename|reschedule|priority|due_date|description|complete|reopen|sphere|notification/.test(kind)
   );
@@ -45,17 +45,17 @@ export function taskChipInitial(
     'status','location','notifyBeforeMinutes'] as const;
   for(const key of fields) {
     const val=action[key];
-    if(val!==undefined && (creating || op==='rename'&&key==='title' ||
-      op==='set_description'&&key==='description' || op==='reschedule'&&key==='dueDate' ||
+    if(val!==undefined && (creating || ['rename','rename_task','rename_subtask'].includes(op)&&key==='title' ||
+      op==='set_description'&&key==='description' || ['reschedule','reschedule_task','reschedule_subtask'].includes(op)&&key==='dueDate' ||
       op==='set_priority'&&['importance','urgency'].includes(key) ||
       op==='set_notification'&&key==='notifyBeforeMinutes' ||
-      op==='change_sphere'&&key==='sphereId' ||
+      ['change_sphere','change_task_sphere'].includes(op)&&key==='sphereId' ||
       op==='update_task'||op==='update_subtask'||op==='create_subtask')) {
       (data as unknown as Record<string,unknown>)[key]=iso(val);
     }
   }
   if(op==='complete'||op==='complete_task'||op==='complete_subtask')data.status='DONE';
-  if(op==='reopen')data.status='TODO';
+  if(op==='reopen'||op==='reopen_subtask')data.status='TODO';
   if(op==='clear_due_date')data.dueDate=null;
   if(creating && op==='create_reminder')data.notifyBeforeMinutes=0;
   if(task?.parentTaskId || op==='create_subtask')delete data.sphereId;
