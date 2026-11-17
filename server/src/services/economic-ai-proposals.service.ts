@@ -215,7 +215,7 @@ export function economicProposalView(row:{
   ).slice(0,8);
   return {id:row.id,messageId:row.messageId,entity:row.entity,action:row.action,
     status:row.status,autoApplied:row.autoApplied,error:row.error,description,
-    payload:d,
+    payload:d,before:old,
     title:(row.action==='create'?'Создание ':'Изменение ')+(TITLES[row.entity as EconomicEntity]??'данных'),details,
     createdAt:row.createdAt.toISOString(),appliedEntityId:row.appliedEntityId};
 }
