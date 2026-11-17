@@ -10,13 +10,16 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AssignmentTurnedIn
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.RotateLeft
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -125,7 +128,7 @@ private fun EconomicChipSelect(
     val text=items.firstOrNull{it.first==value}?.second
         ?:(if(value.isBlank())"Выбрать" else value)
     Box(modifier){
-        Box(Modifier.fillMaxWidth().heightIn(min=31.dp)
+        Box(Modifier.fillMaxWidth().height(34.dp)
             .border(1.dp,Color(0xFFB78E5C).copy(alpha=.5f),RoundedCornerShape(7.dp))
             .background(bg,RoundedCornerShape(7.dp))
             .clickable(enabled=enabled){expanded=true}
@@ -159,6 +162,8 @@ internal fun NativeEconomicAiProposalCard(
     val muted=if(light)Color(0xFF627184) else Color(0xFFD4AE84)
     val frame=RoundedCornerShape(14.dp)
     val amber=Color(0xFFF2A746)
+    val tile=if(light)Color(0xFFF2F4F9) else Color(0xFF382F29)
+    val tileBorder=if(light)Color(0xFFD7DCE7) else Color(0xFF8B6844)
     val status=(proposal["status"] as? JsonPrimitive)?.contentOrNull.orEmpty()
     val statusLabel=when(status){
         "PENDING"->"Ожидает подтверждения"
@@ -224,26 +229,61 @@ internal fun NativeEconomicAiProposalCard(
             .background(bg,frame).padding(12.dp),
         verticalArrangement=Arrangement.spacedBy(8.dp)
     ){
-        Text("◉  "+((proposal["title"] as? JsonPrimitive)?.contentOrNull
-            ?:"Финансовое действие"),color=ink,fontSize=12.sp,fontWeight=FontWeight.Bold)
-        Text(if(status=="APPLIED"&&(proposal["autoApplied"] as? JsonPrimitive)?.booleanOrNull==true)
-            "Применено автоматически" else statusLabel,color=muted,fontSize=10.sp)
-        (proposal["description"] as? JsonPrimitive)?.contentOrNull
-            ?.takeIf{it.isNotBlank()}?.let{
-                Text(it,color=ink,fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+        // Match the native task chip: icon + action heading + status,
+        // with the applied check in the upper-right corner.
+        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
+            horizontalArrangement=Arrangement.spacedBy(9.dp)){
+            Box(Modifier.size(37.dp).clip(RoundedCornerShape(12.dp))
+                .background(amber.copy(alpha=if(light).18f else .2f)),
+                contentAlignment=Alignment.Center){
+                Icon(Icons.Default.AssignmentTurnedIn,null,
+                    tint=if(light)Color(0xFFB86B1A) else amber,
+                    modifier=Modifier.size(20.dp))
             }
-        if(draft.isNotEmpty()){
-            Column(Modifier.fillMaxWidth().heightIn(max=175.dp)
-                .background(if(light)Color(0xFFF7F8FA) else Color(0xFF382F29),
-                    RoundedCornerShape(9.dp))
-                .verticalScroll(rememberScrollState()).padding(8.dp),
-                verticalArrangement=Arrangement.spacedBy(5.dp)){
+            Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(3.dp)){
+                Text((proposal["title"] as? JsonPrimitive)?.contentOrNull
+                    ?:"Финансовое действие",color=ink,fontSize=15.sp,
+                    lineHeight=19.sp,fontWeight=FontWeight.Bold)
+                Text(if(status=="APPLIED"&&
+                    (proposal["autoApplied"] as? JsonPrimitive)?.booleanOrNull==true)
+                    "Применено автоматически" else statusLabel,
+                    color=muted,fontSize=11.sp,lineHeight=15.sp)
+            }
+            if(status=="APPLIED")Icon(Icons.Default.CheckCircle,null,
+                tint=Color(0xFF22C55E),modifier=Modifier.size(19.dp))
+        }
+        // The operation caption, amount/title and every editable control live
+        // inside ONE highlighted tile, as in NativeAiTaskProposalCard.
+        val entity=(proposal["entity"] as? JsonPrimitive)?.contentOrNull.orEmpty()
+        val created=(proposal["action"] as? JsonPrimitive)?.contentOrNull=="create"
+        val innerTitle=when(entity){
+            "operation"->if(created)"Новая операция" else "Изменение операции"
+            "account"->if(created)"Новый счёт" else "Изменение счёта"
+            "category"->if(created)"Новая категория" else "Изменение категории"
+            "loan"->if(created)"Новый кредит" else "Изменение кредита"
+            "debt"->if(created)"Новый долг" else "Изменение долга"
+            else->if(created)"Новая запись" else "Изменение записи"
+        }
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+            .background(tile).border(1.dp,tileBorder,RoundedCornerShape(14.dp))
+            .padding(horizontal=11.dp,vertical=10.dp),
+            verticalArrangement=Arrangement.spacedBy(7.dp)){
+            Text(innerTitle,color=muted,fontSize=11.sp,lineHeight=14.sp)
+            (proposal["description"] as? JsonPrimitive)?.contentOrNull
+                ?.takeIf{it.isNotBlank()}?.let{
+                    Text(it,color=ink,fontSize=13.sp,lineHeight=18.sp,
+                        fontWeight=FontWeight.Bold)
+                }
+            if(draft.isNotEmpty()){
+                Column(Modifier.fillMaxWidth().heightIn(max=184.dp)
+                    .verticalScroll(rememberScrollState()).padding(top=3.dp,end=2.dp),
+                    verticalArrangement=Arrangement.spacedBy(6.dp)){
                 draft.keys.take(15).forEach{key->
                     val label=ECON_FIELDS[key]?:key
                     val value=draft[key].orEmpty()
                     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
                         horizontalArrangement=Arrangement.spacedBy(6.dp)){
-                        Text(label,Modifier.weight(.39f),color=muted,fontSize=10.sp,lineHeight=12.sp)
+                        Text(label,Modifier.weight(.38f),color=muted,fontSize=10.sp,lineHeight=12.sp)
                         val selections:List<Pair<String,String>>?=when(key){
                             "kind"->if((proposal["entity"] as? JsonPrimitive)?.contentOrNull=="category")
                                 listOf("EXPENSE" to "Расход","INCOME" to "Доход")
@@ -256,11 +296,12 @@ internal fun NativeEconomicAiProposalCard(
                                 listOf("true" to "Да","false" to "Нет")
                             else->null
                         }
+                        Box(Modifier.weight(.62f)){
                         if(selections!=null)EconomicChipSelect(
                             value,selections,editable&&!busy&&
                                 (key !in listOf("sourceAccountId","targetAccountId","accountId")||options!=null)&&
                                 !(key=="category"&&kind=="TRANSFER"),
-                            light,Modifier.weight(.61f)){chosen->
+                            light,Modifier.fillMaxWidth()){chosen->
                             draft[key]=chosen
                             if(key=="kind"&&(proposal["entity"] as? JsonPrimitive)
                                 ?.contentOrNull=="operation"){
@@ -275,12 +316,13 @@ internal fun NativeEconomicAiProposalCard(
                             singleLine=true,textStyle=TextStyle(color=ink,fontSize=11.sp),
                             keyboardOptions=KeyboardOptions(keyboardType=
                                 if(key.endsWith("Minor"))KeyboardType.Decimal else KeyboardType.Text),
-                            modifier=Modifier.weight(.61f)
+                            modifier=Modifier.fillMaxWidth().height(34.dp)
                                 .border(1.dp,Color(0xFFC99B61).copy(alpha=.35f),
                                     RoundedCornerShape(7.dp))
                                 .background(if(light)Color.White else Color(0xFF43372B),
                                     RoundedCornerShape(7.dp))
                                 .padding(horizontal=7.dp,vertical=7.dp))
+                        }
                     }
                 }
             }
@@ -290,6 +332,7 @@ internal fun NativeEconomicAiProposalCard(
                     Text(it,color=muted,fontSize=11.sp)
                 }
             }
+        }
         }
         val err=error?:(proposal["error"] as? JsonPrimitive)?.contentOrNull
         if(!err.isNullOrBlank())Text(err,color=Color(0xFFD65B47),fontSize=10.sp)
