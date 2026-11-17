@@ -120,6 +120,11 @@ interface PlanirovychApi {
     suspend fun undoEconomicProposal(@Path("id") id:String,@Body payload:JsonObject):JsonObject
     @GET("api/ai/task-proposals/{id}")
     suspend fun getTaskAiProposal(@Path("id") id:String):JsonObject
+    @GET("api/ai/task-proposals/options")
+    suspend fun taskChipOptions():JsonObject
+    @Headers("Sec-Fetch-Site: same-origin")
+    @PATCH("api/ai/task-proposals/{id}")
+    suspend fun editTaskAiProposal(@Path("id") id:String,@Body payload:JsonObject):JsonObject
     @GET("api/ai/task-proposals/preferences")
     suspend fun getTaskAiProposalPreferences():JsonObject
     @Headers("Sec-Fetch-Site: same-origin")
