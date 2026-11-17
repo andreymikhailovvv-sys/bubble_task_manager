@@ -6,6 +6,9 @@ import { aiPersonalNotesService, validateAiCreateNoteArgs, validateAiUpdateNoteA
 import type { Prisma } from '@prisma/client';
 import { habitService } from './habit.service.js';
 import { validateAiCreateHabitArgs, type CreateHabitProposalAction } from './ai-create-habit.service.js';
+import { taskChipInitial, validateTaskChipValues, chipChanged, applyChipEdits, chipDbPatch, validateChipReferences, type TaskChipValues } from './ai-task-chip-edit.service.js';
+import { rescheduleMonitoringSource } from './task-monitoring-schedule.service.js';
+import { signalTaskMonitoringWakeup } from './task-monitoring-wakeup.service.js';
 
 /**
  * A proposal is a durable, owner-bound command. The model and the browser may
@@ -30,7 +33,8 @@ function noteActionPayload(action: NoteProposalAction): UpdatePersonalNoteArgs {
 }
 export type TaskProposalView = {
   id: string; status: string; source: string; autoApplied: boolean;
-  operations: Array<{ type: string; title: string; before?: string; after?: string; dueDate?: string | null; parentTitle?: string; details?: string[] }>;
+  operations: Array<{ type: string; title: string; before?: string; after?: string; dueDate?: string | null; parentTitle?: string; details?: string[]; editable?:TaskChipValues }>;
+  revision: string;
   result: unknown; error: string | null;
 };
 
@@ -51,10 +55,18 @@ function isCreate(action: TaskProposalAction): boolean {
 }
 export function proposalView(row: {
   id: string; status: string; source: string; autoApplied: boolean; display: unknown; result: unknown; error: string | null;
+  operations?:unknown; updatedAt?:Date;
 }): TaskProposalView {
+  const display=Array.isArray(row.display)?row.display as TaskProposalView['operations']:[];
+  const actions=Array.isArray(row.operations)?row.operations as TaskProposalAction[]:[];
   return {
     id: row.id, status: row.status, source: row.source, autoApplied: row.autoApplied,
-    operations: Array.isArray(row.display) ? row.display as TaskProposalView['operations'] : [],
+    revision:row.updatedAt?.toISOString()??'',
+    operations:display.map((item,index)=>({
+      ...item,...(item.editable?{
+        editable:{...item.editable,...(actions[index]?.__chipEdit as TaskChipValues??{})}
+      }:{})
+    })),
     result: row.result, error: row.error
   };
 }
@@ -63,7 +75,7 @@ async function ownerSnapshot(userId: string, actions: TaskProposalAction[]) {
   const ids = [...new Set(actions.flatMap(actionIds))];
   const tasks = ids.length ? await prisma.task.findMany({
     where: { id: { in: ids }, AND: [taskAccessWhere(userId)] },
-    select: { id: true, title: true, description: true, dueDate: true, status: true, updatedAt: true, parentTaskId: true }
+    select: { id: true, title: true, description: true, dueDate: true, status: true, updatedAt: true, parentTaskId: true, sphereId:true, importance:true, urgency:true, notifyBeforeMinutes:true, location:true }
   }) : [];
   const byId = new Map(tasks.map(task => [task.id, task]));
   const createdNoteActions = actions.filter(isCreateNoteAction);
@@ -150,6 +162,7 @@ async function ownerSnapshot(userId: string, actions: TaskProposalAction[]) {
         after: afterValue(action) || (['complete', 'complete_subtask', 'complete_task'].includes(label(action)) ? 'Выполнено' : undefined),
         dueDate: typeof action.dueDate === 'string' ? action.dueDate : null,
         parentTitle: action.parentTaskId && target ? target.title : undefined,
+        editable: taskChipInitial(action,target),
         details: isCreate(action) ? [
           typeof action.description === 'string' && action.description.trim()
             ? 'Описание: ' + action.description.trim().slice(0, 180) : null,
