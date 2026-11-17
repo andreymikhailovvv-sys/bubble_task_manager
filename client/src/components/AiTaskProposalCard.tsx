@@ -180,7 +180,7 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
       const current=operation==='approve'?await synchronizeTaskEdits(proposal):proposal;
       const result = operation === 'approve'
         ? await api.approveAiTaskProposal(proposal.id, checkup ? selectedIndices : undefined)
-        : await api.rejectAiTaskProposal(current.id);
+        : await api.rejectAiTaskProposal(proposal.id);
       setProposal(result);
       setTaskDrafts(Object.fromEntries(result.operations.map((o,i)=>[i,{...o.editable}])));
       if (result.status === 'APPLIED') {
