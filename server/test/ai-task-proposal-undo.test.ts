@@ -42,7 +42,7 @@ test('user sees undo action and human-friendly localized dates', () => {
   assert.match(component, /Intl\.DateTimeFormat\('ru-RU'/);
   assert.match(component, /humanDescription\(item\)/);
   assert.match(component, /api\.undoAiTaskProposal\(proposal\.id\)/);
-  assert.match(component, /Вернуть\s*<\/button>/);
+  assert.match(component, /Отменить\s*<\/button>/);
   assert.doesNotMatch(component, /<span>\{item\.before\}<\/span>/);
 });
 
