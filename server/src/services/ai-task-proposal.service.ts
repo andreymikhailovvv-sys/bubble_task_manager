@@ -70,14 +70,17 @@ export function proposalView(row: {
 }): TaskProposalView {
   const display=Array.isArray(row.display)?row.display as TaskProposalView['operations']:[];
   const actions=Array.isArray(row.operations)?row.operations as TaskProposalAction[]:[];
+  const result=row.result&&typeof row.result==='object'&&!Array.isArray(row.result)
+    ?row.result as {selectedIndices?:unknown}:{};
+  const selected=Array.isArray(result.selectedIndices)?result.selectedIndices as number[]:null;
   return {
     id: row.id, status: row.status, source: row.source, autoApplied: row.autoApplied,
     revision:taskProposalRevision(row),
-    operations:display.map((item,index)=>({
-      ...item,...(item.editable?{
-        editable:{...item.editable,...(actions[index]?.__chipEdit as TaskChipValues??{})}
-      }:{})
-    })),
+    operations:display.map((item,index)=>{
+      const localIndex=selected?selected.indexOf(index):index;
+      const edited=localIndex<0?undefined:actions[localIndex]?.__chipEdit as TaskChipValues|undefined;
+      return {...item,...(item.editable?{editable:{...item.editable,...(edited??{})}}:{})};
+    }),
     result: row.result, error: row.error
   };
 }
@@ -253,7 +256,12 @@ export async function editTaskProposal(userId:string,id:string,input:unknown):Pr
     throw new Error('Чип изменился в другом окне. Обновите его.');
   const display=Array.isArray(row.display)?row.display as TaskProposalView['operations']:[];
   const actions=Array.isArray(row.operations)?row.operations as TaskProposalAction[]:[];
-  const item=display[index],action=actions[index];
+  const resultInfo=(row.result&&typeof row.result==='object'&&!Array.isArray(row.result))
+    ?row.result as Record<string,unknown>:{};
+  const selectedIndices=Array.isArray(resultInfo.selectedIndices)
+    ?resultInfo.selectedIndices as number[]:null;
+  const storedIndex=selectedIndices?selectedIndices.indexOf(index):index;
+  const item=display[index],action=storedIndex<0?undefined:actions[storedIndex];
   if(!item?.editable || !action)throw new Error('Это действие не редактирует задачу.');
   const base=item.editable;
   const current={...base,...(action.__chipEdit as TaskChipValues??{})};
@@ -262,7 +270,7 @@ export async function editTaskProposal(userId:string,id:string,input:unknown):Pr
   await validateChipReferences(userId,patch);
   if(!Object.keys(patch).length)return proposalView(row);
   const nextEdit=chipChanged(base,next);
-  const amended=actions.map((op,i)=>i===index?{
+  const amended=actions.map((op,i)=>i===storedIndex?{
     ...op,...(Object.keys(nextEdit).length?{__chipEdit:nextEdit}:{__chipEdit:undefined})
   }:op);
   // JSON serializes undefined out, so reverting a field removes its override.
