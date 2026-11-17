@@ -3,6 +3,7 @@ import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronUp, ClipboardCh
 import { api } from '../lib/api';
 import type { AiTaskProposal } from '../lib/types';
 import './AiTaskProposalCard.css';
+import { TaskChipFields, type TaskChipValues } from './TaskChipFields';
 
 const STATUS: Record<AiTaskProposal['status'], string> = {
   PENDING: 'Ожидает подтверждения',
@@ -96,6 +97,10 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
   const [autoApply, setAutoApply] = useState(false);
   const [error, setError] = useState('');
   const [selectedIndices, setSelectedIndices] = useState<number[]>(() => initial.operations.map((_, index) => index));
+  const [taskDrafts,setTaskDrafts]=useState<Record<number,TaskChipValues>>(() =>
+    Object.fromEntries(initial.operations.map((o,i)=>[i,{...o.editable}]))
+  );
+  const [spheres,setSpheres]=useState<Array<{id:string;name:string}>>([]);
   const telegram = ['telegram_assistant', 'telegram_bot', 'telegram_bot_task'].includes(proposal.source);
   const checkup = proposal.source === 'daily_checkup';
   const hasNotes = proposal.operations.some(item => ['update_note', 'create_note'].includes(item.type));
@@ -112,10 +117,20 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
   }, [initial.id]);
   useEffect(() => {
     setSelectedIndices(initial.operations.map((_, index) => index));
+    setTaskDrafts(Object.fromEntries(initial.operations.map((o,i)=>[i,{...o.editable}])));
   }, [initial.id]);
+  useEffect(()=>{
+    let active=true;
+    void api.aiTaskProposalOptions().then(result=>{if(active)setSpheres(result.spheres)})
+      .catch(()=>{});
+    return ()=>{active=false};
+  },[initial.id]);
   useEffect(() => {
     let active = true;
-    void api.aiTaskProposal(initial.id).then(value => { if (active) setProposal(value); }).catch(() => {});
+    void api.aiTaskProposal(initial.id).then(value => {
+      if(active){setProposal(value);setTaskDrafts(Object.fromEntries(
+        value.operations.map((o,i)=>[i,{...o.editable}])));}
+    }).catch(() => {});
     if (!telegram && !checkup) void api.aiTaskProposalPreference().then(({ autoApply: auto }) => {
       if (active) setAutoApply(auto);
     }).catch(() => {});
@@ -127,14 +142,47 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
     return () => window.removeEventListener(preferenceEvent, sync);
   }, []);
 
+  const setTaskField=(index:number,key:keyof TaskChipValues,value:string|number|null)=>{
+    setTaskDrafts(previous=>({...previous,[index]:{...previous[index],[key]:value}}));
+  };
+  const synchronizeTaskEdits=async(start:AiTaskProposal)=>{
+    let current=start;
+    for(const [key,draft] of Object.entries(taskDrafts)){
+      const index=Number(key),original=current.operations[index]?.editable;
+      if(!original || !draft || JSON.stringify(draft)===JSON.stringify(original))continue;
+      if(!current.revision)throw new Error('Не удалось определить версию чипа. Обновите чат.');
+      current=await api.editAiTaskProposal(current.id,index,current.revision,draft);
+    }
+    setProposal(current);
+    setTaskDrafts(Object.fromEntries(current.operations.map((o,i)=>[i,{...o.editable}])));
+    return current;
+  };
+  const revise=async()=>{
+    if(busy||proposal.status!=='APPLIED')return;
+    setBusy(true);setError('');
+    try{
+      const current=await synchronizeTaskEdits(proposal);
+      setProposal(current);
+      window.dispatchEvent(new Event(proposalAppliedEvent));
+      onApplied?.();
+    }catch(cause){
+      const actual=await api.aiTaskProposal(proposal.id).catch(()=>null);
+      if(actual){setProposal(actual);setTaskDrafts(Object.fromEntries(
+        actual.operations.map((o,i)=>[i,{...o.editable}])));}
+      setError(cause instanceof Error?cause.message:'Не удалось обновить задачу.');
+    }finally{setBusy(false);}
+  };
+
   const run = async (operation: 'approve' | 'reject') => {
     if (busy || proposal.status !== 'PENDING') return;
     setBusy(true); setError('');
     try {
+      const current=operation==='approve'?await synchronizeTaskEdits(proposal):proposal;
       const result = operation === 'approve'
-        ? await api.approveAiTaskProposal(proposal.id, checkup ? selectedIndices : undefined)
-        : await api.rejectAiTaskProposal(proposal.id);
+        ? await api.approveAiTaskProposal(current.id, checkup ? selectedIndices : undefined)
+        : await api.rejectAiTaskProposal(current.id);
       setProposal(result);
+      setTaskDrafts(Object.fromEntries(result.operations.map((o,i)=>[i,{...o.editable}])));
       if (result.status === 'APPLIED') {
         window.dispatchEvent(new Event(proposalAppliedEvent));
         if (hasNotes) window.dispatchEvent(new Event('standalone-notes-updated'));
@@ -227,9 +275,12 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
                 <span className="block break-words font-semibold">{item.title}</span>
                 {item.parentTitle ? <span className="ai-task-proposal__muted block text-xs">В задаче «{item.parentTitle}»</span> : null}
                 {humanDescription(item) ? <div className="ai-task-proposal__muted mt-1 break-words text-xs">{humanDescription(item)}</div> : null}
-                {item.details?.length ? <div className="ai-task-proposal__muted mt-1 space-y-0.5 break-words text-xs">
-                  {item.details.map((detail, j) => <div key={j}>{detail}</div>)}
-                </div> : null}
+                {item.editable && ['PENDING','APPLIED'].includes(proposal.status) ?
+                  <TaskChipFields value={taskDrafts[index]??item.editable} spheres={spheres}
+                    disabled={busy} onChange={(key,value)=>setTaskField(index,key,value)}/> :
+                  item.details?.length ? <div className="ai-task-proposal__muted mt-1 space-y-0.5 break-words text-xs">
+                    {item.details.map((detail,j)=><div key={j}>{detail}</div>)}
+                  </div> : null}
               </div>
             </div>
           </div>
@@ -261,6 +312,11 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
           {proposal.status === 'APPLIED' && proposal.autoApplied ? 'Применено автоматически' : STATUS[proposal.status]}
         </p>
       )}
+      {isApplied && proposal.operations.some(item=>item.editable) ?
+        <button type="button" disabled={busy} onClick={()=>void revise()}
+          className="ai-task-proposal__primary mt-2 flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 font-semibold disabled:opacity-50">
+          {busy?<Loader2 size={15} className="animate-spin"/>:<Check size={15}/>}Изменить
+        </button> : null}
       {isApplied ? (
         <button type="button" disabled={busy} onClick={() => void undo()}
           className="ai-task-proposal__secondary mt-2 flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2.5 font-semibold disabled:opacity-50">
