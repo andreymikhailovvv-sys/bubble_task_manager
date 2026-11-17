@@ -33,7 +33,7 @@ test('task chip revision uses owner-scoped updates and never reruns an applied A
   const router=read('../src/routes/api.ts');
   const web=read('../../client/src/components/AiTaskProposalCard.tsx');
   const android=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeAiTaskProposalCard.kt');
-  assert.match(proposal,/row\.updatedAt\.toISOString\(\)!==data\.revision/);
+  assert.match(proposal,/taskProposalRevision\(row\)!==data\.revision/);
   assert.match(proposal,/status:'APPLIED',updatedAt:row\.updatedAt/);
   assert.match(proposal,/updateMany\(/);
   assert.match(proposal,/undoData:undo/);
