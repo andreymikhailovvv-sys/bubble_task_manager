@@ -330,7 +330,7 @@ internal fun NativeAiTaskProposalCard(
                         shape=RoundedCornerShape(12.dp)){
                         Icon(Icons.Default.Undo,null,modifier=Modifier.size(15.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("Вернуть",fontSize=11.sp)
+                        Text("Отменить",fontSize=11.sp)
                     }
                 }
                 else->Text(proposalStatusTitles[status]?:status,

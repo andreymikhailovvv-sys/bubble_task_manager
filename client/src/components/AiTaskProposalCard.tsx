@@ -310,22 +310,24 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
             Применять новые изменения автоматически
           </label> : null}
         </div>
-      ) : (
-        <p className="ai-task-proposal__muted mt-3 text-xs" role="status">
-          {proposal.status === 'APPLIED' && proposal.autoApplied ? 'Применено автоматически' : STATUS[proposal.status]}
-        </p>
+      ) : proposal.status === 'APPLIED' ? null : (
+        <p className="ai-task-proposal__muted mt-3 text-xs" role="status">{STATUS[proposal.status]}</p>
       )}
-      {isApplied && proposal.operations.some(item=>item.editable) ?
-        <button type="button" disabled={busy} onClick={()=>void revise()}
-          className="ai-task-proposal__primary mt-2 flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 font-semibold disabled:opacity-50">
-          {busy?<Loader2 size={15} className="animate-spin"/>:<Check size={15}/>}Изменить
-        </button> : null}
       {isApplied ? (
-        <button type="button" disabled={busy} onClick={() => void undo()}
-          className="ai-task-proposal__secondary mt-2 flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2.5 font-semibold disabled:opacity-50">
-          {busy ? <Loader2 size={15} className="animate-spin" /> : <RotateCcw size={15} />}
-          Вернуть
-        </button>
+        <div className="ai-task-proposal__actions mt-3 flex w-full gap-2">
+          {proposal.operations.some(item => item.editable) ? (
+            <button type="button" disabled={busy} onClick={() => void revise()}
+              className="ai-task-proposal__primary flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 font-semibold disabled:opacity-50">
+              {busy ? <Loader2 size={15} className="animate-spin"/> : <Check size={15}/>}
+              Изменить
+            </button>
+          ) : null}
+          <button type="button" disabled={busy} onClick={() => void undo()}
+            className="ai-task-proposal__secondary flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl border px-2 py-2.5 font-semibold disabled:opacity-50">
+            {busy ? <Loader2 size={15} className="animate-spin" /> : <RotateCcw size={15} />}
+            Отменить
+          </button>
+        </div>
       ) : null}
       {!telegram && !checkup && proposal.status !== 'PENDING' ? (
         <label className="ai-task-proposal__muted mt-2 flex cursor-pointer items-center gap-2 text-xs">

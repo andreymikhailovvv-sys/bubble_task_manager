@@ -56,3 +56,19 @@ test('receipts trigger finance proposals in both assistants and dark chip elemen
   assert.match(css,/scrollbar-color/);
   assert.match(css,/border-top-color/);
 });
+
+test('task proposal stays one inner panel, with paired actions on web, Mini App and Android',()=>{
+  const card=read('../../client/src/components/AiTaskProposalCard.tsx');
+  const css=read('../../client/src/components/AiTaskProposalCard.css');
+  const miniCss=read('../../client/src/styles.css');
+  const nativeCard=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeAiTaskProposalCard.kt');
+  const nativeFields=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeTaskChipFields.kt');
+  assert.match(card,/ai-task-proposal__actions mt-3 flex w-full gap-2/);
+  assert.match(card,/Отменить\s*<\/button>/);
+  assert.match(css,/\.ai-task-proposal__editable\{[\s\S]*?border:0;border-radius:0;background:transparent/);
+  assert.match(miniCss,/\.miniapp-shell \.miniapp-ai-chat-backdrop-general \{[\s\S]*?bottom: calc\(3\.25rem \+ var\(--miniapp-bottom-inset/);
+  assert.match(nativeCard,/"APPLIED"->Row\(Modifier\.fillMaxWidth\(\)/);
+  assert.match(nativeCard,/Text\("Отменить",fontSize=11\.sp\)/);
+  assert.doesNotMatch(nativeFields,/\.background\(surface\.copy\(alpha=\.5f\)/);
+  assert.match(nativeFields,/\.verticalScroll\(rememberScrollState\(\)\)\.padding\(top=4\.dp,end=2\.dp\)/);
+});
