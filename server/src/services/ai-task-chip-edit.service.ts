@@ -8,7 +8,11 @@ import { taskService } from './task.service.js';
 export const TASK_CHIP_FIELDS=['title','description','sphereId','dueDate','importance',
   'urgency','status','location','notifyBeforeMinutes'] as const;
 export type TaskChipField=typeof TASK_CHIP_FIELDS[number];
-export type TaskChipValues=Partial<Record<TaskChipField,string|number|null>>;
+export type TaskChipValues={
+  title?:string;description?:string;sphereId?:string|null;dueDate?:string|null;
+  importance?:number;urgency?:number;status?:string;location?:string;
+  notifyBeforeMinutes?:number;
+};
 const selectable=new Set<string>(TASK_CHIP_FIELDS);
 const iso=(value:unknown)=>value instanceof Date?value.toISOString():value;
 const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
@@ -23,7 +27,7 @@ export const isTaskChipAction=(action:Record<string,unknown>):boolean=>{
 export function taskChipInitial(
   action:Record<string,unknown>,
   task?:{title:string;description:string|null;sphereId:string|null;dueDate:Date|null;
-    importance:number;urgency:number;status:string;location:string|null;notifyBeforeMinutes:number;
+    importance:number;urgency:number;status:string;location:string|null;notifyBeforeMinutes:number|null;
     parentTaskId:string|null}
 ):TaskChipValues | null {
   if(!isTaskChipAction(action))return null;
@@ -32,7 +36,7 @@ export function taskChipInitial(
   const data:TaskChipValues=task?{
     title:task.title,description:task.description??'',sphereId:task.parentTaskId?null:task.sphereId,
     dueDate:task.dueDate?.toISOString()??null,importance:task.importance,urgency:task.urgency,
-    status:task.status,location:task.location??'',notifyBeforeMinutes:task.notifyBeforeMinutes
+    status:task.status,location:task.location??'',notifyBeforeMinutes:task.notifyBeforeMinutes??0
   }:{
     title:String(action.title??'Новая задача'),description:'',sphereId:null,dueDate:null,
     importance:3,urgency:3,status:'TODO',location:'',notifyBeforeMinutes:0
@@ -47,7 +51,7 @@ export function taskChipInitial(
       op==='set_notification'&&key==='notifyBeforeMinutes' ||
       op==='change_sphere'&&key==='sphereId' ||
       op==='update_task'||op==='update_subtask'||op==='create_subtask')) {
-      (data as Record<string,unknown>)[key]=iso(val);
+      (data as unknown as Record<string,unknown>)[key]=iso(val);
     }
   }
   if(op==='complete'||op==='complete_task'||op==='complete_subtask')data.status='DONE';
@@ -119,14 +123,19 @@ export async function applyChipEdits(userId:string,taskId:string,changes:TaskChi
   });
   if(!existing)throw new Error('Задача больше недоступна.');
   await taskService.update(taskId,userId,{
-    ...changes,dueDate:changes.dueDate===undefined?undefined:
+    title:changes.title,description:changes.description,location:changes.location,
+    sphereId:changes.sphereId,
+    status:changes.status as 'TODO'|'IN_PROGRESS'|'DONE'|undefined,
+    importance:changes.importance,urgency:changes.urgency,
+    notifyBeforeMinutes:changes.notifyBeforeMinutes,
+    dueDate:changes.dueDate===undefined?undefined:
       changes.dueDate?new Date(changes.dueDate):null
   });
 }
 export function chipDbPatch(current:{
-  importance:number;urgency:number;status:string;dueDate:Date|null;notifyBeforeMinutes:number
-},changes:TaskChipValues):Prisma.TaskUpdateManyMutationInput {
-  const patch:Prisma.TaskUpdateManyMutationInput={};
+  importance:number;urgency:number;status:string;dueDate:Date|null;notifyBeforeMinutes:number|null
+},changes:TaskChipValues):Prisma.TaskUncheckedUpdateManyInput {
+  const patch:Prisma.TaskUncheckedUpdateManyInput={};
   for(const [key,value] of Object.entries(changes)){
     if(key==='dueDate')patch.dueDate=value?new Date(value as string):null;
     else if(key==='sphereId')patch.sphereId=value as string|null;
