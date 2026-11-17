@@ -183,15 +183,6 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                                 if(section=="overview")"Экономыч AI" else it
                             },fontSize=25.sp,fontWeight=FontWeight.ExtraBold,color=colors.text)
                         }
-                        Surface(onClick={editor=EcoEditorRequest("operations")},
-                            color=colors.gold, shape=RoundedCornerShape(11.dp)) {
-                            Row(Modifier.padding(horizontal=10.dp,vertical=9.dp),
-                                verticalAlignment=Alignment.CenterVertically) {
-                                Icon(Icons.Default.Add,null,Modifier.size(16.dp),tint=Color(0xFF291400))
-                                Text("Новая операция",fontSize=10.sp,fontWeight=FontWeight.Bold,
-                                    color=Color(0xFF291400))
-                            }
-                        }
                     }
                 }
                 if (error.isNotBlank()) item {
@@ -264,7 +255,7 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                                 if(recent.isEmpty()) EcoEmpty("Пока нет операций. Начните с первой записи.",colors)
                                 recent.forEach { op ->
                                     EcoOperationRow(op,current,colors,
-                                        onEdit={ record,resource -> editor=EcoEditorRequest(resource,record) },
+                                        onEdit={ record,resource -> if(resource=="missing-debt")section="debts" else editor=EcoEditorRequest(resource,record) },
                                         onDelete={ remove("operations",op) })
                                 }
                             }
@@ -326,7 +317,7 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                                     EcoEmpty("Нет операций по выбранным фильтрам",colors)
                                 operations.forEach { op ->
                                     EcoOperationRow(op,current,colors,
-                                        onEdit={ record,resource -> editor=EcoEditorRequest(resource,record) },
+                                        onEdit={ record,resource -> if(resource=="missing-debt")section="debts" else editor=EcoEditorRequest(resource,record) },
                                         onDelete={remove("operations",op)})
                                 }
                                 if(nextCursor.isNotBlank()) {
@@ -590,7 +581,9 @@ private fun EcoOperationRow(op:JsonObject,snapshot:JsonObject,colors:EcoColors,
     val linked=snapshot.ecoItems("debts").firstOrNull{it.ecoText("id")==op.ecoText("debtId")}
     val amountColor=if(credit)colors.green else if(debit)Color(0xFFE9AD8E) else colors.text
     Row(Modifier.fillMaxWidth().clickable {
-        onEdit(linked ?: op,if(linked!=null)"debts" else "operations")
+        if(op.ecoText("debtId").isNotBlank()) {
+            if(linked!=null) onEdit(linked,"debts") else onEdit(op,"missing-debt")
+        } else onEdit(op,"operations")
     }.padding(vertical=13.dp),verticalAlignment=Alignment.CenterVertically,
         horizontalArrangement=Arrangement.spacedBy(7.dp)) {
         Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
