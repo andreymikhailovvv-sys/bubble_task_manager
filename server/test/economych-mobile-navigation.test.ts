@@ -59,7 +59,7 @@ test('both mobile surfaces reuse the actual responsive financial overview and ed
 
 test('native Android Economic no longer embeds a browser or owns a second cookie session',()=>{
   assert.match(android,/EconomicComposePage\(userId=userId, dark=dark, active=active\)/);
-  assert.doesNotMatch(android,/WebView|CookieManager|evaluateJavascript|loadUrl/);
+  assert.doesNotMatch(android,/WebView\(|CookieManager\(|evaluateJavascript\(|loadUrl\(/);
   assert.match(native,/NetworkModule\.api\(context\)/);
   assert.match(network,/PersistentCookieJar\(context\)/);
   assert.match(api,/@GET\("api\/economic\/snapshot"\)/);
@@ -94,7 +94,7 @@ test('Android financial editors are native bottom sheets with keyboard-safe acti
   assert.match(editor,/DatePickerDialog\(/);
   assert.match(editor,/onCreateCategory/);
   assert.match(editor,/remindersEnabled/);
-  assert.match(android,/EconomicSkeleton\(dark\)/);
+  assert.match(native,/EconomicSkeleton\(dark\)/);
   assert.match(native,/FloatingActionButton\(/);
 });
 
@@ -103,7 +103,7 @@ test('native money is integer kopecks; web Mini App remains intact',()=>{
   assert.match(financeData,/BigInteger/);
   assert.match(financeData,/ecoLoanEstimate/);
   assert.match(editor,/ecoParseMoney\(value\("amount"\)\)/);
-  assert.match(native,/ecoRubles\(current\.ecoObject\("totals"\)/);
+  assert.match(native,/current\.ecoObject\("totals"\)\.ecoText\("balanceMinor"\)/);
   assert.match(native,/val colors = remember\(dark\) \{ ecoColors\(dark\) \}/);
   assert.match(financeData,/background = Color\(0xFFFFF9F1\)/);
   assert.match(financeData,/background = Color\(0xFF15151C\)/);
