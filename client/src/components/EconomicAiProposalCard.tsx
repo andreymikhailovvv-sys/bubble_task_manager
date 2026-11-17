@@ -75,11 +75,20 @@ function inputValue(key:string,value:Value):string{
     return String(value).slice(0,10);
   return String(value);
 }
-function normalizedDraft(draft:Payload):Payload{
+function displayDraft(proposal:EconomicAiProposal):Payload{
+  return Object.fromEntries(Object.entries(editable(proposal))
+    .map(([key,value])=>[key,key.endsWith('Minor')||['occurredAt','dueAt','startDate','paymentDate'].includes(key)
+      ? inputValue(key,value):value])) as Payload;
+}
+function normalizedDraft(draft:Payload,reference:Payload):Payload{
   return Object.fromEntries(Object.entries(draft).map(([key,value])=>{
     if(key.endsWith('Minor'))return [key,rublesToMinor(String(value),key==='balanceMinor'||key==='openingBalanceMinor')];
     if(['occurredAt','dueAt','startDate','paymentDate'].includes(key))
-      return [key,value?new Date(String(value)+'T12:00:00.000Z').toISOString():null];
+      return [key,value
+        ? String(reference[key]??'').startsWith(String(value).slice(0,10))&&
+            String(reference[key]??'').includes('T')
+          ? reference[key] : new Date(String(value).slice(0,10)+'T12:00:00.000Z').toISOString()
+        : null];
     if(['annualRateBps','termMonths'].includes(key))return [key,Number(value)];
     if(['category','note','lender','accountId','targetAccountId'].includes(key)&&value==='')
       return [key,null];
@@ -88,13 +97,13 @@ function normalizedDraft(draft:Payload):Payload{
 }
 export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRefresh}:Props){
   const [proposal,setProposal]=useState(initial);
-  const [draft,setDraft]=useState<Payload>(()=>editable(initial));
+  const [draft,setDraft]=useState<Payload>(()=>displayDraft(initial));
   const [options,setOptions]=useState<Options|null>(null);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   useEffect(()=>{
     setProposal(initial);
-    setDraft(editable(initial));
+    setDraft(displayDraft(initial));
   },[initial.id,initial.status,JSON.stringify(initial.payload)]);
   useEffect(()=>{
     let active=true;
@@ -110,7 +119,7 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
       const path='/proposals/'+encodeURIComponent(proposal.id);
       let updated=proposal;
       if(action==='approve'||action==='revise'){
-        const payload=normalizedDraft(draft);
+        const payload=normalizedDraft(draft,editable(proposal));
         // Never alter the original object in place: the server checks the
         // previous payload to reject edits from an outdated tab.
         updated=await read<EconomicAiProposal>(path,'PUT',{
@@ -120,13 +129,13 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
       }
       if(action!=='revise')updated=await read<EconomicAiProposal>(path+'/'+action,'POST');
       setProposal(updated);
-      setDraft(editable(updated));
+      setDraft(displayDraft(updated));
       if(updated.status==='APPLIED'||updated.status==='UNDONE')await onRefresh();
     }catch(cause){
       // A response can be lost after a successful mutation: reconcile first.
       try{
         const latest=await read<EconomicAiProposal>('/proposals/'+encodeURIComponent(proposal.id));
-        setProposal(latest);setDraft(editable(latest));
+        setProposal(latest);setDraft(displayDraft(latest));
       }catch{setError('Не удалось проверить результат. Обновите страницу перед повтором.');}
       if(!error)setError(cause instanceof Error?cause.message:'Не удалось применить изменения.');
     }finally{setBusy(false);}
@@ -180,7 +189,7 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
     const isDate=['occurredAt','dueAt','startDate','paymentDate'].includes(key);
     return <input aria-label={LABELS[key]} disabled={!editableStatus||busy}
       type={isDate?'date':'text'} inputMode={key.endsWith('Minor')?'decimal':undefined}
-      value={inputValue(key,value)} maxLength={key==='note'?500:160}
+      value={String(value??'')} maxLength={key==='note'?500:160}
       onChange={e=>setField(key,e.target.value)}/>;
   };
   return <div className="econ-finance-proposal" data-economic-proposal={proposal.id}>
