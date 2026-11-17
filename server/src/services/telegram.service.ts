@@ -1,3 +1,4 @@
+import { habitScheduledOnLocalDay } from '../lib/habit-notification-schedule.js';
 import { authService } from '../auth/auth.service.js';
 import crypto from 'node:crypto';
 import { isTelegramWebhookSecretConfigured, isTelegramWebhookSecretValid } from '../lib/telegram-webhook-security.js';
@@ -2330,6 +2331,11 @@ export const telegramService = {
       const chatId = habit.user.telegramChatId;
 
       const currentDateKey = dateKeyInTimeZone(now, habit.user.timeZone);
+      const createdDateKey = dateKeyInTimeZone(habit.createdAt, habit.user.timeZone);
+      // Only generate notifications on a scheduled occurrence. This guards
+      // BOTH the system feed (Android/Mini App) and Telegram bot messages.
+      // Snoozed reminders remain pending until the next scheduled day.
+      if (!habitScheduledOnLocalDay(habit, currentDateKey, createdDateKey)) continue;
       const currentTime = timeInTimeZone(now, habit.user.timeZone);
       const reminderTimes = normalizeHabitReminderTimes(habit.reminderTimes, habit.reminderTime);
       let notificationKey: string | null = null;
