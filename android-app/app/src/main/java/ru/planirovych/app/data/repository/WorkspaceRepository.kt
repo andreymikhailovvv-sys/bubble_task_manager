@@ -181,6 +181,9 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
         api.systemNotifications()
 
     suspend fun economicProposal(id:String):JsonObject=api.economicProposal(id)
+    suspend fun economicProposalOptions():JsonObject=api.economicProposalOptions()
+    suspend fun editEconomicProposal(id:String,payload:JsonObject):JsonObject=
+        api.editEconomicProposal(id,payload)
     suspend fun economicPreferences():Boolean=
         (api.economicPreferences()["autoApply"] as? JsonPrimitive)?.booleanOrNull==true
     suspend fun setEconomicPreferences(enabled:Boolean):Boolean=

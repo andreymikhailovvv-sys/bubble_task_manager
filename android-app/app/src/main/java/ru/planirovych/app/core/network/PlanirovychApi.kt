@@ -99,6 +99,11 @@ interface PlanirovychApi {
     // Existing Economic server approval / undo flow, also used by general AI.
     @GET("api/economic/assistant/proposals/{id}")
     suspend fun economicProposal(@Path("id") id:String):JsonObject
+    @GET("api/economic/assistant/options")
+    suspend fun economicProposalOptions():JsonObject
+    @Headers("Sec-Fetch-Site: same-origin")
+    @PUT("api/economic/assistant/proposals/{id}")
+    suspend fun editEconomicProposal(@Path("id") id:String,@Body payload:JsonObject):JsonObject
     @GET("api/economic/assistant/preferences")
     suspend fun economicPreferences():JsonObject
     @Headers("Sec-Fetch-Site: same-origin")

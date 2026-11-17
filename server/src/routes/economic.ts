@@ -4,7 +4,7 @@ import { prisma } from '../db/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { answerEconomicAssistant } from '../services/economic-assistant.service.js';
-import { applyEconomicProposal, rejectEconomicProposal, undoEconomicProposal, getEconomicProposalView, economicProposalView } from '../services/economic-ai-proposals.service.js';
+import { applyEconomicProposal, rejectEconomicProposal, undoEconomicProposal, editEconomicProposal, economicProposalOptions, getEconomicProposalView, economicProposalView } from '../services/economic-ai-proposals.service.js';
 import { EconomicActionError } from '../services/economic-ai-action-validation.service.js';
 import { openingForTargetBalance } from '../services/economic-account-balance.service.js';
 import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
@@ -499,6 +499,14 @@ economicRouter.put('/assistant/preferences',asyncHandler(async(req,res)=>{
 }));
 economicRouter.get('/assistant/proposals/:id',asyncHandler(async(req,res)=>{
   try{res.json(await getEconomicProposalView(userId(req),req.params.id));}
+  catch(cause){proposalFailure(res,cause);}
+}));
+economicRouter.get('/assistant/options',asyncHandler(async(req,res)=>{
+  try{res.json(await economicProposalOptions(userId(req)));}
+  catch(cause){proposalFailure(res,cause);}
+}));
+economicRouter.put('/assistant/proposals/:id',asyncHandler(async(req,res)=>{
+  try{res.json(await editEconomicProposal(userId(req),req.params.id,req.body));}
   catch(cause){proposalFailure(res,cause);}
 }));
 economicRouter.post('/assistant/proposals/:id/approve',asyncHandler(async(req,res)=>{

@@ -64,3 +64,50 @@
 }
 .econ-root.econ-light .econ-finance-autoapply{border-color:#e6e9ed}
 .econ-root.econ-light .econ-finance-proposal-error{color:#ab3f38}
+
+
+/* Editable fields occupy the existing details area instead of resizing the card.
+   Scroll internally when the model proposes a lot of properties. */
+.econ-finance-editable-fields{max-height:173px;overflow-y:auto;overscroll-behavior:contain}
+.econ-finance-edit-row{display:grid;grid-template-columns:minmax(0,38%) minmax(0,1fr);align-items:center;gap:7px;min-width:0}
+.econ-finance-edit-row>span{font-size:10px;overflow-wrap:anywhere}
+.econ-finance-edit-row>input,.econ-finance-edit-row>select{
+  box-sizing:border-box;width:100%;max-width:100%;min-width:0;height:27px;
+  padding:3px 6px;border-radius:6px;border:1px solid rgba(245,179,99,.27);
+  background:rgba(18,16,19,.42);color:#fff0d9;font-size:11px;
+}
+.econ-finance-edit-row select option{color:#202938;background:#fff}
+.econ-finance-edit-row>input:disabled,.econ-finance-edit-row>select:disabled{opacity:.8}
+.econ-finance-undo{width:auto;margin-top:0;flex:1}
+/* Economic assistant is deliberately dark even with a light workspace. */
+.econ-root.econ-light .econ-assistant .econ-finance-proposal{
+  background:linear-gradient(125deg,rgba(114,72,36,.25),rgba(42,35,37,.94));
+  color:#f8e4c8;border-color:rgba(236,171,83,.38)
+}
+.econ-root.econ-light .econ-assistant .econ-finance-proposal-title strong,
+.econ-root.econ-light .econ-assistant .econ-finance-description{color:#ffe4af}
+.econ-root.econ-light .econ-assistant .econ-finance-proposal-title small,
+.econ-root.econ-light .econ-assistant .econ-finance-autoapply{color:#cbb391}
+.econ-root.econ-light .econ-assistant .econ-finance-proposal-details{
+  background:rgba(19,18,23,.23);border-color:rgba(247,183,83,.13);color:#d9be9c
+}
+.econ-root.econ-light .econ-assistant .econ-finance-proposal-icon{
+  color:#ffd18a;background:rgba(253,179,80,.15);border-color:rgba(249,188,95,.24)
+}
+.econ-root.econ-light .econ-assistant .econ-finance-secondary{
+  background:rgba(249,190,95,.09);border-color:rgba(249,190,95,.28);color:#f6cd96
+}
+/* Finance chip in the expanded desktop chat matches the task proposal width.
+   Mobile keeps the available full width. */
+@media(min-width:821px){
+  .ai-inline-economic-proposals{width:100%;max-width:100%}
+  .ai-inline-economic-proposals .econ-finance-proposal{width:100%}
+}
+:where(.econ-root.econ-light,.miniapp-light,.app-light,[data-theme='light'])
+ .econ-finance-edit-row>input,
+:where(.econ-root.econ-light,.miniapp-light,.app-light,[data-theme='light'])
+ .econ-finance-edit-row>select{color:#283546;background:#fff;border-color:#d9dce4}
+.econ-root.econ-light .econ-assistant .econ-finance-edit-row>input,
+.econ-root.econ-light .econ-assistant .econ-finance-edit-row>select{
+  color:#fff0d9;background:rgba(18,16,19,.42);border-color:rgba(245,179,99,.27)
+}

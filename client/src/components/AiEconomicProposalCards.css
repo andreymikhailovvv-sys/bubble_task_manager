@@ -1,5 +1,9 @@
 /* Financial chips in the ordinary Planner AI bubbles: warm amber, responsive. */
 .ai-inline-economic-proposals{display:grid;gap:8px;width:100%;min-width:0;margin-top:10px;max-width:100%}
+/* Expanded web chat: match the compact footprint of task action proposals. */
+.ai-chat-expanded .ai-inline-economic-proposals{width:min(100%,420px);max-width:100%}
+.ai-chat-expanded .ai-inline-economic-proposals .econ-finance-proposal{max-width:420px}
+
 .ai-inline-economic-proposals .econ-finance-proposal{margin-top:0;min-width:0;max-width:100%;box-sizing:border-box}
 .ai-inline-economic-proposals .econ-finance-proposal-actions{flex-wrap:wrap}
 .ai-inline-economic-proposals .econ-finance-proposal-actions button{min-width:100px}

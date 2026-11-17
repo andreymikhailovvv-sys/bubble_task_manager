@@ -417,7 +417,16 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
     const isCredit = creditKinds.has(op.kind);
     const isDebit = debitKinds.has(op.kind);
     const operationTone = isCredit ? 'INCOME' : isDebit ? 'EXPENSE' : 'TRANSFER';
-    return <div className="econ-operation-row" key={op.id}>
+    const openOperation = () => {
+      if (linkedDebt) openDialog('debt', linkedDebt);
+      else if (op.debtId) setSection('debts');
+      else openDialog('operation', op);
+    };
+    return <div className="econ-operation-row" key={op.id} role="button" tabIndex={0}
+      aria-label={'Редактировать операцию: ' + op.title}
+      onClick={openOperation}
+      onKeyDown={event => { if(event.target !== event.currentTarget)return;
+        if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); openOperation(); } }}>
       <div className={'econ-operation-icon ' + operationTone}>
         {isCredit ? <ArrowDownLeft size={19}/> : isDebit ? <ArrowUpRight size={19}/> : <ArrowRightLeft size={19}/>}
       </div>
@@ -432,11 +441,11 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
       </strong>
       {op.debtId
         ? <button className="econ-icon-button" type="button" title="Открыть связанный долг" aria-label={'Открыть долг: ' + op.title}
-            onClick={() => { if (linkedDebt) openDialog('debt', linkedDebt); else setSection('debts'); }}>
+            onClick={event => { event.stopPropagation(); openOperation(); }}>
             <BookOpen size={16}/></button>
         : <>
-            <button className="econ-icon-button" type="button" title="Редактировать" aria-label={'Редактировать ' + op.title} onClick={() => openDialog('operation', op)}><Pencil size={15}/></button>
-            <button className="econ-icon-button econ-delete" type="button" title="Удалить" aria-label={'Удалить ' + op.title} onClick={() => void remove('operations', op.id)}><Trash2 size={15}/></button>
+            <button className="econ-icon-button" type="button" title="Редактировать" aria-label={'Редактировать ' + op.title} onClick={event => { event.stopPropagation(); openDialog('operation', op); }}><Pencil size={15}/></button>
+            <button className="econ-icon-button econ-delete" type="button" title="Удалить" aria-label={'Удалить ' + op.title} onClick={event => { event.stopPropagation(); void remove('operations', op.id); }}><Trash2 size={15}/></button>
           </>}
     </div>;
   };
@@ -739,7 +748,13 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
             <option value="OWE">Я получил деньги в долг</option>
             <option value="OWED_TO_ME">Я дал деньги в долг</option>
           </select></label>
-          <label>Кому или кто<input required maxLength={100} value={form.counterparty} onChange={e => formSet('counterparty', e.target.value)} placeholder="Имя человека или организация"/></label>
+          <label>Кому или кто<input required maxLength={100} list="econ-known-counterparties"
+            value={form.counterparty} onChange={e => formSet('counterparty', e.target.value)}
+            placeholder="Имя человека или организация"/>
+            <datalist id="econ-known-counterparties">{Array.from(new Set(snapshot.debts.map(d => d.counterparty.trim())
+              .filter(Boolean))).sort((a,b) => a.localeCompare(b,'ru'))
+              .map(name => <option key={name} value={name}/>)}</datalist>
+          </label>
           <label>Сумма долга, ₽<input required inputMode="decimal" value={form.amount} onChange={e => formSet('amount', e.target.value)}/></label>
           <label className="econ-checkbox-row"><input type="checkbox" checked={form.postedToAccount === 'yes'}
               onChange={e => formSet('postedToAccount', e.target.checked ? 'yes' : 'no')}/>
