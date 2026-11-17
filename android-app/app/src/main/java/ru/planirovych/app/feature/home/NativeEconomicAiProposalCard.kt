@@ -75,7 +75,9 @@ private fun economicDraft(p:JsonObject):Map<String,String>{
         }
     }
 }
-private fun economicEditedPayload(draft:Map<String,String>):JsonObject=buildJsonObject{
+private fun economicEditedPayload(draft:Map<String,String>,proposal:JsonObject):JsonObject=buildJsonObject{
+    val source=proposal["payload"] as? JsonObject
+    val before=proposal["before"] as? JsonObject
     for((key,raw) in draft){
         if(key !in ECON_FIELDS)continue
         val value=raw.trim()
@@ -93,7 +95,11 @@ private fun economicEditedPayload(draft:Map<String,String>):JsonObject=buildJson
             key in listOf("dueAt","occurredAt","startDate","paymentDate")->
                 if(value.isEmpty())put(key,JsonNull)else{
                     require(Regex("^\\d{4}-\\d{2}-\\d{2}$").matches(value)){"Неверная дата"}
-                    put(key,value+"T12:00:00.000Z")
+                    val original=((source?.get(key)?:before?.get(key)) as? JsonPrimitive)
+                        ?.contentOrNull
+                    // Do not shift the time of an unchanged existing operation.
+                    put(key,if(original?.take(10)==value && original.contains("T"))
+                        original else value+"T12:00:00.000Z")
                 }
             key in listOf("annualRateBps","termMonths")->{
                 val n=value.toIntOrNull()?:throw IllegalArgumentException("Введите целое число")
@@ -198,7 +204,7 @@ internal fun NativeEconomicAiProposalCard(
         scope.launch{
             try{
                 if(action=="approve"||action=="revise"){
-                    val edited=economicEditedPayload(draft)
+                    val edited=economicEditedPayload(draft,proposal)
                     proposal=vm.economicProposalEdit(id,buildJsonObject{
                         put("payload",edited)
                         put("expectedPayload",proposal["payload"]?:buildJsonObject{})
