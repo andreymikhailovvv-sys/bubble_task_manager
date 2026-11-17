@@ -292,14 +292,19 @@ export async function editEconomicProposal(owner:string,id:string,input:unknown)
     const current=await readEconomicEntity(tx,owner,action.entity,row.appliedEntityId);
     if(!current||!same(current,row.after))
       no('Запись уже изменена после применения. Обновите финансовые данные.');
-    // Updating an existing category cannot change its type; a created category
-    // retains its kind even if the original create payload contained it.
-    const amendedPayload=action.entity==='category'
-      ? without(action.payload,['name']) : action.payload;
-    const updatedAction=canonicalEconomicAction({
-      entity:action.entity,action:'update',targetId:row.appliedEntityId,payload:amendedPayload
-    });
-    await mutate(tx,owner,updatedAction,current);
+    if(action.entity==='category'&&action.action==='create'){
+      // A newly created category is owned by this proposal. Both its name and
+      // its income/expense type remain editable after auto-application.
+      await tx.economicCategory.update({
+        where:{id:row.appliedEntityId,userId:owner},
+        data:{name:String(action.payload.name),kind:String(action.payload.kind)}
+      });
+    }else{
+      const updatedAction=canonicalEconomicAction({
+        entity:action.entity,action:'update',targetId:row.appliedEntityId,payload:action.payload
+      });
+      await mutate(tx,owner,updatedAction,current);
+    }
     const after=await readEconomicEntity(tx,owner,action.entity,row.appliedEntityId);
     if(!after)no('Не удалось проверить обновлённую запись.');
     const changed=await tx.economicAiProposal.update({
