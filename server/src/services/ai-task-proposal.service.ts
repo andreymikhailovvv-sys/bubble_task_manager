@@ -218,6 +218,104 @@ export async function getTaskProposal(userId: string, id: string) {
   return proposalView(row);
 }
 
+/** Sector options come from the current account, not guessed by the client. */
+export async function taskChipOptions(userId:string){
+  return {spheres:await prisma.sphere.findMany({
+    where:{userId},orderBy:{createdAt:'asc'},select:{id:true,name:true}
+  })};
+}
+
+/** Edit exactly one task item, retaining the original AI command and undo
+ * record. Old versions are rejected; applied chips never replay their batch. */
+export async function editTaskProposal(userId:string,id:string,input:unknown):Promise<TaskProposalView>{
+  if(!input||typeof input!=='object'||Array.isArray(input))
+    throw new Error('Неверные данные карточки.');
+  const data=input as Record<string,unknown>;
+  if(!Number.isInteger(data.index)||typeof data.revision!=='string')
+    throw new Error('Выберите изменение и актуальную версию карточки.');
+  const index=data.index as number;
+  const row=await prisma.aiTaskProposal.findFirst({where:{id,userId}});
+  if(!row)throw new Error('Предложение не найдено.');
+  if(!['PENDING','APPLIED'].includes(row.status))
+    throw new Error('Эту карточку больше нельзя менять.');
+  if(row.updatedAt.toISOString()!==data.revision)
+    throw new Error('Чип изменился в другом окне. Обновите его.');
+  const display=Array.isArray(row.display)?row.display as TaskProposalView['operations']:[];
+  const actions=Array.isArray(row.operations)?row.operations as TaskProposalAction[]:[];
+  const item=display[index],action=actions[index];
+  if(!item?.editable || !action)throw new Error('Это действие не редактирует задачу.');
+  const base=item.editable;
+  const current={...base,...(action.__chipEdit as TaskChipValues??{})};
+  const next=validateTaskChipValues(data.values,base);
+  const patch=chipChanged(current,next);
+  await validateChipReferences(userId,patch);
+  if(!Object.keys(patch).length)return proposalView(row);
+  const nextEdit=chipChanged(base,next);
+  const amended=actions.map((op,i)=>i===index?{
+    ...op,...(Object.keys(nextEdit).length?{__chipEdit:nextEdit}:{__chipEdit:undefined})
+  }:op);
+  // JSON serializes undefined out, so reverting a field removes its override.
+  const operations=JSON.parse(JSON.stringify(amended)) as Prisma.InputJsonValue;
+  if(row.status==='PENDING'){
+    const updated=await prisma.aiTaskProposal.updateMany({
+      where:{id,userId,status:'PENDING',updatedAt:row.updatedAt},
+      data:{operations,error:null}
+    });
+    if(updated.count!==1)throw new Error('Карточка изменилась во время редактирования.');
+    return getTaskProposal(userId,id);
+  }
+  const result=(row.result&&typeof row.result==='object'&&!Array.isArray(row.result))
+    ?row.result as Record<string,unknown>:{};
+  const selected=Array.isArray(result.selectedIndices)?result.selectedIndices as number[]:null;
+  const localIndex=selected?selected.indexOf(index):index;
+  if(localIndex<0)throw new Error('Эта задача не входила в применённые изменения.');
+  const actionTaskIds=Array.isArray(result.actionTaskIds)?result.actionTaskIds as Array<string|null>:[];
+  const targetId=actionTaskIds[localIndex]??action.itemId??action.subtaskId??action.taskId;
+  if(typeof targetId!=='string')throw new Error('Нельзя установить созданную задачу для этой карточки.');
+  const undo=(row.undoData&&typeof row.undoData==='object'&&!Array.isArray(row.undoData))
+    ?JSON.parse(JSON.stringify(row.undoData)) as {
+      after:Array<{id:string;updatedAt:string}>;
+      created:Array<{id:string;updatedAt:string;[key:string]:unknown}>;
+    }:null;
+  if(!undo)throw new Error('У карточки отсутствует история применения.');
+  const observed=[...undo.after,...undo.created].find(item=>item.id===targetId);
+  if(!observed)throw new Error('Запись уже недоступна для безопасного редактирования.');
+  const updatedProposal=await prisma.$transaction(async tx=>{
+    const task=await tx.task.findFirst({
+      where:{id:targetId,userId,AND:[taskAccessWhere(userId)]},
+      select:{id:true,updatedAt:true,importance:true,urgency:true,status:true,
+        dueDate:true,notifyBeforeMinutes:true,collaborationId:true,parentTaskId:true,
+        aiMonitoringEnabled:true}
+    });
+    if(!task||task.updatedAt.toISOString()!==observed.updatedAt)
+      throw new Error('Задача изменилась после применения ИИ. Обновите данные.');
+    if(task.collaborationId)throw new Error('Совместную задачу изменяйте в окне задачи.');
+    if(task.parentTaskId && patch.sphereId!==undefined)
+      throw new Error('Сектор подзадачи меняется через родительскую задачу.');
+    if(task.aiMonitoringEnabled&&patch.dueDate)
+      throw new Error('В режиме мониторинга дата задаётся триггером, а не сроком задачи.');
+    const changed=await tx.task.updateMany({
+      where:{id:targetId,userId,updatedAt:task.updatedAt},
+      data:chipDbPatch(task,patch)
+    });
+    if(changed.count!==1)throw new Error('Задача изменилась во время сохранения.');
+    const updatedTask=await tx.task.findUniqueOrThrow({
+      where:{id:targetId},select:{updatedAt:true}
+    });
+    for(const item of [...undo.after,...undo.created])
+      if(item.id===targetId)item.updatedAt=updatedTask.updatedAt.toISOString();
+    await rescheduleMonitoringSource(tx,targetId);
+    const count=await tx.aiTaskProposal.updateMany({
+      where:{id,userId,status:'APPLIED',updatedAt:row.updatedAt},
+      data:{operations,undoData:undo as unknown as Prisma.InputJsonValue,error:null}
+    });
+    if(count.count!==1)throw new Error('Предложение изменилось во время сохранения.');
+    return tx.aiTaskProposal.findFirstOrThrow({where:{id,userId}});
+  },{isolationLevel:'Serializable'});
+  signalTaskMonitoringWakeup();
+  return proposalView(updatedProposal);
+}
+
 export async function rejectTaskProposal(userId: string, id: string) {
   await prisma.aiTaskProposal.updateMany({ where: { id, userId, status: 'PENDING' }, data: { status: 'REJECTED' } });
   return getTaskProposal(userId, id);
@@ -312,6 +410,7 @@ export async function applyTaskProposal(userId: string, id: string, selectedIndi
     if (notesBefore.length !== noteIds.length) throw new Error('Заметка больше недоступна.');
     const reports: string[] = [];
     const createdIds: string[] = [];
+    const actionTaskIds:(string|null)[]=[];
     const createdNoteIds: string[] = [];
     const createdHabitIds: string[] = [];
     if (row.source === 'planner' || row.source === 'daily_checkup' || row.source === 'telegram_bot' ||
@@ -323,7 +422,7 @@ export async function applyTaskProposal(userId: string, id: string, selectedIndi
         throw new Error('Автоматический Telegram-ассистент не может изменять существующие задачи.');
       }
       const ids = (row.resolvedIds ?? {}) as { items?: string[]; spheres?: string[] };
-      for (const action of actions) {
+      for (const [actionIndex,action] of actions.entries()) {
         // Task chat can mix its legacy JSON actions (type) with planner tools
         // actions (operation). Dispatch PER ACTION, never by the source of the
         // whole proposal; otherwise operation-only actions reach the legacy
@@ -337,6 +436,10 @@ export async function applyTaskProposal(userId: string, id: string, selectedIndi
           if (!result.ok) throw new Error(result.error ?? 'Не удалось изменить задачу.');
           reports.push(...result.reports);
           createdIds.push(...result.createdIds);
+          actionTaskIds[actionIndex]=result.createdIds.length===1 ? result.createdIds[0]
+            : String(action.itemId??action.subtaskId??action.taskId??'')||null;
+          if(action.__chipEdit&&actionTaskIds[actionIndex])
+            await applyChipEdits(userId,actionTaskIds[actionIndex]!,action.__chipEdit as TaskChipValues);
           continue;
         }
         if (isCreateHabitAction(action)) {
@@ -366,7 +469,11 @@ export async function applyTaskProposal(userId: string, id: string, selectedIndi
         );
         if (!result.ok) throw new Error('message' in result ? String(result.message) : 'Не удалось применить изменение.');
         reports.push('report' in result ? String(result.report) : 'Изменение выполнено.');
-        if ('itemId' in result && typeof result.itemId === 'string' && isCreate(action)) createdIds.push(result.itemId);
+        const affected='itemId' in result&&typeof result.itemId==='string'?result.itemId:null;
+        actionTaskIds[actionIndex]=affected;
+        if(affected&&isCreate(action))createdIds.push(affected);
+        if(affected&&action.__chipEdit)
+          await applyChipEdits(userId,affected,action.__chipEdit as TaskChipValues);
       }
     } else if (row.source === 'legacy_general') {
       const { applyLegacyGeneralProposalActions } = await import('./ai-assistant.service.js');
@@ -376,6 +483,11 @@ export async function applyTaskProposal(userId: string, id: string, selectedIndi
       if (!result.ok) throw new Error(result.error ?? 'Не удалось применить изменения.');
       reports.push(...result.reports);
       createdIds.push(...result.createdIds);
+      if(actions.length===1&&result.createdIds.length===1){
+        actionTaskIds[0]=result.createdIds[0];
+        if(actions[0]?.__chipEdit)
+          await applyChipEdits(userId,result.createdIds[0],actions[0].__chipEdit as TaskChipValues);
+      }
     } else if (row.source === 'telegram_assistant') {
       const { approveTelegramAiSuggestedTask } = await import('./telegram-ai-inbox.service.js');
       for (const action of actions) {
@@ -387,7 +499,7 @@ export async function applyTaskProposal(userId: string, id: string, selectedIndi
     const undoData = await captureProposalAfter(userId, before, createdIds, notesBefore, createdNoteIds, createdHabitIds);
     await prisma.aiTaskProposal.update({ where: { id }, data: {
       status: 'APPLIED', undoData: undoData as unknown as Prisma.InputJsonValue,
-      result: { reports, createdIds, createdNoteIds, createdHabitIds,
+      result: { reports, createdIds, actionTaskIds, createdNoteIds, createdHabitIds,
         ...(subset ? { selectedIndices: subset.indices, totalOperations: subset.originalCount } : {}) } as Prisma.InputJsonValue
     } });
   } catch (error) {
