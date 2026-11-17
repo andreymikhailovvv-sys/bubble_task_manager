@@ -60,7 +60,7 @@ jobs:
             sleep 1
           done
           cd server && ../node_modules/.bin/prisma migrate deploy && cd ..
-          node --import tsx --test server/test/economic-ai-proposals.integration.test.ts
+          node --import tsx --test server/test/economic-ai-proposals.integration.test.ts server/test/ai-task-chip-edit.integration.test.ts
       - name: Verify personal Planner boot without Telegram SDK blocking
         run: node --import tsx --test client/test/planner-startup-splash.test.ts
       - name: Verify Planner auth hook order against React render crashes
