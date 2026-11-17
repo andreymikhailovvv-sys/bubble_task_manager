@@ -77,7 +77,7 @@ test('all financial sections have native data-driven UI and real CRUD',()=>{
   assert.match(native,/economicCreate\(resource, payload\)/);
   assert.match(native,/economicUpdate\(resource, record\.ecoText\("id"\), payload\)/);
   assert.match(native,/economicDelete\(selection\.resource,selection\.record\.ecoText\("id"\)\)/);
-  assert.match(native,/if\(linked!=null\)"debts" else "operations"/);
+  assert.match(native,/if\(linked!=null\) onEdit\(linked,"debts"\) else onEdit\(op,"missing-debt"\)/);
   assert.match(native,/nextCursor/);
   assert.match(native,/EcoPaymentProgress/);
 });
