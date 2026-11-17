@@ -550,6 +550,42 @@ apiRouter.get('/business/bootstrap', requireAuth, asyncHandler(async (req, res) 
   res.json({ user: { id: user.id, name: user.name, username: user.username }, status: 'company-shell' });
 }));
 
+// Bounded, anonymised browser-main-thread diagnostics. Unlike PerfDiag (Node.js),
+// these samples measure the short pauses users actually feel when opening panels.
+// Never accept DOM content, URLs, task IDs, messages or stack traces here.
+const uiPerfLimiter = new FixedWindowRateLimiter(8, 60_000);
+apiRouter.post('/client-performance', requireAuth, mailOrigin, (req, res) => {
+  const body = req.body as Record<string, unknown> | undefined;
+  const surface = body?.surface;
+  const allowedSurface = ['desktop', 'compact', 'telegram', 'android-web'].includes(String(surface));
+  const entries = body?.samples;
+  if (!allowedSurface || !Array.isArray(entries) || entries.length > 16) {
+    res.status(400).json({ error: 'Недопустимые данные диагностики' });
+    return;
+  }
+  const samples = entries.map((item: unknown) => {
+    if (!item || typeof item !== 'object') return null;
+    const value = item as Record<string, unknown>;
+    const kind = value.kind;
+    const action = value.action;
+    const ms = value.ms;
+    if (!['interaction', 'longtask'].includes(String(kind))
+      || !['task', 'chat', 'navigation', 'dialog', 'other'].includes(String(action))
+      || typeof ms !== 'number' || !Number.isFinite(ms) || ms < 0 || ms > 10_000) return null;
+    return { kind, action, ms: Math.round(ms) };
+  });
+  if (samples.some(item => item === null)) {
+    res.status(400).json({ error: 'Недопустимые данные диагностики' });
+    return;
+  }
+  if (samples.length > 0 && uiPerfLimiter.consume(req.user!.id).allowed) {
+    console.info('[UiPerf] browser-interaction', JSON.stringify({
+      surface, samples, sampleCount: samples.length
+    }));
+  }
+  res.status(204).end();
+});
+
 apiRouter.post('/client-errors', async (req, res) => {
   const source = typeof req.body?.source === 'string' ? req.body.source : 'unknown';
   const message = typeof req.body?.message === 'string' ? req.body.message : 'empty-message';

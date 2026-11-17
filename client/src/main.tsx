@@ -12,6 +12,7 @@ import CookieBanner from './components/CookieBanner';
 const TelegramAuthPage = React.lazy(() => import('./TelegramAuthPage'));
 const AuthEmailPage = React.lazy(() => import('./AuthEmailPage'))
 import { api } from './lib/api';
+import { startUiPerformanceDiagnostics } from './lib/ui-performance-diagnostics';
 import './styles.css';
 
 type AppErrorBoundaryState = {
@@ -118,6 +119,16 @@ const isPublicRoute = window.location.pathname === '/android'
   || window.location.pathname === '/legal/offer';
 // Choose the workspace once at startup so resizing does not unmount it and lose state.
 const isCompactWorkspaceViewport = window.matchMedia('(max-width: 1024px)').matches;
+// Small, opt-in-free production diagnostics for UI stalls, aggregated and
+// reported only when interactions are measurably slow.
+if (!isBusinessRoute && !isPublicRoute && !isAdminRoute &&
+    !isTelegramAuthRoute && !isAccountEmailRoute && !isEconomicRoute) {
+  startUiPerformanceDiagnostics(
+    isAndroidPlanikRoute ? 'android-web'
+      : isMiniAppRoute ? 'telegram'
+        : isCompactWorkspaceViewport ? 'compact' : 'desktop'
+  );
+}
 const economicParams = new URLSearchParams(window.location.search);
 const isCompactEconomicViewport = window.matchMedia('(max-width: 700px)').matches;
 const economicThemeOverride = economicParams.get('mobileTheme') === 'light' ? 'light' :

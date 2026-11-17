@@ -2167,12 +2167,17 @@ export const telegramService = {
       }
     }
 
+    // The timing logic below caps upcoming notifications at 180 minutes.
+    // Do not hydrate every distant-future task and its relations on each tick:
+    // in production this previously caused ~1,400 SELECT:Task calls per cycle.
+    // Overdue items remain included, preserving their one-off event keys.
+    const latestNotifiableDueDate = new Date(now.getTime() + MAX_SHINE_WINDOW_MINUTES * 60_000);
     const tasks = await prisma.task.findMany({
       where: {
         taskType: { not: 'REMINDER' },
         aiMonitoringEnabled: false,
         AND: [{ OR: [{ parentTaskId: null }, { parentTask: { aiMonitoringEnabled: false } }] }],
-        dueDate: { not: null },
+        dueDate: { not: null, lte: latestNotifiableDueDate },
         OR: [
           { status: { not: 'DONE' }, notifyBeforeMinutes: { not: null } },
           { collaborationId: { not: null }, parentTaskId: null }
