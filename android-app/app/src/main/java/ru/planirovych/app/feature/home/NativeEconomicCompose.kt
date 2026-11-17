@@ -533,9 +533,12 @@ private fun EcoPanelHeader(title:String,subtitle:String,action:String,colors:Eco
 }
 @Composable
 private fun EcoAccountTile(account:JsonObject,colors:EcoColors,onClick:()->Unit) {
+    val primary=account.ecoBool("isPrimary")
+    val dark=colors.background==Color(0xFF15151C)
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp))
-        .background(if(account.ecoBool("isPrimary"))
+        .background(if(primary && dark)
             Brush.linearGradient(listOf(Color(0xFF3F3128),Color(0xFF292831)))
+            else if(primary)Brush.linearGradient(listOf(Color(0xFFFFECD2),Color(0xFFFFF5E9)))
             else Brush.linearGradient(listOf(colors.panel2,colors.panel2)))
         .border(1.dp,if(account.ecoBool("isPrimary"))colors.gold.copy(alpha=.35f)
             else colors.outline,RoundedCornerShape(13.dp))
@@ -543,17 +546,17 @@ private fun EcoAccountTile(account:JsonObject,colors:EcoColors,onClick:()->Unit)
         verticalArrangement=Arrangement.spacedBy(8.dp)) {
         Icon(Icons.Default.AccountBalanceWallet,null,tint=Color(0xFFFFC881),modifier=Modifier.size(21.dp))
         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-            Text(account.ecoText("name"),Modifier.weight(1f),color=if(account.ecoBool("isPrimary"))
+            Text(account.ecoText("name"),Modifier.weight(1f),color=if(primary && dark)
                 Color(0xFFF4EFE8) else colors.text,fontSize=14.sp)
             if(account.ecoBool("isPrimary"))Text("Основной",color=Color(0xFFF4B760),fontSize=10.sp)
         }
         Text(ecoRubles(account.ecoText("balanceMinor")),fontSize=19.sp,
-            fontWeight=FontWeight.ExtraBold,color=if(account.ecoBool("isPrimary"))
+            fontWeight=FontWeight.ExtraBold,color=if(primary && dark)
                 Color.White else colors.text)
     }
 }
 @Composable
-private fun EcoInlineAction(text:String,colors:EcoColors,onClick:()->Unit) {
+internal fun EcoInlineAction(text:String,colors:EcoColors,onClick:()->Unit) {
     TextButton(onClick=onClick,contentPadding=PaddingValues(horizontal=2.dp,vertical=5.dp)) {
         Text(text,color=colors.goldSoft,fontSize=12.sp,fontWeight=FontWeight.SemiBold)
     }
