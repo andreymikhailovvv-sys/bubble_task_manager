@@ -55,3 +55,24 @@ body[data-theme='dark'] .ai-task-proposal__field>textarea{color-scheme:dark}
 .ai-task-proposal__actions button{min-height:36px;font-size:12px;white-space:nowrap}
 .ai-task-proposal__actions .ai-task-proposal__secondary{background:transparent}
 @media(max-width:380px){.ai-task-proposal__actions button{font-size:11px;padding-inline:6px}}
+
+/* Desktop Planner uses the same compact task-chip structure as the Mini App.
+   An explicit desktop rule is needed because the expanded web-chat layout
+   has its own button and surface rules. The operation tile is the sole
+   inner panel; editable controls do not draw another nested box. */
+@media(min-width:1025px){
+  .app-shell .ai-task-proposal{box-sizing:border-box;width:min(100%,420px);max-width:100%}
+  .app-shell .ai-task-proposal__item{box-sizing:border-box;min-width:0}
+  .app-shell .ai-task-proposal__editable{
+    background:transparent!important;border:0!important;box-shadow:none!important;
+    outline:0!important;border-radius:0!important;padding:1px 2px 1px 0;
+    max-height:184px;min-width:0;overflow-y:auto
+  }
+  .app-shell .ai-task-proposal__actions{
+    display:flex!important;flex-flow:row nowrap!important;align-items:stretch;gap:8px
+  }
+  .app-shell .ai-task-proposal__actions>button{
+    display:inline-flex;flex:1 1 0;min-width:0;width:0;margin:0;
+    align-items:center;justify-content:center
+  }
+}
