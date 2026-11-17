@@ -1,3 +1,4 @@
+import { economicAvailableCategories } from '../lib/economic-category-presets.js';
 import crypto from 'node:crypto';
 import { prisma } from '../db/prisma.js';
 import { economicSourceDelta } from '../lib/economic-debt.js';
@@ -100,6 +101,7 @@ export async function answerEconomicAssistant(input: {
     currency: 'RUB', moneyUnits: 'all minor amounts are kopecks (100 per ruble)',
     accounts: accounts.map(a => ({ id: a.id, name: a.name, openingBalanceMinor: a.openingBalanceMinor.toString(), currentBalanceMinor: (balances.get(a.id) ?? 0n).toString() })),
     categories,
+    availableCategories:economicAvailableCategories(categories),
     month: monthKinds.map(m => ({ kind: m.kind, amountMinor: (m._sum.amountMinor ?? 0n).toString() })),
     recentOperations: recent.map(m => ({ ...m, amountMinor: m.amountMinor.toString() })),
     debts: debts.map(d => ({ ...d, amountMinor: d.amountMinor.toString(), paidMinor: d.paidMinor.toString() })),
