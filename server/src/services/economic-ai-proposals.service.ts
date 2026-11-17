@@ -190,7 +190,7 @@ export function economicProposalView(row:{
     name:'Название',title:'Название',counterparty:'Контрагент',
     kind:'Тип',direction:'Направление',balanceMinor:'Баланс',openingBalanceMinor:'Баланс',
     amountMinor:'Сумма',principalMinor:'Сумма кредита',paidMinor:'Выплачено',
-    category:'Категория',note:'Примечание',dueAt:'Срок возврата',
+    category:'Категория',sourceAccountId:'Счёт',targetAccountId:'Счёт получения',accountId:'Счёт долга',note:'Примечание',dueAt:'Срок возврата',
     annualRateBps:'Ставка (б.п.)',termMonths:'Срок (месяцев)',startDate:'Дата начала',
     occurredAt:'Дата операции',lender:'Кредитор',paymentDate:'Дата платежа',
     postedToAccount:'Проводка по счёту',remindersEnabled:'Напоминания',isClosed:'Закрыт'
@@ -215,6 +215,7 @@ export function economicProposalView(row:{
   ).slice(0,8);
   return {id:row.id,messageId:row.messageId,entity:row.entity,action:row.action,
     status:row.status,autoApplied:row.autoApplied,error:row.error,description,
+    payload:d,
     title:(row.action==='create'?'Создание ':'Изменение ')+(TITLES[row.entity as EconomicEntity]??'данных'),details,
     createdAt:row.createdAt.toISOString(),appliedEntityId:row.appliedEntityId};
 }
@@ -254,6 +255,61 @@ export async function getEconomicProposalView(owner:string,id:string){
   if(!row)no('Предложение не найдено.',404);
   return economicProposalView(row);
 }
+/** Select options are owner-scoped and fetched by both React and native Android. */
+export async function economicProposalOptions(owner:string){
+  const [accounts,categories]=await Promise.all([
+    prisma.economicAccount.findMany({where:{userId:owner},orderBy:[{isPrimary:'desc'},{createdAt:'asc'}],
+      select:{id:true,name:true,isPrimary:true}}),
+    prisma.economicCategory.findMany({where:{userId:owner},orderBy:{createdAt:'asc'},
+      select:{name:true,kind:true}})
+  ]);
+  return {accounts,categories};
+}
+
+/** Update a chip's editable fields. Pending suggestions stay pending until approved;
+ * already applied suggestions edit the SAME persisted entity in a serializable
+ * transaction. Stale cards cannot overwrite later changes or another user's data. */
+export async function editEconomicProposal(owner:string,id:string,input:unknown){
+  if(!input||typeof input!=='object'||Array.isArray(input))no('Недопустимые данные чипа.',400);
+  const submitted=input as Record<string,unknown>;
+  return prisma.$transaction(async tx=>{
+    const row=await tx.economicAiProposal.findFirst({where:{id,userId:owner}});
+    if(!row)no('Предложение не найдено.',404);
+    if(!['PENDING','APPLIED'].includes(row.status))no('Это предложение нельзя изменить.');
+    if(!same(submitted.expectedPayload,row.payload))
+      no('Карточка была изменена в другом окне. Обновите её перед редактированием.');
+    const action=canonicalEconomicAction({
+      entity:row.entity,action:row.action,targetId:row.targetId,payload:submitted.payload
+    });
+    if(same(action.payload,row.payload))return economicProposalView(row);
+    if(row.status==='PENDING'){
+      const changed=await tx.economicAiProposal.update({
+        where:{id},data:{payload:action.payload as Prisma.InputJsonValue,error:null}
+      });
+      return economicProposalView(changed);
+    }
+    if(!row.appliedEntityId)no('Не найден ID применённой записи.');
+    const current=await readEconomicEntity(tx,owner,action.entity,row.appliedEntityId);
+    if(!current||!same(current,row.after))
+      no('Запись уже изменена после применения. Обновите финансовые данные.');
+    // Updating an existing category cannot change its type; a created category
+    // retains its kind even if the original create payload contained it.
+    const amendedPayload=action.entity==='category'
+      ? without(action.payload,['name']) : action.payload;
+    const updatedAction=canonicalEconomicAction({
+      entity:action.entity,action:'update',targetId:row.appliedEntityId,payload:amendedPayload
+    });
+    await mutate(tx,owner,updatedAction,current);
+    const after=await readEconomicEntity(tx,owner,action.entity,row.appliedEntityId);
+    if(!after)no('Не удалось проверить обновлённую запись.');
+    const changed=await tx.economicAiProposal.update({
+      where:{id},data:{payload:action.payload as Prisma.InputJsonValue,
+        after:after as Prisma.InputJsonValue,error:null}
+    });
+    return economicProposalView(changed);
+  },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable});
+}
+
 export async function applyEconomicProposal(owner:string,id:string,auto=false){
   return prisma.$transaction(async tx=>{
     const row=await tx.economicAiProposal.findFirst({where:{id,userId:owner}});
