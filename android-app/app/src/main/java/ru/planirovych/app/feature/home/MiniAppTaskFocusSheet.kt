@@ -225,23 +225,6 @@ fun MiniAppTaskFocusSheet(
                 }
             }
             .imePadding()){
-            if(task.isCollaborative){
-                Row(Modifier.padding(start=18.dp,end=18.dp,top=4.dp,bottom=10.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFFF59E0B).copy(alpha=.10f))
-                    .border(1.dp,Color(0xFFF59E0B).copy(alpha=.45f),CircleShape)
-                    .clickable {collaborationOpen=true}
-                    .padding(horizontal=13.dp,vertical=8.dp),
-                    verticalAlignment=Alignment.CenterVertically,
-                    horizontalArrangement=Arrangement.spacedBy(7.dp)){
-                    Icon(Icons.Default.Groups,null,
-                        tint=Color(0xFFF59E0B),modifier=Modifier.size(16.dp))
-                    Text("Совместная задача",color=Color(0xFFF59E0B),
-                        fontSize=12.sp,fontWeight=FontWeight.Bold)
-                    Icon(Icons.Default.ChevronRight,null,
-                        tint=Color(0xFFF59E0B),modifier=Modifier.size(15.dp))
-                }
-            }
             Row(Modifier.fillMaxWidth()
                 .padding(start=18.dp,end=18.dp,top=4.dp,bottom=12.dp),
                 verticalAlignment=Alignment.Top,
@@ -282,6 +265,25 @@ fun MiniAppTaskFocusSheet(
             Column(Modifier.weight(1f,fill=initialSheetHeight!=null)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal=18.dp).padding(bottom=20.dp)){
+                // Keep title and system buttons at the very top. Collaboration
+                // controls belong between the title and due-date selector.
+                if(task.isCollaborative){
+                    Row(Modifier.padding(top=2.dp,bottom=12.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFF59E0B).copy(alpha=.10f))
+                        .border(1.dp,Color(0xFFF59E0B).copy(alpha=.45f),CircleShape)
+                        .clickable {collaborationOpen=true}
+                        .padding(horizontal=13.dp,vertical=8.dp),
+                        verticalAlignment=Alignment.CenterVertically,
+                        horizontalArrangement=Arrangement.spacedBy(7.dp)){
+                        Icon(Icons.Default.Groups,null,
+                            tint=Color(0xFFF59E0B),modifier=Modifier.size(16.dp))
+                        Text("Совместная задача",color=Color(0xFFF59E0B),
+                            fontSize=12.sp,fontWeight=FontWeight.Bold)
+                        Icon(Icons.Default.ChevronRight,null,
+                            tint=Color(0xFFF59E0B),modifier=Modifier.size(15.dp))
+                    }
+                }
                 Row(verticalAlignment=Alignment.CenterVertically,
                     horizontalArrangement=Arrangement.spacedBy(9.dp),
                     modifier=Modifier.fillMaxWidth().padding(top=2.dp,bottom=17.dp)){
@@ -294,7 +296,7 @@ fun MiniAppTaskFocusSheet(
                         horizontalArrangement=Arrangement.spacedBy(8.dp)){
                         Icon(Icons.Default.CalendarMonth,null,
                             modifier=Modifier.size(17.dp),tint=c.teal)
-                        Text("Выбрать дату",fontSize=13.sp,
+                        Text(if(dueDate==null)"Выбрать дату" else "Заменить дату",fontSize=13.sp,
                             fontWeight=FontWeight.SemiBold,color=c.purple,
                             maxLines=1)
                     }
@@ -303,11 +305,6 @@ fun MiniAppTaskFocusSheet(
                         Modifier.weight(1f),
                         fontWeight=FontWeight.SemiBold,fontSize=12.sp,
                         color=if(expired)c.red else c.muted,maxLines=2)
-                    if(dueDate!=null)IconButton(onClick={dueDate=null},
-                        modifier=Modifier.size(25.dp)){
-                        Icon(Icons.Default.Close,"Убрать срок",
-                            tint=c.muted,modifier=Modifier.size(14.dp))
-                    }
                 }
                 HorizontalDivider(color=c.border)
                 Spacer(Modifier.height(18.dp))

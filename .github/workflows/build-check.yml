@@ -99,6 +99,8 @@ jobs:
         run: node --import tsx --test server/test/android-miniapp-workspace-header-parity.test.ts
       - name: Verify Mini App search toolbar is confined to List and Timeline
         run: node --import tsx --test server/test/miniapp-search-bar-workspace-visibility.test.ts
+      - name: Verify habit reminders respect scheduled days on all clients
+        run: node --import tsx --test server/test/habit-notification-schedule.test.ts
       - name: Verify AI-created habits, native day layout and voice transcription defaults
         run: node --import tsx --test server/test/ai-create-habit.test.ts server/test/miniapp-android-day-habits-voice.test.ts
       - name: Verify shared Work subtask discussion, recipients and dispatcher UI
