@@ -44,3 +44,26 @@ test('desktop, Mini App, native Android and voice render actionable finance chip
   }
   assert.match(voice,/economicProposals: 'economicProposals' in result/);
 });
+
+test('mobile finance proposal has a task-style header and a single tile with caption, summary, aligned fields',()=>{
+  const web=read('../../client/src/components/EconomicAiProposalCard.tsx');
+  const css=read('../../client/src/components/EconomicAiProposalCard.css');
+  const native=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeEconomicAiProposalCard.kt');
+  const taskNative=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeTaskChipFields.kt');
+  const taskCss=read('../../client/src/components/AiTaskProposalCard.css');
+  assert.match(web,/className="econ-finance-proposal-details econ-finance-proposal-inner"/);
+  assert.match(web,/className="econ-finance-inner-label"\>\{innerLabel\}/);
+  assert.match(web,/className="econ-finance-editable-fields"/);
+  assert.match(css,/\.econ-finance-proposal \.econ-finance-proposal-inner\{/);
+  assert.match(css,/background:#f2f4f9;border-color:#d7dce7/);
+  assert.match(css,/\.econ-finance-proposal \.econ-finance-edit-row>input,[\s\S]*?height:31px/);
+  assert.match(css,/@media\(hover:hover\) and \(pointer:fine\)/);
+  assert.match(native,/Icons\.Default\.AssignmentTurnedIn/);
+  assert.match(native,/if\(status=="APPLIED"\)Icon\(Icons\.Default\.CheckCircle/);
+  assert.match(native,/Text\(innerTitle,color=muted/);
+  assert.match(native,/val tile=if\(light\)Color\(0xFFF2F4F9\)/);
+  assert.match(native,/Box\(Modifier\.weight\(\.62f\)\)/);
+  assert.match(native,/Modifier\.fillMaxWidth\(\)\.height\(34\.dp\)/);
+  assert.match(taskNative,/heightIn\(min=34\.dp\)/);
+  assert.match(taskCss,/\.ai-task-proposal__field>textarea\{[\s\S]*?overflow-y:hidden;scrollbar-width:none;resize:vertical/);
+});

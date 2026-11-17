@@ -151,6 +151,15 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
   const editableStatus=proposal.status==='PENDING'||applied;
   const entries=Object.entries(draft).filter(([key])=>key in LABELS).slice(0,15);
   const kind=String(draft.kind??proposal.before?.kind??'EXPENSE');
+  // Shared with the native card: the action heading stays above, while the
+  // operation description belongs INSIDE the single editable detail tile.
+  const innerLabel=proposal.entity==='operation'
+    ? (proposal.action==='create'?'Новая операция':'Изменение операции')
+    : proposal.entity==='account'?(proposal.action==='create'?'Новый счёт':'Изменение счёта')
+    : proposal.entity==='category'?(proposal.action==='create'?'Новая категория':'Изменение категории')
+    : proposal.entity==='loan'?(proposal.action==='create'?'Новый кредит':'Изменение кредита')
+    : proposal.entity==='debt'?(proposal.action==='create'?'Новый долг':'Изменение долга')
+    : (proposal.action==='create'?'Новая запись':'Изменение записи');
   const renderField=(key:string,value:Value)=>{
     if(key==='kind'||key==='direction'){
       const pairs=key==='direction'
@@ -210,14 +219,18 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
       {applied?<CheckCircle2 size={17} className="econ-finance-success"/>:null}
       {error||proposal.error?<AlertTriangle size={16} className="econ-finance-warn"/>:null}
     </div>
-    {proposal.description&&<p className="econ-finance-description">{proposal.description}</p>}
-    {entries.length>0?<div className="econ-finance-proposal-details econ-finance-editable-fields">
-      {entries.map(([key,value])=><label key={key} className="econ-finance-edit-row">
-        <span>{LABELS[key]}</span>{renderField(key,value)}
-      </label>)}
-    </div>:proposal.details?.length>0?<div className="econ-finance-proposal-details">
-      {proposal.details.map((item,index)=><div key={index}>{item}</div>)}
-    </div>:null}
+    {entries.length>0||proposal.description||proposal.details?.length>0
+      ? <div className="econ-finance-proposal-details econ-finance-proposal-inner">
+        <span className="econ-finance-inner-label">{innerLabel}</span>
+        {proposal.description&&<p className="econ-finance-description">{proposal.description}</p>}
+        {entries.length>0
+          ? <div className="econ-finance-editable-fields">
+            {entries.map(([key,value])=><label key={key} className="econ-finance-edit-row">
+              <span>{LABELS[key]}</span>{renderField(key,value)}
+            </label>)}
+          </div>
+          : proposal.details?.map((item,index)=><div key={index}>{item}</div>)}
+      </div> : null}
     {error||proposal.error?<div role="alert" className="econ-finance-proposal-error">{error||proposal.error}</div>:null}
     {proposal.status==='PENDING'&&<div className="econ-finance-proposal-actions">
       <button type="button" className="econ-finance-primary" disabled={busy} onClick={()=>void act('approve')}>

@@ -67,7 +67,7 @@ private fun ChipOption(
     val title=options.firstOrNull{it.first==selected}?.second
         ?:selected.ifBlank{"Выбрать"}
     Box(Modifier.fillMaxWidth()){
-        Box(Modifier.fillMaxWidth().heightIn(min=30.dp)
+        Box(Modifier.fillMaxWidth().height(34.dp)
             .border(1.dp,edge,RoundedCornerShape(7.dp))
             .background(surface,RoundedCornerShape(7.dp))
             .clickable(enabled=enabled){open=true}.padding(horizontal=7.dp,vertical=7.dp)){
@@ -124,7 +124,7 @@ internal fun NativeTaskChipFields(
                         textStyle=TextStyle(color=ink,fontSize=11.sp),
                         keyboardOptions=KeyboardOptions(keyboardType=
                             if(key=="notifyBeforeMinutes")KeyboardType.Number else KeyboardType.Text),
-                        modifier=Modifier.fillMaxWidth()
+                        modifier=Modifier.fillMaxWidth().heightIn(min=34.dp)
                             .border(1.dp,edge,RoundedCornerShape(7.dp))
                             .background(surface,RoundedCornerShape(7.dp))
                             .padding(horizontal=7.dp,vertical=7.dp))
