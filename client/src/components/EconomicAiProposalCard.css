@@ -191,3 +191,10 @@
     transform:translateY(-1px);transition:filter .14s ease,box-shadow .14s ease,transform .14s ease
   }
 }
+
+/* General Planner AI uses its own light-chat overrides: keep the inner tile
+   visibly differentiated there as well, regardless of CSS import order. */
+:where(.miniapp-light,.app-light,[data-theme='light'])
+ .ai-inline-economic-proposals .econ-finance-proposal .econ-finance-proposal-inner{
+  background:#f2f4f9;border-color:#d7dce7;color:#263141
+}
