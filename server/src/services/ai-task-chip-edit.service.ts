@@ -85,7 +85,7 @@ export function validateTaskChipValues(raw:unknown,base:TaskChipValues):TaskChip
       result.sphereId=v as string|null;
     }else if(key==='dueDate'){
       if(v!==null&&(typeof v!=='string'||v.length>40||
-        !/^\\d{4}-\\d{2}-\\d{2}T/.test(v)||!Number.isFinite(Date.parse(v))))
+        !/^\d{4}-\d{2}-\d{2}T/.test(v)||!Number.isFinite(Date.parse(v))))
         throw new Error('Некорректная дата и время.');
       result.dueDate=v===null?null:new Date(v as string).toISOString();
     }else if(key==='status'){
