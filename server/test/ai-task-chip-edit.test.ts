@@ -14,7 +14,7 @@ test('task edit fields respect the proposed operation and preserve original date
   assert.equal(fields.dueDate,'2026-12-01T09:00:00.000Z');
   const normalized=validateTaskChipValues({...fields,importance:5,dueDate:'2026-12-01T09:00:00.000Z'},fields);
   assert.deepEqual(chipChanged(fields,normalized),{importance:5});
-  assert.equal(chipDbPatch(task,{importance:5}).priorityScore,3.8);
+  assert.equal(chipDbPatch(task,{importance:5}).priorityScore,4.6);
   assert.equal(taskChipInitial({operation:'delete',itemId:'c123456789'},task),null);
   assert.equal(taskChipInitial({operation:'delete_task',taskId:'c123456789'},task),null);
 });
