@@ -94,10 +94,10 @@ internal fun NativeTaskChipFields(
     val muted=if(dark)Color(0xFFB8BFD1) else Color(0xFF64748B)
     val edge=if(dark)Color(0xFF52546B) else Color(0xFFDCE2EE)
     val surface=if(dark)Color(0xFF1B1D2B) else Color.White
-    Column(Modifier.fillMaxWidth().heightIn(max=176.dp)
-        .background(surface.copy(alpha=.5f),RoundedCornerShape(10.dp))
-        .border(1.dp,edge,RoundedCornerShape(10.dp))
-        .verticalScroll(rememberScrollState()).padding(7.dp),
+    // The operation tile is already the inner panel. Keep the fields scrollable
+    // without drawing a third card and an extra outline inside it.
+    Column(Modifier.fillMaxWidth().heightIn(max=184.dp)
+        .verticalScroll(rememberScrollState()).padding(top=4.dp,end=2.dp),
         verticalArrangement=Arrangement.spacedBy(6.dp)){
         TASK_KEYS.filter{draft.containsKey(it)}.forEach{key->
             val value=draft[key].fieldValue()
