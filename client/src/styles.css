@@ -10773,7 +10773,9 @@ body[data-theme='light'] .upcoming-subtasks-list .upcoming-subtask-row:hover {
    planner owns the bottom navigation. Only the chat thread scrolls. */
 .miniapp-shell .miniapp-ai-chat-backdrop-general {
   top: 0;
-  bottom: calc(4.6rem + var(--miniapp-bottom-inset, env(safe-area-inset-bottom, 0px)));
+  /* The navigation was reduced to ~3.25rem; the old 4.6rem reserve left a
+     visible strip of the underlying task screen between chat and the tabs. */
+  bottom: calc(3.25rem + var(--miniapp-bottom-inset, env(safe-area-inset-bottom, 0px)));
   padding-top: 0 !important;
   background: #0f172a !important;
 }
