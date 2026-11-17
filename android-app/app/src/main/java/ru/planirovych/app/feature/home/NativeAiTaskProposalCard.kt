@@ -249,15 +249,19 @@ internal fun NativeAiTaskProposalCard(
                             Column(Modifier.weight(1f),
                                 verticalArrangement=Arrangement.spacedBy(5.dp)){
                                 Text(operationTitles[kind]?:kind,color=muted,fontSize=11.sp)
-                                Text(item.pText("title")?:"Изменение",color=ink,
+                                Text((if(status in setOf("PENDING","APPLIED"))
+                                    (drafts[index]?.get("title") as? JsonPrimitive)?.contentOrNull
+                                    else null)?:item.pText("title")?:"Изменение",color=ink,
                                     fontSize=13.sp,lineHeight=18.sp,
                                     fontWeight=FontWeight.Bold)
                                 item.pText("parentTitle")?.let{
                                     Text("В задаче «"+it+"»",color=muted,fontSize=11.sp)
                                 }
-                                proposalDescription(item)?.let{
-                                    Text(it,color=muted,fontSize=11.sp,lineHeight=16.sp)
-                                }
+                                if(!(status in setOf("PENDING","APPLIED")
+                                        && taskChipEditable(item)!=null))
+                                    proposalDescription(item)?.let{
+                                        Text(it,color=muted,fontSize=11.sp,lineHeight=16.sp)
+                                    }
                                 if(status in setOf("PENDING","APPLIED")
                                     && taskChipEditable(item)!=null){
                                     val editable=drafts[index]
