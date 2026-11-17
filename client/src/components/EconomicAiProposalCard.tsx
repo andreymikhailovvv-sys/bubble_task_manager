@@ -159,7 +159,15 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
           ? [['EXPENSE','Расход'],['INCOME','Доход']]
           : [['EXPENSE','Расход'],['INCOME','Доход'],['TRANSFER','Перевод']];
       return <select aria-label={LABELS[key]} value={String(value??'')} disabled={!editableStatus||busy}
-        onChange={e=>{setField(key,e.target.value);if(key==='kind'&&e.target.value==='TRANSFER')setField('category',null);}}>
+        onChange={e=>{
+          if(key!=='kind'){setField(key,e.target.value);return;}
+          const next=e.target.value;
+          setDraft(prev=>({...prev,kind:next,
+            ...(proposal.entity==='operation'?{
+              category:null,
+              ...(next==='TRANSFER'&&!('targetAccountId' in prev)?{targetAccountId:null}:{})
+            }:{} )}));
+        }}>
         {pairs.map(([v,label])=><option key={v} value={v}>{label}</option>)}
       </select>;
     }
