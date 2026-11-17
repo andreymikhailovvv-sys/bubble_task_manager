@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import { prisma } from '../src/db/prisma.js';
 import { canonicalEconomicAction } from '../src/services/economic-ai-action-validation.service.js';
-import { applyEconomicProposal, undoEconomicProposal, rejectEconomicProposal, prepareEconomicProposals } from '../src/services/economic-ai-proposals.service.js';
+import { applyEconomicProposal, editEconomicProposal, undoEconomicProposal, rejectEconomicProposal, prepareEconomicProposals } from '../src/services/economic-ai-proposals.service.js';
 
 const action=(entity:string,kind:string,payload:Record<string,unknown>,targetId:string|null=null)=>
   canonicalEconomicAction({entity,action:kind,targetId,payload});
@@ -39,9 +39,49 @@ test('Economic AI applies and reverses real PostgreSQL ledger changes without cr
     assert.ok(race.some(x=>x.status==='fulfilled'));
     assert.equal(await prisma.economicOperation.count({where:{userId:a.id,title:'Бензин'}}),1);
     assert.equal((await prisma.economicAiProposal.findUniqueOrThrow({where:{id:expense.id}})).status,'APPLIED');
+    // Correcting an already applied (including auto-applied) chip updates
+    // the same row, without double-spending or duplicating the transaction.
+    const previousPayload=(await prisma.economicAiProposal.findUniqueOrThrow({
+      where:{id:expense.id}})).payload;
+    const revised=await editEconomicProposal(a.id,expense.id,{
+      expectedPayload:previousPayload,payload:{
+        kind:'EXPENSE',title:'Бензин',amountMinor:'30000',sourceAccountId:account.id,
+        category:'Транспорт'
+      }
+    });
+    assert.equal(revised.status,'APPLIED');
+    assert.equal(await prisma.economicOperation.count({where:{userId:a.id,title:'Бензин'}}),1);
+    assert.equal((await prisma.economicOperation.findFirstOrThrow({
+      where:{userId:a.id,title:'Бензин'}})).amountMinor,30000n);
+    await assert.rejects(()=>editEconomicProposal(a.id,expense.id,{
+      expectedPayload:previousPayload,payload:{kind:'EXPENSE',title:'Неверно',
+        amountMinor:'50000',sourceAccountId:account.id}
+    }),/Карточка была изменена/);
+    await assert.rejects(()=>editEconomicProposal(b.id,expense.id,{
+      expectedPayload:previousPayload,payload:{kind:'EXPENSE',title:'Чужое',
+        amountMinor:'50000',sourceAccountId:other.id}
+    }),/не найдено/);
     await assert.rejects(()=>undoEconomicProposal(b.id,expense.id),/не найдено/);
     assert.equal((await undoEconomicProposal(a.id,expense.id)).status,'UNDONE');
     assert.equal(await prisma.economicOperation.count({where:{userId:a.id,title:'Бензин'}}),0);
+
+    // Pending chip can be edited before first approval.
+    const pending=await propose(a.id,action('operation','create',{
+      kind:'EXPENSE',title:'Продукты',amountMinor:'5000',sourceAccountId:account.id
+    }));
+    await editEconomicProposal(a.id,pending.id,{
+      expectedPayload:pending.payload,payload:{
+        kind:'EXPENSE',title:'Продукты',amountMinor:'7800',
+        sourceAccountId:account.id,category:'Продукты'
+      }
+    });
+    const saved=await applyEconomicProposal(a.id,pending.id);
+    const pendingRecord=await prisma.economicOperation.findUniqueOrThrow({
+      where:{id:saved.appliedEntityId!}
+    });
+    assert.equal(pendingRecord.amountMinor,7800n);
+    assert.equal(pendingRecord.category,'Продукты');
+    await undoEconomicProposal(a.id,pending.id);
 
     // 2. Linked debt cashflow creates FUNDING and SETTLEMENT, then reverts both.
     const debt=await propose(a.id,action('debt','create',{
