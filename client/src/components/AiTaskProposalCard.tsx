@@ -272,7 +272,9 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
               ) : null}
               <div className="min-w-0 flex-1">
                 <span className="ai-task-proposal__muted block text-[11px]">{LABELS[item.type] ?? item.type}</span>
-                <span className="block break-words font-semibold">{item.title}</span>
+                <span className="block break-words font-semibold">{item.editable &&
+                  ['PENDING','APPLIED'].includes(proposal.status)
+                    ? (taskDrafts[index]?.title??item.editable.title??item.title) : item.title}</span>
                 {item.parentTitle ? <span className="ai-task-proposal__muted block text-xs">В задаче «{item.parentTitle}»</span> : null}
                 {humanDescription(item) ? <div className="ai-task-proposal__muted mt-1 break-words text-xs">{humanDescription(item)}</div> : null}
                 {item.editable && ['PENDING','APPLIED'].includes(proposal.status) ?
