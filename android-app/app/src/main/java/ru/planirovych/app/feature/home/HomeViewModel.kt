@@ -70,6 +70,9 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
     private val taskProposalAutoApplyMutable=MutableStateFlow<Boolean?>(null)
     val taskProposalAutoApply=taskProposalAutoApplyMutable.asStateFlow()
     suspend fun economicProposalDetails(id:String):JsonObject=repository.economicProposal(id)
+    suspend fun economicProposalOptions():JsonObject=repository.economicProposalOptions()
+    suspend fun economicProposalEdit(id:String,payload:JsonObject):JsonObject=
+        repository.editEconomicProposal(id,payload)
     suspend fun economicProposalAction(id:String,action:String):JsonObject=
         repository.economicProposalAction(id,action)
     suspend fun economicAutoApply():Boolean=repository.economicPreferences()
