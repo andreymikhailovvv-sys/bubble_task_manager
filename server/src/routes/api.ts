@@ -2177,12 +2177,12 @@ apiRouter.patch('/ai/task-proposals/preferences', requireAuth, taskProposalSameO
   const user = await prisma.user.update({ where: { id: req.user!.id }, data: { aiTaskAutoApply: req.body.autoApply }, select: { aiTaskAutoApply: true } });
   res.json({ autoApply: user.aiTaskAutoApply });
 }));
+apiRouter.get('/ai/task-proposals/options', requireAuth, asyncHandler(async(req,res)=>{
+  res.set('Cache-Control','private, no-store').json(await taskChipOptions(req.user!.id));
+}));
 apiRouter.get('/ai/task-proposals/:id', requireAuth, asyncHandler(async (req, res) => {
   try { res.set('Cache-Control', 'no-store, private').json(await getTaskProposal(req.user!.id, req.params.id)); }
   catch { res.status(404).json({ error: 'Предложение не найдено' }); }
-}));
-apiRouter.get('/ai/task-proposals/options', requireAuth, asyncHandler(async(req,res)=>{
-  res.set('Cache-Control','private, no-store').json(await taskChipOptions(req.user!.id));
 }));
 apiRouter.patch('/ai/task-proposals/:id', requireAuth, taskProposalSameOrigin, asyncHandler(async(req,res)=>{
   try{
