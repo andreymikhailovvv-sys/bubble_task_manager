@@ -477,16 +477,22 @@ export async function applyTaskProposal(userId: string, id: string, selectedIndi
       }
     } else if (row.source === 'legacy_general') {
       const { applyLegacyGeneralProposalActions } = await import('./ai-assistant.service.js');
-      const result = await applyLegacyGeneralProposalActions({
-        userId, actions, userTimeZone: row.userTimeZone
-      });
-      if (!result.ok) throw new Error(result.error ?? 'Не удалось применить изменения.');
-      reports.push(...result.reports);
-      createdIds.push(...result.createdIds);
-      if(actions.length===1&&result.createdIds.length===1){
-        actionTaskIds[0]=result.createdIds[0];
-        if(actions[0]?.__chipEdit)
-          await applyChipEdits(userId,result.createdIds[0],actions[0].__chipEdit as TaskChipValues);
+      // Keep exact action order, but execute one at a time so each created
+      // ID is linked to its own editable chip, even in a multi-task batch.
+      for(const [index,action] of actions.entries()){
+        const result=await applyLegacyGeneralProposalActions({
+          userId,actions:[action],userTimeZone:row.userTimeZone
+        });
+        if(!result.ok)throw new Error(result.error??'Не удалось применить изменения.');
+        reports.push(...result.reports);
+        createdIds.push(...result.createdIds);
+        const target=result.createdIds.length===1?result.createdIds[0]:
+          typeof action.taskId==='string'?action.taskId:
+          typeof action.subtaskId==='string'?action.subtaskId:
+          typeof action.itemId==='string'?action.itemId:null;
+        actionTaskIds[index]=target;
+        if(target&&action.__chipEdit)
+          await applyChipEdits(userId,target,action.__chipEdit as TaskChipValues);
       }
     } else if (row.source === 'telegram_assistant') {
       const { approveTelegramAiSuggestedTask } = await import('./telegram-ai-inbox.service.js');
