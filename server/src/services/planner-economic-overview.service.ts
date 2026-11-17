@@ -1,3 +1,4 @@
+import { economicAvailableCategories } from '../lib/economic-category-presets.js';
 import { prisma } from '../db/prisma.js';
 import { economicSourceDelta } from '../lib/economic-debt.js';
 
@@ -55,6 +56,7 @@ export async function readPlannerEconomicOverview(owner: string) {
       balanceMinor:(balance.get(a.id)??0n).toString(),updatedAt:a.updatedAt.toISOString()
     })),
     categories:categories.map(c=>({...c,createdAt:c.createdAt.toISOString()})),
+    availableCategories:economicAvailableCategories(categories),
     recentOperations:recentOperations.map(o=>({...o,amountMinor:o.amountMinor.toString(),
       occurredAt:o.occurredAt.toISOString(),updatedAt:o.updatedAt.toISOString()})),
     debts:debts.map(d=>({...d,amountMinor:d.amountMinor.toString(),paidMinor:d.paidMinor.toString(),
