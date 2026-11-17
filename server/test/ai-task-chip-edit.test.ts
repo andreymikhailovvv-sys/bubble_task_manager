@@ -72,3 +72,28 @@ test('task proposal stays one inner panel, with paired actions on web, Mini App 
   assert.doesNotMatch(nativeFields,/\.background\(surface\.copy\(alpha=\.5f\)/);
   assert.match(nativeFields,/\.verticalScroll\(rememberScrollState\(\)\)\.padding\(top=4\.dp,end=2\.dp\)/);
 });
+
+test('desktop task chip uses one editable panel and a horizontal action row',()=>{
+  const css=read('../../client/src/components/AiTaskProposalCard.css');
+  assert.match(css,/\.app-shell \.ai-task-proposal__editable\{/);
+  assert.match(css,/background:transparent!important;border:0!important/);
+  assert.match(css,/\.app-shell \.ai-task-proposal__actions>button\{/);
+  assert.match(css,/flex:1 1 0;min-width:0;width:0/);
+});
+
+test('browser performance telemetry is coarse, bounded and avoids user content',()=>{
+  const tracker=read('../../client/src/lib/ui-performance-diagnostics.ts');
+  const entry=read('../../client/src/main.tsx');
+  const api=read('../src/routes/api.ts');
+  assert.match(tracker,/PerformanceObserver/);
+  assert.match(tracker,/requestAnimationFrame/);
+  assert.match(tracker,/\/api\/client-performance/);
+  assert.match(tracker,/navigator\.sendBeacon/);
+  assert.match(entry,/startUiPerformanceDiagnostics\(/);
+  assert.match(api,/apiRouter\.post\('\/client-performance', requireAuth, mailOrigin/);
+  assert.match(api,/new FixedWindowRateLimiter\(8, 60_000\)/);
+  // The background task scan must not hydrate unrelated future deadlines.
+  const telegram=read('../src/services/telegram.service.ts');
+  assert.match(telegram,/latestNotifiableDueDate = new Date\(now\.getTime\(\) \+ MAX_SHINE_WINDOW_MINUTES \* 60_000\)/);
+  assert.match(telegram,/dueDate: \{ not: null, lte: latestNotifiableDueDate \}/);
+});
