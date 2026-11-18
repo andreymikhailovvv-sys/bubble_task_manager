@@ -62,6 +62,7 @@ export default function TestPage() {
   const [editor, setEditor] = useState<{ task?: Task; sphereId?: string } | null>(null);
   const [sectorEditor, setSectorEditor] = useState<Sphere | 'new' | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
+  const [collaborationComplete, setCollaborationComplete] = useState<Task | null>(null);
   const [query, setQuery] = useState('');
   const [sphereFilter, setSphereFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('active');
@@ -146,6 +147,7 @@ export default function TestPage() {
       for (const draft of drafts) await api.createTask({ ...draft, parentTaskId: saved.id, sphereId: saved.sphereId });
       for (const attachment of eventAttachments) await api.createTaskAttachment(saved.id, attachment);
       setEditor(null);
+      if (!editor?.task) void api.recordEfficiencyEvent({ delta: 1, bucket: 'task' }).catch(() => undefined);
       await refresh();
     } finally { setBusy(false); }
   };
@@ -156,12 +158,20 @@ export default function TestPage() {
       await api.createTask({ ...subtask, parentTaskId: created.id, sphereId: created.sphereId });
     }
     setEditor(null);
+    void api.recordEfficiencyEvent({ delta: 1, bucket: 'task' }).catch(() => undefined);
     await refresh();
   };
-  const setComplete = async (task: Task) => {
+  const setComplete = async (task: Task, scope?: 'me' | 'all') => {
+    if (!isDone(task) && task.isCollaborative && task.collaborationOwner && !task.parentTaskId && !scope) {
+      setCollaborationComplete(task);
+      return;
+    }
     try {
-      await api.updateTask(task.id, { status: isDone(task) ? 'TODO' : 'DONE' });
-      if (!isDone(task)) setCelebrationKey(previous => previous + 1);
+      await api.updateTask(task.id, { status: isDone(task) ? 'TODO' : 'DONE', ...(task.isCollaborative ? { collaborationScope: scope ?? 'me' } : {}) });
+      if (!isDone(task)) {
+        setCelebrationKey(previous => previous + 1);
+        void api.recordEfficiencyEvent({ delta: task.parentTaskId ? 1.2 : 4, bucket: 'task' }).catch(() => undefined);
+      }
       await refresh();
     } catch (cause) { setError(errorText(cause)); }
   };
@@ -342,6 +352,7 @@ export default function TestPage() {
       <div className="tp-focus-subtasks">{focusSubtasks.map(item => taskRow(item, true))}{!focusSubtasks.length && <p className="tp-empty">Подзадач пока нет.</p>}</div>
       <div className="tp-focus-actions"><button className="tp-secondary" onClick={() => { setEditor({ task: focusTask }); setFocusId(null); }}><Settings2 size={16}/> Редактировать</button><a className="tp-primary" href={'/?focusTask=' + encodeURIComponent(focusTask.id)}>Полный фокус с ИИ <ArrowRight size={16}/></a></div>
     </div></FocusedTaskWindowFrame>}
+    {collaborationComplete && <div className="tp-overlay"><section className="tp-dialog" role="dialog" aria-modal="true" aria-label="Завершить совместную задачу"><header><div><span className="tp-eyebrow">СОВМЕСТНАЯ ЗАДАЧА</span><h2>Завершение задачи</h2></div><button type="button" onClick={() => setCollaborationComplete(null)} aria-label="Закрыть"><X size={19}/></button></header><div className="tp-dialog-content"><p>Для кого завершить задачу «{collaborationComplete.title}»?</p><button type="button" className="tp-secondary" onClick={() => { const task = collaborationComplete; setCollaborationComplete(null); void setComplete(task, 'me'); }}>Только для меня</button><button type="button" className="tp-primary" onClick={() => { const task = collaborationComplete; setCollaborationComplete(null); void setComplete(task, 'all'); }}>Для всех участников</button></div></section></div>}
     {editor && <TaskEditor key={editor.task?.id || 'new'} task={editor.task} spheres={spheres} initialSphereId={editor.sphereId} subtasks={editor.task ? tasks.filter(task => task.parentTaskId === editor.task?.id) : []}
       defaultAiNotificationsEnabled={true} timeZone={timeZone} onCancel={() => setEditor(null)}
       onSave={saveTask} onAutoSave={editor.task ? async payload => { await api.updateTask(editor.task!.id, payload); } : undefined}
