@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
-import { getSectorBackgroundPalette, SECTOR_BUBBLE_OUTLINE } from './bubbleSectorPalette';
+import { getSectorBackgroundPalette, SECTOR_BUBBLE_OUTLINE, SECTOR_BUBBLE_FILL } from './bubbleSectorPalette';
 
 /** WCAG 2.2 relative luminance and contrast ratio, including compositing. */
 const rgb = (color: string): [number, number, number] =>
@@ -27,8 +27,9 @@ const contrastRatio = (a: number[], b: number[]) => {
 };
 
 // Matches getBubbleShade: only the background/outline is being redesigned.
-const shade = (color: string, distanceRatio: number) => {
-  const fade = 0.04 + distanceRatio * 0.72;
+const shade = (color: string, distanceRatio: number, isLightTheme: boolean) => {
+  const config = SECTOR_BUBBLE_FILL[isLightTheme ? 'light' : 'dark'];
+  const fade = config.fadeBase + distanceRatio * config.fadeRange;
   return rgb(color).map((channel) => Math.round(channel + (255 - channel) * fade));
 };
 
@@ -106,9 +107,9 @@ test('bubble outlines satisfy WCAG 2.2 non-text contrast 3:1 in both themes', ()
           // highlights from the centre to the outer ring of the layout.
           for (const distanceRatio of [0, 0.25, 0.5, 0.75, 1]) {
             const bubbleFill = composite(
-              shade(bubbleColor, distanceRatio),
+              shade(bubbleColor, distanceRatio, isLightTheme),
               surface,
-              isLightTheme ? 0.66 : 0.48
+              SECTOR_BUBBLE_FILL[isLightTheme ? 'light' : 'dark'].opacity
             );
             const insideOutline = composite(rgb(outline.color), bubbleFill, outline.opacity);
             assert.ok(contrastRatio(insideOutline, bubbleFill) >= 3,
@@ -131,7 +132,23 @@ test('sector-only change preserves importance colors, the global view and the la
   assert.match(component, /sectorBubbleOutline\?\.width/);
   assert.match(component, /stopColor=\{palette\.center\}/);
   assert.match(component, /stopColor=\{palette\.edge\}/);
-  assert.match(component, /fillOpacity=\{isLightTheme \? 0\.66 : 0\.48\}/);
+  assert.match(component, /fillOpacity=\{sectorBubbleOutline \? SECTOR_BUBBLE_FILL\[/);
+  assert.match(component, /sectorTheme \? SECTOR_BUBBLE_FILL\[sectorTheme\]/);
   assert.match(component, /bubble-task-info-eyebrow text-2xl font-bold/);
   assert.match(component, /text-\[23px\] font-medium leading-relaxed text-muted/);
+});
+
+test('background remains subordinate to the bubble across both themes', () => {
+  for (const light of [true, false]) {
+    const fill = SECTOR_BUBBLE_FILL[light ? 'light' : 'dark'];
+    assert.ok(fill.opacity >= 0.85, 'bubble color should stay vivid above the sector surface');
+    assert.ok(fill.fadeBase + fill.fadeRange < 0.45, 'bubble importance hue should not wash out into white');
+    for (let index = 0; index < 6; index++) {
+      const palette = getSectorBackgroundPalette(index, light);
+      const difference = Math.abs(luminance(rgb(palette.center)) - luminance(rgb(palette.edge)));
+      assert.ok(difference < 0.12, 'sector gradients should be soft, not visually dominant');
+      if (light) assert.ok(luminance(rgb(palette.center)) > 0.75, 'light surfaces must be very pale');
+      else assert.ok(luminance(rgb(palette.center)) < 0.035, 'dark surfaces must be visually quiet');
+    }
+  }
 });
