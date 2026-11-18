@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   ArrowRight, BookOpenText, CalendarClock, Check, CheckCircle2, ChevronRight, CircleHelp,
-  Coins, CreditCard, FolderKanban, LayoutDashboard, ListTodo, Loader2, LogIn, Menu,
+  Coins, FolderKanban, LayoutDashboard, ListTodo, Loader2, LogIn, Menu,
   MessageCircle, Plus, Search, Send, Settings2, SlidersHorizontal, Sparkles, Trash2,
   TrendingUp, UserPlus, X
 } from 'lucide-react';
 import { api, type CurrentUser, type CreditUsageStatistics, type SubscriptionLinks } from './lib/api';
 import type { ChatAttachmentPayload, ChatMessage, Sphere, Task } from './lib/types';
 import { TaskEditor } from './components/TaskEditor';
-import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
+import { SectorEditor } from './components/SectorEditor';
 import { FocusedTaskWindowFrame } from './components/FocusedTaskWindowFrame';
 import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace';
 import { PlanikMascot } from './components/PlanikMascot';
@@ -319,7 +319,7 @@ export default function TestPage() {
             </article>)}</div>{!spheres.length && <div className="tp-card tp-empty">Пока нет секторов. Создайте первый для группировки задач.</div>}
           </section>}
           {section === 'notes' && <section className="tp-work-area tp-notes-area"><div className="tp-section-heading"><div><h2>Мои заметки</h2><p>Списки, группы и редактор заметок из Планировыча.</p></div></div>
-            <StandaloneNotesWorkspace key={user.id} userId={user.id} mode="inline"/>
+            <StandaloneNotesWorkspace key={user.id} userId={user.id} mode="inline" onClose={() => setSection('overview')}/>
           </section>}
           <footer className="tp-footer">Test Page · Экспериментальный интерфейс. Все данные общие с Планировычем AI.</footer>
         </>}
@@ -336,7 +336,7 @@ export default function TestPage() {
       <form className="tp-chat-compose" onSubmit={event => { event.preventDefault(); void sendAssistant(); }}><VoiceInputButton small activationMode="transcription" onTranscript={(text, immediately) => { if (immediately) void sendAssistant(text); else setAssistantDraft(current => (current ? current + ' ' : '') + text); }}/><input aria-label="Сообщение Планику" placeholder="Спросите Планика…" value={assistantDraft} onChange={event => setAssistantDraft(event.target.value)}/><button type="submit" disabled={assistantBusy || !assistantDraft.trim()} aria-label="Отправить"><Send size={18}/></button></form>
       <a className="tp-chat-full-link" href="/">Открыть полный чат с ИИ <ArrowRight size={14}/></a>
     </aside>}
-    {focusTask && <FocusedTaskWindowFrame><div className="tp-focus-dialog"><header><div><span className="tp-eyebrow">ФОКУС ЗАДАЧИ</span><h2>{focusTask.title}</h2><p>{spheres.find(sphere => sphere.id === focusTask.sphereId)?.name || 'Без сектора'} · {dateLabel(focusTask.dueDate, timeZone)}</p></div><button onClick={() => setFocusId(null)} aria-label="Закрыть"><X size={19}/></button></header>
+    {focusTask && <FocusedTaskWindowFrame><div className="tp-focus-dialog" role="dialog" aria-modal="true" aria-label="Фокус задачи"><header><div><span className="tp-eyebrow">ФОКУС ЗАДАЧИ</span><h2>{focusTask.title}</h2><p>{spheres.find(sphere => sphere.id === focusTask.sphereId)?.name || 'Без сектора'} · {dateLabel(focusTask.dueDate, timeZone)}</p></div><button onClick={() => setFocusId(null)} aria-label="Закрыть"><X size={19}/></button></header>
       {focusTask.description && <p className="tp-focus-description">{focusTask.description}</p>}
       <div className="tp-focus-subtitle">Подзадачи <span>{focusSubtasks.filter(isDone).length} / {focusSubtasks.length}</span></div>
       <div className="tp-focus-subtasks">{focusSubtasks.map(item => taskRow(item, true))}{!focusSubtasks.length && <p className="tp-empty">Подзадач пока нет.</p>}</div>
@@ -362,7 +362,7 @@ export default function TestPage() {
       </div></section></div>}
     {integrationOpen && <div className="tp-overlay" onMouseDown={event => { if (event.target === event.currentTarget) setIntegrationOpen(false); }}><section className="tp-dialog" role="dialog" aria-modal="true" aria-label="Интеграции"><header><div><span className="tp-eyebrow">ПОДКЛЮЧЕНИЯ</span><h2>Интеграции</h2></div><button onClick={() => setIntegrationOpen(false)} aria-label="Закрыть"><X size={19}/></button></header><div className="tp-dialog-content"><p>Telegram, почта и другие подключения используют существующие настройки Планировыча. В тестовом интерфейсе настройки пока открываются через основной модуль.</p><a className="tp-primary" href="/">Перейти в основной интерфейс <ArrowRight size={16}/></a></div></section></div>}
     {authMode && <div className="tp-overlay" onMouseDown={event => { if (event.target === event.currentTarget) setAuthMode(null); }}><section className="tp-dialog" role="dialog" aria-modal="true" aria-label={authMode === 'login' ? 'Вход' : 'Регистрация'}><header><div><span className="tp-eyebrow">ПЛАНИРОВЫЧ AI</span><h2>{authMode === 'login' ? 'Вход в аккаунт' : 'Регистрация'}</h2></div><button onClick={() => setAuthMode(null)} aria-label="Закрыть"><X size={19}/></button></header>
-      <form className="tp-dialog-content tp-auth-form" onSubmit={submitAuth}>{authMode === 'register' && <><label>Имя<input required value={authForm.name} onChange={event => setAuthForm(f => ({...f,name:event.target.value}))}/></label><label>Email<input required type="email" value={authForm.email} onChange={event => setAuthForm(f => ({...f,email:event.target.value}))}/></label></>}
+      <form className="tp-dialog-content tp-auth-form" onSubmit={submitAuth}>{error && <p className="tp-alert" role="alert">{error}</p>}{authMode === 'register' && <><label>Имя<input required value={authForm.name} onChange={event => setAuthForm(f => ({...f,name:event.target.value}))}/></label><label>Email<input required type="email" value={authForm.email} onChange={event => setAuthForm(f => ({...f,email:event.target.value}))}/></label></>}
       <label>Логин<input required autoComplete="username" value={authForm.login} onChange={event => setAuthForm(f => ({...f,login:event.target.value}))}/></label>
       <label>Пароль<input required type="password" minLength={authMode === 'register' ? 8 : undefined} autoComplete={authMode === 'login' ? 'current-password' : 'new-password'} value={authForm.password} onChange={event => setAuthForm(f => ({...f,password:event.target.value}))}/></label>
       {authMode === 'register' && <label className="tp-consent"><input type="checkbox" checked={authForm.consent} onChange={event => setAuthForm(f => ({...f,consent:event.target.checked}))}/> Согласен с <a href="/legal/terms" target="_blank" rel="noreferrer">условиями сервиса</a> и <a href="/legal/privacy" target="_blank" rel="noreferrer">обработкой данных</a></label>}
