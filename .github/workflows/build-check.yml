@@ -225,6 +225,8 @@ jobs:
         run: node --import tsx --test server/test/fullscreen-report-menu-corners-regression.test.ts
       - name: Verify first-visit training invitation and starter tasks and sectors
         run: node --import tsx --test server/test/onboarding-training-defaults-ui.test.ts
+      - name: Verify readable sector backgrounds and preserved bubble colors
+        run: node --import tsx --test client/src/lib/bubbleSectorPalette.test.ts
       - name: Verify opaque overdue popover and neutral dark task-window outlines
         run: node --import tsx --test server/test/desktop-focus-borders-overdue-bubble-theme.test.ts
       - name: Verify newest Focus subtasks, AI note editing, chat scrolling and themed calendar
