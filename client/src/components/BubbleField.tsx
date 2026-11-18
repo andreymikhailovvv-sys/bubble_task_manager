@@ -10,7 +10,7 @@ import { bubbleLinkSegment, detectBubbleDrop, getLinkedBubbleGroups, type DropIn
 import { useBubbleLayoutWorker } from '../hooks/useBubbleLayoutWorker';
 import { resolveSphereIcon } from '../lib/sphereIcons';
 import { compactBubbleHoverPlacement } from '../lib/bubbleHoverPlacement';
-import { getSectorBackgroundPalette, SECTOR_BUBBLE_OUTLINE } from '../lib/bubbleSectorPalette';
+import { getSectorBackgroundPalette, SECTOR_BUBBLE_OUTLINE, SECTOR_BUBBLE_FILL } from '../lib/bubbleSectorPalette';
 import type { Sphere, Task } from '../lib/types';
 import { InlineDateTimePickerIcon } from './InlineDateTimePickerIcon';
 import { LinkifiedText } from './LinkifiedText';
@@ -231,9 +231,11 @@ function hexToRgb(hex: string) {
   };
 }
 
-function getBubbleShade(hex: string, distanceRatio: number) {
+function getBubbleShade(hex: string, distanceRatio: number, sectorTheme?: 'light' | 'dark') {
   const { r, g, b } = hexToRgb(hex);
-  const fade = 0.04 + distanceRatio * 0.72;
+  const fade = sectorTheme
+    ? SECTOR_BUBBLE_FILL[sectorTheme].fadeBase + distanceRatio * SECTOR_BUBBLE_FILL[sectorTheme].fadeRange
+    : 0.04 + distanceRatio * 0.72;
   const nextR = Math.round(r + (255 - r) * fade);
   const nextG = Math.round(g + (255 - g) * fade);
   const nextB = Math.round(b + (255 - b) * fade);
@@ -1029,8 +1031,8 @@ export function BubbleField({
           cx={0}
           cy={0}
           r={bubble.radius}
-          fill={getBubbleShade(bubble.color, bubble.distanceRatio)}
-          fillOpacity={isLightTheme ? 0.66 : 0.48}
+          fill={getBubbleShade(bubble.color, bubble.distanceRatio, sectorBubbleOutline ? (isLightTheme ? 'light' : 'dark') : undefined)}
+          fillOpacity={sectorBubbleOutline ? SECTOR_BUBBLE_FILL[isLightTheme ? 'light' : 'dark'].opacity : (isLightTheme ? 0.66 : 0.48)}
           stroke={isDragTarget ? (dragView?.target?.kind === 'nest' ? '#f59e0b' : '#a78bfa') : selectedId === bubble.task.id ? (isLightTheme ? '#0f172a' : '#f8fafc') : (sectorBubbleOutline?.color ?? (isLightTheme ? 'rgba(14,116,144,0.56)' : '#bae6fd'))}
           strokeOpacity={selectedId === bubble.task.id ? 1 : (sectorBubbleOutline?.opacity ?? (isLightTheme ? 0.78 : 0.65))}
           strokeWidth={isDragTarget || isDragged ? 5 : selectedId === bubble.task.id ? 3.5 : (sectorBubbleOutline?.width ?? 2.4)}
