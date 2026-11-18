@@ -10,7 +10,7 @@ import { bubbleLinkSegment, detectBubbleDrop, getLinkedBubbleGroups, type DropIn
 import { useBubbleLayoutWorker } from '../hooks/useBubbleLayoutWorker';
 import { resolveSphereIcon } from '../lib/sphereIcons';
 import { compactBubbleHoverPlacement } from '../lib/bubbleHoverPlacement';
-import { getSectorBackgroundPalette, SECTOR_BUBBLE_OUTLINE } from '../lib/bubbleSectorPalette';
+import { getSectorBackgroundPalette } from '../lib/bubbleSectorPalette';
 import type { Sphere, Task } from '../lib/types';
 import { InlineDateTimePickerIcon } from './InlineDateTimePickerIcon';
 import { LinkifiedText } from './LinkifiedText';
@@ -567,9 +567,6 @@ export function BubbleField({
 
   const bubbleSectors = useMemo(() => getBubbleSectorSpheres(tasks, spheres, mode), [tasks, spheres, mode]);
   const sectorCount = Math.max(1, bubbleSectors.length);
-  const sectorBubbleOutline = mode === 'sectors' && sectorCount > 1
-    ? SECTOR_BUBBLE_OUTLINE[isLightTheme ? 'light' : 'dark']
-    : null;
   const sectorTaskCounts = useMemo(() => {
     if (sectorCount === 1) return [tasks.length];
     const counts = Array.from({ length: sectorCount }, () => 0);
@@ -1031,9 +1028,9 @@ export function BubbleField({
           r={bubble.radius}
           fill={getBubbleShade(bubble.color, bubble.distanceRatio)}
           fillOpacity={isLightTheme ? 0.66 : 0.48}
-          stroke={isDragTarget ? (dragView?.target?.kind === 'nest' ? '#f59e0b' : '#a78bfa') : selectedId === bubble.task.id ? (isLightTheme ? '#0f172a' : '#f8fafc') : (sectorBubbleOutline?.color ?? (isLightTheme ? 'rgba(14,116,144,0.56)' : '#bae6fd'))}
-          strokeOpacity={selectedId === bubble.task.id ? 1 : (sectorBubbleOutline?.opacity ?? (isLightTheme ? 0.78 : 0.65))}
-          strokeWidth={isDragTarget || isDragged ? 5 : selectedId === bubble.task.id ? 3.5 : (sectorBubbleOutline?.width ?? 2.4)}
+          stroke={isDragTarget ? (dragView?.target?.kind === 'nest' ? '#f59e0b' : '#a78bfa') : selectedId === bubble.task.id ? (isLightTheme ? '#0f172a' : '#f8fafc') : (isLightTheme ? 'rgba(14,116,144,0.56)' : '#bae6fd')}
+          strokeOpacity={selectedId === bubble.task.id ? 1 : isLightTheme ? 0.78 : 0.65}
+          strokeWidth={isDragTarget || isDragged ? 5 : selectedId === bubble.task.id ? 3.5 : 2.4}
         />
         {ownDeadlineOverdue || subtaskDeadlineOverdue ? (
           <circle cx={0} cy={0} r={bubble.radius - 1.5}
@@ -1203,10 +1200,10 @@ export function BubbleField({
                 </>
               )}
             </radialGradient>
-            {/* Neutral sector surfaces separate every importance-colored bubble,
-                even if its hue happens to match the sector's chosen color. */}
+            {/* Muted, theme-aware sector surfaces keep every importance-colored bubble
+                distinct while preserving the user's chosen sector hue. */}
             {mode === 'sectors' && sectorCount > 1 && sectorGeometry.map((_, index) => {
-              const palette = getSectorBackgroundPalette(index, isLightTheme);
+              const palette = getSectorBackgroundPalette(bubbleSectors[index]?.color, isLightTheme);
               return (
                 <radialGradient key={`petal-fill-${index}`} id={`petal-sector-gradient-${index}`}
                   cx="48%" cy="45%" r="85%">
