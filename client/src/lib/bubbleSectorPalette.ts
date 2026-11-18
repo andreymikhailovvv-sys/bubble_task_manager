@@ -1,65 +1,36 @@
 /**
- * Distinct, harmonized CHROMATIC washes for task sectors.
+ * Sector backgrounds are neutral mineral/slate surfaces, not variations of the
+ * sector's brand color. The sector still retains its own hue in the name/icon,
+ * but a pink or orange bubble can never sit on a pink or orange sector wash.
  *
- * Default new-user sectors are green, pink and orange. Their backgrounds are
- * respectively lavender, sea-glass blue and periwinkle blue: not tinted
- * versions of their sector colors, nor an all-grey set of near-duplicates.
- * Task bubble fills and their five priority colors remain untouched.
- *
- * The six alternatives cover custom/reordered sectors and both app themes.
- * Edges of task bubbles retain the sector-only WCAG 2.2 1.4.11 outlines.
+ * A few quiet cool-neutral alternatives separate neighboring areas without
+ * competing with the five importance colors used for task bubbles.
  */
 const LIGHT_SECTOR_SURFACES = [
-  { center: '#ded3f4', edge: '#c9b8eb' }, // lavender, default green sector
-  { center: '#c5e4dc', edge: '#9fd1c4' }, // sea-glass, default pink sector
-  { center: '#cddbf6', edge: '#a9c3ea' }, // blue, default orange sector
-  { center: '#d7d8f5', edge: '#bcc2ee' }, // periwinkle
-  { center: '#c5e6e2', edge: '#9ccfcb' }, // aqua
-  { center: '#e4d6f0', edge: '#cebce5' }  // orchid
+  { center: '#e2ecf1', edge: '#cbdce5' },
+  { center: '#e7ebf0', edge: '#d0d8e2' },
+  { center: '#e4edea', edge: '#cbdcd5' },
+  { center: '#e9edf0', edge: '#d6dee2' },
+  { center: '#e3e9ed', edge: '#c9d3dc' },
+  { center: '#e5eeed', edge: '#cddedc' }
 ] as const;
 
 const DARK_SECTOR_SURFACES = [
-  { center: '#312547', edge: '#3a2a51' },
-  { center: '#143039', edge: '#1b3a42' },
-  { center: '#182b48', edge: '#22334d' },
-  { center: '#282747', edge: '#363459' },
-  { center: '#123038', edge: '#1b3b40' },
-  { center: '#30243e', edge: '#3b2c4c' }
+  { center: '#132837', edge: '#1a3344' },
+  { center: '#192838', edge: '#223549' },
+  { center: '#142d32', edge: '#1d3b42' },
+  { center: '#1c2d37', edge: '#273d48' },
+  { center: '#172536', edge: '#203147' },
+  { center: '#192e32', edge: '#234044' }
 ] as const;
 
-// Hues of the center/edge pairs above, used only to reject a custom sector's
-// own hue. Kept stable rather than re-deriving them every React render.
-const SURFACE_HUES = [260, 165, 218, 238, 173, 272] as const;
-
-const circularHueDistance = (left: number, right: number) => {
-  const distance = Math.abs(left - right) % 360;
-  return Math.min(distance, 360 - distance);
-};
-
-/** Accepts custom short and long hex colors, with safe invalid-color fallback. */
-function sectorHue(color: string | undefined): number | null {
-  if (!color) return null;
-  const hex = color.trim().replace(/^#/, '');
-  const normalized = /^[0-9a-f]{3}$/i.test(hex)
-    ? [...hex].map((digit) => digit + digit).join('')
-    : /^[0-9a-f]{6}$/i.test(hex) ? hex : null;
-  if (!normalized) return null;
-  const [r, g, b] = [0, 2, 4].map((index) =>
-    parseInt(normalized.slice(index, index + 2), 16) / 255);
-  const maximum = Math.max(r, g, b);
-  const minimum = Math.min(r, g, b);
-  const chroma = maximum - minimum;
-  if (chroma < 0.025) return null; // achromatic sector has no competing hue
-  let hue = 0;
-  if (maximum === r) hue = ((g - b) / chroma) % 6;
-  else if (maximum === g) hue = (b - r) / chroma + 2;
-  else hue = (r - g) / chroma + 4;
-  return (hue * 60 + 360) % 360;
-}
-
 /**
- * Contrast is protected by the independently tested bubble outlines, not
- * by pretending that a pastel wash alone supplies WCAG non-text contrast.
+ * WCAG 2.2 SC 1.4.11: meaningful graphical boundaries need >= 3:1
+ * non-text contrast. The outline is measured against BOTH the neutral surface
+ * and the bubble fill as actually composited with its existing opacity.
+ *
+ * These stronger outlines apply only in sector mode. The five task hues,
+ * bubble fills, task text and the global view remain unchanged.
  */
 export const SECTOR_BUBBLE_OUTLINE = {
   light: { color: '#1b354d', opacity: 0.94, width: 3.2 },
@@ -68,25 +39,9 @@ export const SECTOR_BUBBLE_OUTLINE = {
 
 export function getSectorBackgroundPalette(
   sectorIndex: number,
-  isLightTheme: boolean,
-  sectorColor?: string
+  isLightTheme: boolean
 ): { center: string; edge: string } {
   const palette = isLightTheme ? LIGHT_SECTOR_SURFACES : DARK_SECTOR_SURFACES;
-  const preferredIndex = Number.isFinite(sectorIndex)
-    ? ((Math.trunc(sectorIndex) % palette.length) + palette.length) % palette.length
-    : 0;
-  const hue = sectorHue(sectorColor);
-  if (hue === null) return palette[preferredIndex];
-
-  // Keep the thoughtfully chosen defaults. For customized sector colors,
-  // select a different-hued wash instead of recreating "pink on pink".
-  if (circularHueDistance(hue, SURFACE_HUES[preferredIndex]) >= 65) {
-    return palette[preferredIndex];
-  }
-  const indices = SURFACE_HUES.map((_, index) => index);
-  indices.sort((a, b) =>
-    circularHueDistance(hue, SURFACE_HUES[b]) - circularHueDistance(hue, SURFACE_HUES[a]) ||
-    ((a - preferredIndex + palette.length) % palette.length) -
-    ((b - preferredIndex + palette.length) % palette.length));
-  return palette[indices[0]];
+  // The index is intentionally independent of a user's custom sphere color.
+  return palette[((Math.trunc(sectorIndex) % palette.length) + palette.length) % palette.length];
 }
