@@ -1,30 +1,30 @@
 /**
- * Distinct, harmonized CHROMATIC washes for task sectors.
+ * Quiet chromatic sector surfaces that support vivid importance bubbles.
  *
  * Default new-user sectors are green, pink and orange. Their backgrounds are
- * respectively lavender, sea-glass blue and periwinkle blue: not tinted
- * versions of their sector colors, nor an all-grey set of near-duplicates.
- * Task bubble fills and their five priority colors remain untouched.
+ * respectively muted lavender, sea-glass and blue: not tinted
+ * versions of their sector colors. Surfaces stay deliberately low-emphasis.
+ * Five importance hues remain unchanged; sector bubbles are more opaque.
  *
  * The six alternatives cover custom/reordered sectors and both app themes.
  * Edges of task bubbles retain the sector-only WCAG 2.2 1.4.11 outlines.
  */
 const LIGHT_SECTOR_SURFACES = [
-  { center: '#ded3f4', edge: '#c9b8eb' }, // lavender, default green sector
-  { center: '#c5e4dc', edge: '#9fd1c4' }, // sea-glass, default pink sector
-  { center: '#cddbf6', edge: '#a9c3ea' }, // blue, default orange sector
-  { center: '#d7d8f5', edge: '#bcc2ee' }, // periwinkle
-  { center: '#c5e6e2', edge: '#9ccfcb' }, // aqua
-  { center: '#e4d6f0', edge: '#cebce5' }  // orchid
+  { center: '#f1edf9', edge: '#e9e3f5' }, // muted lavender behind green sector
+  { center: '#ebf6f1', edge: '#e1f0e8' }, // muted sea-glass behind pink
+  { center: '#edf3fc', edge: '#e4edfa' }, // muted mist blue behind orange
+  { center: '#f0f0fa', edge: '#e6e8f7' }, // muted periwinkle
+  { center: '#eaf7f3', edge: '#dff0eb' }, // muted aqua
+  { center: '#f6eff9', edge: '#eee5f5' }  // muted orchid
 ] as const;
 
 const DARK_SECTOR_SURFACES = [
-  { center: '#312547', edge: '#3a2a51' },
-  { center: '#14352f', edge: '#1b4037' },
-  { center: '#182b48', edge: '#22334d' },
-  { center: '#282747', edge: '#363459' },
-  { center: '#12352c', edge: '#1b3b33' },
-  { center: '#30243e', edge: '#3b2c4c' }
+  { center: '#211d2c', edge: '#2a2337' }, // subdued violet
+  { center: '#132720', edge: '#1b3028' }, // subdued sea-glass
+  { center: '#152237', edge: '#1d2b42' }, // subdued blue
+  { center: '#202137', edge: '#282a43' },
+  { center: '#112820', edge: '#1a3229' },
+  { center: '#291f31', edge: '#32263e' }
 ] as const;
 
 const circularHueDistance = (left: number, right: number) => {
@@ -52,6 +52,12 @@ function sectorHue(color: string | undefined): number | null {
   else hue = (r - g) / chroma + 4;
   return (hue * 60 + 360) % 360;
 }
+
+/** Stronger fill opacity makes the bubble, not the large background, the accent. */
+export const SECTOR_BUBBLE_FILL = {
+  light: { opacity: 0.92, fadeBase: 0.025, fadeRange: 0.37 },
+  dark: { opacity: 0.86, fadeBase: 0.025, fadeRange: 0.37 }
+} as const;
 
 /**
  * Contrast is protected by the independently tested bubble outlines, not
