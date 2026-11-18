@@ -10,6 +10,11 @@ const miniCss=read('../../client/src/styles.css');
 const home=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/HomeScreen.kt');
 const workspace=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/ModernWorkspace.kt');
 const android=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeEconomicPage.kt');
+const native=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeEconomicCompose.kt');
+const editor=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeEconomicEditor.kt');
+const financeData=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeEconomicData.kt');
+const api=read('../../android-app/app/src/main/java/ru/planirovych/app/core/network/PlanirovychApi.kt');
+const network=read('../../android-app/app/src/main/java/ru/planirovych/app/core/network/NetworkModule.kt');
 const androidVersion=read('../../android-app/app/build.gradle.kts');
 
 test('Mini App and Android have 5 compact icon-only tabs with a warm Economic last tab',()=>{
@@ -52,53 +57,58 @@ test('both mobile surfaces reuse the actual responsive financial overview and ed
   assert.match(economicCss,/\.econ-dialog-layer \.econ-form-actions/);
 });
 
-test('Android WebView never silently takes over a different account',()=>{
-  assert.match(android,/PersistentCookieJar\(context\)\.loadForRequest\(host\)/);
-  assert.match(android,/previous\.toSet\(\)!=expected\.toSet\(\)/);
-  assert.match(android,/if\(!allowReplacement/);
-  assert.match(android,/conflict=true/);
-  assert.match(android,/syncSession\(true\)/);
-  assert.match(android,/manager\.setCookie/);
-  assert.match(android,/current\.toSet\(\)!=expected\.toSet\(\)/);
-  assert.doesNotMatch(android,/removeAllCookies/);
-  assert.match(android,/target\.scheme=="https"/);
-  assert.match(android,/target\.path\?\.startsWith\("\/economic"\)/);
-  assert.match(android,/MIXED_CONTENT_NEVER_ALLOW/);
+test('native Android Economic no longer embeds a browser or owns a second cookie session',()=>{
+  assert.match(android,/EconomicComposePage\(userId=userId, dark=dark, active=active\)/);
+  assert.doesNotMatch(android,/WebView\(|CookieManager\(|evaluateJavascript\(|loadUrl\(/);
+  assert.match(native,/NetworkModule\.api\(context\)/);
+  assert.match(network,/PersistentCookieJar\(context\)/);
+  assert.match(api,/@GET\("api\/economic\/snapshot"\)/);
+  assert.match(api,/@GET\("api\/economic\/operations"\)/);
+  assert.match(api,/@POST\("api\/economic\/\{resource\}"\)/);
+  assert.match(api,/@PATCH\("api\/economic\/\{resource\}\/\{id\}"\)/);
+  assert.match(api,/@DELETE\("api\/economic\/\{resource\}\/\{id\}"\)/);
 });
 
-test('financial dialogs escape the tab scroller and expose the actions on small screens',()=>{
+test('all financial sections have native data-driven UI and real CRUD',()=>{
+  for (const title of ['Обзор','Счета','Операции','Долги и кредиты','Категории'])
+    assert.ok(native.includes(title));
+  assert.match(native,/economicSnapshot\(\)/);
+  assert.match(native,/economicOperations\(/);
+  assert.match(native,/economicCreate\(resource, payload\)/);
+  assert.match(native,/economicUpdate\(resource, record\.ecoText\("id"\), payload\)/);
+  assert.match(native,/economicDelete\(selection\.resource,selection\.record\.ecoText\("id"\)\)/);
+  assert.match(native,/if\(linked!=null\) onEdit\(linked,"debts"\) else onEdit\(op,"missing-debt"\)/);
+  assert.match(native,/nextCursor/);
+  assert.match(native,/EcoPaymentProgress/);
+});
+
+test('Android financial editors are native bottom sheets with keyboard-safe actions',()=>{
+  assert.match(editor,/ModalBottomSheet\(/);
+  assert.match(editor,/rememberModalBottomSheetState\(skipPartiallyExpanded=true\)/);
+  assert.match(editor,/\.imePadding\(\)\.navigationBarsPadding\(\)/);
+  assert.match(editor,/\.verticalScroll\(rememberScrollState\(\)\)/);
+  assert.match(editor,/Text\("Отмена"/);
+  assert.match(editor,/Text\(if\(saving\)"Сохранение…" else "Сохранить"/);
+  for (const type of ['accounts','operations','debts','loans','categories'])
+    assert.ok(editor.includes('"'+type+'"'));
+  assert.match(editor,/DatePickerDialog\(/);
+  assert.match(editor,/onCreateCategory/);
+  assert.match(editor,/remindersEnabled/);
+  assert.match(native,/EconomicSkeleton\(dark\)/);
+  assert.match(native,/FloatingActionButton\(/);
+});
+
+test('native money is integer kopecks; web Mini App remains intact',()=>{
+  assert.match(financeData,/BigDecimal\(clean\)\.movePointRight\(2\)\.toBigIntegerExact\(\)/);
+  assert.match(financeData,/BigInteger/);
+  assert.match(financeData,/ecoLoanEstimate/);
+  assert.match(editor,/ecoParseMoney\(value\("amount"\)\)/);
+  assert.match(native,/current\.ecoObject\("totals"\)\.ecoText\("balanceMinor"\)/);
+  assert.match(native,/val colors = remember\(dark\) \{ ecoColors\(dark\) \}/);
+  assert.match(financeData,/background = Color\(0xFFFFF9F1\)/);
+  assert.match(financeData,/background = Color\(0xFF15151C\)/);
+  assert.match(mini,/<MobileEconomicApp mobile embeddedInMiniApp/);
   assert.match(economic,/createPortal\(<div/);
-  assert.match(economic,/document\.body\)/);
-  assert.match(economic,/econ-miniapp-dialog-layer/);
-  assert.match(economicCss,/econ-miniapp-dialog-layer/);
-  assert.match(economicCss,/--econ-mobile-safe-bottom/);
-  assert.match(mini,/mobileSafeBottom=\{isTelegramRuntime \? telegramViewport\.bottom : 0\}/);
+  assert.match(economicCss,/\.econ-mobile-workspace \.econ-modal-backdrop/);
   assert.match(economicCss,/position:sticky;bottom:0/);
-  assert.match(economicCss,/overflow-y:auto;overscroll-behavior:contain/);
-  assert.match(economicCss,/\.econ-dialog-layer \.econ-form-actions button/);
-  assert.match(android,/document\.querySelector\('\.econ-root \.econ-main'\)/);
-  assert.doesNotMatch(android,/querySelector\('\.econ-mobile-workspace \.econ-main'\)/);
-  assert.match(android,/EconomicSkeleton\(dark\)/);
-  assert.match(android,/addQueryParameter\("mobileTheme",if\(dark\)/);
-  assert.match(home,/pagerState\.currentPage!=4/);
-});
-
-test('native economic route reads Android theme and uses the shared operation form',()=>{
-  const androidEntry=read('../../client/src/economic-main.tsx');
-  assert.match(androidEntry,/economicParams\.get\('mobile'\) === '1'/);
-  assert.match(androidEntry,/mobile=\{isMobileEconomic\} themeOverride=\{economicThemeOverride\}/);
-  assert.match(economic,/data-economic-create-operation/);
-  assert.match(economicCss,/\.econ-mobile-workspace \.econ-top-actions\{display:none\}/);
-  assert.match(android,/document\.querySelector\('\[data-economic-create-operation\]'\)/);
-  assert.match(android,/FloatingActionButton\(/);
-  assert.match(economic,/embeddedInMiniApp && !dialog/);
-  assert.match(economicCss,/\.econ-mobile-add-fab\{/);
-});
-
-test('finance light mode uses neutral surfaces and a matching light editor',()=>{
-  assert.match(economicCss,/\.econ-root\.econ-light\{[\s\S]*?--ec-bg:#f7f8fa/);
-  assert.match(economicCss,/\.econ-dialog-layer\.econ-light \.econ-modal\{[\s\S]*?background:#fff/);
-  assert.match(economicCss,/\.econ-dialog-layer\.econ-light \.econ-form-actions\{background:#fff/);
-  assert.match(android,/android\.graphics\.Color\.WHITE/);
-  assert.match(miniCss,/\.miniapp-light \.miniapp-economic-screen\{background:#f7f8fa\}/);
 });

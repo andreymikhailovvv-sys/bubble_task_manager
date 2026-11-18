@@ -192,4 +192,23 @@ interface PlanirovychApi {
     @POST("api/notes") suspend fun createNote(@Body payload: JsonObject): StandaloneNote
     @PATCH("api/notes/{id}") suspend fun updateNote(@Path("id") id: String, @Body payload: JsonObject): StandaloneNote
     @DELETE("api/notes/{id}") suspend fun deleteNote(@Path("id") id: String): OkResponse
+
+    // First-party finance endpoints. The native UI shares the server ledger,
+    // authentication cookie jar, and validation with the website and Mini App.
+    @GET("api/economic/session") suspend fun economicSession(): JsonObject
+    @GET("api/economic/snapshot") suspend fun economicSnapshot(): JsonObject
+    @GET("api/economic/operations")
+    suspend fun economicOperations(
+        @Query("kind") kind: String? = null,
+        @Query("accountId") accountId: String? = null,
+        @Query("category") category: String? = null,
+        @Query("cursor") cursor: String? = null
+    ): JsonObject
+    @POST("api/economic/{resource}")
+    suspend fun economicCreate(@Path("resource") resource: String, @Body body: JsonObject): JsonObject
+    @PATCH("api/economic/{resource}/{id}")
+    suspend fun economicUpdate(@Path("resource") resource: String, @Path("id") id: String,
+        @Body body: JsonObject): JsonObject
+    @DELETE("api/economic/{resource}/{id}")
+    suspend fun economicDelete(@Path("resource") resource: String, @Path("id") id: String): JsonObject
 }
