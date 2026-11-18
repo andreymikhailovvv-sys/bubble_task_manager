@@ -1206,7 +1206,7 @@ export function BubbleField({
             {/* Neutral sector surfaces separate every importance-colored bubble,
                 even if its hue happens to match the sector's chosen color. */}
             {mode === 'sectors' && sectorCount > 1 && sectorGeometry.map((_, index) => {
-              const palette = getSectorBackgroundPalette(index, isLightTheme);
+              const palette = getSectorBackgroundPalette(index, isLightTheme, bubbleSectors[index]?.color);
               return (
                 <radialGradient key={`petal-fill-${index}`} id={`petal-sector-gradient-${index}`}
                   cx="48%" cy="45%" r="85%">
