@@ -34,22 +34,59 @@ const shade = (color: string, distanceRatio: number) => {
 
 const IMPORTANCE_COLORS = ['#38bdf8', '#22d3ee', '#8b5cf6', '#f97316', '#ef4444'];
 
-test('sector surfaces never borrow a sector hue, even when a sector and bubble are both pink', () => {
+const DEFAULT_SECTOR_COLORS = ['#22c55e', '#ec4899', '#f97316'] as const;
+const hue = (color: string) => {
+  const [r, g, b] = rgb(color).map(channel => channel / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+  if (!delta) return 0;
+  let h = max === r ? ((g - b) / delta) % 6
+    : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
+  return (h * 60 + 360) % 360;
+};
+const hueDistance = (a: number, b: number) =>
+  Math.min(Math.abs(a - b), 360 - Math.abs(a - b));
+
+test('new-account green/pink/orange sectors receive distinct complementary colored backgrounds', () => {
   for (const isLightTheme of [true, false]) {
-    const palettes = Array.from({ length: 6 }, (_, index) => getSectorBackgroundPalette(index, isLightTheme));
+    const colors = DEFAULT_SECTOR_COLORS.map((color, index) =>
+      getSectorBackgroundPalette(index, isLightTheme, color));
+    for (let index = 0; index < colors.length; index++) {
+      const sectorHue = hue(DEFAULT_SECTOR_COLORS[index]);
+      for (const surface of [colors[index].center, colors[index].edge]) {
+        assert.match(surface, /^#[0-9a-f]{6}$/);
+        assert.ok(hueDistance(hue(surface), sectorHue) >= 65,
+          `Sector ${DEFAULT_SECTOR_COLORS[index]} repeats its hue with ${surface}`);
+        assert.ok(isLightTheme ? luminance(rgb(surface)) > 0.5 : luminance(rgb(surface)) < 0.07);
+      }
+    }
+    assert.ok(hueDistance(hue(colors[0].center), hue(colors[1].center)) > 55);
+    assert.ok(hueDistance(hue(colors[1].center), hue(colors[2].center)) > 40);
+  }
+});
+
+test('custom sectors cannot inherit their own hue and indexes have stable fallbacks', () => {
+  for (const isLightTheme of [true, false]) {
+    const palettes = Array.from({ length: 6 }, (_, index) =>
+      getSectorBackgroundPalette(index, isLightTheme));
     for (const palette of palettes) {
       for (const background of [palette.center, palette.edge]) {
         assert.match(background, /^#[0-9a-f]{6}$/);
-        const [r, g, b] = rgb(background);
-        // Cool neutral/slate, not pink/magenta/red/orange. Doesn't depend on sphere.color.
-        assert.ok(b >= r && g >= r, `Found a warm/magenta sector background: ${background}`);
-        assert.ok(isLightTheme ? luminance(rgb(background)) > 0.55 : luminance(rgb(background)) < 0.07);
+        assert.ok(isLightTheme ? luminance(rgb(background)) > 0.5 : luminance(rgb(background)) < 0.07);
       }
     }
-    assert.notDeepEqual(palettes[0], palettes[1], 'neighboring sectors retain a quiet tonal distinction');
-    assert.notDeepEqual(palettes[1], palettes[2]);
     assert.deepEqual(getSectorBackgroundPalette(6, isLightTheme), palettes[0]);
     assert.deepEqual(getSectorBackgroundPalette(-1, isLightTheme), palettes[5]);
+    assert.deepEqual(getSectorBackgroundPalette(0, isLightTheme, '#fff'),
+      getSectorBackgroundPalette(0, isLightTheme, '#ffffff'));
+    assert.deepEqual(getSectorBackgroundPalette(0, isLightTheme, 'invalid'), palettes[0]);
+    for (const sectorColor of ['#22c55e', '#ec4899', '#f97316', '#8b5cf6', '#38bdf8']) {
+      for (let index = 0; index < 6; index++) {
+        const background = getSectorBackgroundPalette(index, isLightTheme, sectorColor);
+        assert.ok(hueDistance(hue(sectorColor), hue(background.center)) >= 65);
+      }
+    }
   }
 });
 
@@ -86,7 +123,7 @@ test('bubble outlines satisfy WCAG 2.2 non-text contrast 3:1 in both themes', ()
 test('sector-only change preserves importance colors, the global view and the larger info panel', async () => {
   const component = await readFile(new URL('../components/BubbleField.tsx', import.meta.url), 'utf8');
   assert.match(component, /1: '#38bdf8',[\s\S]*2: '#22d3ee',[\s\S]*3: '#8b5cf6',[\s\S]*4: '#f97316',[\s\S]*5: '#ef4444'/);
-  assert.match(component, /getSectorBackgroundPalette\(index, isLightTheme\)/);
+  assert.match(component, /getSectorBackgroundPalette\\(index, isLightTheme, bubbleSectors\\[index\\]\\?\\.color\\)/);
   assert.doesNotMatch(component, /getSectorBackgroundPalette\(bubbleSectors\[index\]/);
   assert.match(component, /const sectorBubbleOutline = mode === 'sectors' && sectorCount > 1/);
   assert.match(component, /sectorBubbleOutline\?\.color/);
