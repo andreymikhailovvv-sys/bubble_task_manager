@@ -134,7 +134,7 @@ test('sector-only change preserves importance colors, the global view and the la
   assert.match(component, /stopColor=\{palette\.center\}/);
   assert.match(component, /stopColor=\{palette\.edge\}/);
   assert.match(component, /fillOpacity=\{sectorBubbleOutline \? SECTOR_BUBBLE_FILL\[/);
-  assert.match(component, /sectorTheme \? SECTOR_BUBBLE_FILL\[sectorTheme\]/);
+  assert.match(component, /sectorTheme\s*\? SECTOR_BUBBLE_FILL\[sectorTheme\]/);
   assert.match(component, /bubble-task-info-eyebrow text-2xl font-bold/);
   assert.match(component, /text-\[23px\] font-medium leading-relaxed text-muted/);
 });
