@@ -29,6 +29,8 @@ jobs:
         run: npm ci --include=dev --no-audit --no-fund
       - name: Compile web client and API server
         run: npm run build
+      - name: Verify experimental Test Page routing and shared planner components
+        run: node --import tsx --test client/test/test-page-ui.test.ts
       - name: Verify Economic money precision and loan amortization
         run: node --import tsx --test client/src/lib/economicMoney.test.ts
       - name: Verify Economic debt cashflow and balance signs

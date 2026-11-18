@@ -7,6 +7,7 @@ const MiniApp = React.lazy(() => import('./MiniApp'));
 const AdminPage = React.lazy(() => import('./AdminPage'));
 const BusinessApp = React.lazy(() => import('./BusinessApp'));
 const EconomicApp = React.lazy(() => import('./EconomicApp'));
+const TestPage = React.lazy(() => import('./TestPage'));
 const PublicPages = React.lazy(() => import('./PublicPages'));
 import CookieBanner from './components/CookieBanner';
 const TelegramAuthPage = React.lazy(() => import('./TelegramAuthPage'));
@@ -99,6 +100,8 @@ const isWorkPreview = import.meta.env.DEV && ['localhost','127.0.0.1'].includes(
 const isBusinessRoute = isWorkHost || isWorkPreview;
 const isMiniAppRoute = window.location.pathname.startsWith('/miniapp');
 const isEconomicRoute = window.location.pathname === '/economic' || window.location.pathname === '/economic/';
+// Public experiment, deliberately separate from the production planner workspace.
+const isTestPageRoute = /^\/(?:test-page|test%20page)\/?$/i.test(window.location.pathname);
 // Android embeds this SAME MiniApp frontend for pixel-identical Realtime UI.
 // Runtime web uses existing authenticated session, never Telegram initData.
 const isAndroidPlanikRoute = window.location.pathname === '/android-planik';
@@ -122,7 +125,7 @@ const isCompactWorkspaceViewport = window.matchMedia('(max-width: 1024px)').matc
 // Small, opt-in-free production diagnostics for UI stalls, aggregated and
 // reported only when interactions are measurably slow.
 if (!isBusinessRoute && !isPublicRoute && !isAdminRoute &&
-    !isTelegramAuthRoute && !isAccountEmailRoute && !isEconomicRoute) {
+    !isTelegramAuthRoute && !isAccountEmailRoute && !isEconomicRoute && !isTestPageRoute) {
   startUiPerformanceDiagnostics(
     isAndroidPlanikRoute ? 'android-web'
       : isMiniAppRoute ? 'telegram'
@@ -149,6 +152,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         : isEconomicRoute
           ? <EconomicApp mobile={economicParams.get('mobile') === '1' || isCompactEconomicViewport}
               themeOverride={economicThemeOverride} />
+        : isTestPageRoute
+          ? <TestPage />
         : isMiniAppRoute
           ? <MiniApp runtime="telegram" />
         : isAndroidPlanikRoute
