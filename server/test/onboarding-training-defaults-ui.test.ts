@@ -34,7 +34,8 @@ test('new-account starter tasks include requested importance, sectors and capita
   };
   assert.match(block('Добавить первую задачу'), /importance: 4/);
   assert.match(block('Расписать свои проекты'), /importance: 5/);
-  assert.match(block('Добавь системный промпт к сектору «Работа»'), /sphereKey: 'work',[\s\S]*?importance: 2/);
+  assert.match(block('Набрать "хороший" рейтинг'), /sphereKey: 'projects',[\s\S]*?importance: 4/);
+  assert.match(block('Добавь системный промпт к сектору «Работа»'), /sphereKey: 'work',[\s\S]*?importance: 3/);
   assert.match(block('Создать заметку'), /sphereKey: 'personal',[\s\S]*?importance: 3/);
   assert.match(block('Добавь системный промпт к сектору «Работа»'), /Нажмите на сектор «работа» и укажите общий промпт в поле снизу/);
   assert.match(block('Создать заметку'), /Нажмите в правом меню кнопку добавления заметки/);
