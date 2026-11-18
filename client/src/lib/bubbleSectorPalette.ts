@@ -20,16 +20,12 @@ const LIGHT_SECTOR_SURFACES = [
 
 const DARK_SECTOR_SURFACES = [
   { center: '#312547', edge: '#3a2a51' },
-  { center: '#143039', edge: '#1b3a42' },
+  { center: '#14352f', edge: '#1b4037' },
   { center: '#182b48', edge: '#22334d' },
   { center: '#282747', edge: '#363459' },
-  { center: '#123038', edge: '#1b3b40' },
+  { center: '#12352c', edge: '#1b3b33' },
   { center: '#30243e', edge: '#3b2c4c' }
 ] as const;
-
-// Hues of the center/edge pairs above, used only to reject a custom sector's
-// own hue. Kept stable rather than re-deriving them every React render.
-const SURFACE_HUES = [260, 165, 218, 238, 173, 272] as const;
 
 const circularHueDistance = (left: number, right: number) => {
   const distance = Math.abs(left - right) % 360;
@@ -77,15 +73,18 @@ export function getSectorBackgroundPalette(
     : 0;
   const hue = sectorHue(sectorColor);
   if (hue === null) return palette[preferredIndex];
+  // Calculate from the ACTUAL theme palette, rather than using approximate
+  // hue constants that diverge between light and dark colors.
+  const surfaceHues = palette.map((surface) => sectorHue(surface.center) ?? 0);
 
   // Keep the thoughtfully chosen defaults. For customized sector colors,
   // select a different-hued wash instead of recreating "pink on pink".
-  if (circularHueDistance(hue, SURFACE_HUES[preferredIndex]) >= 65) {
+  if (circularHueDistance(hue, surfaceHues[preferredIndex]) >= 65) {
     return palette[preferredIndex];
   }
-  const indices = SURFACE_HUES.map((_, index) => index);
+  const indices = surfaceHues.map((_, index) => index);
   indices.sort((a, b) =>
-    circularHueDistance(hue, SURFACE_HUES[b]) - circularHueDistance(hue, SURFACE_HUES[a]) ||
+    circularHueDistance(hue, surfaceHues[b]) - circularHueDistance(hue, surfaceHues[a]) ||
     ((a - preferredIndex + palette.length) % palette.length) -
     ((b - preferredIndex + palette.length) % palette.length));
   return palette[indices[0]];
