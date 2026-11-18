@@ -2255,6 +2255,16 @@ export default function App() {
       });
   }, [subtasks, upcomingSubtasksFilter]);
   const focusedTask = useMemo(() => rootTasks.find((task) => task.id === focusedTaskId) ?? null, [rootTasks, focusedTaskId]);
+  // The experimental dashboard can open this exact, fully featured focus
+  // window without re-implementing its task chat and collaborative actions.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const requestedId = url.searchParams.get('focusTask');
+    if (!requestedId || !rootTasks.some((task) => task.id === requestedId)) return;
+    setFocusedTaskId(requestedId);
+    url.searchParams.delete('focusTask');
+    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+  }, [rootTasks]);
   const focusedAiDialog = useMemo(
     () => (focusedTask ? aiDialogByTask[focusedTask.id] ?? [] : []),
     [aiDialogByTask, focusedTask]
