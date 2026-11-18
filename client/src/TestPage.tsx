@@ -106,7 +106,7 @@ export default function TestPage() {
     void api.getMe().then(async ({ user: activeUser }) => {
       if (!mounted) return;
       setUser(activeUser);
-      await reload();
+      await reload().catch(cause => { if (mounted) setError(errorText(cause)); });
       const notifications = await api.getSystemNotifications().catch(() => null);
       if (mounted && notifications) setUnreadCount(notifications.unreadCount);
     }).catch(() => { if (mounted) setUser(null); }).finally(() => {
@@ -193,12 +193,13 @@ export default function TestPage() {
     setAuthBusy(true);
     setError('');
     try {
-      if (authMode === 'register') {
-        if (!authForm.consent) throw new Error('Для регистрации необходимо принять условия сервиса.');
-        await api.register({ login: authForm.login.trim(), password: authForm.password, name: authForm.name.trim(), email: authForm.email.trim(), consentAccepted: true });
-      } else await api.login({ login: authForm.login.trim(), password: authForm.password });
+      if (authMode === 'register' && !authForm.consent) throw new Error('Для регистрации необходимо принять условия сервиса.');
+      const result = authMode === 'register'
+        ? await api.register({ login: authForm.login.trim(), password: authForm.password, name: authForm.name.trim(), email: authForm.email.trim(), consentAccepted: true })
+        : await api.login({ login: authForm.login.trim(), password: authForm.password });
+      setUser(result.user);
       setAuthMode(null);
-      await reload();
+      await refresh();
     } catch (cause) { setError(errorText(cause)); }
     finally { setAuthBusy(false); }
   };
