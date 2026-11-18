@@ -123,7 +123,7 @@ test('bubble outlines satisfy WCAG 2.2 non-text contrast 3:1 in both themes', ()
 test('sector-only change preserves importance colors, the global view and the larger info panel', async () => {
   const component = await readFile(new URL('../components/BubbleField.tsx', import.meta.url), 'utf8');
   assert.match(component, /1: '#38bdf8',[\s\S]*2: '#22d3ee',[\s\S]*3: '#8b5cf6',[\s\S]*4: '#f97316',[\s\S]*5: '#ef4444'/);
-  assert.match(component, /getSectorBackgroundPalette\\(index, isLightTheme, bubbleSectors\\[index\\]\\?\\.color\\)/);
+  assert.match(component, /getSectorBackgroundPalette\(index, isLightTheme, bubbleSectors\[index\]\?\.color\)/);
   assert.doesNotMatch(component, /getSectorBackgroundPalette\(bubbleSectors\[index\]/);
   assert.match(component, /const sectorBubbleOutline = mode === 'sectors' && sectorCount > 1/);
   assert.match(component, /sectorBubbleOutline\?\.color/);
