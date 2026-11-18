@@ -199,8 +199,9 @@ test('large bubbles at the shared hub cannot cross either curved wall, including
 
 test('sector wash has readable light-theme boundaries and soft feathering without blurring bubbles', async () => {
   const source = await readFile(new URL('../../client/src/components/BubbleField.tsx', import.meta.url), 'utf8');
-  assert.match(source, /stopOpacity=\{isLightTheme \? 0\.057 : 0\.028\}/);
-  assert.match(source, /stopOpacity=\{isLightTheme \? 0\.108 : 0\.060\}/);
+  assert.match(source, /getSectorBackgroundPalette\(bubbleSectors\[index\]\?\.color, isLightTheme\)/);
+  assert.match(source, /stopColor=\{palette\.center\}/);
+  assert.match(source, /stopColor=\{palette\.edge\}/);
   assert.match(source, /<clipPath id="petal-sector-oval-clip">/);
   assert.match(source, /<filter id="petal-sector-feather"/);
   assert.match(source, /<feGaussianBlur stdDeviation=\{isLightTheme \? 15 : 20\}/);
