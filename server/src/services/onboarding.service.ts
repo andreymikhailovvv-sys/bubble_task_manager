@@ -122,7 +122,6 @@ export const onboardingService = {
       title: 'Набрать "хороший" рейтинг',
       description: 'Поднять рейтинг (индикатор сверху по центру до состояния "хороший" за счет выполнения задач, подзадач, привычек и обращения к ИИ',
       sphereKey: 'projects',
-      importance: 4,
       dueDate: getCurrentWeekDate(firstLaunchAt, 3, 14)
     });
 
@@ -137,7 +136,7 @@ export const onboardingService = {
       title: 'Добавь системный промпт к сектору «Работа»',
       description: 'Нажмите на сектор «работа» и укажите общий промпт в поле снизу. Можно написать свой рабочий график, должность и другую информацию, которая позволит ИИ лучше давать подсказки.',
       sphereKey: 'work',
-      importance: 3,
+      importance: 2,
       dueDate: null
     });
 

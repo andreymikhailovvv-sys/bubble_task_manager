@@ -10,7 +10,6 @@ import { bubbleLinkSegment, detectBubbleDrop, getLinkedBubbleGroups, type DropIn
 import { useBubbleLayoutWorker } from '../hooks/useBubbleLayoutWorker';
 import { resolveSphereIcon } from '../lib/sphereIcons';
 import { compactBubbleHoverPlacement } from '../lib/bubbleHoverPlacement';
-import { getSectorBackgroundPalette } from '../lib/bubbleSectorPalette';
 import type { Sphere, Task } from '../lib/types';
 import { InlineDateTimePickerIcon } from './InlineDateTimePickerIcon';
 import { LinkifiedText } from './LinkifiedText';
@@ -1200,18 +1199,15 @@ export function BubbleField({
                 </>
               )}
             </radialGradient>
-            {/* Muted, theme-aware sector surfaces keep every importance-colored bubble
-                distinct while preserving the user's chosen sector hue. */}
-            {mode === 'sectors' && sectorCount > 1 && sectorGeometry.map((_, index) => {
-              const palette = getSectorBackgroundPalette(bubbleSectors[index]?.color, isLightTheme);
-              return (
-                <radialGradient key={`petal-fill-${index}`} id={`petal-sector-gradient-${index}`}
-                  cx="48%" cy="45%" r="85%">
-                  <stop offset="0%" stopColor={palette.center} />
-                  <stop offset="100%" stopColor={palette.edge} />
-                </radialGradient>
-              );
-            })}
+            {mode === 'sectors' && sectorCount > 1 && sectorGeometry.map((_, index) => (
+              <radialGradient key={`petal-fill-${index}`} id={`petal-sector-gradient-${index}`}
+                cx="48%" cy="45%" r="85%">
+                <stop offset="0%" stopColor={bubbleSectors[index]?.color ?? '#94a3b8'}
+                  stopOpacity={isLightTheme ? 0.057 : 0.028} />
+                <stop offset="100%" stopColor={bubbleSectors[index]?.color ?? '#94a3b8'}
+                  stopOpacity={isLightTheme ? 0.108 : 0.060} />
+              </radialGradient>
+            ))}
             {/* Blur only the color wash. The outer clip preserves the oval edge
                 and keeps SVG bubbles, progress rings and controls razor-sharp. */}
             <clipPath id="petal-sector-oval-clip">
@@ -1233,7 +1229,7 @@ export function BubbleField({
               {hoveredBubble ? (
                 <div className="min-h-0 space-y-4 overflow-hidden">
                   <div>
-                    <p className="bubble-task-info-eyebrow text-xl font-bold uppercase tracking-[0.14em]">Информация о задаче</p>
+                    <p className="bubble-task-info-eyebrow text-sm font-semibold uppercase tracking-[0.28em]">Информация о задаче</p>
                     <h3 className="mt-3 break-words text-3xl font-semibold leading-tight text-primary">
                       <LinkifiedText text={hoveredBubble.task.title} stopPropagationOnLinkClick />
                     </h3>
@@ -1302,9 +1298,9 @@ export function BubbleField({
                   </div>
                 </div>
               ) : (
-                <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-                  <p className="bubble-task-info-eyebrow text-2xl font-bold uppercase tracking-[0.12em]">Информация о задаче</p>
-                  <p className="mt-4 max-w-[480px] text-[23px] font-medium leading-relaxed text-muted">Наведи на пузырь, чтобы увидеть полное название, описание, дедлайн и подзадачи.</p>
+                <div className="flex h-full flex-col items-center justify-center text-center text-subtle">
+                  <p className="bubble-task-info-eyebrow text-[11px] font-semibold uppercase tracking-[0.28em]">Информация о задаче</p>
+                  <p className="mt-3 text-lg leading-relaxed">Наведи на пузырь, чтобы увидеть полное название, описание, дедлайн и подзадачи.</p>
                 </div>
               )}
             </div>
