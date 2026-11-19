@@ -7,6 +7,8 @@ type Props = {
   className?: string;
   placeholder?: string;
   readOnly?: boolean;
+  /** Test Page text fields: explicit Enter insertion, including trailing blank lines. */
+  enterCreatesLineBreak?: boolean;
 };
 
 /**
@@ -17,7 +19,8 @@ type Props = {
  * every keystroke would destroy the user's selection and IME composition.
  */
 export function InlineRichDescriptionEditor({
-  value, onChange, className = '', placeholder = 'Введите описание', readOnly = false
+  value, onChange, className = '', placeholder = 'Введите описание', readOnly = false,
+  enterCreatesLineBreak = false
 }: Props) {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const lastEmittedRef = useRef<string | null>(null);
@@ -143,6 +146,33 @@ export function InlineRichDescriptionEditor({
   };
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (enterCreatesLineBreak && !readOnly && event.key === 'Enter' &&
+      !event.ctrlKey && !event.metaKey && !event.altKey && !event.nativeEvent.isComposing) {
+      const editor = editorRef.current;
+      const selection = window.getSelection();
+      if (editor && selection?.rangeCount) {
+        const range = selection.getRangeAt(0);
+        if (editor.contains(range.commonAncestorContainer)) {
+          // Use a BR instead of browser-dependent DIV/P wrappers. A trailing
+          // filler BR makes a new empty final line visible and caret-addressable.
+          event.preventDefault();
+          event.stopPropagation();
+          range.deleteContents();
+          const br = document.createElement('br');
+          range.insertNode(br);
+          if (!br.nextSibling || (br.nextSibling.nodeType === Node.TEXT_NODE && !br.nextSibling.textContent)) {
+            br.after(document.createElement('br'));
+          }
+          const caret = document.createRange();
+          caret.setStartAfter(br);
+          caret.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(caret);
+          emitChange();
+          return;
+        }
+      }
+    }
     if ((event.ctrlKey || event.metaKey) && ['b', 'i', 'u'].includes(event.key.toLowerCase())) {
       event.preventDefault();
     }
