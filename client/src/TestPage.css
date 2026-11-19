@@ -399,3 +399,8 @@
   .tp-focus-subtasks {padding:0 15px 12px;}
   .tp-proposal-actions {gap:5px;}
 }
+
+/* Portalled custom pickers have their own themed surface, outside clipped dialogs. */
+.tp-dropdown-menu[data-theme="light"] {background:#fff!important;color:#22354c!important;border-color:#a6c3e0!important;box-shadow:0 15px 35px #23476c38!important;}
+.tp-dropdown-menu[data-theme="light"] .custom-select-option:hover,.tp-dropdown-menu[data-theme="light"] .custom-select-option-active {background:#dcebfb!important;color:#0e4e8b!important;}
+.tp-dropdown-menu .custom-select-option:focus-visible {outline:2px solid #72c8ff;outline-offset:1px;}
