@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import {
   ArrowRight, BookOpenText, CalendarClock, Check, CheckCircle2, ChevronRight, CircleHelp,
   Coins, FolderKanban, LayoutDashboard, ListTodo, Loader2, LogIn, Menu,
-  MessageCircle, Plus, Search, Send, Settings2, SlidersHorizontal, Sparkles, Trash2,
+  Clock3, Plus, Search, Settings, Settings2, SlidersHorizontal, Sparkles, Trash2,
   TrendingUp, UserPlus, X
 } from 'lucide-react';
 import { api, type CurrentUser, type CreditUsageStatistics, type SubscriptionLinks } from './lib/api';
@@ -12,9 +12,12 @@ import { SectorEditor } from './components/SectorEditor';
 import { FocusedTaskWindowFrame } from './components/FocusedTaskWindowFrame';
 import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace';
 import { PlanikMascot } from './components/PlanikMascot';
-import { VoiceInputButton } from './components/VoiceInputButton';
+import { CustomSelect } from './components/CustomSelect';
+import { TaskDescriptionInput } from './components/TaskDescriptionInput';
+import { TestPageChat } from './TestPageChat';
+import { TestPageSettings } from './TestPageSettings';
 import { CreditUsageStats } from './components/CreditUsageStats';
-import { loadThemePreference, resolveThemeMode } from './lib/autoTheme';
+import { loadThemePreference, resolveThemeMode, type ThemePreference } from './lib/autoTheme';
 import './TestPage.css';
 
 type Section = 'overview' | 'tasks' | 'sectors' | 'notes';
@@ -46,6 +49,11 @@ const dateLabel = (value: string | null | undefined, timeZone: string) => {
 const percent = (completed: number, total: number) => total ? Math.round(completed * 100 / total) : 0;
 const errorText = (error: unknown) => error instanceof Error ? error.message : 'Не удалось выполнить операцию.';
 const sortByDate = (a: Task, b: Task) => (a.dueDate ? Date.parse(a.dueDate) : Infinity) - (b.dueDate ? Date.parse(b.dueDate) : Infinity);
+const isOverdue = (task: Task) => !isDone(task) && !!task.dueDate && Number.isFinite(Date.parse(task.dueDate)) && Date.parse(task.dueDate) < Date.now();
+const newestSubtaskFirst = (a: Task, b: Task) =>
+  (a.createdAt ? Date.parse(b.createdAt || '') - Date.parse(a.createdAt) : 0) || b.id.localeCompare(a.id);
+const focusSubtaskSort = (a: Task, b: Task) =>
+  Number(isDone(a)) - Number(isDone(b)) || sortByDate(a,b) || newestSubtaskFirst(a,b);
 const formatCredits = (credits: number) => credits.toLocaleString('ru-RU', { maximumFractionDigits: 2 });
 
 export default function TestPage() {
@@ -62,6 +70,9 @@ export default function TestPage() {
   const [editor, setEditor] = useState<{ task?: Task; sphereId?: string } | null>(null);
   const [sectorEditor, setSectorEditor] = useState<Sphere | 'new' | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
+  const [focusChatId, setFocusChatId] = useState<string | null>(null);
+  const [focusDescription, setFocusDescription] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [collaborationComplete, setCollaborationComplete] = useState<Task | null>(null);
   const [query, setQuery] = useState('');
   const [sphereFilter, setSphereFilter] = useState('all');
@@ -74,26 +85,27 @@ export default function TestPage() {
   const [creditTab, setCreditTab] = useState<'plans' | 'stats'>('plans');
   const [integrationOpen, setIntegrationOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
-  const [assistantDraft, setAssistantDraft] = useState('');
   const [assistantMessages, setAssistantMessages] = useState<ChatMessage[]>([]);
-  const [assistantBusy, setAssistantBusy] = useState(false);
-  const [assistantProgress, setAssistantProgress] = useState<string | null>(null);
-  const [assistantError, setAssistantError] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
   const [celebrationKey, setCelebrationKey] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const timeZone = user?.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const [themeMode, setThemeMode] = useState<ThemePreference>('auto');
   useEffect(() => {
-    const readTheme = () => {
-      const mode = user ? loadThemePreference(localStorage, 'btm:' + user.id + ':theme-mode') : 'auto';
-      setTheme(resolveThemeMode(mode, timeZone, new Date()));
-    };
-    readTheme();
-    const timer = window.setInterval(readTheme, 60_000);
+    if (user) setThemeMode(loadThemePreference(localStorage, 'btm:' + user.id + ':theme-mode'));
+  }, [user?.id]);
+  useEffect(() => {
+    const apply = () => setTheme(resolveThemeMode(themeMode, timeZone, new Date()));
+    apply();
+    const timer = window.setInterval(apply, 60_000);
     return () => window.clearInterval(timer);
-  }, [user?.id, timeZone]);
+  }, [themeMode, timeZone]);
+  const changeThemeMode = (next: ThemePreference) => {
+    setThemeMode(next);
+    if (user) localStorage.setItem('btm:' + user.id + ':theme-mode', next);
+  };
 
   const reload = useCallback(async () => {
     const [nextTasks, nextSpheres, nextUser] = await Promise.all([api.getTasks(), api.getSpheres(), api.getMe()]);
@@ -132,7 +144,24 @@ export default function TestPage() {
     return name.includes(query.trim().toLocaleLowerCase('ru-RU'));
   }).sort((a, b) => Number(isDone(a)) - Number(isDone(b)) || sortByDate(a, b));
   const focusTask = focusId ? taskLookup.get(focusId) : undefined;
-  const focusSubtasks = focusTask ? subtasks.filter(task => task.parentTaskId === focusTask.id) : [];
+  const focusSubtasks = focusTask ? subtasks.filter(task => task.parentTaskId === focusTask.id).sort(focusSubtaskSort) : [];
+  useEffect(() => { setFocusDescription(focusTask?.description || ''); }, [focusId]);
+  useEffect(() => {
+    if (!focusTask || focusDescription === (focusTask.description || '')) return;
+    const id = focusTask.id;
+    const pending = window.setTimeout(() => {
+      void api.updateTask(id, { description: focusDescription }).then(saved => {
+        setTasks(current => current.map(item => item.id === id ? { ...item, description: saved.description } : item));
+      }).catch(cause => setError(errorText(cause)));
+    }, 900);
+    return () => window.clearTimeout(pending);
+  }, [focusDescription, focusId, focusTask?.description]);
+  const saveFocusDescription = async () => {
+    if (focusTask && focusDescription !== (focusTask.description || '')) {
+      const saved = await api.updateTask(focusTask.id, { description: focusDescription });
+      setTasks(current => current.map(item => item.id === saved.id ? { ...item, description: saved.description } : item));
+    }
+  };
 
   const refresh = async () => {
     try { await reload(); setError(''); }
@@ -214,24 +243,9 @@ export default function TestPage() {
     } catch (cause) { setCreditError(errorText(cause)); }
     finally { setCreditsBusy(false); }
   };
-  const sendAssistant = async (message = assistantDraft) => {
-    const question = message.trim();
-    if (!question || assistantBusy || !user) return;
-    const history: ChatMessage[] = [...assistantMessages, { role: 'user', content: question }];
-    setAssistantMessages(history);
-    setAssistantDraft('');
-    setAssistantBusy(true);
-    setAssistantError('');
-    setAssistantProgress('analyzing_request');
-    try {
-      const response = await api.askAiChat({ question, history: assistantMessages, clientSurface: 'web' });
-      setAssistantMessages(current => [...current, { role: 'assistant', content: response.answer }]);
-    } catch (cause) { setAssistantError(errorText(cause)); }
-    finally { setAssistantBusy(false); setAssistantProgress(null); }
-  };
 
   const taskRow = (task: Task, compact = false) => (
-    <div key={task.id} className={'tp-task-row' + (isDone(task) ? ' is-done' : '')}>
+    <div key={task.id} className={'tp-task-row' + (isDone(task) ? ' is-done' : '') + (isOverdue(task) ? ' is-overdue' : '')}>
       <button type="button" className="tp-task-check" onClick={() => void setComplete(task)}
         title={isDone(task) ? 'Вернуть в работу' : 'Отметить выполненной'}
         aria-label={isDone(task) ? 'Вернуть задачу в работу' : 'Выполнить задачу'}>
@@ -240,7 +254,7 @@ export default function TestPage() {
       <button type="button" className="tp-task-main" onClick={() => task.parentTaskId ? setEditor({ task }) : setFocusId(task.id)}>
         <strong>{task.title}</strong>
         <span>{task.parentTaskId ? (taskLookup.get(task.parentTaskId)?.title || 'Подзадача') : (spheres.find(s => s.id === task.sphereId)?.name || 'Без сектора')}
-          <span className="tp-dot">·</span>{dateLabel(task.dueDate, timeZone)}</span>
+          <span className="tp-dot">·</span>{isOverdue(task) && <Clock3 size={12} aria-hidden="true"/>}{isOverdue(task) ? 'Просрочено: ' : ''}{dateLabel(task.dueDate, timeZone)}</span>
       </button>
       {!compact && <button type="button" className="tp-row-edit" aria-label="Редактировать" onClick={() => setEditor({ task })}><Settings2 size={17}/></button>}
       <ChevronRight className="tp-row-chevron" size={16}/>
@@ -276,6 +290,7 @@ export default function TestPage() {
             <div><div className="tp-eyebrow">ПЛАНИРОВЫЧ / TEST PAGE</div><h1>{section === 'overview' ? 'Планировыч AI' : navigation.find(item => item.key === section)?.title}</h1></div></div>
           <div className="tp-actions">
             <button type="button" className="tp-primary" onClick={() => user ? setEditor({}) : setAuthMode('login')}><Plus size={18}/> <span>Новая задача</span></button>
+            {user && <button type="button" className="tp-settings-action" onClick={() => setSettingsOpen(true)}><Settings size={17}/><span>Настройки</span></button>}
             {!user && <><button type="button" onClick={() => setAuthMode('login')}><LogIn size={16}/> Вход</button><button type="button" onClick={() => setAuthMode('register')}><UserPlus size={16}/> Регистрация</button></>}
             <a href="/about"><CircleHelp size={16}/> <span>О сервисе</span></a>
             <button type="button" onClick={() => setIntegrationOpen(true)}><SlidersHorizontal size={16}/><span>Интеграции</span></button>
@@ -311,8 +326,10 @@ export default function TestPage() {
             <div className="tp-section-heading"><div><h2>Все задачи</h2><p>Ваши дела по секторам, срокам и статусу.</p></div><button className="tp-secondary" onClick={() => setEditor({})}><Plus size={17}/> Задача</button></div>
             <div className="tp-filters">
               <label className="tp-search"><Search size={17}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Найти задачу…" aria-label="Поиск задач"/></label>
-              <select value={sphereFilter} onChange={event => setSphereFilter(event.target.value)} aria-label="Фильтр по сектору"><option value="all">Все сектора</option><option value="none">Без сектора</option>{spheres.map(sphere => <option key={sphere.id} value={sphere.id}>{sphere.name}</option>)}</select>
-              <select value={statusFilter} onChange={event => setStatusFilter(event.target.value)} aria-label="Фильтр по статусу"><option value="active">Активные</option><option value="all">Все статусы</option><option value="done">Выполненные</option></select>
+              <CustomSelect value={sphereFilter} onChange={setSphereFilter} ariaLabel="Фильтр по сектору" className="tp-filter-select"
+                options={[{value:'all',label:'Все сектора'},{value:'none',label:'Без сектора'},...spheres.map(sphere=>({value:sphere.id,label:sphere.name,color:sphere.color}))]}/>
+              <CustomSelect value={statusFilter} onChange={setStatusFilter} ariaLabel="Фильтр по статусу" className="tp-filter-select"
+                options={[{value:'active',label:'Активные'},{value:'all',label:'Все статусы'},{value:'done',label:'Выполненные'}]}/>
             </div>
             {spheres.filter(sphere => sphereFilter === 'all' || sphereFilter === sphere.id).map(sphere => {
               const bySector = visibleTasks.filter(task => task.sphereId === sphere.id);
@@ -336,23 +353,35 @@ export default function TestPage() {
         </>}
       </main>
     </div>
-    {user && <button className="tp-mascot" type="button" title="Чат с Плаником" aria-label="Открыть чат с Плаником" onClick={() => setAssistantOpen(previous => !previous)}><PlanikMascot notificationCount={unreadCount} busy={assistantBusy} progress={assistantProgress} celebrationKey={celebrationKey}/></button>}
-    {assistantOpen && user && <aside className="tp-assistant" role="dialog" aria-label="Планик, ИИ-помощник">
-      <header><div className="tp-chat-avatar"><MessageCircle size={19}/></div><div><strong>Планик AI</strong><small>Помощник по задачам</small></div><button type="button" onClick={() => setAssistantOpen(false)} aria-label="Закрыть"><X size={18}/></button></header>
-      <div className="tp-chat-list">{!assistantMessages.length && <div className="tp-chat-welcome"><Sparkles size={24}/><strong>Чем помочь сегодня?</strong><p>Обсудите задачи, план на день или следующий шаг. Голосовой ввод тоже доступен.</p></div>}
-        {assistantMessages.map((message, index) => <div className={'tp-chat-message ' + (message.role === 'user' ? 'mine' : '')} key={index}>{message.content}</div>)}
-        {assistantBusy && <span className="tp-chat-loading"><Loader2 className="tp-spin" size={14}/> Планик думает…</span>}
-        {assistantError && <p className="tp-alert">{assistantError}</p>}
+    {user && <button className="tp-mascot" type="button" title="Чат с Плаником" aria-label="Открыть чат с Плаником" onClick={() => setAssistantOpen(previous => !previous)}><PlanikMascot notificationCount={unreadCount} celebrationKey={celebrationKey}/></button>}
+    {assistantOpen && user && <TestPageChat tasks={tasks} spheres={spheres}
+      initialMessages={assistantMessages} onMessagesChange={setAssistantMessages}
+      onClose={() => setAssistantOpen(false)}
+      onOpenTask={task => { setAssistantOpen(false); task.parentTaskId ? setEditor({task}) : setFocusId(task.id); }}
+      onDataChanged={() => void refresh()}/>}
+    {focusTask && <FocusedTaskWindowFrame><div className="tp-focus-dialog" role="dialog" aria-modal="true" aria-label="Фокус задачи">
+      <header><div><span className="tp-eyebrow">ФОКУС ЗАДАЧИ</span><h2>{focusTask.title}</h2>
+        <p>{spheres.find(sphere => sphere.id === focusTask.sphereId)?.name || 'Без сектора'} · {dateLabel(focusTask.dueDate, timeZone)}</p></div>
+        <button type="button" onClick={() => { void saveFocusDescription().catch(cause => setError(errorText(cause))); setFocusId(null); }} aria-label="Закрыть"><X size={19}/></button>
+      </header>
+      <div className="tp-focus-description">
+        <span className="tp-focus-description-label">Описание задачи</span>
+        <TaskDescriptionInput value={focusDescription} onChange={setFocusDescription} richInlineEditing placeholder="Нажмите, чтобы добавить описание…" className="tp-focus-description-editor"/>
       </div>
-      <form className="tp-chat-compose" onSubmit={event => { event.preventDefault(); void sendAssistant(); }}><VoiceInputButton small activationMode="transcription" onTranscript={(text, immediately) => { if (immediately) void sendAssistant(text); else setAssistantDraft(current => (current ? current + ' ' : '') + text); }}/><input aria-label="Сообщение Планику" placeholder="Спросите Планика…" value={assistantDraft} onChange={event => setAssistantDraft(event.target.value)}/><button type="submit" disabled={assistantBusy || !assistantDraft.trim()} aria-label="Отправить"><Send size={18}/></button></form>
-      <a className="tp-chat-full-link" href="/">Открыть полный чат с ИИ <ArrowRight size={14}/></a>
-    </aside>}
-    {focusTask && <FocusedTaskWindowFrame><div className="tp-focus-dialog" role="dialog" aria-modal="true" aria-label="Фокус задачи"><header><div><span className="tp-eyebrow">ФОКУС ЗАДАЧИ</span><h2>{focusTask.title}</h2><p>{spheres.find(sphere => sphere.id === focusTask.sphereId)?.name || 'Без сектора'} · {dateLabel(focusTask.dueDate, timeZone)}</p></div><button onClick={() => setFocusId(null)} aria-label="Закрыть"><X size={19}/></button></header>
-      {focusTask.description && <p className="tp-focus-description">{focusTask.description}</p>}
-      <div className="tp-focus-subtitle">Подзадачи <span>{focusSubtasks.filter(isDone).length} / {focusSubtasks.length}</span></div>
+      <div className="tp-focus-subtitle"><strong>Подзадачи</strong><span>{focusSubtasks.filter(isDone).length} из {focusSubtasks.length} выполнено</span></div>
       <div className="tp-focus-subtasks">{focusSubtasks.map(item => taskRow(item, true))}{!focusSubtasks.length && <p className="tp-empty">Подзадач пока нет.</p>}</div>
-      <div className="tp-focus-actions"><button className="tp-secondary" onClick={() => { setEditor({ task: focusTask }); setFocusId(null); }}><Settings2 size={16}/> Редактировать</button><a className="tp-primary" href={'/?focusTask=' + encodeURIComponent(focusTask.id)}>Полный фокус с ИИ <ArrowRight size={16}/></a></div>
+      <div className="tp-focus-actions"><button className="tp-secondary" type="button" onClick={() => { void saveFocusDescription().catch(cause=>setError(errorText(cause))); setEditor({ task: focusTask }); setFocusId(null); }}><Settings2 size={16}/> Редактировать</button>
+        <button className="tp-primary" type="button" onClick={() => { void saveFocusDescription().then(() => { setAssistantOpen(false); setFocusChatId(focusTask.id); }).catch(cause=>setError(errorText(cause))); }}>
+          <Sparkles size={16}/> Спросить ИИ</button>
+      </div>
     </div></FocusedTaskWindowFrame>}
+    {focusChatId && taskLookup.get(focusChatId) && <TestPageChat key={focusChatId}
+      task={taskLookup.get(focusChatId)} tasks={tasks} spheres={spheres} onDataChanged={() => void refresh()}
+      onClose={() => setFocusChatId(null)}
+      onOpenTask={task => { setFocusChatId(null); task.parentTaskId ? setEditor({task}) : setFocusId(task.id); }}/>}
+    {settingsOpen && user && <TestPageSettings user={user} themeMode={themeMode} onThemeMode={changeThemeMode}
+      onUserUpdated={setUser} onClose={() => setSettingsOpen(false)}
+      onCheckup={message => { setAssistantMessages(current => [...current,message]); setAssistantOpen(true); }}/>}
     {collaborationComplete && <div className="tp-overlay"><section className="tp-dialog" role="dialog" aria-modal="true" aria-label="Завершить совместную задачу"><header><div><span className="tp-eyebrow">СОВМЕСТНАЯ ЗАДАЧА</span><h2>Завершение задачи</h2></div><button type="button" onClick={() => setCollaborationComplete(null)} aria-label="Закрыть"><X size={19}/></button></header><div className="tp-dialog-content"><p>Для кого завершить задачу «{collaborationComplete.title}»?</p><button type="button" className="tp-secondary" onClick={() => { const task = collaborationComplete; setCollaborationComplete(null); void setComplete(task, 'me'); }}>Только для меня</button><button type="button" className="tp-primary" onClick={() => { const task = collaborationComplete; setCollaborationComplete(null); void setComplete(task, 'all'); }}>Для всех участников</button></div></section></div>}
     {editor && <TaskEditor key={editor.task?.id || 'new'} task={editor.task} spheres={spheres} initialSphereId={editor.sphereId} subtasks={editor.task ? tasks.filter(task => task.parentTaskId === editor.task?.id) : []}
       defaultAiNotificationsEnabled={true} timeZone={timeZone} onCancel={() => setEditor(null)}
