@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { Check, ChevronDown, ChevronRight, Flame, Loader2, Minus, Plus, Target, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Flame, Loader2, Minus, Plus, Settings2, X } from 'lucide-react';
 import { api } from './lib/api';
 import type { Habit } from './lib/types';
 import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
+import { TestPageHabitDialog } from './TestPageHabitDialog';
 
 const dateKey = (timeZone:string, d:Date) => {
   const parts=new Intl.DateTimeFormat('en-US',{timeZone,year:'numeric',month:'2-digit',day:'2-digit'})
@@ -36,6 +37,7 @@ export function TestPageHabits({timeZone}:{timeZone:string}) {
   const [busy,setBusy]=useState<string|null>(null);
   const [error,setError]=useState('');
   const [selected,setSelected]=useState<Habit|null>(null);
+  const [editing,setEditing]=useState<Habit | 'new' | null>(null);
   const [expanded,setExpanded]=useState(false);
   const [clock,setClock]=useState(()=>new Date());
   useEffect(()=>{
@@ -53,6 +55,28 @@ export function TestPageHabits({timeZone}:{timeZone:string}) {
   const items=useMemo(()=>habits.filter(h=>!h.isArchived&&!h.finishedAt),[habits]);
   const eligible=items.filter(h=>scheduled(h,key,timeZone,clock));
   const complete=eligible.filter(h=>getAmount(h,key)>=Math.max(1,h.targetCount)).length;
+  const saveHabit=async(payload:Partial<Habit>)=>{
+    const updated=editing&&editing!=='new'
+      ? await api.updateHabit(editing.id,payload)
+      : await api.createHabit(payload);
+    setHabits(current=>editing&&editing!=='new'
+      ? current.map(h=>h.id===updated.id?updated:h)
+      : [...current,updated]);
+    setSelected(current=>current?.id===updated.id?updated:current);
+    setEditing(null);
+  };
+  const deleteHabit=async()=>{
+    if(!editing||editing==='new')return;
+    await api.deleteHabit(editing.id);
+    setHabits(current=>current.filter(h=>h.id!==editing.id));
+    setSelected(null);setEditing(null);
+  };
+  const finishHabit=async()=>{
+    if(!editing||editing==='new')return;
+    await api.finishHabit(editing.id);
+    setHabits(current=>current.filter(h=>h.id!==editing.id));
+    setSelected(null);setEditing(null);
+  };
   const change=async(habit:Habit,amount:1|-1)=>{
     if(busy)return;
     setBusy(habit.id);setError('');
@@ -69,7 +93,10 @@ export function TestPageHabits({timeZone}:{timeZone:string}) {
   return <section className="tp-card tp-habits-card" aria-label="Привычки">
     <div className="tp-card-head tp-habits-heading">
       <div><h2><Flame size={19}/> Мои привычки</h2><p>Выполнение привычек на сегодня</p></div>
-      <div className="tp-habits-count"><strong>{complete} / {eligible.length}</strong><span>выполнено</span></div>
+      <div className="tp-habits-head-actions">
+        <div className="tp-habits-count"><strong>{complete} / {eligible.length}</strong><span>выполнено</span></div>
+        <button type="button" className="tp-secondary tp-habit-new" onClick={()=>setEditing('new')}><Plus size={16}/> Создать привычку</button>
+      </div>
     </div>
     {loading?<div className="tp-loading tp-habits-loading"><Loader2 className="tp-spin" size={18}/> Загружаем привычки…</div>:
       error&&!items.length?<p className="tp-alert" role="alert">{error}</p>:
@@ -105,11 +132,19 @@ export function TestPageHabits({timeZone}:{timeZone:string}) {
     {selected&&<div className="tp-overlay tp-habit-detail-overlay" onMouseDown={e=>{if(e.currentTarget===e.target)setSelected(null);}}>
       <section className="tp-dialog tp-habit-detail" role="dialog" aria-modal="true" aria-label={'Статистика '+selected.name}>
         <header><div><span className="tp-eyebrow">ПРИВЫЧКА</span><h2>{selected.name}</h2></div>
-          <button type="button" onClick={()=>setSelected(null)} aria-label="Закрыть"><X size={19}/></button></header>
+          <div className="tp-habit-detail-actions">
+            <button type="button" className="tp-secondary" onClick={()=>setEditing(selected)}><Settings2 size={16}/> Настроить привычку</button>
+            <button type="button" onClick={()=>setSelected(null)} aria-label="Закрыть"><X size={19}/></button>
+          </div></header>
         <div className="tp-habit-detail-content"><MiniAppHabitTracker habit={selected} onHabitChanged={updated=>{
           setSelected(updated);setHabits(current=>current.map(h=>h.id===updated.id?updated:h));
         }}/></div>
       </section>
     </div>}
+    {editing&&<TestPageHabitDialog key={editing==='new'?'new':editing.id}
+      habit={editing==='new'?undefined:editing}
+      onClose={()=>setEditing(null)} onSave={saveHabit}
+      onDelete={editing==='new'?undefined:deleteHabit}
+      onFinish={editing==='new'?undefined:finishHabit}/>}
   </section>;
 }
