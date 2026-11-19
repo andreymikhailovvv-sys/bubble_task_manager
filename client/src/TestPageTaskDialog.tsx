@@ -120,7 +120,7 @@ export function TestPageTaskDialog({task,parentTask,spheres,timeZone,onSave,onCl
             placeholder={isSubtask?'Что нужно сделать?':'Название задачи'}/></div>
         <div className="tp-task-settings-row tp-task-description-row"><label>Описание</label>
           <TaskDescriptionInput className="tp-task-settings-description" value={description}
-            onChange={setDescription} richInlineEditing placeholder="Краткое описание или заметки к задаче…"/></div>
+            onChange={setDescription} richInlineEditing enterCreatesLineBreak placeholder="Краткое описание или заметки к задаче…"/></div>
         {!isSubtask&&<div className="tp-task-settings-row"><label htmlFor="tp-task-sphere">Сектор</label>
           <select id="tp-task-sphere" className="tp-task-native-select" value={sphereId||''}
             onChange={e=>setSphereId(e.target.value)}>
