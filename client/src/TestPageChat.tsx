@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { ArrowUpRight, Check, CircleHelp, Copy, Loader2, MessageCircle, Send, Sparkles, X } from 'lucide-react';
-import { api } from './lib/api';
-import type { AiChatModel, ChatMessage, Sphere, Task } from './lib/types';
+import { ArrowUpRight, Check, CircleHelp, Copy, Loader2, MessageCircle, Paperclip, Send, Sparkles, X } from 'lucide-react';
+import { api, type AiChatProgressStatus, type TaskAiProgressStatus } from './lib/api';
+import { prepareAiChatImageFile } from './lib/ai-image-upload';
+import { clipboardImageFiles } from './lib/aiClipboard';
+import { AiAttachmentTiles, AiMessageAttachments, splitAiMessageAttachments, makeAiAttachmentPreviews } from './components/AiAttachmentTiles';
+import { AiProgress } from './components/AiProgress';
+import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Sphere, Task } from './lib/types';
 import { CustomSelect } from './components/CustomSelect';
 import { VoiceInputButton } from './components/VoiceInputButton';
 import { WorkAiMessageBody } from './components/WorkAiMessageBody';
@@ -13,7 +17,11 @@ import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
 import { MailInlineSendCard } from './components/MailInlineSendCard';
 import { serializeAiReply, AiReplyPreview, type AiReplyTarget, makeAiReplyTarget } from './components/AiMessageReply';
 
+type SystemNotice={id:string;eventKey?:string;taskId?:string|null;content:string;readAt?:string|null;createdAt:string};
 type Props = {
+  notifications?: SystemNotice[];
+  onOpenNotification?: (notification:SystemNotice)=>void;
+  onActivityChange?: (activity:{busy:boolean;progress:string|null})=>void;
   task?: Task | null;
   theme: 'light' | 'dark';
   onOpenCheckups?: () => void;
@@ -38,11 +46,16 @@ function refs(content:string, tasks:Task[]):Task[] {
 }
 const messageError=(error:unknown)=>error instanceof Error?error.message:'Не удалось отправить сообщение.';
 
-export function TestPageChat({task,theme,onOpenCheckups,tasks,spheres,onClose,onOpenTask,onDataChanged,initialMessages,onMessagesChange}:Props) {
+export function TestPageChat({task,theme,onOpenCheckups,tasks,spheres,onClose,onOpenTask,onDataChanged,initialMessages,onMessagesChange,notifications=[],onOpenNotification,onActivityChange}:Props) {
   const [model,setModel]=useState<AiChatModel>('gpt-6-luna');
   const [draft,setDraft]=useState('');
   const [messages,setMessages]=useState<ChatMessage[]>(initialMessages||[]);
   const [busy,setBusy]=useState(false);
+  const [progress,setProgress]=useState<AiChatProgressStatus|TaskAiProgressStatus>('analyzing_request');
+  const [pendingFiles,setPendingFiles]=useState<File[]>([]);
+  const [uploadProgress,setUploadProgress]=useState<number|null>(null);
+  const [streamText,setStreamText]=useState('');
+  const fileInputRef=useRef<HTMLInputElement|null>(null);
   const [loading,setLoading]=useState(!!task);
   const [error,setError]=useState('');
   const [replyTo,setReplyTo]=useState<AiReplyTarget|null>(null);
@@ -50,6 +63,37 @@ export function TestPageChat({task,theme,onOpenCheckups,tasks,spheres,onClose,on
   const [capabilitiesOpen,setCapabilitiesOpen]=useState(false);
   const endRef=useRef<HTMLDivElement|null>(null);
   const inFlight=useRef(false);
+  useEffect(()=>{onActivityChange?.({busy,progress:busy?progress:null});},[busy,progress,onActivityChange]);
+  useEffect(()=>()=>{onActivityChange?.({busy:false,progress:null});},[onActivityChange]);
+  const addFiles=(items:File[])=>{
+    if(!items.length)return;
+    const allowed=items.filter(file=>/\.(pdf|docx|xlsx?|png|jpe?g|webp|gif|txt)$/i.test(file.name)
+      || ['application/pdf','image/png','image/jpeg','image/webp','image/gif','text/plain'].includes(file.type));
+    if(items.length!==allowed.length)setError('Допустимы PDF, DOCX, XLS/XLSX, TXT и изображения.');
+    if(allowed.some(file=>file.size>8*1024*1024)){
+      setError('Размер каждого файла не должен превышать 8 МБ.');return;
+    }
+    setPendingFiles(current=>{
+      const next=[...current,...allowed];
+      if(next.length>3)setError('Можно прикрепить максимум три файла.');
+      return next.slice(0,3);
+    });
+  };
+  const encodeFile=async(file:File):Promise<ChatAttachmentPayload>=>{
+    const source=await prepareAiChatImageFile(file);
+    const base64=await new Promise<string>((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onload=()=>typeof reader.result==='string'?resolve(reader.result.split(',')[1]||''):reject(new Error('Файл не прочитан.'));
+      reader.onerror=()=>reject(new Error('Не удалось прочитать файл.'));
+      reader.readAsDataURL(source);
+    });
+    const extension=source.name.split('.').pop()?.toLowerCase()||'';
+    const byExt:Record<string,string>={pdf:'application/pdf',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      doc:'application/msword',xls:'application/vnd.ms-excel',xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      txt:'text/plain',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',gif:'image/gif'};
+    return {name:source.name,mimeType:source.type||byExt[extension]||'application/octet-stream',
+      size:source.size,contentBase64:base64};
+  };
 
   useEffect(()=>{
     setModel('gpt-6-luna');
@@ -70,25 +114,40 @@ export function TestPageChat({task,theme,onOpenCheckups,tasks,spheres,onClose,on
   const taskRefs=useMemo(()=>new Map(tasks.map(task=>[task.id,task])),[tasks]);
   const submit=async (message=draft)=>{
     const question=message.trim();
-    if(!question||inFlight.current)return;
-    inFlight.current=true;setBusy(true);setError('');
-    const forAi=serializeAiReply(question,replyTo);
+    if((!question&&!pendingFiles.length)||inFlight.current)return;
+    inFlight.current=true;setBusy(true);setError('');setProgress('analyzing_request');
+    setUploadProgress(null);setStreamText('');
+    const forAi=serializeAiReply(question||'Проанализируй прикреплённые файлы.',replyTo);
+    const sendingFiles=[...pendingFiles];
     setReplyTo(null);setDraft('');
     const previous=messages;
-    const userMessage:ChatMessage={id:crypto.randomUUID(),role:'user',content:forAi};
+    // Previews are display-only; the original bytes travel in attachments.
+    const attachmentsPreview=await makeAiAttachmentPreviews(sendingFiles).catch(()=>[]);
+    const names=sendingFiles.map(file=>file.name);
+    const userMessage:ChatMessage={id:crypto.randomUUID(),role:'user',
+      content:forAi+(names.length?'\n\n📎 Файлы: '+names.join(', '):''),
+      attachmentPreviews:attachmentsPreview};
     setMessages(old=>[...old,userMessage]);
     try{
+      const attachments=sendingFiles.length?await Promise.all(sendingFiles.map(encodeFile)):undefined;
       if(task){
-        const answer=await api.askTaskAssistant(task.id,{
-          question:forAi, model, clientSurface:'web', interactionContext:'focus'
-        });
+        const answer=await api.askTaskAssistantStreaming(task.id,{
+          question:forAi, model, clientSurface:'web', interactionContext:'focus',attachments
+        },{onStatus:setProgress,onUploadProgress:setUploadProgress,
+          onTextDelta:delta=>setStreamText(current=>current+delta),
+          onTextReset:()=>setStreamText('')});
         // The task conversation is owned by the server. Read it back so
         // proposals and replies share the same history as the classic Focus.
         const latest=await api.getTaskAssistantHistory(task.id).catch(()=>null);
-        if(latest)setMessages(latest.messages);
+        if(latest)setMessages(latest.messages.map(message=>message.role==='user'
+          &&message.content===userMessage.content?{...message,attachmentPreviews:attachmentsPreview}:message));
         else setMessages(old=>[...old,{id:crypto.randomUUID(),role:'assistant',content:answer.answer,taskProposal:answer.taskProposal||null}]);
+        if(answer.taskDataChanged)onDataChanged();
       }else{
-        const answer=await api.askAiChat({question:forAi,history:previous,model,clientSurface:'web'});
+        const answer=await api.askAiChatStreaming({question:forAi,history:previous,model,clientSurface:'web',attachments},
+          {onStatus:setProgress,onUploadProgress:setUploadProgress,
+            onTextDelta:delta=>setStreamText(current=>current+delta),
+            onTextReset:()=>setStreamText('')});
         const responseMessage:ChatMessage={
           id:crypto.randomUUID(),role:'assistant',content:answer.answer,
           taskProposal:answer.taskProposal||null,
@@ -103,8 +162,9 @@ export function TestPageChat({task,theme,onOpenCheckups,tasks,spheres,onClose,on
         onMessagesChange?.([...previous,userMessage,responseMessage]);
         if(answer.taskDataChanged)onDataChanged();
       }
+      setPendingFiles([]);
     }catch(cause){setMessages(previous);setDraft(question);setError(messageError(cause));}
-    finally{inFlight.current=false;setBusy(false);}
+    finally{inFlight.current=false;setBusy(false);setUploadProgress(null);setStreamText('');}
   };
   const copy=async(content:string,index:number)=>{
     try{await navigator.clipboard.writeText(content);setCopied(index);}catch{setError('Не удалось скопировать сообщение.');}
@@ -124,10 +184,19 @@ export function TestPageChat({task,theme,onOpenCheckups,tasks,spheres,onClose,on
       {loading&&<div className="tp-loading"><Loader2 className="tp-spin" size={19}/>Загрузка переписки…</div>}
       {!loading&&!messages.length&&<div className="tp-chat-welcome"><Sparkles size={24}/><strong>{task?'Спросите ИИ об этой задаче':'Чем помочь сегодня?'}</strong>
         <p>{task?'Обсудите выполнение, подзадачи и сроки. Предложения можно проверить перед применением.':'Обсудите свои задачи, план на день или следующий шаг.'}</p></div>}
+      {!task&&notifications.filter(item=>!item.eventKey?.startsWith('monitoring:')).map(item=>
+        <button type="button" className="tp-chat-system-notice" key={item.id}
+          onClick={()=>onOpenNotification?.(item)}
+          title="Открыть уведомление"><span>⚙️ Системное уведомление</span>
+          <strong>{item.content}</strong></button>)}
       {messages.map((message,index)=><article className={'tp-chat-message '+(message.role==='user'?'mine':'')} key={message.id||index}>
         <div className="tp-message-top"><span>{message.role==='user'?'Вы':'ИИ'}</span><button type="button" aria-label="Копировать сообщение" onClick={()=>void copy(message.content,index)}>{copied===index?<Check size={13}/>:<Copy size={13}/>}</button></div>
         <div className="tp-message-body">
-          <WorkAiMessageBody content={message.content.replace(TASK_REF,'').trim()}/>
+          <WorkAiMessageBody content={splitAiMessageAttachments(message.content.replace(TASK_REF,'').trim()).text}/>
+          {message.role==='user'&&(()=>{
+            const {names}=splitAiMessageAttachments(message.content);
+            return names.length?<AiMessageAttachments names={names} previews={message.attachmentPreviews} messageId={message.id}/>:null;
+          })()}
         </div>
         {message.role==='assistant'&&refs(message.content,tasks).length>0&&<div className="tp-task-references">
           {refs(message.content,tasks).map(ref=><button type="button" key={ref.id}
@@ -143,18 +212,32 @@ export function TestPageChat({task,theme,onOpenCheckups,tasks,spheres,onClose,on
         {message.role==='assistant'&&message.mailSendDraft&&<MailInlineSendCard draft={message.mailSendDraft}/>}
         <button type="button" className="tp-reply-button" onClick={()=>setReplyTo(makeAiReplyTarget(message))}>Ответить</button>
       </article>)}
-      {busy&&<span className="tp-chat-loading"><Loader2 size={15} className="tp-spin"/>ИИ обрабатывает запрос…</span>}
+      {busy&&<div className="tp-ai-progress"><AiProgress status={progress}/>
+        {streamText&&<div className="tp-ai-stream-text" aria-live="off"><WorkAiMessageBody content={streamText}/></div>}
+      </div>}
       {error&&<p className="tp-alert" role="alert">{error}</p>}
       <div ref={endRef}/>
     </div>
     {replyTo&&<div className="tp-reply-zone"><AiReplyPreview target={replyTo} onDismiss={()=>setReplyTo(null)} compact/></div>}
+    {!!pendingFiles.length&&<div className="tp-chat-attachments">
+      <AiAttachmentTiles files={pendingFiles} busy={busy} uploadProgress={uploadProgress}
+        onRemove={file=>setPendingFiles(old=>old.filter(x=>x!==file))}/>
+    </div>}
     <form className="tp-chat-compose" onSubmit={(event:FormEvent)=>{event.preventDefault();void submit();}}>
+      <input type="file" ref={fileInputRef} multiple hidden
+        accept=".pdf,.docx,.xls,.xlsx,.txt,image/png,image/jpeg,image/webp,image/gif"
+        onChange={event=>{addFiles(Array.from(event.target.files||[]));event.target.value='';}}/>
+      <button type="button" className="tp-chat-attach-button" disabled={busy} onClick={()=>fileInputRef.current?.click()}
+        title="Прикрепить файл" aria-label="Прикрепить файл"><Paperclip size={18}/></button>
+      <textarea rows={2} aria-label="Сообщение" placeholder="Спросите ИИ…" value={draft} disabled={busy}
+        onChange={event=>setDraft(event.target.value)}
+        onPaste={event=>{const images=clipboardImageFiles(event.clipboardData);
+          if(images.length){event.preventDefault();addFiles(images);}}}
+        onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing){event.preventDefault();void submit();}}}/>
       <VoiceInputButton small activationMode="transcription" disabled={busy}
         liveContext={task?{type:'task',taskId:task.id,model}:undefined}
         onTranscript={(text,immediately)=>{if(immediately)void submit([draft,text].filter(Boolean).join(' '));else setDraft(current=>(current?current+' ':'')+text);}}/>
-      <textarea rows={2} aria-label="Сообщение" placeholder="Спросите ИИ…" value={draft} disabled={busy}
-        onChange={event=>setDraft(event.target.value)} onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();void submit();}}}/>
-      <button type="submit" disabled={busy||!draft.trim()} aria-label="Отправить"><Send size={18}/></button>
+      <button type="submit" disabled={busy||(!draft.trim()&&!pendingFiles.length)} aria-label="Отправить"><Send size={18}/></button>
     </form>
     </aside>
     {capabilitiesOpen&&<TestPageCapabilities kind={task?'task':'general'} theme={theme}
