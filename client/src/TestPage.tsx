@@ -103,6 +103,7 @@ export default function TestPage() {
   const [creditStats, setCreditStats] = useState<CreditUsageStatistics | null>(null);
   const [subscriptionLinks, setSubscriptionLinks] = useState<SubscriptionLinks | null>(null);
   const [creditError, setCreditError] = useState('');
+  const [creditPacksError,setCreditPacksError]=useState('');
   const [creditsBusy, setCreditsBusy] = useState(false);
   const [creditTab, setCreditTab] = useState<'packs' | 'plans' | 'stats'>('packs');
   const [creditPacks,setCreditPacks]=useState<CreditPack[]>([]);
@@ -398,6 +399,7 @@ export default function TestPage() {
     setCreditTab('packs');
     setCreditsBusy(true);
     setCreditError('');
+    setCreditPacksError('');
     try {
       const [stats,links,packs]=await Promise.allSettled([
         api.getCreditUsageStatistics(),api.getSubscriptionLinks(),api.getCreditPacks()
@@ -409,7 +411,7 @@ export default function TestPage() {
         setCreditPurchaseAvailable(packs.value.purchaseAvailable);
       }else{
         setCreditPacks([]);setCreditPurchaseAvailable(false);
-        setCreditError(errorText(packs.reason));
+        setCreditPacksError(errorText(packs.reason));
       }
     } catch (cause) { setCreditError(errorText(cause)); }
     finally { setCreditsBusy(false); }
@@ -666,15 +668,63 @@ export default function TestPage() {
       onOpenParentTask={editor.task?.parentTaskId ? () => { const id = editor.task!.parentTaskId!; setEditor(null); setFocusId(id); } : undefined}
     />}
     {sectorEditor && <SectorEditor sphere={sectorEditor === 'new' ? undefined : sectorEditor} onCancel={() => setSectorEditor(null)} onSave={saveSphere}/>}
-    {creditsOpen && <div className="tp-overlay" onMouseDown={event => { if (event.target === event.currentTarget) setCreditsOpen(false); }}><section className="tp-dialog tp-credits-dialog" role="dialog" aria-modal="true" aria-label="ИИ-кредиты"><header><div><span className="tp-eyebrow">БАЛАНС И ПОДПИСКИ</span><h2>ИИ-кредиты</h2></div><button onClick={() => setCreditsOpen(false)} aria-label="Закрыть"><X size={19}/></button></header>
-      <div className="tp-dialog-content"><div className="tp-credit-balance"><Coins size={24}/><div><span>Доступно</span><strong>{formatCredits((user?.aiCreditsMilli ?? (user?.aiCredits ?? 0) * 1000) / 1000)} кредитов</strong></div></div>
-      <div className="tp-tabs"><button className={creditTab === 'plans' ? 'active' : ''} onClick={() => setCreditTab('plans')}>Подписки</button><button className={creditTab === 'stats' ? 'active' : ''} onClick={() => setCreditTab('stats')}>Статистика</button></div>
-      {creditsBusy ? <p className="tp-empty"><Loader2 className="tp-spin" size={17}/> Загрузка…</p> : creditError ? <p className="tp-alert">{creditError}</p> : creditTab === 'stats' ? <CreditUsageStats statistics={creditStats}/> :
-      <div className="tp-plans">{([
-        ['start','Старт','Для ежедневных задач'],['pro','Про','Для активной работы'],['max','Максимум','Расширенные возможности']
-      ] as const).map(([key,name,desc]) => <div key={key} className="tp-plan"><div><strong>{name}</strong><small>{desc}</small></div>{subscriptionLinks?.[key] ? <a href={subscriptionLinks[key]} target="_blank" rel="noopener noreferrer">Выбрать <ArrowRight size={14}/></a> : <span>Недоступно</span>}</div>)}</div>}
-      </div></section></div>}
-    {integrationOpen && <div className="tp-overlay" onMouseDown={event => { if (event.target === event.currentTarget) setIntegrationOpen(false); }}><section className="tp-dialog" role="dialog" aria-modal="true" aria-label="Интеграции"><header><div><span className="tp-eyebrow">ПОДКЛЮЧЕНИЯ</span><h2>Интеграции</h2></div><button onClick={() => setIntegrationOpen(false)} aria-label="Закрыть"><X size={19}/></button></header><div className="tp-dialog-content"><p>Telegram, почта и другие подключения используют существующие настройки Планировыча. В тестовом интерфейсе настройки пока открываются через основной модуль.</p><a className="tp-primary" href="/">Перейти в основной интерфейс <ArrowRight size={16}/></a></div></section></div>}
+    {creditsOpen && <div className="tp-overlay tp-credits-overlay" onMouseDown={event=>{
+      if(event.target===event.currentTarget)setCreditsOpen(false);
+    }}><section className="tp-dialog tp-credits-dialog" role="dialog" aria-modal="true" aria-label="Баланс и подписки">
+      <header><div><span className="tp-eyebrow">БАЛАНС И ПОДПИСКИ</span><h2>ИИ-кредиты</h2></div>
+        <button type="button" onClick={()=>setCreditsOpen(false)} aria-label="Закрыть"><X size={19}/></button></header>
+      <div className="tp-dialog-content tp-credits-body">
+        <div className="tp-credit-balance"><Coins size={24}/><div><span>Доступно</span>
+          <strong>{formatCredits((user?.aiCreditsMilli??(user?.aiCredits??0)*1000)/1000)} кредитов</strong>
+        </div></div>
+        <div className="tp-tabs tp-credit-tabs" role="tablist" aria-label="Разделы баланса">
+          <button type="button" role="tab" aria-selected={creditTab==='packs'} className={creditTab==='packs'?'active':''}
+            onClick={()=>setCreditTab('packs')}>Пакеты кредитов</button>
+          <button type="button" role="tab" aria-selected={creditTab==='plans'} className={creditTab==='plans'?'active':''}
+            onClick={()=>setCreditTab('plans')}>Подписки</button>
+          <button type="button" role="tab" aria-selected={creditTab==='stats'} className={creditTab==='stats'?'active':''}
+            onClick={()=>setCreditTab('stats')}>Статистика</button>
+        </div>
+        {creditsBusy?<p className="tp-empty"><Loader2 className="tp-spin" size={17}/> Загрузка…</p>:
+          creditTab==='stats'?<CreditUsageStats statistics={creditStats} error={creditError}/>:
+          creditTab==='packs'?<>
+            <p className="tp-credit-note">Разовое пополнение баланса без изменения подписки.</p>
+            {creditPacksError&&<p className="tp-alert" role="alert">{creditPacksError}</p>}
+            <div className="tp-credit-packs">{creditPacks.filter(pack=>pack.isActive).map(pack=>
+              <article className="tp-credit-pack" key={pack.key}>
+                <span className="tp-credit-pack-label">{pack.name}</span>
+                <strong>{pack.creditsAmount.toLocaleString('ru-RU')}<small> ИИ-кредитов</small></strong>
+                <div className="tp-credit-pack-price">{pack.price.toLocaleString('ru-RU')} ₽</div>
+                <button type="button" disabled={!creditPurchaseAvailable||creditPurchase.creatingPackKey!==null}
+                  onClick={()=>void creditPurchase.start(pack.key)}>
+                  {creditPurchase.creatingPackKey===pack.key?'Создаём платёж…':creditPurchaseAvailable?'Купить':'Оплата недоступна'}
+                </button>
+              </article>)}
+            </div>
+            {!creditPacks.length&&!creditPacksError&&<p className="tp-empty">Сейчас нет доступных пакетов.</p>}
+            {creditPurchase.isReceiptEmailRequired&&<div className="tp-credit-receipt">
+              <input type="email" autoComplete="email" aria-label="Email для чека"
+                placeholder="Email для чека" value={creditPurchase.receiptEmail}
+                onChange={event=>creditPurchase.setReceiptEmail(event.target.value)}/>
+              <button type="button" className="tp-primary"
+                disabled={!creditPurchase.receiptEmail.trim()||creditPurchase.creatingPackKey!==null}
+                onClick={()=>void creditPurchase.retryWithReceiptEmail()}>Продолжить</button>
+            </div>}
+            {creditPurchase.message&&<p className="tp-credit-notice" role="status">{creditPurchase.message}</p>}
+            <p className="tp-credit-offer">Покупка означает согласие с <a href="/legal/offer" target="_blank"
+              rel="noopener noreferrer">публичной офертой</a>.</p>
+          </>:
+          creditError?<p className="tp-alert">{creditError}</p>:
+          <div className="tp-plans">{([
+            ['start','Старт','Для ежедневных задач'],['pro','Про','Для активной работы'],['max','Максимум','Расширенные возможности']
+          ] as const).map(([key,name,desc])=><div key={key} className="tp-plan">
+            <div><strong>{name}</strong><small>{desc}</small></div>
+            {subscriptionLinks?.[key]?<a href={subscriptionLinks[key]} target="_blank" rel="noopener noreferrer">
+              Выбрать <ArrowRight size={14}/></a>:<span>Недоступно</span>}
+          </div>)}</div>}
+      </div>
+    </section></div>}
+    {integrationOpen&&<TestPageIntegrationsDialog onClose={()=>setIntegrationOpen(false)}/>}
     {authMode && <div className="tp-overlay" onMouseDown={event => { if (event.target === event.currentTarget) setAuthMode(null); }}><section className="tp-dialog" role="dialog" aria-modal="true" aria-label={authMode === 'login' ? 'Вход' : 'Регистрация'}><header><div><span className="tp-eyebrow">ПЛАНИРОВЫЧ AI</span><h2>{authMode === 'login' ? 'Вход в аккаунт' : 'Регистрация'}</h2></div><button onClick={() => setAuthMode(null)} aria-label="Закрыть"><X size={19}/></button></header>
       <form className="tp-dialog-content tp-auth-form" onSubmit={submitAuth}>{error && <p className="tp-alert" role="alert">{error}</p>}{authMode === 'register' && <><label>Имя<input required value={authForm.name} onChange={event => setAuthForm(f => ({...f,name:event.target.value}))}/></label><label>Email<input required type="email" value={authForm.email} onChange={event => setAuthForm(f => ({...f,email:event.target.value}))}/></label></>}
       <label>Логин<input required autoComplete="username" value={authForm.login} onChange={event => setAuthForm(f => ({...f,login:event.target.value}))}/></label>
