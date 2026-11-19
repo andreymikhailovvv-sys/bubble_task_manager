@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Check, Loader2, Settings2, Sparkles, X } from 'lucide-react';
 import type { Task } from './lib/types';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
@@ -24,10 +24,11 @@ const dateLabel=(date:string|null|undefined,timeZone:string)=>{
 export function TestPageSubtaskFocus({task,parentTask,userId,timeZone,completing=false,onClose,onSaveDescription,
   onToggleComplete,onSettings,onAskAi}:Props) {
   const [description,setDescription]=useState(task.description||'');
+  const descriptionRef=useRef(task.description||'');
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState('');
   // Same inline editing behavior as Focus, but no growing modal height.
-  useEffect(()=>setDescription(task.description||''),[task.id]);
+  useEffect(()=>{descriptionRef.current=task.description||'';setDescription(task.description||'');},[task.id]);
   useEffect(()=>{
     if(description===(task.description||''))return;
     const timer=window.setTimeout(()=>{
@@ -36,7 +37,8 @@ export function TestPageSubtaskFocus({task,parentTask,userId,timeZone,completing
     return()=>window.clearTimeout(timer);
   },[description,task.description,task.id,onSaveDescription]);
   const flush=async()=>{
-    if(description!==(task.description||''))await onSaveDescription(description);
+    const next=descriptionRef.current;
+    if(next!==(task.description||''))await onSaveDescription(next);
   };
   const navigate=async(action:()=>void|Promise<void>)=>{
     setSaving(true);setError('');
@@ -66,7 +68,7 @@ export function TestPageSubtaskFocus({task,parentTask,userId,timeZone,completing
         <label className="tp-focus-description-label">Описание подзадачи</label>
         <ResizableDescriptionSurface storageKey={'btm:'+userId+':test-page:subtask-description-height'}
           initialHeight={160} minHeight={100} maxHeight={300} className="tp-focus-description-resizable tp-subtask-description-resizable">
-          <TaskDescriptionInput className="tp-focus-description-editor" value={description} onChange={setDescription}
+          <TaskDescriptionInput className="tp-focus-description-editor" value={description} onChange={next=>{descriptionRef.current=next;setDescription(next);}}
             richInlineEditing enterCreatesLineBreak placeholder="Нажмите, чтобы добавить описание…"/>
         </ResizableDescriptionSurface>
       </div>
