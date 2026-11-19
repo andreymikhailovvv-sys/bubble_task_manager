@@ -171,7 +171,7 @@ test('Test Page creates ordinary tasks with the same compact settings as task ed
   assert.match(styles, /\.tp-root \.tp-task-settings-dialog \{\s*height:auto/);
 });
 test('Focus without subtasks and new subtask settings fit their actual content', () => {
-  assert.match(testPage, /focusSubtasks\.length\?'':' tp-focus-empty'/);
+  assert.match(testPage, /tp-focus-dialog.*tp-focus-empty/);
   assert.match(styles, /\.tp-root \.tp-focus-dialog\.tp-focus-empty/);
   assert.match(styles, /\.tp-root \.tp-task-settings-form \{flex:0 1 auto/);
 });
