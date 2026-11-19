@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type ClipboardEvent, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, type ClipboardEvent, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent } from 'react';
 import { linkifyNoteHtml, noteValueToEditorHtml } from '../lib/notes';
 
 type Props = {
@@ -75,7 +75,7 @@ export function InlineRichDescriptionEditor({
       if (pendingHtmlRef.current !== null && event.target instanceof Node
         && !editorRef.current?.contains(event.target)) flushPending();
     };
-    const onEscape = (event: globalThis.KeyboardEvent) => {
+    const onEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && pendingHtmlRef.current !== null) flushPending();
     };
     document.addEventListener('pointerdown', onOutsidePointerDown, true);
@@ -142,7 +142,7 @@ export function InlineRichDescriptionEditor({
     event.preventDefault();
   };
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if ((event.ctrlKey || event.metaKey) && ['b', 'i', 'u'].includes(event.key.toLowerCase())) {
       event.preventDefault();
     }
