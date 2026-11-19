@@ -286,3 +286,77 @@ test('Task and subtask descriptions accept explicit multiline Enter in Focus and
   assert.match(testPage, /focusDescriptionRef\.current/);
   assert.match(subtaskEditor, /descriptionRef\.current/);
 });
+
+
+test('Tasks search shares the keyboard-layout-aware matching from workspace search', () => {
+  const search=read('../src/lib/workspaceSearch.ts');
+  assert.match(testPage, /return !query\.trim\(\) \|\| matchesWorkspaceText\(task\.title\+' '\+\(task\.description\|\|''\),query\)/);
+  assert.match(search, /const EN_LAYOUT/);
+  assert.match(search, /const RU_LAYOUT/);
+  assert.match(search, /export function matchesWorkspaceText/);
+});
+
+test('Overview hero can be collapsed and restored with an account-scoped saved preference', () => {
+  assert.match(testPage, /const \[heroHidden,setHeroHidden\]=useState\(false\)/);
+  assert.match(testPage, /btm:'\+user\.id\+':test-page:hero-hidden'/);
+  assert.match(testPage, /localStorage\.getItem/);
+  assert.match(testPage, /localStorage\.setItem/);
+  assert.match(testPage, /tp-hero-collapse/);
+  assert.match(testPage, /tp-hero-restore/);
+  assert.match(styles, /\.tp-root \.tp-hero-restore/);
+});
+
+test('Rating and page itself do not advertise being a secondary or experimental interface', () => {
+  const rating=read('../src/TestPageRating.tsx');
+  assert.doesNotMatch(rating, /синхронизированы с основным|main Planner|main planner/i);
+  assert.doesNotMatch(testPage, /Экспериментальный интерфейс|TEST PAGE|Все данные общие/);
+});
+
+test('Task and subtask Focus and their settings open the real NotesEditor', () => {
+  const settings=read('../src/TestPageTaskDialog.tsx');
+  const subtask=read('../src/TestPageSubtaskFocus.tsx');
+  const notes=read('../src/components/NotesEditor.tsx');
+  assert.match(testPage, /Редактировать описание/);
+  assert.match(settings, /Редактировать описание/);
+  assert.match(subtask, /Редактировать описание/);
+  assert.match(testPage, /<NotesEditor key=\{focusTask\.id\}/);
+  assert.match(settings, /<NotesEditor heading=\{isSubtask/);
+  assert.match(subtask, /<NotesEditor heading="Описание подзадачи"/);
+  assert.match(notes, /NOTE_FORMAT_BUTTONS/);
+  assert.match(notes, /createPortal/);
+  assert.match(styles, /\.tp-root \.tp-description-notes-button/);
+});
+
+test('Habit calendar is enlarged to desktop proportions without losing viewport constraints', () => {
+  assert.match(styles, /\.tp-root \.tp-habit-detail \{\s*width:min\(610px/);
+  assert.match(styles, /\.tp-root \.tp-habit-detail \.miniapp-habit-tracker-calendar \{/);
+  assert.match(styles, /max-width:495px/);
+  assert.match(styles, /min-height:36px/);
+});
+
+test('Credit modal defaults to purchasable real packs and keeps plans and statistics', () => {
+  assert.match(testPage, /const \[creditTab, setCreditTab\] = useState<'packs' \| 'plans' \| 'stats'>\('packs'\)/);
+  assert.match(testPage, /setCreditTab\('packs'\)/);
+  assert.match(testPage, /api\.getCreditPacks\(\)/);
+  assert.match(testPage, /useCreditPurchase\(/);
+  assert.match(testPage, /creditPurchase\.start\(pack\.key\)/);
+  assert.match(testPage, /creditPurchase\.retryWithReceiptEmail/);
+  assert.match(testPage, /Пакеты кредитов/);
+  assert.match(testPage, /Подписки/);
+  assert.match(testPage, /Статистика/);
+  assert.match(styles, /\.tp-root \.tp-credits-dialog \{\s*width:min\(790px/);
+  assert.match(styles, /\.tp-root \.tp-credit-packs/);
+});
+
+test('Integrations opens real embedded connection menu with unchanged nested settings', () => {
+  const integrations=read('../src/TestPageIntegrationsDialog.tsx');
+  const menu=read('../src/components/TelegramIntegrationsMenu.tsx');
+  assert.match(testPage, /<TestPageIntegrationsDialog/);
+  assert.match(integrations, /<TelegramIntegrationsMenu embedded/);
+  assert.match(integrations, /api\.createTelegramLinkToken\(\)/);
+  assert.match(menu, /embedded \? embeddedTarget! : document\.body/);
+  assert.match(menu, /<TelegramAiAssistantSettings/);
+  assert.match(menu, /<MailAssistantSettings/);
+  assert.match(menu, /telegramIntegrationConfigure/);
+  assert.doesNotMatch(testPage, /В тестовом интерфейсе настройки пока/);
+});
