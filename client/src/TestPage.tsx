@@ -18,6 +18,7 @@ import { TestPageChat } from './TestPageChat';
 import { TestPageSettings } from './TestPageSettings';
 import { CreditUsageStats } from './components/CreditUsageStats';
 import { loadThemePreference, resolveThemeMode, type ThemePreference } from './lib/autoTheme';
+import { urgentFocusSubtaskFirst } from './lib/focusSubtaskSort';
 import './TestPage.css';
 
 type Section = 'overview' | 'tasks' | 'sectors' | 'notes';
@@ -50,10 +51,8 @@ const percent = (completed: number, total: number) => total ? Math.round(complet
 const errorText = (error: unknown) => error instanceof Error ? error.message : 'Не удалось выполнить операцию.';
 const sortByDate = (a: Task, b: Task) => (a.dueDate ? Date.parse(a.dueDate) : Infinity) - (b.dueDate ? Date.parse(b.dueDate) : Infinity);
 const isOverdue = (task: Task) => !isDone(task) && !!task.dueDate && Number.isFinite(Date.parse(task.dueDate)) && Date.parse(task.dueDate) < Date.now();
-const newestSubtaskFirst = (a: Task, b: Task) =>
-  (a.createdAt ? Date.parse(b.createdAt || '') - Date.parse(a.createdAt) : 0) || b.id.localeCompare(a.id);
 const focusSubtaskSort = (a: Task, b: Task) =>
-  Number(isDone(a)) - Number(isDone(b)) || sortByDate(a,b) || newestSubtaskFirst(a,b);
+  Number(isDone(a)) - Number(isDone(b)) || urgentFocusSubtaskFirst(a, b);
 const formatCredits = (credits: number) => credits.toLocaleString('ru-RU', { maximumFractionDigits: 2 });
 
 export default function TestPage() {
