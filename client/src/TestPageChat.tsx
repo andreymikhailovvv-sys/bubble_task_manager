@@ -20,6 +20,7 @@ type Props = {
   onOpenTask: (task: Task) => void;
   onDataChanged: () => void;
   initialMessages?: ChatMessage[];
+  onMessagesChange?: (messages: ChatMessage[]) => void;
 };
 const MODEL_OPTIONS = [
   {value:'gpt-6-luna',label:'GPT-6 Luna'},
@@ -34,7 +35,7 @@ function refs(content:string, tasks:Task[]):Task[] {
 }
 const messageError=(error:unknown)=>error instanceof Error?error.message:'Не удалось отправить сообщение.';
 
-export function TestPageChat({task,tasks,spheres,onClose,onOpenTask,onDataChanged,initialMessages}:Props) {
+export function TestPageChat({task,tasks,spheres,onClose,onOpenTask,onDataChanged,initialMessages,onMessagesChange}:Props) {
   const [model,setModel]=useState<AiChatModel>('gpt-6-luna');
   const [draft,setDraft]=useState('');
   const [messages,setMessages]=useState<ChatMessage[]>(initialMessages||[]);
@@ -83,7 +84,7 @@ export function TestPageChat({task,tasks,spheres,onClose,onOpenTask,onDataChange
         else setMessages(old=>[...old,{id:crypto.randomUUID(),role:'assistant',content:answer.answer,taskProposal:answer.taskProposal||null}]);
       }else{
         const answer=await api.askAiChat({question:forAi,history:previous,model,clientSurface:'web'});
-        setMessages(old=>[...old,{
+        const responseMessage:ChatMessage={
           id:crypto.randomUUID(),role:'assistant',content:answer.answer,
           taskProposal:answer.taskProposal||null,
           economicProposals:answer.economicProposals,
@@ -92,7 +93,9 @@ export function TestPageChat({task,tasks,spheres,onClose,onOpenTask,onDataChange
           webSources:answer.webSources,webCitations:answer.webCitations,
           telegramSendDraft:answer.telegramSendDraft||undefined,
           mailSendDraft:answer.mailSendDraft||undefined
-        }]);
+        };
+        setMessages(old=>[...old,responseMessage]);
+        onMessagesChange?.([...previous,userMessage,responseMessage]);
         if(answer.taskDataChanged)onDataChanged();
       }
     }catch(cause){setMessages(previous);setDraft(question);setError(messageError(cause));}
