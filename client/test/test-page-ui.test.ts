@@ -162,3 +162,68 @@ test('task list filter selectors are portalled with explicit theme', () => {
   assert.match(testPage, /className="tp-filter-select" detachedPopup popupVariant="settings" menuClassName="tp-dropdown-menu"/);
   assert.match(styles, /body:has\(\.tp-root\.tp-light\) \.tp-dropdown-menu\[data-theme="light"\]/);
 });
+
+
+test('Test Page creates ordinary tasks with the same compact settings as task editing', () => {
+  assert.match(testPage, /onClick=\{\(\) => user \? setTestTaskDialog\(\{\}\)/);
+  assert.match(testPage, /onClick=\{\(\) => setTestTaskDialog\(\{\}\)\}/);
+  assert.match(testPage, /<TestPageTaskDialog/);
+  assert.match(styles, /\.tp-root \.tp-task-settings-dialog \{\s*height:auto/);
+});
+test('Focus without subtasks and new subtask settings fit their actual content', () => {
+  assert.match(testPage, /focusSubtasks\.length\?'':' tp-focus-empty'/);
+  assert.match(styles, /\.tp-root \.tp-focus-dialog\.tp-focus-empty/);
+  assert.match(styles, /\.tp-root \.tp-task-settings-form \{flex:0 1 auto/);
+});
+test('habit tracker is compact and supports creation, settings, schedule and deletion', () => {
+  const habits = read('../src/TestPageHabits.tsx');
+  const dialog = read('../src/TestPageHabitDialog.tsx');
+  assert.match(habits, /<MiniAppHabitTracker/);
+  assert.match(habits, /<TestPageHabitDialog/);
+  assert.match(habits, /api\.createHabit/);
+  assert.match(habits, /api\.updateHabit/);
+  assert.match(habits, /api\.deleteHabit/);
+  assert.match(dialog, /Повторов в день/);
+  assert.match(dialog, /Уведомления/);
+  assert.match(dialog, /Дни недели/);
+  assert.match(dialog, /До даты/);
+  assert.match(dialog, /По количеству повторов/);
+  assert.match(styles, /\.tp-root \.tp-habit-detail \.miniapp-habit-tracker-calendar/);
+});
+test('overview task filter is inline left of the search icon without duplicate clear', () => {
+  assert.match(testPage, /tp-overview-search-field tp-overview-search-inline/);
+  assert.match(testPage, /type="text" autoFocus value=\{overviewQuery\}/);
+  assert.match(styles, /\.tp-root \.tp-overview-search-field\.tp-overview-search-inline/);
+  assert.match(styles, /\.tp-root input:focus/);
+});
+test('system notifications use shared backend feed, left toast, chat and mascot counter', () => {
+  const chat = read('../src/TestPageChat.tsx');
+  assert.match(testPage, /api\.getSystemNotifications\(\)/);
+  assert.match(testPage, /api\.markSystemNotificationsRead\(\)/);
+  assert.match(testPage, /showBrowserSystemNotification/);
+  assert.match(testPage, /tp-system-notice-toast/);
+  assert.match(testPage, /notificationCount=\{unreadCount\}/);
+  assert.match(chat, /tp-chat-system-notice/);
+  assert.match(testPage, /onActivityChange=\{setAssistantActivity\}/);
+});
+test('AI composer shares classic attachment tiles, clipboard paste and streaming statuses', () => {
+  const chat = read('../src/TestPageChat.tsx');
+  const mascot = read('../src/components/PlanikMascot.tsx');
+  assert.match(chat, /<AiAttachmentTiles/);
+  assert.match(chat, /<AiMessageAttachments/);
+  assert.match(chat, /clipboardImageFiles/);
+  assert.match(chat, /<Paperclip size=\{18\}/);
+  assert.match(chat, /<VoiceInputButton/);
+  assert.match(chat, /api\.askAiChatStreaming/);
+  assert.match(chat, /api\.askTaskAssistantStreaming/);
+  assert.match(chat, /<AiProgress status=\{progress\}/);
+  assert.match(mascot, /isThinking/);
+});
+test('subtask completion bar is shared by overview and task listing and today includes subtasks', () => {
+  assert.match(testPage, /const todayTasks = \[\.\.\.rootTasks,\.\.\.subtasks\]/);
+  assert.match(testPage, /const subtaskProgress = useMemo/);
+  assert.match(testPage, /tp-task-subtask-progress-bar/);
+  assert.match(styles, /\.tp-root \.tp-task-subtask-progress-bar/);
+  assert.match(styles, /\.tp-root \.tp-filters \.tp-filter-select \.custom-select-trigger/);
+  assert.match(styles, /\.tp-root \.tp-actions>button\.tp-primary:before/);
+});
