@@ -1,7 +1,7 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { TaskMonitoringBadge } from './TaskMonitoringBadge';
 import { CalendarDays, ChevronRight, Coins, Gauge, LoaderCircle, MessageCircle, Plus, Repeat, Sparkles, X } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { buildSectorGeometry, getBubbleSectorIndex, getBubbleSectorSpheres, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
 import { hillBoundaryCurve, hillSectorIndexAtAngle } from '../lib/hillSectors';
@@ -313,7 +313,7 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
-export function BubbleField({
+export const BubbleField = memo(function BubbleField({
   tasks,
   timelinePreviewTasks,
   subtaskMap,
@@ -1904,5 +1904,4 @@ export function BubbleField({
         document.body
       ) : null}
     </div>
-  );
-}
+  );});
