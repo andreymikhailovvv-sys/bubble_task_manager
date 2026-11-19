@@ -62,3 +62,44 @@ test('blue Test Page theme is isolated from the Economic golden theme and mobile
   assert.match(styles, /@media \(max-width:720px\)/);
   assert.doesNotMatch(styles, /\.econ-root\s*\{/);
 });
+
+
+test('Focus resizes a bounded description, persists size per user and opens Test Page subtask editor', () => {
+  const taskDialog = read('../src/TestPageTaskDialog.tsx');
+  const resizable = read('../src/components/ResizableDescriptionSurface.tsx');
+  assert.match(testPage, /<ResizableDescriptionSurface/);
+  assert.match(testPage, /storageKey=\{'btm:'\+user\?\.id\+':test-page:focus-description-height'\}/);
+  assert.match(testPage, /maxHeight=\{320\}/);
+  assert.match(testPage, /onClick=\{\(\) => setTestTaskDialog\(\{parentTask:focusTask\}\)\}/);
+  assert.match(testPage, /<TestPageTaskDialog/);
+  assert.match(testPage, /Настроить задачу/);
+  assert.match(testPage, /setTestTaskDialog\(\{task\}\)/);
+  assert.match(resizable, /localStorage\.setItem/);
+  assert.match(taskDialog, /<TaskDescriptionInput/);
+  assert.match(taskDialog, /buildManualRecurrence/);
+  assert.match(taskDialog, /aiMonitoringEnabled/);
+  assert.match(taskDialog, /notifyBeforeMinutes/);
+  assert.match(taskDialog, /collaborationScope/);
+});
+test('AI chat windows are layered and offer the classic capability catalog in Test Page style', () => {
+  const chat = read('../src/TestPageChat.tsx');
+  const capabilities = read('../src/TestPageCapabilities.tsx');
+  const welcome = read('../src/components/AiChatWelcome.tsx');
+  assert.match(chat, /tp-chat-modal-backdrop/);
+  assert.match(chat, /tp-chat-capabilities-button/);
+  assert.match(chat, /<TestPageCapabilities kind=\{task\?'task':'general'\}/);
+  assert.match(capabilities, /generalGroups, taskGroups/);
+  assert.match(welcome, /export const taskGroups/);
+  assert.match(welcome, /export const generalGroups/);
+  assert.match(styles, /width:min\(1060px/);
+  assert.match(styles, /z-index:470/);
+});
+test('theme-specific scrollbars, Notes and task chips use Test Page contrast variables', () => {
+  assert.match(styles, /--tp-scroll-thumb:/);
+  assert.match(styles, /scrollbar-color:var\(--tp-scroll-thumb\) var\(--tp-scroll-track\)/);
+  assert.match(styles, /color-scheme:light/);
+  assert.match(styles, /\.tp-notes-area \.standalone-note-card/);
+  assert.match(styles, /\.tp-root\.tp-light \.tp-proposal/);
+  assert.match(styles, /\.tp-root \.tp-secondary/);
+  assert.match(styles, /\.tp-task-row\.is-overdue[\s\S]*?box-shadow:none/);
+});
