@@ -3,6 +3,7 @@ import { Check, Loader2, Settings2, Sparkles, X } from 'lucide-react';
 import type { Task } from './lib/types';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { ResizableDescriptionSurface } from './components/ResizableDescriptionSurface';
+import { NotesEditor } from './components/NotesEditor';
 
 type Props={
   task:Task;
@@ -27,6 +28,7 @@ export function TestPageSubtaskFocus({task,parentTask,userId,timeZone,completing
   const descriptionRef=useRef(task.description||'');
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState('');
+  const [notesOpen,setNotesOpen]=useState(false);
   // Same inline editing behavior as Focus, but no growing modal height.
   useEffect(()=>{descriptionRef.current=task.description||'';setDescription(task.description||'');},[task.id]);
   useEffect(()=>{
@@ -71,7 +73,13 @@ export function TestPageSubtaskFocus({task,parentTask,userId,timeZone,completing
           <TaskDescriptionInput className="tp-focus-description-editor" value={description} onChange={next=>{descriptionRef.current=next;setDescription(next);}}
             richInlineEditing enterCreatesLineBreak placeholder="Нажмите, чтобы добавить описание…"/>
         </ResizableDescriptionSurface>
+        <button type="button" className="tp-description-notes-button" onClick={()=>setNotesOpen(true)}>
+          <Settings2 size={15}/> Редактировать описание
+        </button>
       </div>
+      {notesOpen&&<NotesEditor heading="Описание подзадачи" value={description}
+        onChange={next=>{descriptionRef.current=next;setDescription(next);}}
+        onClose={()=>{setNotesOpen(false);void flush().catch(cause=>setError(cause instanceof Error?cause.message:'Не удалось сохранить описание.'));}}/>}
       <div className="tp-focus-actions">
         <button type="button" className="tp-secondary" disabled={saving} onClick={()=>void navigate(onSettings)}>
           <Settings2 size={16}/> Настроить подзадачу</button>

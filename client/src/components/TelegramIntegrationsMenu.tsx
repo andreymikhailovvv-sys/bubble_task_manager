@@ -7,12 +7,13 @@ import { api, type TelegramIntegrationStatus } from '../lib/api';
 import './TelegramIntegrationsMenu.css';
 
 type Integration = 'bot' | 'android' | 'messages' | 'assistant' | 'email';
-type Props = { onConnectBot: () => void; tourIntegration?: 'messages' | 'assistant' | 'email' | null };
+type Props = { onConnectBot: () => void; tourIntegration?: 'messages' | 'assistant' | 'email' | null; embedded?: boolean };
 const RUNNING = ['starting', 'qr', 'password_required', 'verifying_password'];
 type MenuPlacement = { left: number; top?: number; bottom?: number; width: number; maxHeight: number };
 
-export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null }: Props) {
-  const [open, setOpen] = useState(false);
+export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null, embedded = false }: Props) {
+  const [open, setOpen] = useState(embedded);
+  const [embeddedTarget,setEmbeddedTarget]=useState<HTMLDivElement|null>(null);
   const [expanded, setExpanded] = useState<Integration | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [assistantDialogOpen, setAssistantDialogOpen] = useState(false);
@@ -31,7 +32,10 @@ export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null 
   const [placement, setPlacement] = useState<MenuPlacement | null>(null);
   const active = useRef(false);
 
-  useEffect(() => { if (tourIntegration) { setOpen(true); setExpanded(null); } else setOpen(false); }, [tourIntegration]);
+  useEffect(() => {
+    if(embedded){setOpen(true);setEmbeddedTarget(popupRef.current);return;}
+    if (tourIntegration) { setOpen(true); setExpanded(null); } else setOpen(false);
+  }, [tourIntegration,embedded]);
   const cancelClose = useCallback(() => {
     if (closeTimeout.current) clearTimeout(closeTimeout.current);
     closeTimeout.current = null;
@@ -39,13 +43,15 @@ export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null 
 
   const scheduleClose = useCallback(() => {
     if (tourIntegration) return;
+    if (embedded) return;
     cancelClose();
     // The popup is portaled outside the header: allow the pointer to cross
     // the small gap without making the menu vanish.
     closeTimeout.current = setTimeout(() => setOpen(false), 180);
-  }, [cancelClose, tourIntegration]);
+  }, [cancelClose, tourIntegration, embedded]);
 
   const updatePlacement = useCallback(() => {
+    if(embedded)return;
     const anchor = popupRef.current;
     if (!anchor) return;
     const rect = anchor.getBoundingClientRect();
@@ -61,7 +67,7 @@ export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null 
         : { top: Math.max(12, rect.bottom + 8) }),
       maxHeight: Math.max(80, above ? availableAbove - 8 : availableBelow - 8)
     });
-  }, []);
+  }, [embedded]);
 
   const openMenu = useCallback(() => {
     cancelClose();
@@ -111,13 +117,14 @@ export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null 
   useEffect(() => {
     if (!open && !dialogOpen) return;
     const onEscape = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
+      if (e.key !== 'Escape' || embedded) return;
       cancelClose();
       if (dialogOpen) setDialogOpen(false); else setOpen(false);
     };
     const onOutside = (e: PointerEvent) => {
       const target = e.target as Node;
       if (tourIntegration) return;
+    if (embedded) return;
       if (!dialogOpen && !popupRef.current?.contains(target) && !floatingRef.current?.contains(target)) {
         cancelClose();
         setOpen(false);
@@ -126,7 +133,7 @@ export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null 
     document.addEventListener('keydown', onEscape);
     document.addEventListener('pointerdown', onOutside);
     return () => { document.removeEventListener('keydown', onEscape); document.removeEventListener('pointerdown', onOutside); };
-  }, [open, dialogOpen, cancelClose, tourIntegration]);
+  }, [open, dialogOpen, cancelClose, tourIntegration, embedded]);
 
   const perform = async (fn: () => Promise<unknown>) => {
     if (busy) return;
@@ -158,17 +165,18 @@ export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null 
 
   return (
     <>
-      <div className="integration-menu relative" ref={popupRef}
+      <div className={'integration-menu relative'+(embedded?' tp-embedded-integrations-menu':'')} ref={popupRef}
         onMouseEnter={openMenu} onMouseLeave={scheduleClose}>
-        <button type="button" className="public-nav-link integration-menu__trigger shrink-0 px-2 py-2 text-sm"
+        {!embedded&&<button type="button" className="public-nav-link integration-menu__trigger shrink-0 px-2 py-2 text-sm"
           aria-label="Интеграции" aria-expanded={open}
           onClick={openMenu}
           onFocus={openMenu}>
           <Link2 size={15} /> Интеграции <ChevronDown size={14} />
-        </button>
-        {open && placement && createPortal(
-          <div ref={floatingRef} className="integration-menu__popup fixed z-[900] rounded-2xl border p-3 shadow-2xl"
-            style={placement as CSSProperties}
+        </button>}
+        {(embedded || (open && placement)) && (!embedded || embeddedTarget) && createPortal(
+          <div ref={floatingRef}
+            className={'integration-menu__popup rounded-2xl border p-3 '+(embedded?'tp-embedded-integration-list':'fixed z-[900] shadow-2xl')}
+            style={embedded ? {position:'relative',left:'auto',top:'auto',bottom:'auto',width:'100%',maxHeight:'none'} : placement as CSSProperties}
             onMouseEnter={cancelClose} onMouseLeave={scheduleClose}
             onFocus={cancelClose}>
             <h3 className="mb-2 px-1 text-sm font-bold">Интеграции</h3>
@@ -214,7 +222,7 @@ export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null 
                 </div>
               );
             })}
-          </div>, document.body
+          </div>, embedded ? embeddedTarget! : document.body
         )}
       </div>
       {assistantDialogOpen && <TelegramAiAssistantSettings onClose={() => setAssistantDialogOpen(false)}/>}

@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import {
   ArrowRight, BookOpenText, CalendarClock, Check, CheckCircle2, ChevronRight, CircleHelp,
   Coins, FolderKanban, LayoutDashboard, ListTodo, Loader2, LogIn, Menu,
-  Clock3, Plus, Search, Settings, Settings2, SlidersHorizontal, Sparkles, Trash2,
+  Clock3, ChevronDown, ChevronUp, Plus, Search, Settings, Settings2, SlidersHorizontal, Sparkles, Trash2,
   TrendingUp, UserPlus, X
 } from 'lucide-react';
-import { api, type CurrentUser, type CreditUsageStatistics, type SubscriptionLinks } from './lib/api';
+import { api, type CreditPack, type CurrentUser, type CreditUsageStatistics, type SubscriptionLinks } from './lib/api';
 import { showBrowserSystemNotification } from './lib/browser-system-notifications';
 import type { ChatAttachmentPayload, ChatMessage, Sphere, Task } from './lib/types';
 import { TaskEditor } from './components/TaskEditor';
@@ -20,6 +20,9 @@ import { TestPageTaskDialog } from './TestPageTaskDialog';
 import { TestPageSubtaskFocus } from './TestPageSubtaskFocus';
 import { TestPageHabits } from './TestPageHabits';
 import { TestPageRating } from './TestPageRating';
+import { TestPageIntegrationsDialog } from './TestPageIntegrationsDialog';
+import { NotesEditor } from './components/NotesEditor';
+import { useCreditPurchase } from './lib/useCreditPurchase';
 import { WorkspaceGlobalSearch } from './components/WorkspaceGlobalSearch';
 import { matchesWorkspaceText } from './lib/workspaceSearch';
 import { TestPageChat } from './TestPageChat';
@@ -86,6 +89,8 @@ export default function TestPage() {
   const [focusId, setFocusId] = useState<string | null>(null);
   const [focusChatId, setFocusChatId] = useState<string | null>(null);
   const [focusDescription, setFocusDescription] = useState('');
+  const [focusNotesOpen,setFocusNotesOpen]=useState(false);
+  const [heroHidden,setHeroHidden]=useState(false);
   const focusDescriptionRef = useRef('');
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const completionInFlightRef = useRef(false);
@@ -98,8 +103,16 @@ export default function TestPage() {
   const [creditStats, setCreditStats] = useState<CreditUsageStatistics | null>(null);
   const [subscriptionLinks, setSubscriptionLinks] = useState<SubscriptionLinks | null>(null);
   const [creditError, setCreditError] = useState('');
+  const [creditPacksError,setCreditPacksError]=useState('');
   const [creditsBusy, setCreditsBusy] = useState(false);
-  const [creditTab, setCreditTab] = useState<'plans' | 'stats'>('plans');
+  const [creditTab, setCreditTab] = useState<'packs' | 'plans' | 'stats'>('packs');
+  const [creditPacks,setCreditPacks]=useState<CreditPack[]>([]);
+  const [creditPurchaseAvailable,setCreditPurchaseAvailable]=useState(false);
+  const creditPurchase=useCreditPurchase({
+    surface:'web',
+    openConfirmation:url=>window.location.assign(url),
+    onSucceeded:async()=>{const me=await api.getMe();setUser(me.user);}
+  });
   const [integrationOpen, setIntegrationOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantMessages, setAssistantMessages] = useState<ChatMessage[]>([]);
@@ -117,6 +130,18 @@ export default function TestPage() {
   useEffect(() => {
     if (user) setThemeMode(loadThemePreference(localStorage, 'btm:' + user.id + ':theme-mode'));
   }, [user?.id]);
+  useEffect(()=>{
+    if(!user?.id)return;
+    try{setHeroHidden(localStorage.getItem('btm:'+user.id+':test-page:hero-hidden')==='1');}
+    catch{setHeroHidden(false);}
+  },[user?.id]);
+  const toggleHero=()=>{
+    setHeroHidden(hidden=>{
+      const next=!hidden;
+      if(user?.id)try{localStorage.setItem('btm:'+user.id+':test-page:hero-hidden',next?'1':'0');}catch{}
+      return next;
+    });
+  };
   useEffect(() => {
     const apply = () => setTheme(resolveThemeMode(themeMode, timeZone, new Date()));
     apply();
@@ -164,8 +189,7 @@ export default function TestPage() {
     if (sphereFilter !== 'all' && (task.sphereId || 'none') !== sphereFilter) return false;
     if (statusFilter === 'active' && isDone(task)) return false;
     if (statusFilter === 'done' && !isDone(task)) return false;
-    const name = (task.title + ' ' + (task.description || '')).toLocaleLowerCase('ru-RU');
-    return name.includes(query.trim().toLocaleLowerCase('ru-RU'));
+    return !query.trim() || matchesWorkspaceText(task.title+' '+(task.description||''),query);
   }).sort((a, b) => Number(isDone(a)) - Number(isDone(b)) || sortByDate(a, b));
   const focusTask = focusId ? taskLookup.get(focusId) : undefined;
   const subtaskFocus = subtaskFocusId ? taskLookup.get(subtaskFocusId) : undefined;
@@ -182,6 +206,7 @@ export default function TestPage() {
     return progress;
   },[subtasks]);
   useEffect(() => {
+    setFocusNotesOpen(false);
     const content=focusTask?.description || '';
     focusDescriptionRef.current=content;
     setFocusDescription(content);
@@ -371,12 +396,23 @@ export default function TestPage() {
   };
   const openCredits = async () => {
     setCreditsOpen(true);
+    setCreditTab('packs');
     setCreditsBusy(true);
     setCreditError('');
+    setCreditPacksError('');
     try {
-      const [stats, links] = await Promise.all([api.getCreditUsageStatistics(), api.getSubscriptionLinks()]);
-      setCreditStats(stats.statistics);
-      setSubscriptionLinks(links.links);
+      const [stats,links,packs]=await Promise.allSettled([
+        api.getCreditUsageStatistics(),api.getSubscriptionLinks(),api.getCreditPacks()
+      ]);
+      if(stats.status==='fulfilled')setCreditStats(stats.value.statistics);
+      if(links.status==='fulfilled')setSubscriptionLinks(links.value.links);
+      if(packs.status==='fulfilled'){
+        setCreditPacks(packs.value.packs);
+        setCreditPurchaseAvailable(packs.value.purchaseAvailable);
+      }else{
+        setCreditPacks([]);setCreditPurchaseAvailable(false);
+        setCreditPacksError(errorText(packs.reason));
+      }
     } catch (cause) { setCreditError(errorText(cause)); }
     finally { setCreditsBusy(false); }
   };
@@ -434,7 +470,7 @@ export default function TestPage() {
       <main className="tp-main">
         <header className="tp-topbar">
           <div className="tp-heading"><button type="button" className="tp-mobile-menu" onClick={() => setMenuOpen(!menuOpen)} aria-label="Разделы"><Menu size={21}/></button>
-            <div><div className="tp-eyebrow">ПЛАНИРОВЫЧ / TEST PAGE</div><h1>{section === 'overview' ? 'Планировыч AI' : navigation.find(item => item.key === section)?.title}</h1></div></div>
+            <div><div className="tp-eyebrow">ПЛАНИРОВЫЧ AI</div><h1>{section === 'overview' ? 'Планировыч AI' : navigation.find(item => item.key === section)?.title}</h1></div></div>
           <div className="tp-actions">
             {user&&<div className="tp-global-search">
               <WorkspaceGlobalSearch key={user.id} userId={user.id} value={globalSearch} onChange={setGlobalSearch}
@@ -457,8 +493,17 @@ export default function TestPage() {
           </section>
         ) : <>
           {section === 'overview' && <>
-            <section className="tp-hero"><div><span className="tp-kicker"><Sparkles size={16}/> Ваш день в порядке</span><h2>Держите задачи<br/><em>под контролем.</em></h2><p>Задачи, ближайшие шаги и результаты в одном спокойном пространстве.</p><button type="button" onClick={() => setTestTaskDialog({})}><Plus size={16}/> Добавить задачу</button></div>
-              <div className="tp-hero-art" aria-hidden="true"><div className="tp-orbit one"/><div className="tp-orbit two"/><div className="tp-hero-main"><CheckCircle2 size={70}/></div><div className="tp-art-satellite small"/><div className="tp-art-satellite big"/></div></section>
+            {!heroHidden?<section className="tp-hero">
+              <div><span className="tp-kicker"><Sparkles size={16}/> Ваш день в порядке</span>
+                <h2>Держите задачи<br/><em>под контролем.</em></h2>
+                <p>Задачи, ближайшие шаги и результаты в одном спокойном пространстве.</p>
+                <button type="button" onClick={() => setTestTaskDialog({})}><Plus size={16}/> Добавить задачу</button>
+              </div>
+              <div className="tp-hero-art" aria-hidden="true"><div className="tp-orbit one"/><div className="tp-orbit two"/><div className="tp-hero-main"><CheckCircle2 size={70}/></div><div className="tp-art-satellite small"/><div className="tp-art-satellite big"/></div>
+              <button type="button" className="tp-hero-collapse" onClick={toggleHero} aria-expanded="true"
+                aria-label="Свернуть приветственный блок" title="Свернуть блок"><ChevronUp size={18}/></button>
+            </section>:<button type="button" className="tp-hero-restore" onClick={toggleHero}
+              aria-expanded="false"><ChevronDown size={16}/> Развернуть приветственный блок</button>}
             <div className="tp-progress-grid">
               {progressCard('План на сегодня', todayDone, todayTasks.length, todayTasks.length ? 'Задачи и подзадачи, назначенные на сегодня' : 'На сегодня задач и подзадач пока нет', 'tp-featured')}
               {progressCard('Общий прогресс', totalDone, rootTasks.length, 'Выполнено из всех ваших задач')}
@@ -517,11 +562,11 @@ export default function TestPage() {
               <div className="tp-sector-actions"><button type="button" onClick={() => setSectorEditor(sphere)}><Settings2 size={16}/> Настроить</button><button type="button" onClick={() => void deleteSphere(sphere)} aria-label={'Удалить сектор ' + sphere.name}><Trash2 size={16}/></button></div>
             </article>)}</div>{!spheres.length && <div className="tp-card tp-empty">Пока нет секторов. Создайте первый для группировки задач.</div>}
           </section>}
-          {section === 'notes' && <section className="tp-work-area tp-notes-area"><div className="tp-section-heading"><div><h2>Мои заметки</h2><p>Списки, группы и редактор заметок из Планировыча.</p></div></div>
+          {section === 'notes' && <section className="tp-work-area tp-notes-area"><div className="tp-section-heading"><div><h2>Мои заметки</h2><p>Списки, группы и редактор заметок.</p></div></div>
             <StandaloneNotesWorkspace key={user.id} userId={user.id} mode="inline" requestedNote={requestedNote}
               editorOutsideInline onClose={() => setSection('overview')}/>
           </section>}
-          <footer className="tp-footer">Test Page · Экспериментальный интерфейс. Все данные общие с Планировычем AI.</footer>
+          <footer className="tp-footer">Планировыч AI · Задачи, привычки и ИИ в одном пространстве.</footer>
         </>}
       </main>
     </div>
@@ -565,6 +610,9 @@ export default function TestPage() {
             richInlineEditing enterCreatesLineBreak
             placeholder="Нажмите, чтобы добавить описание…" className="tp-focus-description-editor"/>
         </ResizableDescriptionSurface>
+        <button type="button" className="tp-description-notes-button" onClick={()=>setFocusNotesOpen(true)}>
+          <Settings2 size={15}/> Редактировать описание
+        </button>
       </div>
       <div className="tp-focus-subtitle"><strong>Подзадачи</strong>
         <span>{focusSubtasks.filter(isDone).length} из {focusSubtasks.length} выполнено</span>
@@ -578,6 +626,9 @@ export default function TestPage() {
           <Sparkles size={16}/> Спросить ИИ</button>
       </div>
     </div></FocusedTaskWindowFrame>}
+    {focusNotesOpen&&focusTask&&<NotesEditor key={focusTask.id} heading="Описание задачи"
+      value={focusDescription} onChange={editFocusDescription}
+      onClose={()=>{setFocusNotesOpen(false);void saveFocusDescription().catch(cause=>setError(errorText(cause)));}}/>}
     {subtaskFocus&&user&&<TestPageSubtaskFocus key={subtaskFocus.id}
       task={subtaskFocus} completing={completingTaskId===subtaskFocus.id}
       parentTask={subtaskFocus.parentTaskId ? taskLookup.get(subtaskFocus.parentTaskId) : undefined}
@@ -617,15 +668,63 @@ export default function TestPage() {
       onOpenParentTask={editor.task?.parentTaskId ? () => { const id = editor.task!.parentTaskId!; setEditor(null); setFocusId(id); } : undefined}
     />}
     {sectorEditor && <SectorEditor sphere={sectorEditor === 'new' ? undefined : sectorEditor} onCancel={() => setSectorEditor(null)} onSave={saveSphere}/>}
-    {creditsOpen && <div className="tp-overlay" onMouseDown={event => { if (event.target === event.currentTarget) setCreditsOpen(false); }}><section className="tp-dialog tp-credits-dialog" role="dialog" aria-modal="true" aria-label="ИИ-кредиты"><header><div><span className="tp-eyebrow">БАЛАНС И ПОДПИСКИ</span><h2>ИИ-кредиты</h2></div><button onClick={() => setCreditsOpen(false)} aria-label="Закрыть"><X size={19}/></button></header>
-      <div className="tp-dialog-content"><div className="tp-credit-balance"><Coins size={24}/><div><span>Доступно</span><strong>{formatCredits((user?.aiCreditsMilli ?? (user?.aiCredits ?? 0) * 1000) / 1000)} кредитов</strong></div></div>
-      <div className="tp-tabs"><button className={creditTab === 'plans' ? 'active' : ''} onClick={() => setCreditTab('plans')}>Подписки</button><button className={creditTab === 'stats' ? 'active' : ''} onClick={() => setCreditTab('stats')}>Статистика</button></div>
-      {creditsBusy ? <p className="tp-empty"><Loader2 className="tp-spin" size={17}/> Загрузка…</p> : creditError ? <p className="tp-alert">{creditError}</p> : creditTab === 'stats' ? <CreditUsageStats statistics={creditStats}/> :
-      <div className="tp-plans">{([
-        ['start','Старт','Для ежедневных задач'],['pro','Про','Для активной работы'],['max','Максимум','Расширенные возможности']
-      ] as const).map(([key,name,desc]) => <div key={key} className="tp-plan"><div><strong>{name}</strong><small>{desc}</small></div>{subscriptionLinks?.[key] ? <a href={subscriptionLinks[key]} target="_blank" rel="noopener noreferrer">Выбрать <ArrowRight size={14}/></a> : <span>Недоступно</span>}</div>)}</div>}
-      </div></section></div>}
-    {integrationOpen && <div className="tp-overlay" onMouseDown={event => { if (event.target === event.currentTarget) setIntegrationOpen(false); }}><section className="tp-dialog" role="dialog" aria-modal="true" aria-label="Интеграции"><header><div><span className="tp-eyebrow">ПОДКЛЮЧЕНИЯ</span><h2>Интеграции</h2></div><button onClick={() => setIntegrationOpen(false)} aria-label="Закрыть"><X size={19}/></button></header><div className="tp-dialog-content"><p>Telegram, почта и другие подключения используют существующие настройки Планировыча. В тестовом интерфейсе настройки пока открываются через основной модуль.</p><a className="tp-primary" href="/">Перейти в основной интерфейс <ArrowRight size={16}/></a></div></section></div>}
+    {creditsOpen && <div className="tp-overlay tp-credits-overlay" onMouseDown={event=>{
+      if(event.target===event.currentTarget)setCreditsOpen(false);
+    }}><section className="tp-dialog tp-credits-dialog" role="dialog" aria-modal="true" aria-label="Баланс и подписки">
+      <header><div><span className="tp-eyebrow">БАЛАНС И ПОДПИСКИ</span><h2>ИИ-кредиты</h2></div>
+        <button type="button" onClick={()=>setCreditsOpen(false)} aria-label="Закрыть"><X size={19}/></button></header>
+      <div className="tp-dialog-content tp-credits-body">
+        <div className="tp-credit-balance"><Coins size={24}/><div><span>Доступно</span>
+          <strong>{formatCredits((user?.aiCreditsMilli??(user?.aiCredits??0)*1000)/1000)} кредитов</strong>
+        </div></div>
+        <div className="tp-tabs tp-credit-tabs" role="tablist" aria-label="Разделы баланса">
+          <button type="button" role="tab" aria-selected={creditTab==='packs'} className={creditTab==='packs'?'active':''}
+            onClick={()=>setCreditTab('packs')}>Пакеты кредитов</button>
+          <button type="button" role="tab" aria-selected={creditTab==='plans'} className={creditTab==='plans'?'active':''}
+            onClick={()=>setCreditTab('plans')}>Подписки</button>
+          <button type="button" role="tab" aria-selected={creditTab==='stats'} className={creditTab==='stats'?'active':''}
+            onClick={()=>setCreditTab('stats')}>Статистика</button>
+        </div>
+        {creditsBusy?<p className="tp-empty"><Loader2 className="tp-spin" size={17}/> Загрузка…</p>:
+          creditTab==='stats'?<CreditUsageStats statistics={creditStats} error={creditError}/>:
+          creditTab==='packs'?<>
+            <p className="tp-credit-note">Разовое пополнение баланса без изменения подписки.</p>
+            {creditPacksError&&<p className="tp-alert" role="alert">{creditPacksError}</p>}
+            <div className="tp-credit-packs">{creditPacks.filter(pack=>pack.isActive).map(pack=>
+              <article className="tp-credit-pack" key={pack.key}>
+                <span className="tp-credit-pack-label">{pack.name}</span>
+                <strong>{pack.creditsAmount.toLocaleString('ru-RU')}<small> ИИ-кредитов</small></strong>
+                <div className="tp-credit-pack-price">{pack.price.toLocaleString('ru-RU')} ₽</div>
+                <button type="button" disabled={!creditPurchaseAvailable||creditPurchase.creatingPackKey!==null}
+                  onClick={()=>void creditPurchase.start(pack.key)}>
+                  {creditPurchase.creatingPackKey===pack.key?'Создаём платёж…':creditPurchaseAvailable?'Купить':'Оплата недоступна'}
+                </button>
+              </article>)}
+            </div>
+            {!creditPacks.length&&!creditPacksError&&<p className="tp-empty">Сейчас нет доступных пакетов.</p>}
+            {creditPurchase.isReceiptEmailRequired&&<div className="tp-credit-receipt">
+              <input type="email" autoComplete="email" aria-label="Email для чека"
+                placeholder="Email для чека" value={creditPurchase.receiptEmail}
+                onChange={event=>creditPurchase.setReceiptEmail(event.target.value)}/>
+              <button type="button" className="tp-primary"
+                disabled={!creditPurchase.receiptEmail.trim()||creditPurchase.creatingPackKey!==null}
+                onClick={()=>void creditPurchase.retryWithReceiptEmail()}>Продолжить</button>
+            </div>}
+            {creditPurchase.message&&<p className="tp-credit-notice" role="status">{creditPurchase.message}</p>}
+            <p className="tp-credit-offer">Покупка означает согласие с <a href="/legal/offer" target="_blank"
+              rel="noopener noreferrer">публичной офертой</a>.</p>
+          </>:
+          creditError?<p className="tp-alert">{creditError}</p>:
+          <div className="tp-plans">{([
+            ['start','Старт','Для ежедневных задач'],['pro','Про','Для активной работы'],['max','Максимум','Расширенные возможности']
+          ] as const).map(([key,name,desc])=><div key={key} className="tp-plan">
+            <div><strong>{name}</strong><small>{desc}</small></div>
+            {subscriptionLinks?.[key]?<a href={subscriptionLinks[key]} target="_blank" rel="noopener noreferrer">
+              Выбрать <ArrowRight size={14}/></a>:<span>Недоступно</span>}
+          </div>)}</div>}
+      </div>
+    </section></div>}
+    {integrationOpen&&<TestPageIntegrationsDialog onClose={()=>setIntegrationOpen(false)}/>}
     {authMode && <div className="tp-overlay" onMouseDown={event => { if (event.target === event.currentTarget) setAuthMode(null); }}><section className="tp-dialog" role="dialog" aria-modal="true" aria-label={authMode === 'login' ? 'Вход' : 'Регистрация'}><header><div><span className="tp-eyebrow">ПЛАНИРОВЫЧ AI</span><h2>{authMode === 'login' ? 'Вход в аккаунт' : 'Регистрация'}</h2></div><button onClick={() => setAuthMode(null)} aria-label="Закрыть"><X size={19}/></button></header>
       <form className="tp-dialog-content tp-auth-form" onSubmit={submitAuth}>{error && <p className="tp-alert" role="alert">{error}</p>}{authMode === 'register' && <><label>Имя<input required value={authForm.name} onChange={event => setAuthForm(f => ({...f,name:event.target.value}))}/></label><label>Email<input required type="email" value={authForm.email} onChange={event => setAuthForm(f => ({...f,email:event.target.value}))}/></label></>}
       <label>Логин<input required autoComplete="username" value={authForm.login} onChange={event => setAuthForm(f => ({...f,login:event.target.value}))}/></label>

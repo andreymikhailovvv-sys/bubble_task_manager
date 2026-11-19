@@ -33,7 +33,7 @@ export function TestPageRating({ user, onRefresh }: { user: CurrentUser; onRefre
           <div className="tp-rating-gauge-value"><strong>{format(score)}</strong><span>из 100</span></div>
         </div>
         <div><strong className="tp-rating-grade">{grade} рейтинг</strong>
-          <p>Рейтинг растёт от выполнения задач, привычек и работы с ИИ. Значения синхронизированы с основным Планировычем.</p></div>
+          <p>Рейтинг растёт благодаря завершённым задачам, привычкам, работе с ИИ и концентрации.</p></div>
       </div>
       <div className="tp-rating-details">
         {details.map(({name,score:points,Icon})=><div key={name} className="tp-rating-detail">

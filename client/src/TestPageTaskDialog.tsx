@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { BellRing, Check, Clock3, Loader2, Plus, Trash2, X } from 'lucide-react';
 import type { Task, Sphere, AiChatModel } from './lib/types';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
+import { NotesEditor } from './components/NotesEditor';
 import { buildManualRecurrence, defaultRecurrenceSlots, loadManualRecurrence, recurrenceWeekdays, type RecurrencePeriod, type RecurrenceSlot } from './lib/recurrenceSchedule';
 
 type Props = {
@@ -47,6 +48,7 @@ export function TestPageTaskDialog({task,parentTask,spheres,timeZone,onSave,onCl
   const isSubtask=Boolean(parentTask||task?.parentTaskId);
   const [title,setTitle]=useState(task?.title||'');
   const [description,setDescription]=useState(task?.description||'');
+  const [notesOpen,setNotesOpen]=useState(false);
   const [dueDate,setDueDate]=useState(localDate(task?.dueDate));
   const [importance,setImportance]=useState(task?.importance??3);
   const [sphereId,setSphereId]=useState(task?.sphereId??parentTask?.sphereId??'');
@@ -120,7 +122,9 @@ export function TestPageTaskDialog({task,parentTask,spheres,timeZone,onSave,onCl
             placeholder={isSubtask?'Что нужно сделать?':'Название задачи'}/></div>
         <div className="tp-task-settings-row tp-task-description-row"><label>Описание</label>
           <TaskDescriptionInput className="tp-task-settings-description" value={description}
-            onChange={setDescription} richInlineEditing enterCreatesLineBreak placeholder="Краткое описание или заметки к задаче…"/></div>
+            onChange={setDescription} richInlineEditing enterCreatesLineBreak placeholder="Краткое описание или заметки к задаче…"/>
+          <button type="button" className="tp-description-notes-button" onClick={()=>setNotesOpen(true)}>Редактировать описание</button>
+        </div>
         {!isSubtask&&<div className="tp-task-settings-row"><label htmlFor="tp-task-sphere">Сектор</label>
           <select id="tp-task-sphere" className="tp-task-native-select" value={sphereId||''}
             onChange={e=>setSphereId(e.target.value)}>
@@ -201,6 +205,8 @@ export function TestPageTaskDialog({task,parentTask,spheres,timeZone,onSave,onCl
           </button>
         </footer>
       </form>
+      {notesOpen&&<NotesEditor heading={isSubtask?'Описание подзадачи':'Описание задачи'}
+        value={description} onChange={setDescription} onClose={()=>setNotesOpen(false)}/>}
     </section>
   </div>;
 }
