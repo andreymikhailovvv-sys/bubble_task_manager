@@ -470,7 +470,7 @@ export default function TestPage() {
       <main className="tp-main">
         <header className="tp-topbar">
           <div className="tp-heading"><button type="button" className="tp-mobile-menu" onClick={() => setMenuOpen(!menuOpen)} aria-label="Разделы"><Menu size={21}/></button>
-            <div><div className="tp-eyebrow">ПЛАНИРОВЫЧ / TEST PAGE</div><h1>{section === 'overview' ? 'Планировыч AI' : navigation.find(item => item.key === section)?.title}</h1></div></div>
+            <div><div className="tp-eyebrow">ПЛАНИРОВЫЧ AI</div><h1>{section === 'overview' ? 'Планировыч AI' : navigation.find(item => item.key === section)?.title}</h1></div></div>
           <div className="tp-actions">
             {user&&<div className="tp-global-search">
               <WorkspaceGlobalSearch key={user.id} userId={user.id} value={globalSearch} onChange={setGlobalSearch}
@@ -562,11 +562,11 @@ export default function TestPage() {
               <div className="tp-sector-actions"><button type="button" onClick={() => setSectorEditor(sphere)}><Settings2 size={16}/> Настроить</button><button type="button" onClick={() => void deleteSphere(sphere)} aria-label={'Удалить сектор ' + sphere.name}><Trash2 size={16}/></button></div>
             </article>)}</div>{!spheres.length && <div className="tp-card tp-empty">Пока нет секторов. Создайте первый для группировки задач.</div>}
           </section>}
-          {section === 'notes' && <section className="tp-work-area tp-notes-area"><div className="tp-section-heading"><div><h2>Мои заметки</h2><p>Списки, группы и редактор заметок из Планировыча.</p></div></div>
+          {section === 'notes' && <section className="tp-work-area tp-notes-area"><div className="tp-section-heading"><div><h2>Мои заметки</h2><p>Списки, группы и редактор заметок.</p></div></div>
             <StandaloneNotesWorkspace key={user.id} userId={user.id} mode="inline" requestedNote={requestedNote}
               editorOutsideInline onClose={() => setSection('overview')}/>
           </section>}
-          <footer className="tp-footer">Test Page · Экспериментальный интерфейс. Все данные общие с Планировычем AI.</footer>
+          <footer className="tp-footer">Планировыч AI · Задачи, привычки и ИИ в одном пространстве.</footer>
         </>}
       </main>
     </div>
