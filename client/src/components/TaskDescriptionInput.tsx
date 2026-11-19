@@ -9,6 +9,7 @@ type Props = {
   className?: string;
   placeholder?: string;
   richInlineEditing?: boolean;
+  enterCreatesLineBreak?: boolean;
   readOnly?: boolean;
 };
 
@@ -16,7 +17,7 @@ type Props = {
  * Preserve stored formatted notes in preview mode. Switching into inline
  * editing alone must not overwrite the original HTML with plain text.
  */
-export function TaskDescriptionInput({ value, onChange, className = '', placeholder = 'Введите описание', richInlineEditing = false, readOnly = false }: Props) {
+export function TaskDescriptionInput({ value, onChange, className = '', placeholder = 'Введите описание', richInlineEditing = false, enterCreatesLineBreak = false, readOnly = false }: Props) {
   const [isEditing, setIsEditing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const description = value ?? '';
@@ -30,7 +31,8 @@ export function TaskDescriptionInput({ value, onChange, className = '', placehol
   // Mini App retains its existing behaviour unless explicitly opted in.
   if (richInlineEditing) {
     return <InlineRichDescriptionEditor value={value} onChange={onChange}
-      className={className} placeholder={placeholder} readOnly={readOnly} />;
+      className={className} placeholder={placeholder} readOnly={readOnly}
+      enterCreatesLineBreak={enterCreatesLineBreak} />;
   }
 
   if (isEditing) {
