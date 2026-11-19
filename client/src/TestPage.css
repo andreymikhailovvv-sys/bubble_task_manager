@@ -759,3 +759,37 @@ html:has(.tp-root.tp-dark),body:has(.tp-root.tp-dark) {color-scheme:dark;scrollb
   .tp-capabilities-dialog>header,.tp-capabilities-content {padding:17px;}
   .tp-capabilities-grid {grid-template-columns:1fr;}
 }
+
+
+/* Notes group pickers/managers are portalled to document.body, outside the
+   scoped notes board. Match the Test Page theme only while its route exists. */
+body:has(.tp-root.tp-light) .standalone-group-manager,
+body:has(.tp-root.tp-light) .standalone-group-picker {
+  --panel-bg:#fff;--card-bg:#eaf2fc;--popover-bg:#fff;
+  --muted-bg:#f0f6fd;--text-primary:#1a3049;--text-muted:#49627c;
+  --panel-border:#b8cce2;--field-bg:#f4f8ff;--field-border:#b8cce2;
+  --accent:#145a9c;
+  background:#fff;color:#1a3049;border-color:#b8cce2;
+  color-scheme:light;scrollbar-color:#86a9c9 #e7f0fa;
+}
+body:has(.tp-root.tp-dark) .standalone-group-manager,
+body:has(.tp-root.tp-dark) .standalone-group-picker {
+  --panel-bg:#1b293d;--card-bg:#253750;--popover-bg:#1b293d;
+  --muted-bg:#253750;--text-primary:#f0f6ff;--text-muted:#becfe4;
+  --panel-border:#476380;--field-bg:#152237;--field-border:#476380;
+  --accent:#9bd6ff;
+  background:#1b293d;color:#f0f6ff;border-color:#476380;
+  color-scheme:dark;scrollbar-color:#6989ac #14243a;
+}
+body:has(.tp-root.tp-light) .standalone-group-manager-backdrop,
+body:has(.tp-root.tp-dark) .standalone-group-manager-backdrop {background:#061427b0;}
+body:has(.tp-root.tp-light) .standalone-group-manager .standalone-notes-create,
+body:has(.tp-root.tp-dark) .standalone-group-manager .standalone-notes-create {
+  background:linear-gradient(120deg,#a7dbff,#4a9ae9);color:#102a45;border:1px solid #81bceb;
+}
+body:has(.tp-root.tp-light) .standalone-group-manager .text-primary,
+body:has(.tp-root.tp-dark) .standalone-group-manager .text-primary {color:var(--text-primary);}
+body:has(.tp-root.tp-light) .standalone-group-manager .text-muted,
+body:has(.tp-root.tp-dark) .standalone-group-manager .text-muted {color:var(--text-muted);}
+body:has(.tp-root.tp-light) .standalone-group-picker::-webkit-scrollbar-thumb {background:#86a9c9;}
+body:has(.tp-root.tp-dark) .standalone-group-picker::-webkit-scrollbar-thumb {background:#6989ac;}
