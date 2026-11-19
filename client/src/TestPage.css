@@ -1017,3 +1017,204 @@ body:has(.tp-root) .notes-editor-panel .text-muted {color:var(--text-muted);}
   .tp-subtask-focus-dialog .tp-focus-actions {padding:12px 14px;flex-wrap:wrap;}
   .tp-task-settings-row select.tp-task-native-select {width:100%;}
 }
+
+
+/* Test Page V5: natural modal height, without the empty reserved space. */
+.tp-root .tp-focus-dialog.tp-focus-empty {
+  height:auto;max-height:min(690px,90dvh);
+  min-height:0;overflow:hidden;
+}
+.tp-root .tp-focus-empty .tp-focus-subtasks {flex:0 0 auto;min-height:0;max-height:90px;overflow:auto;padding-bottom:8px;}
+.tp-root .tp-focus-empty .tp-focus-subtasks .tp-empty {margin:0;padding:5px 0 7px;}
+.tp-root .tp-task-settings-dialog {
+  height:auto;max-height:calc(100dvh - 24px);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.tp-root .tp-task-settings-form {flex:0 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;}
+.tp-root .tp-task-settings-actions {position:sticky;bottom:0;}
+.tp-root .tp-task-settings-row {padding-top:9px;padding-bottom:9px;}
+.tp-root .tp-task-description-row .tp-task-settings-description {min-height:84px;max-height:155px;}
+.tp-root .tp-task-settings-dialog:has(.tp-settings-parent) {max-height:min(650px,94dvh);}
+
+/* Unified input focus: no filled focus background, shadow, or colored outline.
+   The keyboard caret and accessible labels remain. */
+.tp-root input:focus,.tp-root input:focus-visible,
+.tp-root textarea:focus,.tp-root textarea:focus-visible,
+.tp-root [contenteditable="true"]:focus,.tp-root [contenteditable="true"]:focus-visible {
+  outline:0!important;box-shadow:none!important;
+  -webkit-tap-highlight-color:transparent;
+}
+.tp-root .tp-overview-task-tools {gap:7px;max-width:100%;flex-wrap:nowrap;}
+.tp-root .tp-overview-search-field.tp-overview-search-inline {
+  display:flex;align-items:center;gap:4px;flex:1 1 auto;
+  width:clamp(95px,12vw,210px);min-width:90px;max-width:210px;
+  margin:0;padding:2px 0;background:transparent;border:0;border-radius:0;
+  box-shadow:none;outline:0;
+}
+.tp-root .tp-overview-search-inline input {
+  width:100%;height:33px;min-width:0;border:0;border-radius:0;
+  background:transparent;color:var(--tp-text);box-shadow:none;
+  caret-color:var(--tp-accent);font-size:13px;padding:0;
+}
+.tp-root .tp-overview-search-inline button {flex:none;display:grid;place-items:center;border:0;background:transparent;color:var(--tp-muted);}
+.tp-root .tp-overview-search-toggle {order:1;}
+.tp-root .tp-overview-task-tools>button:last-child {order:2;}
+.tp-root .tp-overview-search-inline input::-webkit-search-cancel-button {display:none;}
+
+/* Tasks filters should be level with search, not floating above it. */
+.tp-root .tp-filters {align-items:stretch;gap:10px;}
+.tp-root .tp-filters .tp-search {height:43px;min-height:43px;align-items:center;box-shadow:none;}
+.tp-root .tp-filters .tp-filter-select {align-self:stretch;box-shadow:none!important;filter:none;}
+.tp-root .tp-filters .tp-filter-select .custom-select {z-index:1;box-shadow:none!important;}
+.tp-root .tp-filters .tp-filter-select .custom-select-trigger {
+  min-height:43px;height:43px;box-shadow:none!important;filter:none;
+  border-color:var(--tp-border);background:var(--tp-input);padding:8px 12px;
+  font-size:13px;
+}
+.tp-root .tp-filters .tp-filter-select .custom-select-trigger:hover {border-color:var(--tp-border);background:var(--tp-input);}
+.tp-root .tp-actions>button.tp-primary {
+  background:#70bfff!important;
+  background-image:none!important;
+  border:1px solid #428dc5!important;
+  color:#072d4f;box-shadow:none!important;
+  filter:none;isolation:isolate;
+}
+.tp-root .tp-actions>button.tp-primary:before,
+.tp-root .tp-actions>button.tp-primary:after {content:none!important;display:none!important;}
+.tp-root.tp-light .tp-actions>button.tp-primary {background:#59aaf0!important;}
+
+/* Task-subtask completion indicator shared by Overview and Tasks. */
+.tp-root .tp-task-main .tp-task-subtask-progress {
+  display:flex;align-items:center;gap:8px;
+  max-width:270px;width:100%;height:12px;margin-top:5px;
+  color:var(--tp-muted);overflow:visible;white-space:nowrap;
+}
+.tp-root .tp-task-subtask-progress-bar {
+  flex:1;min-width:55px;height:5px;border-radius:99px;overflow:hidden;
+  background:color-mix(in srgb,var(--tp-muted) 24%,transparent);
+}
+.tp-root .tp-task-subtask-progress-bar>span {
+  display:block;height:100%;border-radius:99px;
+  background:linear-gradient(90deg,#2b90dd,#55cdb7);
+  transition:width .2s ease;
+}
+.tp-root .tp-task-subtask-progress>span:last-child {font-size:10px;font-weight:720;line-height:1;}
+
+/* Habit calendar fits a modest central dialog instead of stretching to full width. */
+.tp-root .tp-habit-detail {
+  width:min(490px,calc(100vw - 24px));max-height:min(770px,92dvh);
+  display:flex;flex-direction:column;
+}
+.tp-root .tp-habit-detail>header {flex:none;}
+.tp-root .tp-habit-detail-content {overflow-y:auto;padding:12px 18px 18px;}
+.tp-root .tp-habit-detail .miniapp-habit-tracker {width:100%;max-width:410px;margin-inline:auto;}
+.tp-root .tp-habit-detail .miniapp-habit-tracker-calendar {width:100%;max-width:360px;margin:0 auto;padding:12px;}
+.tp-root .tp-habit-detail .miniapp-habit-tracker-stat {padding:10px;}
+.tp-root .tp-habit-detail .miniapp-habit-tracker-day {min-height:27px;border-radius:8px;font-size:11px;}
+.tp-root .tp-habit-detail .miniapp-habit-tracker-weekdays,
+.tp-root .tp-habit-detail .miniapp-habit-tracker-days {gap:3px;}
+.tp-root .tp-habit-detail .miniapp-habit-tracker-stat strong {font-size:20px;}
+.tp-root .tp-habit-detail .miniapp-habit-tracker-stat>span {font-size:11px;}
+.tp-root .tp-habit-detail .miniapp-habit-tracker-stat small {font-size:10px;}
+.tp-root .tp-habit-detail-actions,.tp-root .tp-habits-head-actions {display:flex;align-items:center;gap:10px;}
+.tp-root .tp-habit-detail-actions button,.tp-root .tp-habits-head-actions button {display:inline-flex;align-items:center;justify-content:center;gap:6px;}
+.tp-root .tp-habit-detail-actions>button:last-child {border:0;background:transparent;color:var(--tp-muted);padding:7px;}
+.tp-root .tp-habits-head-actions {flex-wrap:wrap;justify-content:flex-end;}
+.tp-root .tp-habits-head-actions .tp-secondary {padding:8px 10px;font-size:12px;}
+
+/* Habit settings reuse the task-settings visual grammar, matching mobile fields. */
+.tp-habit-settings-overlay {z-index:570;}
+.tp-root .tp-habit-settings-dialog {
+  width:min(630px,calc(100vw - 20px));height:auto;max-height:calc(100dvh - 22px);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.tp-root .tp-habit-settings-form {padding:6px 21px 0;overflow:auto;min-height:0;display:block;}
+.tp-root .tp-habit-settings-form .tp-task-settings-row>input,
+.tp-root .tp-habit-settings-form .tp-task-settings-row>select {
+  min-height:43px;width:100%;min-width:0;border-radius:11px;
+  border:1px solid var(--tp-border);background:var(--tp-input);
+  color:var(--tp-text);padding:9px 12px;
+}
+.tp-root .tp-habit-icon-options,.tp-root .tp-habit-color-options,
+.tp-root .tp-habit-times,.tp-root .tp-habit-weekdays {
+  display:flex;align-items:center;flex-wrap:wrap;gap:7px;min-width:0;
+}
+.tp-root .tp-habit-icon-options>button {
+  display:grid;place-items:center;width:34px;height:34px;
+  border:1px solid var(--tp-border);border-radius:50%;
+  background:var(--tp-panel2);font-size:17px;color:var(--tp-text);
+}
+.tp-root .tp-habit-icon-options>button.selected,
+.tp-root .tp-habit-weekdays button.selected {border-color:var(--tp-accent);background:var(--tp-input);color:var(--tp-accent);}
+.tp-root .tp-habit-icon-options input {width:94px;height:34px;background:var(--tp-input);color:var(--tp-text);border:1px solid var(--tp-border);border-radius:8px;padding:6px;}
+.tp-root .tp-habit-color-options>button {height:30px;width:30px;border:2px solid var(--tp-border);border-radius:50%;}
+.tp-root .tp-habit-color-options>button[aria-pressed="true"] {outline:2px solid var(--tp-accent);outline-offset:2px;}
+.tp-root .tp-habit-color-picker {position:relative;display:grid;place-items:center;width:32px;height:32px;border:1px solid var(--tp-border);border-radius:50%;background:var(--tp-panel2);color:var(--tp-text);}
+.tp-root .tp-habit-color-picker input {position:absolute;inset:0;width:100%;height:100%;opacity:.01;cursor:pointer;}
+.tp-root .tp-habit-stepper {display:flex;align-items:center;gap:0;justify-content:space-between;width:175px;max-width:100%;border:1px solid var(--tp-border);border-radius:11px;background:var(--tp-input);overflow:hidden;}
+.tp-root .tp-habit-stepper button {display:grid;place-items:center;width:41px;height:41px;border:0;background:var(--tp-panel2);color:var(--tp-accent);}
+.tp-root .tp-habit-stepper strong {font-size:15px;color:var(--tp-text);}
+.tp-root .tp-habit-time-chip {display:flex;align-items:center;gap:4px;border:1px solid var(--tp-border);border-radius:15px;padding:5px 8px;color:var(--tp-text);font-size:12px;background:var(--tp-panel2);}
+.tp-root .tp-habit-time-chip button {border:0;background:none;color:var(--tp-muted);padding:2px;}
+.tp-root .tp-habit-time-add {display:flex;align-items:center;gap:5px;position:relative;padding:6px;border:1px dashed var(--tp-border);border-radius:10px;cursor:pointer;color:var(--tp-accent);font-size:11px;}
+.tp-root .tp-habit-time-add input {width:110px;color:var(--tp-text);background:var(--tp-input);border:0;}
+.tp-root .tp-habit-weekdays button {min-width:34px;min-height:34px;background:var(--tp-panel2);border:1px solid var(--tp-border);border-radius:8px;padding:6px;color:var(--tp-text);font-size:11px;}
+
+/* Reuse existing chat attachment and progress widgets in the blue Test Page skin. */
+.tp-root .tp-chat-attachments {
+  border-top:1px solid var(--tp-border);padding:9px 12px 0;
+  --panel-bg:var(--tp-panel);--card-bg:var(--tp-panel2);
+  --text-primary:var(--tp-text);--text-muted:var(--tp-muted);
+  --accent:var(--tp-accent);--muted-bg:var(--tp-input);
+}
+.tp-root .tp-chat-attachments .ai-attachment-tiles {display:flex;flex-wrap:wrap;gap:8px;}
+.tp-root .tp-chat-attachments .ai-attachment-tile {max-width:100px;}
+.tp-root .tp-chat-compose {gap:7px;}
+.tp-root .tp-chat-compose>button.tp-chat-attach-button {
+  background:var(--tp-panel2);border:1px solid var(--tp-border);
+  color:var(--tp-text);box-shadow:none;
+}
+.tp-root .tp-chat-compose .tp-chat-attach-button:hover {border-color:var(--tp-accent);}
+.tp-root .tp-chat-compose textarea {flex:1;min-width:0;}
+.tp-root .tp-chat-compose .voice-input-button {flex:none;}
+.tp-root .tp-ai-progress {
+  align-self:stretch;
+  --accent:var(--tp-accent);--text-primary:var(--tp-text);
+  --text-muted:var(--tp-muted);--panel-bg:var(--tp-panel2);
+  --accent-soft:color-mix(in srgb,var(--tp-accent) 23%,transparent);
+}
+.tp-root .tp-ai-progress .ai-progress-group {max-width:100%;width:100%;}
+.tp-root .tp-ai-progress .miniapp-ai-progress {border:1px solid var(--tp-border);border-radius:12px;background:var(--tp-panel2);padding:13px;}
+.tp-root .tp-ai-progress .miniapp-ai-progress-text {font-size:13px;font-weight:760;color:var(--tp-text);}
+.tp-root .tp-ai-progress .miniapp-ai-progress-icon {color:var(--tp-accent);}
+.tp-root .tp-ai-progress .miniapp-ai-progress-track {max-width:290px;}
+.tp-root .tp-ai-progress .miniapp-ai-progress-track>span {background:var(--tp-accent);}
+.tp-root .tp-ai-stream-text {margin-top:9px;border:1px solid var(--tp-border);border-radius:12px;background:var(--tp-panel2);padding:10px 13px;font-size:13px;color:var(--tp-text);}
+.tp-root .tp-chat-system-notice {align-self:stretch;text-align:left;display:flex;flex-direction:column;gap:5px;
+  padding:11px 13px;border-radius:12px;border:1px solid var(--tp-border);
+  border-left:3px solid var(--tp-accent);background:var(--tp-panel2);color:var(--tp-text);}
+.tp-root .tp-chat-system-notice>span {font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--tp-accent);font-weight:780;}
+.tp-root .tp-chat-system-notice>strong {font-size:12px;line-height:1.5;color:var(--tp-text);font-weight:580;white-space:pre-wrap;}
+.tp-root .tp-chat-system-notice:hover {border-color:var(--tp-accent);}
+.tp-system-notice-toast {
+  position:fixed;z-index:2147483645;left:23px;bottom:22px;
+  display:flex;flex-direction:column;gap:6px;max-width:min(350px,calc(100vw - 30px));
+  border:1px solid var(--tp-border);border-left:3px solid var(--tp-accent);
+  border-radius:12px;padding:12px 15px;text-align:left;background:var(--tp-panel);
+  color:var(--tp-text);box-shadow:0 16px 38px #0005;backdrop-filter:blur(10px);
+}
+.tp-system-notice-toast>span {color:var(--tp-accent);font-size:10px;font-weight:800;letter-spacing:.06em;}
+.tp-system-notice-toast>strong {color:var(--tp-text);font-size:12px;font-weight:650;line-height:1.5;white-space:pre-wrap;}
+.tp-root.tp-light .tp-system-notice-toast {background:#fff;color:#163551;}
+@media(max-width:720px) {
+  .tp-root .tp-focus-dialog.tp-focus-empty {height:auto;max-height:94dvh;}
+  .tp-root .tp-task-settings-dialog {height:auto;max-height:calc(100dvh - 16px);}
+  .tp-root .tp-habit-settings-dialog {max-height:calc(100dvh - 16px);}
+  .tp-root .tp-habit-settings-form {padding:6px 12px 0;}
+  .tp-root .tp-overview-task-tools {flex-wrap:wrap;justify-content:flex-end;gap:4px;}
+  .tp-root .tp-overview-search-inline {flex:1;max-width:155px;min-width:70px;}
+  .tp-root .tp-habits-heading {flex-wrap:wrap;}
+  .tp-root .tp-habit-detail-actions .tp-secondary {font-size:11px;padding:7px 9px;}
+  .tp-root .tp-habits-head-actions {justify-content:flex-start;}
+  .tp-system-notice-toast {left:11px;bottom:11px;}
+}
