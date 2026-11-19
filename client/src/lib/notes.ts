@@ -1,6 +1,17 @@
+import { createBoundedStringTransformCache } from './boundedStringTransformCache';
+
 const ALLOWED_NOTE_TAGS = new Set(['A', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'DEL', 'H1', 'H2', 'P', 'DIV', 'BR', 'UL', 'OL', 'LI', 'LABEL', 'INPUT', 'SPAN']);
 const NOTE_HTML_PATTERN = /<(?:a|b|strong|i|em|u|s|del|h1|h2|p|div|br|ul|ol|li|label|input|span)(?:\s[^>]*)?>/i;
 const LINK_PATTERN = /((?:https?:\/\/|www\.)[^\s<]+)/gi;
+
+// Repeated workspace renders must not parse and strip the same stored HTML
+// hundreds of times. The cache is tab-memory-only, bounded and keyed by the
+// original value so edits are never replaced with a stale result.
+const memoizeNoteTransform = createBoundedStringTransformCache({
+  maxEntries: 384,
+  maxChars: 1_000_000,
+  maxEntryChars: 200_000
+});
 
 export function isFormattedNoteHtml(value?: string | null) {
   return Boolean(value && NOTE_HTML_PATTERN.test(value));
@@ -84,11 +95,16 @@ function sanitizeElement(element: Element) {
 
 export function sanitizeNoteHtml(value: string) {
   if (typeof document === 'undefined') return value;
+  // Plain strings cannot contain HTML or entities and do not need a DOM tree.
+  // Keep the sanitizer for everything containing markup or ampersands.
+  if (!/[<&]/.test(value)) return value;
 
-  const wrapper = document.createElement('div');
-  wrapper.innerHTML = value;
-  sanitizeElement(wrapper);
-  return wrapper.innerHTML;
+  return memoizeNoteTransform('sanitize', value, () => {
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = value;
+    sanitizeElement(wrapper);
+    return wrapper.innerHTML;
+  });
 }
 
 function linkifyTextNode(textNode: Text) {
@@ -118,23 +134,26 @@ function linkifyTextNode(textNode: Text) {
 
 export function linkifyNoteHtml(value: string) {
   if (typeof document === 'undefined') return value;
+  if (!/[<&]/.test(value) && !/(?:https?:\/\/|www\.)/i.test(value)) return value;
 
-  const wrapper = document.createElement('div');
-  wrapper.innerHTML = sanitizeNoteHtml(value);
-  const walker = document.createTreeWalker(wrapper, NodeFilter.SHOW_TEXT, {
-    acceptNode: (node) => {
-      const parent = node.parentElement;
-      if (!parent || parent.closest('a')) return NodeFilter.FILTER_REJECT;
-      LINK_PATTERN.lastIndex = 0;
-      return LINK_PATTERN.test(node.textContent ?? '') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+  return memoizeNoteTransform('linkify', value, () => {
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = sanitizeNoteHtml(value);
+    const walker = document.createTreeWalker(wrapper, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) => {
+        const parent = node.parentElement;
+        if (!parent || parent.closest('a')) return NodeFilter.FILTER_REJECT;
+        LINK_PATTERN.lastIndex = 0;
+        return LINK_PATTERN.test(node.textContent ?? '') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      }
+    });
+    const nodes: Text[] = [];
+    while (walker.nextNode()) {
+      nodes.push(walker.currentNode as Text);
     }
+    nodes.forEach(linkifyTextNode);
+    return sanitizeNoteHtml(wrapper.innerHTML);
   });
-  const nodes: Text[] = [];
-  while (walker.nextNode()) {
-    nodes.push(walker.currentNode as Text);
-  }
-  nodes.forEach(linkifyTextNode);
-  return sanitizeNoteHtml(wrapper.innerHTML);
 }
 
 export function noteValueToEditorHtml(value: string) {
@@ -147,19 +166,22 @@ export function noteHtmlToPlainText(value: string, options: { trimEnd?: boolean 
   const shouldTrimEnd = options.trimEnd ?? true;
   if (!value.trim()) return '';
   if (typeof document === 'undefined') return value.replace(/<[^>]+>/g, '');
+  if (!/[<&]/.test(value)) return shouldTrimEnd ? value.trimEnd() : value;
 
-  const wrapper = document.createElement('div');
-  wrapper.innerHTML = sanitizeNoteHtml(value).replace(/<br\s*\/?>/gi, '\n');
-  wrapper.querySelectorAll('h1,h2,p,div,li,label').forEach((block) => {
-    if (block.nextSibling) block.append(document.createTextNode('\n'));
+  return memoizeNoteTransform(shouldTrimEnd ? 'plain-trim' : 'plain-keep', value, () => {
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = sanitizeNoteHtml(value).replace(/<br\s*\/?>/gi, '\n');
+    wrapper.querySelectorAll('h1,h2,p,div,li,label').forEach((block) => {
+      if (block.nextSibling) block.append(document.createTextNode('\n'));
+    });
+    wrapper.querySelectorAll('span,a,b,strong,i,em,u,s,del').forEach((inline) => {
+      const nextText = inline.nextSibling?.textContent ?? '';
+      const currentText = inline.textContent ?? '';
+      if (inline.nextSibling && currentText && nextText && !/\s$/.test(currentText) && !/^\s|^[.,!?;:)]/.test(nextText)) {
+        inline.after(document.createTextNode(' '));
+      }
+    });
+    const plainText = (wrapper.textContent ?? '').replace(/\n{3,}/g, '\n\n');
+    return shouldTrimEnd ? plainText.trimEnd() : plainText;
   });
-  wrapper.querySelectorAll('span,a,b,strong,i,em,u,s,del').forEach((inline) => {
-    const nextText = inline.nextSibling?.textContent ?? '';
-    const currentText = inline.textContent ?? '';
-    if (inline.nextSibling && currentText && nextText && !/\s$/.test(currentText) && !/^\s|^[.,!?;:)]/.test(nextText)) {
-      inline.after(document.createTextNode(' '));
-    }
-  });
-  const plainText = (wrapper.textContent ?? '').replace(/\n{3,}/g, '\n\n');
-  return shouldTrimEnd ? plainText.trimEnd() : plainText;
 }
