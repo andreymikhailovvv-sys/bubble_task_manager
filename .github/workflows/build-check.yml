@@ -77,8 +77,6 @@ jobs:
         run: node --import tsx --test client/src/lib/workspaceSnapshot.test.ts
       - name: Verify bounded note HTML transforms and memoized previews
         run: node --import tsx --test client/src/lib/boundedStringTransformCache.test.ts
-      - name: Verify desktop bubble render isolation and stable interactions
-        run: node --import tsx --test server/test/planner-bubble-render-isolation.test.ts
       - name: Verify privacy-safe performance telemetry and bounded histograms
         run: node --import tsx --test server/test/performance-diagnostics.test.ts
       - name: Verify deduplicated task and reminder notifications

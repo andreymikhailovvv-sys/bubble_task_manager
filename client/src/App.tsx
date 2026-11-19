@@ -1,12 +1,11 @@
 import { AiStreamingMessageBody } from './components/AiStreamingMessageBody';
 import EmailVerificationDialog from './components/EmailVerificationDialog';
 import { subscribeAccountEmailVerified } from './lib/account-email-status-events';
-import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type ChangeEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, CalendarPlus, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Clock3, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Menu, MessageCircle, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, BellRing, Trash2, UserRound, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
-import { useStableCallbackMap } from './hooks/useStableCallbackMap';
 import { FullscreenModePicker, FullscreenWorkspaceSingle, FullscreenWorkspaceSplit } from './components/FullscreenWorkspaceLayout';
 import { replaceFullscreenPanel, resolveFullscreenPanels, type FullscreenWorkspacePanel } from './lib/fullscreenWorkspacePanels';
 import { FullscreenUpcomingTasksPanel } from './components/FullscreenUpcomingTasksPanel';
@@ -4345,12 +4344,12 @@ export default function App() {
     await load();
   };
 
-  const hasUnreadAiMessage = useCallback((taskId: string) => {
+  const hasUnreadAiMessage = (taskId: string) => {
     const dialog = aiDialogByTask[taskId] ?? [];
     const readCount = aiReadCursorByTask[taskId] ?? 0;
     if (readCount >= dialog.length) return false;
     return dialog.slice(readCount).some((message) => message.role === 'assistant');
-  }, [aiDialogByTask, aiReadCursorByTask]);
+  };
 
   const markTaskAsClosing = (taskId: string) => {
     setClosingTaskIds((prev) => (prev.includes(taskId) ? prev : [...prev, taskId]));
@@ -5677,51 +5676,6 @@ export default function App() {
   const renderCreditsControl = () => (
           <button data-tour="credits" type="button" onClick={() => { if (currentUser?.isGuest) { setAuthError(null); setAuthModalMode('register'); } else { setCreditModalView('purchase'); setIsSubscriptionModalOpen(true); } }} className="light-credit-badge topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400" title={currentUser?.isGuest ? 'Зарегистрируйтесь, чтобы получить 100 ИИ-кредитов' : 'Посмотреть подписки и увеличить ИИ-кредиты'}><Coins size={15} /><span>Кредиты: {currentUser?.aiCredits ?? 0}</span></button>
   );
-  // A task title/chat/notes keystroke updates the large App component, but it
-  // must NOT re-render thousands of unchanged animated SVG nodes. The functions
-  // below delegate to their latest committed closures without changing identity.
-  type BubbleActionPayload = Parameters<ComponentProps<typeof BubbleField>['onBubbleAction']>[1];
-  const bubbleCallbacks = useStableCallbackMap({
-    onOpenTraining: () => {
-      setTrainingOpenSignal(signal => signal + 1);
-      setIsUpdatesOpen(true);
-    },
-    onDismissTraining: () => {
-      localStorage.setItem(getOnboardingOfferStorageKey(currentUser.id), '1');
-      setIsOnboardingOfferOpen(false);
-    },
-    onToggleSubtaskFilter: () =>
-      setSubtaskFilterMode(prev => prev === 'none' ? 'urgency' : 'none'),
-    onSelect: (task: Task) => openTaskWithFocusGuard(task),
-    onSelectSubtask: (subtask: Task) => setEditorState({ task: subtask }),
-    onCreateSubtask: async (parentTask: Task, payload: Partial<Task>) => {
-      await createSubtaskForParent(parentTask, payload);
-    },
-    onBubbleAction: async (task: Task, payload: BubbleActionPayload) => {
-      await api.bubbleAction(task.id, payload);
-      await load();
-    },
-    onToggleSubtaskDone: (task: Task) => toggleSubtaskDone(task),
-    onUpdateSubtaskDueDate: async (subtask: Task, dueDate: string | null) => {
-      await api.updateTask(subtask.id, { dueDate });
-      await load();
-    },
-    onQuickCompleteTask: (task: Task) => completeTask(task),
-    onQuickChangeTaskImportance: async (task: Task, importanceDelta: number) => {
-      const nextImportance = Math.max(1, Math.min(5, task.importance + importanceDelta));
-      if (nextImportance === task.importance) return;
-      await api.updateTask(task.id, { importance: nextImportance });
-      await load();
-    },
-    onQuickPostponeTask: (task: Task, option: '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart') =>
-      quickPostponeTask(task, option),
-    onAddTaskToSphere: (sphere: Sphere) => setEditorState({ initialSphereId: sphere.id }),
-    onRenameSphere: (sphere: Sphere) => setSectorEditorSphere(sphere),
-    onRescheduleTask: (task: Task) => setTimelineReschedulePicker({ taskId: task.id, signal: Date.now() }),
-    onOpenInOtherPane: (task: Task, sourcePaneIndex: 0 | 1) =>
-      openTaskInOtherPane(task, sourcePaneIndex)
-  });
-
   // Share the original, interactive mode renderers between ordinary workspace
   // and each fullscreen pane. Nothing is duplicated or displayed as a preview.
   const renderWorkspaceContent = (workspaceMode: DisplayMode): ReactNode => {
@@ -5771,32 +5725,53 @@ export default function App() {
               compact={isBubbleFullscreen && fullscreenPanels.length === 2}
               themeMode={effectiveThemeMode}
               showTrainingInvitation={isOnboardingOfferOpen}
-              onOpenTraining={bubbleCallbacks.onOpenTraining}
-              onDismissTraining={bubbleCallbacks.onDismissTraining}
+              onOpenTraining={() => {
+                setTrainingOpenSignal(signal => signal + 1);
+                setIsUpdatesOpen(true);
+              }}
+              onDismissTraining={() => {
+                localStorage.setItem(getOnboardingOfferStorageKey(currentUser.id), '1');
+                setIsOnboardingOfferOpen(false);
+              }}
             tasks={isBubbleFullscreen ? fullscreenBubbleTasks : visibleTasks}
             timelinePreviewTasks={activeTimelineItems}
             spheres={isBubbleFullscreen ? fullscreenBubbleSpheres : visibleSpheres}
             rankingMode="coefficient"
             subtaskMap={displayedSubtaskMap}
             isSubtaskFilterActive={subtaskFilterMode !== 'none'}
-            onToggleSubtaskFilter={bubbleCallbacks.onToggleSubtaskFilter}
+            onToggleSubtaskFilter={() => setSubtaskFilterMode((prev) => (prev === 'none' ? 'urgency' : 'none'))}
             mode={mode}
             poppingTaskId={poppingTaskId}
             hasAiNotification={hasUnreadAiMessage}
             selectedId={editorState?.task?.id}
-            onSelect={bubbleCallbacks.onSelect}
-            onSelectSubtask={bubbleCallbacks.onSelectSubtask}
-            onCreateSubtask={bubbleCallbacks.onCreateSubtask}
-            onBubbleAction={bubbleCallbacks.onBubbleAction}
-            onToggleSubtaskDone={bubbleCallbacks.onToggleSubtaskDone}
-            onUpdateSubtaskDueDate={bubbleCallbacks.onUpdateSubtaskDueDate}
-            onQuickCompleteTask={bubbleCallbacks.onQuickCompleteTask}
-            onQuickChangeTaskImportance={bubbleCallbacks.onQuickChangeTaskImportance}
-            onQuickPostponeTask={bubbleCallbacks.onQuickPostponeTask}
-            onAddTaskToSphere={bubbleCallbacks.onAddTaskToSphere}
-            onRenameSphere={bubbleCallbacks.onRenameSphere}
-            onRescheduleTask={bubbleCallbacks.onRescheduleTask}
-            onOpenInOtherPane={bubbleCallbacks.onOpenInOtherPane}
+            onSelect={(task) => {
+              openTaskWithFocusGuard(task);
+            }}
+            onSelectSubtask={(subtask) => setEditorState({ task: subtask })}
+            onCreateSubtask={async (parentTask, payload) => {
+              await createSubtaskForParent(parentTask, payload);
+            }}
+            onBubbleAction={async (task, payload) => {
+              await api.bubbleAction(task.id, payload);
+              await load();
+            }}
+            onToggleSubtaskDone={toggleSubtaskDone}
+            onUpdateSubtaskDueDate={async (subtask, dueDate) => {
+              await api.updateTask(subtask.id, { dueDate });
+              await load();
+            }}
+            onQuickCompleteTask={completeTask}
+            onQuickChangeTaskImportance={async (task, importanceDelta) => {
+              const nextImportance = Math.max(1, Math.min(5, task.importance + importanceDelta));
+              if (nextImportance === task.importance) return;
+              await api.updateTask(task.id, { importance: nextImportance });
+              await load();
+            }}
+            onQuickPostponeTask={async (task, option) => await quickPostponeTask(task, option)}
+            onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
+            onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
+            onRescheduleTask={(task) => setTimelineReschedulePicker({ taskId: task.id, signal: Date.now() })}
+             onOpenInOtherPane={openTaskInOtherPane}
             forceTaskContextMenuOpen={activeTourStep === 'task-context-menu'}
             isSearchFiltering={Boolean(search.trim())}
             />
