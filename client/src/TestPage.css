@@ -1354,3 +1354,7 @@ body:has(.tp-root) .notes-editor-panel .text-muted {color:var(--text-muted);}
   .tp-root .tp-focus-header-actions,.tp-root .tp-subtask-header-actions {margin-left:auto;}
   .tp-root .tp-rating-details {grid-template-columns:1fr;}
 }
+
+/* Removing the subtask status band also releases the unused vertical space. */
+.tp-root .tp-subtask-focus-dialog {height:auto;max-height:min(610px,92dvh);}
+.tp-root .tp-subtask-focus-body {flex:0 1 auto;min-height:0;}
