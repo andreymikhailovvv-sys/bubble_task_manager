@@ -61,6 +61,7 @@ export function TestPageChat({task,tasks,spheres,onClose,onOpenTask,onDataChange
     return()=>{active=false;};
   },[task?.id]);
 
+  useEffect(()=>{if(!task&&initialMessages)setMessages(initialMessages);},[initialMessages,task?.id]);
   useEffect(()=>{endRef.current?.scrollIntoView({block:'end',behavior:'smooth'});},[messages.length,busy,loading]);
   const taskRefs=useMemo(()=>new Map(tasks.map(task=>[task.id,task])),[tasks]);
   const submit=async (message=draft)=>{
@@ -108,7 +109,7 @@ export function TestPageChat({task,tasks,spheres,onClose,onOpenTask,onDataChange
   return <aside className={'tp-assistant '+(task?'tp-task-chat':'')} role="dialog" aria-label={title} aria-modal={!!task}>
     <header><div className="tp-chat-avatar"><MessageCircle size={19}/></div><div><strong>{title}</strong><small>{task?task.title:'Помощник по задачам'}</small></div>
       <button type="button" onClick={onClose} aria-label="Закрыть чат"><X size={18}/></button></header>
-    <div className="tp-chat-model"><span>Модель ИИ</span><CustomSelect value={model} options={MODEL_OPTIONS} onChange={value=>setModel(value as AiChatModel)} ariaLabel="Выбор модели ИИ"
+    <div className="tp-chat-model"><span>Модель ИИ</span><CustomSelect detachedPopup popupVariant="settings" menuClassName="tp-dropdown-menu" value={model} options={MODEL_OPTIONS} onChange={value=>setModel(value as AiChatModel)} ariaLabel="Выбор модели ИИ"
       disabled={busy || (task?.aiMonitoringEnabled === true)} /></div>
     <div className="tp-chat-list">
       {loading&&<div className="tp-loading"><Loader2 className="tp-spin" size={19}/>Загрузка переписки…</div>}
