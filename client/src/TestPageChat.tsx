@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { ArrowUpRight, Check, Copy, Loader2, MessageCircle, Send, Sparkles, X } from 'lucide-react';
+import { ArrowUpRight, Check, CircleHelp, Copy, Loader2, MessageCircle, Send, Sparkles, X } from 'lucide-react';
 import { api } from './lib/api';
 import type { AiChatModel, ChatMessage, Sphere, Task } from './lib/types';
 import { CustomSelect } from './components/CustomSelect';
 import { VoiceInputButton } from './components/VoiceInputButton';
 import { WorkAiMessageBody } from './components/WorkAiMessageBody';
 import { TestPageTaskProposal, TestPageFinanceProposal } from './TestPageProposalCards';
+import { TestPageCapabilities } from './TestPageCapabilities';
 import { AiGeneratedDocumentButton } from './components/AiGeneratedDocumentButton';
 import { WebCitations } from './components/WebCitations';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
@@ -14,6 +15,8 @@ import { serializeAiReply, AiReplyPreview, type AiReplyTarget, makeAiReplyTarget
 
 type Props = {
   task?: Task | null;
+  theme: 'light' | 'dark';
+  onOpenCheckups?: () => void;
   tasks: Task[];
   spheres: Sphere[];
   onClose: () => void;
@@ -35,7 +38,7 @@ function refs(content:string, tasks:Task[]):Task[] {
 }
 const messageError=(error:unknown)=>error instanceof Error?error.message:'Не удалось отправить сообщение.';
 
-export function TestPageChat({task,tasks,spheres,onClose,onOpenTask,onDataChanged,initialMessages,onMessagesChange}:Props) {
+export function TestPageChat({task,theme,onOpenCheckups,tasks,spheres,onClose,onOpenTask,onDataChanged,initialMessages,onMessagesChange}:Props) {
   const [model,setModel]=useState<AiChatModel>('gpt-6-luna');
   const [draft,setDraft]=useState('');
   const [messages,setMessages]=useState<ChatMessage[]>(initialMessages||[]);
@@ -44,6 +47,7 @@ export function TestPageChat({task,tasks,spheres,onClose,onOpenTask,onDataChange
   const [error,setError]=useState('');
   const [replyTo,setReplyTo]=useState<AiReplyTarget|null>(null);
   const [copied,setCopied]=useState<number|null>(null);
+  const [capabilitiesOpen,setCapabilitiesOpen]=useState(false);
   const endRef=useRef<HTMLDivElement|null>(null);
   const inFlight=useRef(false);
 
@@ -106,9 +110,14 @@ export function TestPageChat({task,tasks,spheres,onClose,onOpenTask,onDataChange
     try{await navigator.clipboard.writeText(content);setCopied(index);}catch{setError('Не удалось скопировать сообщение.');}
   };
   const title=task?'ИИ по задаче':'Планик AI';
-  return <aside className={'tp-assistant '+(task?'tp-task-chat':'')} role="dialog" aria-label={title} aria-modal={!!task}>
-    <header><div className="tp-chat-avatar"><MessageCircle size={19}/></div><div><strong>{title}</strong><small>{task?task.title:'Помощник по задачам'}</small></div>
-      <button type="button" onClick={onClose} aria-label="Закрыть чат"><X size={18}/></button></header>
+  return <>
+    {task&&<div className="tp-chat-modal-backdrop" aria-hidden="true" onMouseDown={onClose}/>}
+    <aside className={'tp-assistant '+(task?'tp-task-chat':'')} role="dialog" aria-label={title} aria-modal={!!task}>
+      <header><div className="tp-chat-avatar"><MessageCircle size={20}/></div><div className="tp-chat-heading"><strong>{title}</strong><small title={task?.title}>{task?task.title:'Помощник по задачам'}</small></div>
+        <button type="button" className="tp-chat-capabilities-button" onClick={()=>setCapabilitiesOpen(true)}
+          aria-label="Возможности чата" title="Возможности чата"><CircleHelp size={19}/><span>Возможности чата</span></button>
+        <button type="button" className="tp-chat-close" onClick={onClose} aria-label="Закрыть чат"><X size={19}/></button>
+      </header>
     <div className="tp-chat-model"><span>Модель ИИ</span><CustomSelect detachedPopup popupVariant="settings" menuClassName="tp-dropdown-menu" value={model} options={MODEL_OPTIONS} onChange={value=>setModel(value as AiChatModel)} ariaLabel="Выбор модели ИИ"
       disabled={busy || (task?.aiMonitoringEnabled === true)} /></div>
     <div className="tp-chat-list">
@@ -147,5 +156,8 @@ export function TestPageChat({task,tasks,spheres,onClose,onOpenTask,onDataChange
         onChange={event=>setDraft(event.target.value)} onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();void submit();}}}/>
       <button type="submit" disabled={busy||!draft.trim()} aria-label="Отправить"><Send size={18}/></button>
     </form>
-  </aside>;
+    </aside>
+    {capabilitiesOpen&&<TestPageCapabilities kind={task?'task':'general'} theme={theme}
+      onOpenCheckups={onOpenCheckups} onClose={()=>setCapabilitiesOpen(false)}/>}
+  </>;
 }

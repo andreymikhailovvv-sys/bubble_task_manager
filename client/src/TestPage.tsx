@@ -14,6 +14,8 @@ import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace'
 import { PlanikMascot } from './components/PlanikMascot';
 import { CustomSelect } from './components/CustomSelect';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
+import { ResizableDescriptionSurface } from './components/ResizableDescriptionSurface';
+import { TestPageTaskDialog } from './TestPageTaskDialog';
 import { TestPageChat } from './TestPageChat';
 import { TestPageSettings } from './TestPageSettings';
 import { CreditUsageStats } from './components/CreditUsageStats';
@@ -67,6 +69,7 @@ export default function TestPage() {
   const [authBusy, setAuthBusy] = useState(false);
   const [authForm, setAuthForm] = useState({ login: '', password: '', email: '', name: '', consent: false });
   const [editor, setEditor] = useState<{ task?: Task; sphereId?: string } | null>(null);
+  const [testTaskDialog, setTestTaskDialog] = useState<{ task?: Task; parentTask?: Task } | null>(null);
   const [sectorEditor, setSectorEditor] = useState<Sphere | 'new' | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [focusChatId, setFocusChatId] = useState<string | null>(null);
@@ -189,6 +192,29 @@ export default function TestPage() {
     void api.recordEfficiencyEvent({ delta: 1, bucket: 'task' }).catch(() => undefined);
     await refresh();
   };
+  const saveTestTask = async (payload: Partial<Task> & {collaborationScope?: 'me'|'all'}) => {
+    if(!testTaskDialog)return;
+    setBusy(true);
+    try {
+      const item=testTaskDialog.task;
+      const parent=testTaskDialog.parentTask;
+      await (item ? api.updateTask(item.id,payload) : api.createTask({...payload,parentTaskId:parent?.id??null,sphereId:payload.sphereId??parent?.sphereId??null}));
+      if(!item)void api.recordEfficiencyEvent({delta:1,bucket:'task'}).catch(()=>undefined);
+      setTestTaskDialog(null);
+      await refresh();
+    }finally{setBusy(false);}
+  };
+  const deleteTestTask = async () => {
+    const task=testTaskDialog?.task;
+    if(!task||!window.confirm('Удалить «'+task.title+'»?'))return;
+    setBusy(true);
+    try{
+      await api.deleteTask(task.id);
+      setTestTaskDialog(null);
+      if(focusId===task.id)setFocusId(null);
+      await refresh();
+    }finally{setBusy(false);}
+  };
   const setComplete = async (task: Task, scope?: 'me' | 'all') => {
     if (!isDone(task) && task.isCollaborative && task.collaborationOwner && !task.parentTaskId && !scope) {
       setCollaborationComplete(task);
@@ -250,12 +276,12 @@ export default function TestPage() {
         aria-label={isDone(task) ? 'Вернуть задачу в работу' : 'Выполнить задачу'}>
         {isDone(task) ? <Check size={16}/> : null}
       </button>
-      <button type="button" className="tp-task-main" onClick={() => task.parentTaskId ? setEditor({ task }) : setFocusId(task.id)}>
+      <button type="button" className="tp-task-main" onClick={() => task.parentTaskId ? setTestTaskDialog({task}) : setFocusId(task.id)}>
         <strong>{task.title}</strong>
         <span>{task.parentTaskId ? (taskLookup.get(task.parentTaskId)?.title || 'Подзадача') : (spheres.find(s => s.id === task.sphereId)?.name || 'Без сектора')}
           <span className="tp-dot">·</span>{isOverdue(task) && <Clock3 size={12} aria-hidden="true"/>}{isOverdue(task) ? 'Просрочено: ' : ''}{dateLabel(task.dueDate, timeZone)}</span>
       </button>
-      {!compact && <button type="button" className="tp-row-edit" aria-label="Редактировать" onClick={() => setEditor({ task })}><Settings2 size={17}/></button>}
+      {!compact && <button type="button" className="tp-row-edit" aria-label="Настроить задачу" onClick={() => setTestTaskDialog({ task })}><Settings2 size={17}/></button>}
       <ChevronRight className="tp-row-chevron" size={16}/>
     </div>
   );
@@ -353,10 +379,11 @@ export default function TestPage() {
       </main>
     </div>
     {user && <button className="tp-mascot" type="button" title="Чат с Плаником" aria-label="Открыть чат с Плаником" onClick={() => setAssistantOpen(previous => !previous)}><PlanikMascot notificationCount={unreadCount} celebrationKey={celebrationKey}/></button>}
-    {assistantOpen && user && <TestPageChat tasks={tasks} spheres={spheres}
+    {assistantOpen && user && <TestPageChat theme={theme} tasks={tasks} spheres={spheres}
+      onOpenCheckups={() => { setAssistantOpen(false); setSettingsOpen(true); }}
       initialMessages={assistantMessages} onMessagesChange={setAssistantMessages}
       onClose={() => setAssistantOpen(false)}
-      onOpenTask={task => { setAssistantOpen(false); task.parentTaskId ? setEditor({task}) : setFocusId(task.id); }}
+      onOpenTask={task => { setAssistantOpen(false); task.parentTaskId ? setTestTaskDialog({task}) : setFocusId(task.id); }}
       onDataChanged={() => void refresh()}/>}
     {focusTask && <FocusedTaskWindowFrame><div className="tp-focus-dialog" role="dialog" aria-modal="true" aria-label="Фокус задачи">
       <header><div><span className="tp-eyebrow">ФОКУС ЗАДАЧИ</span><h2>{focusTask.title}</h2>
@@ -365,23 +392,40 @@ export default function TestPage() {
       </header>
       <div className="tp-focus-description">
         <span className="tp-focus-description-label">Описание задачи</span>
-        <TaskDescriptionInput value={focusDescription} onChange={setFocusDescription} richInlineEditing placeholder="Нажмите, чтобы добавить описание…" className="tp-focus-description-editor"/>
+        <ResizableDescriptionSurface storageKey={'btm:'+user?.id+':test-page:focus-description-height'}
+          initialHeight={146} minHeight={100} maxHeight={320} className="tp-focus-description-resizable">
+          <TaskDescriptionInput value={focusDescription} onChange={setFocusDescription} richInlineEditing
+            placeholder="Нажмите, чтобы добавить описание…" className="tp-focus-description-editor"/>
+        </ResizableDescriptionSurface>
       </div>
-      <div className="tp-focus-subtitle"><strong>Подзадачи</strong><span>{focusSubtasks.filter(isDone).length} из {focusSubtasks.length} выполнено</span></div>
+      <div className="tp-focus-subtitle"><strong>Подзадачи</strong>
+        <span>{focusSubtasks.filter(isDone).length} из {focusSubtasks.length} выполнено</span>
+        <button type="button" className="tp-focus-add-subtask" onClick={() => setTestTaskDialog({parentTask:focusTask})}>
+          <Plus size={16}/> Добавить
+        </button>
+      </div>
       <div className="tp-focus-subtasks">{focusSubtasks.map(item => taskRow(item, true))}{!focusSubtasks.length && <p className="tp-empty">Подзадач пока нет.</p>}</div>
-      <div className="tp-focus-actions"><button className="tp-secondary" type="button" onClick={() => { void saveFocusDescription().catch(cause=>setError(errorText(cause))); setEditor({ task: focusTask }); setFocusId(null); }}><Settings2 size={16}/> Редактировать</button>
+      <div className="tp-focus-actions"><button className="tp-secondary" type="button" onClick={() => { void saveFocusDescription().then(()=>setTestTaskDialog({ task: focusTask })).catch(cause=>setError(errorText(cause))); }}><Settings2 size={16}/> Настроить задачу</button>
         <button className="tp-primary" type="button" onClick={() => { void saveFocusDescription().then(() => { setAssistantOpen(false); setFocusChatId(focusTask.id); }).catch(cause=>setError(errorText(cause))); }}>
           <Sparkles size={16}/> Спросить ИИ</button>
       </div>
     </div></FocusedTaskWindowFrame>}
     {focusChatId && taskLookup.get(focusChatId) && <TestPageChat key={focusChatId}
+      theme={theme} onOpenCheckups={() => { setFocusChatId(null); setSettingsOpen(true); }}
       task={taskLookup.get(focusChatId)} tasks={tasks} spheres={spheres} onDataChanged={() => void refresh()}
       onClose={() => setFocusChatId(null)}
-      onOpenTask={task => { setFocusChatId(null); task.parentTaskId ? setEditor({task}) : setFocusId(task.id); }}/>}
+      onOpenTask={task => { setFocusChatId(null); task.parentTaskId ? setTestTaskDialog({task}) : setFocusId(task.id); }}/>}
     {settingsOpen && user && <TestPageSettings user={user} themeMode={themeMode} onThemeMode={changeThemeMode}
       onUserUpdated={setUser} onClose={() => setSettingsOpen(false)}
       onCheckup={message => { setAssistantMessages(current => [...current,message]); setAssistantOpen(true); }}/>}
     {collaborationComplete && <div className="tp-overlay"><section className="tp-dialog" role="dialog" aria-modal="true" aria-label="Завершить совместную задачу"><header><div><span className="tp-eyebrow">СОВМЕСТНАЯ ЗАДАЧА</span><h2>Завершение задачи</h2></div><button type="button" onClick={() => setCollaborationComplete(null)} aria-label="Закрыть"><X size={19}/></button></header><div className="tp-dialog-content"><p>Для кого завершить задачу «{collaborationComplete.title}»?</p><button type="button" className="tp-secondary" onClick={() => { const task = collaborationComplete; setCollaborationComplete(null); void setComplete(task, 'me'); }}>Только для меня</button><button type="button" className="tp-primary" onClick={() => { const task = collaborationComplete; setCollaborationComplete(null); void setComplete(task, 'all'); }}>Для всех участников</button></div></section></div>}
+    {testTaskDialog && <TestPageTaskDialog
+      key={testTaskDialog.task?.id || 'new-subtask-'+testTaskDialog.parentTask?.id}
+      task={testTaskDialog.task} parentTask={testTaskDialog.parentTask || (testTaskDialog.task?.parentTaskId ? taskLookup.get(testTaskDialog.task.parentTaskId) : undefined)}
+      spheres={spheres} timeZone={timeZone}
+      onClose={() => setTestTaskDialog(null)} onSave={saveTestTask}
+      onDelete={testTaskDialog.task ? deleteTestTask : undefined}
+      onAdvanced={testTaskDialog.task ? () => { setEditor({task:testTaskDialog.task}); setTestTaskDialog(null); } : undefined}/>}
     {editor && <TaskEditor key={editor.task?.id || 'new'} task={editor.task} spheres={spheres} initialSphereId={editor.sphereId} subtasks={editor.task ? tasks.filter(task => task.parentTaskId === editor.task?.id) : []}
       defaultAiNotificationsEnabled={true} timeZone={timeZone} onCancel={() => setEditor(null)}
       onSave={saveTask} onAutoSave={editor.task ? async payload => { await api.updateTask(editor.task!.id, payload); } : undefined}

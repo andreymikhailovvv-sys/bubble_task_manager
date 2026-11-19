@@ -18,10 +18,10 @@ const MailAssistantSettings = lazy(() =>
 
 type ChatKind = 'task' | 'general';
 type Action = 'telegram' | 'mail' | 'checkups';
-type Capability = { title: string; description: string; icon: LucideIcon; action?: Action };
-type CapabilityGroup = { label: string; items: Capability[] };
+export type Capability = { title: string; description: string; icon: LucideIcon; action?: Action };
+export type CapabilityGroup = { label: string; items: Capability[] };
 
-const taskGroups: CapabilityGroup[] = [
+export const taskGroups: CapabilityGroup[] = [
   {
     label: 'Задача и планирование',
     items: [
@@ -50,7 +50,7 @@ const taskGroups: CapabilityGroup[] = [
   }
 ];
 
-const generalGroups: CapabilityGroup[] = [
+export const generalGroups: CapabilityGroup[] = [
   {
     label: 'Задачи и расписание',
     items: [
