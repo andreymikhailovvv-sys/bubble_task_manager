@@ -227,3 +227,62 @@ test('subtask completion bar is shared by overview and task listing and today in
   assert.match(styles, /\.tp-root \.tp-filters \.tp-filter-select \.custom-select-trigger/);
   assert.match(styles, /\.tp-root \.tp-actions>button\.tp-primary:before/);
 });
+
+
+test('Test Page subtask has completion in header, without working-status stripe', () => {
+  const subtask = read('../src/TestPageSubtaskFocus.tsx');
+  assert.match(subtask, /tp-subtask-header-actions/);
+  assert.match(subtask, /tp-subtask-complete/);
+  assert.match(subtask, /onClick=\{\(\)=>void navigate\(onToggleComplete\)\}/);
+  assert.doesNotMatch(subtask, /Подзадача в работе|tp-subtask-status/);
+  assert.match(testPage, /completing=\{completingTaskId===subtaskFocus\.id\}/);
+});
+
+test('Focus task can be completed and reopening a completed task is supported', () => {
+  assert.match(testPage, /tp-focus-header-actions/);
+  assert.match(testPage, /tp-focus-complete/);
+  assert.match(testPage, /isDone\(focusTask\)\?'Вернуть в работу':'Выполнить'/);
+  assert.match(testPage, /saveFocusDescription\(\)\.then\(\(\)=>setComplete\(focusTask\)\)/);
+});
+
+test('successful task and subtask completion animates before refresh and dismissal', () => {
+  assert.match(testPage, /setCompletingTaskId\(task\.id\)/);
+  assert.match(testPage, /await new Promise<void>\(resolve=>window\.setTimeout\(resolve,360\)\)/);
+  assert.match(testPage, /if \(focusId===task\.id\) setFocusId\(null\)/);
+  assert.match(testPage, /if \(subtaskFocusId===task\.id\) setSubtaskFocusId\(null\)/);
+  assert.match(testPage, /completingTaskId===task\.id\?' is-completing'/);
+  assert.match(styles, /@keyframes tp-task-completion-exit/);
+  assert.match(styles, /@keyframes tp-completion-dialog-exit/);
+  assert.match(styles, /prefers-reduced-motion:reduce/);
+});
+
+test('Overview shows live, not fabricated, efficiency rating and breakdown', () => {
+  const rating = read('../src/TestPageRating.tsx');
+  assert.match(testPage, /<TestPageRating user=\{user\}/);
+  assert.match(rating, /user\.efficiencyScore/);
+  for (const field of ['efficiencyTaskScore','efficiencyHabitScore','efficiencyAiScore','efficiencyFocusScore']) {
+    assert.match(rating, new RegExp('user\\\\.' + field));
+  }
+  assert.match(rating, /Рейтинг эффективности/);
+  assert.match(rating, /aria-valuemax=\{100\}/);
+  assert.match(styles, /\.tp-root \.tp-rating-card/);
+});
+
+test('Task and subtask descriptions accept explicit multiline Enter in Focus and settings', () => {
+  const taskEditor = read('../src/TestPageTaskDialog.tsx');
+  const subtaskEditor = read('../src/TestPageSubtaskFocus.tsx');
+  const wrapper = read('../src/components/TaskDescriptionInput.tsx');
+  const rich = read('../src/components/InlineRichDescriptionEditor.tsx');
+  assert.match(testPage, /richInlineEditing enterCreatesLineBreak/);
+  assert.match(taskEditor, /richInlineEditing enterCreatesLineBreak/);
+  assert.match(subtaskEditor, /richInlineEditing enterCreatesLineBreak/);
+  assert.match(wrapper, /enterCreatesLineBreak=\{enterCreatesLineBreak\}/);
+  assert.match(rich, /event\.key === 'Enter'/);
+  assert.match(rich, /event\.nativeEvent\.isComposing/);
+  assert.match(rich, /range\.insertNode\(br\)/);
+  assert.match(rich, /br\.after\(document\.createElement\('br'\)\)/);
+  assert.match(rich, /selection\.addRange\(caret\)/);
+  assert.match(rich, /emitChange\(\)/);
+  assert.match(testPage, /focusDescriptionRef\.current/);
+  assert.match(subtaskEditor, /descriptionRef\.current/);
+});
