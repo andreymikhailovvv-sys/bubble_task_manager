@@ -46,7 +46,7 @@ test('failed transformations are never cached', () => {
 });
 
 test('plain notes never instantiate DOM parser; entities, markup and links still use sanitizer', () => {
-  const globalDocument = globalThis as typeof globalThis & { document?: Document };
+  const globalDocument = globalThis as unknown as { document?: Document };
   const originalDocument = globalDocument.document;
   globalDocument.document = {
     createElement: () => { throw new Error('DOM path required'); }
