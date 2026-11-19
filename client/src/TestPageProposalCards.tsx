@@ -112,11 +112,11 @@ function TaskEditFields({value,onChange,spheres,disabled}:{
   const change=(key:keyof TaskValues,input:string|number|null)=>onChange({...value,[key]:input});
   return <>{(Object.keys(taskFields) as Array<keyof TaskValues>).filter(k=>k in value).map(key=>
     <label className="tp-edit-field" key={key}><span>{taskFields[key]}</span>
-      {key==='sphereId'?<CustomSelect ariaLabel="Сектор" value={value.sphereId||''}
+      {key==='sphereId'?<CustomSelect detachedPopup popupVariant="settings" menuClassName="tp-dropdown-menu" ariaLabel="Сектор" value={value.sphereId||''}
         options={[{value:'',label:'Без сектора'},...spheres.map(s=>({value:s.id,label:s.name,color:s.color}))]}
         disabled={disabled} onChange={s=>change(key,s||null)}/>:
-      key==='status'?<CustomSelect ariaLabel="Статус" value={value.status||'TODO'} options={statusOptions} disabled={disabled} onChange={s=>change(key,s)}/>:
-      (key==='importance'||key==='urgency')?<CustomSelect ariaLabel={taskFields[key]} value={String(value[key]??3)} options={priorityOptions} disabled={disabled} onChange={s=>change(key,Number(s))}/>:
+      key==='status'?<CustomSelect detachedPopup popupVariant="settings" menuClassName="tp-dropdown-menu" ariaLabel="Статус" value={value.status||'TODO'} options={statusOptions} disabled={disabled} onChange={s=>change(key,s)}/>:
+      (key==='importance'||key==='urgency')?<CustomSelect detachedPopup popupVariant="settings" menuClassName="tp-dropdown-menu" ariaLabel={taskFields[key]} value={String(value[key]??3)} options={priorityOptions} disabled={disabled} onChange={s=>change(key,Number(s))}/>:
       key==='dueDate'?<input type="datetime-local" value={localDateTime(value.dueDate)} disabled={disabled} onChange={e=>change(key,e.target.value?new Date(e.target.value).toISOString():null)}/>:
       key==='description'?<textarea rows={4} maxLength={4000} value={value.description||''} disabled={disabled} onChange={e=>change(key,e.target.value)}/>:
       key==='notifyBeforeMinutes'?<input type="number" min={0} max={10080} value={value.notifyBeforeMinutes??0} disabled={disabled} onChange={e=>change(key,Number(e.target.value))}/>:
@@ -219,7 +219,7 @@ function FinanceFields({draft,proposal,options,change,disabled}:{
   return <>{Object.entries(draft).filter(([key])=>key in financeFields).map(([key,value])=>{
     const list=choices(key);
     return <label key={key} className="tp-edit-field"><span>{financeFields[key]}</span>
-      {list?<CustomSelect ariaLabel={financeFields[key]} options={list} disabled={disabled}
+      {list?<CustomSelect detachedPopup popupVariant="settings" menuClassName="tp-dropdown-menu" ariaLabel={financeFields[key]} options={list} disabled={disabled}
         value={typeof value==='boolean'?String(value):String(value??'')}
         onChange={input=>change(key,['postedToAccount','remindersEnabled','isClosed'].includes(key)?input==='true':input)}/>:
       dateKeys.includes(key)?<input type="date" disabled={disabled} value={String(value||'').slice(0,10)} onChange={e=>change(key,e.target.value)}/>:
