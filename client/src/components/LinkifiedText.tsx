@@ -1,4 +1,4 @@
-import type { MouseEvent, ReactNode } from 'react';
+import { memo, useCallback, useMemo, type MouseEvent, type ReactNode } from 'react';
 import { isFormattedNoteHtml, normalizeNoteHref, sanitizeNoteHtml } from '../lib/notes';
 
 type Props = {
@@ -108,19 +108,23 @@ const createFormattedNoteParts = (value: string, onClick: (event: MouseEvent<HTM
   return Array.from(wrapper.childNodes).map((node, index) => createFormattedNoteNode(node, onClick, `fmt-${index}`));
 };
 
-export const LinkifiedText = ({ text, className, fallback = '', stopPropagationOnLinkClick = false }: Props) => {
+// The main workspace may rerender for a clock tick, chat polling or a hover.
+// Text that has not changed must not be sanitized and reconstructed again.
+export const LinkifiedText = memo(function LinkifiedText({
+  text, className, fallback = '', stopPropagationOnLinkClick = false
+}: Props) {
   const value = text?.trim() || fallback;
+  const handleLinkClick = useCallback((event: MouseEvent<HTMLAnchorElement>) => {
+    if (stopPropagationOnLinkClick) event.stopPropagation();
+  }, [stopPropagationOnLinkClick]);
+
+  const content = useMemo(() => {
+    if (!value) return null;
+    return isFormattedNoteHtml(value)
+      ? createFormattedNoteParts(value, handleLinkClick)
+      : createLinkedTextParts(value, handleLinkClick, 'plain');
+  }, [value, handleLinkClick]);
+
   if (!value) return null;
-
-  const handleLinkClick = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (stopPropagationOnLinkClick) {
-      event.stopPropagation();
-    }
-  };
-
-  const content = isFormattedNoteHtml(value)
-    ? createFormattedNoteParts(value, handleLinkClick)
-    : createLinkedTextParts(value, handleLinkClick, 'plain');
-
   return <span className={`min-w-0 max-w-full break-words [overflow-wrap:anywhere] ${className ?? ''}`}>{content}</span>;
-};
+});
