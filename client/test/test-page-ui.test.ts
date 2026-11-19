@@ -29,11 +29,30 @@ test('dashboard uses live task, sector, credits, subscriptions and notes data', 
   assert.doesNotMatch(testPage, /mockTasks|mockCredits|dummyTask|fakeBalance/);
 });
 
-test('full Focus deep link resolves to the unchanged native focus window', () => {
-  assert.match(testPage, /\?focusTask=/);
-  assert.match(planner, /url\.searchParams\.get\('focusTask'\)/);
-  assert.match(planner, /setFocusedTaskId\(requestedId\)/);
-  assert.match(planner, /<FocusedTaskWindowFrame/);
+test('Focus stays inside Test Page and opens full task AI chat with Luna by default', () => {
+  const chat = read('../src/TestPageChat.tsx');
+  assert.match(testPage, /Спросить ИИ/);
+  assert.match(testPage, /<FocusedTaskWindowFrame/);
+  assert.match(testPage, /<TaskDescriptionInput[^>]+richInlineEditing/);
+  assert.match(testPage, /focusSubtaskSort/);
+  assert.match(chat, /<TestPageTaskProposal/);
+  assert.match(chat, /<TestPageFinanceProposal/);
+  assert.match(chat, /<WorkAiMessageBody/);
+  assert.match(chat, /'gpt-6-luna'/);
+  assert.match(chat, /api\.askTaskAssistant/);
+  assert.match(chat, /api\.getTaskAssistantHistory/);
+});
+test('settings and proposals stay on Test Page with reusable services and separate edit dialogs', () => {
+  const settings = read('../src/TestPageSettings.tsx');
+  const proposals = read('../src/TestPageProposalCards.tsx');
+  assert.match(testPage, /<TestPageSettings/);
+  assert.match(testPage, /is-overdue/);
+  assert.match(settings, /<AiCheckupScheduleSettings/);
+  assert.match(settings, /api\.updateUserSettings/);
+  assert.match(proposals, /function EditModal/);
+  assert.match(proposals, /api\.approveAiTaskProposal/);
+  assert.match(proposals, /api\.setAiTaskProposalPreference/);
+  assert.match(proposals, /\/preferences/);
 });
 
 test('blue Test Page theme is isolated from the Economic golden theme and mobile friendly', () => {
