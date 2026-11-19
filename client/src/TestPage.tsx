@@ -19,6 +19,7 @@ import { ResizableDescriptionSurface } from './components/ResizableDescriptionSu
 import { TestPageTaskDialog } from './TestPageTaskDialog';
 import { TestPageSubtaskFocus } from './TestPageSubtaskFocus';
 import { TestPageHabits } from './TestPageHabits';
+import { TestPageRating } from './TestPageRating';
 import { WorkspaceGlobalSearch } from './components/WorkspaceGlobalSearch';
 import { matchesWorkspaceText } from './lib/workspaceSearch';
 import { TestPageChat } from './TestPageChat';
@@ -85,6 +86,9 @@ export default function TestPage() {
   const [focusId, setFocusId] = useState<string | null>(null);
   const [focusChatId, setFocusChatId] = useState<string | null>(null);
   const [focusDescription, setFocusDescription] = useState('');
+  const focusDescriptionRef = useRef('');
+  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
+  const completionInFlightRef = useRef(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [collaborationComplete, setCollaborationComplete] = useState<Task | null>(null);
   const [query, setQuery] = useState('');
@@ -177,7 +181,11 @@ export default function TestPage() {
     }
     return progress;
   },[subtasks]);
-  useEffect(() => { setFocusDescription(focusTask?.description || ''); }, [focusId]);
+  useEffect(() => {
+    const content=focusTask?.description || '';
+    focusDescriptionRef.current=content;
+    setFocusDescription(content);
+  }, [focusId]);
   useEffect(() => {
     if (!focusTask || focusDescription === (focusTask.description || '')) return;
     const id = focusTask.id;
@@ -188,9 +196,13 @@ export default function TestPage() {
     }, 900);
     return () => window.clearTimeout(pending);
   }, [focusDescription, focusId, focusTask?.description]);
+  const editFocusDescription = (next: string) => {focusDescriptionRef.current=next;setFocusDescription(next);};
   const saveFocusDescription = async () => {
-    if (focusTask && focusDescription !== (focusTask.description || '')) {
-      const saved = await api.updateTask(focusTask.id, { description: focusDescription });
+    // The editor flushes buffered keystrokes on pointerdown. Read its
+    // synchronous ref so clicking Complete never discards the final newline.
+    const content=focusDescriptionRef.current;
+    if (focusTask && content !== (focusTask.description || '')) {
+      const saved = await api.updateTask(focusTask.id, { description: content });
       setTasks(current => current.map(item => item.id === saved.id ? { ...item, description: saved.description } : item));
     }
   };
@@ -301,18 +313,33 @@ export default function TestPage() {
     }finally{setBusy(false);}
   };
   const setComplete = async (task: Task, scope?: 'me' | 'all') => {
+    if (completionInFlightRef.current) return;
     if (!isDone(task) && task.isCollaborative && task.collaborationOwner && !task.parentTaskId && !scope) {
       setCollaborationComplete(task);
       return;
     }
+    completionInFlightRef.current=true;
     try {
-      await api.updateTask(task.id, { status: isDone(task) ? 'TODO' : 'DONE', ...(task.isCollaborative ? { collaborationScope: scope ?? 'me' } : {}) });
-      if (!isDone(task)) {
+      const markingDone=!isDone(task);
+      await api.updateTask(task.id, {
+        status: markingDone ? 'DONE' : 'TODO',
+        ...(task.isCollaborative ? { collaborationScope: scope ?? 'me' } : {})
+      });
+      if (markingDone) {
+        // Keep the outgoing row/modal mounted until the completion transition
+        // finishes. Refreshing first would remove it before it could animate.
+        setCompletingTaskId(task.id);
         setCelebrationKey(previous => previous + 1);
-        void api.recordEfficiencyEvent({ delta: task.parentTaskId ? 1.2 : 4, bucket: 'task' }).catch(() => undefined);
+        void api.recordEfficiencyEvent({ delta: task.parentTaskId ? 1.2 : 4, bucket: 'task' })
+          .then(score=>setUser(current=>current?{...current,...score}:current))
+          .catch(()=>undefined);
+        await new Promise<void>(resolve=>window.setTimeout(resolve,360));
+        if (focusId===task.id) setFocusId(null);
+        if (subtaskFocusId===task.id) setSubtaskFocusId(null);
       }
       await refresh();
     } catch (cause) { setError(errorText(cause)); }
+    finally {setCompletingTaskId(null);completionInFlightRef.current=false;}
   };
   const saveSphere = async (payload: Partial<Sphere>) => {
     try {
@@ -355,7 +382,7 @@ export default function TestPage() {
   };
 
   const taskRow = (task: Task, compact = false) => (
-    <div key={task.id} className={'tp-task-row' + (isDone(task) ? ' is-done' : '') + (isOverdue(task) ? ' is-overdue' : '')}>
+    <div key={task.id} className={'tp-task-row' + (isDone(task) ? ' is-done' : '') + (isOverdue(task) ? ' is-overdue' : '') + (completingTaskId===task.id?' is-completing':'')}>
       <button type="button" className="tp-task-check" onClick={() => void setComplete(task)}
         title={isDone(task) ? 'Вернуть в работу' : 'Отметить выполненной'}
         aria-label={isDone(task) ? 'Вернуть задачу в работу' : 'Выполнить задачу'}>
@@ -437,6 +464,7 @@ export default function TestPage() {
               {progressCard('Общий прогресс', totalDone, rootTasks.length, 'Выполнено из всех ваших задач')}
               <button type="button" className="tp-card tp-credit-card" onClick={() => void openCredits()}><span className="tp-card-eyebrow"><Coins size={17}/> ИИ-кредиты</span><strong>{formatCredits((user.aiCreditsMilli ?? (user.aiCredits ?? 0) * 1000) / 1000)}</strong><span>Доступный баланс</span><span className="tp-card-link">Подписки и статистика <ChevronRight size={16}/></span></button>
             </div>
+            <TestPageRating user={user} onRefresh={()=>void refresh()}/>
             <div className="tp-board">
               <section className="tp-card"><div className="tp-card-head tp-overview-tasks-head"><div><h2>Мои задачи</h2><p>Ближайшие дела и ваши приоритеты</p></div>
                 <div className="tp-overview-task-tools">
@@ -516,16 +544,25 @@ export default function TestPage() {
       onClose={() => setAssistantOpen(false)}
       onOpenTask={task => { setAssistantOpen(false); task.parentTaskId ? setSubtaskFocusId(task.id) : setFocusId(task.id); }}
       onDataChanged={() => void refresh()}/>}
-    {focusTask && <FocusedTaskWindowFrame><div className={'tp-focus-dialog'+(!focusSubtasks.length?' tp-focus-empty':'')} role="dialog" aria-modal="true" aria-label="Фокус задачи">
+    {focusTask && <FocusedTaskWindowFrame><div className={'tp-focus-dialog'+(!focusSubtasks.length?' tp-focus-empty':'')+(completingTaskId===focusTask.id?' is-completing':'')} role="dialog" aria-modal="true" aria-label="Фокус задачи">
       <header><div><span className="tp-eyebrow">ФОКУС ЗАДАЧИ</span><h2>{focusTask.title}</h2>
         <p>{spheres.find(sphere => sphere.id === focusTask.sphereId)?.name || 'Без сектора'} · {dateLabel(focusTask.dueDate, timeZone)}</p></div>
-        <button type="button" onClick={() => { void saveFocusDescription().catch(cause => setError(errorText(cause))); setFocusId(null); }} aria-label="Закрыть"><X size={19}/></button>
+        <div className="tp-focus-header-actions">
+          <button type="button" className={'tp-focus-complete'+(isDone(focusTask)?' is-complete':'')}
+            disabled={completingTaskId===focusTask.id}
+            aria-label={isDone(focusTask)?'Вернуть задачу в работу':'Выполнить задачу'}
+            onClick={() => { void saveFocusDescription().then(()=>setComplete(focusTask)).catch(cause=>setError(errorText(cause))); }}>
+            <Check size={16}/>{isDone(focusTask)?'Вернуть в работу':'Выполнить'}
+          </button>
+          <button type="button" onClick={() => { void saveFocusDescription().catch(cause => setError(errorText(cause))); setFocusId(null); }} aria-label="Закрыть"><X size={19}/></button>
+        </div>
       </header>
       <div className="tp-focus-description">
         <span className="tp-focus-description-label">Описание задачи</span>
         <ResizableDescriptionSurface storageKey={'btm:'+user?.id+':test-page:focus-description-height'}
           initialHeight={146} minHeight={100} maxHeight={320} className="tp-focus-description-resizable">
-          <TaskDescriptionInput value={focusDescription} onChange={setFocusDescription} richInlineEditing
+          <TaskDescriptionInput value={focusDescription} onChange={editFocusDescription}
+            richInlineEditing enterCreatesLineBreak
             placeholder="Нажмите, чтобы добавить описание…" className="tp-focus-description-editor"/>
         </ResizableDescriptionSurface>
       </div>
@@ -542,7 +579,8 @@ export default function TestPage() {
       </div>
     </div></FocusedTaskWindowFrame>}
     {subtaskFocus&&user&&<TestPageSubtaskFocus key={subtaskFocus.id}
-      task={subtaskFocus} parentTask={subtaskFocus.parentTaskId ? taskLookup.get(subtaskFocus.parentTaskId) : undefined}
+      task={subtaskFocus} completing={completingTaskId===subtaskFocus.id}
+      parentTask={subtaskFocus.parentTaskId ? taskLookup.get(subtaskFocus.parentTaskId) : undefined}
       userId={user.id} timeZone={timeZone}
       onClose={()=>setSubtaskFocusId(null)}
       onSaveDescription={async description=>{
