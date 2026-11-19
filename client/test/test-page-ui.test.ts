@@ -261,7 +261,7 @@ test('Overview shows live, not fabricated, efficiency rating and breakdown', () 
   assert.match(testPage, /<TestPageRating user=\{user\}/);
   assert.match(rating, /user\.efficiencyScore/);
   for (const field of ['efficiencyTaskScore','efficiencyHabitScore','efficiencyAiScore','efficiencyFocusScore']) {
-    assert.match(rating, new RegExp('user\\\\.' + field));
+    assert.match(rating, new RegExp('user\\.' + field));
   }
   assert.match(rating, /Рейтинг эффективности/);
   assert.match(rating, /aria-valuemax=\{100\}/);
