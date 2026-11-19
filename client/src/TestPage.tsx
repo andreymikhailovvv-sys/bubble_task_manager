@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import {
   ArrowRight, BookOpenText, CalendarClock, Check, CheckCircle2, ChevronRight, CircleHelp,
   Coins, FolderKanban, LayoutDashboard, ListTodo, Loader2, LogIn, Menu,
-  Clock3, Plus, Search, Settings, Settings2, SlidersHorizontal, Sparkles, Trash2,
+  Clock3, ChevronDown, ChevronUp, Plus, Search, Settings, Settings2, SlidersHorizontal, Sparkles, Trash2,
   TrendingUp, UserPlus, X
 } from 'lucide-react';
-import { api, type CurrentUser, type CreditUsageStatistics, type SubscriptionLinks } from './lib/api';
+import { api, type CreditPack, type CurrentUser, type CreditUsageStatistics, type SubscriptionLinks } from './lib/api';
 import { showBrowserSystemNotification } from './lib/browser-system-notifications';
 import type { ChatAttachmentPayload, ChatMessage, Sphere, Task } from './lib/types';
 import { TaskEditor } from './components/TaskEditor';
@@ -20,6 +20,9 @@ import { TestPageTaskDialog } from './TestPageTaskDialog';
 import { TestPageSubtaskFocus } from './TestPageSubtaskFocus';
 import { TestPageHabits } from './TestPageHabits';
 import { TestPageRating } from './TestPageRating';
+import { TestPageIntegrationsDialog } from './TestPageIntegrationsDialog';
+import { NotesEditor } from './components/NotesEditor';
+import { useCreditPurchase } from './lib/useCreditPurchase';
 import { WorkspaceGlobalSearch } from './components/WorkspaceGlobalSearch';
 import { matchesWorkspaceText } from './lib/workspaceSearch';
 import { TestPageChat } from './TestPageChat';
@@ -86,6 +89,8 @@ export default function TestPage() {
   const [focusId, setFocusId] = useState<string | null>(null);
   const [focusChatId, setFocusChatId] = useState<string | null>(null);
   const [focusDescription, setFocusDescription] = useState('');
+  const [focusNotesOpen,setFocusNotesOpen]=useState(false);
+  const [heroHidden,setHeroHidden]=useState(false);
   const focusDescriptionRef = useRef('');
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const completionInFlightRef = useRef(false);
@@ -99,7 +104,14 @@ export default function TestPage() {
   const [subscriptionLinks, setSubscriptionLinks] = useState<SubscriptionLinks | null>(null);
   const [creditError, setCreditError] = useState('');
   const [creditsBusy, setCreditsBusy] = useState(false);
-  const [creditTab, setCreditTab] = useState<'plans' | 'stats'>('plans');
+  const [creditTab, setCreditTab] = useState<'packs' | 'plans' | 'stats'>('packs');
+  const [creditPacks,setCreditPacks]=useState<CreditPack[]>([]);
+  const [creditPurchaseAvailable,setCreditPurchaseAvailable]=useState(false);
+  const creditPurchase=useCreditPurchase({
+    surface:'web',
+    openConfirmation:url=>window.location.assign(url),
+    onSucceeded:async()=>{const me=await api.getMe();setUser(me.user);}
+  });
   const [integrationOpen, setIntegrationOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantMessages, setAssistantMessages] = useState<ChatMessage[]>([]);
@@ -117,6 +129,18 @@ export default function TestPage() {
   useEffect(() => {
     if (user) setThemeMode(loadThemePreference(localStorage, 'btm:' + user.id + ':theme-mode'));
   }, [user?.id]);
+  useEffect(()=>{
+    if(!user?.id)return;
+    try{setHeroHidden(localStorage.getItem('btm:'+user.id+':test-page:hero-hidden')==='1');}
+    catch{setHeroHidden(false);}
+  },[user?.id]);
+  const toggleHero=()=>{
+    setHeroHidden(hidden=>{
+      const next=!hidden;
+      if(user?.id)try{localStorage.setItem('btm:'+user.id+':test-page:hero-hidden',next?'1':'0');}catch{}
+      return next;
+    });
+  };
   useEffect(() => {
     const apply = () => setTheme(resolveThemeMode(themeMode, timeZone, new Date()));
     apply();
@@ -164,8 +188,7 @@ export default function TestPage() {
     if (sphereFilter !== 'all' && (task.sphereId || 'none') !== sphereFilter) return false;
     if (statusFilter === 'active' && isDone(task)) return false;
     if (statusFilter === 'done' && !isDone(task)) return false;
-    const name = (task.title + ' ' + (task.description || '')).toLocaleLowerCase('ru-RU');
-    return name.includes(query.trim().toLocaleLowerCase('ru-RU'));
+    return !query.trim() || matchesWorkspaceText(task.title+' '+(task.description||''),query);
   }).sort((a, b) => Number(isDone(a)) - Number(isDone(b)) || sortByDate(a, b));
   const focusTask = focusId ? taskLookup.get(focusId) : undefined;
   const subtaskFocus = subtaskFocusId ? taskLookup.get(subtaskFocusId) : undefined;
@@ -182,6 +205,7 @@ export default function TestPage() {
     return progress;
   },[subtasks]);
   useEffect(() => {
+    setFocusNotesOpen(false);
     const content=focusTask?.description || '';
     focusDescriptionRef.current=content;
     setFocusDescription(content);
@@ -371,12 +395,22 @@ export default function TestPage() {
   };
   const openCredits = async () => {
     setCreditsOpen(true);
+    setCreditTab('packs');
     setCreditsBusy(true);
     setCreditError('');
     try {
-      const [stats, links] = await Promise.all([api.getCreditUsageStatistics(), api.getSubscriptionLinks()]);
-      setCreditStats(stats.statistics);
-      setSubscriptionLinks(links.links);
+      const [stats,links,packs]=await Promise.allSettled([
+        api.getCreditUsageStatistics(),api.getSubscriptionLinks(),api.getCreditPacks()
+      ]);
+      if(stats.status==='fulfilled')setCreditStats(stats.value.statistics);
+      if(links.status==='fulfilled')setSubscriptionLinks(links.value.links);
+      if(packs.status==='fulfilled'){
+        setCreditPacks(packs.value.packs);
+        setCreditPurchaseAvailable(packs.value.purchaseAvailable);
+      }else{
+        setCreditPacks([]);setCreditPurchaseAvailable(false);
+        setCreditError(errorText(packs.reason));
+      }
     } catch (cause) { setCreditError(errorText(cause)); }
     finally { setCreditsBusy(false); }
   };
@@ -457,8 +491,17 @@ export default function TestPage() {
           </section>
         ) : <>
           {section === 'overview' && <>
-            <section className="tp-hero"><div><span className="tp-kicker"><Sparkles size={16}/> Ваш день в порядке</span><h2>Держите задачи<br/><em>под контролем.</em></h2><p>Задачи, ближайшие шаги и результаты в одном спокойном пространстве.</p><button type="button" onClick={() => setTestTaskDialog({})}><Plus size={16}/> Добавить задачу</button></div>
-              <div className="tp-hero-art" aria-hidden="true"><div className="tp-orbit one"/><div className="tp-orbit two"/><div className="tp-hero-main"><CheckCircle2 size={70}/></div><div className="tp-art-satellite small"/><div className="tp-art-satellite big"/></div></section>
+            {!heroHidden?<section className="tp-hero">
+              <div><span className="tp-kicker"><Sparkles size={16}/> Ваш день в порядке</span>
+                <h2>Держите задачи<br/><em>под контролем.</em></h2>
+                <p>Задачи, ближайшие шаги и результаты в одном спокойном пространстве.</p>
+                <button type="button" onClick={() => setTestTaskDialog({})}><Plus size={16}/> Добавить задачу</button>
+              </div>
+              <div className="tp-hero-art" aria-hidden="true"><div className="tp-orbit one"/><div className="tp-orbit two"/><div className="tp-hero-main"><CheckCircle2 size={70}/></div><div className="tp-art-satellite small"/><div className="tp-art-satellite big"/></div>
+              <button type="button" className="tp-hero-collapse" onClick={toggleHero} aria-expanded="true"
+                aria-label="Свернуть приветственный блок" title="Свернуть блок"><ChevronUp size={18}/></button>
+            </section>:<button type="button" className="tp-hero-restore" onClick={toggleHero}
+              aria-expanded="false"><ChevronDown size={16}/> Развернуть приветственный блок</button>}
             <div className="tp-progress-grid">
               {progressCard('План на сегодня', todayDone, todayTasks.length, todayTasks.length ? 'Задачи и подзадачи, назначенные на сегодня' : 'На сегодня задач и подзадач пока нет', 'tp-featured')}
               {progressCard('Общий прогресс', totalDone, rootTasks.length, 'Выполнено из всех ваших задач')}
@@ -565,6 +608,9 @@ export default function TestPage() {
             richInlineEditing enterCreatesLineBreak
             placeholder="Нажмите, чтобы добавить описание…" className="tp-focus-description-editor"/>
         </ResizableDescriptionSurface>
+        <button type="button" className="tp-description-notes-button" onClick={()=>setFocusNotesOpen(true)}>
+          <Settings2 size={15}/> Редактировать описание
+        </button>
       </div>
       <div className="tp-focus-subtitle"><strong>Подзадачи</strong>
         <span>{focusSubtasks.filter(isDone).length} из {focusSubtasks.length} выполнено</span>
@@ -578,6 +624,9 @@ export default function TestPage() {
           <Sparkles size={16}/> Спросить ИИ</button>
       </div>
     </div></FocusedTaskWindowFrame>}
+    {focusNotesOpen&&focusTask&&<NotesEditor key={focusTask.id} heading="Описание задачи"
+      value={focusDescription} onChange={editFocusDescription}
+      onClose={()=>{setFocusNotesOpen(false);void saveFocusDescription().catch(cause=>setError(errorText(cause)));}}/>}
     {subtaskFocus&&user&&<TestPageSubtaskFocus key={subtaskFocus.id}
       task={subtaskFocus} completing={completingTaskId===subtaskFocus.id}
       parentTask={subtaskFocus.parentTaskId ? taskLookup.get(subtaskFocus.parentTaskId) : undefined}
