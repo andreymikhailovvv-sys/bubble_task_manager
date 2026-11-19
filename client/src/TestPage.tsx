@@ -206,6 +206,8 @@ export default function TestPage() {
     }else if(task.parentTaskId)setSubtaskFocusId(task.id);
     else setFocusId(task.id);
   },[taskLookup]);
+  const openNoticeRef=useRef(openNotice);
+  useEffect(()=>{openNoticeRef.current=openNotice;},[openNotice]);
   // Poll the same persisted feed as classic Planner; first load only sets a
   // baseline, so an old backlog never spams left-side alerts.
   useEffect(()=>{
@@ -224,9 +226,11 @@ export default function TestPage() {
         setUnreadCount(notices.filter(item=>item.readAt==null).length);
         if(baseline){
           for(const item of newcomers){
-            if(item.readAt==null)void showBrowserSystemNotification(user.id,item,()=>openNotice(item));
+            if(item.readAt==null&&user.browserNotificationsEnabled!==false)
+              void showBrowserSystemNotification(user.id,item,()=>openNoticeRef.current(item));
           }
-          const unseen=newcomers.filter(item=>item.readAt==null).at(-1);
+          const unreadNew=newcomers.filter(item=>item.readAt==null);
+          const unseen=unreadNew[unreadNew.length-1];
           if(unseen&&document.visibilityState==='visible'){
             setNoticeToast(unseen);
             if(toastTimeout!==undefined)window.clearTimeout(toastTimeout);
@@ -239,7 +243,7 @@ export default function TestPage() {
     void pull();
     const timer=window.setInterval(pull,15_000);
     return()=>{active=false;window.clearInterval(timer);if(toastTimeout!==undefined)window.clearTimeout(toastTimeout);noticedIds.current.clear();};
-  },[user?.id,openNotice]);
+  },[user?.id,user?.browserNotificationsEnabled]);
   useEffect(()=>{
     if(!assistantOpen||!unreadCount)return;
     setUnreadCount(0);
