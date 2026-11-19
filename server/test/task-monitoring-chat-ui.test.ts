@@ -232,7 +232,8 @@ test('Planik modal hover reveals the same quick chat panel, and typing follows A
   assert.doesNotMatch(expanded, /setTypingSignal/);
   assert.match(mascot, /document\.addEventListener\('pointermove', onPointerMove, \{ passive: true \}\)/);
   assert.match(mascot, /window\.requestAnimationFrame\(update\)/);
-  assert.match(mascot, /busy \? \(isPainting \? 'painting' : isSearching \? 'searching' : 'typing'\)/);
+  assert.match(mascot, /busy \? \(isPainting \? 'painting' : isSearching \? 'searching' : isThinking \? 'thinking' : 'typing'\)/);
+  assert.match(mascot, /progress === 'analyzing_request'/);
   assert.match(mascot, /progress === 'generating_image' \|\| progress === 'editing_image'/);
   assert.doesNotMatch(mascot, /setTyping\(true\)/);
   assert.doesNotMatch(mascot, /typingText|priorDraft/);
