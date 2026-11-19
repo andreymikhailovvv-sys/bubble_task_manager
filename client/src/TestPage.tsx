@@ -271,7 +271,7 @@ export default function TestPage() {
     </article>
   );
 
-  return <div className={'tp-root ' + (theme === 'light' ? 'tp-light' : 'tp-dark')}>
+  return <div data-theme={theme} className={'tp-root ' + (theme === 'light' ? 'tp-light' : 'tp-dark')}>
     <div className="tp-shell">
       <aside className={'tp-sidebar' + (menuOpen ? ' is-open' : '')}>
         <a className="tp-brand" href="/test-page"><span className="tp-brand-icon"><ListTodo size={25}/></span><span><strong>Планировыч AI</strong><small>Личное пространство</small></span></a>
