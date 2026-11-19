@@ -5,11 +5,13 @@ import { readFileSync } from 'node:fs';
 const component = readFileSync(new URL('../../client/src/components/TelegramIntegrationsMenu.tsx', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../../client/src/components/TelegramIntegrationsMenu.css', import.meta.url), 'utf8');
 
-test('integrations popup is portaled to document.body instead of being clipped by header stacking context', () => {
+test('integrations popup stays portaled to body in normal mode and embeds safely in the Test Page dialog', () => {
   assert.match(component, /import \{ createPortal \} from 'react-dom'/);
-  assert.match(component, /\{open && placement && createPortal\(/);
-  assert.match(component, /integration-menu__popup fixed z-\[900\]/);
-  assert.match(component, /<\/div>, document\.body\s*\)\}/);
+  assert.match(component, /\(embedded \|\| \(open && placement\)\)/);
+  assert.match(component, /createPortal\(/);
+  assert.match(component, /'fixed z-\[900\] shadow-2xl'/);
+  assert.match(component, /embedded \? embeddedTarget! : document\.body/);
+  assert.match(component, /'tp-embedded-integration-list'/);
   assert.doesNotMatch(component, /integration-menu__popup absolute/);
 });
 
