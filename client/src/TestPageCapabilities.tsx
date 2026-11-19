@@ -26,12 +26,11 @@ export function TestPageCapabilities({kind,theme,onClose,onOpenCheckups}:Props) 
     return()=>document.removeEventListener('keydown',escape,true);
   },[onClose]);
   const open=(action:'telegram'|'mail'|'checkups')=>{
-    onClose();
-    if(action==='checkups')onOpenCheckups?.();
+    if(action==='checkups') { onClose(); onOpenCheckups?.(); }
     else setIntegration(action);
   };
   return <>
-    {createPortal(<div className={'tp-root tp-capabilities-overlay '+(theme==='light'?'tp-light':'tp-dark')}
+    {!integration&&createPortal(<div className={'tp-root tp-capabilities-overlay '+(theme==='light'?'tp-light':'tp-dark')}
       data-theme={theme} onMouseDown={event=>{if(event.target===event.currentTarget)onClose();}}>
       <section className="tp-capabilities-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <header><span className="tp-capabilities-header-icon"><Sparkles size={24}/></span>
