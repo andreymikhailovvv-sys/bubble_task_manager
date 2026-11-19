@@ -196,6 +196,7 @@ export default function TestPage() {
     }, 900);
     return () => window.clearTimeout(pending);
   }, [focusDescription, focusId, focusTask?.description]);
+  const editFocusDescription = (next: string) => {focusDescriptionRef.current=next;setFocusDescription(next);};
   const saveFocusDescription = async () => {
     // The editor flushes buffered keystrokes on pointerdown. Read its
     // synchronous ref so clicking Complete never discards the final newline.
@@ -560,7 +561,7 @@ export default function TestPage() {
         <span className="tp-focus-description-label">Описание задачи</span>
         <ResizableDescriptionSurface storageKey={'btm:'+user?.id+':test-page:focus-description-height'}
           initialHeight={146} minHeight={100} maxHeight={320} className="tp-focus-description-resizable">
-          <TaskDescriptionInput value={focusDescription} onChange={next=>{focusDescriptionRef.current=next;setFocusDescription(next);}}
+          <TaskDescriptionInput value={focusDescription} onChange={editFocusDescription}
             richInlineEditing enterCreatesLineBreak
             placeholder="Нажмите, чтобы добавить описание…" className="tp-focus-description-editor"/>
         </ResizableDescriptionSurface>
