@@ -15,7 +15,9 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Chromium 1.56 and its dependency installer support Ubuntu 24.04.
+    # Pin the runner instead of relying on a moving ubuntu-latest image.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Check out source
