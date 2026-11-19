@@ -75,7 +75,7 @@ export function TestPageTaskDialog({task,parentTask,spheres,timeZone,onSave,onCl
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const [advancedOpen,setAdvancedOpen]=useState(false);
-  const set = <K extends keyof typeof draft>(key:K,value:(typeof draft)[K]) =>
+  const set = <K extends keyof typeof draft,>(key:K,value:(typeof draft)[K]) =>
     setDraft(current=>({...current,[key]:value}));
   const changeSlot=(index:number,patch:Partial<RecurrenceSlot>)=>{
     setRecurrenceTouched(true);
