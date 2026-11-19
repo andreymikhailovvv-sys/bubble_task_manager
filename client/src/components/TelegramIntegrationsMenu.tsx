@@ -42,7 +42,8 @@ export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null,
   }, []);
 
   const scheduleClose = useCallback(() => {
-    if (tourIntegration || embedded) return;
+    if (tourIntegration) return;
+    if (embedded) return;
     cancelClose();
     // The popup is portaled outside the header: allow the pointer to cross
     // the small gap without making the menu vanish.
@@ -122,7 +123,8 @@ export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null,
     };
     const onOutside = (e: PointerEvent) => {
       const target = e.target as Node;
-      if (tourIntegration || embedded) return;
+      if (tourIntegration) return;
+    if (embedded) return;
       if (!dialogOpen && !popupRef.current?.contains(target) && !floatingRef.current?.contains(target)) {
         cancelClose();
         setOpen(false);
