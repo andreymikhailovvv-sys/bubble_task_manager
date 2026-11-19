@@ -16,6 +16,10 @@ import { CustomSelect } from './components/CustomSelect';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { ResizableDescriptionSurface } from './components/ResizableDescriptionSurface';
 import { TestPageTaskDialog } from './TestPageTaskDialog';
+import { TestPageSubtaskFocus } from './TestPageSubtaskFocus';
+import { TestPageHabits } from './TestPageHabits';
+import { WorkspaceGlobalSearch } from './components/WorkspaceGlobalSearch';
+import { matchesWorkspaceText } from './lib/workspaceSearch';
 import { TestPageChat } from './TestPageChat';
 import { TestPageSettings } from './TestPageSettings';
 import { CreditUsageStats } from './components/CreditUsageStats';
@@ -70,6 +74,11 @@ export default function TestPage() {
   const [authForm, setAuthForm] = useState({ login: '', password: '', email: '', name: '', consent: false });
   const [editor, setEditor] = useState<{ task?: Task; sphereId?: string } | null>(null);
   const [testTaskDialog, setTestTaskDialog] = useState<{ task?: Task; parentTask?: Task } | null>(null);
+  const [subtaskFocusId, setSubtaskFocusId] = useState<string | null>(null);
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [requestedNote, setRequestedNote] = useState<{id:string;serial:number}|null>(null);
+  const [overviewSearchOpen, setOverviewSearchOpen] = useState(false);
+  const [overviewQuery, setOverviewQuery] = useState('');
   const [sectorEditor, setSectorEditor] = useState<Sphere | 'new' | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [focusChatId, setFocusChatId] = useState<string | null>(null);
@@ -138,6 +147,9 @@ export default function TestPage() {
   const totalDone = rootTasks.filter(isDone).length;
   const activeTasks = rootTasks.filter(task => !isDone(task)).sort(sortByDate);
   const upcomingSubtasks = subtasks.filter(task => !isDone(task) && !!task.dueDate).sort(sortByDate);
+  const overviewTasks = overviewQuery.trim()
+    ? activeTasks.filter(task => matchesWorkspaceText(task.title+' '+(task.description||''),overviewQuery))
+    : activeTasks;
   const visibleTasks = rootTasks.filter(task => {
     if (sphereFilter !== 'all' && (task.sphereId || 'none') !== sphereFilter) return false;
     if (statusFilter === 'active' && isDone(task)) return false;
@@ -146,6 +158,7 @@ export default function TestPage() {
     return name.includes(query.trim().toLocaleLowerCase('ru-RU'));
   }).sort((a, b) => Number(isDone(a)) - Number(isDone(b)) || sortByDate(a, b));
   const focusTask = focusId ? taskLookup.get(focusId) : undefined;
+  const subtaskFocus = subtaskFocusId ? taskLookup.get(subtaskFocusId) : undefined;
   const focusSubtasks = focusTask ? subtasks.filter(task => task.parentTaskId === focusTask.id).sort(focusSubtaskSort) : [];
   useEffect(() => { setFocusDescription(focusTask?.description || ''); }, [focusId]);
   useEffect(() => {
@@ -276,7 +289,7 @@ export default function TestPage() {
         aria-label={isDone(task) ? 'Вернуть задачу в работу' : 'Выполнить задачу'}>
         {isDone(task) ? <Check size={16}/> : null}
       </button>
-      <button type="button" className="tp-task-main" onClick={() => task.parentTaskId ? setTestTaskDialog({task}) : setFocusId(task.id)}>
+      <button type="button" className="tp-task-main" onClick={() => task.parentTaskId ? setSubtaskFocusId(task.id) : setFocusId(task.id)}>
         <strong>{task.title}</strong>
         <span>{task.parentTaskId ? (taskLookup.get(task.parentTaskId)?.title || 'Подзадача') : (spheres.find(s => s.id === task.sphereId)?.name || 'Без сектора')}
           <span className="tp-dot">·</span>{isOverdue(task) && <Clock3 size={12} aria-hidden="true"/>}{isOverdue(task) ? 'Просрочено: ' : ''}{dateLabel(task.dueDate, timeZone)}</span>
@@ -314,6 +327,12 @@ export default function TestPage() {
           <div className="tp-heading"><button type="button" className="tp-mobile-menu" onClick={() => setMenuOpen(!menuOpen)} aria-label="Разделы"><Menu size={21}/></button>
             <div><div className="tp-eyebrow">ПЛАНИРОВЫЧ / TEST PAGE</div><h1>{section === 'overview' ? 'Планировыч AI' : navigation.find(item => item.key === section)?.title}</h1></div></div>
           <div className="tp-actions">
+            {user&&<div className="tp-global-search">
+              <WorkspaceGlobalSearch key={user.id} userId={user.id} value={globalSearch} onChange={setGlobalSearch}
+                tasks={tasks.filter(task=>!task.parentTaskId)} subtasks={subtasks}
+                onOpenTask={task=>{if(task.taskType==='EVENT')setEditor({task});else if(task.taskType!=='REMINDER')setFocusId(task.id);}} onOpenSubtask={task=>setSubtaskFocusId(task.id)}
+                onOpenNote={id=>{setRequestedNote({id,serial:Date.now()});setSection('notes');}}/>
+            </div>}
             <button type="button" className="tp-primary" onClick={() => user ? setEditor({}) : setAuthMode('login')}><Plus size={18}/> <span>Новая задача</span></button>
             {user && <button type="button" className="tp-settings-action" onClick={() => setSettingsOpen(true)}><Settings size={17}/><span>Настройки</span></button>}
             {!user && <><button type="button" onClick={() => setAuthMode('login')}><LogIn size={16}/> Вход</button><button type="button" onClick={() => setAuthMode('register')}><UserPlus size={16}/> Регистрация</button></>}
@@ -337,8 +356,21 @@ export default function TestPage() {
               <button type="button" className="tp-card tp-credit-card" onClick={() => void openCredits()}><span className="tp-card-eyebrow"><Coins size={17}/> ИИ-кредиты</span><strong>{formatCredits((user.aiCreditsMilli ?? (user.aiCredits ?? 0) * 1000) / 1000)}</strong><span>Доступный баланс</span><span className="tp-card-link">Подписки и статистика <ChevronRight size={16}/></span></button>
             </div>
             <div className="tp-board">
-              <section className="tp-card"><div className="tp-card-head"><div><h2>Мои задачи</h2><p>Ближайшие дела и ваши приоритеты</p></div><button type="button" onClick={() => setSection('tasks')}>Все задачи <ChevronRight size={16}/></button></div>
-                {activeTasks.slice(0, 6).map(task => taskRow(task))}{!activeTasks.length && <p className="tp-empty">Активных задач нет. Можно заняться чем-то приятным.</p>}
+              <section className="tp-card"><div className="tp-card-head tp-overview-tasks-head"><div><h2>Мои задачи</h2><p>Ближайшие дела и ваши приоритеты</p></div>
+                <div className="tp-overview-task-tools">
+                  <button type="button" className="tp-overview-search-toggle" aria-label="Поиск в моих задачах"
+                    title="Поиск в моих задачах" aria-expanded={overviewSearchOpen}
+                    onClick={()=>{setOverviewSearchOpen(current=>!current);setOverviewQuery('');}}><Search size={18}/></button>
+                  <button type="button" onClick={() => setSection('tasks')}>Все задачи <ChevronRight size={16}/></button>
+                </div></div>
+                {overviewSearchOpen&&<label className="tp-overview-search-field"><Search size={16}/>
+                  <input type="search" autoFocus value={overviewQuery} onChange={event=>setOverviewQuery(event.target.value)}
+                    onKeyDown={event=>{if(event.key==='Escape'){setOverviewSearchOpen(false);setOverviewQuery('');}}}
+                    placeholder="Найти задачу…" aria-label="Фильтр моих задач"/>
+                  {overviewQuery&&<button type="button" onClick={()=>setOverviewQuery('')} aria-label="Очистить фильтр"><X size={15}/></button>}
+                </label>}
+                {overviewTasks.slice(0,6).map(task=>taskRow(task))}
+                {!overviewTasks.length&&<p className="tp-empty">{overviewQuery.trim()?'По вашему запросу задач не найдено.':'Активных задач нет. Можно заняться чем-то приятным.'}</p>}
                 <button type="button" className="tp-add-inline" onClick={() => setEditor({})}><Plus size={16}/> Добавить задачу</button>
               </section>
               <section className="tp-card"><div className="tp-card-head"><div><h2>Ближайшие подзадачи</h2><p>Конкретные следующие шаги</p></div><CalendarClock size={20}/></div>
@@ -346,14 +378,17 @@ export default function TestPage() {
                 {!upcomingSubtasks.length && <p className="tp-empty">Подзадач с установленным сроком пока нет.</p>}
               </section>
             </div>
+            <TestPageHabits key={user.id} timeZone={timeZone}/>
           </>}
           {section === 'tasks' && <section className="tp-work-area">
             <div className="tp-section-heading"><div><h2>Все задачи</h2><p>Ваши дела по секторам, срокам и статусу.</p></div><button className="tp-secondary" onClick={() => setEditor({})}><Plus size={17}/> Задача</button></div>
             <div className="tp-filters">
               <label className="tp-search"><Search size={17}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Найти задачу…" aria-label="Поиск задач"/></label>
-              <CustomSelect value={sphereFilter} onChange={setSphereFilter} ariaLabel="Фильтр по сектору" className="tp-filter-select"
+              <CustomSelect value={sphereFilter} onChange={setSphereFilter} ariaLabel="Фильтр по сектору"
+                className="tp-filter-select" detachedPopup popupVariant="settings" menuClassName="tp-dropdown-menu"
                 options={[{value:'all',label:'Все сектора'},{value:'none',label:'Без сектора'},...spheres.map(sphere=>({value:sphere.id,label:sphere.name,color:sphere.color}))]}/>
-              <CustomSelect value={statusFilter} onChange={setStatusFilter} ariaLabel="Фильтр по статусу" className="tp-filter-select"
+              <CustomSelect value={statusFilter} onChange={setStatusFilter} ariaLabel="Фильтр по статусу"
+                className="tp-filter-select" detachedPopup popupVariant="settings" menuClassName="tp-dropdown-menu"
                 options={[{value:'active',label:'Активные'},{value:'all',label:'Все статусы'},{value:'done',label:'Выполненные'}]}/>
             </div>
             {spheres.filter(sphere => sphereFilter === 'all' || sphereFilter === sphere.id).map(sphere => {
@@ -372,7 +407,8 @@ export default function TestPage() {
             </article>)}</div>{!spheres.length && <div className="tp-card tp-empty">Пока нет секторов. Создайте первый для группировки задач.</div>}
           </section>}
           {section === 'notes' && <section className="tp-work-area tp-notes-area"><div className="tp-section-heading"><div><h2>Мои заметки</h2><p>Списки, группы и редактор заметок из Планировыча.</p></div></div>
-            <StandaloneNotesWorkspace key={user.id} userId={user.id} mode="inline" onClose={() => setSection('overview')}/>
+            <StandaloneNotesWorkspace key={user.id} userId={user.id} mode="inline" requestedNote={requestedNote}
+              editorOutsideInline onClose={() => setSection('overview')}/>
           </section>}
           <footer className="tp-footer">Test Page · Экспериментальный интерфейс. Все данные общие с Планировычем AI.</footer>
         </>}
@@ -383,7 +419,7 @@ export default function TestPage() {
       onOpenCheckups={() => { setAssistantOpen(false); setSettingsOpen(true); }}
       initialMessages={assistantMessages} onMessagesChange={setAssistantMessages}
       onClose={() => setAssistantOpen(false)}
-      onOpenTask={task => { setAssistantOpen(false); task.parentTaskId ? setTestTaskDialog({task}) : setFocusId(task.id); }}
+      onOpenTask={task => { setAssistantOpen(false); task.parentTaskId ? setSubtaskFocusId(task.id) : setFocusId(task.id); }}
       onDataChanged={() => void refresh()}/>}
     {focusTask && <FocusedTaskWindowFrame><div className="tp-focus-dialog" role="dialog" aria-modal="true" aria-label="Фокус задачи">
       <header><div><span className="tp-eyebrow">ФОКУС ЗАДАЧИ</span><h2>{focusTask.title}</h2>
@@ -410,11 +446,23 @@ export default function TestPage() {
           <Sparkles size={16}/> Спросить ИИ</button>
       </div>
     </div></FocusedTaskWindowFrame>}
+    {subtaskFocus&&user&&<TestPageSubtaskFocus key={subtaskFocus.id}
+      task={subtaskFocus} parentTask={subtaskFocus.parentTaskId ? taskLookup.get(subtaskFocus.parentTaskId) : undefined}
+      userId={user.id} timeZone={timeZone}
+      onClose={()=>setSubtaskFocusId(null)}
+      onSaveDescription={async description=>{
+        const saved=await api.updateTask(subtaskFocus.id,{description});
+        setTasks(current=>current.map(task=>task.id===saved.id?{...task,description:saved.description}:task));
+      }}
+      onToggleComplete={async()=>{await setComplete(subtaskFocus);}}
+      onSettings={()=>setTestTaskDialog({task:subtaskFocus})}
+      onAskAi={()=>{setAssistantOpen(false);setSubtaskFocusId(null);setFocusChatId(subtaskFocus.id);}}/>}
     {focusChatId && taskLookup.get(focusChatId) && <TestPageChat key={focusChatId}
       theme={theme} onOpenCheckups={() => { setFocusChatId(null); setSettingsOpen(true); }}
       task={taskLookup.get(focusChatId)} tasks={tasks} spheres={spheres} onDataChanged={() => void refresh()}
       onClose={() => setFocusChatId(null)}
-      onOpenTask={task => { setFocusChatId(null); task.parentTaskId ? setTestTaskDialog({task}) : setFocusId(task.id); }}/>}
+      onOpenTask={task => { setFocusChatId(null); task.parentTaskId ? setSubtaskFocusId(task.id) : setFocusId(task.id); }}/>}
+
     {settingsOpen && user && <TestPageSettings user={user} themeMode={themeMode} onThemeMode={changeThemeMode}
       onUserUpdated={setUser} onClose={() => setSettingsOpen(false)}
       onCheckup={message => { setAssistantMessages(current => [...current,message]); setAssistantOpen(true); }}/>}
@@ -424,9 +472,8 @@ export default function TestPage() {
       task={testTaskDialog.task} parentTask={testTaskDialog.parentTask || (testTaskDialog.task?.parentTaskId ? taskLookup.get(testTaskDialog.task.parentTaskId) : undefined)}
       spheres={spheres} timeZone={timeZone}
       onClose={() => setTestTaskDialog(null)} onSave={saveTestTask}
-      onDelete={testTaskDialog.task ? deleteTestTask : undefined}
-      onAdvanced={testTaskDialog.task ? () => { setEditor({task:testTaskDialog.task}); setTestTaskDialog(null); } : undefined}/>}
-    {editor && <TaskEditor key={editor.task?.id || 'new'} task={editor.task} spheres={spheres} initialSphereId={editor.sphereId} subtasks={editor.task ? tasks.filter(task => task.parentTaskId === editor.task?.id) : []}
+      onDelete={testTaskDialog.task ? deleteTestTask : undefined}/>} 
+    {editor && <TaskEditor key={editor.task?.id || 'new'} task={editor.task} editorType={editor.task?.taskType==='EVENT'?'event':'task'} spheres={spheres} initialSphereId={editor.sphereId} subtasks={editor.task ? tasks.filter(task => task.parentTaskId === editor.task?.id) : []}
       defaultAiNotificationsEnabled={true} timeZone={timeZone} onCancel={() => setEditor(null)}
       onSave={saveTask} onAutoSave={editor.task ? async payload => { await api.updateTask(editor.task!.id, payload); } : undefined}
       onGenerateWithAi={generateWithAi}

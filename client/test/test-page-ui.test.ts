@@ -64,7 +64,7 @@ test('blue Test Page theme is isolated from the Economic golden theme and mobile
 });
 
 
-test('Focus resizes a bounded description, persists size per user and opens Test Page subtask editor', () => {
+test('Focus resizes bounded description and keeps Test Page subtask creation settings', () => {
   const taskDialog = read('../src/TestPageTaskDialog.tsx');
   const resizable = read('../src/components/ResizableDescriptionSurface.tsx');
   assert.match(testPage, /<ResizableDescriptionSurface/);
@@ -73,7 +73,7 @@ test('Focus resizes a bounded description, persists size per user and opens Test
   assert.match(testPage, /onClick=\{\(\) => setTestTaskDialog\(\{parentTask:focusTask\}\)\}/);
   assert.match(testPage, /<TestPageTaskDialog/);
   assert.match(testPage, /Настроить задачу/);
-  assert.match(testPage, /setTestTaskDialog\(\{task\}\)/);
+  assert.match(testPage, /setSubtaskFocusId\(task\.id\)/);
   assert.match(resizable, /localStorage\.setItem/);
   assert.match(taskDialog, /<TaskDescriptionInput/);
   assert.match(taskDialog, /buildManualRecurrence/);
@@ -102,4 +102,63 @@ test('theme-specific scrollbars, Notes and task chips use Test Page contrast var
   assert.match(styles, /\.tp-root\.tp-light \.tp-proposal/);
   assert.match(styles, /\.tp-root \.tp-secondary/);
   assert.match(styles, /\.tp-task-row\.is-overdue[\s\S]*?box-shadow:none/);
+});
+
+
+test('top global search reuses the interactive planner component and opens tasks, subtasks and notes', () => {
+  const original = read('../src/components/WorkspaceGlobalSearch.tsx');
+  assert.match(testPage, /<WorkspaceGlobalSearch key=\{user\.id\}/);
+  assert.match(testPage, /tasks=\{tasks\.filter\(task=>!task\.parentTaskId\)\} subtasks=\{subtasks\}/);
+  assert.match(testPage, /onOpenSubtask=\{task=>setSubtaskFocusId\(task\.id\)\}/);
+  assert.match(testPage, /onOpenNote=\{id=>\{setRequestedNote/);
+  assert.match(testPage, /requestedNote=\{requestedNote\}/);
+  assert.match(original, /searchWorkspace\(tasks, subtasks, indexedNotes, value\)/);
+  assert.match(original, /api\.getStandaloneNotes\(/);
+});
+test('overview quick filter matches task titles and descriptions and habits use real API', () => {
+  const habits = read('../src/TestPageHabits.tsx');
+  assert.match(testPage, /tp-overview-search-toggle/);
+  assert.match(testPage, /matchesWorkspaceText\(task\.title/);
+  assert.match(testPage, /<TestPageHabits key=\{user\.id\}/);
+  assert.match(habits, /api\.getHabits\(/);
+  assert.match(habits, /api\.completeHabit/);
+  assert.match(habits, /api\.uncompleteHabit/);
+  assert.match(habits, /<MiniAppHabitTracker/);
+});
+test('task and subtask settings use native selects and expose only relevant fields', () => {
+  const dialog = read('../src/TestPageTaskDialog.tsx');
+  assert.match(dialog, /<select id="tp-task-sphere"/);
+  assert.match(dialog, /<select id="tp-task-importance"/);
+  assert.match(dialog, /<select id="tp-task-reminder"/);
+  assert.match(dialog, /<select id="tp-task-collaboration-scope"/);
+  assert.doesNotMatch(dialog, /<CustomSelect/);
+  assert.doesNotMatch(dialog, />Статус</);
+  assert.doesNotMatch(dialog, />Срочность</);
+  assert.doesNotMatch(dialog, />Место</);
+  assert.doesNotMatch(dialog, />ИИ-уведомления</);
+  assert.doesNotMatch(dialog, /Дополнительно|onAdvanced/);
+  assert.match(dialog, /if\(isSubtask\)/);
+  assert.match(dialog, /\{!isSubtask&&/);
+  assert.match(dialog, /notifyBeforeMinutes/);
+  assert.match(styles, /\.tp-task-settings-row select\.tp-task-native-select/);
+});
+test('subtask click opens its own focus and settings separately', () => {
+  const subtask = read('../src/TestPageSubtaskFocus.tsx');
+  assert.match(testPage, /task\.parentTaskId \? setSubtaskFocusId\(task\.id\)/);
+  assert.match(testPage, /<TestPageSubtaskFocus/);
+  assert.match(subtask, /Настроить подзадачу/);
+  assert.match(subtask, /<TaskDescriptionInput/);
+  assert.match(subtask, /<ResizableDescriptionSurface/);
+  assert.match(subtask, /onToggleComplete/);
+});
+test('inline Notes uses an external centered editor portal without changing classic defaults', () => {
+  const notes = read('../src/components/StandaloneNotesWorkspace.tsx');
+  assert.match(testPage, /editorOutsideInline onClose/);
+  assert.match(notes, /editorOutsideInline = false/);
+  assert.match(notes, /inlineTarget=\{mode === 'inline' && !editorOutsideInline \? inlineMount : undefined\}/);
+  assert.match(styles, /body:has\(\.tp-root\.tp-light\) \.notes-editor-backdrop/);
+});
+test('task list filter selectors are portalled with explicit theme', () => {
+  assert.match(testPage, /className="tp-filter-select" detachedPopup popupVariant="settings" menuClassName="tp-dropdown-menu"/);
+  assert.match(styles, /body:has\(\.tp-root\.tp-light\) \.tp-dropdown-menu\[data-theme="light"\]/);
 });

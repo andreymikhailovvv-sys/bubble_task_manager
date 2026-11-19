@@ -7,14 +7,14 @@ import { NotesEditor } from './NotesEditor';
 import { PlanikMascot } from './PlanikMascot';
 import { StandaloneNoteGroupManager, noteGroupStyle } from './StandaloneNoteGroupManager';
 
-type Props = { userId: string; requestedNote?: { id: string; serial: number } | null; mode?: 'widget' | 'mobile' | 'inline'; onClose?: () => void; mobileSafeAreaTop?: number; mobileSafeAreaBottom?: number; telegramMiniApp?: boolean };
+type Props = { userId: string; requestedNote?: { id: string; serial: number } | null; mode?: 'widget' | 'mobile' | 'inline'; editorOutsideInline?: boolean; onClose?: () => void; mobileSafeAreaTop?: number; mobileSafeAreaBottom?: number; telegramMiniApp?: boolean };
 const sortNotes = (items: StandaloneNote[]) =>
   [...items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id));
 const titleOf = (note: StandaloneNote) => note.title.trim() || 'Без названия';
 const summaryOf = (note: StandaloneNote) => noteHtmlToPlainText(note.content).replace(/\s+/g, ' ').trim();
 const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : 'Не удалось сохранить заметку.';
 
-export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget', onClose, mobileSafeAreaTop = 0, mobileSafeAreaBottom = 0, telegramMiniApp = false }: Props) {
+export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget', editorOutsideInline = false, onClose, mobileSafeAreaTop = 0, mobileSafeAreaBottom = 0, telegramMiniApp = false }: Props) {
   const [notes, setNotes] = useState<StandaloneNote[]>([]);
   const [groups, setGroups] = useState<StandaloneNoteGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
@@ -605,7 +605,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
       ) : null}
       {editing ? (
         <NotesEditor
-          inlineTarget={mode === 'inline' ? inlineMount : undefined}
+          inlineTarget={mode === 'inline' && !editorOutsideInline ? inlineMount : undefined}
           key={editing.id}
           telegramSafeTop={telegramMiniApp ? mobileSafeAreaTop : undefined}
           miniAppSheet={telegramMiniApp}
