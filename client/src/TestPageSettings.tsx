@@ -93,20 +93,20 @@ export function TestPageSettings({ user, themeMode, onThemeMode, onUserUpdated, 
           </div>
         </div>
         <div className="tp-setting-row"><div><strong><CalendarClock size={16}/> Часовой пояс</strong><p>Используется в расписаниях, уведомлениях и прогрессе за день.</p></div>
-          <CustomSelect ariaLabel="Часовой пояс" value={user.timeZone || 'Europe/Moscow'}
+          <CustomSelect detachedPopup popupVariant="settings" menuClassName="tp-dropdown-menu" ariaLabel="Часовой пояс" value={user.timeZone || 'Europe/Moscow'}
             options={[...new Set([user.timeZone || 'Europe/Moscow', ...ZONES])].map(value => ({ value, label:value }))}
             onChange={value => void saveSetting('timezone', { timeZone: value })}
             disabled={saving === 'timezone'}/>
           <button className="tp-text-action" type="button" disabled={!!saving} onClick={() => void saveSetting('timezone', { timeZone: 'Europe/Moscow' })}>Сбросить на Москву</button>
         </div>
         <div className="tp-setting-row"><div><strong><BellRing size={16}/> Уведомления браузера</strong><p>Показываются, когда вкладка Планировыча неактивна. Браузер должен разрешить отправку.</p></div>
-          <CustomSelect ariaLabel="Уведомления браузера" value={user.browserNotificationsEnabled === false ? 'disabled' : 'enabled'}
+          <CustomSelect detachedPopup popupVariant="settings" menuClassName="tp-dropdown-menu" ariaLabel="Уведомления браузера" value={user.browserNotificationsEnabled === false ? 'disabled' : 'enabled'}
             options={booleanOptions} disabled={saving === 'notifications'}
             onChange={value => void saveSetting('notifications', { browserNotificationsEnabled: value === 'enabled' })}/>
           {user.browserNotificationsEnabled !== false && <button type="button" className="tp-text-action" onClick={() => void requestPermission()}>Разрешить в браузере</button>}
         </div>
         <div className="tp-setting-row"><div><strong><ClipboardList size={16}/> Отчёт о выполнении задачи</strong><p>Предлагать отчёт после закрытия задачи.</p></div>
-          <CustomSelect ariaLabel="Отчёт о выполнении" value={user.offerTaskCompletionReport === false ? 'disabled' : 'enabled'}
+          <CustomSelect detachedPopup popupVariant="settings" menuClassName="tp-dropdown-menu" ariaLabel="Отчёт о выполнении" value={user.offerTaskCompletionReport === false ? 'disabled' : 'enabled'}
             options={[{value:'enabled',label:'Включено'},{value:'disabled',label:'Выключено'}]}
             disabled={saving === 'taskReport'}
             onChange={value => void saveSetting('taskReport', { offerTaskCompletionReport: value === 'enabled' })}/>
