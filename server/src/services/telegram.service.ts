@@ -2281,9 +2281,12 @@ export const telegramService = {
           });
         }
 
-        if (isShining && !recipient.telegramNotifiedAt) {
+        // Only hydrate task/subtask details when a Telegram message can actually
+        // be sent. The old path queried Task once for every eligible overdue
+        // recipient, even without a bot, recipient chat or pending delivery.
+        if (isShining && !recipient.telegramNotifiedAt && BOT_TOKEN && recipient.telegramChatId) {
           const text = await getTaskNotificationText(task.id, recipient.userId);
-          if (BOT_TOKEN && text && recipient.telegramChatId) {
+          if (text) {
             const keyboard = sharedRoot && recipient.userId !== task.userId
               ? {
                   inline_keyboard: [
