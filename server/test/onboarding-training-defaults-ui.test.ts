@@ -53,9 +53,11 @@ test('first-visit training invitation is persistent, anchored above the oval and
     read('../../client/src/components/UpdatesMenu.tsx')
   ]);
   assert.match(desktop, /showTrainingInvitation=\{isOnboardingOfferOpen\}/);
-  assert.match(desktop, /onOpenTraining=\{\(\) => \{/);
+  assert.match(desktop, /onOpenTraining=\{bubbleCallbacks\.onOpenTraining\}/);
+  assert.match(desktop, /onOpenTraining: \(\) => \{/);
   assert.match(desktop, /setTrainingOpenSignal\(signal => signal \+ 1\)/);
-  assert.match(desktop, /onDismissTraining=\{\(\) => \{/);
+  assert.match(desktop, /onDismissTraining=\{bubbleCallbacks\.onDismissTraining\}/);
+  assert.match(desktop, /onDismissTraining: \(\) => \{/);
   assert.match(desktop, /localStorage\.setItem\(getOnboardingOfferStorageKey\(currentUser\.id\), '1'\)/);
   assert.doesNotMatch(desktop, /onboarding-offer-title|Нет, спасибо/);
   assert.match(bubble, /x=\{BUBBLE_FIELD_CENTER_X - 335\}/);
