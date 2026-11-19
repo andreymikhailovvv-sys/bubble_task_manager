@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import './PlanikMascot.css';
 
-type PlanikMode = 'idle' | 'hover' | 'typing' | 'searching' | 'painting' | 'celebrating' | 'clearing';
+type PlanikMode = 'idle' | 'hover' | 'thinking' | 'typing' | 'searching' | 'painting' | 'celebrating' | 'clearing';
 
 // Fixed particle paths avoid creating random values or timers on every render.
 const POPPER_CONFETTI = Array.from({ length: 24 }, (_, index) => ({
@@ -83,9 +83,14 @@ export const PlanikMascot = memo(function PlanikMascot({
     ['checking_sectors', 'analyzing_subtasks', 'analyzing_web_results', 'analyzing_retrieved_context',
       'editing_document', 'creating_document', 'generating_document', 'working_with_documents', 'refreshing_finances'].includes(progress)));
   // Typing belongs to Planik's answer preparation, never the human draft.
+  const isThinking = busy && !responding && (
+    progress === 'analyzing_request' || progress === 'using_chat_history' ||
+    progress === 'analyzing_retrieved_context' || progress === 'analyzing_subtasks' ||
+    progress === 'checking_sectors'
+  );
   const mode: PlanikMode = clearingCount !== null ? 'clearing'
     : celebrating ? 'celebrating'
-    : busy ? (isPainting ? 'painting' : isSearching ? 'searching' : 'typing')
+    : busy ? (isPainting ? 'painting' : isSearching ? 'searching' : isThinking ? 'thinking' : 'typing')
     : hovered ? 'hover' : 'idle';
   const badgeNumber = clearingCount ?? count;
   const badgeText = badgeNumber > 99 ? '99+' : String(badgeNumber);
@@ -98,7 +103,8 @@ export const PlanikMascot = memo(function PlanikMascot({
   }, []);
 
   useEffect(() => {
-    if (mode === 'searching') gaze(-9, 5);
+    if (mode === 'thinking') gaze(-2, 4);
+    else if (mode === 'searching') gaze(-9, 5);
     else if (mode === 'typing') gaze(0, 7);
     else if (mode === 'painting') gaze(-6, 4);
     else if (mode === 'clearing') gaze(-5, 1);
