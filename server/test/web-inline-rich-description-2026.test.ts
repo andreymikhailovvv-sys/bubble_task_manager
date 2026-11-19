@@ -29,7 +29,11 @@ test('website descriptions remain editable HTML without a preview-to-textarea sw
   assert.match(rich, /editor === document\.activeElement \|\| editor\.contains\(document\.activeElement\)/);
   assert.match(rich, /if \(editor\.innerHTML !== normalized\) editor\.innerHTML = normalized/);
   assert.match(rich, /noteValueToEditorHtml\(value \?\? ''\)/);
-  assert.match(rich, /linkifyNoteHtml\(editor\.innerHTML\)/);
+  // Rich content is still sanitized, but expensive HTML work is coalesced
+  // instead of running on each keystroke.
+  assert.match(rich, /linkifyNoteHtml\(rawHtml\)/);
+  assert.match(rich, /pendingHtmlRef\.current = editor\.innerHTML/);
+  assert.match(rich, /const html = flushPending\(\) \?\? emitSanitized\(editor\.innerHTML\)/);
   assert.match(rich, /event\.clipboardData\.getData\('text\/plain'\)/);
   assert.match(rich, /selection\.addRange\(range\)/);
   assert.doesNotMatch(rich, /<textarea|setIsEditing|noteHtmlToPlainText|setSelectionRange\(0/);

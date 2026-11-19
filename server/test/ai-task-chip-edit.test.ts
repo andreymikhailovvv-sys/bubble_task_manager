@@ -97,3 +97,23 @@ test('browser performance telemetry is coarse, bounded and avoids user content',
   assert.match(telegram,/latestNotifiableDueDate = new Date\(now\.getTime\(\) \+ MAX_SHINE_WINDOW_MINUTES \* 60_000\)/);
   assert.match(telegram,/dueDate: \{ not: null, lte: latestNotifiableDueDate \}/);
 });
+
+test('Telegram reminder scan only loads task details for a deliverable message',()=>{
+  const telegram=read('../src/services/telegram.service.ts');
+  assert.match(telegram,/if \(isShining && !recipient\.telegramNotifiedAt && BOT_TOKEN && recipient\.telegramChatId\) \{\s*const text = await getTaskNotificationText/);
+  assert.doesNotMatch(telegram,/const text = await getTaskNotificationText\(task\.id, recipient\.userId\);\s*if \(BOT_TOKEN/);
+  // Local and Android feed notifications remain independent from Telegram.
+  assert.match(telegram,/createSystemNotificationUnlessExists\(prisma, existingTaskNotifications/);
+});
+
+test('rich description input coalesces expensive sanitizing and flushes before save',()=>{
+  const editor=read('../../client/src/components/InlineRichDescriptionEditor.tsx');
+  assert.match(editor,/pendingHtmlRef\.current = editor\.innerHTML/);
+  assert.match(editor,/pendingTimerRef\.current = setTimeout/);
+  assert.match(editor,/const html = linkifyNoteHtml\(rawHtml\)/);
+  assert.match(editor,/document\.addEventListener\('pointerdown', onOutsidePointerDown, true\)/);
+  assert.match(editor,/event\.key === 'Escape'/);
+  assert.match(editor,/const html = flushPending\(\) \?\? emitSanitized\(editor\.innerHTML\)/);
+  assert.match(editor,/onBlur=\{handleBlur\}/);
+  assert.match(editor,/flushPending\(\);\s*\};\s*\}, \[\]\)/);
+});

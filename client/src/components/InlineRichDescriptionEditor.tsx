@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type ClipboardEvent, type DragEvent, type KeyboardEvent, type MouseEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, type ClipboardEvent, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent } from 'react';
 import { linkifyNoteHtml, noteValueToEditorHtml } from '../lib/notes';
 
 type Props = {
@@ -21,6 +21,11 @@ export function InlineRichDescriptionEditor({
 }: Props) {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const lastEmittedRef = useRef<string | null>(null);
+  const pendingHtmlRef = useRef<string | null>(null);
+  const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // A pending edit must always use the latest callback, even when unmounting.
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   useLayoutEffect(() => {
     const editor = editorRef.current;
@@ -30,27 +35,66 @@ export function InlineRichDescriptionEditor({
     lastEmittedRef.current = normalized;
   }, [value]);
 
+  const emitSanitized = (rawHtml: string) => {
+    // Never pass unsanitized contentEditable HTML to React or autosave.
+    const html = linkifyNoteHtml(rawHtml);
+    if (html !== lastEmittedRef.current) {
+      lastEmittedRef.current = html;
+      onChangeRef.current(html);
+    }
+    return html;
+  };
+
+  const flushPending = () => {
+    if (pendingTimerRef.current !== null) {
+      clearTimeout(pendingTimerRef.current);
+      pendingTimerRef.current = null;
+    }
+    const rawHtml = pendingHtmlRef.current;
+    pendingHtmlRef.current = null;
+    return rawHtml === null ? null : emitSanitized(rawHtml);
+  };
+
   const emitChange = () => {
     const editor = editorRef.current;
     if (!editor || readOnly) return;
-    const html = linkifyNoteHtml(editor.innerHTML);
-    if (html !== lastEmittedRef.current) {
-      lastEmittedRef.current = html;
-      onChange(html);
-    }
+    // Native contentEditable updates immediately. Coalesce expensive HTML
+    // sanitation and the entire planner's React render during continuous input.
+    pendingHtmlRef.current = editor.innerHTML;
+    if (pendingTimerRef.current !== null) clearTimeout(pendingTimerRef.current);
+    pendingTimerRef.current = setTimeout(() => {
+      pendingTimerRef.current = null;
+      flushPending();
+    }, 180);
   };
+
+  useEffect(() => {
+    // Commit pending text *before* outside controls can close/save the task,
+    // including non-focusable buttons and Escape-based dismissal.
+    const onOutsidePointerDown = (event: PointerEvent) => {
+      if (pendingHtmlRef.current !== null && event.target instanceof Node
+        && !editorRef.current?.contains(event.target)) flushPending();
+    };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && pendingHtmlRef.current !== null) flushPending();
+    };
+    document.addEventListener('pointerdown', onOutsidePointerDown, true);
+    document.addEventListener('keydown', onEscape, true);
+    return () => {
+      document.removeEventListener('pointerdown', onOutsidePointerDown, true);
+      document.removeEventListener('keydown', onEscape, true);
+      // Do not discard a final keystroke if the focused editor is unmounted.
+      flushPending();
+    };
+  }, []);
 
   const handleBlur = () => {
     const editor = editorRef.current;
     if (!editor || readOnly) return;
-    // Sanitize and linkify only AFTER focus leaves, not during typing.
-    // While editing, retaining the DOM tree is essential for caret stability.
-    const html = linkifyNoteHtml(editor.innerHTML);
+    // Flush immediately on blur. Only then normalize the DOM, preserving caret
+    // and IME composition throughout typing, as in the original editor.
+    const html = flushPending() ?? emitSanitized(editor.innerHTML);
     if (editor.innerHTML !== html) editor.innerHTML = html;
-    if (html !== lastEmittedRef.current) {
-      lastEmittedRef.current = html;
-      onChange(html);
-    }
   };
 
   const pastePlainText = (event: ClipboardEvent<HTMLDivElement>) => {
@@ -98,7 +142,7 @@ export function InlineRichDescriptionEditor({
     event.preventDefault();
   };
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if ((event.ctrlKey || event.metaKey) && ['b', 'i', 'u'].includes(event.key.toLowerCase())) {
       event.preventDefault();
     }
