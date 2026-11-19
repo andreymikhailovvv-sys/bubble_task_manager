@@ -330,7 +330,7 @@ export default function TestPage() {
             {user&&<div className="tp-global-search">
               <WorkspaceGlobalSearch key={user.id} userId={user.id} value={globalSearch} onChange={setGlobalSearch}
                 tasks={tasks.filter(task=>!task.parentTaskId)} subtasks={subtasks}
-                onOpenTask={task=>setFocusId(task.id)} onOpenSubtask={task=>setSubtaskFocusId(task.id)}
+                onOpenTask={task=>{if(task.taskType==='EVENT')setEditor({task});else if(task.taskType!=='REMINDER')setFocusId(task.id);}} onOpenSubtask={task=>setSubtaskFocusId(task.id)}
                 onOpenNote={id=>{setRequestedNote({id,serial:Date.now()});setSection('notes');}}/>
             </div>}
             <button type="button" className="tp-primary" onClick={() => user ? setEditor({}) : setAuthMode('login')}><Plus size={18}/> <span>Новая задача</span></button>
@@ -473,7 +473,7 @@ export default function TestPage() {
       spheres={spheres} timeZone={timeZone}
       onClose={() => setTestTaskDialog(null)} onSave={saveTestTask}
       onDelete={testTaskDialog.task ? deleteTestTask : undefined}/>} 
-    {editor && <TaskEditor key={editor.task?.id || 'new'} task={editor.task} spheres={spheres} initialSphereId={editor.sphereId} subtasks={editor.task ? tasks.filter(task => task.parentTaskId === editor.task?.id) : []}
+    {editor && <TaskEditor key={editor.task?.id || 'new'} task={editor.task} editorType={editor.task?.taskType==='EVENT'?'event':'task'} spheres={spheres} initialSphereId={editor.sphereId} subtasks={editor.task ? tasks.filter(task => task.parentTaskId === editor.task?.id) : []}
       defaultAiNotificationsEnabled={true} timeZone={timeZone} onCancel={() => setEditor(null)}
       onSave={saveTask} onAutoSave={editor.task ? async payload => { await api.updateTask(editor.task!.id, payload); } : undefined}
       onGenerateWithAi={generateWithAi}
