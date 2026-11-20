@@ -15,7 +15,9 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Chromium 1.56 and its dependency installer support Ubuntu 24.04.
+    # Pin the runner instead of relying on a moving ubuntu-latest image.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Check out source
@@ -29,6 +31,11 @@ jobs:
         run: npm ci --include=dev --no-audit --no-fund
       - name: Compile web client and API server
         run: npm run build
+      - name: Browser smoke - real Chromium task open and typing
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts playwright@1.56.1
+          npx playwright install --with-deps chromium
+          node scripts/browser-planner-smoke.mjs
       - name: Verify experimental Test Page routing and shared planner components
         run: node --import tsx --test client/test/test-page-ui.test.ts
       - name: Verify Economic money precision and loan amortization
