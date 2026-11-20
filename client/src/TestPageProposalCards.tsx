@@ -29,6 +29,7 @@ const taskFields: Record<string,string> = {
 const financeFields: Record<string,string> = {
   title:'Название',name:'Название',kind:'Тип',direction:'Направление',
   amountMinor:'Сумма, ₽',balanceMinor:'Баланс, ₽',openingBalanceMinor:'Начальный баланс, ₽',
+  accountType:'Тип счёта',creditLimitMinor:'Кредитный лимит, ₽',
   principalMinor:'Размер кредита, ₽',paidMinor:'Выплачено, ₽',sourceAccountId:'Счёт',
   targetAccountId:'Счёт зачисления',accountId:'Счёт долга',counterparty:'Контрагент',
   category:'Категория',note:'Примечание',lender:'Кредитор',

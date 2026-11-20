@@ -69,14 +69,14 @@ export async function answerEconomicAssistant(input: {
   monthStart.setUTCDate(1); monthStart.setUTCHours(0, 0, 0, 0);
   const monthEnd = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 1));
   const [accounts, debts, loans, outgoing, incoming, monthKinds, recent, histories, categories] = await Promise.all([
-    prisma.economicAccount.findMany({ where: { userId: input.owner }, select: { name: true, openingBalanceMinor: true, id: true, updatedAt: true } }),
+    prisma.economicAccount.findMany({ where: { userId: input.owner }, select: { name: true, openingBalanceMinor: true, accountType: true, creditLimitMinor: true, id: true, updatedAt: true } }),
     prisma.economicDebt.findMany({ where: { userId: input.owner, isClosed: false }, select: { id: true, direction: true, counterparty: true, amountMinor: true, paidMinor: true, postedToAccount: true, accountId: true, dueAt: true, updatedAt: true }, take: 30 }),
     prisma.economicLoan.findMany({ where: { userId: input.owner, isClosed: false }, select: { id: true, name: true, principalMinor: true, paidMinor: true, annualRateBps: true, termMonths: true, startDate: true, updatedAt: true }, take: 30 }),
     prisma.economicOperation.groupBy({ by: ['sourceAccountId', 'kind'], where: { userId: input.owner }, _sum: { amountMinor: true } }),
     prisma.economicOperation.groupBy({ by: ['targetAccountId'], where: { userId: input.owner, kind: 'TRANSFER', targetAccountId: { not: null } }, _sum: { amountMinor: true } }),
-    prisma.economicOperation.groupBy({ by: ['kind'], where: { userId: input.owner, kind: { in: ['INCOME', 'EXPENSE'] }, occurredAt: { gte: monthStart, lt: monthEnd } }, _sum: { amountMinor: true } }),
+    prisma.economicOperation.groupBy({ by: ['kind'], where: { userId: input.owner, isAdjustment: false, kind: { in: ['INCOME', 'EXPENSE'] }, occurredAt: { gte: monthStart, lt: monthEnd } }, _sum: { amountMinor: true } }),
     prisma.economicOperation.findMany({ where: { userId: input.owner }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 25,
-      select: { id: true, kind: true, amountMinor: true, title: true, category: true, occurredAt: true, sourceAccountId: true, targetAccountId: true, debtId: true, updatedAt: true } }),
+      select: { id: true, kind: true, amountMinor: true, title: true, category: true, occurredAt: true, sourceAccountId: true, targetAccountId: true, debtId: true, isAdjustment: true, updatedAt: true } }),
     prisma.economicAssistantMessage.findMany({ where: { userId: input.owner }, orderBy: [{ createdAt: 'desc' }, { role: 'asc' }, { id: 'desc' }], take: 120 }),
     prisma.economicCategory.findMany({ where: { userId: input.owner }, select: { id: true, kind: true, name: true, createdAt: true }, take: 100 })
   ]);
@@ -99,7 +99,7 @@ export async function answerEconomicAssistant(input: {
 
   const financialContext = JSON.stringify({
     currency: 'RUB', moneyUnits: 'all minor amounts are kopecks (100 per ruble)',
-    accounts: accounts.map(a => ({ id: a.id, name: a.name, openingBalanceMinor: a.openingBalanceMinor.toString(), currentBalanceMinor: (balances.get(a.id) ?? 0n).toString() })),
+    accounts: accounts.map(a => ({ id: a.id, name: a.name, accountType: a.accountType, creditLimitMinor: a.creditLimitMinor?.toString() ?? null, openingBalanceMinor: a.openingBalanceMinor.toString(), currentBalanceMinor: (balances.get(a.id) ?? 0n).toString() })),
     categories,
     availableCategories:economicAvailableCategories(categories),
     month: monthKinds.map(m => ({ kind: m.kind, amountMinor: (m._sum.amountMinor ?? 0n).toString() })),
@@ -120,7 +120,9 @@ export async function answerEconomicAssistant(input: {
     'Ты Экономыч AI, финансовый помощник сервиса Планировыч.',
     'Отвечай по-русски, коротко, точно и ясно. Нельзя выдумывать суммы, счета или операции.',
     'Суммы с суффиксом Minor обозначают копейки. Объясняй рубли пользователю.',
+    'Для CREDIT_CARD currentBalanceMinor означает доступный кредитный лимит, а не собственные деньги. Операции isAdjustment=true отражают исправление остатка и не являются обычными доходами или расходами.',
     'При изменении баланса счёта используй поле balanceMinor, которое означает текущий баланс с учётом уже записанных операций. Не используй openingBalanceMinor для нового действия.',
+    'Если пользователь создаёт кредитную карту, укажи accountType=CREDIT_CARD, creditLimitMinor (общий лимит), balanceMinor (доступный остаток). Не путай остаток лимита с задолженностью. Для обычного счёта accountType=STANDARD.',
     'Если пользователь просит создать или изменить финансовую запись и все обязательные сведения известны, вызови propose_economic_changes.',
     'Для операций допустимы INCOME, EXPENSE и TRANSFER. Для долгов direction OWE (я должен) и OWED_TO_ME (мне должны).',
     'При записи покупки или расхода ОБЯЗАТЕЛЬНО подбирай наиболее подходящую категорию из категорий пользователя в финансовом контексте, передавай её точное имя в поле category. Не придумывай новую категорию, если есть подходящая. Если категорий нет или все совершенно не подходят, оставь category=null и объясни почему.',

@@ -22,7 +22,11 @@ test('module switcher is one connected picker and centers the arrow in both them
 });
 
 test('operations section only has the shared New Operation button', () => {
-  assert.match(economic, /className="econ-add-global"[\s\S]*?Новая операция/);
+  assert.match(economic, /className="econ-add-global"[\s\S]*?Добавить/);
+  assert.match(economic, /Добавить операцию/);
+  assert.match(economic, /Добавить счёт/);
+  assert.match(economic, /Добавить кредит/);
+  assert.match(economic, /Добавить долг/);
   assert.match(economic, /section !== 'operations' && actions\[section\]/);
   assert.doesNotMatch(economic, /section === 'operations' \? 'Операция'/);
 });

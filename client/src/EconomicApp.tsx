@@ -13,12 +13,13 @@ import { loadThemePreference, resolveThemeMode } from './lib/autoTheme';
 import { annuityEstimate, formatMinorRub as money, minorToRublesInput as inputMoney, rublesToMinor as parseMoney } from './lib/economicMoney';
 import { formatCreditsSpent } from './lib/credits';
 import './EconomicApp.css';
+import EconomicReport from './EconomicReport';
 
 type Kind = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'DEBT_BORROWED' | 'DEBT_LENT' | 'DEBT_REPAID' | 'DEBT_RETURNED';
-type Section = 'overview' | 'accounts' | 'operations' | 'debts' | 'categories';
+type Section = 'overview' | 'accounts' | 'operations' | 'debts' | 'categories' | 'report';
 type Dialog = { kind: 'account' | 'operation' | 'debt' | 'loan' | 'category'; id?: string } | null;
-type Account = { id: string; name: string; isPrimary: boolean; currency: string; openingBalanceMinor: string; balanceMinor: string };
-type Operation = { id: string; kind: Kind; amountMinor: string; title: string; note: string | null; category: string | null; sourceAccountId: string; targetAccountId: string | null; occurredAt: string; debtId: string | null; debtPhase: string | null };
+type Account = { id: string; name: string; isPrimary: boolean; currency: string; openingBalanceMinor: string; balanceMinor: string; accountType: 'STANDARD' | 'CREDIT_CARD'; creditLimitMinor: string | null };
+type Operation = { id: string; kind: Kind; amountMinor: string; title: string; note: string | null; category: string | null; sourceAccountId: string; targetAccountId: string | null; occurredAt: string; debtId: string | null; debtPhase: string | null; isAdjustment: boolean };
 type Debt = { id: string; direction: 'OWE' | 'OWED_TO_ME'; counterparty: string; amountMinor: string; paidMinor: string; postedToAccount: boolean; accountId: string | null; dueAt: string | null; note: string | null; isClosed: boolean };
 type Loan = { id: string; name: string; lender: string | null; principalMinor: string; paidMinor: string; monthlyPaymentOverrideMinor: string | null; paymentDate: string | null; remindersEnabled: boolean; annualRateBps: number; termMonths: number; startDate: string; isClosed: boolean };
 type EconomicUser = { id: string; name: string | null; username: string | null; timeZone: string | null; telegramLinked: boolean };
@@ -43,11 +44,11 @@ const kindLabel: Record<Kind, string> = {
 const creditKinds = new Set<Kind>(['INCOME', 'DEBT_BORROWED', 'DEBT_RETURNED']);
 const debitKinds = new Set<Kind>(['EXPENSE', 'DEBT_LENT', 'DEBT_REPAID']);
 const sectionTitles: Record<Section, string> = {
-  overview: 'Обзор', accounts: 'Счета', operations: 'Операции', debts: 'Долги и кредиты', categories: 'Категории'
+  overview: 'Обзор', accounts: 'Счета', operations: 'Операции', debts: 'Долги и кредиты', categories: 'Категории', report: 'Отчёт'
 };
 const nav: Array<{ section: Section; icon: typeof WalletCards }> = [
   { section: 'overview', icon: LayoutDashboard }, { section: 'accounts', icon: WalletCards },
-  { section: 'operations', icon: ArrowRightLeft }, { section: 'debts', icon: BookOpen },
+  { section: 'operations', icon: ArrowRightLeft }, { section: 'report', icon: CircleDollarSign }, { section: 'debts', icon: BookOpen },
   { section: 'categories', icon: Settings2 }
 ];
 
@@ -97,6 +98,8 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [section, setSection] = useState<Section>('overview');
   const [dialog, setDialog] = useState<Dialog>(null);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [reportRevision, setReportRevision] = useState(0);
   const [form, setForm] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -151,6 +154,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
 
   const refresh = useCallback(async () => {
     setSnapshot(await economicRequest<Snapshot>('/snapshot'));
+    setReportRevision(value => value+1);
   }, []);
   // Native Android pager keeps WebView warm while other tabs are open.
   // Re-read finance when its tab becomes active, including proposals prepared
@@ -245,6 +249,8 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
       fields.name = account?.name || '';
       fields.balance = account ? inputMoney(account.balanceMinor) : '0';
       fields.isPrimary = account?.isPrimary ? 'yes' : 'no';
+      fields.accountType = account?.accountType || 'STANDARD';
+      fields.creditLimit = account?.creditLimitMinor ? inputMoney(account.creditLimitMinor) : '';
     } else if (kind === 'debt') {
       const debt = item as Debt | undefined;
       fields.direction = debt?.direction || 'OWE'; fields.counterparty = debt?.counterparty || '';
@@ -278,7 +284,9 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
       if (dialog.kind === 'account') {
         path = '/accounts';
         payload = { name: form.name, balanceMinor: parseMoney(form.balance, true),
-          ...(dialog.id && form.isPrimary === 'yes' ? { isPrimary: true } : {}) };
+          accountType: form.accountType || 'STANDARD',
+          creditLimitMinor: form.accountType === 'CREDIT_CARD' ? parseMoney(form.creditLimit) : null,
+          ...(dialog.id && form.isPrimary === 'yes' && form.accountType !== 'CREDIT_CARD' ? { isPrimary: true } : {}) };
       } else if (dialog.kind === 'operation') {
         path = '/operations';
         payload = { kind: form.kind, title: form.title, amountMinor: parseMoney(form.amount),
@@ -420,10 +428,10 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
     const openOperation = () => {
       if (linkedDebt) openDialog('debt', linkedDebt);
       else if (op.debtId) setSection('debts');
-      else openDialog('operation', op);
+      else if (!op.isAdjustment) openDialog('operation', op);
     };
     return <div className="econ-operation-row" key={op.id} role="button" tabIndex={0}
-      aria-label={'Редактировать операцию: ' + op.title}
+      aria-label={(op.isAdjustment ? 'Корректировка: ' : 'Редактировать операцию: ') + op.title}
       onClick={openOperation}
       onKeyDown={event => { if(event.target !== event.currentTarget)return;
         if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); openOperation(); } }}>
@@ -434,7 +442,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
         <strong>{op.title}</strong>
         <small>{dateLabel(op.occurredAt)} · {op.kind === 'TRANSFER'
           ? accountName(op.sourceAccountId) + ' → ' + accountName(op.targetAccountId)
-          : kindLabel[op.kind] + ' · ' + (op.debtId ? 'Долги · ' : op.category ? op.category + ' · ' : '') + accountName(op.sourceAccountId)}</small>
+          : (op.isAdjustment ? 'Корректировка' : kindLabel[op.kind]) + ' · ' + (op.debtId ? 'Долги · ' : op.category && !op.isAdjustment ? op.category + ' · ' : '') + accountName(op.sourceAccountId)}</small>
       </div>
       <strong className={'econ-operation-amount ' + operationTone}>
         {isCredit ? '+' : isDebit ? '−' : ''}{money(op.amountMinor)}
@@ -444,8 +452,8 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
             onClick={event => { event.stopPropagation(); openOperation(); }}>
             <BookOpen size={16}/></button>
         : <>
-            <button className="econ-icon-button" type="button" title="Редактировать" aria-label={'Редактировать ' + op.title} onClick={event => { event.stopPropagation(); openDialog('operation', op); }}><Pencil size={15}/></button>
-            <button className="econ-icon-button econ-delete" type="button" title="Удалить" aria-label={'Удалить ' + op.title} onClick={event => { event.stopPropagation(); void remove('operations', op.id); }}><Trash2 size={15}/></button>
+            {!op.isAdjustment && <button className="econ-icon-button" type="button" title="Редактировать" aria-label={'Редактировать ' + op.title} onClick={event => { event.stopPropagation(); openDialog('operation', op); }}><Pencil size={15}/></button>}
+            {!op.isAdjustment && <button className="econ-icon-button econ-delete" type="button" title="Удалить" aria-label={'Удалить ' + op.title} onClick={event => { event.stopPropagation(); void remove('operations', op.id); }}><Trash2 size={15}/></button>}
           </>}
     </div>;
   };
@@ -517,6 +525,16 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   </main>;
   if (!snapshot || !user) return <main className={'econ-root econ-loading' + (mobile ? ' econ-mobile-workspace' : '') + (effectiveAppearance === 'light' ? ' econ-light' : '')}><h1>Экономыч AI</h1><p>{error || 'Для начала войдите в Планировыч.'}</p><a className="econ-primary-link" href="/">Вернуться в Планировыч</a></main>;
 
+  const createOptions: Array<{kind:NonNullable<Dialog>['kind'];label:string;icon:typeof Plus}> = [
+    {kind:'operation',label:'Добавить операцию',icon:ArrowRightLeft},
+    {kind:'account',label:'Добавить счёт',icon:WalletCards},
+    {kind:'loan',label:'Добавить кредит',icon:CreditCard},
+    {kind:'debt',label:'Добавить долг',icon:BookOpen}
+  ];
+  const createMenu = <div className="econ-create-menu" role="menu" aria-label="Новая финансовая запись">
+    {createOptions.map(({kind,label,icon:Icon})=><button key={kind} role="menuitem" type="button"
+      onClick={()=>{setAddMenuOpen(false);openDialog(kind);}}><Icon size={18}/>{label}</button>)}
+  </div>;
   const actions: Partial<Record<Section, () => void>> = {
     accounts: () => openDialog('account'), operations: () => openDialog('operation'),
     categories: () => openDialog('category')
@@ -540,17 +558,24 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
             <Icon size={17}/>{sectionTitles[value]}
           </button>)}
         </nav>}
-        <header className="econ-topbar"><div><div className="econ-eyebrow">ПЛАНИРОВЫЧ / ЭКОНОМЫЧ AI</div><h1>{section === 'overview' ? 'Экономыч AI' : sectionTitles[section]}</h1></div><div className="econ-top-actions"><button className="econ-add-global" data-economic-create-operation type="button" onClick={() => openDialog('operation')}><Plus size={18}/> Новая операция</button></div></header>
+        <header className="econ-topbar"><div><div className="econ-eyebrow">ПЛАНИРОВЫЧ / ЭКОНОМЫЧ AI</div><h1>{section === 'overview' ? 'Экономыч AI' : sectionTitles[section]}</h1></div><div className="econ-top-actions"><button className="econ-add-global" data-economic-create-operation type="button"
+  aria-label="Добавить финансовую запись" aria-expanded={addMenuOpen}
+  onClick={() => setAddMenuOpen(v => !v)}><Plus size={18}/> Добавить</button>
+  {addMenuOpen && !embeddedInMiniApp && createMenu}</div></header>
         {error && <div className="econ-error" role="alert"><span>{error}</span><button type="button" aria-label="Скрыть ошибку" onClick={() => setError('')}><X size={16}/></button></div>}
         {section === 'overview' && <>
           <div className="econ-intro"><div><span className="econ-kicker"><span className="econ-intro-star">✦</span> Личные финансы без хаоса</span><h2>Держите деньги<br/><em>под контролем.</em></h2><p>Баланс, повседневные траты, долги и кредиты в одном спокойном пространстве.</p></div><div className="econ-intro-illustration" aria-hidden="true"><div className="econ-coin-big">₽</div><div className="econ-coin-small">₽</div><div className="econ-intro-orbit"/></div></div>
           <div className="econ-stats">
-            <article className="econ-stat"><div className="econ-stat-label"><WalletCards size={18}/> Общий баланс</div><strong>{money(snapshot.totals.balanceMinor)}</strong><small>Все ваши счета</small></article>
+            <article className="econ-stat"><div className="econ-stat-label"><WalletCards size={18}/> Общий баланс</div><strong>{money(snapshot.totals.balanceMinor)}</strong><small>Денежные счета без кредитного лимита</small></article>
             <article className="econ-stat"><div className="econ-stat-label"><ArrowDownLeft size={18}/> Доходы за месяц</div><strong className="econ-positive">{money(snapshot.totals.monthIncomeMinor)}</strong><small>Без переводов между счетами</small></article>
             <article className="econ-stat"><div className="econ-stat-label"><ArrowUpRight size={18}/> Расходы за месяц</div><strong>{money(snapshot.totals.monthExpenseMinor)}</strong><small>Без переводов между счетами</small></article>
           </div>
+          <div className="econ-report-preview-wrap">
+            <EconomicReport preview revision={reportRevision}/>
+            <button type="button" className="econ-report-open" onClick={()=>setSection('report')}>Полный отчёт <ChevronRight size={16}/></button>
+          </div>
           <div className="econ-dashboard-grid">
-            <section className="econ-card"><div className="econ-card-header"><div><h2>Мои счета</h2><p>Остатки с учётом всех операций</p></div><button type="button" onClick={() => setSection('accounts')}>Все счета <ChevronRight size={16}/></button></div><div className="econ-account-grid">{snapshot.accounts.slice(0, 4).map(a => <button type="button" className={'econ-mini-account ' + (a.isPrimary ? 'main' : '')} key={a.id} onClick={() => openDialog('account', a)}><WalletCards size={20}/><span>{a.name}{a.isPrimary && <small>Основной</small>}</span><strong>{money(a.balanceMinor)}</strong></button>)}</div><button className="econ-inline-add" type="button" onClick={() => openDialog('account')}><Plus size={16}/> Добавить счёт</button></section>
+            <section className="econ-card"><div className="econ-card-header"><div><h2>Мои счета</h2><p>Остатки с учётом всех операций</p></div><button type="button" onClick={() => setSection('accounts')}>Все счета <ChevronRight size={16}/></button></div><div className="econ-account-grid">{snapshot.accounts.slice(0, 4).map(a => <button type="button" className={'econ-mini-account ' + (a.isPrimary ? 'main' : '')} key={a.id} onClick={() => openDialog('account', a)}><WalletCards size={20}/><span>{a.name}{a.isPrimary && <small>Основной</small>}{a.accountType === 'CREDIT_CARD' && <small>Кредитная карта · лимит {money(a.creditLimitMinor || '0')}</small>}</span><strong>{money(a.balanceMinor)}</strong></button>)}</div><button className="econ-inline-add" type="button" onClick={() => openDialog('account')}><Plus size={16}/> Добавить счёт</button></section>
             <section className="econ-card">
               <div className="econ-card-header"><div><h2>Долги и кредиты</h2><p>Платежи и прогресс погашения</p></div>
                 <button type="button" onClick={() => setSection('debts')}>Все записи <ChevronRight size={16}/></button></div>
@@ -573,6 +598,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
             <p>{section === 'accounts' ? 'Управляйте счетами и начальными остатками.' :
               section === 'operations' ? 'История доходов, расходов, переводов и долговых движений.' :
               section === 'debts' ? 'Кому вы должны, кто должен вам и платежи по кредитам.' :
+              section === 'report' ? 'Доходы и расходы по категориям за выбранный период.' :
               'Создавайте свои категории доходов и расходов.'}</p>
             <div className="econ-heading-actions">
               {section === 'debts' && <>
@@ -584,7 +610,8 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
               </button>}
             </div>
           </div>
-          {section === 'accounts' && <div className="econ-collection-grid">{snapshot.accounts.map(a => <article className="econ-card econ-account-detail" key={a.id}><div className="econ-card-top"><span className="econ-account-symbol"><Landmark size={22}/></span>{a.isPrimary && <span className="econ-tag">Основной</span>}</div><h3>{a.name}</h3><strong>{money(a.balanceMinor)}</strong><p>Текущий баланс счёта</p><div className="econ-row-actions"><button type="button" onClick={() => openDialog('account', a)}><Pencil size={15}/> Изменить</button>{!a.isPrimary && <><button type="button" onClick={() => void economicRequest('/accounts/' + a.id, 'PATCH', { isPrimary: true }).then(refresh).catch(e => setError(e.message))}><Check size={15}/> Основным</button><button type="button" onClick={() => void remove('accounts', a.id)}><Trash2 size={15}/></button></>}</div></article>)}</div>}
+          {section === 'report' && <EconomicReport revision={reportRevision}/>}
+          {section === 'accounts' && <div className="econ-collection-grid">{snapshot.accounts.map(a => <article className="econ-card econ-account-detail" key={a.id}><div className="econ-card-top"><span className="econ-account-symbol">{a.accountType === 'CREDIT_CARD' ? <CreditCard size={22}/> : <Landmark size={22}/>}</span>{a.isPrimary && <span className="econ-tag">Основной</span>}</div><h3>{a.name}</h3><strong>{money(a.balanceMinor)}</strong><p>{a.accountType === 'CREDIT_CARD' ? 'Доступно из лимита ' + money(a.creditLimitMinor || '0') : 'Текущий баланс счёта'}</p><div className="econ-row-actions"><button type="button" onClick={() => openDialog('account', a)}><Pencil size={15}/> Изменить</button>{!a.isPrimary && <>{a.accountType !== 'CREDIT_CARD' && <button type="button" onClick={() => void economicRequest('/accounts/' + a.id, 'PATCH', { isPrimary: true }).then(refresh).catch(e => setError(e.message))}><Check size={15}/> Основным</button>}<button type="button" onClick={() => void remove('accounts', a.id)}><Trash2 size={15}/></button></>}</div></article>)}</div>}
           {section === 'operations' && <section className="econ-card econ-operations-list"><div className="econ-filters"><select value={kindFilter} onChange={e => setKindFilter(e.target.value)} aria-label="Тип операции"><option value="">Все типы</option><option value="EXPENSE">Расходы</option><option value="INCOME">Доходы</option><option value="TRANSFER">Переводы</option><option value="DEBTS">Долговые операции</option></select><select value={accountFilter} onChange={e => setAccountFilter(e.target.value)} aria-label="Счёт"><option value="">Все счета</option>{snapshot.accounts.map(a => <option value={a.id} key={a.id}>{a.name}</option>)}</select><select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} aria-label="Категория"><option value="">Все категории</option>{[...new Set([...categories('EXPENSE'), ...categories('INCOME')])].map(c => <option value={c} key={c}>{c}</option>)}</select></div>{operations.length ? operations.map(operationRow) : <div className="econ-empty">{operationsBusy ? 'Загружаем…' : 'Нет операций по выбранным фильтрам'}</div>}{nextCursor && <button className="econ-load-more" disabled={operationsBusy} type="button" onClick={() => void loadOperations(true, nextCursor)}>{operationsBusy ? 'Загрузка…' : 'Показать ещё 50 операций'}</button>}</section>}
           {section === 'debts' && <>
             <div className="econ-subsection-heading"><BookOpen size={19}/><h2>Долги</h2><small>{snapshot.debts.length}</small></div>
@@ -696,9 +723,11 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
       </div>
     </section>}
 
-    {mobile && embeddedInMiniApp && !dialog && <button type="button"
-      className="econ-mobile-add-fab" aria-label="Новая операция" title="Новая операция"
-      onClick={() => openDialog('operation')}><Plus size={27}/></button>}
+    {mobile && embeddedInMiniApp && !dialog && <div className="econ-mobile-create">
+      {addMenuOpen && createMenu}
+      <button type="button" className="econ-mobile-add-fab" aria-label="Добавить финансовую запись"
+        aria-expanded={addMenuOpen} title="Добавить" onClick={() => setAddMenuOpen(v=>!v)}><Plus size={27}/></button>
+    </div>}
     {dialog && createPortal(<div
       className={'econ-root econ-dialog-layer ' + (effectiveAppearance === 'light' ? 'econ-light ' : '') + (mobile ? 'econ-mobile-dialog-layer ' : '') + (embeddedInMiniApp ? 'econ-miniapp-dialog-layer' : '')}
       style={embeddedInMiniApp ? { '--econ-mobile-safe-top': mobileSafeTop + 'px', '--econ-mobile-safe-bottom': mobileSafeBottom + 'px' } as CSSProperties : undefined}>
@@ -742,7 +771,21 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
           <label>Дата<input required type="date" value={form.date} onChange={e => formSet('date', e.target.value)}/></label>
           <label>Примечание<input maxLength={500} value={form.note} onChange={e => formSet('note', e.target.value)} placeholder="Необязательно"/></label>
         </>}
-        {dialog.kind === 'account' && <><label>Название счёта<input required maxLength={60} value={form.name} onChange={e => formSet('name',e.target.value)} placeholder="Наличные, карта, накопления"/></label><label>Баланс, ₽<input required inputMode="decimal" value={form.balance} onChange={e => formSet('balance',e.target.value)}/></label>{dialog.id && form.isPrimary !== 'yes' && <label>Статус<select value={form.isPrimary} onChange={e => formSet('isPrimary', e.target.value)}><option value="no">Дополнительный</option><option value="yes">Сделать основным</option></select></label>}<p className="econ-form-hint">Укажите текущую сумму на счёте. Корректировка баланса сохраняет историю операций и не считается доходом или расходом.</p></>}
+        {dialog.kind === 'account' && <>
+          <label>Название счёта<input required maxLength={60} value={form.name} onChange={e=>formSet('name',e.target.value)} placeholder="Наличные, карта, накопления"/></label>
+          <label>Тип счёта<select value={form.accountType || 'STANDARD'} onChange={e=>formSet('accountType',e.target.value)}>
+            <option value="STANDARD">Денежный счёт</option><option value="CREDIT_CARD">Кредитная карта</option>
+          </select></label>
+          {form.accountType === 'CREDIT_CARD' && <label>Кредитный лимит, ₽<input required inputMode="decimal"
+            value={form.creditLimit || ''} onChange={e=>formSet('creditLimit',e.target.value)} placeholder="100 000"/></label>}
+          <label>{form.accountType === 'CREDIT_CARD'?'Доступный остаток лимита, ₽':'Баланс, ₽'}
+            <input required inputMode="decimal" value={form.balance} onChange={e=>formSet('balance',e.target.value)}/></label>
+          {dialog.id && form.isPrimary !== 'yes' && form.accountType !== 'CREDIT_CARD' &&
+            <label>Статус<select value={form.isPrimary} onChange={e=>formSet('isPrimary',e.target.value)}>
+              <option value="no">Дополнительный</option><option value="yes">Сделать основным</option>
+            </select></label>}
+          <p className="econ-form-hint">При изменении остатка создаётся корректирующая операция, видимая в истории и исключённая из обычных доходов и расходов. Расходы по кредитной карте уменьшают доступный лимит.</p>
+        </>}
         {dialog.kind === 'debt' && <>
           <label>Направление<select value={form.direction} onChange={e => formSet('direction', e.target.value)}>
             <option value="OWE">Я получил деньги в долг</option>

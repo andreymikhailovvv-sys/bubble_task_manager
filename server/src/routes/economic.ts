@@ -6,7 +6,7 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { answerEconomicAssistant } from '../services/economic-assistant.service.js';
 import { applyEconomicProposal, rejectEconomicProposal, undoEconomicProposal, editEconomicProposal, economicProposalOptions, getEconomicProposalView, economicProposalView } from '../services/economic-ai-proposals.service.js';
 import { EconomicActionError } from '../services/economic-ai-action-validation.service.js';
-import { openingForTargetBalance } from '../services/economic-account-balance.service.js';
+import { economicAccountMovementMinor, recordEconomicBalanceAdjustment } from '../services/economic-account-balance.service.js';
 import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
 import { debtOperationKind, debtOperationTitle, economicSourceDelta, ECONOMIC_DEBT_OPERATION_KINDS, type EconomicDebtDirection } from '../lib/economic-debt.js';
 
@@ -47,8 +47,8 @@ const conflict = (cause: unknown, res: Response) => {
   }
   return false;
 };
-const accountOut = (row: { openingBalanceMinor: bigint; [key: string]: unknown }) =>
-  ({ ...row, openingBalanceMinor: row.openingBalanceMinor.toString() });
+const accountOut = (row: { openingBalanceMinor: bigint; creditLimitMinor: bigint | null; [key: string]: unknown }) =>
+  ({ ...row, openingBalanceMinor: row.openingBalanceMinor.toString(), creditLimitMinor: row.creditLimitMinor?.toString() ?? null });
 const operationOut = (row: { amountMinor: bigint; [key: string]: unknown }) =>
   ({ ...row, amountMinor: row.amountMinor.toString() });
 const debtOut = (row: { amountMinor: bigint; paidMinor: bigint; [key: string]: unknown }) =>
@@ -114,7 +114,7 @@ economicRouter.get('/snapshot', asyncHandler(async (req, res) => {
     prisma.economicAccount.findMany({ where: { userId: owner }, orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] }),
     prisma.economicOperation.groupBy({ by: ['sourceAccountId', 'kind'], where: { userId: owner }, _sum: { amountMinor: true } }),
     prisma.economicOperation.groupBy({ by: ['targetAccountId'], where: { userId: owner, kind: 'TRANSFER', targetAccountId: { not: null } }, _sum: { amountMinor: true } }),
-    prisma.economicOperation.groupBy({ by: ['kind'], where: { userId: owner, kind: { in: ['INCOME', 'EXPENSE'] }, occurredAt: { gte: monthStart, lt: monthEnd } }, _sum: { amountMinor: true } }),
+    prisma.economicOperation.groupBy({ by: ['kind'], where: { userId: owner, isAdjustment: false, kind: { in: ['INCOME', 'EXPENSE'] }, occurredAt: { gte: monthStart, lt: monthEnd } }, _sum: { amountMinor: true } }),
     prisma.economicOperation.findMany({ where: { userId: owner }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 8 }),
     prisma.economicCategory.findMany({ where: { userId: owner }, orderBy: { createdAt: 'asc' } }),
     prisma.economicDebt.findMany({ where: { userId: owner }, orderBy: [{ isClosed: 'asc' }, { createdAt: 'desc' }], take: 200 }),
@@ -130,7 +130,9 @@ economicRouter.get('/snapshot', asyncHandler(async (req, res) => {
   for (const group of incoming) if (group.targetAccountId) {
     balances.set(group.targetAccountId, (balances.get(group.targetAccountId) ?? 0n) + (group._sum.amountMinor ?? 0n));
   }
-  const totalMinor = [...balances.values()].reduce((sum, n) => sum + n, 0n);
+  // A credit line is borrowed purchasing power, not an owned asset.
+  const totalMinor = accounts.filter(a => a.accountType !== 'CREDIT_CARD')
+    .reduce((sum, a) => sum + (balances.get(a.id) ?? 0n), 0n);
   const monthSum = (kind: string) => (monthKinds.find(row => row.kind === kind)?._sum.amountMinor ?? 0n).toString();
   res.json({
     accounts: accounts.map(a => ({ ...accountOut(a), balanceMinor: (balances.get(a.id) ?? 0n).toString() })),
@@ -140,6 +142,65 @@ economicRouter.get('/snapshot', asyncHandler(async (req, res) => {
   });
 }));
 
+
+/** Category drill-down shared by website, Telegram Mini App and native Android.
+ * Uses raw minor units. Corrections, debt movements and transfers never inflate reports. */
+economicRouter.get('/report', asyncHandler(async (req, res) => {
+  const owner = userId(req);
+  const period = String(req.query.period ?? 'month');
+  const offset = Number(req.query.offset ?? 0);
+  if (!['week', 'month', 'year', 'all', 'custom'].includes(period) ||
+      !Number.isInteger(offset) || offset < -120 || offset > 120) {
+    error(res, 'Недопустимый период отчёта'); return;
+  }
+  const today = new Date(), year = today.getUTCFullYear(), month = today.getUTCMonth();
+  let start: Date, end: Date;
+  if (period === 'custom') {
+    const first = String(req.query.start ?? ''), last = String(req.query.end ?? '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(first) || !/^\d{4}-\d{2}-\d{2}$/.test(last)) {
+      error(res, 'Для произвольного периода укажите две даты'); return;
+    }
+    start = new Date(first + 'T00:00:00Z');
+    end = new Date(last + 'T00:00:00Z');
+    end.setUTCDate(end.getUTCDate() + 1);
+    if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) ||
+        start.toISOString().slice(0,10) !== first ||
+        end <= start || end.getTime() - start.getTime() > 3660 * 86400000) {
+      error(res, 'Некорректный диапазон дат'); return;
+    }
+  } else if (period === 'all') {
+    start = new Date('2000-01-01T00:00:00Z'); end = new Date('2200-01-01T00:00:00Z');
+  } else if (period === 'year') {
+    start = new Date(Date.UTC(year + offset, 0, 1));
+    end = new Date(Date.UTC(year + offset + 1, 0, 1));
+  } else if (period === 'month') {
+    start = new Date(Date.UTC(year, month + offset, 1));
+    end = new Date(Date.UTC(year, month + offset + 1, 1));
+  } else {
+    const monday = new Date(Date.UTC(year, month, today.getUTCDate()));
+    monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7) + offset * 7);
+    start = monday; end = new Date(monday); end.setUTCDate(end.getUTCDate() + 7);
+  }
+  const groups = await prisma.economicOperation.groupBy({
+    by: ['kind', 'category'],
+    where: { userId: owner, isAdjustment: false,
+      kind: { in: ['INCOME', 'EXPENSE'] }, occurredAt: { gte: start, lt: end } },
+    _sum: { amountMinor: true }
+  });
+  function collect(kind: 'INCOME' | 'EXPENSE') {
+    const categories = groups.filter(g => g.kind === kind).map(g => ({
+      name: g.category?.trim() || 'Без категории', amountMinor: g._sum.amountMinor ?? 0n
+    }));
+    const combined = new Map<string, bigint>();
+    for (const item of categories) combined.set(item.name, (combined.get(item.name) ?? 0n) + item.amountMinor);
+    const ordered = [...combined.entries()].sort((a,b) => a[1] === b[1] ? a[0].localeCompare(b[0],'ru') : a[1] > b[1] ? -1 : 1);
+    return { totalMinor: ordered.reduce((total, [,amount]) => total + amount, 0n).toString(),
+      categories: ordered.map(([name,amount]) => ({ name, amountMinor: amount.toString() })) };
+  }
+  res.json({ period, offset, start: start.toISOString(), end: end.toISOString(),
+    expense: collect('EXPENSE'), income: collect('INCOME') });
+}));
+
 economicRouter.post('/accounts', asyncHandler(async (req, res) => {
   const name = text(req.body?.name, 60);
   if (req.body?.balanceMinor !== undefined && req.body?.openingBalanceMinor !== undefined) {
@@ -147,10 +208,15 @@ economicRouter.post('/accounts', asyncHandler(async (req, res) => {
   }
   // Old clients may still send openingBalanceMinor; new clients use balanceMinor.
   const balance = money(req.body?.balanceMinor ?? req.body?.openingBalanceMinor ?? '0', true, true);
-  if (!name || balance === null) { error(res, 'Введите название счёта и корректный баланс'); return; }
+  const accountType = req.body?.accountType ?? 'STANDARD';
+  const creditLimitMinor = accountType === 'CREDIT_CARD' ? money(req.body?.creditLimitMinor) : null;
+  if (!name || balance === null || !['STANDARD','CREDIT_CARD'].includes(accountType) ||
+      (accountType === 'CREDIT_CARD' && (creditLimitMinor === null || balance < 0n || balance > creditLimitMinor))) {
+    error(res, 'Укажите название, тип, лимит и доступный остаток счёта'); return;
+  }
   try {
     const account = await prisma.economicAccount.create({
-      data: { userId: userId(req), name, openingBalanceMinor: balance }
+      data: { userId: userId(req), name, openingBalanceMinor: balance, accountType, creditLimitMinor }
     });
     res.status(201).json({ account: accountOut(account) });
   } catch (cause) { if (!conflict(cause, res)) throw cause; }
@@ -169,13 +235,34 @@ economicRouter.patch('/accounts/:id', asyncHandler(async (req, res) => {
       if (!found) throw new EconomicActionError('Счёт не найден',404);
       const name = req.body?.name === undefined ? found.name : text(req.body.name, 60);
       if (!name) throw new EconomicActionError('Некорректное название счёта');
-      const openingBalanceMinor = desired === undefined
-        ? (legacy ?? found.openingBalanceMinor)
-        : await openingForTargetBalance(tx, owner, found.id, desired);
+      const accountType = req.body?.accountType ?? found.accountType;
+      const creditLimitMinor = accountType === 'CREDIT_CARD'
+        ? (req.body?.creditLimitMinor === undefined ? found.creditLimitMinor : money(req.body.creditLimitMinor))
+        : null;
+      if (!['STANDARD','CREDIT_CARD'].includes(accountType) ||
+          (accountType === 'CREDIT_CARD' && (creditLimitMinor === null || creditLimitMinor <= 0n))) {
+        throw new EconomicActionError('Для кредитной карты требуется положительный лимит');
+      }
+      if (accountType !== found.accountType) {
+        const count = await tx.economicOperation.count({
+          where: { userId: owner, OR: [{ sourceAccountId: found.id }, { targetAccountId: found.id }] }
+        });
+        if (count) throw new EconomicActionError('Тип счёта с операциями изменять нельзя',409);
+      }
+      const target = desired ?? (legacy === undefined ? undefined : legacy + await economicAccountMovementMinor(tx, owner, found.id));
+      const current = found.openingBalanceMinor + await economicAccountMovementMinor(tx, owner, found.id);
+      if (accountType === 'CREDIT_CARD' && (target ?? current) > creditLimitMinor!)
+        throw new EconomicActionError('Доступный остаток превышает кредитный лимит');
+      if (accountType === 'CREDIT_CARD' && (target ?? current) < 0n)
+        throw new EconomicActionError('Доступный остаток не может быть отрицательным');
+      if ((req.body?.isPrimary === true || found.isPrimary) && accountType === 'CREDIT_CARD')
+        throw new EconomicActionError('Кредитная карта не может быть основным денежным счётом');
       if (req.body?.isPrimary === true)
         await tx.economicAccount.updateMany({ where: { userId: owner }, data: { isPrimary: false } });
       await tx.economicAccount.update({ where: { id: found.id, userId: owner },
-        data: { name, openingBalanceMinor, ...(req.body?.isPrimary === true ? { isPrimary: true } : {}) } });
+        data: { name, accountType, creditLimitMinor, ...(req.body?.isPrimary === true ? { isPrimary: true } : {}) } });
+      if (target !== undefined)
+        await recordEconomicBalanceAdjustment(tx, owner, found.id, found.openingBalanceMinor, target);
     },{ isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     res.json({ ok: true });
   } catch (cause) {
@@ -239,7 +326,7 @@ economicRouter.patch('/operations/:id', asyncHandler(async (req, res) => {
   const owner = userId(req);
   const found = await prisma.economicOperation.findFirst({ where: { id: req.params.id, userId: owner } });
   if (!found) { error(res, 'Операция не найдена', 404); return; }
-  if (found.debtId) { error(res, 'Долговая операция редактируется через раздел «Долги»', 409); return; }
+  if (found.debtId || found.isAdjustment) { error(res, 'Долговые и корректирующие операции нельзя редактировать напрямую', 409); return; }
   const body = { ...found, ...req.body };
   // Reuse POST-like validation without ever trusting client-supplied ownership.
   if (!['INCOME','EXPENSE','TRANSFER'].includes(body.kind)) { error(res,'Некорректный тип'); return; }
@@ -264,10 +351,11 @@ economicRouter.delete('/operations/:id', asyncHandler(async (req, res) => {
   // Linked debt entries can only be removed by deleting the debt itself;
   // otherwise the register and the account balance would disagree.
   const found = await prisma.economicOperation.findFirst({
-    where: { id: req.params.id, userId: owner }, select: { id: true, debtId: true }
+    where: { id: req.params.id, userId: owner }, select: { id: true, debtId: true, isAdjustment: true }
   });
   if (!found) { error(res, 'Операция не найдена', 404); return; }
   if (found.debtId) { error(res, 'Долговая операция удаляется вместе с долгом', 409); return; }
+  if (found.isAdjustment) { error(res, 'Корректирующая операция сохраняется в истории. Для изменения остатка создайте новую корректировку', 409); return; }
   await prisma.economicOperation.deleteMany({ where: { id: found.id, userId: owner, debtId: null } });
   res.json({ ok: true });
 }));

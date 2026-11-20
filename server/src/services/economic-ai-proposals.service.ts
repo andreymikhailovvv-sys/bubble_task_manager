@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
-import { openingForTargetBalance } from './economic-account-balance.service.js';
+import { economicAccountMovementMinor, recordEconomicBalanceAdjustment } from './economic-account-balance.service.js';
 import { debtOperationKind, debtOperationTitle, type EconomicDebtDirection } from '../lib/economic-debt.js';
 import { canonicalEconomicAction, EconomicActionError, type EconomicAction, type EconomicEntity } from './economic-ai-action-validation.service.js';
 
@@ -9,7 +9,7 @@ type Snapshot = Record<string,string|number|boolean|null>;
 function no(message:string,status=409):never { throw new EconomicActionError(message,status); }
 const iso=(d:Date|null)=>d?.toISOString()??null;
 const snapshot = (entity:EconomicEntity,row:any):Snapshot => {
-  if(entity==='account')return {id:row.id,name:row.name,openingBalanceMinor:row.openingBalanceMinor.toString(),updatedAt:iso(row.updatedAt)};
+  if(entity==='account')return {id:row.id,name:row.name,accountType:row.accountType,creditLimitMinor:row.creditLimitMinor?.toString()??null,openingBalanceMinor:row.openingBalanceMinor.toString(),updatedAt:iso(row.updatedAt)};
   if(entity==='operation')return {id:row.id,kind:row.kind,amountMinor:row.amountMinor.toString(),
     sourceAccountId:row.sourceAccountId,targetAccountId:row.targetAccountId,category:row.category,
     title:row.title,note:row.note,occurredAt:iso(row.occurredAt),updatedAt:iso(row.updatedAt)};
@@ -43,7 +43,12 @@ const owned=async(tx:Tx,owner:string,ids:string[])=>{
   if(rows.length!==unique.length||rows.some(x=>x.currency!=='RUB'))no('Счёт не найден или не принадлежит пользователю.');
 };
 export async function readEconomicEntity(tx:Tx,owner:string,entity:EconomicEntity,id:string):Promise<Snapshot|null>{
-  if(entity==='account'){const row=await tx.economicAccount.findFirst({where:{id,userId:owner}});return row?snapshot(entity,row):null;}
+  if(entity==='account'){
+    const row=await tx.economicAccount.findFirst({where:{id,userId:owner}});
+    if(!row)return null;
+    return {...snapshot(entity,row), balanceMinor:
+      (row.openingBalanceMinor + await economicAccountMovementMinor(tx,owner,row.id)).toString()};
+  }
   if(entity==='operation'){const row=await tx.economicOperation.findFirst({where:{id,userId:owner}});
     if(row?.debtId)no('Связанную с долгом операцию меняйте через сам долг.');
     return row?snapshot(entity,row):null;}
@@ -116,14 +121,42 @@ async function mutate(tx:Tx,owner:string,action:EconomicAction,record:Snapshot|n
   const d={...record,...action.payload} as Record<string,unknown>;
   if(action.entity==='account'){
     if(typeof d.name!=='string'||!d.name.trim())no('Укажите название счёта.');
-    const openingBalanceMinor=action.payload.balanceMinor !== undefined
-      ? (action.action==='create'
-        ? BigInt(String(action.payload.balanceMinor))
-        : await openingForTargetBalance(tx,owner,action.targetId!,BigInt(String(action.payload.balanceMinor))))
-      : BigInt(String(d.openingBalanceMinor??'0'));
-    const values={name:d.name as string,openingBalanceMinor};
-    if(action.action==='create')return (await tx.economicAccount.create({data:{userId:owner,...values}})).id;
-    await tx.economicAccount.update({where:{id:action.targetId!,userId:owner},data:values});
+    const initial = action.payload.balanceMinor ?? d.openingBalanceMinor ?? '0';
+    const accountType=String(d.accountType??'STANDARD');
+    if(!['STANDARD','CREDIT_CARD'].includes(accountType))no('Неизвестный тип счёта.');
+    const creditLimitMinor=accountType==='CREDIT_CARD' && d.creditLimitMinor!=null
+      ? BigInt(String(d.creditLimitMinor)) : null;
+    if(accountType==='CREDIT_CARD' && (!creditLimitMinor || creditLimitMinor<=0n))
+      no('Для кредитной карты требуется кредитный лимит.');
+    if(action.action==='create'){
+      const balance=BigInt(String(initial));
+      if(accountType==='CREDIT_CARD' && (balance<0n||balance>creditLimitMinor!))
+        no('Доступный остаток должен быть в пределах кредитного лимита.');
+      return (await tx.economicAccount.create({data:{
+        userId:owner,name:d.name as string,openingBalanceMinor:balance,
+        accountType,creditLimitMinor
+      }})).id;
+    }
+    const row=await tx.economicAccount.findFirst({where:{id:action.targetId!,userId:owner}});
+    if(!row)no('Счёт не найден.',404);
+    if(row.accountType!==accountType){
+      if(row.isPrimary && accountType==='CREDIT_CARD')
+        no('Основной денежный счёт нельзя преобразовать в кредитную карту.');
+      const operations=await tx.economicOperation.count({
+        where:{userId:owner,OR:[{sourceAccountId:row.id},{targetAccountId:row.id}]}
+      });
+      if(operations)no('Тип счёта с операциями изменить нельзя.');
+    }
+    const oldCurrent=row.openingBalanceMinor+await economicAccountMovementMinor(tx,owner,row.id);
+    const targetBalance=action.payload.balanceMinor !== undefined
+      ? BigInt(String(action.payload.balanceMinor)) : oldCurrent;
+    if(accountType==='CREDIT_CARD' && (targetBalance<0n||targetBalance>creditLimitMinor!))
+      no('Доступный остаток должен быть в пределах кредитного лимита.');
+    await tx.economicAccount.update({where:{id:action.targetId!,userId:owner},data:{
+      name:d.name as string,accountType,creditLimitMinor
+    }});
+    if(action.payload.balanceMinor !== undefined)
+      await recordEconomicBalanceAdjustment(tx,owner,row.id,row.openingBalanceMinor,targetBalance);
     return action.targetId!;
   }
   if(action.entity==='category'){
@@ -385,7 +418,7 @@ export async function undoEconomicProposal(owner:string,id:string){
         no('Нет предыдущей версии записи для отмены.');
       const before=row.before as Record<string,unknown>;
       const revertFields:Record<EconomicEntity,string[]>={
-        account:['name','openingBalanceMinor'],
+        account:['name','balanceMinor','accountType','creditLimitMinor'],
         operation:['kind','amountMinor','sourceAccountId','targetAccountId','category','title','note','occurredAt'],
         debt:['direction','counterparty','amountMinor','paidMinor','note','dueAt','postedToAccount','accountId'],
         loan:['name','lender','principalMinor','paidMinor','annualRateBps','termMonths',

@@ -620,3 +620,24 @@ body:has(.econ-root.econ-mobile-workspace) #root{min-height:100dvh}
  .econ-mobile-sections button,.econ-nav-links button,
  .econ-mini-account,.econ-obligation-preview,.econ-row-actions button{transition:none}
 }
+
+
+/* Create menu shared by the desktop toolbar and Telegram Mini App FAB. */
+.econ-top-actions{position:relative}
+.econ-create-menu{position:absolute;z-index:260;right:0;top:calc(100% + 8px);
+ width:min(270px,calc(100vw - 24px));padding:6px;display:flex;flex-direction:column;gap:3px;
+ background:var(--ec-panel);border:1px solid var(--ec-border);border-radius:15px;
+ box-shadow:0 12px 45px rgba(0,0,0,.22)}
+.econ-create-menu button{display:flex;align-items:center;gap:11px;padding:12px;
+ border:0;border-radius:10px;background:transparent;color:var(--ec-text);
+ font-size:13px;font-weight:650;text-align:left}
+.econ-create-menu button svg{color:var(--ec-orange);flex:none}
+.econ-create-menu button:hover,.econ-create-menu button:focus-visible{
+ background:rgba(245,165,46,.12)}
+.econ-mobile-create .econ-create-menu{position:fixed;z-index:250;right:16px;
+ top:auto;bottom:calc(8.2rem + var(--econ-mobile-safe-bottom,0px));
+ max-width:calc(100vw - 32px)}
+.econ-report-preview-wrap{position:relative;margin:0 0 20px}
+.econ-report-open{display:inline-flex;align-items:center;gap:5px;margin:12px 0 0;
+ color:var(--ec-orange2);background:transparent;border:0;font-weight:700}
+.econ-mini-account small{display:block;color:var(--ec-muted);font-size:10px;font-weight:450}

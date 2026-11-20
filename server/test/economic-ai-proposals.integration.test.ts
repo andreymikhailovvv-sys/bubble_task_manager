@@ -103,19 +103,52 @@ test('Economic AI applies and reverses real PostgreSQL ledger changes without cr
     await undoEconomicProposal(a.id,created.id);
     assert.equal(await prisma.economicAccount.count({where:{id:newAccount.appliedEntityId!}}),0);
 
-    // Editing the *current* balance adjusts the accounting baseline, never
-    // deletes or fabricates an expense and remains reversible.
+    // Editing the current balance creates a correcting ledger operation,
+    // preserving the opening baseline and remaining reversible.
     const grocery=await prisma.economicOperation.create({data:{
       userId:a.id,kind:'EXPENSE',title:'Продукты',amountMinor:25000n,
       sourceAccountId:account.id
     }});
     const currentBalance=await propose(a.id,action('account','update',{balanceMinor:'33000'},account.id));
     assert.equal((await applyEconomicProposal(a.id,currentBalance.id)).status,'APPLIED');
-    assert.equal((await prisma.economicAccount.findUniqueOrThrow({where:{id:account.id}})).openingBalanceMinor,58000n);
+    assert.equal((await prisma.economicAccount.findUniqueOrThrow({where:{id:account.id}})).openingBalanceMinor,100000n);
+    assert.equal(await prisma.economicOperation.count({where:{userId:a.id,sourceAccountId:account.id,isAdjustment:true,kind:'EXPENSE',amountMinor:42000n}}),1);
     assert.equal(await prisma.economicOperation.count({where:{id:grocery.id}}),1);
     assert.equal((await undoEconomicProposal(a.id,currentBalance.id)).status,'UNDONE');
     assert.equal((await prisma.economicAccount.findUniqueOrThrow({where:{id:account.id}})).openingBalanceMinor,100000n);
+    assert.equal(await prisma.economicOperation.count({where:{userId:a.id,sourceAccountId:account.id,isAdjustment:true,kind:'INCOME',amountMinor:42000n}}),1);
     await prisma.economicOperation.delete({where:{id:grocery.id}});
+
+    // Credit-card accounts store the available limit as a real account balance.
+    const cardDraft=await propose(a.id,action('account','create',{
+      name:'Кредитная карта',accountType:'CREDIT_CARD',
+      creditLimitMinor:'5000000',balanceMinor:'4200000'
+    }));
+    const cardCreated=await applyEconomicProposal(a.id,cardDraft.id);
+    const card=await prisma.economicAccount.findUniqueOrThrow({where:{id:cardCreated.appliedEntityId!}});
+    assert.equal(card.accountType,'CREDIT_CARD');
+    assert.equal(card.creditLimitMinor,5000000n);
+    assert.equal(card.openingBalanceMinor,4200000n);
+    const cardExpense=await prisma.economicOperation.create({data:{
+      userId:a.id,kind:'EXPENSE',title:'Покупка по кредитке',amountMinor:90000n,
+      sourceAccountId:card.id
+    }});
+    const cardEdit=await propose(a.id,action('account','update',{
+      balanceMinor:'4150000'
+    },card.id));
+    await applyEconomicProposal(a.id,cardEdit.id);
+    assert.equal(await prisma.economicOperation.count({where:{
+      userId:a.id,isAdjustment:true,sourceAccountId:card.id,
+      kind:'INCOME',amountMinor:40000n
+    }}),1);
+    assert.equal((await undoEconomicProposal(a.id,cardEdit.id)).status,'UNDONE');
+    assert.equal(await prisma.economicOperation.count({where:{
+      userId:a.id,isAdjustment:true,sourceAccountId:card.id,
+      kind:'EXPENSE',amountMinor:40000n
+    }}),1);
+    await prisma.economicOperation.delete({where:{id:cardExpense.id}});
+    await prisma.economicOperation.deleteMany({where:{sourceAccountId:card.id,isAdjustment:true}});
+    await prisma.economicAccount.delete({where:{id:card.id}});
 
     // 4. A stale edit must never overwrite a newer manual change.
     const stale=await propose(a.id,action('account','update',{name:'Старое имя'},account.id));

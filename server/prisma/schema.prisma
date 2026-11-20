@@ -1552,6 +1552,8 @@ model EconomicAccount {
   name                String
   currency            String @default("RUB")
   openingBalanceMinor BigInt @default(0)
+  accountType         String @default("STANDARD")
+  creditLimitMinor    BigInt?
   isPrimary           Boolean @default(false)
   outgoingOperations  EconomicOperation[] @relation("EconomicSourceAccount")
   incomingTransfers   EconomicOperation[] @relation("EconomicTargetAccount")
@@ -1575,6 +1577,7 @@ model EconomicOperation {
   targetAccount     EconomicAccount? @relation("EconomicTargetAccount", fields: [targetAccountId], references: [id], onDelete: Restrict)
   debtId            String?
   debtPhase         String?
+  isAdjustment      Boolean @default(false)
   debt              EconomicDebt? @relation(fields: [debtId], references: [id], onDelete: Cascade)
   category          String?
   title             String
@@ -1585,6 +1588,7 @@ model EconomicOperation {
 
   @@index([userId, occurredAt, id])
   @@index([userId, kind, occurredAt])
+  @@index([userId, isAdjustment, occurredAt])
   @@index([sourceAccountId, kind])
   @@index([targetAccountId, kind])
   @@unique([debtId, debtPhase])

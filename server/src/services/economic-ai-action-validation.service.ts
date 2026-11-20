@@ -14,7 +14,7 @@ export class EconomicActionError extends Error {
   constructor(message: string, public readonly status = 400) { super(message); }
 }
 const FIELDS: Record<EconomicEntity, readonly string[]> = {
-  account: ['name','openingBalanceMinor','balanceMinor'],
+  account: ['name','openingBalanceMinor','balanceMinor','accountType','creditLimitMinor'],
   operation: ['kind','amountMinor','sourceAccountId','targetAccountId','category','title','note','occurredAt'],
   debt: ['direction','counterparty','amountMinor','paidMinor','note','dueAt','postedToAccount','accountId'],
   loan: ['name','lender','principalMinor','paidMinor','annualRateBps','termMonths','startDate',
@@ -32,9 +32,9 @@ const STRING_LIMITS: Record<string, number> = {
   name:100, title:160, counterparty:100, lender:100, category:80, note:500,
   sourceAccountId:128,targetAccountId:128,accountId:128
 };
-const OPTIONAL_NULL = new Set(['note','category','targetAccountId','accountId','dueAt','lender','monthlyPaymentOverrideMinor','paymentDate']);
+const OPTIONAL_NULL = new Set(['note','category','targetAccountId','accountId','dueAt','lender','monthlyPaymentOverrideMinor','paymentDate','creditLimitMinor']);
 const enumAllowed: Record<string,readonly string[]> = {
-  kind:['INCOME','EXPENSE','TRANSFER'], direction:['OWE','OWED_TO_ME']
+  kind:['INCOME','EXPENSE','TRANSFER'], direction:['OWE','OWED_TO_ME'], accountType:['STANDARD','CREDIT_CARD']
 };
 function plain(value:unknown): value is Record<string,unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) &&
@@ -105,6 +105,11 @@ export function canonicalEconomicAction(value:unknown):EconomicAction {
   }
   if(target==='account' && result.balanceMinor !== undefined && result.openingBalanceMinor !== undefined)
     throw new EconomicActionError('Укажите только текущий баланс, не одновременно начальный остаток.');
+  if(target==='account' && operation==='create' && result.accountType==='CREDIT_CARD' &&
+      (!result.creditLimitMinor || result.balanceMinor === undefined ||
+       BigInt(String(result.balanceMinor))<0n ||
+       BigInt(String(result.balanceMinor))>BigInt(String(result.creditLimitMinor))))
+    throw new EconomicActionError('Для кредитной карты укажите кредитный лимит и доступный остаток.');
   if(target==='category' && result.kind && !['INCOME','EXPENSE'].includes(String(result.kind)))
     throw new EconomicActionError('Категория может быть только доходом или расходом.');
   if(target==='operation' && result.kind==='TRANSFER' && operation==='create' &&

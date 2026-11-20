@@ -197,6 +197,13 @@ interface PlanirovychApi {
     // authentication cookie jar, and validation with the website and Mini App.
     @GET("api/economic/session") suspend fun economicSession(): JsonObject
     @GET("api/economic/snapshot") suspend fun economicSnapshot(): JsonObject
+    @GET("api/economic/report")
+    suspend fun economicReport(
+        @Query("period") period: String = "month",
+        @Query("offset") offset: Int = 0,
+        @Query("start") start: String? = null,
+        @Query("end") end: String? = null
+    ): JsonObject
     @GET("api/economic/operations")
     suspend fun economicOperations(
         @Query("kind") kind: String? = null,
