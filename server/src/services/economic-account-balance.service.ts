@@ -30,3 +30,23 @@ export async function openingForTargetBalance(
 ): Promise<bigint> {
   return targetBalanceMinor - await economicAccountMovementMinor(tx, owner, accountId);
 }
+
+/** Record a human/AI balance correction as a real signed income/expense movement.
+ * Preserve the historical baseline, never count the correction as earned income or spending.
+ * Call within a serializable transaction that also owns the account update. */
+export async function recordEconomicBalanceAdjustment(
+  tx: Prisma.TransactionClient, owner: string, accountId: string,
+  openingBalanceMinor: bigint, targetBalanceMinor: bigint
+): Promise<void> {
+  const current = openingBalanceMinor + await economicAccountMovementMinor(tx, owner, accountId);
+  const delta = targetBalanceMinor - current;
+  if (delta === 0n) return;
+  await tx.economicOperation.create({data: {
+    userId: owner, sourceAccountId: accountId,
+    kind: delta > 0n ? 'INCOME' : 'EXPENSE',
+    amountMinor: delta > 0n ? delta : -delta,
+    title: delta > 0n ? 'Корректировка баланса (+)' : 'Корректировка баланса (−)',
+    category: 'Корректировка', isAdjustment: true,
+    occurredAt: new Date()
+  }});
+}
