@@ -103,18 +103,20 @@ test('Economic AI applies and reverses real PostgreSQL ledger changes without cr
     await undoEconomicProposal(a.id,created.id);
     assert.equal(await prisma.economicAccount.count({where:{id:newAccount.appliedEntityId!}}),0);
 
-    // Editing the *current* balance adjusts the accounting baseline, never
-    // deletes or fabricates an expense and remains reversible.
+    // Editing the current balance creates a correcting ledger operation,
+    // preserving the opening baseline and remaining reversible.
     const grocery=await prisma.economicOperation.create({data:{
       userId:a.id,kind:'EXPENSE',title:'Продукты',amountMinor:25000n,
       sourceAccountId:account.id
     }});
     const currentBalance=await propose(a.id,action('account','update',{balanceMinor:'33000'},account.id));
     assert.equal((await applyEconomicProposal(a.id,currentBalance.id)).status,'APPLIED');
-    assert.equal((await prisma.economicAccount.findUniqueOrThrow({where:{id:account.id}})).openingBalanceMinor,58000n);
+    assert.equal((await prisma.economicAccount.findUniqueOrThrow({where:{id:account.id}})).openingBalanceMinor,100000n);
+    assert.equal(await prisma.economicOperation.count({where:{userId:a.id,sourceAccountId:account.id,isAdjustment:true,kind:'EXPENSE',amountMinor:42000n}}),1);
     assert.equal(await prisma.economicOperation.count({where:{id:grocery.id}}),1);
     assert.equal((await undoEconomicProposal(a.id,currentBalance.id)).status,'UNDONE');
     assert.equal((await prisma.economicAccount.findUniqueOrThrow({where:{id:account.id}})).openingBalanceMinor,100000n);
+    assert.equal(await prisma.economicOperation.count({where:{userId:a.id,sourceAccountId:account.id,isAdjustment:true,kind:'INCOME',amountMinor:42000n}}),1);
     await prisma.economicOperation.delete({where:{id:grocery.id}});
 
     // 4. A stale edit must never overwrite a newer manual change.
