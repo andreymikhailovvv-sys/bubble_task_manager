@@ -35,7 +35,7 @@ import java.util.Locale
 private val reportColors = listOf(
     0xFFF1A94C,0xFF8887ED,0xFF66BDB1,0xFFEC8293,0xFF7EAEF1,0xFFC3A1D9,
     0xFFE0C064,0xFF94C17F,0xFFDC9670,0xFF7DB4C2,0xFFC5A1AE,0xFFA5A6ED
-).map(::Color)
+).map { Color(it) }
 
 private fun reportDate(text:String): String = runCatching {
     LocalDate.parse(text.take(10)).format(DateTimeFormatter.ofPattern("dd.MM.yyyy",Locale.forLanguageTag("ru")))
