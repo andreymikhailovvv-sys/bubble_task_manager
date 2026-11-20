@@ -121,8 +121,14 @@ try {
     else if(method==='GET' && /^\/api\/tasks\/[^/]+\/attachments$/.test(path))
       payload=[];
     else if(/\/api\/tasks\/[^/]+\/ai-chat$/.test(path))payload={messages:[]};
-    else if(/\/api\/tasks\/[^/]+\/monitoring\/(statuses\/unread|triggers)$/.test(path))
-      payload={statuses:[],triggers:[],unreadCount:0};
+    // These are THREE separate API contracts, not one envelope.
+    // Triggers and statuses return bare arrays; unread returns an object.
+    else if(method==='GET' && /^\/api\/tasks\/[^/]+\/monitoring\/triggers$/.test(path))
+      payload=[];
+    else if(method==='GET' && /^\/api\/tasks\/[^/]+\/monitoring\/statuses$/.test(path))
+      payload=[];
+    else if(method==='GET' && /^\/api\/tasks\/[^/]+\/monitoring\/statuses\/unread$/.test(path))
+      payload={unreadCount:0};
     else if(path==='/api/client-performance'||path==='/api/client-error')payload={ok:true};
     else if(method!=='GET'){
       writes++;
@@ -167,6 +173,8 @@ try {
   assert.equal(await page.getByText('Не удалось отрисовать интерфейс').count(),0,
     'React error boundary must never replace the workspace');
   assert.deepEqual(failures,[],'Browser runtime errors: '+failures.join('\n'));
+  assert.deepEqual([...unhandledGetPaths],[],
+    'Missing API fixture(s): '+[...unhandledGetPaths].join(', '));
   console.log('[Browser smoke] PASS '+JSON.stringify({...metrics,mockedApiWrites:writes}));
 }catch(error){
   console.error('[Browser smoke] FAIL '+(error.stack??error));
