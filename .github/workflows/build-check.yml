@@ -35,6 +35,9 @@ jobs:
         run: |
           npm install --no-save --package-lock=false --ignore-scripts playwright@1.56.1
           npx playwright install --with-deps chromium
+          # Generate source maps only on the CI runner so browser stack traces
+          # resolve to original TypeScript. Production deployment stays unchanged.
+          (cd client && ../node_modules/.bin/vite build --sourcemap)
           node scripts/browser-planner-smoke.mjs
       - name: Verify experimental Test Page routing and shared planner components
         run: node --import tsx --test client/test/test-page-ui.test.ts
