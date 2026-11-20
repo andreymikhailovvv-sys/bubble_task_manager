@@ -164,7 +164,14 @@ try {
   assert.ok(await page.locator('textarea[title="Редактировать название"]').count()>0,
     'Focus editor remains mounted after editing description');
 
-  await page.locator('[data-bubble-task-id="smoke-event-task"]').first().click();
+  // The bubble/list views intentionally exclude EVENT/REMINDER tasks, so
+  // an event bubble cannot exist. Test the classic TaskEditor through the
+  // actual "New task -> New event" menu that users use.
+  // Reload to close Focus and verify the edited session can boot again.
+  await page.reload({waitUntil:'domcontentloaded'});
+  await page.locator('[data-tour="create-task"]').waitFor({state:'visible',timeout:12000});
+  await page.locator('[data-tour="create-task"]').click();
+  await page.locator('[data-tour="create-event"]').click();
   const eventTitle=page.locator('textarea.task-edit-title-input').first();
   await eventTitle.waitFor({state:'visible',timeout:12000});
   await eventTitle.fill('Проверка события без ошибок рендера');
