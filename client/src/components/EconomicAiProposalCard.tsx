@@ -27,6 +27,7 @@ const LABELS:Record<string,string>={
   name:'Название',title:'Название',counterparty:'Контрагент',
   kind:'Тип',direction:'Направление',balanceMinor:'Баланс, ₽',
   openingBalanceMinor:'Баланс, ₽',amountMinor:'Сумма, ₽',
+  accountType:'Тип счёта',creditLimitMinor:'Кредитный лимит, ₽',
   principalMinor:'Сумма кредита, ₽',paidMinor:'Выплачено, ₽',
   sourceAccountId:'Счёт',targetAccountId:'Счёт зачисления',accountId:'Счёт долга',
   category:'Категория',note:'Примечание',dueAt:'Срок возврата',
@@ -161,6 +162,13 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
     : proposal.entity==='debt'?(proposal.action==='create'?'Новый долг':'Изменение долга')
     : (proposal.action==='create'?'Новая запись':'Изменение записи');
   const renderField=(key:string,value:Value)=>{
+    if(key==='accountType'){
+      return <select aria-label="Тип счёта" value={String(value??'STANDARD')}
+        disabled={!editableStatus||busy} onChange={e=>setField(key,e.target.value)}>
+        <option value="STANDARD">Денежный счёт</option>
+        <option value="CREDIT_CARD">Кредитная карта</option>
+      </select>;
+    }
     if(key==='kind'||key==='direction'){
       const pairs=key==='direction'
         ? [['OWE','Я должен'],['OWED_TO_ME','Мне должны']]
