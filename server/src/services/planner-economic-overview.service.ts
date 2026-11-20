@@ -15,7 +15,7 @@ export async function readPlannerEconomicOverview(owner: string) {
   const [accounts, sources, incoming, categories, recentOperations, debts, loans] = await Promise.all([
     prisma.economicAccount.findMany({
       where:{userId:owner},orderBy:[{isPrimary:'desc'},{createdAt:'asc'}],take:100,
-      select:{id:true,name:true,openingBalanceMinor:true,isPrimary:true,updatedAt:true}
+      select:{id:true,name:true,openingBalanceMinor:true,accountType:true,creditLimitMinor:true,isPrimary:true,updatedAt:true}
     }),
     prisma.economicOperation.groupBy({
       by:['sourceAccountId','kind'],where:{userId:owner},_sum:{amountMinor:true}
@@ -30,7 +30,7 @@ export async function readPlannerEconomicOverview(owner: string) {
     prisma.economicOperation.findMany({
       where:{userId:owner},orderBy:[{occurredAt:'desc'},{id:'desc'}],take:15,
       select:{id:true,kind:true,title:true,category:true,amountMinor:true,
-        sourceAccountId:true,targetAccountId:true,occurredAt:true,updatedAt:true,debtId:true}
+        sourceAccountId:true,targetAccountId:true,occurredAt:true,updatedAt:true,debtId:true,isAdjustment:true}
     }),
     prisma.economicDebt.findMany({
       where:{userId:owner,isClosed:false},orderBy:{updatedAt:'desc'},take:20,
@@ -52,7 +52,8 @@ export async function readPlannerEconomicOverview(owner: string) {
   return {
     currency:'RUB',minorUnit:'kopecks',rublesPer100Minor:1,
     accounts:accounts.map(a=>({
-      id:a.id,name:a.name,isPrimary:a.isPrimary,
+      id:a.id,name:a.name,isPrimary:a.isPrimary,accountType:a.accountType,
+      creditLimitMinor:a.creditLimitMinor?.toString()??null,
       balanceMinor:(balance.get(a.id)??0n).toString(),updatedAt:a.updatedAt.toISOString()
     })),
     categories:categories.map(c=>({...c,createdAt:c.createdAt.toISOString()})),
