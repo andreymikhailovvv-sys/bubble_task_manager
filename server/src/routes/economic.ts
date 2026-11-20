@@ -255,7 +255,7 @@ economicRouter.patch('/accounts/:id', asyncHandler(async (req, res) => {
         throw new EconomicActionError('Доступный остаток превышает кредитный лимит');
       if (accountType === 'CREDIT_CARD' && (target ?? current) < 0n)
         throw new EconomicActionError('Доступный остаток не может быть отрицательным');
-      if (req.body?.isPrimary === true && accountType === 'CREDIT_CARD')
+      if ((req.body?.isPrimary === true || found.isPrimary) && accountType === 'CREDIT_CARD')
         throw new EconomicActionError('Кредитная карта не может быть основным денежным счётом');
       if (req.body?.isPrimary === true)
         await tx.economicAccount.updateMany({ where: { userId: owner }, data: { isPrimary: false } });
