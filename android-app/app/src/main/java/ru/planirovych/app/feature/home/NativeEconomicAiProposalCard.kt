@@ -37,6 +37,7 @@ private val ECON_FIELDS=mapOf(
     "name" to "Название","title" to "Название","counterparty" to "Контрагент",
     "kind" to "Тип","direction" to "Направление","balanceMinor" to "Баланс, ₽",
     "openingBalanceMinor" to "Баланс, ₽","amountMinor" to "Сумма, ₽",
+    "accountType" to "Тип счёта","creditLimitMinor" to "Кредитный лимит, ₽",
     "principalMinor" to "Сумма кредита, ₽","paidMinor" to "Выплачено, ₽",
     "sourceAccountId" to "Счёт","targetAccountId" to "Счёт зачисления",
     "accountId" to "Счёт долга","category" to "Категория","note" to "Примечание",
@@ -289,6 +290,8 @@ internal fun NativeEconomicAiProposalCard(
                                 listOf("EXPENSE" to "Расход","INCOME" to "Доход")
                                 else listOf("EXPENSE" to "Расход","INCOME" to "Доход","TRANSFER" to "Перевод")
                             "direction"->listOf("OWE" to "Я должен","OWED_TO_ME" to "Мне должны")
+                            "accountType"->listOf("STANDARD" to "Денежный счёт",
+                                "CREDIT_CARD" to "Кредитная карта")
                             "sourceAccountId","targetAccountId","accountId"->
                                 listOf("" to "Выбрать счёт")+accountChoices
                             "category"->categoryChoices
