@@ -5,6 +5,9 @@
  * Requires an existing client build, playwright and Chromium.
  */
 import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { SourceMapConsumer } from 'source-map-js';
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright';
@@ -31,11 +34,35 @@ const tasks = Array.from({length:Number(process.env.PLANNER_BROWSER_SMOKE_TASKS 
 }));
 
 const failures=[];
+const unhandledGetPaths=new Set();
+function describeBrowserStack(stack) {
+  const originalLines=String(stack ?? '').split('\n');
+  const mapped=[];
+  const expression=/\/assets\/([^/:?#]+\.js):(\d+):(\d+)/;
+  for(const item of originalLines){
+    const match=item.match(expression);
+    if(!match)continue;
+    const mapPath=join(process.cwd(),'client','dist','assets',match[1]+'.map');
+    if(!existsSync(mapPath))continue;
+    try{
+      const sourceMap=JSON.parse(readFileSync(mapPath,'utf8'));
+      const consumer=new SourceMapConsumer(sourceMap);
+      const original=consumer.originalPositionFor({line:Number(match[2]),column:Number(match[3])-1});
+      if(!original.source)continue;
+      const originalCode=consumer.sourceContentFor(original.source,true);
+      const sourceLine=originalCode?.split('\n')[original.line-1]?.trim() ?? '';
+      mapped.push(original.source+':'+original.line+':'+original.column+' '+sourceLine.slice(0,180));
+    }catch(error){mapped.push('Failed to map '+mapPath+': '+String(error));}
+    if(mapped.length>=12)break;
+  }
+  return mapped.join('\n');
+}
 let previewOutput='';
-const preview=spawn('npm',[
-  'run','preview','--workspace','client','--',
-  '--host','127.0.0.1','--port',String(port),'--strictPort'
-],{stdio:['ignore','pipe','pipe']});
+// Spawn Vite directly, not through npm -> shell -> vite. Killing npm may
+// orphan Vite with inherited stdio pipes and keep Node/CI alive indefinitely.
+const preview=spawn(join(process.cwd(),'node_modules','.bin','vite'),[
+  'preview','--host','127.0.0.1','--port',String(port),'--strictPort'
+],{cwd:join(process.cwd(),'client'),stdio:['ignore','pipe','pipe']});
 preview.stdout.on('data',chunk=>{previewOutput+=chunk.toString().slice(-2000);});
 preview.stderr.on('data',chunk=>{previewOutput+=chunk.toString().slice(-2000);});
 
@@ -55,7 +82,10 @@ try {
   browser=await chromium.launch({headless:true,args:['--no-sandbox']});
   const context=await browser.newContext({viewport:{width:1440,height:900},locale:'ru-RU'});
   const page=await context.newPage();
-  page.on('pageerror',error=>failures.push(error.stack??error.message));
+  page.on('pageerror',error=>{
+    const stack=error.stack??error.message;
+    failures.push(stack+'\n[Mapped source]\n'+describeBrowserStack(stack));
+  });
   page.on('console',message=>{
     if(message.type()==='error'&&/react|render|hook|TypeError|Ошибка рендера/i.test(message.text()))
       failures.push(message.text().slice(0,600));
@@ -72,15 +102,40 @@ try {
     else if(path==='/api/habits'||path==='/api/notes'||path==='/api/note-groups')payload=[];
     else if(path==='/api/ai-chat/projects')payload={projects:[]};
     else if(path==='/api/ai-general-chat')payload={messages:[]};
-    else if(path==='/api/system-notifications')payload={notifications:[]};
+    // All authenticated chat feeds start empty, but the real API still returns
+    // fully shaped envelopes. Returning {} crashed mergeTelegramAiInbox during
+    // React rendering before the task UI could even mount.
+    else if(path==='/api/telegram-user-client/assistant/inbox')
+      payload={projectId:'telegram-ai-assistant-project',projectTitle:'Телеграм ассистент',
+        projectIcon:'telegram',chats:[],messages:[]};
+    else if(path==='/api/mail-assistant/inbox')
+      payload={projectId:'mail-ai-assistant-project',projectTitle:'Почта',
+        projectIcon:'@',chats:[],messages:[]};
+    else if(path==='/api/subscription-links')
+      payload={links:{start:'',pro:'',max:''}};
+    else if(path==='/api/credit-packs')
+      payload={packs:[],paymentProvider:null,purchaseAvailable:false};
+    else if(path==='/api/system-notifications')
+      payload={notifications:[],unreadCount:0};
+    // The focus editor immediately loads the selected task's attachments.
+    // This endpoint returns a bare array, never an object wrapper.
+    else if(method==='GET' && /^\/api\/tasks\/[^/]+\/attachments$/.test(path))
+      payload=[];
     else if(/\/api\/tasks\/[^/]+\/ai-chat$/.test(path))payload={messages:[]};
-    else if(/\/api\/tasks\/[^/]+\/monitoring\/(statuses\/unread|triggers)$/.test(path))
-      payload={statuses:[],triggers:[],unreadCount:0};
+    // These are THREE separate API contracts, not one envelope.
+    // Triggers and statuses return bare arrays; unread returns an object.
+    else if(method==='GET' && /^\/api\/tasks\/[^/]+\/monitoring\/triggers$/.test(path))
+      payload=[];
+    else if(method==='GET' && /^\/api\/tasks\/[^/]+\/monitoring\/statuses$/.test(path))
+      payload=[];
+    else if(method==='GET' && /^\/api\/tasks\/[^/]+\/monitoring\/statuses\/unread$/.test(path))
+      payload={unreadCount:0};
     else if(path==='/api/client-performance'||path==='/api/client-error')payload={ok:true};
     else if(method!=='GET'){
       writes++;
       payload={task:tasks[0],success:true,notifications:[],user};
     }else if(path.includes('/inbox'))payload={messages:[],items:[],events:[]};
+    else unhandledGetPaths.add(path);
     await route.fulfill({status:200,contentType:'application/json',
       headers:{'cache-control':'no-store'},body:JSON.stringify(payload)});
   });
@@ -109,7 +164,22 @@ try {
   assert.ok(await page.locator('textarea[title="Редактировать название"]').count()>0,
     'Focus editor remains mounted after editing description');
 
-  await page.locator('[data-bubble-task-id="smoke-event-task"]').first().click();
+  // The bubble/list views intentionally exclude EVENT/REMINDER tasks, so
+  // an event bubble cannot exist. Test the classic TaskEditor through the
+  // actual "New task -> New event" menu that users use.
+  // Reload to close Focus and verify the edited session can boot again.
+  await page.reload({waitUntil:'domcontentloaded'});
+  // This user experience starts in fullscreen by default, with the classic
+  // "New task" toolbar deliberately hidden. Exit fullscreen using the actual
+  // UI before accessing the event creation menu.
+  await page.locator('[data-tour="bubbles-fullscreen-exit"]').waitFor({state:'visible',timeout:12000});
+  await page.locator('[data-tour="bubbles-fullscreen-exit"]').click();
+  await page.locator('[data-tour="create-task"]').waitFor({state:'visible',timeout:12000});
+  // Hover opens the desktop add-menu; clicking its trigger again would
+  // toggle it closed because onMouseEnter has already opened it.
+  await page.locator('[data-tour="create-task"]').hover();
+  await page.locator('[data-tour="create-event"]').waitFor({state:'visible',timeout:8000});
+  await page.locator('[data-tour="create-event"]').click();
   const eventTitle=page.locator('textarea.task-edit-title-input').first();
   await eventTitle.waitFor({state:'visible',timeout:12000});
   await eventTitle.fill('Проверка события без ошибок рендера');
@@ -119,10 +189,13 @@ try {
   assert.equal(await page.getByText('Не удалось отрисовать интерфейс').count(),0,
     'React error boundary must never replace the workspace');
   assert.deepEqual(failures,[],'Browser runtime errors: '+failures.join('\n'));
+  assert.deepEqual([...unhandledGetPaths],[],
+    'Missing API fixture(s): '+[...unhandledGetPaths].join(', '));
   console.log('[Browser smoke] PASS '+JSON.stringify({...metrics,mockedApiWrites:writes}));
 }catch(error){
   console.error('[Browser smoke] FAIL '+(error.stack??error));
   if(failures.length)console.error('[Browser smoke] runtime errors:\n'+failures.slice(0,8).join('\n'));
+  console.error('[Browser smoke] unmapped GET paths: '+JSON.stringify([...unhandledGetPaths].slice(0,80)));
   console.error('[Browser smoke] preview log:\n'+previewOutput.slice(-1500));
   process.exitCode=1;
 }finally{
