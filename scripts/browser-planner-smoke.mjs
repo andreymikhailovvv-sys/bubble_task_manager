@@ -101,7 +101,21 @@ try {
     else if(path==='/api/habits'||path==='/api/notes'||path==='/api/note-groups')payload=[];
     else if(path==='/api/ai-chat/projects')payload={projects:[]};
     else if(path==='/api/ai-general-chat')payload={messages:[]};
-    else if(path==='/api/system-notifications')payload={notifications:[]};
+    // All authenticated chat feeds start empty, but the real API still returns
+    // fully shaped envelopes. Returning {} crashed mergeTelegramAiInbox during
+    // React rendering before the task UI could even mount.
+    else if(path==='/api/telegram-user-client/assistant/inbox')
+      payload={projectId:'telegram-ai-assistant-project',projectTitle:'Телеграм ассистент',
+        projectIcon:'telegram',chats:[],messages:[]};
+    else if(path==='/api/mail-assistant/inbox')
+      payload={projectId:'mail-ai-assistant-project',projectTitle:'Почта',
+        projectIcon:'@',chats:[],messages:[]};
+    else if(path==='/api/subscription-links')
+      payload={links:{start:'',pro:'',max:''}};
+    else if(path==='/api/credit-packs')
+      payload={packs:[],paymentProvider:null,purchaseAvailable:false};
+    else if(path==='/api/system-notifications')
+      payload={notifications:[],unreadCount:0};
     else if(/\/api\/tasks\/[^/]+\/ai-chat$/.test(path))payload={messages:[]};
     else if(/\/api\/tasks\/[^/]+\/monitoring\/(statuses\/unread|triggers)$/.test(path))
       payload={statuses:[],triggers:[],unreadCount:0};
