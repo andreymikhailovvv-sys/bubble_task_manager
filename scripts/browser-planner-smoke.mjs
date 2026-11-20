@@ -58,10 +58,11 @@ function describeBrowserStack(stack) {
   return mapped.join('\n');
 }
 let previewOutput='';
-const preview=spawn('npm',[
-  'run','preview','--workspace','client','--',
-  '--host','127.0.0.1','--port',String(port),'--strictPort'
-],{stdio:['ignore','pipe','pipe']});
+// Spawn Vite directly, not through npm -> shell -> vite. Killing npm may
+// orphan Vite with inherited stdio pipes and keep Node/CI alive indefinitely.
+const preview=spawn(join(process.cwd(),'node_modules','.bin','vite'),[
+  'preview','--host','127.0.0.1','--port',String(port),'--strictPort'
+],{cwd:join(process.cwd(),'client'),stdio:['ignore','pipe','pipe']});
 preview.stdout.on('data',chunk=>{previewOutput+=chunk.toString().slice(-2000);});
 preview.stderr.on('data',chunk=>{previewOutput+=chunk.toString().slice(-2000);});
 
