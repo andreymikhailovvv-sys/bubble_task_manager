@@ -9,7 +9,7 @@ type Snapshot = Record<string,string|number|boolean|null>;
 function no(message:string,status=409):never { throw new EconomicActionError(message,status); }
 const iso=(d:Date|null)=>d?.toISOString()??null;
 const snapshot = (entity:EconomicEntity,row:any):Snapshot => {
-  if(entity==='account')return {id:row.id,name:row.name,openingBalanceMinor:row.openingBalanceMinor.toString(),updatedAt:iso(row.updatedAt)};
+  if(entity==='account')return {id:row.id,name:row.name,accountType:row.accountType,creditLimitMinor:row.creditLimitMinor?.toString()??null,openingBalanceMinor:row.openingBalanceMinor.toString(),updatedAt:iso(row.updatedAt)};
   if(entity==='operation')return {id:row.id,kind:row.kind,amountMinor:row.amountMinor.toString(),
     sourceAccountId:row.sourceAccountId,targetAccountId:row.targetAccountId,category:row.category,
     title:row.title,note:row.note,occurredAt:iso(row.occurredAt),updatedAt:iso(row.updatedAt)};
@@ -122,15 +122,41 @@ async function mutate(tx:Tx,owner:string,action:EconomicAction,record:Snapshot|n
   if(action.entity==='account'){
     if(typeof d.name!=='string'||!d.name.trim())no('Укажите название счёта.');
     const initial = action.payload.balanceMinor ?? d.openingBalanceMinor ?? '0';
-    if(action.action==='create')return (await tx.economicAccount.create({data:{
-      userId:owner,name:d.name as string,openingBalanceMinor:BigInt(String(initial))
-    }})).id;
+    const accountType=String(d.accountType??'STANDARD');
+    if(!['STANDARD','CREDIT_CARD'].includes(accountType))no('Неизвестный тип счёта.');
+    const creditLimitMinor=accountType==='CREDIT_CARD' && d.creditLimitMinor!=null
+      ? BigInt(String(d.creditLimitMinor)) : null;
+    if(accountType==='CREDIT_CARD' && (!creditLimitMinor || creditLimitMinor<=0n))
+      no('Для кредитной карты требуется кредитный лимит.');
+    if(action.action==='create'){
+      const balance=BigInt(String(initial));
+      if(accountType==='CREDIT_CARD' && (balance<0n||balance>creditLimitMinor!))
+        no('Доступный остаток должен быть в пределах кредитного лимита.');
+      return (await tx.economicAccount.create({data:{
+        userId:owner,name:d.name as string,openingBalanceMinor:balance,
+        accountType,creditLimitMinor
+      }})).id;
+    }
     const row=await tx.economicAccount.findFirst({where:{id:action.targetId!,userId:owner}});
     if(!row)no('Счёт не найден.',404);
-    await tx.economicAccount.update({where:{id:action.targetId!,userId:owner},data:{name:d.name as string}});
+    if(row.accountType!==accountType){
+      if(row.isPrimary && accountType==='CREDIT_CARD')
+        no('Основной денежный счёт нельзя преобразовать в кредитную карту.');
+      const operations=await tx.economicOperation.count({
+        where:{userId:owner,OR:[{sourceAccountId:row.id},{targetAccountId:row.id}]}
+      });
+      if(operations)no('Тип счёта с операциями изменить нельзя.');
+    }
+    const oldCurrent=row.openingBalanceMinor+await economicAccountMovementMinor(tx,owner,row.id);
+    const targetBalance=action.payload.balanceMinor !== undefined
+      ? BigInt(String(action.payload.balanceMinor)) : oldCurrent;
+    if(accountType==='CREDIT_CARD' && (targetBalance<0n||targetBalance>creditLimitMinor!))
+      no('Доступный остаток должен быть в пределах кредитного лимита.');
+    await tx.economicAccount.update({where:{id:action.targetId!,userId:owner},data:{
+      name:d.name as string,accountType,creditLimitMinor
+    }});
     if(action.payload.balanceMinor !== undefined)
-      await recordEconomicBalanceAdjustment(tx,owner,row.id,row.openingBalanceMinor,
-        BigInt(String(action.payload.balanceMinor)));
+      await recordEconomicBalanceAdjustment(tx,owner,row.id,row.openingBalanceMinor,targetBalance);
     return action.targetId!;
   }
   if(action.entity==='category'){
@@ -392,7 +418,7 @@ export async function undoEconomicProposal(owner:string,id:string){
         no('Нет предыдущей версии записи для отмены.');
       const before=row.before as Record<string,unknown>;
       const revertFields:Record<EconomicEntity,string[]>={
-        account:['name','balanceMinor'],
+        account:['name','balanceMinor','accountType','creditLimitMinor'],
         operation:['kind','amountMinor','sourceAccountId','targetAccountId','category','title','note','occurredAt'],
         debt:['direction','counterparty','amountMinor','paidMinor','note','dueAt','postedToAccount','accountId'],
         loan:['name','lender','principalMinor','paidMinor','annualRateBps','termMonths',
