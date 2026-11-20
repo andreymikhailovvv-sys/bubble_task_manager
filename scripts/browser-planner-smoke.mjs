@@ -175,7 +175,10 @@ try {
   await page.locator('[data-tour="bubbles-fullscreen-exit"]').waitFor({state:'visible',timeout:12000});
   await page.locator('[data-tour="bubbles-fullscreen-exit"]').click();
   await page.locator('[data-tour="create-task"]').waitFor({state:'visible',timeout:12000});
-  await page.locator('[data-tour="create-task"]').click();
+  // Hover opens the desktop add-menu; clicking its trigger again would
+  // toggle it closed because onMouseEnter has already opened it.
+  await page.locator('[data-tour="create-task"]').hover();
+  await page.locator('[data-tour="create-event"]').waitFor({state:'visible',timeout:8000});
   await page.locator('[data-tour="create-event"]').click();
   const eventTitle=page.locator('textarea.task-edit-title-input').first();
   await eventTitle.waitFor({state:'visible',timeout:12000});
