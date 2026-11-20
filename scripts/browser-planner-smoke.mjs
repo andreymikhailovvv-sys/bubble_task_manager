@@ -116,6 +116,10 @@ try {
       payload={packs:[],paymentProvider:null,purchaseAvailable:false};
     else if(path==='/api/system-notifications')
       payload={notifications:[],unreadCount:0};
+    // The focus editor immediately loads the selected task's attachments.
+    // This endpoint returns a bare array, never an object wrapper.
+    else if(method==='GET' && /^\/api\/tasks\/[^/]+\/attachments$/.test(path))
+      payload=[];
     else if(/\/api\/tasks\/[^/]+\/ai-chat$/.test(path))payload={messages:[]};
     else if(/\/api\/tasks\/[^/]+\/monitoring\/(statuses\/unread|triggers)$/.test(path))
       payload={statuses:[],triggers:[],unreadCount:0};
