@@ -169,6 +169,11 @@ try {
   // actual "New task -> New event" menu that users use.
   // Reload to close Focus and verify the edited session can boot again.
   await page.reload({waitUntil:'domcontentloaded'});
+  // This user experience starts in fullscreen by default, with the classic
+  // "New task" toolbar deliberately hidden. Exit fullscreen using the actual
+  // UI before accessing the event creation menu.
+  await page.locator('[data-tour="bubbles-fullscreen-exit"]').waitFor({state:'visible',timeout:12000});
+  await page.locator('[data-tour="bubbles-fullscreen-exit"]').click();
   await page.locator('[data-tour="create-task"]').waitFor({state:'visible',timeout:12000});
   await page.locator('[data-tour="create-task"]').click();
   await page.locator('[data-tour="create-event"]').click();
