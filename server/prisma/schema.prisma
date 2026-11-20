@@ -1588,6 +1588,7 @@ model EconomicOperation {
 
   @@index([userId, occurredAt, id])
   @@index([userId, kind, occurredAt])
+  @@index([userId, isAdjustment, occurredAt])
   @@index([sourceAccountId, kind])
   @@index([targetAccountId, kind])
   @@unique([debtId, debtPhase])
