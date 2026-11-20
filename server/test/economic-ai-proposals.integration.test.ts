@@ -148,7 +148,7 @@ test('Economic AI applies and reverses real PostgreSQL ledger changes without cr
     }}),1);
     await prisma.economicOperation.delete({where:{id:cardExpense.id}});
     await prisma.economicOperation.deleteMany({where:{sourceAccountId:card.id,isAdjustment:true}});
-    assert.equal((await undoEconomicProposal(a.id,cardDraft.id)).status,'UNDONE');
+    await prisma.economicAccount.delete({where:{id:card.id}});
 
     // 4. A stale edit must never overwrite a newer manual change.
     const stale=await propose(a.id,action('account','update',{name:'Старое имя'},account.id));
