@@ -54,6 +54,9 @@ internal fun EcoEditorSheet(
                     put("name",item.ecoText("name"))
                     put("balance",if(editing)ecoInput(item.ecoText("balanceMinor")) else "0")
                     put("isPrimary",if(item.ecoBool("isPrimary"))"yes" else "no")
+                    put("accountType",item.ecoText("accountType").ifBlank{"STANDARD"})
+                    put("creditLimit",if(item.ecoText("creditLimitMinor").isNotBlank())
+                        ecoInput(item.ecoText("creditLimitMinor")) else "")
                 }
                 "operations" -> {
                     put("kind",item.ecoText("kind").ifBlank{"EXPENSE"})
@@ -117,8 +120,18 @@ internal fun EcoEditorSheet(
                         val name=value("name").trim()
                         require(name.isNotBlank()&&name.length<=60){"Введите название счёта (до 60 символов)"}
                         put("name",name)
-                        put("balanceMinor",ecoParseMoney(value("balance"),true))
-                        if(editing && value("isPrimary")=="yes")put("isPrimary",true)
+                        val balance=ecoParseMoney(value("balance"),true)
+                        val accountType=value("accountType").ifBlank{"STANDARD"}
+                        val limit=if(accountType=="CREDIT_CARD")
+                            ecoParseMoney(value("creditLimit")) else null
+                        if(limit!=null)require(balance.toBigInteger()>=java.math.BigInteger.ZERO &&
+                            balance.toBigInteger()<=limit.toBigInteger()) {
+                            "Доступный остаток должен быть от 0 до кредитного лимита"
+                        }
+                        put("balanceMinor",balance)
+                        put("accountType",accountType)
+                        put("creditLimitMinor",if(limit==null)JsonNull else JsonPrimitive(limit))
+                        if(editing && value("isPrimary")=="yes" && accountType!="CREDIT_CARD")put("isPrimary",true)
                     }
                     "operations" -> {
                         val kind=value("kind")
@@ -299,14 +312,23 @@ internal fun EcoEditorSheet(
                     "accounts" -> {
                         EcoInput("Название счёта",value("name"),colors,60,
                             placeholder="Наличные, карта, накопления"){change("name",it)}
-                        EcoInput("Баланс, ₽",value("balance"),colors,40,decimal=true){change("balance",it)}
-                        if(editing&&value("isPrimary")!="yes") {
+                        EcoSelect("Тип счёта",value("accountType"),
+                            listOf("STANDARD" to "Денежный счёт","CREDIT_CARD" to "Кредитная карта"),colors){
+                            change("accountType",it)
+                        }
+                        if(value("accountType")=="CREDIT_CARD")
+                            EcoInput("Кредитный лимит, ₽",value("creditLimit"),colors,40,decimal=true){
+                                change("creditLimit",it)
+                            }
+                        EcoInput(if(value("accountType")=="CREDIT_CARD")"Доступный остаток лимита, ₽"
+                            else "Баланс, ₽",value("balance"),colors,40,decimal=true){change("balance",it)}
+                        if(editing&&value("isPrimary")!="yes"&&value("accountType")!="CREDIT_CARD") {
                             EcoSelect("Статус",value("isPrimary"),listOf(
                                 "no" to "Дополнительный","yes" to "Сделать основным"),colors) {
                                 change("isPrimary",it)
                             }
                         }
-                        EcoHint("Укажите текущую сумму на счёте. Корректировка баланса сохраняет историю операций и не считается доходом или расходом.",colors)
+                        EcoHint("При изменении остатка создаётся корректирующая операция, видимая в истории, но исключённая из обычных доходов и расходов. Расходы по кредитной карте уменьшают доступный лимит.",colors)
                     }
                     "debts" -> {
                         EcoSelect("Направление",value("direction"),listOf(
