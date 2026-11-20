@@ -16,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -156,7 +157,7 @@ internal fun EcoReportPanel(api:PlanirovychApi, colors:EcoColors, revision:Int, 
                     } else {
                         var angle=-90f
                         selection.forEach { (_,amount,color) ->
-                            val sweep=360f*amount.toDouble()/total.toDouble()
+                            val sweep=360f*(amount.toDouble()/total.toDouble()).toFloat()
                             if(sweep>0f) drawArc(color=color,startAngle=angle,sweepAngle=sweep,
                                 useCenter=false,topLeft=Offset(inset,inset),size=ringSize,style=stroke)
                             angle+=sweep
