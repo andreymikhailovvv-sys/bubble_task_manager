@@ -453,7 +453,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
             <BookOpen size={16}/></button>
         : <>
             {!op.isAdjustment && <button className="econ-icon-button" type="button" title="Редактировать" aria-label={'Редактировать ' + op.title} onClick={event => { event.stopPropagation(); openDialog('operation', op); }}><Pencil size={15}/></button>}
-            <button className="econ-icon-button econ-delete" type="button" title="Удалить" aria-label={'Удалить ' + op.title} onClick={event => { event.stopPropagation(); void remove('operations', op.id); }}><Trash2 size={15}/></button>
+            {!op.isAdjustment && <button className="econ-icon-button econ-delete" type="button" title="Удалить" aria-label={'Удалить ' + op.title} onClick={event => { event.stopPropagation(); void remove('operations', op.id); }}><Trash2 size={15}/></button>}
           </>}
     </div>;
   };
