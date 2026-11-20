@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
-import { openingForTargetBalance } from './economic-account-balance.service.js';
+import { economicAccountMovementMinor, recordEconomicBalanceAdjustment } from './economic-account-balance.service.js';
 import { debtOperationKind, debtOperationTitle, type EconomicDebtDirection } from '../lib/economic-debt.js';
 import { canonicalEconomicAction, EconomicActionError, type EconomicAction, type EconomicEntity } from './economic-ai-action-validation.service.js';
 
@@ -43,7 +43,12 @@ const owned=async(tx:Tx,owner:string,ids:string[])=>{
   if(rows.length!==unique.length||rows.some(x=>x.currency!=='RUB'))no('Счёт не найден или не принадлежит пользователю.');
 };
 export async function readEconomicEntity(tx:Tx,owner:string,entity:EconomicEntity,id:string):Promise<Snapshot|null>{
-  if(entity==='account'){const row=await tx.economicAccount.findFirst({where:{id,userId:owner}});return row?snapshot(entity,row):null;}
+  if(entity==='account'){
+    const row=await tx.economicAccount.findFirst({where:{id,userId:owner}});
+    if(!row)return null;
+    return {...snapshot(entity,row), balanceMinor:
+      (row.openingBalanceMinor + await economicAccountMovementMinor(tx,owner,row.id)).toString()};
+  }
   if(entity==='operation'){const row=await tx.economicOperation.findFirst({where:{id,userId:owner}});
     if(row?.debtId)no('Связанную с долгом операцию меняйте через сам долг.');
     return row?snapshot(entity,row):null;}
@@ -116,14 +121,16 @@ async function mutate(tx:Tx,owner:string,action:EconomicAction,record:Snapshot|n
   const d={...record,...action.payload} as Record<string,unknown>;
   if(action.entity==='account'){
     if(typeof d.name!=='string'||!d.name.trim())no('Укажите название счёта.');
-    const openingBalanceMinor=action.payload.balanceMinor !== undefined
-      ? (action.action==='create'
-        ? BigInt(String(action.payload.balanceMinor))
-        : await openingForTargetBalance(tx,owner,action.targetId!,BigInt(String(action.payload.balanceMinor))))
-      : BigInt(String(d.openingBalanceMinor??'0'));
-    const values={name:d.name as string,openingBalanceMinor};
-    if(action.action==='create')return (await tx.economicAccount.create({data:{userId:owner,...values}})).id;
-    await tx.economicAccount.update({where:{id:action.targetId!,userId:owner},data:values});
+    const initial = action.payload.balanceMinor ?? d.openingBalanceMinor ?? '0';
+    if(action.action==='create')return (await tx.economicAccount.create({data:{
+      userId:owner,name:d.name as string,openingBalanceMinor:BigInt(String(initial))
+    }})).id;
+    const row=await tx.economicAccount.findFirst({where:{id:action.targetId!,userId:owner}});
+    if(!row)no('Счёт не найден.',404);
+    await tx.economicAccount.update({where:{id:action.targetId!,userId:owner},data:{name:d.name as string}});
+    if(action.payload.balanceMinor !== undefined)
+      await recordEconomicBalanceAdjustment(tx,owner,row.id,row.openingBalanceMinor,
+        BigInt(String(action.payload.balanceMinor)));
     return action.targetId!;
   }
   if(action.entity==='category'){
@@ -385,7 +392,7 @@ export async function undoEconomicProposal(owner:string,id:string){
         no('Нет предыдущей версии записи для отмены.');
       const before=row.before as Record<string,unknown>;
       const revertFields:Record<EconomicEntity,string[]>={
-        account:['name','openingBalanceMinor'],
+        account:['name','balanceMinor'],
         operation:['kind','amountMinor','sourceAccountId','targetAccountId','category','title','note','occurredAt'],
         debt:['direction','counterparty','amountMinor','paidMinor','note','dueAt','postedToAccount','accountId'],
         loan:['name','lender','principalMinor','paidMinor','annualRateBps','termMonths',
