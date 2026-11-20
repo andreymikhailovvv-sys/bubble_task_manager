@@ -5,6 +5,9 @@
  * Requires an existing client build, playwright and Chromium.
  */
 import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { SourceMapConsumer } from 'source-map-js';
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright';
@@ -31,6 +34,29 @@ const tasks = Array.from({length:Number(process.env.PLANNER_BROWSER_SMOKE_TASKS 
 }));
 
 const failures=[];
+const unhandledGetPaths=new Set();
+function describeBrowserStack(stack) {
+  const originalLines=String(stack ?? '').split('\n');
+  const mapped=[];
+  const expression=/\/assets\/([^/:?#]+\.js):(\d+):(\d+)/;
+  for(const item of originalLines){
+    const match=item.match(expression);
+    if(!match)continue;
+    const mapPath=join(process.cwd(),'client','dist','assets',match[1]+'.map');
+    if(!existsSync(mapPath))continue;
+    try{
+      const sourceMap=JSON.parse(readFileSync(mapPath,'utf8'));
+      const consumer=new SourceMapConsumer(sourceMap);
+      const original=consumer.originalPositionFor({line:Number(match[2]),column:Number(match[3])-1});
+      if(!original.source)continue;
+      const originalCode=consumer.sourceContentFor(original.source,true);
+      const sourceLine=originalCode?.split('\n')[original.line-1]?.trim() ?? '';
+      mapped.push(original.source+':'+original.line+':'+original.column+' '+sourceLine.slice(0,180));
+    }catch(error){mapped.push('Failed to map '+mapPath+': '+String(error));}
+    if(mapped.length>=12)break;
+  }
+  return mapped.join('\n');
+}
 let previewOutput='';
 const preview=spawn('npm',[
   'run','preview','--workspace','client','--',
@@ -55,7 +81,10 @@ try {
   browser=await chromium.launch({headless:true,args:['--no-sandbox']});
   const context=await browser.newContext({viewport:{width:1440,height:900},locale:'ru-RU'});
   const page=await context.newPage();
-  page.on('pageerror',error=>failures.push(error.stack??error.message));
+  page.on('pageerror',error=>{
+    const stack=error.stack??error.message;
+    failures.push(stack+'\n[Mapped source]\n'+describeBrowserStack(stack));
+  });
   page.on('console',message=>{
     if(message.type()==='error'&&/react|render|hook|TypeError|Ошибка рендера/i.test(message.text()))
       failures.push(message.text().slice(0,600));
@@ -81,6 +110,7 @@ try {
       writes++;
       payload={task:tasks[0],success:true,notifications:[],user};
     }else if(path.includes('/inbox'))payload={messages:[],items:[],events:[]};
+    else unhandledGetPaths.add(path);
     await route.fulfill({status:200,contentType:'application/json',
       headers:{'cache-control':'no-store'},body:JSON.stringify(payload)});
   });
@@ -123,6 +153,7 @@ try {
 }catch(error){
   console.error('[Browser smoke] FAIL '+(error.stack??error));
   if(failures.length)console.error('[Browser smoke] runtime errors:\n'+failures.slice(0,8).join('\n'));
+  console.error('[Browser smoke] unmapped GET paths: '+JSON.stringify([...unhandledGetPaths].slice(0,80)));
   console.error('[Browser smoke] preview log:\n'+previewOutput.slice(-1500));
   process.exitCode=1;
 }finally{
