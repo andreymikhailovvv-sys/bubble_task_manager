@@ -17,7 +17,7 @@ test('financial account balance edits never overwrite existing operations',()=>{
   const routes=read('../src/routes/economic.ts');
   const helper=read('../src/services/economic-account-balance.service.ts');
   const ui=read('../../client/src/EconomicApp.tsx');
-  assert.match(routes,/openingForTargetBalance\(tx, owner, found\.id, desired\)/);
+  assert.match(routes,/recordEconomicBalanceAdjustment\\(tx, owner, found\\.id/);
   assert.match(routes,/TransactionIsolationLevel\.Serializable/);
   assert.match(helper,/economicSourceDelta\(row\.kind/);
   assert.match(helper,/kind: 'TRANSFER', targetAccountId: accountId/);
