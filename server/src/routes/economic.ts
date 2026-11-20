@@ -351,10 +351,11 @@ economicRouter.delete('/operations/:id', asyncHandler(async (req, res) => {
   // Linked debt entries can only be removed by deleting the debt itself;
   // otherwise the register and the account balance would disagree.
   const found = await prisma.economicOperation.findFirst({
-    where: { id: req.params.id, userId: owner }, select: { id: true, debtId: true }
+    where: { id: req.params.id, userId: owner }, select: { id: true, debtId: true, isAdjustment: true }
   });
   if (!found) { error(res, 'Операция не найдена', 404); return; }
   if (found.debtId) { error(res, 'Долговая операция удаляется вместе с долгом', 409); return; }
+  if (found.isAdjustment) { error(res, 'Корректирующая операция сохраняется в истории. Для изменения остатка создайте новую корректировку', 409); return; }
   await prisma.economicOperation.deleteMany({ where: { id: found.id, userId: owner, debtId: null } });
   res.json({ ok: true });
 }));
