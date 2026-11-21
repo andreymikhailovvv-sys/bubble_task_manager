@@ -168,7 +168,7 @@ internal fun NativeHoldActionButton(
                         repeat((actions.size-1).coerceAtLeast(0)){index->
                             connection(
                                 androidx.compose.ui.geometry.Offset(x,
-                                    size.height-(111+index*58).dp.toPx()),
+                                    size.height-(118+index*58).dp.toPx()),
                                 androidx.compose.ui.geometry.Offset(x,
                                     size.height-(72+(index+1)*58).dp.toPx()))
                         }
@@ -186,7 +186,7 @@ internal fun NativeHoldActionButton(
                         drawPath(path,wire.copy(alpha=.72f),
                             style=Stroke(stroke,cap=StrokeCap.Round))
                     }
-                     actions.forEachIndexed{index,action->
+                    actions.forEachIndexed{index,action->
                         val chosen=selection==index
                         val scale by animateFloatAsState(if(chosen)1.18f else 1f,
                             label="action-hover-$index")
@@ -312,7 +312,6 @@ internal fun NativeHoldActionButton(
             .semantics{
                 contentDescription="Добавить"
                 onClick(label="Показать доступные действия"){
-                    previewRevision++
                     hintVisible=false
                     open=true
                     releasedPreview=true
