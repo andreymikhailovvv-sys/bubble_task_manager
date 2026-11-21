@@ -109,7 +109,7 @@ test('native money is integer kopecks; web Mini App remains intact',()=>{
   assert.match(native,/current\.ecoObject\("totals"\)\.ecoText\("balanceMinor"\)/);
   assert.match(native,/val colors = remember\(dark\) \{ ecoColors\(dark\) \}/);
   assert.match(financeData,/background = Color\(0xFFF7F8FA\)/);
-  assert.match(financeData,/background = Color\(0xFF15151C\)/);
+  assert.match(financeData,/background = Color\(0xFF12131B\)/);
   assert.match(mini,/<MobileEconomicApp mobile embeddedInMiniApp/);
   assert.match(economic,/createPortal\(<div/);
   assert.match(economicCss,/\.econ-mobile-workspace \.econ-modal-backdrop/);
@@ -143,7 +143,7 @@ test('Economic mobile polish archives closed obligations and animates tab change
   assert.match(native,/closedLoans/);
   assert.match(native,/height\(IntrinsicSize\.Max\)/);
   assert.match(native,/Arrangement\.spacedBy\(0\.dp\)/);
-  assert.match(native,/Text\("Последние операции",fontSize=16\.sp/);
+  assert.match(native,/Text\("Последние операции",fontSize=15\.sp/);
   assert.match(androidVersion,/versionCode = 17/);
   assert.match(androidVersion,/versionName = "1\.0\.15"/);
 });
@@ -152,7 +152,7 @@ test('native Economic overview reuses the Accounts tab card contents without act
   const overview=native.slice(native.indexOf('"overview" -> {'),native.indexOf('"report" -> {'));
   const accounts=native.slice(native.indexOf('"accounts" -> {'),native.indexOf('"operations" -> {'));
   const summary=native.slice(native.indexOf('private fun EcoAccountSummary('),native.indexOf('private fun EcoQuickAction('));
-  assert.match(overview,/EcoPanel\(colors\) \{ EcoAccountSummary\(account,colors\) \}/);
+  assert.match(overview,/EcoMiniAccountTile\(account,colors\)/);
   assert.match(accounts,/EcoAccountSummary\(account,colors\)/);
   assert.match(accounts,/EcoQuickAction\("Изменить"/);
   assert.doesNotMatch(overview,/EcoQuickAction\("Изменить"/);
@@ -184,7 +184,7 @@ test('Economic preview report follows accounts and starts collapsed on Android a
   assert.match(report,/var expanded by remember \{ mutableStateOf\(!preview\) \}/);
   assert.match(report,/if\(preview && !expanded\)/);
   assert.match(report,/EcoReportDonut\(total,selection,colors,130\.dp\)/);
-  assert.match(report,/EcoReportDonut\(total,selection,colors,220\.dp\)/);
+  assert.match(report,/EcoReportDonut\(total,selection,colors,210\.dp\)/);
   assert.match(report,/Text\(ecoWholeRubles\(total\.toString\(\)\)/);
   const mobile=economic.slice(economic.indexOf('<div className="econ-dashboard-grid">'));
   assert.ok(mobile.indexOf('Мои счета')<mobile.indexOf('econ-report-preview-grid-item'));
@@ -199,11 +199,53 @@ test('Economych Android summary sizes naturally, bright add button, normal accou
   const accountSummary=native.slice(native.indexOf('private fun EcoAccountSummary('),native.indexOf('private fun EcoQuickAction('));
   assert.match(native,/height\(IntrinsicSize\.Max\)/);
   assert.doesNotMatch(native,/Column\(modifier\.height\(120\.dp\)/);
-  assert.match(native,/verticalArrangement=Arrangement\.spacedBy\(4\.dp\)/);
+  assert.match(native,/verticalArrangement=Arrangement\.spacedBy\(5\.dp\)/);
   assert.match(native,/containerColor=Color\(0xFFF5A52E\)/);
-  assert.match(accountSummary,/fontWeight=FontWeight\.Normal,fontSize=16\.sp/);
+  assert.match(accountSummary,/fontWeight=FontWeight\.Normal,fontSize=13\.sp/);
   assert.match(home,/selectedIconColor=if\(index==4\) \(if\(dark\) Color\(0xFFF6B95F\) else Color\(0xFF9B5200\)\)/);
   assert.match(report,/fontSize=if\(compact\) 15\.sp else 23\.sp/);
+  assert.match(androidVersion,/versionCode = 17/);
+  assert.match(androidVersion,/versionName = "1\.0\.15"/);
+});
+
+test('Native finance matches Mini App mobile visual tokens and compact hierarchy',()=>{
+  assert.match(financeData,/background = Color\(0xFF12131B\)/);
+  assert.match(financeData,/background = Color\(0xFFF7F8FA\)/);
+  assert.match(financeData,/panel2 = Color\(0xFFF8F9FB\)/);
+  assert.match(financeData,/text = Color\(0xFF202A38\)/);
+  assert.match(financeData,/gold = Color\(0xFFDF8B25\)/);
+  assert.match(economicCss,/\.econ-mobile-workspace \.econ-main\{/);
+  assert.match(native,/Text\("Экономыч AI",fontSize=22\.sp,fontWeight=FontWeight\.Bold/);
+  assert.match(native,/verticalArrangement = Arrangement\.spacedBy\(11\.dp\)/);
+  assert.match(native,/RoundedCornerShape\(17\.dp\)\)\.padding\(14\.dp\)/);
+  assert.match(native,/EcoMiniAccountTile\(account,colors\)/);
+  assert.match(native,/private fun EcoMiniAccountTile\(/);
+  assert.match(native,/\.background\(colors\.panel2\)\.border\(1\.dp,colors\.outline\.copy\(alpha=\.65f\)/);
+  assert.match(native,/fontWeight=FontWeight\.Normal,fontSize=13\.sp,maxLines=1/);
+  assert.match(native,/fontWeight=FontWeight\.Bold,fontSize=18\.sp/);
+  assert.match(native,/if\(light\) \{\s*if\(credit\)Color\(0xFFE3F6E9\)/);
+  assert.match(native,/if\(credit\)Color\(0xFF23824C\)/);
+  assert.match(native,/EcoLoanMetric\("Сумма кредита"/);
+  assert.match(native,/EcoLoanMetric\("Всего выплат \(оценка\)"/);
+  assert.match(native,/EcoPaymentProgress\(/);
+  assert.match(native,/EcoEditorRequest\("accounts",account\)/);
+  assert.match(report,/Text\("Финансовый отчёт",color=colors\.text,fontWeight=FontWeight\.SemiBold,fontSize=15\.sp\)/);
+  assert.match(editor,/height\(stableSheetHeight\)/);
+  assert.match(androidVersion,/versionCode = 17/);
+  assert.match(androidVersion,/versionName = "1\.0\.15"/);
+});
+
+test('Mini App native parity also covers editors, loan metrics and loading surfaces',()=>{
+  assert.match(editor,/Text\(title,fontSize=20\.sp,fontWeight=FontWeight\.Bold/);
+  assert.match(editor,/fontSize=11\.sp,fontWeight=FontWeight\.Normal,color=colors\.muted/);
+  assert.match(editor,/\.padding\(vertical=12\.dp\),verticalArrangement=Arrangement\.spacedBy\(11\.dp\)/);
+  assert.match(native,/EcoLoanMetric\("Срок"/);
+  assert.match(native,/EcoLoanMetric\("Переплата \(оценка\)"/);
+  assert.match(native,/fontSize=19\.sp,fontWeight=FontWeight\.SemiBold,color=colors\.text/);
+  assert.match(native,/\.background\(if\(light\) \{/);
+  assert.match(native,/\.padding\(horizontal=10\.dp,vertical=7\.dp\)/);
+  assert.match(financeData,/bannerStart = Color\.White/);
+  assert.match(report,/EcoReportDonut\(total,selection,colors,210\.dp\)/);
   assert.match(androidVersion,/versionCode = 17/);
   assert.match(androidVersion,/versionName = "1\.0\.15"/);
 });

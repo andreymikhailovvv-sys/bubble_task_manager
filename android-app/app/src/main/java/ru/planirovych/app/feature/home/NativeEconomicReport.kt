@@ -103,8 +103,8 @@ internal fun EcoReportPanel(api:PlanirovychApi, colors:EcoColors, revision:Int, 
             horizontalArrangement=Arrangement.SpaceBetween) {
             Row(verticalAlignment=Alignment.CenterVertically,
                 horizontalArrangement=Arrangement.spacedBy(9.dp)) {
-                Icon(Icons.Default.PieChart,null,tint=colors.gold,modifier=Modifier.size(21.dp))
-                Text("Финансовый отчёт",color=colors.text,fontWeight=FontWeight.Bold,fontSize=17.sp)
+                Icon(Icons.Default.PieChart,null,tint=colors.gold,modifier=Modifier.size(19.dp))
+                Text("Финансовый отчёт",color=colors.text,fontWeight=FontWeight.SemiBold,fontSize=15.sp)
             }
             if(preview) IconButton(onClick={expanded=!expanded}) {
                 Icon(if(expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
@@ -116,12 +116,12 @@ internal fun EcoReportPanel(api:PlanirovychApi, colors:EcoColors, revision:Int, 
         Text(if(preview)"Расходы по категориям за текущий месяц" else "Распределение по категориям и периодам",
             color=colors.muted,fontSize=11.sp)
         if(!preview){
-            Spacer(Modifier.height(15.dp))
+            Spacer(Modifier.height(12.dp))
             EcoSelect("Период",period,listOf("week" to "Неделя","month" to "Месяц",
                 "year" to "Год","all" to "Всё время","custom" to "Произвольный"),colors){
                 period=it;offset=0
             }
-            Spacer(Modifier.height(11.dp))
+            Spacer(Modifier.height(9.dp))
             if(period=="custom"){
                 ReportDatePicker("С",start,colors){start=it}
                 Spacer(Modifier.height(7.dp))
@@ -144,8 +144,8 @@ internal fun EcoReportPanel(api:PlanirovychApi, colors:EcoColors, revision:Int, 
                     Text(label,Modifier.clip(RoundedCornerShape(10.dp))
                         .background(if(active)colors.gold.copy(alpha=.20f) else colors.field)
                         .border(1.dp,if(active)colors.gold else colors.outline,RoundedCornerShape(10.dp))
-                        .clickable{kind=value}.padding(horizontal=13.dp,vertical=9.dp),
-                        color=if(active)colors.goldSoft else colors.muted,fontSize=12.sp)
+                        .clickable{kind=value}.padding(horizontal=11.dp,vertical=7.dp),
+                        color=if(active)colors.goldSoft else colors.muted,fontSize=11.sp)
                 }
             }
         }
@@ -179,9 +179,9 @@ internal fun EcoReportPanel(api:PlanirovychApi, colors:EcoColors, revision:Int, 
                 }
             }
         } else {
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(14.dp))
             Box(Modifier.fillMaxWidth(),contentAlignment=Alignment.Center) {
-                EcoReportDonut(total,selection,colors,220.dp)
+                EcoReportDonut(total,selection,colors,210.dp)
             }
         Spacer(Modifier.height(10.dp))
         if(selection.isEmpty()) {
@@ -194,10 +194,10 @@ internal fun EcoReportPanel(api:PlanirovychApi, colors:EcoColors, revision:Int, 
             Row(Modifier.fillMaxWidth().padding(top=8.dp),verticalAlignment=Alignment.CenterVertically) {
                 Box(Modifier.size(9.dp).background(color, RoundedCornerShape(9.dp)))
                 Spacer(Modifier.width(8.dp))
-                Text(name,Modifier.weight(1f),color=colors.muted,fontSize=12.sp,
+                Text(name,Modifier.weight(1f),color=colors.muted,fontSize=11.sp,
                     maxLines=2,overflow=TextOverflow.Ellipsis)
                 Text(ecoRubles(amount.toString()),color=colors.text,fontSize=12.sp,
-                    fontWeight=FontWeight.SemiBold)
+                    fontWeight=FontWeight.Medium)
             }
             Spacer(Modifier.height(5.dp))
             // Material3's determinate progress has an end dot; a flat track is deliberate here.

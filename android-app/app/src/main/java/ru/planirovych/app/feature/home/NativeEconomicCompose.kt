@@ -135,10 +135,8 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
     val closedDebts = current?.ecoItems("debts").orEmpty().filter { it.ecoBool("isClosed") }
     val closedLoans = current?.ecoItems("loans").orEmpty().filter { it.ecoBool("isClosed") }
 
-    Box(Modifier.fillMaxSize().background(
-        Brush.verticalGradient(if (dark) listOf(Color(0xFF292219), colors.background, Color(0xFF101117))
-            else listOf(Color(0xFFFFFAF3), Color(0xFFF7F8FA), Color(0xFFF7F8FA)))
-    )) {
+    // Match the Mini App's calm neutral surface in both themes.
+    Box(Modifier.fillMaxSize().background(colors.background)) {
         if (current == null && loading) {
             EconomicSkeleton(dark)
         } else if (current == null) {
@@ -182,8 +180,8 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                         }
                     )
                 },
-                contentPadding = PaddingValues(start=13.dp,end=13.dp,top=12.dp,bottom=90.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                contentPadding = PaddingValues(start=13.dp,end=13.dp,top=10.dp,bottom=90.dp),
+                verticalArrangement = Arrangement.spacedBy(11.dp)
             ) {
                 item {
                     Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically,
@@ -192,7 +190,7 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                             Text("ФИНАНСОВЫЙ ПОМОЩНИК",fontSize=9.sp,
                                 fontWeight=FontWeight.ExtraBold,letterSpacing=.8.sp,color=colors.gold)
                             Spacer(Modifier.height(3.dp))
-                            Text("Экономыч AI",fontSize=25.sp,fontWeight=FontWeight.ExtraBold,color=colors.text)
+                            Text("Экономыч AI",fontSize=22.sp,fontWeight=FontWeight.Bold,color=colors.text)
                         }
                     }
                 }
@@ -214,17 +212,18 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                             }
                             Row(
                                 Modifier.clip(RoundedCornerShape(12.dp))
-                                    .background(if(chosen) colors.gold.copy(alpha=.19f) else colors.gold.copy(alpha=.045f))
+                                    .background(if(chosen) colors.gold.copy(alpha=if(dark) .17f else .13f)
+                                         else if(dark) colors.gold.copy(alpha=.04f) else colors.panel2)
                                     .border(1.dp,if(chosen)colors.gold.copy(alpha=.4f)
                                         else colors.gold.copy(alpha=.18f), RoundedCornerShape(12.dp))
                                     .clickable { section=tab.id; error="" }
-                                    .padding(horizontal=10.dp,vertical=10.dp),
+                                    .padding(horizontal=10.dp,vertical=7.dp),
                                 verticalAlignment=Alignment.CenterVertically,
                                 horizontalArrangement=Arrangement.spacedBy(6.dp)
                             ) {
                                 Icon(icon,null,tint=if(chosen)colors.goldSoft else colors.muted,
                                     modifier=Modifier.size(16.dp))
-                                Text(tab.title, fontSize=11.sp,fontWeight=FontWeight.SemiBold,
+                                Text(tab.title, fontSize=11.sp,fontWeight=if(chosen) FontWeight.SemiBold else FontWeight.Normal,
                                     color=if(chosen)colors.goldSoft else colors.muted, maxLines=1)
                             }
                         }
@@ -275,7 +274,7 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                                     "Все счета",colors,{section="accounts"})
                                 current.ecoItems("accounts").take(4).forEach { account ->
                                     Spacer(Modifier.height(9.dp))
-                                    EcoPanel(colors) { EcoAccountSummary(account,colors) }
+                                    EcoMiniAccountTile(account,colors)
                                 }
                                 Spacer(Modifier.height(10.dp))
                                 EcoInlineAction("Добавить счёт",colors){editor=EcoEditorRequest("accounts")}
@@ -358,7 +357,7 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                             EcoPanel(colors) {
                                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
                                     horizontalArrangement=Arrangement.SpaceBetween) {
-                                    Text("Последние операции",fontSize=16.sp,fontWeight=FontWeight.Bold,color=colors.text)
+                                    Text("Последние операции",fontSize=15.sp,fontWeight=FontWeight.SemiBold,color=colors.text)
                                     IconButton(onClick={filtersOpen=true}) {
                                         Icon(Icons.Default.FilterList,"Фильтры операций",
                                             tint=if(kindFilter.isNotBlank()||accountFilter.isNotBlank()||
@@ -432,7 +431,7 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                                             modifier=Modifier.size(19.dp))
                                         Spacer(Modifier.width(10.dp))
                                         Text("Закрытые",Modifier.weight(1f),
-                                            fontSize=16.sp,fontWeight=FontWeight.Bold,color=colors.text)
+                                            fontSize=15.sp,fontWeight=FontWeight.SemiBold,color=colors.text)
                                         Text((closedDebts.size+closedLoans.size).toString(),
                                             fontSize=12.sp,color=colors.muted)
                                         Spacer(Modifier.width(7.dp))
@@ -470,7 +469,7 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                             item {
                                 EcoPanel(colors) {
                                     Text(if(kind=="EXPENSE")"Категории расходов" else "Категории доходов",
-                                        fontSize=16.sp,color=colors.text,fontWeight=FontWeight.Bold)
+                                        fontSize=15.sp,color=colors.text,fontWeight=FontWeight.SemiBold)
                                     ecoCategories(current,kind).forEach { name ->
                                         val custom=current.ecoItems("categories").firstOrNull {
                                             it.ecoText("kind")==kind && it.ecoText("name")==name
@@ -609,33 +608,34 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
 @Composable
 internal fun EcoPanel(colors: EcoColors, content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp)).background(colors.panel)
-        .border(1.dp,colors.outline,RoundedCornerShape(17.dp)).padding(15.dp),
+        .border(1.dp,colors.outline,RoundedCornerShape(17.dp)).padding(14.dp),
         content=content)
 }
 @Composable
 private fun EcoHero(colors: EcoColors) {
-    Box(Modifier.fillMaxWidth().heightIn(min=180.dp)
+    val light=colors.background==Color(0xFFF7F8FA)
+    Box(Modifier.fillMaxWidth().heightIn(min=160.dp)
         .clip(RoundedCornerShape(20.dp))
         .background(Brush.horizontalGradient(listOf(colors.bannerStart,colors.bannerEnd)))
-        .border(1.dp,Color(0x665F4429),RoundedCornerShape(20.dp))) {
-        Box(Modifier.align(Alignment.CenterEnd).offset(x=54.dp,y=6.dp).size(178.dp)
-            .alpha(.40f).clip(CircleShape)
+        .border(1.dp,if(light)colors.gold.copy(alpha=.22f) else Color(0x665F4429),RoundedCornerShape(20.dp))) {
+        Box(Modifier.align(Alignment.CenterEnd).offset(x=50.dp,y=6.dp).size(168.dp)
+            .alpha(if(light).18f else .32f).clip(CircleShape)
             .background(Brush.linearGradient(listOf(Color(0xFFFFDF9F),Color(0xFFE5A039),Color(0xFF995A17))))
             .border(7.dp,Color(0xFFFFCE8C).copy(alpha=.6f),CircleShape),
             contentAlignment=Alignment.Center) {
             Text("₽",fontWeight=FontWeight.Black,fontSize=112.sp,color=Color(0xFF784405))
         }
-        Column(Modifier.fillMaxWidth(.82f).padding(19.dp)) {
-            Text("✦  Личные финансы без хаоса",color=Color(0xFFFFDCA8),
-                fontSize=12.sp,fontWeight=FontWeight.SemiBold)
-            Spacer(Modifier.height(12.dp))
-            Text("Держите деньги",color=Color(0xFFFFF5E7),fontWeight=FontWeight.ExtraBold,
-                fontSize=25.sp,lineHeight=28.sp)
-            Text("под контролем.",color=Color(0xFFFFBF73),fontWeight=FontWeight.ExtraBold,
-                fontSize=25.sp,lineHeight=28.sp)
-            Spacer(Modifier.height(11.dp))
+        Column(Modifier.fillMaxWidth(.82f).padding(17.dp)) {
+            Text("✦  Личные финансы без хаоса",color=if(light)colors.goldSoft else Color(0xFFFFDCA8),
+                fontSize=10.sp,fontWeight=FontWeight.Medium)
+            Spacer(Modifier.height(9.dp))
+            Text("Держите деньги",color=if(light)colors.text else Color(0xFFFFF5E7),
+                fontWeight=FontWeight.Bold,fontSize=23.sp,lineHeight=25.sp)
+            Text("под контролем.",color=if(light)colors.goldSoft else Color(0xFFFFBF73),
+                fontWeight=FontWeight.Bold,fontSize=23.sp,lineHeight=25.sp)
+            Spacer(Modifier.height(8.dp))
             Text("Баланс, повседневные траты, долги и кредиты в одном спокойном пространстве.",
-                color=Color(0xFFD6C4AE),fontSize=12.sp,lineHeight=18.sp)
+                color=if(light)colors.muted else Color(0xFFD6C4AE),fontSize=11.sp,lineHeight=16.sp)
         }
     }
 }
@@ -643,8 +643,8 @@ private fun EcoHero(colors: EcoColors) {
 private fun EcoStat(title:String,minor:String,subtitle:String,colors:EcoColors,
     modifier:Modifier,positive:Boolean) {
     Column(modifier.clip(RoundedCornerShape(15.dp)).background(colors.panel)
-        .border(1.dp,colors.outline,RoundedCornerShape(15.dp)).padding(10.dp),
-        verticalArrangement=Arrangement.spacedBy(4.dp)) {
+        .border(1.dp,colors.outline,RoundedCornerShape(15.dp)).padding(12.dp),
+        verticalArrangement=Arrangement.spacedBy(5.dp)) {
         Row(verticalAlignment=Alignment.CenterVertically) {
             Icon(when {title.startsWith("Доходы")->Icons.Default.SouthWest
                 title.startsWith("Расходы")->Icons.Default.NorthEast
@@ -653,7 +653,7 @@ private fun EcoStat(title:String,minor:String,subtitle:String,colors:EcoColors,
             Spacer(Modifier.width(8.dp))
             Text(title,color=colors.muted,fontSize=12.sp,lineHeight=16.sp)
         }
-        Text(ecoWholeRubles(minor),fontWeight=FontWeight.ExtraBold,fontSize=18.sp,
+        Text(ecoWholeRubles(minor),fontWeight=FontWeight.Bold,fontSize=18.sp,
             maxLines=1,overflow=TextOverflow.Ellipsis,
             color=if(positive)colors.green else colors.text)
         Text(subtitle,fontSize=10.sp,lineHeight=15.sp,color=colors.muted,maxLines=2)
@@ -663,15 +663,15 @@ private fun EcoStat(title:String,minor:String,subtitle:String,colors:EcoColors,
 private fun EcoTopCategoryStat(category:String,minor:String,colors:EcoColors,modifier:Modifier) {
     Column(modifier.clip(RoundedCornerShape(15.dp))
         .background(colors.panel).border(1.dp,colors.outline,RoundedCornerShape(15.dp))
-        .padding(10.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+        .padding(12.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
         Row(verticalAlignment=Alignment.CenterVertically) {
             Icon(Icons.Default.PieChart,null,tint=colors.gold,modifier=Modifier.size(19.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Траты в категориях",color=colors.muted,fontSize=12.sp,
+            Text("Траты в категориях",color=colors.muted,fontSize=11.sp,
                 lineHeight=16.sp,maxLines=2)
         }
         Text(ecoWholeRubles(minor),color=colors.text,fontSize=18.sp,
-            fontWeight=FontWeight.ExtraBold,maxLines=1,overflow=TextOverflow.Ellipsis)
+            fontWeight=FontWeight.Bold,maxLines=1,overflow=TextOverflow.Ellipsis)
         Text(category.ifBlank { "Нет расходов" },fontSize=10.sp,
             lineHeight=15.sp,color=colors.muted,maxLines=2,overflow=TextOverflow.Ellipsis)
     }
@@ -680,8 +680,8 @@ private fun EcoTopCategoryStat(category:String,minor:String,colors:EcoColors,mod
 private fun EcoPanelHeader(title:String,subtitle:String,action:String,colors:EcoColors,onAction:()->Unit) {
     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.Top) {
         Column(Modifier.weight(1f)) {
-            Text(title,color=colors.text,fontSize=17.sp,fontWeight=FontWeight.Bold)
-            Text(subtitle,fontSize=11.sp,color=colors.muted)
+            Text(title,color=colors.text,fontSize=15.sp,fontWeight=FontWeight.SemiBold)
+            Text(subtitle,fontSize=10.sp,color=colors.muted)
         }
         TextButton(onClick=onAction,contentPadding=PaddingValues(0.dp)) {
             Text(action,fontSize=11.sp,color=colors.goldSoft)
@@ -694,10 +694,10 @@ private fun EcoAccountSummary(account:JsonObject,colors:EcoColors) {
     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
         Icon(if(account.ecoText("accountType")=="CREDIT_CARD")
             Icons.Default.CreditCard else Icons.Default.AccountBalanceWallet,
-            null,tint=colors.gold,modifier=Modifier.size(25.dp))
-        Spacer(Modifier.width(10.dp))
+            null,tint=colors.gold,modifier=Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
         Text(account.ecoText("name"),Modifier.weight(1f),color=colors.text,
-            fontWeight=FontWeight.Normal,fontSize=16.sp,maxLines=1,
+            fontWeight=FontWeight.Normal,fontSize=13.sp,maxLines=1,
             overflow=TextOverflow.Ellipsis)
         Text(when {
             account.ecoText("accountType")=="CREDIT_CARD" -> "Кредитная карта"
@@ -705,28 +705,37 @@ private fun EcoAccountSummary(account:JsonObject,colors:EcoColors) {
             else -> ""
         },color=colors.goldSoft,fontSize=10.sp)
     }
-    Spacer(Modifier.height(8.dp))
+    Spacer(Modifier.height(6.dp))
     Text(ecoRubles(account.ecoText("balanceMinor")),color=colors.text,
-        fontWeight=FontWeight.ExtraBold,fontSize=21.sp)
+        fontWeight=FontWeight.Bold,fontSize=18.sp)
     Text(if(account.ecoText("accountType")=="CREDIT_CARD")
         "Лимит: "+ecoRubles(account.ecoText("creditLimitMinor"))
-        else "Текущий баланс",fontSize=11.sp,color=colors.muted)
+        else "Текущий баланс",fontSize=10.sp,color=colors.muted)
+}
+/** Mini App style: subtle account tiles nested in the Overview card, no double white border. */
+@Composable
+private fun EcoMiniAccountTile(account:JsonObject,colors:EcoColors) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp))
+        .background(colors.panel2).border(1.dp,colors.outline.copy(alpha=.65f),
+            RoundedCornerShape(13.dp)).padding(12.dp)) {
+        EcoAccountSummary(account,colors)
+    }
 }
 @Composable
 private fun EcoQuickAction(label:String,colors:EcoColors,add:Boolean=true,onClick:()->Unit) {
-    OutlinedButton(onClick=onClick,border=BorderStroke(1.dp,colors.gold.copy(alpha=.35f)),
-        contentPadding=PaddingValues(horizontal=14.dp,vertical=8.dp)) {
+    OutlinedButton(onClick=onClick,border=BorderStroke(1.dp,colors.gold.copy(alpha=.25f)),
+        contentPadding=PaddingValues(horizontal=12.dp,vertical=7.dp)) {
         if(add) {
             Icon(Icons.Default.Add,null,tint=colors.goldSoft,modifier=Modifier.size(17.dp))
             Spacer(Modifier.width(5.dp))
         }
-        Text(label,color=colors.goldSoft,fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+        Text(label,color=colors.goldSoft,fontSize=11.sp,fontWeight=FontWeight.Medium)
     }
 }
 @Composable
 internal fun EcoInlineAction(text:String,colors:EcoColors,onClick:()->Unit) {
     TextButton(onClick=onClick,contentPadding=PaddingValues(horizontal=2.dp,vertical=5.dp)) {
-        Text(text,color=colors.goldSoft,fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+        Text(text,color=colors.goldSoft,fontSize=11.sp,fontWeight=FontWeight.Medium)
     }
 }
 @Composable
@@ -763,19 +772,27 @@ private fun EcoOperationRow(op:JsonObject,snapshot:JsonObject,colors:EcoColors,
         if(op.ecoText("debtId").isNotBlank()) {
             if(linked!=null) onEdit(linked,"debts") else onEdit(op,"missing-debt")
         } else if(!op.ecoBool("isAdjustment")) onEdit(op,"operations")
-    }.padding(vertical=11.dp),verticalAlignment=Alignment.CenterVertically,
+    }.padding(vertical=9.dp),verticalAlignment=Alignment.CenterVertically,
         horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-        Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
-            .background(if(credit)Color(0xFF263B34) else if(debit)Color(0xFF383038) else Color(0xFF353747)),
+        Box(Modifier.size(32.dp).clip(RoundedCornerShape(10.dp))
+            .background(if(light) {
+                if(credit)Color(0xFFE3F6E9) else if(debit)Color(0xFFFFF0DF)
+                else Color(0xFFE9ECF8)
+            } else {
+                if(credit)Color(0xFF263B34) else if(debit)Color(0xFF383038) else Color(0xFF353747)
+            }),
             contentAlignment=Alignment.Center) {
             Icon(if(credit)Icons.Default.SouthWest else if(debit)Icons.Default.NorthEast
-                else Icons.Default.SwapHoriz,null,tint=if(credit)Color(0xFF9CE0B0)
+                else Icons.Default.SwapHoriz,null,tint=if(light) {
+                    if(credit)Color(0xFF23824C) else if(debit)Color(0xFFB16D22)
+                    else Color(0xFF5755A0)
+                } else if(credit)Color(0xFF9CE0B0)
                     else if(debit)Color(0xFFF4B58B) else Color(0xFFB3BDFA),
                 modifier=Modifier.size(18.dp))
         }
         Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(0.dp)) {
             Text(op.ecoText("title"),maxLines=1,overflow=TextOverflow.Ellipsis,
-                color=colors.text,fontWeight=FontWeight.Bold,fontSize=12.sp,lineHeight=12.sp)
+                color=colors.text,fontWeight=FontWeight.SemiBold,fontSize=12.sp,lineHeight=12.sp)
             Text(ecoDateLabel(op.ecoText("occurredAt"))+" · "+
                 (if(kind=="TRANSFER")source+" → "+target else (if(op.ecoBool("isAdjustment"))"Корректировка" else ecoKindLabel(kind))+" · "+
                     (if(op.ecoText("debtId").isNotBlank())"Долги · " else
@@ -783,7 +800,7 @@ private fun EcoOperationRow(op:JsonObject,snapshot:JsonObject,colors:EcoColors,
                 maxLines=1,overflow=TextOverflow.Ellipsis,fontSize=10.sp,lineHeight=10.sp,color=colors.muted)
         }
         Text((if(credit)"+" else if(debit)"−" else "")+ecoRubles(op.ecoText("amountMinor")),
-            fontSize=12.sp,color=amountColor,fontWeight=FontWeight.Bold,maxLines=1)
+            fontSize=12.sp,color=amountColor,fontWeight=FontWeight.SemiBold,maxLines=1)
         if(linked==null && op.ecoText("debtId").isBlank() && !op.ecoBool("isAdjustment")) {
             IconButton(onClick=onDelete,modifier=Modifier.size(27.dp)) {
                 Icon(Icons.Default.Delete,"Удалить",Modifier.size(16.dp),tint=colors.muted)
@@ -798,7 +815,7 @@ private fun EcoObligationPreview(resource:String,record:JsonObject,colors:EcoCol
     val estimate=if(debt)null else ecoLoanEstimate(record)
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp))
         .background(colors.panel2).border(1.dp,colors.outline,RoundedCornerShape(13.dp))
-        .clickable(onClick=onClick).padding(13.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+        .clickable(onClick=onClick).padding(12.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
         Row(verticalAlignment=Alignment.CenterVertically) {
             Icon(if(debt)Icons.Default.MenuBook else Icons.Default.CreditCard,null,
                 modifier=Modifier.size(16.dp),tint=colors.gold)
@@ -807,7 +824,7 @@ private fun EcoObligationPreview(resource:String,record:JsonObject,colors:EcoCol
                 else "Кредит",color=colors.goldSoft,fontSize=11.sp)
         }
         Text(record.ecoText(if(debt)"counterparty" else "name"),fontSize=13.sp,
-            color=colors.text,fontWeight=FontWeight.Bold)
+            color=colors.text,fontWeight=FontWeight.SemiBold)
         Text(if(debt)ecoRubles(record.ecoText("amountMinor"))
             else ecoRubles((record.ecoText("monthlyPaymentOverrideMinor").ifBlank {
                 estimate?.monthly.toString()
@@ -837,16 +854,16 @@ private fun EcoObligationCard(resource:String,record:JsonObject,colors:EcoColors
     EcoPanel(colors) {
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
             Text(if(debt){if(record.ecoText("direction")=="OWE")"Я должен" else "Мне должны"}
-                else "Кредит",fontSize=12.sp,fontWeight=FontWeight.Bold,color=colors.goldSoft)
+                else "Кредит",fontSize=11.sp,fontWeight=FontWeight.SemiBold,color=colors.goldSoft)
             if(record.ecoBool("isClosed"))Text("Закрыт",color=colors.muted,fontSize=11.sp)
         }
         Spacer(Modifier.height(10.dp))
-        Text(record.ecoText(if(debt)"counterparty" else "name"),fontWeight=FontWeight.Bold,
-            fontSize=17.sp,color=colors.text)
-        Spacer(Modifier.height(8.dp))
+        Text(record.ecoText(if(debt)"counterparty" else "name"),fontWeight=FontWeight.SemiBold,
+            fontSize=15.sp,color=colors.text)
+        Spacer(Modifier.height(6.dp))
         Text(if(debt)ecoRubles(record.ecoText("amountMinor"))
             else ecoRubles(record.ecoText("monthlyPaymentOverrideMinor").ifBlank{estimate!!.monthly.toString()})+
-                " / мес.",fontSize=22.sp,fontWeight=FontWeight.Bold,color=colors.text)
+                " / мес.",fontSize=19.sp,fontWeight=FontWeight.SemiBold,color=colors.text)
         Spacer(Modifier.height(7.dp))
         if(debt) {
             Text(if(record.ecoText("dueAt").isNotBlank())"Вернуть до "+ecoDateLabel(record.ecoText("dueAt"))
@@ -854,23 +871,34 @@ private fun EcoObligationCard(resource:String,record:JsonObject,colors:EcoColors
             Text(if(record.ecoBool("postedToAccount"))"Учтён на счёте" else "Без движения по счёту",
                 fontSize=11.sp,color=colors.muted)
         } else {
-            Text("Сумма: "+ecoRubles(record.ecoText("principalMinor"))+
-                "  ·  "+record.ecoNumber("termMonths")+" мес.",fontSize=11.sp,color=colors.muted)
-            Text("Ставка: "+(record.ecoNumber("annualRateBps")/100.0).toString()+"% годовых",
-                fontSize=11.sp,color=colors.muted)
-            Text("Переплата (оценка): "+ecoRubles(estimate!!.overpay.toString()),
-                fontSize=11.sp,color=colors.muted)
-            Text("Всего выплат (оценка): "+ecoRubles(estimate.total.toString()),
-                fontSize=11.sp,color=colors.muted)
+            // Match the Mini App's calm two-column loan figures, without hiding any data.
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp))
+                .background(colors.panel2).padding(11.dp),
+                verticalArrangement=Arrangement.spacedBy(9.dp)) {
+                Row(horizontalArrangement=Arrangement.spacedBy(9.dp)) {
+                    EcoLoanMetric("Сумма кредита",ecoRubles(record.ecoText("principalMinor")),
+                        colors,Modifier.weight(1f))
+                    EcoLoanMetric("Ставка",
+                        (record.ecoNumber("annualRateBps")/100.0).toString()+"% годовых",
+                        colors,Modifier.weight(1f))
+                }
+                Row(horizontalArrangement=Arrangement.spacedBy(9.dp)) {
+                    EcoLoanMetric("Срок",record.ecoNumber("termMonths").toString()+" мес.",
+                        colors,Modifier.weight(1f))
+                    EcoLoanMetric("Переплата (оценка)",ecoRubles(estimate!!.overpay.toString()),
+                        colors,Modifier.weight(1f))
+                }
+                EcoLoanMetric("Всего выплат (оценка)",ecoRubles(estimate.total.toString()),colors)
+            }
             Text("Начало: "+ecoDateLabel(record.ecoText("startDate"))+
                 " · "+if(record.ecoText("paymentDate").isNotBlank())
                     "Платёж: "+ecoDay(record.ecoText("paymentDate")).takeLast(2)+"-го числа"
-                else "Дата платежа не задана",fontSize=11.sp,color=colors.muted)
+                else "Дата платежа не задана",fontSize=10.sp,color=colors.muted)
             Text("Без комиссий, страховок и досрочного погашения.",
                 fontSize=10.sp,color=colors.muted)
         }
         if(record.ecoText("note").isNotBlank())Text(record.ecoText("note"),fontSize=11.sp,color=colors.muted)
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(10.dp))
         EcoPaymentProgress(record.ecoText("paidMinor"),
             if(debt)record.ecoText("amountMinor") else estimate!!.total.toString(),colors)
         Row(verticalAlignment=Alignment.CenterVertically) {
@@ -879,5 +907,14 @@ private fun EcoObligationCard(resource:String,record:JsonObject,colors:EcoColors
                 Icon(Icons.Default.Delete,"Удалить",tint=colors.muted,modifier=Modifier.size(19.dp))
             }
         }
+    }
+}
+
+@Composable
+private fun EcoLoanMetric(label:String,value:String,colors:EcoColors,modifier:Modifier=Modifier) {
+    Column(modifier,verticalArrangement=Arrangement.spacedBy(2.dp)) {
+        Text(label,fontSize=10.sp,color=colors.muted,lineHeight=13.sp)
+        Text(value,fontSize=12.sp,color=colors.text,fontWeight=FontWeight.Medium,
+            maxLines=2,overflow=TextOverflow.Ellipsis,lineHeight=15.sp)
     }
 }
