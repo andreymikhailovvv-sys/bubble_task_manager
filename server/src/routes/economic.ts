@@ -110,11 +110,12 @@ economicRouter.get('/snapshot', asyncHandler(async (req, res) => {
   const monthStart = new Date();
   monthStart.setUTCDate(1); monthStart.setUTCHours(0, 0, 0, 0);
   const monthEnd = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 1));
-  const [accounts, sources, incoming, monthKinds, recent, categories, debts, loans, operationCount, messages] = await Promise.all([
+  const [accounts, sources, incoming, monthKinds, monthExpenseCategories, recent, categories, debts, loans, operationCount, messages] = await Promise.all([
     prisma.economicAccount.findMany({ where: { userId: owner }, orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] }),
     prisma.economicOperation.groupBy({ by: ['sourceAccountId', 'kind'], where: { userId: owner }, _sum: { amountMinor: true } }),
     prisma.economicOperation.groupBy({ by: ['targetAccountId'], where: { userId: owner, kind: 'TRANSFER', targetAccountId: { not: null } }, _sum: { amountMinor: true } }),
     prisma.economicOperation.groupBy({ by: ['kind'], where: { userId: owner, isAdjustment: false, kind: { in: ['INCOME', 'EXPENSE'] }, occurredAt: { gte: monthStart, lt: monthEnd } }, _sum: { amountMinor: true } }),
+    prisma.economicOperation.groupBy({ by: ['category'], where: { userId: owner, isAdjustment: false, kind: 'EXPENSE', occurredAt: { gte: monthStart, lt: monthEnd } }, _sum: { amountMinor: true } }),
     prisma.economicOperation.findMany({ where: { userId: owner }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 8 }),
     prisma.economicCategory.findMany({ where: { userId: owner }, orderBy: { createdAt: 'asc' } }),
     prisma.economicDebt.findMany({ where: { userId: owner }, orderBy: [{ isClosed: 'asc' }, { createdAt: 'desc' }], take: 200 }),
@@ -134,9 +135,15 @@ economicRouter.get('/snapshot', asyncHandler(async (req, res) => {
   const totalMinor = accounts.filter(a => a.accountType !== 'CREDIT_CARD')
     .reduce((sum, a) => sum + (balances.get(a.id) ?? 0n), 0n);
   const monthSum = (kind: string) => (monthKinds.find(row => row.kind === kind)?._sum.amountMinor ?? 0n).toString();
+  const topExpense = monthExpenseCategories.reduce<{ category: string; amountMinor: bigint } | null>((best, row) => {
+    const amountMinor = row._sum.amountMinor ?? 0n;
+    return !best || amountMinor > best.amountMinor
+      ? { category: row.category?.trim() || 'Без категории', amountMinor } : best;
+  }, null);
   res.json({
     accounts: accounts.map(a => ({ ...accountOut(a), balanceMinor: (balances.get(a.id) ?? 0n).toString() })),
-    totals: { balanceMinor: totalMinor.toString(), monthIncomeMinor: monthSum('INCOME'), monthExpenseMinor: monthSum('EXPENSE'), operationCount },
+    totals: { balanceMinor: totalMinor.toString(), monthIncomeMinor: monthSum('INCOME'), monthExpenseMinor: monthSum('EXPENSE'), operationCount,
+      topExpenseCategory: topExpense?.category ?? null, topExpenseCategoryMinor: (topExpense?.amountMinor ?? 0n).toString() },
     recent: recent.map(operationOut), categories, debts: debts.map(debtOut), loans: loans.map(loanOut),
     assistantMessages: messages.reverse().map(m => ({...m,proposals:m.proposals.map(economicProposalView)}))
   });
