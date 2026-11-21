@@ -165,9 +165,13 @@ internal fun EcoReportPanel(api:PlanirovychApi, colors:EcoColors, revision:Int, 
                     }
                 }
                 Column(horizontalAlignment=Alignment.CenterHorizontally) {
-                    Text(if(kind=="expense")"Расходы" else "Доходы",color=colors.muted,fontSize=12.sp)
-                    Spacer(Modifier.height(4.dp))
-                    Text(ecoRubles(total.toString()),color=colors.text,fontSize=17.sp,
+                    if(!preview) {
+                        Text(if(kind=="expense")"Расходы" else "Доходы",
+                            color=colors.muted,fontSize=12.sp)
+                        Spacer(Modifier.height(4.dp))
+                    }
+                    Text(if(preview) ecoWholeRubles(total.toString()) else ecoRubles(total.toString()),
+                        color=colors.text,fontSize=17.sp,
                         fontWeight=FontWeight.ExtraBold,maxLines=1)
                 }
             }

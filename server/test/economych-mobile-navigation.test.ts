@@ -13,6 +13,7 @@ const android=read('../../android-app/app/src/main/java/ru/planirovych/app/featu
 const native=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeEconomicCompose.kt');
 const editor=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeEconomicEditor.kt');
 const financeData=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeEconomicData.kt');
+const report=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeEconomicReport.kt');
 const api=read('../../android-app/app/src/main/java/ru/planirovych/app/core/network/PlanirovychApi.kt');
 const network=read('../../android-app/app/src/main/java/ru/planirovych/app/core/network/NetworkModule.kt');
 const androidVersion=read('../../android-app/app/build.gradle.kts');
@@ -145,18 +146,30 @@ test('Economic mobile polish archives closed obligations and animates tab change
   assert.match(androidVersion,/versionName = "1\.0\.15"/);
 });
 
-test('native Economic credit tile aligns type and limit; operations and filter button are compact and readable',()=>{
-  const tile=native.slice(native.indexOf('private fun EcoAccountTile('),native.indexOf('private fun EcoQuickAction('));
-  const row= native.slice(native.indexOf('private fun EcoOperationRow('));
-  assert.match(tile,/height\(120\.dp\)/);
-  assert.match(tile,/Column\(verticalArrangement=Arrangement\.spacedBy\(2\.dp\)\)/);
-  assert.match(tile,/Row\(Modifier\.fillMaxWidth\(\),verticalAlignment=Alignment\.CenterVertically\)/);
-  assert.match(tile,/if\(credit\) Text\("Кредитная карта"/);
-  assert.match(tile,/if\(credit\) \{\s*Row\(Modifier\.fillMaxWidth\(\)/);
-  assert.match(tile,/Text\("Лимит: "\+ecoRubles/);
-  assert.match(row,/Column\(Modifier\.weight\(1f\),verticalArrangement=Arrangement\.spacedBy\(0\.dp\)\)/);
-  assert.match(row,/fontSize=12\.sp,lineHeight=12\.sp/);
-  assert.match(row,/fontSize=10\.sp,lineHeight=10\.sp/);
-  assert.match(native,/containerColor=if\(dark\) colors\.gold else colors\.goldSoft/);
-  assert.match(native,/Text\("Готово",color=if\(dark\) Color\(0xFF281703\) else Color\.White\)/);
+test('native Economic overview reuses the Accounts tab card contents without actions',()=>{
+  const overview=native.slice(native.indexOf('"overview" -> {'),native.indexOf('"report" -> {'));
+  const accounts=native.slice(native.indexOf('"accounts" -> {'),native.indexOf('"operations" -> {'));
+  const summary=native.slice(native.indexOf('private fun EcoAccountSummary('),native.indexOf('private fun EcoQuickAction('));
+  assert.match(overview,/EcoPanel\(colors\) \{ EcoAccountSummary\(account,colors\) \}/);
+  assert.match(accounts,/EcoAccountSummary\(account,colors\)/);
+  assert.match(accounts,/EcoQuickAction\("Изменить"/);
+  assert.doesNotMatch(overview,/EcoQuickAction\("Изменить"/);
+  assert.doesNotMatch(native,/private fun EcoAccountTile\(/);
+  assert.equal((native.match(/private fun EcoAccountSummary\(/g)||[]).length,1);
+  assert.match(summary,/Text\(account\.ecoText\("name"\)/);
+  assert.match(summary,/Text\(ecoRubles\(account\.ecoText\("balanceMinor"\)\)/);
+  assert.match(summary,/Text\(if\(account\.ecoText\("accountType"\)=="CREDIT_CARD"\)/);
+  assert.match(summary,/"Лимит: "\+ecoRubles\(account\.ecoText\("creditLimitMinor"\)\)/);
+});
+test('native Economic overview tiles are compact and category amount is prominent',()=>{
+  assert.match(native,/Column\(modifier\.height\(120\.dp\)/);
+  assert.match(native,/Text\("Траты в категориях"/);
+  assert.match(native,/Text\(ecoWholeRubles\(minor\),color=colors\.text,fontSize=18\.sp/);
+  assert.match(native,/Text\(category\.ifBlank \{ "Нет расходов" \}/);
+  assert.doesNotMatch(native,/Больше всего расходов/);
+  assert.match(native,/contentColor=if\(dark\) Color\(0xFF2B1B08\) else Color\.White/);
+  assert.match(report,/if\(!preview\) \{/);
+  assert.match(report,/Text\(if\(preview\) ecoWholeRubles\(total\.toString\(\)\) else ecoRubles\(total\.toString\(\)\)/);
+  assert.match(androidVersion,/versionCode = 17/);
+  assert.match(androidVersion,/versionName = "1\.0\.15"/);
 });
