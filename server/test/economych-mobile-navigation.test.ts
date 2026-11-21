@@ -98,7 +98,9 @@ test('Android financial editors are native bottom sheets with keyboard-safe acti
   assert.match(editor,/onCreateCategory/);
   assert.match(editor,/remindersEnabled/);
   assert.match(native,/EconomicSkeleton\(dark\)/);
-  assert.match(native,/FloatingActionButton\(/);
+  assert.match(native,/NativeHoldActionButton\(/);
+  assert.match(native,/onQuickVoice=onQuickVoice/);
+  assert.match(native,/NativeHoldAction\("Добавить операцию"/);
 });
 
 test('native money is integer kopecks; web Mini App remains intact',()=>{
