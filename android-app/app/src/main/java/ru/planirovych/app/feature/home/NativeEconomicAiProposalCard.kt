@@ -1,5 +1,6 @@
 package ru.planirovych.app.feature.home
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -303,7 +304,7 @@ internal fun NativeEconomicAiProposalCard(
         val err=error?:(proposal["error"] as? JsonPrimitive)?.contentOrNull
         if(!err.isNullOrBlank())Text(err,color=Color(0xFFD65B47),fontSize=10.sp)
         if(status=="PENDING"){
-            TextButton(onClick={openEditor},enabled=!busy,modifier=Modifier.fillMaxWidth()){
+            TextButton(onClick={openEditor()},enabled=!busy,modifier=Modifier.fillMaxWidth()){
                 Icon(Icons.Default.Edit,null,modifier=Modifier.size(14.dp))
                 Spacer(Modifier.width(5.dp));Text("Изменить поля",fontSize=11.sp)
             }
@@ -328,7 +329,7 @@ internal fun NativeEconomicAiProposalCard(
         }
         if(status=="APPLIED"){
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                Button(onClick={openEditor},enabled=!busy,
+                Button(onClick={openEditor()},enabled=!busy,
                     modifier=Modifier.weight(1f),shape=RoundedCornerShape(9.dp),
                     colors=ButtonDefaults.buttonColors(containerColor=amber,
                         contentColor=Color(0xFF2B1B08)),
