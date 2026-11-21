@@ -170,7 +170,7 @@ test('native Economic overview tiles are compact and category amount is prominen
   assert.match(native,/Text\(category\.ifBlank \{ "Нет расходов" \}/);
   assert.doesNotMatch(native,/Больше всего расходов/);
   assert.match(native,/contentColor=if\(dark\) Color\(0xFF2B1B08\) else Color\.White/);
-  assert.match(report,/if\(!preview\) \{/);
+  assert.match(report,/if\(!preview\)\s*\{/);
   assert.match(report,/Text\(ecoWholeRubles\(total\.toString\(\)\)/);
   assert.match(androidVersion,/versionCode = 17/);
   assert.match(androidVersion,/versionName = "1\.0\.15"/);
