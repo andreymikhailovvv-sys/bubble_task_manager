@@ -92,7 +92,9 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
             "Создай задачу", "Добавь напоминание", "Перенеси встречу",
             "Создай привычку", "Запиши заметку", "Запиши расход",
             "Создай счёт", "Переведи деньги между счетами", "Создай долг"
-        )
+        ),
+        financialSuggestions=if(voiceFromFinance)emptySet() else setOf(
+            "Запиши расход","Создай счёт","Переведи деньги между счетами","Создай долг")
     )
     // One shared authenticated Quick AI thread: the assistant reply must finish
     // before moving away from the originating planner / finance screen.
