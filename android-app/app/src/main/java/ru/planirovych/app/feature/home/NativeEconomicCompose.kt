@@ -641,20 +641,26 @@ private fun EcoAccountTile(account:JsonObject,colors:EcoColors,onClick:()->Unit)
         .border(1.dp,if(account.ecoBool("isPrimary"))colors.gold.copy(alpha=.35f)
             else colors.outline,RoundedCornerShape(13.dp))
         .clickable(onClick=onClick).padding(13.dp),
-        verticalArrangement=Arrangement.spacedBy(8.dp)) {
-        Icon(Icons.Default.AccountBalanceWallet,null,tint=Color(0xFFFFC881),modifier=Modifier.size(21.dp))
+        verticalArrangement=Arrangement.spacedBy(7.dp)) {
         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+            Icon(if(account.ecoText("accountType")=="CREDIT_CARD")Icons.Default.CreditCard
+                else Icons.Default.AccountBalanceWallet,null,tint=colors.gold,modifier=Modifier.size(21.dp))
+            Spacer(Modifier.width(7.dp))
             Text(account.ecoText("name"),Modifier.weight(1f),color=if(primary && dark)
-                Color(0xFFF4EFE8) else colors.text,fontSize=14.sp)
-            if(account.ecoBool("isPrimary"))Text("Основной",color=Color(0xFFF4B760),fontSize=10.sp)
-            if(account.ecoText("accountType")=="CREDIT_CARD")Text("Кредитная карта",color=colors.goldSoft,fontSize=10.sp)
+                Color(0xFFF4EFE8) else colors.text,fontSize=14.sp,maxLines=1,
+                overflow=TextOverflow.Ellipsis)
+            Column(horizontalAlignment=Alignment.End) {
+                if(primary) Text("Основной",color=colors.goldSoft,fontSize=10.sp)
+                if(account.ecoText("accountType")=="CREDIT_CARD") {
+                    Text("Кредитная карта",color=colors.goldSoft,fontSize=10.sp)
+                    Text("Лимит: "+ecoRubles(account.ecoText("creditLimitMinor")),
+                        fontSize=10.sp,color=colors.muted)
+                }
+            }
         }
         Text(ecoRubles(account.ecoText("balanceMinor")),fontSize=19.sp,
             fontWeight=FontWeight.ExtraBold,color=if(primary && dark)
                 Color.White else colors.text)
-        if(account.ecoText("accountType")=="CREDIT_CARD")
-            Text("Доступно из лимита "+ecoRubles(account.ecoText("creditLimitMinor")),
-                fontSize=11.sp,color=colors.muted)
     }
 }
 @Composable
@@ -701,13 +707,15 @@ private fun EcoOperationRow(op:JsonObject,snapshot:JsonObject,colors:EcoColors,
     val target=snapshot.ecoItems("accounts").firstOrNull { it.ecoText("id")==op.ecoText("targetAccountId") }
         .ecoText("name").ifBlank{"Счёт"}
     val linked=snapshot.ecoItems("debts").firstOrNull{it.ecoText("id")==op.ecoText("debtId")}
-    val amountColor=if(credit)colors.green else if(debit)Color(0xFFE9AD8E) else colors.text
+    val light=colors.background==Color(0xFFF7F8FA)
+    val amountColor=if(credit)colors.green else if(debit)
+        (if(light)Color(0xFFAE542F) else Color(0xFFE9AD8E)) else colors.text
     Row(Modifier.fillMaxWidth().clickable {
         if(op.ecoText("debtId").isNotBlank()) {
             if(linked!=null) onEdit(linked,"debts") else onEdit(op,"missing-debt")
         } else if(!op.ecoBool("isAdjustment")) onEdit(op,"operations")
-    }.padding(vertical=13.dp),verticalAlignment=Alignment.CenterVertically,
-        horizontalArrangement=Arrangement.spacedBy(7.dp)) {
+    }.padding(vertical=11.dp),verticalAlignment=Alignment.CenterVertically,
+        horizontalArrangement=Arrangement.spacedBy(8.dp)) {
         Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
             .background(if(credit)Color(0xFF263B34) else if(debit)Color(0xFF383038) else Color(0xFF353747)),
             contentAlignment=Alignment.Center) {
@@ -716,14 +724,14 @@ private fun EcoOperationRow(op:JsonObject,snapshot:JsonObject,colors:EcoColors,
                     else if(debit)Color(0xFFF4B58B) else Color(0xFFB3BDFA),
                 modifier=Modifier.size(18.dp))
         }
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
             Text(op.ecoText("title"),maxLines=1,overflow=TextOverflow.Ellipsis,
                 color=colors.text,fontWeight=FontWeight.Bold,fontSize=12.sp)
             Text(ecoDateLabel(op.ecoText("occurredAt"))+" · "+
                 (if(kind=="TRANSFER")source+" → "+target else (if(op.ecoBool("isAdjustment"))"Корректировка" else ecoKindLabel(kind))+" · "+
                     (if(op.ecoText("debtId").isNotBlank())"Долги · " else
                         op.ecoText("category").takeIf{it.isNotBlank()}?.plus(" · ").orEmpty())+source),
-                maxLines=2,overflow=TextOverflow.Ellipsis,fontSize=10.sp,color=colors.muted)
+                maxLines=1,overflow=TextOverflow.Ellipsis,fontSize=10.sp,color=colors.muted)
         }
         Text((if(credit)"+" else if(debit)"−" else "")+ecoRubles(op.ecoText("amountMinor")),
             fontSize=12.sp,color=amountColor,fontWeight=FontWeight.Bold,maxLines=1)
@@ -767,8 +775,10 @@ private fun EcoPaymentProgress(paid:String,total:String,colors:EcoColors) {
             fontSize=10.sp,color=colors.muted,maxLines=1)
         Text((progress*100).toInt().toString()+"%",fontSize=10.sp,color=colors.goldSoft)
     }
-    LinearProgressIndicator(progress={progress},modifier=Modifier.fillMaxWidth().height(5.dp)
-        .clip(CircleShape),color=colors.gold,trackColor=colors.outline)
+    // Simple filled track instead of Material3's built-in trailing stop-indicator dot.
+    Box(Modifier.fillMaxWidth().height(5.dp).clip(CircleShape).background(colors.outline)) {
+        Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(colors.gold))
+    }
 }
 @Composable
 private fun EcoObligationCard(resource:String,record:JsonObject,colors:EcoColors,
