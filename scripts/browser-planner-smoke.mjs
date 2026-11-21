@@ -123,6 +123,19 @@ try {
 }catch(error){
   console.error('[Browser smoke] FAIL '+(error.stack??error));
   if(failures.length)console.error('[Browser smoke] runtime errors:\n'+failures.slice(0,8).join('\n'));
+  // Report a bounded snippet of the failing production bundle so that a
+  // minified stack can be located without uploading artifacts or private data.
+  try {
+    const first=failures.find(f=>/\/assets\/App-[^\s:)]+\.js:\\d+:\\d+/.test(f));
+    const match=first?.match(/(http:\/\/127\.0\.0\.1:\\d+\/assets\/App-[^\s:)]+\.js):(\\d+):(\\d+)/);
+    if(match){
+      const bundled=await (await fetch(match[1])).text();
+      const line=bundled.split('\n')[Number(match[2])-1]??'';
+      const at=Number(match[3])-1;
+      console.error('[Browser smoke] failing bundle context: '+line.slice(Math.max(0,at-360),at+210));
+    }
+  }catch{}
+
   console.error('[Browser smoke] preview log:\n'+previewOutput.slice(-1500));
   process.exitCode=1;
 }finally{
