@@ -52,7 +52,8 @@ internal fun rememberAiChatSpeechInput(
     onError:(String)->Unit,
     quickLauncher:Boolean=false,
     accent:Color=Color(0xFF7C3AED),
-    suggestions:List<String> = emptyList()
+    suggestions:List<String> = emptyList(),
+    financialSuggestions:Set<String> = emptySet()
 ):()->Unit {
     val context=LocalContext.current
     val scope=rememberCoroutineScope()
@@ -206,11 +207,15 @@ internal fun rememberAiChatSpeechInput(
                             fontWeight=FontWeight.Bold,fontSize=20.sp)
                         Text("Примеры голосовых запросов",color=Color(0xFFB9C4DA),fontSize=12.sp)
                         suggestions.take(9).forEach{hint->
+                            val financeHint=hint in financialSuggestions
+                            val hintAccent=if(financeHint)Color(0xFFF3AC43) else accent
                             Surface(shape=RoundedCornerShape(50),
-                                color=accent.copy(alpha=.16f),
-                                border=BorderStroke(1.dp,accent.copy(alpha=.42f))){
+                                color=hintAccent.copy(alpha=if(financeHint).22f else .16f),
+                                border=BorderStroke(1.dp,hintAccent.copy(
+                                    alpha=if(financeHint).78f else .52f))){
                                 Text(hint,Modifier.padding(horizontal=15.dp,vertical=8.dp),
-                                    color=Color.White,fontSize=13.sp)
+                                    color=if(financeHint)Color(0xFFFFD796) else Color.White,
+                                    fontSize=13.sp)
                             }
                         }
                     }
@@ -228,11 +233,24 @@ internal fun rememberAiChatSpeechInput(
                             Text(if(recordingNow)
                                 String.format(java.util.Locale.ROOT,"%02d:%02d",
                                     elapsedSeconds/60,elapsedSeconds%60)
-                                else "Обработка речи…",
-                                color=Color.White,fontSize=14.sp)
-                            TextButton(onClick={releaseRecorder(true)},enabled=recordingNow,
-                                contentPadding=PaddingValues(horizontal=0.dp,vertical=0.dp)){
-                                Text("Отменить",color=Color.White,fontSize=14.sp)
+                                else "Обработка…",
+                                modifier=Modifier.clip(RoundedCornerShape(13.dp))
+                                    .background(Color(0xFF1E2B3F))
+                                    .border(1.dp,Color(0xFF596D84),RoundedCornerShape(13.dp))
+                                    .padding(horizontal=13.dp,vertical=9.dp),
+                                color=Color.White,fontSize=21.sp,
+                                fontWeight=FontWeight.Bold,letterSpacing=1.sp)
+                            OutlinedButton(onClick={releaseRecorder(true)},
+                                enabled=recordingNow,
+                                modifier=Modifier.height(40.dp),
+                                shape=RoundedCornerShape(12.dp),
+                                border=BorderStroke(1.dp,Color(0xFF72849A)),
+                                colors=ButtonDefaults.outlinedButtonColors(
+                                    containerColor=Color(0xFF1E2B3F),
+                                    contentColor=Color.White),
+                                contentPadding=PaddingValues(horizontal=14.dp)){
+                                Text("Отменить",fontSize=13.sp,
+                                    fontWeight=FontWeight.SemiBold)
                             }
                         }
                         Box(Modifier.size(154.dp),contentAlignment=Alignment.Center){
