@@ -52,6 +52,10 @@ test('Mini App planner and Economic plus buttons stay above navigation and accep
   const econCss=read('../../client/src/EconomicApp.css');
   assert.match(mini,/onClick=\{\(\) => setIsQuickCreateOpen\(\(prev\) => !prev\)\}/);
   assert.match(mini,/aria-expanded=\{isQuickCreateOpen\}/);
+  assert.match(mini,/ref=\{quickCreateRef\}/);
+  assert.match(mini,/document.addEventListener\('pointerdown', onOutsidePointerDown\)/);
+  assert.match(mini,/document.addEventListener\('keydown', onEscape\)/);
+  assert.match(mini,/if \(event.key === 'Escape'\) setIsQuickCreateOpen\(false\)/);
   assert.match(miniCss,/\.miniapp-shell \.miniapp-quick-create \{\s*z-index: 320;/);
   assert.match(miniCss,/\.miniapp-shell \.miniapp-quick-create\.is-open \.miniapp-quick-create-actions,/);
   assert.match(miniCss,/touch-action: manipulation/);
