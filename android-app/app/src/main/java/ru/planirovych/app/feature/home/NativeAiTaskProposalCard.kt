@@ -12,6 +12,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
@@ -107,6 +108,8 @@ internal fun NativeAiTaskProposalCard(
     var preferenceBusy by remember(id){mutableStateOf(false)}
     var localError by remember(id){mutableStateOf<String?>(null)}
     var confirmation by remember(id){mutableStateOf<String?>(null)}
+    var editOpen by remember(id){mutableStateOf(false)}
+    val editDrafts=remember(id){mutableStateMapOf<Int,Map<String,JsonElement>>()}
     val drafts=remember(id){mutableStateMapOf<Int,Map<String,JsonElement>>()}
     var spheres by remember(id){mutableStateOf<List<Pair<String,String>>>(emptyList())}
     val scope=rememberCoroutineScope()
@@ -155,6 +158,10 @@ internal fun NativeAiTaskProposalCard(
     val edge=if(dark)Color(0xFF424457) else Color(0xFFDCE2EE)
     val purple=if(dark)Color(0xFFA78BFA) else Color(0xFF7C3AED)
     val working=busy||localBusy
+    fun openEditor(){
+        editDrafts.clear();drafts.forEach{(index,fields)->editDrafts[index]=fields.toMap()}
+        localError=null;editOpen=true
+    }
     fun submit(action:String){
         if(working)return
         localBusy=true;localError=null
@@ -162,12 +169,12 @@ internal fun NativeAiTaskProposalCard(
         scope.launch{
             try{
                 var current=proposal
-                if(action=="approve"||action=="revise"){
-                    for(index in drafts.keys.sorted()){
+                if(action=="approve"||action=="revise"||action=="edit"){
+                    for(index in (if(action=="edit")editDrafts.keys else drafts.keys).sorted()){
                         val fields=(current["operations"] as? JsonArray)
                             ?.getOrNull(index) as? JsonObject ?:continue
                         val existing=taskChipEditable(fields)?:continue
-                        val changed=drafts[index]?:continue
+                        val changed=(if(action=="edit")editDrafts[index] else drafts[index])?:continue
                         val values=taskChipDraftPayload(changed)
                         if(values==existing)continue
                         val revision=current.pText("revision")
@@ -177,7 +184,8 @@ internal fun NativeAiTaskProposalCard(
                     proposal=current
                     resetDrafts(current)
                 }
-                if(action=="revise"){
+                if(action=="edit"||action=="revise"){
+                    if(action=="edit")editOpen=false
                     vm.refresh();localBusy=false
                 }else onAction(id,action,indices){result->
                     if(result!=null){proposal=result;resetDrafts(result)}
@@ -257,22 +265,20 @@ internal fun NativeAiTaskProposalCard(
                                 item.pText("parentTitle")?.let{
                                     Text("В задаче «"+it+"»",color=muted,fontSize=11.sp)
                                 }
-                                if(!(status in setOf("PENDING","APPLIED")
-                                        && taskChipEditable(item)!=null))
-                                    proposalDescription(item)?.let{
+                                proposalDescription(item)?.let{
                                         Text(it,color=muted,fontSize=11.sp,lineHeight=16.sp)
                                     }
-                                if(status in setOf("PENDING","APPLIED")
-                                    && taskChipEditable(item)!=null){
-                                    val editable=drafts[index]
-                                        ?:taskChipEditable(item)!!.toMap()
-                                    NativeTaskChipFields(editable,spheres,!working,dark){
-                                        key,value->drafts[index]=editable+(key to value)
+                                if(taskChipEditable(item)==null){
+                                    (item["details"] as? JsonArray).orEmpty().take(3).forEach{detail->
+                                        val value=(detail as? JsonPrimitive)?.contentOrNull
+                                        if(!value.isNullOrBlank())Text(value,color=muted,fontSize=11.sp)
                                     }
-                                }else (item["details"] as? JsonArray).orEmpty().forEach{detail->
-                                    val value=(detail as? JsonPrimitive)?.contentOrNull
-                                    if(!value.isNullOrBlank())Text(value,
-                                        color=muted,fontSize=11.sp,lineHeight=16.sp)
+                                }else{
+                                    val fields=taskChipEditable(item)!!.toMap()
+                                    (fields["description"] as? JsonPrimitive)?.contentOrNull
+                                        ?.takeIf{it.isNotBlank()}?.let{Text("Описание: "+it,color=muted,fontSize=11.sp,maxLines=2)}
+                                    (fields["dueDate"] as? JsonPrimitive)?.contentOrNull
+                                        ?.takeIf{it.isNotBlank()}?.let{Text("Срок: "+prettyField(it),color=muted,fontSize=11.sp)}
                                 }
                             }
                         }
@@ -299,7 +305,13 @@ internal fun NativeAiTaskProposalCard(
                 Text(it,color=Color(0xFFFB7185),fontSize=11.sp,lineHeight=16.sp)
             }
             when(status){
-                "PENDING"->Row(Modifier.fillMaxWidth(),
+                "PENDING"->Column(verticalArrangement=Arrangement.spacedBy(5.dp)){
+                    if(ops.any{(it as? JsonObject)?.let(::taskChipEditable)!=null})
+                        TextButton(onClick={openEditor},enabled=!working,modifier=Modifier.fillMaxWidth()){
+                            Icon(Icons.Default.Edit,null,modifier=Modifier.size(14.dp))
+                            Spacer(Modifier.width(5.dp));Text("Изменить поля",fontSize=11.sp)
+                        }
+                    Row(Modifier.fillMaxWidth(),
                     horizontalArrangement=Arrangement.spacedBy(7.dp)){
                     Button(onClick={confirmation="approve"},
                         enabled=!working && (!checkup||selected.isNotEmpty()),
@@ -313,14 +325,15 @@ internal fun NativeAiTaskProposalCard(
                         shape=RoundedCornerShape(12.dp)){
                         Text("Отклонить",fontSize=11.sp,maxLines=1)
                     }
+                    }
                 }
                 "APPLIED"->Row(Modifier.fillMaxWidth(),
                     horizontalArrangement=Arrangement.spacedBy(7.dp)){
                     if(ops.any{(it as? JsonObject)?.let(::taskChipEditable)!=null}){
-                        Button(onClick={submit("revise")},enabled=!working,
+                        Button(onClick={openEditor},enabled=!working,
                             modifier=Modifier.weight(1f),shape=RoundedCornerShape(12.dp),
                             colors=ButtonDefaults.buttonColors(containerColor=Color(0xFF7954DB))){
-                            Icon(Icons.Default.Check,null,modifier=Modifier.size(14.dp))
+                            Icon(Icons.Default.Edit,null,modifier=Modifier.size(14.dp))
                             Spacer(Modifier.width(4.dp))
                             Text("Изменить",fontSize=11.sp)
                         }
@@ -356,6 +369,42 @@ internal fun NativeAiTaskProposalCard(
                         colors=CheckboxDefaults.colors(checkedColor=Color(0xFF7954DB)))
                     Text("Применять новые изменения автоматически",
                         color=muted,fontSize=11.sp,lineHeight=16.sp)
+                }
+            }
+        }
+    }
+    if(editOpen){
+        Dialog(onDismissRequest={if(!working)editOpen=false}){
+            Surface(Modifier.fillMaxWidth().heightIn(max=620.dp),shape=RoundedCornerShape(18.dp),
+                color=surface,border=BorderStroke(1.dp,edge)){
+                Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
+                    Text("Изменить поля",color=ink,fontSize=18.sp,fontWeight=FontWeight.Bold)
+                    Column(Modifier.weight(1f,fill=false).verticalScroll(rememberScrollState()),
+                        verticalArrangement=Arrangement.spacedBy(10.dp)){
+                        ops.forEachIndexed{index,entry->
+                            val item=entry as? JsonObject?:return@forEachIndexed
+                            val source=taskChipEditable(item)?:return@forEachIndexed
+                            val fields=editDrafts[index]?:source.toMap()
+                            Column(Modifier.fillMaxWidth().background(tile,RoundedCornerShape(12.dp))
+                                .padding(10.dp)){
+                                Text(item.pText("title")?:"Изменение",color=ink,fontSize=13.sp,
+                                    fontWeight=FontWeight.SemiBold)
+                                NativeTaskChipFields(fields,spheres,!working,dark){key,value->
+                                    editDrafts[index]=fields+(key to value)
+                                }
+                            }
+                        }
+                    }
+                    localError?.let{Text(it,color=Color(0xFFFB7185),fontSize=11.sp)}
+                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                        OutlinedButton(onClick={editOpen=false},enabled=!working,
+                            modifier=Modifier.weight(1f)){Text("Отмена")}
+                        Button(onClick={submit("edit")},enabled=!working,
+                            modifier=Modifier.weight(1f)){
+                            if(working)CircularProgressIndicator(Modifier.size(16.dp),strokeWidth=2.dp)
+                            else Text("Сохранить")
+                        }
+                    }
                 }
             }
         }
