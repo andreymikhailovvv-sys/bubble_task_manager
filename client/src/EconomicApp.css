@@ -639,8 +639,10 @@ body:has(.econ-root.econ-mobile-workspace) #root{min-height:100dvh}
  max-width:calc(100vw - 32px)}
 /* The Mini App bottom navigation is z-index:260; a z-index:120 FAB was
    hidden under its hit area. Give finance creation one isolated high layer. */
-.econ-mobile-create{
+.econ-root.econ-mobile-create{
   position:fixed;right:0;bottom:0;z-index:320;
+  min-height:0;width:0;height:0;
+  background:transparent;
   pointer-events:none;
 }
 .econ-mobile-create .econ-mobile-add-fab,
