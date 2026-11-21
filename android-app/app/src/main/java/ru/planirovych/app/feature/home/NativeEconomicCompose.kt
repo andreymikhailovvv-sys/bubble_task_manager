@@ -117,13 +117,29 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
         busy = true
         scope.launch {
             try {
-                if (record == null) api.economicCreate(resource, payload)
-                else api.economicUpdate(resource, record.ecoText("id"), payload)
-                editor = null
-                error = ""
+                // PATCH returns {ok:true}, not an updated entity. Check it,
+                // then fetch the authoritative records before closing.
+                val result=if(record==null)api.economicCreate(resource,payload)
+                    else api.economicUpdate(resource,record.ecoText("id"),payload)
+                if(record!=null && !result.ecoBool("ok"))
+                    throw IllegalStateException("Сервер не подтвердил сохранение изменений")
+                // A changed source account may remove an operation from the
+                // currently filtered list. Show all operations after updating.
+                if(resource=="operations"){
+                    kindFilter=""
+                    accountFilter=""
+                    categoryFilter=""
+                    val updated=api.economicOperations(null,null,null)
+                    operations=updated.ecoItems("operations")
+                    nextCursor=updated.ecoText("nextCursor")
+                }
+                snapshot=api.economicSnapshot()
+                editor=null
+                error=""
                 refresh()
-            } catch (cause: Exception) { error = readableEconomicError(cause) }
-            finally { busy = false }
+            } catch (cause: Exception) {
+                error=readableEconomicError(cause)
+            } finally { busy=false }
         }
     }
     fun remove(resource: String, record: JsonObject) {
