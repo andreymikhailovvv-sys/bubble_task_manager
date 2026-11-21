@@ -198,3 +198,20 @@
  .ai-inline-economic-proposals .econ-finance-proposal .econ-finance-proposal-inner{
   background:#f2f4f9;border-color:#d7dce7;color:#263141
 }
+
+/* Read-only chat chips, full-size editor in a separate overlay. */
+.econ-finance-summary-fields{display:grid;gap:3px;margin-top:4px}
+.econ-finance-summary-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;overflow-wrap:anywhere}
+.econ-finance-summary-row span{opacity:.75}
+.econ-finance-summary-row strong{font-weight:600;text-align:right}
+.econ-finance-edit-link{display:inline-flex;gap:6px;align-items:center;margin-top:8px;font-size:11px;text-decoration:underline}
+.econ-finance-modal-backdrop{position:fixed;z-index:10050;inset:0;padding:16px;display:grid;place-items:center;background:rgba(4,10,22,.72)}
+.econ-finance-modal{box-sizing:border-box;width:min(100%,500px);max-height:88dvh;display:flex;flex-direction:column;gap:14px;padding:17px;border-radius:18px;background:#30251d;color:#ffe8ce;border:1px solid #8b6844;box-shadow:0 16px 64px rgba(0,0,0,.35)}
+.econ-finance-modal-head,.econ-finance-modal-actions{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.econ-finance-modal-head button{color:inherit;cursor:pointer}
+.econ-finance-modal .econ-finance-editable-fields{max-height:none;min-height:0;overflow-y:auto;display:grid;gap:8px}
+.econ-finance-modal .econ-finance-edit-row>input,.econ-finance-modal .econ-finance-edit-row>select{height:38px}
+.econ-finance-modal-actions button{flex:1;cursor:pointer;padding:10px;border:1px solid #8b6844;border-radius:10px}
+.econ-finance-modal-actions button:last-child{background:#eda54d;color:#261608}
+.econ-root.econ-light .econ-finance-modal{background:white;color:#293444;border-color:#ead6bb}
+.econ-root.econ-light .econ-finance-modal .econ-finance-edit-row>input,.econ-root.econ-light .econ-finance-modal .econ-finance-edit-row>select{color:#293444;background:#f8f9fb;border-color:#e6e9ed}
