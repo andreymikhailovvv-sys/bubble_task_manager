@@ -888,7 +888,7 @@ private fun EcoObligationCard(resource:String,record:JsonObject,colors:EcoColors
                     EcoLoanMetric("Переплата (оценка)",ecoRubles(estimate!!.overpay.toString()),
                         colors,Modifier.weight(1f))
                 }
-                EcoLoanMetric("Всего выплат (оценка)",ecoRubles(estimate.total.toString()),colors)
+                EcoLoanMetric("Всего выплат (оценка)",ecoRubles(estimate!!.total.toString()),colors)
             }
             Text("Начало: "+ecoDateLabel(record.ecoText("startDate"))+
                 " · "+if(record.ecoText("paymentDate").isNotBlank())
