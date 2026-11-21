@@ -354,33 +354,12 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                             EcoSectionActions("История доходов, расходов, переводов и долговых движений.",
                                 colors,emptyList())
                             EcoPanel(colors) {
-                                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
-                                    horizontalArrangement=Arrangement.End) {
-                                    OutlinedButton(onClick={filtersOpen=!filtersOpen},
-                                        border=BorderStroke(1.dp,colors.outline),
-                                        contentPadding=PaddingValues(horizontal=13.dp,vertical=6.dp)) {
-                                        Icon(Icons.Default.FilterList,"Фильтры",modifier=Modifier.size(18.dp),
-                                            tint=colors.goldSoft)
-                                        Spacer(Modifier.width(7.dp))
-                                        Text(if(filtersOpen)"Скрыть фильтры" else "Фильтры",
-                                            color=colors.text,fontSize=12.sp)
+                                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End) {
+                                    IconButton(onClick={filtersOpen=true}) {
+                                        Icon(Icons.Default.FilterList,"Фильтры операций",
+                                            tint=if(kindFilter.isNotBlank()||accountFilter.isNotBlank()||
+                                                categoryFilter.isNotBlank()) colors.gold else colors.goldSoft)
                                     }
-                                }
-                                if(filtersOpen) {
-                                Spacer(Modifier.height(10.dp))
-                                EcoSelect("Тип операции",kindFilter,
-                                    listOf("" to "Все типы","EXPENSE" to "Расходы","INCOME" to "Доходы",
-                                        "TRANSFER" to "Переводы","DEBTS" to "Долговые операции"),
-                                    colors){kindFilter=it}
-                                Spacer(Modifier.height(10.dp))
-                                EcoSelect("Счёт",accountFilter,
-                                    listOf("" to "Все счета")+
-                                        current.ecoItems("accounts").map { it.ecoText("id") to it.ecoText("name") },
-                                    colors){accountFilter=it}
-                                Spacer(Modifier.height(10.dp))
-                                EcoSelect("Категория",categoryFilter,listOf("" to "Все категории")+
-                                    (ecoCategories(current,"EXPENSE")+ecoCategories(current,"INCOME"))
-                                        .distinct().map { it to it },colors){categoryFilter=it}
                                 }
                                 if (operationsBusy) LinearProgressIndicator(Modifier.fillMaxWidth(),color=colors.gold)
                                 if(operations.isEmpty()&&!operationsBusy)
@@ -498,6 +477,40 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                                 },null,tint=colors.gold)},
                                 onClick={addMenuOpen=false;editor=EcoEditorRequest(resource)})
                         }
+                    }
+                }
+            }
+        }
+        if(filtersOpen && current!=null) {
+            // Separate anchored sheet: filter controls do not alter the operations list height.
+            ModalBottomSheet(
+                onDismissRequest={filtersOpen=false},
+                sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),
+                containerColor=colors.panel,contentColor=colors.text,
+                dragHandle={BottomSheetDefaults.DragHandle(color=colors.muted)}
+            ) {
+                Column(Modifier.fillMaxWidth().height(370.dp).navigationBarsPadding()
+                    .padding(horizontal=18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
+                        horizontalArrangement=Arrangement.SpaceBetween) {
+                        Text("Фильтры операций",color=colors.text,fontWeight=FontWeight.Bold,fontSize=20.sp)
+                        IconButton(onClick={filtersOpen=false}){
+                            Icon(Icons.Default.Close,"Закрыть фильтры",tint=colors.muted)
+                        }
+                    }
+                    EcoSelect("Тип операции",kindFilter,
+                        listOf("" to "Все типы","EXPENSE" to "Расходы","INCOME" to "Доходы",
+                            "TRANSFER" to "Переводы","DEBTS" to "Долговые операции"),colors){kindFilter=it}
+                    EcoSelect("Счёт",accountFilter,
+                        listOf("" to "Все счета")+
+                            current.ecoItems("accounts").map { it.ecoText("id") to it.ecoText("name") },
+                        colors){accountFilter=it}
+                    EcoSelect("Категория",categoryFilter,listOf("" to "Все категории")+
+                        (ecoCategories(current,"EXPENSE")+ecoCategories(current,"INCOME"))
+                            .distinct().map { it to it },colors){categoryFilter=it}
+                    Button(onClick={filtersOpen=false},modifier=Modifier.fillMaxWidth(),
+                        colors=ButtonDefaults.buttonColors(containerColor=colors.gold)){
+                        Text("Готово",color=Color(0xFF281703))
                     }
                 }
             }
