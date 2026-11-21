@@ -111,6 +111,9 @@ try {
   assert.ok(await page.locator('textarea[title="Редактировать название"]').count()>0,
     'Focus editor remains mounted after editing description');
 
+  // Focus is a modal surface: close it before switching to another task.
+  await page.locator('.focused-task-ai-icon-button[aria-label="Закрыть окно"]').first().click();
+  await focusedTitle.waitFor({state:'hidden',timeout:12000});
   await page.locator('[data-bubble-task-id="smoke-event-task"]').first().click();
   const eventTitle=page.locator('textarea.task-edit-title-input').first();
   await eventTitle.waitFor({state:'visible',timeout:12000});
