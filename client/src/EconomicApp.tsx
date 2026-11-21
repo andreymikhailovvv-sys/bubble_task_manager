@@ -607,12 +607,16 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
             <article className="econ-stat"><div className="econ-stat-label"><ArrowUpRight size={18}/> Расходы за месяц</div><strong>{wholeRubles(snapshot.totals.monthExpenseMinor)}</strong><small>Без переводов между счетами</small></article>
             <article className="econ-stat"><div className="econ-stat-label"><CircleDollarSign size={18}/> Больше всего расходов</div><strong title={snapshot.totals.topExpenseCategory || undefined}>{snapshot.totals.topExpenseCategory || 'Пока нет'}</strong><small>{snapshot.totals.topExpenseCategory ? wholeRubles(snapshot.totals.topExpenseCategoryMinor) + ' за месяц' : 'Нет расходов за месяц'}</small></article>
           </div>
-          <div className="econ-report-preview-wrap">
+          {!mobile && <div className="econ-report-preview-wrap">
             <EconomicReport preview revision={reportRevision}/>
             <button type="button" className="econ-report-open" onClick={()=>setSection('report')}>Полный отчёт <ChevronRight size={16}/></button>
-          </div>
+          </div>}
           <div className="econ-dashboard-grid">
             <section className="econ-card"><div className="econ-card-header"><div><h2>Мои счета</h2><p>Остатки с учётом всех операций</p></div><button type="button" onClick={() => setSection('accounts')}>Все счета <ChevronRight size={16}/></button></div><div className="econ-account-grid">{snapshot.accounts.slice(0, 4).map(a => <button type="button" className={'econ-mini-account ' + (a.isPrimary ? 'main' : '')} key={a.id} onClick={() => openDialog('account', a)}><WalletCards size={20}/><span>{a.name}{a.isPrimary && <small>Основной</small>}{a.accountType === 'CREDIT_CARD' && <small>Кредитная карта · лимит {money(a.creditLimitMinor || '0')}</small>}</span><strong>{money(a.balanceMinor)}</strong></button>)}</div><button className="econ-inline-add" type="button" onClick={() => openDialog('account')}><Plus size={16}/> Добавить счёт</button></section>
+            {mobile && <div className="econ-report-preview-wrap econ-report-preview-grid-item">
+              <EconomicReport preview collapsedByDefault revision={reportRevision}/>
+              <button type="button" className="econ-report-open" onClick={()=>setSection('report')}>Полный отчёт <ChevronRight size={16}/></button>
+            </div>}
             <section className="econ-card">
               <div className="econ-card-header"><div><h2>Долги и кредиты</h2><p>Платежи и прогресс погашения</p></div>
                 <button type="button" onClick={() => setSection('debts')}>Все записи <ChevronRight size={16}/></button></div>

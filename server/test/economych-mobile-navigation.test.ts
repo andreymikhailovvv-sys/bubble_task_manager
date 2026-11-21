@@ -14,6 +14,8 @@ const native=read('../../android-app/app/src/main/java/ru/planirovych/app/featur
 const editor=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeEconomicEditor.kt');
 const financeData=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeEconomicData.kt');
 const report=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeEconomicReport.kt');
+const webReport=read('../../client/src/EconomicReport.tsx');
+const webReportCss=read('../../client/src/EconomicReport.css');
 const api=read('../../android-app/app/src/main/java/ru/planirovych/app/core/network/PlanirovychApi.kt');
 const network=read('../../android-app/app/src/main/java/ru/planirovych/app/core/network/NetworkModule.kt');
 const androidVersion=read('../../android-app/app/build.gradle.kts');
@@ -139,7 +141,7 @@ test('Economic mobile polish archives closed obligations and animates tab change
   assert.match(native,/slideInHorizontally\(/);
   assert.match(native,/closedDebts/);
   assert.match(native,/closedLoans/);
-  assert.match(native,/height\(120\.dp\)/);
+  assert.match(native,/height\(IntrinsicSize\.Max\)/);
   assert.match(native,/Arrangement\.spacedBy\(0\.dp\)/);
   assert.match(native,/Text\("Последние операции",fontSize=16\.sp/);
   assert.match(androidVersion,/versionCode = 17/);
@@ -162,14 +164,46 @@ test('native Economic overview reuses the Accounts tab card contents without act
   assert.match(summary,/"Лимит: "\+ecoRubles\(account\.ecoText\("creditLimitMinor"\)\)/);
 });
 test('native Economic overview tiles are compact and category amount is prominent',()=>{
-  assert.match(native,/Column\(modifier\.height\(120\.dp\)/);
+  assert.doesNotMatch(native,/Column\(modifier\.height\(120\.dp\)/);
   assert.match(native,/Text\("Траты в категориях"/);
   assert.match(native,/Text\(ecoWholeRubles\(minor\),color=colors\.text,fontSize=18\.sp/);
   assert.match(native,/Text\(category\.ifBlank \{ "Нет расходов" \}/);
   assert.doesNotMatch(native,/Больше всего расходов/);
   assert.match(native,/contentColor=if\(dark\) Color\(0xFF2B1B08\) else Color\.White/);
   assert.match(report,/if\(!preview\) \{/);
-  assert.match(report,/Text\(if\(preview\) ecoWholeRubles\(total\.toString\(\)\) else ecoRubles\(total\.toString\(\)\)/);
+  assert.match(report,/Text\(ecoWholeRubles\(total\.toString\(\)\)/);
+  assert.match(androidVersion,/versionCode = 17/);
+  assert.match(androidVersion,/versionName = "1\.0\.15"/);
+});
+
+test('Economic preview report follows accounts and starts collapsed on Android and Mini App',()=>{
+  const overview=native.slice(native.indexOf('"overview" -> {'),native.indexOf('"report" -> {'));
+  const accounts=overview.indexOf('EcoPanelHeader("Мои счета"');
+  const reportPosition=overview.indexOf('EcoReportPanel(api,colors,revision,preview=true)');
+  assert.ok(accounts>=0 && reportPosition>accounts);
+  assert.match(report,/var expanded by remember \{ mutableStateOf\(!preview\) \}/);
+  assert.match(report,/if\(preview && !expanded\)/);
+  assert.match(report,/EcoReportDonut\(total,selection,colors,130\.dp\)/);
+  assert.match(report,/EcoReportDonut\(total,selection,colors,220\.dp\)/);
+  assert.match(report,/Text\(ecoWholeRubles\(total\.toString\(\)\)/);
+  const mobile=economic.slice(economic.indexOf('<div className="econ-dashboard-grid">'));
+  assert.ok(mobile.indexOf('Мои счета')<mobile.indexOf('econ-report-preview-grid-item'));
+  assert.ok(mobile.indexOf('econ-report-preview-grid-item')<mobile.indexOf('Долги и кредиты'));
+  assert.match(mobile,/<EconomicReport preview collapsedByDefault revision=\{reportRevision\}\/>/);
+  assert.match(webReport,/preview && collapsed \?/);
+  assert.match(webReport,/econ-report-compact-legend/);
+  assert.match(webReport,/formatWholeRub\(selected\?\.totalMinor/);
+  assert.match(webReportCss,/\.econ-report-compact-category i/);
+});
+test('Economych Android summary sizes naturally, bright add button, normal account names and tab icon contrast',()=>{
+  const accountSummary=native.slice(native.indexOf('private fun EcoAccountSummary('),native.indexOf('private fun EcoQuickAction('));
+  assert.match(native,/height\(IntrinsicSize\.Max\)/);
+  assert.doesNotMatch(native,/Column\(modifier\.height\(120\.dp\)/);
+  assert.match(native,/verticalArrangement=Arrangement\.spacedBy\(4\.dp\)/);
+  assert.match(native,/containerColor=Color\(0xFFF5A52E\)/);
+  assert.match(accountSummary,/fontWeight=FontWeight\.Normal,fontSize=16\.sp/);
+  assert.match(home,/selectedIconColor=if\(index==4\) \(if\(dark\) Color\(0xFFF6B95F\) else Color\(0xFF9B5200\)\)/);
+  assert.match(report,/fontSize=if\(compact\) 15\.sp else 23\.sp/);
   assert.match(androidVersion,/versionCode = 17/);
   assert.match(androidVersion,/versionName = "1\.0\.15"/);
 });

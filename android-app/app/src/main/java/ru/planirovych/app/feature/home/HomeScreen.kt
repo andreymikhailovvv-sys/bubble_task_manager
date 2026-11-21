@@ -235,7 +235,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                             label=null,
                             alwaysShowLabel=false,
                             colors=NavigationBarItemDefaults.colors(
-                                selectedIconColor=if(index==4)Color(0xFFF6B95F) else if(dark)Color(0xFFD8B4FE) else Color(0xFF6828C6),
+                                selectedIconColor=if(index==4) (if(dark) Color(0xFFF6B95F) else Color(0xFF9B5200)) else if(dark)Color(0xFFD8B4FE) else Color(0xFF6828C6),
                                 selectedTextColor=if(dark)Color(0xFFF1E8FF) else Color(0xFF5420A7),
                                 indicatorColor=if(index==4) (if(dark)Color(0xFF56371F) else Color(0xFFFFE4BF)) else if(dark)Color(0xFF34264E) else Color(0xFFECE0FF),
                                 unselectedIconColor=if(index==4) (if(dark)Color(0xFFD6A05B) else Color(0xFFB16D22)) else if(dark)Color(0xFF9CA3AF) else Color(0xFF55647E),

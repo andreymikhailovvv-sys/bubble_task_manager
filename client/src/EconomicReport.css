@@ -30,3 +30,25 @@
 .econ-report-preview .econ-report-body{grid-template-columns:minmax(125px,190px) minmax(0,1fr);gap:18px}
 @media(max-width:660px){.econ-report-body,.econ-report-preview .econ-report-body{grid-template-columns:1fr;gap:22px}.econ-report-ring{width:min(68vw,235px)}
 .econ-report-ring-center strong{font-size:17px}.econ-report-periods button{padding:7px 9px;font-size:12px}}
+
+/* A single, larger centered amount in both report modes. */
+.econ-report-ring-center strong{font-size:clamp(19px,2.35vw,26px);line-height:1.15;overflow-wrap:anywhere}
+.econ-report-expand{display:inline-flex;align-items:center;gap:4px;flex:none;border:0;
+ background:transparent;color:var(--ec-orange2);font-size:12px;font-weight:700;cursor:pointer}
+.econ-report-expand svg{transition:transform .18s ease}
+.econ-report-expand svg.expanded{transform:rotate(90deg)}
+.econ-report-compact{display:grid;grid-template-columns:minmax(100px,145px) minmax(0,1fr);
+ align-items:center;gap:14px;margin-top:14px;min-width:0}
+.econ-report-compact .econ-report-ring{width:100%;max-width:145px}
+.econ-report-compact .econ-report-ring-center strong{font-size:clamp(12px,3.3vw,17px)}
+.econ-report-compact-legend{display:grid;gap:9px;min-width:0;max-height:180px;overflow-y:auto}
+.econ-report-compact-category{display:flex;align-items:center;gap:9px;min-width:0;
+ color:var(--ec-muted);font-size:12px}
+.econ-report-compact-category i{display:block;flex:none;width:10px;height:10px;border-radius:50%}
+.econ-report-compact-category span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:660px){
+ .econ-report-ring-center strong{font-size:clamp(19px,5vw,25px)}
+ .econ-report-compact{grid-template-columns:minmax(110px,42%) minmax(0,1fr);gap:12px}
+ .econ-report-compact .econ-report-ring{width:min(100%,145px)}
+ .econ-report-compact .econ-report-ring-center strong{font-size:clamp(13px,3.5vw,17px)}
+}

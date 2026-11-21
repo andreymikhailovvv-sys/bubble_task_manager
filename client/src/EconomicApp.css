@@ -704,3 +704,10 @@ body:has(.econ-root.econ-mobile-workspace) #root{min-height:100dvh}
 .econ-closed-content .econ-subsection-heading{margin:18px 0 12px}
 .econ-closed-content .econ-subsection-heading h3{margin:0;font-size:14px;font-weight:700}
 @media(max-width:570px){.econ-closed-toggle{padding:16px}.econ-closed-content{padding:0 16px 16px}}
+
+/* The collapsible report follows My Accounts on the mobile dashboard. */
+.econ-report-preview-grid-item{min-width:0;grid-column:1/-1}
+.econ-mobile-workspace .econ-report-preview-grid-item{margin:0}
+.econ-mobile-workspace .econ-report-preview-grid-item .econ-card{width:100%}
+.econ-mobile-workspace .econ-account-detail h3{font-weight:400}
+.econ-mobile-workspace .econ-mini-account span{font-weight:400}

@@ -253,23 +253,22 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                             }
                         }
                         item {
-                            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(9.dp)) {
+                            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max),horizontalArrangement=Arrangement.spacedBy(9.dp)) {
                                 EcoStat("Общий баланс",current.ecoObject("totals").ecoText("balanceMinor"),
-                                    "Денежные счета",colors,Modifier.weight(1f),false)
+                                    "Денежные счета",colors,Modifier.weight(1f).fillMaxHeight(),false)
                                 EcoStat("Доходы за месяц",current.ecoObject("totals").ecoText("monthIncomeMinor"),
-                                    "Без переводов",colors,Modifier.weight(1f),true)
+                                    "Без переводов",colors,Modifier.weight(1f).fillMaxHeight(),true)
                             }
                         }
                         item {
-                            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(9.dp)) {
+                            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max),horizontalArrangement=Arrangement.spacedBy(9.dp)) {
                                 EcoStat("Расходы за месяц",current.ecoObject("totals").ecoText("monthExpenseMinor"),
-                                    "Без переводов",colors,Modifier.weight(1f),false)
+                                    "Без переводов",colors,Modifier.weight(1f).fillMaxHeight(),false)
                                 EcoTopCategoryStat(current.ecoObject("totals").ecoText("topExpenseCategory"),
                                     current.ecoObject("totals").ecoText("topExpenseCategoryMinor"),
-                                    colors,Modifier.weight(1f))
+                                    colors,Modifier.weight(1f).fillMaxHeight())
                             }
                         }
-                        item { EcoReportPanel(api,colors,revision,preview=true) }
                         item {
                             EcoPanel(colors) {
                                 EcoPanelHeader("Мои счета","Остатки с учётом всех операций",
@@ -282,6 +281,7 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                                 EcoInlineAction("Добавить счёт",colors){editor=EcoEditorRequest("accounts")}
                             }
                         }
+                        item { EcoReportPanel(api,colors,revision,preview=true) }
                         item {
                             EcoPanel(colors) {
                                 EcoPanelHeader("Долги и кредиты","Платежи и прогресс погашения",
@@ -505,7 +505,7 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                 Box(Modifier.align(Alignment.BottomEnd).padding(end=18.dp,bottom=18.dp)) {
                     FloatingActionButton(
                         onClick={addMenuOpen=true},shape=CircleShape,
-                        containerColor=if(dark) Color(0xFFF5A52E) else colors.goldSoft,
+                        containerColor=Color(0xFFF5A52E),
                         contentColor=if(dark) Color(0xFF2B1B08) else Color.White
                     ) { Icon(Icons.Default.Add,"Добавить финансовую запись",Modifier.size(28.dp)) }
                     DropdownMenu(expanded=addMenuOpen,onDismissRequest={addMenuOpen=false},
@@ -642,9 +642,9 @@ private fun EcoHero(colors: EcoColors) {
 @Composable
 private fun EcoStat(title:String,minor:String,subtitle:String,colors:EcoColors,
     modifier:Modifier,positive:Boolean) {
-    Column(modifier.height(120.dp).clip(RoundedCornerShape(15.dp)).background(colors.panel)
-        .border(1.dp,colors.outline,RoundedCornerShape(15.dp)).padding(12.dp),
-        verticalArrangement=Arrangement.spacedBy(6.dp)) {
+    Column(modifier.clip(RoundedCornerShape(15.dp)).background(colors.panel)
+        .border(1.dp,colors.outline,RoundedCornerShape(15.dp)).padding(10.dp),
+        verticalArrangement=Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment=Alignment.CenterVertically) {
             Icon(when {title.startsWith("Доходы")->Icons.Default.SouthWest
                 title.startsWith("Расходы")->Icons.Default.NorthEast
@@ -661,9 +661,9 @@ private fun EcoStat(title:String,minor:String,subtitle:String,colors:EcoColors,
 }
 @Composable
 private fun EcoTopCategoryStat(category:String,minor:String,colors:EcoColors,modifier:Modifier) {
-    Column(modifier.height(120.dp).clip(RoundedCornerShape(15.dp))
+    Column(modifier.clip(RoundedCornerShape(15.dp))
         .background(colors.panel).border(1.dp,colors.outline,RoundedCornerShape(15.dp))
-        .padding(12.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+        .padding(10.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment=Alignment.CenterVertically) {
             Icon(Icons.Default.PieChart,null,tint=colors.gold,modifier=Modifier.size(19.dp))
             Spacer(Modifier.width(8.dp))
@@ -697,7 +697,7 @@ private fun EcoAccountSummary(account:JsonObject,colors:EcoColors) {
             null,tint=colors.gold,modifier=Modifier.size(25.dp))
         Spacer(Modifier.width(10.dp))
         Text(account.ecoText("name"),Modifier.weight(1f),color=colors.text,
-            fontWeight=FontWeight.Bold,fontSize=16.sp,maxLines=1,
+            fontWeight=FontWeight.Normal,fontSize=16.sp,maxLines=1,
             overflow=TextOverflow.Ellipsis)
         Text(when {
             account.ecoText("accountType")=="CREDIT_CARD" -> "Кредитная карта"
