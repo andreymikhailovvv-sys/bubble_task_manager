@@ -92,7 +92,7 @@ internal fun NativeHoldActionButton(
         }
         Box(
             Modifier.fillMaxSize().clip(CircleShape).background(accent)
-                .pointerInput(actions,waiting){
+                .pointerInput(waiting){
                     if(waiting)return@pointerInput
                     detectDragGesturesAfterLongPress(
                         onDragStart={offsetX=0f;offsetY=0f;selection=-2;open=true},
