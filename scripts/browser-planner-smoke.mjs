@@ -127,8 +127,8 @@ try {
   // Report a bounded snippet of the failing production bundle so that a
   // minified stack can be located without uploading artifacts or private data.
   try {
-    const first=failures.find(f=>/\/assets\/App-[^\s:)]+\.js:[0-9]+:[0-9]+/.test(f));
-    const match=first?.match(/(http:\/\/127\.0\.0\.1:[0-9]+\/assets\/App-[^\s:)]+\.js):([0-9]+):([0-9]+)/);
+    const first=failures.find(f=>/\/assets\/[^\s:)]+\.js:[0-9]+:[0-9]+/.test(f));
+    const match=first?.match(/(http:\/\/127\.0\.0\.1:[0-9]+\/assets\/[^\s:)]+\.js):([0-9]+):([0-9]+)/);
     if(match){
       const bundled=await (await fetch(match[1])).text();
       const line=bundled.split('\n')[Number(match[2])-1]??'';
