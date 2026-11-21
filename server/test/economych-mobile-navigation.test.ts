@@ -37,7 +37,7 @@ test('Mini App and Android have 5 compact icon-only tabs with a warm Economic la
   assert.match(home,/Spacer\(Modifier\.windowInsetsBottomHeight\(WindowInsets\.navigationBars\)\)/);
   assert.match(home,/selectedIconColor=if\(index==4\)/);
   assert.match(workspace,/4 -> NativeEconomicPage\(userId=state\.user\?\.id,dark=dark,active=pagerState\.currentPage==4,/);
-  assert.match(androidVersion,/versionCode = 17/);
+  assert.match(androidVersion,/versionCode = 18/);
 });
 
 test('both mobile surfaces reuse the actual responsive financial overview and editor',()=>{
@@ -146,8 +146,8 @@ test('Economic mobile polish archives closed obligations and animates tab change
   assert.match(native,/height\(IntrinsicSize\.Max\)/);
   assert.match(native,/Arrangement\.spacedBy\(0\.dp\)/);
   assert.match(native,/Text\("Последние операции",fontSize=15\.sp/);
-  assert.match(androidVersion,/versionCode = 17/);
-  assert.match(androidVersion,/versionName = "1\.0\.15"/);
+  assert.match(androidVersion,/versionCode = 18/);
+  assert.match(androidVersion,/versionName = "1\.0\.16"/);
 });
 
 test('native Economic overview reuses the Accounts tab card contents without actions',()=>{
@@ -174,8 +174,8 @@ test('native Economic overview tiles are compact and category amount is prominen
   assert.match(native,/foreground=if\(dark\)Color\(0xFF2B1B08\) else Color\.White/);
   assert.match(report,/if\(!preview\)\s*\{/);
   assert.match(report,/Text\(ecoWholeRubles\(total\.toString\(\)\)/);
-  assert.match(androidVersion,/versionCode = 17/);
-  assert.match(androidVersion,/versionName = "1\.0\.15"/);
+  assert.match(androidVersion,/versionCode = 18/);
+  assert.match(androidVersion,/versionName = "1\.0\.16"/);
 });
 
 test('Economic preview report follows accounts and starts collapsed on Android and Mini App',()=>{
@@ -206,8 +206,8 @@ test('Economych Android summary sizes naturally, bright add button, normal accou
   assert.match(accountSummary,/fontWeight=FontWeight\.Normal,fontSize=13\.sp/);
   assert.match(home,/selectedIconColor=if\(index==4\) \(if\(dark\) Color\(0xFFF6B95F\) else Color\(0xFF9B5200\)\)/);
   assert.match(report,/fontSize=if\(compact\) 15\.sp else 23\.sp/);
-  assert.match(androidVersion,/versionCode = 17/);
-  assert.match(androidVersion,/versionName = "1\.0\.15"/);
+  assert.match(androidVersion,/versionCode = 18/);
+  assert.match(androidVersion,/versionName = "1\.0\.16"/);
 });
 
 test('Native finance matches Mini App mobile visual tokens and compact hierarchy',()=>{
@@ -233,8 +233,8 @@ test('Native finance matches Mini App mobile visual tokens and compact hierarchy
   assert.match(native,/EcoEditorRequest\("accounts",account\)/);
   assert.match(report,/Text\("Финансовый отчёт",color=colors\.text,fontWeight=FontWeight\.SemiBold,fontSize=15\.sp\)/);
   assert.match(editor,/height\(stableSheetHeight\)/);
-  assert.match(androidVersion,/versionCode = 17/);
-  assert.match(androidVersion,/versionName = "1\.0\.15"/);
+  assert.match(androidVersion,/versionCode = 18/);
+  assert.match(androidVersion,/versionName = "1\.0\.16"/);
 });
 
 test('Mini App native parity also covers editors, loan metrics and loading surfaces',()=>{
@@ -248,8 +248,8 @@ test('Mini App native parity also covers editors, loan metrics and loading surfa
   assert.match(native,/\.padding\(horizontal=10\.dp,vertical=7\.dp\)/);
   assert.match(financeData,/bannerStart = Color\.White/);
   assert.match(report,/EcoReportDonut\(total,selection,colors,210\.dp\)/);
-  assert.match(androidVersion,/versionCode = 17/);
-  assert.match(androidVersion,/versionName = "1\.0\.15"/);
+  assert.match(androidVersion,/versionCode = 18/);
+  assert.match(androidVersion,/versionName = "1\.0\.16"/);
 });
 
 test('Android Economic dashboard follows Mini App spatial rhythm and warm summary tiles',()=>{
@@ -275,6 +275,6 @@ test('Android Economic dashboard follows Mini App spatial rhythm and warm summar
   assert.match(native,/val tile=if\(light&&primary\)Color\(0xFFFFF9F2\)/);
   assert.match(native,/val edge=if\(light&&primary\)Color\(0xFFEFD3B1\)/);
   assert.match(native,/internal fun EcoPanel\(colors: EcoColors, modifier: Modifier = Modifier,/);
-  assert.match(androidVersion,/versionCode = 17/);
-  assert.match(androidVersion,/versionName = "1\.0\.15"/);
+  assert.match(androidVersion,/versionCode = 18/);
+  assert.match(androidVersion,/versionName = "1\.0\.16"/);
 });
