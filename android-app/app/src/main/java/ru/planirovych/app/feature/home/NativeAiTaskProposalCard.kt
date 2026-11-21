@@ -307,7 +307,7 @@ internal fun NativeAiTaskProposalCard(
             when(status){
                 "PENDING"->Column(verticalArrangement=Arrangement.spacedBy(5.dp)){
                     if(ops.any{(it as? JsonObject)?.let(::taskChipEditable)!=null})
-                        TextButton(onClick={openEditor},enabled=!working,modifier=Modifier.fillMaxWidth()){
+                        TextButton(onClick={openEditor()},enabled=!working,modifier=Modifier.fillMaxWidth()){
                             Icon(Icons.Default.Edit,null,modifier=Modifier.size(14.dp))
                             Spacer(Modifier.width(5.dp));Text("Изменить поля",fontSize=11.sp)
                         }
@@ -330,7 +330,7 @@ internal fun NativeAiTaskProposalCard(
                 "APPLIED"->Row(Modifier.fillMaxWidth(),
                     horizontalArrangement=Arrangement.spacedBy(7.dp)){
                     if(ops.any{(it as? JsonObject)?.let(::taskChipEditable)!=null}){
-                        Button(onClick={openEditor},enabled=!working,
+                        Button(onClick={openEditor()},enabled=!working,
                             modifier=Modifier.weight(1f),shape=RoundedCornerShape(12.dp),
                             colors=ButtonDefaults.buttonColors(containerColor=Color(0xFF7954DB))){
                             Icon(Icons.Default.Edit,null,modifier=Modifier.size(14.dp))
