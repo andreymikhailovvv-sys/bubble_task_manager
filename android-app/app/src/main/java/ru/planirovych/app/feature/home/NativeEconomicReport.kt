@@ -150,7 +150,7 @@ internal fun EcoReportPanel(api:PlanirovychApi, colors:EcoColors, revision:Int, 
                 Canvas(Modifier.fillMaxSize()) {
                     val inset=19.dp.toPx()
                     val ringSize=Size(size.width-inset*2,size.height-inset*2)
-                    val stroke=Stroke(width=29.dp.toPx())
+                    val stroke=Stroke(width=22.dp.toPx())
                     if(total==BigInteger.ZERO) {
                         drawArc(color=colors.outline,startAngle=-90f,sweepAngle=360f,useCenter=false,
                             topLeft=Offset(inset,inset),size=ringSize,style=stroke)
@@ -189,8 +189,11 @@ internal fun EcoReportPanel(api:PlanirovychApi, colors:EcoColors, revision:Int, 
                     fontWeight=FontWeight.SemiBold)
             }
             Spacer(Modifier.height(5.dp))
-            LinearProgressIndicator(progress={ratio},modifier=Modifier.fillMaxWidth().height(4.dp),
-                color=color,trackColor=colors.outline)
+            // Material3's determinate progress has an end dot; a flat track is deliberate here.
+            Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(8.dp))
+                .background(colors.outline)) {
+                Box(Modifier.fillMaxWidth(ratio).fillMaxHeight().background(color))
+            }
             Text("${"%.1f".format(Locale.US,ratio*100)}%",color=colors.muted,
                 modifier=Modifier.fillMaxWidth(),fontSize=10.sp)
         }
