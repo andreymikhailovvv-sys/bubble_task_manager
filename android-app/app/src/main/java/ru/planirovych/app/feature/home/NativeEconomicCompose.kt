@@ -66,6 +66,7 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
     var revision by remember(userId) { mutableIntStateOf(0) }
     var section by remember(userId) { mutableStateOf("overview") }
     var editor by remember(userId) { mutableStateOf<EcoEditorRequest?>(null) }
+    var economicMenuOpen by remember { mutableStateOf(false) }
     var filtersOpen by remember(userId) { mutableStateOf(false) }
     var closedOpen by remember(userId) { mutableStateOf(false) }
     val economicPreferences = remember(context) { context.getSharedPreferences("economic_ui",android.content.Context.MODE_PRIVATE) }
@@ -530,11 +531,16 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                 }
             }
             }
+            if(economicMenuOpen&&editor==null){
+                Box(Modifier.matchParentSize().background(
+                    Color.Black.copy(alpha=if(dark).40f else .28f)))
+            }
             if(editor==null) {
                 Box(Modifier.align(Alignment.BottomEnd).padding(end=18.dp,bottom=18.dp)) {
                     NativeHoldActionButton(
                         accent=Color(0xFFF5A52E),foreground=if(dark)Color(0xFF2B1B08) else Color.White,
                         waiting=voiceAwaiting,onVoice=onQuickVoice,
+                        onMenuVisibilityChange={economicMenuOpen=it},
                         actions=listOf(
                             NativeHoldAction("Добавить операцию",Icons.Default.SwapHoriz){editor=EcoEditorRequest("operations")},
                             NativeHoldAction("Добавить счёт",Icons.Default.AccountBalanceWallet){editor=EcoEditorRequest("accounts")},
