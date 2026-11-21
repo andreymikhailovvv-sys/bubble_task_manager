@@ -63,6 +63,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     var creationType by remember { mutableStateOf<TaskType?>(null) }
     var createHabit by remember { mutableStateOf(false) }
     var createNote by remember { mutableStateOf(false) }
+    var plannerMenuOpen by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(initialPage=0,pageCount={5})
     val pagerScope = rememberCoroutineScope()
     val sharedChat by vm.generalAi.collectAsStateWithLifecycle()
@@ -228,6 +229,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                     accent=if(dark)Color(0xFFA78BFA) else Color(0xFF6D28D9),
                     foreground=if(dark)Color(0xFF131125) else Color.White,
                     waiting=voiceAwaiting,onVoice={voiceFromFinance=false;voiceInput()},
+                    onMenuVisibilityChange={plannerMenuOpen=it},
                     actions=listOf(
                         NativeHoldAction("Добавить задачу",Icons.Default.CheckCircle){creationType=TaskType.TASK},
                         NativeHoldAction("Добавить событие",Icons.Default.Event){creationType=TaskType.EVENT},
@@ -290,6 +292,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
             }
         }
     ) { padding ->
+        Box(Modifier.fillMaxSize()){
         when {
             state.loading -> NativeLoadingSkeleton(Modifier.padding(padding),dark)
             state.error != null -> ErrorState(state.error!!, vm::refresh, Modifier.padding(padding))
@@ -323,6 +326,13 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                 onQuickVoice={voiceFromFinance=true;voiceInput()},voiceAwaiting=voiceAwaiting,
                 modifier = Modifier.padding(padding),
             )
+        }
+        // Dim the workspace behind the popup without intercepting drags on
+        // the FAB. The popup and FAB remain above this drawing-only overlay.
+        if(plannerMenuOpen && pagerState.currentPage in 0..1){
+            Box(Modifier.matchParentSize().background(
+                Color.Black.copy(alpha=if(dark).36f else .26f)))
+        }
         }
     }
     voiceError?.let{message->
