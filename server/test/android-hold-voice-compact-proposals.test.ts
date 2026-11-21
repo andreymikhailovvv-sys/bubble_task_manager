@@ -39,16 +39,28 @@ test('Android long-press drag actions provide voice, visual feedback and haptics
   assert.match(economic,/NativeHoldActionButton\(/);
   assert.match(economic,/NativeHoldAction\("Добавить кредит"/);
   assert.doesNotMatch(economic,/DropdownMenu\(expanded=addMenuOpen/);
-  // A plain tap must show the preview long enough for the user to notice it.
+  // Single taps acknowledge in ~half a second; the hint appears only AFTER
+  // the menu fades out. A long hold still offers immediate drag selection.
   assert.match(launcher,/releasedPreview=true/);
-  assert.match(launcher,/delay\(2300\)/);
-  assert.match(launcher,/Удерживайте и ведите к действию/);
+  assert.match(launcher,/delay\(420\)/);
+  assert.match(launcher,/delay\(145\)/);
+  assert.match(launcher,/hintVisible=true/);
+  assert.match(launcher,/Зажмите «\+» для выбора/);
+  assert.doesNotMatch(launcher,/Удерживайте и ведите к действию/);
+  assert.doesNotMatch(launcher,/delay\(2300\)/);
+  assert.match(launcher,/MutableTransitionState\(false\)/);
+  assert.match(launcher,/visibleState=menuTransition/);
+  assert.match(launcher,/fadeIn\(/);
+  assert.match(launcher,/fadeOut\(/);
+  assert.match(launcher,/scaleIn\(/);
+  assert.match(launcher,/slideInHorizontally\(/);
   assert.match(launcher,/cy-28\.dp\.toPx\(\)/);
-  assert.match(launcher,/stroke=2\.3\.dp\.toPx\(\)/);
+  assert.match(launcher,/stroke=1\.8\.dp\.toPx\(\)/);
+  assert.match(launcher,/\.border\(0\.8\.dp/);
   assert.match(home,/onMenuVisibilityChange=\{plannerMenuOpen=it\}/);
   assert.match(economic,/onMenuVisibilityChange=\{economicMenuOpen=it\}/);
-  assert.match(home,/Color\.Black\.copy\(alpha=if\(dark\)\.36f else \.26f\)/);
-  assert.match(economic,/Color\.Black\.copy\(alpha=if\(dark\)\.40f else \.28f\)/);
+  assert.match(home,/Color\.Black\.copy\(alpha=plannerScrimAlpha\)/);
+  assert.match(economic,/Color\.Black\.copy\(alpha=economicScrimAlpha\)/);
 });
 
 test('quick voice records locally, submits to existing AI chat and opens replies afterwards',()=>{
