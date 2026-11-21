@@ -226,15 +226,22 @@ internal fun EcoEditorSheet(
         "accounts"->"Счёт";"operations"->"Операция";"debts"->"Долг"
         "loans"->"Кредит";else->"Категория"
     }
-    val height=(LocalConfiguration.current.screenHeightDp*.85f).dp
+    // Keep the sheet's measured height fixed for its lifetime. Recomputing it from
+    // screenHeightDp while the IME opens, or using wrap-content/weight(fill=false)
+    // inside a draggable sheet, changes the anchor and causes bottom-scroll jitter.
+    val initialScreenHeightDp = LocalConfiguration.current.screenHeightDp
+    val stableSheetHeight = remember(type, item.ecoText("id")) {
+        (initialScreenHeightDp * .85f).dp
+    }
+    val stableSheetState = rememberModalBottomSheetState(skipPartiallyExpanded=true)
     ModalBottomSheet(
         onDismissRequest={if(!saving)onDismiss()},
-        sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),
+        sheetState=stableSheetState,
         containerColor=colors.panel,
         contentColor=colors.text,
         dragHandle={BottomSheetDefaults.DragHandle(color=colors.muted)}
     ){
-        Column(Modifier.fillMaxWidth().heightIn(max=height)
+        Column(Modifier.fillMaxWidth().height(stableSheetHeight)
             .imePadding().navigationBarsPadding().padding(horizontal=18.dp)) {
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
                 horizontalArrangement=Arrangement.SpaceBetween) {
@@ -249,7 +256,8 @@ internal fun EcoEditorSheet(
             }
             Spacer(Modifier.height(10.dp))
             HorizontalDivider(color=colors.outline)
-            Column(Modifier.weight(1f,fill=false).verticalScroll(rememberScrollState())
+            // Scroll only the form. Header/footer never alter the sheet's anchor.
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())
                 .padding(vertical=14.dp),verticalArrangement=Arrangement.spacedBy(13.dp)) {
                 when(type) {
                     "operations" -> {
