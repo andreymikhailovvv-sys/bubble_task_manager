@@ -68,6 +68,7 @@ try {
     let payload={};
     if(path==='/api/auth/me')payload={user};
     else if(path==='/api/tasks')payload=tasks;
+    else if(/^\/api\/tasks\/[^/]+\/attachments$/.test(path))payload=[];
     else if(path==='/api/spheres')payload=spheres;
     else if(path==='/api/habits'||path==='/api/notes'||path==='/api/note-groups')payload=[];
     else if(path==='/api/ai-chat/projects')payload={projects:[]};
