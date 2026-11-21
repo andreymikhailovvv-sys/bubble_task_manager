@@ -75,8 +75,9 @@ try {
     else if(path==='/api/ai-general-chat')payload={messages:[]};
     else if(path==='/api/system-notifications')payload={notifications:[]};
     else if(/\/api\/tasks\/[^/]+\/ai-chat$/.test(path))payload={messages:[]};
-    else if(/\/api\/tasks\/[^/]+\/monitoring\/(statuses\/unread|triggers)$/.test(path))
-      payload={statuses:[],triggers:[],unreadCount:0};
+    else if(/\/api\/tasks\/[^/]+\/monitoring\/triggers$/.test(path))payload=[];
+    else if(/\/api\/tasks\/[^/]+\/monitoring\/statuses\/unread$/.test(path))payload={unreadCount:0};
+    else if(/\/api\/tasks\/[^/]+\/monitoring\/statuses$/.test(path))payload=[];
     else if(path==='/api/client-performance'||path==='/api/client-error')payload={ok:true};
     else if(method!=='GET'){
       writes++;
