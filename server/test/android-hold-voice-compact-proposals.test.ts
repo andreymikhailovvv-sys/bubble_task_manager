@@ -61,7 +61,9 @@ test('Mini App planner and Economic plus buttons stay above navigation and accep
   assert.match(miniCss,/touch-action: manipulation/);
   assert.match(economic,/className="econ-mobile-add-fab"[\s\S]*?onClick=\{\(\) => setAddMenuOpen\(v=>!v\)\}/);
   assert.match(economic,/\{addMenuOpen && createMenu\}/);
-  assert.match(econCss,/\.econ-mobile-create\{\s*position:fixed;right:0;bottom:0;z-index:320/);
+  assert.match(economic,/mobile && embeddedInMiniApp && !dialog && createPortal\(/);
+  assert.match(economic,/\}, document.body\)/);
+  assert.match(econCss,/\.econ-root\.econ-mobile-create\{\s*position:fixed;right:0;bottom:0;z-index:320/);
   assert.match(econCss,/\.econ-mobile-create \.econ-create-menu\{z-index:321\}/);
 });
 
