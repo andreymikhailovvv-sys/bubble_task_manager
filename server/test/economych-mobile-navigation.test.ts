@@ -90,7 +90,7 @@ test('Android financial editors are native bottom sheets with keyboard-safe acti
   assert.match(editor,/sheetGesturesEnabled=false/);
   assert.match(editor,/rememberModalBottomSheetState\(skipPartiallyExpanded=true\)/);
   assert.match(editor,/\.imePadding\(\)\.navigationBarsPadding\(\)/);
-  assert.match(editor,/\.verticalScroll\(rememberScrollState\(\)\)/);
+  assert.match(editor,/\.verticalScroll\(formScroll\)/);
   assert.match(editor,/Text\("Отмена"/);
   assert.match(editor,/Text\(if\(saving\)"Сохранение…" else "Сохранить"/);
   for (const type of ['accounts','operations','debts','loans','categories'])
@@ -129,7 +129,7 @@ test('Economic financial UI has four balanced tiles and stable native sheets',()
   assert.match(native,/detectHorizontalDragGestures/);
   assert.match(native,/ecoWholeRubles\(minor\)/);
   assert.match(editor,/height\(stableSheetHeight\)/);
-  assert.match(editor,/Modifier\.weight\(1f\)\.verticalScroll\(rememberScrollState\(\)\)/);
+  assert.match(editor,/Modifier\.weight\(1f\)\.verticalScroll\(formScroll\)/);
   assert.doesNotMatch(editor,/weight\(1f,fill=false\)/);
 });
 
