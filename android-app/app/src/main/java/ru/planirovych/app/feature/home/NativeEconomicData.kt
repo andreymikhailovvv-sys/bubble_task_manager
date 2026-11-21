@@ -109,14 +109,15 @@ internal data class EcoColors(
     val text: Color, val muted: Color, val gold: Color, val goldSoft: Color,
     val green: Color, val field: Color, val bannerStart: Color, val bannerEnd: Color
 )
+/** Keep native finance surfaces in step with client/src/EconomicApp.css mobile tokens. */
 internal fun ecoColors(dark: Boolean) = if (dark) EcoColors(
-    background = Color(0xFF15151C), panel = Color(0xFF1B1D28), panel2 = Color(0xFF20232F),
-    outline = Color(0xFF34323B), text = Color(0xFFF4EFE8), muted = Color(0xFFAAA5A1),
+    background = Color(0xFF12131B), panel = Color(0xFF1B1D28), panel2 = Color(0xFF20232F),
+    outline = Color(0xFF383741), text = Color(0xFFF4EFE8), muted = Color(0xFFAAA5A1),
     gold = Color(0xFFF6A83F), goldSoft = Color(0xFFFFCE83), green = Color(0xFFA7DFB6),
     field = Color(0xFF252631), bannerStart = Color(0xFF34302D), bannerEnd = Color(0xFF633B1D)
 ) else EcoColors(
-    background = Color(0xFFF7F8FA), panel = Color.White, panel2 = Color(0xFFF5F8FC),
-    outline = Color(0xFFE2E5EA), text = Color(0xFF263141), muted = Color(0xFF657181),
-    gold = Color(0xFFB96C14), goldSoft = Color(0xFF965716), green = Color(0xFF23824C),
-    field = Color(0xFFF6F8FC), bannerStart = Color(0xFF34302D), bannerEnd = Color(0xFF633B1D)
+    background = Color(0xFFF7F8FA), panel = Color.White, panel2 = Color(0xFFF8F9FB),
+    outline = Color(0xFFE2E5EA), text = Color(0xFF202A38), muted = Color(0xFF647181),
+    gold = Color(0xFFDF8B25), goldSoft = Color(0xFFAE681B), green = Color(0xFF23824C),
+    field = Color(0xFFF7F8FA), bannerStart = Color.White, bannerEnd = Color(0xFFFFF9F0)
 )

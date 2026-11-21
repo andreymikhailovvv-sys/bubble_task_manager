@@ -29,8 +29,8 @@ internal fun EconomicSkeleton(dark:Boolean){
         animationSpec=infiniteRepeatable(tween(1150),RepeatMode.Reverse),
         label="Economic shimmer"
     )
-    val background=if(dark)Color(0xFF15151C) else Color(0xFFF7F8FA)
-    val panel=if(dark)Color(0xFF57412F) else Color(0xFFE6E8EC)
+    val background=ecoColors(dark).background
+    val panel=if(dark)Color(0xFF2C2F3B) else Color(0xFFE6E8EC)
     @Composable fun preview(width:Modifier=Modifier,height:androidx.compose.ui.unit.Dp){
         Box(width.height(height).clip(RoundedCornerShape(17.dp))
             .background(panel.copy(alpha=shimmer)))
@@ -39,10 +39,10 @@ internal fun EconomicSkeleton(dark:Boolean){
         verticalArrangement=Arrangement.spacedBy(13.dp)){
         Spacer(Modifier.height(12.dp))
         preview(Modifier.fillMaxWidth(.63f),28.dp)
-        preview(Modifier.fillMaxWidth(),142.dp)
+        preview(Modifier.fillMaxWidth(),156.dp)
         preview(Modifier.fillMaxWidth(),105.dp)
         Row(horizontalArrangement=Arrangement.spacedBy(11.dp)){
-            preview(Modifier.weight(1f),99.dp)
+            preview(Modifier.weight(1f),82.dp)
             preview(Modifier.weight(1f),99.dp)
         }
         preview(Modifier.fillMaxWidth(),80.dp)

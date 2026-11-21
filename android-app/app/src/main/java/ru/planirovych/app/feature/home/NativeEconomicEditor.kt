@@ -242,13 +242,13 @@ internal fun EcoEditorSheet(
         dragHandle={BottomSheetDefaults.DragHandle(color=colors.muted)}
     ){
         Column(Modifier.fillMaxWidth().height(stableSheetHeight)
-            .imePadding().navigationBarsPadding().padding(horizontal=18.dp)) {
+            .imePadding().navigationBarsPadding().padding(horizontal=16.dp)) {
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
                 horizontalArrangement=Arrangement.SpaceBetween) {
                 Column {
                     Text(if(editing)"РЕДАКТИРОВАНИЕ" else "НОВАЯ ЗАПИСЬ",
-                        fontSize=10.sp,letterSpacing=1.sp,fontWeight=FontWeight.Bold,color=colors.gold)
-                    Text(title,fontSize=22.sp,fontWeight=FontWeight.ExtraBold,color=colors.text)
+                        fontSize=9.sp,letterSpacing=.8.sp,fontWeight=FontWeight.SemiBold,color=colors.gold)
+                    Text(title,fontSize=20.sp,fontWeight=FontWeight.Bold,color=colors.text)
                 }
                 IconButton(enabled=!saving,onClick=onDismiss) {
                     Icon(Icons.Default.Close,"Закрыть",tint=colors.muted)
@@ -258,7 +258,7 @@ internal fun EcoEditorSheet(
             HorizontalDivider(color=colors.outline)
             // Scroll only the form. Header/footer never alter the sheet's anchor.
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())
-                .padding(vertical=14.dp),verticalArrangement=Arrangement.spacedBy(13.dp)) {
+                .padding(vertical=12.dp),verticalArrangement=Arrangement.spacedBy(11.dp)) {
                 when(type) {
                     "operations" -> {
                         EcoSelect("Тип операции",value("kind"),
@@ -449,7 +449,7 @@ internal fun EcoSelect(label:String,value:String,options:List<Pair<String,String
     colors:EcoColors,onChange:(String)->Unit) {
     var expanded by remember { mutableStateOf(false) }
     Column {
-        Text(label,fontSize=12.sp,fontWeight=FontWeight.SemiBold,color=colors.muted)
+        Text(label,fontSize=11.sp,fontWeight=FontWeight.Normal,color=colors.muted)
         Spacer(Modifier.height(5.dp))
         Box {
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
@@ -457,7 +457,7 @@ internal fun EcoSelect(label:String,value:String,options:List<Pair<String,String
                 .clickable { expanded=true }.padding(horizontal=12.dp,vertical=13.dp),
                 verticalAlignment=Alignment.CenterVertically) {
                 Text(options.firstOrNull{it.first==value}?.second ?: value,
-                    Modifier.weight(1f),fontSize=13.sp,color=colors.text)
+                    Modifier.weight(1f),fontSize=13.sp,color=colors.text,fontWeight=FontWeight.Normal)
                 Icon(Icons.Default.KeyboardArrowDown,null,Modifier.size(18.dp),tint=colors.muted)
             }
             DropdownMenu(expanded=expanded,onDismissRequest={expanded=false},
@@ -476,13 +476,13 @@ internal fun EcoSelect(label:String,value:String,options:List<Pair<String,String
 private fun EcoInput(label:String,value:String,colors:EcoColors,maxChars:Int,
     decimal:Boolean=false,integer:Boolean=false,placeholder:String="",onChange:(String)->Unit){
     Column {
-        Text(label,color=colors.muted,fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+        Text(label,color=colors.muted,fontSize=11.sp,fontWeight=FontWeight.Normal)
         Spacer(Modifier.height(5.dp))
         OutlinedTextField(
             value=value,onValueChange={onChange(it.take(maxChars))},
             modifier=Modifier.fillMaxWidth(),singleLine=true,
             placeholder={if(placeholder.isNotBlank())Text(placeholder,color=colors.muted,fontSize=12.sp)},
-            textStyle=androidx.compose.ui.text.TextStyle(fontSize=14.sp,color=colors.text),
+            textStyle=androidx.compose.ui.text.TextStyle(fontSize=13.sp,color=colors.text),
             keyboardOptions=KeyboardOptions(keyboardType=
                 if(decimal)KeyboardType.Decimal else if(integer)KeyboardType.Number else KeyboardType.Text),
             shape=RoundedCornerShape(10.dp),
@@ -500,7 +500,7 @@ private fun EcoDate(label:String,value:String,colors:EcoColors,optional:Boolean=
     val context=LocalContext.current
     val selected=runCatching {LocalDate.parse(value)}.getOrElse{LocalDate.now()}
     Column {
-        Text(label,fontSize=12.sp,color=colors.muted,fontWeight=FontWeight.SemiBold)
+        Text(label,fontSize=11.sp,color=colors.muted,fontWeight=FontWeight.Normal)
         Spacer(Modifier.height(5.dp))
         Row(verticalAlignment=Alignment.CenterVertically) {
             Row(Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
