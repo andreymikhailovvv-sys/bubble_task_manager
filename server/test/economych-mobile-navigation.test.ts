@@ -36,7 +36,7 @@ test('Mini App and Android have 5 compact icon-only tabs with a warm Economic la
   assert.match(home,/Modifier\.height\(56\.dp\)/);
   assert.match(home,/Spacer\(Modifier\.windowInsetsBottomHeight\(WindowInsets\.navigationBars\)\)/);
   assert.match(home,/selectedIconColor=if\(index==4\)/);
-  assert.match(workspace,/4 -> NativeEconomicPage\(userId=state\.user\?\.id,dark=dark,active=pagerState\.currentPage==4\)/);
+  assert.match(workspace,/4 -> NativeEconomicPage\(userId=state\.user\?\.id,dark=dark,active=pagerState\.currentPage==4,/);
   assert.match(androidVersion,/versionCode = 17/);
 });
 
@@ -61,7 +61,7 @@ test('both mobile surfaces reuse the actual responsive financial overview and ed
 });
 
 test('native Android Economic no longer embeds a browser or owns a second cookie session',()=>{
-  assert.match(android,/EconomicComposePage\(userId=userId, dark=dark, active=active\)/);
+  assert.match(android,/EconomicComposePage\(userId=userId, dark=dark, active=active,/);
   assert.doesNotMatch(android,/WebView\(|CookieManager\(|evaluateJavascript\(|loadUrl\(/);
   assert.match(native,/NetworkModule\.api\(context\)/);
   assert.match(network,/PersistentCookieJar\(context\)/);
@@ -99,7 +99,7 @@ test('Android financial editors are native bottom sheets with keyboard-safe acti
   assert.match(editor,/remindersEnabled/);
   assert.match(native,/EconomicSkeleton\(dark\)/);
   assert.match(native,/NativeHoldActionButton\(/);
-  assert.match(native,/onQuickVoice=onQuickVoice/);
+  assert.match(native,/onVoice=onQuickVoice/);
   assert.match(native,/NativeHoldAction\("Добавить операцию"/);
 });
 
@@ -171,7 +171,7 @@ test('native Economic overview tiles are compact and category amount is prominen
   assert.match(native,/Text\(ecoWholeRubles\(minor\),color=colors\.text,fontSize=18\.sp/);
   assert.match(native,/Text\(category\.ifBlank \{ "Нет расходов" \}/);
   assert.doesNotMatch(native,/Больше всего расходов/);
-  assert.match(native,/contentColor=if\(dark\) Color\(0xFF2B1B08\) else Color\.White/);
+  assert.match(native,/foreground=if\(dark\)Color\(0xFF2B1B08\) else Color\.White/);
   assert.match(report,/if\(!preview\)\s*\{/);
   assert.match(report,/Text\(ecoWholeRubles\(total\.toString\(\)\)/);
   assert.match(androidVersion,/versionCode = 17/);
@@ -202,7 +202,7 @@ test('Economych Android summary sizes naturally, bright add button, normal accou
   assert.match(native,/height\(IntrinsicSize\.Max\)/);
   assert.doesNotMatch(native,/Column\(modifier\.height\(120\.dp\)/);
   assert.match(native,/verticalArrangement=Arrangement\.spacedBy\(6\.dp\)/);
-  assert.match(native,/containerColor=Color\(0xFFF5A52E\)/);
+  assert.match(native,/accent=Color\(0xFFF5A52E\)/);
   assert.match(accountSummary,/fontWeight=FontWeight\.Normal,fontSize=13\.sp/);
   assert.match(home,/selectedIconColor=if\(index==4\) \(if\(dark\) Color\(0xFFF6B95F\) else Color\(0xFF9B5200\)\)/);
   assert.match(report,/fontSize=if\(compact\) 15\.sp else 23\.sp/);
