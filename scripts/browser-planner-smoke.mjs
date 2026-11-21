@@ -128,4 +128,8 @@ try {
 }finally{
   await browser?.close();
   preview.kill('SIGTERM');
+  // npm run preview creates a child Vite process. A failed smoke must exit
+  // promptly rather than hold GitHub Actions until the 15-minute job timeout.
+  // The browser has already closed above and the test result is final.
+  process.exit(process.exitCode ?? 0);
 }
