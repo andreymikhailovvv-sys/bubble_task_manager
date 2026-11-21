@@ -30,6 +30,14 @@ internal fun ecoRubles(minor: String): String {
     val grouped = java.text.NumberFormat.getIntegerInstance(Locale.forLanguageTag("ru-RU")).format(whole)
     return (if (n.signum() < 0) "−" else "") + grouped + "," + kopecks + " ₽"
 }
+/** Whole rubles for compact dashboard totals; ledger and editors retain kopeck precision. */
+internal fun ecoWholeRubles(minor: String): String {
+    val n = minor.toBigIntegerOrNull() ?: BigInteger.ZERO
+    val half = BigInteger.valueOf(50)
+    val rounded = n.abs().add(half).divide(BigInteger.valueOf(100))
+    val grouped = java.text.NumberFormat.getIntegerInstance(Locale.forLanguageTag("ru-RU")).format(rounded)
+    return (if (n.signum()<0) "−" else "") + grouped + " ₽"
+}
 internal fun ecoInput(minor: String): String {
     val n = minor.toBigIntegerOrNull() ?: BigInteger.ZERO
     return (if (n.signum() < 0) "-" else "") +
@@ -107,8 +115,8 @@ internal fun ecoColors(dark: Boolean) = if (dark) EcoColors(
     gold = Color(0xFFF6A83F), goldSoft = Color(0xFFFFCE83), green = Color(0xFFA7DFB6),
     field = Color(0xFF252631), bannerStart = Color(0xFF34302D), bannerEnd = Color(0xFF633B1D)
 ) else EcoColors(
-    background = Color(0xFFFFF9F1), panel = Color(0xFFFFFDF9), panel2 = Color(0xFFFFF5E9),
-    outline = Color(0xFFE2D1BF), text = Color(0xFF342C27), muted = Color(0xFF77695D),
-    gold = Color(0xFFB56C19), goldSoft = Color(0xFF985813), green = Color(0xFF23824C),
-    field = Color(0xFFFFF7ED), bannerStart = Color(0xFF34302D), bannerEnd = Color(0xFF633B1D)
+    background = Color(0xFFF7F8FA), panel = Color.White, panel2 = Color(0xFFF5F8FC),
+    outline = Color(0xFFE2E5EA), text = Color(0xFF263141), muted = Color(0xFF657181),
+    gold = Color(0xFFB96C14), goldSoft = Color(0xFF965716), green = Color(0xFF23824C),
+    field = Color(0xFFF6F8FC), bannerStart = Color(0xFF34302D), bannerEnd = Color(0xFF633B1D)
 )

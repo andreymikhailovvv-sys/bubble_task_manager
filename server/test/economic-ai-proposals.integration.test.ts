@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import { prisma } from '../src/db/prisma.js';
 import { canonicalEconomicAction } from '../src/services/economic-ai-action-validation.service.js';
+import { economicAccountMovementMinor } from '../src/services/economic-account-balance.service.js';
 import { applyEconomicProposal, editEconomicProposal, undoEconomicProposal, rejectEconomicProposal, prepareEconomicProposals } from '../src/services/economic-ai-proposals.service.js';
 
 const action=(entity:string,kind:string,payload:Record<string,unknown>,targetId:string|null=null)=>
@@ -133,6 +134,16 @@ test('Economic AI applies and reverses real PostgreSQL ledger changes without cr
       userId:a.id,kind:'EXPENSE',title:'Покупка по кредитке',amountMinor:90000n,
       sourceAccountId:card.id
     }});
+    // Spending consumes available credit immediately; refunds restore it.
+    assert.equal(card.openingBalanceMinor+
+      await prisma.$transaction(tx=>economicAccountMovementMinor(tx,a.id,card.id)),4110000n);
+    const refund=await prisma.economicOperation.create({data:{
+      userId:a.id,kind:'INCOME',title:'Возврат по кредитке',amountMinor:15000n,
+      sourceAccountId:card.id
+    }});
+    assert.equal(card.openingBalanceMinor+
+      await prisma.$transaction(tx=>economicAccountMovementMinor(tx,a.id,card.id)),4125000n);
+    await prisma.economicOperation.delete({where:{id:refund.id}});
     const cardEdit=await propose(a.id,action('account','update',{
       balanceMinor:'4150000'
     },card.id));

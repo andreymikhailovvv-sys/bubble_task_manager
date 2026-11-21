@@ -11,7 +11,7 @@
 .econ-report-range button{display:grid;place-items:center;padding:7px}
 .econ-report-body{display:grid;grid-template-columns:minmax(170px,250px) minmax(0,1fr);align-items:start;gap:24px;padding:13px 0}
 .econ-report-ring{width:min(100%,250px);aspect-ratio:1;border-radius:50%;display:grid;place-items:center;position:relative;margin:auto;box-shadow:0 8px 30px rgba(0,0,0,.08)}
-.econ-report-ring::before{content:'';position:absolute;inset:23%;border-radius:50%;background:var(--ec-panel)}
+.econ-report-ring::before{content:'';position:absolute;inset:16%;border-radius:50%;background:var(--ec-panel)}
 .econ-report-ring-center{position:relative;display:flex;flex-direction:column;gap:7px;align-items:center;text-align:center;max-width:54%}
 .econ-report-ring-center small{color:var(--ec-muted);font-size:11px}
 .econ-report-ring-center strong{font-size:clamp(12px,1.2vw,18px);line-height:1.35;overflow-wrap:anywhere}
