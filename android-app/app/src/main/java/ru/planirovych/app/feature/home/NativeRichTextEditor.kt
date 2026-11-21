@@ -20,6 +20,7 @@ import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.ViewConfiguration
 import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.OverScroller
 import androidx.compose.foundation.*
@@ -77,10 +78,19 @@ private class RichNativeEditText(context:Context):EditText(context) {
         }
     }
 
-    // AndroidView lives inside Compose scrollable sheets. Handle a vertical drag
-    // once (not additionally to TextView's own movement), then let the native
-    // OverScroller animate the fling after the finger has been lifted.
-    // Horizontal gestures and long-press selection stay with EditText.
+    // TextView may interpret the DOWN/UP pair as selecting a word or restoring
+    // an old selection, especially when all MOVE events were consumed by our
+    // scroll handler. Cancel its pending gesture on a short tap and set the
+    // collapsed cursor ourselves using the actual tapped coordinates.
+    private fun cancelNativeGesture(event:MotionEvent){
+        val cancel=MotionEvent.obtain(event)
+        cancel.action=MotionEvent.ACTION_CANCEL
+        super.onTouchEvent(cancel)
+        cancel.recycle()
+    }
+
+    // Handle vertical scrolling once, without triggering EditText selection.
+    // Native long-press selection is left intact when a true hold is detected.
     override fun onTouchEvent(event:MotionEvent):Boolean {
         when(event.actionMasked){
             MotionEvent.ACTION_DOWN->{
@@ -103,6 +113,9 @@ private class RichNativeEditText(context:Context):EditText(context) {
                 if(!draggingContent && dy>touchSlop &&
                     dy>dx*1.15f && maxVerticalScroll()>0){
                     draggingContent=true
+                    // Suppress any delayed TextView long-click / word selection
+                    // while the finger is scrolling the document.
+                    cancelNativeGesture(event)
                     parent?.requestDisallowInterceptTouchEvent(true)
                 }
                 if(draggingContent){
@@ -132,21 +145,35 @@ private class RichNativeEditText(context:Context):EditText(context) {
                     velocityTracker=null
                     return true
                 }
-                // A plain tap did not reach native MOVE handling: TextView can
-                // otherwise reuse the old selection offset. Resolve the caret
-                // explicitly from the actual touch point AFTER the native UP.
-                val isTap=!movedBeyondTap &&
-                    android.os.SystemClock.uptimeMillis()-pointerDownAt <
-                        ViewConfiguration.getLongPressTimeout()
-                val nativeHandled=super.onTouchEvent(event)
+                val isShortTouch=android.os.SystemClock.uptimeMillis()-pointerDownAt <
+                    ViewConfiguration.getLongPressTimeout()
+                val isTap=!movedBeyondTap&&isShortTouch
                 if(isTap){
                     val offset=getOffsetForPosition(event.x,event.y)
                         .coerceIn(0,text?.length?:0)
+                    // Do not deliver native ACTION_UP: it can asynchronously
+                    // expand selection to an unrelated word after setSelection.
+                    cancelNativeGesture(event)
+                    requestFocus()
                     setSelection(offset)
+                    (context.getSystemService(Context.INPUT_METHOD_SERVICE) as?
+                        InputMethodManager)?.showSoftInput(this,
+                        InputMethodManager.SHOW_IMPLICIT)
+                    velocityTracker?.recycle()
+                    velocityTracker=null
+                    return true
+                }
+                if(isShortTouch&&movedBeyondTap){
+                    // A tiny horizontal/diagonal swipe must never select text.
+                    cancelNativeGesture(event)
+                    velocityTracker?.recycle()
+                    velocityTracker=null
+                    return true
                 }
                 velocityTracker?.recycle()
                 velocityTracker=null
-                return nativeHandled
+                // Keep intentional long-press text-selection behavior.
+                return super.onTouchEvent(event)
             }
             MotionEvent.ACTION_CANCEL->{
                 draggingContent=false
