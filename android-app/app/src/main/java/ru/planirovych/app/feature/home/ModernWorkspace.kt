@@ -115,6 +115,7 @@ fun ModernWorkspace(
     quickAiMode:String?=null,
     quickAiRequestId:Int=0,
     onQuickAiHandled:(Int)->Unit={},
+    onQuickVoice:()->Unit={},voiceAwaiting:Boolean=false,
     modifier: Modifier = Modifier,
 ) {
     val colors = remember(dark) { workspaceColors(dark) }
@@ -163,7 +164,8 @@ fun ModernWorkspace(
         modifier=modifier.fillMaxSize(),
         beyondViewportPageCount=1) { page ->
         when(page) {
-            4 -> NativeEconomicPage(userId=state.user?.id,dark=dark,active=pagerState.currentPage==4)
+            4 -> NativeEconomicPage(userId=state.user?.id,dark=dark,active=pagerState.currentPage==4,
+                onQuickVoice=onQuickVoice,voiceAwaiting=voiceAwaiting)
             2 -> {
                 val pagerScope=rememberCoroutineScope()
                 NativeGeneralAiChatPage(vm=vm,userId=state.user?.id,dark=dark,

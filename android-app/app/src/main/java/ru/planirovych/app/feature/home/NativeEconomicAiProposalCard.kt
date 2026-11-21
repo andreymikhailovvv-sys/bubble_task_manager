@@ -1,5 +1,6 @@
 package ru.planirovych.app.feature.home
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,6 +28,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.material.icons.filled.Edit
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
 import java.math.BigDecimal
@@ -156,6 +159,7 @@ internal fun NativeEconomicAiProposalCard(
     var autoApply by remember(id){mutableStateOf(false)}
     var busy by remember(id){mutableStateOf(false)}
     var error by remember(id){mutableStateOf<String?>(null)}
+    var editOpen by remember(id){mutableStateOf(false)}
     val scope=rememberCoroutineScope()
     val light=c.assistantText.red < .5f
     val bg=if(light)Color.White else Color(0xFF30251D)
@@ -204,6 +208,7 @@ internal fun NativeEconomicAiProposalCard(
             error="Не удалось обновить карточку: "+(t.message?:"ошибка соединения")
         }
     }
+    fun openEditor(){draft.clear();draft.putAll(economicDraft(proposal));error=null;editOpen=true}
     fun action(action:String){
         if(busy)return
         busy=true;error=null
@@ -218,6 +223,7 @@ internal fun NativeEconomicAiProposalCard(
                 }
                 if(action!="revise")proposal=vm.economicProposalAction(id,action)
                 draft.clear();draft.putAll(economicDraft(proposal))
+                if(action=="revise")editOpen=false
             }catch(t:Throwable){
                 val latest=runCatching{vm.economicProposalDetails(id)}.getOrNull()
                 if(latest!=null){proposal=latest;draft.clear();draft.putAll(economicDraft(latest))}
@@ -276,7 +282,97 @@ internal fun NativeEconomicAiProposalCard(
                         fontWeight=FontWeight.Bold)
                 }
             if(draft.isNotEmpty()){
-                Column(Modifier.fillMaxWidth().heightIn(max=184.dp)
+                draft.entries.take(6).forEach{(key,value)->
+                    val label=ECON_FIELDS[key]?:return@forEach
+                    val shown=when(key){
+                        "kind"->when(value){"EXPENSE"->"Расход";"INCOME"->"Доход";"TRANSFER"->"Перевод";else->value}
+                        "direction"->if(value=="OWE")"Я должен" else "Мне должны"
+                        "accountType"->if(value=="CREDIT_CARD")"Кредитная карта" else "Денежный счёт"
+                        "sourceAccountId","targetAccountId","accountId"->accountChoices.firstOrNull{it.first==value}?.second?:"Выбранный счёт"
+                        "isClosed","remindersEnabled","postedToAccount"->if(value=="true")"Да" else "Нет"
+                        else->if(key.endsWith("Minor"))value+" ₽" else value
+                    }
+                    if(shown.isNotBlank())Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                        Text(label,Modifier.weight(.45f),color=muted,fontSize=10.sp)
+                        Text(shown,Modifier.weight(.55f),color=ink,fontSize=11.sp,maxLines=2)
+                    }
+                }
+            }else (proposal["details"] as? JsonArray).orEmpty().take(3).forEach{entry->
+                (entry as? JsonPrimitive)?.contentOrNull?.let{Text(it,color=muted,fontSize=11.sp)}
+            }
+        }
+        val err=error?:(proposal["error"] as? JsonPrimitive)?.contentOrNull
+        if(!err.isNullOrBlank())Text(err,color=Color(0xFFD65B47),fontSize=10.sp)
+        if(status=="PENDING"){
+            TextButton(onClick={openEditor()},enabled=!busy,modifier=Modifier.fillMaxWidth()){
+                Icon(Icons.Default.Edit,null,modifier=Modifier.size(14.dp))
+                Spacer(Modifier.width(5.dp));Text("Изменить поля",fontSize=11.sp)
+            }
+            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                Button(onClick={action("approve")},enabled=!busy,
+                    modifier=Modifier.weight(1f),shape=RoundedCornerShape(9.dp),
+                    colors=ButtonDefaults.buttonColors(containerColor=amber,
+                        contentColor=Color(0xFF2B1B08)),
+                    contentPadding=PaddingValues(horizontal=8.dp)){
+                    Icon(Icons.Default.Check,null,modifier=Modifier.size(15.dp))
+                    Spacer(Modifier.width(3.dp))
+                    Text("Применить",fontSize=11.sp)
+                }
+                OutlinedButton(onClick={action("reject")},enabled=!busy,
+                    modifier=Modifier.weight(1f),shape=RoundedCornerShape(9.dp),
+                    contentPadding=PaddingValues(horizontal=7.dp)){
+                    Icon(Icons.Default.Close,null,modifier=Modifier.size(14.dp),tint=muted)
+                    Spacer(Modifier.width(3.dp))
+                    Text("Отклонить",color=ink,fontSize=11.sp)
+                }
+            }
+        }
+        if(status=="APPLIED"){
+            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                Button(onClick={openEditor()},enabled=!busy,
+                    modifier=Modifier.weight(1f),shape=RoundedCornerShape(9.dp),
+                    colors=ButtonDefaults.buttonColors(containerColor=amber,
+                        contentColor=Color(0xFF2B1B08)),
+                    contentPadding=PaddingValues(horizontal=7.dp)){
+                    Icon(Icons.Default.Edit,null,modifier=Modifier.size(14.dp))
+                    Spacer(Modifier.width(3.dp))
+                    Text("Изменить",fontSize=11.sp)
+                }
+                OutlinedButton(onClick={action("undo")},enabled=!busy,
+                    modifier=Modifier.weight(1f),shape=RoundedCornerShape(9.dp),
+                    contentPadding=PaddingValues(horizontal=7.dp)){
+                    Icon(Icons.Default.RotateLeft,null,modifier=Modifier.size(14.dp),tint=muted)
+                    Spacer(Modifier.width(3.dp))
+                    Text("Отменить",color=ink,fontSize=11.sp)
+                }
+            }
+        }
+        Row(verticalAlignment=Alignment.CenterVertically){
+            Checkbox(checked=autoApply,enabled=!busy,
+                onCheckedChange={enabled->
+                    busy=true;error=null
+                    scope.launch{
+                        try{autoApply=vm.setEconomicAutoApply(enabled)}
+                        catch(t:Throwable){error=t.message?:"Ошибка настройки"}
+                        finally{busy=false}
+                    }
+                },
+                modifier=Modifier.size(36.dp),
+                colors=CheckboxDefaults.colors(checkedColor=amber))
+            Spacer(Modifier.width(4.dp))
+            Text("Автоматически применять новые изменения",color=muted,
+                fontSize=10.sp,lineHeight=14.sp)
+        }
+    }
+
+    if(editOpen){
+        Dialog(onDismissRequest={if(!busy){editOpen=false;draft.clear();draft.putAll(economicDraft(proposal))}}){
+            Surface(Modifier.fillMaxWidth().heightIn(max=620.dp),shape=RoundedCornerShape(18.dp),
+                color=bg,border=BorderStroke(1.dp,tileBorder)){
+                Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
+                    Text("Изменить поля",color=ink,fontSize=18.sp,fontWeight=FontWeight.Bold)
+            if(draft.isNotEmpty()){
+                Column(Modifier.fillMaxWidth().heightIn(max=420.dp)
                     .verticalScroll(rememberScrollState()).padding(top=3.dp,end=2.dp),
                     verticalArrangement=Arrangement.spacedBy(6.dp)){
                 draft.keys.take(15).forEach{key->
@@ -336,64 +432,18 @@ internal fun NativeEconomicAiProposalCard(
                 }
             }
         }
-        }
-        val err=error?:(proposal["error"] as? JsonPrimitive)?.contentOrNull
-        if(!err.isNullOrBlank())Text(err,color=Color(0xFFD65B47),fontSize=10.sp)
-        if(status=="PENDING"){
-            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                Button(onClick={action("approve")},enabled=!busy,
-                    modifier=Modifier.weight(1f),shape=RoundedCornerShape(9.dp),
-                    colors=ButtonDefaults.buttonColors(containerColor=amber,
-                        contentColor=Color(0xFF2B1B08)),
-                    contentPadding=PaddingValues(horizontal=8.dp)){
-                    Icon(Icons.Default.Check,null,modifier=Modifier.size(15.dp))
-                    Spacer(Modifier.width(3.dp))
-                    Text("Применить",fontSize=11.sp)
-                }
-                OutlinedButton(onClick={action("reject")},enabled=!busy,
-                    modifier=Modifier.weight(1f),shape=RoundedCornerShape(9.dp),
-                    contentPadding=PaddingValues(horizontal=7.dp)){
-                    Icon(Icons.Default.Close,null,modifier=Modifier.size(14.dp),tint=muted)
-                    Spacer(Modifier.width(3.dp))
-                    Text("Отклонить",color=ink,fontSize=11.sp)
-                }
-            }
-        }
-        if(status=="APPLIED"){
-            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                Button(onClick={action("revise")},enabled=!busy,
-                    modifier=Modifier.weight(1f),shape=RoundedCornerShape(9.dp),
-                    colors=ButtonDefaults.buttonColors(containerColor=amber,
-                        contentColor=Color(0xFF2B1B08)),
-                    contentPadding=PaddingValues(horizontal=7.dp)){
-                    Icon(Icons.Default.Check,null,modifier=Modifier.size(14.dp))
-                    Spacer(Modifier.width(3.dp))
-                    Text("Изменить",fontSize=11.sp)
-                }
-                OutlinedButton(onClick={action("undo")},enabled=!busy,
-                    modifier=Modifier.weight(1f),shape=RoundedCornerShape(9.dp),
-                    contentPadding=PaddingValues(horizontal=7.dp)){
-                    Icon(Icons.Default.RotateLeft,null,modifier=Modifier.size(14.dp),tint=muted)
-                    Spacer(Modifier.width(3.dp))
-                    Text("Отменить",color=ink,fontSize=11.sp)
-                }
-            }
-        }
-        Row(verticalAlignment=Alignment.CenterVertically){
-            Checkbox(checked=autoApply,enabled=!busy,
-                onCheckedChange={enabled->
-                    busy=true;error=null
-                    scope.launch{
-                        try{autoApply=vm.setEconomicAutoApply(enabled)}
-                        catch(t:Throwable){error=t.message?:"Ошибка настройки"}
-                        finally{busy=false}
+                    error?.let{Text(it,color=Color(0xFFD65B47),fontSize=11.sp)}
+                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                        OutlinedButton(onClick={editOpen=false;draft.clear();draft.putAll(economicDraft(proposal))},
+                            enabled=!busy,modifier=Modifier.weight(1f)){Text("Отмена")}
+                        Button(onClick={action("revise")},enabled=!busy,
+                            modifier=Modifier.weight(1f),colors=ButtonDefaults.buttonColors(containerColor=amber)){
+                            if(busy)CircularProgressIndicator(Modifier.size(16.dp),strokeWidth=2.dp)
+                            else Text("Сохранить",color=Color(0xFF2B1B08))
+                        }
                     }
-                },
-                modifier=Modifier.size(36.dp),
-                colors=CheckboxDefaults.colors(checkedColor=amber))
-            Spacer(Modifier.width(4.dp))
-            Text("Автоматически применять новые изменения",color=muted,
-                fontSize=10.sp,lineHeight=14.sp)
+                }
+            }
         }
     }
 }

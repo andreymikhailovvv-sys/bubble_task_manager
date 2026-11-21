@@ -17,8 +17,10 @@ import androidx.compose.ui.unit.dp
  * JavaScript bridge or duplicated financial calculations.
  */
 @Composable
-fun NativeEconomicPage(userId: String?, dark: Boolean, active: Boolean = true) {
-    EconomicComposePage(userId=userId, dark=dark, active=active)
+fun NativeEconomicPage(userId: String?, dark: Boolean, active: Boolean = true,
+    onQuickVoice:()->Unit={},voiceAwaiting:Boolean=false) {
+    EconomicComposePage(userId=userId, dark=dark, active=active,
+        onQuickVoice=onQuickVoice,voiceAwaiting=voiceAwaiting)
 }
 
 @Composable

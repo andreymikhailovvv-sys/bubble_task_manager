@@ -49,7 +49,10 @@ internal fun rememberAiChatSpeechInput(
     dark:Boolean,
     transcribe:suspend (ByteArray,Double)->String,
     onRecognized:(String,Boolean)->Unit,
-    onError:(String)->Unit
+    onError:(String)->Unit,
+    quickLauncher:Boolean=false,
+    accent:Color=Color(0xFF7C3AED),
+    suggestions:List<String> = emptyList()
 ):()->Unit {
     val context=LocalContext.current
     val scope=rememberCoroutineScope()
@@ -186,7 +189,65 @@ internal fun rememberAiChatSpeechInput(
         val smoothAmplitude by animateFloatAsState(
             targetValue=amplitude,animationSpec=tween(110),label="voice-volume"
         )
-        Dialog(onDismissRequest={},properties=DialogProperties(
+        if(quickLauncher){
+            Dialog(onDismissRequest={},properties=DialogProperties(
+                usePlatformDefaultWidth=false,dismissOnBackPress=false,
+                dismissOnClickOutside=false)){
+                Box(Modifier.fillMaxSize().background(Color(0xED070B15))){
+                    Column(Modifier.align(Alignment.TopCenter)
+                        .statusBarsPadding().padding(horizontal=25.dp,vertical=34.dp),
+                        horizontalAlignment=Alignment.CenterHorizontally,
+                        verticalArrangement=Arrangement.spacedBy(10.dp)){
+                        Text("Скажите, что нужно сделать",color=Color.White,
+                            fontWeight=FontWeight.Bold,fontSize=20.sp)
+                        Text("Примеры голосовых запросов",color=Color(0xFFB9C4DA),fontSize=12.sp)
+                        suggestions.take(5).forEach{hint->
+                            Surface(shape=RoundedCornerShape(50),
+                                color=accent.copy(alpha=.16f),
+                                border=BorderStroke(1.dp,accent.copy(alpha=.42f))){
+                                Text(hint,Modifier.padding(horizontal=15.dp,vertical=8.dp),
+                                    color=Color.White,fontSize=13.sp)
+                            }
+                        }
+                    }
+                    val radius by animateFloatAsState(
+                        targetValue=smoothAmplitude,animationSpec=tween(90),label="fab-voice-amp")
+                    Box(Modifier.align(Alignment.BottomEnd)
+                        .padding(end=8.dp,bottom=90.dp).size(164.dp),
+                        contentAlignment=Alignment.Center){
+                        Canvas(Modifier.fillMaxSize()){
+                            val center=Offset(size.width/2,size.height/2)
+                            for(i in 0..3){
+                                val variation=(.6f+.4f*kotlin.math.abs(sin(phase+i*1.2f)))
+                                val wave=if(recordingNow)variation*(.65f+.35f*radius) else .36f
+                                drawCircle(accent.copy(alpha=(.19f-i*.035f)*wave),
+                                    radius=size.minDimension*(.23f+i*.095f)*wave+.18f*size.minDimension,
+                                    center=center)
+                                drawCircle(accent.copy(alpha=.6f*wave),
+                                    radius=size.minDimension*(.25f+i*.08f)*wave+.14f*size.minDimension,
+                                    center=center,style=androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx()))
+                            }
+                        }
+                        FloatingActionButton(onClick={if(recordingNow)finishRecording(true)},
+                            shape=CircleShape,containerColor=accent,
+                            contentColor=Color.White,modifier=Modifier.size(62.dp)){
+                            if(recordingNow)Icon(Icons.Default.Send,"Отправить голосовой запрос",Modifier.size(25.dp))
+                            else CircularProgressIndicator(Modifier.size(22.dp),color=Color.White,strokeWidth=2.dp)
+                        }
+                    }
+                    Column(Modifier.align(Alignment.BottomStart)
+                        .navigationBarsPadding().padding(start=24.dp,bottom=34.dp),
+                        verticalArrangement=Arrangement.spacedBy(4.dp)){
+                        Text(if(recordingNow)String.format(java.util.Locale.ROOT,"%02d:%02d",
+                            elapsedSeconds/60,elapsedSeconds%60) else "Обработка речи…",
+                            color=Color.White,fontSize=13.sp)
+                        TextButton(onClick={releaseRecorder(true)},enabled=recordingNow){
+                            Text("Отменить",color=Color.White,fontSize=14.sp)
+                        }
+                    }
+                }
+            }
+        }else Dialog(onDismissRequest={},properties=DialogProperties(
             dismissOnBackPress=false,dismissOnClickOutside=false)){
             Surface(shape=RoundedCornerShape(25.dp),
                 color=if(dark)Color(0xFF17243A) else Color.White,

@@ -87,13 +87,16 @@ private class RichNativeEditText(context:Context):EditText(context) {
                 velocityTracker=VelocityTracker.obtain()
                 startPointerX=event.x;startPointerY=event.y
                 lastPointerY=event.y;draggingContent=false
+                // Own the gesture until the tap/drag decision is made.
+                // Otherwise a Compose parent or TextView selection handles MOVE first.
+                parent?.requestDisallowInterceptTouchEvent(true)
             }
             MotionEvent.ACTION_MOVE->{
                 velocityTracker?.addMovement(event)
                 val dx=kotlin.math.abs(event.x-startPointerX)
                 val dy=kotlin.math.abs(event.y-startPointerY)
-                if(!draggingContent && selectionStart==selectionEnd &&
-                    dy>touchSlop && dy>dx*1.3f && maxVerticalScroll()>0){
+                if(!draggingContent && dy>touchSlop &&
+                    dy>dx*1.15f && maxVerticalScroll()>0){
                     draggingContent=true
                     parent?.requestDisallowInterceptTouchEvent(true)
                 }
@@ -104,6 +107,9 @@ private class RichNativeEditText(context:Context):EditText(context) {
                     return true
                 }
                 lastPointerY=event.y
+                // Consume pre-slop MOVE: do not let TextView start drag selection.
+                // A genuine tap is forwarded at UP; a long press still uses DOWN.
+                return true
             }
             MotionEvent.ACTION_UP->{
                 velocityTracker?.addMovement(event)
@@ -121,6 +127,7 @@ private class RichNativeEditText(context:Context):EditText(context) {
                     velocityTracker=null
                     return true
                 }
+                // No vertical drag: preserve native cursor placement and keyboard.
                 velocityTracker?.recycle()
                 velocityTracker=null
             }

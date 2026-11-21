@@ -53,7 +53,8 @@ private val economicTabs = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean) {
+internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean,
+    onQuickVoice:()->Unit={},voiceAwaiting:Boolean=false) {
     val colors = remember(dark) { ecoColors(dark) }
     val context = LocalContext.current
     val api = remember(context) { NetworkModule.api(context) }
@@ -65,7 +66,6 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
     var revision by remember(userId) { mutableIntStateOf(0) }
     var section by remember(userId) { mutableStateOf("overview") }
     var editor by remember(userId) { mutableStateOf<EcoEditorRequest?>(null) }
-    var addMenuOpen by remember(userId) { mutableStateOf(false) }
     var filtersOpen by remember(userId) { mutableStateOf(false) }
     var closedOpen by remember(userId) { mutableStateOf(false) }
     val economicPreferences = remember(context) { context.getSharedPreferences("economic_ui",android.content.Context.MODE_PRIVATE) }
@@ -511,27 +511,16 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
             }
             if(editor==null) {
                 Box(Modifier.align(Alignment.BottomEnd).padding(end=18.dp,bottom=18.dp)) {
-                    FloatingActionButton(
-                        onClick={addMenuOpen=true},shape=CircleShape,
-                        containerColor=Color(0xFFF5A52E),
-                        contentColor=if(dark) Color(0xFF2B1B08) else Color.White
-                    ) { Icon(Icons.Default.Add,"Добавить финансовую запись",Modifier.size(28.dp)) }
-                    DropdownMenu(expanded=addMenuOpen,onDismissRequest={addMenuOpen=false},
-                        modifier=Modifier.background(colors.panel)) {
-                        listOf("operations" to "Добавить операцию",
-                            "accounts" to "Добавить счёт",
-                            "loans" to "Добавить кредит",
-                            "debts" to "Добавить долг").forEach { (resource,title) ->
-                            DropdownMenuItem(text={Text(title,color=colors.text,fontSize=13.sp)},
-                                leadingIcon={Icon(when(resource){
-                                    "operations"->Icons.Default.SwapHoriz
-                                    "accounts"->Icons.Default.AccountBalanceWallet
-                                    "loans"->Icons.Default.CreditCard
-                                    else->Icons.Default.MenuBook
-                                },null,tint=colors.gold)},
-                                onClick={addMenuOpen=false;editor=EcoEditorRequest(resource)})
-                        }
-                    }
+                    NativeHoldActionButton(
+                        accent=Color(0xFFF5A52E),foreground=if(dark)Color(0xFF2B1B08) else Color.White,
+                        waiting=voiceAwaiting,onVoice=onQuickVoice,
+                        actions=listOf(
+                            NativeHoldAction("Добавить операцию",Icons.Default.SwapHoriz){editor=EcoEditorRequest("operations")},
+                            NativeHoldAction("Добавить счёт",Icons.Default.AccountBalanceWallet){editor=EcoEditorRequest("accounts")},
+                            NativeHoldAction("Добавить кредит",Icons.Default.CreditCard){editor=EcoEditorRequest("loans")},
+                            NativeHoldAction("Добавить долг",Icons.Default.MenuBook){editor=EcoEditorRequest("debts")}
+                        )
+                    )
                 }
             }
         }

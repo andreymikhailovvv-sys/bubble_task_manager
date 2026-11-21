@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Check, CheckCircle2, ClipboardCheck, Loader2, RotateCcw, X } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle2, ClipboardCheck, Loader2, RotateCcw, Pencil, X } from 'lucide-react';
 import { minorToRublesInput, rublesToMinor } from '../lib/economicMoney';
 import './EconomicAiProposalCard.css';
 
@@ -101,10 +101,12 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
   const [draft,setDraft]=useState<Payload>(()=>displayDraft(initial));
   const [options,setOptions]=useState<Options|null>(null);
   const [busy,setBusy]=useState(false);
+  const [editOpen,setEditOpen]=useState(false);
   const [error,setError]=useState('');
   useEffect(()=>{
     setProposal(initial);
     setDraft(displayDraft(initial));
+    setEditOpen(false);
   },[initial.id,initial.status,JSON.stringify(initial.payload)]);
   useEffect(()=>{
     let active=true;
@@ -132,6 +134,7 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
       setProposal(updated);
       setDraft(displayDraft(updated));
       if(updated.status==='APPLIED'||updated.status==='UNDONE')await onRefresh();
+      if(action==='revise')setEditOpen(false);
     }catch(cause){
       // A response can be lost after a successful mutation: reconcile first.
       try{
@@ -141,6 +144,7 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
       if(!error)setError(cause instanceof Error?cause.message:'Не удалось применить изменения.');
     }finally{setBusy(false);}
   };
+  const openEditor=()=>{setDraft(displayDraft(proposal));setError('');setEditOpen(true);};
   const toggle=async(enabled:boolean)=>{
     if(busy)return;
     setBusy(true);setError('');
@@ -161,6 +165,17 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
     : proposal.entity==='loan'?(proposal.action==='create'?'Новый кредит':'Изменение кредита')
     : proposal.entity==='debt'?(proposal.action==='create'?'Новый долг':'Изменение долга')
     : (proposal.action==='create'?'Новая запись':'Изменение записи');
+  const previewValue=(key:string,value:Value)=>{
+    if(value==null||value==='')return 'Не указано';
+    if(['sourceAccountId','targetAccountId','accountId'].includes(key))
+      return options?.accounts.find(account=>account.id===value)?.name??'Выбранный счёт';
+    if(key==='kind')return ({EXPENSE:'Расход',INCOME:'Доход',TRANSFER:'Перевод'} as Record<string,string>)[String(value)]??String(value);
+    if(key==='direction')return value==='OWE'?'Я должен':'Мне должны';
+    if(key==='accountType')return value==='CREDIT_CARD'?'Кредитная карта':'Денежный счёт';
+    if(typeof value==='boolean')return value?'Да':'Нет';
+    if(key.endsWith('Minor'))return String(value)+' ₽';
+    return String(value);
+  };
   const renderField=(key:string,value:Value)=>{
     if(key==='accountType'){
       return <select aria-label="Тип счёта" value={String(value??'STANDARD')}
@@ -231,15 +246,11 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
       ? <div className="econ-finance-proposal-details econ-finance-proposal-inner">
         <span className="econ-finance-inner-label">{innerLabel}</span>
         {proposal.description&&<p className="econ-finance-description">{proposal.description}</p>}
-        {entries.length>0
-          ? <div className="econ-finance-editable-fields">
-            {entries.map(([key,value])=><label key={key} className="econ-finance-edit-row">
-              <span>{LABELS[key]}</span>{renderField(key,value)}
-            </label>)}
-          </div>
+        {entries.length>0 ? <div className="econ-finance-summary-fields">{entries.slice(0,5).map(([key,value])=><div key={key} className="econ-finance-summary-row"><span>{LABELS[key]}</span><strong>{previewValue(key,value)}</strong></div>)}</div>
           : proposal.details?.map((item,index)=><div key={index}>{item}</div>)}
       </div> : null}
     {error||proposal.error?<div role="alert" className="econ-finance-proposal-error">{error||proposal.error}</div>:null}
+    {proposal.status==='PENDING'&&entries.length>0?<button type="button" className="econ-finance-edit-link" disabled={busy} onClick={openEditor}><Pencil size={13}/>Изменить поля</button>:null}
     {proposal.status==='PENDING'&&<div className="econ-finance-proposal-actions">
       <button type="button" className="econ-finance-primary" disabled={busy} onClick={()=>void act('approve')}>
         {busy?<Loader2 className="econ-spin" size={15}/>:<Check size={15}/>}Применить
@@ -249,13 +260,19 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
       </button>
     </div>}
     {applied&&<div className="econ-finance-proposal-actions">
-      <button type="button" className="econ-finance-primary" disabled={busy} onClick={()=>void act('revise')}>
-        {busy?<Loader2 className="econ-spin" size={15}/>:<Check size={15}/>}Изменить
+      <button type="button" className="econ-finance-primary" disabled={busy} onClick={openEditor}>
+        {busy?<Loader2 className="econ-spin" size={15}/>:<Pencil size={15}/>}Изменить
       </button>
       <button type="button" className="econ-finance-secondary econ-finance-undo" disabled={busy} onClick={()=>void act('undo')}>
         {busy?<Loader2 className="econ-spin" size={14}/>:<RotateCcw size={14}/>}Отменить
       </button>
     </div>}
+    {editOpen?<div className="econ-finance-modal-backdrop" role="presentation" onMouseDown={e=>{if(e.currentTarget===e.target&&!busy)setEditOpen(false)}}><div className="econ-finance-modal" role="dialog" aria-modal="true" aria-label="Изменение финансовой операции">
+      <div className="econ-finance-modal-head"><strong>Изменить поля</strong><button type="button" disabled={busy} aria-label="Закрыть" onClick={()=>setEditOpen(false)}><X size={18}/></button></div>
+      <div className="econ-finance-editable-fields">{entries.map(([key,value])=><label key={key} className="econ-finance-edit-row"><span>{LABELS[key]}</span>{renderField(key,value)}</label>)}</div>
+      {error?<p role="alert" className="econ-finance-proposal-error">{error}</p>:null}
+      <div className="econ-finance-modal-actions"><button type="button" disabled={busy} onClick={()=>setEditOpen(false)}>Отмена</button><button type="button" disabled={busy} onClick={()=>void act('revise')}>{busy?'Сохраняем…':'Сохранить'}</button></div>
+    </div></div>:null}
     <label className="econ-finance-autoapply">
       <input type="checkbox" checked={autoApply} disabled={busy}
         onChange={event=>void toggle(event.target.checked)}/>

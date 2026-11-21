@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Loader2, RotateCcw, X } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Loader2, RotateCcw, Pencil, X } from 'lucide-react';
 import { api } from '../lib/api';
 import type { AiTaskProposal } from '../lib/types';
 import './AiTaskProposalCard.css';
@@ -94,6 +94,8 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
   const [proposal, setProposal] = useState(initial);
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [modalDrafts, setModalDrafts] = useState<Record<number,TaskChipValues>>({});
   const [autoApply, setAutoApply] = useState(false);
   const [error, setError] = useState('');
   const [selectedIndices, setSelectedIndices] = useState<number[]>(() => initial.operations.map((_, index) => index));
@@ -145,9 +147,9 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
   const setTaskField=(index:number,key:keyof TaskChipValues,value:string|number|null)=>{
     setTaskDrafts(previous=>({...previous,[index]:{...previous[index],[key]:value}}));
   };
-  const synchronizeTaskEdits=async(start:AiTaskProposal)=>{
+  const synchronizeTaskEdits=async(start:AiTaskProposal, edits=taskDrafts)=>{
     let current=start;
-    for(const [key,draft] of Object.entries(taskDrafts)){
+    for(const [key,draft] of Object.entries(edits)){
       const index=Number(key),original=current.operations[index]?.editable;
       if(!original || !draft || JSON.stringify(draft)===JSON.stringify(original))continue;
       if(!current.revision)throw new Error('Не удалось определить версию чипа. Обновите чат.');
@@ -156,6 +158,27 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
     setProposal(current);
     setTaskDrafts(Object.fromEntries(current.operations.map((o,i)=>[i,{...o.editable}])));
     return current;
+  };
+  const openEditor=()=>{
+    setModalDrafts(Object.fromEntries(proposal.operations.map((o,i)=>[i,{...o.editable}])));
+    setEditOpen(true);setError('');
+  };
+  const saveEditor=async()=>{
+    if(busy)return;
+    setBusy(true);setError('');
+    try{
+      const latest=await synchronizeTaskEdits(proposal,modalDrafts);
+      setProposal(latest);setEditOpen(false);
+      if(latest.status==='APPLIED'){
+        window.dispatchEvent(new Event(proposalAppliedEvent));
+        if(hasNotes)window.dispatchEvent(new Event('standalone-notes-updated'));
+        onApplied?.();
+      }
+    }catch(cause){
+      const actual=await api.aiTaskProposal(proposal.id).catch(()=>null);
+      if(actual){setProposal(actual);setTaskDrafts(Object.fromEntries(actual.operations.map((o,i)=>[i,{...o.editable}])));}
+      setError(cause instanceof Error?cause.message:'Не удалось сохранить поля.');
+    }finally{setBusy(false);}
   };
   const revise=async()=>{
     if(busy||proposal.status!=='APPLIED')return;
@@ -276,12 +299,14 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
                   ['PENDING','APPLIED'].includes(proposal.status)
                     ? (taskDrafts[index]?.title??item.editable.title??item.title) : item.title}</span>
                 {item.parentTitle ? <span className="ai-task-proposal__muted block text-xs">В задаче «{item.parentTitle}»</span> : null}
-                {!(item.editable&&['PENDING','APPLIED'].includes(proposal.status)) && humanDescription(item) ?
+                {humanDescription(item) ?
                   <div className="ai-task-proposal__muted mt-1 break-words text-xs">{humanDescription(item)}</div> : null}
                 {item.editable && ['PENDING','APPLIED'].includes(proposal.status) ?
-                  <TaskChipFields value={taskDrafts[index]??item.editable} spheres={spheres}
-                    disabled={busy} onChange={(key,value)=>setTaskField(index,key,value)}/> :
-                  item.details?.length ? <div className="ai-task-proposal__muted mt-1 space-y-0.5 break-words text-xs">
+                  <div className="ai-task-proposal__muted mt-1 space-y-0.5 break-words text-xs">
+                    {item.editable.description ? <div>Описание: {item.editable.description}</div> : null}
+                    {item.editable.dueDate ? <div>Срок: {formatHumanDate(item.editable.dueDate)}</div> : null}
+                    {item.editable.sphereId ? <div>Сектор: {spheres.find(s=>s.id===item.editable?.sphereId)?.name??'Выбран'}</div> : null}
+                  </div> : item.details?.length ? <div className="ai-task-proposal__muted mt-1 space-y-0.5 break-words text-xs">
                     {item.details.map((detail,j)=><div key={j}>{detail}</div>)}
                   </div> : null}
               </div>
@@ -299,6 +324,7 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
       {proposal.error || error ? <p className="ai-task-proposal__error mt-2 text-xs" role="alert">{proposal.error || error}</p> : null}
       {proposal.status === 'PENDING' ? (
         <div className="mt-3 space-y-2">
+          {proposal.operations.some(item=>item.editable) ? <button type="button" disabled={busy} onClick={openEditor} className="ai-task-proposal__secondary flex w-full items-center justify-center gap-1 rounded-lg border px-3 py-1.5 text-xs"><Pencil size={13}/>Изменить поля</button> : null}
           <div className="flex gap-2">
             <button type="button" disabled={busy || (checkup && selectedIndices.length === 0)} onClick={() => void run('approve')} className="ai-task-proposal__primary flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 font-semibold disabled:opacity-50">
               {busy ? <Loader2 size={15} className="animate-spin" /> : <Check size={15}/>}{checkup ? `Применить выбранные (${selectedIndices.length})` : 'Принять'}
@@ -316,9 +342,9 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
       {isApplied ? (
         <div className="ai-task-proposal__actions mt-3 flex w-full gap-2">
           {proposal.operations.some(item => item.editable) ? (
-            <button type="button" disabled={busy} onClick={() => void revise()}
+            <button type="button" disabled={busy} onClick={openEditor}
               className="ai-task-proposal__primary flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 font-semibold disabled:opacity-50">
-              {busy ? <Loader2 size={15} className="animate-spin"/> : <Check size={15}/>}
+              {busy ? <Loader2 size={15} className="animate-spin"/> : <Pencil size={15}/>}
               Изменить
             </button>
           ) : null}
@@ -335,6 +361,17 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
           Применять новые изменения автоматически
         </label>
       ) : null}
+      {editOpen ? <div className="ai-task-proposal__modal-backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget&&!busy)setEditOpen(false)}}>
+        <div className="ai-task-proposal__modal" role="dialog" aria-modal="true" aria-label="Изменить предложение ИИ">
+          <div className="ai-task-proposal__modal-header"><strong>Изменить поля</strong><button type="button" disabled={busy} onClick={()=>setEditOpen(false)} aria-label="Закрыть"><X size={18}/></button></div>
+          <div className="ai-task-proposal__modal-body">{proposal.operations.map((item,index)=>item.editable ? <section key={index} className="ai-task-proposal__item rounded-xl border p-3">
+            <strong>{item.title}</strong><TaskChipFields value={modalDrafts[index]??item.editable} spheres={spheres} disabled={busy}
+              onChange={(key,value)=>setModalDrafts(previous=>({...previous,[index]:{...previous[index],[key]:value}}))}/>
+          </section> : null)}</div>
+          {error ? <p role="alert" className="ai-task-proposal__error">{error}</p> : null}
+          <div className="ai-task-proposal__modal-actions"><button type="button" disabled={busy} onClick={()=>setEditOpen(false)}>Отмена</button><button type="button" disabled={busy} onClick={()=>void saveEditor()}>{busy?'Сохраняем…':'Сохранить'}</button></div>
+        </div>
+      </div> : null}
       {isApplied && proposal.result?.createdIds?.length ? <div className="mt-2 flex flex-wrap gap-2">
         {proposal.result.createdIds.map(id => <span key={id} className="ai-task-proposal__muted text-[11px]">Создана задача · {id.slice(0, 8)}</span>)}
       </div> : null}

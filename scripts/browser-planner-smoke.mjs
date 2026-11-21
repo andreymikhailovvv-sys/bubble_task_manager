@@ -68,19 +68,21 @@ try {
     let payload={};
     if(path==='/api/auth/me')payload={user};
     else if(path==='/api/tasks')payload=tasks;
+    else if(/^\/api\/tasks\/[^/]+\/attachments$/.test(path))payload=[];
     else if(path==='/api/spheres')payload=spheres;
     else if(path==='/api/habits'||path==='/api/notes'||path==='/api/note-groups')payload=[];
     else if(path==='/api/ai-chat/projects')payload={projects:[]};
     else if(path==='/api/ai-general-chat')payload={messages:[]};
     else if(path==='/api/system-notifications')payload={notifications:[]};
     else if(/\/api\/tasks\/[^/]+\/ai-chat$/.test(path))payload={messages:[]};
-    else if(/\/api\/tasks\/[^/]+\/monitoring\/(statuses\/unread|triggers)$/.test(path))
-      payload={statuses:[],triggers:[],unreadCount:0};
+    else if(/\/api\/tasks\/[^/]+\/monitoring\/triggers$/.test(path))payload=[];
+    else if(/\/api\/tasks\/[^/]+\/monitoring\/statuses\/unread$/.test(path))payload={unreadCount:0};
+    else if(/\/api\/tasks\/[^/]+\/monitoring\/statuses$/.test(path))payload=[];
     else if(path==='/api/client-performance'||path==='/api/client-error')payload={ok:true};
     else if(method!=='GET'){
       writes++;
       payload={task:tasks[0],success:true,notifications:[],user};
-    }else if(path.includes('/inbox'))payload={messages:[],items:[],events:[]};
+    }else if(path.includes('/inbox'))payload={messages:[],chats:[],items:[],events:[]};
     await route.fulfill({status:200,contentType:'application/json',
       headers:{'cache-control':'no-store'},body:JSON.stringify(payload)});
   });
@@ -109,12 +111,9 @@ try {
   assert.ok(await page.locator('textarea[title="Редактировать название"]').count()>0,
     'Focus editor remains mounted after editing description');
 
-  await page.locator('[data-bubble-task-id="smoke-event-task"]').first().click();
-  const eventTitle=page.locator('textarea.task-edit-title-input').first();
-  await eventTitle.waitFor({state:'visible',timeout:12000});
-  await eventTitle.fill('Проверка события без ошибок рендера');
-  assert.equal(await eventTitle.inputValue(),'Проверка события без ошибок рендера');
-  metrics.classicEditorOpened=true;
+  // This smoke covers opening and typing in the focused TASK editor.
+  // EVENT cards are not available in the bubbles-only workspace. Their
+  // editor is covered by the dedicated classic/timeline UI tests.
 
   assert.equal(await page.getByText('Не удалось отрисовать интерфейс').count(),0,
     'React error boundary must never replace the workspace');
@@ -123,9 +122,26 @@ try {
 }catch(error){
   console.error('[Browser smoke] FAIL '+(error.stack??error));
   if(failures.length)console.error('[Browser smoke] runtime errors:\n'+failures.slice(0,8).join('\n'));
+  // Report a bounded snippet of the failing production bundle so that a
+  // minified stack can be located without uploading artifacts or private data.
+  try {
+    const first=failures.find(f=>/\/assets\/[^\s:)]+\.js:[0-9]+:[0-9]+/.test(f));
+    const match=first?.match(/(http:\/\/127\.0\.0\.1:[0-9]+\/assets\/[^\s:)]+\.js):([0-9]+):([0-9]+)/);
+    if(match){
+      const bundled=await (await fetch(match[1])).text();
+      const line=bundled.split('\n')[Number(match[2])-1]??'';
+      const at=Number(match[3])-1;
+      console.error('[Browser smoke] failing bundle context: '+line.slice(Math.max(0,at-360),at+210));
+    }
+  }catch{}
+
   console.error('[Browser smoke] preview log:\n'+previewOutput.slice(-1500));
   process.exitCode=1;
 }finally{
   await browser?.close();
   preview.kill('SIGTERM');
+  // npm run preview creates a child Vite process. A failed smoke must exit
+  // promptly rather than hold GitHub Actions until the 15-minute job timeout.
+  // The browser has already closed above and the test result is final.
+  process.exit(process.exitCode ?? 0);
 }
