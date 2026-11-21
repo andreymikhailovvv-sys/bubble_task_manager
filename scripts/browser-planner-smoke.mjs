@@ -80,7 +80,7 @@ try {
     else if(method!=='GET'){
       writes++;
       payload={task:tasks[0],success:true,notifications:[],user};
-    }else if(path.includes('/inbox'))payload={messages:[],items:[],events:[]};
+    }else if(path.includes('/inbox'))payload={messages:[],chats:[],items:[],events:[]};
     await route.fulfill({status:200,contentType:'application/json',
       headers:{'cache-control':'no-store'},body:JSON.stringify(payload)});
   });
