@@ -2,6 +2,8 @@ package ru.planirovych.app.feature.home
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
@@ -65,6 +67,11 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     var createNote by remember { mutableStateOf(false) }
     var plannerMenuOpen by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(initialPage=0,pageCount={5})
+    val plannerScrimAlpha by animateFloatAsState(
+        targetValue=if(plannerMenuOpen&&pagerState.currentPage in 0..1)
+            if(dark).26f else .19f else 0f,
+        animationSpec=tween(155),label="planner-action-scrim"
+    )
     val pagerScope = rememberCoroutineScope()
     val sharedChat by vm.generalAi.collectAsStateWithLifecycle()
     var pendingVoiceText by remember { mutableStateOf<String?>(null) }
@@ -331,9 +338,9 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
         }
         // Dim the workspace behind the popup without intercepting drags on
         // the FAB. The popup and FAB remain above this drawing-only overlay.
-        if(plannerMenuOpen && pagerState.currentPage in 0..1){
+        if(plannerScrimAlpha>0.001f){
             Box(Modifier.matchParentSize().background(
-                Color.Black.copy(alpha=if(dark).36f else .26f)))
+                Color.Black.copy(alpha=plannerScrimAlpha)))
         }
         }
     }
