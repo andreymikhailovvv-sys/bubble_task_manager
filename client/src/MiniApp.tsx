@@ -993,6 +993,24 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     }
   }, [androidPlanikLaunch, error, loading]);
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
+  const quickCreateRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!isQuickCreateOpen) return;
+    const onOutsidePointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && !quickCreateRef.current?.contains(event.target)) {
+        setIsQuickCreateOpen(false);
+      }
+    };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsQuickCreateOpen(false);
+    };
+    document.addEventListener('pointerdown', onOutsidePointerDown);
+    document.addEventListener('keydown', onEscape);
+    return () => {
+      document.removeEventListener('pointerdown', onOutsidePointerDown);
+      document.removeEventListener('keydown', onEscape);
+    };
+  }, [isQuickCreateOpen]);
   const [creatingStandaloneNote, setCreatingStandaloneNote] = useState(false);
   const [newStandaloneNote, setNewStandaloneNote] = useState<StandaloneNote | null>(null);
   const [aiCredits, setAiCredits] = useState(0);
@@ -5691,7 +5709,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         </div>
       ) : null}
 
-      <div className={`miniapp-quick-create fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2 ${isQuickCreateOpen ? 'is-open' : ''} ${isAiChatOpen || isStandaloneNotesOpen || isEconomicOpen ? 'miniapp-quick-create-hidden' : ''}`}>
+      <div ref={quickCreateRef} className={`miniapp-quick-create fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2 ${isQuickCreateOpen ? 'is-open' : ''} ${isAiChatOpen || isStandaloneNotesOpen || isEconomicOpen ? 'miniapp-quick-create-hidden' : ''}`}>
         <div className="miniapp-quick-create-actions flex flex-col items-end gap-2" aria-hidden={!isQuickCreateOpen}>
           <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={() => { setIsQuickCreateOpen(false); openCreateTaskModal(undefined, 'event'); }} className="miniapp-quick-create-action miniapp-quick-create-event inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
             <span>Добавить событие</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><CalendarDays size={18} /></span>

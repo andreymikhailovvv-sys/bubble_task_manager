@@ -10691,6 +10691,27 @@ body[data-theme='light'] .upcoming-subtasks-list .upcoming-subtask-row:hover {
 .miniapp-shell .miniapp-quick-create {
   bottom: calc(5.55rem + var(--miniapp-bottom-inset, env(safe-area-inset-bottom, 0px)));
 }
+/* The bottom navigation has z-index:260. The former z-40 quick launcher was
+   underneath its click/paint layer in Telegram WebView. Keep the menu above
+   navigation while allowing clicks through the rest of its transparent area. */
+.miniapp-shell .miniapp-quick-create {
+  z-index: 320;
+  pointer-events: none;
+}
+.miniapp-shell .miniapp-quick-create .miniapp-ai-chat-launcher {
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+.miniapp-shell .miniapp-quick-create.is-open .miniapp-quick-create-actions,
+.miniapp-shell .miniapp-quick-create.is-open .miniapp-quick-create-action {
+  pointer-events: auto;
+}
+.miniapp-shell .miniapp-quick-create .miniapp-quick-create-actions {
+  position: relative;
+  z-index: 3;
+}
 /* Keep keyboard focus and app controls unobstructed. */
 .miniapp-shell:has(input:focus, textarea:focus, [contenteditable="true"]:focus) .miniapp-bottom-navigation {
   display: none;

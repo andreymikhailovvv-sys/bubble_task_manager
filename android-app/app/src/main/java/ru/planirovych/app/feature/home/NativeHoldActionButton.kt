@@ -1,21 +1,16 @@
 package ru.planirovych.app.feature.home
 
-import android.os.SystemClock
-import android.view.ViewConfiguration
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,27 +27,18 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
-import kotlinx.coroutines.delay
-import kotlin.math.abs
-import kotlin.math.roundToInt
 
 internal data class NativeHoldAction(val title:String,val icon:ImageVector,val select:()->Unit)
 
-/**
- * ACTION_DOWN softly reveals actions. A quick tap previews them for half a
- * second, then fades to a compact hint beside the FAB. Long press + slide
- * still selects on release. Popup keeps labels outside the 56dp FAB layout.
+/** Click opens a persistent, accessible action menu; selecting an item or
+ * tapping outside closes it. No hold gestures, preview timers or teaching hints.
  */
 @Composable
 internal fun NativeHoldActionButton(
@@ -62,80 +48,39 @@ internal fun NativeHoldActionButton(
     onMenuVisibilityChange:(Boolean)->Unit={}
 ){
     val haptics=LocalHapticFeedback.current
-    val density=LocalDensity.current
-    val unit=with(density){1.dp.toPx()}
     val latestActions by rememberUpdatedState(actions)
     val latestVoice by rememberUpdatedState(onVoice)
     val visibilityChanged by rememberUpdatedState(onMenuVisibilityChange)
     var open by remember { mutableStateOf(false) }
-    var selection by remember { mutableIntStateOf(-2) }
-    var releasedPreview by remember { mutableStateOf(false) }
-    var hintVisible by remember { mutableStateOf(false) }
-    var previewRevision by remember { mutableIntStateOf(0) }
     val menuTransition=remember { MutableTransitionState(false) }
-    val hintTransition=remember { MutableTransitionState(false) }
     val dark=MaterialTheme.colorScheme.background.luminance()<.4f
-    val teal=if(dark)Color(0xFF79DDD3) else Color(0xFF177C86)
     val wire=if(dark)Color(0xFF9BDCD9) else Color(0xFF318790)
     val tile=if(dark)Color(0xFF223044) else Color(0xFFFCFDFF)
     val outline=if(dark)Color(0xFF698094) else Color(0xFFD4DEE8)
     val ink=if(dark)Color(0xFFF7FAFF) else Color(0xFF132434)
-    val hover=if(dark)Color(0xFF2E515C) else Color(0xFFDDF2F0)
 
     LaunchedEffect(open,waiting){
-        visibilityChanged(open&&!waiting)
-        menuTransition.targetState=open&&!waiting
+        val visible=open&&!waiting
+        menuTransition.targetState=visible
+        visibilityChanged(visible)
     }
-    LaunchedEffect(hintVisible,waiting){
-        hintTransition.targetState=hintVisible&&!waiting
-    }
-    // A tap is a half-second acknowledgement, not an open menu. A short
-    // contextual hint appears only after the fade-out has completed.
-    // Incrementing the revision cancels stale timers on a second gesture.
-    LaunchedEffect(previewRevision){
-        if(releasedPreview){
-            delay(420)
-            open=false
-            selection=-2
-            delay(145)
-            if(!waiting){
-                hintVisible=true
-                delay(1650)
-                hintVisible=false
-            }
-            releasedPreview=false
-        }
-    }
-    LaunchedEffect(waiting){
-        if(waiting){
-            previewRevision++
-            open=false
-            releasedPreview=false
-            hintVisible=false
-            selection=-2
-        }
-    }
+    LaunchedEffect(waiting){if(waiting)open=false}
 
-    fun choose(next:Int){
-        if(next!=selection){
-            selection=next
-            if(next>=-1)haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-        }
-    }
     fun activate(target:Int){
-        previewRevision++
         open=false
-        releasedPreview=false
-        hintVisible=false
-        selection=-2
+        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         if(target==-1)latestVoice()
         else latestActions.getOrNull(target)?.select?.invoke()
     }
+
     Box(Modifier.size(56.dp)){
         if(menuTransition.currentState || menuTransition.targetState){
             val height=(actions.size*58+86).dp
-            Popup(alignment=Alignment.BottomEnd,offset=IntOffset.Zero,
-                properties=PopupProperties(focusable=false,clippingEnabled=false)){
+            Popup(
+                onDismissRequest={open=false},
+                alignment=Alignment.BottomEnd,offset=IntOffset.Zero,
+                properties=PopupProperties(focusable=true,clippingEnabled=false)
+            ){
                 AnimatedVisibility(
                     visibleState=menuTransition,
                     enter=fadeIn(animationSpec=tween(155))+
@@ -187,18 +132,14 @@ internal fun NativeHoldActionButton(
                             style=Stroke(stroke,cap=StrokeCap.Round))
                     }
                     actions.forEachIndexed{index,action->
-                        val chosen=selection==index
-                        val scale by animateFloatAsState(if(chosen)1.18f else 1f,
-                            label="action-hover-$index")
                         Row(Modifier.align(Alignment.BottomEnd)
                             .offset(y=(-(72+index*58)).dp)
                             .width(226.dp)
-                            .graphicsLayer{scaleX=scale;scaleY=scale}
                             .clip(RoundedCornerShape(15.dp))
-                            .background(if(chosen)hover else tile)
-                            .border(0.8.dp,
-                                if(chosen)teal.copy(alpha=.65f) else outline.copy(alpha=.80f),
+                            .background(tile)
+                            .border(.8.dp,outline.copy(alpha=.80f),
                                 RoundedCornerShape(15.dp))
+                            .clickable { activate(index) }
                             .padding(horizontal=12.dp,vertical=9.dp),
                             verticalAlignment=Alignment.CenterVertically,
                             horizontalArrangement=Arrangement.spacedBy(10.dp)){
@@ -206,118 +147,30 @@ internal fun NativeHoldActionButton(
                                 .clip(CircleShape)
                                 .background(accent.copy(alpha=if(dark).17f else .10f)),
                                 contentAlignment=Alignment.Center){
-                                Icon(action.icon,null,tint=if(chosen)teal else accent,
+                                Icon(action.icon,null,tint=accent,
                                     modifier=Modifier.size(17.dp))
                             }
                             Text(action.title,Modifier.weight(1f),fontSize=13.sp,
                                 color=ink,maxLines=1,softWrap=false)
                         }
                     }
-                    val chosen=selection==-1
-                    val scale by animateFloatAsState(if(chosen)1.20f else 1f,label="voice-hover")
                     Box(Modifier.align(Alignment.BottomEnd).offset(x=(-82).dp)
-                        .graphicsLayer{scaleX=scale;scaleY=scale}
                         .size(56.dp).clip(CircleShape)
-                        .background(if(chosen)hover else tile)
-                        .border(.8.dp,
-                            if(chosen)teal.copy(alpha=.65f) else outline.copy(alpha=.80f),
-                            CircleShape),
+                        .background(tile)
+                        .border(.8.dp,outline.copy(alpha=.80f),CircleShape)
+                        .clickable { activate(-1) },
                         contentAlignment=Alignment.Center){
                         Icon(Icons.Default.Mic,"Голосовой ввод",
-                            tint=if(chosen)teal else accent,modifier=Modifier.size(24.dp))
+                            tint=accent,modifier=Modifier.size(24.dp))
                     }
                 }
-                }
-            }
-        }
-        if(hintTransition.currentState || hintTransition.targetState){
-            Popup(alignment=Alignment.CenterEnd,
-                offset=IntOffset(x=with(density){(-72).dp.roundToPx()},y=0),
-                properties=PopupProperties(focusable=false,clippingEnabled=false)){
-                AnimatedVisibility(
-                    visibleState=hintTransition,
-                    enter=fadeIn(animationSpec=tween(140))+
-                        slideInHorizontally(initialOffsetX={it/8},
-                            animationSpec=tween(140)),
-                    exit=fadeOut(animationSpec=tween(160))
-                ){
-                    Surface(shape=RoundedCornerShape(12.dp),color=tile,
-                        shadowElevation=3.dp,
-                        border=androidx.compose.foundation.BorderStroke(
-                            .75.dp,outline.copy(alpha=.8f))){
-                        Text("Зажмите «+» для выбора",
-                            Modifier.padding(horizontal=12.dp,vertical=9.dp),
-                            color=ink,fontSize=12.sp,maxLines=1)
-                    }
                 }
             }
         }
         Box(Modifier.fillMaxSize().clip(CircleShape).background(accent)
-            .pointerInput(waiting){
-                if(waiting)return@pointerInput
-                awaitEachGesture{
-                    val down=awaitFirstDown(requireUnconsumed=false)
-                    previewRevision++
-                    open=true
-                    releasedPreview=false
-                    hintVisible=false
-                    selection=-2
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    val downAt=SystemClock.uptimeMillis()
-                    var held=false
-                    var target=-2
-                    while(true){
-                        val event=awaitPointerEvent()
-                        val change=event.changes.firstOrNull{it.id==down.id}
-                        if(change==null){
-                            open=false;releasedPreview=false;hintVisible=false;selection=-2
-                            break
-                        }
-                        if(!change.pressed){
-                            val longEnough=held ||
-                                SystemClock.uptimeMillis()-downAt >=
-                                    ViewConfiguration.getLongPressTimeout()
-                            if(longEnough){
-                                if(target>=-1)activate(target)
-                                else{open=false;selection=-2}
-                            }else{
-                                // Brief feedback, then teach the gesture beside "+".
-                                selection=-2
-                                releasedPreview=true
-                                previewRevision++
-                            }
-                            break
-                        }
-                        if(!held&&SystemClock.uptimeMillis()-downAt>=
-                            ViewConfiguration.getLongPressTimeout()){
-                            held=true
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        }
-                        if(held){
-                            val dx=(change.position.x-down.position.x)/unit
-                            val dy=(change.position.y-down.position.y)/unit
-                            target=when{
-                                dx< -58f&&abs(dy)<95f -> -1
-                                dy< -47f&&dx> -66f&&latestActions.isNotEmpty()->
-                                    ((-dy-72f)/58f).roundToInt()
-                                        .coerceIn(0,latestActions.lastIndex)
-                                else->-2
-                            }
-                            choose(target)
-                            if(target>=-1)change.consume()
-                        }
-                    }
-                }
-            }
-            .semantics{
-                contentDescription="Добавить"
-                onClick(label="Показать доступные действия"){
-                    hintVisible=false
-                    open=true
-                    releasedPreview=true
-                    previewRevision++
-                    true
-                }
+            .clickable(enabled=!waiting, onClickLabel="Открыть меню добавления") {
+                open=!open
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             },contentAlignment=Alignment.Center){
             if(waiting)CircularProgressIndicator(Modifier.size(25.dp),color=foreground,strokeWidth=2.dp)
             else Icon(Icons.Default.Add,null,tint=foreground,modifier=Modifier.size(28.dp))
