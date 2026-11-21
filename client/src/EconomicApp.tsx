@@ -780,11 +780,15 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
       </div>
     </section>}
 
-    {mobile && embeddedInMiniApp && !dialog && <div className="econ-mobile-create">
-      {addMenuOpen && createMenu}
-      <button type="button" className="econ-mobile-add-fab" aria-label="Добавить финансовую запись"
-        aria-expanded={addMenuOpen} title="Добавить" onClick={() => setAddMenuOpen(v=>!v)}><Plus size={27}/></button>
-    </div>}
+    {mobile && embeddedInMiniApp && !dialog && createPortal(
+      <div className={'econ-root econ-mobile-create' + (effectiveAppearance === 'light' ? ' econ-light' : '')}
+        style={{ '--econ-mobile-safe-bottom': mobileSafeBottom + 'px' } as CSSProperties}>
+        {addMenuOpen && createMenu}
+        <button type="button" className="econ-mobile-add-fab" aria-label="Добавить финансовую запись"
+          aria-expanded={addMenuOpen} title="Добавить" onClick={() => setAddMenuOpen(v=>!v)}>
+          <Plus size={27}/>
+        </button>
+      </div>, document.body)}
     {dialog && createPortal(<div
       className={'econ-root econ-dialog-layer ' + (effectiveAppearance === 'light' ? 'econ-light ' : '') + (mobile ? 'econ-mobile-dialog-layer ' : '') + (embeddedInMiniApp ? 'econ-miniapp-dialog-layer' : '')}
       style={embeddedInMiniApp ? { '--econ-mobile-safe-top': mobileSafeTop + 'px', '--econ-mobile-safe-bottom': mobileSafeBottom + 'px' } as CSSProperties : undefined}>
