@@ -199,7 +199,7 @@ test('Economych Android summary sizes naturally, bright add button, normal accou
   const accountSummary=native.slice(native.indexOf('private fun EcoAccountSummary('),native.indexOf('private fun EcoQuickAction('));
   assert.match(native,/height\(IntrinsicSize\.Max\)/);
   assert.doesNotMatch(native,/Column\(modifier\.height\(120\.dp\)/);
-  assert.match(native,/verticalArrangement=Arrangement\.spacedBy\(5\.dp\)/);
+  assert.match(native,/verticalArrangement=Arrangement\.spacedBy\(6\.dp\)/);
   assert.match(native,/containerColor=Color\(0xFFF5A52E\)/);
   assert.match(accountSummary,/fontWeight=FontWeight\.Normal,fontSize=13\.sp/);
   assert.match(home,/selectedIconColor=if\(index==4\) \(if\(dark\) Color\(0xFFF6B95F\) else Color\(0xFF9B5200\)\)/);
@@ -220,7 +220,7 @@ test('Native finance matches Mini App mobile visual tokens and compact hierarchy
   assert.match(native,/RoundedCornerShape\(17\.dp\)\)\.padding\(14\.dp\)/);
   assert.match(native,/EcoMiniAccountTile\(account,colors\)/);
   assert.match(native,/private fun EcoMiniAccountTile\(/);
-  assert.match(native,/\.background\(colors\.panel2\)\.border\(1\.dp,colors\.outline\.copy\(alpha=\.65f\)/);
+  assert.match(native,/val tile=if\(light&&primary\)Color\(0xFFFFF9F2\) else colors\.panel2/);
   assert.match(native,/fontWeight=FontWeight\.Normal,fontSize=13\.sp,maxLines=1/);
   assert.match(native,/fontWeight=FontWeight\.Bold,fontSize=18\.sp/);
   assert.match(native,/if\(light\) \{\s*if\(credit\)Color\(0xFFE3F6E9\)/);
@@ -246,6 +246,33 @@ test('Mini App native parity also covers editors, loan metrics and loading surfa
   assert.match(native,/\.padding\(horizontal=10\.dp,vertical=7\.dp\)/);
   assert.match(financeData,/bannerStart = Color\.White/);
   assert.match(report,/EcoReportDonut\(total,selection,colors,210\.dp\)/);
+  assert.match(androidVersion,/versionCode = 17/);
+  assert.match(androidVersion,/versionName = "1\.0\.15"/);
+});
+
+test('Android Economic dashboard follows Mini App spatial rhythm and warm summary tiles',()=>{
+  const overview=native.slice(native.indexOf('"overview" -> {'),native.indexOf('"report" -> {'));
+  const firstCard=native.slice(native.indexOf('private fun EcoStat('),native.indexOf('private fun EcoTopCategoryStat('));
+  const categoryCard=native.slice(native.indexOf('private fun EcoTopCategoryStat('),native.indexOf('private fun EcoPanelHeader('));
+  assert.match(native,/Brush\.verticalGradient\(if\(dark\) listOf\(colors\.background,colors\.background\)/);
+  assert.match(native,/Color\(0xFFF8FBFF\),Color\(0xFFF1F5F9\)/);
+  assert.match(overview,/padding\(top=10\.dp\)\.height\(IntrinsicSize\.Max\)/);
+  assert.match(overview,/EcoPanel\(colors,Modifier\.padding\(top=8\.dp\)\)/);
+  assert.equal((overview.match(/EcoPanel\(colors,Modifier\.padding\(top=8\.dp\)\)/g)||[]).length,3);
+  assert.match(overview,/Box\(Modifier\.padding\(top=8\.dp\)\) \{\s*EcoReportPanel/);
+  assert.match(overview,/Денежные счета без кредитного лимита/);
+  assert.equal((overview.match(/Без переводов между счетами/g)||[]).length,2);
+  for(const tile of [firstCard,categoryCard]){
+    assert.match(tile,/heightIn\(min=136\.dp\)/);
+    assert.match(tile,/Color\(0xFFFFFAF2\)/);
+    assert.match(tile,/Color\(0xFFE6DDD1\)/);
+    assert.match(tile,/\.padding\(14\.dp\)/);
+    assert.match(tile,/Spacer\(Modifier\.weight\(1f\)\)/);
+    assert.match(tile,/fontSize=11\.sp/);
+  }
+  assert.match(native,/val tile=if\(light&&primary\)Color\(0xFFFFF9F2\)/);
+  assert.match(native,/val edge=if\(light&&primary\)Color\(0xFFEFD3B1\)/);
+  assert.match(native,/internal fun EcoPanel\(colors: EcoColors, modifier: Modifier = Modifier,/);
   assert.match(androidVersion,/versionCode = 17/);
   assert.match(androidVersion,/versionName = "1\.0\.15"/);
 });
