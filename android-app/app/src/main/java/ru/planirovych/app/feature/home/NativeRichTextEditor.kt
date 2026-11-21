@@ -59,6 +59,8 @@ private class RichNativeEditText(context:Context):EditText(context) {
     private var startPointerX=0f
     private var startPointerY=0f
     private var draggingContent=false
+    private var movedBeyondTap=false
+    private var pointerDownAt=0L
     private val touchConfiguration=ViewConfiguration.get(context)
     private val touchSlop=touchConfiguration.scaledTouchSlop
     private val flingScroller=OverScroller(context)
@@ -87,6 +89,8 @@ private class RichNativeEditText(context:Context):EditText(context) {
                 velocityTracker=VelocityTracker.obtain()
                 startPointerX=event.x;startPointerY=event.y
                 lastPointerY=event.y;draggingContent=false
+                movedBeyondTap=false
+                pointerDownAt=android.os.SystemClock.uptimeMillis()
                 // Own the gesture until the tap/drag decision is made.
                 // Otherwise a Compose parent or TextView selection handles MOVE first.
                 parent?.requestDisallowInterceptTouchEvent(true)
@@ -95,6 +99,7 @@ private class RichNativeEditText(context:Context):EditText(context) {
                 velocityTracker?.addMovement(event)
                 val dx=kotlin.math.abs(event.x-startPointerX)
                 val dy=kotlin.math.abs(event.y-startPointerY)
+                if(dx>touchSlop||dy>touchSlop)movedBeyondTap=true
                 if(!draggingContent && dy>touchSlop &&
                     dy>dx*1.15f && maxVerticalScroll()>0){
                     draggingContent=true
@@ -127,9 +132,21 @@ private class RichNativeEditText(context:Context):EditText(context) {
                     velocityTracker=null
                     return true
                 }
-                // No vertical drag: preserve native cursor placement and keyboard.
+                // A plain tap did not reach native MOVE handling: TextView can
+                // otherwise reuse the old selection offset. Resolve the caret
+                // explicitly from the actual touch point AFTER the native UP.
+                val isTap=!movedBeyondTap &&
+                    android.os.SystemClock.uptimeMillis()-pointerDownAt <
+                        ViewConfiguration.getLongPressTimeout()
+                val nativeHandled=super.onTouchEvent(event)
+                if(isTap){
+                    val offset=getOffsetForPosition(event.x,event.y)
+                        .coerceIn(0,text?.length?:0)
+                    setSelection(offset)
+                }
                 velocityTracker?.recycle()
                 velocityTracker=null
+                return nativeHandled
             }
             MotionEvent.ACTION_CANCEL->{
                 draggingContent=false
