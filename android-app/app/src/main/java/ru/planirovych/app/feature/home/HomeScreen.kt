@@ -39,6 +39,7 @@ import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import java.util.Locale
+import java.util.UUID
 import ru.planirovych.app.data.model.*
 import ru.planirovych.app.ui.theme.ThemeMode
 
@@ -59,13 +60,65 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     // Do not mount a bottom sheet while the search IME is animating out.
     var pendingFocusTaskId by remember{mutableStateOf<String?>(null)}
     var settings by remember { mutableStateOf(false) }
-    var creationMenu by remember { mutableStateOf(false) }
     var creationType by remember { mutableStateOf<TaskType?>(null) }
     var createHabit by remember { mutableStateOf(false) }
     var createNote by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(initialPage=0,pageCount={5})
     val pagerScope = rememberCoroutineScope()
     val sharedChat by vm.generalAi.collectAsStateWithLifecycle()
+    var pendingVoiceText by remember { mutableStateOf<String?>(null) }
+    var voiceAwaiting by remember { mutableStateOf(false) }
+    var voiceError by remember { mutableStateOf<String?>(null) }
+    val voiceInput=rememberAiChatSpeechInput(
+        dark=dark,transcribe=vm::transcribeVoice,
+        onRecognized={spoken,sendImmediately->
+            if(sendImmediately){
+                pendingVoiceText=spoken
+                voiceAwaiting=true
+                vm.loadGeneralAi(state.user?.id)
+            }
+        },
+        onError={message->voiceError=message;voiceAwaiting=false},
+        quickLauncher=true,
+        accent=if(pagerState.currentPage==4)Color(0xFFF5A52E) else Color(0xFF8050DF),
+        suggestions=if(pagerState.currentPage==4)listOf(
+            "Добавь расход", "Запиши доход", "Покажи расходы за месяц",
+            "Создай долг", "Сколько денег на счетах?"
+        )else listOf(
+            "Создай задачу", "Добавь напоминание", "Перенеси встречу",
+            "Создай привычку", "Запиши заметку"
+        )
+    )
+    // One shared authenticated Quick AI thread: the assistant reply must finish
+    // before moving away from the originating planner / finance screen.
+    LaunchedEffect(pendingVoiceText,sharedChat.projects,sharedChat.loading,sharedChat.busy){
+        val spoken=pendingVoiceText?:return@LaunchedEffect
+        if(sharedChat.loading)return@LaunchedEffect
+        val quick=sharedChat.projects.firstOrNull{project->
+            !project.isTelegram && project.chats.any{it.id==QUICK_AI_THREAD_ID}
+        }
+        if(quick==null){
+            pendingVoiceText=null;voiceAwaiting=false
+            voiceError="Общий чат с ИИ не найден. Обновите данные аккаунта."
+            return@LaunchedEffect
+        }
+        if(sharedChat.busy||sharedChat.saving){
+            pendingVoiceText=null;voiceAwaiting=false
+            voiceError="Дождитесь предыдущего ответа ИИ."
+            return@LaunchedEffect
+        }
+        pendingVoiceText=null
+        val thread=quick.chats.first{it.id==QUICK_AI_THREAD_ID}
+        vm.chooseGeneralAiChat(quick.id,QUICK_AI_THREAD_ID)
+        vm.sendGeneralAi(quick.id,QUICK_AI_THREAD_ID,UUID.randomUUID().toString(),
+            spoken,spoken,emptyList(),thread.model?:"gpt-6-luna",
+            onDone={
+                voiceAwaiting=false
+                pagerScope.launch{pagerState.animateScrollToPage(2)}
+            },
+            onFailed={message->voiceAwaiting=false;voiceError=message}
+        )
+    }
     var requestPersonalChat by remember { mutableStateOf(false) }
     LaunchedEffect(requestPersonalChat,sharedChat.projects,sharedChat.loading,sharedChat.saving){
         if(requestPersonalChat && !sharedChat.loading && !sharedChat.saving){
@@ -79,8 +132,12 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
         }
     }
     var quickNavigationHandled by remember(openGeneralAi,quickAiRequestId){mutableStateOf(false)}
-    LaunchedEffect(openGeneralAi,quickAiMode,quickAiRequestId,sharedChat.projects){
-        if((openGeneralAi || quickAiMode!=null) && !quickNavigationHandled){
+    LaunchedEffect(openGeneralAi,quickAiMode,quickAiRequestId,sharedChat.projects,state.loading){
+        if(quickAiMode=="voice" && quickAiRequestId>0 && !quickNavigationHandled && !state.loading){
+            quickNavigationHandled=true
+            onQuickAiHandled(quickAiRequestId)
+            voiceInput()
+        }else if((openGeneralAi || quickAiMode!=null) && quickAiMode!="voice" && !quickNavigationHandled){
             pagerState.scrollToPage(2)
             // Widget result and scheduled checkup alerts must open Quick Requests,
             // not whichever project conversation happened to be selected last.
@@ -124,15 +181,13 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
             overlayNewSubtaskParentId=null
             subtaskReturnToTaskId=null
             taskAiChatId=null
-            creationMenu=false
             settings=false
         }
     }
     // Never resume a previously focused chat input just because the user
     // switched back to Chats AI. A widget's explicit text command is different.
     LaunchedEffect(pagerState.currentPage) {
-        if(pagerState.currentPage==2) creationMenu=false
-        else {
+        if(pagerState.currentPage!=2) {
             focusManager.clearFocus(force=true)
             softwareKeyboard?.hide()
         }
@@ -161,45 +216,25 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     Scaffold(contentWindowInsets = WindowInsets.safeDrawing,
         containerColor = MaterialTheme.colorScheme.background,
         floatingActionButton = {
-            if(!state.loading && state.error==null && pagerState.currentPage!=2 && pagerState.currentPage!=3 && pagerState.currentPage!=4) {
-                Box {
-                    FloatingActionButton(
-                        onClick={creationMenu=!creationMenu},
-                        shape=CircleShape,
-                        containerColor=if(dark)Color(0xFFA78BFA) else Color(0xFF6D28D9),
-                        contentColor=if(dark)Color(0xFF131125) else Color.White,
-                        elevation=FloatingActionButtonDefaults.elevation(defaultElevation=7.dp)
-                    ) {
-                        Icon(if(creationMenu)Icons.Default.Close else Icons.Default.Add,
-                            "Добавить",modifier=Modifier.size(27.dp))
-                    }
-                    DropdownMenu(expanded=creationMenu,onDismissRequest={creationMenu=false}) {
-                        listOf(
-                            Triple("Добавить задачу",Icons.Default.CheckCircle,TaskType.TASK),
-                            Triple("Добавить событие",Icons.Default.Event,TaskType.EVENT),
-                            Triple("Добавить напоминание",Icons.Default.Notifications,TaskType.REMINDER),
-                        ).forEach { (label,icon,type)->
-                            DropdownMenuItem(text={Text(label)},leadingIcon={Icon(icon,null)},
-                                onClick={creationType=type;creationMenu=false})
+            if(!state.loading && state.error==null &&
+                pagerState.currentPage!=2 && pagerState.currentPage!=3 && pagerState.currentPage!=4){
+                NativeHoldActionButton(
+                    accent=if(dark)Color(0xFFA78BFA) else Color(0xFF6D28D9),
+                    foreground=if(dark)Color(0xFF131125) else Color.White,
+                    waiting=voiceAwaiting,onVoice=voiceInput,
+                    actions=listOf(
+                        NativeHoldAction("Добавить задачу",Icons.Default.CheckCircle){creationType=TaskType.TASK},
+                        NativeHoldAction("Добавить событие",Icons.Default.Event){creationType=TaskType.EVENT},
+                        NativeHoldAction("Добавить напоминание",Icons.Default.Notifications){creationType=TaskType.REMINDER},
+                        NativeHoldAction("Добавить привычку",Icons.Default.AutoAwesome){createHabit=true},
+                        NativeHoldAction("Добавить заметку",Icons.Default.StickyNote2){createNote=true},
+                        NativeHoldAction("Создать чат с ИИ",Icons.Default.SmartToy){
+                            requestPersonalChat=true
+                            vm.loadGeneralAi(state.user?.id)
+                            pagerScope.launch{pagerState.animateScrollToPage(2)}
                         }
-                        HorizontalDivider()
-                        DropdownMenuItem(text={Text("Добавить привычку")},
-                            leadingIcon={Icon(Icons.Default.AutoAwesome,null)},
-                            onClick={createHabit=true;creationMenu=false})
-                        DropdownMenuItem(text={Text("Добавить заметку")},
-                            leadingIcon={Icon(Icons.Default.StickyNote2,null)},
-                            onClick={createNote=true;creationMenu=false})
-                        HorizontalDivider()
-                        DropdownMenuItem(text={Text("Создать чат с ИИ")},
-                            leadingIcon={Icon(Icons.Default.SmartToy,null)},
-                            onClick={
-                                creationMenu=false
-                                requestPersonalChat=true
-                                vm.loadGeneralAi(state.user?.id)
-                                pagerScope.launch{pagerState.animateScrollToPage(2)}
-                            })
-                    }
-                }
+                    )
+                )
             }
         },
         bottomBar = {
@@ -279,9 +314,15 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                 quickAiMode=quickAiMode,
                 quickAiRequestId=quickAiRequestId,
                 onQuickAiHandled=onQuickAiHandled,
+                onQuickVoice=voiceInput,voiceAwaiting=voiceAwaiting,
                 modifier = Modifier.padding(padding),
             )
         }
+    }
+    voiceError?.let{message->
+        AlertDialog(onDismissRequest={voiceError=null},
+            title={Text("Голосовой запрос")},text={Text(message)},
+            confirmButton={TextButton(onClick={voiceError=null}){Text("Понятно")}})
     }
     creationType?.let { type ->
         NativeQuickTaskCreateSheet(type=type,vm=vm,dark=dark,
