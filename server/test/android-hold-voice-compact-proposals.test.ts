@@ -39,6 +39,16 @@ test('Android long-press drag actions provide voice, visual feedback and haptics
   assert.match(economic,/NativeHoldActionButton\(/);
   assert.match(economic,/NativeHoldAction\("Добавить кредит"/);
   assert.doesNotMatch(economic,/DropdownMenu\(expanded=addMenuOpen/);
+  // A plain tap must show the preview long enough for the user to notice it.
+  assert.match(launcher,/releasedPreview=true/);
+  assert.match(launcher,/delay\(2300\)/);
+  assert.match(launcher,/Удерживайте и ведите к действию/);
+  assert.match(launcher,/cy-28\.dp\.toPx\(\)/);
+  assert.match(launcher,/stroke=2\.3\.dp\.toPx\(\)/);
+  assert.match(home,/onMenuVisibilityChange=\{plannerMenuOpen=it\}/);
+  assert.match(economic,/onMenuVisibilityChange=\{economicMenuOpen=it\}/);
+  assert.match(home,/Color\.Black\.copy\(alpha=if\(dark\)\.36f else \.26f\)/);
+  assert.match(economic,/Color\.Black\.copy\(alpha=if\(dark\)\.40f else \.28f\)/);
 });
 
 test('quick voice records locally, submits to existing AI chat and opens replies afterwards',()=>{
@@ -56,4 +66,11 @@ test('quick voice records locally, submits to existing AI chat and opens replies
   assert.match(voice,/Icon\(Icons\.Default\.Send/);
   assert.match(rich,/maxVerticalScroll\(\)>0/);
   assert.match(rich,/Consume pre-slop MOVE/);
+  assert.match(rich,/cancelNativeGesture\(event\)/);
+  assert.match(rich,/getOffsetForPosition\(event\.x,event\.y\)/);
+  assert.match(rich,/InputMethodManager\.SHOW_IMPLICIT/);
+  assert.match(voice,/financialSuggestions:Set<String>/);
+  assert.match(voice,/Color\(0xFFF3AC43\)/);
+  assert.match(voice,/fontSize=21\.sp/);
+  assert.match(voice,/OutlinedButton\(onClick=\{releaseRecorder\(true\)\}/);
 });

@@ -160,7 +160,9 @@ internal fun NativeGeneralAiChatPage(
             "Создай задачу", "Добавь напоминание", "Перенеси встречу",
             "Создай привычку", "Запиши заметку",
             "Запиши расход", "Создай счёт", "Сделай перевод", "Создай долг"
-        )
+        ),
+        financialSuggestions=setOf(
+            "Запиши расход","Создай счёт","Сделай перевод","Создай долг")
     )
     LaunchedEffect(quickAiRequestId,quickAiMode,chatVisible,thread?.id,state.loading){
         if(quickAiMode==null || quickAiRequestId<=0 ||
