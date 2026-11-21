@@ -69,6 +69,9 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     var pendingVoiceText by remember { mutableStateOf<String?>(null) }
     var voiceAwaiting by remember { mutableStateOf(false) }
     var voiceError by remember { mutableStateOf<String?>(null) }
+    // Voice launched by a widget is always the planner, independent of the
+    // last open tab (including Economych).
+    var voiceFromFinance by remember { mutableStateOf(false) }
     val voiceInput=rememberAiChatSpeechInput(
         dark=dark,transcribe=vm::transcribeVoice,
         onRecognized={spoken,sendImmediately->
@@ -80,13 +83,14 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
         },
         onError={message->voiceError=message;voiceAwaiting=false},
         quickLauncher=true,
-        accent=if(pagerState.currentPage==4)Color(0xFFF5A52E) else Color(0xFF8050DF),
-        suggestions=if(pagerState.currentPage==4)listOf(
+        accent=if(voiceFromFinance)Color(0xFFF5A52E) else Color(0xFF8050DF),
+        suggestions=if(voiceFromFinance)listOf(
             "Добавь расход", "Запиши доход", "Покажи расходы за месяц",
             "Создай долг", "Сколько денег на счетах?"
         )else listOf(
             "Создай задачу", "Добавь напоминание", "Перенеси встречу",
-            "Создай привычку", "Запиши заметку"
+            "Создай привычку", "Запиши заметку", "Запиши расход",
+            "Создай счёт", "Переведи деньги между счетами", "Создай долг"
         )
     )
     // One shared authenticated Quick AI thread: the assistant reply must finish
@@ -136,6 +140,8 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
         if(quickAiMode=="voice" && quickAiRequestId>0 && !quickNavigationHandled && !state.loading){
             quickNavigationHandled=true
             onQuickAiHandled(quickAiRequestId)
+            voiceFromFinance=false
+            pagerState.scrollToPage(0)
             voiceInput()
         }else if((openGeneralAi || quickAiMode!=null) && quickAiMode!="voice" && !quickNavigationHandled){
             pagerState.scrollToPage(2)
@@ -221,7 +227,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                 NativeHoldActionButton(
                     accent=if(dark)Color(0xFFA78BFA) else Color(0xFF6D28D9),
                     foreground=if(dark)Color(0xFF131125) else Color.White,
-                    waiting=voiceAwaiting,onVoice=voiceInput,
+                    waiting=voiceAwaiting,onVoice={voiceFromFinance=false;voiceInput()},
                     actions=listOf(
                         NativeHoldAction("Добавить задачу",Icons.Default.CheckCircle){creationType=TaskType.TASK},
                         NativeHoldAction("Добавить событие",Icons.Default.Event){creationType=TaskType.EVENT},
@@ -314,7 +320,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                 quickAiMode=quickAiMode,
                 quickAiRequestId=quickAiRequestId,
                 onQuickAiHandled=onQuickAiHandled,
-                onQuickVoice=voiceInput,voiceAwaiting=voiceAwaiting,
+                onQuickVoice={voiceFromFinance=true;voiceInput()},voiceAwaiting=voiceAwaiting,
                 modifier = Modifier.padding(padding),
             )
         }
