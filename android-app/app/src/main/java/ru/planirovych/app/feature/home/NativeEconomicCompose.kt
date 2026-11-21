@@ -1,6 +1,7 @@
 package ru.planirovych.app.feature.home
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -67,6 +68,10 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
     var section by remember(userId) { mutableStateOf("overview") }
     var editor by remember(userId) { mutableStateOf<EcoEditorRequest?>(null) }
     var economicMenuOpen by remember { mutableStateOf(false) }
+    val economicScrimAlpha by animateFloatAsState(
+        targetValue=if(economicMenuOpen)if(dark).29f else .21f else 0f,
+        animationSpec=tween(155),label="economych-action-scrim"
+    )
     var filtersOpen by remember(userId) { mutableStateOf(false) }
     var closedOpen by remember(userId) { mutableStateOf(false) }
     val economicPreferences = remember(context) { context.getSharedPreferences("economic_ui",android.content.Context.MODE_PRIVATE) }
@@ -531,9 +536,9 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                 }
             }
             }
-            if(economicMenuOpen&&editor==null){
+            if(economicScrimAlpha>0.001f && editor==null){
                 Box(Modifier.matchParentSize().background(
-                    Color.Black.copy(alpha=if(dark).40f else .28f)))
+                    Color.Black.copy(alpha=economicScrimAlpha)))
             }
             if(editor==null) {
                 Box(Modifier.align(Alignment.BottomEnd).padding(end=18.dp,bottom=18.dp)) {
