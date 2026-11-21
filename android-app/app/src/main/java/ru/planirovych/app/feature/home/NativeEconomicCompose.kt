@@ -276,7 +276,7 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                                     "Все счета",colors,{section="accounts"})
                                 current.ecoItems("accounts").take(4).forEach { account ->
                                     Spacer(Modifier.height(9.dp))
-                                    EcoAccountTile(account,colors,{editor=EcoEditorRequest("accounts",account)})
+                                    EcoPanel(colors) { EcoAccountSummary(account,colors) }
                                 }
                                 Spacer(Modifier.height(10.dp))
                                 EcoInlineAction("Добавить счёт",colors){editor=EcoEditorRequest("accounts")}
@@ -332,26 +332,7 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                         }
                         items(current.ecoItems("accounts"),key={ "account-"+it.ecoText("id") }) { account ->
                             EcoPanel(colors) {
-                                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                                    Icon(if(account.ecoText("accountType")=="CREDIT_CARD")
-                                        Icons.Default.CreditCard else Icons.Default.AccountBalanceWallet,
-                                        null,tint=colors.gold,modifier=Modifier.size(25.dp))
-                                    Spacer(Modifier.width(10.dp))
-                                    Text(account.ecoText("name"),Modifier.weight(1f),color=colors.text,
-                                        fontWeight=FontWeight.Bold,fontSize=16.sp,maxLines=1,
-                                        overflow=TextOverflow.Ellipsis)
-                                    Text(when {
-                                        account.ecoText("accountType")=="CREDIT_CARD" -> "Кредитная карта"
-                                        account.ecoBool("isPrimary") -> "Основной"
-                                        else -> ""
-                                    },color=colors.goldSoft,fontSize=10.sp)
-                                }
-                                Spacer(Modifier.height(8.dp))
-                                Text(ecoRubles(account.ecoText("balanceMinor")),color=colors.text,
-                                    fontWeight=FontWeight.ExtraBold,fontSize=21.sp)
-                                Text(if(account.ecoText("accountType")=="CREDIT_CARD")
-                                    "Лимит: "+ecoRubles(account.ecoText("creditLimitMinor"))
-                                    else "Текущий баланс",fontSize=11.sp,color=colors.muted)
+                                EcoAccountSummary(account,colors)
                                 Spacer(Modifier.height(4.dp))
                                 Row(verticalAlignment=Alignment.CenterVertically) {
                                     EcoQuickAction("Изменить",colors,false){editor=EcoEditorRequest("accounts",account)}
@@ -524,7 +505,8 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                 Box(Modifier.align(Alignment.BottomEnd).padding(end=18.dp,bottom=18.dp)) {
                     FloatingActionButton(
                         onClick={addMenuOpen=true},shape=CircleShape,
-                        containerColor=Color(0xFFF5A52E),contentColor=Color(0xFF2B1B08)
+                        containerColor=if(dark) Color(0xFFF5A52E) else colors.goldSoft,
+                        contentColor=if(dark) Color(0xFF2B1B08) else Color.White
                     ) { Icon(Icons.Default.Add,"Добавить финансовую запись",Modifier.size(28.dp)) }
                     DropdownMenu(expanded=addMenuOpen,onDismissRequest={addMenuOpen=false},
                         modifier=Modifier.background(colors.panel)) {
@@ -660,9 +642,9 @@ private fun EcoHero(colors: EcoColors) {
 @Composable
 private fun EcoStat(title:String,minor:String,subtitle:String,colors:EcoColors,
     modifier:Modifier,positive:Boolean) {
-    Column(modifier.height(145.dp).clip(RoundedCornerShape(15.dp)).background(colors.panel)
-        .border(1.dp,colors.outline,RoundedCornerShape(15.dp)).padding(13.dp),
-        verticalArrangement=Arrangement.spacedBy(9.dp)) {
+    Column(modifier.height(120.dp).clip(RoundedCornerShape(15.dp)).background(colors.panel)
+        .border(1.dp,colors.outline,RoundedCornerShape(15.dp)).padding(12.dp),
+        verticalArrangement=Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment=Alignment.CenterVertically) {
             Icon(when {title.startsWith("Доходы")->Icons.Default.SouthWest
                 title.startsWith("Расходы")->Icons.Default.NorthEast
@@ -679,19 +661,19 @@ private fun EcoStat(title:String,minor:String,subtitle:String,colors:EcoColors,
 }
 @Composable
 private fun EcoTopCategoryStat(category:String,minor:String,colors:EcoColors,modifier:Modifier) {
-    Column(modifier.height(145.dp).clip(RoundedCornerShape(15.dp))
+    Column(modifier.height(120.dp).clip(RoundedCornerShape(15.dp))
         .background(colors.panel).border(1.dp,colors.outline,RoundedCornerShape(15.dp))
-        .padding(13.dp),verticalArrangement=Arrangement.spacedBy(9.dp)) {
+        .padding(12.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment=Alignment.CenterVertically) {
             Icon(Icons.Default.PieChart,null,tint=colors.gold,modifier=Modifier.size(19.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Больше всего расходов",color=colors.muted,fontSize=12.sp,lineHeight=16.sp)
+            Text("Траты в категориях",color=colors.muted,fontSize=12.sp,
+                lineHeight=16.sp,maxLines=2)
         }
-        Text(category.ifBlank{"Пока нет"},color=colors.text,fontSize=18.sp,
-            fontWeight=FontWeight.ExtraBold,maxLines=2,overflow=TextOverflow.Ellipsis,
-            lineHeight=21.sp)
-        Text(if(category.isBlank())"Нет расходов" else ecoWholeRubles(minor)+" за месяц",
-            fontSize=10.sp,color=colors.muted,maxLines=2)
+        Text(ecoWholeRubles(minor),color=colors.text,fontSize=18.sp,
+            fontWeight=FontWeight.ExtraBold,maxLines=1,overflow=TextOverflow.Ellipsis)
+        Text(category.ifBlank { "Нет расходов" },fontSize=10.sp,
+            lineHeight=15.sp,color=colors.muted,maxLines=2,overflow=TextOverflow.Ellipsis)
     }
 }
 @Composable
@@ -708,48 +690,27 @@ private fun EcoPanelHeader(title:String,subtitle:String,action:String,colors:Eco
     }
 }
 @Composable
-private fun EcoAccountTile(account:JsonObject,colors:EcoColors,onClick:()->Unit) {
-    val primary=account.ecoBool("isPrimary")
-    val credit=account.ecoText("accountType")=="CREDIT_CARD"
-    val dark=colors.background==Color(0xFF15151C)
-    Column(Modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(13.dp))
-        .background(if(primary && dark)
-            Brush.linearGradient(listOf(Color(0xFF3F3128),Color(0xFF292831)))
-            else if(primary)Brush.linearGradient(listOf(Color(0xFFFFECD2),Color(0xFFFFF5E9)))
-            else Brush.linearGradient(listOf(colors.panel2,colors.panel2)))
-        .border(1.dp,if(primary)colors.gold.copy(alpha=.35f)
-            else colors.outline,RoundedCornerShape(13.dp))
-        .clickable(onClick=onClick).padding(13.dp),
-        verticalArrangement=Arrangement.SpaceBetween) {
-        // Align account name and type on the same row; the limit lives below.
-        // Keeping them in a single centred row avoids offsetting the name
-        // against a two-line block on the right.
-        Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
-            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                Icon(if(credit) Icons.Default.CreditCard else Icons.Default.AccountBalanceWallet,
-                    null,tint=colors.gold,modifier=Modifier.size(21.dp))
-                Spacer(Modifier.width(7.dp))
-                Text(account.ecoText("name"),Modifier.weight(1f),
-                    color=if(primary && dark) Color(0xFFF4EFE8) else colors.text,
-                    fontSize=14.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
-                if(credit) Text("Кредитная карта",color=colors.goldSoft,fontSize=10.sp,
-                    maxLines=1)
-                else if(primary) Text("Основной",color=colors.goldSoft,fontSize=10.sp)
-            }
-            if(credit) {
-                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                    if(primary) Text("Основной",color=colors.goldSoft,fontSize=10.sp)
-                    Spacer(Modifier.weight(1f))
-                    Text("Лимит: "+ecoRubles(account.ecoText("creditLimitMinor")),
-                        fontSize=10.sp,color=colors.muted,maxLines=1,
-                        overflow=TextOverflow.Ellipsis)
-                }
-            }
-        }
-        Text(ecoRubles(account.ecoText("balanceMinor")),fontSize=19.sp,
-            fontWeight=FontWeight.ExtraBold,color=if(primary && dark)
-                Color.White else colors.text)
+private fun EcoAccountSummary(account:JsonObject,colors:EcoColors) {
+    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+        Icon(if(account.ecoText("accountType")=="CREDIT_CARD")
+            Icons.Default.CreditCard else Icons.Default.AccountBalanceWallet,
+            null,tint=colors.gold,modifier=Modifier.size(25.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(account.ecoText("name"),Modifier.weight(1f),color=colors.text,
+            fontWeight=FontWeight.Bold,fontSize=16.sp,maxLines=1,
+            overflow=TextOverflow.Ellipsis)
+        Text(when {
+            account.ecoText("accountType")=="CREDIT_CARD" -> "Кредитная карта"
+            account.ecoBool("isPrimary") -> "Основной"
+            else -> ""
+        },color=colors.goldSoft,fontSize=10.sp)
     }
+    Spacer(Modifier.height(8.dp))
+    Text(ecoRubles(account.ecoText("balanceMinor")),color=colors.text,
+        fontWeight=FontWeight.ExtraBold,fontSize=21.sp)
+    Text(if(account.ecoText("accountType")=="CREDIT_CARD")
+        "Лимит: "+ecoRubles(account.ecoText("creditLimitMinor"))
+        else "Текущий баланс",fontSize=11.sp,color=colors.muted)
 }
 @Composable
 private fun EcoQuickAction(label:String,colors:EcoColors,add:Boolean=true,onClick:()->Unit) {
