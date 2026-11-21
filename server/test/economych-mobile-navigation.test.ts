@@ -34,7 +34,7 @@ test('Mini App and Android have 5 compact icon-only tabs with a warm Economic la
   assert.match(home,/Spacer\(Modifier\.windowInsetsBottomHeight\(WindowInsets\.navigationBars\)\)/);
   assert.match(home,/selectedIconColor=if\(index==4\)/);
   assert.match(workspace,/4 -> NativeEconomicPage\(userId=state\.user\?\.id,dark=dark,active=pagerState\.currentPage==4\)/);
-  assert.match(androidVersion,/versionCode = 16/);
+  assert.match(androidVersion,/versionCode = 17/);
 });
 
 test('both mobile surfaces reuse the actual responsive financial overview and editor',()=>{
@@ -125,4 +125,22 @@ test('Economic financial UI has four balanced tiles and stable native sheets',()
   assert.match(editor,/height\(stableSheetHeight\)/);
   assert.match(editor,/Modifier\.weight\(1f\)\.verticalScroll\(rememberScrollState\(\)\)/);
   assert.doesNotMatch(editor,/weight\(1f,fill=false\)/);
+});
+
+test('Economic mobile polish archives closed obligations and animates tab changes',()=>{
+  assert.match(economic,/econ-operations-heading/);
+  assert.match(economic,/snapshot\.debts\.filter\(d => !d\.isClosed\)/);
+  assert.match(economic,/snapshot\.loans\.filter\(l => !l\.isClosed\)/);
+  assert.match(economic,/econ-closed-toggle/);
+  assert.match(economic,/hidden=\{!closedOpen\}/);
+  assert.match(economicCss,/\.econ-closed-content\[hidden\]\{display:none\}/);
+  assert.match(native,/AnimatedContent\(/);
+  assert.match(native,/slideInHorizontally\(/);
+  assert.match(native,/closedDebts/);
+  assert.match(native,/closedLoans/);
+  assert.match(native,/height\(120\.dp\)/);
+  assert.match(native,/Arrangement\.spacedBy\(1\.dp\)/);
+  assert.match(native,/Text\("Последние операции",fontSize=16\.sp/);
+  assert.match(androidVersion,/versionCode = 17/);
+  assert.match(androidVersion,/versionName = "1\.0\.15"/);
 });
