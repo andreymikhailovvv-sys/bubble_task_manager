@@ -70,6 +70,6 @@ test('Android focus layout shows collaboration badge below heading and date cont
 
 test('new Android release version is incremented for Play and GitHub updates',()=>{
   const gradle=readFileSync(new URL('../../android-app/app/build.gradle.kts',import.meta.url),'utf8');
-  assert.match(gradle,/versionCode = 17/);
-  assert.match(gradle,/versionName = "1\.0\.15"/);
+  assert.match(gradle,/versionCode = 18/);
+  assert.match(gradle,/versionName = "1\.0\.16"/);
 });

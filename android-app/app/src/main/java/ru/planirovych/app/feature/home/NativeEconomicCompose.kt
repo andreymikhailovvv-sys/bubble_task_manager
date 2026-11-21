@@ -117,13 +117,34 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
         busy = true
         scope.launch {
             try {
-                if (record == null) api.economicCreate(resource, payload)
-                else api.economicUpdate(resource, record.ecoText("id"), payload)
-                editor = null
-                error = ""
+                // PATCH returns {ok:true}, not an updated entity. Check it,
+                // then fetch the authoritative records before closing.
+                val result=if(record==null)api.economicCreate(resource,payload)
+                    else api.economicUpdate(resource,record.ecoText("id"),payload)
+                if(record!=null && !result.ecoBool("ok"))
+                    throw IllegalStateException("Сервер не подтвердил сохранение изменений")
+                // The server has committed. Do not leave an editable form
+                // open just because the follow-up GET failed: retrying POST
+                // would otherwise duplicate a financial record.
+                editor=null
+                error=""
+                // A changed account may remove an operation from the currently
+                // filtered list. Show all operations after updating.
+                if(resource=="operations"){
+                    kindFilter=""
+                    accountFilter=""
+                    categoryFilter=""
+                    runCatching{api.economicOperations(null,null,null)}.onSuccess{updated->
+                        operations=updated.ecoItems("operations")
+                        nextCursor=updated.ecoText("nextCursor")
+                    }.onFailure{error="Изменения сохранены, но список операций ещё не обновился."}
+                }
+                runCatching{api.economicSnapshot()}.onSuccess{snapshot=it}
+                    .onFailure{error="Изменения сохранены, но финансовый обзор пока не обновился."}
                 refresh()
-            } catch (cause: Exception) { error = readableEconomicError(cause) }
-            finally { busy = false }
+            } catch (cause: Exception) {
+                error=readableEconomicError(cause)
+            } finally { busy=false }
         }
     }
     fun remove(resource: String, record: JsonObject) {
@@ -529,6 +550,7 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
             ModalBottomSheet(
                 onDismissRequest={filtersOpen=false},
                 sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),
+                sheetGesturesEnabled=false,
                 containerColor=colors.panel,contentColor=colors.text,
                 dragHandle={BottomSheetDefaults.DragHandle(color=colors.muted)}
             ) {

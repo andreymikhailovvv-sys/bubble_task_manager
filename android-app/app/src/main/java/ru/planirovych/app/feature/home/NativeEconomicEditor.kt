@@ -166,7 +166,9 @@ internal fun EcoEditorSheet(
                             require(value("accountId").isNotBlank()){"Выберите счёт для учёта долга"}
                         put("direction",value("direction"))
                         put("counterparty",value("counterparty").trim())
-                        put("amountMinor",amount); put("paidMinor",paid)
+                        val closing=editing && value("isClosed")=="yes"
+                        put("amountMinor",amount)
+                        put("paidMinor",if(closing)amount else paid)
                         put("postedToAccount",value("postedToAccount")=="yes")
                         put("accountId",if(value("postedToAccount")=="yes")
                             JsonPrimitive(value("accountId")) else JsonNull)
@@ -237,6 +239,9 @@ internal fun EcoEditorSheet(
     ModalBottomSheet(
         onDismissRequest={if(!saving)onDismiss()},
         sheetState=stableSheetState,
+        // The sheet must not compete with the form for a downward swipe at
+        // the end of the scroll range. Dismiss via the visible X/Cancel.
+        sheetGesturesEnabled=false,
         containerColor=colors.panel,
         contentColor=colors.text,
         dragHandle={BottomSheetDefaults.DragHandle(color=colors.muted)}
@@ -257,7 +262,8 @@ internal fun EcoEditorSheet(
             Spacer(Modifier.height(10.dp))
             HorizontalDivider(color=colors.outline)
             // Scroll only the form. Header/footer never alter the sheet's anchor.
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())
+            val formScroll=rememberScrollState()
+            Column(Modifier.weight(1f).verticalScroll(formScroll)
                 .padding(vertical=12.dp),verticalArrangement=Arrangement.spacedBy(11.dp)) {
                 when(type) {
                     "operations" -> {

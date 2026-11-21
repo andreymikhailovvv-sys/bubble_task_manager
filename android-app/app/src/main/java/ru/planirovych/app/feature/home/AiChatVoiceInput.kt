@@ -61,7 +61,7 @@ internal fun rememberAiChatSpeechInput(
     val transcription by rememberUpdatedState(transcribe)
     var stage by remember { mutableStateOf(VoiceRecordingStage.IDLE) }
     var elapsedSeconds by remember { mutableIntStateOf(0) }
-    var amplitude by remember { mutableFloatStateOf(.15f) }
+    var amplitude by remember { mutableFloatStateOf(0f) }
     var startedAt by remember { mutableLongStateOf(0L) }
     val recorder=remember { mutableStateOf<MediaRecorder?>(null) }
     val recording=remember { mutableStateOf<File?>(null) }
@@ -100,7 +100,7 @@ internal fun rememberAiChatSpeechInput(
             native.start()
             startedAt=SystemClock.elapsedRealtime()
             elapsedSeconds=0
-            amplitude=.15f
+            amplitude=0f
             stage=VoiceRecordingStage.RECORDING
         }catch(error:Exception){
             releaseRecorder(true)
@@ -158,7 +158,11 @@ internal fun rememberAiChatSpeechInput(
         while(stage==VoiceRecordingStage.RECORDING){
             val second=((SystemClock.elapsedRealtime()-startedAt)/1000L).toInt()
             if(elapsedSeconds!=second)elapsedSeconds=second
-            amplitude=((recorder.value?.maxAmplitude?:0)/25000f).coerceIn(.12f,1f)
+            // MediaRecorder.maxAmplitude samples the actual microphone signal.
+            // Apply a small noise gate so silence stays still rather than
+            // displaying the old looping fake listening animation.
+            val peak=recorder.value?.maxAmplitude?:0
+            amplitude=if(peak<850)0f else ((peak-850f)/21000f).coerceIn(0f,1f)
             if(second>=120){
                 finishRecording(false)
                 break
@@ -187,7 +191,7 @@ internal fun rememberAiChatSpeechInput(
             ),label="voice-wave-phase"
         )
         val smoothAmplitude by animateFloatAsState(
-            targetValue=amplitude,animationSpec=tween(110),label="voice-volume"
+            targetValue=amplitude,animationSpec=tween(125),label="voice-volume"
         )
         if(quickLauncher){
             Dialog(onDismissRequest={},properties=DialogProperties(
@@ -201,7 +205,7 @@ internal fun rememberAiChatSpeechInput(
                         Text("Скажите, что нужно сделать",color=Color.White,
                             fontWeight=FontWeight.Bold,fontSize=20.sp)
                         Text("Примеры голосовых запросов",color=Color(0xFFB9C4DA),fontSize=12.sp)
-                        suggestions.take(5).forEach{hint->
+                        suggestions.take(9).forEach{hint->
                             Surface(shape=RoundedCornerShape(50),
                                 color=accent.copy(alpha=.16f),
                                 border=BorderStroke(1.dp,accent.copy(alpha=.42f))){
@@ -210,39 +214,54 @@ internal fun rememberAiChatSpeechInput(
                             }
                         }
                     }
-                    val radius by animateFloatAsState(
-                        targetValue=smoothAmplitude,animationSpec=tween(90),label="fab-voice-amp")
-                    Box(Modifier.align(Alignment.BottomEnd)
-                        .padding(end=8.dp,bottom=90.dp).size(164.dp),
-                        contentAlignment=Alignment.Center){
-                        Canvas(Modifier.fillMaxSize()){
-                            val center=Offset(size.width/2,size.height/2)
-                            for(i in 0..3){
-                                val variation=(.6f+.4f*kotlin.math.abs(sin(phase+i*1.2f)))
-                                val wave=if(recordingNow)variation*(.65f+.35f*radius) else .36f
-                                drawCircle(accent.copy(alpha=(.19f-i*.035f)*wave),
-                                    radius=size.minDimension*(.23f+i*.095f)*wave+.18f*size.minDimension,
-                                    center=center)
-                                drawCircle(accent.copy(alpha=.6f*wave),
-                                    radius=size.minDimension*(.25f+i*.08f)*wave+.14f*size.minDimension,
-                                    center=center,style=androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx()))
+                    // Timer/cancel and send FAB share one baseline in the same row.
+                    // The rings are driven by measured mic amplitude, not by
+                    // a free-running sine animation during silence.
+                    Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(start=22.dp,end=14.dp,bottom=18.dp),
+                        verticalAlignment=Alignment.CenterVertically,
+                        horizontalArrangement=Arrangement.SpaceBetween){
+                        Column(Modifier.weight(1f),
+                            horizontalAlignment=Alignment.Start,
+                            verticalArrangement=Arrangement.spacedBy(5.dp)){
+                            Text(if(recordingNow)
+                                String.format(java.util.Locale.ROOT,"%02d:%02d",
+                                    elapsedSeconds/60,elapsedSeconds%60)
+                                else "Обработка речи…",
+                                color=Color.White,fontSize=14.sp)
+                            TextButton(onClick={releaseRecorder(true)},enabled=recordingNow,
+                                contentPadding=PaddingValues(horizontal=0.dp,vertical=0.dp)){
+                                Text("Отменить",color=Color.White,fontSize=14.sp)
                             }
                         }
-                        FloatingActionButton(onClick={if(recordingNow)finishRecording(true)},
-                            shape=CircleShape,containerColor=accent,
-                            contentColor=Color.White,modifier=Modifier.size(62.dp)){
-                            if(recordingNow)Icon(Icons.Default.Send,"Отправить голосовой запрос",Modifier.size(25.dp))
-                            else CircularProgressIndicator(Modifier.size(22.dp),color=Color.White,strokeWidth=2.dp)
-                        }
-                    }
-                    Column(Modifier.align(Alignment.BottomStart)
-                        .navigationBarsPadding().padding(start=24.dp,bottom=34.dp),
-                        verticalArrangement=Arrangement.spacedBy(4.dp)){
-                        Text(if(recordingNow)String.format(java.util.Locale.ROOT,"%02d:%02d",
-                            elapsedSeconds/60,elapsedSeconds%60) else "Обработка речи…",
-                            color=Color.White,fontSize=13.sp)
-                        TextButton(onClick={releaseRecorder(true)},enabled=recordingNow){
-                            Text("Отменить",color=Color.White,fontSize=14.sp)
+                        Box(Modifier.size(154.dp),contentAlignment=Alignment.Center){
+                            Canvas(Modifier.fillMaxSize()){
+                                val center=Offset(size.width/2,size.height/2)
+                                val level=if(recordingNow)smoothAmplitude.coerceIn(0f,1f) else 0f
+                                for(i in 0..3){
+                                    val radius=size.minDimension*(.23f+i*.072f+level*(.09f+i*.047f))
+                                    val ringAlpha=if(level<.035f){
+                                        if(i==0).18f else 0f
+                                    }else (.12f+level*.35f)*(1f-i*.18f)
+                                    if(ringAlpha>0f){
+                                        drawCircle(accent.copy(alpha=ringAlpha*.35f),
+                                            radius=radius,center=center)
+                                        drawCircle(accent.copy(alpha=ringAlpha),
+                                            radius=radius,center=center,
+                                            style=androidx.compose.ui.graphics.drawscope.Stroke(
+                                                (1.5f+level*2f).dp.toPx()))
+                                    }
+                                }
+                            }
+                            FloatingActionButton(onClick={if(recordingNow)finishRecording(true)},
+                                shape=CircleShape,containerColor=accent,
+                                contentColor=Color.White,modifier=Modifier.size(62.dp)){
+                                if(recordingNow)Icon(Icons.Default.Send,"Отправить голосовой запрос",
+                                    Modifier.size(25.dp))
+                                else CircularProgressIndicator(Modifier.size(22.dp),
+                                    color=Color.White,strokeWidth=2.dp)
+                            }
                         }
                     }
                 }

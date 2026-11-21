@@ -1,9 +1,13 @@
 package ru.planirovych.app.feature.home
 
+import android.os.SystemClock
+import android.view.ViewConfiguration
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,13 +28,16 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.*
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 internal data class NativeHoldAction(val title:String,val icon:ImageVector,val select:()->Unit)
 
-/** Hold, then drag left to talk or upward to choose an existing action.
- * The overlay has no blocking backdrop: the underlying scroll surface is unchanged
- * until the user performs the intentional long press.
+/** The choices are revealed on ACTION_DOWN. Releasing without selecting hides
+ * the preview; holding and sliding activates a choice on ACTION_UP. A Popup
+ * keeps text unconstrained by the FAB's 56dp layout width.
  */
 @Composable
 internal fun NativeHoldActionButton(
@@ -41,86 +48,134 @@ internal fun NativeHoldActionButton(
     val haptics=LocalHapticFeedback.current
     val density=LocalDensity.current
     val unit=with(density){1.dp.toPx()}
-    var open by remember{mutableStateOf(false)}
-    var selection by remember{mutableIntStateOf(-2)}
-    var offsetX by remember{mutableFloatStateOf(0f)}
-    var offsetY by remember{mutableFloatStateOf(0f)}
-    fun changeSelection(next:Int){
+    val latestActions by rememberUpdatedState(actions)
+    val latestVoice by rememberUpdatedState(onVoice)
+    var open by remember { mutableStateOf(false) }
+    var selection by remember { mutableIntStateOf(-2) }
+    val teal=Color(0xFF37B6B1)
+
+    fun choose(next:Int){
         if(next!=selection){
             selection=next
-            if(next>=-1)haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            if(next>=-1)haptics.performHapticFeedback(HapticFeedbackType.LongPress)
         }
     }
-    fun activate(index:Int){
-        open=false;selection=-2
-        if(index==-1)onVoice()
-        else if(index in actions.indices)actions[index].select()
+    fun activate(target:Int){
+        open=false
+        selection=-2
+        if(target==-1)latestVoice()
+        else latestActions.getOrNull(target)?.select?.invoke()
     }
     Box(Modifier.size(56.dp)){
-        if(open){
-            // Non-modal radial choices: upward stack plus the microphone on the left.
-            actions.forEachIndexed{index,action->
-                val chosen=selection==index
-                val scale by animateFloatAsState(if(chosen)1.09f else 1f,label="action-hover")
-                Row(Modifier.align(Alignment.BottomEnd)
-                    .offset(y=(-(72+index*57)).dp)
-                    .graphicsLayer{scaleX=scale;scaleY=scale}
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(if(chosen)accent else MaterialTheme.colorScheme.surface)
-                    .border(1.dp,accent.copy(alpha=if(chosen)1f else .35f),RoundedCornerShape(24.dp))
-                    .padding(horizontal=12.dp,vertical=9.dp),
-                    verticalAlignment=Alignment.CenterVertically,
-                    horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                    Icon(action.icon,null,tint=if(chosen)foreground else accent,
-                        modifier=Modifier.size(18.dp))
-                    Text(action.title,fontSize=12.sp,
-                        color=if(chosen)foreground else MaterialTheme.colorScheme.onSurface,
-                        maxLines=1)
+        if(open && !waiting){
+            // Draw in the popup, not inside a 56dp Box; otherwise every text
+            // label is measured as a single letter.
+            val height=(actions.size*58+86).dp
+            Popup(alignment=Alignment.BottomEnd,offset=IntOffset.Zero,
+                properties=PopupProperties(focusable=false,clippingEnabled=false)){
+                Box(Modifier.width(254.dp).height(height)){
+                    Canvas(Modifier.fillMaxSize()){
+                        val x=size.width-28.dp.toPx()
+                        val fabY=size.height-28.dp.toPx()
+                        val firstY=size.height-92.dp.toPx()
+                        val lastY=size.height-(92+(actions.size-1)*58).dp.toPx()
+                        drawLine(teal.copy(alpha=.60f),start=androidx.compose.ui.geometry.Offset(x,fabY),
+                            end=androidx.compose.ui.geometry.Offset(x,lastY),strokeWidth=1.8.dp.toPx())
+                        // Short dashes mark each connector between the stacked actions.
+                        actions.forEachIndexed{index,_->
+                            val y=firstY-index*58.dp.toPx()
+                            drawCircle(teal.copy(alpha=.75f),radius=2.3.dp.toPx(),
+                                center=androidx.compose.ui.geometry.Offset(x,y))
+                        }
+                        drawLine(teal.copy(alpha=.60f),
+                            start=androidx.compose.ui.geometry.Offset(x-28.dp.toPx(),fabY),
+                            end=androidx.compose.ui.geometry.Offset(x-79.dp.toPx(),fabY),
+                            strokeWidth=1.8.dp.toPx())
+                    }
+                    actions.forEachIndexed{index,action->
+                        val chosen=selection==index
+                        val scale by animateFloatAsState(if(chosen)1.18f else 1f,
+                            label="action-hover-$index")
+                        Row(Modifier.align(Alignment.BottomEnd)
+                            .offset(y=(-(72+index*58)).dp)
+                            .width(222.dp)
+                            .graphicsLayer{scaleX=scale;scaleY=scale}
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.surface)
+                            .background(if(chosen)teal.copy(alpha=.19f) else Color.Transparent)
+                            .border(1.dp,if(chosen)teal else MaterialTheme.colorScheme.outlineVariant,
+                                RoundedCornerShape(16.dp))
+                            .padding(horizontal=13.dp,vertical=10.dp),
+                            verticalAlignment=Alignment.CenterVertically,
+                            horizontalArrangement=Arrangement.spacedBy(11.dp)){
+                            Icon(action.icon,null,tint=if(chosen)teal else accent.copy(alpha=.78f),
+                                modifier=Modifier.size(19.dp))
+                            Text(action.title,Modifier.weight(1f),fontSize=13.sp,
+                                color=MaterialTheme.colorScheme.onSurface,maxLines=1,softWrap=false)
+                        }
+                    }
+                    val chosen=selection==-1
+                    val scale by animateFloatAsState(if(chosen)1.20f else 1f,label="voice-hover")
+                    Box(Modifier.align(Alignment.BottomEnd).offset(x=(-82).dp)
+                        .graphicsLayer{scaleX=scale;scaleY=scale}
+                        .size(56.dp).clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surface)
+                        .background(if(chosen)teal.copy(alpha=.20f) else Color.Transparent)
+                        .border(1.dp,if(chosen)teal else MaterialTheme.colorScheme.outlineVariant,CircleShape),
+                        contentAlignment=Alignment.Center){
+                        Icon(Icons.Default.Mic,"Голосовой ввод",tint=if(chosen)teal else accent)
+                    }
                 }
-            }
-            val chosen=selection==-1
-            val scale by animateFloatAsState(if(chosen)1.12f else 1f,label="voice-hover")
-            Box(Modifier.align(Alignment.CenterStart).offset(x=(-87).dp)
-                .graphicsLayer{scaleX=scale;scaleY=scale}
-                .size(54.dp).clip(CircleShape)
-                .background(if(chosen)accent else MaterialTheme.colorScheme.surface)
-                .border(1.dp,accent.copy(alpha=.7f),CircleShape),
-                contentAlignment=Alignment.Center){
-                Icon(Icons.Default.Mic,"Голосовой ввод",tint=if(chosen)foreground else accent)
             }
         }
-        Box(
-            Modifier.fillMaxSize().clip(CircleShape).background(accent)
-                .pointerInput(waiting){
-                    if(waiting)return@pointerInput
-                    detectDragGesturesAfterLongPress(
-                        onDragStart={offsetX=0f;offsetY=0f;selection=-2;open=true},
-                        onDrag={change,amount->
-                            change.consume()
-                            offsetX+=amount.x;offsetY+=amount.y
-                            val next=when{
-                                offsetX<(-58*unit) && kotlin.math.abs(offsetY)<(95*unit)->-1
-                                offsetY<(-48*unit) && offsetX>(-66*unit)->
-                                    (((-offsetY/unit)-72f)/57f).roundToInt().coerceIn(0,actions.lastIndex)
+        Box(Modifier.fillMaxSize().clip(CircleShape).background(accent)
+            .pointerInput(waiting){
+                if(waiting)return@pointerInput
+                awaitEachGesture{
+                    val down=awaitFirstDown(requireUnconsumed=false)
+                    open=true
+                    selection=-2
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    val downAt=SystemClock.uptimeMillis()
+                    var held=false
+                    var target=-2
+                    while(true){
+                        val event=awaitPointerEvent()
+                        val change=event.changes.firstOrNull{it.id==down.id}
+                        if(change==null){
+                            open=false
+                            selection=-2
+                            break
+                        }
+                        if(!change.pressed){
+                            if(held && target>=-1)activate(target)
+                            else{open=false;selection=-2}
+                            break
+                        }
+                        if(!held && SystemClock.uptimeMillis()-downAt>=
+                            ViewConfiguration.getLongPressTimeout()){
+                            held=true
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        }
+                        if(held){
+                            val dx=(change.position.x-down.position.x)/unit
+                            val dy=(change.position.y-down.position.y)/unit
+                            target=when{
+                                dx< -58f && abs(dy)<95f -> -1
+                                dy< -47f && dx> -66f && latestActions.isNotEmpty()->
+                                    ((-dy-72f)/58f).roundToInt()
+                                        .coerceIn(0,latestActions.lastIndex)
                                 else->-2
                             }
-                            changeSelection(next)
-                        },
-                        onDragEnd={
-                            val target=selection
-                            if(target>=-1)activate(target)
-                            else {open=false;selection=-2}
-                        },
-                        onDragCancel={open=false;selection=-2}
-                    )
-                }
-                .semantics{
-                    contentDescription="Зажмите для выбора действия или голосового ввода"
-                    onClick(label="Открыть действия"){
-                        open=!open;true
+                            choose(target)
+                            if(target>=-1)change.consume()
+                        }
                     }
-                },
-            contentAlignment=Alignment.Center){
+                }
+            }
+            .semantics{
+                contentDescription="Зажмите и проведите к действию или голосовому вводу"
+            },contentAlignment=Alignment.Center){
             if(waiting)CircularProgressIndicator(Modifier.size(25.dp),color=foreground,strokeWidth=2.dp)
             else Icon(Icons.Default.Add,null,tint=foreground,modifier=Modifier.size(28.dp))
         }

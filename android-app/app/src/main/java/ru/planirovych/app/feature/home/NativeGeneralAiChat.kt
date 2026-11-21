@@ -153,7 +153,14 @@ internal fun NativeGeneralAiChatPage(
             lastRequestHadError=false
             if(sendImmediately)voiceSendSerial++
         },
-        onError={message->attachError=message}
+        onError={message->attachError=message},
+        quickLauncher=true,
+        accent=Color(0xFF8050DF),
+        suggestions=listOf(
+            "Создай задачу", "Добавь напоминание", "Перенеси встречу",
+            "Создай привычку", "Запиши заметку",
+            "Запиши расход", "Создай счёт", "Сделай перевод", "Создай долг"
+        )
     )
     LaunchedEffect(quickAiRequestId,quickAiMode,chatVisible,thread?.id,state.loading){
         if(quickAiMode==null || quickAiRequestId<=0 ||
