@@ -165,6 +165,17 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
     : proposal.entity==='loan'?(proposal.action==='create'?'Новый кредит':'Изменение кредита')
     : proposal.entity==='debt'?(proposal.action==='create'?'Новый долг':'Изменение долга')
     : (proposal.action==='create'?'Новая запись':'Изменение записи');
+  const previewValue=(key:string,value:Value)=>{
+    if(value==null||value==='')return 'Не указано';
+    if(['sourceAccountId','targetAccountId','accountId'].includes(key))
+      return options?.accounts.find(account=>account.id===value)?.name??'Выбранный счёт';
+    if(key==='kind')return ({EXPENSE:'Расход',INCOME:'Доход',TRANSFER:'Перевод'} as Record<string,string>)[String(value)]??String(value);
+    if(key==='direction')return value==='OWE'?'Я должен':'Мне должны';
+    if(key==='accountType')return value==='CREDIT_CARD'?'Кредитная карта':'Денежный счёт';
+    if(typeof value==='boolean')return value?'Да':'Нет';
+    if(key.endsWith('Minor'))return String(value)+' ₽';
+    return String(value);
+  };
   const renderField=(key:string,value:Value)=>{
     if(key==='accountType'){
       return <select aria-label="Тип счёта" value={String(value??'STANDARD')}
@@ -235,7 +246,7 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
       ? <div className="econ-finance-proposal-details econ-finance-proposal-inner">
         <span className="econ-finance-inner-label">{innerLabel}</span>
         {proposal.description&&<p className="econ-finance-description">{proposal.description}</p>}
-        {entries.length>0 ? <div className="econ-finance-summary-fields">{entries.slice(0,5).map(([key,value])=><div key={key} className="econ-finance-summary-row"><span>{LABELS[key]}</span><strong>{key.endsWith('Minor')?String(value)+' ₽':String(value??'Не указано')}</strong></div>)}</div>
+        {entries.length>0 ? <div className="econ-finance-summary-fields">{entries.slice(0,5).map(([key,value])=><div key={key} className="econ-finance-summary-row"><span>{LABELS[key]}</span><strong>{previewValue(key,value)}</strong></div>)}</div>
           : proposal.details?.map((item,index)=><div key={index}>{item}</div>)}
       </div> : null}
     {error||proposal.error?<div role="alert" className="econ-finance-proposal-error">{error||proposal.error}</div>:null}
