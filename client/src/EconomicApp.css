@@ -688,3 +688,19 @@ body:has(.econ-root.econ-mobile-workspace) #root{min-height:100dvh}
 .econ-filters-popover-title{display:flex;align-items:center;justify-content:space-between;gap:12px;
   color:var(--ec-text);font-size:13px;padding-bottom:5px}
 .econ-filters-popover-title button{padding:4px;display:grid;place-items:center;color:var(--ec-muted)}
+
+/* Mini App operations header and archived obligations for every web surface. */
+.econ-mobile-workspace .econ-filters-control .econ-filters-toggle-row{justify-content:space-between;align-items:center}
+.econ-operations-heading{margin:0;color:var(--ec-text);font-size:16px;font-weight:750}
+.econ-closed-block{margin-top:20px;padding:0;overflow:hidden}
+.econ-closed-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;gap:12px;padding:17px 20px;border:0;background:transparent;color:var(--ec-text);text-align:left}
+.econ-closed-toggle>span{display:flex;align-items:center;gap:9px;font-weight:750;font-size:16px}
+.econ-closed-toggle>span svg{color:var(--ec-orange)}
+.econ-closed-toggle small{font-size:11px;color:var(--ec-muted);font-weight:600}
+.econ-closed-toggle>svg{color:var(--ec-muted);transition:transform .2s ease}
+.econ-closed-toggle>svg.expanded{transform:rotate(90deg)}
+.econ-closed-content{padding:0 20px 20px;border-top:1px solid var(--ec-border)}
+.econ-closed-content[hidden]{display:none}
+.econ-closed-content .econ-subsection-heading{margin:18px 0 12px}
+.econ-closed-content .econ-subsection-heading h3{margin:0;font-size:14px;font-weight:700}
+@media(max-width:570px){.econ-closed-toggle{padding:16px}.econ-closed-content{padding:0 16px 16px}}

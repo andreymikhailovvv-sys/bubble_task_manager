@@ -106,6 +106,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   const [dialog, setDialog] = useState<Dialog>(null);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [closedOpen, setClosedOpen] = useState(false);
   const [bannerHidden, setBannerHidden] = useState(false);
   const [reportRevision, setReportRevision] = useState(0);
   const [form, setForm] = useState<Record<string, string>>({});
@@ -648,18 +649,34 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
           </div>
           {section === 'report' && <EconomicReport revision={reportRevision}/>}
           {section === 'accounts' && <div className="econ-collection-grid">{snapshot.accounts.map(a => <article className="econ-card econ-account-detail" key={a.id}><div className="econ-card-top"><span className="econ-account-symbol">{a.accountType === 'CREDIT_CARD' ? <CreditCard size={22}/> : <Landmark size={22}/>}</span>{a.isPrimary && <span className="econ-tag">Основной</span>}</div><h3>{a.name}</h3><strong>{money(a.balanceMinor)}</strong><p>{a.accountType === 'CREDIT_CARD' ? 'Доступно из лимита ' + money(a.creditLimitMinor || '0') : 'Текущий баланс счёта'}</p><div className="econ-row-actions"><button type="button" onClick={() => openDialog('account', a)}><Pencil size={15}/> Изменить</button>{!a.isPrimary && <>{a.accountType !== 'CREDIT_CARD' && <button type="button" onClick={() => void economicRequest('/accounts/' + a.id, 'PATCH', { isPrimary: true }).then(refresh).catch(e => setError(e.message))}><Check size={15}/> Основным</button>}<button type="button" onClick={() => void remove('accounts', a.id)}><Trash2 size={15}/></button></>}</div></article>)}</div>}
-          {section === 'operations' && <section className="econ-card econ-operations-list"><div className="econ-filters-control">{mobile && <div className="econ-filters-toggle-row"><button type="button" className={'econ-filters-toggle' + ((kindFilter||accountFilter||categoryFilter) ? ' active' : '')} title="Фильтры операций" aria-label="Фильтры операций" aria-expanded={filtersOpen} aria-controls="economic-operation-filters" onClick={()=>setFiltersOpen(value=>!value)}><Settings2 size={19}/></button></div>}{(!mobile || filtersOpen) && <div id="economic-operation-filters" className="econ-filters">{mobile && <div className="econ-filters-popover-title"><strong>Фильтры операций</strong><button type="button" onClick={()=>setFiltersOpen(false)} aria-label="Закрыть фильтры"><X size={16}/></button></div>}<select value={kindFilter} onChange={e => setKindFilter(e.target.value)} aria-label="Тип операции"><option value="">Все типы</option><option value="EXPENSE">Расходы</option><option value="INCOME">Доходы</option><option value="TRANSFER">Переводы</option><option value="DEBTS">Долговые операции</option></select><select value={accountFilter} onChange={e => setAccountFilter(e.target.value)} aria-label="Счёт"><option value="">Все счета</option>{snapshot.accounts.map(a => <option value={a.id} key={a.id}>{a.name}</option>)}</select><select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} aria-label="Категория"><option value="">Все категории</option>{[...new Set([...categories('EXPENSE'), ...categories('INCOME')])].map(c => <option value={c} key={c}>{c}</option>)}</select></div>}</div>{operations.length ? operations.map(operationRow) : <div className="econ-empty">{operationsBusy ? 'Загружаем…' : 'Нет операций по выбранным фильтрам'}</div>}{nextCursor && <button className="econ-load-more" disabled={operationsBusy} type="button" onClick={() => void loadOperations(true, nextCursor)}>{operationsBusy ? 'Загрузка…' : 'Показать ещё 50 операций'}</button>}</section>}
+          {section === 'operations' && <section className="econ-card econ-operations-list"><div className="econ-filters-control">{mobile && <div className="econ-filters-toggle-row"><h2 className="econ-operations-heading">Последние операции</h2><button type="button" className={'econ-filters-toggle' + ((kindFilter||accountFilter||categoryFilter) ? ' active' : '')} title="Фильтры операций" aria-label="Фильтры операций" aria-expanded={filtersOpen} aria-controls="economic-operation-filters" onClick={()=>setFiltersOpen(value=>!value)}><Settings2 size={19}/></button></div>}{(!mobile || filtersOpen) && <div id="economic-operation-filters" className="econ-filters">{mobile && <div className="econ-filters-popover-title"><strong>Фильтры операций</strong><button type="button" onClick={()=>setFiltersOpen(false)} aria-label="Закрыть фильтры"><X size={16}/></button></div>}<select value={kindFilter} onChange={e => setKindFilter(e.target.value)} aria-label="Тип операции"><option value="">Все типы</option><option value="EXPENSE">Расходы</option><option value="INCOME">Доходы</option><option value="TRANSFER">Переводы</option><option value="DEBTS">Долговые операции</option></select><select value={accountFilter} onChange={e => setAccountFilter(e.target.value)} aria-label="Счёт"><option value="">Все счета</option>{snapshot.accounts.map(a => <option value={a.id} key={a.id}>{a.name}</option>)}</select><select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} aria-label="Категория"><option value="">Все категории</option>{[...new Set([...categories('EXPENSE'), ...categories('INCOME')])].map(c => <option value={c} key={c}>{c}</option>)}</select></div>}</div>{operations.length ? operations.map(operationRow) : <div className="econ-empty">{operationsBusy ? 'Загружаем…' : 'Нет операций по выбранным фильтрам'}</div>}{nextCursor && <button className="econ-load-more" disabled={operationsBusy} type="button" onClick={() => void loadOperations(true, nextCursor)}>{operationsBusy ? 'Загрузка…' : 'Показать ещё 50 операций'}</button>}</section>}
           {section === 'debts' && <>
-            <div className="econ-subsection-heading"><BookOpen size={19}/><h2>Долги</h2><small>{snapshot.debts.length}</small></div>
+            <div className="econ-subsection-heading"><BookOpen size={19}/><h2>Долги</h2><small>{snapshot.debts.filter(d => !d.isClosed).length}</small></div>
             <div className="econ-collection-grid">
-              {snapshot.debts.map(debtCard)}
-              {!snapshot.debts.length && <div className="econ-empty econ-card">Долгов пока нет</div>}
+              {snapshot.debts.filter(d => !d.isClosed).map(debtCard)}
+              {!snapshot.debts.some(d => !d.isClosed) && <div className="econ-empty econ-card">Активных долгов пока нет</div>}
             </div>
-            <div className="econ-subsection-heading"><CreditCard size={19}/><h2>Кредиты</h2><small>{snapshot.loans.length}</small></div>
+            <div className="econ-subsection-heading"><CreditCard size={19}/><h2>Кредиты</h2><small>{snapshot.loans.filter(l => !l.isClosed).length}</small></div>
             <div className="econ-collection-grid">
-              {snapshot.loans.map(loanCard)}
-              {!snapshot.loans.length && <div className="econ-empty econ-card">Кредитов пока нет</div>}
+              {snapshot.loans.filter(l => !l.isClosed).map(loanCard)}
+              {!snapshot.loans.some(l => !l.isClosed) && <div className="econ-empty econ-card">Активных кредитов пока нет</div>}
             </div>
+            {(snapshot.debts.some(d => d.isClosed) || snapshot.loans.some(l => l.isClosed)) && <section className="econ-card econ-closed-block">
+              <button type="button" className="econ-closed-toggle" aria-expanded={closedOpen} aria-controls="economic-closed-obligations" onClick={() => setClosedOpen(v => !v)}>
+                <span><BookOpen size={17}/>Закрытые <small>{snapshot.debts.filter(d => d.isClosed).length + snapshot.loans.filter(l => l.isClosed).length}</small></span>
+                <ChevronRight size={19} className={closedOpen ? 'expanded' : ''}/>
+              </button>
+              <div className="econ-closed-content" id="economic-closed-obligations" hidden={!closedOpen}>
+                {snapshot.debts.some(d => d.isClosed) && <>
+                  <div className="econ-subsection-heading"><BookOpen size={17}/><h3>Долги</h3></div>
+                  <div className="econ-collection-grid">{snapshot.debts.filter(d => d.isClosed).map(debtCard)}</div>
+                </>}
+                {snapshot.loans.some(l => l.isClosed) && <>
+                  <div className="econ-subsection-heading"><CreditCard size={17}/><h3>Кредиты</h3></div>
+                  <div className="econ-collection-grid">{snapshot.loans.filter(l => l.isClosed).map(loanCard)}</div>
+                </>}
+              </div>
+            </section>}
           </>}
           {section === 'categories' && <div className="econ-collection-grid">{(['EXPENSE', 'INCOME'] as const).map(kind => <section className="econ-card" key={kind}><div className="econ-card-header"><h2>{kind === 'EXPENSE' ? 'Категории расходов' : 'Категории доходов'}</h2></div><div className="econ-category-list">{categories(kind).map(name => { const custom = snapshot.categories.find(c => c.kind === kind && c.name === name); return <div key={name}><span>{name}</span>{custom ? <button type="button" title="Удалить пользовательскую категорию" onClick={() => void remove('categories', custom.id)}><Trash2 size={14}/></button> : <small>Базовая</small>}</div>; })}</div><button className="econ-inline-add" type="button" onClick={() => { openDialog('category'); setForm({ kind, name: '' }); }}><Plus size={15}/> Своя категория</button></section>)}</div>}
         </div>}
