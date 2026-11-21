@@ -139,8 +139,24 @@ test('Economic mobile polish archives closed obligations and animates tab change
   assert.match(native,/closedDebts/);
   assert.match(native,/closedLoans/);
   assert.match(native,/height\(120\.dp\)/);
-  assert.match(native,/Arrangement\.spacedBy\(1\.dp\)/);
+  assert.match(native,/Arrangement\.spacedBy\(0\.dp\)/);
   assert.match(native,/Text\("Последние операции",fontSize=16\.sp/);
   assert.match(androidVersion,/versionCode = 17/);
   assert.match(androidVersion,/versionName = "1\.0\.15"/);
+});
+
+test('native Economic credit tile aligns type and limit; operations and filter button are compact and readable',()=>{
+  const tile=native.slice(native.indexOf('private fun EcoAccountTile('),native.indexOf('private fun EcoQuickAction('));
+  const row= native.slice(native.indexOf('private fun EcoOperationRow('));
+  assert.match(tile,/height\(120\.dp\)/);
+  assert.match(tile,/Column\(verticalArrangement=Arrangement\.spacedBy\(2\.dp\)\)/);
+  assert.match(tile,/Row\(Modifier\.fillMaxWidth\(\),verticalAlignment=Alignment\.CenterVertically\)/);
+  assert.match(tile,/if\(credit\) Text\("Кредитная карта"/);
+  assert.match(tile,/if\(credit\) \{\s*Row\(Modifier\.fillMaxWidth\(\)/);
+  assert.match(tile,/Text\("Лимит: "\+ecoRubles/);
+  assert.match(row,/Column\(Modifier\.weight\(1f\),verticalArrangement=Arrangement\.spacedBy\(0\.dp\)\)/);
+  assert.match(row,/fontSize=12\.sp,lineHeight=12\.sp/);
+  assert.match(row,/fontSize=10\.sp,lineHeight=10\.sp/);
+  assert.match(native,/containerColor=if\(dark\) colors\.gold else colors\.goldSoft/);
+  assert.match(native,/Text\("Готово",color=if\(dark\) Color\(0xFF281703\) else Color\.White\)/);
 });
