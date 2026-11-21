@@ -11,6 +11,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,6 +26,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.serialization.json.JsonObject
@@ -64,6 +67,7 @@ private fun ReportDatePicker(label:String,date:String,colors:EcoColors,onChange:
 internal fun EcoReportPanel(api:PlanirovychApi, colors:EcoColors, revision:Int, preview:Boolean = false) {
     var period by remember { mutableStateOf("month") }
     var kind by remember { mutableStateOf("expense") }
+    var expanded by remember { mutableStateOf(!preview) }
     var offset by remember { mutableIntStateOf(0) }
     var start by remember { mutableStateOf(LocalDate.now().withDayOfMonth(1).toString()) }
     var end by remember { mutableStateOf(LocalDate.now().toString()) }
@@ -95,9 +99,18 @@ internal fun EcoReportPanel(api:PlanirovychApi, colors:EcoColors, revision:Int, 
     val range=if(first.isNotBlank() && last.isNotBlank())
         "${reportDate(first)} – ${reportDate(last)}" else "Текущий месяц"
     EcoPanel(colors) {
-        Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(9.dp)){
-            Icon(Icons.Default.PieChart,null,tint=colors.gold,modifier=Modifier.size(21.dp))
-            Text("Финансовый отчёт",color=colors.text,fontWeight=FontWeight.Bold,fontSize=17.sp)
+        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
+            horizontalArrangement=Arrangement.SpaceBetween) {
+            Row(verticalAlignment=Alignment.CenterVertically,
+                horizontalArrangement=Arrangement.spacedBy(9.dp)) {
+                Icon(Icons.Default.PieChart,null,tint=colors.gold,modifier=Modifier.size(21.dp))
+                Text("Финансовый отчёт",color=colors.text,fontWeight=FontWeight.Bold,fontSize=17.sp)
+            }
+            if(preview) IconButton(onClick={expanded=!expanded}) {
+                Icon(if(expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    if(expanded) "Свернуть финансовый отчёт" else "Развернуть финансовый отчёт",
+                    tint=colors.goldSoft)
+            }
         }
         Spacer(Modifier.height(4.dp))
         Text(if(preview)"Расходы по категориям за текущий месяц" else "Распределение по категориям и периодам",
@@ -144,38 +157,32 @@ internal fun EcoReportPanel(api:PlanirovychApi, colors:EcoColors, revision:Int, 
             Spacer(Modifier.height(12.dp))
             LinearProgressIndicator(Modifier.fillMaxWidth(),color=colors.gold)
         }
-        Spacer(Modifier.height(18.dp))
-        Box(Modifier.fillMaxWidth(),contentAlignment=Alignment.Center) {
-            Box(Modifier.size(220.dp),contentAlignment=Alignment.Center) {
-                Canvas(Modifier.fillMaxSize()) {
-                    val inset=19.dp.toPx()
-                    val ringSize=Size(size.width-inset*2,size.height-inset*2)
-                    val stroke=Stroke(width=22.dp.toPx())
-                    if(total==BigInteger.ZERO) {
-                        drawArc(color=colors.outline,startAngle=-90f,sweepAngle=360f,useCenter=false,
-                            topLeft=Offset(inset,inset),size=ringSize,style=stroke)
-                    } else {
-                        var angle=-90f
-                        selection.forEach { (_,amount,color) ->
-                            val sweep=360f*(amount.toDouble()/total.toDouble()).toFloat()
-                            if(sweep>0f) drawArc(color=color,startAngle=angle,sweepAngle=sweep,
-                                useCenter=false,topLeft=Offset(inset,inset),size=ringSize,style=stroke)
-                            angle+=sweep
+        if(preview && !expanded) {
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
+                horizontalArrangement=Arrangement.spacedBy(13.dp)) {
+                EcoReportDonut(total,selection,colors,130.dp)
+                Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(7.dp)) {
+                    if(selection.isEmpty()) {
+                        Text(if(busy) "Загрузка…" else "Категорий пока нет",
+                            color=colors.muted,fontSize=12.sp)
+                    }
+                    selection.forEach { (name,_,color) ->
+                        Row(verticalAlignment=Alignment.CenterVertically,
+                            horizontalArrangement=Arrangement.spacedBy(7.dp)) {
+                            Box(Modifier.size(9.dp).clip(RoundedCornerShape(9.dp))
+                                .background(color))
+                            Text(name,color=colors.muted,fontSize=12.sp,
+                                maxLines=1,overflow=TextOverflow.Ellipsis)
                         }
                     }
                 }
-                Column(horizontalAlignment=Alignment.CenterHorizontally) {
-                    if(!preview) {
-                        Text(if(kind=="expense")"Расходы" else "Доходы",
-                            color=colors.muted,fontSize=12.sp)
-                        Spacer(Modifier.height(4.dp))
-                    }
-                    Text(if(preview) ecoWholeRubles(total.toString()) else ecoRubles(total.toString()),
-                        color=colors.text,fontSize=17.sp,
-                        fontWeight=FontWeight.ExtraBold,maxLines=1)
-                }
             }
-        }
+        } else {
+            Spacer(Modifier.height(18.dp))
+            Box(Modifier.fillMaxWidth(),contentAlignment=Alignment.Center) {
+                EcoReportDonut(total,selection,colors,220.dp)
+            }
         Spacer(Modifier.height(10.dp))
         if(selection.isEmpty()) {
             Text(if(busy)"Загрузка…" else "За выбранный период операций нет",color=colors.muted,
@@ -201,5 +208,36 @@ internal fun EcoReportPanel(api:PlanirovychApi, colors:EcoColors, revision:Int, 
             Text("${"%.1f".format(Locale.US,ratio*100)}%",color=colors.muted,
                 modifier=Modifier.fillMaxWidth(),fontSize=10.sp)
         }
+        }
+    }
+}
+
+/** One accessible donut drawing shared by collapsed preview and the full report. */
+@Composable
+private fun EcoReportDonut(total:BigInteger,selection:List<Triple<String,BigInteger,Color>>,
+    colors:EcoColors,diameter:Dp) {
+    val compact=diameter <= 150.dp
+    Box(Modifier.size(diameter),contentAlignment=Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val inset=(if(compact) 14.dp else 19.dp).toPx()
+            val ringSize=Size(size.width-inset*2,size.height-inset*2)
+            val stroke=Stroke(width=(if(compact) 16.dp else 22.dp).toPx())
+            if(total==BigInteger.ZERO) {
+                drawArc(color=colors.outline,startAngle=-90f,sweepAngle=360f,useCenter=false,
+                    topLeft=Offset(inset,inset),size=ringSize,style=stroke)
+            } else {
+                var angle=-90f
+                selection.forEach { (_,amount,color) ->
+                    val sweep=360f*(amount.toDouble()/total.toDouble()).toFloat()
+                    if(sweep>0f) drawArc(color=color,startAngle=angle,sweepAngle=sweep,
+                        useCenter=false,topLeft=Offset(inset,inset),size=ringSize,style=stroke)
+                    angle+=sweep
+                }
+            }
+        }
+        Text(ecoWholeRubles(total.toString()),modifier=Modifier.widthIn(
+            max=if(compact) 90.dp else 164.dp),
+            color=colors.text,fontSize=if(compact) 15.sp else 23.sp,
+            fontWeight=FontWeight.ExtraBold,maxLines=1,overflow=TextOverflow.Ellipsis)
     }
 }

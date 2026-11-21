@@ -19,9 +19,15 @@ const periods: {id:Period;label:string}[] = [
 ];
 const today = () => new Date().toISOString().slice(0,10);
 const startOfMonth = () => today().slice(0,7) + '-01';
+const formatWholeRub = (minor:string) => {
+  const value=BigInt(minor);
+  const absolute=value<0n?-value:value;
+  return (value<0n?'−':'')+((absolute+50n)/100n).toLocaleString('ru-RU')+' ₽';
+};
 
-export default function EconomicReport({ preview = false, revision = 0 }: {preview?:boolean;revision?:number}) {
+export default function EconomicReport({ preview = false, collapsedByDefault = false, revision = 0 }: {preview?:boolean;collapsedByDefault?:boolean;revision?:number}) {
   const [kind, setKind] = useState<Kind>('expense');
+  const [collapsed, setCollapsed] = useState(preview && collapsedByDefault);
   const [period, setPeriod] = useState<Period>('month');
   const [offset, setOffset] = useState(0);
   const [start, setStart] = useState(startOfMonth);
@@ -63,11 +69,21 @@ export default function EconomicReport({ preview = false, revision = 0 }: {previ
     ? new Date(data.start).toLocaleDateString('ru-RU') + ' – ' +
       new Date(Date.parse(data.end)-86400000).toLocaleDateString('ru-RU')
     : 'Текущий месяц';
+  const ring = <div className="econ-report-ring" style={{background:gradient}} aria-label="Распределение по категориям">
+    <div className="econ-report-ring-center">
+      <strong>{formatWholeRub(selected?.totalMinor || '0')}</strong>
+    </div>
+  </div>;
   return <section className={'econ-card econ-report ' + (preview?'econ-report-preview':'')}>
     <div className="econ-card-header">
       <div><h2><PieChart size={19}/> Финансовый отчёт</h2>
         <p>{preview?'Расходы по категориям за текущий месяц':'Распределение по категориям и периодам'}</p>
       </div>
+      {preview && collapsedByDefault && <button type="button" className="econ-report-expand"
+        aria-expanded={!collapsed} aria-label={collapsed?'Развернуть финансовый отчёт':'Свернуть финансовый отчёт'}
+        onClick={()=>setCollapsed(value=>!value)}>
+        {collapsed?'Развернуть':'Свернуть'} <ChevronRight size={16} className={collapsed?'':'expanded'}/>
+      </button>}
     </div>
     {!preview && <div className="econ-report-filters">
       <div className="econ-report-periods" role="group" aria-label="Период отчёта">
@@ -88,13 +104,15 @@ export default function EconomicReport({ preview = false, revision = 0 }: {previ
       <button type="button" className={kind==='income'?'selected':''} onClick={()=>setKind('income')}>Доходы</button>
     </div>}
     {error && <p className="econ-report-error" role="alert">{error}</p>}
-    <div className="econ-report-body" aria-busy={busy}>
-      <div className="econ-report-ring" style={{background:gradient}} aria-label="Распределение по категориям">
-        <div className="econ-report-ring-center">
-          <small>{kind==='expense'?'Расходы':'Доходы'}</small>
-          <strong>{formatMinorRub(selected?.totalMinor || '0')}</strong>
-        </div>
+    {preview && collapsed ? <div className="econ-report-compact" aria-busy={busy}>
+      {ring}
+      <div className="econ-report-compact-legend">
+        {segments.length ? segments.map(seg=><div className="econ-report-compact-category" key={seg.name}>
+          <i style={{background:seg.color}}/><span>{seg.name}</span>
+        </div>) : <p className="econ-report-empty">{busy?'Загрузка…':'Категорий пока нет'}</p>}
       </div>
+    </div> : <div className="econ-report-body" aria-busy={busy}>
+      {ring}
       <div className="econ-report-breakdown">
         <div className="econ-report-breakdown-title">
           <span>Категории</span><small>{preview?'Текущий месяц':range}</small>
@@ -108,6 +126,6 @@ export default function EconomicReport({ preview = false, revision = 0 }: {previ
           <small>{seg.pct.toLocaleString('ru-RU',{maximumFractionDigits:2})}%</small>
         </div>) : <p className="econ-report-empty">{busy?'Загрузка…':'За выбранный период операций нет'}</p>}
       </div>
-    </div>
+    </div>}
   </section>;
 }
