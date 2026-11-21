@@ -673,3 +673,18 @@ body:has(.econ-root.econ-mobile-workspace) #root{min-height:100dvh}
 @media(max-width:350px){
   .econ-mobile-workspace .econ-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* Icon-only operation filter opens a focused flyout in the Mini App. */
+.econ-filters-control{position:relative}
+.econ-mobile-workspace .econ-filters-control .econ-filters-toggle-row{padding:5px 0 12px}
+.econ-mobile-workspace .econ-filters-toggle{width:39px;height:39px;padding:0;display:grid;place-items:center}
+.econ-filters-toggle.active{border-color:var(--ec-orange);color:var(--ec-orange)}
+.econ-mobile-workspace .econ-filters-control .econ-filters{
+  position:absolute;z-index:270;top:calc(100% - 6px);right:0;
+  width:min(320px,calc(100vw - 58px));padding:14px;
+  background:var(--ec-panel);border:1px solid var(--ec-border);border-radius:15px;
+  box-shadow:0 18px 45px rgba(0,0,0,.21)
+}
+.econ-filters-popover-title{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  color:var(--ec-text);font-size:13px;padding-bottom:5px}
+.econ-filters-popover-title button{padding:4px;display:grid;place-items:center;color:var(--ec-muted)}
