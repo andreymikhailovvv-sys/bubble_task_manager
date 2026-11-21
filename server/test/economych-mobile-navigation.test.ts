@@ -105,10 +105,24 @@ test('native money is integer kopecks; web Mini App remains intact',()=>{
   assert.match(editor,/ecoParseMoney\(value\("amount"\)\)/);
   assert.match(native,/current\.ecoObject\("totals"\)\.ecoText\("balanceMinor"\)/);
   assert.match(native,/val colors = remember\(dark\) \{ ecoColors\(dark\) \}/);
-  assert.match(financeData,/background = Color\(0xFFFFF9F1\)/);
+  assert.match(financeData,/background = Color\(0xFFF7F8FA\)/);
   assert.match(financeData,/background = Color\(0xFF15151C\)/);
   assert.match(mini,/<MobileEconomicApp mobile embeddedInMiniApp/);
   assert.match(economic,/createPortal\(<div/);
   assert.match(economicCss,/\.econ-mobile-workspace \.econ-modal-backdrop/);
   assert.match(economicCss,/position:sticky;bottom:0/);
+});
+
+test('Economic financial UI has four balanced tiles and stable native sheets',()=>{
+  assert.match(economic,/topExpenseCategory/);
+  assert.match(economic,/wholeRubles\(snapshot\.totals\.monthExpenseMinor\)/);
+  assert.match(economic,/econ-intro-hide/);
+  assert.match(economic,/econ-filters-toggle/);
+  assert.match(economicCss,/\.econ-mobile-workspace \.econ-stats\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(native,/EcoTopCategoryStat/);
+  assert.match(native,/detectHorizontalDragGestures/);
+  assert.match(native,/ecoWholeRubles\(minor\)/);
+  assert.match(editor,/height\(stableSheetHeight\)/);
+  assert.match(editor,/Modifier\.weight\(1f\)\.verticalScroll\(rememberScrollState\(\)\)/);
+  assert.doesNotMatch(editor,/weight\(1f,fill=false\)/);
 });
