@@ -77,8 +77,8 @@ test('all financial sections have native data-driven UI and real CRUD',()=>{
     assert.ok(native.includes(title));
   assert.match(native,/economicSnapshot\(\)/);
   assert.match(native,/economicOperations\(/);
-  assert.match(native,/economicCreate\(resource, payload\)/);
-  assert.match(native,/economicUpdate\(resource, record\.ecoText\("id"\), payload\)/);
+  assert.match(native,/economicCreate\(resource,payload\)/);
+  assert.match(native,/economicUpdate\(resource,record\.ecoText\("id"\),payload\)/);
   assert.match(native,/economicDelete\(selection\.resource,selection\.record\.ecoText\("id"\)\)/);
   assert.match(native,/if\(linked!=null\) onEdit\(linked,"debts"\) else onEdit\(op,"missing-debt"\)/);
   assert.match(native,/nextCursor/);
@@ -87,6 +87,7 @@ test('all financial sections have native data-driven UI and real CRUD',()=>{
 
 test('Android financial editors are native bottom sheets with keyboard-safe actions',()=>{
   assert.match(editor,/ModalBottomSheet\(/);
+  assert.match(editor,/sheetGesturesEnabled=false/);
   assert.match(editor,/rememberModalBottomSheetState\(skipPartiallyExpanded=true\)/);
   assert.match(editor,/\.imePadding\(\)\.navigationBarsPadding\(\)/);
   assert.match(editor,/\.verticalScroll\(rememberScrollState\(\)\)/);
