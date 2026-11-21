@@ -4,6 +4,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -22,6 +23,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.abs
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
 import retrofit2.HttpException
@@ -42,8 +45,8 @@ private fun readableEconomicError(cause: Throwable): String {
 
 private data class EcoTab(val id: String, val title: String)
 private val economicTabs = listOf(
-    EcoTab("overview","Обзор"), EcoTab("accounts","Счета"), EcoTab("operations","Операции"),
-    EcoTab("debts","Долги и кредиты"), EcoTab("report","Отчёт"), EcoTab("categories","Категории")
+    EcoTab("overview","Обзор"), EcoTab("report","Отчёт"), EcoTab("accounts","Счета"),
+    EcoTab("operations","Операции"), EcoTab("debts","Долги и кредиты"), EcoTab("categories","Категории")
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -61,6 +64,11 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
     var section by remember(userId) { mutableStateOf("overview") }
     var editor by remember(userId) { mutableStateOf<EcoEditorRequest?>(null) }
     var addMenuOpen by remember(userId) { mutableStateOf(false) }
+    var filtersOpen by remember(userId) { mutableStateOf(false) }
+    val economicPreferences = remember(context) { context.getSharedPreferences("economic_ui",android.content.Context.MODE_PRIVATE) }
+    var bannerHidden by remember(userId) {
+        mutableStateOf(economicPreferences.getBoolean("hidden_banner_"+userId.orEmpty(),false))
+    }
     var removing by remember(userId) { mutableStateOf<EcoRemoval?>(null) }
     var busy by remember { mutableStateOf(false) }
     var kindFilter by remember { mutableStateOf("") }
@@ -121,8 +129,8 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
     val current = snapshot
 
     Box(Modifier.fillMaxSize().background(
-        Brush.linearGradient(if (dark) listOf(Color(0xFF292219), colors.background, Color(0xFF101117))
-            else listOf(Color(0xFFFFF1DB), colors.background, Color(0xFFF8F3EA)))
+        Brush.verticalGradient(if (dark) listOf(Color(0xFF292219), colors.background, Color(0xFF101117))
+            else listOf(Color(0xFFFFFAF3), Color(0xFFF7F8FA), Color(0xFFF7F8FA)))
     )) {
         if (current == null && loading) {
             EconomicSkeleton(dark)
@@ -136,10 +144,37 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
             }
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().pointerInput(section) {
+                    // Horizontal drags switch tabs; vertical drags remain with LazyColumn.
+                    var dragged=0f
+                    detectHorizontalDragGestures(
+                        onDragStart={dragged=0f},
+                        onHorizontalDrag={change,amount->dragged+=amount;change.consume()},
+                        onDragEnd={
+                            if(abs(dragged)>85.dp.toPx()) {
+                                val index=economicTabs.indexOfFirst{it.id==section}
+                                val next=(index+if(dragged<0f)1 else -1)
+                                    .coerceIn(0,economicTabs.lastIndex)
+                                section=economicTabs[next].id
+                                error=""
+                            }
+                        }
+                    )
+                },
                 contentPadding = PaddingValues(start=13.dp,end=13.dp,top=12.dp,bottom=90.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                item {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically,
+                        horizontalArrangement=Arrangement.SpaceBetween) {
+                        Column(Modifier.weight(1f)) {
+                            Text("ФИНАНСОВЫЙ ПОМОЩНИК",fontSize=9.sp,
+                                fontWeight=FontWeight.ExtraBold,letterSpacing=.8.sp,color=colors.gold)
+                            Spacer(Modifier.height(3.dp))
+                            Text("Экономыч AI",fontSize=25.sp,fontWeight=FontWeight.ExtraBold,color=colors.text)
+                        }
+                    }
+                }
                 item {
                     Row(
                         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
@@ -174,19 +209,6 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                         }
                     }
                 }
-                item {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically,
-                        horizontalArrangement=Arrangement.SpaceBetween) {
-                        Column(Modifier.weight(1f)) {
-                            Text("ПЛАНИРОВЫЧ / ЭКОНОМЫЧ AI",fontSize=9.sp,
-                                fontWeight=FontWeight.ExtraBold,letterSpacing=.8.sp,color=colors.gold)
-                            Spacer(Modifier.height(3.dp))
-                            Text(economicTabs.first { it.id==section }.title.let {
-                                if(section=="overview")"Экономыч AI" else it
-                            },fontSize=25.sp,fontWeight=FontWeight.ExtraBold,color=colors.text)
-                        }
-                    }
-                }
                 if (error.isNotBlank()) item {
                     EcoPanel(colors) {
                         Row(verticalAlignment=Alignment.CenterVertically) {
@@ -197,20 +219,33 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                 }
                 when(section) {
                     "overview" -> {
-                        item { EcoHero(colors) }
-                        item {
-                            Row(horizontalArrangement=Arrangement.spacedBy(9.dp)) {
-                                EcoStat("Общий баланс",current.ecoObject("totals").ecoText("balanceMinor"),
-                                    "Все ваши счета",colors,Modifier.weight(1f),false)
-                                EcoStat("Доходы за месяц",current.ecoObject("totals").ecoText("monthIncomeMinor"),
-                                    "Без переводов между счетами",colors,Modifier.weight(1f),true)
+                        if(!bannerHidden) item {
+                            Box {
+                                EcoHero(colors)
+                                TextButton(onClick={
+                                    bannerHidden=true
+                                    economicPreferences.edit().putBoolean(
+                                        "hidden_banner_"+userId.orEmpty(),true).apply()
+                                },modifier=Modifier.align(Alignment.BottomEnd).padding(end=10.dp,bottom=6.dp)) {
+                                    Text("Скрыть",fontSize=11.sp,color=Color(0xFFFFE7CB))
+                                }
                             }
                         }
                         item {
-                            Row {
+                            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(9.dp)) {
+                                EcoStat("Общий баланс",current.ecoObject("totals").ecoText("balanceMinor"),
+                                    "Денежные счета",colors,Modifier.weight(1f),false)
+                                EcoStat("Доходы за месяц",current.ecoObject("totals").ecoText("monthIncomeMinor"),
+                                    "Без переводов",colors,Modifier.weight(1f),true)
+                            }
+                        }
+                        item {
+                            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(9.dp)) {
                                 EcoStat("Расходы за месяц",current.ecoObject("totals").ecoText("monthExpenseMinor"),
-                                    "Без переводов между счетами",colors,Modifier.weight(1f),false)
-                                Spacer(Modifier.weight(1f))
+                                    "Без переводов",colors,Modifier.weight(1f),false)
+                                EcoTopCategoryStat(current.ecoObject("totals").ecoText("topExpenseCategory"),
+                                    current.ecoObject("totals").ecoText("topExpenseCategoryMinor"),
+                                    colors,Modifier.weight(1f))
                             }
                         }
                         item { EcoReportPanel(api,colors,revision,preview=true) }
@@ -243,9 +278,9 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                                     EcoObligationPreview("loans",record,colors) { editor=EcoEditorRequest("loans",record) }
                                     Spacer(Modifier.height(8.dp))
                                 }
-                                Row(horizontalArrangement=Arrangement.spacedBy(17.dp)) {
-                                    EcoInlineAction("+ Долг",colors) { editor=EcoEditorRequest("debts") }
-                                    EcoInlineAction("+ Кредит",colors) { editor=EcoEditorRequest("loans") }
+                                Row(horizontalArrangement=Arrangement.spacedBy(9.dp)) {
+                                    EcoQuickAction("Долг",colors){editor=EcoEditorRequest("debts")}
+                                    EcoQuickAction("Кредит",colors){editor=EcoEditorRequest("loans")}
                                 }
                             }
                         }
