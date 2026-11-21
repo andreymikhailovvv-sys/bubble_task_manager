@@ -23,44 +23,42 @@ test('AI proposal chips are compact summaries; edits live in dedicated dialogs',
   assert.match(nativeFinance,/Icons\.Default\.Edit/);
 });
 
-test('Android long-press drag actions provide voice, visual feedback and haptics',()=>{
+test('Android quick actions open on tap and dismiss after an explicit choice',()=>{
   const launcher=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeHoldActionButton.kt');
   const home=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/HomeScreen.kt');
   const economic=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeEconomicCompose.kt');
-  assert.match(launcher,/awaitEachGesture/);
-  assert.match(launcher,/awaitFirstDown/);
-  assert.match(launcher,/Popup\(/);
-  assert.match(launcher,/1\.18f/);
-  assert.match(launcher,/HapticFeedbackType\.TextHandleMove/);
-  assert.match(launcher,/animateFloatAsState/);
+  assert.match(launcher,/\.clickable\(enabled=!waiting, onClickLabel="Открыть меню добавления"\)/);
+  assert.match(launcher,/open=!open/);
+  assert.match(launcher,/onDismissRequest=\{open=false\}/);
+  assert.match(launcher,/PopupProperties\(focusable=true/);
+  assert.match(launcher,/\.clickable \{ activate\(index\) \}/);
+  assert.match(launcher,/\.clickable \{ activate\(-1\) \}/);
   assert.match(launcher,/latestVoice\(\)/);
-  assert.match(home,/NativeHoldActionButton\(/);
-  assert.match(home,/NativeHoldAction\("Добавить напоминание"/);
-  assert.match(economic,/NativeHoldActionButton\(/);
-  assert.match(economic,/NativeHoldAction\("Добавить кредит"/);
-  assert.doesNotMatch(economic,/DropdownMenu\(expanded=addMenuOpen/);
-  // Single taps acknowledge in ~half a second; the hint appears only AFTER
-  // the menu fades out. A long hold still offers immediate drag selection.
-  assert.match(launcher,/releasedPreview=true/);
-  assert.match(launcher,/delay\(420\)/);
-  assert.match(launcher,/delay\(145\)/);
-  assert.match(launcher,/hintVisible=true/);
-  assert.match(launcher,/Зажмите «\+» для выбора/);
-  assert.doesNotMatch(launcher,/Удерживайте и ведите к действию/);
-  assert.doesNotMatch(launcher,/delay\(2300\)/);
-  assert.match(launcher,/MutableTransitionState\(false\)/);
-  assert.match(launcher,/visibleState=menuTransition/);
   assert.match(launcher,/fadeIn\(/);
   assert.match(launcher,/fadeOut\(/);
-  assert.match(launcher,/scaleIn\(/);
-  assert.match(launcher,/slideInHorizontally\(/);
   assert.match(launcher,/cy-28\.dp\.toPx\(\)/);
-  assert.match(launcher,/stroke=1\.8\.dp\.toPx\(\)/);
-  assert.match(launcher,/\.border\(0\.8\.dp/);
+  assert.doesNotMatch(launcher,/awaitEachGesture|awaitFirstDown|delay\(|hintVisible|releasedPreview|Зажмите/);
   assert.match(home,/onMenuVisibilityChange=\{plannerMenuOpen=it\}/);
+  assert.match(home,/NativeHoldAction\("Добавить напоминание"/);
   assert.match(economic,/onMenuVisibilityChange=\{economicMenuOpen=it\}/);
-  assert.match(home,/Color\.Black\.copy\(alpha=plannerScrimAlpha\)/);
-  assert.match(economic,/Color\.Black\.copy\(alpha=economicScrimAlpha\)/);
+  assert.match(economic,/NativeHoldAction\("Добавить кредит"/);
+  assert.doesNotMatch(economic,/DropdownMenu\(expanded=addMenuOpen/);
+});
+
+test('Mini App planner and Economic plus buttons stay above navigation and accept taps',()=>{
+  const mini=read('../../client/src/MiniApp.tsx');
+  const miniCss=read('../../client/src/styles.css');
+  const economic=read('../../client/src/EconomicApp.tsx');
+  const econCss=read('../../client/src/EconomicApp.css');
+  assert.match(mini,/onClick=\{\(\) => setIsQuickCreateOpen\(\(prev\) => !prev\)\}/);
+  assert.match(mini,/aria-expanded=\{isQuickCreateOpen\}/);
+  assert.match(miniCss,/\.miniapp-shell \.miniapp-quick-create \{\s*z-index: 320;/);
+  assert.match(miniCss,/\.miniapp-shell \.miniapp-quick-create\.is-open \.miniapp-quick-create-actions,/);
+  assert.match(miniCss,/touch-action: manipulation/);
+  assert.match(economic,/className="econ-mobile-add-fab"[\s\S]*?onClick=\{\(\) => setAddMenuOpen\(v=>!v\)\}/);
+  assert.match(economic,/\{addMenuOpen && createMenu\}/);
+  assert.match(econCss,/\.econ-mobile-create\{\s*position:fixed;right:0;bottom:0;z-index:320/);
+  assert.match(econCss,/\.econ-mobile-create \.econ-create-menu\{z-index:321\}/);
 });
 
 test('quick voice records locally, submits to existing AI chat and opens replies afterwards',()=>{
