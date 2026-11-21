@@ -123,19 +123,24 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                     else api.economicUpdate(resource,record.ecoText("id"),payload)
                 if(record!=null && !result.ecoBool("ok"))
                     throw IllegalStateException("Сервер не подтвердил сохранение изменений")
-                // A changed source account may remove an operation from the
-                // currently filtered list. Show all operations after updating.
+                // The server has committed. Do not leave an editable form
+                // open just because the follow-up GET failed: retrying POST
+                // would otherwise duplicate a financial record.
+                editor=null
+                error=""
+                // A changed account may remove an operation from the currently
+                // filtered list. Show all operations after updating.
                 if(resource=="operations"){
                     kindFilter=""
                     accountFilter=""
                     categoryFilter=""
-                    val updated=api.economicOperations(null,null,null)
-                    operations=updated.ecoItems("operations")
-                    nextCursor=updated.ecoText("nextCursor")
+                    runCatching{api.economicOperations(null,null,null)}.onSuccess{updated->
+                        operations=updated.ecoItems("operations")
+                        nextCursor=updated.ecoText("nextCursor")
+                    }.onFailure{error="Изменения сохранены, но список операций ещё не обновился."}
                 }
-                snapshot=api.economicSnapshot()
-                editor=null
-                error=""
+                runCatching{api.economicSnapshot()}.onSuccess{snapshot=it}
+                    .onFailure{error="Изменения сохранены, но финансовый обзор пока не обновился."}
                 refresh()
             } catch (cause: Exception) {
                 error=readableEconomicError(cause)
@@ -545,6 +550,7 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
             ModalBottomSheet(
                 onDismissRequest={filtersOpen=false},
                 sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),
+                sheetGesturesEnabled=false,
                 containerColor=colors.panel,contentColor=colors.text,
                 dragHandle={BottomSheetDefaults.DragHandle(color=colors.muted)}
             ) {
