@@ -141,7 +141,12 @@ internal fun NativeHoldActionButton(
                     var target=-2
                     while(true){
                         val event=awaitPointerEvent()
-                        val change=event.changes.firstOrNull{it.id==down.id}?:break
+                        val change=event.changes.firstOrNull{it.id==down.id}
+                        if(change==null){
+                            open=false
+                            selection=-2
+                            break
+                        }
                         if(!change.pressed){
                             if(held && target>=-1)activate(target)
                             else{open=false;selection=-2}
