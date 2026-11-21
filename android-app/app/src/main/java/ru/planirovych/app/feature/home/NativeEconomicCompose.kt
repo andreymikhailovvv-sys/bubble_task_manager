@@ -135,8 +135,12 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
     val closedDebts = current?.ecoItems("debts").orEmpty().filter { it.ecoBool("isClosed") }
     val closedLoans = current?.ecoItems("loans").orEmpty().filter { it.ecoBool("isClosed") }
 
-    // Match the Mini App's calm neutral surface in both themes.
-    Box(Modifier.fillMaxSize().background(colors.background)) {
+    // The Mini App's pale blue gradient gives the light workspace subtle depth.
+    // Dark mode keeps its existing neutral canvas.
+    Box(Modifier.fillMaxSize().background(
+        Brush.verticalGradient(if(dark) listOf(colors.background,colors.background)
+            else listOf(Color(0xFFF8FBFF),Color(0xFFF1F5F9)))
+    )) {
         if (current == null && loading) {
             EconomicSkeleton(dark)
         } else if (current == null) {
@@ -252,24 +256,25 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                             }
                         }
                         item {
-                            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max),horizontalArrangement=Arrangement.spacedBy(9.dp)) {
+                            Row(Modifier.fillMaxWidth().padding(top=10.dp).height(IntrinsicSize.Max),
+                                horizontalArrangement=Arrangement.spacedBy(9.dp)) {
                                 EcoStat("Общий баланс",current.ecoObject("totals").ecoText("balanceMinor"),
-                                    "Денежные счета",colors,Modifier.weight(1f).fillMaxHeight(),false)
+                                    "Денежные счета без кредитного лимита",colors,Modifier.weight(1f).fillMaxHeight(),false)
                                 EcoStat("Доходы за месяц",current.ecoObject("totals").ecoText("monthIncomeMinor"),
-                                    "Без переводов",colors,Modifier.weight(1f).fillMaxHeight(),true)
+                                    "Без переводов между счетами",colors,Modifier.weight(1f).fillMaxHeight(),true)
                             }
                         }
                         item {
                             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max),horizontalArrangement=Arrangement.spacedBy(9.dp)) {
                                 EcoStat("Расходы за месяц",current.ecoObject("totals").ecoText("monthExpenseMinor"),
-                                    "Без переводов",colors,Modifier.weight(1f).fillMaxHeight(),false)
+                                    "Без переводов между счетами",colors,Modifier.weight(1f).fillMaxHeight(),false)
                                 EcoTopCategoryStat(current.ecoObject("totals").ecoText("topExpenseCategory"),
                                     current.ecoObject("totals").ecoText("topExpenseCategoryMinor"),
                                     colors,Modifier.weight(1f).fillMaxHeight())
                             }
                         }
                         item {
-                            EcoPanel(colors) {
+                            EcoPanel(colors,Modifier.padding(top=8.dp)) {
                                 EcoPanelHeader("Мои счета","Остатки с учётом всех операций",
                                     "Все счета",colors,{section="accounts"})
                                 current.ecoItems("accounts").take(4).forEach { account ->
@@ -280,9 +285,13 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                                 EcoInlineAction("Добавить счёт",colors){editor=EcoEditorRequest("accounts")}
                             }
                         }
-                        item { EcoReportPanel(api,colors,revision,preview=true) }
                         item {
-                            EcoPanel(colors) {
+                            Box(Modifier.padding(top=8.dp)) {
+                                EcoReportPanel(api,colors,revision,preview=true)
+                            }
+                        }
+                        item {
+                            EcoPanel(colors,Modifier.padding(top=8.dp)) {
                                 EcoPanelHeader("Долги и кредиты","Платежи и прогресс погашения",
                                     "Все записи",colors,{section="debts"})
                                 val debts=current.ecoItems("debts").filterNot { it.ecoBool("isClosed") }
@@ -305,7 +314,7 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                             }
                         }
                         item {
-                            EcoPanel(colors) {
+                            EcoPanel(colors,Modifier.padding(top=8.dp)) {
                                 EcoPanelHeader("Последние операции",
                                     current.ecoObject("totals").ecoNumber("operationCount").toString()+" записей всего",
                                     "Все операции",colors,{section="operations"})
@@ -606,8 +615,9 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
 }
 
 @Composable
-internal fun EcoPanel(colors: EcoColors, content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp)).background(colors.panel)
+internal fun EcoPanel(colors: EcoColors, modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp)).background(colors.panel)
         .border(1.dp,colors.outline,RoundedCornerShape(17.dp)).padding(14.dp),
         content=content)
 }
@@ -642,38 +652,50 @@ private fun EcoHero(colors: EcoColors) {
 @Composable
 private fun EcoStat(title:String,minor:String,subtitle:String,colors:EcoColors,
     modifier:Modifier,positive:Boolean) {
-    Column(modifier.clip(RoundedCornerShape(15.dp)).background(colors.panel)
-        .border(1.dp,colors.outline,RoundedCornerShape(15.dp)).padding(12.dp),
-        verticalArrangement=Arrangement.spacedBy(5.dp)) {
+    val light=colors.background==Color(0xFFF7F8FA)
+    val tile=if(light) Color(0xFFFFFAF2) else colors.panel
+    val edge=if(light) Color(0xFFE6DDD1) else colors.outline
+    Column(modifier.heightIn(min=136.dp).clip(RoundedCornerShape(15.dp)).background(tile)
+        .border(1.dp,edge,RoundedCornerShape(15.dp)).padding(14.dp),
+        verticalArrangement=Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment=Alignment.CenterVertically) {
             Icon(when {title.startsWith("Доходы")->Icons.Default.SouthWest
                 title.startsWith("Расходы")->Icons.Default.NorthEast
-                else->Icons.Default.AccountBalanceWallet},null,tint=colors.gold,
+                else->Icons.Default.AccountBalanceWallet},null,
+                tint=if(light)Color(0xFFB96C14) else colors.gold,
                 modifier=Modifier.size(19.dp))
             Spacer(Modifier.width(8.dp))
-            Text(title,color=colors.muted,fontSize=12.sp,lineHeight=16.sp)
+            Text(title,color=colors.muted,fontSize=11.sp,lineHeight=16.sp,maxLines=2,
+                overflow=TextOverflow.Ellipsis)
         }
         Text(ecoWholeRubles(minor),fontWeight=FontWeight.Bold,fontSize=18.sp,
             maxLines=1,overflow=TextOverflow.Ellipsis,
             color=if(positive)colors.green else colors.text)
-        Text(subtitle,fontSize=10.sp,lineHeight=15.sp,color=colors.muted,maxLines=2)
+        Spacer(Modifier.weight(1f))
+        Text(subtitle,fontSize=11.sp,lineHeight=16.sp,color=colors.muted,maxLines=2,
+            overflow=TextOverflow.Ellipsis)
     }
 }
 @Composable
 private fun EcoTopCategoryStat(category:String,minor:String,colors:EcoColors,modifier:Modifier) {
-    Column(modifier.clip(RoundedCornerShape(15.dp))
-        .background(colors.panel).border(1.dp,colors.outline,RoundedCornerShape(15.dp))
-        .padding(12.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
+    val light=colors.background==Color(0xFFF7F8FA)
+    val tile=if(light) Color(0xFFFFFAF2) else colors.panel
+    val edge=if(light) Color(0xFFE6DDD1) else colors.outline
+    Column(modifier.heightIn(min=136.dp).clip(RoundedCornerShape(15.dp))
+        .background(tile).border(1.dp,edge,RoundedCornerShape(15.dp))
+        .padding(14.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment=Alignment.CenterVertically) {
-            Icon(Icons.Default.PieChart,null,tint=colors.gold,modifier=Modifier.size(19.dp))
+            Icon(Icons.Default.PieChart,null,tint=if(light)Color(0xFFB96C14) else colors.gold,
+                modifier=Modifier.size(19.dp))
             Spacer(Modifier.width(8.dp))
             Text("Траты в категориях",color=colors.muted,fontSize=11.sp,
                 lineHeight=16.sp,maxLines=2)
         }
         Text(ecoWholeRubles(minor),color=colors.text,fontSize=18.sp,
             fontWeight=FontWeight.Bold,maxLines=1,overflow=TextOverflow.Ellipsis)
-        Text(category.ifBlank { "Нет расходов" },fontSize=10.sp,
-            lineHeight=15.sp,color=colors.muted,maxLines=2,overflow=TextOverflow.Ellipsis)
+        Spacer(Modifier.weight(1f))
+        Text(category.ifBlank { "Нет расходов" },fontSize=11.sp,
+            lineHeight=16.sp,color=colors.muted,maxLines=2,overflow=TextOverflow.Ellipsis)
     }
 }
 @Composable
@@ -715,9 +737,13 @@ private fun EcoAccountSummary(account:JsonObject,colors:EcoColors) {
 /** Mini App style: subtle account tiles nested in the Overview card, no double white border. */
 @Composable
 private fun EcoMiniAccountTile(account:JsonObject,colors:EcoColors) {
+    val light=colors.background==Color(0xFFF7F8FA)
+    val primary=account.ecoBool("isPrimary")
+    val tile=if(light&&primary)Color(0xFFFFF9F2) else colors.panel2
+    val edge=if(light&&primary)Color(0xFFEFD3B1) else colors.outline.copy(alpha=.65f)
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp))
-        .background(colors.panel2).border(1.dp,colors.outline.copy(alpha=.65f),
-            RoundedCornerShape(13.dp)).padding(12.dp)) {
+        .background(tile).border(1.dp,edge,RoundedCornerShape(13.dp))
+        .padding(12.dp)) {
         EcoAccountSummary(account,colors)
     }
 }
