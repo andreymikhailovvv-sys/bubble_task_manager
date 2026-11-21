@@ -241,6 +241,12 @@ internal fun NativeHoldActionButton(
             }
             .semantics{
                 contentDescription="Удерживайте и ведите к действию"
+                onClick(label="Показать доступные действия"){
+                    open=true
+                    releasedPreview=true
+                    previewRevision++
+                    true
+                }
             },contentAlignment=Alignment.Center){
             if(waiting)CircularProgressIndicator(Modifier.size(25.dp),color=foreground,strokeWidth=2.dp)
             else Icon(Icons.Default.Add,null,tint=foreground,modifier=Modifier.size(28.dp))
