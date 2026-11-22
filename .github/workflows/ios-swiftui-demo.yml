@@ -1,0 +1,100 @@
+name: iOS SwiftUI demo
+
+on:
+  pull_request:
+    paths:
+      - 'ios-app/**'
+      - '.github/workflows/ios-swiftui-demo.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ios-app/**'
+      - '.github/workflows/ios-swiftui-demo.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  simulator-build:
+    name: Build iOS app and capture preview
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Print Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: |
+          cd ios-app
+          xcodegen generate
+
+      - name: Build unsigned iOS Simulator application
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project ios-app/Planirovych.xcodeproj \
+            -scheme Planirovych \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/PlanirovychDerived" \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee "$RUNNER_TEMP/ios-build.log"
+
+      - name: Package Simulator application
+        shell: bash
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$RUNNER_TEMP/PlanirovychDerived/Build/Products/Debug-iphonesimulator/Planirovych.app" \
+            "$RUNNER_TEMP/Planirovych-iOS-Simulator.zip"
+
+      - name: Upload Simulator build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Planirovych-iOS-Simulator
+          path: ${{ runner.temp }}/Planirovych-iOS-Simulator.zip
+          retention-days: 14
+
+      - name: Launch simulator and take screenshot
+        continue-on-error: true
+        timeout-minutes: 8
+        shell: bash
+        run: |
+          set -euo pipefail
+          SIM_ID="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; j=json.load(sys.stdin); print(next((d["udid"] for runtime,items in j["devices"].items() if "iOS" in runtime for d in items if d.get("isAvailable") and "iPhone" in d.get("name","")), ""))')"
+          if [ -z "$SIM_ID" ]; then
+            echo "No available iPhone Simulator runtime. Build artifact is still valid."
+            exit 0
+          fi
+          xcrun simctl boot "$SIM_ID" || true
+          xcrun simctl bootstatus "$SIM_ID" -b
+          xcrun simctl install "$SIM_ID" "$RUNNER_TEMP/PlanirovychDerived/Build/Products/Debug-iphonesimulator/Planirovych.app"
+          xcrun simctl launch "$SIM_ID" ru.planirovych.iosdemo
+          sleep 6
+          xcrun simctl io "$SIM_ID" screenshot "$RUNNER_TEMP/Planirovych-preview.png"
+
+      - name: Upload screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Planirovych-iOS-Preview
+          path: ${{ runner.temp }}/Planirovych-preview.png
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Planirovych-iOS-Build-Log
+          path: ${{ runner.temp }}/ios-build.log
+          if-no-files-found: ignore
+          retention-days: 7
