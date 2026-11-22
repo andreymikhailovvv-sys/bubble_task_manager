@@ -1,33 +1,32 @@
-# Планировыч для iPhone (SwiftUI demo)
+# Планировыч для iPhone (нативный SwiftUI)
 
-The first milestone is a **real native SwiftUI application** targeting iOS 17 and newer. It lives independently from the Android and web clients in `ios-app/`.
+## Этап 2: вход и реальные задачи
 
-## What works
+Это нативное iOS-приложение на Swift и SwiftUI (iOS 17+), собираемое на GitHub Actions без собственного Mac.
 
-- Native overview with a decorative bubble workspace and completion counters.
-- Tasks: category filter, add a task, mark it completed.
-- Habits: mark a habit completed and view progress.
-- A separate Economic module placeholder.
-- Light and dark system appearances.
+Работает в этом PR:
+- Вход в существующий аккаунт Планировыча по логину/почте и паролю через `POST /api/auth/login`.
+- Cookie-based сессия через `btm_auth` (и при наличии `btm_device`) строго от `https://planirovych.ru`.
+- Авторизационные cookie сохраняются в **Keychain, ThisDeviceOnly**. Пароль не сохраняется в приложении.
+- При запуске существующая сессия восстанавливается через `/api/auth/me`. Поскольку этот endpoint создаёт гостевую учётную запись при отсутствии авторизации, приложение **не вызывает его без существующего auth-cookie** и не признаёт гостя входом.
+- Настоящие сферы и задачи загружаются через `GET /api/spheres` и `GET /api/tasks`.
+- Создание задачи (`POST /api/tasks`), отметка выполнения (`PATCH /api/tasks/:id` с `collaborationScope: "me"`), ручное обновление и выход из учётной записи.
+- Основной экран и вкладка задач отображают **только данные сервера**, без фальшивой статистики.
+- Автоподстройка под светлую и тёмную темы.
+- На экране входа остаётся кнопка **«Посмотреть офлайн-демо»**, открывающая первый локальный макет. Изменения в нём не влияют на реальные задачи.
 
-**This is offline sample data, not the user's real tasks.** State resets when the app is relaunched. No credentials are stored, no API calls are made and financial data is not loaded. The next milestone can add authentication and the existing API at `https://planirovych.ru/`.
+Пока не подключены: настоящие привычки, Экономыч, уведомления, Планик, ИИ-чаты и полноценный редактор задач. Их вкладки честно показывают заглушки. Это **не** готовый аналог Android.
 
-## Build on GitHub (no personal Mac required)
+## Как проверить сборку
 
-Open Actions → **iOS SwiftUI demo** on a pull request or run it manually via **Run workflow**. The job:
+1. Открыть PR → вкладка **Checks**, запустить/дождаться workflow `iOS SwiftUI demo`.
+2. Найти загружаемые артефакты `Planirovych-iOS-Simulator` и `Planirovych-iOS-Preview`.
+3. Скриншот отражает **экран входа**, поскольку GitHub Actions **не получает реальные учётные данные пользователя**.
+4. Проверить реальную авторизацию и синхронизацию можно будет на физическом iPhone после выпуска подписанного устройства-совместимого IPA либо на интерактивном iOS Simulator.
 
-1. Selects a hosted macOS runner with Xcode.
-2. Installs XcodeGen and generates the Xcode project from `project.yml`.
-3. Builds an **unsigned iOS Simulator app**, saving `Planirovych-iOS-Simulator.zip`.
-4. Attempts to boot an iPhone Simulator, launch the app and upload `Planirovych-preview.png`.
+Демонстрационный Simulator ZIP **не подходит для установки на физический iPhone**. GitHub Actions собирает его без платной программы разработчика Apple.
 
-The screenshot step is best-effort because simulator runtimes can vary on GitHub-hosted runners; failing to boot a simulator should not invalidate a successful compile.
-
-**Simulator builds cannot be installed on a physical iPhone.** For a real device, a separate `iphoneos` build and Apple code signing / provisioning will be required. Neither Apple Developer membership nor a MacBook is required to obtain the initial Simulator build and preview.
-
-## Local build on macOS (optional)
-
-Install Xcode and XcodeGen, then run:
+## Локальная сборка (если доступен Mac)
 
 ```sh
 cd ios-app
@@ -37,4 +36,4 @@ xcodebuild -project Planirovych.xcodeproj -scheme Planirovych \
   CODE_SIGNING_ALLOWED=NO build
 ```
 
-No changes to production services or Android code are needed for this demo.
+Сборка не модифицирует сервер, Android, сайт или Telegram Mini App. Реальные пользовательские секреты нельзя добавлять в исходный код, workflow или публичные issue/PR.

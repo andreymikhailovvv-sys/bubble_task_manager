@@ -18,7 +18,7 @@ private enum DemoTab: String, CaseIterable, Identifiable {
     }
 }
 
-struct ContentView: View {
+struct DemoDashboardView: View {
     @Environment(\.colorScheme) private var colorScheme
     @StateObject private var store = DemoStore()
     @State private var selectedTab: DemoTab = .overview
