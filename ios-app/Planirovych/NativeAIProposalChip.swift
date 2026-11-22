@@ -91,6 +91,23 @@ struct NativeAIProposalChip: View {
                 Text(rawTitle).font(.subheadline).foregroundStyle(.primary)
             }
 
+            if economic {
+                if let description = proposal.description, !description.isEmpty {
+                    Text(description)
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let details = proposal.details, !details.isEmpty {
+                    ForEach(Array(details.enumerated()), id: \.offset) { _, detail in
+                        Text("• " + detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+
             if let error = proposal.error ?? localError {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .font(.caption)
