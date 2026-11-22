@@ -342,12 +342,13 @@ final class NativeAPI {
     }
 
     func updateTaskSettings(id: String, dueDate: Date?, importance: Int,
-                            sphereId: String?, isSubtask: Bool) async throws -> RemoteTask {
+                            urgency: Int, sphereId: String?, isSubtask: Bool) async throws -> RemoteTask {
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         var fields: [String: Any] = [
             "dueDate": dueDate.map(iso.string(from:)) ?? NSNull(),
-            "importance": max(1, min(5, importance))
+            "importance": max(1, min(5, importance)),
+            "urgency": max(1, min(5, urgency))
         ]
         if !isSubtask { fields["sphereId"] = sphereId ?? NSNull() }
         return try await request("tasks/\(id)", method: "PATCH", json: fields)
