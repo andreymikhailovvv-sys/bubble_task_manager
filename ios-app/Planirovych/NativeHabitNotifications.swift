@@ -53,7 +53,7 @@ enum NativeHabitNotifications {
                 switch habit.recurrenceType {
                 case "WEEKDAYS":
                     for weekday in habit.weekdays where (0...6).contains(weekday) {
-                        let match = DateComponents(weekday: weekday + 1, hour: hour, minute: minute)
+                        let match = DateComponents(hour: hour, minute: minute, weekday: weekday + 1)
                         let trigger = UNCalendarNotificationTrigger(dateMatching: match, repeats: true)
                         let request = UNNotificationRequest(identifier: tag + String(weekday),
                                                             content: body, trigger: trigger)
