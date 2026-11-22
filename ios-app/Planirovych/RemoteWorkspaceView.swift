@@ -327,7 +327,13 @@ struct RemoteWorkspaceView: View {
             .foregroundStyle(accent)
 
             if taskMode == .timeline {
-                NativeTaskTimelineView(tasks: active, spheres: session.spheres) { task in
+                NativeTaskTimelineView(
+                    tasks: session.tasks.filter {
+                        $0.parentTaskId == nil && !$0.isComplete &&
+                        (selectedSphereID == nil || $0.sphereId == selectedSphereID) && matchesTime($0)
+                    },
+                    spheres: session.spheres
+                ) { task in
                     editingTask = task
                 }
             } else if active.isEmpty {
