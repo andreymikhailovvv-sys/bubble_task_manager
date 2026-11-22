@@ -6,8 +6,10 @@ import AVFoundation
 @MainActor
 private final class ChatVoiceRecorder: NSObject, ObservableObject {
     @Published private(set) var isRecording = false
+    @Published private(set) var level: CGFloat = 0
     @Published var errorMessage: String?
     private var recorder: AVAudioRecorder?
+    private var meterTask: Task<Void, Never>?
     private var fileURL: URL?
     private(set) var startedAt: Date?
 
@@ -35,6 +37,7 @@ private final class ChatVoiceRecorder: NSObject, ObservableObject {
                 AVEncoderBitRateKey: 32_000
             ]
             let current = try AVAudioRecorder(url: location, settings: settings)
+            current.isMeteringEnabled = true
             guard current.record(forDuration: 119) else {
                 throw NSError(domain: "PlanirovychAudio", code: 1,
                               userInfo: [NSLocalizedDescriptionKey: "Не удалось начать запись."])
@@ -43,6 +46,18 @@ private final class ChatVoiceRecorder: NSObject, ObservableObject {
             fileURL = location
             startedAt = Date()
             isRecording = true
+            level = 0
+            meterTask?.cancel()
+            meterTask = Task { [weak self] in
+                while !Task.isCancelled {
+                    guard let self, self.isRecording, let recorder = self.recorder else { return }
+                    recorder.updateMeters()
+                    let decibels = recorder.averagePower(forChannel: 0)
+                    let normalized = max(0, min(1, (Double(decibels) + 47) / 43))
+                    self.level = CGFloat(pow(normalized, 1.4))
+                    try? await Task.sleep(nanoseconds: 80_000_000)
+                }
+            }
         } catch {
             errorMessage = error.localizedDescription
             _ = try? AVAudioSession.sharedInstance().setActive(false)
@@ -52,6 +67,9 @@ private final class ChatVoiceRecorder: NSObject, ObservableObject {
     func stop() -> (data: Data, duration: TimeInterval)? {
         guard isRecording, let location = fileURL, let startedAt else { return nil }
         let duration = min(119, Date().timeIntervalSince(startedAt))
+        meterTask?.cancel()
+        meterTask = nil
+        level = 0
         recorder?.stop()
         recorder = nil
         isRecording = false
@@ -71,6 +89,9 @@ private final class ChatVoiceRecorder: NSObject, ObservableObject {
     }
 
     func cancel() {
+        meterTask?.cancel()
+        meterTask = nil
+        level = 0
         recorder?.stop()
         recorder = nil
         isRecording = false
@@ -98,32 +119,32 @@ struct NativeChatView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(accent)
-                    .font(.title3)
+                Image(systemName: "sparkles").foregroundStyle(accent).font(.title3)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Общий чат").font(.title3.bold())
                     Text("Планировыч AI").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button {
-                    Task { await session.loadChat() }
-                } label: {
+                if session.isLoadingChat { ProgressView().controlSize(.small) }
+                Button { Task { await session.loadChat() } } label: {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 17, weight: .medium))
                         .frame(width: 38, height: 38)
                         .background(card, in: Circle())
                 }
-                .disabled(session.isSendingChat)
+                .disabled(session.isSendingChat || session.isLoadingChat)
                 .accessibilityLabel("Обновить диалог")
             }
             .padding(.horizontal, 20)
-            .padding(.vertical, 13)
+            .padding(.top, 13)
+            .padding(.bottom, 5)
+
+            projectAndChatPicker
 
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 14) {
-                        if session.chatMessages.isEmpty {
+                        if session.chatMessages.isEmpty && !session.isLoadingChat {
                             welcome
                         }
                         ForEach(Array(session.chatMessages.enumerated()), id: \.offset) { index, message in
@@ -167,13 +188,73 @@ struct NativeChatView: View {
             }
 
             if voice.isRecording {
-                recordingToolbar
+                recordingPanel
             } else {
                 composer
             }
         }
         .task { await session.loadChat() }
         .onDisappear { voice.cancel() }
+    }
+
+    private var projectAndChatPicker: some View {
+        HStack(spacing: 9) {
+            Menu {
+                ForEach(session.chatProjects) { project in
+                    Button {
+                        if let first = project.chats.first {
+                            Task { await session.selectChat(projectId: project.id, chatId: first.id) }
+                        }
+                    } label: {
+                        Label(project.title, systemImage: project.id == session.selectedProjectID
+                              ? "checkmark.folder.fill" : "folder")
+                    }
+                    .disabled(project.chats.isEmpty || session.isSendingChat)
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(session.selectedChatProject?.icon ?? "🗂️")
+                    Text(session.selectedChatProject?.title ?? "Проекты")
+                        .lineLimit(1)
+                    Image(systemName: "chevron.down").font(.caption2)
+                }
+                .font(.system(size: 12, weight: .medium))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 10)
+                .background(card, in: Capsule())
+            }
+            .accessibilityLabel("Выбрать проект чата")
+
+            Menu {
+                if let project = session.selectedChatProject {
+                    ForEach(project.chats) { thread in
+                        Button {
+                            Task { await session.selectChat(projectId: project.id, chatId: thread.id) }
+                        } label: {
+                            Label(thread.title, systemImage: thread.id == session.selectedThreadID
+                                  ? "checkmark.bubble.left" : "bubble.left")
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "bubble.left.and.text.bubble.right")
+                    Text(session.selectedChatThread?.title ?? "Выбрать чат")
+                        .lineLimit(1)
+                    Image(systemName: "chevron.down").font(.caption2)
+                }
+                .font(.system(size: 12, weight: .medium))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 10)
+                .background(card, in: Capsule())
+            }
+            .accessibilityLabel("Выбрать чат")
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(.primary)
+        .padding(.horizontal, 17)
+        .padding(.bottom, 9)
+        .disabled(session.isSendingChat || session.isLoadingChat)
     }
 
     private var welcome: some View {
@@ -206,6 +287,14 @@ struct NativeChatView: View {
                     .font(.system(size: 15))
                     .textSelection(.enabled)
                     .foregroundStyle(mine ? Color.white : Color.primary)
+                if !mine, let proposal = message.taskProposal {
+                    NativeAIProposalChip(session: session, proposal: proposal, economic: false)
+                }
+                if !mine, let proposals = message.economicProposals {
+                    ForEach(proposals) { proposal in
+                        NativeAIProposalChip(session: session, proposal: proposal, economic: true)
+                    }
+                }
             }
             .padding(14)
             .background(mine ? accent : card, in: RoundedRectangle(cornerRadius: 18))
@@ -224,7 +313,7 @@ struct NativeChatView: View {
                     .foregroundStyle(accent)
                     .frame(width: 42, height: 43)
             }
-            .disabled(session.isSendingChat || sendingVoice)
+            .disabled(session.isSendingChat || sendingVoice || session.selectedChatThread == nil)
             .accessibilityLabel("Записать голосовой запрос")
 
             TextField("Сообщение Планировычу…", text: $draft, axis: .vertical)
@@ -242,7 +331,8 @@ struct NativeChatView: View {
                     .frame(width: 40, height: 43)
             }
             .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                      session.isSendingChat || sendingVoice)
+                      session.isSendingChat || sendingVoice ||
+                      session.selectedChatThread == nil)
             .accessibilityLabel("Отправить сообщение")
         }
         .padding(.horizontal, 10)
@@ -252,32 +342,57 @@ struct NativeChatView: View {
         .padding(.bottom, 9)
     }
 
-    private var recordingToolbar: some View {
-        HStack(spacing: 14) {
-            Button("Отмена") { voice.cancel() }
-                .font(.subheadline.weight(.medium))
-
-            Spacer()
-            Image(systemName: "waveform")
-                .foregroundStyle(.red)
+    private var recordingPanel: some View {
+        VStack(spacing: 12) {
             TimelineView(.periodic(from: .now, by: 1)) { timeline in
-                let seconds = min(119, Int(timeline.date.timeIntervalSince(voice.startedAt ?? timeline.date)))
+                let seconds = max(0, min(119, Int(timeline.date.timeIntervalSince(voice.startedAt ?? timeline.date))))
                 Text(String(format: "%02d:%02d", seconds / 60, seconds % 60))
-                    .monospacedDigit()
-                    .font(.headline)
-            }
-            Spacer()
-            Button {
-                Task { await sendVoice() }
-            } label: {
-                Label("Отправить", systemImage: "arrow.up.circle.fill")
                     .font(.subheadline.weight(.semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
             }
-            .disabled(sendingVoice)
+            ZStack {
+                Circle()
+                    .stroke(accent.opacity(0.12 + Double(voice.level) * 0.25), lineWidth: 2)
+                    .frame(width: 100 + voice.level * 55, height: 100 + voice.level * 55)
+                Circle()
+                    .fill(accent.opacity(0.10 + Double(voice.level) * 0.17))
+                    .frame(width: 85 + voice.level * 28, height: 85 + voice.level * 28)
+                Circle()
+                    .fill(accent)
+                    .frame(width: 65, height: 65)
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 28, weight: .medium))
+                    .foregroundStyle(.white)
+            }
+            .frame(height: 120)
+            .animation(.easeOut(duration: 0.11), value: voice.level)
+            Text("Говорите, микрофон слушает")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack(spacing: 35) {
+                Button {
+                    voice.cancel()
+                } label: {
+                    Label("Отмена", systemImage: "xmark")
+                        .font(.subheadline.weight(.medium))
+                }
+                Button {
+                    Task { await sendVoice() }
+                } label: {
+                    Label("Отправить", systemImage: "arrow.up.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .disabled(sendingVoice)
+            }
+            .frame(maxWidth: .infinity)
         }
+        .padding(.vertical, 15)
         .padding(.horizontal, 18)
-        .padding(.vertical, 18)
-        .background(card)
+        .frame(maxWidth: .infinity)
+        .background(card, in: RoundedRectangle(cornerRadius: 21))
+        .padding(.horizontal, 14)
+        .padding(.bottom, 8)
     }
 
     private func submitText() async {
