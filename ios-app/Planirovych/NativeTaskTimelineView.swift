@@ -109,6 +109,12 @@ struct NativeTaskTimelineView: View {
                     .fill(sectorTint(task))
                     .frame(width: 4)
                 VStack(alignment: .leading, spacing: 5) {
+                    if task.taskType == "EVENT" || task.taskType == "REMINDER" {
+                        Label(task.taskType == "EVENT" ? "Событие" : "Напоминание",
+                              systemImage: task.taskType == "EVENT" ? "calendar" : "bell")
+                            .font(.caption2)
+                            .foregroundStyle(sectorTint(task))
+                    }
                     Text(task.title)
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.primary)
