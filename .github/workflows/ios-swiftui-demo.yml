@@ -65,7 +65,7 @@ jobs:
 
       - name: Launch simulator and take screenshot
         continue-on-error: true
-        timeout-minutes: 8
+        timeout-minutes: 10
         shell: bash
         run: |
           set -euo pipefail
@@ -77,16 +77,35 @@ jobs:
           xcrun simctl boot "$SIM_ID" || true
           xcrun simctl bootstatus "$SIM_ID" -b
           xcrun simctl install "$SIM_ID" "$RUNNER_TEMP/PlanirovychDerived/Build/Products/Debug-iphonesimulator/Planirovych.app"
+          # Capture the real native login screen. We never inject real credentials.
           xcrun simctl launch "$SIM_ID" ru.planirovych.iosdemo
-          sleep 6
+          sleep 5
           xcrun simctl io "$SIM_ID" screenshot "$RUNNER_TEMP/Planirovych-preview.png"
+
+          # Start the app afresh for each OFFLINE demo tab. This debug-only
+          # launch argument does not bypass login in release device builds.
+          for tab in overview tasks habits economic; do
+            xcrun simctl terminate "$SIM_ID" ru.planirovych.iosdemo || true
+            xcrun simctl launch "$SIM_ID" ru.planirovych.iosdemo --ci-preview-tab "$tab"
+            sleep 4
+            xcrun simctl io "$SIM_ID" screenshot "$RUNNER_TEMP/Planirovych-demo-$tab.png"
+          done
+
+          # Check the second appearance without modifying the user's theme.
+          xcrun simctl ui "$SIM_ID" appearance dark
+          xcrun simctl terminate "$SIM_ID" ru.planirovych.iosdemo || true
+          xcrun simctl launch "$SIM_ID" ru.planirovych.iosdemo --ci-preview-tab overview
+          sleep 4
+          xcrun simctl io "$SIM_ID" screenshot "$RUNNER_TEMP/Planirovych-demo-dark.png"
 
       - name: Upload screenshot
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Planirovych-iOS-Preview
-          path: ${{ runner.temp }}/Planirovych-preview.png
+          path: |
+            ${{ runner.temp }}/Planirovych-preview.png
+            ${{ runner.temp }}/Planirovych-demo-*.png
           if-no-files-found: ignore
           retention-days: 14
 

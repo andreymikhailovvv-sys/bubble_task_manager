@@ -63,3 +63,25 @@ Workflow `.github/workflows/ios-iphone-ipa.yml` собирает отдельн�
 
 Успешная компиляция **не гарантирует** успешную установку, работу логина или
 совместимость с любой версией iOS: это проверяется отдельно на устройстве.
+
+## Скриншоты на облачном iOS Simulator без Mac
+
+Workflow `iOS SwiftUI demo` запускает приложение внутри iPhone Simulator на
+macOS runner GitHub Actions и загружает артефакт `Planirovych-iOS-Preview`.
+Внутри ZIP находятся:
+
+- `Planirovych-preview.png` — реальный стартовый экран входа в аккаунт.
+- `Planirovych-demo-overview.png` — обзорная вкладка офлайн-демо.
+- `Planirovych-demo-tasks.png` — офлайн-задачи.
+- `Planirovych-demo-habits.png` — офлайн-привычки.
+- `Planirovych-demo-economic.png` — заглушка Экономыча.
+- `Planirovych-demo-dark.png` — обзор в тёмной теме.
+
+В режиме Debug для автоматизированных скриншотов используется аргумент
+`--ci-preview-tab <overview|tasks|habits|economic>`. В Release этот аргумент
+игнорируется и не открывает обход авторизации. Все скриншоты сделаны **без
+учётных данных и с демо-данными**.
+
+GitHub Actions не предоставляет интерактивный удалённый Simulator, которым можно
+кликать в браузере. Для живого ручного тестирования потребуется macOS (свой
+или удалённый Mac) либо подписанное приложение на реальном iPhone.
