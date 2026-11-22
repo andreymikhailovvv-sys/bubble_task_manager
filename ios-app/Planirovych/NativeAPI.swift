@@ -43,6 +43,47 @@ struct RemoteTask: Decodable, Identifiable {
     var isActualTask: Bool { taskType == nil || taskType == "TASK" }
 }
 
+struct HabitCompletionStat: Decodable {
+    let dateKey: String
+    let amount: Int
+}
+
+struct RemoteHabit: Decodable, Identifiable {
+    let id: String
+    let name: String
+    let icon: String
+    let color: String
+    let targetCount: Int
+    let recurrenceType: String
+    let intervalDays: Int?
+    let weekdays: [Int]
+    let reminderTime: String?
+    let createdAt: String?
+    let stats: [HabitCompletionStat]
+
+    func amount(on dateKey: String) -> Int {
+        stats.first(where: { $0.dateKey == dateKey })?.amount ?? 0
+    }
+}
+
+struct RemoteChatMessage: Decodable {
+    let id: String?
+    let role: String
+    let content: String
+}
+
+private struct ChatHistoryEnvelope: Decodable {
+    let messages: [RemoteChatMessage]
+}
+
+private struct AiChatReply: Decodable {
+    let answer: String
+}
+
+private struct VoiceTranscription: Decodable {
+    let text: String
+}
+
 private struct OperationResult: Decodable {
     let ok: Bool
 }
@@ -227,10 +268,78 @@ final class NativeAPI {
         return try await (tasks, spheres)
     }
 
-    func createTask(title: String, sphereId: String?) async throws -> RemoteTask {
+    func createTask(title: String, sphereId: String?, parentTaskId: String? = nil) async throws -> RemoteTask {
         var payload: [String: Any] = ["title": title, "importance": 1]
         if let sphereId { payload["sphereId"] = sphereId }
+        if let parentTaskId { payload["parentTaskId"] = parentTaskId }
         return try await request("tasks", method: "POST", json: payload)
+    }
+
+    func updateTask(id: String, title: String, description: String) async throws -> RemoteTask {
+        try await request("tasks/\(id)", method: "PATCH", json: [
+            "title": title, "description": description
+        ])
+    }
+
+    func loadHabits() async throws -> [RemoteHabit] {
+        try await request("habits")
+    }
+
+    func createHabit(name: String, icon: String, color: String, targetCount: Int,
+                     recurrenceType: String, weekdays: [Int], intervalDays: Int?) async throws -> RemoteHabit {
+        var json: [String: Any] = [
+            "name": name, "icon": icon, "color": color, "targetCount": targetCount,
+            "recurrenceType": recurrenceType, "weekdays": weekdays
+        ]
+        if let intervalDays { json["intervalDays"] = intervalDays }
+        return try await request("habits", method: "POST", json: json)
+    }
+
+    func updateHabit(id: String, name: String, icon: String, color: String, targetCount: Int,
+                     recurrenceType: String, weekdays: [Int], intervalDays: Int?) async throws -> RemoteHabit {
+        var json: [String: Any] = [
+            "name": name, "icon": icon, "color": color, "targetCount": targetCount,
+            "recurrenceType": recurrenceType, "weekdays": weekdays
+        ]
+        if let intervalDays { json["intervalDays"] = intervalDays }
+        return try await request("habits/\(id)", method: "PATCH", json: json)
+    }
+
+    func setHabitProgress(_ habit: RemoteHabit, dateKey: String, completed: Bool) async throws -> RemoteHabit {
+        let current = habit.amount(on: dateKey)
+        let endpoint = completed ? "complete" : "uncomplete"
+        let amount = completed ? max(1, habit.targetCount - current) : max(1, current)
+        return try await request("habits/\(habit.id)/\(endpoint)",
+                                 method: "POST", json: ["dateKey": dateKey, "amount": amount])
+    }
+
+    func loadGeneralChat() async throws -> [RemoteChatMessage] {
+        let result: ChatHistoryEnvelope = try await request("ai-general-chat")
+        return result.messages
+    }
+
+    func sendGeneralChat(question: String, history: [RemoteChatMessage]) async throws -> String {
+        let payload: [String: Any] = [
+            "clientRequestId": UUID().uuidString.lowercased(),
+            "question": question,
+            "history": history.suffix(30).map { ["role": $0.role, "content": $0.content] },
+            "projectTitle": "Личный проект",
+            "chatId": "quick-ai-requests",
+            "chatTitle": "Быстрые запросы",
+            "userTimeZone": TimeZone.current.identifier
+        ]
+        let result: AiChatReply = try await request("ai-chat", method: "POST",
+                                                   json: payload, timeoutInterval: 180)
+        return result.answer
+    }
+
+    func transcribeVoice(data: Data, duration: TimeInterval) async throws -> String {
+        let result: VoiceTranscription = try await request("ai/audio/transcribe", method: "POST", json: [
+            "audioBase64": data.base64EncodedString(),
+            "mimeType": "audio/mp4",
+            "durationSeconds": max(0.1, min(duration, 120))
+        ], timeoutInterval: 90)
+        return result.text
     }
 
     func setTaskCompleted(_ task: RemoteTask, completed: Bool) async throws -> RemoteTask {
@@ -243,7 +352,8 @@ final class NativeAPI {
     private func request<T: Decodable>(
         _ relativePath: String,
         method: String = "GET",
-        json: [String: Any]? = nil
+        json: [String: Any]? = nil,
+        timeoutInterval: TimeInterval = 30
     ) async throws -> T {
         guard let url = URL(string: relativePath, relativeTo: base),
               url.scheme == "https", url.host == base.host else {
@@ -253,7 +363,7 @@ final class NativeAPI {
         request.httpMethod = method
         request.httpShouldHandleCookies = true
         request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.timeoutInterval = 30
+        request.timeoutInterval = timeoutInterval
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
         if let json {

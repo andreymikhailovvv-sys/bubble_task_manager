@@ -5,6 +5,10 @@ final class NativeWorkspaceSession: ObservableObject {
     @Published private(set) var account: ServerAccount?
     @Published private(set) var tasks: [RemoteTask] = []
     @Published private(set) var spheres: [RemoteSphere] = []
+    @Published private(set) var habits: [RemoteHabit] = []
+    @Published private(set) var chatMessages: [RemoteChatMessage] = []
+    @Published private(set) var isSendingChat = false
+    @Published var chatError: String?
     @Published private(set) var checkingSession = true
     @Published private(set) var isWorking = false
     @Published var errorMessage: String?
@@ -67,6 +71,117 @@ final class NativeWorkspaceSession: ObservableObject {
         }
     }
 
+    func saveTask(id: String, title: String, description: String) async -> Bool {
+        guard account != nil, !isWorking else { return false }
+        let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return false }
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            _ = try await api.updateTask(id: id, title: cleaned, description: description)
+            try await loadWorkspace()
+            errorMessage = nil
+            return true
+        } catch {
+            handle(error)
+            return false
+        }
+    }
+
+    func addSubtask(title: String, parent: RemoteTask) async -> Bool {
+        guard account != nil, !isWorking else { return false }
+        let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return false }
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            _ = try await api.createTask(title: cleaned, sphereId: parent.sphereId,
+                                         parentTaskId: parent.id)
+            try await loadWorkspace()
+            errorMessage = nil
+            return true
+        } catch {
+            handle(error)
+            return false
+        }
+    }
+
+    func upsertHabit(id: String?, name: String, icon: String, color: String,
+                     targetCount: Int, recurrenceType: String, weekdays: [Int],
+                     intervalDays: Int?) async -> Bool {
+        guard account != nil, !isWorking else { return false }
+        let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return false }
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            if let id {
+                _ = try await api.updateHabit(id: id, name: cleaned, icon: icon, color: color,
+                                              targetCount: targetCount, recurrenceType: recurrenceType,
+                                              weekdays: weekdays, intervalDays: intervalDays)
+            } else {
+                _ = try await api.createHabit(name: cleaned, icon: icon, color: color,
+                                              targetCount: targetCount, recurrenceType: recurrenceType,
+                                              weekdays: weekdays, intervalDays: intervalDays)
+            }
+            habits = try await api.loadHabits()
+            errorMessage = nil
+            return true
+        } catch {
+            handle(error)
+            return false
+        }
+    }
+
+    func toggleHabit(_ habit: RemoteHabit, dateKey: String) async {
+        guard account != nil, !isWorking else { return }
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            let completed = habit.amount(on: dateKey) < habit.targetCount
+            let updated = try await api.setHabitProgress(habit, dateKey: dateKey, completed: completed)
+            if let index = habits.firstIndex(where: { $0.id == habit.id }) {
+                habits[index] = updated
+            }
+            errorMessage = nil
+        } catch { handle(error) }
+    }
+
+    func loadChat() async {
+        guard account != nil, !isSendingChat else { return }
+        do {
+            chatMessages = try await api.loadGeneralChat()
+            chatError = nil
+        } catch {
+            chatError = error.localizedDescription
+        }
+    }
+
+    func sendChat(_ question: String) async -> Bool {
+        guard account != nil, !isSendingChat else { return false }
+        let cleaned = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return false }
+        isSendingChat = true
+        chatError = nil
+        defer { isSendingChat = false }
+        do {
+            let answer = try await api.sendGeneralChat(question: cleaned, history: chatMessages)
+            // Update immediately, then prefer the server-owned, synchronized dialogue.
+            chatMessages.append(RemoteChatMessage(id: nil, role: "user", content: cleaned))
+            chatMessages.append(RemoteChatMessage(id: nil, role: "assistant", content: answer))
+            if let history = try? await api.loadGeneralChat() { chatMessages = history }
+            await refresh()
+            return true
+        } catch {
+            chatError = error.localizedDescription
+            return false
+        }
+    }
+
+    func transcribeVoice(data: Data, duration: TimeInterval) async throws -> String {
+        try await api.transcribeVoice(data: data, duration: duration)
+    }
+
     func toggleTask(_ task: RemoteTask) async {
         guard account != nil, !isWorking else { return }
         isWorking = true
@@ -87,14 +202,20 @@ final class NativeWorkspaceSession: ObservableObject {
         account = nil
         tasks = []
         spheres = []
+        habits = []
+        chatMessages = []
+        chatError = nil
         errorMessage = nil
         isWorking = false
     }
 
     private func loadWorkspace() async throws {
-        let (loadedTasks, loadedSpheres) = try await api.loadWorkspace()
+        async let workspace = api.loadWorkspace()
+        async let fetchedHabits = api.loadHabits()
+        let (loadedTasks, loadedSpheres) = try await workspace
         tasks = loadedTasks
         spheres = loadedSpheres
+        habits = try await fetchedHabits
     }
 
     private func handle(_ error: Error) {
@@ -104,6 +225,8 @@ final class NativeWorkspaceSession: ObservableObject {
             account = nil
             tasks = []
             spheres = []
+            habits = []
+            chatMessages = []
         }
     }
 }

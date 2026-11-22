@@ -25,6 +25,7 @@ targets:
         SWIFT_VERSION: "5.0"
         GENERATE_INFOPLIST_FILE: "YES"
         INFOPLIST_KEY_CFBundleDisplayName: "Планировыч"
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Микрофон нужен для голосовых запросов в общем чате Планировыча."
         INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
         CODE_SIGN_STYLE: Automatic
         SUPPORTS_MACCATALYST: "NO"
