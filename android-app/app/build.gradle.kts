@@ -26,8 +26,8 @@ android {
         applicationId = "ru.planirovych.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 22
-        versionName = "1.0.20"
+        versionCode = 23
+        versionName = "1.0.21"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "API_BASE_URL", "\"${project.findProperty("API_BASE_URL") ?: "https://planirovych.ru/"}\"")
     }
