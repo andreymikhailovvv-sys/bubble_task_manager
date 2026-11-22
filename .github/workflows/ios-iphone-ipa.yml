@@ -1,0 +1,108 @@
+name: iOS iPhone unsigned IPA
+
+on:
+  pull_request:
+    paths:
+      - 'ios-app/**'
+      - '.github/workflows/ios-iphone-ipa.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ios-app/**'
+      - '.github/workflows/ios-iphone-ipa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  iphoneos-build:
+    name: Build unsigned iPhone IPA (arm64)
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Print Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios-app
+        run: xcodegen generate
+
+      - name: Build unsigned iPhoneOS application
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project ios-app/Planirovych.xcodeproj \
+            -scheme Planirovych \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/PlanirovychPhoneDerived" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee "$RUNNER_TEMP/ios-device-build.log"
+
+      - name: Validate and package iPhone IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/PlanirovychPhoneDerived/Build/Products/Release-iphoneos/Planirovych.app"
+          test -d "$APP"
+          EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")
+          BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")
+          ARCHS=$(lipo -archs "$APP/$EXECUTABLE")
+          echo "Bundle identifier: $BUNDLE_ID"
+          echo "Device binary architectures: $ARCHS"
+          test "$BUNDLE_ID" = "ru.planirovych.iosdemo"
+          [[ " $ARCHS " == *" arm64 "* ]]
+          test ! -d "$APP/_CodeSignature"
+          mkdir -p "$RUNNER_TEMP/ios-package/Payload"
+          ditto "$APP" "$RUNNER_TEMP/ios-package/Payload/Planirovych.app"
+          (cd "$RUNNER_TEMP/ios-package" && /usr/bin/zip -qry "$RUNNER_TEMP/Planirovych-iPhone-unsigned.ipa" Payload)
+          unzip -t "$RUNNER_TEMP/Planirovych-iPhone-unsigned.ipa" > /dev/null
+          cat > "$RUNNER_TEMP/INSTALLATION-NOTES.txt" <<'EOF'
+          PLANIROVYCH iOS - UNSIGNED iPhoneOS IPA, arm64
+          Minimum iOS version: 17.0
+          Bundle identifier: ru.planirovych.iosdemo
+
+          This file is for a physical iPhone, NOT the iOS Simulator.
+          An unsigned IPA cannot be installed directly on a normal iPhone.
+          Sign it for your device with your own Apple Account, using a
+          compatible iOS sideloading tool (for example Sideloadly).
+          A free Apple Account typically provides a 7-day signature,
+          after which the app must be re-signed.
+
+          Do not upload your Apple Account password, authorization cookies,
+          provisioning profiles or signing keys to GitHub issues, PRs or Actions.
+
+          Real account features need an online connection to planirovych.ru.
+          The app includes a separate offline demo accessible before sign-in.
+          EOF
+          shasum -a 256 "$RUNNER_TEMP/Planirovych-iPhone-unsigned.ipa"
+
+      - name: Upload unsigned iPhone IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Planirovych-iPhone-Unsigned-IPA
+          path: |
+            ${{ runner.temp }}/Planirovych-iPhone-unsigned.ipa
+            ${{ runner.temp }}/INSTALLATION-NOTES.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Planirovych-iPhone-Build-Log
+          path: ${{ runner.temp }}/ios-device-build.log
+          if-no-files-found: ignore
+          retention-days: 7

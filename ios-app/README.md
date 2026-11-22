@@ -37,3 +37,29 @@ xcodebuild -project Planirovych.xcodeproj -scheme Planirovych \
 ```
 
 Сборка не модифицирует сервер, Android, сайт или Telegram Mini App. Реальные пользовательские секреты нельзя добавлять в исходный код, workflow или публичные issue/PR.
+
+## Сборка для настоящего iPhone без App Store
+
+Workflow `.github/workflows/ios-iphone-ipa.yml` собирает отдельный артефакт
+`Planirovych-iPhone-Unsigned-IPA` на GitHub-hosted macOS. Он содержит
+`Planirovych-iPhone-unsigned.ipa` с ARM64-приложением для iOS **17+**.
+
+**Это не подписанный файл** и не версия для iOS Simulator. Непосредственно
+открыть IPA на iPhone и установить его невозможно. Файл предназначен для
+локальной подписи Apple Account и установки на свой телефон через
+подходящий sideload-инструмент, например [Sideloadly](https://sideloadly.io/).
+Для бесплатного Apple Account подпись обычно действует до **7 дней**.
+Необходимо разрешить режим разработчика на iPhone (iOS 16+).
+
+### Как получить IPA
+
+1. Открыть GitHub → Actions → **iOS iPhone unsigned IPA** и выбрать
+   успешный запуск для нужного коммита.
+2. В **Summary → Artifacts** скачать `Planirovych-iPhone-Unsigned-IPA`.
+3. Распаковать ZIP один раз, внутри будет `Planirovych-iPhone-unsigned.ipa`
+   и `INSTALLATION-NOTES.txt`.
+4. На собственном компьютере подписать и установить IPA на свой iPhone.
+   Никогда не передавать пароли Apple Account или ключи подписи в GitHub.
+
+Успешная компиляция **не гарантирует** успешную установку, работу логина или
+совместимость с любой версией iOS: это проверяется отдельно на устройстве.
