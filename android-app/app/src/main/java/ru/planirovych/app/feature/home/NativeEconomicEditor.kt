@@ -235,29 +235,27 @@ internal fun EcoEditorSheet(
     val stableSheetHeight = remember(type, item.ecoText("id")) {
         (initialScreenHeightDp * .85f).dp
     }
-    val stableSheetState = rememberModalBottomSheetState(skipPartiallyExpanded=true)
+    val savingNow by rememberUpdatedState(saving)
+    val stableSheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded=true,
+        // Drag only between Expanded and Hidden: no intermediate anchor that
+        // can bounce while the user scrolls. Never dismiss mid-save.
+        confirmValueChange={target->target!=SheetValue.Hidden || !savingNow}
+    )
     ModalBottomSheet(
         onDismissRequest={if(!saving)onDismiss()},
         sheetState=stableSheetState,
-        // The sheet must not compete with the form for a downward swipe at
-        // the end of the scroll range. Dismiss via the visible X/Cancel.
-        sheetGesturesEnabled=false,
+        sheetGesturesEnabled=true,
         containerColor=colors.panel,
         contentColor=colors.text,
         dragHandle={BottomSheetDefaults.DragHandle(color=colors.muted)}
     ){
         Column(Modifier.fillMaxWidth().height(stableSheetHeight)
             .imePadding().navigationBarsPadding().padding(horizontal=16.dp)) {
-            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
-                horizontalArrangement=Arrangement.SpaceBetween) {
-                Column {
-                    Text(if(editing)"РЕДАКТИРОВАНИЕ" else "НОВАЯ ЗАПИСЬ",
-                        fontSize=9.sp,letterSpacing=.8.sp,fontWeight=FontWeight.SemiBold,color=colors.gold)
-                    Text(title,fontSize=20.sp,fontWeight=FontWeight.Bold,color=colors.text)
-                }
-                IconButton(enabled=!saving,onClick=onDismiss) {
-                    Icon(Icons.Default.Close,"Закрыть",tint=colors.muted)
-                }
+            Column {
+                Text(if(editing)"РЕДАКТИРОВАНИЕ" else "НОВАЯ ЗАПИСЬ",
+                    fontSize=9.sp,letterSpacing=.8.sp,fontWeight=FontWeight.SemiBold,color=colors.gold)
+                Text(title,fontSize=20.sp,fontWeight=FontWeight.Bold,color=colors.text)
             }
             Spacer(Modifier.height(10.dp))
             HorizontalDivider(color=colors.outline)
