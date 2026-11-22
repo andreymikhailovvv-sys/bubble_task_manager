@@ -25,6 +25,19 @@ struct DemoDashboardView: View {
     @State private var selectedArea: TaskArea?
     @State private var presentingNewTask = false
 
+    // Used only to select the initial screen in CI's simulator screenshots.
+    // Regular launches still start on the overview.
+    init(previewTabName: String? = nil) {
+        let tab: DemoTab
+        switch previewTabName {
+        case "tasks": tab = .tasks
+        case "habits": tab = .habits
+        case "economic": tab = .economic
+        default: tab = .overview
+        }
+        _selectedTab = State(initialValue: tab)
+    }
+
     private var dark: Bool { colorScheme == .dark }
     private var background: Color {
         dark ? Color(red: 0.075, green: 0.085, blue: 0.13) : Color(red: 0.95, green: 0.96, blue: 0.985)

@@ -114,6 +114,41 @@ struct ContentView: View {
 
     var body: some View {
         Group {
+#if DEBUG
+            // Preview-only launch argument used by GitHub's iOS Simulator job.
+            // Release builds never expose a shortcut around authentication.
+            if let tab = Self.ciPreviewTab {
+                DemoDashboardView(previewTabName: tab)
+            } else {
+                normalScreens
+            }
+#else
+            normalScreens
+#endif
+        }
+        .task {
+#if DEBUG
+            if Self.ciPreviewTab != nil { return }
+#endif
+            await session.bootstrap()
+        }
+        .sheet(isPresented: $showOfflineDemo) {
+            DemoDashboardView()
+        }
+    }
+
+#if DEBUG
+    private static var ciPreviewTab: String? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let flag = args.firstIndex(of: "--ci-preview-tab"),
+              args.indices.contains(flag + 1) else { return nil }
+        let tab = args[flag + 1]
+        return ["overview", "tasks", "habits", "economic"].contains(tab) ? tab : nil
+    }
+#endif
+
+    private var normalScreens: some View {
+        Group {
             if session.checkingSession {
                 VStack(spacing: 16) {
                     Image(systemName: "sparkles.rectangle.stack.fill")
@@ -134,10 +169,6 @@ struct ContentView: View {
                     onShowDemo: { showOfflineDemo = true }
                 )
             }
-        }
-        .task { await session.bootstrap() }
-        .sheet(isPresented: $showOfflineDemo) {
-            DemoDashboardView()
         }
     }
 }
