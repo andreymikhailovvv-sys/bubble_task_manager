@@ -93,13 +93,13 @@ final class NativeWorkspaceSession: ObservableObject {
     }
 
     func saveTaskSettings(task: RemoteTask, dueDate: Date?,
-                          importance: Int, sphereId: String?) async -> Bool {
+                          importance: Int, urgency: Int, sphereId: String?) async -> Bool {
         guard account != nil, !isWorking else { return false }
         isWorking = true
         defer { isWorking = false }
         do {
             _ = try await api.updateTaskSettings(id: task.id, dueDate: dueDate,
-                                                 importance: importance, sphereId: sphereId,
+                                                 importance: importance, urgency: urgency, sphereId: sphereId,
                                                  isSubtask: task.parentTaskId != nil)
             try await loadWorkspace()
             errorMessage = nil
