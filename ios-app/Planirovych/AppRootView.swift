@@ -7,6 +7,10 @@ final class NativeWorkspaceSession: ObservableObject {
     @Published private(set) var spheres: [RemoteSphere] = []
     @Published private(set) var habits: [RemoteHabit] = []
     @Published private(set) var chatMessages: [RemoteChatMessage] = []
+    @Published private(set) var chatProjects: [NativeChatProject] = []
+    @Published private(set) var selectedProjectID: String?
+    @Published private(set) var selectedThreadID: String?
+    @Published private(set) var isLoadingChat = false
     @Published private(set) var isSendingChat = false
     @Published var chatError: String?
     @Published private(set) var checkingSession = true
@@ -88,6 +92,24 @@ final class NativeWorkspaceSession: ObservableObject {
         }
     }
 
+    func saveTaskSettings(task: RemoteTask, dueDate: Date?,
+                          importance: Int, sphereId: String?) async -> Bool {
+        guard account != nil, !isWorking else { return false }
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            _ = try await api.updateTaskSettings(id: task.id, dueDate: dueDate,
+                                                 importance: importance, sphereId: sphereId,
+                                                 isSubtask: task.parentTaskId != nil)
+            try await loadWorkspace()
+            errorMessage = nil
+            return true
+        } catch {
+            handle(error)
+            return false
+        }
+    }
+
     func addSubtask(title: String, parent: RemoteTask) async -> Bool {
         guard account != nil, !isWorking else { return false }
         let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -108,7 +130,7 @@ final class NativeWorkspaceSession: ObservableObject {
 
     func upsertHabit(id: String?, name: String, icon: String, color: String,
                      targetCount: Int, recurrenceType: String, weekdays: [Int],
-                     intervalDays: Int?) async -> Bool {
+                     intervalDays: Int?, reminderTimes: [String]) async -> Bool {
         guard account != nil, !isWorking else { return false }
         let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty else { return false }
@@ -118,11 +140,13 @@ final class NativeWorkspaceSession: ObservableObject {
             if let id {
                 _ = try await api.updateHabit(id: id, name: cleaned, icon: icon, color: color,
                                               targetCount: targetCount, recurrenceType: recurrenceType,
-                                              weekdays: weekdays, intervalDays: intervalDays)
+                                              weekdays: weekdays, intervalDays: intervalDays,
+                                              reminderTimes: reminderTimes)
             } else {
                 _ = try await api.createHabit(name: cleaned, icon: icon, color: color,
                                               targetCount: targetCount, recurrenceType: recurrenceType,
-                                              weekdays: weekdays, intervalDays: intervalDays)
+                                              weekdays: weekdays, intervalDays: intervalDays,
+                                              reminderTimes: reminderTimes)
             }
             habits = try await api.loadHabits()
             errorMessage = nil
@@ -131,6 +155,23 @@ final class NativeWorkspaceSession: ObservableObject {
             handle(error)
             return false
         }
+    }
+
+    func habitHistory(id: String) async throws -> [HabitCompletionStat] {
+        try await api.loadHabitHistory(id: id)
+    }
+
+    func changeHabitAmount(_ habit: RemoteHabit, dateKey: String,
+                           increment: Bool, amount: Int = 1) async {
+        guard account != nil, !isWorking else { return }
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            let updated = try await api.changeHabitAmount(habit, dateKey: dateKey,
+                                                          increment: increment, amount: amount)
+            if let index = habits.firstIndex(where: { $0.id == habit.id }) { habits[index] = updated }
+            errorMessage = nil
+        } catch { handle(error) }
     }
 
     func toggleHabit(_ habit: RemoteHabit, dateKey: String) async {
@@ -147,30 +188,87 @@ final class NativeWorkspaceSession: ObservableObject {
         } catch { handle(error) }
     }
 
+    var selectedChatProject: NativeChatProject? {
+        chatProjects.first(where: { $0.id == selectedProjectID })
+    }
+
+    var selectedChatThread: NativeChatThread? {
+        selectedChatProject?.chats.first(where: { $0.id == selectedThreadID })
+    }
+
     func loadChat() async {
         guard account != nil, !isSendingChat else { return }
+        isLoadingChat = true
+        defer { isLoadingChat = false }
         do {
-            chatMessages = try await api.loadGeneralChat()
+            chatProjects = try await api.loadChatProjects()
+            if selectedChatThread == nil {
+                let quick = chatProjects.first { $0.chats.contains(where: { $0.id == "quick-ai-requests" }) }
+                let project = quick ?? chatProjects.first(where: { !$0.chats.isEmpty })
+                selectedProjectID = project?.id
+                selectedThreadID = project?.chats.first(where: { $0.id == "quick-ai-requests" })?.id
+                    ?? project?.chats.first?.id
+            }
+            if let pid = selectedProjectID, let cid = selectedThreadID {
+                chatMessages = try await api.loadChat(projectId: pid, chatId: cid)
+            } else { chatMessages = [] }
             chatError = nil
-        } catch {
-            chatError = error.localizedDescription
-        }
+        } catch { chatError = error.localizedDescription }
+    }
+
+    func selectChat(projectId: String, chatId: String) async {
+        guard !isSendingChat, !isLoadingChat, account != nil else { return }
+        selectedProjectID = projectId
+        selectedThreadID = chatId
+        isLoadingChat = true
+        defer { isLoadingChat = false }
+        do {
+            chatMessages = try await api.loadChat(projectId: projectId, chatId: chatId)
+            chatError = nil
+        } catch { chatError = error.localizedDescription }
     }
 
     func sendChat(_ question: String) async -> Bool {
-        guard account != nil, !isSendingChat else { return false }
+        guard account != nil, !isSendingChat, !isLoadingChat,
+              let project = selectedChatProject, let thread = selectedChatThread else { return false }
         let cleaned = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty else { return false }
         isSendingChat = true
         chatError = nil
         defer { isSendingChat = false }
         do {
-            let answer = try await api.sendGeneralChat(question: cleaned, history: chatMessages)
-            // Update immediately, then prefer the server-owned, synchronized dialogue.
-            chatMessages.append(RemoteChatMessage(id: nil, role: "user", content: cleaned))
-            chatMessages.append(RemoteChatMessage(id: nil, role: "assistant", content: answer))
-            if let history = try? await api.loadGeneralChat() { chatMessages = history }
+            let reply = try await api.sendChat(question: cleaned, history: chatMessages,
+                                               project: project, thread: thread)
+            chatMessages.append(RemoteChatMessage(id: UUID().uuidString, role: "user", content: cleaned))
+            chatMessages.append(RemoteChatMessage(id: UUID().uuidString, role: "assistant",
+                                                  content: reply.answer, taskProposal: reply.taskProposal,
+                                                  economicProposals: reply.economicProposals))
+            do {
+                try await api.persistChatReply(projectId: project.id, chatId: thread.id,
+                                               question: cleaned, reply: reply)
+                chatMessages = try await api.loadChat(projectId: project.id, chatId: thread.id)
+            } catch {
+                chatError = "Ответ получен, но история пока не синхронизирована: \(error.localizedDescription)"
+            }
             await refresh()
+            return true
+        } catch {
+            chatError = error.localizedDescription
+            return false
+        }
+    }
+
+    func changeProposal(_ proposal: NativeAIProposal, economic: Bool,
+                        action: String) async -> Bool {
+        guard account != nil, !isSendingChat,
+              let pid = selectedProjectID, let cid = selectedThreadID else { return false }
+        isSendingChat = true
+        defer { isSendingChat = false }
+        do {
+            _ = try await api.proposalAction(proposal, economic: economic, action: action)
+            chatMessages = try await api.loadChat(projectId: pid, chatId: cid)
+            await refresh()
+            chatError = nil
             return true
         } catch {
             chatError = error.localizedDescription
@@ -204,6 +302,9 @@ final class NativeWorkspaceSession: ObservableObject {
         spheres = []
         habits = []
         chatMessages = []
+        chatProjects = []
+        selectedProjectID = nil
+        selectedThreadID = nil
         chatError = nil
         errorMessage = nil
         isWorking = false
@@ -227,6 +328,9 @@ final class NativeWorkspaceSession: ObservableObject {
             spheres = []
             habits = []
             chatMessages = []
+            chatProjects = []
+            selectedProjectID = nil
+            selectedThreadID = nil
         }
     }
 }
