@@ -86,7 +86,6 @@ struct NativeAIProposal: Codable, Identifiable {
     let action: String?
     let autoApplied: Bool?
     let operations: [NativeProposalOperation]?
-    let details: [String]?
     let error: String?
     let revision: String?
 }
