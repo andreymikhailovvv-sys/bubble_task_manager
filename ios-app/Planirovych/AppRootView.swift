@@ -317,6 +317,7 @@ final class NativeWorkspaceSession: ObservableObject {
         tasks = loadedTasks
         spheres = loadedSpheres
         habits = try await fetchedHabits
+        await NativeHabitNotifications.syncIfAuthorized(habits)
     }
 
     private func handle(_ error: Error) {
