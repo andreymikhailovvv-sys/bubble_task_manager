@@ -235,14 +235,25 @@ internal fun rememberAiChatSpeechInput(
             val accessibleAccent=if(dark)accent
                 else if(financeAccent)Color(0xFF97540E) else Color(0xFF6435B3)
             val iconOnAccent=if(financeAccent)Color(0xFF2B1B08) else Color.White
+            // In light mode dim the workspace a touch more, without returning
+            // to the nearly opaque backdrop of the original recording window.
+            val voiceBackdrop=if(dark)Color(0xB30B1120) else Color(0xBFD9E0EC)
+            val statusBarFadePx=with(LocalDensity.current){140.dp.toPx()}
 
             if(recordingNow){
                 Dialog(onDismissRequest={},properties=DialogProperties(
                     usePlatformDefaultWidth=false,dismissOnBackPress=false,
                     dismissOnClickOutside=false)){
                     Box(Modifier.fillMaxSize()
-                        // Softer than the previous near-opaque 0xED overlay.
-                        .background(if(dark)Color(0xB30B1120) else Color(0xB4EDF0F8))){
+                        // Blend into the system status bar instead of ending the
+                        // dimmed recording layer at one abrupt horizontal edge.
+                        .background(Brush.verticalGradient(
+                            colors=listOf(
+                                voiceBackdrop.copy(alpha=voiceBackdrop.alpha*.24f),
+                                voiceBackdrop
+                            ),
+                            startY=0f,endY=statusBarFadePx
+                        ))){
                         Column(
                             Modifier.align(Alignment.TopCenter)
                                 .statusBarsPadding()
@@ -254,20 +265,28 @@ internal fun rememberAiChatSpeechInput(
                                 fontWeight=FontWeight.SemiBold,fontSize=20.sp)
                             Text("Говорите, я записываю",color=secondaryText,fontSize=13.sp)
                             Spacer(Modifier.height(8.dp))
-                            // Only a few quiet suggestions: the microphone remains
-                            // the main visual focus instead of a wall of chips.
-                            suggestions.take(3).forEach { hint ->
-                                val suggestedFinance=hint in financialSuggestions
-                                val hintColor=if(suggestedFinance)Color(0xFFF5A52E) else accent
-                                Surface(
-                                    shape=RoundedCornerShape(50),
-                                    color=panel.copy(alpha=if(dark).80f else .92f),
-                                    border=BorderStroke(.8.dp,
-                                        hintColor.copy(alpha=if(dark).50f else .33f))
-                                ){
-                                    Text(hint,Modifier.padding(horizontal=14.dp,vertical=7.dp),
-                                        color=primaryText,fontSize=12.sp,
-                                        fontWeight=FontWeight.Medium)
+                            // Restore every quick request, including financial ones
+                            // in the planner. Wrap chips into short centered rows so
+                            // nine suggestions do not cover the microphone controls.
+                            FlowRow(
+                                modifier=Modifier.fillMaxWidth(),
+                                horizontalArrangement=Arrangement.spacedBy(
+                                    7.dp,Alignment.CenterHorizontally),
+                                verticalArrangement=Arrangement.spacedBy(7.dp)
+                            ){
+                                suggestions.forEach { hint ->
+                                    val suggestedFinance=hint in financialSuggestions
+                                    val hintColor=if(suggestedFinance)Color(0xFFF5A52E) else accent
+                                    Surface(
+                                        shape=RoundedCornerShape(50),
+                                        color=panel.copy(alpha=if(dark).80f else .92f),
+                                        border=BorderStroke(.8.dp,
+                                            hintColor.copy(alpha=if(dark).50f else .33f))
+                                    ){
+                                        Text(hint,Modifier.padding(horizontal=11.dp,vertical=6.dp),
+                                            color=primaryText,fontSize=11.sp,
+                                            fontWeight=FontWeight.Medium)
+                                    }
                                 }
                             }
                         }
@@ -289,9 +308,10 @@ internal fun rememberAiChatSpeechInput(
                                 verticalAlignment=Alignment.CenterVertically,
                                 horizontalArrangement=Arrangement.SpaceBetween
                             ){
-                                Column(Modifier.weight(1f),
-                                    horizontalAlignment=Alignment.CenterHorizontally,
-                                    verticalArrangement=Arrangement.spacedBy(7.dp)){
+                                Box(Modifier.weight(1f).height(156.dp),
+                                    contentAlignment=Alignment.Center){
+                                    // Center the button itself, not button+caption,
+                                    // on the central microphone's horizontal axis.
                                     Box(Modifier.size(48.dp).clip(CircleShape)
                                         .background(panel.copy(alpha=.91f))
                                         .border(.8.dp,panelBorder,CircleShape)
@@ -300,7 +320,8 @@ internal fun rememberAiChatSpeechInput(
                                         Icon(Icons.Default.Close,"Отменить запись",
                                             tint=primaryText,modifier=Modifier.size(21.dp))
                                     }
-                                    Text("Отмена",fontSize=11.sp,color=secondaryText)
+                                    Text("Отмена",Modifier.align(Alignment.Center)
+                                        .offset(y=47.dp),fontSize=11.sp,color=secondaryText)
                                 }
                                 Box(Modifier.size(156.dp),
                                     contentAlignment=Alignment.Center){
@@ -331,9 +352,8 @@ internal fun rememberAiChatSpeechInput(
                                             tint=iconOnAccent,modifier=Modifier.size(36.dp))
                                     }
                                 }
-                                Column(Modifier.weight(1f),
-                                    horizontalAlignment=Alignment.CenterHorizontally,
-                                    verticalArrangement=Arrangement.spacedBy(7.dp)){
+                                Box(Modifier.weight(1f).height(156.dp),
+                                    contentAlignment=Alignment.Center){
                                     Box(Modifier.size(48.dp).clip(CircleShape)
                                         .background(accent)
                                         .clickable { finishRecording(true) },
@@ -341,7 +361,8 @@ internal fun rememberAiChatSpeechInput(
                                         Icon(Icons.Default.Send,"Отправить голосовой запрос",
                                             tint=iconOnAccent,modifier=Modifier.size(21.dp))
                                     }
-                                    Text("Отправить",fontSize=11.sp,
+                                    Text("Отправить",Modifier.align(Alignment.Center)
+                                        .offset(y=47.dp),fontSize=11.sp,
                                         fontWeight=FontWeight.Medium,color=primaryText)
                                 }
                             }
