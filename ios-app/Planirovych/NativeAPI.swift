@@ -62,6 +62,9 @@ struct RemoteHabit: Decodable, Identifiable {
     let reminderTime: String?
     let reminderTimes: [String]?
     let createdAt: String?
+    let endDate: String?
+    let isArchived: Bool?
+    let isAutoCompleted: Bool?
     let stats: [HabitCompletionStat]
 
     func amount(on dateKey: String) -> Int {
