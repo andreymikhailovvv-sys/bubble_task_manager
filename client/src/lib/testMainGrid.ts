@@ -78,9 +78,14 @@ export function testMainReflow(blocks: readonly TestMainBlock[], columns: number
     if (!spec) continue;
     const w = Math.min(columns, Math.max(spec.minW, Math.round(item.w * columns / 12)));
     const h = item.h;
-    const candidate: TestMainBlock = { ...item, x: 0, y: 0, w, h };
-    const result = testMainAdd(packed, candidate.kind, candidate.id, columns);
-    packed.push({ ...result[result.length - 1], h });
+    let position: TestMainBlock | null = null;
+    for (let y = 0; y < 350 && !position; y++) {
+      for (let x = 0; x <= columns - w; x++) {
+        const candidate: TestMainBlock = { ...item, x, y, w, h };
+        if (packed.every(other => !testMainOverlap(candidate, other))) { position = candidate; break; }
+      }
+    }
+    packed.push(position ?? { ...item, x: 0, y: Math.max(0, ...packed.map(block => block.y + block.h)), w, h });
   }
   return packed;
 }
