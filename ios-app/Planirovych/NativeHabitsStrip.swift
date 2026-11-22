@@ -176,6 +176,7 @@ struct NativeHabitEditor: View {
     @State private var weekdays: Set<Int>
     @State private var reminderEnabled: Bool
     @State private var reminderDate: Date
+    @State private var showNotificationWarning = false
 
     private let emojiOptions = ["✨","💪","🏃","📚","📖","🧘","💧","🥗","😴","🚴","🎯","💻","📝","🎨","🎹","☀️","🌱","❤️","🧠","🦷","🚶","🏊","🏋️","☕️","💊","🧹","💰","📅","🐶","⛳️","🚗","🌙","🔥","🎵","📵","🫶"]
     private let palette = ["#22c55e", "#8b5cf6", "#3b82f6", "#f97316", "#ec4899", "#eab308", "#ef4444"]
@@ -302,7 +303,15 @@ struct NativeHabitEditor: View {
                                 intervalDays: recurrenceType == "INTERVAL" ? intervalDays : nil,
                                 reminderTimes: times
                             )
-                            if ok { dismiss() }
+                            if ok {
+                                if reminderEnabled {
+                                    let granted = await NativeHabitNotifications.requestAndSync(session.habits)
+                                    if !granted { showNotificationWarning = true }
+                                    else { dismiss() }
+                                } else {
+                                    dismiss()
+                                }
+                            }
                         }
                     }
                     .disabled(session.isWorking ||
@@ -310,6 +319,11 @@ struct NativeHabitEditor: View {
                               (recurrenceType == "WEEKDAYS" && weekdays.isEmpty))
                 }
             }
+        }
+        .alert("Уведомления отключены", isPresented: $showNotificationWarning) {
+            Button("Понятно") { dismiss() }
+        } message: {
+            Text("Время сохранено. Чтобы iPhone показывал напоминания, разреши уведомления Планировычу в настройках.")
         }
     }
 }
