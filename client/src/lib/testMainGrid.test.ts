@@ -43,7 +43,7 @@ test('move and resize respect minimum dimensions and push neighboring modules do
   const neighbor = initial[1];
   const moved = testMainMove(initial, first.id, { x: neighbor.x, y: neighbor.y }, 12);
   assertGrid(moved, 12);
-  assert.equal(moved.find(block => block.id === first.id)!.x, 5); // 8 columns clamped to a 12-column width.
+  assert.equal(moved.find(block => block.id === first.id)!.x, 4); // 8-column block is clamped within 12 columns.
   assert.equal(initial[0].x, 0, 'do not mutate the original layout');
   const shrunk = testMainMove(moved, first.id, { w: 1, h: 1 }, 12);
   assertGrid(shrunk, 12);
