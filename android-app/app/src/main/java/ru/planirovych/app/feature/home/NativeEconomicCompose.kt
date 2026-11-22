@@ -570,13 +570,8 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
             ) {
                 Column(Modifier.fillMaxWidth().height(370.dp).navigationBarsPadding()
                     .padding(horizontal=18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-                    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
-                        horizontalArrangement=Arrangement.SpaceBetween) {
-                        Text("Фильтры операций",color=colors.text,fontWeight=FontWeight.Bold,fontSize=20.sp)
-                        IconButton(onClick={filtersOpen=false}){
-                            Icon(Icons.Default.Close,"Закрыть фильтры",tint=colors.muted)
-                        }
-                    }
+                    Text("Фильтры операций",color=colors.text,
+                        fontWeight=FontWeight.Bold,fontSize=20.sp)
                     EcoSelect("Тип операции",kindFilter,
                         listOf("" to "Все типы","EXPENSE" to "Расходы","INCOME" to "Доходы",
                             "TRANSFER" to "Переводы","DEBTS" to "Долговые операции"),colors){kindFilter=it}
