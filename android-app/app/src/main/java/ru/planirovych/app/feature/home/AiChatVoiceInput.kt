@@ -77,6 +77,7 @@ internal fun rememberAiChatSpeechInput(
     val recorder=remember { mutableStateOf<MediaRecorder?>(null) }
     val recording=remember { mutableStateOf<File?>(null) }
     var processingJob by remember { mutableStateOf<Job?>(null) }
+    var processingGeneration by remember { mutableIntStateOf(0) }
     val maxSize=6*1024*1024
 
     fun releaseRecorder(discard:Boolean) {
@@ -142,6 +143,7 @@ internal fun rememberAiChatSpeechInput(
             return
         }
         stage=VoiceRecordingStage.TRANSCRIBING
+        val generation=++processingGeneration
         if(sendImmediately)processingStarted()
         processingJob=scope.launch{
             try{
@@ -162,15 +164,19 @@ internal fun rememberAiChatSpeechInput(
                 errorCallback(cause.message?.take(240)
                     ?:"Расшифровка не удалась. Повторите попытку.")
             }finally{
-                stage=VoiceRecordingStage.IDLE
-                elapsedSeconds=0
-                processingJob=null
+                // An earlier cancelled job must not close a new recording.
+                if(processingGeneration==generation){
+                    stage=VoiceRecordingStage.IDLE
+                    elapsedSeconds=0
+                    processingJob=null
+                }
             }
         }
     }
 
     fun cancelProcessing(){
         if(stage!=VoiceRecordingStage.TRANSCRIBING)return
+        processingGeneration++
         processingJob?.cancel()
         processingJob=null
         stage=VoiceRecordingStage.IDLE
