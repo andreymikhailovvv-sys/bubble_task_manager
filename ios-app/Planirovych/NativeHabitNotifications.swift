@@ -17,7 +17,7 @@ enum NativeHabitNotifications {
 
     static func syncIfAuthorized(_ habits: [RemoteHabit]) async {
         let center = UNUserNotificationCenter.current()
-        let settings = await withCheckedContinuation { continuation in
+        let settings: UNNotificationSettings = await withCheckedContinuation { (continuation: CheckedContinuation<UNNotificationSettings, Never>) in
             center.getNotificationSettings { continuation.resume(returning: $0) }
         }
         if settings.authorizationStatus == .authorized ||
@@ -29,7 +29,7 @@ enum NativeHabitNotifications {
 
     private static func sync(_ habits: [RemoteHabit]) async {
         let center = UNUserNotificationCenter.current()
-        let existing = await withCheckedContinuation { continuation in
+        let existing: [UNNotificationRequest] = await withCheckedContinuation { (continuation: CheckedContinuation<[UNNotificationRequest], Never>) in
             center.getPendingNotificationRequests { continuation.resume(returning: $0) }
         }
         center.removePendingNotificationRequests(
