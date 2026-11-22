@@ -85,6 +85,8 @@ struct NativeAIProposal: Codable, Identifiable {
     let id: String
     let status: String?
     let title: String?
+    let description: String?
+    let details: [String]?
     let entity: String?
     let action: String?
     let autoApplied: Bool?
@@ -93,7 +95,7 @@ struct NativeAIProposal: Codable, Identifiable {
     let revision: String?
 
     private enum CodingKeys: String, CodingKey {
-        case id, status, title, entity, action, autoApplied, operations, error, revision
+        case id, status, title, description, details, entity, action, autoApplied, operations, error, revision
     }
 
     init(from decoder: Decoder) throws {
@@ -101,6 +103,8 @@ struct NativeAIProposal: Codable, Identifiable {
         id = try values.decode(String.self, forKey: .id)
         status = try? values.decodeIfPresent(String.self, forKey: .status)
         title = try? values.decodeIfPresent(String.self, forKey: .title)
+        description = try? values.decodeIfPresent(String.self, forKey: .description)
+        details = try? values.decodeIfPresent([String].self, forKey: .details)
         entity = try? values.decodeIfPresent(String.self, forKey: .entity)
         action = try? values.decodeIfPresent(String.self, forKey: .action)
         autoApplied = try? values.decodeIfPresent(Bool.self, forKey: .autoApplied)
