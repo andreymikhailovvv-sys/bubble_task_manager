@@ -33,6 +33,8 @@ enum HabitCalendar {
     }
 
     static func scheduled(_ habit: RemoteHabit, on date: Date) -> Bool {
+        if habit.isArchived == true || habit.isAutoCompleted == true { return false }
+        if let endDate = habit.endDate, dateKey(date) > String(endDate.prefix(10)) { return false }
         let calendar = Calendar.current
         let day = calendar.startOfDay(for: date)
         let created = calendar.startOfDay(for: createdDate(habit))
