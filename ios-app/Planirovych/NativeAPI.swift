@@ -91,6 +91,23 @@ struct NativeAIProposal: Codable, Identifiable {
     let operations: [NativeProposalOperation]?
     let error: String?
     let revision: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, status, title, entity, action, autoApplied, operations, error, revision
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        status = try? values.decodeIfPresent(String.self, forKey: .status)
+        title = try? values.decodeIfPresent(String.self, forKey: .title)
+        entity = try? values.decodeIfPresent(String.self, forKey: .entity)
+        action = try? values.decodeIfPresent(String.self, forKey: .action)
+        autoApplied = try? values.decodeIfPresent(Bool.self, forKey: .autoApplied)
+        operations = try? values.decodeIfPresent([NativeProposalOperation].self, forKey: .operations)
+        error = try? values.decodeIfPresent(String.self, forKey: .error)
+        revision = try? values.decodeIfPresent(String.self, forKey: .revision)
+    }
 }
 
 struct NativeChatThread: Identifiable {
@@ -129,6 +146,19 @@ struct RemoteChatMessage: Codable {
         self.content = content
         self.taskProposal = taskProposal
         self.economicProposals = economicProposals
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, role, content, taskProposal, economicProposals
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try? values.decodeIfPresent(String.self, forKey: .id)
+        role = (try? values.decode(String.self, forKey: .role)) ?? "assistant"
+        content = (try? values.decode(String.self, forKey: .content)) ?? ""
+        taskProposal = try? values.decodeIfPresent(NativeAIProposal.self, forKey: .taskProposal)
+        economicProposals = try? values.decodeIfPresent([NativeAIProposal].self, forKey: .economicProposals)
     }
 }
 
