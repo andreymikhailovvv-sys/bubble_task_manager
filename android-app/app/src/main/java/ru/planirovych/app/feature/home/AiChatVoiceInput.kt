@@ -29,6 +29,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -50,6 +56,8 @@ internal fun rememberAiChatSpeechInput(
     transcribe:suspend (ByteArray,Double)->String,
     onRecognized:(String,Boolean)->Unit,
     onError:(String)->Unit,
+    onProcessingStart:()->Unit={},
+    onProcessingCancelled:()->Unit={},
     quickLauncher:Boolean=false,
     accent:Color=Color(0xFF7C3AED),
     suggestions:List<String> = emptyList(),
@@ -60,12 +68,15 @@ internal fun rememberAiChatSpeechInput(
     val recognized by rememberUpdatedState(onRecognized)
     val errorCallback by rememberUpdatedState(onError)
     val transcription by rememberUpdatedState(transcribe)
+    val processingStarted by rememberUpdatedState(onProcessingStart)
+    val processingCancelled by rememberUpdatedState(onProcessingCancelled)
     var stage by remember { mutableStateOf(VoiceRecordingStage.IDLE) }
     var elapsedSeconds by remember { mutableIntStateOf(0) }
     var amplitude by remember { mutableFloatStateOf(0f) }
     var startedAt by remember { mutableLongStateOf(0L) }
     val recorder=remember { mutableStateOf<MediaRecorder?>(null) }
     val recording=remember { mutableStateOf<File?>(null) }
+    var processingJob by remember { mutableStateOf<Job?>(null) }
     val maxSize=6*1024*1024
 
     fun releaseRecorder(discard:Boolean) {
@@ -131,7 +142,8 @@ internal fun rememberAiChatSpeechInput(
             return
         }
         stage=VoiceRecordingStage.TRANSCRIBING
-        scope.launch{
+        if(sendImmediately)processingStarted()
+        processingJob=scope.launch{
             try{
                 val bytes=withContext(Dispatchers.IO){
                     try {
@@ -141,16 +153,29 @@ internal fun rememberAiChatSpeechInput(
                     } finally { file.delete() }
                 }
                 val text=transcription(bytes,length.coerceAtMost(120.0))
+                if(!isActive)return@launch
                 if(text.isBlank())error("Речь не распознана.")
                 recognized(text.trim(),sendImmediately)
+            }catch(_:CancellationException){
+                // User dismissed the small processing pill: do not report an error.
             }catch(cause:Exception){
                 errorCallback(cause.message?.take(240)
                     ?:"Расшифровка не удалась. Повторите попытку.")
             }finally{
                 stage=VoiceRecordingStage.IDLE
                 elapsedSeconds=0
+                processingJob=null
             }
         }
+    }
+
+    fun cancelProcessing(){
+        if(stage!=VoiceRecordingStage.TRANSCRIBING)return
+        processingJob?.cancel()
+        processingJob=null
+        stage=VoiceRecordingStage.IDLE
+        elapsedSeconds=0
+        processingCancelled()
     }
 
     // Sample amplitude without re-laying out all bars. Only the timer's displayed
@@ -173,6 +198,7 @@ internal fun rememberAiChatSpeechInput(
     }
     DisposableEffect(Unit){
         onDispose {
+            processingJob?.cancel()
             recorder.value?.let{native->
                 runCatching{native.stop()}
                 runCatching{native.release()}
@@ -195,90 +221,167 @@ internal fun rememberAiChatSpeechInput(
             targetValue=amplitude,animationSpec=tween(125),label="voice-volume"
         )
         if(quickLauncher){
-            Dialog(onDismissRequest={},properties=DialogProperties(
-                usePlatformDefaultWidth=false,dismissOnBackPress=false,
-                dismissOnClickOutside=false)){
-                Box(Modifier.fillMaxSize().background(Color(0xED070B15))){
-                    Column(Modifier.align(Alignment.TopCenter)
-                        .statusBarsPadding().padding(horizontal=25.dp,vertical=34.dp),
-                        horizontalAlignment=Alignment.CenterHorizontally,
-                        verticalArrangement=Arrangement.spacedBy(10.dp)){
-                        Text("Скажите, что нужно сделать",color=Color.White,
-                            fontWeight=FontWeight.Bold,fontSize=20.sp)
-                        Text("Примеры голосовых запросов",color=Color(0xFFB9C4DA),fontSize=12.sp)
-                        suggestions.take(9).forEach{hint->
-                            val financeHint=hint in financialSuggestions
-                            val hintAccent=if(financeHint)Color(0xFFF3AC43) else accent
-                            Surface(shape=RoundedCornerShape(50),
-                                color=hintAccent.copy(alpha=if(financeHint).22f else .16f),
-                                border=BorderStroke(1.dp,hintAccent.copy(
-                                    alpha=if(financeHint).78f else .52f))){
-                                Text(hint,Modifier.padding(horizontal=15.dp,vertical=8.dp),
-                                    color=if(financeHint)Color(0xFFFFD796) else Color.White,
-                                    fontSize=13.sp)
-                            }
-                        }
-                    }
-                    // Timer/cancel and send FAB share one baseline in the same row.
-                    // The rings are driven by measured mic amplitude, not by
-                    // a free-running sine animation during silence.
-                    Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(start=22.dp,end=14.dp,bottom=18.dp),
-                        verticalAlignment=Alignment.CenterVertically,
-                        horizontalArrangement=Arrangement.SpaceBetween){
-                        Column(Modifier.weight(1f),
-                            horizontalAlignment=Alignment.Start,
-                            verticalArrangement=Arrangement.spacedBy(5.dp)){
-                            Text(if(recordingNow)
-                                String.format(java.util.Locale.ROOT,"%02d:%02d",
-                                    elapsedSeconds/60,elapsedSeconds%60)
-                                else "Обработка…",
-                                modifier=Modifier.clip(RoundedCornerShape(13.dp))
-                                    .background(Color(0xFF1E2B3F))
-                                    .border(1.dp,Color(0xFF596D84),RoundedCornerShape(13.dp))
-                                    .padding(horizontal=13.dp,vertical=9.dp),
-                                color=Color.White,fontSize=21.sp,
-                                fontWeight=FontWeight.Bold,letterSpacing=1.sp)
-                            OutlinedButton(onClick={releaseRecorder(true)},
-                                enabled=recordingNow,
-                                modifier=Modifier.height(40.dp),
-                                shape=RoundedCornerShape(12.dp),
-                                border=BorderStroke(1.dp,Color(0xFF72849A)),
-                                colors=ButtonDefaults.outlinedButtonColors(
-                                    containerColor=Color(0xFF1E2B3F),
-                                    contentColor=Color.White),
-                                contentPadding=PaddingValues(horizontal=14.dp)){
-                                Text("Отменить",fontSize=13.sp,
-                                    fontWeight=FontWeight.SemiBold)
-                            }
-                        }
-                        Box(Modifier.size(154.dp),contentAlignment=Alignment.Center){
-                            Canvas(Modifier.fillMaxSize()){
-                                val center=Offset(size.width/2,size.height/2)
-                                val level=if(recordingNow)smoothAmplitude.coerceIn(0f,1f) else 0f
-                                for(i in 0..3){
-                                    val radius=size.minDimension*(.23f+i*.072f+level*(.09f+i*.047f))
-                                    val ringAlpha=if(level<.035f){
-                                        if(i==0).18f else 0f
-                                    }else (.12f+level*.35f)*(1f-i*.18f)
-                                    if(ringAlpha>0f){
-                                        drawCircle(accent.copy(alpha=ringAlpha*.35f),
-                                            radius=radius,center=center)
-                                        drawCircle(accent.copy(alpha=ringAlpha),
-                                            radius=radius,center=center,
-                                            style=androidx.compose.ui.graphics.drawscope.Stroke(
-                                                (1.5f+level*2f).dp.toPx()))
-                                    }
+            val financeAccent=accent==Color(0xFFF5A52E)
+            val primaryText=if(dark)Color(0xFFF8FAFC) else Color(0xFF192439)
+            val secondaryText=if(dark)Color(0xFFADBBD0) else Color(0xFF55657C)
+            val panel=if(dark)Color(0xFF1B283C) else Color(0xFFFBFCFF)
+            val panelBorder=if(dark)Color(0xFF43516B) else Color(0xFFDCE3ED)
+            val accessibleAccent=if(dark)accent
+                else if(financeAccent)Color(0xFF97540E) else Color(0xFF6435B3)
+            val iconOnAccent=if(financeAccent)Color(0xFF2B1B08) else Color.White
+
+            if(recordingNow){
+                Dialog(onDismissRequest={},properties=DialogProperties(
+                    usePlatformDefaultWidth=false,dismissOnBackPress=false,
+                    dismissOnClickOutside=false)){
+                    Box(Modifier.fillMaxSize()
+                        // Softer than the previous near-opaque 0xED overlay.
+                        .background(if(dark)Color(0xB30B1120) else Color(0xB4EDF0F8))){
+                        Column(
+                            Modifier.align(Alignment.TopCenter)
+                                .statusBarsPadding()
+                                .padding(start=24.dp,end=24.dp,top=30.dp),
+                            horizontalAlignment=Alignment.CenterHorizontally,
+                            verticalArrangement=Arrangement.spacedBy(9.dp)
+                        ){
+                            Text("Голосовой ввод",color=primaryText,
+                                fontWeight=FontWeight.SemiBold,fontSize=20.sp)
+                            Text("Говорите, я записываю",color=secondaryText,fontSize=13.sp)
+                            Spacer(Modifier.height(8.dp))
+                            // Only a few quiet suggestions: the microphone remains
+                            // the main visual focus instead of a wall of chips.
+                            suggestions.take(3).forEach { hint ->
+                                val suggestedFinance=hint in financialSuggestions
+                                val hintColor=if(suggestedFinance)Color(0xFFF5A52E) else accent
+                                Surface(
+                                    shape=RoundedCornerShape(50),
+                                    color=panel.copy(alpha=if(dark).80f else .92f),
+                                    border=BorderStroke(.8.dp,
+                                        hintColor.copy(alpha=if(dark).50f else .33f))
+                                ){
+                                    Text(hint,Modifier.padding(horizontal=14.dp,vertical=7.dp),
+                                        color=primaryText,fontSize=12.sp,
+                                        fontWeight=FontWeight.Medium)
                                 }
                             }
-                            FloatingActionButton(onClick={if(recordingNow)finishRecording(true)},
-                                shape=CircleShape,containerColor=accent,
-                                contentColor=Color.White,modifier=Modifier.size(62.dp)){
-                                if(recordingNow)Icon(Icons.Default.Send,"Отправить голосовой запрос",
-                                    Modifier.size(25.dp))
-                                else CircularProgressIndicator(Modifier.size(22.dp),
-                                    color=Color.White,strokeWidth=2.dp)
+                        }
+                        Column(
+                            Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                                .navigationBarsPadding()
+                                .padding(horizontal=18.dp).padding(bottom=32.dp),
+                            horizontalAlignment=Alignment.CenterHorizontally
+                        ){
+                            Text(
+                                String.format(java.util.Locale.ROOT,"%02d:%02d",
+                                    elapsedSeconds/60,elapsedSeconds%60),
+                                color=primaryText,fontWeight=FontWeight.SemiBold,
+                                fontSize=27.sp,letterSpacing=1.sp
+                            )
+                            Spacer(Modifier.height(14.dp))
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment=Alignment.CenterVertically,
+                                horizontalArrangement=Arrangement.SpaceBetween
+                            ){
+                                Column(Modifier.weight(1f),
+                                    horizontalAlignment=Alignment.CenterHorizontally,
+                                    verticalArrangement=Arrangement.spacedBy(7.dp)){
+                                    Box(Modifier.size(48.dp).clip(CircleShape)
+                                        .background(panel.copy(alpha=.91f))
+                                        .border(.8.dp,panelBorder,CircleShape)
+                                        .clickable { releaseRecorder(true) },
+                                        contentAlignment=Alignment.Center){
+                                        Icon(Icons.Default.Close,"Отменить запись",
+                                            tint=primaryText,modifier=Modifier.size(21.dp))
+                                    }
+                                    Text("Отмена",fontSize=11.sp,color=secondaryText)
+                                }
+                                Box(Modifier.size(156.dp),
+                                    contentAlignment=Alignment.Center){
+                                    Canvas(Modifier.fillMaxSize()){
+                                        val center=Offset(size.width/2,size.height/2)
+                                        val level=smoothAmplitude.coerceIn(0f,1f)
+                                        for(i in 0..3){
+                                            val radius=size.minDimension*
+                                                (.27f+i*.066f+level*(.07f+i*.04f))
+                                            val alpha=if(level<.035f){
+                                                if(i==0).30f else .07f
+                                            }else(.19f+level*.31f)*(1f-i*.19f)
+                                            drawCircle(accent.copy(alpha=alpha*.28f),
+                                                radius=radius,center=center)
+                                            drawCircle(accent.copy(alpha=alpha),
+                                                radius=radius,center=center,
+                                                style=androidx.compose.ui.graphics.drawscope.Stroke(
+                                                    (1.25f+level*1.8f).dp.toPx()))
+                                        }
+                                    }
+                                    Box(Modifier.size(86.dp).clip(CircleShape)
+                                        .background(
+                                            Brush.linearGradient(listOf(
+                                                accent,accent.copy(alpha=.82f))))
+                                        .border(1.dp,Color.White.copy(alpha=.18f),CircleShape),
+                                        contentAlignment=Alignment.Center){
+                                        Icon(Icons.Default.Mic,"Идёт запись",
+                                            tint=iconOnAccent,modifier=Modifier.size(36.dp))
+                                    }
+                                }
+                                Column(Modifier.weight(1f),
+                                    horizontalAlignment=Alignment.CenterHorizontally,
+                                    verticalArrangement=Arrangement.spacedBy(7.dp)){
+                                    Box(Modifier.size(48.dp).clip(CircleShape)
+                                        .background(accent)
+                                        .clickable { finishRecording(true) },
+                                        contentAlignment=Alignment.Center){
+                                        Icon(Icons.Default.Send,"Отправить голосовой запрос",
+                                            tint=iconOnAccent,modifier=Modifier.size(21.dp))
+                                    }
+                                    Text("Отправить",fontSize=11.sp,
+                                        fontWeight=FontWeight.Medium,color=primaryText)
+                                }
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            Text("До 2 минут",fontSize=11.sp,color=secondaryText)
+                        }
+                    }
+                }
+            }else{
+                // The full-screen recorder disappears the instant Send is
+                // tapped. Only this compact cancellable status stays visible
+                // while transcription runs; the home FAB shows AI progress.
+                val density=LocalDensity.current
+                Popup(
+                    alignment=Alignment.BottomEnd,
+                    offset=IntOffset(
+                        x=with(density){(-16).dp.roundToPx()},
+                        y=with(density){(-112).dp.roundToPx()}
+                    ),
+                    properties=PopupProperties(focusable=false,clippingEnabled=false)
+                ){
+                    Surface(
+                        shape=RoundedCornerShape(18.dp),
+                        color=panel,
+                        border=BorderStroke(1.dp,panelBorder),
+                        shadowElevation=10.dp
+                    ){
+                        Row(Modifier.widthIn(max=320.dp)
+                            .padding(horizontal=12.dp,vertical=10.dp),
+                            verticalAlignment=Alignment.CenterVertically,
+                            horizontalArrangement=Arrangement.spacedBy(10.dp)){
+                            CircularProgressIndicator(
+                                modifier=Modifier.size(22.dp),strokeWidth=2.5.dp,
+                                color=accessibleAccent
+                            )
+                            Column(Modifier.weight(1f)) {
+                                Text("Обработка речи",fontSize=13.sp,
+                                    fontWeight=FontWeight.SemiBold,color=primaryText)
+                                Text("Можно продолжать работу",fontSize=10.sp,
+                                    color=secondaryText)
+                            }
+                            TextButton(onClick={cancelProcessing()},
+                                contentPadding=PaddingValues(horizontal=8.dp)){
+                                Text("Отмена",fontSize=12.sp,
+                                    fontWeight=FontWeight.SemiBold,
+                                    color=accessibleAccent)
                             }
                         }
                     }
