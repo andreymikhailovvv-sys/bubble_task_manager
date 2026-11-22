@@ -90,6 +90,10 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
             }
         },
         onError={message->voiceError=message;voiceAwaiting=false},
+        // Reflect processing on the originating planner/finance FAB immediately
+        // after Send, not only after the remote transcript is returned.
+        onProcessingStart={voiceAwaiting=true},
+        onProcessingCancelled={voiceAwaiting=false},
         quickLauncher=true,
         accent=if(voiceFromFinance)Color(0xFFF5A52E) else Color(0xFF8050DF),
         suggestions=if(voiceFromFinance)listOf(
