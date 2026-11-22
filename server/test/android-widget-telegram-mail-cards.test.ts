@@ -107,10 +107,10 @@ test('mail card is editable but only submits after confirmation and checks SMTP 
   assert.ok(api.includes('api/mail-assistant/recent-recipients'));
 });
 
-test('next Android release is 1.0.15 with increasing versionCode=17',async()=>{
+test('next Android release is 1.0.20 with increasing versionCode=22',async()=>{
   const gradle=await read('../../android-app/app/build.gradle.kts');
-  assert.ok(gradle.includes('versionCode = 21'));
-  assert.ok(gradle.includes('versionName = "1.0.19"'));
+  assert.ok(gradle.includes('versionCode = 22'));
+  assert.ok(gradle.includes('versionName = "1.0.20"'));
   assert.ok(gradle.includes('applicationId = "ru.planirovych.app"'));
 });
 
