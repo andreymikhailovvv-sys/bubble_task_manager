@@ -76,26 +76,53 @@ test('Mini App planner and Economic plus buttons stay above navigation and accep
   assert.match(econCss,/transform:rotate\(45deg\)/);
 });
 
-test('quick voice records locally, submits to existing AI chat and opens replies afterwards',()=>{
+test('Android planner and Economic share the minimal recording window and instant background transcription',()=>{
   const home=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/HomeScreen.kt');
   const voice=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/AiChatVoiceInput.kt');
   const rich=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeRichTextEditor.kt');
   assert.match(home,/quickAiMode=="voice"/);
   assert.match(home,/vm\.sendGeneralAi\(quick\.id,QUICK_AI_THREAD_ID/);
   assert.match(home,/onDone=\{[\s\S]*?pagerState\.animateScrollToPage\(2\)/);
+  assert.match(home,/onQuickVoice=\{voiceFromFinance=true;voiceInput\(\)\}/);
+  assert.match(home,/onVoice=\{voiceFromFinance=false;voiceInput\(\)\}/);
+  assert.match(home,/onProcessingStart=\{voiceAwaiting=true\}/);
+  assert.match(home,/onProcessingCancelled=\{voiceAwaiting=false\}/);
+  assert.match(home,/accent=if\(voiceFromFinance\)Color\(0xFFF5A52E\) else Color\(0xFF8050DF\)/);
+
   assert.match(voice,/quickLauncher:Boolean=false/);
-  assert.match(voice,/suggestions\.take\(9\)/);
+  assert.match(voice,/suggestions\.take\(3\)/);
+  assert.doesNotMatch(voice,/suggestions\.take\(9\)/);
   assert.match(voice,/recorder\.value\?\.maxAmplitude/);
   assert.match(voice,/if\(peak<850\)0f/);
   assert.match(voice,/drawCircle\(accent\.copy/);
-  assert.match(voice,/Icon\(Icons\.Default\.Send/);
+  assert.match(voice,/Icon\(Icons\.Default\.Mic,"Идёт запись"/);
+  assert.match(voice,/Icon\(Icons\.Default\.Send,"Отправить голосовой запрос"/);
+  assert.match(voice,/elapsedSeconds\/60,elapsedSeconds%60/);
+  assert.match(voice,/Color\(0xB30B1120\)/);
+  assert.match(voice,/Color\(0xB4EDF0F8\)/);
+  assert.match(voice,/Modifier\.size\(86\.dp\)\.clip\(CircleShape\)/);
+  assert.match(voice,/Modifier\.size\(48\.dp\)\.clip\(CircleShape\)/);
+
+  // Sending must dismiss the fullscreen recorder immediately and show
+  // a separate, small processing popover while bytes are transcribed.
+  assert.match(voice,/stage=VoiceRecordingStage\.TRANSCRIBING[\s\S]*?if\(sendImmediately\)processingStarted\(\)/);
+  assert.match(voice,/if\(recordingNow\)\{\s*Dialog\(/);
+  assert.match(voice,/\}else\{\s*\/\/ The full-screen recorder disappears/);
+  assert.match(voice,/Popup\([\s\S]*?alignment=Alignment\.BottomEnd/);
+  assert.match(voice,/PopupProperties\(focusable=false,clippingEnabled=false\)/);
+  assert.match(voice,/Text\("Обработка речи"/);
+  assert.match(voice,/TextButton\(onClick=\{cancelProcessing\(\)\}/);
+  assert.match(voice,/if\(financeAccent\)Color\(0xFF97540E\) else Color\(0xFF6435B3\)/);
+  assert.match(voice,/processingJob\?\.cancel\(\)/);
+  assert.match(voice,/if\(processingGeneration==generation\)/);
+  assert.match(voice,/catch\(_:CancellationException\)/);
+
+  // Existing non-quick dictation and editor gestures are preserved.
   assert.match(rich,/maxVerticalScroll\(\)>0/);
   assert.match(rich,/Consume pre-slop MOVE/);
   assert.match(rich,/cancelNativeGesture\(event\)/);
   assert.match(rich,/getOffsetForPosition\(event\.x,event\.y\)/);
   assert.match(rich,/InputMethodManager\.SHOW_IMPLICIT/);
   assert.match(voice,/financialSuggestions:Set<String>/);
-  assert.match(voice,/Color\(0xFFF3AC43\)/);
-  assert.match(voice,/fontSize=21\.sp/);
-  assert.match(voice,/OutlinedButton\(onClick=\{releaseRecorder\(true\)\}/);
+  assert.match(voice,/\}else Dialog\(onDismissRequest=/);
 });
