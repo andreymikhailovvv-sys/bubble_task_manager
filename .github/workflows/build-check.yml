@@ -38,6 +38,8 @@ jobs:
           node scripts/browser-planner-smoke.mjs
       - name: Verify experimental Test Page routing and shared planner components
         run: node --import tsx --test client/test/test-page-ui.test.ts
+      - name: Verify modular Test Main Page and responsive grid geometry
+        run: node --import tsx --test client/test/test-main-page-ui.test.ts client/src/lib/testMainGrid.test.ts
       - name: Verify Economic money precision and loan amortization
         run: node --import tsx --test client/src/lib/economicMoney.test.ts
       - name: Verify Economic debt cashflow and balance signs
