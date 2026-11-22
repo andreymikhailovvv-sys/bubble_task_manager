@@ -8,6 +8,7 @@ const AdminPage = React.lazy(() => import('./AdminPage'));
 const BusinessApp = React.lazy(() => import('./BusinessApp'));
 const EconomicApp = React.lazy(() => import('./EconomicApp'));
 const TestPage = React.lazy(() => import('./TestPage'));
+const TestMainPage = React.lazy(() => import('./TestMainPage'));
 const PublicPages = React.lazy(() => import('./PublicPages'));
 import CookieBanner from './components/CookieBanner';
 const TelegramAuthPage = React.lazy(() => import('./TelegramAuthPage'));
@@ -102,6 +103,7 @@ const isMiniAppRoute = window.location.pathname.startsWith('/miniapp');
 const isEconomicRoute = window.location.pathname === '/economic' || window.location.pathname === '/economic/';
 // Public experiment, deliberately separate from the production planner workspace.
 const isTestPageRoute = /^\/(?:test-page|test%20page)\/?$/i.test(window.location.pathname);
+const isTestMainPageRoute = /^\/(?:test-main-page|test%20main%20page)\/?$/i.test(window.location.pathname);
 // Android embeds this SAME MiniApp frontend for pixel-identical Realtime UI.
 // Runtime web uses existing authenticated session, never Telegram initData.
 const isAndroidPlanikRoute = window.location.pathname === '/android-planik';
@@ -125,7 +127,7 @@ const isCompactWorkspaceViewport = window.matchMedia('(max-width: 1024px)').matc
 // Small, opt-in-free production diagnostics for UI stalls, aggregated and
 // reported only when interactions are measurably slow.
 if (!isBusinessRoute && !isPublicRoute && !isAdminRoute &&
-    !isTelegramAuthRoute && !isAccountEmailRoute && !isEconomicRoute && !isTestPageRoute) {
+    !isTelegramAuthRoute && !isAccountEmailRoute && !isEconomicRoute && !isTestPageRoute && !isTestMainPageRoute) {
   startUiPerformanceDiagnostics(
     isAndroidPlanikRoute ? 'android-web'
       : isMiniAppRoute ? 'telegram'
@@ -154,6 +156,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               themeOverride={economicThemeOverride} />
         : isTestPageRoute
           ? <TestPage />
+        : isTestMainPageRoute
+          ? <TestMainPage />
         : isMiniAppRoute
           ? <MiniApp runtime="telegram" />
         : isAndroidPlanikRoute
