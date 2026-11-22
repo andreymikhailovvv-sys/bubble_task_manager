@@ -524,6 +524,9 @@ final class NativeAPI {
         request.httpShouldHandleCookies = true
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.timeoutInterval = timeoutInterval
+        // Match Android's first-party native client marker. Without this header,
+        // the existing CSRF guard rejects speech and proposal approvals.
+        request.setValue("same-origin", forHTTPHeaderField: "Sec-Fetch-Site")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
         if let json {
