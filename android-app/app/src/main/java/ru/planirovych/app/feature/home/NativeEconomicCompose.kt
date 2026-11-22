@@ -306,7 +306,10 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                                     "Все счета",colors,{section="accounts"})
                                 current.ecoItems("accounts").take(4).forEach { account ->
                                     Spacer(Modifier.height(9.dp))
-                                    EcoMiniAccountTile(account,colors)
+                                    EcoMiniAccountTile(account,colors) {
+                                        error=""
+                                        editor=EcoEditorRequest("accounts",account)
+                                    }
                                 }
                                 Spacer(Modifier.height(10.dp))
                                 EcoInlineAction("Добавить счёт",colors){editor=EcoEditorRequest("accounts")}
@@ -561,7 +564,7 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
             ModalBottomSheet(
                 onDismissRequest={filtersOpen=false},
                 sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),
-                sheetGesturesEnabled=false,
+                sheetGesturesEnabled=true,
                 containerColor=colors.panel,contentColor=colors.text,
                 dragHandle={BottomSheetDefaults.DragHandle(color=colors.muted)}
             ) {
@@ -758,13 +761,14 @@ private fun EcoAccountSummary(account:JsonObject,colors:EcoColors) {
 }
 /** Mini App style: subtle account tiles nested in the Overview card, no double white border. */
 @Composable
-private fun EcoMiniAccountTile(account:JsonObject,colors:EcoColors) {
+private fun EcoMiniAccountTile(account:JsonObject,colors:EcoColors,onEdit:()->Unit) {
     val light=colors.background==Color(0xFFF7F8FA)
     val primary=account.ecoBool("isPrimary")
     val tile=if(light&&primary)Color(0xFFFFF9F2) else colors.panel2
     val edge=if(light&&primary)Color(0xFFEFD3B1) else colors.outline.copy(alpha=.65f)
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp))
         .background(tile).border(1.dp,edge,RoundedCornerShape(13.dp))
+        .clickable(onClickLabel="Изменить счёт") { onEdit() }
         .padding(12.dp)) {
         EcoAccountSummary(account,colors)
     }
