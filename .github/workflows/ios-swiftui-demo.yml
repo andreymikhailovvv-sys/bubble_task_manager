@@ -35,6 +35,14 @@ jobs:
           cd ios-app
           xcodegen generate
 
+      - name: Upload ready-to-open Xcode project
+        uses: actions/upload-artifact@v4
+        with:
+          name: Planirovych-Xcode-Ready
+          path: ios-app/
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Build unsigned iOS Simulator application
         shell: bash
         run: |
