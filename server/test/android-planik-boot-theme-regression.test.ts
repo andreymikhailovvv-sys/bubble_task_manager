@@ -91,6 +91,6 @@ test('small Planik matches light/dark website palette with tight tap bounds and 
   assert.match(light, /#b8b3ec/);
   assert.match(lightBlink, /#b8b3ec/);
   assert.match(styles, /body\[data-theme='light'\] \.planik-body-stop-start \{ stop-color: #b8b3ec/);
-  assert.match(build, /versionCode = 23/);
-  assert.match(build, /versionName = "1\.0\.21"/);
+  assert.match(build, /versionCode = 24/);
+  assert.match(build, /versionName = "1\.0\.22"/);
 });
