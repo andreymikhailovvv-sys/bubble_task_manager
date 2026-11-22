@@ -18,6 +18,26 @@ private enum ConnectedTab: String, CaseIterable, Identifiable {
     }
 }
 
+private enum TaskOrder: String, CaseIterable {
+    case urgency = "По срочности"
+    case importance = "По важности"
+    case dueDate = "По сроку"
+}
+
+private enum TaskDateWindow: String, CaseIterable {
+    case all = "Все сроки"
+    case today = "Сегодня"
+    case tomorrow = "Завтра"
+    case week = "7 дней"
+    case overdue = "Просроченные"
+    case undated = "Без срока"
+}
+
+private enum TaskDisplayMode: String, CaseIterable {
+    case list = "Список"
+    case timeline = "Таймлайн"
+}
+
 struct RemoteWorkspaceView: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var session: NativeWorkspaceSession
@@ -25,6 +45,10 @@ struct RemoteWorkspaceView: View {
     @State private var selectedSphereID: String?
     @State private var showingNewTask = false
     @State private var editingTask: RemoteTask?
+    @State private var taskOrder: TaskOrder = .urgency
+    @State private var dateWindow: TaskDateWindow = .all
+    @State private var taskMode: TaskDisplayMode = .list
+    @State private var showCompletedTasks = false
 
     private let accent = Color(red: 0.54, green: 0.49, blue: 0.97)
 
@@ -45,11 +69,7 @@ struct RemoteWorkspaceView: View {
         VStack(spacing: 0) {
             header
 
-            if selectedTab == .overview || selectedTab == .tasks {
-                NativeHabitsStrip(session: session)
-            }
-
-            if selectedTab == .chat {
+             if selectedTab == .chat {
                 NativeChatView(session: session)
             } else {
                 ScrollView {
@@ -146,6 +166,8 @@ struct RemoteWorkspaceView: View {
 
     private var overview: some View {
         VStack(alignment: .leading, spacing: 19) {
+            NativeHabitsStrip(session: session)
+
             VStack(alignment: .leading, spacing: 7) {
                 Text("Ваши задачи")
                     .font(.system(size: 29, weight: .bold, design: .rounded))
@@ -232,14 +254,37 @@ struct RemoteWorkspaceView: View {
     }
 
     private var taskList: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Задачи")
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
-                Text("Настоящие задачи из твоего аккаунта")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+        let filtered = allActualTasks.filter {
+            (selectedSphereID == nil || $0.sphereId == selectedSphereID)
+                && matchesTime($0)
+        }
+        let active = sortedTasks(filtered.filter { !$0.isComplete })
+        let completed = sortedTasks(filtered.filter { $0.isComplete })
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Задачи")
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                    Text("Управление задачами и сроками")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button {
+                    showingNewTask = true
+                } label: {
+                    Image(systemName: "plus.circle.fill").font(.title2)
+                }
+                .disabled(session.isWorking)
+                .accessibilityLabel("Создать задачу")
             }
+
+            Picker("Отображение", selection: $taskMode) {
+                ForEach(TaskDisplayMode.allCases, id: \.self) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
 
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {
@@ -248,32 +293,132 @@ struct RemoteWorkspaceView: View {
                         filter(sphere.name, id: sphere.id, tint: Color(sphereHex: sphere.color))
                     }
                 }
-                .padding(.vertical, 2)
+                .padding(.vertical, 3)
             }
             .scrollIndicators(.hidden)
 
-            let filtered = allActualTasks.filter {
-                selectedSphereID == nil || $0.sphereId == selectedSphereID
-            }
+            HStack(spacing: 10) {
+                Menu {
+                    Picker("Сортировка", selection: $taskOrder) {
+                        ForEach(TaskOrder.allCases, id: \.self) { order in
+                            Text(order.rawValue).tag(order)
+                        }
+                    }
+                } label: {
+                    Label(taskOrder.rawValue, systemImage: "arrow.up.arrow.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .padding(10)
+                        .background(card, in: Capsule())
+                }
 
-            if filtered.isEmpty {
-                emptyTasks
-            } else {
-                ForEach(filtered) { task in
-                    taskRow(task)
+                Menu {
+                    Picker("По времени", selection: $dateWindow) {
+                        ForEach(TaskDateWindow.allCases, id: \.self) { window in
+                            Text(window.rawValue).tag(window)
+                        }
+                    }
+                } label: {
+                    Label(dateWindow.rawValue, systemImage: "calendar")
+                        .font(.system(size: 12, weight: .semibold))
+                        .padding(10)
+                        .background(card, in: Capsule())
                 }
             }
-            Button {
-                showingNewTask = true
-            } label: {
-                Label("Создать задачу", systemImage: "plus.circle.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(16)
-                    .foregroundStyle(accent)
-                    .background(accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 18))
+            .foregroundStyle(accent)
+
+            if taskMode == .timeline {
+                NativeTaskTimelineView(
+                    tasks: session.tasks.filter {
+                        $0.parentTaskId == nil && !$0.isComplete &&
+                        (selectedSphereID == nil || $0.sphereId == selectedSphereID) && matchesTime($0)
+                    },
+                    spheres: session.spheres
+                ) { task in
+                    editingTask = task
+                }
+            } else if active.isEmpty {
+                emptyTasks
+            } else {
+                ForEach(active) { task in taskRow(task) }
             }
-            .disabled(session.isWorking)
+
+            if !completed.isEmpty {
+                DisclosureGroup(isExpanded: $showCompletedTasks) {
+                    VStack(spacing: 9) {
+                        ForEach(completed) { task in taskRow(task) }
+                    }
+                    .padding(.top, 9)
+                } label: {
+                    HStack {
+                        Label("Выполненные", systemImage: "checkmark.circle.fill")
+                            .font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Text("\(completed.count)")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .tint(accent)
+                .padding(15)
+                .background(card, in: RoundedRectangle(cornerRadius: 18))
+            }
+
+            if taskMode == .list {
+                Button {
+                    showingNewTask = true
+                } label: {
+                    Label("Создать задачу", systemImage: "plus.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(16)
+                        .foregroundStyle(accent)
+                        .background(accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 18))
+                }
+                .disabled(session.isWorking)
+            }
+        }
+    }
+
+    private func matchesTime(_ task: RemoteTask) -> Bool {
+        let calendar = Calendar.current
+        let now = Date()
+        let today = calendar.startOfDay(for: now)
+        let deadline = NativeTaskDates.parse(task.dueDate)
+        switch dateWindow {
+        case .all: return true
+        case .undated: return deadline == nil
+        case .today: return deadline.map { calendar.isDate($0, inSameDayAs: today) } ?? false
+        case .tomorrow:
+            guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) else { return false }
+            return deadline.map { calendar.isDate($0, inSameDayAs: tomorrow) } ?? false
+        case .week:
+            guard let end = calendar.date(byAdding: .day, value: 7, to: today),
+                  let deadline else { return false }
+            return deadline >= today && deadline < end
+        case .overdue: return deadline.map { $0 < now } ?? false
+        }
+    }
+
+    private func sortedTasks(_ tasks: [RemoteTask]) -> [RemoteTask] {
+        tasks.sorted { lhs, rhs in
+            let priorityA: Int
+            let priorityB: Int
+            switch taskOrder {
+            case .urgency:
+                priorityA = lhs.urgency ?? 3
+                priorityB = rhs.urgency ?? 3
+            case .importance:
+                priorityA = lhs.importance ?? 3
+                priorityB = rhs.importance ?? 3
+            case .dueDate:
+                priorityA = 0
+                priorityB = 0
+            }
+            if priorityA != priorityB { return priorityA > priorityB }
+            let dateA = NativeTaskDates.parse(lhs.dueDate) ?? .distantFuture
+            let dateB = NativeTaskDates.parse(rhs.dueDate) ?? .distantFuture
+            if dateA != dateB { return dateA < dateB }
+            return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
         }
     }
 

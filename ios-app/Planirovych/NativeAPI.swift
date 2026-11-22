@@ -38,6 +38,8 @@ struct RemoteTask: Decodable, Identifiable {
     let dueDate: String?
     let status: String
     let isCollaborative: Bool?
+    let importance: Int?
+    let urgency: Int?
 
     var isComplete: Bool { status == "DONE" }
     var isActualTask: Bool { taskType == nil || taskType == "TASK" }
@@ -58,7 +60,11 @@ struct RemoteHabit: Decodable, Identifiable {
     let intervalDays: Int?
     let weekdays: [Int]
     let reminderTime: String?
+    let reminderTimes: [String]?
     let createdAt: String?
+    let endDate: String?
+    let isArchived: Bool?
+    let isAutoCompleted: Bool?
     let stats: [HabitCompletionStat]
 
     func amount(on dateKey: String) -> Int {
@@ -66,10 +72,98 @@ struct RemoteHabit: Decodable, Identifiable {
     }
 }
 
-struct RemoteChatMessage: Decodable {
+struct NativeProposalOperation: Codable {
+    let type: String?
+    let title: String?
+    let before: String?
+    let after: String?
+    let dueDate: String?
+    let details: [String]?
+}
+
+struct NativeAIProposal: Codable, Identifiable {
+    let id: String
+    let status: String?
+    let title: String?
+    let description: String?
+    let details: [String]?
+    let entity: String?
+    let action: String?
+    let autoApplied: Bool?
+    let operations: [NativeProposalOperation]?
+    let error: String?
+    let revision: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, status, title, description, details, entity, action, autoApplied, operations, error, revision
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        status = try? values.decodeIfPresent(String.self, forKey: .status)
+        title = try? values.decodeIfPresent(String.self, forKey: .title)
+        description = try? values.decodeIfPresent(String.self, forKey: .description)
+        details = try? values.decodeIfPresent([String].self, forKey: .details)
+        entity = try? values.decodeIfPresent(String.self, forKey: .entity)
+        action = try? values.decodeIfPresent(String.self, forKey: .action)
+        autoApplied = try? values.decodeIfPresent(Bool.self, forKey: .autoApplied)
+        operations = try? values.decodeIfPresent([NativeProposalOperation].self, forKey: .operations)
+        error = try? values.decodeIfPresent(String.self, forKey: .error)
+        revision = try? values.decodeIfPresent(String.self, forKey: .revision)
+    }
+}
+
+struct NativeChatThread: Identifiable {
+    let id: String
+    let title: String
+    let model: String?
+}
+
+struct NativeChatProject: Identifiable {
+    let id: String
+    let title: String
+    let color: String
+    let icon: String
+    let chats: [NativeChatThread]
+}
+
+struct NativeChatReply {
+    let answer: String
+    let taskProposal: NativeAIProposal?
+    let economicProposals: [NativeAIProposal]
+    let raw: [String: Any]
+}
+
+struct RemoteChatMessage: Codable {
     let id: String?
     let role: String
     let content: String
+    let taskProposal: NativeAIProposal?
+    let economicProposals: [NativeAIProposal]?
+
+    init(id: String?, role: String, content: String,
+         taskProposal: NativeAIProposal? = nil,
+         economicProposals: [NativeAIProposal]? = nil) {
+        self.id = id
+        self.role = role
+        self.content = content
+        self.taskProposal = taskProposal
+        self.economicProposals = economicProposals
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, role, content, taskProposal, economicProposals
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try? values.decodeIfPresent(String.self, forKey: .id)
+        role = (try? values.decode(String.self, forKey: .role)) ?? "assistant"
+        content = (try? values.decode(String.self, forKey: .content)) ?? ""
+        taskProposal = try? values.decodeIfPresent(NativeAIProposal.self, forKey: .taskProposal)
+        economicProposals = try? values.decodeIfPresent([NativeAIProposal].self, forKey: .economicProposals)
+    }
 }
 
 private struct ChatHistoryEnvelope: Decodable {
@@ -78,6 +172,8 @@ private struct ChatHistoryEnvelope: Decodable {
 
 private struct AiChatReply: Decodable {
     let answer: String
+    let taskProposal: NativeAIProposal?
+    let economicProposals: [NativeAIProposal]?
 }
 
 private struct VoiceTranscription: Decodable {
@@ -281,25 +377,42 @@ final class NativeAPI {
         ])
     }
 
+    func updateTaskSettings(id: String, dueDate: Date?, importance: Int,
+                            urgency: Int, sphereId: String?, isSubtask: Bool) async throws -> RemoteTask {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var fields: [String: Any] = [
+            "dueDate": dueDate.map(iso.string(from:)) ?? NSNull(),
+            "importance": max(1, min(5, importance)),
+            "urgency": max(1, min(5, urgency))
+        ]
+        if !isSubtask { fields["sphereId"] = sphereId ?? NSNull() }
+        return try await request("tasks/\(id)", method: "PATCH", json: fields)
+    }
+
     func loadHabits() async throws -> [RemoteHabit] {
         try await request("habits")
     }
 
     func createHabit(name: String, icon: String, color: String, targetCount: Int,
-                     recurrenceType: String, weekdays: [Int], intervalDays: Int?) async throws -> RemoteHabit {
+                     recurrenceType: String, weekdays: [Int], intervalDays: Int?,
+                     reminderTimes: [String]) async throws -> RemoteHabit {
         var json: [String: Any] = [
             "name": name, "icon": icon, "color": color, "targetCount": targetCount,
-            "recurrenceType": recurrenceType, "weekdays": weekdays
+            "recurrenceType": recurrenceType, "weekdays": weekdays,
+            "reminderTimes": reminderTimes
         ]
         if let intervalDays { json["intervalDays"] = intervalDays }
         return try await request("habits", method: "POST", json: json)
     }
 
     func updateHabit(id: String, name: String, icon: String, color: String, targetCount: Int,
-                     recurrenceType: String, weekdays: [Int], intervalDays: Int?) async throws -> RemoteHabit {
+                     recurrenceType: String, weekdays: [Int], intervalDays: Int?,
+                     reminderTimes: [String]) async throws -> RemoteHabit {
         var json: [String: Any] = [
             "name": name, "icon": icon, "color": color, "targetCount": targetCount,
-            "recurrenceType": recurrenceType, "weekdays": weekdays
+            "recurrenceType": recurrenceType, "weekdays": weekdays,
+            "reminderTimes": reminderTimes
         ]
         if let intervalDays { json["intervalDays"] = intervalDays }
         return try await request("habits/\(id)", method: "PATCH", json: json)
@@ -313,24 +426,101 @@ final class NativeAPI {
                                  method: "POST", json: ["dateKey": dateKey, "amount": amount])
     }
 
-    func loadGeneralChat() async throws -> [RemoteChatMessage] {
-        let result: ChatHistoryEnvelope = try await request("ai-general-chat")
+    func loadHabitHistory(id: String) async throws -> [HabitCompletionStat] {
+        try await request("habits/\(id)/history")
+    }
+
+    func changeHabitAmount(_ habit: RemoteHabit, dateKey: String,
+                           increment: Bool, amount: Int) async throws -> RemoteHabit {
+        try await request("habits/\(habit.id)/\(increment ? "complete" : "uncomplete")",
+                          method: "POST", json: ["dateKey": dateKey, "amount": max(1, amount)])
+    }
+
+    func loadChatProjects() async throws -> [NativeChatProject] {
+        let data = try await requestData("ai-chat/projects")
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let raw = json["projects"] as? [[String: Any]] else { throw NativeAPIError.invalidResponse }
+        return raw.compactMap { project in
+            guard let id = project["id"] as? String else { return nil }
+            let conversations = (project["chats"] as? [[String: Any]] ?? []).compactMap { chat -> NativeChatThread? in
+                guard let chatId = chat["id"] as? String else { return nil }
+                return NativeChatThread(id: chatId, title: chat["title"] as? String ?? "Чат",
+                                        model: chat["model"] as? String)
+            }
+            return NativeChatProject(id: id, title: project["title"] as? String ?? "Проект",
+                                     color: project["color"] as? String ?? "#8b5cf6",
+                                     icon: project["icon"] as? String ?? "✨", chats: conversations)
+        }
+    }
+
+    func loadChat(projectId: String, chatId: String) async throws -> [RemoteChatMessage] {
+        if chatId == "quick-ai-requests" {
+            let result: ChatHistoryEnvelope = try await request("ai-general-chat")
+            return result.messages
+        }
+        guard let pid = projectId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+              let cid = chatId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
+            throw NativeAPIError.invalidResponse
+        }
+        let result: ChatHistoryEnvelope = try await request("ai-chat/projects/\(pid)/chats/\(cid)/messages")
         return result.messages
     }
 
-    func sendGeneralChat(question: String, history: [RemoteChatMessage]) async throws -> String {
+    func sendChat(question: String, history: [RemoteChatMessage],
+                  project: NativeChatProject, thread: NativeChatThread) async throws -> NativeChatReply {
         let payload: [String: Any] = [
             "clientRequestId": UUID().uuidString.lowercased(),
             "question": question,
-            "history": history.suffix(30).map { ["role": $0.role, "content": $0.content] },
-            "projectTitle": "Личный проект",
-            "chatId": "quick-ai-requests",
-            "chatTitle": "Быстрые запросы",
+            "history": history.suffix(25).map { ["role": $0.role, "content": $0.content] },
+            "projectId": project.id, "projectTitle": project.title,
+            "chatId": thread.id, "chatTitle": thread.title,
             "userTimeZone": TimeZone.current.identifier
         ]
-        let result: AiChatReply = try await request("ai-chat", method: "POST",
-                                                   json: payload, timeoutInterval: 180)
-        return result.answer
+        let data = try await requestData("ai-chat", method: "POST", json: payload,
+                                         timeoutInterval: 180)
+        let result = try JSONDecoder().decode(AiChatReply.self, from: data)
+        let raw = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+        return NativeChatReply(answer: result.answer, taskProposal: result.taskProposal,
+                               economicProposals: result.economicProposals ?? [], raw: raw)
+    }
+
+    /// Preserve other clients' unknown project/message metadata when saving.
+    /// The server merges the submitted snapshot under a row lock.
+    func persistChatReply(projectId: String, chatId: String,
+                          question: String, reply: NativeChatReply) async throws {
+        guard chatId != "quick-ai-requests" else { return } // Server owns quick-chat history.
+        let data = try await requestData("ai-chat/projects")
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              var projects = json["projects"] as? [[String: Any]],
+              let projectIndex = projects.firstIndex(where: { ($0["id"] as? String) == projectId }),
+              var threads = projects[projectIndex]["chats"] as? [[String: Any]],
+              let chatIndex = threads.firstIndex(where: { ($0["id"] as? String) == chatId }) else {
+            throw NativeAPIError.invalidResponse
+        }
+        var messages = threads[chatIndex]["messages"] as? [[String: Any]] ?? []
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        messages.append(["id": UUID().uuidString, "role": "user", "content": question, "createdAt": timestamp])
+        var answer: [String: Any] = [
+            "id": UUID().uuidString, "role": "assistant",
+            "content": reply.answer, "createdAt": timestamp
+        ]
+        if let proposal = reply.raw["taskProposal"], !(proposal is NSNull) {
+            answer["taskProposal"] = proposal
+        }
+        if let proposals = reply.raw["economicProposals"], !(proposals is NSNull) {
+            answer["economicProposals"] = proposals
+        }
+        messages.append(answer)
+        threads[chatIndex]["messages"] = messages
+        projects[projectIndex]["chats"] = threads
+        _ = try await requestData("ai-chat/projects", method: "PUT", json: ["projects": projects])
+    }
+
+    func proposalAction(_ proposal: NativeAIProposal, economic: Bool,
+                        action: String) async throws -> NativeAIProposal {
+        guard ["approve", "reject", "undo"].contains(action) else { throw NativeAPIError.invalidResponse }
+        let root = economic ? "economic/assistant/proposals" : "ai/task-proposals"
+        return try await request("\(root)/\(proposal.id)/\(action)", method: "POST", json: [:])
     }
 
     func transcribeVoice(data: Data, duration: TimeInterval) async throws -> String {
@@ -350,11 +540,18 @@ final class NativeAPI {
     }
 
     private func request<T: Decodable>(
-        _ relativePath: String,
-        method: String = "GET",
-        json: [String: Any]? = nil,
-        timeoutInterval: TimeInterval = 30
+        _ relativePath: String, method: String = "GET",
+        json: [String: Any]? = nil, timeoutInterval: TimeInterval = 30
     ) async throws -> T {
+        let data = try await requestData(relativePath, method: method,
+                                         json: json, timeoutInterval: timeoutInterval)
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    private func requestData(
+        _ relativePath: String, method: String = "GET",
+        json: [String: Any]? = nil, timeoutInterval: TimeInterval = 30
+    ) async throws -> Data {
         guard let url = URL(string: relativePath, relativeTo: base),
               url.scheme == "https", url.host == base.host else {
             throw NativeAPIError.invalidResponse
@@ -364,6 +561,9 @@ final class NativeAPI {
         request.httpShouldHandleCookies = true
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.timeoutInterval = timeoutInterval
+        // Match Android's first-party native client marker. Without this header,
+        // the existing CSRF guard rejects speech and proposal approvals.
+        request.setValue("same-origin", forHTTPHeaderField: "Sec-Fetch-Site")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
         if let json {
@@ -374,12 +574,10 @@ final class NativeAPI {
         guard let http = response as? HTTPURLResponse else { throw NativeAPIError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             let serverError = (try? JSONDecoder().decode(APIErrorEnvelope.self, from: data))?.error
-            throw NativeAPIError.server(
-                code: http.statusCode,
-                message: serverError ?? "Ошибка сервера (HTTP \(http.statusCode))."
-            )
+            throw NativeAPIError.server(code: http.statusCode,
+                                        message: serverError ?? "Ошибка сервера (HTTP \(http.statusCode)).")
         }
-        return try JSONDecoder().decode(T.self, from: data)
+        return data
     }
 }
 
