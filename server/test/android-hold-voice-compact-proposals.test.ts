@@ -27,7 +27,13 @@ test('Android quick actions open on tap and dismiss after an explicit choice',()
   const launcher=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeHoldActionButton.kt');
   const home=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/HomeScreen.kt');
   const economic=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeEconomicCompose.kt');
-  assert.match(launcher,/\.clickable\(enabled=!waiting, onClickLabel="Открыть меню добавления"\)/);
+  assert.match(launcher,/\.clickable\(enabled=!waiting,/);
+  assert.match(launcher,/onClickLabel=if\(open\)"Закрыть меню добавления"/);
+  assert.match(launcher,/targetValue=if\(open\)45f else 0f/);
+  assert.match(launcher,/rotationZ=plusRotation/);
+  // Focusable native Popup intercepts outside taps: its own visible X must
+  // close the popup instead of relying on the underlying FAB.
+  assert.match(launcher,/\.clickable\(onClickLabel="Закрыть меню добавления"\) \{ open=false \}/);
   assert.match(launcher,/open=!open/);
   assert.match(launcher,/onDismissRequest=\{open=false\}/);
   assert.match(launcher,/PopupProperties\(focusable=true/);
@@ -65,6 +71,9 @@ test('Mini App planner and Economic plus buttons stay above navigation and accep
   assert.match(economic,/<\/div>, document\.body\)\}/);
   assert.match(econCss,/\.econ-root\.econ-mobile-create\{\s*position:fixed;right:0;bottom:0;z-index:320/);
   assert.match(econCss,/\.econ-mobile-create \.econ-create-menu\{z-index:321\}/);
+  assert.match(miniCss,/\.miniapp-quick-create\.is-open \.miniapp-ai-chat-launcher svg \{[\s\S]*?rotate\(45deg\)/);
+  assert.match(econCss,/\.econ-mobile-create \.econ-mobile-add-fab\[aria-expanded="true"\] svg,/);
+  assert.match(econCss,/transform:rotate\(45deg\)/);
 });
 
 test('quick voice records locally, submits to existing AI chat and opens replies afterwards',()=>{

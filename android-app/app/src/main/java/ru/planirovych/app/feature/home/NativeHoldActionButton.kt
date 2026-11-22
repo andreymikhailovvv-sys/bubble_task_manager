@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -22,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
@@ -53,6 +55,10 @@ internal fun NativeHoldActionButton(
     val visibilityChanged by rememberUpdatedState(onMenuVisibilityChange)
     var open by remember { mutableStateOf(false) }
     val menuTransition=remember { MutableTransitionState(false) }
+    val plusRotation by animateFloatAsState(
+        targetValue=if(open)45f else 0f,
+        animationSpec=tween(durationMillis=190),label="plus-to-close"
+    )
     val dark=MaterialTheme.colorScheme.background.luminance()<.4f
     val wire=if(dark)Color(0xFF9BDCD9) else Color(0xFF318790)
     val tile=if(dark)Color(0xFF223044) else Color(0xFFFCFDFF)
@@ -163,17 +169,30 @@ internal fun NativeHoldActionButton(
                         Icon(Icons.Default.Mic,"Голосовой ввод",
                             tint=accent,modifier=Modifier.size(24.dp))
                     }
+                    // A focusable Popup has its own window and intercepts taps
+                    // over the FAB. Put the close button in that window as well,
+                    // at exactly the same anchor, so the visible X always works.
+                    Box(Modifier.align(Alignment.BottomEnd)
+                        .size(56.dp).clip(CircleShape).background(accent)
+                        .clickable(onClickLabel="Закрыть меню добавления") { open=false },
+                        contentAlignment=Alignment.Center){
+                        Icon(Icons.Default.Add,"Закрыть меню",tint=foreground,
+                            modifier=Modifier.size(28.dp)
+                                .graphicsLayer { rotationZ=plusRotation })
+                    }
                 }
                 }
             }
         }
         Box(Modifier.fillMaxSize().clip(CircleShape).background(accent)
-            .clickable(enabled=!waiting, onClickLabel="Открыть меню добавления") {
+            .clickable(enabled=!waiting,
+                onClickLabel=if(open)"Закрыть меню добавления" else "Открыть меню добавления") {
                 open=!open
                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             },contentAlignment=Alignment.Center){
             if(waiting)CircularProgressIndicator(Modifier.size(25.dp),color=foreground,strokeWidth=2.dp)
-            else Icon(Icons.Default.Add,null,tint=foreground,modifier=Modifier.size(28.dp))
+            else Icon(Icons.Default.Add,null,tint=foreground,
+                modifier=Modifier.size(28.dp).graphicsLayer { rotationZ=plusRotation })
         }
     }
 }

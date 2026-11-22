@@ -652,6 +652,20 @@ body:has(.econ-root.econ-mobile-workspace) #root{min-height:100dvh}
 }
 .econ-mobile-create .econ-create-menu{z-index:321}
 .econ-mobile-create .econ-mobile-add-fab{z-index:322}
+/* The opened menu uses the same rotating + -> X affordance as the planner. */
+.econ-mobile-create .econ-mobile-add-fab svg,
+.econ-top-actions .econ-add-global svg {
+  transition:transform 190ms ease;
+  transform-origin:center;
+}
+.econ-mobile-create .econ-mobile-add-fab[aria-expanded="true"] svg,
+.econ-top-actions .econ-add-global[aria-expanded="true"] svg {
+  transform:rotate(45deg);
+}
+@media(prefers-reduced-motion:reduce){
+  .econ-mobile-create .econ-mobile-add-fab svg,
+  .econ-top-actions .econ-add-global svg {transition:none}
+}
 .econ-report-preview-wrap{position:relative;margin:0 0 20px}
 .econ-report-open{display:inline-flex;align-items:center;gap:5px;margin:12px 0 0;
  color:var(--ec-orange2);background:transparent;border:0;font-weight:700}

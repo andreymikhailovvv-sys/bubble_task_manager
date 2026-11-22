@@ -211,11 +211,16 @@ interface PlanirovychApi {
         @Query("category") category: String? = null,
         @Query("cursor") cursor: String? = null
     ): JsonObject
+    // Cookie-authenticated native writes need the same-origin metadata expected
+    // by the Economic CSRF guard. Do not relax the server-side origin check.
+    @Headers("Sec-Fetch-Site: same-origin")
     @POST("api/economic/{resource}")
     suspend fun economicCreate(@Path("resource") resource: String, @Body body: JsonObject): JsonObject
+    @Headers("Sec-Fetch-Site: same-origin")
     @PATCH("api/economic/{resource}/{id}")
     suspend fun economicUpdate(@Path("resource") resource: String, @Path("id") id: String,
         @Body body: JsonObject): JsonObject
+    @Headers("Sec-Fetch-Site: same-origin")
     @DELETE("api/economic/{resource}/{id}")
     suspend fun economicDelete(@Path("resource") resource: String, @Path("id") id: String): JsonObject
 }
