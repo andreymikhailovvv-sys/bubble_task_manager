@@ -1,0 +1,6 @@
+# XcodeGen output, build outputs and local Xcode files
+Planirovych.xcodeproj/
+DerivedData/
+.build/
+*.xcuserstate
+.DS_Store
