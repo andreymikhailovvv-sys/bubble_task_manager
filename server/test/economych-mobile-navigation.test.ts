@@ -224,6 +224,10 @@ test('Native finance matches Mini App mobile visual tokens and compact hierarchy
   assert.match(native,/verticalArrangement = Arrangement\.spacedBy\(11\.dp\)/);
   assert.match(native,/RoundedCornerShape\(17\.dp\)\)\.padding\(14\.dp\)/);
   assert.match(native,/EcoMiniAccountTile\(account,colors\)/);
+  assert.match(native,/EcoMiniAccountTile\(account,colors\) \{/);
+  assert.match(native,/editor=EcoEditorRequest\("accounts",account\)/);
+  assert.match(native,/private fun EcoMiniAccountTile\(account:JsonObject,colors:EcoColors,onEdit:\(\)->Unit\)/);
+  assert.match(native,/\.clickable\(onClickLabel="Изменить счёт"\) \{ onEdit\(\) \}/);
   assert.match(native,/private fun EcoMiniAccountTile\(/);
   assert.match(native,/val tile=if\(light&&primary\)Color\(0xFFFFF9F2\) else colors\.panel2/);
   assert.match(native,/fontWeight=FontWeight\.Normal,fontSize=13\.sp,maxLines=1/);
@@ -281,3 +285,25 @@ test('Android Economic dashboard follows Mini App spatial rhythm and warm summar
   assert.match(androidVersion,/versionCode = 22/);
   assert.match(androidVersion,/versionName = "1\.0\.20"/);
 });
+
+test('Native Economic CRUD retains server-side origin protection and marks each native write same-origin',()=>{
+  const route=read('../../server/src/routes/economic.ts');
+  assert.match(route,/telegramChatRequestIsSameOrigin\(req\.get\('origin'\), req\.get\('host'\), req\.get\('sec-fetch-site'\)\)/);
+  for (const method of ['POST','PATCH','DELETE']) {
+    const expression=new RegExp('@Headers\\("Sec-Fetch-Site: same-origin"\\)\\s+@'+method+'\\("api/economic/');
+    assert.match(api,expression);
+  }
+  assert.match(native,/api\.economicCreate\(resource,payload\)/);
+  assert.match(native,/api\.economicUpdate\(resource,record\.ecoText\("id"\),payload\)/);
+  assert.match(native,/api\.economicDelete\(selection\.resource,selection\.record\.ecoText\("id"\)\)/);
+});
+
+test('Native Economic bottom sheets swipe away without a second dismissal button',()=>{
+  assert.match(editor,/sheetGesturesEnabled=true/);
+  assert.match(editor,/skipPartiallyExpanded=true/);
+  assert.match(editor,/stableSheetHeight/);
+  assert.match(editor,/target!=SheetValue.Hidden \|\| !savingNow/);
+  assert.doesNotMatch(editor,/IconButton\(enabled=!saving,onClick=onDismiss\)/);
+  assert.match(native,/sheetGesturesEnabled=true/);
+});
+
