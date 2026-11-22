@@ -90,8 +90,24 @@ test('Android planner and Economic share the minimal recording window and instan
   assert.match(home,/accent=if\(voiceFromFinance\)Color\(0xFFF5A52E\) else Color\(0xFF8050DF\)/);
 
   assert.match(voice,/quickLauncher:Boolean=false/);
-  assert.match(voice,/suggestions\.take\(3\)/);
-  assert.doesNotMatch(voice,/suggestions\.take\(9\)/);
+  assert.match(voice,/FlowRow\(/);
+  assert.match(voice,/suggestions\.forEach \{ hint ->/);
+  assert.doesNotMatch(voice,/suggestions\.take\(3\)|suggestions\.take\(9\)/);
+  // All nine planner hints, including financial commands, and all five
+  // Economic hints must reach the same shared voice UI.
+  for (const hint of [
+    "Создай задачу","Добавь напоминание","Перенеси встречу",
+    "Создай привычку","Запиши заметку","Запиши расход",
+    "Создай счёт","Переведи деньги между счетами","Создай долг",
+    "Добавь расход","Запиши доход","Покажи расходы за месяц",
+    "Сколько денег на счетах?"
+  ]) assert.ok(home.includes(hint), hint);
+  assert.match(voice,/val voiceBackdrop=if\(dark\)Color\(0xB30B1120\) else Color\(0xBFD9E0EC\)/);
+  assert.match(voice,/Brush\.verticalGradient\(/);
+  assert.match(voice,/voiceBackdrop\.copy\(alpha=voiceBackdrop\.alpha\*\.24f\)/);
+  assert.match(voice,/startY=0f,endY=statusBarFadePx/);
+  assert.match(voice,/\.height\(156\.dp\)[\s\S]*?contentAlignment=Alignment\.Center/);
+  assert.match(voice,/\.offset\(y=47\.dp\)/);
   assert.match(voice,/recorder\.value\?\.maxAmplitude/);
   assert.match(voice,/if\(peak<850\)0f/);
   assert.match(voice,/drawCircle\(accent\.copy/);
@@ -99,7 +115,7 @@ test('Android planner and Economic share the minimal recording window and instan
   assert.match(voice,/Icon\(Icons\.Default\.Send,"Отправить голосовой запрос"/);
   assert.match(voice,/elapsedSeconds\/60,elapsedSeconds%60/);
   assert.match(voice,/Color\(0xB30B1120\)/);
-  assert.match(voice,/Color\(0xB4EDF0F8\)/);
+  assert.match(voice,/Color\(0xBFD9E0EC\)/);
   assert.match(voice,/Modifier\.size\(86\.dp\)\.clip\(CircleShape\)/);
   assert.match(voice,/Modifier\.size\(48\.dp\)\.clip\(CircleShape\)/);
 
