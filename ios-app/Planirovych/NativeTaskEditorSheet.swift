@@ -12,6 +12,7 @@ struct NativeTaskEditorSheet: View {
     @State private var subtaskTitle = ""
     @State private var selectedSubtask: RemoteTask?
     @State private var showingSettings = false
+    @State private var showingTaskAI = false
     @State private var showingSubtaskInput = false
     @State private var savingSubtask = false
     @FocusState private var subtaskInputFocused: Bool
@@ -53,6 +54,50 @@ struct NativeTaskEditorSheet: View {
                     if task.isCollaborative == true {
                         Label("Совместная задача", systemImage: "person.2")
                             .foregroundStyle(.secondary)
+                    }
+                }
+
+                if task.parentTaskId == nil && task.isActualTask {
+                    Section {
+                        Button {
+                            Task {
+                                if hasChanges {
+                                    guard await session.saveTask(
+                                        id: task.id, title: title, description: description
+                                    ) else { return }
+                                }
+                                showingTaskAI = true
+                            }
+                        } label: {
+                            HStack(spacing: 11) {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 22, weight: .semibold))
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("Спросить у ИИ")
+                                        .font(.system(size: 16, weight: .bold))
+                                    Text("Помощник знает контекст этой задачи")
+                                        .font(.caption)
+                                        .foregroundStyle(.white.opacity(0.86))
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.bold))
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.vertical, 10)
+                            .padding(.horizontal, 13)
+                            .frame(maxWidth: .infinity)
+                            .background(
+                                LinearGradient(colors: [
+                                    Color(red: 0.51, green: 0.38, blue: 0.90),
+                                    Color(red: 0.22, green: 0.64, blue: 0.78)
+                                ], startPoint: .leading, endPoint: .trailing),
+                                in: RoundedRectangle(cornerRadius: 16)
+                            )
+                        }
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                        .disabled(session.isWorking)
                     }
                 }
 
@@ -163,6 +208,13 @@ struct NativeTaskEditorSheet: View {
             .sheet(item: $selectedSubtask) { child in
                 NativeTaskEditorSheet(session: session, task: child)
                     .presentationDetents([.large])
+            }
+            .sheet(isPresented: $showingTaskAI) {
+                NativeTaskAIChatView(
+                    session: session,
+                    task: session.tasks.first(where: { $0.id == task.id }) ?? task
+                )
+                .presentationDetents([.large])
             }
             .sheet(isPresented: $showingSettings) {
                 NativeTaskSettingsSheet(session: session, task: task)
