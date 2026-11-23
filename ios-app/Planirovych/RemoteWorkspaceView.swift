@@ -151,11 +151,25 @@ struct RemoteWorkspaceView: View {
             }
         }
         .sheet(isPresented: $showingQuickVoice) {
-            NativeQuickVoiceSheet(session: session) { text in
+            NativeQuickVoiceSheet(session: session) { recordingData, duration in
                 quickAIWaiting = true
                 Task {
-                    let succeeded = await session.sendQuickVoiceRequest(text)
-                    if !succeeded {
+                    do {
+                        let text = try await session.transcribeVoice(data: recordingData,
+                                                                    duration: duration)
+                        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                            session.chatError = "Не удалось распознать голосовой запрос."
+                            quickAIWaiting = false
+                            selectedTab = .chat
+                            return
+                        }
+                        let succeeded = await session.sendQuickVoiceRequest(text)
+                        if !succeeded {
+                            quickAIWaiting = false
+                            selectedTab = .chat
+                        }
+                    } catch {
+                        session.chatError = error.localizedDescription
                         quickAIWaiting = false
                         selectedTab = .chat
                     }
