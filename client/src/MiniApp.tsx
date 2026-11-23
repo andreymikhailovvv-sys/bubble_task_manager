@@ -4674,16 +4674,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               }}
             />
             </div>
-            {displayMode === 'timeline' ? (
-              <button type="button" className="miniapp-timeline-postpone-button"
-                onClick={() => setIsOverdueTasksOpen(true)}
-                title="Показать просроченные задачи"
-                aria-label={`Просроченные задачи: ${overdueTasks.length}`}>
-                <Clock3 size={18}/>
-                <span className="miniapp-timeline-overdue-copy">Просроченные</span>
-                {overdueTasks.length > 0 ? <span className="miniapp-unified-overdue-count">{overdueTasks.length}</span> : null}
-              </button>
-            ) : null}
             <div ref={timelineMoreRef} className={`miniapp-workspace-utilities is-list ${isTimelineMoreOpen ? 'is-open' : ''}`}>
               {false ? (
                 <button type="button" className="miniapp-timeline-more-toggle" aria-label="Кредиты, рейтинг и настройки"
@@ -5016,6 +5006,14 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 </div>
                 <button type="button" onClick={() => moveTimelinePeriod(1)} className="miniapp-timeline-date-arrow" aria-label="Следующий период" title="Следующий период"><ChevronRight size={17} /></button>
               </div>
+              <button type="button" className="miniapp-timeline-overdue-inline"
+                onClick={() => setIsOverdueTasksOpen(true)}
+                title="Показать просроченные задачи"
+                aria-label={`Просроченные задачи: ${overdueTasks.length}`}>
+                <Clock3 size={18}/>
+                <span>Просроченные<br/>задачи</span>
+                {overdueTasks.length > 0 ? <span className="miniapp-unified-overdue-count">{overdueTasks.length}</span> : null}
+              </button>
               </div>
             </div>
             {timelineView === 'day' ? (
