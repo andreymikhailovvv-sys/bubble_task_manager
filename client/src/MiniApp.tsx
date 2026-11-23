@@ -4487,7 +4487,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         />
       ) : null}
       {isAccountOpen ? createPortal(
-        <div className="miniapp-unified-modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setIsAccountOpen(false); }}>
+        <div className={`miniapp-unified-modal-backdrop ${isLightTheme ? 'miniapp-light' : ''}`} onMouseDown={event => { if (event.target === event.currentTarget) setIsAccountOpen(false); }}>
           <section className="miniapp-unified-modal" role="dialog" aria-modal="true" aria-label="Управление аккаунтом">
             <div className="miniapp-unified-section-header"><h2>Управление аккаунтом</h2>
               <button type="button" onClick={() => setIsAccountOpen(false)} aria-label="Закрыть"><X size={20}/></button></div>
@@ -4498,7 +4498,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           </section>
         </div>, document.body) : null}
       {isSectorSettingsOpen ? createPortal(
-        <div className="miniapp-unified-modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setIsSectorSettingsOpen(false); }}>
+        <div className={`miniapp-unified-modal-backdrop ${isLightTheme ? 'miniapp-light' : ''}`} onMouseDown={event => { if (event.target === event.currentTarget) setIsSectorSettingsOpen(false); }}>
           <section className="miniapp-unified-modal" role="dialog" aria-modal="true" aria-label="Настройки секторов">
             <div className="miniapp-unified-section-header"><h2>{sectorEditorOpen ? 'Редактирование сектора' : 'Настройки секторов'}</h2>
               <button type="button" onClick={() => {if (sectorEditorOpen) setSectorEditorOpen(false); else setIsSectorSettingsOpen(false);}} aria-label="Закрыть"><X size={20}/></button>
