@@ -58,6 +58,22 @@ final class NativeWorkspaceSession: ObservableObject {
         }
     }
 
+    func updateProfile(name: String, username: String, email: String,
+                       currentPassword: String?) async -> Bool {
+        guard account != nil, !isWorking else { return false }
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            account = try await api.updateProfile(name: name, username: username,
+                                                   email: email, currentPassword: currentPassword)
+            errorMessage = nil
+            return true
+        } catch {
+            handle(error)
+            return false
+        }
+    }
+
     func saveSphere(id: String?, name: String, color: String,
                     icon: String, prompt: String) async -> Bool {
         guard account != nil, !isWorking, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
