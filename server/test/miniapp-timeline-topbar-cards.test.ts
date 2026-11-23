@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 
 const read = (path: string) => readFile(new URL(path, import.meta.url), 'utf8');
 
-test('timeline top row has separate search, postpone and expandable utilities, not optimize or filters', async () => {
+test('timeline top row has expandable search and opens overdue tasks, preserving utilities', async () => {
   const [mini, css] = await Promise.all([
     read('../../client/src/MiniApp.tsx'),
     read('../../client/src/styles.css')
@@ -17,7 +17,7 @@ test('timeline top row has separate search, postpone and expandable utilities, n
   assert.match(toolbar, /<WorkspaceGlobalSearch/);
   assert.match(toolbar, /displayMode === 'timeline' \? \(/);
   assert.match(toolbar, /miniapp-timeline-postpone-button/);
-  assert.match(toolbar, /onClick=\{\(\) => void postponeAllOverdueToToday\(\)\}/);
+  assert.match(toolbar, /onClick=\{\(\) => setIsOverdueTasksOpen\(true\)\}/);
   assert.match(toolbar, /miniapp-timeline-more-toggle/);
   assert.match(toolbar, /aria-expanded=\{isTimelineMoreOpen\}/);
   assert.match(toolbar, /miniapp-workspace-utilities-panel/);

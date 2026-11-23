@@ -20,13 +20,14 @@ const api=read('../../android-app/app/src/main/java/ru/planirovych/app/core/netw
 const network=read('../../android-app/app/src/main/java/ru/planirovych/app/core/network/NetworkModule.kt');
 const androidVersion=read('../../android-app/app/build.gradle.kts');
 
-test('Android has 4 labeled tabs and Mini App retains its existing navigation until the follow-up PR',()=>{
-  assert.equal((mini.match(/<MiniNavigationControl/g)||[]).length,5);
+test('Android and Mini App have 4 labeled tabs, with the warm Economic tab last',()=>{
+  assert.equal((mini.match(/<MiniNavigationControl/g)||[]).length,4);
   assert.match(mini,/aria-label="Экономыч AI, финансы"/);
   assert.match(mini,/isEconomicOpen \? 'economic'/);
-  for(const text of ['Список','Таймлайн','Чат с ИИ','Заметки'])
-    assert.doesNotMatch(mini,new RegExp('<span>'+text+'</span>'));
-  assert.match(miniCss,/grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
+  for(const text of ['Общая','Таймлайн','ИИ-чат','Экономыч'])
+    assert.match(mini,new RegExp('miniapp-bottom-navigation-label">'+text+'</span>'));
+  assert.doesNotMatch(mini,/miniapp-bottom-navigation-icon"><StickyNote/);
+  assert.match(miniCss,/grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
   assert.match(miniCss,/data-active-tab='economic'/);
   assert.match(miniCss,/\.miniapp-economic-screen\{/);
   assert.match(home,/pageCount=\{4\}/);
