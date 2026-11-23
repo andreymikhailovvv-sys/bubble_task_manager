@@ -143,6 +143,23 @@ final class NativeWorkspaceSession: ObservableObject {
         }
     }
 
+    func addPlannerEntry(title: String, type: String, dueDate: Date?,
+                         sphereId: String?) async -> Bool {
+        guard account != nil, !isWorking else { return false }
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            _ = try await api.createPlannerEntry(title: title, type: type,
+                                                 dueDate: dueDate, sphereId: sphereId)
+            try await loadWorkspace()
+            errorMessage = nil
+            return true
+        } catch {
+            handle(error)
+            return false
+        }
+    }
+
     func saveTask(id: String, title: String, description: String) async -> Bool {
         guard account != nil, !isWorking else { return false }
         let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -302,6 +319,22 @@ final class NativeWorkspaceSession: ObservableObject {
             chatMessages = try await api.loadChat(projectId: projectId, chatId: chatId)
             chatError = nil
         } catch { chatError = error.localizedDescription }
+    }
+
+    /// Quick-add always targets the account's quick AI conversation, never
+    /// whichever project chat happens to be active in the navigation.
+    func sendQuickVoiceRequest(_ question: String) async -> Bool {
+        guard account != nil else { return false }
+        if chatProjects.isEmpty { await loadChat() }
+        if let quickProject = chatProjects.first(where: { project in
+            project.chats.contains(where: { $0.id == "quick-ai-requests" })
+        }) {
+            if selectedThreadID != "quick-ai-requests" ||
+                selectedProjectID != quickProject.id {
+                await selectChat(projectId: quickProject.id, chatId: "quick-ai-requests")
+            }
+        }
+        return await sendChat(question)
     }
 
     func sendChat(_ question: String) async -> Bool {
