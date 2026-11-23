@@ -569,3 +569,10 @@ body:has(.bubble-fullscreen-shell:not(.fullscreen-overlay-active) .primary-works
 @media (prefers-reduced-motion: reduce) {
   .primary-workspace-sidebar-list { transition: none !important; }
 }
+
+/* Higher specificity than the earlier open-sidebar rules: centered dialogs
+   must always restore the bottom-right mascot position. */
+body:has(.bubble-fullscreen-shell.fullscreen-overlay-active .primary-workspace-sidebar.is-open)
+  .ai-chat-launcher.bubble-ai-fullscreen {
+  right: max(16px, env(safe-area-inset-right)) !important;
+}
