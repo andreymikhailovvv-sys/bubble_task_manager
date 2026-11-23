@@ -1,6 +1,6 @@
 import { useState, type CSSProperties, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Clock3, ClipboardList, Loader2, Minus, Palette, Plus, Trash2, X } from 'lucide-react';
+import { Check, Clock3, Loader2, Minus, Palette, Plus, Trash2, X } from 'lucide-react';
 import type { Habit, HabitDurationMode, HabitRecurrenceType } from '../lib/types';
 import './PrimaryHabitDialog.css';
 
