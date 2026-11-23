@@ -175,7 +175,7 @@ struct NativeHabitEditor: View {
     @State private var intervalDays: Int
     @State private var weekdays: Set<Int>
     @State private var reminderEnabled: Bool
-    @State private var reminderDate: Date
+    @State private var reminderDates: [Date]
     @State private var showNotificationWarning = false
 
     private let emojiOptions = ["✨","💪","🏃","📚","📖","🧘","💧","🥗","😴","🚴","🎯","💻","📝","🎨","🎹","☀️","🌱","❤️","🧠","🦷","🚶","🏊","🏋️","☕️","💊","🧹","💰","📅","🐶","⛳️","🚗","🌙","🔥","🎵","📵","🫶"]
@@ -192,11 +192,13 @@ struct NativeHabitEditor: View {
         _recurrenceType = State(initialValue: habit?.recurrenceType ?? "DAILY")
         _intervalDays = State(initialValue: habit?.intervalDays ?? 2)
         _weekdays = State(initialValue: Set(habit?.weekdays ?? [1,2,3,4,5,6,0]))
-        let time = habit?.reminderTimes?.first ?? habit?.reminderTime
-        _reminderEnabled = State(initialValue: time != nil)
+        let times = (habit?.reminderTimes?.isEmpty == false ? habit?.reminderTimes : habit?.reminderTime.map { [$0] }) ?? []
+        _reminderEnabled = State(initialValue: !times.isEmpty)
         let parser = DateFormatter()
         parser.dateFormat = "HH:mm"
-        _reminderDate = State(initialValue: time.flatMap(parser.date(from:)) ?? parser.date(from: "09:00") ?? Date())
+        let parsed = times.compactMap(parser.date(from:))
+        _reminderDates = State(initialValue: parsed.isEmpty
+            ? [parser.date(from: "09:00") ?? Date()] : parsed)
     }
 
     var body: some View {
@@ -272,9 +274,31 @@ struct NativeHabitEditor: View {
                 Section("Уведомления") {
                     Toggle("Напоминать о привычке", isOn: $reminderEnabled)
                     if reminderEnabled {
-                        DatePicker("Время уведомления", selection: $reminderDate, displayedComponents: .hourAndMinute)
-                            .datePickerStyle(.compact)
-                        Text("Напоминание будет приходить в выбранное время через действующую систему уведомлений Планировыча.")
+                        ForEach(reminderDates.indices, id: \.self) { index in
+                            HStack(spacing: 8) {
+                                DatePicker("Напоминание \(index + 1)", selection: $reminderDates[index],
+                                           displayedComponents: .hourAndMinute)
+                                    .datePickerStyle(.compact)
+                                if reminderDates.count > 1 {
+                                    Button(role: .destructive) {
+                                        reminderDates.remove(at: index)
+                                    } label: {
+                                        Image(systemName: "minus.circle.fill")
+                                    }
+                                    .accessibilityLabel("Удалить напоминание \(index + 1)")
+                                }
+                            }
+                        }
+                        Button {
+                            guard reminderDates.count < 12 else { return }
+                            let next = Calendar.current.date(byAdding: .hour, value: 1,
+                                                             to: reminderDates.last ?? Date()) ?? Date()
+                            reminderDates.append(next)
+                        } label: {
+                            Label("Добавить напоминание", systemImage: "plus.circle.fill")
+                        }
+                        .disabled(reminderDates.count >= 12)
+                        Text("Можно назначить до 12 напоминаний в разное время.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -295,7 +319,9 @@ struct NativeHabitEditor: View {
                             let clock = DateFormatter()
                             clock.dateFormat = "HH:mm"
                             clock.locale = Locale(identifier: "en_US_POSIX")
-                            let times = reminderEnabled ? [clock.string(from: reminderDate)] : []
+                            let times = reminderEnabled
+                                ? Array(Set(reminderDates.map(clock.string(from:)))).sorted()
+                                : []
                             let ok = await session.upsertHabit(
                                 id: habit?.id, name: name, icon: icon, color: color,
                                 targetCount: targetCount, recurrenceType: recurrenceType,
