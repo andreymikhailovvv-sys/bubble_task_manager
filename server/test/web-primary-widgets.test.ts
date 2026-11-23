@@ -98,16 +98,50 @@ test('Planik is offset from open widgets but returns to screen corner for center
   assert.ok(css.includes('right: max(16px, env(safe-area-inset-right)) !important'));
 });
 
-test('habit dialog matches Focus settings pill fields, five pastel choices and progress theme', async () => {
-  const dialog = await source('client/src/components/PrimaryHabitDialog.tsx');
+test('habit ring strip follows the Mini App: done badge, today's rings, divider, offday badge and plus', async () => {
+  const widget = await source('client/src/components/PrimaryWorkspaceSidebar.tsx');
+  const css = await source('client/src/components/PrimaryWorkspaceSidebar.css');
+  assert.ok(widget.includes('primary-habit-summary-badge'));
+  assert.ok(widget.includes('Выполнено {completedHabitCount} из {todayHabits.length}'));
+  assert.ok(widget.includes('primary-widget-habit-strip'));
+  assert.ok(widget.includes('primary-widget-habit-circle'));
+  assert.ok(widget.includes('primary-widget-habit-divider'));
+  assert.ok(widget.includes('primary-widget-habit-day-badge'));
+  assert.ok(widget.includes('primary-widget-habit-add-circle'));
+  assert.ok(widget.includes("setSelectedHabitId(habit.id)"));
+  assert.ok(!widget.includes('primary-widget-habit-summary'));
+  assert.ok(css.includes('conic-gradient(var(--habit-color) var(--habit-progress)'));
+});
+
+test('habit detail mirrors Mini App completion controls, calendar and embedded settings', async () => {
+  const widget = await source('client/src/components/PrimaryWorkspaceSidebar.tsx');
+  const editor = await source('client/src/components/PrimaryHabitDialog.tsx');
   const css = await source('client/src/components/PrimaryHabitDialog.css');
-  const sidebar = await source('client/src/components/PrimaryWorkspaceSidebar.css');
-  assert.ok(dialog.includes('className="primary-habit-title-pill"'));
-  assert.ok(dialog.includes('className="primary-habit-select-grid"'));
-  assert.ok(dialog.includes('className="primary-habit-target-presets"'));
-  assert.ok(dialog.includes('[1, 2, 3, 4, 5].map'));
-  assert.ok(css.includes('border-radius: 999px'));
-  assert.ok(css.includes('#75dce6') && css.includes('#f17c9f'));
+  assert.ok(widget.includes('primary-habit-detail-overview'));
+  assert.ok(widget.includes('primary-habit-detail-completion'));
+  assert.ok(widget.includes('primary-habit-detail-complete'));
+  assert.ok(widget.includes('<MiniAppHabitTracker habit={selectedHabit}'));
+  assert.ok(widget.includes('aria-expanded={editingHabitId === selectedHabit.id}'));
+  assert.ok(widget.includes('<PrimaryHabitDialog key={editingHabitId} embedded habit={editingHabit}'));
+  assert.ok(editor.includes('embedded?: boolean'));
+  assert.ok(editor.includes('if (embedded) return panel'));
+  assert.ok(editor.includes('primary-habit-settings-card'));
+  assert.ok(editor.includes('primary-habit-duration-options'));
+  assert.ok(editor.includes('primary-habit-full-stepper'));
+  assert.ok(editor.includes('primary-habit-icon-grid'));
+  assert.ok(css.includes('.primary-habit-dialog.primary-habit-dialog--embedded'));
+  assert.ok(css.includes('.primary-habit-detail-content .miniapp-habit-tracker-calendar'));
   assert.ok(css.includes("body[data-theme='dark'] .primary-habit-dialog.dialog-surface"));
-  assert.ok(sidebar.includes('.primary-widget-metric:first-child .primary-widget-progress > span'));
+});
+
+test('card scale keeps 18px spacing, glass matches header, and collapse handle uses viewport edge', async () => {
+  const css = await source('client/src/components/PrimaryWorkspaceSidebar.css');
+  assert.ok(css.includes('--primary-sidebar-width: 374px'));
+  assert.ok(css.includes('gap: 18px'));
+  assert.ok(css.includes('background: var(--topbar-bg) !important'));
+  assert.ok(css.includes('rgba(240,249,255,.70)'));
+  assert.ok(css.includes('position: fixed !important'));
+  assert.ok(css.includes('right: 0 !important'));
+  assert.ok(css.includes('top: 50dvh !important'));
+  assert.ok(css.includes('--primary-sidebar-width: 357px'));
 });
