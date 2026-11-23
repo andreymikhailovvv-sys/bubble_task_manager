@@ -139,7 +139,10 @@ fun ModernWorkspace(
     var overdueOpen by remember { mutableStateOf(false) }
     var sectorSettingsOpen by remember { mutableStateOf(false) }
     var notesVisible by remember { mutableStateOf(false) }
-    var searchFieldOpen by rememberSaveable { mutableStateOf(false) }
+    // HorizontalPager precomposes adjacent pages. A single Boolean made all
+    // precomposed search fields request focus and dragged the pager to AI Chat.
+    // Only one page can own an open search (and its keyboard focus) at a time.
+    var searchOpenedOnPage by rememberSaveable { mutableIntStateOf(-1) }
     var scoreOpen by remember { mutableStateOf(false) }
     var creditsOpen by remember { mutableStateOf(false) }
     var searchExpanded by remember { mutableStateOf(false) }
@@ -169,9 +172,19 @@ fun ModernWorkspace(
                 .thenBy { it.createdAt ?: "" }
         )
     }
+    LaunchedEffect(pagerState.currentPage) {
+        // Switching tabs explicitly closes the old field. Never focus a field
+        // from an adjacent page that HorizontalPager already precomposed.
+        if(searchOpenedOnPage!=-1 && searchOpenedOnPage!=pagerState.currentPage) {
+            searchOpenedOnPage=-1
+            searchExpanded=false
+            search("")
+        }
+    }
     HorizontalPager(state=pagerState,userScrollEnabled=false,
         modifier=modifier.fillMaxSize(),
         beyondViewportPageCount=1) { page ->
+        val searchActiveHere = searchOpenedOnPage==page && pagerState.currentPage==page
         when(page) {
             3 -> NativeEconomicPage(userId=state.user?.id,dark=dark,active=pagerState.currentPage==3,
                 onQuickVoice=onQuickVoice,voiceAwaiting=voiceAwaiting)
@@ -182,16 +195,21 @@ fun ModernWorkspace(
                     Column(Modifier.fillMaxWidth().padding(horizontal=14.dp,vertical=9.dp)) {
                         WorkspaceTopbar(state,colors,dark,onAccount=onAccount,
                             onSearchToggle={
-                                searchFieldOpen=!searchFieldOpen
-                                if(!searchFieldOpen){search("");searchExpanded=false}
+                                if(searchOpenedOnPage==page) {
+                                    searchOpenedOnPage=-1
+                                    search("")
+                                } else {
+                                    searchOpenedOnPage=page
+                                }
+                                searchExpanded=false
                             },settings=settings,onCredits={creditsOpen=true})
-                        if(searchFieldOpen) {
+                        if(searchActiveHere) {
                             Spacer(Modifier.height(8.dp))
                             WorkspaceSearchField(state.query,colors,search,
-                                onClose={search("");searchFieldOpen=false;searchExpanded=false},
+                                onClose={search("");searchOpenedOnPage=-1;searchExpanded=false},
                                 onEdited={searchExpanded=it.isNotBlank()})
                         }
-                        if(searchFieldOpen && searchExpanded && searchQuery.isNotEmpty()) {
+                        if(searchActiveHere && searchExpanded && searchQuery.isNotEmpty()) {
                             Spacer(Modifier.height(6.dp))
                             NativeWorkspaceGlobalSearch(query=state.query,
                                 tasks=state.tasks,notes=state.notes,
@@ -278,16 +296,21 @@ fun ModernWorkspace(
             Column(Modifier.fillMaxWidth()) {
                 WorkspaceTopbar(state,colors,dark,
                     onAccount=onAccount,onSearchToggle={
-                        searchFieldOpen=!searchFieldOpen
-                        if(!searchFieldOpen){search("");searchExpanded=false}
+                        if(searchOpenedOnPage==page) {
+                            searchOpenedOnPage=-1
+                            search("")
+                        } else {
+                            searchOpenedOnPage=page
+                        }
+                        searchExpanded=false
                     },settings=settings,onCredits={creditsOpen=true})
-                if(searchFieldOpen) {
+                if(searchActiveHere) {
                     Spacer(Modifier.height(8.dp))
                     WorkspaceSearchField(state.query,colors,search,
-                        onClose={search("");searchFieldOpen=false;searchExpanded=false},
+                        onClose={search("");searchOpenedOnPage=-1;searchExpanded=false},
                         onEdited={searchExpanded=it.isNotBlank()})
                 }
-                if(searchFieldOpen && searchExpanded && searchQuery.isNotEmpty()) {
+                if(searchActiveHere && searchExpanded && searchQuery.isNotEmpty()) {
                     Spacer(Modifier.height(7.dp))
                     NativeWorkspaceGlobalSearch(
                         query=state.query,tasks=state.tasks,notes=state.notes,
@@ -605,6 +628,9 @@ private fun WorkspaceSearchField(
     val requester=remember{FocusRequester()}
     val keyboard=LocalSoftwareKeyboardController.current
     LaunchedEffect(Unit) {
+        // Wait until this active pager page's text field is attached, then
+        // focus it and open the IME. Never request focus from a prefetched page.
+        withFrameNanos { }
         requester.requestFocus()
         keyboard?.show()
     }

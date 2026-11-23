@@ -36,3 +36,25 @@ test('Android overview header uses brand, account, credits, expandable search an
   assert.match(mini, /miniapp-workspace-utilities/);
   assert.match(tools, /miniapp-workspace-tool-overdue/);
 });
+
+
+test('Android search focuses only the visible pager tab and never navigates to AI Chat', async () => {
+  const source = await read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/ModernWorkspace.kt');
+  assert.match(source, /var searchOpenedOnPage by rememberSaveable \{ mutableIntStateOf\(-1\) \}/);
+  assert.doesNotMatch(source, /var searchFieldOpen by rememberSaveable/);
+  // HorizontalPager keeps adjacent tabs composed. Both hidden pages must NOT
+  // mount a focused search field when one tab's magnifier was tapped.
+  assert.match(source, /val searchActiveHere = searchOpenedOnPage==page && pagerState\.currentPage==page/);
+  assert.equal((source.match(/if\(searchActiveHere\) \{/g) ?? []).length, 2);
+  assert.equal((source.match(/if\(searchActiveHere && searchExpanded && searchQuery\.isNotEmpty\(\)\)/g) ?? []).length, 2);
+  assert.equal((source.match(/if\(searchOpenedOnPage==page\)/g) ?? []).length, 2);
+  assert.equal((source.match(/onClose=\{search\(""\);searchOpenedOnPage=-1;searchExpanded=false\}/g) ?? []).length, 2);
+  assert.match(source, /if\(searchOpenedOnPage!=-1 && searchOpenedOnPage!=pagerState\.currentPage\)/);
+  // Wait for attachment of the visible BasicTextField before requesting focus and IME.
+  assert.match(source, /withFrameNanos \{ \}[\s\S]*requester\.requestFocus\(\)[\s\S]*keyboard\?\.show\(\)/);
+  const searchCallbacks = source.match(/onSearchToggle=\{[\s\S]*?searchExpanded=false\s*\}/g) ?? [];
+  assert.equal(searchCallbacks.length, 2);
+  for (const callback of searchCallbacks) {
+    assert.doesNotMatch(callback, /scrollToPage|animateScrollToPage|onExit/);
+  }
+});
