@@ -927,6 +927,8 @@ export default function App() {
   const [creditPacks, setCreditPacks] = useState<CreditPack[]>([]);
   const [creditPurchaseAvailable, setCreditPurchaseAvailable] = useState(false);
   const [subscriptionPurchaseAvailable, setSubscriptionPurchaseAvailable] = useState(false);
+  const activeSubscription = Boolean(currentUser?.subscriptionExpiresAt &&
+    new Date(currentUser.subscriptionExpiresAt).getTime() > Date.now());
   const subscriptionPurchase = useSubscriptionPurchase({
     surface: 'web', openConfirmation: (url) => window.location.assign(url),
     onSucceeded: async () => { const me = await api.getMe(); setCurrentUser(me.user); }
@@ -7235,10 +7237,10 @@ export default function App() {
                         <li key={feature} className="subscription-feature-pill flex items-start gap-2 rounded-xl px-3 py-1.5"><Check size={15} className="mt-0.5 shrink-0 text-emerald-300" /> <span>{feature}</span></li>
                       ))}
                     </ul>
-                    <button type="button" disabled={!subscriptionPurchaseAvailable || subscriptionPurchase.creatingPlanKey !== null}
+                    <button type="button" disabled={!subscriptionPurchaseAvailable || activeSubscription || subscriptionPurchase.creatingPlanKey !== null}
                       onClick={() => void subscriptionPurchase.start(plan.key)}
                       className="mt-3 rounded-xl bg-gradient-to-r from-fuchsia-600 to-rose-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50">
-                      {isCreating ? 'Создаём платёж…' : subscriptionPurchaseAvailable ? 'Купить на месяц' : 'Оплата недоступна'}
+                      {isCreating ? 'Создаём платёж…' : activeSubscription ? 'Подписка активна' : subscriptionPurchaseAvailable ? 'Купить на месяц' : 'Оплата недоступна'}
                     </button>
                   </article>
                 );

@@ -110,6 +110,7 @@ export default function TestPage() {
   const [creditPacks,setCreditPacks]=useState<CreditPack[]>([]);
   const [creditPurchaseAvailable,setCreditPurchaseAvailable]=useState(false);
   const [subscriptionPurchaseAvailable,setSubscriptionPurchaseAvailable]=useState(false);
+  const activeSubscription=Boolean(user?.subscriptionExpiresAt&&new Date(user.subscriptionExpiresAt).getTime()>Date.now());
   const subscriptionPurchase=useSubscriptionPurchase({
     surface:'web', openConfirmation:url=>window.location.assign(url),
     onSucceeded:async()=>{const me=await api.getMe();setUser(me.user);}
@@ -736,9 +737,9 @@ export default function TestPage() {
             ['start','Старт','Для ежедневных задач'],['pro','Про','Для активной работы'],['max','Максимум','Расширенные возможности']
           ] as const).map(([key,name,desc])=><div key={key} className="tp-plan">
             <div><strong>{name}</strong><small>{desc}</small></div>
-            <button type="button" disabled={!subscriptionPurchaseAvailable||subscriptionPurchase.creatingPlanKey!==null}
+            <button type="button" disabled={!subscriptionPurchaseAvailable||activeSubscription||subscriptionPurchase.creatingPlanKey!==null}
               onClick={()=>void subscriptionPurchase.start(key)}>
-              {subscriptionPurchase.creatingPlanKey===key?'Создаём платёж…':subscriptionPurchaseAvailable?'Купить':'Оплата недоступна'}
+              {subscriptionPurchase.creatingPlanKey===key?'Создаём платёж…':activeSubscription?'Подписка активна':subscriptionPurchaseAvailable?'Купить':'Оплата недоступна'}
             </button>
           </div>)}
           <p className="tp-credit-note">Тариф действует один календарный месяц, без автопродления.</p>

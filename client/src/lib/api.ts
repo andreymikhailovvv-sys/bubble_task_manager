@@ -298,6 +298,8 @@ export type CurrentUser = {
   aiCredits?: number;
   aiCreditsMilli?: number;
   aiCreditsPeriod?: string;
+  subscriptionPlan?: 'free' | SubscriptionPlanKey;
+  subscriptionExpiresAt?: string | null;
   aiEfficiencyCreditsSpent?: number;
   aiEfficiencyCreditsPeriod?: string;
   timeZone?: string | null;
