@@ -62,11 +62,12 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     // Do not mount a bottom sheet while the search IME is animating out.
     var pendingFocusTaskId by remember{mutableStateOf<String?>(null)}
     var settings by remember { mutableStateOf(false) }
+    var accountOpen by remember { mutableStateOf(false) }
     var creationType by remember { mutableStateOf<TaskType?>(null) }
     var createHabit by remember { mutableStateOf(false) }
     var createNote by remember { mutableStateOf(false) }
     var plannerMenuOpen by remember { mutableStateOf(false) }
-    val pagerState = rememberPagerState(initialPage=0,pageCount={5})
+    val pagerState = rememberPagerState(initialPage=0,pageCount={4})
     val plannerScrimAlpha by animateFloatAsState(
         targetValue=if(plannerMenuOpen&&pagerState.currentPage in 0..1)
             if(dark).26f else .19f else 0f,
@@ -237,7 +238,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
         containerColor = MaterialTheme.colorScheme.background,
         floatingActionButton = {
             if(!state.loading && state.error==null &&
-                pagerState.currentPage!=2 && pagerState.currentPage!=3 && pagerState.currentPage!=4){
+                pagerState.currentPage!=2 && pagerState.currentPage!=3){
                 NativeHoldActionButton(
                     accent=if(dark)Color(0xFFA78BFA) else Color(0xFF6D28D9),
                     foreground=if(dark)Color(0xFF131125) else Color.White,
@@ -263,10 +264,9 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
             // Keeping it while the IME is open double-offsets Quick AI composer.
             if(!state.loading && state.error == null && !keyboardOpen) {
                 val tabs = listOf(
-                    Triple("Список",Icons.Default.FormatListBulleted,"Задачи списком"),
+                    Triple("Общая",Icons.Default.Dashboard,"Общая"),
                     Triple("Таймлайн",Icons.Default.CalendarViewWeek,"Таймлайн"),
-                    Triple("Чат с ИИ",Icons.Default.SmartToy,"Общий чат с ИИ"),
-                    Triple("Заметки",Icons.Default.StickyNote2,"Заметки"),
+                    Triple("ИИ-чат",Icons.Default.SmartToy,"ИИ-чат"),
                     Triple("Экономыч",Icons.Default.MonetizationOn,"Экономыч AI, финансы")
                 )
                 // One uninterrupted surface behind the five tabs AND the Android
@@ -276,7 +276,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                   HorizontalDivider(thickness=1.dp,
                       color=if(dark)Color(0xFF263044) else Color(0xFFE4E8F0))
                   NavigationBar(
-                    modifier=Modifier.height(56.dp),
+                    modifier=Modifier.height(66.dp),
                     containerColor=navBackground,
                     contentColor=if(dark)Color(0xFFE2E8F0) else Color(0xFF172238),
                     tonalElevation=0.dp,
@@ -287,14 +287,14 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                             selected=pagerState.currentPage==index,
                             onClick={pagerScope.launch { pagerState.animateScrollToPage(index) }},
                             icon={Icon(tab.second,contentDescription=tab.third,
-                                modifier=Modifier.size(21.dp))},
-                            label=null,
-                            alwaysShowLabel=false,
+                                modifier=Modifier.size(24.dp))},
+                            label={Text(tab.first,fontSize=10.sp,maxLines=1)},
+                            alwaysShowLabel=true,
                             colors=NavigationBarItemDefaults.colors(
-                                selectedIconColor=if(index==4) (if(dark) Color(0xFFF6B95F) else Color(0xFF9B5200)) else if(dark)Color(0xFFD8B4FE) else Color(0xFF6828C6),
+                                selectedIconColor=if(index==3) (if(dark) Color(0xFFF6B95F) else Color(0xFF9B5200)) else if(dark)Color(0xFFD8B4FE) else Color(0xFF6828C6),
                                 selectedTextColor=if(dark)Color(0xFFF1E8FF) else Color(0xFF5420A7),
-                                indicatorColor=if(index==4) (if(dark)Color(0xFF56371F) else Color(0xFFFFE4BF)) else if(dark)Color(0xFF34264E) else Color(0xFFECE0FF),
-                                unselectedIconColor=if(index==4) (if(dark)Color(0xFFD6A05B) else Color(0xFFB16D22)) else if(dark)Color(0xFF9CA3AF) else Color(0xFF55647E),
+                                indicatorColor=if(index==3) (if(dark)Color(0xFF56371F) else Color(0xFFFFE4BF)) else if(dark)Color(0xFF34264E) else Color(0xFFECE0FF),
+                                unselectedIconColor=if(index==3) (if(dark)Color(0xFFD6A05B) else Color(0xFFB16D22)) else if(dark)Color(0xFF9CA3AF) else Color(0xFF55647E),
                                 unselectedTextColor=if(dark)Color(0xFF9CA3AF) else Color(0xFF55647E)
                             ),
                         )
@@ -311,6 +311,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
             state.error != null -> ErrorState(state.error!!, vm::refresh, Modifier.padding(padding))
             else -> ModernWorkspace(
                 vm, state, dark, vm::search, { settings = true },
+                onAccount = { accountOpen = true },
                 onOpenTask = { taskId ->
                     focusManager.clearFocus(force=true)
                     softwareKeyboard?.hide()
@@ -361,6 +362,9 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
         onClose={createHabit=false})
     if(createNote) NativeQuickNoteCreateSheet(vm=vm,dark=dark,
         onClose={createNote=false})
+    if (accountOpen) AndroidAccountSheet(state.user,dark,
+        onClose={accountOpen=false},onSettings={accountOpen=false;settings=true},
+        onLogout={accountOpen=false;vm.logout { }})
     if (settings) SettingsSheet(
         state.user, dark, themeMode, vm::setThemeMode, { settings = false },
         { authMode = it; settings = false }, { vm.logout { settings = false } },
@@ -843,6 +847,39 @@ private fun SettingsSheet(
                 }
             }
             Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AndroidAccountSheet(
+    user:CurrentUser?,dark:Boolean,onClose:()->Unit,
+    onSettings:()->Unit,onLogout:()->Unit
+) {
+    ModalBottomSheet(onDismissRequest=onClose) {
+        Column(Modifier.fillMaxWidth().padding(start=20.dp,end=20.dp,bottom=32.dp),
+            verticalArrangement=Arrangement.spacedBy(13.dp)) {
+            Text("Управление аккаунтом",style=MaterialTheme.typography.headlineSmall,
+                fontWeight=FontWeight.Bold)
+            Text(user?.displayName ?: "Профиль",fontWeight=FontWeight.SemiBold)
+            Text("Логин: "+(user?.username ?: "Не указан"),
+                color=MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("E-mail: "+(user?.email ?: "Не указан"),
+                color=MaterialTheme.colorScheme.onSurfaceVariant)
+            HorizontalDivider()
+            Text("ИИ-кредиты: "+(user?.aiCredits ?: 0),
+                fontWeight=FontWeight.Medium)
+            OutlinedButton(onClick=onSettings,modifier=Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.Settings,null)
+                Spacer(Modifier.width(8.dp))
+                Text("Настройки приложения")
+            }
+            if(user?.hasAccount==true) {
+                OutlinedButton(onClick=onLogout,modifier=Modifier.fillMaxWidth()) {
+                    Text("Выйти из аккаунта")
+                }
+            }
         }
     }
 }
