@@ -256,7 +256,9 @@ fun ModernWorkspace(
     LazyColumn(
         state=workspaceScroll,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start=14.dp,end=14.dp,top=92.dp,bottom=28.dp),
+        contentPadding = PaddingValues(start=14.dp,end=14.dp,
+            top=if(contentMode==WorkspaceMode.TIMELINE || searchFieldOpen) 152.dp else 92.dp,
+            bottom=28.dp),
         verticalArrangement = Arrangement.spacedBy(13.dp),
     ) {
         if (contentMode == WorkspaceMode.LIST) {
@@ -1003,6 +1005,195 @@ private fun TaskCompletionConfetti() {
                     trailingIcon=if(index==selected) ({ Icon(Icons.Default.Check,null) }) else null)
             }
         }
+    }
+}
+
+@Composable
+private fun WorkspaceProgressCard(
+    label:String,icon:androidx.compose.ui.graphics.vector.ImageVector,
+    completed:Int,total:Int,colors:WorkspaceColors,modifier:Modifier=Modifier
+) {
+    Surface(modifier,shape=RoundedCornerShape(21.dp),color=colors.card,
+        border=BorderStroke(1.dp,colors.panelBorder)) {
+        Column(Modifier.padding(15.dp),verticalArrangement=Arrangement.spacedBy(11.dp)) {
+            Row(verticalAlignment=Alignment.CenterVertically,
+                horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                Icon(icon,null,Modifier.size(19.dp),tint=colors.purple)
+                Text(label,fontSize=12.sp,fontWeight=FontWeight.SemiBold,color=colors.secondaryText)
+            }
+            Text("$completed из $total",fontSize=27.sp,fontWeight=FontWeight.ExtraBold,
+                color=colors.text,maxLines=1)
+            LinearProgressIndicator(progress={if(total>0)completed.toFloat()/total else 0f},
+                modifier=Modifier.fillMaxWidth().height(7.dp).clip(CircleShape),
+                color=colors.purple,trackColor=colors.muted)
+        }
+    }
+}
+
+@Composable
+private fun WorkspaceSectorsOverview(
+    spheres:List<Sphere>,tasks:List<Task>,colors:WorkspaceColors,
+    selected:Set<String>,onSelect:(String?)->Unit,onSettings:()->Unit
+) {
+    Surface(Modifier.fillMaxWidth(),shape=RoundedCornerShape(23.dp),color=colors.card,
+        border=BorderStroke(1.dp,colors.panelBorder)) {
+        Column(Modifier.padding(15.dp),verticalArrangement=Arrangement.spacedBy(13.dp)) {
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                Text("Сектора",fontSize=19.sp,fontWeight=FontWeight.Bold,
+                    color=colors.text,modifier=Modifier.weight(1f))
+                Text(spheres.size.toString(),fontSize=12.sp,color=colors.secondaryText)
+                IconButton(onClick=onSettings,modifier=Modifier.size(34.dp)) {
+                    Icon(Icons.Default.Settings,"Настроить сектора",
+                        Modifier.size(19.dp),tint=colors.secondaryText)
+                }
+            }
+            if(spheres.isEmpty()) {
+                Text("Добавьте первый сектор через настройки",
+                    color=colors.secondaryText,fontSize=13.sp)
+            } else {
+                spheres.chunked(3).forEach { group ->
+                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        group.forEach { sector ->
+                            val sectorColor=parseWorkspaceColor(sector.color)
+                            val count=tasks.count {
+                                it.taskType==TaskType.TASK && it.parentTaskId==null &&
+                                    it.sphereId==sector.id && it.status!=TaskStatus.DONE
+                            }
+                            val chosen=sector.id in selected
+                            Column(Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
+                                .background(if(chosen)colors.selected else colors.card)
+                                .clickable { onSelect(sector.id) }
+                                .padding(vertical=6.dp,horizontal=2.dp),
+                                horizontalAlignment=Alignment.CenterHorizontally,
+                                verticalArrangement=Arrangement.spacedBy(7.dp)) {
+                                Box(Modifier.size(65.dp)
+                                    .background(sectorColor.copy(alpha=.17f),CircleShape),
+                                    contentAlignment=Alignment.Center) {
+                                    Box(Modifier.size(53.dp).background(sectorColor,CircleShape),
+                                        contentAlignment=Alignment.Center) {
+                                        Text(count.toString(),fontSize=19.sp,
+                                            fontWeight=FontWeight.Bold,color=Color.White)
+                                    }
+                                }
+                                Text(sector.name,fontSize=12.sp,fontWeight=FontWeight.Medium,
+                                    color=colors.text,maxLines=2,textAlign=TextAlign.Center,
+                                    lineHeight=14.sp)
+                            }
+                        }
+                        repeat(3-group.size){Spacer(Modifier.weight(1f))}
+                    }
+                }
+            }
+            if(selected.isNotEmpty()) {
+                TextButton(onClick={onSelect(null)}) {
+                    Text("Показать все сектора",color=colors.purple)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorkspaceSectorSettings(
+    vm:HomeViewModel,state:HomeState,colors:WorkspaceColors,onClose:()->Unit
+) {
+    var editorOpen by remember { mutableStateOf(false) }
+    var editingId by remember { mutableStateOf<String?>(null) }
+    var name by remember { mutableStateOf("") }
+    var color by remember { mutableStateOf("#8B5CF6") }
+    var icon by remember { mutableStateOf("briefcase") }
+    var prompt by remember { mutableStateOf("") }
+    var confirmDelete by remember { mutableStateOf(false) }
+    val palette=listOf("#8B5CF6","#2563EB","#06B6D4","#10B981","#F59E0B",
+        "#F97316","#E11D48","#64748B")
+    fun edit(sector:Sphere?) {
+        editingId=sector?.id
+        name=sector?.name ?: ""
+        color=sector?.color ?: palette.first()
+        icon=sector?.icon ?: "briefcase"
+        prompt=sector?.generalPrompt ?: ""
+        editorOpen=true
+    }
+    Column(Modifier.fillMaxWidth().navigationBarsPadding()
+        .verticalScroll(rememberScrollState())
+        .padding(start=19.dp,end=19.dp,bottom=28.dp),
+        verticalArrangement=Arrangement.spacedBy(13.dp)) {
+        Row(verticalAlignment=Alignment.CenterVertically) {
+            Text(if(editorOpen)"Редактирование сектора" else "Настройки секторов",
+                fontSize=20.sp,fontWeight=FontWeight.Bold,color=colors.text,
+                modifier=Modifier.weight(1f))
+            IconButton(onClick={if(editorOpen){editorOpen=false}else onClose()}) {
+                Icon(Icons.Default.Close,"Закрыть",tint=colors.text)
+            }
+        }
+        if(!editorOpen) {
+            state.spheres.forEach { sector ->
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp))
+                    .background(colors.card).clickable { edit(sector) }.padding(12.dp),
+                    verticalAlignment=Alignment.CenterVertically) {
+                    Box(Modifier.size(23.dp).background(parseWorkspaceColor(sector.color),CircleShape))
+                    Spacer(Modifier.width(10.dp))
+                    Text(sector.name,color=colors.text,modifier=Modifier.weight(1f))
+                    Icon(Icons.Default.Edit,"Редактировать",Modifier.size(18.dp),
+                        tint=colors.secondaryText)
+                }
+            }
+            Button(onClick={edit(null)},modifier=Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.Add,null)
+                Spacer(Modifier.width(8.dp))
+                Text("Добавить сектор")
+            }
+        } else {
+            OutlinedTextField(value=name,onValueChange={name=it},
+                label={Text("Название сектора")},singleLine=true,
+                modifier=Modifier.fillMaxWidth())
+            Text("Цвет сектора",color=colors.secondaryText,fontSize=13.sp)
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                palette.forEach { option ->
+                    Box(Modifier.weight(1f).aspectRatio(1f)
+                        .clip(CircleShape).background(parseWorkspaceColor(option))
+                        .border(if(color==option)3.dp else 0.dp,
+                            if(color==option)colors.text else Color.Transparent,CircleShape)
+                        .clickable { color=option })
+                }
+            }
+            OutlinedTextField(value=icon,onValueChange={icon=it},
+                label={Text("Иконка (код)")},singleLine=true,
+                modifier=Modifier.fillMaxWidth())
+            OutlinedTextField(value=prompt,onValueChange={prompt=it},
+                label={Text("Общий промпт")},minLines=2,maxLines=4,
+                modifier=Modifier.fillMaxWidth())
+            state.sectorError?.let {
+                Text(it,color=MaterialTheme.colorScheme.error,fontSize=12.sp)
+            }
+            Button(
+                onClick={vm.saveSphere(editingId,name,color,icon,prompt){
+                    editorOpen=false
+                }},
+                enabled=!state.sectorBusy && name.isNotBlank(),
+                modifier=Modifier.fillMaxWidth()
+            ) {
+                if(state.sectorBusy)CircularProgressIndicator(Modifier.size(17.dp),
+                    color=Color.White,strokeWidth=2.dp)
+                else Text("Сохранить")
+            }
+            if(editingId!=null) {
+                OutlinedButton(onClick={confirmDelete=true},
+                    enabled=!state.sectorBusy,modifier=Modifier.fillMaxWidth()) {
+                    Text("Удалить сектор",color=MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+    }
+    if(confirmDelete) {
+        AlertDialog(onDismissRequest={confirmDelete=false},
+            title={Text("Удалить сектор?")},
+            text={Text("Действие удалит сектор. Перед удалением проверьте связанные задачи.")},
+            confirmButton={TextButton(onClick={
+                confirmDelete=false
+                editingId?.let { vm.deleteSphere(it){editorOpen=false} }
+            }){Text("Удалить")}},
+            dismissButton={TextButton(onClick={confirmDelete=false}){Text("Отмена")}})
     }
 }
 
