@@ -10,15 +10,19 @@ const railCss = read('../src/components/ModuleRail.css');
 const mascot = read('../src/components/PlanikMascot.tsx');
 const mascotCss = read('../src/components/PlanikMascot.css');
 
-test('module switcher is one connected picker and centers the arrow in both themes', () => {
-  assert.match(rail, /className="module-rail-handle"/);
-  assert.match(railCss, /\.module-rail-handle\s*\{[\s\S]*?align-items:center;justify-content:center/);
-  assert.match(railCss, /\.module-rail:hover \.module-rail-handle,[\s\S]*?border-right:0;border-radius:0/);
-  assert.match(railCss, /\.module-rail-panel\s*\{[\s\S]*?border-radius:0 16px 16px 0/);
+test('module switcher has independent persistent edge icons and hover-only labels in both themes', () => {
+  assert.doesNotMatch(rail, /module-rail-handle|module-rail-panel/);
+  assert.match(rail, /<nav className="module-rail"/);
+  assert.match(rail, /module-rail-link module-rail-planner/);
+  assert.match(rail, /module-rail-link module-rail-economic/);
+  assert.match(rail, /module-rail-label/);
+  assert.match(railCss, /position: fixed;/);
+  assert.match(railCss, /top: clamp\(105px, 17vh, 182px\)/);
+  assert.match(railCss, /\.module-rail-link:hover \.module-rail-label/);
+  assert.match(railCss, /\.module-rail-link:focus-visible \.module-rail-label/);
   assert.match(railCss, /\.app-shell\[data-theme="light"\] \.module-rail/);
   assert.match(railCss, /\.econ-light \.module-rail/);
-  assert.match(railCss, /\.module-rail-economic\{color:#ffd18b/);
-  assert.match(railCss, /\.module-rail-economic\.is-active/);
+  assert.match(railCss, /\.module-rail-link\.module-rail-economic\.is-active/);
 });
 
 test('operations section only has the shared New Operation button', () => {
