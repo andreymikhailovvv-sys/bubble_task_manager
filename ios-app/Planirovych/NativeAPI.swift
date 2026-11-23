@@ -495,6 +495,23 @@ final class NativeAPI {
         return try await request("tasks", method: "POST", json: payload)
     }
 
+    func createPlannerEntry(title: String, type: String, dueDate: Date?,
+                            sphereId: String?) async throws -> RemoteTask {
+        guard ["TASK", "REMINDER", "EVENT"].contains(type) else {
+            throw NativeAPIError.invalidResponse
+        }
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw NativeAPIError.invalidResponse }
+        var json: [String: Any] = [
+            "title": trimmed, "taskType": type, "importance": 3, "urgency": 3
+        ]
+        if let dueDate {
+            json["dueDate"] = ISO8601DateFormatter().string(from: dueDate)
+        }
+        if let sphereId { json["sphereId"] = sphereId }
+        return try await request("tasks", method: "POST", json: json)
+    }
+
     func updateTask(id: String, title: String, description: String) async throws -> RemoteTask {
         try await request("tasks/\(id)", method: "PATCH", json: [
             "title": title, "description": description
