@@ -25,6 +25,7 @@ import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace'
 // The separate Economic route is loaded only when the financial tab is opened.
 const MobileEconomicApp = lazy(() => import('./EconomicApp'));
 import { WorkspaceGlobalSearch } from './components/WorkspaceGlobalSearch';
+import { SectorIconPicker, SectorIconGlyph } from './components/SectorIconPicker';
 import { matchesWorkspaceText } from './lib/workspaceSearch';
 import { MiniWorkspaceTools } from './components/MiniWorkspaceTools';
 import { WorkspaceActionToast } from './components/WorkspaceActionToast';
@@ -4535,13 +4536,13 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             </div>
             {!sectorEditorOpen ? <>
               {spheres.map(sphere => <button key={sphere.id} type="button" className="miniapp-unified-sector-edit-row" onClick={() => openSectorEditor(sphere)}>
-                <span className="miniapp-unified-sector-edit-dot" style={{ backgroundColor: sphere.color }}/>
+                <span className="miniapp-unified-sector-edit-dot" style={{ backgroundColor: sphere.color }}><SectorIconGlyph code={sphere.icon} size={15}/></span>
                 <span>{sphere.name}</span><Edit3 size={18}/></button>)}
               <button type="button" className="miniapp-unified-primary-button" onClick={() => openSectorEditor()}>+ Добавить сектор</button>
             </> : <>
               <label>Название<input value={sectorDraftName} onChange={event => setSectorDraftName(event.target.value)} maxLength={80}/></label>
               <label>Цвет<input type="color" value={sectorDraftColor} onChange={event => setSectorDraftColor(event.target.value)}/></label>
-              <label>Иконка<input value={sectorDraftIcon} onChange={event => setSectorDraftIcon(event.target.value)}/></label>
+              <SectorIconPicker selected={sectorDraftIcon} onChange={setSectorDraftIcon} />
               <label>Общий промпт<textarea value={sectorDraftPrompt} onChange={event => setSectorDraftPrompt(event.target.value)}/></label>
               {sectorError ? <p role="alert" className="text-rose-500">{sectorError}</p> : null}
               <button type="button" className="miniapp-unified-primary-button" onClick={() => void saveSectorFromOverview()} disabled={sectorBusy || !sectorDraftName.trim()}>{sectorBusy ? 'Сохраняем…' : 'Сохранить'}</button>
@@ -4675,12 +4676,15 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           <div className="miniapp-workspace-topbar-row miniapp-unified-topbar-row flex items-center gap-2">
             <div className="miniapp-unified-brand" aria-label="Планировыч">
               <span className="miniapp-unified-app-icon">✦</span>
-              <strong>Планировыч</strong>
+              <span className="miniapp-unified-brand-copy">
+                <strong>Планировыч</strong>
+                <small title={accountDisplayName}>{accountDisplayName}</small>
+              </span>
             </div>
-            <button type="button" className="miniapp-unified-icon-button" onClick={() => setIsAccountOpen(true)} title="Управление аккаунтом" aria-label="Управление аккаунтом">
+            <button type="button" className="miniapp-unified-icon-button is-account" onClick={() => setIsAccountOpen(true)} title="Управление аккаунтом" aria-label="Управление аккаунтом">
               <UserCircle size={21} />
             </button>
-            <button type="button" className="miniapp-unified-icon-button miniapp-unified-search-toggle" onClick={() => {
+            <button type="button" className="miniapp-unified-icon-button miniapp-unified-search-toggle is-search" onClick={() => {
               setIsMiniSearchExpanded(open => !open);
               if (isMiniSearchExpanded) { setIsGlobalSearchOpen(false); setTaskSearch(''); }
             }} title="Поиск" aria-label="Поиск" aria-expanded={isMiniSearchExpanded}><Search size={20}/></button>
