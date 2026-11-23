@@ -58,6 +58,55 @@ final class NativeWorkspaceSession: ObservableObject {
         }
     }
 
+    func saveSphere(id: String?, name: String, color: String,
+                    icon: String, prompt: String) async -> Bool {
+        guard account != nil, !isWorking, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            try await api.saveSphere(id: id, name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                                     color: color, icon: icon, prompt: prompt)
+            try await loadWorkspace()
+            errorMessage = nil
+            return true
+        } catch {
+            handle(error)
+            return false
+        }
+    }
+
+    func deleteSphere(id: String) async -> Bool {
+        guard account != nil, !isWorking else { return false }
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            try await api.deleteSphere(id: id)
+            try await loadWorkspace()
+            errorMessage = nil
+            return true
+        } catch {
+            handle(error)
+            return false
+        }
+    }
+
+    func postponeOverdueTasks(_ tasks: [RemoteTask]) async -> Bool {
+        guard account != nil, !isWorking else { return false }
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            for task in tasks {
+                try await api.postponeTaskToToday(task)
+            }
+            try await loadWorkspace()
+            errorMessage = nil
+            return true
+        } catch {
+            handle(error)
+            return false
+        }
+    }
+
     func addTask(title: String, sphereId: String?) async -> Bool {
         guard account != nil, !isWorking else { return false }
         let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -371,7 +420,7 @@ struct ContentView: View {
         guard let flag = args.firstIndex(of: "--ci-preview-tab"),
               args.indices.contains(flag + 1) else { return nil }
         let tab = args[flag + 1]
-        return ["overview", "tasks", "habits", "economic"].contains(tab) ? tab : nil
+        return ["overview", "timeline", "chat", "economic"].contains(tab) ? tab : nil
     }
 #endif
 
