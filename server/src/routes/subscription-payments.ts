@@ -119,7 +119,8 @@ subscriptionPaymentsRouter.post('/subscriptions/:planKey', requireAuth, async (r
   } catch (error) {
     // The same clientRequestId and YooKassa idempotence key can safely retry an uncertain provider response.
     await prisma.subscriptionPurchase.updateMany({
-      where: { id: purchase.id, activatedAt: null, status: { notIn: ['succeeded', 'canceled'] } },
+      where: { id: purchase.id, activatedAt: null, yookassaPaymentId: null,
+        status: { notIn: ['succeeded', 'canceled'] } },
       data: { status: 'create_failed' }
     });
     console.error('[Payments] subscription payment create failed', {
