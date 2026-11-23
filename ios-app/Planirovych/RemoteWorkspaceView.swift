@@ -289,40 +289,39 @@ struct RemoteWorkspaceView: View {
         VStack(alignment: .leading, spacing: 19) {
             NativeHabitsStrip(session: session)
 
-            VStack(alignment: .leading, spacing: 7) {
-                Text("Ваши задачи")
-                    .font(.system(size: 29, weight: .bold, design: .rounded))
-                Text("Сферы и задачи в одном пространстве")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
+            Text("Статистика выполнения")
+                .font(.system(size: 27, weight: .bold, design: .rounded))
 
             HStack(spacing: 12) {
-                stat("Всего", value: "\(allActualTasks.count)", symbol: "checklist", color: accent)
-                stat("Выполнено", value: "\(doneCount)", symbol: "checkmark.circle.fill", color: .green)
+                stat("Все задачи", done: doneCount, total: allActualTasks.count,
+                     symbol: "checkmark.circle.fill", color: accent)
+                stat("За сегодня", done: plannedToday.filter { $0.isComplete }.count,
+                     total: plannedToday.count, symbol: "calendar", color: accent)
             }
 
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
-                    Text("Сферы")
-                        .font(.headline)
+                    Text("Сектора").font(.title3.weight(.bold))
                     Spacer()
                     Text("\(session.spheres.count)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(.secondary)
+                    Button { showSectorSettings = true } label: {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 19))
+                            .frame(width: 32, height: 32)
+                    }
+                    .accessibilityLabel("Настройки секторов")
                 }
                 if session.spheres.isEmpty {
-                    Text("Сферы пока не созданы")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 30)
+                    Text("Сектора пока не созданы")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity).padding(.vertical, 30)
                 } else {
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()),
+                                        GridItem(.flexible())], spacing: 14) {
                         ForEach(session.spheres) { sphere in
                             Button {
-                                selectedSphereID = sphere.id
-                                selectedTab = .tasks
+                                selectedSphereID = selectedSphereID == sphere.id ? nil : sphere.id
                             } label: {
                                 VStack(spacing: 7) {
                                     ZStack {
@@ -332,7 +331,9 @@ struct RemoteWorkspaceView: View {
                                         Circle()
                                             .fill(Color(sphereHex: sphere.color))
                                             .frame(width: 62, height: 62)
-                                        Text("\(allActualTasks.filter { $0.sphereId == sphere.id }.count)")
+                                        Text("\(allActualTasks.filter {
+                                            $0.sphereId == sphere.id && !$0.isComplete
+                                        }.count)")
                                             .font(.title3.bold())
                                             .foregroundStyle(.white)
                                     }
@@ -343,6 +344,11 @@ struct RemoteWorkspaceView: View {
                                         .foregroundStyle(.primary)
                                 }
                                 .frame(maxWidth: .infinity)
+                                .padding(5)
+                                .background(
+                                    selectedSphereID == sphere.id ? accent.opacity(0.12) : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: 17)
+                                )
                             }
                             .buttonStyle(.plain)
                         }
@@ -353,23 +359,48 @@ struct RemoteWorkspaceView: View {
             .background(card, in: RoundedRectangle(cornerRadius: 24))
 
             HStack {
-                Text("Задачи")
-                    .font(.headline)
+                Text("Ваши задачи")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
                 Spacer()
-                Button("Все задачи") {
-                    selectedSphereID = nil
-                    selectedTab = .tasks
+                if selectedSphereID != nil {
+                    Button("Все сектора") { selectedSphereID = nil }
+                        .font(.caption).foregroundStyle(accent)
                 }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(accent)
             }
 
-            if allActualTasks.isEmpty {
-                emptyTasks
-            } else {
-                ForEach(Array(allActualTasks.prefix(5))) { task in
-                    taskRow(task)
+            taskList
+        }
+    }
+
+    private var timelineContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Таймлайн")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                Spacer()
+                Button { showOverdue = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "clock.badge.exclamationmark")
+                        Text("Просроченные задачи")
+                            .font(.caption.weight(.semibold))
+                        if !overdueTasks.isEmpty {
+                            Text("\(overdueTasks.count)")
+                                .font(.caption2.bold())
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .foregroundStyle(.white)
+                                .background(.red, in: Capsule())
+                        }
+                    }
+                    .padding(9)
+                    .background(card, in: RoundedRectangle(cornerRadius: 14))
                 }
+            }
+            NativeTaskTimelineView(
+                tasks: session.tasks.filter { $0.parentTaskId == nil && !$0.isComplete },
+                spheres: session.spheres
+            ) { task in
+                editingTask = task
             }
         }
     }
@@ -378,86 +409,71 @@ struct RemoteWorkspaceView: View {
         let filtered = allActualTasks.filter {
             (selectedSphereID == nil || $0.sphereId == selectedSphereID)
                 && matchesTime($0)
+                && (searchQuery.isEmpty || $0.title.localizedCaseInsensitiveContains(searchQuery)
+                    || ($0.description ?? "").localizedCaseInsensitiveContains(searchQuery))
         }
         let active = sortedTasks(filtered.filter { !$0.isComplete })
         let completed = sortedTasks(filtered.filter { $0.isComplete })
-        return VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("Задачи")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                    Text("Управление задачами и сроками")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
                 Button {
-                    showingNewTask = true
+                    Task { _ = await session.postponeOverdueTasks(overdueTasks) }
                 } label: {
-                    Image(systemName: "plus.circle.fill").font(.title2)
+                    Label("Отложить", systemImage: "clock")
+                        .frame(maxWidth: .infinity)
                 }
-                .disabled(session.isWorking)
-                .accessibilityLabel("Создать задачу")
-            }
+                .disabled(overdueTasks.isEmpty || session.isWorking)
+                .accessibilityLabel("Отложить просроченные задачи")
 
-            Picker("Отображение", selection: $taskMode) {
-                ForEach(TaskDisplayMode.allCases, id: \.self) { mode in
-                    Text(mode.rawValue).tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
-
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    filter("Все", id: nil)
-                    ForEach(session.spheres) { sphere in
-                        filter(sphere.name, id: sphere.id, tint: Color(sphereHex: sphere.color))
+                Button { showOverdue = true } label: {
+                    VStack(spacing: 2) {
+                        Text("Просроченные")
+                            .lineLimit(1).minimumScaleFactor(0.75)
+                        Text("задачи")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .overlay(alignment: .topTrailing) {
+                        if !overdueTasks.isEmpty {
+                            Text("\(overdueTasks.count)")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 3)
+                                .background(.red, in: Capsule())
+                                .offset(x: 8, y: -9)
+                        }
                     }
                 }
-                .padding(.vertical, 3)
-            }
-            .scrollIndicators(.hidden)
+                .accessibilityLabel("Просроченные задачи: \(overdueTasks.count)")
 
-            HStack(spacing: 10) {
                 Menu {
                     Picker("Сортировка", selection: $taskOrder) {
                         ForEach(TaskOrder.allCases, id: \.self) { order in
                             Text(order.rawValue).tag(order)
                         }
                     }
-                } label: {
-                    Label(taskOrder.rawValue, systemImage: "arrow.up.arrow.down")
-                        .font(.system(size: 12, weight: .semibold))
-                        .padding(10)
-                        .background(card, in: Capsule())
-                }
-
-                Menu {
                     Picker("По времени", selection: $dateWindow) {
                         ForEach(TaskDateWindow.allCases, id: \.self) { window in
                             Text(window.rawValue).tag(window)
                         }
                     }
+                    Button("Сбросить фильтры") {
+                        taskOrder = .urgency
+                        dateWindow = .all
+                        selectedSphereID = nil
+                    }
                 } label: {
-                    Label(dateWindow.rawValue, systemImage: "calendar")
-                        .font(.system(size: 12, weight: .semibold))
-                        .padding(10)
-                        .background(card, in: Capsule())
+                    Label("Фильтры", systemImage: "line.3.horizontal.decrease")
+                        .frame(maxWidth: .infinity)
                 }
             }
+            .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(accent)
+            .padding(.vertical, 13)
+            .padding(.horizontal, 6)
+            .background(card, in: RoundedRectangle(cornerRadius: 16))
 
-            if taskMode == .timeline {
-                NativeTaskTimelineView(
-                    tasks: session.tasks.filter {
-                        $0.parentTaskId == nil && !$0.isComplete &&
-                        (selectedSphereID == nil || $0.sphereId == selectedSphereID) && matchesTime($0)
-                    },
-                    spheres: session.spheres
-                ) { task in
-                    editingTask = task
-                }
-            } else if active.isEmpty {
+            if active.isEmpty {
                 emptyTasks
             } else {
                 ForEach(active) { task in taskRow(task) }
@@ -467,8 +483,7 @@ struct RemoteWorkspaceView: View {
                 DisclosureGroup(isExpanded: $showCompletedTasks) {
                     VStack(spacing: 9) {
                         ForEach(completed) { task in taskRow(task) }
-                    }
-                    .padding(.top, 9)
+                    }.padding(.top, 9)
                 } label: {
                     HStack {
                         Label("Выполненные", systemImage: "checkmark.circle.fill")
@@ -484,19 +499,15 @@ struct RemoteWorkspaceView: View {
                 .background(card, in: RoundedRectangle(cornerRadius: 18))
             }
 
-            if taskMode == .list {
-                Button {
-                    showingNewTask = true
-                } label: {
-                    Label("Создать задачу", systemImage: "plus.circle.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(16)
-                        .foregroundStyle(accent)
-                        .background(accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 18))
-                }
-                .disabled(session.isWorking)
+            Button { showingNewTask = true } label: {
+                Label("Создать задачу", systemImage: "plus.circle.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(16)
+                    .foregroundStyle(accent)
+                    .background(accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 18))
             }
+            .disabled(session.isWorking)
         }
     }
 
@@ -543,20 +554,27 @@ struct RemoteWorkspaceView: View {
         }
     }
 
-    private func stat(_ label: String, value: String, symbol: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Image(systemName: symbol)
-                .font(.title3)
-                .foregroundStyle(color)
-            Text(value)
-                .font(.system(size: 29, weight: .bold, design: .rounded))
+    private func stat(_ label: String, done: Int, total: Int,
+                      symbol: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: symbol)
+                    .font(.system(size: 18))
+                    .foregroundStyle(color)
+                Text(label)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            Text("\(done) из \(total)")
+                .font(.system(size: 27, weight: .bold, design: .rounded))
+                .minimumScaleFactor(0.78)
+                .lineLimit(1)
                 .monospacedDigit()
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            ProgressView(value: Double(done), total: Double(max(1, total)))
+                .tint(color)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
+        .padding(17)
         .background(card, in: RoundedRectangle(cornerRadius: 22))
     }
 
@@ -690,8 +708,8 @@ struct RemoteWorkspaceView: View {
                 } label: {
                     VStack(spacing: 5) {
                         Image(systemName: tab.symbol)
-                            .font(.system(size: 20, weight: .semibold))
-                            .frame(height: 24)
+                            .font(.system(size: 24, weight: .semibold))
+                            .frame(height: 28)
                         Text(tab.rawValue)
                             .font(.system(size: 10, weight: .medium))
                     }
