@@ -72,7 +72,7 @@ export function PrimaryHabitDialog({ habit, embedded = false, onClose, onSave, o
   };
 
   const panel = (
-      <section className={`primary-habit-dialog dialog-surface ${embedded ? 'primary-habit-dialog--embedded' : ''}`} role="dialog" aria-modal={!embedded}
+      <section className={`primary-habit-dialog dialog-surface ${embedded ? 'primary-habit-dialog--embedded' : !habit ? 'primary-habit-dialog--create' : ''}`} role="dialog" aria-modal={!embedded}
         aria-label={habit ? 'Настройки привычки' : 'Создание привычки'}>
         <header className="primary-habit-dialog-header">
           {habit ? <h2>Настройки привычки</h2> : <div className="primary-habit-create-heading">
