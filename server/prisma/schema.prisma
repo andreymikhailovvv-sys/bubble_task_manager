@@ -400,6 +400,8 @@ model User {
   telegramChatId String?  @unique
   telegramLinkedAt DateTime?
   subscriptionPlan String @default("free")
+  subscriptionExpiresAt DateTime?
+  subscriptionPurchases SubscriptionPurchase[]
   aiCredits    Int      @default(0)
   aiCreditsPeriod String @default("")
   aiIncludedCreditsMilli Int @default(0)
@@ -1335,6 +1337,31 @@ model CreditPurchase {
   providerStatus    String?
   providerCheckedAt DateTime?
   creditedAt        DateTime?
+  canceledAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([userId, clientRequestId])
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+model SubscriptionPurchase {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientRequestId   String
+  planKey           String
+  creditsMilli      Int
+  amountKopecks     Int
+  currency          String   @default("RUB")
+  yookassaPaymentId String?  @unique
+  idempotenceKey    String   @unique
+  status            String   @default("created")
+  confirmationUrl   String?
+  providerStatus    String?
+  providerCheckedAt DateTime?
+  activatedAt       DateTime?
   canceledAt        DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt

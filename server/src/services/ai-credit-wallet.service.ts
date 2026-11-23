@@ -22,7 +22,7 @@ export type AiCreditReservation = {
   totalMilli: number;
 };
 
-type WalletRow = AiCreditBuckets & GuestIdentity & { id: string; aiCreditsPeriod: string; subscriptionPlan: string };
+type WalletRow = AiCreditBuckets & GuestIdentity & { id: string; aiCreditsPeriod: string; subscriptionPlan: string; subscriptionExpiresAt?: Date | null };
 type WalletTransaction = Prisma.TransactionClient;
 type WalletDatabase = Pick<PrismaClient, '$transaction'>;
 
@@ -51,7 +51,7 @@ export function calculateDebitBreakdown(wallet: AiCreditBuckets, amountMilli: nu
 const selectWalletForUpdate = async (tx: WalletTransaction, userId: string): Promise<WalletRow | null> => {
   const rows = await tx.$queryRaw<WalletRow[]>(Prisma.sql`
     SELECT "id", "aiCreditsPeriod", "aiIncludedCreditsMilli", "aiBonusCreditsMilli", "aiPurchasedCreditsMilli",
-           "deviceId", "username", "passwordHash", "googleSub", "email", "telegramChatId", "subscriptionPlan"
+           "deviceId", "username", "passwordHash", "googleSub", "email", "telegramChatId", "subscriptionPlan", "subscriptionExpiresAt"
     FROM "User"
     WHERE "id" = ${userId}
     FOR UPDATE
@@ -78,6 +78,16 @@ const refreshLockedWallet = async (tx: WalletTransaction, row: WalletRow, period
   // Do not erase legacy/purchased records: mask them until registration logic
   // explicitly determines how to handle conversion.
   if (isGuestAccount(row)) return row;
+  if (row.subscriptionExpiresAt) {
+    if (row.subscriptionExpiresAt.getTime() > Date.now()) return row;
+    // An expired prepaid term must not refresh into another month's credits.
+    const expired = { ...row, subscriptionPlan: 'free', subscriptionExpiresAt: null,
+      aiIncludedCreditsMilli: 0, aiCreditsPeriod: period };
+    await updateWallet(tx, row.id, expired, period);
+    await tx.user.update({ where: { id: row.id },
+      data: { subscriptionPlan: 'free', subscriptionExpiresAt: null } });
+    return expired;
+  }
   if (row.aiCreditsPeriod === period) return row;
   // Free accounts get a one-time trial (bonus bucket), never a recurring
   // monthly free grant. Keep existing included balances until their own
