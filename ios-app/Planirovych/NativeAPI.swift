@@ -181,6 +181,32 @@ struct NativeChatProject: Identifiable {
     let chats: [NativeChatThread]
 }
 
+struct NativeTelegramSendDraft: Codable {
+    let requestId: String
+    let text: String
+    let requestedRecipient: String?
+    let recipientId: String?
+    let recipientName: String?
+    let match: String?
+}
+
+struct NativeTelegramReadDraft: Codable {
+    let requestId: String
+    let requestedChat: String
+    let chatName: String?
+    let chatId: String?
+    let match: String?
+}
+
+struct NativeMailSendDraft: Codable {
+    let id: String
+    let mailboxId: String?
+    let sender: String?
+    let recipient: String?
+    let subject: String?
+    let text: String
+}
+
 struct NativeGeneratedDocument: Codable, Identifiable {
     let id: String
     let fileName: String
@@ -200,6 +226,9 @@ struct NativeChatReply {
     let taskProposal: NativeAIProposal?
     let economicProposals: [NativeAIProposal]
     let generatedDocument: NativeGeneratedDocument?
+    let telegramSendDraft: NativeTelegramSendDraft?
+    let telegramReadDraft: NativeTelegramReadDraft?
+    let mailSendDraft: NativeMailSendDraft?
     let raw: [String: Any]
 }
 
@@ -210,21 +239,31 @@ struct RemoteChatMessage: Codable {
     let taskProposal: NativeAIProposal?
     let economicProposals: [NativeAIProposal]?
     let generatedDocument: NativeGeneratedDocument?
+    let telegramSendDraft: NativeTelegramSendDraft?
+    let telegramReadDraft: NativeTelegramReadDraft?
+    let mailSendDraft: NativeMailSendDraft?
 
     init(id: String?, role: String, content: String,
          taskProposal: NativeAIProposal? = nil,
          economicProposals: [NativeAIProposal]? = nil,
-         generatedDocument: NativeGeneratedDocument? = nil) {
+         generatedDocument: NativeGeneratedDocument? = nil,
+         telegramSendDraft: NativeTelegramSendDraft? = nil,
+         telegramReadDraft: NativeTelegramReadDraft? = nil,
+         mailSendDraft: NativeMailSendDraft? = nil) {
         self.id = id
         self.role = role
         self.content = content
         self.taskProposal = taskProposal
         self.economicProposals = economicProposals
         self.generatedDocument = generatedDocument
+        self.telegramSendDraft = telegramSendDraft
+        self.telegramReadDraft = telegramReadDraft
+        self.mailSendDraft = mailSendDraft
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, role, content, taskProposal, economicProposals, generatedDocument
+        case id, role, content, taskProposal, economicProposals, generatedDocument,
+             telegramSendDraft, telegramReadDraft, mailSendDraft
     }
 
     init(from decoder: Decoder) throws {
@@ -235,6 +274,9 @@ struct RemoteChatMessage: Codable {
         taskProposal = try? values.decodeIfPresent(NativeAIProposal.self, forKey: .taskProposal)
         economicProposals = try? values.decodeIfPresent([NativeAIProposal].self, forKey: .economicProposals)
         generatedDocument = try? values.decodeIfPresent(NativeGeneratedDocument.self, forKey: .generatedDocument)
+        telegramSendDraft = try? values.decodeIfPresent(NativeTelegramSendDraft.self, forKey: .telegramSendDraft)
+        telegramReadDraft = try? values.decodeIfPresent(NativeTelegramReadDraft.self, forKey: .telegramReadDraft)
+        mailSendDraft = try? values.decodeIfPresent(NativeMailSendDraft.self, forKey: .mailSendDraft)
     }
 }
 
@@ -247,6 +289,9 @@ private struct AiChatReply: Decodable {
     let taskProposal: NativeAIProposal?
     let economicProposals: [NativeAIProposal]?
     let generatedDocument: NativeGeneratedDocument?
+    let telegramSendDraft: NativeTelegramSendDraft?
+    let telegramReadDraft: NativeTelegramReadDraft?
+    let mailSendDraft: NativeMailSendDraft?
 }
 
 private struct VoiceTranscription: Decodable {
@@ -477,6 +522,76 @@ final class NativeAPI {
             let _: OperationResult = try await request("auth/logout", method: "POST")
         } catch { /* local logout is authoritative for this device */ }
         vault.clear()
+    }
+
+    // Telegram and mail cards only send after an explicit user action.
+    // Durable request IDs prevent duplicate dispatch when a network reply is lost.
+    func telegramSendTargets() async throws -> [[String: Any]] {
+        let data = try await requestData("telegram-user-client/chat/send-targets",
+                                         method: "POST", json: [:])
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        return json?["dialogs"] as? [[String: Any]] ?? []
+    }
+
+    func telegramQuickSend(requestId: String, recipientId: String, text: String) async throws -> [String: Any] {
+        let data = try await requestData("telegram-user-client/chat/quick-send",
+                                        method: "POST", json: [
+            "requestId": requestId, "recipientIds": [recipientId],
+            "text": text, "mode": "DIRECT"
+        ])
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { throw NativeAPIError.invalidResponse }
+        return json
+    }
+
+    func telegramQuickSendStatus(requestId: String) async throws -> [String: Any] {
+        let data = try await requestData("telegram-user-client/chat/quick-send/\(requestId)")
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { throw NativeAPIError.invalidResponse }
+        return json
+    }
+
+    func mailAccounts() async throws -> [[String: Any]] {
+        let data = try await requestData("mail-assistant/accounts")
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        return json?["accounts"] as? [[String: Any]] ?? []
+    }
+
+    func mailRecentRecipients() async throws -> [String] {
+        let data = try await requestData("mail-assistant/recent-recipients")
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        return json?["addresses"] as? [String] ?? []
+    }
+
+    func mailDraftStatus(id: String) async throws -> [String: Any] {
+        let data = try await requestData("mail-assistant/drafts/\(id)")
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let draft = json?["draft"] as? [String: Any] else {
+            throw NativeAPIError.invalidResponse
+        }
+        return draft
+    }
+
+    func mailRewrite(text: String, instruction: String) async throws -> String {
+        let data = try await requestData("mail-assistant/quick-rewrite",
+                                        method: "POST", json: [
+            "text": text, "instruction": instruction
+        ], timeoutInterval: 120)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let result = json?["text"] as? String else { throw NativeAPIError.invalidResponse }
+        return result
+    }
+
+    func mailSend(id: String, mailboxId: String, recipient: String,
+                  subject: String, text: String) async throws -> [String: Any] {
+        let data = try await requestData("mail-assistant/drafts/\(id)/send",
+                                        method: "POST", json: [
+            "mailboxId": mailboxId, "recipient": recipient,
+            "subject": subject, "text": text
+        ])
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { throw NativeAPIError.invalidResponse }
+        return json
     }
 
     // Economic API: same protected ledger, account-scoped ownership and
@@ -797,7 +912,10 @@ final class NativeAPI {
                 return NativeChatReply(answer: parsed.answer,
                                        taskProposal: parsed.taskProposal,
                                        economicProposals: parsed.economicProposals ?? [],
-                                       generatedDocument: parsed.generatedDocument, raw: data)
+                                       generatedDocument: parsed.generatedDocument,
+                                       telegramSendDraft: parsed.telegramSendDraft,
+                                       telegramReadDraft: parsed.telegramReadDraft,
+                                       mailSendDraft: parsed.mailSendDraft, raw: data)
             default: break
             }
         }
@@ -840,6 +958,9 @@ final class NativeAPI {
         }
         if let image = reply.raw["generatedDocument"], !(image is NSNull) {
             answer["generatedDocument"] = image
+        }
+        for key in ["telegramSendDraft", "telegramReadDraft", "mailSendDraft"] {
+            if let value = reply.raw[key], !(value is NSNull) { answer[key] = value }
         }
         messages.append(answer)
         threads[chatIndex]["messages"] = messages
