@@ -1,6 +1,6 @@
 import Foundation
 
-struct EcoAccount: Decodable, Identifiable {
+struct EcoAccount: Codable, Identifiable {
     let id: String
     let name: String
     let accountType: String?
@@ -10,7 +10,7 @@ struct EcoAccount: Decodable, Identifiable {
     let isPrimary: Bool?
 }
 
-struct EcoOperation: Decodable, Identifiable {
+struct EcoOperation: Codable, Identifiable {
     let id: String
     let kind: String
     let title: String
@@ -24,7 +24,7 @@ struct EcoOperation: Decodable, Identifiable {
     let debtId: String?
 }
 
-struct EcoDebt: Decodable, Identifiable {
+struct EcoDebt: Codable, Identifiable {
     let id: String
     let counterparty: String
     let direction: String?
@@ -37,7 +37,7 @@ struct EcoDebt: Decodable, Identifiable {
     let note: String?
 }
 
-struct EcoLoan: Decodable, Identifiable {
+struct EcoLoan: Codable, Identifiable {
     let id: String
     let name: String
     let lender: String?
@@ -52,7 +52,7 @@ struct EcoLoan: Decodable, Identifiable {
     let isClosed: Bool?
 }
 
-struct EcoCategory: Decodable, Identifiable {
+struct EcoCategory: Codable, Identifiable {
     let id: String
     let kind: String
     let name: String
@@ -86,7 +86,7 @@ struct EcoReportGroup: Decodable {
     let categories: [EcoReportCategory]
 }
 
-struct EcoReportCategory: Decodable, Identifiable {
+struct EcoReportCategory: Codable, Identifiable {
     let name: String
     let amountMinor: String
     var id: String { name }
