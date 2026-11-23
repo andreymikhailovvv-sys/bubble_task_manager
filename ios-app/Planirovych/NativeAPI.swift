@@ -494,7 +494,7 @@ final class NativeAPI {
             "isRecurring": isRecurring,
             "recurrenceText": isRecurring ? (recurrenceSummary ?? "") : NSNull(),
             "recurrenceSummary": isRecurring ? (recurrenceSummary ?? "") : NSNull(),
-            "recurrenceUntil": isRecurring ? (recurrence?.until ?? NSNull()) : NSNull()
+            "recurrenceUntil": isRecurring ? (recurrence?.until as Any? ?? NSNull()) : NSNull()
         ]
         if isRecurring, let recurrence {
             let encoded = try JSONEncoder().encode(recurrence)
