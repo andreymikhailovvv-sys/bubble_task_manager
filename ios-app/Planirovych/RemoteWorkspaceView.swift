@@ -773,8 +773,8 @@ private struct SectorSettingsSheet: View {
         editingID = sphere?.id
         name = sphere?.name ?? ""
         color = Color(sphereHex: sphere?.color)
-        icon = "briefcase"
-        prompt = ""
+        icon = sphere?.icon ?? "briefcase"
+        prompt = sphere?.generalPrompt ?? ""
         editing = true
     }
 
