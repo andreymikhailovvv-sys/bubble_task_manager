@@ -9,6 +9,7 @@ import { BubbleField } from './components/BubbleField';
 import { FullscreenModePicker, FullscreenWorkspaceSingle, FullscreenWorkspaceSplit } from './components/FullscreenWorkspaceLayout';
 import { replaceFullscreenPanel, resolveFullscreenPanels, type FullscreenWorkspacePanel } from './lib/fullscreenWorkspacePanels';
 import { FullscreenUpcomingTasksPanel } from './components/FullscreenUpcomingTasksPanel';
+import { PrimaryWorkspaceSidebar } from './components/PrimaryWorkspaceSidebar';
 import { FullscreenPaneFilters, createDefaultWorkspacePaneFilter, type WorkspacePaneFilter } from './components/FullscreenPaneFilters';
 import { WorkspaceActionToast } from './components/WorkspaceActionToast';
 import { TaskMonitoringBadge } from './components/TaskMonitoringBadge';
@@ -7483,19 +7484,49 @@ export default function App() {
           ? 'workspace-shell relative min-h-0 flex-1 overflow-hidden rounded-none p-0'
           : 'workspace-shell relative min-h-0 flex-1 overflow-hidden pr-[360px]'}>
         {isBubbleFullscreen ? (
-          fullscreenPanels.length === 2 ? (
-            <FullscreenWorkspaceSplit
-              panels={fullscreenPanels as [FullscreenWorkspacePanel, FullscreenWorkspacePanel]}
-              renderPanel={renderFullscreenPanel}
-              onChoose={chooseFullscreenPanel}
-              tasks={fullscreenTaskChoices}
-              ratio={fullscreenSplitRatio}
-              onRatioChange={setFullscreenSplitRatio}
+          <div className="primary-workspace-layout">
+            <div className="primary-workspace-stage">
+              {fullscreenPanels.length === 2 ? (
+                <FullscreenWorkspaceSplit
+                  panels={fullscreenPanels as [FullscreenWorkspacePanel, FullscreenWorkspacePanel]}
+                  renderPanel={renderFullscreenPanel}
+                  onChoose={chooseFullscreenPanel}
+                  tasks={fullscreenTaskChoices}
+                  ratio={fullscreenSplitRatio}
+                  onRatioChange={setFullscreenSplitRatio}
+                />
+              ) : (
+                <FullscreenWorkspaceSingle panel={fullscreenPanels[0]} renderPanel={renderFullscreenPanel}
+                  tasks={fullscreenTaskChoices} onChoose={addFullscreenSinglePanel} />
+              )}
+            </div>
+            <PrimaryWorkspaceSidebar key={currentUser?.id ?? 'anonymous'}
+              userId={currentUser?.id ?? 'anonymous'}
+              windowCount={fullscreenPanels.length} tasks={tasks} habits={habits} spheres={spheres}
+              timeZone={userTimeZone} requestedNote={requestedStandaloneNote}
+              onOpenUpcoming={() => setIsUpcomingSubtasksModalOpen(true)}
+              onOpenTask={task => {
+                if (task.parentTaskId || task.taskType === 'EVENT') setEditorState({ task });
+                else openTaskWithFocusGuard(task);
+              }}
+              onCompleteTask={async task => { await toggleSubtaskDone(task); }}
+              onRestoreTask={async task => {
+                await api.updateTask(task.id, { status: 'TODO' });
+                await load();
+              }}
+              onEditSphere={setSectorEditorSphere}
+              onCreateSphere={() => setSectorEditorSphere({ id: '', name: '', color: HARMONIOUS_COLORS[0], icon: 'briefcase' })}
+              onDeleteSphere={async sphere => {
+                if (!confirm(`Удалить сектор ${sphere.name}?`)) return;
+                await api.deleteSphere(sphere.id);
+                await load();
+              }}
+              onHabitUpsert={updated => setHabits(current => current.some(item => item.id === updated.id)
+                ? current.map(item => item.id === updated.id ? updated : item)
+                : [...current, updated])}
+              onHabitRemove={id => setHabits(current => current.filter(item => item.id !== id))}
             />
-          ) : (
-            <FullscreenWorkspaceSingle panel={fullscreenPanels[0]} renderPanel={renderFullscreenPanel}
-              tasks={fullscreenTaskChoices} onChoose={addFullscreenSinglePanel} />
-          )
+          </div>
         ) : renderWorkspaceMode(displayMode)}
 
         {timelineCreateMenu ? (
