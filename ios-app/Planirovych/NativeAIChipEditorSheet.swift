@@ -130,30 +130,29 @@ struct NativeAIChipEditorSheet: View {
         }
     }
 
-    @ViewBuilder
-    private func taskField(index: Int, key: String) -> some View {
-        let choices: [Choice]?
+    private func taskChoices(_ key: String) -> [Choice]? {
         switch key {
         case "sphereId":
             let spheres = options["spheres"] as? [[String: Any]] ?? []
-            choices = [Choice(id: "", title: "Без сектора")] +
+            return [Choice(id: "", title: "Без сектора")] +
                 spheres.compactMap { row -> Choice? in
                     guard let id = row["id"] as? String else { return nil }
                     return Choice(id: id, title: row["name"] as? String ?? id)
                 }
         case "status":
-            choices = [
-                Choice(id: "TODO", title: "Не начато"),
-                Choice(id: "IN_PROGRESS", title: "В работе"),
-                Choice(id: "DONE", title: "Выполнено")
-            ]
+            return [Choice(id: "TODO", title: "Не начато"),
+                    Choice(id: "IN_PROGRESS", title: "В работе"),
+                    Choice(id: "DONE", title: "Выполнено")]
         case "importance", "urgency":
-            choices = (1...5).map { Choice(id: String($0), title: String($0)) }
+            return (1...5).map { Choice(id: String($0), title: String($0)) }
         default:
-            choices = nil
+            return nil
         }
+    }
+
+    private func taskField(index: Int, key: String) -> some View {
         fieldControl(title: taskLabels[key] ?? key, value: taskBinding(index, key),
-                     choices: choices)
+                     choices: taskChoices(key))
     }
 
     @ViewBuilder
