@@ -2,7 +2,7 @@ import SwiftUI
 
 private enum ConnectedTab: String, CaseIterable, Identifiable {
     case overview = "Общая"
-    case tasks = "Задачи"
+    case timeline = "Таймлайн"
     case chat = "ИИ-чат"
     case economic = "Экономыч"
 
@@ -11,7 +11,7 @@ private enum ConnectedTab: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .overview: return "square.grid.2x2.fill"
-        case .tasks: return "checklist"
+        case .timeline: return "calendar"
         case .chat: return "bubble.left.and.bubble.right.fill"
         case .economic: return "rublesign.circle.fill"
         }
@@ -49,6 +49,13 @@ struct RemoteWorkspaceView: View {
     @State private var dateWindow: TaskDateWindow = .all
     @State private var taskMode: TaskDisplayMode = .list
     @State private var showCompletedTasks = false
+    @State private var searchExpanded = false
+    @State private var searchQuery = ""
+    @State private var showOverdue = false
+    @State private var showSectorSettings = false
+    @State private var showAccount = false
+    @State private var showAppSettings = false
+    @State private var showTaskFilters = false
 
     private let accent = Color(red: 0.54, green: 0.49, blue: 0.97)
 
@@ -64,6 +71,21 @@ struct RemoteWorkspaceView: View {
 
     private var allActualTasks: [RemoteTask] { session.tasks.filter { $0.isActualTask && $0.parentTaskId == nil } }
     private var doneCount: Int { allActualTasks.filter { $0.isComplete }.count }
+    private var plannedToday: [RemoteTask] {
+        allActualTasks.filter { task in
+            guard let date = NativeTaskDates.parse(task.dueDate) else { return false }
+            return Calendar.current.isDateInToday(date)
+        }
+    }
+    private var overdueTasks: [RemoteTask] {
+        allActualTasks.filter { task in
+            guard !task.isComplete, let date = NativeTaskDates.parse(task.dueDate) else { return false }
+            return date < Date()
+        }.sorted {
+            (NativeTaskDates.parse($0.dueDate) ?? .distantFuture) <
+            (NativeTaskDates.parse($1.dueDate) ?? .distantFuture)
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -79,7 +101,7 @@ struct RemoteWorkspaceView: View {
                         }
                         switch selectedTab {
                         case .overview: overview
-                        case .tasks: taskList
+                        case .timeline: timelineContent
                         case .chat: EmptyView()
                         case .economic:
                             upcomingModule(
@@ -107,60 +129,159 @@ struct RemoteWorkspaceView: View {
             NativeTaskEditorSheet(session: session, task: task)
                 .presentationDetents([.large])
         }
+        .sheet(isPresented: $showOverdue) {
+            NavigationStack {
+                List {
+                    if overdueTasks.isEmpty {
+                        Text("Просроченных задач нет")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(overdueTasks) { task in
+                            Button {
+                                showOverdue = false
+                                editingTask = task
+                            } label: {
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(task.title).foregroundStyle(.primary)
+                                    Text(String((task.dueDate ?? "").prefix(16)))
+                                        .font(.caption).foregroundStyle(.red)
+                                }
+                            }
+                        }
+                    }
+                }
+                .navigationTitle("Просроченные задачи")
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Закрыть") { showOverdue = false }
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Отложить все") {
+                            Task {
+                                if await session.postponeOverdueTasks(overdueTasks) {
+                                    showOverdue = false
+                                }
+                            }
+                        }
+                        .disabled(overdueTasks.isEmpty || session.isWorking)
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $showSectorSettings) {
+            SectorSettingsSheet(session: session)
+                .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showAccount) {
+            NavigationStack {
+                Form {
+                    Section("Аккаунт") {
+                        LabeledContent("Имя", value: session.account?.displayName ?? "Профиль")
+                        LabeledContent("Логин", value: session.account?.username ?? "Не указан")
+                        LabeledContent("Email", value: session.account?.email ?? "Не указан")
+                    }
+                    Section("ИИ-кредиты") {
+                        Text("\(session.account?.aiCredits ?? 0)")
+                    }
+                    Section {
+                        Button("Выйти из аккаунта", role: .destructive) {
+                            showAccount = false
+                            Task { await session.logout() }
+                        }
+                    }
+                }
+                .navigationTitle("Управление аккаунтом")
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Закрыть") { showAccount = false }
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showAppSettings) {
+            NavigationStack {
+                Form {
+                    Section("Планировыч") {
+                        Button("Обновить данные") {
+                            Task { await session.refresh() }
+                            showAppSettings = false
+                        }
+                        Button("Управление аккаунтом") {
+                            showAppSettings = false
+                            showAccount = true
+                        }
+                    }
+                }
+                .navigationTitle("Настройки")
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Закрыть") { showAppSettings = false }
+                    }
+                }
+            }
+        }
     }
 
     private var header: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "sparkles.rectangle.stack.fill")
-                .font(.system(size: 23))
-                .foregroundStyle(accent)
-                .frame(width: 43, height: 43)
-                .background(accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 13))
-
-            VStack(alignment: .leading, spacing: 3) {
+        VStack(spacing: 7) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles.rectangle.stack.fill")
+                    .font(.system(size: 21))
+                    .foregroundStyle(.white)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        LinearGradient(colors: [accent, .cyan],
+                            startPoint: .topLeading, endPoint: .bottomTrailing),
+                        in: RoundedRectangle(cornerRadius: 11)
+                    )
                 Text("Планировыч")
-                    .font(.system(size: 23, weight: .bold, design: .rounded))
-                Text(session.account?.displayName ?? "Аккаунт")
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
                     .lineLimit(1)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 6)
-
-            if session.isWorking { ProgressView().padding(.trailing, 6) }
-
-            Button { showingNewTask = true } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 19, weight: .semibold))
-                    .frame(width: 41, height: 41)
-                    .background(card, in: Circle())
-            }
-            .disabled(session.isWorking)
-            .accessibilityLabel("Добавить задачу")
-
-            Menu {
-                Button {
-                    Task { await session.refresh() }
-                } label: {
-                    Label("Обновить", systemImage: "arrow.clockwise")
+                    .minimumScaleFactor(0.8)
+                Spacer(minLength: 2)
+                Button { showAccount = true } label: {
+                    Image(systemName: "person.crop.circle")
+                        .font(.system(size: 20))
+                        .frame(width: 32, height: 36)
                 }
-                Button(role: .destructive) {
-                    Task { await session.logout() }
-                } label: {
-                    Label("Выйти из аккаунта", systemImage: "rectangle.portrait.and.arrow.right")
+                .accessibilityLabel("Управление аккаунтом")
+                Text("\(session.account?.aiCredits ?? 0)")
+                    .font(.caption.weight(.bold))
+                    .lineLimit(1)
+                    .padding(.horizontal, 5)
+                    .frame(height: 36)
+                    .background(card, in: RoundedRectangle(cornerRadius: 10))
+                    .accessibilityLabel("ИИ-кредиты")
+                Button { searchExpanded.toggle() } label: {
+                    Image(systemName: "magnifyingglass")
+                        .frame(width: 32, height: 36)
                 }
-            } label: {
-                Image(systemName: "person.crop.circle")
-                    .font(.system(size: 24))
-                    .foregroundStyle(accent)
-                    .frame(width: 41, height: 41)
-                    .background(card, in: Circle())
+                .accessibilityLabel("Поиск")
+                Button { showAppSettings = true } label: {
+                    Image(systemName: "gearshape")
+                        .frame(width: 32, height: 36)
+                }
+                .accessibilityLabel("Настройки")
             }
-            .accessibilityLabel("Настройки аккаунта")
+            if searchExpanded {
+                HStack {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    TextField("Поиск по задачам", text: $searchQuery)
+                        .textInputAutocapitalization(.sentences)
+                    Button { searchQuery = ""; searchExpanded = false } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    }
+                    .accessibilityLabel("Закрыть поиск")
+                }
+                .padding(11)
+                .background(card, in: RoundedRectangle(cornerRadius: 14))
+            }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 10)
-        .padding(.bottom, 13)
+        .foregroundStyle(.primary)
+        .padding(.horizontal, 16)
+        .padding(.top, 9)
+        .padding(.bottom, 12)
         .background(background)
     }
 
