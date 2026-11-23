@@ -281,7 +281,7 @@ struct NativeChatView: View {
                 Text(mine ? "Вы" : "Планировыч")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(mine ? Color.white.opacity(0.8) : accent)
-                markdown(message.generatedDocument?.isImage == true
+                markdown(message.generatedDocument != nil
                     ? message.content.replacingOccurrences(
                         of: #"\\[\\[file_ref=[^\\]]+\\]\\]"#, with: "",
                         options: .regularExpression
@@ -290,8 +290,23 @@ struct NativeChatView: View {
                     .font(.system(size: 15))
                     .textSelection(.enabled)
                     .foregroundStyle(mine ? Color.white : Color.primary)
-                if !mine, let doc = message.generatedDocument, doc.isImage {
-                    NativeGeneratedImageCard(document: doc)
+                if !mine, let doc = message.generatedDocument {
+                    if doc.isImage {
+                        NativeGeneratedImageCard(document: doc)
+                    } else {
+                        NativeGeneratedDocumentCard(document: doc)
+                    }
+                }
+                if !mine, let telegram = message.telegramSendDraft {
+                    NativeTelegramSendCard(draft: telegram)
+                }
+                if !mine, let mail = message.mailSendDraft {
+                    NativeMailSendCard(draft: mail)
+                }
+                if !mine, let read = message.telegramReadDraft {
+                    NativeTelegramReadCard(draft: read) { approval in
+                        await session.continueTelegramRead(approval)
+                    }
                 }
                 if !mine, let proposal = message.taskProposal {
                     NativeAIProposalChip(session: session, proposal: proposal, economic: false)
