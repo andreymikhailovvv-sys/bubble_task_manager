@@ -75,7 +75,7 @@ struct NativeEconomicEditorSheet: View {
         _paid = State(initialValue: EcoMoney.plain(raw("paidMinor")))
         _creditLimit = State(initialValue: EcoMoney.plain(raw("creditLimitMinor")))
         _rate = State(initialValue: raw("annualRateBps").isEmpty ? "0" :
-                      String(Double(raw("annualRateBps"))! / 100))
+                      String((Double(raw("annualRateBps")) ?? 0) / 100))
         _months = State(initialValue: raw("termMonths").isEmpty ? "12" : raw("termMonths"))
         _monthlyOverride = State(initialValue: raw("monthlyPaymentOverrideMinor").isEmpty ?
                                  "" : EcoMoney.plain(raw("monthlyPaymentOverrideMinor")))
