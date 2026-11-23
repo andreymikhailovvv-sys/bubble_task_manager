@@ -105,7 +105,7 @@ export function PrimaryHabitDialog({ habit, embedded = false, onClose, onSave, o
           </div>}
           {embedded && <label className="primary-habit-field primary-habit-embedded-name"><span>Название привычки</span>
             <input autoFocus required value={name} maxLength={160} onChange={event => setName(event.target.value)}/>
-          </label>
+          </label>}
           <div className="primary-habit-field"><span>Иконка</span>
             <div className="primary-habit-icon-grid">
               {icons.map(item => <button type="button" key={item} aria-label={'Выбрать ' + item}
