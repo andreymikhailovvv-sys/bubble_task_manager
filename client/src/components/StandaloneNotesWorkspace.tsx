@@ -7,14 +7,14 @@ import { NotesEditor } from './NotesEditor';
 import { PlanikMascot } from './PlanikMascot';
 import { StandaloneNoteGroupManager, noteGroupStyle } from './StandaloneNoteGroupManager';
 
-type Props = { userId: string; requestedNote?: { id: string; serial: number } | null; mode?: 'widget' | 'mobile' | 'inline'; editorOutsideInline?: boolean; onClose?: () => void; mobileSafeAreaTop?: number; mobileSafeAreaBottom?: number; telegramMiniApp?: boolean };
+type Props = { userId: string; requestedNote?: { id: string; serial: number } | null; mode?: 'widget' | 'mobile' | 'inline'; editorOutsideInline?: boolean; onClose?: () => void; mobileSafeAreaTop?: number; mobileSafeAreaBottom?: number; telegramMiniApp?: boolean; compactWidget?: boolean };
 const sortNotes = (items: StandaloneNote[]) =>
   [...items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id));
 const titleOf = (note: StandaloneNote) => note.title.trim() || 'Без названия';
 const summaryOf = (note: StandaloneNote) => noteHtmlToPlainText(note.content).replace(/\s+/g, ' ').trim();
 const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : 'Не удалось сохранить заметку.';
 
-export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget', editorOutsideInline = false, onClose, mobileSafeAreaTop = 0, mobileSafeAreaBottom = 0, telegramMiniApp = false }: Props) {
+export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget', editorOutsideInline = false, onClose, mobileSafeAreaTop = 0, mobileSafeAreaBottom = 0, telegramMiniApp = false, compactWidget = false }: Props) {
   const [notes, setNotes] = useState<StandaloneNote[]>([]);
   const [groups, setGroups] = useState<StandaloneNoteGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
@@ -374,12 +374,12 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
   return (
     <>
       {mode === 'inline' ? <div ref={setInlineMount} className="standalone-notes-inline-mount relative h-full min-h-0 w-full" /> : null}
-      {mode === 'widget' ? <section className="workspace-widget-card standalone-notes-widget rounded-[1.35rem] border p-4" aria-label="Личные заметки">
+      {mode === 'widget' ? <section className={`workspace-widget-card standalone-notes-widget ${compactWidget ? 'standalone-notes-widget--embedded' : 'rounded-[1.35rem] border p-4'}`} aria-label="Личные заметки">
         <div className="mb-3 flex items-center justify-between gap-2">
-          <h3 className="flex items-center gap-2 text-base font-bold tracking-[-0.01em]">
+          {compactWidget ? <span className="text-xs text-muted">Последние заметки</span> : <h3 className="flex items-center gap-2 text-base font-bold tracking-[-0.01em]">
             <StickyNote size={17} className="standalone-note-accent shrink-0" />
             Заметки
-          </h3>
+          </h3>}
           <div className="flex items-center gap-1.5">
             <button type="button" className="standalone-notes-icon-button rounded-lg p-1.5" onClick={() => void createNote()} disabled={creating} aria-label="Создать заметку" title="Новая заметка"><Plus size={16} /></button>
             <button type="button" className="standalone-notes-icon-button rounded-lg p-1.5" onClick={() => setBoardOpen(true)} aria-label="Открыть все заметки" title="Развернуть заметки"><Maximize2 size={15} /></button>

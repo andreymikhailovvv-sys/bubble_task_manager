@@ -1,13 +1,13 @@
 import { memo, useEffect, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { Reorder, useDragControls } from 'framer-motion';
-import { CalendarClock, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, GripVertical, Maximize2, Minus, Plus, Settings2, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, GripVertical, Maximize2, Minus, Plus, Settings2, X } from 'lucide-react';
 import { api } from '../lib/api';
 import type { Habit, Sphere, Task } from '../lib/types';
 import { resolveSphereIcon } from '../lib/sphereIcons';
 import { MiniAppHabitTracker } from './MiniAppHabitTracker';
 import { StandaloneNotesWorkspace } from './StandaloneNotesWorkspace';
-import { TestPageHabitDialog } from '../TestPageHabitDialog';
-import '../TestPage.css';
+import { PrimaryHabitDialog } from './PrimaryHabitDialog';
 import './PrimaryWorkspaceSidebar.css';
 
 const DEFAULT_ORDER = ['upcoming', 'completed', 'habits', 'progress', 'sectors', 'notes'] as const;
@@ -16,7 +16,7 @@ type WidgetId = typeof DEFAULT_ORDER[number];
 const SidebarNotes = memo(function SidebarNotes({ userId, requestedNote }: {
   userId: string; requestedNote: { id: string; serial: number } | null;
 }) {
-  return <StandaloneNotesWorkspace userId={userId} requestedNote={requestedNote}/>;
+  return <StandaloneNotesWorkspace userId={userId} requestedNote={requestedNote} compactWidget/>;
 });
 
 function readOrder(userId: string): WidgetId[] {
@@ -143,7 +143,11 @@ export function PrimaryWorkspaceSidebar(props: Props) {
   const todayKey = localDateKey(now, timeZone);
   const taskItems = tasks.filter(task => (task.taskType ?? 'TASK') === 'TASK' && !task.parentTaskId);
   const doneCount = taskItems.filter(task => task.status === 'DONE').length;
-  const todayTasks = taskItems.filter(task => task.dueDate && localDateKey(new Date(task.dueDate), timeZone) === todayKey);
+  // For today's metric, match the main task count but also include dated
+  // subtasks. Events and reminders are not tasks.
+  const todayTasks = tasks.filter(task => (task.taskType ?? 'TASK') === 'TASK'
+    && task.dueDate && Number.isFinite(new Date(task.dueDate).getTime())
+    && localDateKey(new Date(task.dueDate), timeZone) === todayKey);
   const todayDone = todayTasks.filter(task => task.status === 'DONE').length;
   const upcoming = tasks.filter(task => task.parentTaskId && task.status !== 'DONE' && task.dueDate)
     .filter(task => Number.isFinite(new Date(task.dueDate!).getTime()))
@@ -297,6 +301,14 @@ export function PrimaryWorkspaceSidebar(props: Props) {
 
   return <aside className={`primary-workspace-sidebar ${isOpen ? 'is-open' : 'is-collapsed'}`}
     aria-label="Дополнительные блоки рабочего пространства" data-no-field-zoom="true">
+    <Reorder.Group as="div" axis="y" values={order} onReorder={setOrder}
+      className="primary-workspace-sidebar-list" aria-hidden={!isOpen}
+      aria-label="Блоки рабочего пространства. Перетаскивайте за маркер в заголовке">
+      {order.map(id => <Widget key={id} id={id}
+        title={{ upcoming: 'Ближайшие подзадачи', completed: 'Выполненные задания', habits: 'Привычки',
+          progress: 'Статистика выполнения', sectors: 'Управление секторами', notes: 'Заметки' }[id]}
+        onMove={direction => updateOrder(direction, id)}>{widgetBodies[id]}</Widget>)}
+    </Reorder.Group>
     <div className="primary-workspace-sidebar-toggle-slot">
       <button type="button" className="primary-workspace-sidebar-toggle"
         aria-label={isOpen ? 'Скрыть панель блоков' : 'Показать панель блоков'}
@@ -308,31 +320,30 @@ export function PrimaryWorkspaceSidebar(props: Props) {
         {isOpen ? <ChevronRight size={17}/> : <ChevronLeft size={17}/>}
       </button>
     </div>
-    {isOpen && <Reorder.Group as="div" axis="y" values={order} onReorder={setOrder}
-      className="primary-workspace-sidebar-list" aria-label="Блоки рабочего пространства. Перетаскивайте за маркер в заголовке">
-      {order.map(id => <Widget key={id} id={id}
-        title={{ upcoming: 'Ближайшие подзадачи', completed: 'Выполненные задания', habits: 'Привычки',
-          progress: 'Статистика выполнения', sectors: 'Управление секторами', notes: 'Заметки' }[id]}
-        onMove={direction => updateOrder(direction, id)}>{widgetBodies[id]}</Widget>)}
-    </Reorder.Group>}
-    {(selectedHabit || editingHabitId) && <div className="tp-root primary-habit-modal-host">
-      {selectedHabit && <div className="tp-overlay tp-habit-detail-overlay" onMouseDown={event => {
+    {selectedHabit && createPortal(
+      <div className="primary-habit-backdrop" onMouseDown={event => {
         if (event.currentTarget === event.target) setSelectedHabitId(null);
       }}>
-        <section className="tp-dialog tp-habit-detail" role="dialog" aria-modal="true" aria-label={'Привычка ' + selectedHabit.name}>
-          <header><div><span className="tp-eyebrow">ПРИВЫЧКА</span><h2>{selectedHabit.name}</h2></div>
-            <div className="primary-habit-modal-actions">
-              <button type="button" className="tp-secondary" onClick={() => setEditingHabitId(selectedHabit.id)}><Settings2 size={16}/> Настройки</button>
-              <button type="button" onClick={() => setSelectedHabitId(null)} aria-label="Закрыть"><X size={18}/></button>
+        <section className="primary-habit-dialog primary-habit-detail-dialog dialog-surface" role="dialog"
+          aria-modal="true" aria-label={'Привычка ' + selectedHabit.name}>
+          <header className="primary-habit-dialog-header">
+            <div><p className="primary-habit-eyebrow">ПРИВЫЧКА</p><h2>{selectedHabit.name}</h2></div>
+            <div className="primary-habit-detail-actions">
+              <button type="button" onClick={() => setEditingHabitId(selectedHabit.id)}>
+                <Settings2 size={16}/> Настройки</button>
+              <button type="button" onClick={() => setSelectedHabitId(null)} aria-label="Закрыть">
+                <X size={18}/></button>
             </div>
           </header>
-          <div className="tp-habit-detail-content"><MiniAppHabitTracker habit={selectedHabit} onHabitChanged={props.onHabitUpsert}/></div>
+          <div className="primary-habit-detail-content">
+            <MiniAppHabitTracker habit={selectedHabit} onHabitChanged={props.onHabitUpsert}/>
+          </div>
         </section>
-      </div>}
-      {editingHabitId && <TestPageHabitDialog key={editingHabitId} habit={editingHabit}
-        onClose={() => setEditingHabitId(null)} onSave={saveHabit}
-        onDelete={editingHabit ? deleteHabit : undefined}
-        onFinish={editingHabit ? finishHabit : undefined}/>}
-    </div>}
+      </div>, document.body
+    )}
+    {editingHabitId && <PrimaryHabitDialog key={editingHabitId} habit={editingHabit}
+      onClose={() => setEditingHabitId(null)} onSave={saveHabit}
+      onDelete={editingHabit ? deleteHabit : undefined}
+      onFinish={editingHabit ? finishHabit : undefined}/>}
   </aside>;
 }
