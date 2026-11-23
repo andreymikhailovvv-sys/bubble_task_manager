@@ -83,7 +83,8 @@ struct NativeTaskAIChatView: View {
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
-                        ForEach(models, id: \.key) { item in
+                        ForEach(models.indices, id: \.self) { index in
+                            let item = models[index]
                             Button(item.label) { model = item.key }
                         }
                     } label: {
