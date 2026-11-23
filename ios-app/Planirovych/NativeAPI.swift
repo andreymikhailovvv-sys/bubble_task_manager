@@ -181,10 +181,25 @@ struct NativeChatProject: Identifiable {
     let chats: [NativeChatThread]
 }
 
+struct NativeGeneratedDocument: Codable, Identifiable {
+    let id: String
+    let fileName: String
+    let mimeType: String
+    let size: Int?
+    var isImage: Bool { mimeType.hasPrefix("image/") }
+}
+
+enum NativeChatStreamEvent {
+    case delta(String)
+    case reset
+    case status(String)
+}
+
 struct NativeChatReply {
     let answer: String
     let taskProposal: NativeAIProposal?
     let economicProposals: [NativeAIProposal]
+    let generatedDocument: NativeGeneratedDocument?
     let raw: [String: Any]
 }
 
@@ -194,19 +209,22 @@ struct RemoteChatMessage: Codable {
     let content: String
     let taskProposal: NativeAIProposal?
     let economicProposals: [NativeAIProposal]?
+    let generatedDocument: NativeGeneratedDocument?
 
     init(id: String?, role: String, content: String,
          taskProposal: NativeAIProposal? = nil,
-         economicProposals: [NativeAIProposal]? = nil) {
+         economicProposals: [NativeAIProposal]? = nil,
+         generatedDocument: NativeGeneratedDocument? = nil) {
         self.id = id
         self.role = role
         self.content = content
         self.taskProposal = taskProposal
         self.economicProposals = economicProposals
+        self.generatedDocument = generatedDocument
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, role, content, taskProposal, economicProposals
+        case id, role, content, taskProposal, economicProposals, generatedDocument
     }
 
     init(from decoder: Decoder) throws {
@@ -216,6 +234,7 @@ struct RemoteChatMessage: Codable {
         content = (try? values.decode(String.self, forKey: .content)) ?? ""
         taskProposal = try? values.decodeIfPresent(NativeAIProposal.self, forKey: .taskProposal)
         economicProposals = try? values.decodeIfPresent([NativeAIProposal].self, forKey: .economicProposals)
+        generatedDocument = try? values.decodeIfPresent(NativeGeneratedDocument.self, forKey: .generatedDocument)
     }
 }
 
@@ -227,6 +246,7 @@ private struct AiChatReply: Decodable {
     let answer: String
     let taskProposal: NativeAIProposal?
     let economicProposals: [NativeAIProposal]?
+    let generatedDocument: NativeGeneratedDocument?
 }
 
 private struct VoiceTranscription: Decodable {
@@ -591,22 +611,85 @@ final class NativeAPI {
         return result.messages
     }
 
+    /// Streaming NDJSON is the same transport used by Mini App and Android.
+    /// The quick intro, status transitions and answer deltas arrive in order.
     func sendChat(question: String, history: [RemoteChatMessage],
-                  project: NativeChatProject, thread: NativeChatThread) async throws -> NativeChatReply {
+                  project: NativeChatProject, thread: NativeChatThread,
+                  onEvent: @escaping @MainActor (NativeChatStreamEvent) -> Void
+    ) async throws -> NativeChatReply {
         let payload: [String: Any] = [
             "clientRequestId": UUID().uuidString.lowercased(),
             "question": question,
-            "history": history.suffix(25).map { ["role": $0.role, "content": $0.content] },
+            "history": history.suffix(25).map { message in
+                var item: [String: Any] = ["role": message.role, "content": message.content]
+                if let doc = message.generatedDocument { item["generatedDocument"] = ["id": doc.id] }
+                return item
+            },
             "projectId": project.id, "projectTitle": project.title,
             "chatId": thread.id, "chatTitle": thread.title,
             "userTimeZone": TimeZone.current.identifier
         ]
-        let data = try await requestData("ai-chat", method: "POST", json: payload,
-                                         timeoutInterval: 180)
-        let result = try JSONDecoder().decode(AiChatReply.self, from: data)
-        let raw = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
-        return NativeChatReply(answer: result.answer, taskProposal: result.taskProposal,
-                               economicProposals: result.economicProposals ?? [], raw: raw)
+        guard let url = URL(string: "ai-chat", relativeTo: base),
+              url.scheme == "https", url.host == base.host else {
+            throw NativeAPIError.invalidResponse
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpShouldHandleCookies = true
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = 180
+        request.setValue("same-origin", forHTTPHeaderField: "Sec-Fetch-Site")
+        request.setValue("application/x-ndjson", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        let (bytes, response) = try await http.bytes(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NativeAPIError.invalidResponse
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            throw NativeAPIError.server(code: httpResponse.statusCode,
+                                        message: "Сервер не принял запрос (HTTP \(httpResponse.statusCode)).")
+        }
+        for try await line in bytes.lines {
+            try Task.checkCancellation()
+            guard let rawData = line.data(using: .utf8),
+                  let event = try? JSONSerialization.jsonObject(with: rawData) as? [String: Any],
+                  let type = event["type"] as? String else { continue }
+            switch type {
+            case "delta":
+                if let value = event["text"] as? String, !value.isEmpty {
+                    onEvent(.delta(value))
+                }
+            case "reset":
+                onEvent(.reset)
+            case "status":
+                if let value = event["status"] as? String { onEvent(.status(value)) }
+            case "error":
+                throw NativeAPIError.server(code: 500,
+                    message: event["message"] as? String ?? "Ошибка обработки запроса ИИ.")
+            case "result":
+                guard let data = event["result"] as? [String: Any] else {
+                    throw NativeAPIError.invalidResponse
+                }
+                let resultData = try JSONSerialization.data(withJSONObject: data)
+                let parsed = try JSONDecoder().decode(AiChatReply.self, from: resultData)
+                return NativeChatReply(answer: parsed.answer,
+                                       taskProposal: parsed.taskProposal,
+                                       economicProposals: parsed.economicProposals ?? [],
+                                       generatedDocument: parsed.generatedDocument, raw: data)
+            default: break
+            }
+        }
+        throw NativeAPIError.server(code: 502, message: "Соединение с ИИ прервалось до завершения ответа.")
+    }
+
+    func downloadGeneratedDocument(id: String) async throws -> Data {
+        guard id.count < 150, id.range(of: #"^[A-Za-z0-9_-]+$"#,
+                                       options: .regularExpression) != nil else {
+            throw NativeAPIError.invalidResponse
+        }
+        return try await requestData("ai-documents/\(id)/download", timeoutInterval: 90)
     }
 
     /// Preserve other clients' unknown project/message metadata when saving.
@@ -634,6 +717,9 @@ final class NativeAPI {
         }
         if let proposals = reply.raw["economicProposals"], !(proposals is NSNull) {
             answer["economicProposals"] = proposals
+        }
+        if let image = reply.raw["generatedDocument"], !(image is NSNull) {
+            answer["generatedDocument"] = image
         }
         messages.append(answer)
         threads[chatIndex]["messages"] = messages
