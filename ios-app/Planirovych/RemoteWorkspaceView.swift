@@ -491,7 +491,7 @@ struct RemoteWorkspaceView: View {
             Text("Таймлайн")
                 .font(.system(size: 28, weight: .bold, design: .rounded))
             NativeTaskTimelineView(
-                tasks: session.tasks.filter { $0.parentTaskId == nil && !$0.isComplete },
+                tasks: session.tasks.filter { !$0.isComplete },
                 spheres: session.spheres,
                 habits: session.habits,
                 onOpenTask: { task in editingTask = task },
