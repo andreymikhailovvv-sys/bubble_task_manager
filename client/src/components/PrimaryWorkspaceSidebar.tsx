@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { memo, useEffect, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { Reorder, useDragControls } from 'framer-motion';
 import { CalendarClock, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, GripVertical, Maximize2, Minus, Plus, Settings2, X } from 'lucide-react';
 import { api } from '../lib/api';
@@ -12,6 +12,12 @@ import './PrimaryWorkspaceSidebar.css';
 
 const DEFAULT_ORDER = ['upcoming', 'completed', 'habits', 'progress', 'sectors', 'notes'] as const;
 type WidgetId = typeof DEFAULT_ORDER[number];
+
+const SidebarNotes = memo(function SidebarNotes({ userId, requestedNote }: {
+  userId: string; requestedNote: { id: string; serial: number } | null;
+}) {
+  return <StandaloneNotesWorkspace userId={userId} requestedNote={requestedNote}/>;
+});
 
 function readOrder(userId: string): WidgetId[] {
   try {
@@ -285,7 +291,7 @@ export function PrimaryWorkspaceSidebar(props: Props) {
       {spheres.length < 8 && <button type="button" className="primary-widget-more" onClick={props.onCreateSphere}><Plus size={15}/> Добавить сектор</button>}
     </>,
     notes: <div className="primary-widget-notes">
-      <StandaloneNotesWorkspace key={userId + ':primary-sidebar-notes'} userId={userId} requestedNote={requestedNote}/>
+      <SidebarNotes userId={userId} requestedNote={requestedNote}/>
     </div>
   };
 
