@@ -58,6 +58,24 @@ struct RemoteSphere: Decodable, Identifiable {
     let generalPrompt: String?
 }
 
+struct NativeRecurrenceSlot: Codable {
+    let time: String
+    let weekday: Int?
+    let monthDay: Int?
+}
+
+struct NativeRecurrenceRule: Codable {
+    let rrule: String
+    let timezone: String
+    let until: String?
+    let slots: [NativeRecurrenceSlot]?
+}
+
+private struct RecurrenceParseEnvelope: Decodable {
+    let summary: String
+    let schedule: NativeRecurrenceRule
+}
+
 struct RemoteTask: Decodable, Identifiable {
     let id: String
     let title: String
@@ -70,6 +88,11 @@ struct RemoteTask: Decodable, Identifiable {
     let isCollaborative: Bool?
     let importance: Int?
     let urgency: Int?
+    let isRecurring: Bool?
+    let recurrenceText: String?
+    let recurrenceJson: NativeRecurrenceRule?
+    let recurrenceSummary: String?
+    let recurrenceUntil: String?
 
     var isComplete: Bool { status == "DONE" }
     var isActualTask: Bool { taskType == nil || taskType == "TASK" }
@@ -459,16 +482,37 @@ final class NativeAPI {
     }
 
     func updateTaskSettings(id: String, dueDate: Date?, importance: Int,
-                            urgency: Int, sphereId: String?, isSubtask: Bool) async throws -> RemoteTask {
+                            urgency: Int, sphereId: String?, isSubtask: Bool,
+                            isRecurring: Bool, recurrence: NativeRecurrenceRule?,
+                            recurrenceSummary: String?) async throws -> RemoteTask {
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         var fields: [String: Any] = [
             "dueDate": dueDate.map(iso.string(from:)) ?? NSNull(),
             "importance": max(1, min(5, importance)),
-            "urgency": max(1, min(5, urgency))
+            "urgency": max(1, min(5, urgency)),
+            "isRecurring": isRecurring,
+            "recurrenceText": isRecurring ? (recurrenceSummary ?? "") : NSNull(),
+            "recurrenceSummary": isRecurring ? (recurrenceSummary ?? "") : NSNull(),
+            "recurrenceUntil": isRecurring ? (recurrence?.until ?? NSNull()) : NSNull()
         ]
+        if isRecurring, let recurrence {
+            let encoded = try JSONEncoder().encode(recurrence)
+            fields["recurrenceJson"] = try JSONSerialization.jsonObject(with: encoded)
+        } else {
+            fields["recurrenceJson"] = NSNull()
+        }
         if !isSubtask { fields["sphereId"] = sphereId ?? NSNull() }
         return try await request("tasks/\(id)", method: "PATCH", json: fields)
+    }
+
+    func parseRecurrence(prompt: String, taskId: String?) async throws -> (NativeRecurrenceRule, String) {
+        var payload: [String: Any] = ["text": prompt, "userTimeZone": TimeZone.current.identifier]
+        if let taskId { payload["taskId"] = taskId }
+        let result: RecurrenceParseEnvelope = try await request(
+            "ai/parse-recurrence", method: "POST", json: payload, timeoutInterval: 90
+        )
+        return (result.schedule, result.summary)
     }
 
     func loadHabits() async throws -> [RemoteHabit] {
