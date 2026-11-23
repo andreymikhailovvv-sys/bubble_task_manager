@@ -98,7 +98,7 @@ test('Planik is offset from open widgets but returns to screen corner for center
   assert.ok(css.includes('right: max(16px, env(safe-area-inset-right)) !important'));
 });
 
-test('habit ring strip follows the Mini App: done badge, today's rings, divider, offday badge and plus', async () => {
+test('habit ring strip follows the Mini App: completion badge, daily rings, offday divider and plus', async () => {
   const widget = await source('client/src/components/PrimaryWorkspaceSidebar.tsx');
   const css = await source('client/src/components/PrimaryWorkspaceSidebar.css');
   assert.ok(widget.includes('primary-habit-summary-badge'));
