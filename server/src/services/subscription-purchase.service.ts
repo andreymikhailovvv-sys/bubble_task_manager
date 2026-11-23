@@ -70,7 +70,7 @@ export async function reconcileSubscriptionPurchaseFromYooKassa(
     const user = users[0];
     if (!user) throw new Error('Subscription user disappeared');
     const now = new Date();
-    const active = Boolean(user.subscriptionExpiresAt && user.subscriptionExpiresAt > now);
+    const active = Boolean(user.subscriptionExpiresAt && user.subscriptionExpiresAt.getTime() > now.getTime());
     const termStart = active ? user.subscriptionExpiresAt! : now;
     const included = (active ? user.aiIncludedCreditsMilli : 0) + current.creditsMilli;
     // Existing bonus/purchased buckets never expire with the subscription.

@@ -27,5 +27,8 @@ CREATE UNIQUE INDEX "SubscriptionPurchase_yookassaPaymentId_key" ON "Subscriptio
 CREATE UNIQUE INDEX "SubscriptionPurchase_idempotenceKey_key" ON "SubscriptionPurchase"("idempotenceKey");
 CREATE INDEX "SubscriptionPurchase_userId_createdAt_idx" ON "SubscriptionPurchase"("userId","createdAt");
 CREATE INDEX "SubscriptionPurchase_status_idx" ON "SubscriptionPurchase"("status");
+-- Prevent two simultaneous unfinished subscription checkouts for one account.
+CREATE UNIQUE INDEX "SubscriptionPurchase_one_unfinished_per_user_idx" ON "SubscriptionPurchase"("userId")
+  WHERE "status" IN ('created', 'pending', 'create_failed');
 ALTER TABLE "SubscriptionPurchase" ADD CONSTRAINT "SubscriptionPurchase_userId_fkey"
   FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;

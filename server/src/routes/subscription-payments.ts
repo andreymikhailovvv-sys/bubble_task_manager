@@ -8,6 +8,9 @@ import { reconcileSubscriptionPurchaseFromYooKassa } from '../services/subscript
 import { isYooKassaConfigured, resolveReceiptEmail, yookassaService } from '../services/yookassa.service.js';
 
 export const subscriptionPaymentsRouter = Router();
+class CheckoutConflict extends Error {
+  constructor(public readonly code: string, message: string) { super(message); }
+}
 const REQUEST_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const STATUS_THROTTLE_MS = 10_000;
 
@@ -49,16 +52,37 @@ subscriptionPaymentsRouter.post('/subscriptions/:planKey', requireAuth, async (r
   if (purchase && purchase.planKey !== plan.key) return void res.status(409).json({ error: 'Идентификатор запроса уже использован.' });
   if (!purchase) {
     try {
-      purchase = await prisma.subscriptionPurchase.create({ data: {
-        userId: user.id, clientRequestId, planKey: plan.key,
-        creditsMilli: plan.creditsAmount * 1000, amountKopecks: plan.amountKopecks,
-        idempotenceKey: crypto.randomUUID()
-      } });
+      purchase = await prisma.$transaction(async (tx) => {
+        // Checkout and activation take the same user row lock.
+        const rows = await tx.$queryRaw<Array<{ subscriptionExpiresAt: Date | null }>>(
+          Prisma.sql`SELECT "subscriptionExpiresAt" FROM "User" WHERE "id" = ${user.id} FOR UPDATE`
+        );
+        if (rows[0]?.subscriptionExpiresAt && rows[0].subscriptionExpiresAt.getTime() > Date.now()) {
+          throw new CheckoutConflict('SUBSCRIPTION_ACTIVE',
+            'Подписка уже активна. Продлить её можно после окончания текущего периода.');
+        }
+        const unfinished = await tx.subscriptionPurchase.findFirst({
+          where: { userId: user.id, status: { in: ['created', 'pending', 'create_failed'] } },
+          select: { id: true }
+        });
+        if (unfinished) throw new CheckoutConflict('SUBSCRIPTION_PAYMENT_PENDING',
+          'У вас уже есть незавершённая оплата. Дождитесь её проверки, не оплачивайте повторно.');
+        return tx.subscriptionPurchase.create({ data: {
+          userId: user.id, clientRequestId, planKey: plan.key,
+          creditsMilli: plan.creditsAmount * 1000, amountKopecks: plan.amountKopecks,
+          idempotenceKey: crypto.randomUUID()
+        } });
+      });
     } catch (error) {
+      if (error instanceof CheckoutConflict) return void res.status(409).json({ code: error.code, error: error.message });
       if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
-      purchase = await prisma.subscriptionPurchase.findUniqueOrThrow({ where: {
+      purchase = await prisma.subscriptionPurchase.findUnique({ where: {
         userId_clientRequestId: { userId: user.id, clientRequestId }
       } });
+      if (!purchase) return void res.status(409).json({
+        code: 'SUBSCRIPTION_PAYMENT_PENDING',
+        error: 'У вас уже есть незавершённый платёж. Дождитесь его подтверждения.'
+      });
     }
   }
   if (purchase.confirmationUrl || purchase.status === 'succeeded') {

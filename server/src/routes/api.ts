@@ -283,6 +283,8 @@ const toAuthUser = (user: {
   deviceId?: string | null;
   aiCredits?: number;
   aiCreditsPeriod?: string;
+  subscriptionPlan?: string;
+  subscriptionExpiresAt?: Date | null;
   aiIncludedCreditsMilli?: number;
   aiBonusCreditsMilli?: number;
   aiPurchasedCreditsMilli?: number;
@@ -322,6 +324,8 @@ const toAuthUser = (user: {
   aiCredits: Math.floor(aiCreditsMilli / 1000),
   aiCreditsMilli,
   aiCreditsPeriod: user.aiCreditsPeriod ?? '',
+  subscriptionPlan: user.subscriptionPlan ?? 'free',
+  subscriptionExpiresAt: user.subscriptionExpiresAt ?? null,
   aiEfficiencyCreditsSpent: user.aiEfficiencyCreditsSpent ?? 0,
   aiEfficiencyCreditsPeriod: user.aiEfficiencyCreditsPeriod ?? '',
   timeZone: user.timeZone ?? DEFAULT_TIMEZONE,
