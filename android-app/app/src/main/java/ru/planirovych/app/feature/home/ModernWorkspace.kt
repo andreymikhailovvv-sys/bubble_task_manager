@@ -1118,7 +1118,6 @@ private fun WorkspaceSectorsOverview(
     }
 }
 
-@Composable
 private data class SectorIconChoice(
     val code:String,val title:String,
     val symbol:androidx.compose.ui.graphics.vector.ImageVector
@@ -1183,6 +1182,7 @@ private fun SectorIconSelector(
     }
 }
 
+@Composable
 private fun WorkspaceSectorSettings(
     vm:HomeViewModel,state:HomeState,colors:WorkspaceColors,onClose:()->Unit
 ) {
