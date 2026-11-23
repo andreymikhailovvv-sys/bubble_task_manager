@@ -442,34 +442,15 @@ struct RemoteWorkspaceView: View {
 
     private var timelineContent: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Таймлайн")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                Spacer()
-                Button { showOverdue = true } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "clock.badge.exclamationmark")
-                        Text("Просроченные задачи")
-                            .font(.caption.weight(.semibold))
-                        if !overdueTasks.isEmpty {
-                            Text("\(overdueTasks.count)")
-                                .font(.caption2.bold())
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .foregroundStyle(.white)
-                                .background(.red, in: Capsule())
-                        }
-                    }
-                    .padding(9)
-                    .background(card, in: RoundedRectangle(cornerRadius: 14))
-                }
-            }
+            Text("Таймлайн")
+                .font(.system(size: 28, weight: .bold, design: .rounded))
             NativeTaskTimelineView(
                 tasks: session.tasks.filter { $0.parentTaskId == nil && !$0.isComplete },
-                spheres: session.spheres
-            ) { task in
-                editingTask = task
-            }
+                spheres: session.spheres,
+                onOpenTask: { task in editingTask = task },
+                overdueCount: overdueTasks.count,
+                onOpenOverdue: { showOverdue = true }
+            )
         }
     }
 
