@@ -25,6 +25,7 @@ import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace'
 // The separate Economic route is loaded only when the financial tab is opened.
 const MobileEconomicApp = lazy(() => import('./EconomicApp'));
 import { WorkspaceGlobalSearch } from './components/WorkspaceGlobalSearch';
+import { SectorIconPicker, SectorIconGlyph } from './components/SectorIconPicker';
 import { matchesWorkspaceText } from './lib/workspaceSearch';
 import { MiniWorkspaceTools } from './components/MiniWorkspaceTools';
 import { WorkspaceActionToast } from './components/WorkspaceActionToast';
@@ -4456,43 +4457,13 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         setIsCreditPurchaseOpen(false);
         setIsTimelineMoreOpen(false);
         if (!showWorkspaceSearchBar) return;
-        const nextTop = event.currentTarget.scrollTop;
-        const previousTop = lastMainScrollTopRef.current;
-        const delta = nextTop - previousTop;
-        lastMainScrollTopRef.current = nextTop;
-
-        // Never position the initial search bar using sticky: Telegram's
-        // fullscreen top inset otherwise shifts it over the habits card.
-        const slotBottom = searchBarSlotRef.current?.getBoundingClientRect().bottom ?? Infinity;
-        const originalSearchIsPastTop = slotBottom < (telegramViewport.fullscreen ? telegramViewport.top : 0) + 2;
-        if (nextTop <= 8 || !originalSearchIsPastTop) {
-          mainScrollIntentRef.current = 0;
-          setIsHeaderVisible(true);
-          setIsSearchBarFloating(false);
-          return;
-        }
-
-        if (isGlobalSearchOpen) {
-          setIsHeaderVisible(true);
-          setFloatingSearchBarHeight(searchBarPanelRef.current?.offsetHeight ?? 0);
-          setIsSearchBarFloating(true);
-          return;
-        }
-
-        // Accumulate small touch scroll events so reverse scrolling triggers
-        // reliably even when each individual event is shorter than 6px.
-        if (delta === 0) return;
-        const previousIntent = mainScrollIntentRef.current;
-        mainScrollIntentRef.current = Math.sign(previousIntent) === Math.sign(delta)
-          ? previousIntent + delta : delta;
-        if (mainScrollIntentRef.current <= -10) {
-          setFloatingSearchBarHeight(searchBarPanelRef.current?.offsetHeight ?? 0);
-          setIsHeaderVisible(true);
-          setIsSearchBarFloating(true);
-        } else if (mainScrollIntentRef.current >= 10) {
-          setIsHeaderVisible(false);
-          setIsSearchBarFloating(false);
-        }
+        // Keep the unified header in normal document flow on mobile.
+        // In particular, do not re-pin it when the user scrolls upward.
+        lastMainScrollTopRef.current = event.currentTarget.scrollTop;
+        mainScrollIntentRef.current = 0;
+        if (isSearchBarFloating) setIsSearchBarFloating(false);
+        if (!isHeaderVisible) setIsHeaderVisible(true);
+        if (floatingSearchBarHeight) setFloatingSearchBarHeight(0);
       }}
       onTouchMove={() => {
         setIsEfficiencyDetailsOpen(false);
@@ -4517,7 +4488,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         />
       ) : null}
       {isAccountOpen ? createPortal(
-        <div className="miniapp-unified-modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setIsAccountOpen(false); }}>
+        <div className={`miniapp-unified-modal-backdrop ${isLightTheme ? 'miniapp-light' : ''}`} onMouseDown={event => { if (event.target === event.currentTarget) setIsAccountOpen(false); }}>
           <section className="miniapp-unified-modal" role="dialog" aria-modal="true" aria-label="Управление аккаунтом">
             <div className="miniapp-unified-section-header"><h2>Управление аккаунтом</h2>
               <button type="button" onClick={() => setIsAccountOpen(false)} aria-label="Закрыть"><X size={20}/></button></div>
@@ -4528,20 +4499,20 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           </section>
         </div>, document.body) : null}
       {isSectorSettingsOpen ? createPortal(
-        <div className="miniapp-unified-modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setIsSectorSettingsOpen(false); }}>
+        <div className={`miniapp-unified-modal-backdrop ${isLightTheme ? 'miniapp-light' : ''}`} onMouseDown={event => { if (event.target === event.currentTarget) setIsSectorSettingsOpen(false); }}>
           <section className="miniapp-unified-modal" role="dialog" aria-modal="true" aria-label="Настройки секторов">
             <div className="miniapp-unified-section-header"><h2>{sectorEditorOpen ? 'Редактирование сектора' : 'Настройки секторов'}</h2>
               <button type="button" onClick={() => {if (sectorEditorOpen) setSectorEditorOpen(false); else setIsSectorSettingsOpen(false);}} aria-label="Закрыть"><X size={20}/></button>
             </div>
             {!sectorEditorOpen ? <>
               {spheres.map(sphere => <button key={sphere.id} type="button" className="miniapp-unified-sector-edit-row" onClick={() => openSectorEditor(sphere)}>
-                <span className="miniapp-unified-sector-edit-dot" style={{ backgroundColor: sphere.color }}/>
+                <span className="miniapp-unified-sector-edit-dot" style={{ backgroundColor: sphere.color }}><SectorIconGlyph code={sphere.icon} size={15}/></span>
                 <span>{sphere.name}</span><Edit3 size={18}/></button>)}
               <button type="button" className="miniapp-unified-primary-button" onClick={() => openSectorEditor()}>+ Добавить сектор</button>
             </> : <>
               <label>Название<input value={sectorDraftName} onChange={event => setSectorDraftName(event.target.value)} maxLength={80}/></label>
               <label>Цвет<input type="color" value={sectorDraftColor} onChange={event => setSectorDraftColor(event.target.value)}/></label>
-              <label>Иконка<input value={sectorDraftIcon} onChange={event => setSectorDraftIcon(event.target.value)}/></label>
+              <SectorIconPicker selected={sectorDraftIcon} onChange={setSectorDraftIcon} />
               <label>Общий промпт<textarea value={sectorDraftPrompt} onChange={event => setSectorDraftPrompt(event.target.value)}/></label>
               {sectorError ? <p role="alert" className="text-rose-500">{sectorError}</p> : null}
               <button type="button" className="miniapp-unified-primary-button" onClick={() => void saveSectorFromOverview()} disabled={sectorBusy || !sectorDraftName.trim()}>{sectorBusy ? 'Сохраняем…' : 'Сохранить'}</button>
@@ -4675,12 +4646,15 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           <div className="miniapp-workspace-topbar-row miniapp-unified-topbar-row flex items-center gap-2">
             <div className="miniapp-unified-brand" aria-label="Планировыч">
               <span className="miniapp-unified-app-icon">✦</span>
-              <strong>Планировыч</strong>
+              <span className="miniapp-unified-brand-copy">
+                <strong>Планировыч</strong>
+                <small title={accountDisplayName}>{accountDisplayName}</small>
+              </span>
             </div>
-            <button type="button" className="miniapp-unified-icon-button" onClick={() => setIsAccountOpen(true)} title="Управление аккаунтом" aria-label="Управление аккаунтом">
+            <button type="button" className="miniapp-unified-icon-button is-account" onClick={() => setIsAccountOpen(true)} title="Управление аккаунтом" aria-label="Управление аккаунтом">
               <UserCircle size={21} />
             </button>
-            <button type="button" className="miniapp-unified-icon-button miniapp-unified-search-toggle" onClick={() => {
+            <button type="button" className="miniapp-unified-icon-button miniapp-unified-search-toggle is-search" onClick={() => {
               setIsMiniSearchExpanded(open => !open);
               if (isMiniSearchExpanded) { setIsGlobalSearchOpen(false); setTaskSearch(''); }
             }} title="Поиск" aria-label="Поиск" aria-expanded={isMiniSearchExpanded}><Search size={20}/></button>
@@ -4701,16 +4675,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               }}
             />
             </div>
-            {displayMode === 'timeline' ? (
-              <button type="button" className="miniapp-timeline-postpone-button"
-                onClick={() => setIsOverdueTasksOpen(true)}
-                title="Показать просроченные задачи"
-                aria-label={`Просроченные задачи: ${overdueTasks.length}`}>
-                <Clock3 size={18}/>
-                <span className="miniapp-timeline-overdue-copy">Просроченные</span>
-                {overdueTasks.length > 0 ? <span className="miniapp-unified-overdue-count">{overdueTasks.length}</span> : null}
-              </button>
-            ) : null}
             <div ref={timelineMoreRef} className={`miniapp-workspace-utilities is-list ${isTimelineMoreOpen ? 'is-open' : ''}`}>
               {false ? (
                 <button type="button" className="miniapp-timeline-more-toggle" aria-label="Кредиты, рейтинг и настройки"
@@ -5043,6 +5007,14 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 </div>
                 <button type="button" onClick={() => moveTimelinePeriod(1)} className="miniapp-timeline-date-arrow" aria-label="Следующий период" title="Следующий период"><ChevronRight size={17} /></button>
               </div>
+              <button type="button" className="miniapp-timeline-overdue-inline"
+                onClick={() => setIsOverdueTasksOpen(true)}
+                title="Показать просроченные задачи"
+                aria-label={`Просроченные задачи: ${overdueTasks.length}`}>
+                <Clock3 size={18}/>
+                <span>Просроченные<br/>задачи</span>
+                {overdueTasks.length > 0 ? <span className="miniapp-unified-overdue-count">{overdueTasks.length}</span> : null}
+              </button>
               </div>
             </div>
             {timelineView === 'day' ? (

@@ -16983,3 +16983,73 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
   .miniapp-unified-sector-outer{width:3.6rem;height:3.6rem}
   .miniapp-unified-sector-circle{width:2.9rem;height:2.9rem}
 }
+
+/* Shared mobile header typography and visual sector icon selector */
+.miniapp-unified-brand-copy {display:flex;flex-direction:column;gap:.06rem;min-width:0;line-height:1.12}
+.miniapp-unified-brand-copy strong {font-size:1.02rem;letter-spacing:-.018em;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.miniapp-unified-brand-copy small {font-size:.66rem;font-weight:500;color:var(--muted-text,#9ca3af);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.miniapp-unified-brand {flex:1;min-width:0;margin-right:0}
+.miniapp-shell .miniapp-unified-icon-button {width:2.16rem;height:2.36rem}
+.miniapp-unified-icon-button.is-account {color:#a78bfa;background:rgba(139,92,246,.09)}
+.miniapp-unified-icon-button.is-search {color:#38bdb3;background:rgba(45,185,181,.08)}
+.miniapp-shell.miniapp-light .miniapp-unified-icon-button.is-account {color:#7757c6;background:#f2edff}
+.miniapp-shell.miniapp-light .miniapp-unified-icon-button.is-search {color:#0f918f;background:#e8f8f6}
+.miniapp-unified-sector-icon-field {min-width:0;border:0;margin:0;padding:0}
+.miniapp-unified-sector-icon-field legend {font-size:.82rem;font-weight:650;margin-bottom:.65rem;color:var(--muted-text,#a5b4ca)}
+.miniapp-unified-sector-icon-grid {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.45rem}
+.miniapp-unified-sector-icon-option {display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.28rem;padding:.7rem .14rem;min-width:0;border:1px solid var(--panel-border,#35455c);border-radius:.9rem;background:var(--muted-bg,rgba(148,163,184,.07));color:var(--muted-text,#a5b4ca)}
+.miniapp-unified-sector-icon-option span {font-size:.61rem;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.miniapp-unified-sector-icon-option.is-selected {border:2px solid #9171dd;padding:calc(.7rem - 1px) calc(.14rem - 1px);background:rgba(139,92,246,.13);color:#b9a4fa}
+.miniapp-shell.miniapp-light .miniapp-unified-sector-icon-option {background:#f8faff;color:#687891}
+.miniapp-shell.miniapp-light .miniapp-unified-sector-icon-option.is-selected {background:#f0eafe;color:#6d28d9}
+.miniapp-unified-sector-edit-dot {display:inline-flex;width:2rem;height:2rem;align-items:center;justify-content:center;flex-shrink:0;color:white}
+@media(max-width:360px) {
+ .miniapp-unified-brand-copy strong {font-size:.91rem}
+ .miniapp-unified-brand-copy small {font-size:.59rem}
+ .miniapp-shell .miniapp-unified-icon-button {width:1.95rem}
+}
+
+/* Timeline: date-range navigation and overdue tasks share one balanced row. */
+.miniapp-shell .miniapp-timeline-independent-blocks .miniapp-timeline-period-panel {
+  display:flex;align-items:stretch;gap:.5rem;min-width:0;
+}
+.miniapp-shell .miniapp-timeline-independent-blocks .miniapp-timeline-date-nav {
+  width:auto;max-width:none;min-width:0;flex:1 1 0;
+}
+.miniapp-shell .miniapp-timeline-date-current {padding:.35rem .2rem;gap:.25rem}
+.miniapp-shell .miniapp-timeline-date-arrow {width:1.85rem;flex-basis:1.85rem}
+.miniapp-timeline-overdue-inline {
+  position:relative;min-width:6.9rem;max-width:7.3rem;min-height:3.2rem;
+  display:flex;align-items:center;justify-content:center;gap:.3rem;
+  flex:0 0 7.3rem;border:1px solid rgba(244,114,182,.25);
+  border-radius:.9rem;background:rgba(190,24,93,.09);color:#f9a8d4;
+}
+.miniapp-timeline-overdue-inline span:not(.miniapp-unified-overdue-count) {
+  font-size:.63rem;line-height:.84rem;font-weight:650;text-align:left;
+}
+.miniapp-shell.miniapp-light .miniapp-timeline-overdue-inline {
+  color:#be185d;background:#fff4f5;border-color:#f7c9d4;
+}
+@media(max-width:350px){
+  .miniapp-timeline-overdue-inline {flex-basis:6rem;min-width:6rem}
+  .miniapp-shell .miniapp-timeline-date-arrow {width:1.6rem;flex-basis:1.6rem}
+  .miniapp-timeline-overdue-inline svg {width:15px}
+}
+
+/* Portals mount at document.body: they need an explicit light-theme scope. */
+.miniapp-unified-modal-backdrop.miniapp-light .miniapp-unified-modal {
+  background:#ffffff;color:#172238;border-color:#d8e2ef;
+}
+.miniapp-unified-modal-backdrop.miniapp-light .miniapp-unified-modal input,
+.miniapp-unified-modal-backdrop.miniapp-light .miniapp-unified-modal textarea {
+  background:#f8fafc;color:#172238;border-color:#d8e2ef;
+}
+.miniapp-unified-modal-backdrop.miniapp-light .miniapp-unified-sector-icon-option {
+  background:#f8faff;color:#60718b;border-color:#d8e2ef;
+}
+.miniapp-unified-modal-backdrop.miniapp-light .miniapp-unified-sector-icon-option.is-selected {
+  background:#f1eaff;color:#6d28d9;border-color:#8b5cf6;
+}
+.miniapp-unified-modal-backdrop.miniapp-light .miniapp-unified-sector-edit-row {
+  border-color:#d8e2ef;
+}

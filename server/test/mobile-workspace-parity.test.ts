@@ -117,7 +117,7 @@ test('Telegram fullscreen uses safe insets and bottom tabs replace the old displ
   ]);
   assert.equal((mini.match(/<MiniWorkspaceTools/g) ?? []).length, 1);
   assert.equal((mini.match(/onPostpone=\{\(\) => void postponeAllOverdueToToday\(\)\}/g) ?? []).length, 1);
-  assert.match(mini, /miniapp-timeline-postpone-button/);
+  assert.match(mini, /miniapp-timeline-overdue-inline/);
   assert.doesNotMatch(tools, /display-mode-toggle-group|onDisplayModeChange/);
   assert.match(mini, /webApp\.requestFullscreen\?\.\(\)/);
   assert.match(mini, /safeAreaChanged/);
@@ -274,9 +274,9 @@ test('fullscreen search and four mobile tabs respect safe areas and keep notes t
   assert.match(mini, /ref=\{searchBarSlotRef\} className="miniapp-premium-topbar-slot"/);
   assert.match(mini, /section ref=\{searchBarPanelRef\} className=\{\`relative z-30 miniapp-premium-topbar/);
   assert.match(mini, /isSearchBarFloating && \(isHeaderVisible \|\| isGlobalSearchOpen\)/);
-  assert.match(mini, /originalSearchIsPastTop/);
+  assert.match(mini, /Keep the unified header in normal document flow on mobile/);
   assert.match(mini, /setIsSearchBarFloating\(false\)/);
-  assert.match(mini, /setIsSearchBarFloating\(true\)/);
+  assert.doesNotMatch(mini, /setIsSearchBarFloating\(true\)/);
   assert.match(styles, /\.miniapp-shell \.miniapp-premium-topbar-floating,[\s\S]*?position: fixed/);
   assert.match(styles, /top: calc\(var\(--miniapp-top-inset, 0px\) \+ \.5rem\)/);
   assert.doesNotMatch(mini, /sticky z-30 miniapp-premium-topbar/);
