@@ -47,9 +47,9 @@ test('habit actions and progress metric use the real shared API and Mini App tas
   assert.match(widget, /api\.updateHabit\(/);
   assert.match(widget, /<MiniAppHabitTracker habit=\{selectedHabit\}/);
   assert.match(widget, /<PrimaryHabitDialog/);
-  assert.doesNotMatch(widget, /TestPageHabitDialog|TestPage\\.css/);
-  assert.match(widget, /todayTasks = tasks\\.filter\\(task =>/);
-  assert.match(widget, /&& task\\.dueDate && Number\\.isFinite/);
+  assert.doesNotMatch(widget, /TestPageHabitDialog|TestPage\.css/);
+  assert.match(widget, /todayTasks = tasks\.filter\(task =>/);
+  assert.match(widget, /&& task\.dueDate && Number\.isFinite/);
   const editor = await source('client/src/components/PrimaryHabitDialog.tsx');
   assert.match(editor, /primary-habit-dialog dialog-surface/);
   assert.match(editor, /onSave/);
