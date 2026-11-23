@@ -29,6 +29,8 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
@@ -109,6 +111,7 @@ fun ModernWorkspace(
     dark: Boolean,
     search: (String) -> Unit,
     settings: () -> Unit,
+    onAccount: () -> Unit,
     onOpenTask: (String) -> Unit,
     onOpenTaskAi: (String) -> Unit,
     pagerState: PagerState,
@@ -131,6 +134,9 @@ fun ModernWorkspace(
     var timelineSector by rememberSaveable { mutableStateOf("all") }
     var filtersOpen by remember { mutableStateOf(false) }
     var overdueOpen by remember { mutableStateOf(false) }
+    var sectorSettingsOpen by remember { mutableStateOf(false) }
+    var notesVisible by remember { mutableStateOf(false) }
+    var searchFieldOpen by rememberSaveable { mutableStateOf(false) }
     var scoreOpen by remember { mutableStateOf(false) }
     var creditsOpen by remember { mutableStateOf(false) }
     var searchExpanded by remember { mutableStateOf(false) }
@@ -164,7 +170,7 @@ fun ModernWorkspace(
         modifier=modifier.fillMaxSize(),
         beyondViewportPageCount=1) { page ->
         when(page) {
-            4 -> NativeEconomicPage(userId=state.user?.id,dark=dark,active=pagerState.currentPage==4,
+            3 -> NativeEconomicPage(userId=state.user?.id,dark=dark,active=pagerState.currentPage==3,
                 onQuickVoice=onQuickVoice,voiceAwaiting=voiceAwaiting)
             2 -> {
                 val pagerScope=rememberCoroutineScope()
@@ -175,14 +181,6 @@ fun ModernWorkspace(
                     chatVisible=pagerState.currentPage==2,
                     onExit={pagerScope.launch{pagerState.animateScrollToPage(0)}},
                     onOpenTask=onOpenTask,onOpenTaskAi=onOpenTaskAi)
-            }
-            3 -> {
-                val pagerScope=rememberCoroutineScope()
-                NativeNotesPage(vm=vm,colors=colors,dark=dark,
-                    modifier=Modifier.fillMaxSize(),
-                    onClose={pagerScope.launch{pagerState.animateScrollToPage(0)}},
-                    openNoteId=searchNoteTarget,
-                    onNoteOpened={searchNoteTarget=null})
             }
             else -> {
                 val contentMode = if(page==1) WorkspaceMode.TIMELINE else WorkspaceMode.LIST
@@ -258,11 +256,47 @@ fun ModernWorkspace(
     LazyColumn(
         state=workspaceScroll,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start=14.dp,end=14.dp,top=92.dp,bottom=28.dp),
+        contentPadding = PaddingValues(start=14.dp,end=14.dp,
+            top=if(contentMode==WorkspaceMode.TIMELINE || searchFieldOpen) 152.dp else 92.dp,
+            bottom=28.dp),
         verticalArrangement = Arrangement.spacedBy(13.dp),
     ) {
-        if (contentMode == WorkspaceMode.LIST) item {
-            HabitsStrip(habits, colors, dark, onHabitClick = { selectedHabitId = it.id }, onAdd = { createHabitOpen = true })
+        if (contentMode == WorkspaceMode.LIST) {
+            item {
+                HabitsStrip(habits, colors, dark, onHabitClick = { selectedHabitId = it.id },
+                    onAdd = { createHabitOpen = true })
+            }
+            item {
+                Text("Статистика выполнения",fontSize=24.sp,fontWeight=FontWeight.Bold,
+                    color=colors.text,modifier=Modifier.padding(top=8.dp))
+            }
+            item {
+                val actual=state.tasks.filter { it.taskType==TaskType.TASK && it.parentTaskId==null }
+                val completed=actual.count { it.status==TaskStatus.DONE }
+                val today=LocalDate.now()
+                val planned=actual.filter { parseDueDate(it.dueDate)?.toLocalDate()==today }
+                val plannedDone=planned.count { it.status==TaskStatus.DONE }
+                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+                    WorkspaceProgressCard("Все задачи",Icons.Default.CheckCircle,
+                        completed,actual.size,colors,Modifier.weight(1f))
+                    WorkspaceProgressCard("За сегодня",Icons.Default.Today,
+                        plannedDone,planned.size,colors,Modifier.weight(1f))
+                }
+            }
+            item {
+                WorkspaceSectorsOverview(state.spheres,state.tasks,colors,
+                    selectedSectors.toSet().takeIf{sectorFilterEnabled} ?: emptySet(),
+                    onSelect={id->
+                        if(id==null){sectorFilterEnabled=false;selectedSectors=emptyList()}
+                        else if(sectorFilterEnabled && selectedSectors==listOf(id)){
+                            sectorFilterEnabled=false;selectedSectors=emptyList()
+                        }else{sectorFilterEnabled=true;selectedSectors=listOf(id)}
+                    },onSettings={sectorSettingsOpen=true})
+            }
+            item {
+                Text("Ваши задачи",fontSize=24.sp,fontWeight=FontWeight.Bold,
+                    color=colors.text,modifier=Modifier.padding(top=7.dp))
+            }
         }
         // Timeline already has its navigation immediately beneath the top search bar.
         // The toolbar belongs only to List; do not insert a spare Filters row here.
@@ -272,7 +306,8 @@ fun ModernWorkspace(
                     sort != SortTasks.URGENCY || sectorFilterEnabled,
                 onFilter = { filtersOpen=true },
                 onPostpone = { vm.postponeOverdue() }, canPostpone = overdue && !state.taskBusy,
-                onOpenOverdue = { overdueOpen=true })
+                onOpenOverdue = { overdueOpen=true },
+                overdueCount=overdueTasks.size)
         }
         state.taskError?.let { error ->
             item { Text(error, color=MaterialTheme.colorScheme.error,
@@ -340,14 +375,47 @@ fun ModernWorkspace(
         .fillMaxWidth()
         .padding(start=14.dp,end=14.dp,top=35.dp)){
         Column(Modifier.fillMaxWidth()) {
-            WorkspaceTopbar(state,colors,mode=contentMode,dark=dark,
-                search={text->search(text);searchExpanded=text.isNotBlank()},
-                onSearchFocus={if(state.query.isNotBlank()) searchExpanded=true},
-                settings=settings,
-                onCredits={creditsOpen=true},
-                onScore={scoreOpen=true},
-                onPostpone={vm.postponeOverdue()},
-                canPostpone=overdue && !state.taskBusy)
+            WorkspaceTopbar(state,colors,dark,
+                onAccount=onAccount,onSearchToggle={
+                    searchFieldOpen=!searchFieldOpen
+                    if(!searchFieldOpen){search("");searchExpanded=false}
+                },settings=settings,onCredits={creditsOpen=true})
+            if(searchFieldOpen) {
+                Spacer(Modifier.height(8.dp))
+                Surface(Modifier.fillMaxWidth().height(46.dp),
+                    shape=RoundedCornerShape(18.dp),color=colors.card,
+                    border=BorderStroke(1.dp,colors.panelBorder)) {
+                    Row(Modifier.fillMaxSize().padding(horizontal=12.dp),
+                        verticalAlignment=Alignment.CenterVertically) {
+                        Icon(Icons.Default.Search,null,Modifier.size(19.dp),
+                            tint=colors.secondaryText)
+                        Spacer(Modifier.width(8.dp))
+                        BasicTextField(value=state.query,
+                            onValueChange={text->search(text);searchExpanded=text.isNotBlank()},
+                            modifier=Modifier.weight(1f),
+                            singleLine=true,textStyle=MaterialTheme.typography.bodyMedium.copy(
+                                color=colors.text,fontSize=14.sp),
+                            cursorBrush=androidx.compose.ui.graphics.SolidColor(colors.purple),
+                            decorationBox={inner->Box(contentAlignment=Alignment.CenterStart){
+                                if(state.query.isBlank())Text("Поиск по задачам и заметкам",
+                                    color=colors.secondaryText,fontSize=13.sp)
+                                inner()
+                            }})
+                        IconButton(onClick={search("");searchFieldOpen=false;searchExpanded=false},
+                            modifier=Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Close,"Закрыть поиск",
+                                Modifier.size(18.dp),tint=colors.secondaryText)
+                        }
+                    }
+                }
+            }
+            if(contentMode==WorkspaceMode.TIMELINE) {
+                Spacer(Modifier.height(8.dp))
+                ToolbarButton("Просроченные задачи",Icons.Default.Schedule,
+                    if(dark)Color(0xFFF9A8D4) else Color(0xFFBE185D),
+                    colors.card,colors.panelBorder,Modifier.fillMaxWidth(),
+                    click={overdueOpen=true},badgeCount=overdueTasks.size)
+            }
             if(searchExpanded && searchQuery.isNotEmpty()) {
                 Spacer(Modifier.height(7.dp))
                 NativeWorkspaceGlobalSearch(
@@ -356,7 +424,8 @@ fun ModernWorkspace(
                     onOpenTask=onOpenTask,
                     onOpenNote={id->
                         searchNoteTarget=id
-                        searchPagerScope.launch{pagerState.animateScrollToPage(3)}
+                        notesVisible=true
+                        searchExpanded=false
                     },
                     onDismiss={searchExpanded=false}
                 )
@@ -365,6 +434,22 @@ fun ModernWorkspace(
     }
     }
             }
+        }
+    }
+    if (notesVisible) {
+        Dialog(onDismissRequest={notesVisible=false},
+            properties=DialogProperties(usePlatformDefaultWidth=false)) {
+            NativeNotesPage(vm=vm,colors=colors,dark=dark,
+                modifier=Modifier.fillMaxSize(),
+                onClose={notesVisible=false},
+                openNoteId=searchNoteTarget,
+                onNoteOpened={searchNoteTarget=null})
+        }
+    }
+    if (sectorSettingsOpen) {
+        ModalBottomSheet(onDismissRequest={sectorSettingsOpen=false},
+            containerColor=colors.panel,contentColor=colors.text) {
+            WorkspaceSectorSettings(vm,state,colors,onClose={sectorSettingsOpen=false})
         }
     }
     if (filtersOpen) {
@@ -479,135 +564,48 @@ fun ModernWorkspace(
  */
 @Composable
 private fun WorkspaceTopbar(
-    state:HomeState, colors:WorkspaceColors, mode:WorkspaceMode, dark:Boolean,
-    search:(String)->Unit, onSearchFocus:()->Unit, settings:()->Unit,
-    onCredits:()->Unit, onScore:()->Unit,
-    onPostpone:()->Unit, canPostpone:Boolean
+    state:HomeState,colors:WorkspaceColors,dark:Boolean,
+    onAccount:()->Unit,onSearchToggle:()->Unit,settings:()->Unit,
+    onCredits:()->Unit
 ) {
-    val shape=RoundedCornerShape(18.dp)
-    val searchShape=RoundedCornerShape(21.dp)
-    val iconColor=if(dark)Color(0xFFFBBF24) else Color(0xFFEAB308)
-    var moreOpen by remember(mode) { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.spacedBy(7.dp),
-        verticalAlignment=Alignment.CenterVertically) {
-        Surface(modifier=Modifier.weight(1f).height(44.dp),
-            shape=searchShape,color=colors.card,
-            border=BorderStroke(1.dp,colors.panelBorder),shadowElevation=0.dp) {
-            Row(Modifier.fillMaxSize().padding(start=11.dp,end=7.dp),
-                verticalAlignment=Alignment.CenterVertically) {
-                Icon(Icons.Default.Search, contentDescription=null, tint=colors.secondaryText,
-                    modifier=Modifier.size(18.dp))
-                Spacer(Modifier.width(7.dp))
-                BasicTextField(value=state.query,onValueChange=search,
-                    modifier=Modifier.weight(1f).onFocusChanged {
-                        if(it.isFocused)onSearchFocus()
-                    },singleLine=true,
-                    keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.Sentences),
-                    textStyle=MaterialTheme.typography.bodyMedium.copy(
-                        color=colors.text,fontSize=14.sp),
-                    cursorBrush=androidx.compose.ui.graphics.SolidColor(colors.purple),
-                    decorationBox={inner ->
-                        Box(contentAlignment=Alignment.CenterStart) {
-                            if(state.query.isEmpty())Text("Поиск",fontSize=13.sp,
-                                color=colors.secondaryText)
-                            inner()
-                        }
-                    })
-                if(state.query.isNotEmpty()) {
-                    Box(Modifier.size(27.dp).clip(CircleShape)
-                        .clickable { search("") },contentAlignment=Alignment.Center) {
-                        Icon(Icons.Default.Close,"Очистить поиск",
-                            tint=colors.secondaryText,modifier=Modifier.size(16.dp))
-                    }
-                }
+    val shape=RoundedCornerShape(15.dp)
+    Row(Modifier.fillMaxWidth().height(46.dp),
+        verticalAlignment=Alignment.CenterVertically,
+        horizontalArrangement=Arrangement.spacedBy(5.dp)) {
+        Box(Modifier.size(39.dp).clip(shape)
+            .background(Brush.linearGradient(listOf(Color(0xFF7045D9),Color(0xFF38BDF8)))),
+            contentAlignment=Alignment.Center) {
+            Icon(Icons.Default.AutoAwesome,"Планировыч",Modifier.size(23.dp),tint=Color.White)
+        }
+        Text("Планировыч",color=colors.text,fontSize=15.sp,
+            fontWeight=FontWeight.ExtraBold,maxLines=1)
+        Spacer(Modifier.weight(1f))
+        WorkspaceHeaderIcon(Icons.Default.AccountCircle,"Аккаунт",colors,onAccount)
+        Surface(Modifier.height(38.dp).clip(shape).clickable(onClick=onCredits),
+            shape=shape,color=colors.card,border=BorderStroke(1.dp,colors.panelBorder)) {
+            Row(Modifier.padding(horizontal=6.dp),verticalAlignment=Alignment.CenterVertically) {
+                Icon(Icons.Default.Paid,"Кредиты",Modifier.size(15.dp),
+                    tint=if(dark)Color(0xFFF9A8D4) else Color(0xFFBE185D))
+                Spacer(Modifier.width(3.dp))
+                Text((state.user?.aiCredits?:0).toString(),fontSize=11.sp,
+                    fontWeight=FontWeight.Bold,color=colors.text)
             }
         }
-        if(mode==WorkspaceMode.LIST) {
-            val creditColor=if(dark)Color(0xFFF9A8D4) else Color(0xFFBE185D)
-            val creditFill=if(dark)Color(0xFF37243B) else Color(0xFFFDF2F8)
-            val creditBorder=if(dark)Color(0xFF70405A) else Color(0xFFF2C5DD)
-            Surface(modifier=Modifier.height(44.dp).clip(shape).clickable(onClick=onCredits),
-                shape=shape,color=creditFill,border=BorderStroke(1.dp,creditBorder),
-                shadowElevation=0.dp) {
-                Row(Modifier.padding(horizontal=9.dp),verticalAlignment=Alignment.CenterVertically,
-                    horizontalArrangement=Arrangement.spacedBy(4.dp)) {
-                    Icon(Icons.Default.Paid,"AI-кредиты",modifier=Modifier.size(16.dp),tint=creditColor)
-                    Text((state.user?.aiCredits ?: 0).toString(),fontSize=11.sp,
-                        fontWeight=FontWeight.SemiBold,color=creditColor,maxLines=1)
-                }
-            }
-            Surface(modifier=Modifier.size(width=41.dp,height=44.dp)
-                    .clip(shape).clickable(onClick=onScore),
-                shape=shape,color=colors.card,border=BorderStroke(1.dp,colors.panelBorder),
-                shadowElevation=0.dp) {
-                Box(contentAlignment=Alignment.Center) {
-                    CircularProgressIndicator(progress={
-                        ((state.user?.efficiencyScore ?: 0.0)/100.0).toFloat().coerceIn(0f,1f)
-                    },modifier=Modifier.size(29.dp),strokeWidth=2.6.dp,
-                        color=Color(0xFF8B5CF6),trackColor=Color(0xFFA5B4FC).copy(alpha=.5f))
-                    Icon(Icons.Default.Star,"Рейтинг эффективности",
-                        tint=if(dark)Color(0xFF67E8F9) else Color(0xFF38BDF8),
-                        modifier=Modifier.size(19.dp))
-                }
-            }
-            Surface(modifier=Modifier.size(width=41.dp,height=44.dp)
-                    .clip(shape).clickable(onClick=settings),
-                shape=shape,color=colors.card,border=BorderStroke(1.dp,colors.panelBorder),
-                shadowElevation=0.dp) {
-                Box(contentAlignment=Alignment.Center) {
-                    Icon(Icons.Default.Settings,"Настройки",
-                        modifier=Modifier.size(19.dp),tint=iconColor)
-                }
-            }
-        } else {
-            val postponeInk=if(dark)Color(0xFF93DAF0) else Color(0xFF067EA2)
-            val postponeFill=if(dark)Color(0xFF19354A) else Color(0xFFEFFAFF)
-            Row(Modifier.height(44.dp).alpha(if(canPostpone)1f else .5f)
-                .clip(shape).background(postponeFill)
-                .border(1.dp,tinted(postponeInk,colors.panelBorder,.35f),shape)
-                .then(if(canPostpone)Modifier.clickable(onClick=onPostpone) else Modifier)
-                .padding(horizontal=10.dp),
-                verticalAlignment=Alignment.CenterVertically,
-                horizontalArrangement=Arrangement.spacedBy(5.dp)) {
-                Icon(Icons.Default.Schedule,"Перенести просроченные задачи",
-                    tint=postponeInk,modifier=Modifier.size(16.dp))
-                Text("Отложить",fontSize=11.sp,fontWeight=FontWeight.SemiBold,
-                    color=postponeInk,maxLines=1)
-            }
-            Box {
-                Surface(modifier=Modifier.size(width=43.dp,height=44.dp)
-                        .clip(shape).clickable { moreOpen=true },
-                    shape=shape,color=colors.card,border=BorderStroke(1.dp,colors.panelBorder),
-                    shadowElevation=0.dp) {
-                    Box(contentAlignment=Alignment.Center) {
-                        Icon(Icons.Default.MoreVert,"Кредиты, рейтинг и настройки",
-                            tint=colors.text,modifier=Modifier.size(22.dp))
-                    }
-                }
-                DropdownMenu(expanded=moreOpen,onDismissRequest={moreOpen=false},
-                    modifier=Modifier.width(272.dp)
-                        .clip(RoundedCornerShape(26.dp))
-                        .background(if(dark)Color(0xFF1E2844) else Color(0xFFF9F5FF))) {
-                    Column(Modifier.padding(horizontal=7.dp,vertical=5.dp),
-                        verticalArrangement=Arrangement.spacedBy(9.dp)) {
-                        val score=(state.user?.efficiencyScore ?: 0.0).coerceIn(0.0,100.0)
-                        val scoreText=if(score%1.0==0.0)score.toInt().toString()
-                            else String.format(Locale("ru"),"%.1f",score)
-                        WorkspaceUtilityMenuItem(
-                            label="Кредиты",value=(state.user?.aiCredits?:0).toString(),
-                            icon=Icons.Default.Paid,accent=Color(0xFF1B395D),
-                            dark=dark,onClick={moreOpen=false;onCredits()})
-                        WorkspaceUtilityMenuItem(
-                            label="Рейтинг",value=scoreText+"/100",
-                            icon=Icons.Default.Star,accent=Color(0xFF38BDF8),
-                            dark=dark,onClick={moreOpen=false;onScore()})
-                        WorkspaceUtilityMenuItem(
-                            label="Настройки",value=null,
-                            icon=Icons.Default.Settings,accent=Color(0xFFF4B400),
-                            dark=dark,onClick={moreOpen=false;settings()})
-                    }
-                }
-            }
+        WorkspaceHeaderIcon(Icons.Default.Search,"Поиск",colors,onSearchToggle)
+        WorkspaceHeaderIcon(Icons.Default.Settings,"Настройки",colors,settings)
+    }
+}
+
+@Composable
+private fun WorkspaceHeaderIcon(
+    icon:androidx.compose.ui.graphics.vector.ImageVector,label:String,
+    colors:WorkspaceColors,onClick:()->Unit
+) {
+    Surface(Modifier.size(36.dp).clip(RoundedCornerShape(13.dp))
+        .clickable(onClick=onClick),shape=RoundedCornerShape(13.dp),
+        color=colors.card,border=BorderStroke(1.dp,colors.panelBorder)) {
+        Box(contentAlignment=Alignment.Center) {
+            Icon(icon,label,Modifier.size(19.dp),tint=colors.text)
         }
     }
 }
@@ -767,7 +765,8 @@ private fun WorkspaceUtilityMenuItem(
 @Composable
 private fun WorkspaceToolbar(
     colors:WorkspaceColors,dark:Boolean,mode:WorkspaceMode,filtered:Boolean,
-    onFilter:()->Unit,onPostpone:()->Unit,canPostpone:Boolean,onOpenOverdue:()->Unit
+    onFilter:()->Unit,onPostpone:()->Unit,canPostpone:Boolean,onOpenOverdue:()->Unit,
+    overdueCount:Int
 ) {
     // No outer tinted container. Mini App renders these as independent chips.
     val filterInk=if(filtered)colors.purple else if(dark)Color(0xFFE2E8F0) else Color(0xFF24354F)
@@ -791,7 +790,7 @@ private fun WorkspaceToolbar(
                 if(dark)Color(0xFFF9A8D4) else Color(0xFFBE185D),
                 tinted(Color(0xFFF472B6),colors.panel,if(dark).13f else .07f),
                 tinted(Color(0xFFF472B6),colors.panelBorder,.29f),
-                Modifier.weight(1.65f),onOpenOverdue)
+                Modifier.weight(1.65f),onOpenOverdue,badgeCount=overdueCount)
             ToolbarButton("Фильтры",Icons.Default.FilterList,
                 filterInk,filterFill,filterBorder,
                 Modifier.weight(1.03f),onFilter)
@@ -812,23 +811,31 @@ private fun WorkspaceToolbar(
 }
 @Composable private fun ToolbarButton(label:String,icon:androidx.compose.ui.graphics.vector.ImageVector,
     ink:Color,fill:Color,border:Color,modifier:Modifier=Modifier,
-    click:()->Unit,enabled:Boolean=true,dimDisabled:Boolean=true) {
+    click:()->Unit,enabled:Boolean=true,dimDisabled:Boolean=true,badgeCount:Int=0) {
     val iconInk=if(!enabled && dimDisabled)ink.copy(alpha=.55f) else ink
     val shape=RoundedCornerShape(17.dp)
-    // Never apply alpha to the entire chip: it reveals gray corners and
-    // makes disabled "Отложить" look like it has extra blocks on both sides.
-    Row(modifier.height(44.dp)
-        .clip(shape)
-        .background(fill).border(1.dp,border,shape)
-        .clickable(enabled=enabled,onClick=click)
-        .padding(horizontal=4.dp),
-        horizontalArrangement=Arrangement.Center,verticalAlignment=Alignment.CenterVertically) {
-        Icon(icon,null,tint=iconInk,modifier=Modifier.size(15.dp))
-        Spacer(Modifier.width(5.dp))
-        val isOverdueAction = label == "Просроченные задачи"
-        Text(label,color=iconInk,fontSize=if(isOverdueAction)10.sp else 11.sp,
-            fontWeight=FontWeight.SemiBold,maxLines=if(isOverdueAction)2 else 1,
-            lineHeight=12.sp,textAlign=TextAlign.Center,softWrap=isOverdueAction)
+    Box(modifier.height(44.dp)) {
+        Row(Modifier.fillMaxSize()
+            .clip(shape).background(fill).border(1.dp,border,shape)
+            .clickable(enabled=enabled,onClick=click)
+            .padding(horizontal=4.dp),
+            horizontalArrangement=Arrangement.Center,verticalAlignment=Alignment.CenterVertically) {
+            Icon(icon,null,tint=iconInk,modifier=Modifier.size(15.dp))
+            Spacer(Modifier.width(5.dp))
+            val overdue = label=="Просроченные задачи"
+            Text(label,color=iconInk,fontSize=if(overdue)10.sp else 11.sp,
+                fontWeight=FontWeight.SemiBold,maxLines=if(overdue)2 else 1,
+                lineHeight=12.sp,textAlign=TextAlign.Center,softWrap=overdue)
+        }
+        if(badgeCount>0) {
+            Box(Modifier.align(Alignment.TopEnd).offset(x=3.dp,y=(-5).dp)
+                .defaultMinSize(minWidth=18.dp,minHeight=18.dp)
+                .clip(CircleShape).background(Color(0xFFE11D48))
+                .padding(horizontal=4.dp),contentAlignment=Alignment.Center) {
+                Text(if(badgeCount>99)"99+" else badgeCount.toString(),
+                    color=Color.White,fontSize=10.sp,fontWeight=FontWeight.Bold)
+            }
+        }
     }
 }
 
@@ -998,6 +1005,195 @@ private fun TaskCompletionConfetti() {
                     trailingIcon=if(index==selected) ({ Icon(Icons.Default.Check,null) }) else null)
             }
         }
+    }
+}
+
+@Composable
+private fun WorkspaceProgressCard(
+    label:String,icon:androidx.compose.ui.graphics.vector.ImageVector,
+    completed:Int,total:Int,colors:WorkspaceColors,modifier:Modifier=Modifier
+) {
+    Surface(modifier,shape=RoundedCornerShape(21.dp),color=colors.card,
+        border=BorderStroke(1.dp,colors.panelBorder)) {
+        Column(Modifier.padding(15.dp),verticalArrangement=Arrangement.spacedBy(11.dp)) {
+            Row(verticalAlignment=Alignment.CenterVertically,
+                horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                Icon(icon,null,Modifier.size(19.dp),tint=colors.purple)
+                Text(label,fontSize=12.sp,fontWeight=FontWeight.SemiBold,color=colors.secondaryText)
+            }
+            Text("$completed из $total",fontSize=27.sp,fontWeight=FontWeight.ExtraBold,
+                color=colors.text,maxLines=1)
+            LinearProgressIndicator(progress={if(total>0)completed.toFloat()/total else 0f},
+                modifier=Modifier.fillMaxWidth().height(7.dp).clip(CircleShape),
+                color=colors.purple,trackColor=colors.muted)
+        }
+    }
+}
+
+@Composable
+private fun WorkspaceSectorsOverview(
+    spheres:List<Sphere>,tasks:List<Task>,colors:WorkspaceColors,
+    selected:Set<String>,onSelect:(String?)->Unit,onSettings:()->Unit
+) {
+    Surface(Modifier.fillMaxWidth(),shape=RoundedCornerShape(23.dp),color=colors.card,
+        border=BorderStroke(1.dp,colors.panelBorder)) {
+        Column(Modifier.padding(15.dp),verticalArrangement=Arrangement.spacedBy(13.dp)) {
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                Text("Сектора",fontSize=19.sp,fontWeight=FontWeight.Bold,
+                    color=colors.text,modifier=Modifier.weight(1f))
+                Text(spheres.size.toString(),fontSize=12.sp,color=colors.secondaryText)
+                IconButton(onClick=onSettings,modifier=Modifier.size(34.dp)) {
+                    Icon(Icons.Default.Settings,"Настроить сектора",
+                        Modifier.size(19.dp),tint=colors.secondaryText)
+                }
+            }
+            if(spheres.isEmpty()) {
+                Text("Добавьте первый сектор через настройки",
+                    color=colors.secondaryText,fontSize=13.sp)
+            } else {
+                spheres.chunked(3).forEach { group ->
+                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        group.forEach { sector ->
+                            val sectorColor=parseWorkspaceColor(sector.color)
+                            val count=tasks.count {
+                                it.taskType==TaskType.TASK && it.parentTaskId==null &&
+                                    it.sphereId==sector.id && it.status!=TaskStatus.DONE
+                            }
+                            val chosen=sector.id in selected
+                            Column(Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
+                                .background(if(chosen)colors.selected else colors.card)
+                                .clickable { onSelect(sector.id) }
+                                .padding(vertical=6.dp,horizontal=2.dp),
+                                horizontalAlignment=Alignment.CenterHorizontally,
+                                verticalArrangement=Arrangement.spacedBy(7.dp)) {
+                                Box(Modifier.size(65.dp)
+                                    .background(sectorColor.copy(alpha=.17f),CircleShape),
+                                    contentAlignment=Alignment.Center) {
+                                    Box(Modifier.size(53.dp).background(sectorColor,CircleShape),
+                                        contentAlignment=Alignment.Center) {
+                                        Text(count.toString(),fontSize=19.sp,
+                                            fontWeight=FontWeight.Bold,color=Color.White)
+                                    }
+                                }
+                                Text(sector.name,fontSize=12.sp,fontWeight=FontWeight.Medium,
+                                    color=colors.text,maxLines=2,textAlign=TextAlign.Center,
+                                    lineHeight=14.sp)
+                            }
+                        }
+                        repeat(3-group.size){Spacer(Modifier.weight(1f))}
+                    }
+                }
+            }
+            if(selected.isNotEmpty()) {
+                TextButton(onClick={onSelect(null)}) {
+                    Text("Показать все сектора",color=colors.purple)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorkspaceSectorSettings(
+    vm:HomeViewModel,state:HomeState,colors:WorkspaceColors,onClose:()->Unit
+) {
+    var editorOpen by remember { mutableStateOf(false) }
+    var editingId by remember { mutableStateOf<String?>(null) }
+    var name by remember { mutableStateOf("") }
+    var color by remember { mutableStateOf("#8B5CF6") }
+    var icon by remember { mutableStateOf("briefcase") }
+    var prompt by remember { mutableStateOf("") }
+    var confirmDelete by remember { mutableStateOf(false) }
+    val palette=listOf("#8B5CF6","#2563EB","#06B6D4","#10B981","#F59E0B",
+        "#F97316","#E11D48","#64748B")
+    fun edit(sector:Sphere?) {
+        editingId=sector?.id
+        name=sector?.name ?: ""
+        color=sector?.color ?: palette.first()
+        icon=sector?.icon ?: "briefcase"
+        prompt=sector?.generalPrompt ?: ""
+        editorOpen=true
+    }
+    Column(Modifier.fillMaxWidth().navigationBarsPadding()
+        .verticalScroll(rememberScrollState())
+        .padding(start=19.dp,end=19.dp,bottom=28.dp),
+        verticalArrangement=Arrangement.spacedBy(13.dp)) {
+        Row(verticalAlignment=Alignment.CenterVertically) {
+            Text(if(editorOpen)"Редактирование сектора" else "Настройки секторов",
+                fontSize=20.sp,fontWeight=FontWeight.Bold,color=colors.text,
+                modifier=Modifier.weight(1f))
+            IconButton(onClick={if(editorOpen){editorOpen=false}else onClose()}) {
+                Icon(Icons.Default.Close,"Закрыть",tint=colors.text)
+            }
+        }
+        if(!editorOpen) {
+            state.spheres.forEach { sector ->
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp))
+                    .background(colors.card).clickable { edit(sector) }.padding(12.dp),
+                    verticalAlignment=Alignment.CenterVertically) {
+                    Box(Modifier.size(23.dp).background(parseWorkspaceColor(sector.color),CircleShape))
+                    Spacer(Modifier.width(10.dp))
+                    Text(sector.name,color=colors.text,modifier=Modifier.weight(1f))
+                    Icon(Icons.Default.Edit,"Редактировать",Modifier.size(18.dp),
+                        tint=colors.secondaryText)
+                }
+            }
+            Button(onClick={edit(null)},modifier=Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.Add,null)
+                Spacer(Modifier.width(8.dp))
+                Text("Добавить сектор")
+            }
+        } else {
+            OutlinedTextField(value=name,onValueChange={name=it},
+                label={Text("Название сектора")},singleLine=true,
+                modifier=Modifier.fillMaxWidth())
+            Text("Цвет сектора",color=colors.secondaryText,fontSize=13.sp)
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                palette.forEach { option ->
+                    Box(Modifier.weight(1f).aspectRatio(1f)
+                        .clip(CircleShape).background(parseWorkspaceColor(option))
+                        .border(if(color==option)3.dp else 0.dp,
+                            if(color==option)colors.text else Color.Transparent,CircleShape)
+                        .clickable { color=option })
+                }
+            }
+            OutlinedTextField(value=icon,onValueChange={icon=it},
+                label={Text("Иконка (код)")},singleLine=true,
+                modifier=Modifier.fillMaxWidth())
+            OutlinedTextField(value=prompt,onValueChange={prompt=it},
+                label={Text("Общий промпт")},minLines=2,maxLines=4,
+                modifier=Modifier.fillMaxWidth())
+            state.sectorError?.let {
+                Text(it,color=MaterialTheme.colorScheme.error,fontSize=12.sp)
+            }
+            Button(
+                onClick={vm.saveSphere(editingId,name,color,icon,prompt){
+                    editorOpen=false
+                }},
+                enabled=!state.sectorBusy && name.isNotBlank(),
+                modifier=Modifier.fillMaxWidth()
+            ) {
+                if(state.sectorBusy)CircularProgressIndicator(Modifier.size(17.dp),
+                    color=Color.White,strokeWidth=2.dp)
+                else Text("Сохранить")
+            }
+            if(editingId!=null) {
+                OutlinedButton(onClick={confirmDelete=true},
+                    enabled=!state.sectorBusy,modifier=Modifier.fillMaxWidth()) {
+                    Text("Удалить сектор",color=MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+    }
+    if(confirmDelete) {
+        AlertDialog(onDismissRequest={confirmDelete=false},
+            title={Text("Удалить сектор?")},
+            text={Text("Действие удалит сектор. Перед удалением проверьте связанные задачи.")},
+            confirmButton={TextButton(onClick={
+                confirmDelete=false
+                editingId?.let { vm.deleteSphere(it){editorOpen=false} }
+            }){Text("Удалить")}},
+            dismissButton={TextButton(onClick={confirmDelete=false}){Text("Отмена")}})
     }
 }
 

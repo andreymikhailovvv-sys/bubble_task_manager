@@ -20,7 +20,7 @@ const api=read('../../android-app/app/src/main/java/ru/planirovych/app/core/netw
 const network=read('../../android-app/app/src/main/java/ru/planirovych/app/core/network/NetworkModule.kt');
 const androidVersion=read('../../android-app/app/build.gradle.kts');
 
-test('Mini App and Android have 5 compact icon-only tabs with a warm Economic last tab',()=>{
+test('Android has 4 labeled tabs and Mini App retains its existing navigation until the follow-up PR',()=>{
   assert.equal((mini.match(/<MiniNavigationControl/g)||[]).length,5);
   assert.match(mini,/aria-label="Экономыч AI, финансы"/);
   assert.match(mini,/isEconomicOpen \? 'economic'/);
@@ -29,14 +29,14 @@ test('Mini App and Android have 5 compact icon-only tabs with a warm Economic la
   assert.match(miniCss,/grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
   assert.match(miniCss,/data-active-tab='economic'/);
   assert.match(miniCss,/\.miniapp-economic-screen\{/);
-  assert.match(home,/pageCount=\{5\}/);
+  assert.match(home,/pageCount=\{4\}/);
   assert.match(home,/Triple\("Экономыч",Icons\.Default\.MonetizationOn/);
-  assert.match(home,/label=null,/);
-  assert.match(home,/alwaysShowLabel=false/);
-  assert.match(home,/Modifier\.height\(56\.dp\)/);
+  assert.match(home,/label=\{Text\(tab\.first,fontSize=10\.sp,maxLines=1\)\}/);
+  assert.match(home,/alwaysShowLabel=true/);
+  assert.match(home,/Modifier\.height\(66\.dp\)/);
   assert.match(home,/Spacer\(Modifier\.windowInsetsBottomHeight\(WindowInsets\.navigationBars\)\)/);
-  assert.match(home,/selectedIconColor=if\(index==4\)/);
-  assert.match(workspace,/4 -> NativeEconomicPage\(userId=state\.user\?\.id,dark=dark,active=pagerState\.currentPage==4,/);
+  assert.match(home,/selectedIconColor=if\(index==3\)/);
+  assert.match(workspace,/3 -> NativeEconomicPage\(userId=state\.user\?\.id,dark=dark,active=pagerState\.currentPage==3,/);
   assert.match(androidVersion,/versionCode = 24/);
 });
 
@@ -207,7 +207,7 @@ test('Economych Android summary sizes naturally, bright add button, normal accou
   assert.match(native,/verticalArrangement=Arrangement\.spacedBy\(6\.dp\)/);
   assert.match(native,/accent=Color\(0xFFF5A52E\)/);
   assert.match(accountSummary,/fontWeight=FontWeight\.Normal,fontSize=13\.sp/);
-  assert.match(home,/selectedIconColor=if\(index==4\) \(if\(dark\) Color\(0xFFF6B95F\) else Color\(0xFF9B5200\)\)/);
+  assert.match(home,/selectedIconColor=if\(index==3\) \(if\(dark\) Color\(0xFFF6B95F\) else Color\(0xFF9B5200\)\)/);
   assert.match(report,/fontSize=if\(compact\) 15\.sp else 23\.sp/);
   assert.match(androidVersion,/versionCode = 24/);
   assert.match(androidVersion,/versionName = "1\.0\.22"/);
