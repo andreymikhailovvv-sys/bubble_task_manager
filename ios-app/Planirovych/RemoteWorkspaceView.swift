@@ -99,7 +99,12 @@ struct RemoteWorkspaceView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if selectedTab == .chat {
+            if selectedTab == .economic {
+                NativeEconomicView(
+                    session: session, awaitingVoice: quickAIWaiting,
+                    onVoiceRequested: { showingQuickVoice = true }
+                )
+            } else if selectedTab == .chat {
                 header
                     .padding(.horizontal, 16)
                 Rectangle()
@@ -119,12 +124,7 @@ struct RemoteWorkspaceView: View {
                         case .overview: overview
                         case .timeline: timelineContent
                         case .chat: EmptyView()
-                        case .economic:
-                            upcomingModule(
-                                "Экономыч",
-                                symbol: "wallet.bifold.fill",
-                                message: "Финансовые данные не загружаются в этой сборке. Переносим модуль отдельно, без демонстрации вымышленных балансов."
-                            )
+                        case .economic: EmptyView()
                         }
                     }
                     .padding(20)
@@ -151,7 +151,7 @@ struct RemoteWorkspaceView: View {
             }
         }
         .sheet(isPresented: $showingQuickVoice) {
-            NativeQuickVoiceSheet(session: session) { recordingData, duration in
+            NativeQuickVoiceSheet(session: session, economic: selectedTab == .economic) { recordingData, duration in
                 quickAIWaiting = true
                 Task {
                     do {
