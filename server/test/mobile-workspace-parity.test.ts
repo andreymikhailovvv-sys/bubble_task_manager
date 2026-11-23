@@ -117,7 +117,7 @@ test('Telegram fullscreen uses safe insets and bottom tabs replace the old displ
   ]);
   assert.equal((mini.match(/<MiniWorkspaceTools/g) ?? []).length, 1);
   assert.equal((mini.match(/onPostpone=\{\(\) => void postponeAllOverdueToToday\(\)\}/g) ?? []).length, 1);
-  assert.match(mini, /miniapp-timeline-postpone-button/);
+  assert.match(mini, /miniapp-timeline-overdue-inline/);
   assert.doesNotMatch(tools, /display-mode-toggle-group|onDisplayModeChange/);
   assert.match(mini, /webApp\.requestFullscreen\?\.\(\)/);
   assert.match(mini, /safeAreaChanged/);
