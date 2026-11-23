@@ -479,6 +479,61 @@ final class NativeAPI {
         vault.clear()
     }
 
+    // Economic API: same protected ledger, account-scoped ownership and
+    // server-side CSRF validation used by the Android and Mini App clients.
+    func economicSnapshot() async throws -> EcoSnapshot {
+        try await request("economic/snapshot")
+    }
+
+    func economicSession() async throws -> EcoServerUser {
+        let result: EcoSessionEnvelope = try await request("economic/session")
+        return result.user
+    }
+
+    func economicReport(period: String, offset: Int = 0,
+                        start: String? = nil, end: String? = nil) async throws -> EcoReport {
+        guard ["week", "month", "year", "all", "custom"].contains(period),
+              (-120...120).contains(offset) else { throw NativeAPIError.invalidResponse }
+        var path = "economic/report?period=\(period)&offset=\(offset)"
+        if period == "custom", let start, let end {
+            path += "&start=\(start)&end=\(end)"
+        }
+        return try await request(path)
+    }
+
+    func economicOperations(kind: String? = nil, accountId: String? = nil,
+                            category: String? = nil, cursor: String? = nil) async throws -> EcoOperationsEnvelope {
+        var components = URLComponents()
+        components.queryItems = [
+            kind.map { URLQueryItem(name: "kind", value: $0) },
+            accountId.map { URLQueryItem(name: "accountId", value: $0) },
+            category.map { URLQueryItem(name: "category", value: $0) },
+            cursor.map { URLQueryItem(name: "cursor", value: $0) }
+        ].compactMap { $0 }
+        return try await request("economic/operations" + (components.percentEncodedQuery.map { "?" + $0 } ?? ""))
+    }
+
+    func economicCreate(_ resource: EcoResource, payload: [String: Any]) async throws {
+        _ = try await requestData("economic/\(resource.rawValue)", method: "POST", json: payload)
+    }
+
+    func economicUpdate(_ resource: EcoResource, id: String,
+                        payload: [String: Any]) async throws {
+        guard !id.isEmpty else { throw NativeAPIError.invalidResponse }
+        let result: OperationResult = try await request(
+            "economic/\(resource.rawValue)/\(id)", method: "PATCH", json: payload
+        )
+        guard result.ok else { throw NativeAPIError.invalidResponse }
+    }
+
+    func economicDelete(_ resource: EcoResource, id: String) async throws {
+        guard !id.isEmpty else { throw NativeAPIError.invalidResponse }
+        let result: OperationResult = try await request(
+            "economic/\(resource.rawValue)/\(id)", method: "DELETE"
+        )
+        guard result.ok else { throw NativeAPIError.invalidResponse }
+    }
+
     func creditBalance() async throws -> CreditBalance {
         try await request("auth/email/status")
     }
