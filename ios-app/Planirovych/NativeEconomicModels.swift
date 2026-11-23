@@ -127,9 +127,10 @@ enum EcoMoney {
     }
 
     static func parse(_ value: String, allowZero: Bool = false, allowNegative: Bool = false) -> String? {
-        let clean = value.trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: " ", with: "")
-            .replacingOccurrences(of: ",", with: ".")
+        // Russian currency formatting uses non-breaking spaces as grouping
+        // separators. Strip Unicode whitespace before converting to minor units.
+        let clean = value.components(separatedBy: .whitespacesAndNewlines)
+            .joined().replacingOccurrences(of: ",", with: ".")
         guard clean.range(of: #"^-?\d{1,12}(?:\.\d{1,2})?$"#,
                           options: .regularExpression) != nil else { return nil }
         let negative = clean.hasPrefix("-")
