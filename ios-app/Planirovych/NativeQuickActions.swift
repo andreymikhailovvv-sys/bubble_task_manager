@@ -91,10 +91,9 @@ struct NativeQuickVoiceSheet: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var recorder = ChatVoiceRecorder()
     @ObservedObject var session: NativeWorkspaceSession
-    let onSubmitted: (String) -> Void
+    let onSubmitted: (Data, TimeInterval) -> Void
 
-    @State private var processing = false
-    @State private var errorText: String?
+     @State private var errorText: String?
     private let purple = Color(red: 0.55, green: 0.43, blue: 0.91)
 
     private let samples = [
@@ -138,8 +137,7 @@ struct NativeQuickVoiceSheet: View {
                     .frame(height: 210)
                     .animation(.easeOut(duration: 0.12), value: recorder.level)
 
-                    Text(processing ? "Распознаю запись…" :
-                         recorder.isRecording ? "Слушаю вас" : "Подключаю микрофон…")
+                    Text(recorder.isRecording ? "Слушаю вас" : "Подключаю микрофон…")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
@@ -173,18 +171,14 @@ struct NativeQuickVoiceSheet: View {
                         }
                         .buttonStyle(.bordered)
                         Button {
-                            Task { await send() }
+                            send()
                         } label: {
-                            if processing {
-                                ProgressView().frame(maxWidth: .infinity, minHeight: 44)
-                            } else {
-                                Label("Отправить", systemImage: "arrow.up")
-                                    .frame(maxWidth: .infinity, minHeight: 44)
-                            }
+                            Label("Отправить", systemImage: "arrow.up")
+                                .frame(maxWidth: .infinity, minHeight: 44)
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(purple)
-                        .disabled(!recorder.isRecording || processing)
+                        .disabled(!recorder.isRecording)
                     }
                 }
                 .padding(20)
@@ -197,21 +191,11 @@ struct NativeQuickVoiceSheet: View {
         .onDisappear { recorder.cancel() }
     }
 
-    private func send() async {
-        guard !processing, let recorded = recorder.stop() else { return }
-        processing = true
-        defer { processing = false }
-        do {
-            let text = try await session.transcribeVoice(data: recorded.data,
-                                                         duration: recorded.duration)
-            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                errorText = "Не удалось распознать речь."
-                return
-            }
-            onSubmitted(text)
-            dismiss()
-        } catch {
-            errorText = error.localizedDescription
-        }
+    private func send() {
+        guard let recorded = recorder.stop() else { return }
+        // Hand off the recording and close immediately. The parent performs
+        // transcription and AI request while the floating + shows progress.
+        onSubmitted(recorded.data, recorded.duration)
+        dismiss()
     }
 }
