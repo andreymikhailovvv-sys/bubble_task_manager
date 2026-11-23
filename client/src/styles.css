@@ -17035,3 +17035,21 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
   .miniapp-shell .miniapp-timeline-date-arrow {width:1.6rem;flex-basis:1.6rem}
   .miniapp-timeline-overdue-inline svg {width:15px}
 }
+
+/* Portals mount at document.body: they need an explicit light-theme scope. */
+.miniapp-unified-modal-backdrop.miniapp-light .miniapp-unified-modal {
+  background:#ffffff;color:#172238;border-color:#d8e2ef;
+}
+.miniapp-unified-modal-backdrop.miniapp-light .miniapp-unified-modal input,
+.miniapp-unified-modal-backdrop.miniapp-light .miniapp-unified-modal textarea {
+  background:#f8fafc;color:#172238;border-color:#d8e2ef;
+}
+.miniapp-unified-modal-backdrop.miniapp-light .miniapp-unified-sector-icon-option {
+  background:#f8faff;color:#60718b;border-color:#d8e2ef;
+}
+.miniapp-unified-modal-backdrop.miniapp-light .miniapp-unified-sector-icon-option.is-selected {
+  background:#f1eaff;color:#6d28d9;border-color:#8b5cf6;
+}
+.miniapp-unified-modal-backdrop.miniapp-light .miniapp-unified-sector-edit-row {
+  border-color:#d8e2ef;
+}
