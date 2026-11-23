@@ -11,6 +11,10 @@ struct NativeAIProposalChip: View {
     @State private var busy = false
     @State private var lastAction: String?
     @State private var localError: String?
+    @State private var showEditor = false
+    @State private var autoApply = false
+    @State private var preferenceBusy = false
+    @State private var remoteStatus: String?
 
     private let finance = Color(red: 0.85, green: 0.53, blue: 0.14)
     private let tasks = Color(red: 0.47, green: 0.39, blue: 0.91)
@@ -20,7 +24,7 @@ struct NativeAIProposalChip: View {
         case "approve": return "APPLIED"
         case "reject": return "REJECTED"
         case "undo": return "UNDONE"
-        default: return proposal.status ?? "PENDING"
+        default: return remoteStatus ?? proposal.status ?? "PENDING"
         }
     }
     private var title: String {
@@ -114,6 +118,31 @@ struct NativeAIProposalChip: View {
                     .foregroundStyle(.orange)
             }
 
+            if status == "PENDING" || status == "APPLIED" {
+                HStack(spacing: 10) {
+                    Button {
+                        showEditor = true
+                    } label: {
+                        Label("Изменить", systemImage: "pencil")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(busy || session.isSendingChat)
+                    if status == "APPLIED" {
+                        Button {
+                            awaitingConfirmation = "undo"
+                        } label: {
+                            Label("Отменить", systemImage: "arrow.uturn.backward")
+                                .font(.subheadline.weight(.semibold))
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(busy || session.isSendingChat)
+                    }
+                }
+            }
+
             if status == "PENDING" {
                 HStack(spacing: 10) {
                     Button {
@@ -131,20 +160,36 @@ struct NativeAIProposalChip: View {
                     .buttonStyle(.bordered)
                 }
                 .disabled(busy || session.isSendingChat)
-            } else if status == "APPLIED" {
-                Button {
-                    awaitingConfirmation = "undo"
-                } label: {
-                    Label("Отменить действие", systemImage: "arrow.uturn.backward")
-                        .font(.subheadline)
-                }
-                .disabled(busy || session.isSendingChat)
             }
+
+            Toggle(isOn: Binding(
+                get: { autoApply },
+                set: { wanted in
+                    Task { await setAutoApply(wanted) }
+                }
+            )) {
+                Text("Автоматически применять новые изменения")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .tint(tint)
+            .disabled(preferenceBusy)
         }
         .padding(13)
         .background(Color(uiColor: .secondarySystemGroupedBackground),
                     in: RoundedRectangle(cornerRadius: 17))
         .overlay(RoundedRectangle(cornerRadius: 17).stroke(tint.opacity(0.19)))
+        .task(id: proposal.id) { await refreshChip() }
+        .sheet(isPresented: $showEditor) {
+            NativeAIChipEditorSheet(proposalID: proposal.id, economic: economic) {
+                Task {
+                    await refreshChip()
+                    await session.loadChat()
+                    await session.refresh()
+                }
+            }
+            .presentationDetents([.large])
+        }
         .confirmationDialog("Действие Планировыча",
                             isPresented: Binding(get: { awaitingConfirmation != nil },
                                                  set: { if !$0 { awaitingConfirmation = nil } }),
@@ -175,12 +220,43 @@ struct NativeAIProposalChip: View {
         }
     }
 
+    private func refreshChip() async {
+        let api = NativeAPI()
+        do {
+            async let details = api.proposalDetails(id: proposal.id, economic: economic)
+            async let setting = api.proposalAutoApply(economic: economic)
+            let data = try await details
+            remoteStatus = data["status"] as? String
+            autoApply = try await setting
+            localError = nil
+        } catch {
+            // Show the original card when offline, but never fake an action result.
+            localError = error.localizedDescription
+        }
+    }
+
+    private func setAutoApply(_ wanted: Bool) async {
+        guard !preferenceBusy else { return }
+        preferenceBusy = true
+        defer { preferenceBusy = false }
+        do {
+            autoApply = try await NativeAPI().updateProposalAutoApply(economic: economic, value: wanted)
+            localError = nil
+        } catch {
+            localError = error.localizedDescription
+        }
+    }
+
     private func perform(_ action: String) async {
         guard !busy else { return }
         busy = true
         defer { busy = false }
         let success = await session.changeProposal(proposal, economic: economic, action: action)
-        if success { lastAction = action; localError = nil }
+        if success {
+            lastAction = action
+            localError = nil
+            await refreshChip()
+        }
         else { localError = session.chatError ?? "Не удалось выполнить действие." }
     }
 }
