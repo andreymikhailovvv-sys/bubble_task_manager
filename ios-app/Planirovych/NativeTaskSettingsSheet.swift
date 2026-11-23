@@ -125,6 +125,7 @@ struct NativeTaskSettingsSheet: View {
                     }
                 }
 
+                if task.parentTaskId == nil {
                 Section("Повторение") {
                     Toggle("Повторять", isOn: $repeating)
                     if repeating {
@@ -236,6 +237,8 @@ struct NativeTaskSettingsSheet: View {
                                        in: Date()..., displayedComponents: .date)
                         }
                     }
+                }
+
                 }
 
                 if let recurrenceError {
