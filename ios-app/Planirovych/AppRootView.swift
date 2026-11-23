@@ -158,14 +158,18 @@ final class NativeWorkspaceSession: ObservableObject {
     }
 
     func saveTaskSettings(task: RemoteTask, dueDate: Date?,
-                          importance: Int, urgency: Int, sphereId: String?) async -> Bool {
+                          importance: Int, urgency: Int, sphereId: String?,
+                          isRecurring: Bool, recurrence: NativeRecurrenceRule?,
+                          recurrenceSummary: String?) async -> Bool {
         guard account != nil, !isWorking else { return false }
         isWorking = true
         defer { isWorking = false }
         do {
             _ = try await api.updateTaskSettings(id: task.id, dueDate: dueDate,
                                                  importance: importance, urgency: urgency, sphereId: sphereId,
-                                                 isSubtask: task.parentTaskId != nil)
+                                                 isSubtask: task.parentTaskId != nil,
+                                                 isRecurring: isRecurring, recurrence: recurrence,
+                                                 recurrenceSummary: recurrenceSummary)
             try await loadWorkspace()
             errorMessage = nil
             return true
@@ -173,6 +177,10 @@ final class NativeWorkspaceSession: ObservableObject {
             handle(error)
             return false
         }
+    }
+
+    func parseRecurrence(_ text: String, taskId: String?) async throws -> (NativeRecurrenceRule, String) {
+        try await api.parseRecurrence(prompt: text, taskId: taskId)
     }
 
     func addSubtask(title: String, parent: RemoteTask) async -> Bool {
