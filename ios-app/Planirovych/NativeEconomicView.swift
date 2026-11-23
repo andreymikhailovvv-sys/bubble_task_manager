@@ -3,10 +3,11 @@ import Charts
 
 private enum EcoSection: String, CaseIterable, Identifiable {
     case overview = "Обзор"
+    case report = "Отчёт"
     case accounts = "Счета"
     case operations = "Операции"
-    case debts = "Долги"
-    case report = "Отчёт"
+    case debts = "Долги и кредиты"
+    case categories = "Категории"
     var id: String { rawValue }
     var icon: String {
         switch self {
@@ -15,6 +16,7 @@ private enum EcoSection: String, CaseIterable, Identifiable {
         case .operations: return "arrow.left.arrow.right"
         case .debts: return "books.vertical"
         case .report: return "chart.pie"
+        case .categories: return "square.grid.2x2"
         }
     }
 }
@@ -125,6 +127,7 @@ struct NativeEconomicView: View {
                         case .operations: operationsScreen(snapshot)
                         case .debts: debtsScreen(snapshot)
                         case .report: reportScreen
+                        case .categories: categoriesScreen(snapshot)
                         }
                     } else {
                         ContentUnavailableView("Не удалось получить финансовые данные",
@@ -515,23 +518,40 @@ struct NativeEconomicView: View {
                 if loans.isEmpty { Text("Кредитов нет").foregroundStyle(.secondary).font(.footnote) }
                 ForEach(loans) { loan in loanRow(loan) }
             }
+        }
+    }
+
+    private func categoriesScreen(_ data: EcoSnapshot) -> some View {
+        VStack(spacing: 13) {
             card {
                 sectionHeader("Категории", action: "Добавить") {
                     editor = EcoEditorTarget(resource: .categories)
                 }
-                ForEach(data.categories) { category in
-                    Button {
-                        showEditor(category, resource: .categories)
-                    } label: {
-                        HStack {
-                            Text(category.name)
-                            Spacer()
-                            Text(category.kind == "INCOME" ? "Доход" : "Расход")
-                                .foregroundStyle(.secondary).font(.caption)
-                            Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
-                        }
+                Text("Категории доходов и расходов используются в операциях и отчётах.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(["EXPENSE", "INCOME"], id: \.self) { kind in
+                card {
+                    sectionHeader(kind == "EXPENSE" ? "Расходы" : "Доходы")
+                    let list = data.categories.filter { $0.kind == kind }
+                    if list.isEmpty {
+                        Text("Категорий нет").font(.footnote).foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.plain)
+                    ForEach(list) { category in
+                        Button {
+                            showEditor(category, resource: .categories)
+                        } label: {
+                            HStack {
+                                Text(category.name).font(.subheadline)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2).foregroundStyle(.tertiary)
+                            }
+                            .foregroundStyle(.primary)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
         }
