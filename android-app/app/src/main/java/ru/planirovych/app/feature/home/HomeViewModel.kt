@@ -64,7 +64,8 @@ data class HomeState(val loading: Boolean = true, val user: CurrentUser? = null,
     val notes: List<StandaloneNote> = emptyList(), val noteGroups: List<StandaloneNoteGroup> = emptyList(), val notesLoading: Boolean = false, val notesBusy: Boolean = false, val notesError: String? = null, val attachmentTaskId: String? = null,
     val taskAttachments: List<TaskAttachment> = emptyList(),
     val taskAttachmentsBusy: Boolean = false, val taskAttachmentsError: String? = null,
-    val sectorBusy:Boolean=false,val sectorError:String?=null)
+    val sectorBusy:Boolean=false,val sectorError:String?=null,
+    val profileBusy:Boolean=false,val profileError:String?=null)
 class HomeViewModel(private val repository: WorkspaceRepository, private val themes: ThemePreferences) : ViewModel() {
     private val mutable = MutableStateFlow(HomeState())
     private val taskAiMutable=MutableStateFlow(TaskAiChatState())
@@ -677,6 +678,23 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                         current.copy(taskError="Аккаунт на сервере отличается от открытого в Android. Данные задач сохранены; войдите в исходный аккаунт.")
                     } else current.copy(user=profile)
                 }
+            }
+        }
+    }
+    fun updateProfile(name:String,username:String,email:String,password:String,
+                      onSaved:()->Unit={}) {
+        if(username.trim().length<3 || email.isBlank()) {
+            mutable.update { it.copy(profileError="Проверьте логин и электронную почту") }
+            return
+        }
+        viewModelScope.launch {
+            mutable.update { it.copy(profileBusy=true,profileError=null) }
+            try {
+                val updated=repository.updateProfile(name,username,email,password)
+                mutable.update { it.copy(user=updated,profileBusy=false,profileError=null) }
+                onSaved()
+            } catch(e:Throwable) {
+                mutable.update { it.copy(profileBusy=false,profileError=e.userMessage()) }
             }
         }
     }
