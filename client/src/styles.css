@@ -17008,3 +17008,30 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
  .miniapp-unified-brand-copy small {font-size:.59rem}
  .miniapp-shell .miniapp-unified-icon-button {width:1.95rem}
 }
+
+/* Timeline: date-range navigation and overdue tasks share one balanced row. */
+.miniapp-shell .miniapp-timeline-independent-blocks .miniapp-timeline-period-panel {
+  display:flex;align-items:stretch;gap:.5rem;min-width:0;
+}
+.miniapp-shell .miniapp-timeline-independent-blocks .miniapp-timeline-date-nav {
+  width:auto;max-width:none;min-width:0;flex:1 1 0;
+}
+.miniapp-shell .miniapp-timeline-date-current {padding:.35rem .2rem;gap:.25rem}
+.miniapp-shell .miniapp-timeline-date-arrow {width:1.85rem;flex-basis:1.85rem}
+.miniapp-timeline-overdue-inline {
+  position:relative;min-width:6.9rem;max-width:7.3rem;min-height:3.2rem;
+  display:flex;align-items:center;justify-content:center;gap:.3rem;
+  flex:0 0 7.3rem;border:1px solid rgba(244,114,182,.25);
+  border-radius:.9rem;background:rgba(190,24,93,.09);color:#f9a8d4;
+}
+.miniapp-timeline-overdue-inline span:not(.miniapp-unified-overdue-count) {
+  font-size:.63rem;line-height:.84rem;font-weight:650;text-align:left;
+}
+.miniapp-shell.miniapp-light .miniapp-timeline-overdue-inline {
+  color:#be185d;background:#fff4f5;border-color:#f7c9d4;
+}
+@media(max-width:350px){
+  .miniapp-timeline-overdue-inline {flex-basis:6rem;min-width:6rem}
+  .miniapp-shell .miniapp-timeline-date-arrow {width:1.6rem;flex-basis:1.6rem}
+  .miniapp-timeline-overdue-inline svg {width:15px}
+}
