@@ -50,6 +50,16 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
         return response["text"]?.jsonPrimitive?.contentOrNull
             ?.takeIf{it.isNotBlank()}?:error("Сервис вернул пустую расшифровку.")
     }
+    suspend fun updateProfile(name:String,username:String,email:String,password:String):CurrentUser {
+        val body=buildJsonObject {
+            put("name",name.trim())
+            put("username",username.trim())
+            put("email",email.trim())
+            if(password.isNotBlank()) put("currentPassword",password)
+        }
+        return api.updateProfile(body).user
+    }
+
     suspend fun saveSphere(id:String?,name:String,color:String,icon:String,prompt:String):Sphere {
         val body=buildJsonObject {
             put("name",name.trim());put("color",color);put("icon",icon)
