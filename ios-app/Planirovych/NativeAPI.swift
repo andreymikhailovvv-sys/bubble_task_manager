@@ -850,9 +850,10 @@ final class NativeAPI {
     /// The quick intro, status transitions and answer deltas arrive in order.
     func sendChat(question: String, history: [RemoteChatMessage],
                   project: NativeChatProject, thread: NativeChatThread,
+                  telegramRead: [String: Any]? = nil,
                   onEvent: @escaping @MainActor (NativeChatStreamEvent) -> Void
     ) async throws -> NativeChatReply {
-        let payload: [String: Any] = [
+        var payload: [String: Any] = [
             "clientRequestId": UUID().uuidString.lowercased(),
             "question": question,
             "history": history.suffix(25).map { message in
@@ -862,8 +863,10 @@ final class NativeAPI {
             },
             "projectId": project.id, "projectTitle": project.title,
             "chatId": thread.id, "chatTitle": thread.title,
-            "userTimeZone": TimeZone.current.identifier
+            "userTimeZone": TimeZone.current.identifier,
+            "userMessage": telegramRead == nil ? question : ""
         ]
+        if let telegramRead { payload["telegramRead"] = telegramRead }
         guard let url = URL(string: "ai-chat", relativeTo: base),
               url.scheme == "https", url.host == base.host else {
             throw NativeAPIError.invalidResponse
@@ -933,7 +936,8 @@ final class NativeAPI {
     /// Preserve other clients' unknown project/message metadata when saving.
     /// The server merges the submitted snapshot under a row lock.
     func persistChatReply(projectId: String, chatId: String,
-                          question: String, reply: NativeChatReply) async throws {
+                          question: String, reply: NativeChatReply,
+                          includeUserMessage: Bool = true) async throws {
         guard chatId != "quick-ai-requests" else { return } // Server owns quick-chat history.
         let data = try await requestData("ai-chat/projects")
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -945,7 +949,10 @@ final class NativeAPI {
         }
         var messages = threads[chatIndex]["messages"] as? [[String: Any]] ?? []
         let timestamp = ISO8601DateFormatter().string(from: Date())
-        messages.append(["id": UUID().uuidString, "role": "user", "content": question, "createdAt": timestamp])
+        if includeUserMessage {
+            messages.append(["id": UUID().uuidString, "role": "user",
+                             "content": question, "createdAt": timestamp])
+        }
         var answer: [String: Any] = [
             "id": UUID().uuidString, "role": "assistant",
             "content": reply.answer, "createdAt": timestamp
