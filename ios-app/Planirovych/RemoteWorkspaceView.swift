@@ -56,6 +56,10 @@ struct RemoteWorkspaceView: View {
     @State private var showAccount = false
     @State private var showAppSettings = false
     @State private var showTaskFilters = false
+    @State private var accountName = ""
+    @State private var accountUsername = ""
+    @State private var accountEmail = ""
+    @State private var accountPassword = ""
 
     private let accent = Color(red: 0.54, green: 0.49, blue: 0.97)
 
@@ -176,10 +180,32 @@ struct RemoteWorkspaceView: View {
         .sheet(isPresented: $showAccount) {
             NavigationStack {
                 Form {
-                    Section("Аккаунт") {
-                        LabeledContent("Имя", value: session.account?.displayName ?? "Профиль")
-                        LabeledContent("Логин", value: session.account?.username ?? "Не указан")
-                        LabeledContent("Email", value: session.account?.email ?? "Не указан")
+                    Section("Данные аккаунта") {
+                        TextField("Имя", text: $accountName)
+                        TextField("Логин", text: $accountUsername)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        TextField("Электронная почта", text: $accountEmail)
+                            .textInputAutocapitalization(.never)
+                            .keyboardType(.emailAddress)
+                            .autocorrectionDisabled()
+                        SecureField("Текущий пароль, если требуется", text: $accountPassword)
+                    }
+                    Section {
+                        Button("Сохранить данные") {
+                            Task {
+                                if await session.updateProfile(name: accountName,
+                                    username: accountUsername, email: accountEmail,
+                                    currentPassword: accountPassword.isEmpty ? nil : accountPassword) {
+                                    showAccount = false
+                                    accountPassword = ""
+                                }
+                            }
+                        }
+                        .disabled(session.isWorking || accountUsername.isEmpty || accountEmail.isEmpty)
+                        if let error = session.errorMessage {
+                            Text(error).font(.footnote).foregroundStyle(.red)
+                        }
                     }
                     Section("ИИ-кредиты") {
                         Text("\(session.account?.aiCredits ?? 0)")
@@ -196,6 +222,12 @@ struct RemoteWorkspaceView: View {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Закрыть") { showAccount = false }
                     }
+                }
+                .onAppear {
+                    accountName = session.account?.name ?? ""
+                    accountUsername = session.account?.username ?? ""
+                    accountEmail = session.account?.email ?? ""
+                    accountPassword = ""
                 }
             }
         }
