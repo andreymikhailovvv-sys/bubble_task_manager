@@ -22,7 +22,7 @@ test('Telegram Mini App and compact mobile browser render the same workspace com
   assert.deepEqual([old, fresh].sort(urgentFocusSubtaskFirst).map(item => item.id), ['fresh', 'old']);
 });
 
-test('compact toolbar retains postponed actions and accessible filters; notes move to the bottom navigation', async () => {
+test('compact toolbar retains postponed actions and filters; notes stay in search but leave bottom nav', async () => {
   const [mini, toolbar, styles] = await Promise.all([
     read('../../client/src/MiniApp.tsx'),
     read('../../client/src/components/MiniWorkspaceTools.tsx'),
@@ -32,7 +32,7 @@ test('compact toolbar retains postponed actions and accessible filters; notes mo
   assert.match(toolbar, /miniapp-workspace-tools-compact/);
   assert.doesNotMatch(toolbar, /miniapp-workspace-tool-notes|onNotesOpen/);
   assert.match(mini, /miniapp-bottom-navigation/);
-  assert.match(mini, /aria-label="Заметки"/);
+  assert.doesNotMatch(mini, /aria-label="Заметки"/);
   assert.match(toolbar, /onClick=\{onOpenOverdue\}/);
   assert.match(toolbar, /aria-label="Фильтры задач"/);
   assert.match(toolbar, /aria-expanded=\{open\}/);
@@ -124,7 +124,7 @@ test('Telegram fullscreen uses safe insets and bottom tabs replace the old displ
   assert.match(mini, /contentSafeAreaChanged/);
   assert.match(mini, /const fullscreenClass = isTelegramRuntime/);
   assert.match(mini, /aria-label="Разделы Планировыча"/);
-  assert.match(mini, /aria-label="Список задач"/);
+  assert.match(mini, /aria-label="Общая"/);
   assert.match(mini, /aria-label="Таймлайн"/);
   assert.match(mini, /aria-label="Общий чат с ИИ"/);
   assert.match(mini, /aria-label="Заметки"/);
@@ -253,7 +253,7 @@ test('Telegram project picker, navigation and attachment theme refinements remai
   // Telegram WebView uses focus-safe accessible controls; mobile web remains a button.
   assert.match(mini, /MiniNavigationControl = isTelegramRuntime \? 'div' : 'button'/);
   assert.match(mini, /handleMiniNavigationKeyDown/);
-  assert.equal((mini.match(/<MiniNavigationControl role=/g) ?? []).length, 5);
+  assert.equal((mini.match(/<MiniNavigationControl role=/g) ?? []).length, 4);
   assert.match(css, /\.miniapp-shell\.miniapp-telegram-fullscreen \.miniapp-bottom-navigation-item \{/);
   assert.match(css, /-webkit-tap-highlight-color: transparent !important/);
   // Miniapp side menu is below Telegram system controls.
@@ -265,7 +265,7 @@ test('Telegram project picker, navigation and attachment theme refinements remai
   assert.match(css, /\.miniapp-shell:not\(\.miniapp-light\) \.miniapp-ai-chat-panel-general \.miniapp-ai-chat-attach \{/);
 });
 
-test('fullscreen search and all five tabs respect safe areas and keep the shared navigation', async () => {
+test('fullscreen search and four mobile tabs respect safe areas and keep notes through search', async () => {
   const [mini, styles, notes] = await Promise.all([
     read('../../client/src/MiniApp.tsx'),
     read('../../client/src/styles.css'),
@@ -281,7 +281,7 @@ test('fullscreen search and all five tabs respect safe areas and keep the shared
   assert.match(styles, /top: calc\(var\(--miniapp-top-inset, 0px\) \+ \.5rem\)/);
   assert.doesNotMatch(mini, /sticky z-30 miniapp-premium-topbar/);
   assert.match(mini, /!isEconomicOpen && isAiChatOpen && !isStandaloneNotesOpen \? 'is-active'/);
-  assert.match(mini, /!isEconomicOpen && isStandaloneNotesOpen \? 'is-active'/);
+  assert.doesNotMatch(mini, /!isEconomicOpen && isStandaloneNotesOpen \? 'is-active'/);
   assert.match(mini, /setIsEconomicOpen\(false\); setIsAiChatOpen\(false\); setIsStandaloneNotesOpen\(false\)/);
   assert.match(mini, /mobileSafeAreaTop=\{telegramViewport\.top\}/);
   assert.match(notes, /style=\{mode === 'mobile' \?/);
@@ -369,7 +369,7 @@ test('Telegram focus task has a bounded scroll viewport without covering native 
 test('AI bottom tab opens Quick Requests and scrolls to its end even on repeated taps', async () => {
   const mini = await read('../../client/src/MiniApp.tsx');
   const nav = mini.slice(mini.indexOf('aria-label="Разделы Планировыча"'), mini.indexOf('      </nav>', mini.indexOf('aria-label="Разделы Планировыча"')));
-  const tab = nav.slice(nav.indexOf('aria-label="Общий чат с ИИ"'), nav.indexOf('aria-label="Заметки"'));
+  const tab = nav.slice(nav.indexOf('aria-label="Общий чат с ИИ"'), nav.indexOf('aria-label="Экономыч AI, финансы"'));
   assert.match(tab, /setActiveAiChatProjectId\(quickProject\?\.id/);
   assert.match(tab, /setActiveAiChatId\(QUICK_AI_CHAT_ID\)/);
   assert.match(tab, /setQuickAiTabNavigationSerial\(serial => serial \+ 1\)/);
