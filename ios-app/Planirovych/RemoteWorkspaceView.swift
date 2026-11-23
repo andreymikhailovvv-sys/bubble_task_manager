@@ -45,6 +45,8 @@ struct RemoteWorkspaceView: View {
     @State private var selectedSphereID: String?
     @State private var showingNewTask = false
     @State private var editingTask: RemoteTask?
+    @State private var openedTimelineHabit: RemoteHabit?
+    @State private var showCredits = false
     @State private var taskOrder: TaskOrder = .urgency
     @State private var dateWindow: TaskDateWindow = .all
     @State private var taskMode: TaskDisplayMode = .list
@@ -135,6 +137,14 @@ struct RemoteWorkspaceView: View {
         .sheet(isPresented: $showingNewTask) {
             NewServerTaskSheet(session: session)
                 .presentationDetents([.medium])
+        }
+        .sheet(item: $openedTimelineHabit) { habit in
+            NativeHabitDetailSheet(session: session, habitID: habit.id)
+                .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showCredits) {
+            NativeCreditsSheet(session: session)
+                .presentationDetents([.medium, .large])
         }
         .sheet(item: $editingTask) { task in
             NativeTaskEditorSheet(session: session, task: task)
@@ -296,8 +306,9 @@ struct RemoteWorkspaceView: View {
                         .background(accent.opacity(0.09), in: RoundedRectangle(cornerRadius: 12))
                 }
                 .accessibilityLabel("Управление аккаунтом")
-                HStack(spacing: 3) {
-                    Image(systemName: "circle.hexagongrid.fill")
+                Button { showCredits = true } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "circle.hexagongrid.fill")
                         .font(.system(size: 16))
                         .foregroundStyle(Color(red: 0.83, green: 0.41, blue: 0.57))
                     Text("\(session.account?.aiCredits ?? 0)")
@@ -307,7 +318,9 @@ struct RemoteWorkspaceView: View {
                 .padding(.horizontal, 5)
                 .frame(height: 40)
                 .background(accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
-                .accessibilityLabel("ИИ-кредиты")
+                    }
+                .buttonStyle(.plain)
+                .accessibilityLabel("ИИ-кредиты: открыть баланс и статистику")
                 Button {
                     searchExpanded.toggle()
                 } label: {
@@ -447,7 +460,9 @@ struct RemoteWorkspaceView: View {
             NativeTaskTimelineView(
                 tasks: session.tasks.filter { $0.parentTaskId == nil && !$0.isComplete },
                 spheres: session.spheres,
+                habits: session.habits,
                 onOpenTask: { task in editingTask = task },
+                onOpenHabit: { habit in openedTimelineHabit = habit },
                 overdueCount: overdueTasks.count,
                 onOpenOverdue: { showOverdue = true }
             )
