@@ -96,7 +96,7 @@ jobs:
 
           # Start the app afresh for each OFFLINE demo tab. This debug-only
           # launch argument does not bypass login in release device builds.
-          for tab in overview tasks habits economic; do
+          for tab in overview timeline chat economic; do
             xcrun simctl terminate "$SIM_ID" ru.planirovych.iosdemo || true
             xcrun simctl launch "$SIM_ID" ru.planirovych.iosdemo --ci-preview-tab "$tab"
             sleep 4
