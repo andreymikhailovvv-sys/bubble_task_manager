@@ -127,7 +127,7 @@ test('Telegram fullscreen uses safe insets and bottom tabs replace the old displ
   assert.match(mini, /aria-label="Общая"/);
   assert.match(mini, /aria-label="Таймлайн"/);
   assert.match(mini, /aria-label="Общий чат с ИИ"/);
-  assert.match(mini, /aria-label="Заметки"/);
+  assert.doesNotMatch(mini, /aria-label="Заметки"/);
   assert.match(mini, /setDisplayMode\('list'\)/);
   assert.match(mini, /setDisplayMode\('timeline'\)/);
   assert.match(mini, /setIsAiChatOpen\(true\)/);
