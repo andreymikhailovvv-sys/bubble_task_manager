@@ -584,3 +584,208 @@ body:has(.bubble-fullscreen-shell:not(.fullscreen-overlay-active) .primary-works
   .ai-chat-launcher.bubble-ai-fullscreen {
   right: max(16px, env(safe-area-inset-right)) !important;
 }
+
+
+/* Mini App habit rail, compact 2.6% scale adjustment and unified toolbar glass.
+   Keep spacing BETWEEN widgets unchanged; reduce only their width and internal padding. */
+.primary-workspace-layout { --primary-sidebar-width: 374px; }
+.primary-workspace-sidebar .primary-workspace-sidebar-list {
+  flex-basis: var(--primary-sidebar-width);
+  width: var(--primary-sidebar-width);
+  gap: 18px;
+}
+.primary-workspace-sidebar.is-collapsed .primary-workspace-sidebar-list {
+  flex-basis: 0;
+  width: 0;
+}
+.primary-workspace-sidebar .workspace-widget-card.primary-widget {
+  padding: 15.5px;
+  border-radius: 21px;
+  background: var(--topbar-bg) !important;
+  border-color: var(--panel-border);
+  box-shadow: 0 4px 16px rgba(2,6,23,.065) !important;
+  backdrop-filter: blur(18px) saturate(1.06);
+}
+.app-shell[data-theme='light'] .primary-workspace-sidebar .workspace-widget-card.primary-widget {
+  background: linear-gradient(135deg, rgba(255,255,255,.82),rgba(240,249,255,.70)) !important;
+  border-color: rgba(219,234,254,.95);
+  box-shadow: 0 6px 18px rgba(15,23,42,.055), inset 0 1px 0 rgba(255,255,255,.73) !important;
+}
+.app-shell[data-theme='dark'] .primary-workspace-sidebar .workspace-widget-card.primary-widget {
+  background: var(--topbar-bg) !important;
+  border-color: var(--panel-border);
+}
+.primary-workspace-sidebar .primary-widget-heading { margin-bottom: 10px; }
+.primary-workspace-sidebar .primary-widget-heading h3 { font-size: 14.6px; }
+.primary-workspace-sidebar .primary-widget-rows { gap: 7px; }
+.primary-workspace-sidebar .primary-widget-task { padding: 8.8px 10.5px; }
+
+/* The collapse control is viewport-fixed, NEVER positioned against a padded aside. */
+.primary-workspace-sidebar .primary-workspace-sidebar-toggle-slot {
+  position: fixed !important;
+  right: 0 !important;
+  left: auto !important;
+  top: 50dvh !important;
+  transform: translateY(-50%) !important;
+  width: 29px;
+  height: 55px;
+  padding: 0 !important;
+  margin: 0 !important;
+  z-index: 105;
+  pointer-events: auto;
+}
+.primary-workspace-sidebar .primary-workspace-sidebar-toggle {
+  margin: 0 !important;
+  width: 29px;
+  border-radius: 12px 0 0 12px;
+  border-right: none;
+  box-shadow: 0 2px 12px rgba(15,23,42,.07);
+}
+
+/* One-row circular habit strip as in Telegram Mini App. */
+.primary-workspace-sidebar .primary-widget-heading:has(+ .primary-widget-habit-strip) { gap: 7px; }
+.primary-habit-summary-badge {
+  margin-left: auto;
+  max-width: 160px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(22,163,74,.10);
+  color: #15803d;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.app-shell[data-theme='dark'] .primary-habit-summary-badge {
+  background: rgba(34,197,94,.17);
+  color: #86efac;
+}
+.primary-widget-habit-strip {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 12px 1px 5px;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.primary-widget-habit-strip::-webkit-scrollbar { display: none; }
+.primary-widget-habit-circle-unit {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.primary-widget-habit-divider {
+  display: block;
+  flex: 0 0 1px;
+  height: 51px;
+  background: var(--panel-border);
+  margin-inline: 2px 1px;
+}
+.primary-widget-habit-circle-wrap { position: relative; flex: 0 0 auto; }
+.primary-widget-habit-circle {
+  --habit-color: #06b6d4;
+  --habit-progress: 0%;
+  --habit-track: #e3e9f2;
+  display: grid;
+  place-items: center;
+  width: 63px;
+  height: 63px;
+  border: 0;
+  border-radius: 50%;
+  padding: 6px;
+  background: conic-gradient(var(--habit-color) var(--habit-progress),var(--habit-track) var(--habit-progress) 100%);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: transform .18s ease, filter .18s ease;
+}
+.primary-widget-habit-circle:hover { transform: scale(1.055); }
+.primary-widget-habit-circle:focus-visible,
+.primary-widget-habit-add-circle:focus-visible { outline: 2px solid #0bb7d0; outline-offset: 3px; }
+.primary-widget-habit-circle-core {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border-radius: 50%;
+  background: #fff;
+  line-height: 1;
+}
+.primary-widget-habit-emoji { font-size: 22px; line-height: 1.1; }
+.primary-widget-habit-fraction { color: #17243c; font-size: 12px; font-weight: 730; font-variant-numeric: tabular-nums; }
+.primary-widget-habit-circle.is-complete .primary-widget-habit-circle-core { background: #f7fbfc; }
+.primary-widget-habit-circle.is-offday {
+  --habit-track: #e6e6e6;
+  filter: grayscale(.75);
+  color: #89949f;
+}
+.primary-widget-habit-circle.is-offday .primary-widget-habit-fraction { color: #8b949e; }
+.primary-widget-habit-day-badge {
+  position: absolute;
+  top: -10px;
+  right: -7px;
+  display: grid;
+  place-items: center;
+  min-width: 27px;
+  height: 22px;
+  padding-inline: 5px;
+  border: 1px solid #ccd9e8;
+  border-radius: 11px;
+  background: #e4ebf3;
+  box-shadow: 0 1px 5px rgba(15,23,42,.07);
+  color: #475a72;
+  font-size: 10px;
+  font-weight: 700;
+}
+.primary-widget-habit-add-circle {
+  display: grid;
+  flex: 0 0 63px;
+  place-items: center;
+  width: 63px;
+  height: 63px;
+  border: 1.5px dashed #34d399;
+  border-radius: 50%;
+  background: rgba(16,185,129,.10);
+  color: #10b981;
+  transition: background .18s ease, transform .18s ease;
+}
+.primary-widget-habit-add-circle:hover { background: rgba(16,185,129,.18); transform: scale(1.04); }
+.app-shell[data-theme='dark'] .primary-widget-habit-circle { --habit-track: #40536b; }
+.app-shell[data-theme='dark'] .primary-widget-habit-circle-core { background: #152238; }
+.app-shell[data-theme='dark'] .primary-widget-habit-fraction { color: #e6edf7; }
+.app-shell[data-theme='dark'] .primary-widget-habit-circle.is-offday { --habit-track: #3c4654; }
+.app-shell[data-theme='dark'] .primary-widget-habit-circle.is-offday .primary-widget-habit-fraction { color: #9ba8bb; }
+.app-shell[data-theme='dark'] .primary-widget-habit-circle.is-complete .primary-widget-habit-circle-core { background: #1f3047; }
+.app-shell[data-theme='dark'] .primary-widget-habit-day-badge {
+  background: #33465e; border-color: #53647c; color: #d1dbeb;
+}
+
+/* Work area and mascot retain the 2.6%-smaller rail offset. */
+body:has(.bubble-fullscreen-shell:not(.fullscreen-overlay-active) .primary-workspace-sidebar.is-open)
+  .ai-chat-launcher.bubble-ai-fullscreen {
+  right: calc(374px + 12px + 56px) !important;
+}
+@media (max-width: 1050px) {
+  .primary-workspace-layout { --primary-sidebar-width: 357px; }
+  body:has(.bubble-fullscreen-shell:not(.fullscreen-overlay-active) .primary-workspace-sidebar.is-open)
+    .ai-chat-launcher.bubble-ai-fullscreen { right: calc(357px + 12px + 56px) !important; }
+}
+@media (max-width: 820px) {
+  .primary-workspace-layout { --primary-sidebar-width: min(346px, calc(100vw - 45px)); }
+  .primary-workspace-sidebar .primary-workspace-sidebar-list {
+    width: var(--primary-sidebar-width);
+    flex-basis: var(--primary-sidebar-width);
+  }
+  .primary-workspace-sidebar.is-collapsed .primary-workspace-sidebar-list { width: 0; flex-basis: 0; }
+  body:has(.bubble-fullscreen-shell:not(.fullscreen-overlay-active) .primary-workspace-sidebar.is-open)
+    .ai-chat-launcher.bubble-ai-fullscreen { right: calc(min(346px, 100vw - 45px) + 28px) !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .primary-widget-habit-circle,.primary-widget-habit-add-circle { transition: none; }
+}
