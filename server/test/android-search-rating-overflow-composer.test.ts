@@ -24,7 +24,7 @@ test('Android global search mirrors MiniApp sections, including notes and comple
   assert.ok(workspace.includes('NativeWorkspaceGlobalSearch('));
   assert.ok(workspace.includes('tasks=state.tasks,notes=state.notes'));
   assert.ok(workspace.includes('if(state.query.isNotBlank()) vm.loadNotes()'));
-  assert.ok(workspace.includes('pagerState.animateScrollToPage(3)'));
+  assert.ok(workspace.includes('notesVisible=true'), 'search opens note dialog without a notes tab');
   assert.ok(notes.includes('openNoteId:String?=null'));
   assert.ok(notes.includes('editing=target'));
   assert.ok(notes.includes('editorOpen=true'));
@@ -47,18 +47,20 @@ test('Android efficiency rating has the MiniApp-style pastel card and real break
   assert.ok(!s.includes('Canvas('),'rating no longer uses a ring');
 });
 
-test('Android overflow menu renders large utility cards with live badges',async()=>{
-  const s=await read(base+'ModernWorkspace.kt');
-  assert.ok(s.includes('WorkspaceUtilityMenuItem('));
-  assert.ok(s.includes('label="Кредиты"'));
-  assert.ok(s.includes('label="Рейтинг"'));
-  assert.ok(s.includes('label="Настройки"'));
-  assert.ok(s.includes('(state.user?.aiCredits?:0).toString()'));
-  assert.ok(s.includes('state.user?.efficiencyScore'));
-  assert.ok(s.includes('RoundedCornerShape(21.dp)'));
-  assert.ok(s.includes('moreOpen=false;onCredits()'));
-  assert.ok(s.includes('moreOpen=false;onScore()'));
-  assert.ok(s.includes('moreOpen=false;settings()'));
+test('Android overview header exposes account, credits, expandable search and settings',async()=>{
+  const [workspace,home]=await Promise.all([
+    read(base+'ModernWorkspace.kt'),
+    read(base+'HomeScreen.kt')
+  ]);
+  assert.ok(workspace.includes('WorkspaceTopbar(state,colors,dark,'));
+  assert.ok(workspace.includes('onAccount=onAccount'));
+  assert.ok(workspace.includes('onSearchToggle='));
+  assert.ok(workspace.includes('onCredits={creditsOpen=true}'));
+  assert.ok(workspace.includes('Icon(Icons.Default.Settings,"Настройки"'));
+  assert.ok(workspace.includes('Text("Статистика выполнения"'));
+  assert.ok(workspace.includes('Text("Ваши задачи"'));
+  assert.ok(workspace.includes('WorkspaceSectorsOverview('));
+  assert.ok(home.includes('AndroidAccountSheet('));
 });
 
 test('Both AI chats use a stable expanding five-line composer without overlap',async()=>{
