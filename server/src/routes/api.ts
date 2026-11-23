@@ -53,6 +53,9 @@ import { FixedWindowRateLimiter, type RateLimitDecision } from '../lib/security-
 import { validateAndroidPushRegistration } from '../lib/android-push-payload.js';
 import { CREDIT_PACKS, type CreditPackKey } from '../config/credit-packs.js';
 import { creditPacksResponse, yookassaPaymentsRouter } from './yookassa-payments.js';
+import { subscriptionPaymentsRouter } from './subscription-payments.js';
+import { SUBSCRIPTION_PLANS } from '../config/subscription-plans.js';
+import { isYooKassaConfigured } from '../services/yookassa.service.js';
 import { buildCreditUsageExcelXml, getCreditUsageStatistics, getMonthlyCreditUsageExport } from '../services/ai-credit-statistics.service.js';
 import { telegramUserClientAuth, TelegramUserClientError } from '../services/telegram-user-client-auth.service.js';
 import { TelegramUserProxyConfigurationError } from '../lib/telegram-user-client-network.js';
@@ -192,6 +195,7 @@ apiRouter.use('/business/organizations', workProjectsRouter);
 apiRouter.use('/business/organizations', workCompanyRouter);
 apiRouter.use('/business/organizations', businessOrganizationsRouter);
 apiRouter.use('/payments/yookassa', yookassaPaymentsRouter);
+apiRouter.use('/payments/yookassa', subscriptionPaymentsRouter);
 const ADMIN_PANEL_PASSWORD_ENV = 'ADMIN_PANEL_PASSWORD';
 const SUBSCRIPTION_PLAN_KEYS = ['start', 'pro', 'max'] as const;
 const ADMIN_SUBSCRIPTION_PLAN_KEYS = ['free', ...SUBSCRIPTION_PLAN_KEYS] as const;
@@ -850,6 +854,15 @@ apiRouter.get('/subscription-links', async (_req, res) => {
     select: { planKey: true, url: true }
   });
   res.json({ links: Object.fromEntries(SUBSCRIPTION_PLAN_KEYS.map((key) => [key, links.find((link) => link.planKey === key)?.url ?? ''])) });
+});
+
+apiRouter.get('/subscription-plans', (_req, res) => {
+  res.json({
+    plans: SUBSCRIPTION_PLANS.map(({ amountKopecks: _, ...plan }) => plan),
+    paymentProvider: isYooKassaConfigured() ? 'yookassa' : null,
+    purchaseAvailable: isYooKassaConfigured(),
+    automaticRenewal: false
+  });
 });
 
 apiRouter.get('/credit-packs', async (_req, res) => {

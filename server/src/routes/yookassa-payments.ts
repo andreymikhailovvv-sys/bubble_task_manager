@@ -5,6 +5,7 @@ import { CREDIT_PACKS, getCreditPackByKey } from '../config/credit-packs.js';
 import { prisma } from '../db/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { reconcileCreditPurchaseFromYooKassa } from '../services/credit-purchase.service.js';
+import { reconcileSubscriptionPurchaseFromYooKassa } from '../services/subscription-purchase.service.js';
 import { isYooKassaConfigured, resolveReceiptEmail, YooKassaError, yookassaService } from '../services/yookassa.service.js';
 
 export const yookassaPaymentsRouter = Router();
@@ -93,11 +94,14 @@ yookassaPaymentsRouter.post('/webhook', async (req, res) => {
   if (!['payment.succeeded', 'payment.canceled'].includes(event)) return void res.json({ ok: true });
   const providerPaymentId = typeof req.body?.object?.id === 'string' ? req.body.object.id : '';
   if (!providerPaymentId || providerPaymentId.length > 100) return void res.json({ ok: true });
-  let step: 'provider_fetch' | 'credit_reconciliation' = 'provider_fetch';
+  let step: 'provider_fetch' | 'credit_reconciliation' | 'subscription_reconciliation' = 'provider_fetch';
   try {
     const verified = await yookassaService.getPayment(providerPaymentId);
-    step = 'credit_reconciliation';
-    const result = await reconcileCreditPurchaseFromYooKassa(verified);
+    const subscription = Boolean(verified.metadata?.subscription_purchase_id);
+    step = subscription ? 'subscription_reconciliation' : 'credit_reconciliation';
+    const result = subscription
+      ? await reconcileSubscriptionPurchaseFromYooKassa(verified)
+      : await reconcileCreditPurchaseFromYooKassa(verified);
     console.info('[Payments] YooKassa webhook', { event, providerPaymentId, purchaseId: result.purchase?.id });
     return void res.json({ ok: true });
   } catch (error) {
