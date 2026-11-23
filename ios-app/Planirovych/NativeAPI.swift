@@ -23,6 +23,33 @@ private struct AccountEnvelope: Decodable {
     let user: ServerAccount
 }
 
+struct CreditBalance: Decodable {
+    let aiCreditsMilli: Int
+    let aiCredits: Int
+}
+
+struct CreditUsageItem: Decodable, Identifiable {
+    let key: String
+    let label: String
+    let creditsMilli: Int
+    let children: [CreditUsageItem]?
+    var id: String { key }
+}
+
+struct CreditUsageStatistics: Decodable {
+    let todayCreditsMilli: Int
+    let weekCreditsMilli: Int
+    let monthCreditsMilli: Int
+    let averageDailyCreditsMilli: Int
+    let byModel: [CreditUsageItem]
+    let byFeature: [CreditUsageItem]
+}
+
+private struct CreditStatisticsEnvelope: Decodable {
+    let statistics: CreditUsageStatistics
+}
+
+
 struct RemoteSphere: Decodable, Identifiable {
     let id: String
     let name: String
@@ -359,6 +386,15 @@ final class NativeAPI {
             let _: OperationResult = try await request("auth/logout", method: "POST")
         } catch { /* local logout is authoritative for this device */ }
         vault.clear()
+    }
+
+    func creditBalance() async throws -> CreditBalance {
+        try await request("auth/email/status")
+    }
+
+    func creditStatistics() async throws -> CreditUsageStatistics {
+        let reply: CreditStatisticsEnvelope = try await request("credits/statistics")
+        return reply.statistics
     }
 
     func loadWorkspace() async throws -> ([RemoteTask], [RemoteSphere]) {
