@@ -46,7 +46,7 @@ struct NativeTaskEditorSheet: View {
                         Button {
                             showingSettings = true
                         } label: {
-                            Label("Дедлайн, важность и другие настройки", systemImage: "slider.horizontal.3")
+                            Label("Другие настройки", systemImage: "slider.horizontal.3")
                                 .font(.subheadline)
                         }
                     }

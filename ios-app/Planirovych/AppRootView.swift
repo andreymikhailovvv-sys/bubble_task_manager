@@ -12,6 +12,9 @@ final class NativeWorkspaceSession: ObservableObject {
     @Published private(set) var selectedThreadID: String?
     @Published private(set) var isLoadingChat = false
     @Published private(set) var isSendingChat = false
+    @Published private(set) var chatStreamText = ""
+    @Published private(set) var chatProgressStatus: String?
+    @Published private(set) var firstChatReactionSerial = 0
     @Published var chatError: String?
     @Published private(set) var checkingSession = true
     @Published private(set) var isWorking = false
@@ -140,6 +143,23 @@ final class NativeWorkspaceSession: ObservableObject {
         }
     }
 
+    func addPlannerEntry(title: String, type: String, dueDate: Date?,
+                         sphereId: String?) async -> Bool {
+        guard account != nil, !isWorking else { return false }
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            _ = try await api.createPlannerEntry(title: title, type: type,
+                                                 dueDate: dueDate, sphereId: sphereId)
+            try await loadWorkspace()
+            errorMessage = nil
+            return true
+        } catch {
+            handle(error)
+            return false
+        }
+    }
+
     func saveTask(id: String, title: String, description: String) async -> Bool {
         guard account != nil, !isWorking else { return false }
         let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -158,14 +178,18 @@ final class NativeWorkspaceSession: ObservableObject {
     }
 
     func saveTaskSettings(task: RemoteTask, dueDate: Date?,
-                          importance: Int, urgency: Int, sphereId: String?) async -> Bool {
+                          importance: Int, urgency: Int, sphereId: String?,
+                          isRecurring: Bool, recurrence: NativeRecurrenceRule?,
+                          recurrenceSummary: String?) async -> Bool {
         guard account != nil, !isWorking else { return false }
         isWorking = true
         defer { isWorking = false }
         do {
             _ = try await api.updateTaskSettings(id: task.id, dueDate: dueDate,
                                                  importance: importance, urgency: urgency, sphereId: sphereId,
-                                                 isSubtask: task.parentTaskId != nil)
+                                                 isSubtask: task.parentTaskId != nil,
+                                                 isRecurring: isRecurring, recurrence: recurrence,
+                                                 recurrenceSummary: recurrenceSummary)
             try await loadWorkspace()
             errorMessage = nil
             return true
@@ -173,6 +197,10 @@ final class NativeWorkspaceSession: ObservableObject {
             handle(error)
             return false
         }
+    }
+
+    func parseRecurrence(_ text: String, taskId: String?) async throws -> (NativeRecurrenceRule, String) {
+        try await api.parseRecurrence(prompt: text, taskId: taskId)
     }
 
     func addSubtask(title: String, parent: RemoteTask) async -> Bool {
@@ -293,21 +321,60 @@ final class NativeWorkspaceSession: ObservableObject {
         } catch { chatError = error.localizedDescription }
     }
 
+    /// Quick-add always targets the account's quick AI conversation, never
+    /// whichever project chat happens to be active in the navigation.
+    func sendQuickVoiceRequest(_ question: String) async -> Bool {
+        guard account != nil else { return false }
+        if chatProjects.isEmpty { await loadChat() }
+        if let quickProject = chatProjects.first(where: { project in
+            project.chats.contains(where: { $0.id == "quick-ai-requests" })
+        }) {
+            if selectedThreadID != "quick-ai-requests" ||
+                selectedProjectID != quickProject.id {
+                await selectChat(projectId: quickProject.id, chatId: "quick-ai-requests")
+            }
+        }
+        return await sendChat(question)
+    }
+
     func sendChat(_ question: String) async -> Bool {
         guard account != nil, !isSendingChat, !isLoadingChat,
               let project = selectedChatProject, let thread = selectedChatThread else { return false }
         let cleaned = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty else { return false }
+        let history = chatMessages
         isSendingChat = true
+        chatStreamText = ""
+        chatProgressStatus = "analyzing_request"
         chatError = nil
-        defer { isSendingChat = false }
+        chatMessages.append(RemoteChatMessage(id: UUID().uuidString, role: "user", content: cleaned))
+        defer {
+            isSendingChat = false
+            chatProgressStatus = nil
+            chatStreamText = ""
+        }
+        var receivedFirstDelta = false
         do {
-            let reply = try await api.sendChat(question: cleaned, history: chatMessages,
-                                               project: project, thread: thread)
-            chatMessages.append(RemoteChatMessage(id: UUID().uuidString, role: "user", content: cleaned))
+            let reply = try await api.sendChat(question: cleaned, history: history,
+                                               project: project, thread: thread) { [weak self] event in
+                guard let self else { return }
+                switch event {
+                case .delta(let delta):
+                    self.chatStreamText += delta
+                    if !receivedFirstDelta {
+                        receivedFirstDelta = true
+                        self.firstChatReactionSerial += 1
+                    }
+                case .reset:
+                    self.chatStreamText = ""
+                case .status(let status):
+                    self.chatProgressStatus = status
+                }
+            }
             chatMessages.append(RemoteChatMessage(id: UUID().uuidString, role: "assistant",
                                                   content: reply.answer, taskProposal: reply.taskProposal,
-                                                  economicProposals: reply.economicProposals))
+                                                  economicProposals: reply.economicProposals,
+                                                  generatedDocument: reply.generatedDocument))
             do {
                 try await api.persistChatReply(projectId: project.id, chatId: thread.id,
                                                question: cleaned, reply: reply)
@@ -367,6 +434,8 @@ final class NativeWorkspaceSession: ObservableObject {
         spheres = []
         habits = []
         chatMessages = []
+        chatStreamText = ""
+        chatProgressStatus = nil
         chatProjects = []
         selectedProjectID = nil
         selectedThreadID = nil

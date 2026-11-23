@@ -4,7 +4,7 @@ import AVFoundation
 /// The microphone sends audio to the existing authenticated speech-to-text API.
 /// The recorded file is kept in temporary storage and deleted after use.
 @MainActor
-private final class ChatVoiceRecorder: NSObject, ObservableObject {
+final class ChatVoiceRecorder: NSObject, ObservableObject {
     @Published private(set) var isRecording = false
     @Published private(set) var level: CGFloat = 0
     @Published var errorMessage: String?
@@ -151,13 +151,7 @@ struct NativeChatView: View {
                             messageBubble(message).id(index)
                         }
                         if session.isSendingChat {
-                            HStack(spacing: 9) {
-                                ProgressView()
-                                Text("Планировыч отвечает…")
-                                    .font(.subheadline).foregroundStyle(.secondary)
-                            }
-                            .padding(.vertical, 8)
-                            .id("pending")
+                            aiStreamBubble.id("pending")
                         }
                         if let error = session.chatError ?? localVoiceError ?? voice.errorMessage {
                             Label(error, systemImage: "exclamationmark.triangle")
@@ -180,10 +174,14 @@ struct NativeChatView: View {
                         }
                     }
                 }
-                .onChange(of: session.isSendingChat) { isSending in
-                    if isSending {
-                        withAnimation { proxy.scrollTo("pending", anchor: .bottom) }
-                    }
+                .onChange(of: session.isSendingChat) { _, sending in
+                    if sending { withAnimation { proxy.scrollTo("pending", anchor: .bottom) } }
+                }
+                .onChange(of: session.chatStreamText) { _, _ in
+                    proxy.scrollTo("pending", anchor: .bottom)
+                }
+                .onChange(of: session.chatProgressStatus) { _, _ in
+                    proxy.scrollTo("pending", anchor: .bottom)
                 }
             }
 
@@ -283,10 +281,18 @@ struct NativeChatView: View {
                 Text(mine ? "Вы" : "Планировыч")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(mine ? Color.white.opacity(0.8) : accent)
-                Text(message.content)
+                markdown(message.generatedDocument?.isImage == true
+                    ? message.content.replacingOccurrences(
+                        of: #"\\[\\[file_ref=[^\\]]+\\]\\]"#, with: "",
+                        options: .regularExpression
+                    ).trimmingCharacters(in: .whitespacesAndNewlines)
+                    : message.content)
                     .font(.system(size: 15))
                     .textSelection(.enabled)
                     .foregroundStyle(mine ? Color.white : Color.primary)
+                if !mine, let doc = message.generatedDocument, doc.isImage {
+                    NativeGeneratedImageCard(document: doc)
+                }
                 if !mine, let proposal = message.taskProposal {
                     NativeAIProposalChip(session: session, proposal: proposal, economic: false)
                 }
@@ -300,6 +306,102 @@ struct NativeChatView: View {
             .background(mine ? accent : card, in: RoundedRectangle(cornerRadius: 18))
             if !mine { Spacer(minLength: 36) }
         }
+    }
+
+    /// Native attributed Markdown removes literal **/### markers and preserves
+    /// emphasis, lists, inline links and code formatting from the AI.
+    private func markdown(_ value: String) -> Text {
+        if let parsed = try? AttributedString(markdown: value,
+            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)) {
+            return Text(parsed)
+        }
+        return Text(value)
+    }
+
+    private func statusLabel(_ code: String?) -> String {
+        guard let code else { return "Анализирую запрос" }
+        if code.hasPrefix("reading_file:") || code.hasPrefix("reading_attachment:") {
+            let name = String(code.split(separator: ":", maxSplits: 1).last ?? "")
+            return "Изучаю документ «\(name.prefix(70))»"
+        }
+        switch code {
+        case "analyzing_request": return "Анализирую запрос"
+        case "using_chat_history": return "Учитываю историю диалога"
+        case "searching_workspace": return "Ищу в задачах и заметках"
+        case "searching_tasks": return "Ищу задачи"
+        case "searching_notes": return "Ищу заметки"
+        case "searching_subtasks": return "Ищу подзадачи"
+        case "listing_tasks": return "Собираю список задач"
+        case "reading_task": return "Изучаю задачу"
+        case "reading_note": return "Читаю заметку"
+        case "reading_subtask": return "Изучаю подзадачу"
+        case "checking_sectors": return "Проверяю сектора"
+        case "searching_files": return "Ищу файл"
+        case "reading_file": return "Изучаю документ"
+        case "reading_attachment": return "Изучаю вложение"
+        case "searching_web": return "Ищу в интернете"
+        case "analyzing_web_results": return "Изучаю найденные источники"
+        case "analyzing_retrieved_context": return "Анализирую найденные данные"
+        case "forming_answer": return "Формирую ответ"
+        case "applying_changes": return "Вношу изменения"
+        case "generating_image": return "Создаю изображение"
+        case "editing_image": return "Редактирую изображение"
+        case "editing_document": return "Редактирую документ"
+        default: return "Работаю над запросом"
+        }
+    }
+
+    private var aiStreamBubble: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(accent)
+                    .symbolEffect(.pulse, options: .repeating)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(statusLabel(session.chatProgressStatus))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .contentTransition(.opacity)
+                    HStack(spacing: 5) {
+                        ForEach(0..<3) { index in
+                            Capsule()
+                                .fill(accent.opacity(index == 1 ? 0.9 : 0.4))
+                                .frame(width: 17, height: 4)
+                        }
+                    }
+                }
+            }
+            if session.chatProgressStatus == "generating_image" ||
+               session.chatProgressStatus == "editing_image" {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(LinearGradient(
+                            colors: [accent.opacity(0.24), Color.cyan.opacity(0.10),
+                                     accent.opacity(0.20)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        ))
+                    Circle().fill(accent.opacity(0.2)).frame(width: 105, height: 105).blur(radius: 10)
+                    Image(systemName: "photo.artframe")
+                        .font(.system(size: 38, weight: .ultraLight))
+                        .foregroundStyle(accent)
+                        .symbolEffect(.pulse, options: .repeating)
+                }
+                .frame(height: 150)
+                .accessibilityLabel("ИИ создаёт изображение")
+            }
+            if !session.chatStreamText.isEmpty {
+                markdown(session.chatStreamText)
+                    .font(.system(size: 15))
+                    .textSelection(.enabled)
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(card, in: RoundedRectangle(cornerRadius: 18))
+        .padding(.trailing, 25)
     }
 
     private var composer: some View {

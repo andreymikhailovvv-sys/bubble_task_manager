@@ -23,12 +23,57 @@ private struct AccountEnvelope: Decodable {
     let user: ServerAccount
 }
 
+struct CreditBalance: Decodable {
+    let aiCreditsMilli: Int
+    let aiCredits: Int
+}
+
+struct CreditUsageItem: Decodable, Identifiable {
+    let key: String
+    let label: String
+    let creditsMilli: Int
+    let children: [CreditUsageItem]?
+    var id: String { key }
+}
+
+struct CreditUsageStatistics: Decodable {
+    let todayCreditsMilli: Int
+    let weekCreditsMilli: Int
+    let monthCreditsMilli: Int
+    let averageDailyCreditsMilli: Int
+    let byModel: [CreditUsageItem]
+    let byFeature: [CreditUsageItem]
+}
+
+private struct CreditStatisticsEnvelope: Decodable {
+    let statistics: CreditUsageStatistics
+}
+
+
 struct RemoteSphere: Decodable, Identifiable {
     let id: String
     let name: String
     let color: String?
     let icon: String?
     let generalPrompt: String?
+}
+
+struct NativeRecurrenceSlot: Codable {
+    let time: String
+    let weekday: Int?
+    let monthDay: Int?
+}
+
+struct NativeRecurrenceRule: Codable {
+    let rrule: String
+    let timezone: String
+    let until: String?
+    let slots: [NativeRecurrenceSlot]?
+}
+
+private struct RecurrenceParseEnvelope: Decodable {
+    let summary: String
+    let schedule: NativeRecurrenceRule
 }
 
 struct RemoteTask: Decodable, Identifiable {
@@ -43,6 +88,11 @@ struct RemoteTask: Decodable, Identifiable {
     let isCollaborative: Bool?
     let importance: Int?
     let urgency: Int?
+    let isRecurring: Bool?
+    let recurrenceText: String?
+    let recurrenceJson: NativeRecurrenceRule?
+    let recurrenceSummary: String?
+    let recurrenceUntil: String?
 
     var isComplete: Bool { status == "DONE" }
     var isActualTask: Bool { taskType == nil || taskType == "TASK" }
@@ -131,10 +181,25 @@ struct NativeChatProject: Identifiable {
     let chats: [NativeChatThread]
 }
 
+struct NativeGeneratedDocument: Codable, Identifiable {
+    let id: String
+    let fileName: String
+    let mimeType: String
+    let size: Int?
+    var isImage: Bool { mimeType.hasPrefix("image/") }
+}
+
+enum NativeChatStreamEvent {
+    case delta(String)
+    case reset
+    case status(String)
+}
+
 struct NativeChatReply {
     let answer: String
     let taskProposal: NativeAIProposal?
     let economicProposals: [NativeAIProposal]
+    let generatedDocument: NativeGeneratedDocument?
     let raw: [String: Any]
 }
 
@@ -144,19 +209,22 @@ struct RemoteChatMessage: Codable {
     let content: String
     let taskProposal: NativeAIProposal?
     let economicProposals: [NativeAIProposal]?
+    let generatedDocument: NativeGeneratedDocument?
 
     init(id: String?, role: String, content: String,
          taskProposal: NativeAIProposal? = nil,
-         economicProposals: [NativeAIProposal]? = nil) {
+         economicProposals: [NativeAIProposal]? = nil,
+         generatedDocument: NativeGeneratedDocument? = nil) {
         self.id = id
         self.role = role
         self.content = content
         self.taskProposal = taskProposal
         self.economicProposals = economicProposals
+        self.generatedDocument = generatedDocument
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, role, content, taskProposal, economicProposals
+        case id, role, content, taskProposal, economicProposals, generatedDocument
     }
 
     init(from decoder: Decoder) throws {
@@ -166,6 +234,7 @@ struct RemoteChatMessage: Codable {
         content = (try? values.decode(String.self, forKey: .content)) ?? ""
         taskProposal = try? values.decodeIfPresent(NativeAIProposal.self, forKey: .taskProposal)
         economicProposals = try? values.decodeIfPresent([NativeAIProposal].self, forKey: .economicProposals)
+        generatedDocument = try? values.decodeIfPresent(NativeGeneratedDocument.self, forKey: .generatedDocument)
     }
 }
 
@@ -177,6 +246,7 @@ private struct AiChatReply: Decodable {
     let answer: String
     let taskProposal: NativeAIProposal?
     let economicProposals: [NativeAIProposal]?
+    let generatedDocument: NativeGeneratedDocument?
 }
 
 private struct VoiceTranscription: Decodable {
@@ -265,8 +335,8 @@ final class SessionCookieVault {
         return true
     }
 
-    func save() throws {
-        let cookies = (HTTPCookieStorage.shared.cookies(for: origin) ?? [])
+    private func liveSessionCookies() -> [HTTPCookie] {
+        (HTTPCookieStorage.shared.cookies(for: origin) ?? [])
             .filter {
                 cookieNames.contains($0.name)
                     && ($0.domain == host || $0.domain == "." + host)
@@ -274,6 +344,34 @@ final class SessionCookieVault {
                     && $0.isSecure
                     && ($0.expiresDate ?? .distantPast) > Date()
             }
+    }
+
+    #if targetEnvironment(simulator)
+    /// Some remote, unsigned Simulator runtimes cannot write to Keychain.
+    /// Keep the server-issued session as non-persistent cookies for *this run*
+    /// instead of breaking sign-in or storing tokens in UserDefaults.
+    /// This is NEVER compiled into the physical-device application.
+    func adoptTemporarySimulatorSession() -> Bool {
+        let cookies = liveSessionCookies()
+        guard cookies.contains(where: { $0.name == "btm_auth" }) else { return false }
+        var temporary: [HTTPCookie] = []
+        for cookie in cookies {
+            guard var properties = cookie.properties else { return false }
+            properties.removeValue(forKey: .expires)
+            properties.removeValue(forKey: .maximumAge)
+            properties[.discard] = "TRUE"
+            guard let sessionCookie = HTTPCookie(properties: properties) else { return false }
+            temporary.append(sessionCookie)
+        }
+        let storage = HTTPCookieStorage.shared
+        cookies.forEach { storage.deleteCookie($0) }
+        temporary.forEach { storage.setCookie($0) }
+        return temporary.contains(where: { $0.name == "btm_auth" })
+    }
+    #endif
+
+    func save() throws {
+        let cookies = liveSessionCookies()
         guard cookies.contains(where: { $0.name == "btm_auth" }) else {
             throw NativeAPIError.noSessionCookie
         }
@@ -288,7 +386,10 @@ final class SessionCookieVault {
         var insertion = query
         insertion[kSecValueData as String] = data
         insertion[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        guard SecItemAdd(insertion as CFDictionary, nil) == errSecSuccess else {
+        let status = SecItemAdd(insertion as CFDictionary, nil)
+        guard status == errSecSuccess else {
+            // OSStatus only: do not log sensitive cookie contents.
+            NSLog("[Planirovych] Keychain save failed (OSStatus=%d)", status)
             throw NativeAPIError.secureStorage
         }
     }
@@ -320,7 +421,14 @@ final class NativeAPI {
     }()
 
     func restoreAccount() async throws -> ServerAccount? {
-        guard vault.restore() else { return nil }
+        guard vault.restore() else {
+            #if targetEnvironment(simulator)
+            // If the previous run could not use Keychain, discard any residual
+            // browser cookie storage instead of silently restoring credentials.
+            vault.clear()
+            #endif
+            return nil
+        }
         do {
             let response: AccountEnvelope = try await request("auth/me")
             guard response.user.isRegistered else {
@@ -347,6 +455,16 @@ final class NativeAPI {
         do {
             try vault.save()
         } catch {
+            #if targetEnvironment(simulator)
+            if let vaultError = error as? NativeAPIError {
+                if case .secureStorage = vaultError,
+                   vault.adoptTemporarySimulatorSession() {
+                    // Server login succeeded. The cloud Simulator can use the
+                    // session until restart, with no insecure token fallback.
+                    return response.user
+                }
+            }
+            #endif
             vault.clear()
             throw error
         }
@@ -359,6 +477,15 @@ final class NativeAPI {
             let _: OperationResult = try await request("auth/logout", method: "POST")
         } catch { /* local logout is authoritative for this device */ }
         vault.clear()
+    }
+
+    func creditBalance() async throws -> CreditBalance {
+        try await request("auth/email/status")
+    }
+
+    func creditStatistics() async throws -> CreditUsageStatistics {
+        let reply: CreditStatisticsEnvelope = try await request("credits/statistics")
+        return reply.statistics
     }
 
     func loadWorkspace() async throws -> ([RemoteTask], [RemoteSphere]) {
@@ -416,6 +543,23 @@ final class NativeAPI {
         return try await request("tasks", method: "POST", json: payload)
     }
 
+    func createPlannerEntry(title: String, type: String, dueDate: Date?,
+                            sphereId: String?) async throws -> RemoteTask {
+        guard ["TASK", "REMINDER", "EVENT"].contains(type) else {
+            throw NativeAPIError.invalidResponse
+        }
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw NativeAPIError.invalidResponse }
+        var json: [String: Any] = [
+            "title": trimmed, "taskType": type, "importance": 3, "urgency": 3
+        ]
+        if let dueDate {
+            json["dueDate"] = ISO8601DateFormatter().string(from: dueDate)
+        }
+        if let sphereId { json["sphereId"] = sphereId }
+        return try await request("tasks", method: "POST", json: json)
+    }
+
     func updateTask(id: String, title: String, description: String) async throws -> RemoteTask {
         try await request("tasks/\(id)", method: "PATCH", json: [
             "title": title, "description": description
@@ -423,16 +567,37 @@ final class NativeAPI {
     }
 
     func updateTaskSettings(id: String, dueDate: Date?, importance: Int,
-                            urgency: Int, sphereId: String?, isSubtask: Bool) async throws -> RemoteTask {
+                            urgency: Int, sphereId: String?, isSubtask: Bool,
+                            isRecurring: Bool, recurrence: NativeRecurrenceRule?,
+                            recurrenceSummary: String?) async throws -> RemoteTask {
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         var fields: [String: Any] = [
             "dueDate": dueDate.map(iso.string(from:)) ?? NSNull(),
             "importance": max(1, min(5, importance)),
-            "urgency": max(1, min(5, urgency))
+            "urgency": max(1, min(5, urgency)),
+            "isRecurring": isRecurring,
+            "recurrenceText": isRecurring ? (recurrenceSummary ?? "") : NSNull(),
+            "recurrenceSummary": isRecurring ? (recurrenceSummary ?? "") : NSNull(),
+            "recurrenceUntil": isRecurring ? (recurrence?.until as Any? ?? NSNull()) : NSNull()
         ]
+        if isRecurring, let recurrence {
+            let encoded = try JSONEncoder().encode(recurrence)
+            fields["recurrenceJson"] = try JSONSerialization.jsonObject(with: encoded)
+        } else {
+            fields["recurrenceJson"] = NSNull()
+        }
         if !isSubtask { fields["sphereId"] = sphereId ?? NSNull() }
         return try await request("tasks/\(id)", method: "PATCH", json: fields)
+    }
+
+    func parseRecurrence(prompt: String, taskId: String?) async throws -> (NativeRecurrenceRule, String) {
+        var payload: [String: Any] = ["text": prompt, "userTimeZone": TimeZone.current.identifier]
+        if let taskId { payload["taskId"] = taskId }
+        let result: RecurrenceParseEnvelope = try await request(
+            "ai/parse-recurrence", method: "POST", json: payload, timeoutInterval: 90
+        )
+        return (result.schedule, result.summary)
     }
 
     func loadHabits() async throws -> [RemoteHabit] {
@@ -511,22 +676,85 @@ final class NativeAPI {
         return result.messages
     }
 
+    /// Streaming NDJSON is the same transport used by Mini App and Android.
+    /// The quick intro, status transitions and answer deltas arrive in order.
     func sendChat(question: String, history: [RemoteChatMessage],
-                  project: NativeChatProject, thread: NativeChatThread) async throws -> NativeChatReply {
+                  project: NativeChatProject, thread: NativeChatThread,
+                  onEvent: @escaping @MainActor (NativeChatStreamEvent) -> Void
+    ) async throws -> NativeChatReply {
         let payload: [String: Any] = [
             "clientRequestId": UUID().uuidString.lowercased(),
             "question": question,
-            "history": history.suffix(25).map { ["role": $0.role, "content": $0.content] },
+            "history": history.suffix(25).map { message in
+                var item: [String: Any] = ["role": message.role, "content": message.content]
+                if let doc = message.generatedDocument { item["generatedDocument"] = ["id": doc.id] }
+                return item
+            },
             "projectId": project.id, "projectTitle": project.title,
             "chatId": thread.id, "chatTitle": thread.title,
             "userTimeZone": TimeZone.current.identifier
         ]
-        let data = try await requestData("ai-chat", method: "POST", json: payload,
-                                         timeoutInterval: 180)
-        let result = try JSONDecoder().decode(AiChatReply.self, from: data)
-        let raw = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
-        return NativeChatReply(answer: result.answer, taskProposal: result.taskProposal,
-                               economicProposals: result.economicProposals ?? [], raw: raw)
+        guard let url = URL(string: "ai-chat", relativeTo: base),
+              url.scheme == "https", url.host == base.host else {
+            throw NativeAPIError.invalidResponse
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpShouldHandleCookies = true
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = 180
+        request.setValue("same-origin", forHTTPHeaderField: "Sec-Fetch-Site")
+        request.setValue("application/x-ndjson", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        let (bytes, response) = try await http.bytes(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NativeAPIError.invalidResponse
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            throw NativeAPIError.server(code: httpResponse.statusCode,
+                                        message: "Сервер не принял запрос (HTTP \(httpResponse.statusCode)).")
+        }
+        for try await line in bytes.lines {
+            try Task.checkCancellation()
+            guard let rawData = line.data(using: .utf8),
+                  let event = try? JSONSerialization.jsonObject(with: rawData) as? [String: Any],
+                  let type = event["type"] as? String else { continue }
+            switch type {
+            case "delta":
+                if let value = event["text"] as? String, !value.isEmpty {
+                    onEvent(.delta(value))
+                }
+            case "reset":
+                onEvent(.reset)
+            case "status":
+                if let value = event["status"] as? String { onEvent(.status(value)) }
+            case "error":
+                throw NativeAPIError.server(code: 500,
+                    message: event["message"] as? String ?? "Ошибка обработки запроса ИИ.")
+            case "result":
+                guard let data = event["result"] as? [String: Any] else {
+                    throw NativeAPIError.invalidResponse
+                }
+                let resultData = try JSONSerialization.data(withJSONObject: data)
+                let parsed = try JSONDecoder().decode(AiChatReply.self, from: resultData)
+                return NativeChatReply(answer: parsed.answer,
+                                       taskProposal: parsed.taskProposal,
+                                       economicProposals: parsed.economicProposals ?? [],
+                                       generatedDocument: parsed.generatedDocument, raw: data)
+            default: break
+            }
+        }
+        throw NativeAPIError.server(code: 502, message: "Соединение с ИИ прервалось до завершения ответа.")
+    }
+
+    func downloadGeneratedDocument(id: String) async throws -> Data {
+        guard id.count < 150, id.range(of: #"^[A-Za-z0-9_-]+$"#,
+                                       options: .regularExpression) != nil else {
+            throw NativeAPIError.invalidResponse
+        }
+        return try await requestData("ai-documents/\(id)/download", timeoutInterval: 90)
     }
 
     /// Preserve other clients' unknown project/message metadata when saving.
@@ -555,10 +783,70 @@ final class NativeAPI {
         if let proposals = reply.raw["economicProposals"], !(proposals is NSNull) {
             answer["economicProposals"] = proposals
         }
+        if let image = reply.raw["generatedDocument"], !(image is NSNull) {
+            answer["generatedDocument"] = image
+        }
         messages.append(answer)
         threads[chatIndex]["messages"] = messages
         projects[projectIndex]["chats"] = threads
         _ = try await requestData("ai-chat/projects", method: "PUT", json: ["projects": projects])
+    }
+
+    private struct AutoApplyEnvelope: Decodable {
+        let autoApply: Bool
+    }
+
+    func proposalDetails(id: String, economic: Bool) async throws -> [String: Any] {
+        let root = economic ? "economic/assistant/proposals" : "ai/task-proposals"
+        let data = try await requestData("\(root)/\(id)")
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw NativeAPIError.invalidResponse
+        }
+        return json
+    }
+
+    func proposalAutoApply(economic: Bool) async throws -> Bool {
+        let resource = economic ? "economic/assistant/preferences" : "ai/task-proposals/preferences"
+        let response: AutoApplyEnvelope = try await request(resource)
+        return response.autoApply
+    }
+
+    func updateProposalAutoApply(economic: Bool, value: Bool) async throws -> Bool {
+        let resource = economic ? "economic/assistant/preferences" : "ai/task-proposals/preferences"
+        let response: AutoApplyEnvelope = try await request(
+            resource, method: economic ? "PUT" : "PATCH", json: ["autoApply": value]
+        )
+        return response.autoApply
+    }
+
+    func proposalOptions(economic: Bool) async throws -> [String: Any] {
+        let resource = economic ? "economic/assistant/options" : "ai/task-proposals/options"
+        let data = try await requestData(resource)
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw NativeAPIError.invalidResponse
+        }
+        return json
+    }
+
+    func editTaskProposal(id: String, index: Int, revision: String,
+                          values: [String: Any]) async throws -> [String: Any] {
+        let data = try await requestData("ai/task-proposals/\(id)", method: "PATCH", json: [
+            "index": index, "revision": revision, "values": values
+        ])
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw NativeAPIError.invalidResponse
+        }
+        return json
+    }
+
+    func editEconomicProposal(id: String, payload: [String: Any],
+                              expectedPayload: [String: Any]) async throws -> [String: Any] {
+        let data = try await requestData("economic/assistant/proposals/\(id)", method: "PUT",
+                                         json: ["payload": payload, "expectedPayload": expectedPayload])
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw NativeAPIError.invalidResponse
+        }
+        return json
     }
 
     func proposalAction(_ proposal: NativeAIProposal, economic: Bool,

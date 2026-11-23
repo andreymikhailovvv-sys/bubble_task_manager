@@ -9,10 +9,13 @@ enum NativeTimelineZoom: String, CaseIterable {
 struct NativeTaskTimelineView: View {
     let tasks: [RemoteTask]
     let spheres: [RemoteSphere]
+    let habits: [RemoteHabit]
     let onOpenTask: (RemoteTask) -> Void
+    let onOpenHabit: (RemoteHabit) -> Void
     let overdueCount: Int
     let onOpenOverdue: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
     @State private var zoom: NativeTimelineZoom = .day
     @State private var anchor = Calendar.current.startOfDay(for: Date())
 
@@ -197,41 +200,165 @@ struct NativeTaskTimelineView: View {
         .buttonStyle(.plain)
     }
 
+    private struct DayRecord: Identifiable {
+        let id: String
+        let date: Date
+        let title: String
+        let tint: Color
+        let kind: String
+        let task: RemoteTask?
+        let habit: RemoteHabit?
+    }
+
+    private var dayRecords: [DayRecord] {
+        var records = events(on: anchor).compactMap { task -> DayRecord? in
+            guard let due = NativeTaskDates.parse(task.dueDate) else { return nil }
+            let kind = task.taskType == "EVENT" ? "Событие" :
+                task.taskType == "REMINDER" ? "Напоминание" :
+                task.parentTaskId != nil ? "Подзадача" : "Задача"
+            return DayRecord(id: task.id, date: due, title: task.title,
+                             tint: sectorTint(task), kind: kind, task: task, habit: nil)
+        }
+        for habit in habits where HabitCalendar.scheduled(habit, on: anchor) {
+            let times = habit.reminderTimes?.isEmpty == false ?
+                habit.reminderTimes ?? [] : (habit.reminderTime.map { [$0] } ?? [])
+            for (index, clock) in times.enumerated() {
+                let parts = clock.split(separator: ":")
+                guard parts.count == 2, let hour = Int(parts[0]), let minute = Int(parts[1]),
+                      let date = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: anchor)
+                else { continue }
+                records.append(DayRecord(id: "habit-\(habit.id)-\(index)", date: date,
+                                         title: habit.icon + " " + habit.name,
+                                         tint: Color(habitHex: habit.color), kind: "Привычка",
+                                         task: nil, habit: habit))
+            }
+        }
+        return records.sorted { $0.date == $1.date ? $0.title < $1.title : $0.date < $1.date }
+    }
+
+    private func remainingTime(_ date: Date) -> String {
+        let minutes = Int(abs(date.timeIntervalSinceNow) / 60)
+        let days = minutes / 1440
+        let hours = (minutes % 1440) / 60
+        let remainder = minutes % 60
+        let pieces = [
+            days > 0 ? "\(days)д" : nil,
+            hours > 0 ? "\(hours)ч" : nil,
+            days == 0 && (remainder > 0 || hours == 0) ? "\(max(remainder, 1))м" : nil
+        ].compactMap { $0 }
+        return (date < Date() ? "Просрочено на " : "Через ") + pieces.joined(separator: " ")
+    }
+
+    private func compactDayCard(_ record: DayRecord) -> some View {
+        let isSubtask = record.kind == "Подзадача"
+        let isEvent = record.kind == "Событие"
+        let isTimeOnly = ["Событие", "Напоминание", "Привычка"].contains(record.kind)
+        let dark = colorScheme == .dark
+        let tintBackground = record.tint.opacity(dark ? 0.11 : 0.045)
+        let base = Color(uiColor: .secondarySystemGroupedBackground)
+        let border = dark ? Color(red: 0.25, green: 0.31, blue: 0.41)
+                          : Color(red: 0.88, green: 0.91, blue: 0.95)
+
+        return Button {
+            if let task = record.task { onOpenTask(task) }
+            else if let habit = record.habit { onOpenHabit(habit) }
+        } label: {
+            HStack(alignment: .top, spacing: 12) {
+                Circle().fill(record.tint)
+                    .frame(width: isSubtask ? 6 : 7, height: isSubtask ? 6 : 7)
+                    .padding(.top, 8)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(record.title)
+                        .font(.system(size: isSubtask ? 12.5 : 14, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(isTimeOnly ? record.date.formatted(date: .omitted, time: .shortened)
+                         : remainingTime(record.date))
+                        .font(.system(size: isSubtask ? 10.5 : 11.5, weight: .medium))
+                        .foregroundStyle(record.date < Date() && !isTimeOnly ? Color.red : Color.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 15)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, minHeight: isSubtask ? 54 : 62, alignment: .leading)
+            .background(
+                LinearGradient(colors: [tintBackground, base, base],
+                               startPoint: .leading, endPoint: .trailing),
+                in: RoundedRectangle(cornerRadius: 18)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 18)
+                    .stroke(border, style: StrokeStyle(lineWidth: 1,
+                                                      dash: isEvent ? [6, 4] : []))
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(.trailing, isSubtask ? 8 : 0)
+    }
+
     private var dayView: some View {
-        VStack(spacing: 0) {
-            let all = events(on: anchor)
-            if all.isEmpty {
-                Label("Нет задач с дедлайном на этот день", systemImage: "calendar.badge.clock")
+        let records = dayRecords
+        let isToday = calendar.isDateInToday(anchor)
+        let currentHour = calendar.component(.hour, from: Date())
+        let scheduledHours = Set(records.map { calendar.component(.hour, from: $0.date) })
+        let hours = (scheduledHours.union(isToday ? [currentHour] : [])).sorted()
+        let rail = colorScheme == .dark ? Color(red: 0.27, green: 0.34, blue: 0.44)
+                                        : Color(red: 0.88, green: 0.90, blue: 0.94)
+        let marker = colorScheme == .dark ? Color(red: 0.61, green: 0.67, blue: 0.78)
+                                          : Color(red: 0.55, green: 0.61, blue: 0.70)
+        return VStack(alignment: .leading, spacing: 11) {
+            if hours.isEmpty {
+                Label("На выбранный день нет записей", systemImage: "calendar")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 28)
+                    .padding(.vertical, 22)
             } else {
-                ForEach(0..<24, id: \.self) { hour in
-                    let matching = all.filter {
-                        guard let due = NativeTaskDates.parse($0.dueDate) else { return false }
-                        return calendar.component(.hour, from: due) == hour
-                    }
-                    HStack(alignment: .top, spacing: 10) {
-                        Text(String(format: "%02d:00", hour))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .frame(width: 43, alignment: .trailing)
-                        VStack(spacing: 7) {
-                            if matching.isEmpty {
-                                Rectangle().fill(Color.secondary.opacity(0.12)).frame(height: 1)
-                            } else {
-                                ForEach(matching) { task in taskCard(task) }
+                ForEach(hours, id: \.self) { hour in
+                    HStack(alignment: .top, spacing: 0) {
+                        HStack(alignment: .top, spacing: 5) {
+                            Text(String(format: "%02d:00", hour))
+                                .font(.system(size: 11, weight: .medium))
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                                .padding(.top, 16)
+                            Spacer(minLength: 0)
+                            Circle().fill(marker)
+                                .frame(width: 9, height: 9)
+                                .padding(.top, 19)
+                                .offset(x: 4.5)
+                        }
+                        .frame(width: 64)
+                        VStack(alignment: .leading, spacing: 9) {
+                            if isToday && hour == currentHour {
+                                HStack(spacing: 8) {
+                                    Circle().fill(Color.purple).frame(width: 7, height: 7)
+                                    Text("Сейчас · " + Date().formatted(date: .omitted, time: .shortened))
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(.purple)
+                                    Rectangle().fill(Color.purple.opacity(0.45)).frame(height: 1)
+                                }
+                                .padding(.vertical, 9)
+                            }
+                            ForEach(records.filter { calendar.component(.hour, from: $0.date) == hour }) { record in
+                                compactDayCard(record)
                             }
                         }
-                        .padding(.bottom, matching.isEmpty ? 12 : 9)
+                        .padding(.leading, 13)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             }
         }
-        .padding(15)
-        .background(Color(uiColor: .secondarySystemGroupedBackground),
-                    in: RoundedRectangle(cornerRadius: 21))
+        .padding(.vertical, 8)
+        .background(alignment: .topLeading) {
+            rail.frame(width: 1.3)
+                .padding(.leading, 63.5)
+                .padding(.vertical, 17)
+        }
     }
 
     private var weekView: some View {

@@ -12,6 +12,10 @@ on:
       - '.github/workflows/ios-iphone-ipa.yml'
   workflow_dispatch:
 
+concurrency:
+  group: ios-iphone-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 

@@ -45,6 +45,11 @@ struct RemoteWorkspaceView: View {
     @State private var selectedSphereID: String?
     @State private var showingNewTask = false
     @State private var editingTask: RemoteTask?
+    @State private var openedTimelineHabit: RemoteHabit?
+    @State private var showCredits = false
+    @State private var quickEntryKind: NativeQuickEntryKind?
+    @State private var showingQuickVoice = false
+    @State private var quickAIWaiting = false
     @State private var taskOrder: TaskOrder = .urgency
     @State private var dateWindow: TaskDateWindow = .all
     @State private var taskMode: TaskDisplayMode = .list
@@ -132,9 +137,61 @@ struct RemoteWorkspaceView: View {
             navigation
         }
         .background(background.ignoresSafeArea())
+        .overlay(alignment: .bottomTrailing) {
+            if selectedTab == .overview || selectedTab == .timeline {
+                quickPlusButton
+                    .padding(.trailing, 22)
+                    .padding(.bottom, 90)
+            }
+        }
+        .onChange(of: session.firstChatReactionSerial) { _, _ in
+            if quickAIWaiting {
+                selectedTab = .chat
+                quickAIWaiting = false
+            }
+        }
+        .sheet(isPresented: $showingQuickVoice) {
+            NativeQuickVoiceSheet(session: session) { recordingData, duration in
+                quickAIWaiting = true
+                Task {
+                    do {
+                        let text = try await session.transcribeVoice(data: recordingData,
+                                                                    duration: duration)
+                        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                            session.chatError = "Не удалось распознать голосовой запрос."
+                            quickAIWaiting = false
+                            selectedTab = .chat
+                            return
+                        }
+                        let succeeded = await session.sendQuickVoiceRequest(text)
+                        if !succeeded {
+                            quickAIWaiting = false
+                            selectedTab = .chat
+                        }
+                    } catch {
+                        session.chatError = error.localizedDescription
+                        quickAIWaiting = false
+                        selectedTab = .chat
+                    }
+                }
+            }
+            .presentationDetents([.large])
+        }
+        .sheet(item: $quickEntryKind) { kind in
+            NativeQuickCreateSheet(session: session, kind: kind)
+                .presentationDetents([.medium, .large])
+        }
         .sheet(isPresented: $showingNewTask) {
             NewServerTaskSheet(session: session)
                 .presentationDetents([.medium])
+        }
+        .sheet(item: $openedTimelineHabit) { habit in
+            NativeHabitDetailSheet(session: session, habitID: habit.id)
+                .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showCredits) {
+            NativeCreditsSheet(session: session)
+                .presentationDetents([.medium, .large])
         }
         .sheet(item: $editingTask) { task in
             NativeTaskEditorSheet(session: session, task: task)
@@ -296,8 +353,9 @@ struct RemoteWorkspaceView: View {
                         .background(accent.opacity(0.09), in: RoundedRectangle(cornerRadius: 12))
                 }
                 .accessibilityLabel("Управление аккаунтом")
-                HStack(spacing: 3) {
-                    Image(systemName: "circle.hexagongrid.fill")
+                Button { showCredits = true } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "circle.hexagongrid.fill")
                         .font(.system(size: 16))
                         .foregroundStyle(Color(red: 0.83, green: 0.41, blue: 0.57))
                     Text("\(session.account?.aiCredits ?? 0)")
@@ -307,7 +365,9 @@ struct RemoteWorkspaceView: View {
                 .padding(.horizontal, 5)
                 .frame(height: 40)
                 .background(accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
-                .accessibilityLabel("ИИ-кредиты")
+                    }
+                .buttonStyle(.plain)
+                .accessibilityLabel("ИИ-кредиты: открыть баланс и статистику")
                 Button {
                     searchExpanded.toggle()
                 } label: {
@@ -445,9 +505,11 @@ struct RemoteWorkspaceView: View {
             Text("Таймлайн")
                 .font(.system(size: 28, weight: .bold, design: .rounded))
             NativeTaskTimelineView(
-                tasks: session.tasks.filter { $0.parentTaskId == nil && !$0.isComplete },
+                tasks: session.tasks.filter { !$0.isComplete },
                 spheres: session.spheres,
+                habits: session.habits,
                 onOpenTask: { task in editingTask = task },
+                onOpenHabit: { habit in openedTimelineHabit = habit },
                 overdueCount: overdueTasks.count,
                 onOpenOverdue: { showOverdue = true }
             )
@@ -747,6 +809,49 @@ struct RemoteWorkspaceView: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.orange.opacity(0.11), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var quickPlusButton: some View {
+        Menu {
+            Button {
+                showingQuickVoice = true
+            } label: {
+                Label("Голосовой ввод", systemImage: "mic.fill")
+            }
+            Divider()
+            ForEach(NativeQuickEntryKind.allCases) { kind in
+                Button {
+                    quickEntryKind = kind
+                } label: {
+                    Label(kind.rawValue, systemImage: kind.symbol)
+                }
+            }
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(LinearGradient(colors: [
+                        Color(red: 0.50, green: 0.34, blue: 0.87),
+                        Color(red: 0.24, green: 0.72, blue: 0.82)
+                    ], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 58, height: 58)
+                if quickAIWaiting {
+                    Circle()
+                        .trim(from: 0.05, to: 0.8)
+                        .stroke(.white.opacity(0.9), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                        .frame(width: 42, height: 42)
+                        .rotationEffect(.degrees(quickAIWaiting ? 360 : 0))
+                        .animation(.linear(duration: 1.1).repeatForever(autoreverses: false),
+                                   value: quickAIWaiting)
+                }
+                Image(systemName: quickAIWaiting ? "sparkles" : "plus")
+                    .font(.system(size: 27, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+            .shadow(color: Color.purple.opacity(0.25), radius: 12, y: 6)
+        }
+        .disabled(quickAIWaiting || session.isWorking)
+        .accessibilityLabel(quickAIWaiting ? "Планировыч обрабатывает голосовой запрос" :
+                            "Добавить задачу, событие, напоминание или голосовой запрос")
     }
 
     private var navigation: some View {
