@@ -789,3 +789,49 @@ body:has(.bubble-fullscreen-shell:not(.fullscreen-overlay-active) .primary-works
 @media (prefers-reduced-motion: reduce) {
   .primary-widget-habit-circle,.primary-widget-habit-add-circle { transition: none; }
 }
+
+
+/* Slightly smaller habit rings without scaling the entire sidebar or its gaps. */
+.primary-workspace-sidebar .primary-widget-habit-circle {
+  width: 57px;
+  height: 57px;
+  padding: 5px;
+}
+.primary-workspace-sidebar .primary-widget-habit-emoji { font-size: 20px; }
+.primary-workspace-sidebar .primary-widget-habit-fraction { font-size: 11px; }
+.primary-workspace-sidebar .primary-widget-habit-add-circle {
+  flex-basis: 57px;
+  width: 57px;
+  height: 57px;
+}
+.primary-workspace-sidebar .primary-widget-habit-divider { height: 45px; }
+.primary-workspace-sidebar .primary-widget-habit-day-badge {
+  top: -9px;
+  right: -6px;
+  min-width: 25px;
+  height: 21px;
+  font-size: 9px;
+}
+
+/* Highlight note cards on hover / keyboard focus in both themes. */
+.primary-workspace-sidebar .primary-widget-notes .standalone-note-recent {
+  transition: border-color .16s ease, background-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+.primary-workspace-sidebar .primary-widget-notes .standalone-note-recent:hover,
+.primary-workspace-sidebar .primary-widget-notes .standalone-note-recent:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 53%, var(--panel-border));
+  background: color-mix(in srgb, var(--accent) 9%, var(--card-bg));
+  box-shadow: 0 3px 12px rgba(30,52,80,.11) !important;
+  transform: translateY(-1px);
+  outline: none;
+}
+body[data-theme='light'] .primary-workspace-sidebar .primary-widget-notes .standalone-note-recent:hover,
+body[data-theme='light'] .primary-workspace-sidebar .primary-widget-notes .standalone-note-recent:focus-visible {
+  background: color-mix(in srgb, var(--accent) 9%, #fff);
+  border-color: color-mix(in srgb, var(--accent) 44%, #d4e3ef);
+}
+@media (prefers-reduced-motion: reduce) {
+  .primary-workspace-sidebar .primary-widget-notes .standalone-note-recent { transition: none; }
+  .primary-workspace-sidebar .primary-widget-notes .standalone-note-recent:hover,
+  .primary-workspace-sidebar .primary-widget-notes .standalone-note-recent:focus-visible { transform: none; }
+}

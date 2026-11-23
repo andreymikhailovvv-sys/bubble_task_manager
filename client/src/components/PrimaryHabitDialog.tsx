@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type CSSProperties, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Clock3, ClipboardList, Loader2, Minus, Palette, Plus, Trash2, X } from 'lucide-react';
+import { Check, Clock3, Loader2, Minus, Palette, Plus, Trash2, X } from 'lucide-react';
 import type { Habit, HabitDurationMode, HabitRecurrenceType } from '../lib/types';
 import './PrimaryHabitDialog.css';
 
@@ -72,19 +72,39 @@ export function PrimaryHabitDialog({ habit, embedded = false, onClose, onSave, o
   };
 
   const panel = (
-      <section className={`primary-habit-dialog dialog-surface ${embedded ? 'primary-habit-dialog--embedded' : ''}`} role="dialog" aria-modal={!embedded}
+      <section className={`primary-habit-dialog dialog-surface ${embedded ? 'primary-habit-dialog--embedded' : !habit ? 'primary-habit-dialog--create' : ''}`} role="dialog" aria-modal={!embedded}
         aria-label={habit ? 'Настройки привычки' : 'Создание привычки'}>
         <header className="primary-habit-dialog-header">
-          <h2>{habit ? 'Настройки привычки' : 'Новая привычка'}</h2>
+          {habit ? <h2>Настройки привычки</h2> : <div className="primary-habit-create-heading">
+            <h2>НОВАЯ ПРИВЫЧКА</h2>
+            <p>Выберите параметры и создайте привычку.</p>
+          </div>}
           <button type="button" className="primary-habit-icon-button" onClick={onClose} disabled={saving} aria-label="Закрыть"><X size={19}/></button>
         </header>
         <form className="primary-habit-form" onSubmit={event => void save(event)}>
           {error && <p className="primary-habit-error" role="alert">{error}</p>}
-          {!embedded && <label className="primary-habit-title-pill">
-            <ClipboardList size={18} aria-hidden="true"/>
-            <input autoFocus required aria-label="Название привычки" maxLength={160}
-              value={name} placeholder="Название привычки"
-              onChange={event => setName(event.target.value)}/>
+          {!habit && <div className="primary-habit-create-overview">
+            <div className="primary-habit-create-ring" style={{
+              '--habit-color': color, '--habit-progress': '0%'
+            } as CSSProperties}><span className="primary-habit-create-ring-core">{icon || '✨'}</span></div>
+            <div className="primary-habit-create-overview-main">
+              <label className="primary-habit-field"><span>Название привычки</span>
+                <input autoFocus required aria-label="Название привычки" maxLength={160}
+                  value={name} placeholder="Например, вода или зарядка"
+                  onChange={event => setName(event.target.value)}/>
+              </label>
+              <div className="primary-habit-create-completion">
+                <div className="primary-habit-create-completion-head"><span>Выполнено</span><strong>0 из {targetCount}</strong></div>
+                <div className="primary-habit-create-completion-actions">
+                  <button type="button" disabled aria-label="Снять выполнение"><Minus size={16}/></button>
+                  <button type="button" className="primary-habit-create-complete" disabled>Выполнить</button>
+                  <button type="button" disabled aria-label="Отметить выполнение"><Plus size={16}/></button>
+                </div>
+              </div>
+            </div>
+          </div>}
+          {embedded && <label className="primary-habit-field primary-habit-embedded-name"><span>Название привычки</span>
+            <input autoFocus required value={name} maxLength={160} onChange={event => setName(event.target.value)}/>
           </label>}
           <div className="primary-habit-field"><span>Иконка</span>
             <div className="primary-habit-icon-grid">
@@ -121,11 +141,15 @@ export function PrimaryHabitDialog({ habit, embedded = false, onClose, onSave, o
           <div className="primary-habit-field"><span><Clock3 size={15}/> Время напоминаний</span>
             <div className="primary-habit-times">{times.map(time => <span key={time} className="primary-habit-time-pill">
               {time}<button type="button" onClick={() => setTimes(values => values.filter(value => value !== time))} aria-label={'Удалить ' + time}><X size={13}/></button></span>)}
-              <label className="primary-habit-time-add"><Plus size={15}/> Добавить
-                <input type="time" aria-label="Добавить время напоминания" onChange={event => {
-                  if (event.target.value) setTimes(previous => normalizedTimes([...previous, event.target.value]));
-                  event.target.value = '';
-                }}/></label>
+              <label className="primary-habit-time-add">
+                <Plus size={15}/><span>Добавить</span>
+                <input type="time" aria-label="Выбрать время нового напоминания" title="Выберите время"
+                  onChange={event => {
+                    const chosenTime = event.currentTarget.value;
+                    if (chosenTime) setTimes(previous => normalizedTimes([...previous, chosenTime]));
+                    event.currentTarget.value = '';
+                  }}/>
+              </label>
             </div>
           </div>
           <div className="primary-habit-settings-card">
@@ -167,9 +191,6 @@ export function PrimaryHabitDialog({ habit, embedded = false, onClose, onSave, o
                 'Выбранные дни недели'}
             </p>
           </div>
-          {embedded && <label className="primary-habit-field"><span>Название привычки</span>
-            <input required value={name} maxLength={160} onChange={event => setName(event.target.value)}/>
-          </label>}
           <footer className="primary-habit-dialog-footer">
             {habit && onDelete && <button type="button" className="primary-habit-danger" disabled={saving}
               onClick={() => void destructive(onDelete, 'Удалить привычку «' + habit.name + '»?')}><Trash2 size={15}/> Удалить</button>}
@@ -178,7 +199,8 @@ export function PrimaryHabitDialog({ habit, embedded = false, onClose, onSave, o
             <span className="primary-habit-footer-spacer"/>
             <button type="button" className="primary-habit-secondary" disabled={saving} onClick={onClose}>Отмена</button>
             <button type="submit" className="primary-habit-save" disabled={saving}>
-              {saving ? <Loader2 size={15} className="animate-spin"/> : <Check size={15}/>} Сохранить</button>
+              {saving ? <Loader2 size={15} className="animate-spin"/> : <Check size={15}/>}
+              {habit ? 'Сохранить' : 'Создать привычку'}</button>
           </footer>
         </form>
       </section>
