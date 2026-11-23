@@ -16,7 +16,7 @@ test('Android overview header uses brand, account, credits, expandable search an
   assert.ok(start > 0 && end > start);
   assert.match(header, /state:HomeState,colors:WorkspaceColors,dark:Boolean/);
   assert.match(header, /onAccount:.*onSearchToggle:/);
-  assert.match(header, /onCredits\(\)/);
+  assert.match(header, /clickable\(onClick=onCredits\)/);
   assert.match(header, /Icons\.Default\.Settings/);
   assert.match(header, /Icons\.Default\.Search/);
   assert.match(header, /Icons\.Default\.AccountCircle/);
