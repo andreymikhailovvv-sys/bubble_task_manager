@@ -210,6 +210,16 @@
 .primary-widget-habit-label small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .primary-widget-habit-label strong { color: var(--text-primary); font-size: 12px; }
 .primary-widget-habit-label small { color: var(--text-muted); font-size: 10px; }
+.primary-widget-habit-calendar {
+  display: grid;
+  flex: 0 0 25px;
+  place-items: center;
+  width: 25px;
+  height: 26px;
+  border-radius: 7px;
+  color: var(--text-muted);
+}
+.primary-widget-habit-calendar:hover { background: var(--accent-soft); color: var(--accent-strong); }
 .primary-widget-habit-actions { display: inline-flex; flex: 0 0 auto; gap: 3px; }
 .primary-widget-habit-actions button {
   display: grid;
