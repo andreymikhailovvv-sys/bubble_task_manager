@@ -4456,44 +4456,13 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         setIsSettingsOpen(false);
         setIsCreditPurchaseOpen(false);
         setIsTimelineMoreOpen(false);
-        if (!showWorkspaceSearchBar) return;
-        const nextTop = event.currentTarget.scrollTop;
-        const previousTop = lastMainScrollTopRef.current;
-        const delta = nextTop - previousTop;
-        lastMainScrollTopRef.current = nextTop;
-
-        // Never position the initial search bar using sticky: Telegram's
-        // fullscreen top inset otherwise shifts it over the habits card.
-        const slotBottom = searchBarSlotRef.current?.getBoundingClientRect().bottom ?? Infinity;
-        const originalSearchIsPastTop = slotBottom < (telegramViewport.fullscreen ? telegramViewport.top : 0) + 2;
-        if (nextTop <= 8 || !originalSearchIsPastTop) {
-          mainScrollIntentRef.current = 0;
-          setIsHeaderVisible(true);
-          setIsSearchBarFloating(false);
-          return;
-        }
-
-        if (isGlobalSearchOpen) {
-          setIsHeaderVisible(true);
-          setFloatingSearchBarHeight(searchBarPanelRef.current?.offsetHeight ?? 0);
-          setIsSearchBarFloating(true);
-          return;
-        }
-
-        // Accumulate small touch scroll events so reverse scrolling triggers
-        // reliably even when each individual event is shorter than 6px.
-        if (delta === 0) return;
-        const previousIntent = mainScrollIntentRef.current;
-        mainScrollIntentRef.current = Math.sign(previousIntent) === Math.sign(delta)
-          ? previousIntent + delta : delta;
-        if (mainScrollIntentRef.current <= -10) {
-          setFloatingSearchBarHeight(searchBarPanelRef.current?.offsetHeight ?? 0);
-          setIsHeaderVisible(true);
-          setIsSearchBarFloating(true);
-        } else if (mainScrollIntentRef.current >= 10) {
-          setIsHeaderVisible(false);
-          setIsSearchBarFloating(false);
-        }
+        // Keep the unified header in normal document flow on mobile.
+        // In particular, do not re-pin it when the user scrolls upward.
+        lastMainScrollTopRef.current = event.currentTarget.scrollTop;
+        mainScrollIntentRef.current = 0;
+        if (isSearchBarFloating) setIsSearchBarFloating(false);
+        if (!isHeaderVisible) setIsHeaderVisible(true);
+        if (floatingSearchBarHeight) setFloatingSearchBarHeight(0);
       }}
       onTouchMove={() => {
         setIsEfficiencyDetailsOpen(false);
