@@ -246,11 +246,14 @@ export function PrimaryWorkspaceSidebar(props: Props) {
           const target = Math.max(1, habit.targetCount);
           const percent = Math.min(100, Math.round(amount / target * 100));
           return <div key={habit.id} className={`primary-widget-habit ${planned ? '' : 'is-unscheduled'}`}>
-            <button type="button" className="primary-widget-habit-open" onClick={() => setSelectedHabitId(habit.id)}
-              aria-label={`Открыть привычку ${habit.name}`}>
+            <button type="button" className="primary-widget-habit-open" onClick={() => setEditingHabitId(habit.id)}
+              aria-label={`Настроить привычку ${habit.name}`}>
               <span className="primary-widget-habit-ring" style={{ '--habit-color': habit.color || '#22c55e', '--habit-progress': percent + '%' } as CSSProperties}><span>{habit.icon || '✓'}</span></span>
               <span className="primary-widget-habit-label"><strong>{habit.name}</strong><small>{planned ? amount + ' из ' + target : 'Не на сегодня'}</small></span>
             </button>
+            <button type="button" className="primary-widget-habit-calendar"
+              onClick={() => setSelectedHabitId(habit.id)} aria-label={`Календарь и статистика привычки ${habit.name}`}
+              title="Календарь и статистика"><CalendarDays size={14}/></button>
             {planned && <div className="primary-widget-habit-actions">
               {amount > 0 && <button type="button" onClick={() => void changeHabit(habit, -1)} disabled={busyHabitId !== null} aria-label={`Убрать выполнение ${habit.name}`}><Minus size={13}/></button>}
               <button type="button" onClick={() => void changeHabit(habit, 1)} disabled={busyHabitId !== null || amount >= target} aria-label={`Отметить выполнение ${habit.name}`}><Plus size={14}/></button>
