@@ -365,6 +365,20 @@ final class NativeAPI {
         return try await (tasks, spheres)
     }
 
+    func updateProfile(name: String, username: String, email: String,
+                       currentPassword: String?) async throws -> ServerAccount {
+        var fields: [String: Any] = [
+            "name": name, "username": username, "email": email
+        ]
+        if let currentPassword, !currentPassword.isEmpty {
+            fields["currentPassword"] = currentPassword
+        }
+        let envelope: AccountEnvelope = try await request(
+            "user/profile", method: "PATCH", json: fields
+        )
+        return envelope.user
+    }
+
     func saveSphere(id: String?, name: String, color: String, icon: String, prompt: String) async throws {
         let fields: [String: Any] = [
             "name": name, "color": color, "icon": icon, "generalPrompt": prompt
