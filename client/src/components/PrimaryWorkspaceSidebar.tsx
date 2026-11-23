@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { Reorder, useDragControls } from 'framer-motion';
 import { CalendarClock, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, GripVertical, Maximize2, Minus, Plus, Settings2, X } from 'lucide-react';
 import { api } from '../lib/api';
@@ -106,8 +106,10 @@ type Props = {
 export function PrimaryWorkspaceSidebar(props: Props) {
   const { userId, windowCount, tasks, habits, spheres, timeZone, requestedNote } = props;
   const [visible, setVisible] = useState(() => readVisible(userId));
+  // Automatic collapse must not overwrite the user's remembered manual choice.
+  const [autoCollapsed, setAutoCollapsed] = useState(windowCount > 1);
+  const isOpen = visible && !autoCollapsed;
   const [order, setOrder] = useState<WidgetId[]>(() => readOrder(userId));
-  const lastWindowCount = useRef(windowCount);
   const [completedFilter, setCompletedFilter] = useState<'today' | 'all'>('today');
   const [completedLimit, setCompletedLimit] = useState(40);
   const [selectedHabitId, setSelectedHabitId] = useState<string | null>(null);
@@ -117,8 +119,7 @@ export function PrimaryWorkspaceSidebar(props: Props) {
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
-    if (windowCount > 1 && lastWindowCount.current === 1) setVisible(false);
-    lastWindowCount.current = windowCount;
+    setAutoCollapsed(windowCount > 1);
   }, [windowCount]);
   useEffect(() => {
     try { localStorage.setItem('btm:primary-sidebar:visible:' + userId, String(visible)); }
@@ -285,17 +286,20 @@ export function PrimaryWorkspaceSidebar(props: Props) {
     </div>
   };
 
-  return <aside className={`primary-workspace-sidebar ${visible ? 'is-open' : 'is-collapsed'}`}
+  return <aside className={`primary-workspace-sidebar ${isOpen ? 'is-open' : 'is-collapsed'}`}
     aria-label="Дополнительные блоки рабочего пространства" data-no-field-zoom="true">
     <div className="primary-workspace-sidebar-toggle-slot">
       <button type="button" className="primary-workspace-sidebar-toggle"
-        aria-label={visible ? 'Скрыть панель блоков' : 'Показать панель блоков'}
-        title={visible ? 'Скрыть блоки' : 'Развернуть блоки'}
-        aria-expanded={visible} onClick={() => setVisible(value => !value)}>
-        {visible ? <ChevronRight size={17}/> : <ChevronLeft size={17}/>}
+        aria-label={isOpen ? 'Скрыть панель блоков' : 'Показать панель блоков'}
+        title={isOpen ? 'Скрыть блоки' : 'Развернуть блоки'}
+        aria-expanded={isOpen} onClick={() => {
+          if (autoCollapsed) { setAutoCollapsed(false); setVisible(true); }
+          else setVisible(value => !value);
+        }}>
+        {isOpen ? <ChevronRight size={17}/> : <ChevronLeft size={17}/>}
       </button>
     </div>
-    {visible && <Reorder.Group as="div" axis="y" values={order} onReorder={setOrder}
+    {isOpen && <Reorder.Group as="div" axis="y" values={order} onReorder={setOrder}
       className="primary-workspace-sidebar-list" aria-label="Блоки рабочего пространства. Перетаскивайте за маркер в заголовке">
       {order.map(id => <Widget key={id} id={id}
         title={{ upcoming: 'Ближайшие подзадачи', completed: 'Выполненные задания', habits: 'Привычки',
