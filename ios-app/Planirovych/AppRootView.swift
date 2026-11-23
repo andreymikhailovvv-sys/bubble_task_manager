@@ -374,7 +374,10 @@ final class NativeWorkspaceSession: ObservableObject {
             chatMessages.append(RemoteChatMessage(id: UUID().uuidString, role: "assistant",
                                                   content: reply.answer, taskProposal: reply.taskProposal,
                                                   economicProposals: reply.economicProposals,
-                                                  generatedDocument: reply.generatedDocument))
+                                                  generatedDocument: reply.generatedDocument,
+                                                  telegramSendDraft: reply.telegramSendDraft,
+                                                  telegramReadDraft: reply.telegramReadDraft,
+                                                  mailSendDraft: reply.mailSendDraft))
             do {
                 try await api.persistChatReply(projectId: project.id, chatId: thread.id,
                                                question: cleaned, reply: reply)
