@@ -12,6 +12,9 @@ final class NativeWorkspaceSession: ObservableObject {
     @Published private(set) var selectedThreadID: String?
     @Published private(set) var isLoadingChat = false
     @Published private(set) var isSendingChat = false
+    @Published private(set) var chatStreamText = ""
+    @Published private(set) var chatProgressStatus: String?
+    @Published private(set) var firstChatReactionSerial = 0
     @Published var chatError: String?
     @Published private(set) var checkingSession = true
     @Published private(set) var isWorking = false
@@ -306,16 +309,39 @@ final class NativeWorkspaceSession: ObservableObject {
               let project = selectedChatProject, let thread = selectedChatThread else { return false }
         let cleaned = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty else { return false }
+        let history = chatMessages
         isSendingChat = true
+        chatStreamText = ""
+        chatProgressStatus = "analyzing_request"
         chatError = nil
-        defer { isSendingChat = false }
+        chatMessages.append(RemoteChatMessage(id: UUID().uuidString, role: "user", content: cleaned))
+        defer {
+            isSendingChat = false
+            chatProgressStatus = nil
+            chatStreamText = ""
+        }
+        var receivedFirstDelta = false
         do {
-            let reply = try await api.sendChat(question: cleaned, history: chatMessages,
-                                               project: project, thread: thread)
-            chatMessages.append(RemoteChatMessage(id: UUID().uuidString, role: "user", content: cleaned))
+            let reply = try await api.sendChat(question: cleaned, history: history,
+                                               project: project, thread: thread) { [weak self] event in
+                guard let self else { return }
+                switch event {
+                case .delta(let delta):
+                    self.chatStreamText += delta
+                    if !receivedFirstDelta {
+                        receivedFirstDelta = true
+                        self.firstChatReactionSerial += 1
+                    }
+                case .reset:
+                    self.chatStreamText = ""
+                case .status(let status):
+                    self.chatProgressStatus = status
+                }
+            }
             chatMessages.append(RemoteChatMessage(id: UUID().uuidString, role: "assistant",
                                                   content: reply.answer, taskProposal: reply.taskProposal,
-                                                  economicProposals: reply.economicProposals))
+                                                  economicProposals: reply.economicProposals,
+                                                  generatedDocument: reply.generatedDocument))
             do {
                 try await api.persistChatReply(projectId: project.id, chatId: thread.id,
                                                question: cleaned, reply: reply)
@@ -375,6 +401,8 @@ final class NativeWorkspaceSession: ObservableObject {
         spheres = []
         habits = []
         chatMessages = []
+        chatStreamText = ""
+        chatProgressStatus = nil
         chatProjects = []
         selectedProjectID = nil
         selectedThreadID = nil
