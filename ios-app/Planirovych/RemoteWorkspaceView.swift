@@ -2,7 +2,7 @@ import SwiftUI
 
 private enum ConnectedTab: String, CaseIterable, Identifiable {
     case overview = "Общая"
-    case tasks = "Задачи"
+    case timeline = "Таймлайн"
     case chat = "ИИ-чат"
     case economic = "Экономыч"
 
@@ -11,7 +11,7 @@ private enum ConnectedTab: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .overview: return "square.grid.2x2.fill"
-        case .tasks: return "checklist"
+        case .timeline: return "calendar"
         case .chat: return "bubble.left.and.bubble.right.fill"
         case .economic: return "rublesign.circle.fill"
         }
@@ -49,6 +49,17 @@ struct RemoteWorkspaceView: View {
     @State private var dateWindow: TaskDateWindow = .all
     @State private var taskMode: TaskDisplayMode = .list
     @State private var showCompletedTasks = false
+    @State private var searchExpanded = false
+    @State private var searchQuery = ""
+    @State private var showOverdue = false
+    @State private var showSectorSettings = false
+    @State private var showAccount = false
+    @State private var showAppSettings = false
+    @State private var showTaskFilters = false
+    @State private var accountName = ""
+    @State private var accountUsername = ""
+    @State private var accountEmail = ""
+    @State private var accountPassword = ""
 
     private let accent = Color(red: 0.54, green: 0.49, blue: 0.97)
 
@@ -64,6 +75,21 @@ struct RemoteWorkspaceView: View {
 
     private var allActualTasks: [RemoteTask] { session.tasks.filter { $0.isActualTask && $0.parentTaskId == nil } }
     private var doneCount: Int { allActualTasks.filter { $0.isComplete }.count }
+    private var plannedToday: [RemoteTask] {
+        allActualTasks.filter { task in
+            guard let date = NativeTaskDates.parse(task.dueDate) else { return false }
+            return Calendar.current.isDateInToday(date)
+        }
+    }
+    private var overdueTasks: [RemoteTask] {
+        allActualTasks.filter { task in
+            guard !task.isComplete, let date = NativeTaskDates.parse(task.dueDate) else { return false }
+            return date < Date()
+        }.sorted {
+            (NativeTaskDates.parse($0.dueDate) ?? .distantFuture) <
+            (NativeTaskDates.parse($1.dueDate) ?? .distantFuture)
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -79,7 +105,7 @@ struct RemoteWorkspaceView: View {
                         }
                         switch selectedTab {
                         case .overview: overview
-                        case .tasks: taskList
+                        case .timeline: timelineContent
                         case .chat: EmptyView()
                         case .economic:
                             upcomingModule(
@@ -107,60 +133,187 @@ struct RemoteWorkspaceView: View {
             NativeTaskEditorSheet(session: session, task: task)
                 .presentationDetents([.large])
         }
+        .sheet(isPresented: $showOverdue) {
+            NavigationStack {
+                List {
+                    if overdueTasks.isEmpty {
+                        Text("Просроченных задач нет")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(overdueTasks) { task in
+                            Button {
+                                showOverdue = false
+                                editingTask = task
+                            } label: {
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(task.title).foregroundStyle(.primary)
+                                    Text(String((task.dueDate ?? "").prefix(16)))
+                                        .font(.caption).foregroundStyle(.red)
+                                }
+                            }
+                        }
+                    }
+                }
+                .navigationTitle("Просроченные задачи")
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Закрыть") { showOverdue = false }
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Отложить все") {
+                            Task {
+                                if await session.postponeOverdueTasks(overdueTasks) {
+                                    showOverdue = false
+                                }
+                            }
+                        }
+                        .disabled(overdueTasks.isEmpty || session.isWorking)
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $showSectorSettings) {
+            SectorSettingsSheet(session: session)
+                .presentationDetents([.large])
+        }
+        .sheet(isPresented: $showAccount) {
+            NavigationStack {
+                Form {
+                    Section("Данные аккаунта") {
+                        TextField("Имя", text: $accountName)
+                        TextField("Логин", text: $accountUsername)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        TextField("Электронная почта", text: $accountEmail)
+                            .textInputAutocapitalization(.never)
+                            .keyboardType(.emailAddress)
+                            .autocorrectionDisabled()
+                        SecureField("Текущий пароль, если требуется", text: $accountPassword)
+                    }
+                    Section {
+                        Button("Сохранить данные") {
+                            Task {
+                                if await session.updateProfile(name: accountName,
+                                    username: accountUsername, email: accountEmail,
+                                    currentPassword: accountPassword.isEmpty ? nil : accountPassword) {
+                                    showAccount = false
+                                    accountPassword = ""
+                                }
+                            }
+                        }
+                        .disabled(session.isWorking || accountUsername.isEmpty || accountEmail.isEmpty)
+                        if let error = session.errorMessage {
+                            Text(error).font(.footnote).foregroundStyle(.red)
+                        }
+                    }
+                    Section("ИИ-кредиты") {
+                        Text("\(session.account?.aiCredits ?? 0)")
+                    }
+                    Section {
+                        Button("Выйти из аккаунта", role: .destructive) {
+                            showAccount = false
+                            Task { await session.logout() }
+                        }
+                    }
+                }
+                .navigationTitle("Управление аккаунтом")
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Закрыть") { showAccount = false }
+                    }
+                }
+                .onAppear {
+                    accountName = session.account?.name ?? ""
+                    accountUsername = session.account?.username ?? ""
+                    accountEmail = session.account?.email ?? ""
+                    accountPassword = ""
+                }
+            }
+        }
+        .sheet(isPresented: $showAppSettings) {
+            NavigationStack {
+                Form {
+                    Section("Планировыч") {
+                        Button("Обновить данные") {
+                            Task { await session.refresh() }
+                            showAppSettings = false
+                        }
+                        Button("Управление аккаунтом") {
+                            showAppSettings = false
+                            showAccount = true
+                        }
+                    }
+                }
+                .navigationTitle("Настройки")
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Закрыть") { showAppSettings = false }
+                    }
+                }
+            }
+        }
     }
 
     private var header: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "sparkles.rectangle.stack.fill")
-                .font(.system(size: 23))
-                .foregroundStyle(accent)
-                .frame(width: 43, height: 43)
-                .background(accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 13))
-
-            VStack(alignment: .leading, spacing: 3) {
+        VStack(spacing: 7) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles.rectangle.stack.fill")
+                    .font(.system(size: 21))
+                    .foregroundStyle(.white)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        LinearGradient(colors: [accent, .cyan],
+                            startPoint: .topLeading, endPoint: .bottomTrailing),
+                        in: RoundedRectangle(cornerRadius: 11)
+                    )
                 Text("Планировыч")
-                    .font(.system(size: 23, weight: .bold, design: .rounded))
-                Text(session.account?.displayName ?? "Аккаунт")
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
                     .lineLimit(1)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 6)
-
-            if session.isWorking { ProgressView().padding(.trailing, 6) }
-
-            Button { showingNewTask = true } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 19, weight: .semibold))
-                    .frame(width: 41, height: 41)
-                    .background(card, in: Circle())
-            }
-            .disabled(session.isWorking)
-            .accessibilityLabel("Добавить задачу")
-
-            Menu {
-                Button {
-                    Task { await session.refresh() }
-                } label: {
-                    Label("Обновить", systemImage: "arrow.clockwise")
+                    .minimumScaleFactor(0.8)
+                Spacer(minLength: 2)
+                Button { showAccount = true } label: {
+                    Image(systemName: "person.crop.circle")
+                        .font(.system(size: 20))
+                        .frame(width: 32, height: 36)
                 }
-                Button(role: .destructive) {
-                    Task { await session.logout() }
-                } label: {
-                    Label("Выйти из аккаунта", systemImage: "rectangle.portrait.and.arrow.right")
+                .accessibilityLabel("Управление аккаунтом")
+                Text("\(session.account?.aiCredits ?? 0)")
+                    .font(.caption.weight(.bold))
+                    .lineLimit(1)
+                    .padding(.horizontal, 5)
+                    .frame(height: 36)
+                    .background(card, in: RoundedRectangle(cornerRadius: 10))
+                    .accessibilityLabel("ИИ-кредиты")
+                Button { searchExpanded.toggle() } label: {
+                    Image(systemName: "magnifyingglass")
+                        .frame(width: 32, height: 36)
                 }
-            } label: {
-                Image(systemName: "person.crop.circle")
-                    .font(.system(size: 24))
-                    .foregroundStyle(accent)
-                    .frame(width: 41, height: 41)
-                    .background(card, in: Circle())
+                .accessibilityLabel("Поиск")
+                Button { showAppSettings = true } label: {
+                    Image(systemName: "gearshape")
+                        .frame(width: 32, height: 36)
+                }
+                .accessibilityLabel("Настройки")
             }
-            .accessibilityLabel("Настройки аккаунта")
+            if searchExpanded {
+                HStack {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    TextField("Поиск по задачам", text: $searchQuery)
+                        .textInputAutocapitalization(.sentences)
+                    Button { searchQuery = ""; searchExpanded = false } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    }
+                    .accessibilityLabel("Закрыть поиск")
+                }
+                .padding(11)
+                .background(card, in: RoundedRectangle(cornerRadius: 14))
+            }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 10)
-        .padding(.bottom, 13)
+        .foregroundStyle(.primary)
+        .padding(.horizontal, 16)
+        .padding(.top, 9)
+        .padding(.bottom, 12)
         .background(background)
     }
 
@@ -168,40 +321,39 @@ struct RemoteWorkspaceView: View {
         VStack(alignment: .leading, spacing: 19) {
             NativeHabitsStrip(session: session)
 
-            VStack(alignment: .leading, spacing: 7) {
-                Text("Ваши задачи")
-                    .font(.system(size: 29, weight: .bold, design: .rounded))
-                Text("Сферы и задачи в одном пространстве")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
+            Text("Статистика выполнения")
+                .font(.system(size: 27, weight: .bold, design: .rounded))
 
             HStack(spacing: 12) {
-                stat("Всего", value: "\(allActualTasks.count)", symbol: "checklist", color: accent)
-                stat("Выполнено", value: "\(doneCount)", symbol: "checkmark.circle.fill", color: .green)
+                stat("Все задачи", done: doneCount, total: allActualTasks.count,
+                     symbol: "checkmark.circle.fill", color: accent)
+                stat("За сегодня", done: plannedToday.filter { $0.isComplete }.count,
+                     total: plannedToday.count, symbol: "calendar", color: accent)
             }
 
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
-                    Text("Сферы")
-                        .font(.headline)
+                    Text("Сектора").font(.title3.weight(.bold))
                     Spacer()
                     Text("\(session.spheres.count)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(.secondary)
+                    Button { showSectorSettings = true } label: {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 19))
+                            .frame(width: 32, height: 32)
+                    }
+                    .accessibilityLabel("Настройки секторов")
                 }
                 if session.spheres.isEmpty {
-                    Text("Сферы пока не созданы")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 30)
+                    Text("Сектора пока не созданы")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity).padding(.vertical, 30)
                 } else {
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()),
+                                        GridItem(.flexible())], spacing: 14) {
                         ForEach(session.spheres) { sphere in
                             Button {
-                                selectedSphereID = sphere.id
-                                selectedTab = .tasks
+                                selectedSphereID = selectedSphereID == sphere.id ? nil : sphere.id
                             } label: {
                                 VStack(spacing: 7) {
                                     ZStack {
@@ -211,7 +363,7 @@ struct RemoteWorkspaceView: View {
                                         Circle()
                                             .fill(Color(sphereHex: sphere.color))
                                             .frame(width: 62, height: 62)
-                                        Text("\(allActualTasks.filter { $0.sphereId == sphere.id }.count)")
+                                        Text("\(allActualTasks.filter { $0.sphereId == sphere.id && !$0.isComplete }.count)")
                                             .font(.title3.bold())
                                             .foregroundStyle(.white)
                                     }
@@ -222,6 +374,11 @@ struct RemoteWorkspaceView: View {
                                         .foregroundStyle(.primary)
                                 }
                                 .frame(maxWidth: .infinity)
+                                .padding(5)
+                                .background(
+                                    selectedSphereID == sphere.id ? accent.opacity(0.12) : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: 17)
+                                )
                             }
                             .buttonStyle(.plain)
                         }
@@ -232,23 +389,48 @@ struct RemoteWorkspaceView: View {
             .background(card, in: RoundedRectangle(cornerRadius: 24))
 
             HStack {
-                Text("Задачи")
-                    .font(.headline)
+                Text("Ваши задачи")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
                 Spacer()
-                Button("Все задачи") {
-                    selectedSphereID = nil
-                    selectedTab = .tasks
+                if selectedSphereID != nil {
+                    Button("Все сектора") { selectedSphereID = nil }
+                        .font(.caption).foregroundStyle(accent)
                 }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(accent)
             }
 
-            if allActualTasks.isEmpty {
-                emptyTasks
-            } else {
-                ForEach(Array(allActualTasks.prefix(5))) { task in
-                    taskRow(task)
+            taskList
+        }
+    }
+
+    private var timelineContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Таймлайн")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                Spacer()
+                Button { showOverdue = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "clock.badge.exclamationmark")
+                        Text("Просроченные задачи")
+                            .font(.caption.weight(.semibold))
+                        if !overdueTasks.isEmpty {
+                            Text("\(overdueTasks.count)")
+                                .font(.caption2.bold())
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .foregroundStyle(.white)
+                                .background(.red, in: Capsule())
+                        }
+                    }
+                    .padding(9)
+                    .background(card, in: RoundedRectangle(cornerRadius: 14))
                 }
+            }
+            NativeTaskTimelineView(
+                tasks: session.tasks.filter { $0.parentTaskId == nil && !$0.isComplete },
+                spheres: session.spheres
+            ) { task in
+                editingTask = task
             }
         }
     }
@@ -257,86 +439,71 @@ struct RemoteWorkspaceView: View {
         let filtered = allActualTasks.filter {
             (selectedSphereID == nil || $0.sphereId == selectedSphereID)
                 && matchesTime($0)
+                && (searchQuery.isEmpty || $0.title.localizedCaseInsensitiveContains(searchQuery)
+                    || ($0.description ?? "").localizedCaseInsensitiveContains(searchQuery))
         }
         let active = sortedTasks(filtered.filter { !$0.isComplete })
         let completed = sortedTasks(filtered.filter { $0.isComplete })
-        return VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("Задачи")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                    Text("Управление задачами и сроками")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
                 Button {
-                    showingNewTask = true
+                    Task { _ = await session.postponeOverdueTasks(overdueTasks) }
                 } label: {
-                    Image(systemName: "plus.circle.fill").font(.title2)
+                    Label("Отложить", systemImage: "clock")
+                        .frame(maxWidth: .infinity)
                 }
-                .disabled(session.isWorking)
-                .accessibilityLabel("Создать задачу")
-            }
+                .disabled(overdueTasks.isEmpty || session.isWorking)
+                .accessibilityLabel("Отложить просроченные задачи")
 
-            Picker("Отображение", selection: $taskMode) {
-                ForEach(TaskDisplayMode.allCases, id: \.self) { mode in
-                    Text(mode.rawValue).tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
-
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    filter("Все", id: nil)
-                    ForEach(session.spheres) { sphere in
-                        filter(sphere.name, id: sphere.id, tint: Color(sphereHex: sphere.color))
+                Button { showOverdue = true } label: {
+                    VStack(spacing: 2) {
+                        Text("Просроченные")
+                            .lineLimit(1).minimumScaleFactor(0.75)
+                        Text("задачи")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .overlay(alignment: .topTrailing) {
+                        if !overdueTasks.isEmpty {
+                            Text("\(overdueTasks.count)")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 3)
+                                .background(.red, in: Capsule())
+                                .offset(x: 8, y: -9)
+                        }
                     }
                 }
-                .padding(.vertical, 3)
-            }
-            .scrollIndicators(.hidden)
+                .accessibilityLabel("Просроченные задачи: \(overdueTasks.count)")
 
-            HStack(spacing: 10) {
                 Menu {
                     Picker("Сортировка", selection: $taskOrder) {
                         ForEach(TaskOrder.allCases, id: \.self) { order in
                             Text(order.rawValue).tag(order)
                         }
                     }
-                } label: {
-                    Label(taskOrder.rawValue, systemImage: "arrow.up.arrow.down")
-                        .font(.system(size: 12, weight: .semibold))
-                        .padding(10)
-                        .background(card, in: Capsule())
-                }
-
-                Menu {
                     Picker("По времени", selection: $dateWindow) {
                         ForEach(TaskDateWindow.allCases, id: \.self) { window in
                             Text(window.rawValue).tag(window)
                         }
                     }
+                    Button("Сбросить фильтры") {
+                        taskOrder = .urgency
+                        dateWindow = .all
+                        selectedSphereID = nil
+                    }
                 } label: {
-                    Label(dateWindow.rawValue, systemImage: "calendar")
-                        .font(.system(size: 12, weight: .semibold))
-                        .padding(10)
-                        .background(card, in: Capsule())
+                    Label("Фильтры", systemImage: "line.3.horizontal.decrease")
+                        .frame(maxWidth: .infinity)
                 }
             }
+            .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(accent)
+            .padding(.vertical, 13)
+            .padding(.horizontal, 6)
+            .background(card, in: RoundedRectangle(cornerRadius: 16))
 
-            if taskMode == .timeline {
-                NativeTaskTimelineView(
-                    tasks: session.tasks.filter {
-                        $0.parentTaskId == nil && !$0.isComplete &&
-                        (selectedSphereID == nil || $0.sphereId == selectedSphereID) && matchesTime($0)
-                    },
-                    spheres: session.spheres
-                ) { task in
-                    editingTask = task
-                }
-            } else if active.isEmpty {
+            if active.isEmpty {
                 emptyTasks
             } else {
                 ForEach(active) { task in taskRow(task) }
@@ -346,8 +513,7 @@ struct RemoteWorkspaceView: View {
                 DisclosureGroup(isExpanded: $showCompletedTasks) {
                     VStack(spacing: 9) {
                         ForEach(completed) { task in taskRow(task) }
-                    }
-                    .padding(.top, 9)
+                    }.padding(.top, 9)
                 } label: {
                     HStack {
                         Label("Выполненные", systemImage: "checkmark.circle.fill")
@@ -363,19 +529,15 @@ struct RemoteWorkspaceView: View {
                 .background(card, in: RoundedRectangle(cornerRadius: 18))
             }
 
-            if taskMode == .list {
-                Button {
-                    showingNewTask = true
-                } label: {
-                    Label("Создать задачу", systemImage: "plus.circle.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(16)
-                        .foregroundStyle(accent)
-                        .background(accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 18))
-                }
-                .disabled(session.isWorking)
+            Button { showingNewTask = true } label: {
+                Label("Создать задачу", systemImage: "plus.circle.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(16)
+                    .foregroundStyle(accent)
+                    .background(accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 18))
             }
+            .disabled(session.isWorking)
         }
     }
 
@@ -422,20 +584,27 @@ struct RemoteWorkspaceView: View {
         }
     }
 
-    private func stat(_ label: String, value: String, symbol: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Image(systemName: symbol)
-                .font(.title3)
-                .foregroundStyle(color)
-            Text(value)
-                .font(.system(size: 29, weight: .bold, design: .rounded))
+    private func stat(_ label: String, done: Int, total: Int,
+                      symbol: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: symbol)
+                    .font(.system(size: 18))
+                    .foregroundStyle(color)
+                Text(label)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            Text("\(done) из \(total)")
+                .font(.system(size: 27, weight: .bold, design: .rounded))
+                .minimumScaleFactor(0.78)
+                .lineLimit(1)
                 .monospacedDigit()
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            ProgressView(value: Double(done), total: Double(max(1, total)))
+                .tint(color)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
+        .padding(17)
         .background(card, in: RoundedRectangle(cornerRadius: 22))
     }
 
@@ -569,8 +738,8 @@ struct RemoteWorkspaceView: View {
                 } label: {
                     VStack(spacing: 5) {
                         Image(systemName: tab.symbol)
-                            .font(.system(size: 20, weight: .semibold))
-                            .frame(height: 24)
+                            .font(.system(size: 24, weight: .semibold))
+                            .frame(height: 28)
                         Text(tab.rawValue)
                             .font(.system(size: 10, weight: .medium))
                     }
@@ -586,6 +755,126 @@ struct RemoteWorkspaceView: View {
         .padding(.horizontal, 10)
         .background(card)
         .overlay(alignment: .top) { Divider().opacity(0.35) }
+    }
+}
+
+private struct SectorSettingsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var session: NativeWorkspaceSession
+    @State private var editingID: String?
+    @State private var editing = false
+    @State private var name = ""
+    @State private var color = Color.purple
+    @State private var icon = "briefcase"
+    @State private var prompt = ""
+    @State private var showingDelete = false
+
+    private func openEditor(_ sphere: RemoteSphere?) {
+        editingID = sphere?.id
+        name = sphere?.name ?? ""
+        color = Color(sphereHex: sphere?.color)
+        icon = sphere?.icon ?? "briefcase"
+        prompt = sphere?.generalPrompt ?? ""
+        editing = true
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if editing {
+                    Section("Сектор") {
+                        TextField("Название", text: $name)
+                        ColorPicker("Цвет", selection: $color, supportsOpacity: false)
+                        TextField("Иконка", text: $icon)
+                        TextField("Общий промпт", text: $prompt, axis: .vertical)
+                            .lineLimit(2...4)
+                    }
+                    Section {
+                        Button("Сохранить") {
+                            Task {
+                                let saved = await session.saveSphere(
+                                    id: editingID, name: name,
+                                    color: color.toSphereHex, icon: icon, prompt: prompt
+                                )
+                                if saved { editing = false }
+                            }
+                        }
+                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.isWorking)
+                    }
+                    if editingID != nil {
+                        Section {
+                            Button("Удалить сектор", role: .destructive) {
+                                showingDelete = true
+                            }.disabled(session.isWorking)
+                        }
+                    }
+                } else {
+                    Section("Сектора") {
+                        ForEach(session.spheres) { sphere in
+                            Button {
+                                openEditor(sphere)
+                            } label: {
+                                HStack {
+                                    Circle().fill(Color(sphereHex: sphere.color))
+                                        .frame(width: 20, height: 20)
+                                    Text(sphere.name).foregroundStyle(.primary)
+                                    Spacer()
+                                    Image(systemName: "pencil").foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                    Section {
+                        Button {
+                            openEditor(nil)
+                        } label: {
+                            Label("Добавить сектор", systemImage: "plus.circle.fill")
+                        }
+                    }
+                }
+                if let error = session.errorMessage {
+                    Section {
+                        Text(error).foregroundStyle(.red)
+                            .font(.footnote)
+                    }
+                }
+            }
+            .navigationTitle(editing ? "Редактор сектора" : "Настройки секторов")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if editing {
+                        Button("Назад") { editing = false }
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Готово") { dismiss() }
+                }
+            }
+            .confirmationDialog("Удалить сектор?", isPresented: $showingDelete) {
+                Button("Удалить", role: .destructive) {
+                    guard let editingID else { return }
+                    Task {
+                        if await session.deleteSphere(id: editingID) {
+                            editing = false
+                        }
+                    }
+                }
+            } message: {
+                Text("Сектор будет удалён. Проверьте задачи, которые к нему относятся.")
+            }
+        }
+    }
+}
+
+private extension Color {
+    var toSphereHex: String {
+        let value = UIColor(self)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard value.getRed(&r, green: &g, blue: &b, alpha: &a) else {
+            return "#8B5CF6"
+        }
+        return String(format: "#%02X%02X%02X",
+            Int((r * 255).rounded()), Int((g * 255).rounded()), Int((b * 255).rounded()))
     }
 }
 
