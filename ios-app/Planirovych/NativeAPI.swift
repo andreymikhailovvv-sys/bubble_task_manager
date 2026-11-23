@@ -335,8 +335,8 @@ final class SessionCookieVault {
         return true
     }
 
-    func save() throws {
-        let cookies = (HTTPCookieStorage.shared.cookies(for: origin) ?? [])
+    private func liveSessionCookies() -> [HTTPCookie] {
+        (HTTPCookieStorage.shared.cookies(for: origin) ?? [])
             .filter {
                 cookieNames.contains($0.name)
                     && ($0.domain == host || $0.domain == "." + host)
@@ -344,6 +344,34 @@ final class SessionCookieVault {
                     && $0.isSecure
                     && ($0.expiresDate ?? .distantPast) > Date()
             }
+    }
+
+    #if targetEnvironment(simulator)
+    /// Some remote, unsigned Simulator runtimes cannot write to Keychain.
+    /// Keep the server-issued session as non-persistent cookies for *this run*
+    /// instead of breaking sign-in or storing tokens in UserDefaults.
+    /// This is NEVER compiled into the physical-device application.
+    func adoptTemporarySimulatorSession() -> Bool {
+        let cookies = liveSessionCookies()
+        guard cookies.contains(where: { $0.name == "btm_auth" }) else { return false }
+        var temporary: [HTTPCookie] = []
+        for cookie in cookies {
+            guard var properties = cookie.properties else { return false }
+            properties.removeValue(forKey: .expires)
+            properties.removeValue(forKey: .maximumAge)
+            properties[.discard] = "TRUE"
+            guard let sessionCookie = HTTPCookie(properties: properties) else { return false }
+            temporary.append(sessionCookie)
+        }
+        let storage = HTTPCookieStorage.shared
+        cookies.forEach { storage.deleteCookie($0) }
+        temporary.forEach { storage.setCookie($0) }
+        return temporary.contains(where: { $0.name == "btm_auth" })
+    }
+    #endif
+
+    func save() throws {
+        let cookies = liveSessionCookies()
         guard cookies.contains(where: { $0.name == "btm_auth" }) else {
             throw NativeAPIError.noSessionCookie
         }
@@ -358,7 +386,10 @@ final class SessionCookieVault {
         var insertion = query
         insertion[kSecValueData as String] = data
         insertion[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        guard SecItemAdd(insertion as CFDictionary, nil) == errSecSuccess else {
+        let status = SecItemAdd(insertion as CFDictionary, nil)
+        guard status == errSecSuccess else {
+            // OSStatus only: do not log sensitive cookie contents.
+            NSLog("[Planirovych] Keychain save failed (OSStatus=%d)", status)
             throw NativeAPIError.secureStorage
         }
     }
@@ -390,7 +421,14 @@ final class NativeAPI {
     }()
 
     func restoreAccount() async throws -> ServerAccount? {
-        guard vault.restore() else { return nil }
+        guard vault.restore() else {
+            #if targetEnvironment(simulator)
+            // If the previous run could not use Keychain, discard any residual
+            // browser cookie storage instead of silently restoring credentials.
+            vault.clear()
+            #endif
+            return nil
+        }
         do {
             let response: AccountEnvelope = try await request("auth/me")
             guard response.user.isRegistered else {
@@ -417,6 +455,16 @@ final class NativeAPI {
         do {
             try vault.save()
         } catch {
+            #if targetEnvironment(simulator)
+            if let vaultError = error as? NativeAPIError {
+                if case .secureStorage = vaultError,
+                   vault.adoptTemporarySimulatorSession() {
+                    // Server login succeeded. The cloud Simulator can use the
+                    // session until restart, with no insecure token fallback.
+                    return response.user
+                }
+            }
+            #endif
             vault.clear()
             throw error
         }
