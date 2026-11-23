@@ -50,6 +50,7 @@ struct RemoteWorkspaceView: View {
     @State private var taskMode: TaskDisplayMode = .list
     @State private var showCompletedTasks = false
     @State private var searchExpanded = false
+    @FocusState private var searchFocused: Bool
     @State private var searchQuery = ""
     @State private var showOverdue = false
     @State private var showSectorSettings = false
@@ -93,13 +94,19 @@ struct RemoteWorkspaceView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-
-             if selectedTab == .chat {
+            if selectedTab == .chat {
+                header
+                    .padding(.horizontal, 16)
+                Rectangle()
+                    .fill(LinearGradient(
+                        colors: [background, background.opacity(0.35)],
+                        startPoint: .top, endPoint: .bottom))
+                    .frame(height: 9)
                 NativeChatView(session: session)
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
+                        header
                         if let error = session.errorMessage {
                             errorBanner(error)
                         }
@@ -256,51 +263,78 @@ struct RemoteWorkspaceView: View {
     }
 
     private var header: some View {
-        VStack(spacing: 7) {
+        VStack(spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "sparkles.rectangle.stack.fill")
-                    .font(.system(size: 21))
+                    .font(.system(size: 23))
                     .foregroundStyle(.white)
-                    .frame(width: 36, height: 36)
+                    .frame(width: 40, height: 40)
                     .background(
-                        LinearGradient(colors: [accent, .cyan],
-                            startPoint: .topLeading, endPoint: .bottomTrailing),
-                        in: RoundedRectangle(cornerRadius: 11)
+                        LinearGradient(colors: [
+                            Color(red: 0.46, green: 0.34, blue: 0.80),
+                            Color(red: 0.23, green: 0.66, blue: 0.81)
+                        ], startPoint: .topLeading, endPoint: .bottomTrailing),
+                        in: RoundedRectangle(cornerRadius: 12)
                     )
-                Text("Планировыч")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Spacer(minLength: 2)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Планировыч")
+                        .font(.system(size: 17, weight: .heavy, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.83)
+                    Text(session.account?.displayName ?? "Мой профиль")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 Button { showAccount = true } label: {
                     Image(systemName: "person.crop.circle")
-                        .font(.system(size: 20))
-                        .frame(width: 32, height: 36)
+                        .font(.system(size: 22))
+                        .foregroundStyle(Color(red: 0.59, green: 0.43, blue: 0.88))
+                        .frame(width: 37, height: 40)
+                        .background(accent.opacity(0.09), in: RoundedRectangle(cornerRadius: 12))
                 }
                 .accessibilityLabel("Управление аккаунтом")
-                Text("\(session.account?.aiCredits ?? 0)")
-                    .font(.caption.weight(.bold))
-                    .lineLimit(1)
-                    .padding(.horizontal, 5)
-                    .frame(height: 36)
-                    .background(card, in: RoundedRectangle(cornerRadius: 10))
-                    .accessibilityLabel("ИИ-кредиты")
-                Button { searchExpanded.toggle() } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "circle.hexagongrid.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color(red: 0.83, green: 0.41, blue: 0.57))
+                    Text("\(session.account?.aiCredits ?? 0)")
+                        .font(.system(size: 11, weight: .bold))
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 5)
+                .frame(height: 40)
+                .background(accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+                .accessibilityLabel("ИИ-кредиты")
+                Button {
+                    searchExpanded.toggle()
+                } label: {
                     Image(systemName: "magnifyingglass")
-                        .frame(width: 32, height: 36)
+                        .font(.system(size: 21, weight: .medium))
+                        .foregroundStyle(Color(red: 0.10, green: 0.65, blue: 0.63))
+                        .frame(width: 37, height: 40)
+                        .background(Color.teal.opacity(0.09),
+                                    in: RoundedRectangle(cornerRadius: 12))
                 }
                 .accessibilityLabel("Поиск")
                 Button { showAppSettings = true } label: {
                     Image(systemName: "gearshape")
-                        .frame(width: 32, height: 36)
+                        .font(.system(size: 21, weight: .medium))
+                        .foregroundStyle(Color(red: 0.77, green: 0.55, blue: 0.21))
+                        .frame(width: 37, height: 40)
+                        .background(Color.orange.opacity(0.08),
+                                    in: RoundedRectangle(cornerRadius: 12))
                 }
                 .accessibilityLabel("Настройки")
             }
             if searchExpanded {
                 HStack {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    Image(systemName: "magnifyingglass").foregroundStyle(accent)
                     TextField("Поиск по задачам", text: $searchQuery)
                         .textInputAutocapitalization(.sentences)
+                        .focused($searchFocused)
                     Button { searchQuery = ""; searchExpanded = false } label: {
                         Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                     }
@@ -310,11 +344,15 @@ struct RemoteWorkspaceView: View {
                 .background(card, in: RoundedRectangle(cornerRadius: 14))
             }
         }
-        .foregroundStyle(.primary)
-        .padding(.horizontal, 16)
-        .padding(.top, 9)
-        .padding(.bottom, 12)
-        .background(background)
+        .padding(.top, 10)
+        .padding(.bottom, 9)
+        .onChange(of: searchExpanded) { _, opened in
+            if opened {
+                searchFocused = true
+            } else {
+                searchFocused = false
+            }
+        }
     }
 
     private var overview: some View {
@@ -404,34 +442,15 @@ struct RemoteWorkspaceView: View {
 
     private var timelineContent: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Таймлайн")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                Spacer()
-                Button { showOverdue = true } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "clock.badge.exclamationmark")
-                        Text("Просроченные задачи")
-                            .font(.caption.weight(.semibold))
-                        if !overdueTasks.isEmpty {
-                            Text("\(overdueTasks.count)")
-                                .font(.caption2.bold())
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .foregroundStyle(.white)
-                                .background(.red, in: Capsule())
-                        }
-                    }
-                    .padding(9)
-                    .background(card, in: RoundedRectangle(cornerRadius: 14))
-                }
-            }
+            Text("Таймлайн")
+                .font(.system(size: 28, weight: .bold, design: .rounded))
             NativeTaskTimelineView(
                 tasks: session.tasks.filter { $0.parentTaskId == nil && !$0.isComplete },
-                spheres: session.spheres
-            ) { task in
-                editingTask = task
-            }
+                spheres: session.spheres,
+                onOpenTask: { task in editingTask = task },
+                overdueCount: overdueTasks.count,
+                onOpenOverdue: { showOverdue = true }
+            )
         }
     }
 
@@ -758,6 +777,41 @@ struct RemoteWorkspaceView: View {
     }
 }
 
+private struct SectorIconOption {
+    let code: String
+    let title: String
+    let symbol: String
+}
+private let sectorIconOptions: [SectorIconOption] = [
+    .init(code:"briefcase",title:"Работа",symbol:"briefcase.fill"),
+    .init(code:"heart",title:"Здоровье",symbol:"heart.fill"),
+    .init(code:"home",title:"Дом",symbol:"house.fill"),
+    .init(code:"graduation-cap",title:"Учёба",symbol:"graduationcap.fill"),
+    .init(code:"dumbbell",title:"Спорт",symbol:"dumbbell.fill"),
+    .init(code:"wallet",title:"Финансы",symbol:"wallet.bifold.fill"),
+    .init(code:"book-open",title:"Книги",symbol:"book.fill"),
+    .init(code:"palette",title:"Творчество",symbol:"paintpalette.fill"),
+    .init(code:"plane",title:"Поездки",symbol:"airplane"),
+    .init(code:"car",title:"Авто",symbol:"car.fill"),
+    .init(code:"music",title:"Музыка",symbol:"music.note"),
+    .init(code:"star",title:"Избранное",symbol:"star.fill"),
+    .init(code:"target",title:"Цели",symbol:"scope"),
+    .init(code:"laptop",title:"Проекты",symbol:"laptopcomputer"),
+    .init(code:"users",title:"Семья",symbol:"person.2.fill"),
+    .init(code:"shopping-cart",title:"Покупки",symbol:"cart.fill"),
+    .init(code:"sprout",title:"Природа",symbol:"leaf.fill"),
+    .init(code:"coffee",title:"Отдых",symbol:"cup.and.saucer.fill"),
+    .init(code:"calendar",title:"Планы",symbol:"calendar"),
+    .init(code:"lightbulb",title:"Идеи",symbol:"lightbulb.fill"),
+    .init(code:"sparkles",title:"Развитие",symbol:"sparkles"),
+    .init(code:"trophy",title:"Достижения",symbol:"trophy.fill"),
+    .init(code:"globe",title:"Мир",symbol:"globe"),
+    .init(code:"paw-print",title:"Питомцы",symbol:"pawprint.fill")
+]
+private func sectorIconSymbol(_ code: String?) -> String {
+    sectorIconOptions.first(where: { $0.code == code })?.symbol ?? "briefcase.fill"
+}
+
 private struct SectorSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var session: NativeWorkspaceSession
@@ -768,6 +822,7 @@ private struct SectorSettingsSheet: View {
     @State private var icon = "briefcase"
     @State private var prompt = ""
     @State private var showingDelete = false
+    private let accentColor = Color(red: 0.54, green: 0.39, blue: 0.86)
 
     private func openEditor(_ sphere: RemoteSphere?) {
         editingID = sphere?.id
@@ -785,7 +840,41 @@ private struct SectorSettingsSheet: View {
                     Section("Сектор") {
                         TextField("Название", text: $name)
                         ColorPicker("Цвет", selection: $color, supportsOpacity: false)
-                        TextField("Иконка", text: $icon)
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Иконка сектора")
+                                .font(.subheadline.weight(.semibold))
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 7),
+                                                     count: 4), spacing: 8) {
+                                ForEach(sectorIconOptions, id: \.code) { option in
+                                    let selected = icon == option.code
+                                    Button {
+                                        icon = option.code
+                                    } label: {
+                                        VStack(spacing: 6) {
+                                            Image(systemName: option.symbol)
+                                                .font(.system(size: 22))
+                                            Text(option.title)
+                                                .font(.system(size: 9, weight: .medium))
+                                                .lineLimit(1)
+                                                .minimumScaleFactor(0.75)
+                                        }
+                                        .foregroundStyle(selected ? accentColor : .secondary)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 10)
+                                        .background(selected ? accentColor.opacity(0.12) : Color.secondary.opacity(0.05),
+                                                    in: RoundedRectangle(cornerRadius: 12))
+                                        .overlay {
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(selected ? accentColor : Color.secondary.opacity(0.17),
+                                                        lineWidth: selected ? 2 : 1)
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel(option.title)
+                                    .accessibilityAddTraits(selected ? .isSelected : [])
+                                }
+                            }
+                        }
                         TextField("Общий промпт", text: $prompt, axis: .vertical)
                             .lineLimit(2...4)
                     }
@@ -815,8 +904,11 @@ private struct SectorSettingsSheet: View {
                                 openEditor(sphere)
                             } label: {
                                 HStack {
-                                    Circle().fill(Color(sphereHex: sphere.color))
-                                        .frame(width: 20, height: 20)
+                                    Image(systemName: sectorIconSymbol(sphere.icon))
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .frame(width: 30, height: 30)
+                                        .background(Color(sphereHex: sphere.color), in: Circle())
                                     Text(sphere.name).foregroundStyle(.primary)
                                     Spacer()
                                     Image(systemName: "pencil").foregroundStyle(.secondary)
