@@ -52,8 +52,8 @@ test('list retains its original layout, and search focus does not repaint timeli
   assert.match(css, /\.miniapp-workspace-utilities\.is-list/);
   assert.match(css, /\.miniapp-timeline-topbar \.miniapp-global-search-field:focus-within/);
   assert.match(css, /outline: none !important/);
-  assert.match(mini, /setIsSearchBarFloating\(true\)/);
-  assert.match(mini, /setIsHeaderVisible\(false\)/);
+  assert.doesNotMatch(mini, /setIsSearchBarFloating\(true\)/);
+  assert.doesNotMatch(mini, /setIsHeaderVisible\(false\)/);
   assert.match(mini, /miniapp-bottom-navigation/);
   assert.match(mini, /miniapp-native-day-timeline/);
 });
