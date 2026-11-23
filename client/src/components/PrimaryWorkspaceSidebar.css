@@ -434,3 +434,153 @@ body:has(.primary-workspace-sidebar.is-open) .ai-chat-launcher.bubble-ai-fullscr
     transition: none !important;
   }
 }
+
+/* Sidebar flush with the toolbar's 12px screen inset; toggle stays at x=viewport edge.
+   Unlike the previous flex-item toggle, it never steals horizontal space. */
+.primary-workspace-layout {
+  --primary-sidebar-edge-inset: 12px;
+}
+.primary-workspace-sidebar {
+  position: relative;
+  padding-right: var(--primary-sidebar-edge-inset);
+  overflow: visible;
+}
+.primary-workspace-sidebar-list {
+  padding: 12px 0 24px 10px;
+  gap: 18px;
+}
+.primary-workspace-sidebar-toggle-slot {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  z-index: 5;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  width: 28px;
+  height: 55px;
+  padding: 0;
+  flex: none;
+  order: unset;
+}
+.primary-workspace-sidebar-toggle {
+  width: 27px;
+  height: 50px;
+  border-radius: 11px 0 0 11px;
+  border-right: 0;
+  box-shadow: none;
+}
+.primary-workspace-sidebar.is-collapsed .primary-workspace-sidebar-list {
+  padding-inline: 0;
+}
+.primary-workspace-sidebar .workspace-widget-card.primary-widget {
+  border-radius: 22px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--panel-border) 59%, transparent);
+  background: color-mix(in srgb, var(--panel-bg) 86%, transparent);
+  box-shadow: 0 6px 21px rgba(15, 23, 42, .055) !important;
+  backdrop-filter: blur(15px);
+}
+body[data-theme='light'] .primary-workspace-sidebar .workspace-widget-card.primary-widget {
+  background: rgba(255, 255, 255, .81);
+  border-color: rgba(222, 229, 239, .77);
+  box-shadow: 0 7px 22px rgba(55, 78, 105, .055) !important;
+}
+body[data-theme='dark'] .primary-workspace-sidebar .workspace-widget-card.primary-widget {
+  box-shadow: 0 7px 22px rgba(0, 0, 0, .12) !important;
+}
+.primary-workspace-sidebar .primary-widget-heading { margin-bottom: 12px; }
+.primary-workspace-sidebar .primary-widget-heading h3 {
+  font-size: 15px; font-weight: 720; letter-spacing: -.018em;
+}
+.primary-workspace-sidebar .primary-widget-task,
+.primary-workspace-sidebar .primary-widget-sector,
+.primary-workspace-sidebar .primary-widget-habit,
+.primary-workspace-sidebar .primary-widget-metric {
+  background: color-mix(in srgb, var(--card-bg) 73%, transparent);
+  border-color: color-mix(in srgb, var(--panel-border) 54%, transparent);
+  border-radius: 12px;
+  box-shadow: none !important;
+}
+body[data-theme='light'] .primary-workspace-sidebar .primary-widget-task,
+body[data-theme='light'] .primary-workspace-sidebar .primary-widget-sector,
+body[data-theme='light'] .primary-workspace-sidebar .primary-widget-habit,
+body[data-theme='light'] .primary-workspace-sidebar .primary-widget-metric {
+  background: rgba(255, 255, 255, .55);
+  border-color: #e1e6ee;
+}
+.primary-workspace-sidebar .primary-widget-task {
+  padding: 9px 11px;
+}
+.primary-workspace-sidebar .primary-widget-metric {
+  padding: 13px;
+}
+.primary-workspace-sidebar .primary-widget-progress {
+  height: 8px;
+  background: color-mix(in srgb, var(--panel-border) 38%, transparent);
+}
+.primary-workspace-sidebar .primary-widget-metric:first-child .primary-widget-progress > span {
+  background: linear-gradient(90deg, #69cde7 0%, #759adf 55%, #b09df1 100%);
+}
+.primary-workspace-sidebar .primary-widget-metric:last-child .primary-widget-progress > span {
+  background: linear-gradient(90deg, #79d4e0 0%, #a18bfa 55%, #ea85ac 100%);
+}
+.primary-workspace-sidebar .primary-widget-filter button.is-active {
+  background: #168ca9;
+  border-color: #168ca9;
+  color: #fff;
+}
+.primary-workspace-sidebar .primary-widget-notes .standalone-note-recent {
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card-bg) 74%, transparent);
+}
+body[data-theme='light'] .primary-workspace-sidebar .primary-widget-notes .standalone-note-recent {
+  background: rgba(255,255,255,.6);
+  border-color: #e1e6ee;
+}
+/* Planik tracks the work area's border, but not when a centred modal is active.
+   Overlay mode gets the same lower-right placement as a closed sidebar. */
+body:has(.bubble-fullscreen-shell:not(.fullscreen-overlay-active) .primary-workspace-sidebar.is-open)
+  .ai-chat-launcher.bubble-ai-fullscreen {
+  right: calc(384px + 12px + 56px) !important;
+}
+.bubble-fullscreen-shell.fullscreen-overlay-active .ai-chat-launcher.bubble-ai-fullscreen {
+  right: max(16px, env(safe-area-inset-right)) !important;
+}
+@media (max-width: 1050px) {
+  body:has(.bubble-fullscreen-shell:not(.fullscreen-overlay-active) .primary-workspace-sidebar.is-open)
+    .ai-chat-launcher.bubble-ai-fullscreen {
+    right: calc(366px + 12px + 56px) !important;
+  }
+}
+@media (max-width: 820px) {
+  .primary-workspace-sidebar-list {
+    padding: 12px 0 24px 8px;
+    border-left: 0;
+    box-shadow: none;
+  }
+  .primary-workspace-sidebar-toggle-slot { top: 50%; padding: 0; align-items: center; }
+  body:has(.bubble-fullscreen-shell:not(.fullscreen-overlay-active) .primary-workspace-sidebar.is-open)
+    .ai-chat-launcher.bubble-ai-fullscreen {
+    right: calc(min(355px, 100vw - 45px) + 12px + 16px) !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .primary-workspace-sidebar-list { transition: none !important; }
+}
+
+/* Higher specificity than the earlier open-sidebar rules: centered dialogs
+   must always restore the bottom-right mascot position. */
+body:has(.bubble-fullscreen-shell.fullscreen-overlay-active .primary-workspace-sidebar.is-open)
+  .ai-chat-launcher.bubble-ai-fullscreen {
+  right: max(16px, env(safe-area-inset-right)) !important;
+}
+
+/* Habit/calendar and notes dialogs live in portals, outside App's overlay state. */
+body:has(.bubble-fullscreen-shell:not(.fullscreen-overlay-active) .primary-workspace-sidebar.is-open):has(.primary-habit-backdrop)
+  .ai-chat-launcher.bubble-ai-fullscreen,
+body:has(.bubble-fullscreen-shell:not(.fullscreen-overlay-active) .primary-workspace-sidebar.is-open):has(.standalone-notes-backdrop)
+  .ai-chat-launcher.bubble-ai-fullscreen {
+  right: max(16px, env(safe-area-inset-right)) !important;
+}

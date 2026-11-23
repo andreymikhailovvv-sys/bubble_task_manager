@@ -1,109 +1,118 @@
-/* One connected module picker: the handle and the tray share a single silhouette. */
-.module-rail{
-  --module-rail-bg:rgba(20,27,42,.96);
-  --module-rail-border:rgba(148,163,184,.29);
-  --module-rail-ink:#d3dbe6;
-  --module-rail-hover:rgba(255,255,255,.09);
-  --module-rail-active:rgba(49,105,142,.35);
-  position:fixed;z-index:90;left:0;top:50%;transform:translateY(-50%);
-  display:flex;align-items:center;max-width:240px;color:var(--module-rail-ink);
-  font-family:Inter,system-ui,-apple-system,'Segoe UI',sans-serif;
+/* Compact, independent module icons, always attached to the left screen edge.
+   Positioned above the fullscreen pane's left-side "+" control. */
+.module-rail {
+  --module-rail-bg: rgba(20, 27, 42, .90);
+  --module-rail-border: rgba(148,163,184,.29);
+  --module-rail-ink: #d9e3f2;
+  --module-rail-hover: rgba(255,255,255,.10);
+  --module-rail-active: rgba(49,105,142,.35);
+  position: fixed;
+  z-index: 90;
+  top: clamp(105px, 17vh, 182px);
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 9px;
+  width: 46px;
+  font-family: Inter,system-ui,-apple-system,'Segoe UI',sans-serif;
+  color: var(--module-rail-ink);
 }
-.module-rail-handle{
-  flex:none;box-sizing:border-box;width:32px;height:72px;padding:0;
-  display:flex;align-items:center;justify-content:center;
-  border:1px solid var(--module-rail-border);border-left:0;
-  border-radius:0 15px 15px 0;
-  background:var(--module-rail-bg);color:#f6bc69;cursor:pointer;
-  box-shadow:3px 5px 18px rgba(0,0,0,.18);backdrop-filter:blur(20px);
-  transition:border-radius .2s ease,background .2s ease;
+.module-rail-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 43px;
+  height: 45px;
+  padding: 0;
+  border: 1px solid var(--module-rail-border);
+  border-left: 0;
+  border-radius: 0 14px 14px 0;
+  background: var(--module-rail-bg);
+  color: var(--module-rail-ink);
+  text-decoration: none;
+  box-shadow: 0 3px 12px rgba(0,0,0,.08);
+  backdrop-filter: blur(15px);
+  transition: border-color .18s ease,background .18s ease,color .18s ease;
 }
-.module-rail-handle svg{display:block;flex:none;transition:transform .22s ease}
-.module-rail-panel{
-  display:flex;flex-direction:column;box-sizing:border-box;
-  width:0;max-width:0;opacity:0;overflow:hidden;pointer-events:none;
-  padding:0;gap:6px;border:0 solid var(--module-rail-border);
-  border-radius:0 16px 16px 0;background:var(--module-rail-bg);
-  box-shadow:none;backdrop-filter:blur(20px);
-  transition:max-width .22s ease,width .22s ease,opacity .17s ease,padding .22s ease;
+.module-rail-link svg { display: block; flex: 0 0 auto; }
+.module-rail-link:hover,.module-rail-link:focus-visible {
+  background: var(--module-rail-hover);
+  border-color: color-mix(in srgb, var(--module-rail-border) 40%, #8ccffa);
+  outline: none;
 }
-.module-rail:hover .module-rail-panel,
-.module-rail:focus-within .module-rail-panel{
-  width:187px;max-width:187px;opacity:1;pointer-events:auto;
-  padding:9px;border-width:1px;border-left:0;
-  box-shadow:8px 14px 40px rgba(0,0,0,.21);
+.module-rail-link.is-active {
+  border-color: rgba(157,205,241,.39);
+  background: var(--module-rail-active);
+  color: #f5fbff;
 }
-.module-rail:hover .module-rail-handle,
-.module-rail:focus-within .module-rail-handle{
-  border-right:0;border-radius:0;background:var(--module-rail-bg);
-  box-shadow:none;
+.module-rail-link.module-rail-economic { color: #ffd18b; background: rgba(235,153,48,.10); }
+.module-rail-link.module-rail-economic svg { color: #f5b45a; }
+.module-rail-link.module-rail-economic:hover,
+.module-rail-link.module-rail-economic:focus-visible { background: rgba(244,158,49,.20); }
+.module-rail-link.module-rail-economic.is-active {
+  color: #ffe5b9;
+  background: rgba(244,142,35,.24);
+  border-color: rgba(255,168,60,.42);
 }
-.module-rail:hover .module-rail-handle svg,
-.module-rail:focus-within .module-rail-handle svg{transform:rotate(180deg)}
-.module-rail-link{
-  display:flex;align-items:center;gap:10px;box-sizing:border-box;
-  min-height:43px;width:168px;padding:0 10px;border:1px solid transparent;
-  border-radius:11px;color:var(--module-rail-ink);
-  font-size:12px;font-weight:700;white-space:nowrap;text-decoration:none;
-  transition:background .2s,color .2s,border-color .2s;
+.module-rail-label {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 9px);
+  transform: translate(-4px,-50%);
+  pointer-events: none;
+  opacity: 0;
+  white-space: nowrap;
+  padding: 8px 12px;
+  border: 1px solid var(--module-rail-border);
+  border-radius: 11px;
+  background: var(--module-rail-bg);
+  color: var(--module-rail-ink);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  box-shadow: 0 6px 18px rgba(0,0,0,.10);
+  transition: opacity .16s ease,transform .16s ease;
 }
-.module-rail-link svg{flex:none}
-.module-rail-link:hover{color:inherit;background:var(--module-rail-hover)}
-.module-rail-link.is-active{
-  color:#fff;background:var(--module-rail-active);
-  border-color:rgba(157,205,241,.29);
+.module-rail-link:hover .module-rail-label,
+.module-rail-link:focus-visible .module-rail-label {
+  transform: translate(0,-50%);
+  opacity: 1;
 }
-/* Economic is gold even when the Planner is selected. */
-.module-rail-economic{color:#ffd18b;background:rgba(235,153,48,.09)}
-.module-rail-economic svg{color:#f5b45a}
-.module-rail-economic:hover{color:#ffdfaa;background:rgba(244,158,49,.17)}
-.module-rail-economic.is-active{
-  color:#ffe5b9;background:rgba(244,142,35,.23);
-  border-color:rgba(255,168,60,.42);
-}
-.module-rail-separator{
-  width:calc(100% - 20px);height:1px;margin:0 auto;
-  background:var(--module-rail-border);
-}
-/* Planner and Economic each supply their actual saved theme on their root. */
+.module-rail-economic .module-rail-label { color: #ffd18b; }
 .app-shell[data-theme="light"] .module-rail,
-.econ-light .module-rail{
-  --module-rail-bg:rgba(255,251,243,.97);
-  --module-rail-border:rgba(137,108,73,.3);
-  --module-rail-ink:#554d4a;
-  --module-rail-hover:rgba(147,108,66,.1);
-  --module-rail-active:rgba(93,136,172,.12);
+.econ-light .module-rail {
+  --module-rail-bg: rgba(255,251,246,.96);
+  --module-rail-border: rgba(151,164,183,.37);
+  --module-rail-ink: #405167;
+  --module-rail-hover: #edf2f9;
+  --module-rail-active: rgba(93,136,172,.15);
 }
-.app-shell[data-theme="light"] .module-rail-handle,
-.econ-light .module-rail-handle{color:#a76720}
 .app-shell[data-theme="light"] .module-rail-link.is-active,
-.econ-light .module-rail-link.is-active{
-  color:#36516a;border-color:rgba(94,141,174,.25);
-}
+.econ-light .module-rail-link.is-active { color: #315374; }
 .app-shell[data-theme="light"] .module-rail-economic,
-.econ-light .module-rail-economic{
-  color:#986019;background:rgba(232,155,57,.1);
+.econ-light .module-rail-economic {
+  color: #985e19;
+  background: rgba(232,155,57,.11);
 }
 .app-shell[data-theme="light"] .module-rail-economic svg,
-.econ-light .module-rail-economic svg{color:#ae6b15}
+.econ-light .module-rail-economic svg { color: #ae6b15; }
 .app-shell[data-theme="light"] .module-rail-economic.is-active,
-.econ-light .module-rail-economic.is-active{
-  color:#874809;background:rgba(241,154,45,.2);
-  border-color:rgba(194,119,22,.39);
+.econ-light .module-rail-economic.is-active {
+  color: #874809;
+  background: rgba(241,154,45,.20);
+  border-color: rgba(194,119,22,.39);
 }
-@media(max-width:720px){
-  .module-rail{
-    top:auto;bottom:max(12px,env(safe-area-inset-bottom));
-    left:50%;transform:translateX(-50%);max-width:none;z-index:95;
-  }
-  .module-rail-handle{display:none}
-  .module-rail-panel{
-    width:auto;max-width:none;opacity:1;overflow:visible;pointer-events:auto;
-    flex-direction:row;align-items:center;padding:5px 8px;
-    border:1px solid var(--module-rail-border);border-radius:15px;
-    box-shadow:0 12px 40px rgba(0,0,0,.24);
-  }
-  .module-rail-link{width:auto;min-height:40px;padding:0 11px;font-size:11px}
-  .module-rail-separator{width:1px;height:23px;margin:0 3px}
+.app-shell[data-theme="light"] .module-rail-economic .module-rail-label,
+.econ-light .module-rail-economic .module-rail-label { color: #985e19; }
+@media (max-width: 720px) {
+  .module-rail { top: clamp(78px, 14vh, 132px); width: 39px; gap: 7px; z-index: 95; }
+  .module-rail-link { width: 38px; height: 39px; border-radius: 0 12px 12px 0; }
+  .module-rail-link svg { width: 19px; height: 19px; }
+  .module-rail-label { font-size: 11px; }
 }
-@media(prefers-reduced-motion:reduce){.module-rail *{transition:none!important}}
+@media (prefers-reduced-motion: reduce) {
+  .module-rail-link,.module-rail-label { transition: none; }
+}

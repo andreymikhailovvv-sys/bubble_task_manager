@@ -74,3 +74,40 @@ test('classic sidebar notes are embedded without a second card, and the rail ani
   assert.match(css, /body:has\(\.primary-workspace-sidebar\.is-open\) \.ai-chat-launcher\.bubble-ai-fullscreen/);
   assert.doesNotMatch(css, /primary-habit-modal-host|--tp-panel/);
 });
+
+
+test('sidebar cards align with toolbar right inset while edge toggle stays independent of rail width', async () => {
+  const sidebar = await source('client/src/components/PrimaryWorkspaceSidebar.css');
+  const topbar = await source('client/src/styles.css');
+  assert.ok(topbar.includes('width: calc(100% - 24px)'));
+  assert.ok(sidebar.includes('--primary-sidebar-edge-inset: 12px'));
+  assert.ok(sidebar.includes('padding-right: var(--primary-sidebar-edge-inset)'));
+  assert.ok(sidebar.includes('position: absolute;') && sidebar.includes('.primary-workspace-sidebar-toggle-slot'));
+  assert.ok(sidebar.includes('right: 0;'));
+  assert.ok(sidebar.includes('padding: 12px 0 24px 10px'));
+});
+
+test('Planik is offset from open widgets but returns to screen corner for centered modal windows', async () => {
+  const css = await source('client/src/components/PrimaryWorkspaceSidebar.css');
+  const app = await source('client/src/App.tsx');
+  assert.ok(app.includes("fullscreen-overlay-active"));
+  assert.ok(css.includes("right: calc(384px + 12px + 56px) !important"));
+  assert.ok(css.includes('.bubble-fullscreen-shell.fullscreen-overlay-active .primary-workspace-sidebar.is-open'));
+  assert.ok(css.includes('.primary-habit-backdrop'));
+  assert.ok(css.includes('.standalone-notes-backdrop'));
+  assert.ok(css.includes('right: max(16px, env(safe-area-inset-right)) !important'));
+});
+
+test('habit dialog matches Focus settings pill fields, five pastel choices and progress theme', async () => {
+  const dialog = await source('client/src/components/PrimaryHabitDialog.tsx');
+  const css = await source('client/src/components/PrimaryHabitDialog.css');
+  const sidebar = await source('client/src/components/PrimaryWorkspaceSidebar.css');
+  assert.ok(dialog.includes('className="primary-habit-title-pill"'));
+  assert.ok(dialog.includes('className="primary-habit-select-grid"'));
+  assert.ok(dialog.includes('className="primary-habit-target-presets"'));
+  assert.ok(dialog.includes('[1, 2, 3, 4, 5].map'));
+  assert.ok(css.includes('border-radius: 999px'));
+  assert.ok(css.includes('#75dce6') && css.includes('#f17c9f'));
+  assert.ok(css.includes("body[data-theme='dark'] .primary-habit-dialog.dialog-surface"));
+  assert.ok(sidebar.includes('.primary-widget-metric:first-child .primary-widget-progress > span'));
+});

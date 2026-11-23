@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Clock3, Loader2, Minus, Plus, Trash2, X } from 'lucide-react';
+import { Check, Clock3, ClipboardList, Loader2, Minus, Plus, Trash2, X } from 'lucide-react';
 import type { Habit, HabitDurationMode, HabitRecurrenceType } from '../lib/types';
 import './PrimaryHabitDialog.css';
 
@@ -76,13 +76,15 @@ export function PrimaryHabitDialog({ habit, onClose, onSave, onDelete, onFinish 
       <section className="primary-habit-dialog dialog-surface" role="dialog" aria-modal="true"
         aria-label={habit ? 'Настройки привычки' : 'Создание привычки'}>
         <header className="primary-habit-dialog-header">
-          <div><p className="primary-habit-eyebrow">ПРИВЫЧКИ</p><h2>{habit ? 'Настройки привычки' : 'Новая привычка'}</h2></div>
+          <h2>{habit ? 'Настройки привычки' : 'Новая привычка'}</h2>
           <button type="button" className="primary-habit-icon-button" onClick={onClose} disabled={saving} aria-label="Закрыть"><X size={19}/></button>
         </header>
         <form className="primary-habit-form" onSubmit={event => void save(event)}>
           {error && <p className="primary-habit-error" role="alert">{error}</p>}
-          <label className="primary-habit-field"><span>Название привычки</span>
-            <input autoFocus required maxLength={160} value={name} placeholder="Например, читать каждый день"
+          <label className="primary-habit-title-pill">
+            <ClipboardList size={18} aria-hidden="true"/>
+            <input autoFocus required aria-label="Название привычки" maxLength={160}
+              value={name} placeholder="Название привычки"
               onChange={event => setName(event.target.value)}/>
           </label>
           <div className="primary-habit-field"><span>Иконка</span>
@@ -104,11 +106,17 @@ export function PrimaryHabitDialog({ habit, onClose, onSave, onDelete, onFinish 
               </label>
             </div>
           </div>
-          <div className="primary-habit-field"><span>Количество выполнений за день</span>
-            <div className="primary-habit-stepper">
-              <button type="button" onClick={() => setTargetCount(value => Math.max(1, value - 1))} disabled={targetCount <= 1} aria-label="Уменьшить"><Minus size={17}/></button>
-              <strong>{targetCount}</strong>
-              <button type="button" onClick={() => setTargetCount(value => Math.min(99, value + 1))} disabled={targetCount >= 99} aria-label="Увеличить"><Plus size={17}/></button>
+          <div className="primary-habit-field"><span>Повторов в день: {targetCount}</span>
+            <div className="primary-habit-target-presets" role="group" aria-label="Количество повторений за день">
+              {[1, 2, 3, 4, 5].map(value =>
+                <button type="button" key={value} className={targetCount === value ? 'is-selected' : ''}
+                  aria-pressed={targetCount === value} onClick={() => setTargetCount(value)}>{value}</button>)}
+              <div className="primary-habit-stepper">
+                <button type="button" onClick={() => setTargetCount(value => Math.max(1, value - 1))}
+                  disabled={targetCount <= 1} aria-label="Меньше повторений"><Minus size={16}/></button>
+                <button type="button" onClick={() => setTargetCount(value => Math.min(99, value + 1))}
+                  disabled={targetCount >= 99} aria-label="Больше повторений"><Plus size={16}/></button>
+              </div>
             </div>
           </div>
           <div className="primary-habit-field"><span><Clock3 size={15}/> Время напоминаний</span>
@@ -121,12 +129,20 @@ export function PrimaryHabitDialog({ habit, onClose, onSave, onDelete, onFinish 
                 }}/></label>
             </div>
           </div>
-          <label className="primary-habit-field"><span>Периодичность</span>
-            <select value={recurrenceType} onChange={event => setRecurrenceType(event.target.value as HabitRecurrenceType)}>
-              <option value="DAILY">Каждый день</option><option value="WEEKDAYS">По дням недели</option>
-              <option value="INTERVAL">Каждые N дней</option>
-            </select>
-          </label>
+          <div className="primary-habit-select-grid">
+            <label className="primary-habit-field"><span>Периодичность</span>
+              <select value={recurrenceType} onChange={event => setRecurrenceType(event.target.value as HabitRecurrenceType)}>
+                <option value="DAILY">Каждый день</option><option value="WEEKDAYS">По дням недели</option>
+                <option value="INTERVAL">Каждые N дней</option>
+              </select>
+            </label>
+            <label className="primary-habit-field"><span>Продолжительность</span>
+              <select value={durationMode} onChange={event => setDurationMode(event.target.value as HabitDurationMode)}>
+                <option value="FOREVER">Постоянно</option><option value="UNTIL_DATE">До даты</option>
+                <option value="REPEAT_COUNT">До количества повторов</option>
+              </select>
+            </label>
+          </div>
           {recurrenceType === 'WEEKDAYS' && <div className="primary-habit-weekdays">{weekdays.map(day =>
             <button key={day.value} type="button" className={weekdaysSelection.includes(day.value) ? 'is-selected' : ''}
               aria-pressed={weekdaysSelection.includes(day.value)}
@@ -135,12 +151,6 @@ export function PrimaryHabitDialog({ habit, onClose, onSave, onDelete, onFinish 
           {recurrenceType === 'INTERVAL' && <label className="primary-habit-field"><span>Интервал в днях</span>
             <input type="number" min={1} max={365} value={intervalDays}
               onChange={event => setIntervalDays(Math.max(1, Math.min(365, Number(event.target.value) || 1)))}/></label>}
-          <label className="primary-habit-field"><span>Продолжительность</span>
-            <select value={durationMode} onChange={event => setDurationMode(event.target.value as HabitDurationMode)}>
-              <option value="FOREVER">Без ограничения</option><option value="UNTIL_DATE">До даты</option>
-              <option value="REPEAT_COUNT">До количества повторов</option>
-            </select>
-          </label>
           {durationMode === 'UNTIL_DATE' && <label className="primary-habit-field"><span>Дата окончания</span>
             <input type="date" value={endDate} onChange={event => setEndDate(event.target.value)}/></label>}
           {durationMode === 'REPEAT_COUNT' && <label className="primary-habit-field"><span>Всего повторений</span>
