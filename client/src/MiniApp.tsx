@@ -4456,6 +4456,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         setIsSettingsOpen(false);
         setIsCreditPurchaseOpen(false);
         setIsTimelineMoreOpen(false);
+        if (!showWorkspaceSearchBar) return;
         // Keep the unified header in normal document flow on mobile.
         // In particular, do not re-pin it when the user scrolls upward.
         lastMainScrollTopRef.current = event.currentTarget.scrollTop;
