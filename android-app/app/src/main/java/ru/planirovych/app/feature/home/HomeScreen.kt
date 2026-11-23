@@ -364,6 +364,10 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     if(createNote) NativeQuickNoteCreateSheet(vm=vm,dark=dark,
         onClose={createNote=false})
     if (accountOpen) AndroidAccountSheet(state.user,dark,
+        busy=state.profileBusy,error=state.profileError,
+        onSave={name,username,email,password,onSaved->
+            vm.updateProfile(name,username,email,password,onSaved)
+        },
         onClose={accountOpen=false},onSettings={accountOpen=false;settings=true},
         onLogout={accountOpen=false;vm.logout { }})
     if (settings) SettingsSheet(
@@ -855,19 +859,47 @@ private fun SettingsSheet(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AndroidAccountSheet(
-    user:CurrentUser?,dark:Boolean,onClose:()->Unit,
-    onSettings:()->Unit,onLogout:()->Unit
+    user:CurrentUser?,dark:Boolean,busy:Boolean,error:String?,
+    onSave:(String,String,String,String,()->Unit)->Unit,
+    onClose:()->Unit,onSettings:()->Unit,onLogout:()->Unit
 ) {
+    var name by remember(user?.id) { mutableStateOf(user?.name ?: "") }
+    var username by remember(user?.id) { mutableStateOf(user?.username ?: "") }
+    var email by remember(user?.id) { mutableStateOf(user?.email ?: "") }
+    var password by remember(user?.id) { mutableStateOf("") }
     ModalBottomSheet(onDismissRequest=onClose) {
-        Column(Modifier.fillMaxWidth().padding(start=20.dp,end=20.dp,bottom=32.dp),
-            verticalArrangement=Arrangement.spacedBy(13.dp)) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+            .imePadding().padding(start=20.dp,end=20.dp,bottom=32.dp),
+            verticalArrangement=Arrangement.spacedBy(12.dp)) {
             Text("Управление аккаунтом",style=MaterialTheme.typography.headlineSmall,
                 fontWeight=FontWeight.Bold)
             Text(user?.displayName ?: "Профиль",fontWeight=FontWeight.SemiBold)
-            Text("Логин: "+(user?.username ?: "Не указан"),
-                color=MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("E-mail: "+(user?.email ?: "Не указан"),
-                color=MaterialTheme.colorScheme.onSurfaceVariant)
+            if(user?.hasAccount==true) {
+                OutlinedTextField(value=name,onValueChange={name=it},
+                    label={Text("Имя")},modifier=Modifier.fillMaxWidth(),singleLine=true)
+                OutlinedTextField(value=username,onValueChange={username=it},
+                    label={Text("Логин")},modifier=Modifier.fillMaxWidth(),singleLine=true)
+                OutlinedTextField(value=email,onValueChange={email=it},
+                    label={Text("Электронная почта")},modifier=Modifier.fillMaxWidth(),
+                    singleLine=true)
+                OutlinedTextField(value=password,onValueChange={password=it},
+                    label={Text("Текущий пароль (для смены почты)")},
+                    modifier=Modifier.fillMaxWidth(),singleLine=true,
+                    visualTransformation=androidx.compose.ui.text.input.PasswordVisualTransformation())
+                error?.let {
+                    Text(it,color=MaterialTheme.colorScheme.error,fontSize=12.sp)
+                }
+                Button(onClick={onSave(name,username,email,password,onClose)},
+                    modifier=Modifier.fillMaxWidth(),
+                    enabled=!busy && username.trim().length>=3 && email.isNotBlank()) {
+                    if(busy) CircularProgressIndicator(
+                        Modifier.size(18.dp),strokeWidth=2.dp)
+                    else Text("Сохранить данные аккаунта")
+                }
+                Text("При смене почты может потребоваться подтверждение по электронной почте.",
+                    style=MaterialTheme.typography.bodySmall,
+                    color=MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             HorizontalDivider()
             Text("ИИ-кредиты: "+(user?.aiCredits ?: 0),
                 fontWeight=FontWeight.Medium)
