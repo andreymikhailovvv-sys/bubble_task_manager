@@ -317,6 +317,9 @@ export type CurrentUser = {
   hasPassword?: boolean;
 };
 export type SubscriptionLinks = { start: string; pro: string; max: string };
+export type SubscriptionPlanKey = keyof SubscriptionLinks;
+export type SubscriptionPlan = { key: SubscriptionPlanKey; name: string; creditsAmount: number; price: number };
+export type SubscriptionPurchase = { id: string; planKey: SubscriptionPlanKey; creditsAmount: number; price: number; status: string; activated: boolean };
 export type CreditPackKey = 'credit_start' | 'credit_pro' | 'credit_max';
 export type CreditPack = { key: CreditPackKey; name: string; creditsAmount: number; price: number; isActive: boolean };
 export type CreditPackLinks = Record<CreditPackKey, string>;
@@ -877,6 +880,14 @@ export const api = {
       body: JSON.stringify(payload)
     }),
   getSubscriptionLinks: () => request<{ links: SubscriptionLinks }>('/api/subscription-links'),
+  getSubscriptionPlans: () => request<{ plans: SubscriptionPlan[]; paymentProvider: 'yookassa' | null; purchaseAvailable: boolean; automaticRenewal: boolean }>('/api/subscription-plans'),
+  createSubscriptionPurchase: (payload: { planKey: SubscriptionPlanKey; clientRequestId: string; clientSurface: 'web' | 'miniapp'; receiptEmail?: string }) =>
+    request<{ purchaseId: string; status: string; confirmationUrl: string | null }>(`/api/payments/yookassa/subscriptions/${payload.planKey}`, {
+      method: 'POST', body: JSON.stringify({ clientRequestId: payload.clientRequestId, clientSurface: payload.clientSurface,
+        ...(payload.receiptEmail ? { receiptEmail: payload.receiptEmail } : {}) })
+    }),
+  getSubscriptionPurchaseStatus: (purchaseId: string) =>
+    request<{ purchase: SubscriptionPurchase }>(`/api/payments/yookassa/subscription-purchases/${encodeURIComponent(purchaseId)}`),
   getCreditPacks: () => request<{ packs: CreditPack[]; paymentProvider: 'yookassa' | null; purchaseAvailable: boolean }>('/api/credit-packs'),
   createCreditPurchase: (payload: { packKey: CreditPackKey; clientRequestId: string; clientSurface: 'web' | 'miniapp'; receiptEmail?: string }) =>
     request<{ purchaseId: string; status: string; confirmationUrl: string | null }>(`/api/payments/yookassa/credit-packs/${payload.packKey}`, { method: 'POST', body: JSON.stringify({ clientRequestId: payload.clientRequestId, clientSurface: payload.clientSurface, ...(payload.receiptEmail ? { receiptEmail: payload.receiptEmail } : {}) }) }),

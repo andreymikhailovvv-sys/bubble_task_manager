@@ -23,6 +23,7 @@ import { TestPageRating } from './TestPageRating';
 import { TestPageIntegrationsDialog } from './TestPageIntegrationsDialog';
 import { NotesEditor } from './components/NotesEditor';
 import { useCreditPurchase } from './lib/useCreditPurchase';
+import { useSubscriptionPurchase } from './lib/useSubscriptionPurchase';
 import { WorkspaceGlobalSearch } from './components/WorkspaceGlobalSearch';
 import { matchesWorkspaceText } from './lib/workspaceSearch';
 import { TestPageChat } from './TestPageChat';
@@ -108,6 +109,11 @@ export default function TestPage() {
   const [creditTab, setCreditTab] = useState<'packs' | 'plans' | 'stats'>('packs');
   const [creditPacks,setCreditPacks]=useState<CreditPack[]>([]);
   const [creditPurchaseAvailable,setCreditPurchaseAvailable]=useState(false);
+  const [subscriptionPurchaseAvailable,setSubscriptionPurchaseAvailable]=useState(false);
+  const subscriptionPurchase=useSubscriptionPurchase({
+    surface:'web', openConfirmation:url=>window.location.assign(url),
+    onSucceeded:async()=>{const me=await api.getMe();setUser(me.user);}
+  });
   const creditPurchase=useCreditPurchase({
     surface:'web',
     openConfirmation:url=>window.location.assign(url),
@@ -394,6 +400,16 @@ export default function TestPage() {
     } catch (cause) { setError(errorText(cause)); }
     finally { setAuthBusy(false); }
   };
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const purchaseId = params.get('payment') === 'subscription' ? params.get('subscriptionPurchaseId') : null;
+    if (!purchaseId) return;
+    setCreditsOpen(true); setCreditTab('plans');
+    subscriptionPurchase.setPendingPurchaseId(purchaseId);
+    void subscriptionPurchase.check(purchaseId).catch(() => undefined);
+    params.delete('payment'); params.delete('subscriptionPurchaseId');
+    window.history.replaceState({}, '', window.location.pathname + (params.size ? '?' + params.toString() : '') + window.location.hash);
+  }, []);
   const openCredits = async () => {
     setCreditsOpen(true);
     setCreditTab('packs');
@@ -401,11 +417,12 @@ export default function TestPage() {
     setCreditError('');
     setCreditPacksError('');
     try {
-      const [stats,links,packs]=await Promise.allSettled([
-        api.getCreditUsageStatistics(),api.getSubscriptionLinks(),api.getCreditPacks()
+      const [stats,links,packs,plans]=await Promise.allSettled([
+        api.getCreditUsageStatistics(),api.getSubscriptionLinks(),api.getCreditPacks(),api.getSubscriptionPlans()
       ]);
       if(stats.status==='fulfilled')setCreditStats(stats.value.statistics);
       if(links.status==='fulfilled')setSubscriptionLinks(links.value.links);
+      setSubscriptionPurchaseAvailable(plans.status==='fulfilled'&&plans.value.purchaseAvailable);
       if(packs.status==='fulfilled'){
         setCreditPacks(packs.value.packs);
         setCreditPurchaseAvailable(packs.value.purchaseAvailable);
@@ -719,9 +736,21 @@ export default function TestPage() {
             ['start','Старт','Для ежедневных задач'],['pro','Про','Для активной работы'],['max','Максимум','Расширенные возможности']
           ] as const).map(([key,name,desc])=><div key={key} className="tp-plan">
             <div><strong>{name}</strong><small>{desc}</small></div>
-            {subscriptionLinks?.[key]?<a href={subscriptionLinks[key]} target="_blank" rel="noopener noreferrer">
-              Выбрать <ArrowRight size={14}/></a>:<span>Недоступно</span>}
-          </div>)}</div>}
+            <button type="button" disabled={!subscriptionPurchaseAvailable||subscriptionPurchase.creatingPlanKey!==null}
+              onClick={()=>void subscriptionPurchase.start(key)}>
+              {subscriptionPurchase.creatingPlanKey===key?'Создаём платёж…':subscriptionPurchaseAvailable?'Купить':'Оплата недоступна'}
+            </button>
+          </div>)}
+          <p className="tp-credit-note">Тариф действует один календарный месяц, без автопродления.</p>
+          {subscriptionPurchase.isReceiptEmailRequired&&<div className="tp-credit-receipt">
+            <input type="email" value={subscriptionPurchase.receiptEmail}
+              onChange={event=>subscriptionPurchase.setReceiptEmail(event.target.value)}
+              placeholder="Email для чека" aria-label="Email для чека подписки"/>
+            <button type="button" className="tp-primary" disabled={!subscriptionPurchase.receiptEmail.trim()||!!subscriptionPurchase.creatingPlanKey}
+              onClick={()=>void subscriptionPurchase.retryWithReceiptEmail()}>Продолжить</button>
+          </div>}
+          {subscriptionPurchase.message&&<p className="tp-credit-notice" role="status">{subscriptionPurchase.message}</p>}
+          </div>}
       </div>
     </section></div>}
     {integrationOpen&&<TestPageIntegrationsDialog onClose={()=>setIntegrationOpen(false)}/>}
