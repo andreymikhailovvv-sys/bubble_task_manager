@@ -4376,7 +4376,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     !isQuickCreateOpen && !isSettingsOpen && !authModalMode &&
     !isTaskNotesEditorOpen && !isSubtaskNotesEditorOpen &&
     !isAiChatProjectDialogOpen && !isCalendarExportOpen && !reportPromptTask;
-  const showTelegramBrand = useTelegramCompactChatHeader && showWorkspaceSearchBar;
+  const showTelegramBrand = useTelegramCompactChatHeader && !showWorkspaceSearchBar;
   useEffect(() => {
     if (displayMode !== 'timeline') {
       setIsTimelineMoreOpen(false);
@@ -4516,6 +4516,40 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           onGenerated={() => void loadData()}
         />
       ) : null}
+      {isAccountOpen ? createPortal(
+        <div className="miniapp-unified-modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setIsAccountOpen(false); }}>
+          <section className="miniapp-unified-modal" role="dialog" aria-modal="true" aria-label="Управление аккаунтом">
+            <div className="miniapp-unified-section-header"><h2>Управление аккаунтом</h2>
+              <button type="button" onClick={() => setIsAccountOpen(false)} aria-label="Закрыть"><X size={20}/></button></div>
+            <p className="font-semibold text-primary">{accountDisplayName}</p>
+            <p className="text-sm text-muted">Логин: {currentUser?.username || 'Не указан'}</p>
+            <p className="text-sm text-muted">Email: {currentUser?.email || 'Не указан'}</p>
+            <button className="miniapp-unified-primary-button" type="button" onClick={() => {setIsAccountOpen(false);setIsSettingsOpen(true);}}>Изменить данные аккаунта</button>
+          </section>
+        </div>, document.body) : null}
+      {isSectorSettingsOpen ? createPortal(
+        <div className="miniapp-unified-modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setIsSectorSettingsOpen(false); }}>
+          <section className="miniapp-unified-modal" role="dialog" aria-modal="true" aria-label="Настройки секторов">
+            <div className="miniapp-unified-section-header"><h2>{sectorEditorOpen ? 'Редактирование сектора' : 'Настройки секторов'}</h2>
+              <button type="button" onClick={() => {if (sectorEditorOpen) setSectorEditorOpen(false); else setIsSectorSettingsOpen(false);}} aria-label="Закрыть"><X size={20}/></button>
+            </div>
+            {!sectorEditorOpen ? <>
+              {spheres.map(sphere => <button key={sphere.id} type="button" className="miniapp-unified-sector-edit-row" onClick={() => openSectorEditor(sphere)}>
+                <span className="miniapp-unified-sector-edit-dot" style={{ backgroundColor: sphere.color }}/>
+                <span>{sphere.name}</span><Edit3 size={18}/></button>)}
+              <button type="button" className="miniapp-unified-primary-button" onClick={() => openSectorEditor()}>+ Добавить сектор</button>
+            </> : <>
+              <label>Название<input value={sectorDraftName} onChange={event => setSectorDraftName(event.target.value)} maxLength={80}/></label>
+              <label>Цвет<input type="color" value={sectorDraftColor} onChange={event => setSectorDraftColor(event.target.value)}/></label>
+              <label>Иконка<input value={sectorDraftIcon} onChange={event => setSectorDraftIcon(event.target.value)}/></label>
+              <label>Общий промпт<textarea value={sectorDraftPrompt} onChange={event => setSectorDraftPrompt(event.target.value)}/></label>
+              {sectorError ? <p role="alert" className="text-rose-500">{sectorError}</p> : null}
+              <button type="button" className="miniapp-unified-primary-button" onClick={() => void saveSectorFromOverview()} disabled={sectorBusy || !sectorDraftName.trim()}>{sectorBusy ? 'Сохраняем…' : 'Сохранить'}</button>
+              {editingSectorId ? (sectorDeleteConfirm ? <div className="flex gap-2"><button type="button" onClick={() => void deleteSectorFromOverview()} disabled={sectorBusy}>Подтвердить удаление</button><button type="button" onClick={() => setSectorDeleteConfirm(false)}>Отмена</button></div>
+                : <button type="button" onClick={() => setSectorDeleteConfirm(true)}>Удалить сектор</button>) : null}
+            </>}
+          </section>
+        </div>, document.body) : null}
       {isSettingsOpen ? createPortal(
         <div className="settings-modal-backdrop fixed inset-0 z-[320] flex items-center justify-center overflow-hidden bg-slate-950/65 p-3 backdrop-blur-sm sm:p-6"
           style={isTelegramRuntime ? { top: Math.max(96, telegramViewport.top + 12) } : undefined}
@@ -4638,7 +4672,19 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         {showWorkspaceSearchBar ? <div ref={searchBarSlotRef} className="miniapp-premium-topbar-slot"
           style={isSearchBarFloating ? { minHeight: floatingSearchBarHeight || undefined } : undefined}>
         <section ref={searchBarPanelRef} className={`relative z-30 miniapp-premium-topbar ${displayMode === 'timeline' ? 'miniapp-timeline-topbar' : 'miniapp-list-topbar'} rounded-xl border border-slate-700 bg-slate-900/95 p-2.5 backdrop-blur ${isSearchBarFloating && (isHeaderVisible || isGlobalSearchOpen) ? 'miniapp-premium-topbar-floating' : ''}`}>
-          <div className="miniapp-workspace-topbar-row flex items-center gap-2">
+          <div className="miniapp-workspace-topbar-row miniapp-unified-topbar-row flex items-center gap-2">
+            <div className="miniapp-unified-brand" aria-label="Планировыч">
+              <span className="miniapp-unified-app-icon">✦</span>
+              <strong>Планировыч</strong>
+            </div>
+            <button type="button" className="miniapp-unified-icon-button" onClick={() => setIsAccountOpen(true)} title="Управление аккаунтом" aria-label="Управление аккаунтом">
+              <UserCircle size={21} />
+            </button>
+            <button type="button" className="miniapp-unified-icon-button miniapp-unified-search-toggle" onClick={() => {
+              setIsMiniSearchExpanded(open => !open);
+              if (isMiniSearchExpanded) { setIsGlobalSearchOpen(false); setTaskSearch(''); }
+            }} title="Поиск" aria-label="Поиск" aria-expanded={isMiniSearchExpanded}><Search size={20}/></button>
+            <div className={`miniapp-unified-search-popover ${isMiniSearchExpanded ? 'is-open' : ''}`}>
             <WorkspaceGlobalSearch
               mobile
               userId={currentUser?.id ?? ''}
@@ -4654,18 +4700,19 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 setIsStandaloneNotesOpen(true);
               }}
             />
+            </div>
             {displayMode === 'timeline' ? (
               <button type="button" className="miniapp-timeline-postpone-button"
-                onClick={() => void postponeAllOverdueToToday()}
-                disabled={isPostponingOverdue || overdueTasks.length === 0}
-                title="Перенести просроченные задачи на сегодня на это же время"
-                aria-label="Перенести просроченные задачи на сегодня на это же время">
-                {isPostponingOverdue ? <Loader2 size={18} className="animate-spin" /> : <Clock3 size={18}/>}
-                <span>Отложить</span>
+                onClick={() => setIsOverdueTasksOpen(true)}
+                title="Показать просроченные задачи"
+                aria-label={`Просроченные задачи: ${overdueTasks.length}`}>
+                <Clock3 size={18}/>
+                <span className="miniapp-timeline-overdue-copy">Просроченные</span>
+                {overdueTasks.length > 0 ? <span className="miniapp-unified-overdue-count">{overdueTasks.length}</span> : null}
               </button>
             ) : null}
-            <div ref={timelineMoreRef} className={`miniapp-workspace-utilities ${displayMode === 'timeline' ? 'is-timeline' : 'is-list'} ${isTimelineMoreOpen ? 'is-open' : ''}`}>
-              {displayMode === 'timeline' ? (
+            <div ref={timelineMoreRef} className={`miniapp-workspace-utilities is-list ${isTimelineMoreOpen ? 'is-open' : ''}`}>
+              {false ? (
                 <button type="button" className="miniapp-timeline-more-toggle" aria-label="Кредиты, рейтинг и настройки"
                   aria-haspopup="menu" aria-expanded={isTimelineMoreOpen}
                   onClick={() => {
@@ -4677,8 +4724,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 </button>
               ) : null}
               <div className="miniapp-workspace-utilities-panel relative inline-flex shrink-0 items-center gap-1"
-                role={displayMode === 'timeline' ? 'menu' : undefined}
-                aria-label={displayMode === 'timeline' ? 'Дополнительные действия' : undefined}>
+                role={undefined}
+                aria-label="Управление сервисом">
               <button type="button" onClick={() => { if (currentUser?.isGuest && isWebRuntime) { setIsCreditPurchaseOpen(false); openAuthModal('register'); } else { setCreditPopoverView('purchase'); setIsCreditPurchaseOpen((open) => !open); } }} className="miniapp-credit-badge inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold" title={currentUser?.isGuest ? 'Зарегистрируйтесь, чтобы получить 100 ИИ-кредитов' : 'Купить AI-кредиты'} aria-label={`AI-кредиты: ${aiCredits}`} aria-expanded={isCreditPurchaseOpen}>
                 <Coins size={15} />
                 {displayMode === 'timeline' ? <span className="miniapp-utility-menu-label">Кредиты</span> : null}
@@ -4835,6 +4882,47 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             </div>
           </section>
 
+          <section className="miniapp-unified-statistics" aria-label="Статистика выполнения">
+            <h2>Статистика выполнения</h2>
+            <div className="miniapp-unified-stats-grid">
+              {[{ title: 'Все задачи', done: completedOverviewTasks, total: overviewTasks.length, symbol: <CheckCircle2 size={21}/> },
+                { title: 'За сегодня', done: completedTodayTasks, total: plannedTodayTasks.length, symbol: <CalendarDays size={21}/> }].map(metric => (
+                <article key={metric.title} className="miniapp-unified-stat-card">
+                  <div className="miniapp-unified-stat-label">{metric.symbol}<span>{metric.title}</span></div>
+                  <strong>{metric.done} из {metric.total}</strong>
+                  <div className="miniapp-unified-progress-track" role="progressbar" aria-label={metric.title} aria-valuenow={metric.done} aria-valuemin={0} aria-valuemax={metric.total}>
+                    <span style={{ width: `${overviewProgress(metric.done, metric.total)}%` }}/>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+          <section className="miniapp-unified-sectors" aria-label="Сектора">
+            <div className="miniapp-unified-section-header">
+              <h2>Сектора</h2>
+              <button type="button" onClick={() => setIsSectorSettingsOpen(true)}
+                aria-label="Настройки секторов" title="Настройки секторов"><Settings size={19}/></button>
+            </div>
+            {spheres.length === 0 ? <p className="text-sm text-muted">Сектора пока не добавлены</p> : (
+              <div className="miniapp-unified-sector-grid">
+                {spheres.map(sphere => {
+                  const count = overviewTasks.filter(task => task.sphereId === sphere.id && task.status !== 'DONE').length;
+                  const selected = listSelectedSphereIds?.length === 1 && listSelectedSphereIds[0] === sphere.id;
+                  return (
+                    <button type="button" key={sphere.id} className={`miniapp-unified-sector ${selected ? 'is-selected' : ''}`}
+                      onClick={() => setListSelectedSphereIds(selected ? null : [sphere.id])}>
+                      <span className="miniapp-unified-sector-outer" style={{ backgroundColor: `${sphere.color}25` }}>
+                        <span className="miniapp-unified-sector-circle" style={{ backgroundColor: sphere.color }}>{count}</span>
+                      </span>
+                      <span className="miniapp-unified-sector-name">{sphere.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {listSelectedSphereIds?.length === 1 ? <button type="button" className="miniapp-unified-show-all" onClick={() => setListSelectedSphereIds(null)}>Все сектора</button> : null}
+          </section>
+          <h2 className="miniapp-unified-tasks-heading">Ваши задачи</h2>
           <div className="miniapp-list-workspace">
             <div className="miniapp-workspace-toolbar-card">
             <MiniWorkspaceTools
