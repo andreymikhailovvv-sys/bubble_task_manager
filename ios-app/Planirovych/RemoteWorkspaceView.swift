@@ -331,9 +331,7 @@ struct RemoteWorkspaceView: View {
                                         Circle()
                                             .fill(Color(sphereHex: sphere.color))
                                             .frame(width: 62, height: 62)
-                                        Text("\(allActualTasks.filter {
-                                            $0.sphereId == sphere.id && !$0.isComplete
-                                        }.count)")
+                                        Text("\(allActualTasks.filter { $0.sphereId == sphere.id && !$0.isComplete }.count)")
                                             .font(.title3.bold())
                                             .foregroundStyle(.white)
                                     }
