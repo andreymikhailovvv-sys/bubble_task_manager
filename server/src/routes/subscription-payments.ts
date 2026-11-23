@@ -62,11 +62,17 @@ subscriptionPaymentsRouter.post('/subscriptions/:planKey', requireAuth, async (r
             'Подписка уже активна. Продлить её можно после окончания текущего периода.');
         }
         const unfinished = await tx.subscriptionPurchase.findFirst({
-          where: { userId: user.id, status: { in: ['created', 'pending', 'create_failed'] } },
-          select: { id: true }
+          where: { userId: user.id, status: { in: ['created', 'pending', 'create_failed'] } }
         });
-        if (unfinished) throw new CheckoutConflict('SUBSCRIPTION_PAYMENT_PENDING',
-          'У вас уже есть незавершённая оплата. Дождитесь её проверки, не оплачивайте повторно.');
+        if (unfinished) {
+          if (unfinished.planKey !== plan.key) {
+            throw new CheckoutConflict('SUBSCRIPTION_PAYMENT_PENDING',
+              'У вас уже есть незавершённая оплата другого тарифа. Дождитесь её проверки.');
+          }
+          // Resume the SAME checkout with the SAME provider idempotence key.
+          // A lost provider response must not force a second charge.
+          return unfinished;
+        }
         return tx.subscriptionPurchase.create({ data: {
           userId: user.id, clientRequestId, planKey: plan.key,
           creditsMilli: plan.creditsAmount * 1000, amountKopecks: plan.amountKopecks,
@@ -85,7 +91,7 @@ subscriptionPaymentsRouter.post('/subscriptions/:planKey', requireAuth, async (r
       });
     }
   }
-  if (purchase.confirmationUrl || purchase.status === 'succeeded') {
+  if (purchase.confirmationUrl || purchase.status === 'succeeded' || purchase.status === 'canceled') {
     return void res.json({ purchaseId: purchase.id, status: purchase.status, confirmationUrl: purchase.confirmationUrl });
   }
   try {
@@ -112,7 +118,10 @@ subscriptionPaymentsRouter.post('/subscriptions/:planKey', requireAuth, async (r
     return void res.json({ purchaseId: purchase.id, status: purchase.status, confirmationUrl: purchase.confirmationUrl });
   } catch (error) {
     // The same clientRequestId and YooKassa idempotence key can safely retry an uncertain provider response.
-    await prisma.subscriptionPurchase.update({ where: { id: purchase.id }, data: { status: 'create_failed' } });
+    await prisma.subscriptionPurchase.updateMany({
+      where: { id: purchase.id, activatedAt: null, status: { notIn: ['succeeded', 'canceled'] } },
+      data: { status: 'create_failed' }
+    });
     console.error('[Payments] subscription payment create failed', {
       purchaseId: purchase.id, errorName: error instanceof Error ? error.name : 'unknown'
     });
