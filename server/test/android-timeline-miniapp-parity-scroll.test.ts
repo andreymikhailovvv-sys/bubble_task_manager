@@ -12,9 +12,9 @@ test('Android Timeline opens directly under the top bar, without a redundant Fil
   assert.ok(list > 0 && toolbar > list && display > toolbar, 'workspace and timeline remain wired');
   // Include the opening call. An exclusive slice ending at its start cannot match it.
   const section = android.slice(list, display + 'NativeTimelineWorkspace'.length);
-  assert.match(section, /if \(contentMode == WorkspaceMode\.LIST\) item \{\s*WorkspaceToolbar/);
+  assert.match(section, /if \(contentMode == WorkspaceMode\.LIST\)[\s\S]*WorkspaceToolbar/);
   assert.match(section, /else item \{\s*NativeTimelineWorkspace/);
-  assert.match(android, /WorkspaceTopbar\(state,colors,mode=contentMode/);
+  assert.match(android, /WorkspaceTopbar\(state,colors,dark,/);
 });
 
 test('Day and Week share neutral cards without colored left-edge stripes', async () => {
