@@ -50,6 +50,16 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
         return response["text"]?.jsonPrimitive?.contentOrNull
             ?.takeIf{it.isNotBlank()}?:error("Сервис вернул пустую расшифровку.")
     }
+    suspend fun saveSphere(id:String?,name:String,color:String,icon:String,prompt:String):Sphere {
+        val body=buildJsonObject {
+            put("name",name.trim());put("color",color);put("icon",icon)
+            put("generalPrompt",prompt)
+        }
+        return if(id==null) api.createSphere(body) else api.updateSphere(id,body)
+    }
+    suspend fun removeSphere(id:String) { api.deleteSphere(id) }
+    suspend fun loadSpheres():List<Sphere> = api.spheres()
+
     suspend fun loadTasks(): List<Task> = api.tasks()
     suspend fun updateTask(id: String, changes: JsonObject): Task = api.updateTask(id, changes)
     suspend fun updateStatus(id: String, status: TaskStatus, scope: String = "me"): Task =
