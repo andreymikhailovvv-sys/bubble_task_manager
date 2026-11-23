@@ -144,7 +144,8 @@ struct NativeTaskSettingsSheet: View {
                                 VStack(alignment: .leading, spacing: 9) {
                                     Text("Дни недели").font(.subheadline)
                                     HStack(spacing: 5) {
-                                        ForEach(days, id: \.0) { day in
+                                        ForEach(days.indices, id: \.self) { index in
+                                            let day = days[index]
                                             Button {
                                                 if weekdays.contains(day.0) {
                                                     if weekdays.count > 1 { weekdays.remove(day.0) }
