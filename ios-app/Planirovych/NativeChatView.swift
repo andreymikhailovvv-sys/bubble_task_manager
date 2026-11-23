@@ -281,7 +281,12 @@ struct NativeChatView: View {
                 Text(mine ? "Вы" : "Планировыч")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(mine ? Color.white.opacity(0.8) : accent)
-                markdown(message.content)
+                markdown(message.generatedDocument?.isImage == true
+                    ? message.content.replacingOccurrences(
+                        of: #"\\[\\[file_ref=[^\\]]+\\]\\]"#, with: "",
+                        options: .regularExpression
+                    ).trimmingCharacters(in: .whitespacesAndNewlines)
+                    : message.content)
                     .font(.system(size: 15))
                     .textSelection(.enabled)
                     .foregroundStyle(mine ? Color.white : Color.primary)
