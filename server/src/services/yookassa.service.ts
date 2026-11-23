@@ -9,7 +9,7 @@ export type YooKassaPayment = {
   paid?: boolean;
   amount?: { value?: string; currency?: string };
   confirmation?: { confirmation_url?: string };
-  metadata?: { purchase_id?: string; credit_pack_key?: string };
+  metadata?: { purchase_id?: string; credit_pack_key?: string; subscription_purchase_id?: string; subscription_plan_key?: string };
   recipient?: { account_id?: string };
 };
 
@@ -151,7 +151,7 @@ export const parseProviderAmountKopecks = (value: string | undefined): number | 
 };
 
 export const yookassaService = {
-  createPayment(input: { amountKopecks: number; returnUrl: string; description: string; receiptDescription: string; customerEmail: string; purchaseId: string; creditPackKey: string; idempotenceKey: string }) {
+  createPayment(input: { amountKopecks: number; returnUrl: string; description: string; receiptDescription: string; customerEmail: string; purchaseId: string; creditPackKey?: string; subscriptionPlanKey?: string; idempotenceKey: string }) {
     const amount = { value: formatKopecks(input.amountKopecks), currency: 'RUB' };
     return providerRequest('/payments', {
       method: 'POST',
@@ -161,7 +161,9 @@ export const yookassaService = {
         capture: true,
         confirmation: { type: 'redirect', return_url: input.returnUrl },
         description: input.description,
-        metadata: { purchase_id: input.purchaseId, credit_pack_key: input.creditPackKey },
+        metadata: input.subscriptionPlanKey
+          ? { subscription_purchase_id: input.purchaseId, subscription_plan_key: input.subscriptionPlanKey }
+          : { purchase_id: input.purchaseId, credit_pack_key: input.creditPackKey },
         receipt: {
           customer: { email: input.customerEmail },
           items: [{

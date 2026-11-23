@@ -15,6 +15,7 @@ import { telegramService } from './services/telegram.service.js';
 import { sendEconomicLoanPaymentReminders } from './services/economic-loan-reminder.service.js';
 import { prisma } from './db/prisma.js';
 import { reconcilePendingCreditPurchases } from './services/credit-purchase-recovery.service.js';
+import { reconcilePendingSubscriptionPurchases } from './services/subscription-purchase-recovery.service.js';
 import { createAiCheckup } from './services/ai-checkup-delivery.service.js';
 import { resolveAiCheckupSchedules } from './lib/ai-checkup-schedules.js';
 import { Prisma } from '@prisma/client';
@@ -141,7 +142,11 @@ const runPaymentRecovery = async () => {
   if (paymentRecoveryRunning) return;
   paymentRecoveryRunning = true;
   try {
-    const result = await measureBackground('payments.recovery', () => reconcilePendingCreditPurchases());
+    const result = await measureBackground('payments.recovery', async () => {
+      const packs = await reconcilePendingCreditPurchases();
+      const subscriptions = await reconcilePendingSubscriptionPurchases();
+      return { scanned: packs.scanned + subscriptions.scanned, confirmed: packs.confirmed + subscriptions.confirmed, failed: packs.failed + subscriptions.failed };
+    });
     if (result.scanned) console.info('[Payments] pending purchase recovery cycle', result);
   } catch (error) {
     console.error('[Payments] pending purchase recovery cycle failed', {

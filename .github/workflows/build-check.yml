@@ -31,6 +31,8 @@ jobs:
         run: npm ci --include=dev --no-audit --no-fund
       - name: Compile web client and API server
         run: npm run build
+      - name: Verify paid subscription calendar and YooKassa confirmation idempotency
+        run: node --import tsx --test server/test/subscription-purchase.service.test.ts
       - name: Browser smoke - real Chromium task open and typing
         run: |
           npm install --no-save --package-lock=false --ignore-scripts playwright@1.56.1

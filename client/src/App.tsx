@@ -58,6 +58,7 @@ import type { AiAttachmentPreview } from './components/AiAttachmentTiles';
 import { formatCreditsSpent } from './lib/credits';
 import { AI_TOUR_STEPS, FEATURE_TOUR_STEPS, TASK_TOUR_STEPS, WORKSPACE_TOUR_STEPS, PRIMARY_WORKSPACE_TOUR_STEPS, TourOverlay, type AiTourStep, type FeatureTourStep, type TaskTourStep, type WorkspaceTourStep } from './components/TourOverlay';
 import { useCreditPurchase } from './lib/useCreditPurchase';
+import { useSubscriptionPurchase } from './lib/useSubscriptionPurchase';
 import { ExpandedAiChat } from './components/ExpandedAiChat';
 import { QuickAiLauncherFrame } from './components/QuickAiLauncherFrame';
 import { PlanikMascot } from './components/PlanikMascot';
@@ -925,6 +926,13 @@ export default function App() {
   const [subscriptionLinks, setSubscriptionLinks] = useState<SubscriptionLinks>({ start: '', pro: '', max: '' });
   const [creditPacks, setCreditPacks] = useState<CreditPack[]>([]);
   const [creditPurchaseAvailable, setCreditPurchaseAvailable] = useState(false);
+  const [subscriptionPurchaseAvailable, setSubscriptionPurchaseAvailable] = useState(false);
+  const activeSubscription = Boolean(currentUser?.subscriptionExpiresAt &&
+    new Date(currentUser.subscriptionExpiresAt).getTime() > Date.now());
+  const subscriptionPurchase = useSubscriptionPurchase({
+    surface: 'web', openConfirmation: (url) => window.location.assign(url),
+    onSucceeded: async () => { const me = await api.getMe(); setCurrentUser(me.user); }
+  });
   const creditPurchase = useCreditPurchase({ surface: 'web', openConfirmation: (url) => window.location.assign(url), onSucceeded: async () => { const me = await api.getMe(); setCurrentUser(me.user); } });
   const loadCreditUsageStatistics = async () => {
     setCreditUsageStatisticsLoading(true);
@@ -1446,6 +1454,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    api.getSubscriptionPlans()
+      .then((result) => setSubscriptionPurchaseAvailable(result.purchaseAvailable))
+      .catch(() => setSubscriptionPurchaseAvailable(false));
+  }, []);
+
+  useEffect(() => {
     api.getCreditPacks()
       .then((response) => { setCreditPacks(response.packs); setCreditPurchaseAvailable(response.purchaseAvailable); })
       .catch(() => {
@@ -1455,6 +1469,15 @@ export default function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const subscriptionId = params.get('payment') === 'subscription' ? params.get('subscriptionPurchaseId') : null;
+    if (subscriptionId) {
+      subscriptionPurchase.setPendingPurchaseId(subscriptionId);
+      void subscriptionPurchase.check(subscriptionId).catch((error) =>
+        subscriptionPurchase.setMessage(error instanceof Error ? error.message : 'Не удалось проверить платёж'));
+      params.delete('payment'); params.delete('subscriptionPurchaseId');
+      window.history.replaceState({}, '', `${window.location.pathname}${params.size ? `?${params.toString()}` : ''}${window.location.hash}`);
+      return;
+    }
     const purchaseId = params.get('payment') === 'return' ? params.get('purchaseId') : null;
     if (!purchaseId) return;
     creditPurchase.setPendingPurchaseId(purchaseId);
@@ -7199,7 +7222,7 @@ export default function App() {
               <div key="credits-purchase" className="credit-switch-content">
             <div className="grid gap-3 p-4 sm:grid-cols-3">
               {SUBSCRIPTION_PLANS.map((plan) => {
-                const link = subscriptionLinks[plan.key]?.trim();
+                const isCreating = subscriptionPurchase.creatingPlanKey === plan.key;
                 return (
                   <article key={plan.key} className="subscription-plan-card flex min-h-full flex-col rounded-2xl border p-4 shadow-xl sm:p-3">
                     <div className="flex items-start justify-between gap-3">
@@ -7214,19 +7237,26 @@ export default function App() {
                         <li key={feature} className="subscription-feature-pill flex items-start gap-2 rounded-xl px-3 py-1.5"><Check size={15} className="mt-0.5 shrink-0 text-emerald-300" /> <span>{feature}</span></li>
                       ))}
                     </ul>
-                    <a
-                      href={link || undefined}
-                      target={link ? '_blank' : undefined}
-                      rel={link ? 'noreferrer' : undefined}
-                      aria-disabled={!link}
-                      onClick={(event) => { if (!link) event.preventDefault(); }}
-                      className={`mt-3 rounded-xl px-4 py-2.5 text-center text-sm font-semibold shadow-lg transition ${link ? 'bg-gradient-to-r from-fuchsia-600 to-rose-600 text-white hover:-translate-y-0.5 hover:shadow-fuchsia-500/25' : 'cursor-not-allowed bg-slate-500/40 text-slate-300'}`}
-                    >
-                      Купить подписку
-                    </a>
+                    <button type="button" disabled={!subscriptionPurchaseAvailable || activeSubscription || subscriptionPurchase.creatingPlanKey !== null}
+                      onClick={() => void subscriptionPurchase.start(plan.key)}
+                      className="mt-3 rounded-xl bg-gradient-to-r from-fuchsia-600 to-rose-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50">
+                      {isCreating ? 'Создаём платёж…' : activeSubscription ? 'Подписка активна' : subscriptionPurchaseAvailable ? 'Купить на месяц' : 'Оплата недоступна'}
+                    </button>
                   </article>
                 );
               })}
+            </div>
+            <div className="px-4 pb-3 text-xs text-muted sm:px-5">
+              Подписка действует один календарный месяц. Автоматического продления и списания нет.
+              {subscriptionPurchase.isReceiptEmailRequired ? <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                <input type="email" autoComplete="email" placeholder="Email для чека" aria-label="Email для чека подписки"
+                  value={subscriptionPurchase.receiptEmail} onChange={event => subscriptionPurchase.setReceiptEmail(event.target.value)}
+                  className="form-field min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm" />
+                <button type="button" disabled={!subscriptionPurchase.receiptEmail.trim() || subscriptionPurchase.creatingPlanKey !== null}
+                  onClick={() => void subscriptionPurchase.retryWithReceiptEmail()}
+                  className="rounded-xl bg-fuchsia-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Продолжить</button>
+              </div> : null}
+              {subscriptionPurchase.message ? <p className="mt-2" role="status">{subscriptionPurchase.message}</p> : null}
             </div>
             <section className="border-t border-white/10 px-4 pb-2 pt-4 sm:px-5">
               <h3 className="text-xl font-bold text-primary">Дополнительные AI-кредиты</h3>
