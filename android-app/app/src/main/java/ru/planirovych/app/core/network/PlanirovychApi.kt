@@ -19,6 +19,7 @@ interface PlanirovychApi {
     @POST("api/auth/login") suspend fun login(@Body request: LoginRequest): UserResponse
     @POST("api/auth/register") suspend fun register(@Body request: RegisterRequest): UserResponse
     @POST("api/auth/logout") suspend fun logout(): OkResponse
+    @PATCH("api/user/profile") suspend fun updateProfile(@Body payload: JsonObject): UserResponse
     @GET("api/spheres") suspend fun spheres(): List<Sphere>
     @POST("api/spheres") suspend fun createSphere(@Body payload: JsonObject): Sphere
     @PATCH("api/spheres/{id}") suspend fun updateSphere(@Path("id") id:String,@Body payload:JsonObject): Sphere
