@@ -34,6 +34,9 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.*
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -174,13 +177,45 @@ fun ModernWorkspace(
                 onQuickVoice=onQuickVoice,voiceAwaiting=voiceAwaiting)
             2 -> {
                 val pagerScope=rememberCoroutineScope()
-                NativeGeneralAiChatPage(vm=vm,userId=state.user?.id,dark=dark,
-                    tasks=state.tasks,quickAiMode=quickAiMode,
-                    quickAiRequestId=quickAiRequestId,
-                    onQuickAiHandled=onQuickAiHandled,
-                    chatVisible=pagerState.currentPage==2,
-                    onExit={pagerScope.launch{pagerState.animateScrollToPage(0)}},
-                    onOpenTask=onOpenTask,onOpenTaskAi=onOpenTaskAi)
+                Column(Modifier.fillMaxSize().background(
+                    if(dark) Color(0xFF101B30) else Color(0xFFF2F7FF))) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal=14.dp,vertical=9.dp)) {
+                        WorkspaceTopbar(state,colors,dark,onAccount=onAccount,
+                            onSearchToggle={
+                                searchFieldOpen=!searchFieldOpen
+                                if(!searchFieldOpen){search("");searchExpanded=false}
+                            },settings=settings,onCredits={creditsOpen=true})
+                        if(searchFieldOpen) {
+                            Spacer(Modifier.height(8.dp))
+                            WorkspaceSearchField(state.query,colors,search,
+                                onClose={search("");searchFieldOpen=false;searchExpanded=false},
+                                onEdited={searchExpanded=it.isNotBlank()})
+                        }
+                        if(searchFieldOpen && searchExpanded && searchQuery.isNotEmpty()) {
+                            Spacer(Modifier.height(6.dp))
+                            NativeWorkspaceGlobalSearch(query=state.query,
+                                tasks=state.tasks,notes=state.notes,
+                                notesLoading=state.notesLoading,dark=dark,
+                                onOpenTask={id->searchExpanded=false;onOpenTask(id)},
+                                onOpenNote={id->
+                                    searchNoteTarget=id;notesVisible=true;searchExpanded=false
+                                },onDismiss={searchExpanded=false})
+                        }
+                    }
+                    Box(Modifier.fillMaxWidth().height(10.dp)
+                        .background(Brush.verticalGradient(listOf(
+                            if(dark)Color(0xFF101B30) else Color(0xFFF2F7FF),
+                            if(dark)Color(0xFF17253B) else Color(0xFFEAF1FB)))))
+                    Box(Modifier.weight(1f)) {
+                        NativeGeneralAiChatPage(vm=vm,userId=state.user?.id,dark=dark,
+                            tasks=state.tasks,quickAiMode=quickAiMode,
+                            quickAiRequestId=quickAiRequestId,
+                            onQuickAiHandled=onQuickAiHandled,
+                            chatVisible=pagerState.currentPage==2,
+                            onExit={pagerScope.launch{pagerState.animateScrollToPage(0)}},
+                            onOpenTask=onOpenTask,onOpenTaskAi=onOpenTaskAi)
+                    }
+                }
             }
             else -> {
                 val contentMode = if(page==1) WorkspaceMode.TIMELINE else WorkspaceMode.LIST
@@ -223,44 +258,49 @@ fun ModernWorkspace(
     }
     val workspaceScroll=rememberLazyListState()
     val timelineActive=pagerState.currentPage==1
-    val headerInsetPx=with(LocalDensity.current){92.dp.toPx()}
-    var timelineViewportCenter by remember{mutableFloatStateOf(0f)}
-    var currentTimeTarget by remember{mutableStateOf<Pair<String,Float>?>(null)}
-    var lastCenteredTimeKey by remember{mutableStateOf<String?>(null)}
-    LaunchedEffect(timelineActive){
-        if(!timelineActive)lastCenteredTimeKey=null
-    }
-    LaunchedEffect(timelineActive,currentTimeTarget?.first,timelineViewportCenter){
-        val target=currentTimeTarget
-        if(timelineActive && target!=null && timelineViewportCenter>0f &&
-            lastCenteredTimeKey!=target.first){
-            // Only one adjustment per opening/date: subsequent manual swipes
-            // must not be overridden by repeated layout callbacks.
-            lastCenteredTimeKey=target.first
-            workspaceScroll.scroll {
-                scrollBy(target.second-timelineViewportCenter)
-            }
-        }
+    // On every entry the timeline begins at the top, not centered on "now".
+    LaunchedEffect(timelineActive) {
+        if(timelineActive) workspaceScroll.scrollToItem(0)
     }
     // Mini App's subtly blue-tinted background; task cards remain white.
     Box(Modifier.fillMaxSize()
-        .onGloballyPositioned{coords->
-            if(contentMode==WorkspaceMode.TIMELINE){
-                timelineViewportCenter=coords.positionInRoot().y+
-                    (coords.size.height+headerInsetPx)/2f
-            }
-        }.background(Brush.verticalGradient(
+        .background(Brush.verticalGradient(
         if(dark) listOf(Color(0xFF0E192B),Color(0xFF111C30))
         else listOf(Color(0xFFF3F8FF),Color(0xFFEEF6FF),Color(0xFFF5F9FF))
     ))){
     LazyColumn(
         state=workspaceScroll,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start=14.dp,end=14.dp,
-            top=if(contentMode==WorkspaceMode.TIMELINE || searchFieldOpen) 152.dp else 92.dp,
-            bottom=28.dp),
+        contentPadding = PaddingValues(start=14.dp,end=14.dp,top=12.dp,bottom=28.dp),
         verticalArrangement = Arrangement.spacedBy(13.dp),
     ) {
+        item(key="workspace-unified-header") {
+            Column(Modifier.fillMaxWidth()) {
+                WorkspaceTopbar(state,colors,dark,
+                    onAccount=onAccount,onSearchToggle={
+                        searchFieldOpen=!searchFieldOpen
+                        if(!searchFieldOpen){search("");searchExpanded=false}
+                    },settings=settings,onCredits={creditsOpen=true})
+                if(searchFieldOpen) {
+                    Spacer(Modifier.height(8.dp))
+                    WorkspaceSearchField(state.query,colors,search,
+                        onClose={search("");searchFieldOpen=false;searchExpanded=false},
+                        onEdited={searchExpanded=it.isNotBlank()})
+                }
+                if(searchFieldOpen && searchExpanded && searchQuery.isNotEmpty()) {
+                    Spacer(Modifier.height(7.dp))
+                    NativeWorkspaceGlobalSearch(
+                        query=state.query,tasks=state.tasks,notes=state.notes,
+                        notesLoading=state.notesLoading,dark=dark,
+                        onOpenTask={id->searchExpanded=false;onOpenTask(id)},
+                        onOpenNote={id->
+                            searchNoteTarget=id;notesVisible=true;searchExpanded=false
+                        },onDismiss={searchExpanded=false})
+                }
+                // Match the visual rhythm between Habits and Statistics.
+                if(contentMode==WorkspaceMode.LIST) Spacer(Modifier.height(8.dp))
+            }
+        }
         if (contentMode == WorkspaceMode.LIST) {
             item {
                 HabitsStrip(habits, colors, dark, onHabitClick = { selectedHabitId = it.id },
@@ -368,68 +408,8 @@ fun ModernWorkspace(
                 state.spheres, colors, dark, onOpenTask,
                 onOpenHabit={selectedHabitId=it},
                 isActive=timelineActive,
-                onCurrentTimePosition={key,center->currentTimeTarget=key to center})
-        }
-    }
-    Box(Modifier.align(Alignment.TopCenter)
-        .fillMaxWidth()
-        .padding(start=14.dp,end=14.dp,top=35.dp)){
-        Column(Modifier.fillMaxWidth()) {
-            WorkspaceTopbar(state,colors,dark,
-                onAccount=onAccount,onSearchToggle={
-                    searchFieldOpen=!searchFieldOpen
-                    if(!searchFieldOpen){search("");searchExpanded=false}
-                },settings=settings,onCredits={creditsOpen=true})
-            if(searchFieldOpen) {
-                Spacer(Modifier.height(8.dp))
-                Surface(Modifier.fillMaxWidth().height(46.dp),
-                    shape=RoundedCornerShape(18.dp),color=colors.card,
-                    border=BorderStroke(1.dp,colors.panelBorder)) {
-                    Row(Modifier.fillMaxSize().padding(horizontal=12.dp),
-                        verticalAlignment=Alignment.CenterVertically) {
-                        Icon(Icons.Default.Search,null,Modifier.size(19.dp),
-                            tint=colors.secondaryText)
-                        Spacer(Modifier.width(8.dp))
-                        BasicTextField(value=state.query,
-                            onValueChange={text->search(text);searchExpanded=text.isNotBlank()},
-                            modifier=Modifier.weight(1f),
-                            singleLine=true,textStyle=MaterialTheme.typography.bodyMedium.copy(
-                                color=colors.text,fontSize=14.sp),
-                            cursorBrush=androidx.compose.ui.graphics.SolidColor(colors.purple),
-                            decorationBox={inner->Box(contentAlignment=Alignment.CenterStart){
-                                if(state.query.isBlank())Text("Поиск по задачам и заметкам",
-                                    color=colors.secondaryText,fontSize=13.sp)
-                                inner()
-                            }})
-                        IconButton(onClick={search("");searchFieldOpen=false;searchExpanded=false},
-                            modifier=Modifier.size(32.dp)) {
-                            Icon(Icons.Default.Close,"Закрыть поиск",
-                                Modifier.size(18.dp),tint=colors.secondaryText)
-                        }
-                    }
-                }
-            }
-            if(contentMode==WorkspaceMode.TIMELINE) {
-                Spacer(Modifier.height(8.dp))
-                ToolbarButton("Просроченные задачи",Icons.Default.Schedule,
-                    if(dark)Color(0xFFF9A8D4) else Color(0xFFBE185D),
-                    colors.card,colors.panelBorder,Modifier.fillMaxWidth(),
-                    click={overdueOpen=true},badgeCount=overdueTasks.size)
-            }
-            if(searchExpanded && searchQuery.isNotEmpty()) {
-                Spacer(Modifier.height(7.dp))
-                NativeWorkspaceGlobalSearch(
-                    query=state.query,tasks=state.tasks,notes=state.notes,
-                    notesLoading=state.notesLoading,dark=dark,
-                    onOpenTask=onOpenTask,
-                    onOpenNote={id->
-                        searchNoteTarget=id
-                        notesVisible=true
-                        searchExpanded=false
-                    },
-                    onDismiss={searchExpanded=false}
-                )
-            }
+                overdueCount=overdueTasks.size,
+                onOpenOverdue={overdueOpen=true})
         }
     }
     }
@@ -556,56 +536,101 @@ fun ModernWorkspace(
     }
 }
 
-/**
- * List and Timeline share the Mini App's search-led header:
- * List: search | credit balance | efficiency | settings
- * Timeline: search | overdue postpone | compact overflow utilities.
- * Keep each item on its own surface, never wrap the whole row in another card.
- */
+/** A unified, naturally scrolling header shared by Overview, Timeline and AI Chat. */
 @Composable
 private fun WorkspaceTopbar(
     state:HomeState,colors:WorkspaceColors,dark:Boolean,
     onAccount:()->Unit,onSearchToggle:()->Unit,settings:()->Unit,
     onCredits:()->Unit
 ) {
-    val shape=RoundedCornerShape(15.dp)
-    Row(Modifier.fillMaxWidth().height(46.dp),
+    val shape=RoundedCornerShape(13.dp)
+    Row(Modifier.fillMaxWidth().height(54.dp),
         verticalAlignment=Alignment.CenterVertically,
         horizontalArrangement=Arrangement.spacedBy(5.dp)) {
-        Box(Modifier.size(39.dp).clip(shape)
-            .background(Brush.linearGradient(listOf(Color(0xFF7045D9),Color(0xFF38BDF8)))),
+        Box(Modifier.size(40.dp).clip(shape)
+            .background(Brush.linearGradient(listOf(Color(0xFF7657CD),Color(0xFF3BA6CE)))),
             contentAlignment=Alignment.Center) {
-            Icon(Icons.Default.AutoAwesome,"Планировыч",Modifier.size(23.dp),tint=Color.White)
+            Icon(Icons.Default.AutoAwesome,"Планировыч",Modifier.size(24.dp),tint=Color.White)
         }
-        Text("Планировыч",color=colors.text,fontSize=15.sp,
-            fontWeight=FontWeight.ExtraBold,maxLines=1)
-        Spacer(Modifier.weight(1f))
-        WorkspaceHeaderIcon(Icons.Default.AccountCircle,"Аккаунт",colors,onAccount)
-        Surface(Modifier.height(38.dp).clip(shape).clickable(onClick=onCredits),
-            shape=shape,color=colors.card,border=BorderStroke(1.dp,colors.panelBorder)) {
-            Row(Modifier.padding(horizontal=6.dp),verticalAlignment=Alignment.CenterVertically) {
-                Icon(Icons.Default.Paid,"Кредиты",Modifier.size(15.dp),
-                    tint=if(dark)Color(0xFFF9A8D4) else Color(0xFFBE185D))
-                Spacer(Modifier.width(3.dp))
+        Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(1.dp)) {
+            Text("Планировыч",color=colors.text,fontSize=17.sp,lineHeight=20.sp,
+                fontWeight=FontWeight.ExtraBold,maxLines=1,
+                overflow=TextOverflow.Ellipsis)
+            Text(state.user?.displayName ?: "Мой профиль",fontSize=10.sp,
+                color=colors.secondaryText,lineHeight=12.sp,maxLines=1,
+                overflow=TextOverflow.Ellipsis)
+        }
+        WorkspaceHeaderIcon(Icons.Default.AccountCircle,"Аккаунт",colors,
+            if(dark)Color(0xFFC4B5FD) else Color(0xFF7757C6),onAccount)
+        Surface(Modifier.height(40.dp).clip(shape).clickable(onClick=onCredits),
+            shape=shape,color=tinted(if(dark)Color(0xFF9D83DC)
+                else Color(0xFF8B5CF6),colors.card,if(dark).13f else .07f),
+            border=BorderStroke(1.dp,colors.panelBorder)) {
+            Row(Modifier.padding(horizontal=5.dp),verticalAlignment=Alignment.CenterVertically) {
+                Icon(Icons.Default.Paid,"Кредиты",Modifier.size(19.dp),
+                    tint=if(dark)Color(0xFFF3B7D2) else Color(0xFFC25487))
+                Spacer(Modifier.width(2.dp))
                 Text((state.user?.aiCredits?:0).toString(),fontSize=11.sp,
-                    fontWeight=FontWeight.Bold,color=colors.text)
+                    fontWeight=FontWeight.Bold,color=colors.text,maxLines=1)
             }
         }
-        WorkspaceHeaderIcon(Icons.Default.Search,"Поиск",colors,onSearchToggle)
-        WorkspaceHeaderIcon(Icons.Default.Settings,"Настройки",colors,settings)
+        WorkspaceHeaderIcon(Icons.Default.Search,"Поиск",colors,
+            if(dark)Color(0xFF69D4D2) else Color(0xFF0F9B9B),onSearchToggle)
+        WorkspaceHeaderIcon(Icons.Default.Settings,"Настройки",colors,
+            if(dark)Color(0xFFF2CE91) else Color(0xFFC58B31),settings)
     }
 }
 
 @Composable
 private fun WorkspaceHeaderIcon(
     icon:androidx.compose.ui.graphics.vector.ImageVector,label:String,
-    colors:WorkspaceColors,onClick:()->Unit
+    colors:WorkspaceColors,accent:Color,onClick:()->Unit
 ) {
-    Surface(Modifier.size(36.dp).clip(RoundedCornerShape(13.dp))
-        .clickable(onClick=onClick),shape=RoundedCornerShape(13.dp),
-        color=colors.card,border=BorderStroke(1.dp,colors.panelBorder)) {
+    val shape=RoundedCornerShape(13.dp)
+    Surface(Modifier.size(39.dp).clip(shape).clickable(onClick=onClick),
+        shape=shape,
+        color=tinted(accent,colors.card,.10f),
+        border=BorderStroke(1.dp,colors.panelBorder)) {
         Box(contentAlignment=Alignment.Center) {
-            Icon(icon,label,Modifier.size(19.dp),tint=colors.text)
+            Icon(icon,label,Modifier.size(23.dp),tint=accent)
+        }
+    }
+}
+
+@Composable
+private fun WorkspaceSearchField(
+    query:String,colors:WorkspaceColors,
+    onSearch:(String)->Unit,onClose:()->Unit,onEdited:(String)->Unit
+) {
+    val requester=remember{FocusRequester()}
+    val keyboard=LocalSoftwareKeyboardController.current
+    LaunchedEffect(Unit) {
+        requester.requestFocus()
+        keyboard?.show()
+    }
+    Surface(Modifier.fillMaxWidth().height(46.dp),
+        shape=RoundedCornerShape(17.dp),color=colors.card,
+        border=BorderStroke(1.dp,colors.panelBorder)) {
+        Row(Modifier.fillMaxSize().padding(horizontal=12.dp),
+            verticalAlignment=Alignment.CenterVertically) {
+            Icon(Icons.Default.Search,null,Modifier.size(21.dp),
+                tint=colors.purple)
+            Spacer(Modifier.width(8.dp))
+            BasicTextField(value=query,
+                onValueChange={text->onSearch(text);onEdited(text)},
+                modifier=Modifier.weight(1f).focusRequester(requester),
+                singleLine=true,textStyle=MaterialTheme.typography.bodyMedium.copy(
+                    color=colors.text,fontSize=14.sp),
+                cursorBrush=androidx.compose.ui.graphics.SolidColor(colors.purple),
+                decorationBox={inner->Box(contentAlignment=Alignment.CenterStart){
+                    if(query.isBlank())Text("Поиск по задачам и заметкам",
+                        color=colors.secondaryText,fontSize=13.sp)
+                    inner()
+                }})
+            IconButton(onClick=onClose,modifier=Modifier.size(32.dp)) {
+                Icon(Icons.Default.Close,"Закрыть поиск",
+                    Modifier.size(19.dp),tint=colors.secondaryText)
+            }
         }
     }
 }
@@ -1093,6 +1118,70 @@ private fun WorkspaceSectorsOverview(
     }
 }
 
+private data class SectorIconChoice(
+    val code:String,val title:String,
+    val symbol:androidx.compose.ui.graphics.vector.ImageVector
+)
+private val sectorIconChoices=listOf(
+    SectorIconChoice("briefcase","Работа",Icons.Default.Work),
+    SectorIconChoice("heart","Здоровье",Icons.Default.Favorite),
+    SectorIconChoice("home","Дом",Icons.Default.Home),
+    SectorIconChoice("graduation-cap","Учёба",Icons.Default.School),
+    SectorIconChoice("dumbbell","Спорт",Icons.Default.FitnessCenter),
+    SectorIconChoice("wallet","Финансы",Icons.Default.AccountBalanceWallet),
+    SectorIconChoice("book-open","Книги",Icons.Default.MenuBook),
+    SectorIconChoice("palette","Творчество",Icons.Default.Palette),
+    SectorIconChoice("plane","Поездки",Icons.Default.Flight),
+    SectorIconChoice("car","Авто",Icons.Default.DirectionsCar),
+    SectorIconChoice("music","Музыка",Icons.Default.MusicNote),
+    SectorIconChoice("star","Избранное",Icons.Default.Star),
+    SectorIconChoice("target","Цели",Icons.Default.TrackChanges),
+    SectorIconChoice("laptop","Проекты",Icons.Default.Computer),
+    SectorIconChoice("users","Семья",Icons.Default.Group),
+    SectorIconChoice("shopping-cart","Покупки",Icons.Default.ShoppingCart),
+    SectorIconChoice("sprout","Природа",Icons.Default.Eco),
+    SectorIconChoice("coffee","Отдых",Icons.Default.LocalCafe),
+    SectorIconChoice("calendar","Планы",Icons.Default.CalendarToday),
+    SectorIconChoice("lightbulb","Идеи",Icons.Default.Lightbulb),
+    SectorIconChoice("sparkles","Развитие",Icons.Default.AutoAwesome),
+    SectorIconChoice("trophy","Достижения",Icons.Default.EmojiEvents),
+    SectorIconChoice("globe","Мир",Icons.Default.Public),
+    SectorIconChoice("paw-print","Питомцы",Icons.Default.Pets)
+)
+private fun sectorIconVector(code:String?):androidx.compose.ui.graphics.vector.ImageVector =
+    sectorIconChoices.firstOrNull{it.code==code}?.symbol ?: Icons.Default.Work
+
+@Composable
+private fun SectorIconSelector(
+    selected:String,colors:WorkspaceColors,onSelect:(String)->Unit
+) {
+    Column(verticalArrangement=Arrangement.spacedBy(9.dp)) {
+        Text("Иконка сектора",color=colors.secondaryText,fontSize=13.sp)
+        sectorIconChoices.chunked(4).forEach { group ->
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                group.forEach { choice ->
+                    val active=choice.code==selected
+                    val shape=RoundedCornerShape(14.dp)
+                    Column(Modifier.weight(1f).clip(shape)
+                        .background(if(active)colors.selected else colors.card)
+                        .border(if(active)2.dp else 1.dp,
+                            if(active)colors.purple else colors.panelBorder,shape)
+                        .clickable{onSelect(choice.code)}
+                        .padding(vertical=9.dp,horizontal=2.dp),
+                        horizontalAlignment=Alignment.CenterHorizontally,
+                        verticalArrangement=Arrangement.spacedBy(5.dp)) {
+                        Icon(choice.symbol,choice.title,Modifier.size(25.dp),
+                            tint=if(active)colors.purple else colors.secondaryText)
+                        Text(choice.title,color=if(active)colors.text else colors.secondaryText,
+                            fontSize=9.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+                    }
+                }
+                repeat(4-group.size){Spacer(Modifier.weight(1f))}
+            }
+        }
+    }
+}
+
 @Composable
 private fun WorkspaceSectorSettings(
     vm:HomeViewModel,state:HomeState,colors:WorkspaceColors,onClose:()->Unit
@@ -1131,7 +1220,11 @@ private fun WorkspaceSectorSettings(
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp))
                     .background(colors.card).clickable { edit(sector) }.padding(12.dp),
                     verticalAlignment=Alignment.CenterVertically) {
-                    Box(Modifier.size(23.dp).background(parseWorkspaceColor(sector.color),CircleShape))
+                    Box(Modifier.size(32.dp).background(parseWorkspaceColor(sector.color),CircleShape),
+                        contentAlignment=Alignment.Center) {
+                        Icon(sectorIconVector(sector.icon),null,Modifier.size(19.dp),
+                            tint=Color.White)
+                    }
                     Spacer(Modifier.width(10.dp))
                     Text(sector.name,color=colors.text,modifier=Modifier.weight(1f))
                     Icon(Icons.Default.Edit,"Редактировать",Modifier.size(18.dp),
@@ -1157,9 +1250,7 @@ private fun WorkspaceSectorSettings(
                         .clickable { color=option })
                 }
             }
-            OutlinedTextField(value=icon,onValueChange={icon=it},
-                label={Text("Иконка (код)")},singleLine=true,
-                modifier=Modifier.fillMaxWidth())
+            SectorIconSelector(selected=icon,colors=colors,onSelect={icon=it})
             OutlinedTextField(value=prompt,onValueChange={prompt=it},
                 label={Text("Общий промпт")},minLines=2,maxLines=4,
                 modifier=Modifier.fillMaxWidth())

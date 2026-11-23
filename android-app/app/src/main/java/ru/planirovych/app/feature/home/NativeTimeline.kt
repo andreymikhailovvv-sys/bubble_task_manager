@@ -145,7 +145,8 @@ internal fun NativeTimelineWorkspace(
     colors:WorkspaceColors,dark:Boolean,onOpen:(String)->Unit,
     onOpenHabit:(String)->Unit={},
     isActive:Boolean=true,
-    onCurrentTimePosition:(String,Float)->Unit={_,_->}
+    onCurrentTimePosition:(String,Float)->Unit={_,_->},
+    overdueCount:Int=0,onOpenOverdue:()->Unit={}
 ){
     var zoom by rememberSaveable{mutableStateOf(TimelineZoom.DAY)}
     var anchorRaw by rememberSaveable{mutableStateOf(LocalDate.now().toString())}
@@ -193,7 +194,9 @@ internal fun NativeTimelineWorkspace(
         }
         val dateShape=RoundedCornerShape(18.dp)
         val arrowColor=if(dark)Color(0xFFC4B5FD) else Color(0xFF6D28D9)
-        Row(Modifier.fillMaxWidth().height(52.dp)
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp),
+            verticalAlignment=Alignment.CenterVertically) {
+        Row(Modifier.weight(1f).height(52.dp)
             .clip(dateShape)
             .background(if(dark)Color(0xFF22233E) else Color(0xFFFAF7FF))
             .border(1.dp,Color(0xFF8B5CF6).copy(alpha=if(dark).42f else .28f),
@@ -247,6 +250,33 @@ internal fun NativeTimelineWorkspace(
                 Icon(Icons.Default.ChevronRight,"Следующий период",
                     tint=arrowColor,modifier=Modifier.size(20.dp))
             }
+        }
+        Box(Modifier.width(117.dp).height(52.dp)) {
+            Surface(Modifier.fillMaxSize().clip(dateShape).clickable(onClick=onOpenOverdue),
+                shape=dateShape,color=if(dark)Color(0xFF33263B) else Color(0xFFFFF4F5),
+                border=BorderStroke(1.dp,if(dark)Color(0xFF68425D) else Color(0xFFF5CBD4))) {
+                Row(Modifier.fillMaxSize().padding(horizontal=8.dp),
+                    verticalAlignment=Alignment.CenterVertically,
+                    horizontalArrangement=Arrangement.Center) {
+                    Icon(Icons.Default.Schedule,"Просроченные задачи",
+                        Modifier.size(20.dp),
+                        tint=if(dark)Color(0xFFF7A6C4) else Color(0xFFC65075))
+                    Spacer(Modifier.width(5.dp))
+                    Text("Просроченные\nзадачи",fontSize=10.sp,lineHeight=12.sp,
+                        fontWeight=FontWeight.SemiBold,
+                        color=colors.text,maxLines=2)
+                }
+            }
+            if(overdueCount>0) {
+                Box(Modifier.align(Alignment.TopEnd).offset(x=3.dp,y=(-6).dp)
+                    .defaultMinSize(minWidth=18.dp,minHeight=18.dp)
+                    .background(Color(0xFFE11D48),CircleShape)
+                    .padding(horizontal=4.dp),contentAlignment=Alignment.Center) {
+                    Text(if(overdueCount>99)"99+" else overdueCount.toString(),
+                        color=Color.White,fontSize=10.sp,fontWeight=FontWeight.Bold)
+                }
+            }
+        }
         }
         when(zoom){
             TimelineZoom.DAY->TimelineDay(anchor,tasks,allTasks,habits,spheres,colors,dark,onOpen,onOpenHabit,onCurrentTimePosition)
