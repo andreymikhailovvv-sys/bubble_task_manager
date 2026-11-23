@@ -9,6 +9,7 @@ struct ServerAccount: Decodable, Equatable {
     let username: String?
     let email: String?
     let isGuest: Bool?
+    let aiCredits: Int?
 
     var displayName: String {
         [name, username, email].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -362,6 +363,34 @@ final class NativeAPI {
         async let tasks: [RemoteTask] = request("tasks")
         async let spheres: [RemoteSphere] = request("spheres")
         return try await (tasks, spheres)
+    }
+
+    func saveSphere(id: String?, name: String, color: String, icon: String, prompt: String) async throws {
+        let fields: [String: Any] = [
+            "name": name, "color": color, "icon": icon, "generalPrompt": prompt
+        ]
+        if let id {
+            let _: RemoteSphere = try await request("spheres/\(id)", method: "PATCH", json: fields)
+        } else {
+            let _: RemoteSphere = try await request("spheres", method: "POST", json: fields)
+        }
+    }
+
+    func deleteSphere(id: String) async throws {
+        let _: OperationResult = try await request("spheres/\(id)", method: "DELETE")
+    }
+
+    func postponeTaskToToday(_ task: RemoteTask) async throws {
+        guard let due = NativeTaskDates.parse(task.dueDate) else { return }
+        let calendar = Calendar.current
+        let today = Date()
+        guard let target = calendar.date(bySettingHour: calendar.component(.hour, from: due),
+            minute: calendar.component(.minute, from: due),
+            second: calendar.component(.second, from: due), of: today) else { return }
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let _: RemoteTask = try await request("tasks/\(task.id)", method: "PATCH",
+            json: ["dueDate": iso.string(from: target)])
     }
 
     func createTask(title: String, sphereId: String?, parentTaskId: String? = nil) async throws -> RemoteTask {
