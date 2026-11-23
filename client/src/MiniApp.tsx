@@ -5,7 +5,7 @@ import { prepareAiChatImageFile } from './lib/ai-image-upload';
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUpRight, Bot, CircleDollarSign, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Edit3, Menu, MessageCircle, Minus, MoreVertical, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, StickyNote, UserCircle, Ticket, Trash2, X } from 'lucide-react';
-import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, stripAiChatProjectDisplayPreviews, type CreditPack, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus, type StandaloneNote } from './lib/api';
+import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, stripAiChatProjectDisplayPreviews, type CreditPack, type SubscriptionPlan, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus, type StandaloneNote } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { TaskCompletionReportDialog } from './components/TaskCompletionReportDialog';
 import { TaskAiEmptyState } from './components/TaskAiEmptyState';
@@ -57,6 +57,7 @@ import { WebCitations } from './components/WebCitations';
 import { AiInlineMarkup } from './components/AiInlineMarkup';
 import { attachChatMessageId } from './lib/chatMessages';
 import { useCreditPurchase } from './lib/useCreditPurchase';
+import { useSubscriptionPurchase } from './lib/useSubscriptionPurchase';
 import { CollapsibleUserMessage } from './components/CollapsibleUserMessage';
 import { CreditUsageStats } from './components/CreditUsageStats';
 import { AiGeneratedDocumentButton } from './components/AiGeneratedDocumentButton';
@@ -1040,6 +1041,16 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [creditUsageStatisticsError, setCreditUsageStatisticsError] = useState<string | null>(null);
   const [creditPacks, setCreditPacks] = useState<CreditPack[]>([]);
   const [creditPurchaseAvailable, setCreditPurchaseAvailable] = useState(false);
+  const [creditPurchaseTab, setCreditPurchaseTab] = useState<'packs' | 'plans'>('packs');
+  const [subscriptionPlans, setSubscriptionPlans] = useState<SubscriptionPlan[]>([]);
+  const [subscriptionPurchaseAvailable, setSubscriptionPurchaseAvailable] = useState(false);
+  const activeSubscription = Boolean(currentUser?.subscriptionExpiresAt &&
+    new Date(currentUser.subscriptionExpiresAt).getTime() > Date.now());
+  const subscriptionPurchase = useSubscriptionPurchase({
+    surface: 'miniapp',
+    openConfirmation: (url) => { const webApp = (window as TelegramWindow).Telegram?.WebApp; if (webApp?.openLink) webApp.openLink(url); else window.open(url, '_blank', 'noopener,noreferrer'); },
+    onSucceeded: async () => { const { user } = await api.getMe(); setCurrentUser(user); setAiCredits(user.aiCredits ?? 0); }
+  });
   const creditPurchase = useCreditPurchase({
     surface: 'miniapp',
     openConfirmation: (url) => { const webApp = (window as TelegramWindow).Telegram?.WebApp; if (webApp?.openLink) webApp.openLink(url); else window.open(url, '_blank', 'noopener,noreferrer'); },
@@ -4289,14 +4300,21 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
   useEffect(() => {
     void api.getCreditPacks().then((result) => { setCreditPacks(result.packs); setCreditPurchaseAvailable(result.purchaseAvailable); }).catch(() => undefined);
+    void api.getSubscriptionPlans().then((result) => {
+      setSubscriptionPlans(result.plans); setSubscriptionPurchaseAvailable(result.purchaseAvailable);
+    }).catch(() => setSubscriptionPurchaseAvailable(false));
   }, []);
 
   useEffect(() => {
-    const checkPending = () => { if (document.visibilityState === 'visible' && creditPurchase.pendingPurchaseId) void creditPurchase.check(creditPurchase.pendingPurchaseId).catch(() => undefined); };
+    const checkPending = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (creditPurchase.pendingPurchaseId) void creditPurchase.check(creditPurchase.pendingPurchaseId).catch(() => undefined);
+      if (subscriptionPurchase.pendingPurchaseId) void subscriptionPurchase.check(subscriptionPurchase.pendingPurchaseId).catch(() => undefined);
+    };
     window.addEventListener('focus', checkPending);
     document.addEventListener('visibilitychange', checkPending);
     return () => { window.removeEventListener('focus', checkPending); document.removeEventListener('visibilitychange', checkPending); };
-  }, [creditPurchase.check, creditPurchase.pendingPurchaseId]);
+  }, [creditPurchase.check, creditPurchase.pendingPurchaseId, subscriptionPurchase.check, subscriptionPurchase.pendingPurchaseId]);
 
   const telegramViewportStyle = isTelegramRuntime
     ? { '--miniapp-top-inset': `${telegramViewport.top}px`, '--miniapp-bottom-inset': `${telegramViewport.bottom}px` } as CSSProperties
@@ -4713,15 +4731,32 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <div key="credits-statistics" className="credit-switch-content mt-3"><CreditUsageStats statistics={creditUsageStatistics} loading={creditUsageStatisticsLoading} error={creditUsageStatisticsError} compact /></div>
                 ) : (
                   <div key="credits-purchase" className="credit-switch-content">
-                    <div className="mt-3 space-y-2">{creditPacks.filter((pack) => pack.isActive).map((pack) => <div key={pack.key} className="miniapp-credit-pack-card flex items-center justify-between gap-2 rounded-xl border p-2.5">
-                      <div><div className="text-xs font-bold text-primary">{pack.creditsAmount.toLocaleString('ru-RU')} AI-кредитов</div><div className="mt-0.5 text-[11px] text-muted">{pack.price.toLocaleString('ru-RU')} ₽</div></div>
-                      <button type="button" disabled={!creditPurchaseAvailable || creditPurchase.creatingPackKey !== null} onClick={() => void creditPurchase.start(pack.key)} className="miniapp-credit-buy-button rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{creditPurchase.creatingPackKey === pack.key ? 'Создаём…' : 'Купить'}</button>
-                    </div>)}</div>
-                    {creditPurchase.isReceiptEmailRequired ? <div className="mt-3 space-y-2">
-                      <input type="email" autoComplete="email" value={creditPurchase.receiptEmail} onChange={(event) => creditPurchase.setReceiptEmail(event.target.value)} placeholder="Email для чека" aria-label="Email для чека" className="miniapp-credit-email-input w-full rounded-lg border px-3 py-2 text-xs" />
-                      <button type="button" disabled={creditPurchase.creatingPackKey !== null || !creditPurchase.receiptEmail.trim()} onClick={() => void creditPurchase.retryWithReceiptEmail()} className="miniapp-credit-buy-button w-full rounded-lg px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{creditPurchase.creatingPackKey ? 'Создаём платёж…' : 'Продолжить'}</button>
-                    </div> : null}
-                    {creditPurchase.message ? <p className="miniapp-credit-message mt-3 rounded-xl border p-2.5 text-xs" role="status">{creditPurchase.message}</p> : null}
+                    <div className="credit-view-toggle mt-3 flex gap-1 rounded-xl border p-1">
+                      <button type="button" className={`credit-view-toggle-button flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold ${creditPurchaseTab === 'packs' ? 'is-active is-purchase' : ''}`} onClick={() => setCreditPurchaseTab('packs')}>Пакеты</button>
+                      <button type="button" className={`credit-view-toggle-button flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold ${creditPurchaseTab === 'plans' ? 'is-active is-purchase' : ''}`} onClick={() => setCreditPurchaseTab('plans')}>Подписки</button>
+                    </div>
+                    {creditPurchaseTab === 'packs' ? <>
+                      <div className="mt-3 space-y-2">{creditPacks.filter((pack) => pack.isActive).map((pack) => <div key={pack.key} className="miniapp-credit-pack-card flex items-center justify-between gap-2 rounded-xl border p-2.5">
+                        <div><div className="text-xs font-bold text-primary">{pack.creditsAmount.toLocaleString('ru-RU')} AI-кредитов</div><div className="mt-0.5 text-[11px] text-muted">{pack.price.toLocaleString('ru-RU')} ₽</div></div>
+                        <button type="button" disabled={!creditPurchaseAvailable || creditPurchase.creatingPackKey !== null} onClick={() => void creditPurchase.start(pack.key)} className="miniapp-credit-buy-button rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{creditPurchase.creatingPackKey === pack.key ? 'Создаём…' : 'Купить'}</button>
+                      </div>)}</div>
+                      {creditPurchase.isReceiptEmailRequired ? <div className="mt-3 space-y-2">
+                        <input type="email" autoComplete="email" value={creditPurchase.receiptEmail} onChange={(event) => creditPurchase.setReceiptEmail(event.target.value)} placeholder="Email для чека" aria-label="Email для чека" className="miniapp-credit-email-input w-full rounded-lg border px-3 py-2 text-xs" />
+                        <button type="button" disabled={creditPurchase.creatingPackKey !== null || !creditPurchase.receiptEmail.trim()} onClick={() => void creditPurchase.retryWithReceiptEmail()} className="miniapp-credit-buy-button w-full rounded-lg px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{creditPurchase.creatingPackKey ? 'Создаём платёж…' : 'Продолжить'}</button>
+                      </div> : null}
+                      {creditPurchase.message ? <p className="miniapp-credit-message mt-3 rounded-xl border p-2.5 text-xs" role="status">{creditPurchase.message}</p> : null}
+                    </> : <>
+                      <div className="mt-3 space-y-2">{subscriptionPlans.map(plan => <div key={plan.key} className="miniapp-credit-pack-card flex items-center justify-between gap-2 rounded-xl border p-2.5">
+                        <div><div className="text-xs font-bold text-primary">{plan.name}: {plan.creditsAmount.toLocaleString('ru-RU')} AI-кредитов</div><div className="mt-0.5 text-[11px] text-muted">{plan.price.toLocaleString('ru-RU')} ₽ за месяц</div></div>
+                        <button type="button" disabled={!subscriptionPurchaseAvailable || activeSubscription || subscriptionPurchase.creatingPlanKey !== null} onClick={() => void subscriptionPurchase.start(plan.key)} className="miniapp-credit-buy-button rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{subscriptionPurchase.creatingPlanKey === plan.key ? 'Создаём…' : activeSubscription ? 'Активна' : 'Купить'}</button>
+                      </div>)}</div>
+                      <p className="mt-2 text-[11px] text-muted">Подписка на один календарный месяц, без автопродления.</p>
+                      {subscriptionPurchase.isReceiptEmailRequired ? <div className="mt-3 space-y-2">
+                        <input type="email" autoComplete="email" value={subscriptionPurchase.receiptEmail} onChange={event => subscriptionPurchase.setReceiptEmail(event.target.value)} placeholder="Email для чека" aria-label="Email для чека подписки" className="miniapp-credit-email-input w-full rounded-lg border px-3 py-2 text-xs" />
+                        <button type="button" disabled={subscriptionPurchase.creatingPlanKey !== null || !subscriptionPurchase.receiptEmail.trim()} onClick={() => void subscriptionPurchase.retryWithReceiptEmail()} className="miniapp-credit-buy-button w-full rounded-lg px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Продолжить</button>
+                      </div> : null}
+                      {subscriptionPurchase.message ? <p className="miniapp-credit-message mt-3 rounded-xl border p-2.5 text-xs" role="status">{subscriptionPurchase.message}</p> : null}
+                    </>}
                   </div>
                 )}
               </div> : null}
