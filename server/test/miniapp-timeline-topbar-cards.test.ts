@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 
 const read = (path: string) => readFile(new URL(path, import.meta.url), 'utf8');
 
-test('timeline top row has expandable search and opens overdue tasks, preserving utilities', async () => {
+test('timeline keeps unified header and places overdue next to its date navigation', async () => {
   const [mini, css] = await Promise.all([
     read('../../client/src/MiniApp.tsx'),
     read('../../client/src/styles.css')
@@ -15,9 +15,10 @@ test('timeline top row has expandable search and opens overdue tasks, preserving
   assert.ok(start > -1 && end > start);
   assert.match(toolbar, /miniapp-workspace-topbar-row/);
   assert.match(toolbar, /<WorkspaceGlobalSearch/);
-  assert.match(toolbar, /displayMode === 'timeline' \? \(/);
-  assert.match(toolbar, /miniapp-timeline-postpone-button/);
-  assert.match(toolbar, /onClick=\{\(\) => setIsOverdueTasksOpen\(true\)\}/);
+  assert.match(toolbar, /miniapp-unified-topbar-row/);
+  assert.doesNotMatch(toolbar, /miniapp-timeline-postpone-button/);
+  assert.match(mini, /miniapp-timeline-date-nav[\s\S]*miniapp-timeline-overdue-inline/);
+  assert.match(mini, /onClick=\{\(\) => setIsOverdueTasksOpen\(true\)\}/);
   assert.match(toolbar, /miniapp-timeline-more-toggle/);
   assert.match(toolbar, /aria-expanded=\{isTimelineMoreOpen\}/);
   assert.match(toolbar, /miniapp-workspace-utilities-panel/);
