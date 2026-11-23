@@ -641,6 +641,63 @@ final class NativeAPI {
         _ = try await requestData("ai-chat/projects", method: "PUT", json: ["projects": projects])
     }
 
+    private struct AutoApplyEnvelope: Decodable {
+        let autoApply: Bool
+    }
+
+    func proposalDetails(id: String, economic: Bool) async throws -> [String: Any] {
+        let root = economic ? "economic/assistant/proposals" : "ai/task-proposals"
+        let data = try await requestData("\(root)/\(id)")
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw NativeAPIError.invalidResponse
+        }
+        return json
+    }
+
+    func proposalAutoApply(economic: Bool) async throws -> Bool {
+        let resource = economic ? "economic/assistant/preferences" : "ai/task-proposals/preferences"
+        let response: AutoApplyEnvelope = try await request(resource)
+        return response.autoApply
+    }
+
+    func updateProposalAutoApply(economic: Bool, value: Bool) async throws -> Bool {
+        let resource = economic ? "economic/assistant/preferences" : "ai/task-proposals/preferences"
+        let response: AutoApplyEnvelope = try await request(
+            resource, method: economic ? "PUT" : "PATCH", json: ["autoApply": value]
+        )
+        return response.autoApply
+    }
+
+    func proposalOptions(economic: Bool) async throws -> [String: Any] {
+        let resource = economic ? "economic/assistant/options" : "ai/task-proposals/options"
+        let data = try await requestData(resource)
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw NativeAPIError.invalidResponse
+        }
+        return json
+    }
+
+    func editTaskProposal(id: String, index: Int, revision: String,
+                          values: [String: Any]) async throws -> [String: Any] {
+        let data = try await requestData("ai/task-proposals/\(id)", method: "PATCH", json: [
+            "index": index, "revision": revision, "values": values
+        ])
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw NativeAPIError.invalidResponse
+        }
+        return json
+    }
+
+    func editEconomicProposal(id: String, payload: [String: Any],
+                              expectedPayload: [String: Any]) async throws -> [String: Any] {
+        let data = try await requestData("economic/assistant/proposals/\(id)", method: "PUT",
+                                         json: ["payload": payload, "expectedPayload": expectedPayload])
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw NativeAPIError.invalidResponse
+        }
+        return json
+    }
+
     func proposalAction(_ proposal: NativeAIProposal, economic: Bool,
                         action: String) async throws -> NativeAIProposal {
         guard ["approve", "reject", "undo"].contains(action) else { throw NativeAPIError.invalidResponse }
