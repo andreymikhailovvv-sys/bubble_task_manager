@@ -145,3 +145,54 @@ test('card scale keeps 18px spacing, glass matches header, and collapse handle u
   assert.ok(css.includes('top: 50dvh !important'));
   assert.ok(css.includes('--primary-sidebar-width: 357px'));
 });
+
+
+test('habit circles are compact and note cards visibly highlight on hover and focus', async () => {
+  const css = await source('client/src/components/PrimaryWorkspaceSidebar.css');
+  assert.ok(css.includes('width: 57px'));
+  assert.ok(css.includes('height: 57px'));
+  assert.ok(css.includes('flex-basis: 57px'));
+  assert.ok(css.includes('.primary-widget-notes .standalone-note-recent:hover'));
+  assert.ok(css.includes('.primary-widget-notes .standalone-note-recent:focus-visible'));
+  assert.ok(css.includes('transform: translateY(-1px)'));
+});
+
+test('desktop habit creation has a Mini App ring, disabled progress and vivid create action', async () => {
+  const jsx = await source('client/src/components/PrimaryHabitDialog.tsx');
+  const css = await source('client/src/components/PrimaryHabitDialog.css');
+  assert.ok(jsx.includes('primary-habit-dialog--create'));
+  assert.ok(jsx.includes('primary-habit-create-overview'));
+  assert.ok(jsx.includes('primary-habit-create-ring'));
+  assert.ok(jsx.includes('primary-habit-create-completion'));
+  assert.ok(jsx.includes('0 из {targetCount}'));
+  assert.ok(jsx.includes('Например, вода или зарядка'));
+  assert.ok(jsx.includes("habit ? 'Сохранить' : 'Создать привычку'"));
+  assert.ok(css.includes('.primary-habit-dialog--create .primary-habit-dialog-footer .primary-habit-save'));
+});
+
+test('settings title is first, close button turquoise, footer buttons share a row and reminder picker is native', async () => {
+  const jsx = await source('client/src/components/PrimaryHabitDialog.tsx');
+  const css = await source('client/src/components/PrimaryHabitDialog.css');
+  const titleIndex = jsx.indexOf('primary-habit-embedded-name');
+  const iconIndex = jsx.indexOf('<div className="primary-habit-field"><span>Иконка');
+  assert.ok(titleIndex > 0 && titleIndex < iconIndex);
+  assert.ok(jsx.includes('type="time" aria-label="Выбрать время нового напоминания"'));
+  assert.ok(jsx.includes('setTimes(previous => normalizedTimes([...previous, chosenTime]))'));
+  assert.ok(!jsx.includes('event.target.value ='));
+  assert.ok(css.includes('.primary-habit-dialog .primary-habit-time-add input[type='));
+  assert.ok(css.includes('opacity: 1;'));
+  assert.ok(css.includes('.primary-habit-dialog--embedded .primary-habit-icon-button'));
+  assert.ok(css.includes('color: #089abd'));
+  assert.ok(css.includes('flex-wrap: nowrap'));
+});
+
+test('desktop habit calendar remains compact and completed days override scheduled cells in both themes', async () => {
+  const css = await source('client/src/components/PrimaryHabitDialog.css');
+  assert.ok(css.includes('max-width: 515px'));
+  assert.ok(css.includes('.miniapp-habit-tracker-day.miniapp-habit-tracker-day-done'));
+  assert.ok(css.includes('.miniapp-habit-tracker-day-connected-left::before'));
+  assert.ok(css.includes('display: none'));
+  assert.ok(css.includes("body[data-theme='dark'] .primary-habit-detail-dialog"));
+  assert.ok(css.includes('.miniapp-habit-tracker-day.miniapp-habit-tracker-day-partial'));
+  assert.ok(css.includes('outline: 2px solid var(--tracker-accent)'));
+});
