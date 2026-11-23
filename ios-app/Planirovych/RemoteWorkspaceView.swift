@@ -728,6 +728,126 @@ struct RemoteWorkspaceView: View {
     }
 }
 
+private struct SectorSettingsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var session: NativeWorkspaceSession
+    @State private var editingID: String?
+    @State private var editing = false
+    @State private var name = ""
+    @State private var color = Color.purple
+    @State private var icon = "briefcase"
+    @State private var prompt = ""
+    @State private var showingDelete = false
+
+    private func openEditor(_ sphere: RemoteSphere?) {
+        editingID = sphere?.id
+        name = sphere?.name ?? ""
+        color = Color(sphereHex: sphere?.color)
+        icon = "briefcase"
+        prompt = ""
+        editing = true
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if editing {
+                    Section("Сектор") {
+                        TextField("Название", text: $name)
+                        ColorPicker("Цвет", selection: $color, supportsOpacity: false)
+                        TextField("Иконка", text: $icon)
+                        TextField("Общий промпт", text: $prompt, axis: .vertical)
+                            .lineLimit(2...4)
+                    }
+                    Section {
+                        Button("Сохранить") {
+                            Task {
+                                let saved = await session.saveSphere(
+                                    id: editingID, name: name,
+                                    color: color.toSphereHex, icon: icon, prompt: prompt
+                                )
+                                if saved { editing = false }
+                            }
+                        }
+                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.isWorking)
+                    }
+                    if editingID != nil {
+                        Section {
+                            Button("Удалить сектор", role: .destructive) {
+                                showingDelete = true
+                            }.disabled(session.isWorking)
+                        }
+                    }
+                } else {
+                    Section("Сектора") {
+                        ForEach(session.spheres) { sphere in
+                            Button {
+                                openEditor(sphere)
+                            } label: {
+                                HStack {
+                                    Circle().fill(Color(sphereHex: sphere.color))
+                                        .frame(width: 20, height: 20)
+                                    Text(sphere.name).foregroundStyle(.primary)
+                                    Spacer()
+                                    Image(systemName: "pencil").foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                    Section {
+                        Button {
+                            openEditor(nil)
+                        } label: {
+                            Label("Добавить сектор", systemImage: "plus.circle.fill")
+                        }
+                    }
+                }
+                if let error = session.errorMessage {
+                    Section {
+                        Text(error).foregroundStyle(.red)
+                            .font(.footnote)
+                    }
+                }
+            }
+            .navigationTitle(editing ? "Редактор сектора" : "Настройки секторов")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if editing {
+                        Button("Назад") { editing = false }
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Готово") { dismiss() }
+                }
+            }
+            .confirmationDialog("Удалить сектор?", isPresented: $showingDelete) {
+                Button("Удалить", role: .destructive) {
+                    guard let editingID else { return }
+                    Task {
+                        if await session.deleteSphere(id: editingID) {
+                            editing = false
+                        }
+                    }
+                }
+            } message: {
+                Text("Сектор будет удалён. Проверьте задачи, которые к нему относятся.")
+            }
+        }
+    }
+}
+
+private extension Color {
+    var toSphereHex: String {
+        let value = UIColor(self)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard value.getRed(&r, green: &g, blue: &b, alpha: &a) else {
+            return "#8B5CF6"
+        }
+        return String(format: "#%02X%02X%02X",
+            Int((r * 255).rounded()), Int((g * 255).rounded()), Int((b * 255).rounded()))
+    }
+}
+
 private struct NewServerTaskSheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var session: NativeWorkspaceSession
