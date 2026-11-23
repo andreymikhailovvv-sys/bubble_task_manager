@@ -62,8 +62,8 @@ function scheduledToday(habit: Habit, date: Date, dateKey: string, timeZone: str
   return true;
 }
 
-function Widget({ id, title, children, onMove }: {
-  id: WidgetId; title: string; children: ReactNode; onMove: (direction: -1 | 1) => void;
+function Widget({ id, title, headingExtra, children, onMove }: {
+  id: WidgetId; title: string; headingExtra?: ReactNode; children: ReactNode; onMove: (direction: -1 | 1) => void;
 }) {
   const controls = useDragControls();
   const startDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -76,6 +76,7 @@ function Widget({ id, title, children, onMove }: {
     className="primary-widget workspace-widget-card rounded-[1.35rem] border p-4" data-primary-widget={id}>
     <div className="primary-widget-heading">
       <h3>{title}</h3>
+      {headingExtra}
       <button type="button" className="primary-widget-grip" onPointerDown={startDrag}
         onKeyDown={event => {
           if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
@@ -157,6 +158,17 @@ export function PrimaryWorkspaceSidebar(props: Props) {
     .slice().sort((a, b) => Date.parse(b.updatedAt || '') - Date.parse(a.updatedAt || ''));
   const activeHabits = habits.filter(habit => !habit.isArchived && !habit.finishedAt);
   const todayHabits = activeHabits.filter(habit => scheduledToday(habit, now, todayKey, timeZone));
+  const otherDayHabits = activeHabits.filter(habit => !todayHabits.includes(habit));
+  const orderedHabits = [...todayHabits, ...otherDayHabits];
+  const completedHabitCount = todayHabits.filter(habit =>
+    (habit.stats.find(stat => stat.dateKey === todayKey)?.amount ?? 0) >= Math.max(1, habit.targetCount)).length;
+  const nextScheduledDate = (habit: Habit): Date | null => {
+    for (let day = 1; day <= 370; day++) {
+      const candidate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + day);
+      if (scheduledToday(habit, candidate, localDateKey(candidate, timeZone), timeZone)) return candidate;
+    }
+    return null;
+  };
   const selectedHabit = habits.find(habit => habit.id === selectedHabitId) ?? null;
   const editingHabit = habits.find(habit => habit.id === editingHabitId) ?? null;
 
@@ -248,32 +260,40 @@ export function PrimaryWorkspaceSidebar(props: Props) {
         onClick={() => setCompletedLimit(value => value + 40)}>Показать ещё ({completed.length - completedLimit})</button>}
     </>,
     habits: <>
-      <div className="primary-widget-habit-summary">{todayHabits.filter(habit => (habit.stats.find(s => s.dateKey === todayKey)?.amount ?? 0) >= Math.max(1, habit.targetCount)).length} из {todayHabits.length} выполнено сегодня</div>
-      <div className="primary-widget-habits">
-        {activeHabits.map(habit => {
-          const planned = todayHabits.some(item => item.id === habit.id);
+      <div className="primary-widget-habit-strip" aria-label="Ваши привычки">
+        {orderedHabits.map((habit, index) => {
+          const planned = index < todayHabits.length;
+          const nextDate = planned ? null : nextScheduledDate(habit);
           const amount = habit.stats.find(stat => stat.dateKey === todayKey)?.amount ?? 0;
           const target = Math.max(1, habit.targetCount);
-          const percent = Math.min(100, Math.round(amount / target * 100));
-          return <div key={habit.id} className={`primary-widget-habit ${planned ? '' : 'is-unscheduled'}`}>
-            <button type="button" className="primary-widget-habit-open" onClick={() => setEditingHabitId(habit.id)}
-              aria-label={`Настроить привычку ${habit.name}`}>
-              <span className="primary-widget-habit-ring" style={{ '--habit-color': habit.color || '#22c55e', '--habit-progress': percent + '%' } as CSSProperties}><span>{habit.icon || '✓'}</span></span>
-              <span className="primary-widget-habit-label"><strong>{habit.name}</strong><small>{planned ? amount + ' из ' + target : 'Не на сегодня'}</small></span>
-            </button>
-            <button type="button" className="primary-widget-habit-calendar"
-              onClick={() => setSelectedHabitId(habit.id)} aria-label={`Календарь и статистика привычки ${habit.name}`}
-              title="Календарь и статистика"><CalendarDays size={14}/></button>
-            {planned && <div className="primary-widget-habit-actions">
-              {amount > 0 && <button type="button" onClick={() => void changeHabit(habit, -1)} disabled={busyHabitId !== null} aria-label={`Убрать выполнение ${habit.name}`}><Minus size={13}/></button>}
-              <button type="button" onClick={() => void changeHabit(habit, 1)} disabled={busyHabitId !== null || amount >= target} aria-label={`Отметить выполнение ${habit.name}`}><Plus size={14}/></button>
-            </div>}
+          const completed = planned ? Math.min(amount, target) : 0;
+          const progress = planned ? Math.round(completed / target * 100) : 0;
+          const complete = planned && completed >= target;
+          const dayLabel = nextDate ? new Intl.DateTimeFormat('ru-RU', { weekday: 'short', timeZone }).format(nextDate).replace('.', '').toUpperCase() : '—';
+          return <div key={habit.id} className="primary-widget-habit-circle-unit">
+            {index === todayHabits.length && todayHabits.length > 0 &&
+              <span className="primary-widget-habit-divider" aria-hidden="true"/>}
+            <div className="primary-widget-habit-circle-wrap">
+              <button type="button" className={`primary-widget-habit-circle ${planned ? '' : 'is-offday'} ${complete ? 'is-complete' : ''}`}
+                onClick={() => { setHabitError(null); setSelectedHabitId(habit.id); }}
+                aria-label={`Открыть привычку «${habit.name}», ${planned ? completed + ' из ' + target : 'не на сегодня'}`}
+                title={planned ? `${habit.name}: ${completed} из ${target}` :
+                  `${habit.name}: следующий день ${nextDate?.toLocaleDateString('ru-RU') ?? 'не запланирован'}`}
+                style={{ '--habit-color': habit.color || '#06b6d4', '--habit-progress': progress + '%' } as CSSProperties}>
+                <span className="primary-widget-habit-circle-core">
+                  <span className="primary-widget-habit-emoji">{habit.icon || '✨'}</span>
+                  <span className="primary-widget-habit-fraction">{completed}/{target}</span>
+                </span>
+              </button>
+              {!planned && <span className="primary-widget-habit-day-badge" aria-hidden="true">{dayLabel}</span>}
+            </div>
           </div>;
         })}
-        {activeHabits.length === 0 && <p className="primary-widget-empty">Привычек пока нет</p>}
+        <button type="button" className="primary-widget-habit-add-circle"
+          onClick={() => setEditingHabitId('new')} aria-label="Создать привычку"
+          title="Создать привычку"><Plus size={24} strokeWidth={1.7}/></button>
       </div>
       {habitError && <p role="alert" className="primary-widget-error">{habitError}</p>}
-      <button type="button" className="primary-widget-more" onClick={() => setEditingHabitId('new')}><Plus size={15}/> Создать привычку</button>
     </>,
     progress: <div className="primary-widget-metrics">
       {metric('Все задачи', doneCount, taskItems.length, <CheckCircle2 size={17}/>)}
@@ -307,6 +327,9 @@ export function PrimaryWorkspaceSidebar(props: Props) {
       {order.map(id => <Widget key={id} id={id}
         title={{ upcoming: 'Ближайшие подзадачи', completed: 'Выполненные задания', habits: 'Привычки',
           progress: 'Статистика выполнения', sectors: 'Управление секторами', notes: 'Заметки' }[id]}
+        headingExtra={id === 'habits' ?
+          <span className="primary-habit-summary-badge">Выполнено {completedHabitCount} из {todayHabits.length}</span>
+          : undefined}
         onMove={direction => updateOrder(direction, id)}>{widgetBodies[id]}</Widget>)}
     </Reorder.Group>
     <div className="primary-workspace-sidebar-toggle-slot">
@@ -322,27 +345,70 @@ export function PrimaryWorkspaceSidebar(props: Props) {
     </div>
     {selectedHabit && createPortal(
       <div className="primary-habit-backdrop" onMouseDown={event => {
-        if (event.currentTarget === event.target) setSelectedHabitId(null);
+        if (event.currentTarget === event.target) {
+          setSelectedHabitId(null);
+          setEditingHabitId(null);
+        }
       }}>
-        <section className="primary-habit-dialog primary-habit-detail-dialog dialog-surface" role="dialog"
-          aria-modal="true" aria-label={'Привычка ' + selectedHabit.name}>
+        <section className="primary-habit-dialog primary-habit-detail-dialog dialog-surface"
+          role="dialog" aria-modal="true" aria-label={'Привычка ' + selectedHabit.name}>
           <header className="primary-habit-dialog-header">
-            <div><p className="primary-habit-eyebrow">ПРИВЫЧКА</p><h2>{selectedHabit.name}</h2></div>
+            <p className="primary-habit-eyebrow">ПРИВЫЧКА</p>
             <div className="primary-habit-detail-actions">
-              <button type="button" onClick={() => setEditingHabitId(selectedHabit.id)}>
-                <Settings2 size={16}/> Настройки</button>
-              <button type="button" onClick={() => setSelectedHabitId(null)} aria-label="Закрыть">
-                <X size={18}/></button>
+              <button type="button" className="primary-habit-detail-settings-trigger"
+                onClick={() => setEditingHabitId(current => current === selectedHabit.id ? null : selectedHabit.id)}
+                aria-expanded={editingHabitId === selectedHabit.id} title="Настройки привычки"
+                aria-label="Настройки привычки"><Settings2 size={17}/></button>
+              <button type="button" onClick={() => { setSelectedHabitId(null); setEditingHabitId(null); }}
+                aria-label="Закрыть привычку"><X size={18}/></button>
             </div>
           </header>
+          {editingHabitId === selectedHabit.id &&
+            <PrimaryHabitDialog key={editingHabitId} embedded habit={editingHabit}
+              onClose={() => setEditingHabitId(null)} onSave={saveHabit}
+              onDelete={editingHabit ? deleteHabit : undefined}
+              onFinish={editingHabit ? finishHabit : undefined}/>}
           <div className="primary-habit-detail-content">
+            <div className="primary-habit-detail-overview">
+              <div className="primary-habit-detail-ring" style={{
+                '--habit-color': selectedHabit.color || '#06b6d4',
+                '--habit-progress': Math.min(100, Math.round(((selectedHabit.stats.find(s => s.dateKey === todayKey)?.amount ?? 0) /
+                  Math.max(1, selectedHabit.targetCount)) * 100)) + '%'
+              } as CSSProperties}>
+                <span className="primary-habit-detail-ring-core">{selectedHabit.icon || '✨'}</span>
+              </div>
+              <div className="primary-habit-detail-main">
+                <span className="primary-habit-detail-name-label">Название привычки</span>
+                <div className="primary-habit-detail-name">{selectedHabit.name}</div>
+                <div className="primary-habit-detail-completion">
+                  <div className="primary-habit-detail-completion-label">
+                    <span>Сегодня выполнено</span>
+                    <strong>{Math.min(selectedHabit.stats.find(s => s.dateKey === todayKey)?.amount ?? 0, selectedHabit.targetCount)} из {selectedHabit.targetCount}</strong>
+                  </div>
+                  <div className="primary-habit-detail-controls">
+                    <button type="button" onClick={() => void changeHabit(selectedHabit, -1)}
+                      disabled={busyHabitId !== null || (selectedHabit.stats.find(s => s.dateKey === todayKey)?.amount ?? 0) <= 0}
+                      aria-label="Убрать выполнение"><Minus size={19}/></button>
+                    <button type="button" className="primary-habit-detail-complete"
+                      onClick={() => void changeHabit(selectedHabit, 1)}
+                      disabled={busyHabitId !== null || (selectedHabit.stats.find(s => s.dateKey === todayKey)?.amount ?? 0) >= Math.max(1, selectedHabit.targetCount)}>
+                      Выполнить
+                    </button>
+                    <button type="button" onClick={() => void changeHabit(selectedHabit, 1)}
+                      disabled={busyHabitId !== null || (selectedHabit.stats.find(s => s.dateKey === todayKey)?.amount ?? 0) >= Math.max(1, selectedHabit.targetCount)}
+                      aria-label="Добавить выполнение"><Plus size={19}/></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {habitError && <p role="alert" className="primary-widget-error">{habitError}</p>}
             <MiniAppHabitTracker habit={selectedHabit} onHabitChanged={props.onHabitUpsert}/>
           </div>
         </section>
       </div>, document.body
     )}
-    {editingHabitId && <PrimaryHabitDialog key={editingHabitId} habit={editingHabit}
-      onClose={() => setEditingHabitId(null)} onSave={saveHabit}
+    {editingHabitId && editingHabitId !== selectedHabitId && <PrimaryHabitDialog key={editingHabitId}
+      habit={editingHabit} onClose={() => setEditingHabitId(null)} onSave={saveHabit}
       onDelete={editingHabit ? deleteHabit : undefined}
       onFinish={editingHabit ? finishHabit : undefined}/>}
   </aside>;

@@ -373,3 +373,340 @@ body[data-theme='dark'] .primary-habit-detail-content .miniapp-habit-tracker-sta
 @media (prefers-reduced-motion: reduce) {
   .primary-habit-target-presets > button { transition: none; }
 }
+
+
+/* Desktop habit detail follows Mini App: name/completion + calendar/streaks. */
+.primary-habit-dialog.primary-habit-detail-dialog {
+  position: relative;
+  width: min(720px, calc(100vw - 32px)) !important;
+  max-height: min(90dvh, 860px);
+  border: 1px solid #cfc4f3;
+  border-radius: 25px;
+  box-shadow: 0 17px 48px rgba(15,23,42,.17);
+}
+.primary-habit-detail-dialog .primary-habit-dialog-header {
+  padding: 19px 22px 10px;
+}
+.primary-habit-detail-dialog .primary-habit-eyebrow {
+  font-size: 12px;
+  letter-spacing: .17em;
+  color: #7c3aed;
+  font-weight: 760;
+}
+.primary-habit-detail-dialog .primary-habit-detail-actions button {
+  display: grid;
+  flex: 0 0 36px;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid #c5e5f2;
+  border-radius: 50%;
+  background: #fff;
+  color: #089abd;
+}
+.primary-habit-detail-dialog .primary-habit-detail-actions button:hover,
+.primary-habit-detail-dialog .primary-habit-detail-actions button[aria-expanded='true'] {
+  background: #eaf6fc;
+  border-color: #79c8df;
+}
+.primary-habit-detail-dialog .primary-habit-detail-content {
+  display: grid;
+  gap: 23px;
+  width: 100%;
+  padding: 9px 22px 22px;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #d3deed transparent;
+}
+.primary-habit-detail-overview {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  gap: 17px;
+  align-items: center;
+  min-width: 0;
+}
+.primary-habit-detail-ring {
+  display: grid;
+  place-items: center;
+  width: 99px;
+  height: 99px;
+  padding: 11px;
+  border-radius: 50%;
+  background: conic-gradient(var(--habit-color,#06b6d4) var(--habit-progress,0%),#e4e9f1 var(--habit-progress,0%) 100%);
+}
+.primary-habit-detail-ring-core {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  border-radius: 50%;
+  font-size: 36px;
+  line-height: 1;
+}
+.primary-habit-detail-main { display: grid; gap: 10px; min-width: 0; }
+.primary-habit-detail-name-label { font-size: 13px; color: #62748c; }
+.primary-habit-detail-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 12px 15px;
+  border: 1px solid #cbd7e7;
+  border-radius: 12px;
+  background: #fff;
+  color: #18233b;
+  font-size: 16px;
+  font-weight: 750;
+}
+.primary-habit-detail-completion {
+  display: grid;
+  gap: 11px;
+  border: 1px solid #d5e8ff;
+  border-radius: 13px;
+  padding: 13px;
+  background: #f6f9fd;
+}
+.primary-habit-detail-completion-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: #63748a;
+}
+.primary-habit-detail-completion-label strong { flex: none; color: #17243c; font-size: 14px; }
+.primary-habit-detail-controls {
+  display: grid;
+  grid-template-columns: 37px minmax(0, 1fr) 37px;
+  align-items: center;
+  gap: 9px;
+}
+.primary-habit-detail-controls > button {
+  display: grid;
+  place-items: center;
+  height: 37px;
+  min-width: 0;
+  border: 1px solid #d0dae9;
+  border-radius: 50%;
+  background: #fff;
+  color: #1f3150;
+}
+.primary-habit-detail-controls > button:disabled { opacity: .4; cursor: not-allowed; }
+.primary-habit-detail-controls > button.primary-habit-detail-complete {
+  border-radius: 10px;
+  border-color: #19a550;
+  background: linear-gradient(125deg, #23c55e, #16a34a);
+  color: white;
+  font-size: 14px;
+  font-weight: 730;
+  box-shadow: 0 8px 17px rgba(22,163,74,.13);
+}
+.primary-habit-detail-content .miniapp-habit-tracker { width: 100%; max-width: 100%; margin: 0; color: #17243c; }
+.primary-habit-detail-content .miniapp-habit-tracker-calendar {
+  background: #f5f7fc;
+  border: 1px solid #dce5f2;
+  border-radius: 21px;
+  padding: 18px 18px 16px;
+}
+.primary-habit-detail-content .miniapp-habit-tracker-calendar h3 {
+  color: #18233b;
+  font-size: 16px;
+}
+.primary-habit-detail-content .miniapp-habit-tracker-calendar .miniapp-focus-icon-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #cce6f3;
+  border-radius: 50%;
+  background: #fff;
+  color: #06aec9;
+}
+.primary-habit-detail-content .miniapp-habit-tracker-day { min-height: 36px; }
+.primary-habit-detail-content .miniapp-habit-tracker-day-done {
+  background: color-mix(in srgb, var(--tracker-accent) 89%, #07858f);
+  color: #fff;
+}
+.primary-habit-detail-content .miniapp-habit-tracker-day-scheduled { background: #e8edf5; color: #34445d; }
+.primary-habit-detail-content .miniapp-habit-tracker-day-outside { background: transparent; }
+.primary-habit-detail-content .miniapp-habit-tracker-stat {
+  background: #f5f7fc;
+  border: 1px solid #dce5f2;
+  border-radius: 18px;
+  color: #16253c;
+}
+.primary-habit-detail-content .miniapp-habit-tracker-stat-featured {
+  background: linear-gradient(140deg, rgba(92,214,225,.19),#f5f7fc);
+  border-color: #97ddeb;
+}
+.primary-habit-detail-content .miniapp-habit-tracker-stat strong { color: #17243c; }
+.primary-habit-detail-content .miniapp-habit-tracker-stat > span,
+.primary-habit-detail-content .miniapp-habit-tracker-stat small { color: #607188; }
+
+/* A settings WINDOW anchored inside detail, not a second full-screen modal. */
+.primary-habit-dialog.primary-habit-dialog--embedded {
+  position: absolute;
+  top: 60px;
+  right: 16px;
+  z-index: 30;
+  width: min(438px, calc(100% - 32px));
+  max-height: min(70dvh, 660px);
+  border: 1px solid #cfc4f3;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 14px 42px rgba(15,23,42,.20);
+}
+.primary-habit-dialog--embedded .primary-habit-dialog-header { padding: 15px 18px 12px; }
+.primary-habit-dialog--embedded .primary-habit-form {
+  gap: 15px;
+  padding: 9px 18px 0;
+}
+.primary-habit-dialog--embedded .primary-habit-dialog-footer {
+  margin-inline: -18px;
+  padding: 12px 18px;
+}
+.primary-habit-dialog--embedded .primary-habit-icon-grid button {
+  width: 39px;
+  height: 39px;
+  border: 1px solid #ccd8e7;
+  border-radius: 50%;
+  font-size: 19px;
+}
+.primary-habit-dialog--embedded .primary-habit-icon-grid button.is-selected {
+  background: #d9eefd;
+  border-color: #38bdf8;
+  box-shadow: none;
+}
+.primary-habit-color-grid > button,
+.primary-habit-dialog--embedded .primary-habit-color-custom {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #d2dce8;
+  border-radius: 50%;
+}
+.primary-habit-color-custom {
+  position: relative;
+  display: grid;
+  place-items: center;
+  background: #eef3f9;
+  color: #25364e;
+  overflow: hidden;
+}
+.primary-habit-color-custom svg { position: absolute; z-index: 1; pointer-events: none; }
+.primary-habit-color-custom input { position: absolute; inset: 0; opacity: .01; cursor: pointer; }
+.primary-habit-full-stepper {
+  display: grid;
+  grid-template-columns: 45px minmax(0, 1fr) 45px;
+  height: 43px;
+  overflow: hidden;
+  border: 1px solid #cbd7e7;
+  border-radius: 12px;
+  background: #fff;
+  color: #17243c;
+}
+.primary-habit-full-stepper > button { display: grid; place-items: center; color: inherit; }
+.primary-habit-full-stepper > button:first-child { border-right: 1px solid #cbd7e7; }
+.primary-habit-full-stepper > button:last-child { border-left: 1px solid #cbd7e7; }
+.primary-habit-full-stepper > button:hover { background: #edf4fc; }
+.primary-habit-full-stepper > strong {
+  display: grid; place-items: center;
+  font-size: 16px; font-weight: 730;
+}
+.primary-habit-settings-card {
+  display: grid;
+  gap: 11px;
+  padding: 13px;
+  border-radius: 14px;
+  border: 1px solid #d2dce8;
+  background: #f5f8fc;
+  color: #40536b;
+  font-size: 12px;
+}
+.primary-habit-duration-options {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 8px;
+}
+.primary-habit-duration-options button {
+  min-width: 0;
+  padding: 9px 6px;
+  border: 1px solid #cbd7e7;
+  border-radius: 999px;
+  background: #fff;
+  color: #40536b;
+  font-size: 11px;
+  font-weight: 610;
+}
+.primary-habit-duration-options button.is-selected {
+  color: #10684f;
+  border-color: #53d4a9;
+  background: linear-gradient(125deg, #ddfdec, #aff3d5);
+}
+.primary-habit-duration-summary {
+  margin: 0;
+  font-size: 11px;
+  color: #64748b;
+}
+.primary-habit-settings-card .primary-habit-field select,
+.primary-habit-settings-card .primary-habit-field input {
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #d2dce8;
+}
+.primary-habit-dialog--embedded .primary-habit-time-pill {
+  background: #fff; border-color: #cbd7e7; border-radius: 999px;
+}
+.primary-habit-dialog--embedded .primary-habit-time-add {
+  background: #e8f8f6; border-color: #b2e5e5; color: #16a3bc;
+}
+:root:has(.app-shell[data-theme='dark']) .primary-habit-detail-dialog,
+:root:has(.app-shell[data-theme='dark']) .primary-habit-dialog--embedded {
+  background: #101b2d;
+  border-color: #435475;
+  color: #eaf0fa;
+}
+:root:has(.app-shell[data-theme='dark']) .primary-habit-detail-name,
+:root:has(.app-shell[data-theme='dark']) .primary-habit-detail-completion,
+:root:has(.app-shell[data-theme='dark']) .primary-habit-detail-content .miniapp-habit-tracker-calendar,
+:root:has(.app-shell[data-theme='dark']) .primary-habit-detail-content .miniapp-habit-tracker-stat,
+:root:has(.app-shell[data-theme='dark']) .primary-habit-settings-card {
+  background: #1e2e46;
+  border-color: #435475;
+  color: #eaf0fa;
+}
+:root:has(.app-shell[data-theme='dark']) .primary-habit-detail-completion-label strong,
+:root:has(.app-shell[data-theme='dark']) .primary-habit-detail-content .miniapp-habit-tracker-stat strong,
+:root:has(.app-shell[data-theme='dark']) .primary-habit-detail-name,
+:root:has(.app-shell[data-theme='dark']) .primary-habit-detail-content .miniapp-habit-tracker-calendar h3 {
+  color: #edf3ff;
+}
+:root:has(.app-shell[data-theme='dark']) .primary-habit-detail-ring-core {
+  background: #101b2d;
+}
+:root:has(.app-shell[data-theme='dark']) .primary-habit-detail-controls > button:not(.primary-habit-detail-complete),
+:root:has(.app-shell[data-theme='dark']) .primary-habit-duration-options button,
+:root:has(.app-shell[data-theme='dark']) .primary-habit-full-stepper,
+:root:has(.app-shell[data-theme='dark']) .primary-habit-dialog--embedded .primary-habit-time-pill,
+:root:has(.app-shell[data-theme='dark']) .primary-habit-dialog--embedded .primary-habit-icon-grid button {
+  background: #25364f;
+  border-color: #51627f;
+  color: #eaf0fa;
+}
+:root:has(.app-shell[data-theme='dark']) .primary-habit-duration-options button.is-selected {
+  background: #1a6053;
+  border-color: #4ec9aa;
+  color: #defff2;
+}
+@media (max-width: 650px) {
+  .primary-habit-detail-overview { grid-template-columns: 74px minmax(0, 1fr); gap: 9px; }
+  .primary-habit-detail-ring { width: 72px; height: 72px; padding: 8px; }
+  .primary-habit-detail-ring-core { font-size: 27px; }
+  .primary-habit-detail-dialog .primary-habit-detail-content { padding: 8px 13px 13px; }
+  .primary-habit-detail-dialog .primary-habit-dialog-header { padding-inline: 13px; }
+  .primary-habit-detail-name { font-size: 13px; padding: 9px; }
+  .primary-habit-detail-completion { padding: 8px; }
+  .primary-habit-detail-controls { gap: 5px; grid-template-columns: 30px minmax(0, 1fr) 30px; }
+  .primary-habit-detail-controls > button { height: 30px; }
+  .primary-habit-dialog.primary-habit-dialog--embedded { right: 8px; width: calc(100% - 16px); }
+}
