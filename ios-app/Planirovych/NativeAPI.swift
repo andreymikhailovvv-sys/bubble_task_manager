@@ -846,6 +846,89 @@ final class NativeAPI {
         return result.messages
     }
 
+    func loadTaskAiHistory(taskId: String) async throws -> [RemoteChatMessage] {
+        guard !taskId.isEmpty else { throw NativeAPIError.invalidResponse }
+        let result: ChatHistoryEnvelope = try await request("tasks/\(taskId)/ai-chat")
+        return result.messages
+    }
+
+    func sendTaskAI(taskId: String, question: String, model: String,
+                    telegramRead: [String: Any]? = nil,
+                    onEvent: @escaping @MainActor (NativeChatStreamEvent) -> Void
+    ) async throws -> NativeChatReply {
+        guard !taskId.isEmpty,
+              ["gpt-6-luna", "gpt-6.1-terra", "gpt-6.1-sol"].contains(model),
+              let url = URL(string: "tasks/\(taskId)/ai-chat", relativeTo: base),
+              url.scheme == "https", url.host == base.host else {
+            throw NativeAPIError.invalidResponse
+        }
+        var payload: [String: Any] = [
+            "clientRequestId": UUID().uuidString.lowercased(),
+            "question": question,
+            "userMessage": telegramRead == nil ? question : "",
+            "mode": model == "gpt-6.1-sol" ? "smart" : "fast",
+            "model": model,
+            "clientSurface": "miniapp",
+            "interactionContext": "chat",
+            "userTimeZone": TimeZone.current.identifier
+        ]
+        if let telegramRead { payload["telegramRead"] = telegramRead }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpShouldHandleCookies = true
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = 180
+        request.setValue("same-origin", forHTTPHeaderField: "Sec-Fetch-Site")
+        request.setValue("application/x-ndjson", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+        let (bytes, response) = try await http.bytes(for: request)
+        guard let status = response as? HTTPURLResponse else {
+            throw NativeAPIError.invalidResponse
+        }
+        guard (200..<300).contains(status.statusCode) else {
+            throw NativeAPIError.server(code: status.statusCode,
+                                        message: "Сервер отклонил запрос ИИ по задаче.")
+        }
+        for try await line in bytes.lines {
+            try Task.checkCancellation()
+            guard let lineData = line.data(using: .utf8),
+                  let event = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
+                  let type = event["type"] as? String else { continue }
+            switch type {
+            case "status":
+                if let status = event["status"] as? String { onEvent(.status(status)) }
+            case "delta":
+                if let delta = event["text"] as? String { onEvent(.delta(delta)) }
+            case "reset":
+                onEvent(.reset)
+            case "error":
+                throw NativeAPIError.server(code: 500,
+                    message: event["message"] as? String ?? "Ошибка ИИ по задаче.")
+            case "result":
+                guard let raw = event["result"] as? [String: Any] else {
+                    throw NativeAPIError.invalidResponse
+                }
+                let data = try JSONSerialization.data(withJSONObject: raw)
+                let decoded = try JSONDecoder().decode(AiChatReply.self, from: data)
+                return NativeChatReply(
+                    answer: decoded.answer,
+                    taskProposal: decoded.taskProposal,
+                    economicProposals: decoded.economicProposals ?? [],
+                    generatedDocument: decoded.generatedDocument,
+                    telegramSendDraft: decoded.telegramSendDraft,
+                    telegramReadDraft: decoded.telegramReadDraft,
+                    mailSendDraft: decoded.mailSendDraft,
+                    raw: raw
+                )
+            default: break
+            }
+        }
+        throw NativeAPIError.server(code: 502, message: "Поток ИИ завершился без ответа.")
+    }
+
     /// Streaming NDJSON is the same transport used by Mini App and Android.
     /// The quick intro, status transitions and answer deltas arrive in order.
     func sendChat(question: String, history: [RemoteChatMessage],
