@@ -576,3 +576,11 @@ body:has(.bubble-fullscreen-shell.fullscreen-overlay-active .primary-workspace-s
   .ai-chat-launcher.bubble-ai-fullscreen {
   right: max(16px, env(safe-area-inset-right)) !important;
 }
+
+/* Habit/calendar and notes dialogs live in portals, outside App's overlay state. */
+body:has(.primary-workspace-sidebar.is-open):has(.primary-habit-backdrop)
+  .ai-chat-launcher.bubble-ai-fullscreen,
+body:has(.primary-workspace-sidebar.is-open):has(.standalone-notes-backdrop)
+  .ai-chat-launcher.bubble-ai-fullscreen {
+  right: max(16px, env(safe-area-inset-right)) !important;
+}
