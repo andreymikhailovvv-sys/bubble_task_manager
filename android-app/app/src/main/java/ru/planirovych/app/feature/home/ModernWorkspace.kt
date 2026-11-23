@@ -1119,6 +1119,70 @@ private fun WorkspaceSectorsOverview(
 }
 
 @Composable
+private data class SectorIconChoice(
+    val code:String,val title:String,
+    val symbol:androidx.compose.ui.graphics.vector.ImageVector
+)
+private val sectorIconChoices=listOf(
+    SectorIconChoice("briefcase","Работа",Icons.Default.Work),
+    SectorIconChoice("heart","Здоровье",Icons.Default.Favorite),
+    SectorIconChoice("home","Дом",Icons.Default.Home),
+    SectorIconChoice("graduation-cap","Учёба",Icons.Default.School),
+    SectorIconChoice("dumbbell","Спорт",Icons.Default.FitnessCenter),
+    SectorIconChoice("wallet","Финансы",Icons.Default.AccountBalanceWallet),
+    SectorIconChoice("book-open","Книги",Icons.Default.MenuBook),
+    SectorIconChoice("palette","Творчество",Icons.Default.Palette),
+    SectorIconChoice("plane","Поездки",Icons.Default.Flight),
+    SectorIconChoice("car","Авто",Icons.Default.DirectionsCar),
+    SectorIconChoice("music","Музыка",Icons.Default.MusicNote),
+    SectorIconChoice("star","Избранное",Icons.Default.Star),
+    SectorIconChoice("target","Цели",Icons.Default.TrackChanges),
+    SectorIconChoice("laptop","Проекты",Icons.Default.Computer),
+    SectorIconChoice("users","Семья",Icons.Default.Group),
+    SectorIconChoice("shopping-cart","Покупки",Icons.Default.ShoppingCart),
+    SectorIconChoice("sprout","Природа",Icons.Default.Eco),
+    SectorIconChoice("coffee","Отдых",Icons.Default.LocalCafe),
+    SectorIconChoice("calendar","Планы",Icons.Default.CalendarToday),
+    SectorIconChoice("lightbulb","Идеи",Icons.Default.Lightbulb),
+    SectorIconChoice("sparkles","Развитие",Icons.Default.AutoAwesome),
+    SectorIconChoice("trophy","Достижения",Icons.Default.EmojiEvents),
+    SectorIconChoice("globe","Мир",Icons.Default.Public),
+    SectorIconChoice("paw-print","Питомцы",Icons.Default.Pets)
+)
+private fun sectorIconVector(code:String?):androidx.compose.ui.graphics.vector.ImageVector =
+    sectorIconChoices.firstOrNull{it.code==code}?.symbol ?: Icons.Default.Work
+
+@Composable
+private fun SectorIconSelector(
+    selected:String,colors:WorkspaceColors,onSelect:(String)->Unit
+) {
+    Column(verticalArrangement=Arrangement.spacedBy(9.dp)) {
+        Text("Иконка сектора",color=colors.secondaryText,fontSize=13.sp)
+        sectorIconChoices.chunked(4).forEach { group ->
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                group.forEach { choice ->
+                    val active=choice.code==selected
+                    val shape=RoundedCornerShape(14.dp)
+                    Column(Modifier.weight(1f).clip(shape)
+                        .background(if(active)colors.selected else colors.card)
+                        .border(if(active)2.dp else 1.dp,
+                            if(active)colors.purple else colors.panelBorder,shape)
+                        .clickable{onSelect(choice.code)}
+                        .padding(vertical=9.dp,horizontal=2.dp),
+                        horizontalAlignment=Alignment.CenterHorizontally,
+                        verticalArrangement=Arrangement.spacedBy(5.dp)) {
+                        Icon(choice.symbol,choice.title,Modifier.size(25.dp),
+                            tint=if(active)colors.purple else colors.secondaryText)
+                        Text(choice.title,color=if(active)colors.text else colors.secondaryText,
+                            fontSize=9.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+                    }
+                }
+                repeat(4-group.size){Spacer(Modifier.weight(1f))}
+            }
+        }
+    }
+}
+
 private fun WorkspaceSectorSettings(
     vm:HomeViewModel,state:HomeState,colors:WorkspaceColors,onClose:()->Unit
 ) {
@@ -1156,7 +1220,11 @@ private fun WorkspaceSectorSettings(
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp))
                     .background(colors.card).clickable { edit(sector) }.padding(12.dp),
                     verticalAlignment=Alignment.CenterVertically) {
-                    Box(Modifier.size(23.dp).background(parseWorkspaceColor(sector.color),CircleShape))
+                    Box(Modifier.size(32.dp).background(parseWorkspaceColor(sector.color),CircleShape),
+                        contentAlignment=Alignment.Center) {
+                        Icon(sectorIconVector(sector.icon),null,Modifier.size(19.dp),
+                            tint=Color.White)
+                    }
                     Spacer(Modifier.width(10.dp))
                     Text(sector.name,color=colors.text,modifier=Modifier.weight(1f))
                     Icon(Icons.Default.Edit,"Редактировать",Modifier.size(18.dp),
@@ -1182,9 +1250,7 @@ private fun WorkspaceSectorSettings(
                         .clickable { color=option })
                 }
             }
-            OutlinedTextField(value=icon,onValueChange={icon=it},
-                label={Text("Иконка (код)")},singleLine=true,
-                modifier=Modifier.fillMaxWidth())
+            SectorIconSelector(selected=icon,colors=colors,onSelect={icon=it})
             OutlinedTextField(value=prompt,onValueChange={prompt=it},
                 label={Text("Общий промпт")},minLines=2,maxLines=4,
                 modifier=Modifier.fillMaxWidth())
