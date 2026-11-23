@@ -10,6 +10,8 @@ struct NativeTaskTimelineView: View {
     let tasks: [RemoteTask]
     let spheres: [RemoteSphere]
     let onOpenTask: (RemoteTask) -> Void
+    let overdueCount: Int
+    let onOpenOverdue: () -> Void
 
     @State private var zoom: NativeTimelineZoom = .day
     @State private var anchor = Calendar.current.startOfDay(for: Date())
@@ -41,33 +43,88 @@ struct NativeTaskTimelineView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Picker("Масштаб", selection: $zoom) {
-                ForEach(NativeTimelineZoom.allCases, id: \.self) { item in
-                    Text(item.rawValue).tag(item)
+            HStack(spacing: 8) {
+                Picker("Масштаб", selection: $zoom) {
+                    ForEach(NativeTimelineZoom.allCases, id: \.self) { item in
+                        Text(item.rawValue).tag(item)
+                    }
                 }
-            }
-            .pickerStyle(.segmented)
-
-            HStack {
-                Button {
-                    move(-1)
-                } label: { Image(systemName: "chevron.left").frame(width: 34, height: 38) }
-                    .accessibilityLabel("Предыдущий период")
-                Spacer(minLength: 0)
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                Spacer(minLength: 0)
-                Button {
+                .pickerStyle(.segmented)
+                Button("Сегодня") {
                     anchor = calendar.startOfDay(for: Date())
-                } label: {
-                    Text("Сегодня").font(.caption.weight(.semibold))
                 }
-                Button {
-                    move(1)
-                } label: { Image(systemName: "chevron.right").frame(width: 34, height: 38) }
+                .font(.caption2.weight(.semibold))
+            }
+
+            HStack(spacing: 8) {
+                HStack(spacing: 3) {
+                    Button {
+                        move(-1)
+                    } label: {
+                        Image(systemName: "chevron.left").frame(width: 25, height: 48)
+                    }
+                    .accessibilityLabel("Предыдущий период")
+                    Spacer(minLength: 0)
+                    VStack(spacing: 2) {
+                        Text(title)
+                            .font(.system(size: 12, weight: .semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.78)
+                        Text(zoom == .day ? "Выбранный день" :
+                             zoom == .week ? "Выбранная неделя" : "Выбранный месяц")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .multilineTextAlignment(.center)
+                    Spacer(minLength: 0)
+                    Button {
+                        move(1)
+                    } label: {
+                        Image(systemName: "chevron.right").frame(width: 25, height: 48)
+                    }
                     .accessibilityLabel("Следующий период")
+                }
+                .frame(maxWidth: .infinity)
+                .background(Color.purple.opacity(0.08),
+                            in: RoundedRectangle(cornerRadius: 14))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.purple.opacity(0.23), lineWidth: 1)
+                }
+                Button(action: onOpenOverdue) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "clock.badge.exclamationmark")
+                            .font(.system(size: 17))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Просроченные")
+                            Text("задачи")
+                        }
+                        .font(.system(size: 9, weight: .semibold))
+                        .lineLimit(1)
+                    }
+                    .foregroundStyle(Color(red: 0.74, green: 0.32, blue: 0.47))
+                    .frame(width: 115, height: 51)
+                    .background(Color.pink.opacity(0.08),
+                                in: RoundedRectangle(cornerRadius: 14))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(Color.pink.opacity(0.25), lineWidth: 1)
+                    }
+                    .overlay(alignment: .topTrailing) {
+                        if overdueCount > 0 {
+                            Text("\(min(overdueCount, 99))")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 3)
+                                .background(Color.red, in: Capsule())
+                                .offset(x: 4, y: -6)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Просроченные задачи: \(overdueCount)")
             }
             .buttonStyle(.plain)
 
