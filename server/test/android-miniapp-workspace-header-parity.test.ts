@@ -21,7 +21,11 @@ test('Android overview header uses brand, account, credits, expandable search an
   assert.match(header, /Icons\.Default\.Search/);
   assert.match(header, /Icons\.Default\.AccountCircle/);
   assert.match(android, /WorkspaceTopbar\(state,colors,dark,/);
-  assert.match(android, /BasicTextField\(value=state\.query/);
+  assert.match(android, /BasicTextField\(value=query/);
+  assert.match(android, /focusRequester\(requester\)/);
+  assert.match(android, /keyboard\?\.show\(\)/);
+  assert.match(android, /item\(key="workspace-unified-header"\)/);
+  assert.match(android, /if\(timelineActive\) workspaceScroll\.scrollToItem\(0\)/);
   assert.match(android, /onSearchToggle=/);
   assert.match(android, /ToolbarButton\("Просроченные задачи"/);
   assert.match(android, /ToolbarButton\("Отложить"/);
