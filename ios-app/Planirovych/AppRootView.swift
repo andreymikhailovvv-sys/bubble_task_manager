@@ -480,6 +480,8 @@ final class NativeWorkspaceSession: ObservableObject {
 struct ContentView: View {
     @StateObject private var session = NativeWorkspaceSession()
     @State private var showOfflineDemo = false
+    @State private var subscriptionNotice: SubscriptionNotice?
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -500,6 +502,29 @@ struct ContentView: View {
             if Self.ciPreviewTab != nil { return }
 #endif
             await session.bootstrap()
+        }
+        .task(id: session.account?.id) {
+            guard let id = session.account?.id else { subscriptionNotice = nil; return }
+            while !Task.isCancelled {
+                if scenePhase == .active && subscriptionNotice == nil {
+                    let notices = (try? await NativeAPI().subscriptionNotices()) ?? []
+                    guard session.account?.id == id, !Task.isCancelled else { return }
+                    let key = "subscription-notices-seen-" + id
+                    let seen = Set(UserDefaults.standard.stringArray(forKey: key) ?? [])
+                    if let next = notices.first(where: { !seen.contains($0.id) }) {
+                        subscriptionNotice = next
+                    }
+                }
+                try? await Task.sleep(for: .seconds(30))
+            }
+        }
+        .alert(item: $subscriptionNotice) { notice in
+            Alert(title: Text("Планировыч"), message: Text(notice.content), dismissButton: .default(Text("Понятно")) {
+                guard let id = session.account?.id else { return }
+                let key = "subscription-notices-seen-" + id
+                let seen = UserDefaults.standard.stringArray(forKey: key) ?? []
+                UserDefaults.standard.set(Array((seen + [notice.id]).suffix(100)), forKey: key)
+            })
         }
         .sheet(isPresented: $showOfflineDemo) {
             DemoDashboardView()
