@@ -79,12 +79,15 @@ test('monitoring unread events light up Planik badge without duplicate chat bubb
 
 
 test('Planik overlays the fullscreen composer without moving its input bar', async () => {
-  const [expanded, mascotCss, appCss] = await Promise.all([
+  const [expanded, mascotCss, appCss, wardrobeCss] = await Promise.all([
     read('../../client/src/components/ExpandedAiChat.tsx'),
     read('../../client/src/components/PlanikMascot.css'),
-    read('../../client/src/styles.css')
+    read('../../client/src/styles.css'),
+    read('../../client/src/components/MascotWardrobe.css')
   ]);
-  assert.match(expanded, /className="planik-composer-float"[\s\S]{0,320}<\/div> : null\}\s*<div ref=\{composerRef\}/);
+  assert.match(expanded, /className="planik-composer-float mascot-wardrobe-anchor"[^>]*>[\s\S]{0,500}<MascotWardrobeTrigger[\s\S]{0,100}<\/div> : null\}\s*<div ref=\{composerRef\}/);
+  assert.match(mascotCss, /\.planik-composer-float\s*\{[^}]*position:\s*absolute/);
+  assert.match(wardrobeCss, /\.planik-composer-float\.mascot-wardrobe-anchor\s*\{[^}]*position:\s*absolute/);
   assert.match(appCss, /\.ai-chat-expanded-composer-wrap\s*\{[^}]*position:\s*absolute/);
   assert.doesNotMatch(mascotCss, /\.ai-chat-expanded-composer-wrap\s*\{\s*position:\s*relative/);
   assert.match(mascotCss, /bottom:\s*calc\(0\.75rem \+ var\(--ai-composer-height/);
