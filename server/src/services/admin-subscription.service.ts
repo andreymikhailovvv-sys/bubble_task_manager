@@ -1,3 +1,4 @@
+import { enqueueSubscriptionWelcome } from './subscription-welcome.service.js';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { getSubscriptionPlanByKey, subscriptionEndDate } from '../config/subscription-plans.js';
@@ -77,6 +78,7 @@ export async function setAdminSubscription(input: AdminSubscriptionInput, db: Pi
         }
       });
     }
+    if (!unchanged && plan) await enqueueSubscriptionWelcome(tx, user.id, plan.key, `admin:${input.requestId}`);
     await tx.adminSubscriptionChange.create({ data: {
       id: input.requestId, userId: user.id,
       action: unchanged ? 'noop' : !plan ? 'cancel' : active ? 'replace' : 'grant',

@@ -972,10 +972,15 @@ model SystemNotification {
   pushClaimedAt DateTime?
   pushAttempts Int @default(0)
   pushNextAttemptAt DateTime @default(now())
+  subscriptionTelegramSentAt DateTime?
+  subscriptionEmailSentAt DateTime?
+  subscriptionDeliveryClaimedAt DateTime?
+  subscriptionDeliveryNextAt DateTime?
 
   @@index([userId, createdAt])
   @@index([userId, readAt])
   @@index([pushDispatchedAt, pushNextAttemptAt])
+  @@index([subscriptionDeliveryNextAt])
 }
 model AndroidPushDevice {
   id             String @id @default(cuid())

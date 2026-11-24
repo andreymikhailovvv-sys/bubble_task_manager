@@ -1,3 +1,4 @@
+import { enqueueSubscriptionWelcome } from './subscription-welcome.service.js';
 import { Prisma, type SubscriptionPurchase } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { getSubscriptionPlanByKey, subscriptionEndDate } from '../config/subscription-plans.js';
@@ -82,6 +83,7 @@ export async function reconcileSubscriptionPurchaseFromYooKassa(
       aiIncludedCreditsMilli: included,
       aiCredits: Math.floor((included + user.aiBonusCreditsMilli + user.aiPurchasedCreditsMilli) / 1000)
     } });
+    await enqueueSubscriptionWelcome(tx, user.id, current.planKey, `purchase:${current.id}`);
     return tx.subscriptionPurchase.update({ where: { id: current.id }, data: {
       yookassaPaymentId: payment.id, status: 'succeeded', providerStatus: 'succeeded',
       providerCheckedAt: now, activatedAt: now
