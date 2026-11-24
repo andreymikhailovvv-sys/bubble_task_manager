@@ -480,3 +480,50 @@ body:has(.planik-notes-companion, .planik-task-editor-companion)
 @keyframes zoomer-hide-phone{0%{visibility:visible;opacity:1}100%{visibility:hidden;opacity:0}}
 @keyframes zoomer-restore-hover{0%{visibility:hidden;opacity:0}100%{visibility:visible;opacity:1}}
 @media(prefers-reduced-motion:reduce){.planik-mascot[data-skin=zoomer][data-mode=hover] .zoomer-phone-hide{display:none;animation:none!important}.planik-mascot[data-skin=zoomer][data-mode=hover] .planik-hover{visibility:visible;opacity:1;animation:none!important}.planik-mascot[data-skin=zoomer][data-mode=hover] .planik-eye{animation-delay:0s}}
+
+/* Adventure outfits use the original coordinate system, not a scaled mascot. */
+.planik-mascot[data-skin=ninja]:is([data-mode=idle],[data-mode=hover]) .planik-eye{visibility:hidden}
+.ninja-squint{transform-box:fill-box;transform-origin:center;animation:planik-blink 5.4s infinite}
+.planik-mascot[data-skin=ninja][data-mode=hover] .planik-character-rig{animation:ninja-vanish 3.9s linear both}
+.ninja-hover-ready{animation:ninja-ready-return 3.9s steps(1,end) both}
+.ninja-throw-arm{transform-box:view-box;transform-origin:298px 196px;animation:ninja-throw 3.9s ease-in-out both}
+.ninja-bomb{animation:ninja-bomb-drop 3.9s linear both;transform-box:view-box;transform-origin:0 0}
+.ninja-smoke{transform-box:view-box;transform-origin:215px 168px;animation:ninja-smoke-cloud 3.9s ease-out both}
+@keyframes ninja-vanish{0%,26%{opacity:1}34%,75%{opacity:0}83%,100%{opacity:1}}
+@keyframes ninja-ready-return{0%{opacity:1}10%{opacity:0}78%,100%{opacity:1}}
+@keyframes ninja-throw{0%{opacity:0;transform:rotate(25deg)}10%{opacity:1;transform:rotate(0deg)}23%{opacity:1;transform:rotate(32deg)}24%,100%{opacity:0}}
+@keyframes ninja-bomb-drop{0%{opacity:0;transform:translate(232px,225px) scale(.8)}11%{opacity:1;transform:translate(326px,206px) scale(.8)}23%{opacity:1;transform:translate(215px,298px) rotate(210deg) scale(.8)}24%,100%{opacity:0;transform:translate(215px,298px)}}
+@keyframes ninja-smoke-cloud{0%,22%{opacity:0;transform:translateY(117px) scale(.12)}36%{opacity:1;transform:translateY(0) scale(1.05)}48%{opacity:.9;transform:scale(1.12)}65%{opacity:0;transform:scale(1.25)}68%{opacity:0;transform:scale(.3)}77%{opacity:1;transform:scale(1)}86%{opacity:.75;transform:scale(1.12)}100%{opacity:0;transform:scale(1.25)}}
+/* The covered eye is independently hidden, so no white pixel can escape
+   the patch when gaze moves down to the map or outside the mascot. */
+.planik-mascot[data-skin=pirate] .planik-eye-right{visibility:hidden}
+.planik-mascot[data-skin=pirate][data-mode=hover] .planik-eye-right{animation:pirate-reveal-eye 2.85s steps(1,end) both}
+.planik-mascot[data-skin=pirate][data-mode=hover] .pirate-eye-patch{transform-box:view-box;transform-origin:245px 159px;animation:pirate-lift-patch 2.85s ease-in-out both}
+.pirate-lift-arm{transform-box:view-box;transform-origin:298px 196px;animation:pirate-lift-arm 2.85s ease-in-out both}
+.pirate-rest-arm{animation:pirate-rest-arm 2.85s steps(1,end) both}
+.pirate-treasure-map{transform-origin:0 0;animation:pirate-map-read 3.4s ease-in-out infinite}
+@keyframes pirate-lift-patch{0%,100%{transform:none}23%,74%{transform:translate(3px,-35px) rotate(-12deg)}}
+@keyframes pirate-reveal-eye{0%,20%{visibility:hidden}23%,74%{visibility:visible}77%,100%{visibility:hidden}}
+@keyframes pirate-lift-arm{0%{opacity:0;transform:rotate(-28deg)}23%,74%{opacity:1;transform:none}100%{opacity:0;transform:rotate(-28deg)}}
+@keyframes pirate-rest-arm{0%{opacity:1}8%{opacity:0}92%,100%{opacity:1}}
+@keyframes pirate-map-read{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(2deg)}}
+.planik-mascot[data-skin=space][data-mode=hover] .planik-character-rig{transform-box:view-box;transform-origin:215px 166px;animation:space-weightless 7s ease-in-out infinite}
+.planik-mascot[data-skin=space][data-mode=hover] .planik-eye-left,.planik-mascot[data-skin=space][data-mode=hover] .planik-eye-right{animation:space-lost-gaze 1.3s ease-in-out infinite alternate}
+.space-arm-left{transform-box:view-box;transform-origin:132px 196px;animation:space-wave-left 1.25s ease-in-out infinite alternate}
+.space-arm-right{transform-box:view-box;transform-origin:298px 196px;animation:space-wave-right 1.15s ease-in-out infinite alternate}
+.space-satellite{animation:space-satellite-drift 3s ease-in-out infinite}
+.space-signal-wave{transform-box:view-box;transform-origin:0 0;animation:space-signal-send 1.35s linear infinite}
+@keyframes space-weightless{0%{transform:translate(0,0) rotate(0deg)}20%{transform:translate(-9px,-24px) rotate(-22deg)}49%{transform:translate(7px,-30px) rotate(170deg)}79%{transform:translate(-9px,-24px) rotate(360deg)}99%,100%{transform:translate(0,0) rotate(360deg)}}
+@keyframes space-lost-gaze{0%{transform:translate(-7px,3px)}30%{transform:translate(5px,-7px)}65%{transform:translate(-4px,-2px)}100%{transform:translate(7px,5px)}}
+@keyframes space-wave-left{from{transform:rotate(-20deg)}to{transform:rotate(20deg)}}
+@keyframes space-wave-right{from{transform:rotate(17deg)}to{transform:rotate(-20deg)}}
+@keyframes space-satellite-drift{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes space-signal-send{0%{opacity:0;transform:translate(307px,67px) rotate(40deg) scale(.5)}18%{opacity:1}100%{opacity:0;transform:translate(264px,114px) rotate(40deg) scale(1.2)}}
+@media(prefers-reduced-motion:reduce){
+ .planik-mascot[data-skin=ninja][data-mode=hover] .planik-character-rig,.ninja-hover-ready,.ninja-squint,.pirate-treasure-map,.space-satellite,.space-arm-left,.space-arm-right,.planik-mascot[data-skin=space][data-mode=hover] .planik-character-rig,.planik-mascot[data-skin=space][data-mode=hover] :is(.planik-eye-left,.planik-eye-right){animation:none!important;opacity:1;transform:none}
+ .ninja-throw-arm,.ninja-bomb,.ninja-smoke,.pirate-rest-arm{display:none}
+ .planik-mascot[data-skin=pirate][data-mode=hover] .planik-eye-right{visibility:visible;animation:none!important}
+ .planik-mascot[data-skin=pirate][data-mode=hover] .pirate-eye-patch{animation:none!important;transform:translate(3px,-35px) rotate(-12deg)}
+ .pirate-lift-arm{animation:none!important;opacity:1;transform:none}
+ .space-signal-wave{animation:none!important;transform:translate(280px,96px) rotate(40deg);opacity:.85}
+}

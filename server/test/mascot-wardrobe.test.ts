@@ -6,7 +6,7 @@ import { MASCOT_SKINS, effectiveMascotSkin, findMascotSkin } from '../src/config
 import { wardrobeState } from '../src/services/mascot-wardrobe.service.js';
 const read=(path:string)=>readFileSync(new URL(path,import.meta.url),'utf8');
 test('only released skins are available; maestro is free and max inherits northern',()=>{
- assert.deepEqual(MASCOT_SKINS.map(s=>[s.variant,s.id,s.rank]),[['planner','classic',0],['planner','northern',2],['planner','maestro',0],['planner','zoomer',2],['planner','wizard',3],['economic','classic',0],['economic','banker',2]]);
+ assert.deepEqual(MASCOT_SKINS.map(s=>[s.variant,s.id,s.rank]),[['planner','classic',0],['planner','northern',2],['planner','maestro',0],['planner','zoomer',2],['planner','pirate',2],['planner','wizard',3],['planner','ninja',3],['planner','space',3],['economic','classic',0],['economic','banker',2]]);
  assert.equal(findMascotSkin('planner','aviator'),undefined);
  assert.equal(effectiveMascotSkin('planner','maestro',0),'maestro');
  assert.equal(effectiveMascotSkin('planner','northern',1),'classic');
@@ -28,7 +28,7 @@ test('expired or downgraded user sees classic but stored preference remains unto
  assert.deepEqual(active.selected,{planner:'wizard',economic:'classic'});
  const expired=wardrobeState(base,new Date('2026-12-01'));
  assert.deepEqual(expired.selected,{planner:'classic',economic:'classic'});
- assert.equal(expired.catalog.length,7);
+ assert.equal(expired.catalog.length,10);
  assert.equal(base.plannerMascotSkin,'wizard');
  assert.equal(wardrobeState({...base,subscriptionPlan:'pro'},new Date('2026-11-24')).selected.economic,'classic');
 });
@@ -96,4 +96,23 @@ test('shirt outfits share the classic viewport and retain normal hover after the
  assert.match(art,/className="shirt-collar"/);
  assert.ok(rig.indexOf('shirt-search-holding-arm')<rig.indexOf('<rect x="80" y="151"'));
  assert.match(rig,/shirtSkin \? null : north \? <><path d="M102 216/);
+});
+
+test('adventure skins respect tiers, keep the covered eye hidden outside hover and reuse the original body',()=>{
+ for(const [id,rank] of [['pirate',2],['ninja',3],['space',3]] as const){
+  assert.equal(effectiveMascotSkin('planner',id,rank-1),'classic');
+  assert.equal(effectiveMascotSkin('planner',id,rank),id);
+  assert.equal(findMascotSkin('economic',id),undefined);
+ }
+ const rig=read('../../client/src/components/PlanikMascot.tsx');
+ const css=read('../../client/src/components/PlanikMascot.css');
+ const art=read('../../client/src/components/AdventureMascotSkins.tsx');
+ assert.match(rig,/viewBox="35 32 345 275"/);
+ assert.match(rig,/pirate && mode==='thinking' \? <PirateMap/);
+ assert.match(rig,/space && mode==='thinking' \? <SpaceSignal/);
+ assert.match(css,/\[data-skin=pirate\] \.planik-eye-right\{visibility:hidden\}/);
+ assert.match(css,/ninja-vanish 3\.9s linear both/);
+ assert.match(css,/space-weightless 7s ease-in-out infinite/);
+ assert.match(art,/className="pirate-eye-patch"/);
+ assert.match(art,/className="ninja-ready"/);
 });
