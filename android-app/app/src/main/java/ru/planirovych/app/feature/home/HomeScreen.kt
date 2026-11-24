@@ -582,7 +582,7 @@ private fun Workspace(
                 IconButton(settings, Modifier.clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) { Icon(Icons.Default.Settings,"Настройки", tint=Color(0xFFF59E0B)) }
             }
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                Metric(Icons.Default.AutoAwesome, "ИИ-кредиты", "${state.user?.aiCredits ?: 0}", Color(0xFF22B8CF), Modifier.weight(1f))
+                Metric(Icons.Default.AutoAwesome, if(state.user?.subscriptionLimit != null) "Лимит ИИ" else "ИИ-кредиты", state.user?.aiBalanceLabel ?: "0", Color(0xFF22B8CF), Modifier.weight(1f))
                 Metric(Icons.Default.Star, "Эффективность", "${state.user?.efficiencyScore?.toInt() ?: 0}/100", Color(0xFF8B5CF6), Modifier.weight(1f))
             }
         }
@@ -901,7 +901,7 @@ private fun AndroidAccountSheet(
                     color=MaterialTheme.colorScheme.onSurfaceVariant)
             }
             HorizontalDivider()
-            Text("ИИ-кредиты: "+(user?.aiCredits ?: 0),
+            Text((if(user?.subscriptionLimit != null) "Лимит ИИ: " else "ИИ-кредиты: ")+(user?.aiBalanceLabel ?: "0"),
                 fontWeight=FontWeight.Medium)
             OutlinedButton(onClick=onSettings,modifier=Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.Settings,null)
