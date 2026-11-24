@@ -3,7 +3,7 @@ package ru.planirovych.app.data.model
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class SubscriptionLimit(val usedPercent: Int, val expiresAt: String, val planName: String)
+data class SubscriptionLimit(val usedPercent: Int, val expiresAt: String, val planName: String, val allowanceMilli: Int? = null)
 
 @Serializable
 data class CurrentUser(

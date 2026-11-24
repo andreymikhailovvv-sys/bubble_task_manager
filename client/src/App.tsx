@@ -1,3 +1,4 @@
+import { SubscriptionLimitPanel, PLAN_FEATURES } from './components/SubscriptionLimitPanel';
 import { AiStreamingMessageBody } from './components/AiStreamingMessageBody';
 import EmailVerificationDialog from './components/EmailVerificationDialog';
 import { subscribeAccountEmailVerified } from './lib/account-email-status-events';
@@ -130,9 +131,9 @@ const AI_CHAT_MODEL_SELECT_OPTIONS = AI_CHAT_MODEL_OPTIONS.map(({ value, label }
 
 
 const SUBSCRIPTION_PLANS: Array<{ key: keyof SubscriptionLinks; name: string; price: string; badge: string; features: string[] }> = [
-  { key: 'start', name: 'Старт', price: '299 ₽/мес', badge: 'Для регулярного старта', features: ['Базовый месячный лимит ИИ (1×)', 'Память диалогов: до 100 сообщений'] },
-  { key: 'pro', name: 'Про', price: '599 ₽/мес', badge: 'Оптимальный выбор', features: ['В 2 раза больше лимит ИИ, чем в Старт', 'Безлимитная память диалогов', 'ИИ-чекап', 'Оптимизация расписания'] },
-  { key: 'max', name: 'Максимум', price: '1290 ₽/мес', badge: 'Все возможности', features: ['В 4,33 раза больше лимит ИИ, чем в Старт', 'Безлимитная память диалогов', 'Доступ ко всем ИИ-функциям', 'Доступ к самым продвинутым моделям'] }
+  { key: 'start', name: 'Старт', price: '299 ₽/мес', badge: 'Для регулярного старта', features: [...PLAN_FEATURES.start] },
+  { key: 'pro', name: 'Про', price: '599 ₽/мес', badge: 'Оптимальный выбор', features: [...PLAN_FEATURES.pro] },
+  { key: 'max', name: 'Максимум', price: '1290 ₽/мес', badge: 'Все возможности', features: [...PLAN_FEATURES.max] }
 ];
 const MAX_AI_ATTACHMENTS = 3;
 const MAX_AI_ATTACHMENT_SIZE = 8 * 1024 * 1024;
@@ -7210,7 +7211,7 @@ export default function App() {
               <div className="subscription-eyebrow inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium"><Sparkles size={14} /> Больше возможностей ИИ</div>
               <h2 className="mt-3 max-w-2xl text-2xl font-bold text-primary">{creditModalView === 'statistics' ? (activeSubscription ? 'Месячный лимит ИИ' : 'Статистика расхода AI-кредитов') : 'Выберите месячный лимит ИИ'}</h2>
               <p className="mt-2 max-w-2xl text-sm text-muted">{creditModalView === 'statistics' ? (activeSubscription ? 'Лимит действует до окончания оплаченного периода.' : 'Посмотрите расход за день, неделю и 30 дней, а также разбивку по моделям и ИИ-инструментам.') : 'Лимит расходуется в зависимости от модели, длины запроса и инструментов ИИ. Это не фиксированное число запросов.'}</p>
-              {activeSubscription && (<div className="mt-2 text-sm text-muted"><strong>{currentUser?.subscriptionLimit?.planName ?? 'Подписка'}</strong><div>Осталось: {currentUser?.subscriptionLimit ? `${100 - currentUser.subscriptionLimit.usedPercent}%` : '…'}</div>{currentUser?.subscriptionLimit ? <><progress className="w-full accent-emerald-500" max={100} value={100 - currentUser.subscriptionLimit.usedPercent}/><div>Использовано {currentUser.subscriptionLimit.usedPercent}% · до {new Date(currentUser.subscriptionLimit.expiresAt).toLocaleDateString('ru-RU')}</div></> : null}</div>)}
+              {activeSubscription && (<SubscriptionLimitPanel limit={currentUser?.subscriptionLimit}/>)}
                <div className="credit-view-toggle mt-4 inline-flex rounded-xl border p-1">
                 <button type="button" className={`credit-view-toggle-button rounded-lg px-3 py-1.5 text-sm font-semibold ${creditModalView === 'purchase' ? 'is-active is-purchase' : ''}`} onClick={() => setCreditModalView('purchase')}>Пополнить</button>
                 <button type="button" className={`credit-view-toggle-button rounded-lg px-3 py-1.5 text-sm font-semibold ${creditModalView === 'statistics' ? 'is-active is-statistics' : ''}`} onClick={() => { setCreditModalView('statistics'); void loadCreditUsageStatistics(); }}>Статистика</button>
@@ -7218,7 +7219,7 @@ export default function App() {
             </div>
             {creditModalView === 'statistics' ? (
               <div key="credits-statistics" className="credit-switch-content max-h-[68vh] overflow-y-auto p-4 sm:p-5">
-                {activeSubscription ? <p className="text-sm text-muted">Расход включённого лимита показан выше.</p> : <CreditUsageStats statistics={creditUsageStatistics} loading={creditUsageStatisticsLoading} error={creditUsageStatisticsError} />}
+                {<CreditUsageStats statistics={creditUsageStatistics} loading={creditUsageStatisticsLoading} error={creditUsageStatisticsError}  allowanceMilli={currentUser?.subscriptionLimit?.allowanceMilli} />}
               </div>
             ) : (
               <div key="credits-purchase" className="credit-switch-content">
@@ -7239,10 +7240,10 @@ export default function App() {
                         <li key={feature} className="subscription-feature-pill flex items-start gap-2 rounded-xl px-3 py-1.5"><Check size={15} className="mt-0.5 shrink-0 text-emerald-300" /> <span>{feature}</span></li>
                       ))}
                     </ul>
-                    <button type="button" disabled={!subscriptionPurchaseAvailable || activeSubscription || subscriptionPurchase.creatingPlanKey !== null}
+                    <button type="button" disabled={!subscriptionPurchaseAvailable || (activeSubscription && currentUser?.subscriptionPlan === plan.key) || subscriptionPurchase.creatingPlanKey !== null}
                       onClick={() => void subscriptionPurchase.start(plan.key)}
                       className="mt-3 rounded-xl bg-gradient-to-r from-fuchsia-600 to-rose-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50">
-                      {isCreating ? 'Создаём платёж…' : activeSubscription ? 'Подписка активна' : subscriptionPurchaseAvailable ? 'Купить на месяц' : 'Оплата недоступна'}
+                      {isCreating ? 'Создаём платёж…' : activeSubscription ? (currentUser?.subscriptionPlan === plan.key ? 'Подписка активна' : 'Сменить тариф') : subscriptionPurchaseAvailable ? 'Купить на месяц' : 'Оплата недоступна'}
                     </button>
                   </article>
                 );

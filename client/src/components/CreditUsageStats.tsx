@@ -5,6 +5,7 @@ type CreditUsageStatsProps = {
   loading?: boolean;
   error?: string | null;
   compact?: boolean;
+  allowanceMilli?: number;
 };
 
 export const formatCreditsMilli = (creditsMilli: number) => {
@@ -14,11 +15,12 @@ export const formatCreditsMilli = (creditsMilli: number) => {
   return credits.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 };
 
-export function CreditUsageStats({ statistics, loading = false, error = null, compact = false }: CreditUsageStatsProps) {
+export function CreditUsageStats({ statistics, loading = false, error = null, compact = false, allowanceMilli }: CreditUsageStatsProps) {
   if (loading) return <div className="rounded-xl border border-slate-500/20 p-4 text-sm text-muted">Загружаем статистику…</div>;
   if (error) return <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300">{error}</div>;
   if (!statistics) return <div className="rounded-xl border border-slate-500/20 p-4 text-sm text-muted">Статистика пока недоступна.</div>;
 
+  const format = (value: number) => allowanceMilli && allowanceMilli > 0 ? `${(value * 100 / allowanceMilli).toLocaleString('ru-RU', { maximumFractionDigits: 2 })}%` : formatCreditsMilli(value);
   const summary = [
     ['Сегодня', statistics.todayCreditsMilli],
     ['7 дней', statistics.weekCreditsMilli],
@@ -35,12 +37,12 @@ export function CreditUsageStats({ statistics, loading = false, error = null, co
             <div key={item.key} className="space-y-1">
               <div className="flex items-center justify-between gap-3 text-sm">
                 <span className="min-w-0 truncate text-secondary">{item.label}</span>
-                <span className="shrink-0 font-semibold tabular-nums text-primary">{formatCreditsMilli(item.creditsMilli)}</span>
+                <span className="shrink-0 font-semibold tabular-nums text-primary">{format(item.creditsMilli)}</span>
               </div>
               {item.children?.map(child => (
                 <div key={child.key} className="ml-3 flex items-center justify-between gap-3 border-l border-slate-500/20 pl-3 text-xs">
                   <span className="min-w-0 truncate text-muted">{child.label}</span>
-                  <span className="shrink-0 tabular-nums text-secondary">{formatCreditsMilli(child.creditsMilli)}</span>
+                  <span className="shrink-0 tabular-nums text-secondary">{format(child.creditsMilli)}</span>
                 </div>
               ))}
             </div>
@@ -56,7 +58,7 @@ export function CreditUsageStats({ statistics, loading = false, error = null, co
         {summary.map(([label, value]) => (
           <div key={label} className="rounded-xl border border-slate-500/20 bg-slate-500/5 p-3">
             <div className="text-[11px] text-muted">{label}</div>
-            <div className="mt-1 text-lg font-bold tabular-nums text-primary">{formatCreditsMilli(value)}</div>
+            <div className="mt-1 text-lg font-bold tabular-nums text-primary">{format(value)}</div>
           </div>
         ))}
       </div>
@@ -65,7 +67,7 @@ export function CreditUsageStats({ statistics, loading = false, error = null, co
         {renderBreakdown('По ИИ-инструментам · 30 дней', statistics.byFeature)}
       </div>
       <p className="text-[10px] leading-relaxed text-muted">
-        Учитываются подтверждённые списания, записанные после включения этой статистики.
+        {allowanceMilli ? 'Расход за выбранные интервалы в процентах от текущего общего лимита. Включены все подтверждённые списания, в том числе из дополнительного баланса.' : 'Учитываются подтверждённые списания, записанные после включения этой статистики.'}
       </p>
     </div>
   );

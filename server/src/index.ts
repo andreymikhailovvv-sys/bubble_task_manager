@@ -1,3 +1,5 @@
+import { SubscriptionAccessError } from './services/subscription-access.service.js';
+import { startSubscriptionWelcomeWorker } from './services/subscription-welcome-worker.service.js';
 import 'dotenv/config';
 import './lib/timestamp-console.js';
 import cookieParser from 'cookie-parser';
@@ -88,6 +90,7 @@ app.use(authSession);
 app.use('/api', apiRouter);
 
 app.use('/api', (error: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  if (error instanceof SubscriptionAccessError) { res.status(403).json({error:error.message,code:error.code,requiredPlan:error.requiredPlan}); return; }
   const errorCode = typeof error === 'object' && error !== null && 'code' in error
     ? String(error.code)
     : '';
@@ -182,6 +185,7 @@ setInterval(() => {
 // A lightweight safety tick watches the queue, never scans all overdue tasks.
 startTaskMonitoringWorker();
 startAndroidPushWorker();
+startSubscriptionWelcomeWorker();
 
 const CHECKUP_POLL_INTERVAL_MS = Number(process.env.AI_CHECKUP_POLL_INTERVAL_MS ?? 60_000);
 const formatLocalCheckupSlot = (date: Date, timeZone: string) => {

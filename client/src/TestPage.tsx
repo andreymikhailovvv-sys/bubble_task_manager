@@ -1,3 +1,4 @@
+import { SubscriptionLimitPanel, PLAN_FEATURES } from './components/SubscriptionLimitPanel';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   ArrowRight, BookOpenText, CalendarClock, Check, CheckCircle2, ChevronRight, CircleHelp,
@@ -694,7 +695,7 @@ export default function TestPage() {
         <button type="button" onClick={()=>setCreditsOpen(false)} aria-label="Закрыть"><X size={19}/></button></header>
       <div className="tp-dialog-content tp-credits-body">
         <div className="tp-credit-balance"><Coins size={24}/><div><span>Доступно</span>
-          {activeSubscription ? <div className="mt-2 text-sm text-muted"><strong>{user?.subscriptionLimit?.planName ?? 'Подписка'}</strong><div>Осталось: {user?.subscriptionLimit ? `${100 - user.subscriptionLimit.usedPercent}%` : '…'}</div>{user?.subscriptionLimit ? <><progress className="w-full accent-emerald-500" max={100} value={100 - user.subscriptionLimit.usedPercent}/><div>Использовано {user.subscriptionLimit.usedPercent}% · до {new Date(user.subscriptionLimit.expiresAt).toLocaleDateString('ru-RU')}</div></> : null}</div> : <strong>{formatCredits((user?.aiCreditsMilli??(user?.aiCredits??0)*1000)/1000)} кредитов</strong>}
+          {activeSubscription ? <SubscriptionLimitPanel limit={user?.subscriptionLimit}/> : <strong>{formatCredits((user?.aiCreditsMilli??(user?.aiCredits??0)*1000)/1000)} кредитов</strong>}
         </div></div>
         <div className="tp-tabs tp-credit-tabs" role="tablist" aria-label="Разделы баланса">
           <button type="button" role="tab" aria-selected={creditTab==='packs'} className={creditTab==='packs'?'active':''}
@@ -705,7 +706,7 @@ export default function TestPage() {
             onClick={()=>setCreditTab('stats')}>Статистика</button>
         </div>
         {creditsBusy?<p className="tp-empty"><Loader2 className="tp-spin" size={17}/> Загрузка…</p>:
-          creditTab==='stats'?(activeSubscription ? <p className="tp-credit-note">Расход включённого лимита показан выше.</p> : <CreditUsageStats statistics={creditStats} error={creditError}/>):
+          creditTab==='stats'?(<CreditUsageStats statistics={creditStats} error={creditError} allowanceMilli={user?.subscriptionLimit?.allowanceMilli} />):
           creditTab==='packs'?<>
             <p className="tp-credit-note">Разовое пополнение баланса без изменения подписки.</p>
             {creditPacksError&&<p className="tp-alert" role="alert">{creditPacksError}</p>}
@@ -738,9 +739,9 @@ export default function TestPage() {
             ['start','Старт','Базовый лимит · 299 ₽/мес'],['pro','Про','Лимит ×2 · 599 ₽/мес'],['max','Максимум','Лимит ×4,33 · 1290 ₽/мес']
           ] as const).map(([key,name,desc])=><div key={key} className="tp-plan">
             <div><strong>{name}</strong><small>{desc}</small></div>
-            <button type="button" disabled={!subscriptionPurchaseAvailable||activeSubscription||subscriptionPurchase.creatingPlanKey!==null}
+            <ul className="mt-2 space-y-1 text-xs text-secondary">{PLAN_FEATURES[key as keyof typeof PLAN_FEATURES].map(feature => <li key={feature}>✓ {feature}</li>)}</ul><button type="button" disabled={!subscriptionPurchaseAvailable||(activeSubscription&&user?.subscriptionPlan===key)||subscriptionPurchase.creatingPlanKey!==null}
               onClick={()=>void subscriptionPurchase.start(key)}>
-              {subscriptionPurchase.creatingPlanKey===key?'Создаём платёж…':activeSubscription?'Подписка активна':subscriptionPurchaseAvailable?'Купить':'Оплата недоступна'}
+              {subscriptionPurchase.creatingPlanKey===key?'Создаём платёж…':activeSubscription?(user?.subscriptionPlan===key?'Подписка активна':'Сменить тариф'):subscriptionPurchaseAvailable?'Купить':'Оплата недоступна'}
             </button>
           </div>)}
           <p className="tp-credit-note">Тариф действует один календарный месяц, без автопродления.</p>

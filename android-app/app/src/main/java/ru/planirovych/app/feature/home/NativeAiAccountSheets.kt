@@ -239,6 +239,7 @@ internal fun NativeAiCreditsDialog(
             })
     }
     val limit = user?.subscriptionLimit
+    fun usageLabel(value: Long): String = limit?.allowanceMilli?.takeIf{it>0}?.let{ java.lang.String.format(java.util.Locale("ru"),"%.2f%%",value*100.0/it) } ?: milliLabel(value)
     AccountFrame(dark,if(limit != null) "Лимит ИИ" else "AI-кредиты",Icons.Default.Paid,onClose){
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
             .background(if(dark)Color(0xFF29234F)else Color(0xFFF2EBFF))
@@ -247,7 +248,7 @@ internal fun NativeAiCreditsDialog(
             Text(if(limit != null) (user?.aiBalanceLabel ?: "0%")+" осталось" else (user?.aiCredits?:0).toString()+" кредитов",
                 color=fore(dark),fontSize=23.sp,fontWeight=FontWeight.Bold)
             if(limit != null){
-                LinearProgressIndicator(progress = { (100-limit.usedPercent.coerceIn(0,100))/100f },modifier=Modifier.fillMaxWidth().padding(vertical=8.dp))
+                Box(Modifier.fillMaxWidth().padding(vertical=8.dp).height(7.dp).clip(CircleShape).background(violet.copy(alpha=.13f))){ Box(Modifier.fillMaxWidth((100-limit.usedPercent.coerceIn(0,100))/100f).fillMaxHeight().clip(CircleShape).background(violet)) }
                 Text("Использовано ${limit.usedPercent}% · до ${limit.expiresAt.take(10)}",color=muted(dark),fontSize=12.sp)
             }
         }
@@ -314,8 +315,6 @@ internal fun NativeAiCreditsDialog(
                     notice?.let{Text(it,color=fore(dark),fontSize=12.sp)}
                 }
             }
-        }else if(limit != null){
-            Text("Расход включённого лимита показан выше.",color=muted(dark))
         }else{
             when{
                 loadingStats->Text("Загружаем статистику…",color=muted(dark))
@@ -335,7 +334,7 @@ internal fun NativeAiCreditsDialog(
                                     .background(if(dark)Color(0xFF26354A)
                                         else Color(0xFFF5F8FD)).padding(12.dp)){
                                     Text(title,color=muted(dark),fontSize=11.sp)
-                                    Text(milliLabel(value),color=fore(dark),
+                                    Text(usageLabel(value),color=fore(dark),
                                         fontWeight=FontWeight.Bold,fontSize=18.sp)
                                 }
                             }
@@ -357,7 +356,7 @@ internal fun NativeAiCreditsDialog(
                                         Row(Modifier.fillMaxWidth()){
                                             Text(item.label,Modifier.weight(1f),
                                                 color=fore(dark),fontSize=12.sp)
-                                            Text(milliLabel(item.creditsMilli),
+                                            Text(usageLabel(item.creditsMilli),
                                                 color=fore(dark),fontSize=12.sp,
                                                 fontWeight=FontWeight.Bold)
                                         }
@@ -365,7 +364,7 @@ internal fun NativeAiCreditsDialog(
                                             Row(Modifier.fillMaxWidth().padding(start=14.dp)){
                                                 Text(child.label,Modifier.weight(1f),
                                                     color=muted(dark),fontSize=11.sp)
-                                                Text(milliLabel(child.creditsMilli),
+                                                Text(usageLabel(child.creditsMilli),
                                                     color=muted(dark),fontSize=11.sp)
                                             }
                                         }

@@ -1,3 +1,4 @@
+import { getSubscriptionRank, premiumToolFeature, featureAccessError } from './subscription-access.service.js';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../db/prisma.js';
 import { telegramUserChatCapability } from './telegram-user-client-chat-access.service.js';
@@ -330,6 +331,7 @@ export async function runAiChatToolLoop(options: ToolLoopOptions) {
 }
 
 export async function askAiChatWithTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string; assistantReplyContext?: AssistantReplyToolContext; autoApplyTaskActions?: boolean; dynamicBilling?: boolean; fileTools?: FileToolContext; requiredLookupTool?: 'search_workspace' | 'search_notes' | 'create_note'; onProgress?: (status: import('./ai-chat-progress.js').AiChatProgressStatus) => void; onTextDelta?: (delta: string) => void; onTextReset?: () => void }) {
+  const rank = await getSubscriptionRank(input.userId);
   const requestId = input.actionRequestId; const startedAt = Date.now();
   // Freeze relative dates when the user's request starts, not on later approval.
   const dateResolutionNow = new Date(startedAt);
@@ -467,6 +469,9 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         return payload;
       },
       executeTool: async (name, value, round) => {
+        const feature = premiumToolFeature(name);
+        const unavailable = feature ? featureAccessError(rank, feature) : null;
+        if (unavailable) return {ok:false,code:unavailable.code,message:unavailable.message};
         toolOperations.push(name);
         
         const progressByTool: Record<string, import('./ai-chat-progress.js').AiChatProgressStatus> = {
@@ -578,6 +583,8 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         if (name === 'prepare_assistant_reply') {
           const context = input.assistantReplyContext;
           if (!context) return { ok: false, code: 'NOT_AN_ASSISTANT_CHAT' };
+          const assistantError = featureAccessError(rank, context.kind === 'telegram' ? 'telegram' : 'mail');
+          if (assistantError) return {ok:false,code:assistantError.code,message:assistantError.message};
           const replyArgs = value as Record<string, unknown>;
           const text = typeof replyArgs.text === 'string' ? replyArgs.text.trim() : '';
           const sourceMessageId = typeof replyArgs.sourceMessageId === 'string' ? replyArgs.sourceMessageId.trim() : '';

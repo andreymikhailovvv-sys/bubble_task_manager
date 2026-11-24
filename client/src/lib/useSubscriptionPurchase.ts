@@ -82,6 +82,7 @@ export function useSubscriptionPurchase(options: {
   }, [check]);
 
   const start = useCallback(async (planKey: SubscriptionPlanKey) => {
+    if (creating.current) return;
     const attempt = { planKey, clientRequestId: crypto.randomUUID() };
     attemptRef.current = attempt;
     setIsReceiptEmailRequired(false);

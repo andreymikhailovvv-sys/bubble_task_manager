@@ -300,7 +300,7 @@ export type CurrentUser = {
   aiCreditsPeriod?: string;
   subscriptionPlan?: 'free' | SubscriptionPlanKey;
   subscriptionExpiresAt?: string | null;
-  subscriptionLimit?: { usedPercent: number; expiresAt: string; planName: string } | null;
+  subscriptionLimit?: { usedPercent: number; expiresAt: string; planName: string; allowanceMilli?: number } | null;
   aiEfficiencyCreditsSpent?: number;
   aiEfficiencyCreditsPeriod?: string;
   timeZone?: string | null;

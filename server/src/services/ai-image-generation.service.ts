@@ -1,3 +1,4 @@
+import { requireSubscriptionFeature } from './subscription-access.service.js';
 import { prisma } from '../db/prisma.js';
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { providerNanoUsdToMilliCredits, recordAiCreditCharge } from './ai-usage-metering.service.js';
@@ -106,6 +107,7 @@ export function buildImageApiRequest(
 export async function generateAiImage(input: {
   userId: string; taskId?: string; actionId: string; apiKey: string; args: unknown; sourceImageId?: string; uploadedSourceImage?: ValidatedImage; sourceImages?: ValidatedImage[];
 }): Promise<AiImageGenerationResult> {
+  await requireSubscriptionFeature(input.userId, 'image');
   const { prompt, size, sourceFileIds } = validateImageToolArguments(input.args);
   if (sourceFileIds.length && input.sourceImages?.length !== sourceFileIds.length) {
     throw new TypeError('Не удалось получить все выбранные изображения. Генерация отменена без списания.');

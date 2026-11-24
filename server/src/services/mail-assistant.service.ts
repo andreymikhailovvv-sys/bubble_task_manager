@@ -1,3 +1,4 @@
+import { requireSubscriptionFeature, SubscriptionAccessError, getSubscriptionRank, modelAccessError, featureAccessError } from './subscription-access.service.js';
 import { randomUUID } from 'node:crypto';
 import { Prisma, type EmailMailbox } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
@@ -102,11 +103,14 @@ export const mailAssistant = {
     return { available: mailKeyReady(), accounts: rows.map(publicAccount) };
   },
   async connect(userId: string, data: unknown) {
+    await requireSubscriptionFeature(userId,'mail').catch(error => { if(error instanceof SubscriptionAccessError) throw new MailAssistantError(403,error.message); throw error; });
     checkKey();
     if (!limiter.consume(userId).allowed) throw new MailAssistantError(429, 'Слишком много попыток подключения');
     const payload = data && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, unknown> : {};
     const credentials = validateMailCredentials(payload.provider, payload.email, payload.password);
     const config = settings(payload);
+    const modelError = modelAccessError(await getSubscriptionRank(userId),config.monitorModel);
+    if(modelError) throw new MailAssistantError(403,modelError.message);
     const existing = await prisma.emailMailbox.findUnique({ where: { userId_email: { userId, email: credentials.email } } });
     if (!existing && await prisma.emailMailbox.count({ where: { userId } }) >= 8) {
       throw new MailAssistantError(409, 'Можно подключить не более восьми ящиков');
@@ -149,6 +153,7 @@ export const mailAssistant = {
     await own(userId, id);
     const payload = data && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, unknown> : {};
     const config = settings(payload);
+    if(config.enabled){ const rank=await getSubscriptionRank(userId); const unavailable=featureAccessError(rank,'mail') ?? modelAccessError(rank,config.monitorModel); if(unavailable) throw new MailAssistantError(403,unavailable.message); }
     const account = await prisma.emailMailbox.update({ where: { id }, data: {
       ...config, revision: { increment: 1 }, nextCheckAt: config.enabled ? new Date() : null,
       leaseToken: null, leasedUntil: null, lastError: null,
@@ -162,6 +167,7 @@ export const mailAssistant = {
     return { ok: true };
   },
   async check(userId: string, id: string) {
+    await requireSubscriptionFeature(userId,'mail').catch(error => { if(error instanceof SubscriptionAccessError) throw new MailAssistantError(403,error.message); throw error; });
     const row = await own(userId, id);
     if (!row.enabled) throw new MailAssistantError(409, 'Мониторинг отключён');
     await prisma.emailMailbox.updateMany({ where: { id, userId, enabled: true },
@@ -251,6 +257,9 @@ function normalize(data: Record<string, unknown>) {
     shouldReply: value.shouldReply === true, replyText: typeof value.replyText === 'string' ? value.replyText.trim().slice(0,1500) : '' };
 }
 async function analyze(account: EmailMailbox, message: MailMessage, requestId: string) {
+  const rank = await getSubscriptionRank(account.userId);
+  const unavailable = featureAccessError(rank,'mail') ?? modelAccessError(rank,account.monitorModel);
+  if(unavailable) throw unavailable;
   const timeZone = (await prisma.user.findUnique({ where: { id: account.userId }, select: { timeZone: true } }))?.timeZone || 'Europe/Moscow';
   const request = payload(message, account, timeZone);
   const apiKey = process.env.OPENAI_API_KEY?.trim();

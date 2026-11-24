@@ -1,3 +1,4 @@
+import { enqueueSubscriptionWelcome } from './subscription-welcome.service.js';
 import { Prisma, type SubscriptionPurchase } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { getSubscriptionPlanByKey, subscriptionEndDate } from '../config/subscription-plans.js';
@@ -61,9 +62,9 @@ export async function reconcileSubscriptionPurchaseFromYooKassa(
 
     // Lock the wallet as AI debit/refund code does. Nothing is granted from webhook payloads.
     const users = await tx.$queryRaw<Array<{
-      id: string; subscriptionPlan: string; subscriptionExpiresAt: Date | null;
+      id: string; subscriptionPlan: string; subscriptionExpiresAt: Date | null; subscriptionAllowanceMilli: number; aiCreditsPeriod: string;
       aiIncludedCreditsMilli: number; aiBonusCreditsMilli: number; aiPurchasedCreditsMilli: number;
-    }>>(Prisma.sql`SELECT "id", "subscriptionPlan", "subscriptionExpiresAt",
+    }>>(Prisma.sql`SELECT "id", "subscriptionPlan", "subscriptionExpiresAt", "subscriptionAllowanceMilli", "aiCreditsPeriod",
       "aiIncludedCreditsMilli", "aiBonusCreditsMilli", "aiPurchasedCreditsMilli"
       FROM "User" WHERE "id" = ${current.userId} FOR UPDATE`);
     const user = users[0];
@@ -72,13 +73,17 @@ export async function reconcileSubscriptionPurchaseFromYooKassa(
     const active = Boolean(user.subscriptionExpiresAt && user.subscriptionExpiresAt.getTime() > now.getTime());
     const termStart = active ? user.subscriptionExpiresAt! : now;
     const included = (active ? user.aiIncludedCreditsMilli : 0) + current.creditsMilli;
+    const previousAllowance = user.subscriptionAllowanceMilli || (getSubscriptionPlanByKey(user.subscriptionPlan)?.creditsAmount ?? 0) * 1000;
+    const allowance = (active ? previousAllowance : 0) + current.creditsMilli;
     // Existing bonus/purchased buckets never expire with the subscription.
     await tx.user.update({ where: { id: user.id }, data: {
       subscriptionPlan: current.planKey, subscriptionExpiresAt: subscriptionEndDate(termStart),
-      aiCreditsPeriod: `subscription:${current.id}`,
+      aiCreditsPeriod: active ? user.aiCreditsPeriod : `subscription:${current.id}`,
+      subscriptionAllowanceMilli: allowance,
       aiIncludedCreditsMilli: included,
       aiCredits: Math.floor((included + user.aiBonusCreditsMilli + user.aiPurchasedCreditsMilli) / 1000)
     } });
+    await enqueueSubscriptionWelcome(tx, user.id, current.planKey, `purchase:${current.id}`);
     return tx.subscriptionPurchase.update({ where: { id: current.id }, data: {
       yookassaPaymentId: payment.id, status: 'succeeded', providerStatus: 'succeeded',
       providerCheckedAt: now, activatedAt: now

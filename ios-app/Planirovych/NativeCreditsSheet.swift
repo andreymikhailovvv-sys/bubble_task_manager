@@ -37,8 +37,13 @@ struct NativeCreditsSheet: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         if let limit = session.account?.subscriptionLimit {
-                            ProgressView(value: Double(limit.remainingPercent), total: 100).tint(accent)
-                                .padding(.horizontal, 24)
+                            GeometryReader { geometry in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(accent.opacity(0.13))
+                                    Capsule().fill(accent).frame(width: geometry.size.width * CGFloat(limit.remainingPercent) / 100)
+                                }
+                            }.frame(height: 7).padding(.horizontal, 24)
+                                .accessibilityLabel("Осталось \(limit.remainingPercent)% лимита")
                             Text("Использовано \(limit.usedPercent)% · до \(String(limit.expiresAt.prefix(10)))")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
@@ -48,7 +53,6 @@ struct NativeCreditsSheet: View {
                     .background(Color(uiColor: .secondarySystemGroupedBackground),
                                 in: RoundedRectangle(cornerRadius: 23))
 
-                    if session.account?.subscriptionLimit == nil {
                     Picker("Раздел", selection: $selectedTab) {
                         Text("Обзор").tag(0)
                         Text("Статистика").tag(1)
@@ -71,7 +75,6 @@ struct NativeCreditsSheet: View {
                         }
                     } else if isLoading {
                         ProgressView("Загружаем статистику…").padding()
-                    }
                     }
                     if let errorMessage {
                         Label(errorMessage, systemImage: "exclamationmark.triangle")
@@ -97,10 +100,17 @@ struct NativeCreditsSheet: View {
         .task { await load() }
     }
 
+    private func usageLabel(_ value: Int) -> String {
+        if let total = session.account?.subscriptionLimit?.allowanceMilli, total > 0 {
+            return (Double(value) * 100 / Double(total)).formatted(number) + "%"
+        }
+        return (Double(value) / 1000).formatted(number)
+    }
+
     private func metric(_ title: String, _ value: Int) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title).font(.caption).foregroundStyle(.secondary)
-            Text((Double(value) / 1000).formatted(number))
+            Text(usageLabel(value))
                 .font(.title2.bold())
                 .monospacedDigit()
         }
@@ -120,7 +130,7 @@ struct NativeCreditsSheet: View {
                     HStack {
                         Text(item.label).font(.subheadline).lineLimit(2)
                         Spacer(minLength: 8)
-                        Text((Double(item.creditsMilli) / 1000).formatted(number))
+                        Text(usageLabel(item.creditsMilli))
                             .font(.subheadline.monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
@@ -140,7 +150,6 @@ struct NativeCreditsSheet: View {
         do {
             let api = NativeAPI()
             await session.refreshAiBalance()
-            if session.account?.subscriptionLimit != nil { errorMessage = nil; return }
             async let wallet = api.creditBalance()
             async let usage = api.creditStatistics()
             balance = try await wallet

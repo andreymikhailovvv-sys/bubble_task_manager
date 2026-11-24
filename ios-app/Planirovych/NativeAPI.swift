@@ -5,6 +5,7 @@ import Security
 // native iOS milestone. Unknown fields from the existing API are ignored.
 struct SubscriptionLimit: Decodable, Equatable {
     let usedPercent: Int
+    let allowanceMilli: Int?
     let expiresAt: String
     let planName: String
     var remainingPercent: Int { 100 - min(100, max(0, usedPercent)) }
@@ -26,6 +27,15 @@ struct ServerAccount: Decodable, Equatable {
     }
 
     var isRegistered: Bool { isGuest == false }
+}
+
+struct SubscriptionNotice: Decodable, Identifiable {
+    let id: String
+    let eventKey: String
+    let content: String
+}
+private struct SubscriptionNoticeEnvelope: Decodable {
+    let notifications: [SubscriptionNotice]
 }
 
 private struct AccountEnvelope: Decodable {
@@ -428,6 +438,11 @@ final class NativeAPI {
         config.httpShouldSetCookies = true
         return URLSession(configuration: config)
     }()
+
+    func subscriptionNotices() async throws -> [SubscriptionNotice] {
+        let response: SubscriptionNoticeEnvelope = try await request("system-notifications")
+        return response.notifications.filter { $0.eventKey.hasPrefix("subscription-welcome:") || $0.eventKey.hasPrefix("subscription-limit:") }
+    }
 
     func restoreAccount() async throws -> ServerAccount? {
         guard vault.restore() else {

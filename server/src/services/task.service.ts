@@ -1,3 +1,4 @@
+import { requireSubscriptionFeature } from './subscription-access.service.js';
 import { Prisma, type Prisma as PrismaTypes } from '@prisma/client';
 import { createCollaborationInviteToken } from '../lib/collaboration-security.js';
 import { prisma } from '../db/prisma.js';
@@ -291,6 +292,7 @@ export const taskService = {
     });
   },
   create: async (userId: string, input: CreateTaskInput) => {
+    if (input.aiMonitoringEnabled === true) await requireSubscriptionFeature(userId, 'monitoring');
     const isEvent = input.taskType === 'EVENT';
     const isReminder = input.taskType === 'REMINDER';
     if (isReminder && (!input.dueDate || !Number.isFinite(new Date(input.dueDate).getTime()))) throw new TypeError('Для напоминания нужны дата и время.');
@@ -372,6 +374,7 @@ export const taskService = {
     return created;
   },
   update: async (id: string, userId: string, input: TaskInput, context: { source?: string; requestId?: string } = {}) => {
+    if (input.aiMonitoringEnabled === true) await requireSubscriptionFeature(userId, 'monitoring');
     if (input.recurrenceJson && typeof input.recurrenceJson === 'object' && 'slots' in input.recurrenceJson) {
       validateManualRecurrenceSchedule(input.recurrenceJson as unknown as RecurrenceSchedule);
     }

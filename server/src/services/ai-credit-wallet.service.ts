@@ -23,7 +23,7 @@ export type AiCreditReservation = {
   totalMilli: number;
 };
 
-type WalletRow = AiCreditBuckets & GuestIdentity & { id: string; aiCreditsPeriod: string; subscriptionPlan: string; subscriptionExpiresAt?: Date | null };
+type WalletRow = AiCreditBuckets & GuestIdentity & { id: string; aiCreditsPeriod: string; subscriptionPlan: string; subscriptionExpiresAt?: Date | null; subscriptionAllowanceMilli?: number };
 type WalletTransaction = Prisma.TransactionClient;
 type WalletDatabase = Pick<PrismaClient, '$transaction'>;
 
@@ -52,7 +52,7 @@ export function calculateDebitBreakdown(wallet: AiCreditBuckets, amountMilli: nu
 const selectWalletForUpdate = async (tx: WalletTransaction, userId: string): Promise<WalletRow | null> => {
   const rows = await tx.$queryRaw<WalletRow[]>(Prisma.sql`
     SELECT "id", "aiCreditsPeriod", "aiIncludedCreditsMilli", "aiBonusCreditsMilli", "aiPurchasedCreditsMilli",
-           "deviceId", "username", "passwordHash", "googleSub", "email", "telegramChatId", "subscriptionPlan", "subscriptionExpiresAt"
+           "deviceId", "username", "passwordHash", "googleSub", "email", "telegramChatId", "subscriptionPlan", "subscriptionExpiresAt", "subscriptionAllowanceMilli"
     FROM "User"
     WHERE "id" = ${userId}
     FOR UPDATE
@@ -86,7 +86,7 @@ const refreshLockedWallet = async (tx: WalletTransaction, row: WalletRow, period
       aiIncludedCreditsMilli: 0, aiCreditsPeriod: period };
     await updateWallet(tx, row.id, expired, period);
     await tx.user.update({ where: { id: row.id },
-      data: { subscriptionPlan: 'free', subscriptionExpiresAt: null } });
+      data: { subscriptionPlan: 'free', subscriptionExpiresAt: null, subscriptionAllowanceMilli: 0 } });
     return expired;
   }
   if (row.aiCreditsPeriod === period || (row.subscriptionPlan === 'free' && row.aiCreditsPeriod.startsWith(`free:${period}:`))) return row;
@@ -274,7 +274,7 @@ async function finalizeAiCreditReservation(
         where: { userId: reservation.userId, period: wallet.aiCreditsPeriod, status: 'RESERVED' },
         _sum: { includedMilli: true }
       });
-      const allowance = plan.creditsAmount * AI_CREDIT_MILLI_PER_CREDIT;
+      const allowance = wallet.subscriptionAllowanceMilli || plan.creditsAmount * AI_CREDIT_MILLI_PER_CREDIT;
       const used = Math.max(0, allowance - next.aiIncludedCreditsMilli - (pending._sum.includedMilli ?? 0));
       const percent = Math.min(100, Math.floor(used * 100 / allowance));
       const notifications = Array.from({ length: Math.floor(percent / 10) }, (_, i) => (i + 1) * 10)

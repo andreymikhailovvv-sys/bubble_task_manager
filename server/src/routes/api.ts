@@ -1,3 +1,4 @@
+import { requireSubscriptionFeature, SubscriptionAccessError, type PremiumFeature } from '../services/subscription-access.service.js';
 import { setAdminSubscription, AdminSubscriptionError } from '../services/admin-subscription.service.js';
 import { getSubscriptionPlanByKey as getLimitPlan } from '../config/subscription-plans.js';
 import { createLiveVoiceTicket } from '../services/ai-live-voice.service.js';
@@ -113,8 +114,16 @@ const mailOrigin = (req: Request, res: Response, next: NextFunction) => {
   }
   next();
 };
+const enforcePremium = (feature: PremiumFeature) => asyncHandler(async (req, res, next) => {
+  try { await requireSubscriptionFeature(req.user!.id, feature); next(); }
+  catch (error) {
+    if (error instanceof SubscriptionAccessError) { res.status(403).json({error:error.message,code:error.code,requiredPlan:error.requiredPlan}); return; }
+    throw error;
+  }
+});
 const mailFailure = (res: Response, error: unknown) => {
-  if (error instanceof MailAssistantError) res.status(error.statusCode).json({ error: error.message });
+  if (error instanceof SubscriptionAccessError) res.status(403).json({error:error.message,code:error.code,requiredPlan:error.requiredPlan});
+  else if (error instanceof MailAssistantError) res.status(error.statusCode).json({ error: error.message });
   else res.status(500).json({ error: 'Не удалось выполнить действие с почтой' });
 };
 
@@ -129,7 +138,7 @@ apiRouter.get('/mail-assistant/recent-recipients', requireAuth, async(req,res)=>
   }).filter((x):x is string=>Boolean(x)))].slice(0,40);
   res.json({addresses});
 });
-apiRouter.post('/mail-assistant/quick-rewrite',requireAuth,mailOrigin,async(req,res)=>{
+apiRouter.post('/mail-assistant/quick-rewrite',requireAuth, mailOrigin, enforcePremium('mail'),async(req,res)=>{
   res.set('Cache-Control','no-store, private');
   try {
     const data = await rewriteMailQuickText(req.user!.id,req.body?.text,req.body?.instruction);
@@ -144,7 +153,7 @@ apiRouter.get('/mail-assistant/drafts/:id', requireAuth, async (req,res)=>{
   if (!draft) { res.status(404).json({error:'Черновик не найден'}); return; }
   res.json({draft});
 });
-apiRouter.post('/mail-assistant/drafts/:id/send', requireAuth, mailOrigin, async (req,res)=>{
+apiRouter.post('/mail-assistant/drafts/:id/send', requireAuth, mailOrigin, enforcePremium('mail'), async (req,res)=>{
   res.set('Cache-Control','no-store, private');
   try {
     const result=await sendOwnerMailDraft(req.user!.id,req.params.id,req.body);
@@ -158,7 +167,7 @@ apiRouter.get('/mail-assistant/inbox', requireAuth, async (req, res) => {
   res.set('Cache-Control', 'no-store');
   try { res.json(await mailAssistantInboxFeed(req.user!.id)); } catch { res.status(500).json({ error: 'Не удалось загрузить почтовые сводки' }); }
 });
-apiRouter.post('/mail-assistant/inbox/:eventId/send-reply', requireAuth, mailOrigin, async (req, res) => {
+apiRouter.post('/mail-assistant/inbox/:eventId/send-reply', requireAuth, mailOrigin, enforcePremium('mail'), async (req, res) => {
   res.set('Cache-Control', 'no-store');
   try {
     if (typeof req.body?.text !== 'string') { res.status(400).json({ error: 'Укажите текст ответа' }); return; }
@@ -170,7 +179,7 @@ apiRouter.get('/mail-assistant/accounts', requireAuth, async (req, res) => {
   res.set('Cache-Control', 'no-store');
   try { res.json(await mailAssistant.list(req.user!.id)); } catch (error) { mailFailure(res, error); }
 });
-apiRouter.post('/mail-assistant/accounts', requireAuth, mailOrigin, async (req, res) => {
+apiRouter.post('/mail-assistant/accounts', requireAuth, mailOrigin, enforcePremium('mail'), async (req, res) => {
   res.set('Cache-Control', 'no-store');
   try { res.status(201).json(await mailAssistant.connect(req.user!.id, req.body)); } catch (error) { mailFailure(res, error); }
 });
@@ -182,7 +191,7 @@ apiRouter.delete('/mail-assistant/accounts/:id', requireAuth, mailOrigin, async 
   res.set('Cache-Control', 'no-store');
   try { res.json(await mailAssistant.disconnect(req.user!.id, req.params.id)); } catch (error) { mailFailure(res, error); }
 });
-apiRouter.post('/mail-assistant/accounts/:id/check', requireAuth, mailOrigin, async (req, res) => {
+apiRouter.post('/mail-assistant/accounts/:id/check', requireAuth, mailOrigin, enforcePremium('mail'), async (req, res) => {
   res.set('Cache-Control', 'no-store');
   try { res.json(await mailAssistant.check(req.user!.id, req.params.id)); } catch (error) { mailFailure(res, error); }
 });
@@ -287,6 +296,7 @@ const toAuthUser = (user: {
   aiCreditsPeriod?: string;
   subscriptionPlan?: string;
   subscriptionExpiresAt?: Date | null;
+  subscriptionAllowanceMilli?: number;
   aiIncludedCreditsMilli?: number;
   aiBonusCreditsMilli?: number;
   aiPurchasedCreditsMilli?: number;
@@ -314,9 +324,10 @@ const toAuthUser = (user: {
     + (user.aiPurchasedCreditsMilli ?? 0);
   const plan = getLimitPlan(user.subscriptionPlan ?? 'free');
   const active = plan && user.subscriptionExpiresAt && user.subscriptionExpiresAt.getTime() > Date.now() && !isGuestAccount(user);
+  const allowanceMilli = user.subscriptionAllowanceMilli || (plan?.creditsAmount ?? 0) * 1000;
   const subscriptionLimit = active && plan && user.subscriptionExpiresAt && user.aiIncludedCreditsMilli != null ? {
-    usedPercent: Math.max(0, Math.min(100, Math.floor((1 - user.aiIncludedCreditsMilli / (plan.creditsAmount * 1000)) * 100 + 1e-9))),
-    expiresAt: user.subscriptionExpiresAt.toISOString(), planName: plan.name,
+    usedPercent: Math.max(0, Math.min(100, Math.floor((1 - user.aiIncludedCreditsMilli / allowanceMilli) * 100 + 1e-9))),
+    expiresAt: user.subscriptionExpiresAt.toISOString(), planName: plan.name, allowanceMilli,
   } : null;
   return ({
   id: user.id,
@@ -1092,7 +1103,8 @@ apiRouter.post('/admin/users', async (req, res) => {
 
 
 const telegramAuthError = (res: Response, error: unknown) => {
-  if (error instanceof TelegramUserClientError) {
+  if (error instanceof SubscriptionAccessError) res.status(403).json({error:error.message,code:error.code,requiredPlan:error.requiredPlan});
+  else if (error instanceof TelegramUserClientError) {
     res.status(error.statusCode).json({ error: error.message });
   } else if (error instanceof TelegramUserProxyConfigurationError) {
     console.error('[TelegramUserClient] invalid MTProto proxy configuration');
@@ -1428,6 +1440,7 @@ apiRouter.patch('/user/settings', requireAuth, async (req, res) => {
       aiCreditsPeriod: true,
       subscriptionPlan: true,
       subscriptionExpiresAt: true,
+      subscriptionAllowanceMilli: true,
       aiIncludedCreditsMilli: true,
       aiBonusCreditsMilli: true,
       aiPurchasedCreditsMilli: true,
@@ -1879,12 +1892,12 @@ apiRouter.get('/telegram-user-client/assistant/inbox', requireAuth, async (req, 
   try { res.json(await telegramAiInboxFeed(req.user!.id)); }
   catch (error) { telegramAuthError(res, error); }
 });
-apiRouter.post('/telegram-user-client/assistant/inbox/:eventId/send-reply', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+apiRouter.post('/telegram-user-client/assistant/inbox/:eventId/send-reply', requireAuth, requireTelegramChatOrigin, enforcePremium('telegram'), async (req, res) => {
   setTelegramChatNoCache(res);
   try { res.json(await sendTelegramAiSuggestedReply(req.user!.id, req.params.eventId, req.body?.text)); }
   catch (error) { telegramAuthError(res, error); }
 });
-apiRouter.post('/telegram-user-client/assistant/inbox/:eventId/tasks/:index', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+apiRouter.post('/telegram-user-client/assistant/inbox/:eventId/tasks/:index', requireAuth, requireTelegramChatOrigin, enforcePremium('telegram'), async (req, res) => {
   setTelegramChatNoCache(res);
   try { res.json(await approveTelegramAiSuggestedTask(req.user!.id, req.params.eventId, Number(req.params.index))); }
   catch (error) { telegramAuthError(res, error); }
@@ -1905,7 +1918,7 @@ apiRouter.delete('/telegram-user-client/assistant/chats/:chatId', requireAuth, r
   catch (error) { telegramAuthError(res, error); }
 });
 
-apiRouter.post('/telegram-user-client/assistant/chats/:chatId/start', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+apiRouter.post('/telegram-user-client/assistant/chats/:chatId/start', requireAuth, requireTelegramChatOrigin, enforcePremium('telegram'), async (req, res) => {
   setTelegramChatNoCache(res);
   try { res.json(await telegramAiMonitorControl.start(req.user!.id, req.params.chatId)); }
   catch (error) { telegramAuthError(res, error); }
@@ -1915,7 +1928,7 @@ apiRouter.post('/telegram-user-client/assistant/chats/:chatId/stop', requireAuth
   try { res.json(await telegramAiMonitorControl.stop(req.user!.id, req.params.chatId)); }
   catch (error) { telegramAuthError(res, error); }
 });
-apiRouter.post('/telegram-user-client/assistant/chats/:chatId/summarize', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+apiRouter.post('/telegram-user-client/assistant/chats/:chatId/summarize', requireAuth, requireTelegramChatOrigin, enforcePremium('telegram'), async (req, res) => {
   setTelegramChatNoCache(res);
   try { res.status(202).json(await telegramAiMonitorControl.requestSummary(req.user!.id, req.params.chatId)); }
   catch (error) { telegramAuthError(res, error); }
@@ -1924,6 +1937,7 @@ apiRouter.post('/telegram-user-client/assistant/chats/:chatId/summarize', requir
 apiRouter.post('/telegram-user-client/chat/quick-send', requireAuth, requireTelegramChatOrigin, async (req, res) => {
   setTelegramChatNoCache(res);
   try {
+    if (req.body?.mode === 'REWRITE_AND_SEND') await requireSubscriptionFeature(req.user!.id,'telegram');
     const result = await telegramQuickShare.enqueue(req.user!.id, {
       recipientIds: req.body?.recipientIds, text: req.body?.text,
       instruction: req.body?.instruction, mode: req.body?.mode, requestId: req.body?.requestId
@@ -1936,7 +1950,7 @@ apiRouter.get('/telegram-user-client/chat/quick-send/:jobId', requireAuth, async
   try { res.json(await telegramQuickShare.status(req.user!.id, req.params.jobId)); }
   catch (error) { telegramAuthError(res, error); }
 });
-apiRouter.post('/telegram-user-client/chat/quick-rewrite', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+apiRouter.post('/telegram-user-client/chat/quick-rewrite', requireAuth, requireTelegramChatOrigin, enforcePremium('telegram'), async (req, res) => {
   setTelegramChatNoCache(res);
   try {
     res.json(await telegramQuickShare.rewritePreview(req.user!.id, req.body?.text, req.body?.instruction));
@@ -1965,7 +1979,7 @@ apiRouter.post('/telegram-user-client/chat/history', requireAuth, requireTelegra
   try { res.json(await telegramUserClientRead.history(req.user!.id, req.body?.dialogId)); }
   catch (error) { telegramAuthError(res, error); }
 });
-apiRouter.post('/telegram-user-client/chat/analyze', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+apiRouter.post('/telegram-user-client/chat/analyze', requireAuth, requireTelegramChatOrigin, enforcePremium('telegram'), async (req, res) => {
   setTelegramChatNoCache(res);
   try {
     res.json(await telegramUserClientDialogAssistant.analyze(req.user!.id, {
@@ -2296,6 +2310,7 @@ apiRouter.post('/ai/audio/live/ticket', requireAuth, taskProposalSameOrigin, asy
     res.set('Cache-Control', 'private, no-store').json(await createLiveVoiceTicket(req.user!.id, req.body?.context, req.body?.voice));
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Не удалось открыть голосовой диалог.';
+    if (error instanceof SubscriptionAccessError) { res.status(403).json({error:message,code:error.code,requiredPlan:error.requiredPlan}); return; }
     res.status(429).json({ error: message });
   }
 }));

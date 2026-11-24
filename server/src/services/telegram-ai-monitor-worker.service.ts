@@ -1,3 +1,4 @@
+import { requireSubscriptionFeature } from './subscription-access.service.js';
 import { normalizeSelectableAiChatModel } from '../lib/ai-chat-model.js';
 import { randomUUID } from 'node:crypto';
 import { Prisma, type TelegramAiChatPolicy, type TelegramAiMonitorCall } from '@prisma/client';
@@ -71,6 +72,7 @@ export function availableMonitorBudget(limitMilli: number | null, spentMilli: nu
 }
 
 async function permission(userId: string) {
+  await requireSubscriptionFeature(userId,'telegram');
   const access = await telegramUserChatCapability(userId);
   if (!access.connected || !access.readEnabled) {
     throw new TelegramUserClientError(403, 'Личный Telegram недоступен для мониторинга');
