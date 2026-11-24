@@ -17053,8 +17053,3 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
 .miniapp-unified-modal-backdrop.miniapp-light .miniapp-unified-sector-edit-row {
   border-color:#d8e2ef;
 }
-
-/* Subscription allowance follows the task completion progress treatment. */
-.subscription-limit-track { height: 8px; border-radius: 999px; overflow: hidden; background: rgba(148,163,184,.20); }
-.subscription-limit-track > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#14b8a6,#22d3ee); transition: width .35s ease; }
-body[data-theme='light'] .subscription-limit-track { background: #dbe5ef; }

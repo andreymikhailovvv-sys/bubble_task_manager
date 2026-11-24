@@ -15,7 +15,7 @@ export function initialTaskMonitoringModel(
     ? (savedModel ?? DEFAULT_TASK_AI_CHAT_MODEL)
     : DEFAULT_TASK_AI_CHAT_MODEL;
 }
-export const DEFAULT_WEB_PROJECT_CHAT_MODEL: AiChatModel = 'gpt-6.1-terra';
+export const DEFAULT_WEB_PROJECT_CHAT_MODEL: AiChatModel = 'gpt-6-luna';
 export const DEFAULT_MOBILE_PROJECT_CHAT_MODEL: AiChatModel = 'gpt-6-luna';
 
 /** Stored per conversation in the shared project JSON, not in a global UI state. */
