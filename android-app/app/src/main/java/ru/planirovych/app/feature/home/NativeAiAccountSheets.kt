@@ -238,13 +238,18 @@ internal fun NativeAiCreditsDialog(
                 notice=it
             })
     }
-    AccountFrame(dark,"AI-кредиты",Icons.Default.Paid,onClose){
+    val limit = user?.subscriptionLimit
+    AccountFrame(dark,if(limit != null) "Лимит ИИ" else "AI-кредиты",Icons.Default.Paid,onClose){
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
             .background(if(dark)Color(0xFF29234F)else Color(0xFFF2EBFF))
             .padding(14.dp)){
-            Text("Текущий баланс",color=muted(dark),fontSize=12.sp)
-            Text((user?.aiCredits?:0).toString()+" кредитов",
+            Text(if(limit != null) limit.planName+" · месячный лимит" else "Текущий баланс",color=muted(dark),fontSize=12.sp)
+            Text(if(limit != null) (user?.aiBalanceLabel ?: "0%")+" осталось" else (user?.aiCredits?:0).toString()+" кредитов",
                 color=fore(dark),fontSize=23.sp,fontWeight=FontWeight.Bold)
+            if(limit != null){
+                LinearProgressIndicator(progress = { (100-limit.usedPercent.coerceIn(0,100))/100f },modifier=Modifier.fillMaxWidth().padding(vertical=8.dp))
+                Text("Использовано ${limit.usedPercent}% · до ${limit.expiresAt.take(10)}",color=muted(dark),fontSize=12.sp)
+            }
         }
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
             .background(if(dark)Color(0xFF233149)else Color(0xFFF1F5F9))
@@ -309,6 +314,8 @@ internal fun NativeAiCreditsDialog(
                     notice?.let{Text(it,color=fore(dark),fontSize=12.sp)}
                 }
             }
+        }else if(limit != null){
+            Text("Расход включённого лимита показан выше.",color=muted(dark))
         }else{
             when{
                 loadingStats->Text("Загружаем статистику…",color=muted(dark))
