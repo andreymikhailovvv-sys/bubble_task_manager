@@ -3,6 +3,13 @@ import Security
 
 // These structures deliberately describe only the fields used by this first
 // native iOS milestone. Unknown fields from the existing API are ignored.
+struct SubscriptionLimit: Decodable, Equatable {
+    let usedPercent: Int
+    let expiresAt: String
+    let planName: String
+    var remainingPercent: Int { 100 - min(100, max(0, usedPercent)) }
+}
+
 struct ServerAccount: Decodable, Equatable {
     let id: String
     let name: String?
@@ -10,6 +17,8 @@ struct ServerAccount: Decodable, Equatable {
     let email: String?
     let isGuest: Bool?
     let aiCredits: Int?
+    let subscriptionLimit: SubscriptionLimit?
+    var aiBalanceLabel: String { subscriptionLimit.map { "\($0.remainingPercent)%" } ?? String(aiCredits ?? 0) }
 
     var displayName: String {
         [name, username, email].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
