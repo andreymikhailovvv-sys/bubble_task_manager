@@ -24,12 +24,15 @@ export async function createAiBillingSystemNotification(input: {
 }) {
   if (!input.creditsSpentMilli || input.creditsSpentMilli <= 0) return;
   try {
+    const user = await prisma.user.findUnique({ where: { id: input.userId }, select: { subscriptionExpiresAt: true } });
+    const subscribed = Boolean(user?.subscriptionExpiresAt && user.subscriptionExpiresAt.getTime() > Date.now());
+    const content = input.content(formatCreditsSpent(input.creditsSpentMilli));
     await prisma.systemNotification.create({
       data: {
         userId: input.userId,
         taskId: input.taskId ?? null,
         eventKey: input.eventKey,
-        content: input.content(formatCreditsSpent(input.creditsSpentMilli))
+        content: subscribed ? content.replace(/\s*Потрачено кредитов:.*$/u, '') : content
       }
     });
   } catch (error) {
