@@ -402,6 +402,7 @@ model User {
   subscriptionPlan String @default("free")
   subscriptionExpiresAt DateTime?
   subscriptionPurchases SubscriptionPurchase[]
+  adminSubscriptionChanges AdminSubscriptionChange[]
   aiCredits    Int      @default(0)
   aiCreditsPeriod String @default("")
   aiIncludedCreditsMilli Int @default(0)
@@ -1713,4 +1714,25 @@ model EconomicAiProposal {
 
   @@index([userId, createdAt])
   @@index([messageId])
+}
+
+
+// Administrative grants are not payments. Keep a separate, immutable audit record.
+model AdminSubscriptionChange {
+  id                  String   @id
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action              String
+  previousPlan        String
+  nextPlan            String
+  previousExpiresAt   DateTime?
+  nextExpiresAt       DateTime?
+  previousIncludedMilli Int
+  nextIncludedMilli   Int
+  previousPeriod      String
+  nextPeriod          String
+  reason              String
+  createdAt           DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
