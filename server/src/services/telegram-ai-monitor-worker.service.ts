@@ -1,4 +1,4 @@
-import { requireSubscriptionFeature } from './subscription-access.service.js';
+import { requireSubscriptionFeature, SubscriptionAccessError } from './subscription-access.service.js';
 import { normalizeSelectableAiChatModel } from '../lib/ai-chat-model.js';
 import { randomUUID } from 'node:crypto';
 import { Prisma, type TelegramAiChatPolicy, type TelegramAiMonitorCall } from '@prisma/client';
@@ -673,6 +673,12 @@ class TelegramAiMonitorWorker {
         if (!claimed) break;
         try { await processClaim(claimed); await release(claimed); }
         catch (error) {
+          if (error instanceof SubscriptionAccessError) {
+            // Keep the user's monitoring configuration, but avoid a tight retry loop.
+            await release(claimed, error.message, 60 * 60_000);
+            console.info('[TelegramMonitor] subscription paused', { policyId: claimed.policy.id, code: error.code });
+            continue;
+          }
           if (error instanceof TelegramUserClientError && error.statusCode === 409 &&
               error.message === 'Предыдущий запрос Telegram ещё выполняется') {
             // An interactive Telegram read has priority. Retry without showing
