@@ -1,3 +1,4 @@
+import { getSubscriptionPlanByKey as getLimitPlan } from '../config/subscription-plans.js';
 import { createLiveVoiceTicket } from '../services/ai-live-voice.service.js';
 import { mergeChatProjectSnapshots, canonicalizeTelegramAssistantProjects, canonicalizeMailAssistantProjects } from '../lib/ai-chat-project-sync.js';
 import { aiAssistantService } from '../services/ai-assistant.service.js';
@@ -310,6 +311,12 @@ const toAuthUser = (user: {
   const aiCreditsMilli = isGuestAccount(user) ? 0 : (user.aiIncludedCreditsMilli ?? creditsToMilli(user.aiCredits ?? 100))
     + (user.aiBonusCreditsMilli ?? 0)
     + (user.aiPurchasedCreditsMilli ?? 0);
+  const plan = getLimitPlan(user.subscriptionPlan ?? 'free');
+  const active = plan && user.subscriptionExpiresAt && user.subscriptionExpiresAt.getTime() > Date.now() && !isGuestAccount(user);
+  const subscriptionLimit = active && plan && user.subscriptionExpiresAt && user.aiIncludedCreditsMilli != null ? {
+    usedPercent: Math.max(0, Math.min(100, Math.floor((1 - user.aiIncludedCreditsMilli / (plan.creditsAmount * 1000)) * 100 + 1e-9))),
+    expiresAt: user.subscriptionExpiresAt.toISOString(), planName: plan.name,
+  } : null;
   return ({
   id: user.id,
   email: user.email,
@@ -326,6 +333,7 @@ const toAuthUser = (user: {
   aiCreditsPeriod: user.aiCreditsPeriod ?? '',
   subscriptionPlan: user.subscriptionPlan ?? 'free',
   subscriptionExpiresAt: user.subscriptionExpiresAt ?? null,
+  subscriptionLimit,
   aiEfficiencyCreditsSpent: user.aiEfficiencyCreditsSpent ?? 0,
   aiEfficiencyCreditsPeriod: user.aiEfficiencyCreditsPeriod ?? '',
   timeZone: user.timeZone ?? DEFAULT_TIMEZONE,
