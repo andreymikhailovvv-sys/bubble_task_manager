@@ -97,6 +97,12 @@ try {
   await page.goto(baseUrl+'/?enter=1',{waitUntil:'domcontentloaded'});
   const primary=page.locator('[data-bubble-task-id="smoke-primary-task"]').first();
   await primary.waitFor({state:'visible',timeout:30000});
+  // Fresh Chromium profiles have not accepted cookies yet. Complete the
+  // actual consent interaction before testing the launcher underneath it.
+  const cookieNotice=page.getByRole('complementary',{name:'Уведомление об использовании cookies'});
+  await cookieNotice.getByRole('button',{name:'Принять',exact:true}).click({timeout:12000});
+  await cookieNotice.waitFor({state:'hidden'});
+  assert.equal(await page.evaluate(()=>localStorage.getItem('planirovych_cookie_consent')),'v1');
   const launcher=page.locator('.planik-launcher-button').first();
   await launcher.locator('.planik-body-surface').hover({timeout:12000});
   const trigger=page.locator('.mascot-wardrobe-anchor').filter({has:launcher}).getByRole('button',{name:'Аксессуары и скины'});
