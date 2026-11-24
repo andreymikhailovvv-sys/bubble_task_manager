@@ -527,3 +527,28 @@ body:has(.planik-notes-companion, .planik-task-editor-companion)
  .pirate-lift-arm{animation:none!important;opacity:1;transform:none}
  .space-signal-wave{animation:none!important;transform:translate(280px,96px) rotate(40deg);opacity:.85}
 }
+
+/* The ears sit behind the original body. Both mascots reuse their own
+   theme/variant gradient stops, and keep the original viewport and rig. */
+.cat-ear-left,.cat-ear-right{transform-box:view-box}
+.cat-ear-left{transform-origin:156px 103px}
+.cat-ear-right{transform-origin:274px 103px}
+.planik-mascot[data-skin="cat"][data-mode="thinking"] .cat-ear-left{animation:cat-ear-left-think 2.8s ease-in-out infinite}
+.planik-mascot[data-skin="cat"][data-mode="thinking"] .cat-ear-right{animation:cat-ear-right-think 3.5s ease-in-out -.9s infinite}
+@keyframes cat-ear-left-think{
+ 0%,100%{transform:rotate(0deg) skewX(0deg) scaleY(1)}
+ 17%{transform:rotate(-9deg) skewX(-3deg) scaleY(.91)}
+ 32%{transform:rotate(5deg) skewX(3deg) scaleY(1.02)}
+ 48%,70%{transform:rotate(0deg) scaleY(1)}
+ 82%{transform:rotate(-5deg) scaleY(.94)}
+}
+@keyframes cat-ear-right-think{
+ 0%,100%{transform:rotate(0deg) scaleY(1)}
+ 19%{transform:rotate(6deg) skewX(3deg) scaleY(.91)}
+ 34%{transform:rotate(-4deg) skewX(-2deg) scaleY(1.01)}
+ 53%,72%{transform:rotate(0deg)}
+ 85%{transform:rotate(9deg) scaleY(.94)}
+}
+@media(prefers-reduced-motion:reduce){
+ .planik-mascot[data-skin="cat"][data-mode="thinking"] :is(.cat-ear-left,.cat-ear-right){animation:none!important}
+}

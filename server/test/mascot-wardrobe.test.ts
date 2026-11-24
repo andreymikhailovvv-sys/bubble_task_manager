@@ -6,7 +6,7 @@ import { MASCOT_SKINS, effectiveMascotSkin, findMascotSkin } from '../src/config
 import { wardrobeState } from '../src/services/mascot-wardrobe.service.js';
 const read=(path:string)=>readFileSync(new URL(path,import.meta.url),'utf8');
 test('only released skins are available; maestro is free and max inherits northern',()=>{
- assert.deepEqual(MASCOT_SKINS.map(s=>[s.variant,s.id,s.rank]),[['planner','classic',0],['planner','northern',2],['planner','maestro',0],['planner','zoomer',2],['planner','pirate',2],['planner','wizard',3],['planner','ninja',3],['planner','space',3],['economic','classic',0],['economic','banker',2]]);
+ assert.deepEqual(MASCOT_SKINS.map(s=>[s.variant,s.id,s.rank]),[['planner','classic',0],['planner','cat',0],['planner','northern',2],['planner','maestro',0],['planner','zoomer',2],['planner','pirate',2],['planner','wizard',3],['planner','ninja',3],['planner','space',3],['economic','classic',0],['economic','cat',0],['economic','banker',2]]);
  assert.equal(findMascotSkin('planner','aviator'),undefined);
  assert.equal(effectiveMascotSkin('planner','maestro',0),'maestro');
  assert.equal(effectiveMascotSkin('planner','northern',1),'classic');
@@ -28,7 +28,7 @@ test('expired or downgraded user sees classic but stored preference remains unto
  assert.deepEqual(active.selected,{planner:'wizard',economic:'classic'});
  const expired=wardrobeState(base,new Date('2026-12-01'));
  assert.deepEqual(expired.selected,{planner:'classic',economic:'classic'});
- assert.equal(expired.catalog.length,10);
+ assert.equal(expired.catalog.length,12);
  assert.equal(base.plannerMascotSkin,'wizard');
  assert.equal(wardrobeState({...base,subscriptionPlan:'pro'},new Date('2026-11-24')).selected.economic,'classic');
 });
@@ -115,4 +115,27 @@ test('adventure skins respect tiers, keep the covered eye hidden outside hover a
  assert.match(css,/space-weightless 7s ease-in-out infinite/);
  assert.match(art,/className="pirate-eye-patch"/);
  assert.match(art,/className="ninja-ready"/);
+});
+
+test('both cat outfits are free even after expiration and preserve independent selections',()=>{
+ for(const variant of ['planner','economic'] as const){
+  assert.equal(findMascotSkin(variant,'cat')?.rank,0);
+  for(const rank of [0,1,2,3])assert.equal(effectiveMascotSkin(variant,'cat',rank),'cat');
+ }
+ const base={id:'u',subscriptionPlan:'pro',subscriptionExpiresAt:new Date('2026-11-01'),plannerMascotSkin:'cat',economicMascotSkin:'cat'};
+ assert.deepEqual(wardrobeState(base,new Date('2026-11-24')).selected,{planner:'cat',economic:'cat'});
+ assert.deepEqual(wardrobeState({...base,economicMascotSkin:'classic'},new Date('2026-11-24')).selected,{planner:'cat',economic:'classic'});
+ const rig=read('../../client/src/components/PlanikMascot.tsx');
+ const art=read('../../client/src/components/CatMascotEars.tsx');
+ const css=read('../../client/src/components/PlanikMascot.css');
+ const modal=read('../../client/src/components/MascotWardrobe.tsx');
+ assert.ok(rig.includes('<CatMascotEars suffix={gradientSuffix} variant={variant}/>'));
+ assert.ok(rig.indexOf('<CatMascotEars')<rig.indexOf('className="planik-body-surface"'));
+ assert.match(rig,/viewBox="35 32 345 275"/);
+ assert.match(art,/className="cat-ear-left"/);
+ assert.match(art,/className="cat-ear-right"/);
+ assert.match(art,/translate\(430 0\) scale\(-1 1\)/);
+ assert.match(css,/\[data-skin="cat"\]\[data-mode="thinking"\] \.cat-ear-left\{animation:cat-ear-left-think 2\.8s/);
+ assert.match(css,/\[data-skin="cat"\]\[data-mode="thinking"\] \.cat-ear-right\{animation:cat-ear-right-think 3\.5s ease-in-out -\.9s/);
+ assert.match(modal,/selected==='cat'\?\['idle','thinking'\]/);
 });

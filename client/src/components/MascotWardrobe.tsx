@@ -148,7 +148,7 @@ export function MascotWardrobeDialog({wardrobe,variant,theme}:{wardrobe:MascotWa
   },[catalog.length,updateListFade]);
   const skin=catalog.find(item=>item.id===selected);
   const allowed=Boolean(skin&&skin.rank<=wardrobe.rank);
-  const specialModes: Exclude<PlanikMode,'showcase'>[] = selected==='banker'?['idle','typing','hover']:['wizard','pirate','space'].includes(selected)?['idle','hover','thinking']:['northern','zoomer','ninja'].includes(selected)?['idle','hover']:[];
+  const specialModes: Exclude<PlanikMode,'showcase'>[] = selected==='cat'?['idle','thinking']:selected==='banker'?['idle','typing','hover']:['wizard','pirate','space'].includes(selected)?['idle','hover','thinking']:['northern','zoomer','ninja'].includes(selected)?['idle','hover']:[];
   const isEquipped=selected===wardrobe.selected(variant);
   const equip=async()=>{
     if(!allowed||isEquipped||saving)return;

@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import './PlanikMascot.css';
+import { CatMascotEars } from './CatMascotEars';
 import { MascotSkinArtwork, isScarfSkin } from './MascotSkinArtwork';
 import { RefinedSkin, Mitten, NorthernHover, WizardHover, WizardCards } from './RefinedMascotSkins';
 import { ShirtOutfit, ShirtArm, ZoomerPhone, BankerMoney } from './ShirtMascotSkins';
@@ -196,6 +197,7 @@ export const PlanikMascot = memo(function PlanikMascot({
         </defs>
 
         <g className="planik-character-rig">
+        {skinId === 'cat' && <CatMascotEars suffix={gradientSuffix} variant={variant}/> }
         {refined && <RefinedSkin skinId={skinId} suffix={gradientSuffix} layer="rear"/>}
         {!refined && !zoomer && <><path d="M215 77V58" stroke="#8c8ed3" strokeWidth="7" strokeLinecap="round" />
         <circle className="planik-antenna" cx="215" cy="52" r="9" fill="#88e0ed" /></>}
@@ -205,7 +207,7 @@ export const PlanikMascot = memo(function PlanikMascot({
         <g ref={leftEye} className="planik-eye-left"><ellipse className="planik-eye" cx="190" cy="162" rx="10" ry="15" fill="#f1f3ff" />{squint&&<path className="ninja-squint" d="M179 153Q190 158 201 162Q200 174 190 174Q179 174 179 153Z" fill="#f3f4ff"/>}</g>
         <g ref={rightEye} className="planik-eye-right"><ellipse className="planik-eye" cx="240" cy="162" rx="10" ry="15" fill="#f1f3ff" />{squint&&<path className="ninja-squint" d="M229 162Q240 158 251 153Q251 174 240 174Q230 174 229 162Z" fill="#f3f4ff"/>}</g>
 
-        {refined ? <RefinedSkin skinId={skinId} suffix={gradientSuffix} layer="front"/> : shirtSkin ? <ShirtOutfit skin={shirtSkin} suffix={gradientSuffix}/> : adventure ? <AdventureOutfit skin={adventure} suffix={gradientSuffix}/> : <MascotSkinArtwork skinId={skinId} suffix={gradientSuffix} />}
+        {refined ? <RefinedSkin skinId={skinId} suffix={gradientSuffix} layer="front"/> : shirtSkin ? <ShirtOutfit skin={shirtSkin} suffix={gradientSuffix}/> : adventure ? <AdventureOutfit skin={adventure} suffix={gradientSuffix}/> : skinId === 'cat' ? null : <MascotSkinArtwork skinId={skinId} suffix={gradientSuffix} />}
         {north && mode === 'idle' && <g pointerEvents="none"><path d="M129 194Q124 218 153 232M301 194Q306 218 277 232" fill="none" stroke="#418d89" strokeWidth="19" strokeLinecap="round"/><Mitten x={153} y={232} dx={29} dy={14} suffix={gradientSuffix}/><Mitten x={277} y={232} dx={-29} dy={14} right suffix={gradientSuffix}/></g>}
         {zoomer && (mode==='idle'||mode==='hover') && <ZoomerPhone key={mode} suffix={gradientSuffix} hide={mode==='hover'}/>}
         {banker && mode==='idle' && <BankerMoney suffix={gradientSuffix}/>}
