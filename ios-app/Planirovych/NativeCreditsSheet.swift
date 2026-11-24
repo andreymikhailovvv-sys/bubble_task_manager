@@ -27,21 +27,28 @@ struct NativeCreditsSheet: View {
                         Image(systemName: "circle.hexagongrid.fill")
                             .font(.system(size: 31))
                             .foregroundStyle(accent)
-                        Text("Баланс ИИ-кредитов")
+                        Text(session.account?.subscriptionLimit?.planName ?? "Баланс ИИ-кредитов")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                        Text(currentCredits.formatted(number))
+                        Text(session.account?.subscriptionLimit.map { "\($0.remainingPercent)%" } ?? currentCredits.formatted(number))
                             .font(.system(size: 41, weight: .bold, design: .rounded))
                             .monospacedDigit()
-                        Text("Доступно кредитов")
+                        Text(session.account?.subscriptionLimit == nil ? "Доступно кредитов" : "Осталось месячного лимита")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        if let limit = session.account?.subscriptionLimit {
+                            ProgressView(value: Double(limit.remainingPercent), total: 100).tint(accent)
+                                .padding(.horizontal, 24)
+                            Text("Использовано \(limit.usedPercent)% · до \(String(limit.expiresAt.prefix(10)))")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 23)
                     .background(Color(uiColor: .secondarySystemGroupedBackground),
                                 in: RoundedRectangle(cornerRadius: 23))
 
+                    if session.account?.subscriptionLimit == nil {
                     Picker("Раздел", selection: $selectedTab) {
                         Text("Обзор").tag(0)
                         Text("Статистика").tag(1)
@@ -65,6 +72,7 @@ struct NativeCreditsSheet: View {
                     } else if isLoading {
                         ProgressView("Загружаем статистику…").padding()
                     }
+                    }
                     if let errorMessage {
                         Label(errorMessage, systemImage: "exclamationmark.triangle")
                             .font(.footnote).foregroundStyle(.orange)
@@ -73,7 +81,7 @@ struct NativeCreditsSheet: View {
                 .padding(18)
             }
             .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("ИИ-кредиты")
+            .navigationTitle(session.account?.subscriptionLimit == nil ? "ИИ-кредиты" : "Лимит ИИ")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -131,6 +139,8 @@ struct NativeCreditsSheet: View {
         defer { isLoading = false }
         do {
             let api = NativeAPI()
+            await session.refreshAiBalance()
+            if session.account?.subscriptionLimit != nil { errorMessage = nil; return }
             async let wallet = api.creditBalance()
             async let usage = api.creditStatistics()
             balance = try await wallet
