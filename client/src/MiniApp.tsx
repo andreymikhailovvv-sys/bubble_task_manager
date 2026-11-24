@@ -1286,7 +1286,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       generalAiChatNearBottomRef.current = true;
       setIsSettingsOpen(false);
       setIsAiChatOpen(true);
-      void api.getMe().then(({ user }) => setAiCredits(user.aiCredits ?? 0)).catch(() => undefined);
+      void api.getMe().then(({ user }) => { setCurrentUser(user); setAiCredits(user.aiCredits ?? 0); }).catch(() => undefined);
     } catch (error) {
       setManualCheckupError(formatAiRequestError(error));
     } finally {
@@ -3590,7 +3590,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
   const refreshAiCredits = () => {
     void api.getMe()
-      .then(({ user }) => setAiCredits(user.aiCredits ?? 0))
+      .then(({ user }) => { setCurrentUser(user); setAiCredits(user.aiCredits ?? 0); })
       .catch(() => undefined);
   };
 
@@ -4494,6 +4494,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       {showTelegramBrand ? <div className="miniapp-telegram-service-title" aria-label="Планировыч AI">✦ Планировыч AI</div> : null}
       {reportPromptTask ? (
         <TaskCompletionReportDialog
+          hideCreditCost={activeSubscription}
           onDownload={startAiGeneratedDocumentDownload}
           taskId={reportPromptTask.id}
           taskTitle={reportPromptTask.title}
@@ -4708,17 +4709,17 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               <div className="miniapp-workspace-utilities-panel relative inline-flex shrink-0 items-center gap-1"
                 role={undefined}
                 aria-label="Управление сервисом">
-              <button type="button" onClick={() => { if (currentUser?.isGuest && isWebRuntime) { setIsCreditPurchaseOpen(false); openAuthModal('register'); } else { setCreditPopoverView('purchase'); setIsCreditPurchaseOpen((open) => !open); } }} className="miniapp-credit-badge inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold" title={currentUser?.isGuest ? 'Зарегистрируйтесь, чтобы получить 100 ИИ-кредитов' : 'Купить AI-кредиты'} aria-label={`AI-кредиты: ${aiCredits}`} aria-expanded={isCreditPurchaseOpen}>
+              <button type="button" onClick={() => { if (currentUser?.isGuest && isWebRuntime) { setIsCreditPurchaseOpen(false); openAuthModal('register'); } else { setCreditPopoverView('purchase'); setIsCreditPurchaseOpen((open) => !open); } }} className="miniapp-credit-badge inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold" title={currentUser?.isGuest ? 'Зарегистрируйтесь, чтобы получить 100 ИИ-кредитов' : 'Купить AI-кредиты'} aria-label={activeSubscription ? `Лимит ИИ: ${currentUser?.subscriptionLimit ? `${100 - currentUser.subscriptionLimit.usedPercent}%` : '…'}` : `AI-кредиты: ${aiCredits}`} aria-expanded={isCreditPurchaseOpen}>
                 <Coins size={15} />
-                {displayMode === 'timeline' ? <span className="miniapp-utility-menu-label">Кредиты</span> : null}
-                <span className={displayMode === 'timeline' ? 'miniapp-utility-menu-value' : undefined}>{aiCredits}</span>
+                {displayMode === 'timeline' ? <span className="miniapp-utility-menu-label">{activeSubscription ? "Лимит" : "Кредиты"}</span> : null}
+                <span className={displayMode === 'timeline' ? 'miniapp-utility-menu-value' : undefined}>{activeSubscription ? (currentUser?.subscriptionLimit ? `${100 - currentUser.subscriptionLimit.usedPercent}%` : '…') : aiCredits}</span>
               </button>
               {isCreditPurchaseOpen ? <div onScroll={(event) => event.stopPropagation()} onTouchMove={(event) => event.stopPropagation()} className="miniapp-credit-popover absolute right-0 top-full z-[60] mt-2 max-h-[75vh] w-[min(21rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border p-4 shadow-2xl">
                 <div className="miniapp-credit-popover-hero -m-4 mb-3 rounded-t-2xl p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2.5">
                       <span className="miniapp-credit-popover-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"><Coins size={17} /></span>
-                      <div><h2 className="font-semibold text-primary">AI-кредиты</h2><p className="mt-0.5 text-xs text-muted">Баланс: <strong className="text-primary">{aiCredits}</strong></p></div>
+                      <div><h2 className="font-semibold text-primary">{activeSubscription ? 'Лимит ИИ' : 'AI-кредиты'}</h2>{activeSubscription ? <div className="mt-2 text-sm text-muted"><strong>{currentUser?.subscriptionLimit?.planName ?? 'Подписка'}</strong><div>Осталось: {currentUser?.subscriptionLimit ? `${100 - currentUser.subscriptionLimit.usedPercent}%` : '…'}</div>{currentUser?.subscriptionLimit ? <><progress className="w-full accent-emerald-500" max={100} value={100 - currentUser.subscriptionLimit.usedPercent}/><div>Использовано {currentUser.subscriptionLimit.usedPercent}% · до {new Date(currentUser.subscriptionLimit.expiresAt).toLocaleDateString('ru-RU')}</div></> : null}</div> : <p className="mt-0.5 text-xs text-muted">Баланс: <strong className="text-primary">{aiCredits}</strong></p>}</div>
                     </div>
                     <button type="button" className="miniapp-credit-popover-close rounded-full p-1.5 text-muted" onClick={() => setIsCreditPurchaseOpen(false)} aria-label="Закрыть"><X size={16} /></button>
                   </div>
@@ -4728,7 +4729,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <button type="button" className={`credit-view-toggle-button flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold ${creditPopoverView === 'statistics' ? 'is-active is-statistics' : ''}`} onClick={() => { setCreditPopoverView('statistics'); void loadCreditUsageStatistics(); }}>Статистика</button>
                 </div>
                 {creditPopoverView === 'statistics' ? (
-                  <div key="credits-statistics" className="credit-switch-content mt-3"><CreditUsageStats statistics={creditUsageStatistics} loading={creditUsageStatisticsLoading} error={creditUsageStatisticsError} compact /></div>
+                  <div key="credits-statistics" className="credit-switch-content mt-3">{activeSubscription ? <p className="text-xs text-muted">Расход включённого лимита показан выше.</p> : <CreditUsageStats statistics={creditUsageStatistics} loading={creditUsageStatisticsLoading} error={creditUsageStatisticsError} compact />}</div>
                 ) : (
                   <div key="credits-purchase" className="credit-switch-content">
                     <div className="credit-view-toggle mt-3 flex gap-1 rounded-xl border p-1">
@@ -4747,7 +4748,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       {creditPurchase.message ? <p className="miniapp-credit-message mt-3 rounded-xl border p-2.5 text-xs" role="status">{creditPurchase.message}</p> : null}
                     </> : <>
                       <div className="mt-3 space-y-2">{subscriptionPlans.map(plan => <div key={plan.key} className="miniapp-credit-pack-card flex items-center justify-between gap-2 rounded-xl border p-2.5">
-                        <div><div className="text-xs font-bold text-primary">{plan.name}: {plan.creditsAmount.toLocaleString('ru-RU')} AI-кредитов</div><div className="mt-0.5 text-[11px] text-muted">{plan.price.toLocaleString('ru-RU')} ₽ за месяц</div></div>
+                        <div><div className="text-xs font-bold text-primary">{plan.name}: {plan.key === 'start' ? 'базовый лимит' : plan.key === 'pro' ? 'лимит ×2' : 'лимит ×4,33'}</div><div className="mt-0.5 text-[11px] text-muted">{plan.price.toLocaleString('ru-RU')} ₽ за месяц</div></div>
                         <button type="button" disabled={!subscriptionPurchaseAvailable || activeSubscription || subscriptionPurchase.creatingPlanKey !== null} onClick={() => void subscriptionPurchase.start(plan.key)} className="miniapp-credit-buy-button rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{subscriptionPurchase.creatingPlanKey === plan.key ? 'Создаём…' : activeSubscription ? 'Активна' : 'Купить'}</button>
                       </div>)}</div>
                       <p className="mt-2 text-[11px] text-muted">Подписка на один календарный месяц, без автопродления.</p>
@@ -5777,10 +5778,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} /> : null}
                   {message.role === 'assistant' && message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={message.telegramSuggestedReply} /> : null}
                   {message.role === 'assistant' && message.mailSuggestedReply ? <MailAiReplySuggestionCard reply={message.mailSuggestedReply} /> : null}
-                  {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.mailSendDraft ? <MailInlineSendCard draft={message.mailSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={continueTelegramReadTask} /> : null}
-                  {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(message.id)} /> : null}
+                  {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.mailSendDraft ? <MailInlineSendCard draft={message.mailSendDraft} hideCreditCost={activeSubscription} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={continueTelegramReadTask} /> : null}
+                  {!activeSubscription && message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{!activeSubscription && message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(message.id)} /> : null}
                   </div>
-                  <div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={(target) => { setReplyToTask(target); if (openedTask) setAiRecipientByTaskId(prev => ({ ...prev, [openedTask.id]: 'ai' })); }} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={openedTask?.sphereId ?? null} /></div>
+                  <div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={(target) => { setReplyToTask(target); if (openedTask) setAiRecipientByTaskId(prev => ({ ...prev, [openedTask.id]: 'ai' })); }} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={openedTask?.sphereId ?? null} hideCreditCost={activeSubscription} /></div>
                 </div>
                 ))}
                 <TaskMonitoringTriggerChips taskId={openedTask.id} />
@@ -5979,10 +5980,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} /> : null}
                   {message.role === 'assistant' && message.economicProposals?.length ? <AiEconomicProposalCards proposals={message.economicProposals} /> : null}
                   {message.role === 'assistant' && message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={message.telegramSuggestedReply} /> : null}{message.role === 'assistant' && message.mailSuggestedReply ? <MailAiReplySuggestionCard reply={message.mailSuggestedReply} /> : null}
-                  {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.mailSendDraft ? <MailInlineSendCard draft={message.mailSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={continueTelegramReadAiChat} /> : null}
-                  {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(message.id)} /> : null}
+                  {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.mailSendDraft ? <MailInlineSendCard draft={message.mailSendDraft} hideCreditCost={activeSubscription} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={continueTelegramReadAiChat} /> : null}
+                  {!activeSubscription && message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{!activeSubscription && message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(message.id)} /> : null}
                   </div>
-                  <div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={setReplyToGeneral} /><TelegramMessageQuickShare text={message.content} compact /></div>
+                  <div className="ai-message-forward-actions">{message.role === 'assistant' ? <AiReadAloudAction text={message.content} messageKey={String(message.id)} /> : null}<AiReplyAction message={message} onReply={setReplyToGeneral} /><TelegramMessageQuickShare text={message.content} compact hideCreditCost={activeSubscription} /></div>
                 </div>
               ))}
               {aiChatLoading && aiChatStreamingText ? <div className="ai-message-forward-group w-fit max-w-[88%] mr-auto"><div className="miniapp-ai-chat-message miniapp-ai-chat-message-general miniapp-ai-chat-message-assistant w-full rounded-3xl rounded-bl-lg px-4 py-3"><div className="mb-1 text-[10px] font-semibold uppercase">ИИ</div><div className="text-sm leading-relaxed"><AiStreamingMessageBody content={aiChatStreamingText} /></div></div></div> : null}

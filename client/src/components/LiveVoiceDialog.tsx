@@ -66,6 +66,12 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveTool
   onLiveActionReveal?: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>('connecting');
+  const [showCreditCost, setShowCreditCost] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void api.getMe().then(({ user }) => { if (alive) setShowCreditCost(!user.subscriptionLimit); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, []);
   useEffect(() => {
     if (window.location.pathname !== '/android-planik') return;
     // The Android host only removes its loading veil after the actual
@@ -694,9 +700,9 @@ export function LiveVoiceDialog({ onClose, audioContext, liveContext, onLiveTool
           </div>
           <div className="planik-live-meta">
             <span><Radio size={13}/> {minute}:{second}</span>
-            <span title={creditsSpentMilli === null
+            {showCreditCost ? <span title={creditsSpentMilli === null
               ? 'Предварительная оценка и зарезервированные кредиты не показываются. Итог после закрытия сеанса.'
-              : 'Фактическая сумма проведённого списания.'}>{cost}</span>
+              : 'Фактическая сумма проведённого списания.'}>{cost}</span> : null}
           </div>
         </footer>
       </div>

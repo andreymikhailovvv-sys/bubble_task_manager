@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { getSubscriptionPlanByKey } from '../config/subscription-plans.js';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { isGuestAccount, type GuestIdentity } from '../lib/guest-account.js';
@@ -121,8 +122,8 @@ export async function reserveAiCreditsMilli(userId: string, amountMilli: number,
     const row = await selectWalletForUpdate(tx, userId);
     if (!row) throw new Error('User not found');
     if (isGuestAccount(row)) throw new Error('Недостаточно AI кредитов');
-    const period = currentAiCreditsPeriod();
-    const wallet = await refreshLockedWallet(tx, row, period);
+    const wallet = await refreshLockedWallet(tx, row, currentAiCreditsPeriod());
+    const period = wallet.aiCreditsPeriod;
     const debit = calculateDebitBreakdown(wallet, amountMilli);
     if (!debit) throw new Error('Недостаточно AI кредитов');
     const next = {
@@ -155,8 +156,8 @@ export async function reserveAiCreditsMilliWithTransaction<T>(
     const row = await selectWalletForUpdate(tx, userId);
     if (!row) throw new Error('User not found');
     if (isGuestAccount(row)) throw new Error('Недостаточно AI кредитов');
-    const period = currentAiCreditsPeriod();
-    const wallet = await refreshLockedWallet(tx, row, period);
+    const wallet = await refreshLockedWallet(tx, row, currentAiCreditsPeriod());
+    const period = wallet.aiCreditsPeriod;
     const debit = calculateDebitBreakdown(wallet, amountMilli);
     if (!debit) throw new Error('Недостаточно AI кредитов');
     const id = crypto.randomUUID();
@@ -180,8 +181,8 @@ export async function reserveAiCreditsMilliUpTo(userId: string, minimumMilli: nu
     const row = await selectWalletForUpdate(tx, userId);
     if (!row) throw new Error('User not found');
     if (isGuestAccount(row)) throw new Error('Недостаточно AI кредитов');
-    const period = currentAiCreditsPeriod();
-    const wallet = await refreshLockedWallet(tx, row, period);
+    const wallet = await refreshLockedWallet(tx, row, currentAiCreditsPeriod());
+    const period = wallet.aiCreditsPeriod;
     const balance = getTotalAiCreditsMilli(wallet);
     if (balance < minimumMilli) throw new Error('Недостаточно AI кредитов');
     const amountMilli = Math.min(balance, desiredMilli);
@@ -261,6 +262,31 @@ async function finalizeAiCreditReservation(
       where: { id: saved.id },
       data: { status, chargedMilli, refundedMilli, expiredIncludedMilli, settledAt: new Date() }
     });
+
+    // Count only finalized usage, excluding reservations still in flight.
+    // The user lock serializes threshold checks and the unique event key
+    // prevents replays from generating duplicate system notifications.
+    const plan = getSubscriptionPlanByKey(wallet.subscriptionPlan);
+    if (status === 'SETTLED' && spent.includedMilli > 0 &&
+        saved.period === wallet.aiCreditsPeriod && plan &&
+        wallet.subscriptionExpiresAt && wallet.subscriptionExpiresAt.getTime() > Date.now()) {
+      const pending = await tx.aiCreditReservationRecord.aggregate({
+        where: { userId: reservation.userId, period: wallet.aiCreditsPeriod, status: 'RESERVED' },
+        _sum: { includedMilli: true }
+      });
+      const allowance = plan.creditsAmount * AI_CREDIT_MILLI_PER_CREDIT;
+      const used = Math.max(0, allowance - next.aiIncludedCreditsMilli - (pending._sum.includedMilli ?? 0));
+      const percent = Math.min(100, Math.floor(used * 100 / allowance));
+      const notifications = Array.from({ length: Math.floor(percent / 10) }, (_, i) => (i + 1) * 10)
+        .map(threshold => ({
+          userId: reservation.userId,
+          eventKey: `subscription-limit:${reservation.userId}:${wallet.subscriptionExpiresAt!.toISOString()}:${threshold}`,
+          content: threshold === 100
+            ? 'Месячный лимит ИИ по подписке исчерпан. При наличии дополнительного баланса вы можете продолжить работу.'
+            : `Использовано ${threshold}% месячного лимита ИИ по подписке.`
+        }));
+      if (notifications.length) await tx.systemNotification.createMany({ data: notifications, skipDuplicates: true });
+    }
 
     console.info('[AI wallet] reservation finalized', {
       userId: reservation.userId, reservationId: saved.id, status,

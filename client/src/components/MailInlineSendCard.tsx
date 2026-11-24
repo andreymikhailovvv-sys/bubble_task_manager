@@ -3,7 +3,7 @@ import {Check,Loader2,Mail,Send,Search,Sparkles} from 'lucide-react';
 import {api,type MailAccount,type MailSendDraft} from '../lib/api';
 import './TelegramInlineSendCard.css';
 
-export function MailInlineSendCard({draft}:{draft:MailSendDraft}){
+export function MailInlineSendCard({draft, hideCreditCost = false}:{draft:MailSendDraft; hideCreditCost?: boolean}){
   const [accounts,setAccounts]=useState<MailAccount[]>([]);
   const [recipients,setRecipients]=useState<string[]>([]);
   const [mailboxId,setMailboxId]=useState(draft.mailboxId);
@@ -105,7 +105,7 @@ export function MailInlineSendCard({draft}:{draft:MailSendDraft}){
         {rewriting?'Редактирование…':'Применить'}
       </button>
     </div>}
-    {rewriteCost>0&&<p className="telegram-ai-send-card__muted mt-2 text-xs">Редактирование с ИИ: {(rewriteCost/1000).toLocaleString('ru-RU',{maximumFractionDigits:3})} кредитов.</p>}
+    {!hideCreditCost&&rewriteCost>0&&<p className="telegram-ai-send-card__muted mt-2 text-xs">Редактирование с ИИ: {(rewriteCost/1000).toLocaleString('ru-RU',{maximumFractionDigits:3})} кредитов.</p>}
     {error&&<p role="alert" className="telegram-ai-send-card__error mt-2 text-xs">{error}</p>}
     {status==='SENT'&&<p role="status" className="telegram-ai-send-card__muted mt-2 text-xs">Письмо отправлено.</p>}
     {status==='UNKNOWN'&&<p role="status" className="telegram-ai-send-card__error mt-2 text-xs">Нет подтверждения приёма письма SMTP. Повтор заблокирован, чтобы не отправить дубликат.</p>}

@@ -271,8 +271,8 @@ struct RemoteWorkspaceView: View {
                             Text(error).font(.footnote).foregroundStyle(.red)
                         }
                     }
-                    Section("ИИ-кредиты") {
-                        Text("\(session.account?.aiCredits ?? 0)")
+                    Section(session.account?.subscriptionLimit == nil ? "ИИ-кредиты" : "Лимит ИИ") {
+                        Text(session.account?.aiBalanceLabel ?? "0")
                     }
                     Section {
                         Button("Выйти из аккаунта", role: .destructive) {
@@ -358,7 +358,7 @@ struct RemoteWorkspaceView: View {
                         Image(systemName: "circle.hexagongrid.fill")
                         .font(.system(size: 16))
                         .foregroundStyle(Color(red: 0.83, green: 0.41, blue: 0.57))
-                    Text("\(session.account?.aiCredits ?? 0)")
+                    Text(session.account?.aiBalanceLabel ?? "0")
                         .font(.system(size: 11, weight: .bold))
                         .lineLimit(1)
                 }
@@ -367,7 +367,7 @@ struct RemoteWorkspaceView: View {
                 .background(accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
                     }
                 .buttonStyle(.plain)
-                .accessibilityLabel("ИИ-кредиты: открыть баланс и статистику")
+                .accessibilityLabel(session.account?.subscriptionLimit == nil ? "ИИ-кредиты: открыть баланс и статистику" : "Лимит ИИ: открыть статистику")
                 Button {
                     searchExpanded.toggle()
                 } label: {

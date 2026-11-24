@@ -529,7 +529,7 @@ async function commitAiCreditReservation(userId: string, reservation: AiCreditRe
   if (!user) throw new Error('User not found');
   const updated = await prisma.user.update({
     where: { id: userId },
-    data: aiCreditEfficiencyData(reservation.cost, reservation.period, user.aiEfficiencyCreditsPeriod),
+    data: aiCreditEfficiencyData(reservation.cost, currentAiCreditsPeriod(), user.aiEfficiencyCreditsPeriod),
     select: { efficiencyScore: true }
   });
   await clampUserEfficiencyScore(userId, updated.efficiencyScore);
@@ -544,6 +544,7 @@ async function commitAiCreditReservation(userId: string, reservation: AiCreditRe
       creditsSpentMilli: reservation.totalMilli
     });
   }
+  await settleAiCreditReservation(reservation, reservation.totalMilli);
 }
 
 async function refundAiCreditReservation(userId: string, reservation: AiCreditReservation, requestId?: string) {
@@ -565,7 +566,8 @@ async function withAiCreditReservation<T>(userId: string, model: string, operati
 
 async function chargeFixedAiCredits(userId: string, cost: number, tracking?: AiCreditChargeTracking) {
   const period = currentAiCreditsPeriod();
-  await reserveAiCreditsMilli(userId, creditsToMilli(cost));
+  const reservation = await reserveAiCreditsMilli(userId, creditsToMilli(cost));
+  await settleAiCreditReservation(reservation, reservation.totalMilli);
   const efficiencyState = await prisma.user.findUnique({ where: { id: userId }, select: { aiEfficiencyCreditsPeriod: true } });
   const updated = await prisma.user.update({ where: { id: userId }, data: aiCreditEfficiencyData(cost, period, efficiencyState?.aiEfficiencyCreditsPeriod), select: { efficiencyScore: true } });
   await clampUserEfficiencyScore(userId, updated.efficiencyScore);

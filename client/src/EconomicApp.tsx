@@ -12,6 +12,7 @@ const EconomicVoiceInput = lazy(() => import('./components/VoiceInputButton').th
 import { loadThemePreference, resolveThemeMode } from './lib/autoTheme';
 import { annuityEstimate, formatMinorRub as money, minorToRublesInput as inputMoney, rublesToMinor as parseMoney } from './lib/economicMoney';
 import { formatCreditsSpent } from './lib/credits';
+import { api } from './lib/api';
 import './EconomicApp.css';
 import EconomicReport from './EconomicReport';
 
@@ -114,6 +115,14 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [showCreditCost, setShowCreditCost] = useState(false);
+  useEffect(() => {
+    if (!assistantOpen) return;
+    let alive = true;
+    setShowCreditCost(false);
+    void api.getMe().then(({ user }) => { if (alive) setShowCreditCost(!user.subscriptionLimit); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [assistantOpen]);
   const [assistantQuestion, setAssistantQuestion] = useState('');
   const [assistantBusy, setAssistantBusy] = useState(false);
   const [assistantStage, setAssistantStage] = useState<EconomicAssistantStage | 'reading_files' | 'refreshing_finances' | null>(null);
@@ -722,7 +731,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
                   onAutoApplyChange={changeEconomicAutoApply}
                   onRefresh={refresh}/>
               )}
-              {m.role === 'assistant' && typeof m.creditsSpentMilli === 'number' && m.creditsSpentMilli > 0 &&
+              {showCreditCost && m.role === 'assistant' && typeof m.creditsSpentMilli === 'number' && m.creditsSpentMilli > 0 &&
                 <div className="econ-message-credits" aria-label="Стоимость ответа ИИ">
                   <Sparkles size={11}/> Потрачено: {formatCreditsSpent(m.creditsSpentMilli)}
                 </div>}

@@ -418,9 +418,10 @@ export default function TestPage() {
     setCreditError('');
     setCreditPacksError('');
     try {
-      const [stats,links,packs,plans]=await Promise.allSettled([
-        api.getCreditUsageStatistics(),api.getSubscriptionLinks(),api.getCreditPacks(),api.getSubscriptionPlans()
+      const [stats,links,packs,plans,profile]=await Promise.allSettled([
+        api.getCreditUsageStatistics(),api.getSubscriptionLinks(),api.getCreditPacks(),api.getSubscriptionPlans(),api.getMe()
       ]);
+      if(profile.status==='fulfilled')setUser(profile.value.user);
       if(stats.status==='fulfilled')setCreditStats(stats.value.statistics);
       if(links.status==='fulfilled')setSubscriptionLinks(links.value.links);
       setSubscriptionPurchaseAvailable(plans.status==='fulfilled'&&plans.value.purchaseAvailable);
@@ -525,7 +526,7 @@ export default function TestPage() {
             <div className="tp-progress-grid">
               {progressCard('План на сегодня', todayDone, todayTasks.length, todayTasks.length ? 'Задачи и подзадачи, назначенные на сегодня' : 'На сегодня задач и подзадач пока нет', 'tp-featured')}
               {progressCard('Общий прогресс', totalDone, rootTasks.length, 'Выполнено из всех ваших задач')}
-              <button type="button" className="tp-card tp-credit-card" onClick={() => void openCredits()}><span className="tp-card-eyebrow"><Coins size={17}/> ИИ-кредиты</span><strong>{formatCredits((user.aiCreditsMilli ?? (user.aiCredits ?? 0) * 1000) / 1000)}</strong><span>Доступный баланс</span><span className="tp-card-link">Подписки и статистика <ChevronRight size={16}/></span></button>
+              <button type="button" className="tp-card tp-credit-card" onClick={() => void openCredits()}><span className="tp-card-eyebrow"><Coins size={17}/> {activeSubscription ? 'Лимит ИИ' : 'ИИ-кредиты'}</span><strong>{activeSubscription ? (user?.subscriptionLimit ? `${100 - user.subscriptionLimit.usedPercent}%` : '…') : formatCredits((user.aiCreditsMilli ?? (user.aiCredits ?? 0) * 1000) / 1000)}</strong><span>Доступный баланс</span><span className="tp-card-link">Подписки и статистика <ChevronRight size={16}/></span></button>
             </div>
             <TestPageRating user={user} onRefresh={()=>void refresh()}/>
             <div className="tp-board">
@@ -689,11 +690,11 @@ export default function TestPage() {
     {creditsOpen && <div className="tp-overlay tp-credits-overlay" onMouseDown={event=>{
       if(event.target===event.currentTarget)setCreditsOpen(false);
     }}><section className="tp-dialog tp-credits-dialog" role="dialog" aria-modal="true" aria-label="Баланс и подписки">
-      <header><div><span className="tp-eyebrow">БАЛАНС И ПОДПИСКИ</span><h2>ИИ-кредиты</h2></div>
+      <header><div><span className="tp-eyebrow">БАЛАНС И ПОДПИСКИ</span><h2>{activeSubscription ? 'Лимит ИИ' : 'ИИ-кредиты'}</h2></div>
         <button type="button" onClick={()=>setCreditsOpen(false)} aria-label="Закрыть"><X size={19}/></button></header>
       <div className="tp-dialog-content tp-credits-body">
         <div className="tp-credit-balance"><Coins size={24}/><div><span>Доступно</span>
-          <strong>{formatCredits((user?.aiCreditsMilli??(user?.aiCredits??0)*1000)/1000)} кредитов</strong>
+          {activeSubscription ? <div className="mt-2 text-sm text-muted"><strong>{user?.subscriptionLimit?.planName ?? 'Подписка'}</strong><div>Осталось: {user?.subscriptionLimit ? `${100 - user.subscriptionLimit.usedPercent}%` : '…'}</div>{user?.subscriptionLimit ? <><progress className="w-full accent-emerald-500" max={100} value={100 - user.subscriptionLimit.usedPercent}/><div>Использовано {user.subscriptionLimit.usedPercent}% · до {new Date(user.subscriptionLimit.expiresAt).toLocaleDateString('ru-RU')}</div></> : null}</div> : <strong>{formatCredits((user?.aiCreditsMilli??(user?.aiCredits??0)*1000)/1000)} кредитов</strong>}
         </div></div>
         <div className="tp-tabs tp-credit-tabs" role="tablist" aria-label="Разделы баланса">
           <button type="button" role="tab" aria-selected={creditTab==='packs'} className={creditTab==='packs'?'active':''}
@@ -704,7 +705,7 @@ export default function TestPage() {
             onClick={()=>setCreditTab('stats')}>Статистика</button>
         </div>
         {creditsBusy?<p className="tp-empty"><Loader2 className="tp-spin" size={17}/> Загрузка…</p>:
-          creditTab==='stats'?<CreditUsageStats statistics={creditStats} error={creditError}/>:
+          creditTab==='stats'?(activeSubscription ? <p className="tp-credit-note">Расход включённого лимита показан выше.</p> : <CreditUsageStats statistics={creditStats} error={creditError}/>):
           creditTab==='packs'?<>
             <p className="tp-credit-note">Разовое пополнение баланса без изменения подписки.</p>
             {creditPacksError&&<p className="tp-alert" role="alert">{creditPacksError}</p>}
@@ -734,7 +735,7 @@ export default function TestPage() {
           </>:
           creditError?<p className="tp-alert">{creditError}</p>:
           <div className="tp-plans">{([
-            ['start','Старт','Для ежедневных задач'],['pro','Про','Для активной работы'],['max','Максимум','Расширенные возможности']
+            ['start','Старт','Базовый лимит · 299 ₽/мес'],['pro','Про','Лимит ×2 · 599 ₽/мес'],['max','Максимум','Лимит ×4,33 · 1290 ₽/мес']
           ] as const).map(([key,name,desc])=><div key={key} className="tp-plan">
             <div><strong>{name}</strong><small>{desc}</small></div>
             <button type="button" disabled={!subscriptionPurchaseAvailable||activeSubscription||subscriptionPurchase.creatingPlanKey!==null}
