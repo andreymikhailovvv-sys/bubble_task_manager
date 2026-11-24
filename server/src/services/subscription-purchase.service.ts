@@ -1,7 +1,6 @@
 import { Prisma, type SubscriptionPurchase } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { getSubscriptionPlanByKey, subscriptionEndDate } from '../config/subscription-plans.js';
-import { currentAiCreditsPeriod } from './ai-credit-wallet.service.js';
 import { parseProviderAmountKopecks, type YooKassaPayment } from './yookassa.service.js';
 
 export type SubscriptionReconcileResult = {
@@ -76,7 +75,7 @@ export async function reconcileSubscriptionPurchaseFromYooKassa(
     // Existing bonus/purchased buckets never expire with the subscription.
     await tx.user.update({ where: { id: user.id }, data: {
       subscriptionPlan: current.planKey, subscriptionExpiresAt: subscriptionEndDate(termStart),
-      aiCreditsPeriod: currentAiCreditsPeriod(now),
+      aiCreditsPeriod: `subscription:${current.id}`,
       aiIncludedCreditsMilli: included,
       aiCredits: Math.floor((included + user.aiBonusCreditsMilli + user.aiPurchasedCreditsMilli) / 1000)
     } });
