@@ -5,6 +5,7 @@ import type { GeneratedDocument } from '../lib/types';
 
 export function TaskCompletionReportDialog(props: {
   taskId: string;
+  hideCreditCost?: boolean;
   taskTitle: string;
   onClose: () => void;
   onNeverShow?: () => Promise<void>;
@@ -107,7 +108,7 @@ export function TaskCompletionReportDialog(props: {
               {downloading ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
               <span className="min-w-0 truncate">{downloading ? 'Скачиваем…' : `Скачать ${document.file.fileName}`}</span>
             </button>
-            <p className="text-center text-xs text-muted">Списано {Math.round(document.credits) / 1000} ИИ-кредитов. Word также добавлен в чат задачи.</p>
+            <p className="text-center text-xs text-muted">{!props.hideCreditCost ? `Списано ${Math.round(document.credits) / 1000} ИИ-кредитов. ` : ''}Word также добавлен в чат задачи.</p>
             <button type="button" onClick={() => props.onClose()} className="surface-muted w-full rounded-xl px-4 py-2 text-sm text-primary">Закрыть</button>
           </div>
         )}
