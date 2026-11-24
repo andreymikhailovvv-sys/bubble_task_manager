@@ -62,13 +62,14 @@ try {
   });
   let writes=0;
   let wardrobeWrites=0;
-  const wardrobe={userId:user.id,rank:2,expiresAt:'2099-01-01T00:00:00.000Z',selected:{planner:'classic',economic:'classic'},catalog:[{id:'classic',variant:'planner',name:'Классический',description:'Базовый',rank:0},{id:'northern',variant:'planner',name:'Север',description:'Шарф и варежки',rank:2},{id:'maestro',variant:'planner',name:'Маэстро',description:'Берет',rank:0},{id:'wizard',variant:'planner',name:'Астролог',description:'Шляпа',rank:3},{id:'classic',variant:'economic',name:'Классический',description:'Базовый',rank:0}]};
+  const wardrobe={userId:user.id,rank:2,expiresAt:'2099-01-01T00:00:00.000Z',selected:{planner:'classic',economic:'classic'},catalog:[{id:'classic',variant:'planner',name:'Классический',description:'Базовый',rank:0},{id:'northern',variant:'planner',name:'Север',description:'Шарф и варежки',rank:2},{id:'maestro',variant:'planner',name:'Маэстро',description:'Берет',rank:0},{id:'zoomer',variant:'planner',name:'Зумер',description:'Телефон',rank:2},{id:'wizard',variant:'planner',name:'Астролог',description:'Шляпа',rank:3},{id:'classic',variant:'economic',name:'Классический',description:'Базовый',rank:0},{id:'banker',variant:'economic',name:'Менеджер банка',description:'Портфель',rank:2}]};
   await page.route('**/api/**',async route=>{
     const request=route.request();
     const path=new URL(request.url()).pathname;
     const method=request.method();
     let payload={};
-    if(path==='/api/auth/me')payload={user};
+    if(path==='/api/auth/me'||path==='/api/economic/session')payload={user};
+    else if(path==='/api/economic/snapshot')payload={accounts:[],recent:[],debts:[],loans:[],categories:[],assistantMessages:[],totals:{balanceMinor:'0',monthIncomeMinor:'0',monthExpenseMinor:'0',operationCount:0,topExpenseCategory:null,topExpenseCategoryMinor:'0'}};
     else if(path==='/api/mascot-wardrobe'){
       if(method==='PUT'){const body=request.postDataJSON();assert.equal(body.variant,'planner');assert.equal(body.skinId,'northern');wardrobe.selected.planner=body.skinId;wardrobeWrites++;}
       payload=wardrobe;
@@ -111,7 +112,9 @@ try {
   const skinList=wardrobeDialog.getByRole('navigation',{name:'Скины'});
   const listWrap=wardrobeDialog.locator('.mascot-wardrobe-list-wrap');
   await skinList.getByRole('button',{name:/Маэстро/}).waitFor({state:'visible'});
-  assert.equal(await skinList.getByRole('button').count(),4);
+  assert.equal(await skinList.getByRole('button').count(),5);
+  const classicBody=await wardrobeDialog.locator('.planik-body-surface').boundingBox();
+  assert.ok(classicBody);
   assert.equal(await skinList.evaluate(el=>getComputedStyle(el).scrollbarWidth),'none');
   await skinList.evaluate(el=>{el.style.height='110px';});
   await wardrobeDialog.locator('.mascot-wardrobe-list-wrap[data-more-below="true"]').waitFor({state:'visible'});
@@ -128,8 +131,20 @@ try {
   await wardrobeDialog.getByRole('button',{name:'Наведение курсора'}).click();
   await wardrobeDialog.locator('[data-skin="wizard"][data-mode="hover"] .wizard-orb').waitFor({state:'visible'});
   assert.equal(wardrobeWrites,0);
+  await wardrobeDialog.getByRole('button',{name:/Зумер/}).click();
+  await wardrobeDialog.locator('[data-skin="zoomer"][data-mode="idle"] .zoomer-phone-back').waitFor({state:'visible'});
+  await wardrobeDialog.locator('.mascot-wardrobe-character.phase-idle').waitFor({state:'visible'});
+  const zoomerBody=await wardrobeDialog.locator('.planik-body-surface').boundingBox();
+  assert.ok(zoomerBody&&Math.abs(zoomerBody.width-classicBody.width)<2&&Math.abs(zoomerBody.height-classicBody.height)<2);
+  await wardrobeDialog.getByRole('button',{name:'Наведение курсора'}).click();
+  await wardrobeDialog.locator('[data-skin="zoomer"] .zoomer-phone-hide').waitFor({state:'hidden'});
+  await wardrobeDialog.locator('[data-skin="zoomer"][data-mode="hover"] .planik-hover').waitFor({state:'visible'});
+  assert.equal(wardrobeWrites,0);
   await wardrobeDialog.getByRole('button',{name:/Север/}).click();
   await wardrobeDialog.locator('[data-skin="northern"][data-mode="idle"]').waitFor({state:'visible'});
+  await wardrobeDialog.locator('.mascot-wardrobe-character.phase-idle').waitFor({state:'visible'});
+  const northBody=await wardrobeDialog.locator('.planik-body-surface').boundingBox();
+  assert.ok(northBody&&Math.abs(northBody.width-classicBody.width)<2&&Math.abs(northBody.height-classicBody.height)<2);
   await wardrobeDialog.getByRole('button',{name:'Наведение курсора'}).click();
   await wardrobeDialog.locator('[data-skin="northern"][data-mode="hover"] .north-warm').waitFor({state:'visible'});
   await wardrobeDialog.getByRole('button',{name:'Применить образ'}).click();
@@ -167,6 +182,19 @@ try {
 
   assert.equal(await page.getByText('Не удалось отрисовать интерфейс').count(),0,
     'React error boundary must never replace the workspace');
+  await page.goto(baseUrl+'/economic',{waitUntil:'domcontentloaded'});
+  const economicMascot=page.locator('.econ-mascot .planik-mascot');
+  await economicMascot.locator('.planik-body-surface').hover({timeout:12000});
+  await page.locator('.econ-mascot-dressing').getByRole('button',{name:'Аксессуары и скины'}).click();
+  const economicDialog=page.getByRole('dialog',{name:'Аксессуары и скины'});
+  await economicDialog.getByRole('button',{name:/Менеджер банка/}).click();
+  await economicDialog.locator('[data-skin="banker"][data-mode="idle"] .banker-counting').waitFor({state:'visible'});
+  await economicDialog.getByRole('button',{name:'Формирует ответ'}).click();
+  await economicDialog.locator('[data-skin="banker"][data-mode="typing"] .banker-briefcase').waitFor({state:'visible'});
+  await economicDialog.getByRole('button',{name:'Наведение курсора'}).click();
+  await economicDialog.locator('[data-skin="banker"][data-mode="hover"] .planik-hover').waitFor({state:'visible'});
+  assert.equal(wardrobeWrites,1);
+  metrics.economicWardrobe='counting, packing and standard hover PASS';
   assert.deepEqual(failures,[],'Browser runtime errors: '+failures.join('\n'));
   console.log('[Browser smoke] PASS '+JSON.stringify({...metrics,mockedApiWrites:writes}));
 }catch(error){

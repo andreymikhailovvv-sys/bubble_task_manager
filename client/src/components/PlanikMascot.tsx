@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useId, useRef, useState, type CSSProperti
 import './PlanikMascot.css';
 import { MascotSkinArtwork, isScarfSkin } from './MascotSkinArtwork';
 import { RefinedSkin, Mitten, NorthernHover, WizardHover, WizardCards } from './RefinedMascotSkins';
+import { ShirtOutfit, ShirtArm, ZoomerPhone, BankerMoney } from './ShirtMascotSkins';
 
 export type PlanikMode = 'idle' | 'hover' | 'thinking' | 'typing' | 'searching' | 'painting' | 'celebrating' | 'clearing' | 'showcase';
 
@@ -104,6 +105,8 @@ export const PlanikMascot = memo(function PlanikMascot({
   const badgeNumber = previewMode === 'clearing' ? 3 : clearingCount ?? count;
   const north = skinId === 'northern', wizard = skinId === 'wizard';
   const refined = north || wizard;
+  const zoomer=variant==='planner'&&skinId==='zoomer', banker=variant==='economic'&&skinId==='banker';
+  const shirtSkin=zoomer?'zoomer':banker?'banker':null;
   const badgeText = badgeNumber > 99 ? '99+' : String(badgeNumber);
 
   const gaze = useCallback((x: number, y: number) => {
@@ -119,15 +122,16 @@ export const PlanikMascot = memo(function PlanikMascot({
     else if (mode === 'typing') gaze(0, 7);
     else if (mode === 'painting') gaze(-6, 4);
     else if (mode === 'clearing') gaze(-5, 1);
-    else if (mode !== 'hover') gaze(0, 0);
-  }, [mode]);
+    else if (mode === 'idle' && shirtSkin) gaze(0, 7);
+    else if (mode !== 'hover' || previewMode) gaze(0, 0);
+  }, [mode, gaze, shirtSkin, previewMode]);
 
   // Follow the cursor anywhere in the working area, including empty space
   // and modal surfaces. Only the eyes move while idle; the reaching-hands
   // animation still needs a pointer directly over Planik.
   // One rAF per pointer frame avoids React rerenders on every move.
   useEffect(() => {
-    if (previewMode || (mode !== 'idle' && mode !== 'hover')) return;
+    if (previewMode || (mode !== 'idle' && mode !== 'hover') || (shirtSkin && mode === 'idle')) return;
     if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
     let frame = 0;
     let pointerX = 0;
@@ -150,7 +154,7 @@ export const PlanikMascot = memo(function PlanikMascot({
       document.removeEventListener('pointermove', onPointerMove);
       if (frame) window.cancelAnimationFrame(frame);
     };
-  }, [mode, gaze, previewMode]);
+  }, [mode, gaze, previewMode, shirtSkin]);
 
   return (
     <span
@@ -166,7 +170,7 @@ export const PlanikMascot = memo(function PlanikMascot({
       <svg
         ref={svgRef}
         className="planik-svg"
-        viewBox={refined ? "18 -8 394 325" : "35 32 345 275"}
+        viewBox="35 32 345 275"
         xmlns="http://www.w3.org/2000/svg"
         aria-hidden="true"
         onPointerEnter={() => setHovered(true)}
@@ -185,7 +189,7 @@ export const PlanikMascot = memo(function PlanikMascot({
         </defs>
 
         {refined && <RefinedSkin skinId={skinId} suffix={gradientSuffix} layer="rear"/>}
-        {!refined && <><path d="M215 77V58" stroke="#8c8ed3" strokeWidth="7" strokeLinecap="round" />
+        {!refined && !zoomer && <><path d="M215 77V58" stroke="#8c8ed3" strokeWidth="7" strokeLinecap="round" />
         <circle className="planik-antenna" cx="215" cy="52" r="9" fill="#88e0ed" /></>}
         <rect className="planik-body-surface" x="122" y="76" width="186" height="174" rx="65" fill={`url(#planik-body-${gradientSuffix})`} stroke={`url(#planik-rim-${gradientSuffix})`} strokeWidth="4" />
         <path d="M148 100Q163 83 192 83" fill="none" stroke="#d0eaff" strokeOpacity=".2" strokeLinecap="round" strokeWidth="4" />
@@ -193,8 +197,10 @@ export const PlanikMascot = memo(function PlanikMascot({
         <g ref={leftEye}><ellipse className="planik-eye" cx="190" cy="162" rx="10" ry="15" fill="#f1f3ff" /></g>
         <g ref={rightEye}><ellipse className="planik-eye" cx="240" cy="162" rx="10" ry="15" fill="#f1f3ff" /></g>
 
-        {refined ? <RefinedSkin skinId={skinId} suffix={gradientSuffix} layer="front"/> : <MascotSkinArtwork skinId={skinId} suffix={gradientSuffix} />}
+        {refined ? <RefinedSkin skinId={skinId} suffix={gradientSuffix} layer="front"/> : shirtSkin ? <ShirtOutfit skin={shirtSkin} suffix={gradientSuffix}/> : <MascotSkinArtwork skinId={skinId} suffix={gradientSuffix} />}
         {north && mode === 'idle' && <g pointerEvents="none"><path d="M129 194Q124 218 153 232M301 194Q306 218 277 232" fill="none" stroke="#418d89" strokeWidth="19" strokeLinecap="round"/><Mitten x={153} y={232} dx={29} dy={14} suffix={gradientSuffix}/><Mitten x={277} y={232} dx={-29} dy={14} right suffix={gradientSuffix}/></g>}
+        {zoomer && (mode==='idle'||mode==='hover') && <ZoomerPhone key={mode} suffix={gradientSuffix} hide={mode==='hover'}/>}
+        {banker && mode==='idle' && <BankerMoney suffix={gradientSuffix}/>}
         {/* Red notification counter sits on the upper-left edge of Planik's body.
             It is visible only while idle. The three animated copies below share
             exactly the same number when notifications are marked read. */}
@@ -204,8 +210,8 @@ export const PlanikMascot = memo(function PlanikMascot({
             fontWeight="800" fontSize={badgeNumber > 99 ? 15 : badgeNumber > 9 ? 19 : 22}>{badgeText}</text>
         </g>
         <g className="planik-notif-take-arm">
-          <path d="M133 190Q106 178 106 151Q107 126 125 113" fill="none" stroke="#7576b9"
-            strokeWidth="18" strokeLinecap="round" strokeLinejoin="round" />
+          {shirtSkin ? <ShirtArm skin={shirtSkin} suffix={gradientSuffix} d="M133 190Q106 178 106 151Q107 126 125 113" strokeWidth="18"/> : <path d="M133 190Q106 178 106 151Q107 126 125 113" fill="none" stroke="#7576b9"
+            strokeWidth="18" strokeLinecap="round" strokeLinejoin="round" />}
           {north ? <Mitten x={125} y={113} dx={18} dy={-13} suffix={gradientSuffix}/> : !wizard && <><circle cx="126" cy="112" r="10" fill="#aca6ef" />
           <path d="M120 109L117 102M129 107L134 101" stroke="#d4ceff"
             strokeWidth="3.5" fill="none" strokeLinecap="round" /></>}
@@ -223,7 +229,7 @@ export const PlanikMascot = memo(function PlanikMascot({
             fontWeight="800" fontSize={badgeNumber > 99 ? 15 : badgeNumber > 9 ? 19 : 22}>{badgeText}</text>
         </g>
 
-        <g className="planik-typing">
+        {banker && mode==='typing' ? <BankerMoney suffix={gradientSuffix} packing/> : <g className="planik-typing">
           <path d="M156 224H275L309 279H125Z" fill="#242e54" stroke="#a09de1" strokeWidth="2.5" strokeLinejoin="round" />
           <path d="M164 233H268L289 264H145Z" fill="#303d6b" />
           <g fill="#59649d">
@@ -240,27 +246,27 @@ export const PlanikMascot = memo(function PlanikMascot({
             <rect x="178" y="267" width="92" height="6" rx="3" />
           </g>
           <g className="planik-type-left">
-            {refined ? <><path d="M135 209C144 226 159 240 182 246" fill="none" stroke={north?'#418d89':'#9290d8'} strokeWidth="16" strokeLinecap="round"/>{north && <Mitten x={182} y={246} dx={23} dy={6} suffix={gradientSuffix} scale={.8}/>}</> : <><path d="M133 211Q147 224 172 244" fill="none" stroke="#7777b8" strokeWidth="16" strokeLinecap="round" />
+            {refined ? <><path d="M135 209C144 226 159 240 182 246" fill="none" stroke={north?'#418d89':'#9290d8'} strokeWidth="16" strokeLinecap="round"/>{north && <Mitten x={182} y={246} dx={23} dy={6} suffix={gradientSuffix} scale={.8}/>}</> : <>{shirtSkin ? <ShirtArm skin={shirtSkin} suffix={gradientSuffix} d="M133 211Q147 224 172 244" strokeWidth="16"/> : <path d="M133 211Q147 224 172 244" fill="none" stroke="#7777b8" strokeWidth="16" strokeLinecap="round" />}
             <circle cx="176" cy="245" r="8" fill="#aaa6f0" />
             <path d="M179 244L189 241" stroke="#c1bcff" strokeWidth="6" strokeLinecap="round" /></>}
           </g>
           <g className="planik-type-right">
-            {refined ? <><path d="M295 209C286 226 271 240 248 246" fill="none" stroke={north?'#418d89':'#9290d8'} strokeWidth="16" strokeLinecap="round"/>{north && <Mitten x={248} y={246} dx={-23} dy={6} right suffix={gradientSuffix} scale={.8}/>}</> : <><path d="M298 211Q282 224 264 244" fill="none" stroke="#7777b8" strokeWidth="16" strokeLinecap="round" />
+            {refined ? <><path d="M295 209C286 226 271 240 248 246" fill="none" stroke={north?'#418d89':'#9290d8'} strokeWidth="16" strokeLinecap="round"/>{north && <Mitten x={248} y={246} dx={-23} dy={6} right suffix={gradientSuffix} scale={.8}/>}</> : <>{shirtSkin ? <ShirtArm skin={shirtSkin} suffix={gradientSuffix} d="M298 211Q282 224 264 244" strokeWidth="16"/> : <path d="M298 211Q282 224 264 244" fill="none" stroke="#7777b8" strokeWidth="16" strokeLinecap="round" />}
             <circle cx="260" cy="245" r="8" fill="#aaa6f0" />
             <path d="M258 244L248 253" stroke="#c1bcff" strokeWidth="6" strokeLinecap="round" /></>}
           </g>
-        </g>
+        </g>}
 
         {wizard && mode === 'thinking' ? <WizardCards/> : <g className="planik-thinking">
           <g className="planik-scratch-arm">
-            <path d="M301 188Q327 185 330 163Q335 140 309 118" fill="none" stroke="#7274b4" strokeWidth="18" strokeLinecap="round" />
+            {shirtSkin ? <ShirtArm skin={shirtSkin} suffix={gradientSuffix} d="M301 188Q327 185 330 163Q335 140 309 118" strokeWidth="18"/> : <path d="M301 188Q327 185 330 163Q335 140 309 118" fill="none" stroke="#7274b4" strokeWidth="18" strokeLinecap="round" />}
             {north ? <Mitten x={309} y={118} dx={-26} dy={-22} right suffix={gradientSuffix}/> : <><circle cx="306" cy="116" r="10" fill="#a8a3ed" />
             <path d="M296 108L291 99M304 106V96M313 107L317 98" fill="none" stroke="#c3bfff" strokeWidth="3.5" strokeLinecap="round" /></>}
           </g>
         </g>}
 
         <g className="planik-searching">
-          <path d="M130 190Q104 191 102 216" fill="none" stroke="#7375b2" strokeWidth="17" strokeLinecap="round" />
+          {shirtSkin ? <path className="shirt-search-holding-arm" d="M133 194C126 214 126 239 133 252" stroke={banker?'#e2a35f':'#9792d7'} strokeWidth="16" strokeLinecap="round" fill="none"/> : <path d="M130 190Q104 191 102 216" fill="none" stroke="#7375b2" strokeWidth="17" strokeLinecap="round" />}
           <rect x="80" y="151" width="103" height="100" rx="10" fill="#484d84" stroke="#a39cf0" strokeWidth="2.5" />
           <path d="M81 168H182" stroke="#c5c0ff" strokeWidth="3" />
           <circle cx="94" cy="159" r="2.8" fill="#efa9c9" /><circle cx="104" cy="159" r="2.8" fill="#e9d689" /><circle cx="114" cy="159" r="2.8" fill="#9ce4ed" />
@@ -279,19 +285,20 @@ export const PlanikMascot = memo(function PlanikMascot({
             <circle cx="116" cy="201" r="14" fill="#a1dce5" />
             <path d="M136 188h27M136 198h25M99 221h63M99 230h45" stroke="#98bfc7" strokeWidth="3" strokeLinecap="round" />
           </g>
-          {north ? <><path d="M102 216Q131 237 182 222" fill="none" stroke="#418d89" strokeWidth="16" strokeLinecap="round"/><Mitten x={182} y={222} dx={51} dy={-15} suffix={gradientSuffix}/></> : wizard ? <path d="M102 216Q131 237 182 222" fill="none" stroke="#9290d8" strokeWidth="14" strokeLinecap="round"/> : <circle cx="182" cy="222" r="9" fill="#a9a5ed" />}
-          <path d="M301 191Q279 204 249 244" fill="none" stroke="#7778b8" strokeWidth="18" strokeLinecap="round" />
-          {north ? <Mitten x={249} y={244} dx={-30} dy={40} right suffix={gradientSuffix}/> : wizard ? null : <circle cx="248" cy="243" r="9" fill="#aaa5ee" />}
+          {shirtSkin ? null : north ? <><path d="M102 216Q131 237 182 222" fill="none" stroke="#418d89" strokeWidth="16" strokeLinecap="round"/><Mitten x={182} y={222} dx={51} dy={-15} suffix={gradientSuffix}/></> : wizard ? <path d="M102 216Q131 237 182 222" fill="none" stroke="#9290d8" strokeWidth="14" strokeLinecap="round"/> : <circle cx="182" cy="222" r="9" fill="#a9a5ed" />}
+          {shirtSkin ? <ShirtArm skin={shirtSkin} suffix={gradientSuffix} d="M301 191Q279 204 249 244" strokeWidth="18"/> : <path d="M301 191Q279 204 249 244" fill="none" stroke="#7778b8" strokeWidth="18" strokeLinecap="round" />}
+          {north ? <Mitten x={249} y={244} dx={-30} dy={40} right suffix={gradientSuffix}/> : wizard || shirtSkin ? null : <circle cx="248" cy="243" r="9" fill="#aaa5ee" />}
           <g className="planik-loupe">
             <path d="M242 240L210 215" fill="none" stroke="#9e94ef" strokeWidth="11" strokeLinecap="round" />
             <circle cx="191" cy="195" r="25" fill="#a3d8f5" fillOpacity=".2" stroke="#cac3ff" strokeWidth="7" />
             <path d="M180 187Q188 180 196 185" fill="none" stroke="#fff" strokeOpacity=".9" strokeWidth="3" strokeLinecap="round" />
+            {shirtSkin && <path d="M252 245l-5-4" stroke={banker?'#e2a35f':'#9792d7'} strokeWidth="13" strokeLinecap="round"/>}
           </g>
         </g>
 
         <g className="planik-painting">
           {/* A thin, borderless sheet of paper: no tablet rim, bezel or display. */}
-          <path d="M130 197Q109 206 105 233" fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round" />
+          {shirtSkin ? <ShirtArm skin={shirtSkin} suffix={gradientSuffix} d="M130 197Q109 206 105 233" strokeWidth="17"/> : <path d="M130 197Q109 206 105 233" fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round" />}
           <path d="M91 159L177 154L183 246L89 252Z" fill="#56608e" fillOpacity=".2" transform="translate(3 5)" />
           <path d="M91 159L177 154L183 246L89 252Z" fill="#fffdf5" stroke="#c9c5e5" strokeWidth="2.3" strokeLinejoin="round" />
           <path d="M165 155L177 154L178 167Z" fill="#f0e8dd" stroke="#d6cce2" strokeWidth="1" />
@@ -314,7 +321,7 @@ export const PlanikMascot = memo(function PlanikMascot({
             <path d="M159 237V223M153 230L159 219L165 230" fill="none" stroke="#4b8f76" strokeWidth="2.4" strokeLinecap="round" />
           </g>
           {north ? <Mitten x={105} y={233} dx={-4} dy={27} suffix={gradientSuffix}/> : wizard && <path d="M99 231l9 5" stroke="#9290d8" strokeWidth="12" strokeLinecap="round"/>}
-          <path d="M300 196Q276 207 262 216" fill="none" stroke="#7778b8" strokeWidth="17" strokeLinecap="round" />
+          {shirtSkin ? <ShirtArm skin={shirtSkin} suffix={gradientSuffix} d="M300 196Q276 207 262 216" strokeWidth="18"/> : <path d="M300 196Q276 207 262 216" fill="none" stroke="#7778b8" strokeWidth="17" strokeLinecap="round" />}
           <g className="planik-paint-brush">
             <path d="M263 216L227 206" stroke="#b79a74" strokeWidth="9" strokeLinecap="round" />
             <path d="M227 206L213 204L216 216L228 212Z" fill="#d4d8ff" stroke="#a99bff" strokeWidth="2" />
@@ -326,8 +333,8 @@ export const PlanikMascot = memo(function PlanikMascot({
         <g className="planik-celebrating">
           {/* Both arms lift a real party popper, aimed toward the left. */}
           <g className="planik-celebrate-rig">
-            <path d="M132 207Q146 235 173 224" fill="none" stroke="#7272b3" strokeWidth="19" strokeLinecap="round" />
-            <path d="M301 208Q281 237 258 230" fill="none" stroke="#7272b3" strokeWidth="19" strokeLinecap="round" />
+            {shirtSkin ? <ShirtArm skin={shirtSkin} suffix={gradientSuffix} d="M132 207Q146 235 173 224" strokeWidth="18"/> : <path d="M132 207Q146 235 173 224" fill="none" stroke="#7272b3" strokeWidth="19" strokeLinecap="round" />}
+            {shirtSkin ? <ShirtArm skin={shirtSkin} suffix={gradientSuffix} d="M301 208Q281 237 258 230" strokeWidth="18"/> : <path d="M301 208Q281 237 258 230" fill="none" stroke="#7272b3" strokeWidth="19" strokeLinecap="round" />}
             <path d="M118 132Q103 140 104 163Q105 179 119 190L258 237Q273 232 267 219Z" fill="#8569d0" stroke="#c5a8ff" strokeWidth="3" />
             <path d="M145 140L171 151L202 217L178 207Z" fill="#f5cd70" />
             <path d="M198 176L219 190L241 231L223 224Z" fill="#f5cd70" />
@@ -370,11 +377,11 @@ export const PlanikMascot = memo(function PlanikMascot({
         </g>}
         {north && mode === 'hover' ? <NorthernHover suffix={gradientSuffix}/> : wizard && mode === 'hover' ? <WizardHover suffix={gradientSuffix}/> : <g className="planik-hover">
           <g className="planik-hover-left"><g>
-            <path d="M129 194Q141 219 170 224" fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round" />
+            {shirtSkin ? <ShirtArm skin={shirtSkin} suffix={gradientSuffix} d="M129 194Q141 219 170 224" strokeWidth="17"/> : <path d="M129 194Q141 219 170 224" fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round" />}
             <circle cx="170" cy="224" r="10" fill="#b2aaff" />
           </g></g>
           <g className="planik-hover-right"><g>
-            <path d="M303 194Q283 218 254 225" fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round" />
+            {shirtSkin ? <ShirtArm skin={shirtSkin} suffix={gradientSuffix} d="M303 194Q283 218 254 225" strokeWidth="17"/> : <path d="M303 194Q283 218 254 225" fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round" />}
             <circle cx="254" cy="225" r="10" fill="#b2aaff" />
           </g></g>
         </g>}

@@ -38,8 +38,8 @@ test('Android launcher uses real static SVG artwork, animated natively instead o
     read('../../android-app/app/src/main/AndroidManifest.xml'),
     read('../../android-app/app/build.gradle.kts')
   ]);
-  // The original Android asset matches the classic web geometry; tailored skins use an expanded viewBox.
-  assert.match(source, /viewBox=\{refined \? "18 -8 394 325" : "35 32 345 275"\}/);
+  // All web skins retain the classic body scale and original Android geometry.
+  assert.match(source, /viewBox="35 32 345 275"/);
   assert.match(asset, /viewBox="35 32 345 275"/);
   assert.match(asset, /planik-body-native/);
   assert.match(asset, /planik-screen-native/);

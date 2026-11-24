@@ -148,6 +148,7 @@ export function MascotWardrobeDialog({wardrobe,variant,theme}:{wardrobe:MascotWa
   },[catalog.length,updateListFade]);
   const skin=catalog.find(item=>item.id===selected);
   const allowed=Boolean(skin&&skin.rank<=wardrobe.rank);
+  const specialModes: Exclude<PlanikMode,'showcase'>[] = selected==='banker'?['idle','typing','hover']:selected==='wizard'?['idle','hover','thinking']:selected==='northern'||selected==='zoomer'?['idle','hover']:[];
   const isEquipped=selected===wardrobe.selected(variant);
   const equip=async()=>{
     if(!allowed||isEquipped||saving)return;
@@ -179,11 +180,10 @@ export function MascotWardrobeDialog({wardrobe,variant,theme}:{wardrobe:MascotWa
             </div>
           </div>
           <div className="mascot-wardrobe-details"><span className={'mascot-wardrobe-tier tier-'+(skin?.rank??0)}>{tier(skin?.rank??0)}</span><h3>{skin?.name??'Классический'}</h3><p>{skin?.description??'Выберите образ из коллекции.'}</p></div>
-          {(selected==='northern'||selected==='wizard')&&<div className="mascot-wardrobe-animations" aria-label="Особые анимации">
+          {specialModes.length>0&&<div className="mascot-wardrobe-animations" aria-label="Особые анимации">
             <span>Особые анимации:</span>
-            <div>{(['idle','hover',...(selected==='wizard'?['thinking']:[])] as const).map(value=>{
-              const mode=value as 'idle'|'hover'|'thinking';
-              return <button key={mode} type="button" aria-pressed={previewMode===mode} disabled={phase==='leaving'||phase==='entering'} onClick={()=>{setPreviewMode(mode);setReplay(v=>v+1);}}>{mode==='idle'?'Ожидание':mode==='hover'?'Наведение курсора':'Думает'}</button>;
+            <div>{specialModes.map(mode=>{
+              return <button key={mode} type="button" aria-pressed={previewMode===mode} disabled={phase==='leaving'||phase==='entering'} onClick={()=>{setPreviewMode(mode);setReplay(v=>v+1);}}>{mode==='idle'?'Ожидание':mode==='hover'?'Наведение курсора':mode==='typing'?'Формирует ответ':'Думает'}</button>;
             })}</div>
           </div>}
           <div className="mascot-wardrobe-actions">
