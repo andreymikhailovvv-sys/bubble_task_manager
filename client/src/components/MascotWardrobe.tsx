@@ -3,7 +3,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, LockKeyhole, Shirt, X } from 'lucide-react';
 import { api, type MascotVariant, type MascotWardrobeState } from '../lib/api';
-import { PlanikMascot } from './PlanikMascot';
+import { PlanikMascot, type PlanikMode } from './PlanikMascot';
 import './MascotWardrobe.css';
 
 export function useMascotWardrobe(userId?:string, plan?:string, expiresAt?:string|null) {
@@ -95,13 +95,15 @@ export function MascotWardrobeTrigger({onClick}:{onClick:()=>void}) {
       onClick();
     }}><Shirt size={12}/>Аксессуары и скины</button>;
 }
-const tier=(rank:number)=>rank===3?'Максимум':rank===2?'Про':'Базовый';
+const tier=(rank:number)=>rank===3?'Максимум':rank===2?'Про':'Бесплатно';
 export function MascotWardrobeDialog({wardrobe,variant,theme}:{wardrobe:MascotWardrobeController;variant:MascotVariant;theme:'light'|'dark'}) {
   const dialog=useRef<HTMLDialogElement>(null);
   const titleId=useId();
   const [selected,setSelected]=useState(()=>wardrobe.selected(variant));
   const [displayed,setDisplayed]=useState(selected);
   const [phase,setPhase]=useState<'idle'|'leaving'|'entering'|'showing'>('idle');
+  const [previewMode,setPreviewMode]=useState<Exclude<PlanikMode,'showcase'>>('idle');
+  const [replay,setReplay]=useState(0);
   const [saving,setSaving]=useState(false);
   const [saveError,setSaveError]=useState('');
   const timers=useRef<number[]>([]);
@@ -119,12 +121,12 @@ export function MascotWardrobeDialog({wardrobe,variant,theme}:{wardrobe:MascotWa
   const select=(id:string)=>{
     if(id===selected||saving)return;
     timers.current.forEach(timer=>window.clearTimeout(timer));timers.current=[];
-    setSelected(id);setSaveError('');
+    setSelected(id);setSaveError('');setPreviewMode('idle');
     if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){setDisplayed(id);setPhase('idle');return;}
     setPhase('leaving');
     timers.current.push(window.setTimeout(()=>{
       setDisplayed(id);setPhase('entering');
-      timers.current.push(window.setTimeout(()=>setPhase('showing'),440));
+      timers.current.push(window.setTimeout(()=>setPhase('idle'),440));
     },220));
   };
   const catalog=wardrobe.data?.catalog.filter(skin=>skin.variant===variant)??[];
@@ -173,10 +175,17 @@ export function MascotWardrobeDialog({wardrobe,variant,theme}:{wardrobe:MascotWa
         <div className="mascot-wardrobe-preview">
           <div className="mascot-wardrobe-stage" aria-label={'Примерка: '+(skin?.name??'Классический')}>
             <div key={displayed} className={'mascot-wardrobe-character phase-'+phase}>
-              <PlanikMascot variant={variant} skinId={displayed} showcase={phase==='showing'}/>
+              <PlanikMascot key={replay} variant={variant} skinId={displayed} previewMode={previewMode}/>
             </div>
           </div>
           <div className="mascot-wardrobe-details"><span className={'mascot-wardrobe-tier tier-'+(skin?.rank??0)}>{tier(skin?.rank??0)}</span><h3>{skin?.name??'Классический'}</h3><p>{skin?.description??'Выберите образ из коллекции.'}</p></div>
+          {(selected==='northern'||selected==='wizard')&&<div className="mascot-wardrobe-animations" aria-label="Особые анимации">
+            <span>Особые анимации:</span>
+            <div>{(['idle','hover',...(selected==='wizard'?['thinking']:[])] as const).map(value=>{
+              const mode=value as 'idle'|'hover'|'thinking';
+              return <button key={mode} type="button" aria-pressed={previewMode===mode} disabled={phase==='leaving'||phase==='entering'} onClick={()=>{setPreviewMode(mode);setReplay(v=>v+1);}}>{mode==='idle'?'Ожидание':mode==='hover'?'Наведение курсора':'Думает'}</button>;
+            })}</div>
+          </div>}
           <div className="mascot-wardrobe-actions">
             <button type="button" className="mascot-wardrobe-apply" disabled={!allowed||isEquipped||saving||phase==='leaving'||phase==='entering'} onClick={()=>void equip()}>{saving?'Сохраняем…':!allowed&&skin?<><LockKeyhole size={15}/>Тариф «{tier(skin.rank)}»</>:isEquipped?<><Check size={16}/>Уже выбран</>:'Применить образ'}</button>
             <p role={saveError?'alert':undefined}>{saveError||(!allowed&&skin?'Примерка доступна всем. Для применения нужна подписка.':'Выбор сохраняется в вашем аккаунте.')}</p>

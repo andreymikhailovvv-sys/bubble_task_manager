@@ -68,3 +68,9 @@ body:has(.planik-notes-companion,.planik-task-editor-companion) .ai-chat-launche
 /* A modal must not leave a hovered trigger behind the backdrop. */
 body:has(.mascot-wardrobe-dialog[open]) .mascot-wardrobe-trigger{opacity:0;pointer-events:none}
 @media(max-height:560px){.mascot-wardrobe-stage{height:clamp(100px,27dvh,150px)}.mascot-wardrobe-header{padding-block:12px}.mascot-wardrobe-details{padding-block:10px}.mascot-wardrobe-preview{padding-block:10px}}
+
+.mascot-wardrobe-animations{margin:0 0 13px;display:grid;gap:7px;text-align:left;color:var(--wd-muted);font-size:11px;font-weight:650}
+.mascot-wardrobe-animations>div{display:flex;gap:6px;flex-wrap:wrap}
+.mascot-wardrobe-animations button{background:var(--wd-hover);border:1px solid var(--wd-line);color:var(--wd-text);border-radius:8px;padding:7px 9px;font:inherit;cursor:pointer}
+.mascot-wardrobe-animations button[aria-pressed=true]{background:var(--wd-selected);border-color:var(--wd-accent);color:var(--wd-accent)}
+.mascot-wardrobe-character .planik-mascot:is([data-skin=northern],[data-skin=wizard]){aspect-ratio:394/325;width:min(300px,100%,34dvh)}

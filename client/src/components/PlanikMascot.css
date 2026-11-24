@@ -443,3 +443,31 @@ body:has(.planik-notes-companion, .planik-task-editor-companion)
 @keyframes wardrobe-tip-hat {0%,28%,82%,100%{transform:none}45%,60%{transform:translateY(-5px) rotate(8deg)}}
 @keyframes wardrobe-fix-scarf {0%,28%,82%,100%{transform:none}45%,60%{transform:translateX(4px) rotate(-6deg)}}
 @media(prefers-reduced-motion:reduce){.planik-showcase-arm{display:none}.planik-skin-head,.planik-skin-collar{animation:none!important}}
+
+/* Individual reactions use existing mode signals; no extra runtime mode. */
+.north-tail{transform-origin:271px 203px;transform-box:view-box;animation:north-tail-sway 3.2s ease-in-out infinite}
+.wizard-cape-back{transform-origin:215px 200px;transform-box:view-box;animation:wizard-cape-sway 4s ease-in-out infinite}
+.north-rub-left,.north-rub-right,.wizard-magic-left,.wizard-magic-right{transform-box:view-box}
+.north-rub-left{transform-origin:130px 196px;animation:north-rub-l .48s ease-in-out infinite alternate}
+.north-rub-right{transform-origin:300px 196px;animation:north-rub-r .48s ease-in-out infinite alternate}
+.north-vapor{transform-box:fill-box;transform-origin:center;animation:north-breath 2.5s ease-out infinite}
+.wizard-orb{animation:wizard-orb-bob 2.6s ease-in-out infinite}
+.wizard-orb-glow{animation:wizard-orb-glow 2.6s ease-in-out infinite}
+.wizard-orbit{transform-origin:0 0;animation:wizard-orbit-spin 7s linear infinite}
+.wizard-magic-left{transform-origin:130px 195px;animation:wizard-hand-l 2.6s ease-in-out infinite}
+.wizard-magic-right{transform-origin:300px 195px;animation:wizard-hand-r 2.6s ease-in-out infinite}
+.planik-mascot:is([data-skin=northern],[data-skin=wizard])[data-mode=typing] .planik-type-left{transform-origin:135px 209px;animation:refined-tap-l .32s ease-in-out infinite alternate}
+.planik-mascot:is([data-skin=northern],[data-skin=wizard])[data-mode=typing] .planik-type-right{transform-origin:295px 209px;animation:refined-tap-r .32s ease-in-out .32s infinite alternate}
+@keyframes refined-tap-l{from{transform:rotate(-5deg)}to{transform:rotate(3deg)}}
+@keyframes refined-tap-r{from{transform:rotate(5deg)}to{transform:rotate(-3deg)}}
+@keyframes north-tail-sway{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(4deg)}}
+@keyframes wizard-cape-sway{0%,100%{transform:scaleX(1)}50%{transform:scaleX(1.025)}}
+@keyframes north-rub-l{from{transform:rotate(-3deg) translateY(-2px)}to{transform:rotate(3deg) translateY(3px)}}
+@keyframes north-rub-r{from{transform:rotate(-3deg) translateY(2px)}to{transform:rotate(3deg) translateY(-3px)}}
+@keyframes north-breath{0%,8%{opacity:0;transform:scale(.3)}24%{opacity:.65}72%,100%{opacity:0;transform:translate(28px,16px) scale(2.3)}}
+@keyframes wizard-orb-bob{0%,100%{transform:translateY(5px)}50%{transform:translateY(-8px)}}
+@keyframes wizard-orb-glow{0%,100%{opacity:.5}50%{opacity:1}}
+@keyframes wizard-orbit-spin{to{transform:rotate(360deg)}}
+@keyframes wizard-hand-l{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(4deg)}}
+@keyframes wizard-hand-r{0%,100%{transform:rotate(5deg)}50%{transform:rotate(-4deg)}}
+@media(prefers-reduced-motion:reduce){.north-tail,.wizard-cape-back,.north-rub-left,.north-rub-right,.north-vapor,.wizard-orb,.wizard-orb-glow,.wizard-orbit,.wizard-magic-left,.wizard-magic-right{animation:none!important}.north-vapor{opacity:0}}
