@@ -566,7 +566,13 @@ export type AdminWorkCreditHistory = { id:string;kind:string;deltaMilli:number;c
 
 
 
+export type MascotVariant = 'planner' | 'economic';
+export type MascotSkin = { id:string; variant:MascotVariant; name:string; description:string; rank:0|2|3 };
+export type MascotWardrobeState = { userId:string; rank:number; expiresAt:string|null; selected:Record<MascotVariant,string>; catalog:MascotSkin[] };
+
 export const api = {
+  getMascotWardrobe: () => request<MascotWardrobeState>('/api/mascot-wardrobe'),
+  equipMascotSkin: (variant:MascotVariant,skinId:string) => request<MascotWardrobeState>('/api/mascot-wardrobe',{method:'PUT',body:JSON.stringify({variant,skinId})}),
   transcribeVoice: (input: { audioBase64: string; mimeType: string; durationSeconds: number }) =>
     request<{ text: string; creditsSpentMilli: number }>('/api/ai/audio/transcribe', {
       method: 'POST', body: JSON.stringify(input)

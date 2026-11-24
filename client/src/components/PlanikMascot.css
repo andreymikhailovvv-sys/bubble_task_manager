@@ -429,3 +429,17 @@ body:has(.planik-notes-companion, .planik-task-editor-companion)
 .planik-mascot--economic .planik-svg [fill="#242e54"]{fill:#483129}
 .planik-mascot--economic .planik-svg [fill="#303d6b"]{fill:#75503a}
 .planik-mascot--economic .planik-svg [fill="#59649d"]{fill:#b7854f}
+
+/* The accessories are body-anchored SVG layers; the original action rigs are
+   drawn above them. Never intercept pointer or notification badge events. */
+.planik-skin-artwork,.planik-showcase-arm { pointer-events:none; }
+.planik-skin-head { transform-box:view-box;transform-origin:215px 93px; }
+.planik-skin-collar { transform-box:view-box;transform-origin:215px 225px; }
+.planik-showcase-arm { opacity:0;transform-origin:301px 194px;transform-box:view-box; }
+.planik-mascot[data-mode="showcase"] .planik-showcase-arm { animation: wardrobe-gesture 1.55s ease-in-out both; }
+.planik-mascot[data-mode="showcase"][data-skin-gesture="hat"] .planik-skin-head { animation: wardrobe-tip-hat 1.55s ease-in-out both; }
+.planik-mascot[data-mode="showcase"][data-skin-gesture="scarf"] .planik-skin-collar { animation: wardrobe-fix-scarf 1.55s ease-in-out both; }
+@keyframes wardrobe-gesture {0%{opacity:0;transform:rotate(42deg)}15%{opacity:1}35%,62%{opacity:1;transform:rotate(0deg)}88%{opacity:1;transform:rotate(38deg)}100%{opacity:0;transform:rotate(42deg)}}
+@keyframes wardrobe-tip-hat {0%,28%,82%,100%{transform:none}45%,60%{transform:translateY(-5px) rotate(8deg)}}
+@keyframes wardrobe-fix-scarf {0%,28%,82%,100%{transform:none}45%,60%{transform:translateX(4px) rotate(-6deg)}}
+@media(prefers-reduced-motion:reduce){.planik-showcase-arm{display:none}.planik-skin-head,.planik-skin-collar{animation:none!important}}

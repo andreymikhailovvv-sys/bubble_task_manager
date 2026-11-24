@@ -1,0 +1,140 @@
+
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Check, LockKeyhole, Shirt, X } from 'lucide-react';
+import { api, type MascotVariant, type MascotWardrobeState } from '../lib/api';
+import { PlanikMascot } from './PlanikMascot';
+import './MascotWardrobe.css';
+
+export function useMascotWardrobe(userId?:string, plan?:string, expiresAt?:string|null) {
+  const [data,setData]=useState<MascotWardrobeState|null>(null);
+  const [error,setError]=useState('');
+  const [open,setOpen]=useState(false);
+  const owner=useRef(userId);
+  owner.current=userId;
+  const sequence=useRef(0);
+  const refresh=useCallback(async()=>{
+    if(!userId)return;
+    const call=++sequence.current;
+    try {
+      const result=await api.getMascotWardrobe();
+      if(call===sequence.current&&owner.current===userId&&result.userId===userId){setData(result);setError('');}
+    } catch(cause) {
+      if(call===sequence.current&&owner.current===userId)setError(cause instanceof Error?cause.message:'Не удалось загрузить гардероб.');
+    }
+  },[userId]);
+  useEffect(()=>{
+    setOpen(false);
+    setData(null);
+    setError('');
+    if(userId)void refresh();
+    return ()=>{sequence.current++;};
+  },[userId,refresh]);
+  useEffect(()=>{if(userId)void refresh();},[plan,expiresAt,refresh,userId]);
+  useEffect(()=>{
+    if(!userId)return;
+    const focus=()=>void refresh();
+    window.addEventListener('focus',focus);
+    return()=>window.removeEventListener('focus',focus);
+  },[userId,refresh]);
+  const current=data?.userId===userId?data:null;
+  useEffect(()=>{
+    if(!current?.expiresAt||!current.rank)return;
+    const delay=Math.max(0,new Date(current.expiresAt).getTime()-Date.now());
+    const timer=window.setTimeout(()=>void refresh(),Math.min(delay+50,2_147_000_000));
+    return()=>window.clearTimeout(timer);
+  },[current?.expiresAt,current?.rank,refresh]);
+  const rank=current?.expiresAt&&new Date(current.expiresAt).getTime()>Date.now()?current.rank:0;
+  const selected=(variant:MascotVariant)=>{
+    const id=current?.selected[variant]??'classic';
+    const skin=current?.catalog.find(item=>item.id===id&&item.variant===variant);
+    return skin&&skin.rank<=rank?id:'classic';
+  };
+  const show=useCallback(()=>{setOpen(true);void refresh();},[refresh]);
+  const save=useCallback(async(variant:MascotVariant,skinId:string)=>{
+    if(!userId)throw new Error('Войдите в аккаунт.');
+    const call=++sequence.current;
+    const result=await api.equipMascotSkin(variant,skinId);
+    if(owner.current!==userId||result.userId!==userId)throw new Error('Аккаунт изменился.');
+    if(call===sequence.current){setData(result);setError('');}
+    else void refresh();
+    return result;
+  },[userId,refresh]);
+  return {data:current,error,rank,selected,open:open&&Boolean(userId),show,close:()=>setOpen(false),save,refresh};
+}
+export type MascotWardrobeController=ReturnType<typeof useMascotWardrobe>;
+export function MascotWardrobeTrigger({onClick}:{onClick:()=>void}) {
+  return <button type="button" className="mascot-wardrobe-trigger" aria-haspopup="dialog" onClick={event=>{event.stopPropagation();onClick();}}><Shirt size={12}/>Аксессуары и скины</button>;
+}
+const tier=(rank:number)=>rank===3?'Максимум':rank===2?'Про':'Базовый';
+export function MascotWardrobeDialog({wardrobe,variant,theme}:{wardrobe:MascotWardrobeController;variant:MascotVariant;theme:'light'|'dark'}) {
+  const dialog=useRef<HTMLDialogElement>(null);
+  const titleId=useId();
+  const [selected,setSelected]=useState(()=>wardrobe.selected(variant));
+  const [displayed,setDisplayed]=useState(selected);
+  const [phase,setPhase]=useState<'idle'|'leaving'|'entering'|'showing'>('idle');
+  const [saving,setSaving]=useState(false);
+  const [saveError,setSaveError]=useState('');
+  const timers=useRef<number[]>([]);
+  const close=wardrobe.close;
+  const closeRef=useRef(close);
+  closeRef.current=close;
+  useEffect(()=>{
+    const element=dialog.current;
+    if(!element)return;
+    const previous=document.activeElement as HTMLElement|null;
+    element.showModal();
+    return()=>{if(element.open)element.close();previous?.focus({preventScroll:true});};
+  },[]);
+  useEffect(()=>()=>timers.current.forEach(id=>window.clearTimeout(id)),[]);
+  const select=(id:string)=>{
+    if(id===selected||saving)return;
+    timers.current.forEach(timer=>window.clearTimeout(timer));timers.current=[];
+    setSelected(id);setSaveError('');
+    if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){setDisplayed(id);setPhase('idle');return;}
+    setPhase('leaving');
+    timers.current.push(window.setTimeout(()=>{
+      setDisplayed(id);setPhase('entering');
+      timers.current.push(window.setTimeout(()=>setPhase('showing'),440));
+    },220));
+  };
+  const catalog=wardrobe.data?.catalog.filter(skin=>skin.variant===variant)??[];
+  const skin=catalog.find(item=>item.id===selected);
+  const allowed=Boolean(skin&&skin.rank<=wardrobe.rank);
+  const isEquipped=selected===wardrobe.selected(variant);
+  const equip=async()=>{
+    if(!allowed||isEquipped||saving)return;
+    setSaving(true);setSaveError('');
+    try {await wardrobe.save(variant,selected);}
+    catch(cause){setSaveError(cause instanceof Error?cause.message:'Не удалось сохранить образ.');void wardrobe.refresh();}
+    finally{setSaving(false);}
+  };
+  return createPortal(<dialog ref={dialog} className="mascot-wardrobe-dialog" data-theme={theme} aria-labelledby={titleId}
+    onCancel={event=>{event.preventDefault();closeRef.current();}} onClick={event=>{if(event.target===event.currentTarget)close();}}>
+    <section className="mascot-wardrobe-shell">
+      <header className="mascot-wardrobe-header"><div><span className="mascot-wardrobe-kicker">ГАРДЕРОБ · {variant==='planner'?'ПЛАНИК':'ЭКОНОМЫЧ'}</span><h2 id={titleId}>Аксессуары и скины</h2><p>Примеряйте любые образы и выбирайте свой стиль.</p></div><button type="button" className="mascot-wardrobe-close" onClick={close} aria-label="Закрыть гардероб"><X size={20}/></button></header>
+      <div className="mascot-wardrobe-content">
+        <nav className="mascot-wardrobe-list" aria-label="Скины">
+          <span className="mascot-wardrobe-list-label">СКИНЫ</span>
+          {catalog.map(item=><button type="button" key={item.id} aria-pressed={item.id===selected} className={'mascot-wardrobe-option'+(item.id===selected?' is-selected':'')} onClick={()=>select(item.id)} disabled={saving}>
+            <span className="mascot-wardrobe-option-title">{item.name}{item.id===wardrobe.selected(variant)?<Check size={14} aria-label="Выбран"/>:null}</span>
+            <span className={'mascot-wardrobe-tier tier-'+item.rank}>{item.rank>wardrobe.rank?<LockKeyhole size={10}/>:null}{tier(item.rank)}</span>
+          </button>)}
+          {!catalog.length&&<p className="mascot-wardrobe-message">{wardrobe.error||'Загружаем образы…'}</p>}
+        </nav>
+        <div className="mascot-wardrobe-preview">
+          <div className="mascot-wardrobe-stage" aria-label={'Примерка: '+(skin?.name??'Классический')}>
+            <div key={displayed} className={'mascot-wardrobe-character phase-'+phase}>
+              <PlanikMascot variant={variant} skinId={displayed} showcase={phase==='showing'}/>
+            </div>
+          </div>
+          <div className="mascot-wardrobe-details"><span className={'mascot-wardrobe-tier tier-'+(skin?.rank??0)}>{tier(skin?.rank??0)}</span><h3>{skin?.name??'Классический'}</h3><p>{skin?.description??'Выберите образ из коллекции.'}</p></div>
+          <div className="mascot-wardrobe-actions">
+            <button type="button" className="mascot-wardrobe-apply" disabled={!allowed||isEquipped||saving||phase==='leaving'||phase==='entering'} onClick={()=>void equip()}>{saving?'Сохраняем…':!allowed&&skin?<><LockKeyhole size={15}/>Тариф «{tier(skin.rank)}»</>:isEquipped?<><Check size={16}/>Уже выбран</>:'Применить образ'}</button>
+            <p role={saveError?'alert':undefined}>{saveError||(!allowed&&skin?'Примерка доступна всем. Для применения нужна подписка.':'Выбор сохраняется в вашем аккаунте.')}</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </dialog>,document.body);
+}

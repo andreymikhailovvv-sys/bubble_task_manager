@@ -14,6 +14,7 @@ import { SectorEditor } from './components/SectorEditor';
 import { FocusedTaskWindowFrame } from './components/FocusedTaskWindowFrame';
 import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace';
 import { PlanikMascot } from './components/PlanikMascot';
+import { useMascotWardrobe, MascotWardrobeDialog, MascotWardrobeTrigger } from './components/MascotWardrobe';
 import { CustomSelect } from './components/CustomSelect';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { ResizableDescriptionSurface } from './components/ResizableDescriptionSurface';
@@ -72,6 +73,7 @@ const formatCredits = (credits: number) => credits.toLocaleString('ru-RU', { max
 export default function TestPage() {
   const [section, setSection] = useState<Section>('overview');
   const [user, setUser] = useState<CurrentUser | null>(null);
+  const wardrobe=useMascotWardrobe(user?.id,user?.subscriptionPlan,user?.subscriptionExpiresAt);
   const [spheres, setSpheres] = useState<Sphere[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -590,10 +592,11 @@ export default function TestPage() {
         </>}
       </main>
     </div>
-    {user && <button className="tp-mascot" type="button" title="Чат с Плаником" aria-label="Открыть чат с Плаником" onClick={() => setAssistantOpen(previous => !previous)}>
+    {user && <div className="mascot-wardrobe-anchor tp-mascot-dressing"><button className="tp-mascot" type="button" title="Чат с Плаником" aria-label="Открыть чат с Плаником" onClick={() => setAssistantOpen(previous => !previous)}>
       <PlanikMascot notificationCount={unreadCount} celebrationKey={celebrationKey}
-        busy={assistantActivity.busy} progress={assistantActivity.progress}/>
-    </button>}
+        busy={assistantActivity.busy} progress={assistantActivity.progress} skinId={wardrobe.selected('planner')}/>
+    </button><MascotWardrobeTrigger onClick={wardrobe.show}/></div>}
+    {wardrobe.open&&<MascotWardrobeDialog wardrobe={wardrobe} variant="planner" theme={theme}/>}
     {noticeToast&&<button type="button" className="tp-system-notice-toast" onClick={()=>openNotice(noticeToast)}
       aria-label="Открыть системное уведомление">
       <span>⚙️ Системное уведомление</span>

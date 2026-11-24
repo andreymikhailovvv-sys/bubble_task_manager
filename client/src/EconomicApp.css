@@ -740,3 +740,6 @@ body:has(.econ-root.econ-mobile-workspace) #root{min-height:100dvh}
 .econ-mobile-workspace .econ-report-preview-grid-item .econ-card{width:100%}
 .econ-mobile-workspace .econ-account-detail h3{font-weight:400}
 .econ-mobile-workspace .econ-mini-account span{font-weight:400}
+
+.econ-mascot-dressing{position:fixed;z-index:140;right:19px;bottom:23px}.econ-mascot-dressing .econ-mascot{position:relative;right:auto;bottom:auto;z-index:auto}.econ-mascot-dressing .mascot-wardrobe-trigger{top:calc(100% - 9px)}
+@media(max-width:570px){.econ-mascot-dressing{right:6px;bottom:60px}}
