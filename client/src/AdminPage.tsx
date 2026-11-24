@@ -1,7 +1,11 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { api, type AdminBroadcastImage, type AdminBroadcastTarget, type AdminSubscriptionPlan, type AdminUser, type CreditUsageStatistics, type SubscriptionLinks, type AdminWorkOrganization, type AdminWorkCreditHistory } from './lib/api';
+import { api, type AdminBroadcastImage, type AdminBroadcastTarget, type AdminSubscriptionPlan, type AdminSubscriptionChange, type AdminUser, type CreditUsageStatistics, type SubscriptionLinks, type AdminWorkOrganization, type AdminWorkCreditHistory } from './lib/api';
 import { CreditUsageStats } from './components/CreditUsageStats';
 
+const PLAN_LABELS: Record<AdminSubscriptionPlan, string> = { free: 'Без подписки', start: 'Старт', pro: 'Про', max: 'Максимум' };
+const PLAN_CREDITS: Record<AdminSubscriptionPlan, number> = { free: 0, start: 3000, pro: 6000, max: 13000 };
+const formatAdminDate = (value: string | null) => value ? new Date(value).toLocaleString('ru-RU') : '—';
+const activePlan = (user: AdminUser) => user.subscriptionPlan !== 'free' && Boolean(user.subscriptionExpiresAt && new Date(user.subscriptionExpiresAt).getTime() > Date.now());
 const BROADCAST_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const BROADCAST_MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
@@ -54,6 +58,13 @@ export default function AdminPage() {
   const [creditUsageMonth, setCreditUsageMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [creditUsageExporting, setCreditUsageExporting] = useState(false);
   const [subscriptionUpdating, setSubscriptionUpdating] = useState(false);
+  const [subscriptionDraft, setSubscriptionDraft] = useState<AdminSubscriptionPlan>('free');
+  const [subscriptionReason, setSubscriptionReason] = useState('');
+  const [subscriptionNotice, setSubscriptionNotice] = useState('');
+  const [subscriptionHistory, setSubscriptionHistory] = useState<AdminSubscriptionChange[]>([]);
+  const [subscriptionHistoryError, setSubscriptionHistoryError] = useState('');
+  const [subscriptionHistoryLoading, setSubscriptionHistoryLoading] = useState(false);
+  const [subscriptionHistoryRevision, setSubscriptionHistoryRevision] = useState(0);
   const [broadcastTarget, setBroadcastTarget] = useState<AdminBroadcastTarget>('all');
   const [broadcastUserId, setBroadcastUserId] = useState('');
   const [broadcastText, setBroadcastText] = useState('');
@@ -165,13 +176,46 @@ export default function AdminPage() {
     }
   }
 
+  useEffect(() => {
+    setSubscriptionDraft(selectedUser?.subscriptionPlan ?? 'free');
+    setSubscriptionReason('');
+    setSubscriptionNotice('');
+  }, [selectedUserId, selectedUser?.subscriptionPlan, selectedUser?.subscriptionExpiresAt]);
+
+  useEffect(() => {
+    setSubscriptionHistory([]);
+    setSubscriptionHistoryError('');
+    if (!selectedUserId || !password) return;
+    let alive = true;
+    setSubscriptionHistoryLoading(true);
+    void api.adminGetSubscriptionHistory(password, selectedUserId)
+      .then(result => { if (alive) setSubscriptionHistory(result.history); })
+      .catch(error => { if (alive) setSubscriptionHistoryError(error instanceof Error ? error.message : 'Не удалось загрузить историю'); })
+      .finally(() => { if (alive) setSubscriptionHistoryLoading(false); });
+    return () => { alive = false; };
+  }, [selectedUserId, password, subscriptionHistoryRevision]);
+
   async function updateSubscriptionPlan(subscriptionPlan: AdminSubscriptionPlan) {
-    if (!selectedUser) return;
+    if (!selectedUser || subscriptionUpdating) return;
+    const target = selectedUser;
+    const active = activePlan(target);
+    const prompt = subscriptionPlan === 'free'
+      ? 'Отменить подписку? Неиспользованный лимит сгорит, бонусные и купленные кредиты сохранятся. Возврат оплаты не производится.'
+      : `Выдать тариф «${PLAN_LABELS[subscriptionPlan]}» бесплатно на один календарный месяц? Начислится ${PLAN_CREDITS[subscriptionPlan].toLocaleString('ru-RU')} кредитов в месячный лимит.` +
+        (active ? ' Текущий период и его неиспользованный лимит будут заменены; возврата оплаты нет.' : '');
+    if (!window.confirm(prompt)) return;
     setSubscriptionUpdating(true);
     setError('');
+    setSubscriptionNotice('');
     try {
-      const result = await api.adminSetSubscriptionPlan({ password, userId: selectedUser.id, subscriptionPlan });
-      setUsers((prev) => prev.map((user) => user.id === result.user.id ? { ...user, subscriptionPlan: result.user.subscriptionPlan } : user));
+      const result = await api.adminSetSubscriptionPlan({
+        password, userId: target.id, subscriptionPlan, requestId: crypto.randomUUID(),
+        expectedPeriod: target.aiCreditsPeriod, expectedPlan: target.subscriptionPlan,
+        expectedExpiresAt: target.subscriptionExpiresAt, reason: subscriptionReason
+      });
+      setUsers(prev => prev.map(user => user.id === result.user.id ? { ...user, ...result.user } : user));
+      setSubscriptionNotice(result.changed ? 'Подписка успешно изменена.' : 'Изменений нет: повторное начисление не произведено.');
+      setSubscriptionHistoryRevision(value => value + 1);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось изменить тариф');
     } finally {
@@ -434,6 +478,7 @@ export default function AdminPage() {
                 <button
                   key={user.id}
                   type="button"
+                  disabled={subscriptionUpdating}
                   onClick={() => setSelectedUserId(user.id)}
                   className={`w-full rounded-md border p-2 text-left text-sm ${
                     selectedUserId === user.id
@@ -461,15 +506,49 @@ export default function AdminPage() {
                   <div>Текущие кредиты: {selectedUser.aiCredits}</div>
                   <div>Telegram: {selectedUser.telegramLinked ? 'подключён' : 'не подключён'}</div>
                 </div>
-                <label className="mt-3 block max-w-xs text-sm text-slate-200">
-                  Тариф для сегментации рассылок
-                  <select value={selectedUser.subscriptionPlan} disabled={subscriptionUpdating} onChange={(event) => void updateSubscriptionPlan(event.target.value as AdminSubscriptionPlan)} className="mt-1 w-full rounded-md border border-slate-600 bg-slate-950 px-3 py-2 text-sm outline-none ring-cyan-400 focus:ring-2 disabled:opacity-60">
-                    <option value="free">Без подписки</option>
-                    <option value="start">Старт</option>
-                    <option value="pro">Про</option>
-                    <option value="max">Максимум</option>
-                  </select>
-                </label>
+                <div className="mt-4 rounded-xl border border-cyan-400/25 bg-slate-950/50 p-4">
+                  <h3 className="font-semibold text-cyan-200">Управление подпиской</h3>
+                  <p className="mt-1 text-xs text-slate-400">Бесплатная выдача на один календарный месяц. Без оплаты и автопродления. Тариф также используется для сегментации рассылок.</p>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <div>Тариф: <strong>{PLAN_LABELS[selectedUser.subscriptionPlan] ?? selectedUser.subscriptionPlan}</strong></div>
+                    <div>Статус: {activePlan(selectedUser) ? 'Активна' : selectedUser.subscriptionPlan === 'free' ? 'Нет подписки' : selectedUser.subscriptionExpiresAt ? 'Истекла' : 'Старый тариф без срока'}</div>
+                    <div>Действует до: {formatAdminDate(selectedUser.subscriptionExpiresAt)}</div>
+                    <div>Остаток лимита: {(selectedUser.aiIncludedCreditsMilli / 1000).toLocaleString('ru-RU')}</div>
+                    <div>Бонусные: {(selectedUser.aiBonusCreditsMilli / 1000).toLocaleString('ru-RU')}</div>
+                    <div>Купленные: {(selectedUser.aiPurchasedCreditsMilli / 1000).toLocaleString('ru-RU')}</div>
+                  </div>
+                  {selectedUser.isGuest && <p className="mt-2 text-xs text-amber-300">Гостевой аккаунт: выдача доступна после регистрации.</p>}
+                  <label className="mt-3 block text-sm text-slate-200">
+                    Новый тариф
+                    <select value={subscriptionDraft} disabled={subscriptionUpdating} onChange={event => setSubscriptionDraft(event.target.value as AdminSubscriptionPlan)} className="mt-1 w-full rounded-md border border-slate-600 bg-slate-950 px-3 py-2 text-sm">
+                      <option value="free">Без подписки (отменить)</option>
+                      <option value="start">Старт · 3 000 кредитов</option>
+                      <option value="pro">Про · 6 000 кредитов</option>
+                      <option value="max">Максимум · 13 000 кредитов</option>
+                    </select>
+                  </label>
+                  <label className="mt-2 block text-sm text-slate-200">Причина (необязательно)
+                    <input value={subscriptionReason} onChange={event => setSubscriptionReason(event.target.value)} maxLength={500} disabled={subscriptionUpdating} placeholder="Подарок, компенсация, тестирование…" className="mt-1 w-full rounded-md border border-slate-600 bg-slate-950 px-3 py-2 text-sm"/>
+                  </label>
+                  <button type="button" disabled={subscriptionUpdating || (subscriptionDraft !== 'free' && selectedUser.isGuest) || (subscriptionDraft === selectedUser.subscriptionPlan && (activePlan(selectedUser) || subscriptionDraft === 'free'))}
+                    onClick={() => void updateSubscriptionPlan(subscriptionDraft)}
+                    className="mt-3 rounded-md bg-cyan-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                    {subscriptionUpdating ? 'Сохранение…' : subscriptionDraft === 'free' ? 'Отменить подписку' : 'Выдать подписку бесплатно'}
+                  </button>
+                  {subscriptionNotice && <p role="status" className="mt-2 text-xs text-emerald-300">{subscriptionNotice}</p>}
+                  <p className="mt-2 text-xs text-slate-400">Повторная выдача активного тарифа не пополняет лимит. Смена тарифа начинает новый период. Бонусные и купленные кредиты сохраняются.</p>
+                  <h4 className="mt-4 border-t border-slate-700 pt-3 text-sm font-semibold">История выдач и отмен</h4>
+                  {subscriptionHistoryLoading ? <p className="text-xs text-slate-400">Загрузка…</p> : subscriptionHistoryError ? <p role="alert" className="text-xs text-rose-300">{subscriptionHistoryError}</p> : !subscriptionHistory.length ? <p className="text-xs text-slate-400">Операций пока нет.</p> : (
+                    <div className="mt-2 max-h-56 space-y-2 overflow-y-auto">
+                      {subscriptionHistory.map(change => <div key={change.id} className="rounded-md border border-slate-700 p-2 text-xs">
+                        <div className="font-semibold">{PLAN_LABELS[change.previousPlan] ?? change.previousPlan} → {PLAN_LABELS[change.nextPlan] ?? change.nextPlan} {change.action === 'noop' ? '(без изменений)' : ''}</div>
+                        <div>{formatAdminDate(change.createdAt)} · до {formatAdminDate(change.nextExpiresAt)}</div>
+                        <div>Лимит: {change.previousIncludedMilli / 1000} → {change.nextIncludedMilli / 1000}</div>
+                        {change.reason && <div className="text-slate-400">{change.reason}</div>}
+                      </div>)}
+                    </div>
+                  )}
+                </div>
                 <div className="mt-5 border-t border-slate-700 pt-4">
                   <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
                     <div>

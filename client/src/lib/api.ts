@@ -348,8 +348,20 @@ export type AdminUser = {
   aiCredits: number;
   aiCreditsPeriod: string;
   subscriptionPlan: AdminSubscriptionPlan;
+  subscriptionExpiresAt: string | null;
+  aiIncludedCreditsMilli: number;
+  aiBonusCreditsMilli: number;
+  aiPurchasedCreditsMilli: number;
+  isGuest: boolean;
   telegramLinked: boolean;
   createdAt: string;
+};
+export type AdminSubscriptionChange = {
+  id: string; action: 'grant' | 'replace' | 'cancel' | 'noop';
+  previousPlan: AdminSubscriptionPlan; nextPlan: AdminSubscriptionPlan;
+  previousExpiresAt: string | null; nextExpiresAt: string | null;
+  previousIncludedMilli: number; nextIncludedMilli: number;
+  reason: string; createdAt: string;
 };
 export type TelegramIntegrationStatus = TelegramUserClientAuthStatus & {
   botConnected: boolean;
@@ -1034,10 +1046,15 @@ export const api = {
     const fileNameMatch = disposition.match(/filename="?([^";]+)"?/i);
     return { blob: await response.blob(), fileName: fileNameMatch?.[1] ?? `credit-usage-${payload.month}.xls` };
   },
-  adminSetSubscriptionPlan: (payload: { password: string; userId: string; subscriptionPlan: AdminSubscriptionPlan }) =>
-    request<{ user: { id: string; subscriptionPlan: AdminSubscriptionPlan } }>(`/api/admin/users/${payload.userId}/subscription`, {
-      method: 'POST',
-      body: JSON.stringify({ password: payload.password, subscriptionPlan: payload.subscriptionPlan })
+  adminSetSubscriptionPlan: (payload: {
+    password: string; userId: string; subscriptionPlan: AdminSubscriptionPlan; requestId: string;
+    expectedPeriod: string; expectedPlan: AdminSubscriptionPlan; expectedExpiresAt: string | null; reason: string;
+  }) => request<{ user: Pick<AdminUser, 'id' | 'subscriptionPlan' | 'subscriptionExpiresAt' | 'aiCreditsPeriod' | 'aiCredits' | 'aiIncludedCreditsMilli' | 'aiBonusCreditsMilli' | 'aiPurchasedCreditsMilli' | 'isGuest'>; changed: boolean; replay: boolean }>(`/api/admin/users/${encodeURIComponent(payload.userId)}/subscription`, {
+    method: 'POST', body: JSON.stringify(payload)
+  }),
+  adminGetSubscriptionHistory: (password: string, userId: string) =>
+    request<{ history: AdminSubscriptionChange[] }>(`/api/admin/users/${encodeURIComponent(userId)}/subscription-history`, {
+      method: 'POST', body: JSON.stringify({ password })
     }),
   adminSendBroadcast: (payload: { password: string; target: AdminBroadcastTarget; userId?: string; text: string; image?: AdminBroadcastImage | null }) =>
     request<{ requested: number; sent: number; failed: number }>('/api/admin/broadcasts', {
