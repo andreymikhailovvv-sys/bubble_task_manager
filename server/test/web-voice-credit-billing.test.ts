@@ -4,6 +4,8 @@ import { normalizeSpeechText, realtimeSpeechCostMilli, realtimeSpeechInputEvent,
 import { calculateOpenAiTranscriptionUsageCost } from '../src/services/ai-usage-metering.service.js';
 import { createLiveVoiceTicket } from '../src/services/ai-live-voice.service.js';
 import crypto from 'node:crypto';
+import { prisma } from '../src/db/prisma.js';
+import { SubscriptionAccessError } from '../src/services/subscription-access.service.js';
 
 test('Web audio uses the current duration-billed transcription model', () => {
   const cost = calculateOpenAiTranscriptionUsageCost('gpt-transcribe', { type: 'duration', seconds: 60 });
@@ -38,8 +40,12 @@ test('Narration passes text to Realtime as a user conversation item', () => {
   });
 });
 
-test('Live voice tickets are one-time, short-lived and limited per user', async () => {
+test('Live voice tickets are one-time, short-lived and limited per user', async (t) => {
   const user = 'voice-ticket-test-' + crypto.randomUUID();
+  // Stub only the database boundary; keep the production subscription gate active.
+  const lookup = t.mock.method(prisma.user, 'findUnique', async () => ({
+    subscriptionPlan: 'pro', subscriptionExpiresAt: new Date(Date.now() + 86_400_000)
+  }));
   const a = await createLiveVoiceTicket(user);
   const b = await createLiveVoiceTicket(user);
   const c = await createLiveVoiceTicket(user);
@@ -48,6 +54,26 @@ test('Live voice tickets are one-time, short-lived and limited per user', async 
   assert.equal(a.maxSeconds, 300);
   assert.equal(a.expiresInSeconds, 30);
   await assert.rejects(() => createLiveVoiceTicket(user), /Слишком много запросов/);
+  assert.equal(lookup.mock.callCount(), 4);
+});
+
+test('Live voice refuses missing, expired and lower-tier subscriptions before issuing a ticket', async (t) => {
+  const future = new Date(Date.now() + 86_400_000);
+  const past = new Date(Date.now() - 86_400_000);
+  const accounts = new Map([
+    ['free', { subscriptionPlan: 'free', subscriptionExpiresAt: future }],
+    ['start', { subscriptionPlan: 'start', subscriptionExpiresAt: future }],
+    ['expired-pro', { subscriptionPlan: 'pro', subscriptionExpiresAt: past }],
+    ['max', { subscriptionPlan: 'max', subscriptionExpiresAt: future }]
+  ]);
+  const lookup = t.mock.method(prisma.user, 'findUnique', async (args: { where: { id: string } }) => accounts.get(args.where.id) ?? null);
+  for (const userId of ['missing', 'free', 'start', 'expired-pro']) {
+    await assert.rejects(() => createLiveVoiceTicket(userId), (error: unknown) =>
+      error instanceof SubscriptionAccessError && error.status === 403 && error.requiredPlan === 'pro');
+  }
+  const allowed = await createLiveVoiceTicket('max');
+  assert.equal(allowed.expiresInSeconds, 30);
+  assert.equal(lookup.mock.callCount(), 5);
 });
 
 test('Realtime billing applies modality-specific cached input discounts', () => {
