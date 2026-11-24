@@ -660,6 +660,7 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
     onOpenTaskReference:((String)->Unit)?=null,
     onOpenMonitoredTaskAi:((String)->Unit)?=null,
     actionTaskId:String?=null,actionTaskModel:String="gpt-6-luna"){
+    val billingProfile = proposalVm?.state?.collectAsStateWithLifecycle()?.value?.user
     val isUser=message.role=="user"
     val rawContent=messageDisplayContent(message.content)
     val (content,attachmentNames)=splitNativeAiMessageAttachments(rawContent)
@@ -829,7 +830,7 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                             NativeMailSendCard(actions,it,c)
                         }
                     }
-                    message.creditsSpentMilli?.takeIf{it>0}?.let{
+                    message.creditsSpentMilli?.takeIf{it>0 && billingProfile?.subscriptionLimit == null}?.let{
                         Text("ИИ-кредиты: "+String.format(Locale.US,"%.3f",it/1000.0),
                             color=c.secondary,fontSize=9.sp)
                     }
