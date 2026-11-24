@@ -4,8 +4,7 @@ import { normalizeSpeechText, realtimeSpeechCostMilli, realtimeSpeechInputEvent,
 import { calculateOpenAiTranscriptionUsageCost } from '../src/services/ai-usage-metering.service.js';
 import { createLiveVoiceTicket } from '../src/services/ai-live-voice.service.js';
 import crypto from 'node:crypto';
-import { prisma } from '../src/db/prisma.js';
-import { SubscriptionAccessError } from '../src/services/subscription-access.service.js';
+import { SubscriptionAccessError, subscriptionAccessRepository } from '../src/services/subscription-access.service.js';
 
 test('Web audio uses the current duration-billed transcription model', () => {
   const cost = calculateOpenAiTranscriptionUsageCost('gpt-transcribe', { type: 'duration', seconds: 60 });
@@ -43,7 +42,7 @@ test('Narration passes text to Realtime as a user conversation item', () => {
 test('Live voice tickets are one-time, short-lived and limited per user', async (t) => {
   const user = 'voice-ticket-test-' + crypto.randomUUID();
   // Stub only the database boundary; keep the production subscription gate active.
-  const lookup = t.mock.method(prisma.user, 'findUnique', async () => ({
+  const lookup = t.mock.method(subscriptionAccessRepository, 'findUser', async () => ({
     subscriptionPlan: 'pro', subscriptionExpiresAt: new Date(Date.now() + 86_400_000)
   }));
   const a = await createLiveVoiceTicket(user);
@@ -66,7 +65,7 @@ test('Live voice refuses missing, expired and lower-tier subscriptions before is
     ['expired-pro', { subscriptionPlan: 'pro', subscriptionExpiresAt: past }],
     ['max', { subscriptionPlan: 'max', subscriptionExpiresAt: future }]
   ]);
-  const lookup = t.mock.method(prisma.user, 'findUnique', async (args: { where: { id: string } }) => accounts.get(args.where.id) ?? null);
+  const lookup = t.mock.method(subscriptionAccessRepository, 'findUser', async (userId: string) => accounts.get(userId) ?? null);
   for (const userId of ['missing', 'free', 'start', 'expired-pro']) {
     await assert.rejects(() => createLiveVoiceTicket(userId), (error: unknown) =>
       error instanceof SubscriptionAccessError && error.status === 403 && error.requiredPlan === 'pro');

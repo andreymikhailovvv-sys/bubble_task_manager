@@ -19,8 +19,14 @@ export class SubscriptionAccessError extends Error {
 export function effectiveSubscriptionRank(user: {subscriptionPlan: string; subscriptionExpiresAt: Date | null} | null, now = new Date()) {
   return user?.subscriptionExpiresAt && user.subscriptionExpiresAt > now ? subscriptionRank(user.subscriptionPlan) : 0;
 }
+/** A narrow database boundary; the entitlement logic stays independent of Prisma's dynamic delegate. */
+export const subscriptionAccessRepository = {
+  findUser(userId: string) {
+    return prisma.user.findUnique({where:{id:userId},select:{subscriptionPlan:true,subscriptionExpiresAt:true}});
+  }
+};
 export async function getSubscriptionRank(userId: string) {
-  return effectiveSubscriptionRank(await prisma.user.findUnique({where:{id:userId},select:{subscriptionPlan:true,subscriptionExpiresAt:true}}));
+  return effectiveSubscriptionRank(await subscriptionAccessRepository.findUser(userId));
 }
 export function featureAccessError(rank: number, feature: PremiumFeature) {
   const required = requirements[feature];
