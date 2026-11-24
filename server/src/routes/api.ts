@@ -1249,9 +1249,9 @@ apiRouter.post('/admin/broadcasts', async (req, res) => {
   const where: Prisma.UserWhereInput = target === 'user'
     ? { id: userId, telegramChatId: { not: null } }
     : target === 'paid'
-      ? { telegramChatId: { not: null }, subscriptionPlan: { in: [...SUBSCRIPTION_PLAN_KEYS] } }
+      ? { telegramChatId: { not: null }, subscriptionPlan: { in: [...SUBSCRIPTION_PLAN_KEYS] }, subscriptionExpiresAt: { gt: new Date() } }
       : target === 'free'
-        ? { telegramChatId: { not: null }, subscriptionPlan: 'free' }
+        ? { telegramChatId: { not: null }, OR: [{ subscriptionPlan: 'free' }, { subscriptionExpiresAt: null }, { subscriptionExpiresAt: { lte: new Date() } }] }
         : { telegramChatId: { not: null } };
 
   const recipients = await prisma.user.findMany({
@@ -1351,7 +1351,12 @@ apiRouter.post('/admin/users/:userId/credits', async (req, res) => {
     id: updatedUser.id,
     aiCredits: updatedUser.aiCredits,
     aiCreditsMilli: updatedUser.aiIncludedCreditsMilli + updatedUser.aiBonusCreditsMilli + updatedUser.aiPurchasedCreditsMilli,
-    aiCreditsPeriod: updatedUser.aiCreditsPeriod
+    aiCreditsPeriod: updatedUser.aiCreditsPeriod,
+    subscriptionPlan: updatedUser.subscriptionPlan,
+    subscriptionExpiresAt: updatedUser.subscriptionExpiresAt,
+    aiIncludedCreditsMilli: updatedUser.aiIncludedCreditsMilli,
+    aiBonusCreditsMilli: updatedUser.aiBonusCreditsMilli,
+    aiPurchasedCreditsMilli: updatedUser.aiPurchasedCreditsMilli
   } });
 });
 

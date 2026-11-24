@@ -125,8 +125,8 @@ export default function AdminPage() {
   const telegramUsers = useMemo(() => users.filter((user) => user.telegramLinked), [users]);
   const broadcastAudienceCount = useMemo(() => {
     if (broadcastTarget === 'user') return telegramUsers.some((user) => user.id === broadcastUserId) ? 1 : 0;
-    if (broadcastTarget === 'paid') return telegramUsers.filter((user) => user.subscriptionPlan !== 'free').length;
-    if (broadcastTarget === 'free') return telegramUsers.filter((user) => user.subscriptionPlan === 'free').length;
+    if (broadcastTarget === 'paid') return telegramUsers.filter((user) => activePlan(user)).length;
+    if (broadcastTarget === 'free') return telegramUsers.filter((user) => !activePlan(user)).length;
     return telegramUsers.length;
   }, [broadcastTarget, broadcastUserId, telegramUsers]);
 
@@ -178,9 +178,8 @@ export default function AdminPage() {
 
   useEffect(() => {
     setSubscriptionDraft(selectedUser?.subscriptionPlan ?? 'free');
-    setSubscriptionReason('');
-    setSubscriptionNotice('');
   }, [selectedUserId, selectedUser?.subscriptionPlan, selectedUser?.subscriptionExpiresAt]);
+  useEffect(() => { setSubscriptionReason(''); setSubscriptionNotice(''); }, [selectedUserId]);
 
   useEffect(() => {
     setSubscriptionHistory([]);
@@ -214,6 +213,7 @@ export default function AdminPage() {
         expectedExpiresAt: target.subscriptionExpiresAt, reason: subscriptionReason
       });
       setUsers(prev => prev.map(user => user.id === result.user.id ? { ...user, ...result.user } : user));
+      setSubscriptionReason('');
       setSubscriptionNotice(result.changed ? 'Подписка успешно изменена.' : 'Изменений нет: повторное начисление не произведено.');
       setSubscriptionHistoryRevision(value => value + 1);
     } catch (e) {
@@ -285,7 +285,7 @@ export default function AdminPage() {
         userId: selectedUser.id,
         creditsToAdd: amount
       });
-      setUsers((prev) => prev.map((user) => (user.id === result.user.id ? { ...user, aiCredits: result.user.aiCredits } : user)));
+      setUsers((prev) => prev.map((user) => (user.id === result.user.id ? { ...user, ...result.user } : user)));
       setCreditsToAdd('10');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось обновить кредиты');
@@ -513,6 +513,7 @@ export default function AdminPage() {
                     <div>Тариф: <strong>{PLAN_LABELS[selectedUser.subscriptionPlan] ?? selectedUser.subscriptionPlan}</strong></div>
                     <div>Статус: {activePlan(selectedUser) ? 'Активна' : selectedUser.subscriptionPlan === 'free' ? 'Нет подписки' : selectedUser.subscriptionExpiresAt ? 'Истекла' : 'Старый тариф без срока'}</div>
                     <div>Действует до: {formatAdminDate(selectedUser.subscriptionExpiresAt)}</div>
+                    <div>Источник: {selectedUser.aiCreditsPeriod.startsWith('admin-subscription:') ? 'Администратор' : selectedUser.aiCreditsPeriod.startsWith('subscription:') ? 'Оплата' : '—'}</div>
                     <div>Остаток лимита: {(selectedUser.aiIncludedCreditsMilli / 1000).toLocaleString('ru-RU')}</div>
                     <div>Бонусные: {(selectedUser.aiBonusCreditsMilli / 1000).toLocaleString('ru-RU')}</div>
                     <div>Купленные: {(selectedUser.aiPurchasedCreditsMilli / 1000).toLocaleString('ru-RU')}</div>
