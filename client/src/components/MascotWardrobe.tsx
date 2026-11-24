@@ -63,7 +63,37 @@ export function useMascotWardrobe(userId?:string, plan?:string, expiresAt?:strin
 }
 export type MascotWardrobeController=ReturnType<typeof useMascotWardrobe>;
 export function MascotWardrobeTrigger({onClick}:{onClick:()=>void}) {
-  return <button type="button" className="mascot-wardrobe-trigger" aria-haspopup="dialog" onClick={event=>{event.stopPropagation();onClick();}}><Shirt size={12}/>Аксессуары и скины</button>;
+  const button=useRef<HTMLButtonElement>(null);
+  const [hovered,setHovered]=useState(false);
+  const hideTimer=useRef<number|undefined>(undefined);
+  const cancelHide=()=>window.clearTimeout(hideTimer.current);
+  useEffect(()=>{
+    const anchor=button.current?.closest('.mascot-wardrobe-anchor');
+    if(!anchor)return;
+    const isTarget=(target:EventTarget|null)=>target instanceof Element &&
+      Boolean(target.closest('.planik-body-surface,.mascot-wardrobe-trigger'));
+    const enter=(event:Event)=>{if(isTarget(event.target)){window.clearTimeout(hideTimer.current);setHovered(true);}};
+    const leave=(event:Event)=>{
+      const pointer=event as PointerEvent;
+      if(isTarget(pointer.target)&&!isTarget(pointer.relatedTarget)){
+        window.clearTimeout(hideTimer.current);
+        // Briefly bridge the small gap between the painted torso and the button.
+        hideTimer.current=window.setTimeout(()=>setHovered(false),220);
+      }
+    };
+    anchor.addEventListener('pointerover',enter);
+    anchor.addEventListener('pointerout',leave);
+    return()=>{anchor.removeEventListener('pointerover',enter);anchor.removeEventListener('pointerout',leave);window.clearTimeout(hideTimer.current);};
+  },[]);
+  return <button ref={button} type="button" className="mascot-wardrobe-trigger" data-hovered={hovered}
+    aria-haspopup="dialog" onClick={event=>{
+      event.stopPropagation();
+      cancelHide();setHovered(false);
+      // Pointer activation must not leave a sticky focus-within state on return.
+      // Keyboard activation retains the native dialog focus restoration.
+      if(event.detail>0)event.currentTarget.blur();
+      onClick();
+    }}><Shirt size={12}/>Аксессуары и скины</button>;
 }
 const tier=(rank:number)=>rank===3?'Максимум':rank===2?'Про':'Базовый';
 export function MascotWardrobeDialog({wardrobe,variant,theme}:{wardrobe:MascotWardrobeController;variant:MascotVariant;theme:'light'|'dark'}) {
@@ -98,6 +128,22 @@ export function MascotWardrobeDialog({wardrobe,variant,theme}:{wardrobe:MascotWa
     },220));
   };
   const catalog=wardrobe.data?.catalog.filter(skin=>skin.variant===variant)??[];
+  const list=useRef<HTMLElement>(null);
+  const [moreBelow,setMoreBelow]=useState(false);
+  const updateListFade=useCallback(()=>{
+    const element=list.current;
+    if(element)setMoreBelow(element.scrollHeight-element.clientHeight-element.scrollTop>2);
+  },[]);
+  useEffect(()=>{
+    const element=list.current;
+    if(!element)return;
+    updateListFade();
+    const observer=new ResizeObserver(updateListFade);
+    observer.observe(element);
+    // Items can load or change height independently of the viewport.
+    Array.from(element.children).forEach(child=>observer.observe(child));
+    return()=>observer.disconnect();
+  },[catalog.length,updateListFade]);
   const skin=catalog.find(item=>item.id===selected);
   const allowed=Boolean(skin&&skin.rank<=wardrobe.rank);
   const isEquipped=selected===wardrobe.selected(variant);
@@ -113,7 +159,8 @@ export function MascotWardrobeDialog({wardrobe,variant,theme}:{wardrobe:MascotWa
     <section className="mascot-wardrobe-shell">
       <header className="mascot-wardrobe-header"><div><span className="mascot-wardrobe-kicker">ГАРДЕРОБ · {variant==='planner'?'ПЛАНИК':'ЭКОНОМЫЧ'}</span><h2 id={titleId}>Аксессуары и скины</h2><p>Примеряйте любые образы и выбирайте свой стиль.</p></div><button type="button" className="mascot-wardrobe-close" onClick={close} aria-label="Закрыть гардероб"><X size={20}/></button></header>
       <div className="mascot-wardrobe-content">
-        <nav className="mascot-wardrobe-list" aria-label="Скины">
+        <div className="mascot-wardrobe-list-wrap" data-more-below={moreBelow}>
+        <nav ref={list} onScroll={updateListFade} className="mascot-wardrobe-list" aria-label="Скины">
           <span className="mascot-wardrobe-list-label">СКИНЫ</span>
           {catalog.map(item=><button type="button" key={item.id} aria-pressed={item.id===selected} className={'mascot-wardrobe-option'+(item.id===selected?' is-selected':'')} onClick={()=>select(item.id)} disabled={saving}>
             <span className="mascot-wardrobe-option-title">{item.name}{item.id===wardrobe.selected(variant)?<Check size={14} aria-label="Выбран"/>:null}</span>
@@ -121,6 +168,8 @@ export function MascotWardrobeDialog({wardrobe,variant,theme}:{wardrobe:MascotWa
           </button>)}
           {!catalog.length&&<p className="mascot-wardrobe-message">{wardrobe.error||'Загружаем образы…'}</p>}
         </nav>
+        <span className="mascot-wardrobe-list-fade" aria-hidden="true"/>
+        </div>
         <div className="mascot-wardrobe-preview">
           <div className="mascot-wardrobe-stage" aria-label={'Примерка: '+(skin?.name??'Классический')}>
             <div key={displayed} className={'mascot-wardrobe-character phase-'+phase}>

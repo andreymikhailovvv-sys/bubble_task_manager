@@ -48,3 +48,14 @@ test('each catalogue outfit has SVG art and the original rig stays in front of i
  assert.match(service,/rank < skin.rank/);
  assert.match(service,/subscriptionExpiresAt:\{equals:user.subscriptionExpiresAt,gt:new Date\(\)\}/);
 });
+
+test('wardrobe hover is pointer-driven, and catalogue fade only indicates remaining scroll content',()=>{
+ const modal=read('../../client/src/components/MascotWardrobe.tsx');
+ const css=read('../../client/src/components/MascotWardrobe.css');
+ assert.match(modal,/event\.detail>0\)event\.currentTarget\.blur\(\)/);
+ assert.match(modal,/pointerover/);
+ assert.match(modal,/scrollHeight-element\.clientHeight-element\.scrollTop>2/);
+ assert.match(css,/scrollbar-width:none/);
+ assert.match(css,/data-more-below="true"\] \.mascot-wardrobe-list-fade/);
+ assert.doesNotMatch(css,/\.mascot-wardrobe-anchor:focus-within/);
+});
