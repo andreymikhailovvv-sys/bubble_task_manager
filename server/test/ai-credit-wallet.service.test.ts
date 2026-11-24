@@ -21,6 +21,7 @@ type State = {
   aiCredits: number;
   aiCreditsPeriod: string;
   subscriptionPlan?: string;
+  subscriptionExpiresAt?: Date | null;
   aiIncludedCreditsMilli: number;
   aiBonusCreditsMilli: number;
   aiPurchasedCreditsMilli: number;
@@ -43,6 +44,7 @@ type ReservationRow = AiCreditReservation & {
 class FakeWalletDatabase {
   private queue = Promise.resolve();
   public reservations = new Map<string, ReservationRow>();
+  public notifications = new Map<string, string>();
   constructor(public state: State | null) {}
 
   $transaction<T>(callback: (tx: any) => Promise<T>): Promise<T> {
@@ -55,7 +57,15 @@ class FakeWalletDatabase {
           return { ...this.state };
         }
       },
+      systemNotification: {
+        createMany: async ({ data }: { data: { eventKey: string; content: string }[] }) => {
+          for (const n of data) if (!this.notifications.has(n.eventKey)) this.notifications.set(n.eventKey, n.content);
+        }
+      },
       aiCreditReservationRecord: {
+        aggregate: async ({ where }: { where: { userId: string; period: string; status: string } }) => ({
+          _sum: { includedMilli: [...this.reservations.values()].filter(r => r.userId === where.userId && r.period === where.period && r.status === where.status).reduce((sum,r) => sum + r.includedMilli, 0) }
+        }),
         create: async ({ data }: { data: AiCreditReservation }) => {
           if (this.reservations.has(data.id)) throw new Error('duplicate reservation id');
           this.reservations.set(data.id, {
@@ -297,4 +307,22 @@ test('reservation migration has database-level identity, balance constraints and
   assert.match(sql, /PRIMARY KEY \("id"\)/);
   assert.match(sql, /"totalMilli" = "includedMilli" \+ "bonusMilli" \+ "purchasedMilli"/);
   assert.match(sql, /ON DELETE CASCADE/);
+});
+
+
+test('subscription thresholds count settled usage only and are unique within the term', async () => {
+  const db = wallet({ subscriptionPlan: 'start', subscriptionExpiresAt: new Date(Date.now() + 86400000), aiCreditsPeriod: 'subscription:test', aiCredits: 3000, aiIncludedCreditsMilli: 3000000 });
+  const pending = await reserveAiCreditsMilli('user-1', 600000, db as any);
+  const first = await reserveAiCreditsMilli('user-1', 600000, db as any);
+  assert.equal(first.period, 'subscription:test');
+  await settleAiCreditReservation(first, 300000, db as any);
+  assert.equal(db.notifications.size, 1);
+  await settleAiCreditReservation(first, 300000, db as any);
+  assert.equal(db.notifications.size, 1);
+  await refundAiCreditReservation(pending, db as any);
+  assert.equal(db.notifications.size, 1);
+  const second = await reserveAiCreditsMilli('user-1', 600000, db as any);
+  await settleAiCreditReservation(second, 600000, db as any);
+  assert.equal(db.notifications.size, 3);
+  assert.equal(db.state?.aiIncludedCreditsMilli, 2100000);
 });
