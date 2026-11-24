@@ -3,6 +3,9 @@ package ru.planirovych.app.data.model
 import kotlinx.serialization.Serializable
 
 @Serializable
+data class SubscriptionLimit(val usedPercent: Int, val expiresAt: String, val planName: String)
+
+@Serializable
 data class CurrentUser(
     val id: String,
     val email: String? = null,
@@ -14,6 +17,7 @@ data class CurrentUser(
     val aiCredits: Int = 0,
     val aiCreditsMilli: Int = 0,
     val aiCreditsPeriod: String? = null,
+    val subscriptionLimit: SubscriptionLimit? = null,
     val aiEfficiencyCreditsSpent: Double = 0.0,
     val aiEfficiencyCreditsPeriod: String? = null,
     val timeZone: String? = null,
@@ -29,6 +33,7 @@ data class CurrentUser(
     val completedLessonIds: List<String> = emptyList(),
     val hasPassword: Boolean = false,
 ) {
+    val aiBalanceLabel: String get() = subscriptionLimit?.let { "${100 - it.usedPercent.coerceIn(0,100)}%" } ?: aiCredits.toString()
     val hasAccount: Boolean get() = !username.isNullOrBlank() || !email.isNullOrBlank() || !googleSub.isNullOrBlank() || hasPassword
     val displayName: String get() = name?.takeIf { it.isNotBlank() } ?: username ?: email ?: "Локальный профиль"
 }
