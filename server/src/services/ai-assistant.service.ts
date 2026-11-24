@@ -1,3 +1,4 @@
+import { getSubscriptionRank, modelAccessError, premiumToolFeature, featureAccessError } from './subscription-access.service.js';
 import { prisma } from '../db/prisma.js';
 import { deductEfficiencyPenalty } from './efficiency-rating.service.js';
 import { randomUUID } from 'node:crypto';
@@ -1400,7 +1401,10 @@ export const aiAssistantService = {
     if (!question) throw new TypeError('Question is required');
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY is not configured');
-    const model = AI_CHAT_MODEL_BY_OPTION[input.model ?? 'gpt-6.1-terra'] ?? AI_CHAT_MODEL_TERRA;
+    const rank = await getSubscriptionRank(input.userId);
+    const modelError = modelAccessError(rank, input.model);
+    if (modelError) throw modelError;
+    const model = AI_CHAT_MODEL_BY_OPTION[input.model ?? (rank >= 2 ? 'gpt-6.1-terra' : 'gpt-6-luna')] ?? AI_CHAT_MODEL_NANO;
     const actionRequestId = input.requestId ?? randomUUID();
     const operation = async () => {
       const now = new Date();
@@ -2265,8 +2269,12 @@ export const aiAssistantService = {
         hasAttachmentPayload: hasAttachments
       });
     }
+    const subscriptionRank = await getSubscriptionRank(input.userId);
+    const modelError = modelAccessError(subscriptionRank, input.model);
+    if (modelError) throw modelError;
+    if (monitoringEnabled) { const error = featureAccessError(subscriptionRank, 'monitoring'); if (error) throw error; }
     const reasoningEffort = resolveReasoningEffort(input.mode);
-    const modelCandidates = monitoringEnabled
+    const modelCandidates = subscriptionRank < 2 ? [AI_CHAT_MODEL_NANO] : subscriptionRank < 3 ? [input.model === 'gpt-6-luna' ? AI_CHAT_MODEL_NANO : AI_CHAT_MODEL_TERRA] : monitoringEnabled
       ? resolveModelCandidates(input.mode, hasAttachments, lockedMonitoringModel)
       : isSmartPostponeRequest
         ? Array.from(new Set([OTHER_AI_MODEL, ...resolveModelCandidates(input.mode, hasAttachments, lockedMonitoringModel)].filter(Boolean)))
@@ -2458,6 +2466,9 @@ export const aiAssistantService = {
               providerInput.push(item as OpenAiFunctionCall);
           }
           for (const call of toolCalls.slice(0, 1)) {
+            const feature = premiumToolFeature(call.name);
+            const unavailable = feature ? featureAccessError(subscriptionRank, feature) : null;
+            if (unavailable) { providerInput.push({type:'function_call_output',call_id:call.call_id,output:JSON.stringify({ok:false,code:unavailable.code,message:unavailable.message})}); continue; }
             let args: TaskContextLookupArguments;
             try { args = JSON.parse(call.arguments) as TaskContextLookupArguments; } catch {
               providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: false, code: 'INVALID_ARGUMENTS' }) });
