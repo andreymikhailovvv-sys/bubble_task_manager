@@ -1,3 +1,4 @@
+import { SubscriptionLimitPanel, PLAN_FEATURES } from './components/SubscriptionLimitPanel';
 import { AiStreamingMessageBody } from './components/AiStreamingMessageBody';
 import EmailVerificationDialog from './components/EmailVerificationDialog';
 import { subscribeAccountEmailVerified } from './lib/account-email-status-events';
@@ -4719,7 +4720,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2.5">
                       <span className="miniapp-credit-popover-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"><Coins size={17} /></span>
-                      <div><h2 className="font-semibold text-primary">{activeSubscription ? 'Лимит ИИ' : 'AI-кредиты'}</h2>{activeSubscription ? <div className="mt-2 text-sm text-muted"><strong>{currentUser?.subscriptionLimit?.planName ?? 'Подписка'}</strong><div>Осталось: {currentUser?.subscriptionLimit ? `${100 - currentUser.subscriptionLimit.usedPercent}%` : '…'}</div>{currentUser?.subscriptionLimit ? <><progress className="w-full accent-emerald-500" max={100} value={100 - currentUser.subscriptionLimit.usedPercent}/><div>Использовано {currentUser.subscriptionLimit.usedPercent}% · до {new Date(currentUser.subscriptionLimit.expiresAt).toLocaleDateString('ru-RU')}</div></> : null}</div> : <p className="mt-0.5 text-xs text-muted">Баланс: <strong className="text-primary">{aiCredits}</strong></p>}</div>
+                      <div><h2 className="font-semibold text-primary">{activeSubscription ? 'Лимит ИИ' : 'AI-кредиты'}</h2>{activeSubscription ? <SubscriptionLimitPanel limit={currentUser?.subscriptionLimit}/> : <p className="mt-0.5 text-xs text-muted">Баланс: <strong className="text-primary">{aiCredits}</strong></p>}</div>
                     </div>
                     <button type="button" className="miniapp-credit-popover-close rounded-full p-1.5 text-muted" onClick={() => setIsCreditPurchaseOpen(false)} aria-label="Закрыть"><X size={16} /></button>
                   </div>
@@ -4729,7 +4730,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <button type="button" className={`credit-view-toggle-button flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold ${creditPopoverView === 'statistics' ? 'is-active is-statistics' : ''}`} onClick={() => { setCreditPopoverView('statistics'); void loadCreditUsageStatistics(); }}>Статистика</button>
                 </div>
                 {creditPopoverView === 'statistics' ? (
-                  <div key="credits-statistics" className="credit-switch-content mt-3">{activeSubscription ? <p className="text-xs text-muted">Расход включённого лимита показан выше.</p> : <CreditUsageStats statistics={creditUsageStatistics} loading={creditUsageStatisticsLoading} error={creditUsageStatisticsError} compact />}</div>
+                  <div key="credits-statistics" className="credit-switch-content mt-3">{<CreditUsageStats statistics={creditUsageStatistics} loading={creditUsageStatisticsLoading} error={creditUsageStatisticsError} compact  allowanceMilli={currentUser?.subscriptionLimit?.allowanceMilli} />}</div>
                 ) : (
                   <div key="credits-purchase" className="credit-switch-content">
                     <div className="credit-view-toggle mt-3 flex gap-1 rounded-xl border p-1">
@@ -4748,8 +4749,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       {creditPurchase.message ? <p className="miniapp-credit-message mt-3 rounded-xl border p-2.5 text-xs" role="status">{creditPurchase.message}</p> : null}
                     </> : <>
                       <div className="mt-3 space-y-2">{subscriptionPlans.map(plan => <div key={plan.key} className="miniapp-credit-pack-card flex items-center justify-between gap-2 rounded-xl border p-2.5">
-                        <div><div className="text-xs font-bold text-primary">{plan.name}: {plan.key === 'start' ? 'базовый лимит' : plan.key === 'pro' ? 'лимит ×2' : 'лимит ×4,33'}</div><div className="mt-0.5 text-[11px] text-muted">{plan.price.toLocaleString('ru-RU')} ₽ за месяц</div></div>
-                        <button type="button" disabled={!subscriptionPurchaseAvailable || activeSubscription || subscriptionPurchase.creatingPlanKey !== null} onClick={() => void subscriptionPurchase.start(plan.key)} className="miniapp-credit-buy-button rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{subscriptionPurchase.creatingPlanKey === plan.key ? 'Создаём…' : activeSubscription ? 'Активна' : 'Купить'}</button>
+                        <div><div className="text-xs font-bold text-primary">{plan.name}: {plan.key === 'start' ? 'базовый лимит' : plan.key === 'pro' ? 'лимит ×2' : 'лимит ×4,33'}</div><div className="mt-0.5 text-[11px] text-muted">{plan.price.toLocaleString('ru-RU')} ₽ за месяц</div><ul className="mt-2 space-y-1 text-[11px] text-secondary">{PLAN_FEATURES[plan.key].map(feature => <li key={feature}>✓ {feature}</li>)}</ul></div>
+                        <button type="button" disabled={!subscriptionPurchaseAvailable || (activeSubscription && currentUser?.subscriptionPlan === plan.key) || subscriptionPurchase.creatingPlanKey !== null} onClick={() => void subscriptionPurchase.start(plan.key)} className="miniapp-credit-buy-button rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{subscriptionPurchase.creatingPlanKey === plan.key ? 'Создаём…' : activeSubscription ? (currentUser?.subscriptionPlan === plan.key ? 'Подписка активна' : 'Сменить тариф') : 'Купить'}</button>
                       </div>)}</div>
                       <p className="mt-2 text-[11px] text-muted">Подписка на один календарный месяц, без автопродления.</p>
                       {subscriptionPurchase.isReceiptEmailRequired ? <div className="mt-3 space-y-2">
