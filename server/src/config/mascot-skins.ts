@@ -5,8 +5,10 @@ export const MASCOT_SKINS: readonly MascotSkin[] = [
   { id:'classic', variant:'planner', name:'Классический', description:'Фирменный Планик без аксессуаров.', rank:0 },
   { id:'northern', variant:'planner', name:'Север', description:'Объёмный вязаный шарф, шапка и варежки. При наведении греет руки.', rank:2 },
   { id:'maestro', variant:'planner', name:'Маэстро', description:'Бордовый берет и шейный платок с золотой булавкой.', rank:0 },
+  { id:'zoomer', variant:'planner', name:'Зумер', description:'Короткая светлая причёска, мятная рубашка и смартфон. Листает телефон и убирает его при наведении.', rank:2 },
   { id:'wizard', variant:'planner', name:'Астролог', description:'Звёздная шляпа и прилегающая накидка. Магический шар и расклад карт.', rank:3 },
   { id:'classic', variant:'economic', name:'Классический', description:'Фирменный Экономыч без аксессуаров.', rank:0 },
+  { id:'banker', variant:'economic', name:'Менеджер банка', description:'Белая рубашка, красный галстук и очки. Пересчитывает деньги и складывает их в портфель.', rank:2 },
 ];
 export function findMascotSkin(variant: unknown, id: unknown): MascotSkin | undefined {
   return MASCOT_SKINS.find(skin => skin.variant === variant && skin.id === id);

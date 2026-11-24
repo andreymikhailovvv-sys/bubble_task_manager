@@ -471,3 +471,12 @@ body:has(.planik-notes-companion, .planik-task-editor-companion)
 @keyframes wizard-hand-l{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(4deg)}}
 @keyframes wizard-hand-r{0%,100%{transform:rotate(5deg)}50%{transform:rotate(-4deg)}}
 @media(prefers-reduced-motion:reduce){.north-tail,.wizard-cape-back,.north-rub-left,.north-rub-right,.north-vapor,.wizard-orb,.wizard-orb-glow,.wizard-orbit,.wizard-magic-left,.wizard-magic-right{animation:none!important}.north-vapor{opacity:0}}
+
+/* All skins use the classic coordinate system and overflow only for accessories. */
+.planik-mascot[data-skin=zoomer][data-mode=hover] .zoomer-phone-hide{animation:zoomer-hide-phone 1.3s steps(1,end) both}
+.planik-mascot[data-skin=zoomer][data-mode=hover] .planik-hover{animation:zoomer-restore-hover 1.3s steps(1,end) both}
+.planik-mascot[data-skin=zoomer][data-mode=hover] .planik-eye{animation-delay:1.3s}
+.planik-mascot:is([data-skin=zoomer],[data-skin=banker])[data-mode=searching] .planik-loupe{transform-origin:248px 243px}
+@keyframes zoomer-hide-phone{0%{visibility:visible;opacity:1}100%{visibility:hidden;opacity:0}}
+@keyframes zoomer-restore-hover{0%{visibility:hidden;opacity:0}100%{visibility:visible;opacity:1}}
+@media(prefers-reduced-motion:reduce){.planik-mascot[data-skin=zoomer][data-mode=hover] .zoomer-phone-hide{display:none;animation:none!important}.planik-mascot[data-skin=zoomer][data-mode=hover] .planik-hover{visibility:visible;opacity:1;animation:none!important}.planik-mascot[data-skin=zoomer][data-mode=hover] .planik-eye{animation-delay:0s}}

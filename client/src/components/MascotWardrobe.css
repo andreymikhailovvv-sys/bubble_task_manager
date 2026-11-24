@@ -73,4 +73,5 @@ body:has(.mascot-wardrobe-dialog[open]) .mascot-wardrobe-trigger{opacity:0;point
 .mascot-wardrobe-animations>div{display:flex;gap:6px;flex-wrap:wrap}
 .mascot-wardrobe-animations button{background:var(--wd-hover);border:1px solid var(--wd-line);color:var(--wd-text);border-radius:8px;padding:7px 9px;font:inherit;cursor:pointer}
 .mascot-wardrobe-animations button[aria-pressed=true]{background:var(--wd-selected);border-color:var(--wd-accent);color:var(--wd-accent)}
-.mascot-wardrobe-character .planik-mascot:is([data-skin=northern],[data-skin=wizard]){aspect-ratio:394/325;width:min(300px,100%,34dvh)}
+.mascot-wardrobe-stage{container-type:size}
+.mascot-wardrobe-character .planik-mascot{width:min(300px,100%,106cqh);aspect-ratio:345/275}
