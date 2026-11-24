@@ -287,6 +287,7 @@ const toAuthUser = (user: {
   aiCreditsPeriod?: string;
   subscriptionPlan?: string;
   subscriptionExpiresAt?: Date | null;
+  subscriptionAllowanceMilli?: number;
   aiIncludedCreditsMilli?: number;
   aiBonusCreditsMilli?: number;
   aiPurchasedCreditsMilli?: number;
@@ -314,9 +315,10 @@ const toAuthUser = (user: {
     + (user.aiPurchasedCreditsMilli ?? 0);
   const plan = getLimitPlan(user.subscriptionPlan ?? 'free');
   const active = plan && user.subscriptionExpiresAt && user.subscriptionExpiresAt.getTime() > Date.now() && !isGuestAccount(user);
+  const allowanceMilli = user.subscriptionAllowanceMilli || (plan?.creditsAmount ?? 0) * 1000;
   const subscriptionLimit = active && plan && user.subscriptionExpiresAt && user.aiIncludedCreditsMilli != null ? {
-    usedPercent: Math.max(0, Math.min(100, Math.floor((1 - user.aiIncludedCreditsMilli / (plan.creditsAmount * 1000)) * 100 + 1e-9))),
-    expiresAt: user.subscriptionExpiresAt.toISOString(), planName: plan.name,
+    usedPercent: Math.max(0, Math.min(100, Math.floor((1 - user.aiIncludedCreditsMilli / allowanceMilli) * 100 + 1e-9))),
+    expiresAt: user.subscriptionExpiresAt.toISOString(), planName: plan.name, allowanceMilli,
   } : null;
   return ({
   id: user.id,
@@ -1428,6 +1430,7 @@ apiRouter.patch('/user/settings', requireAuth, async (req, res) => {
       aiCreditsPeriod: true,
       subscriptionPlan: true,
       subscriptionExpiresAt: true,
+      subscriptionAllowanceMilli: true,
       aiIncludedCreditsMilli: true,
       aiBonusCreditsMilli: true,
       aiPurchasedCreditsMilli: true,

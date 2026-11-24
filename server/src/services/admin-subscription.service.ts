@@ -72,6 +72,7 @@ export async function setAdminSubscription(input: AdminSubscriptionInput, db: Pi
           subscriptionExpiresAt: plan ? subscriptionEndDate(now) : null,
           aiCreditsPeriod: plan ? `admin-subscription:${input.requestId}` : `free:${currentAiCreditsPeriod(now)}:${input.requestId}`,
           aiIncludedCreditsMilli: included,
+          subscriptionAllowanceMilli: included,
           aiCredits: Math.floor((included + user.aiBonusCreditsMilli + user.aiPurchasedCreditsMilli) / 1000)
         }
       });
