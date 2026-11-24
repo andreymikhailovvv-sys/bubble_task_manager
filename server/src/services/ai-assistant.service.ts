@@ -1404,6 +1404,9 @@ export const aiAssistantService = {
     const rank = await getSubscriptionRank(input.userId);
     const modelError = modelAccessError(rank, input.model);
     if (modelError) throw modelError;
+    const assistantFeature = input.projectId === 'telegram-ai-assistant-project' ? 'telegram' : input.projectId === 'mail-ai-assistant-project' ? 'mail' : null;
+    const assistantError = assistantFeature ? featureAccessError(rank,assistantFeature) : null;
+    if (assistantError) throw assistantError;
     const model = AI_CHAT_MODEL_BY_OPTION[input.model ?? (rank >= 2 ? 'gpt-6.1-terra' : 'gpt-6-luna')] ?? AI_CHAT_MODEL_NANO;
     const actionRequestId = input.requestId ?? randomUUID();
     const operation = async () => {

@@ -583,6 +583,8 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         if (name === 'prepare_assistant_reply') {
           const context = input.assistantReplyContext;
           if (!context) return { ok: false, code: 'NOT_AN_ASSISTANT_CHAT' };
+          const assistantError = featureAccessError(rank, context.kind === 'telegram' ? 'telegram' : 'mail');
+          if (assistantError) return {ok:false,code:assistantError.code,message:assistantError.message};
           const replyArgs = value as Record<string, unknown>;
           const text = typeof replyArgs.text === 'string' ? replyArgs.text.trim() : '';
           const sourceMessageId = typeof replyArgs.sourceMessageId === 'string' ? replyArgs.sourceMessageId.trim() : '';
