@@ -15,3 +15,10 @@ export function subscriptionEndDate(start: Date): Date {
   return new Date(Date.UTC(year, month + 1, Math.min(start.getUTCDate(), lastDay),
     start.getUTCHours(), start.getUTCMinutes(), start.getUTCSeconds(), start.getUTCMilliseconds()));
 }
+
+export const subscriptionRank = (key: string) => SUBSCRIPTION_PLANS.findIndex(plan => plan.key === key) + 1;
+export const SUBSCRIPTION_FEATURES = {
+  start: ['Базовый месячный лимит (×1)', 'Модель Luna', 'Запросы и управление задачами', 'Создание Word и Excel', 'Поиск в интернете'],
+  pro: ['Месячный лимит ×2', 'Модели Luna и Terra', 'Все функции Старта', 'Создание изображений', 'Почтовый ИИ-ассистент', 'Живое общение с ИИ', 'Набор аксессуаров для Планика'],
+  max: ['Месячный лимит ×4,33', 'Модели Luna, Terra, Sol и Astra', 'Все функции Про', 'Telegram ИИ-ассистент', 'Автомониторинг задач', 'Расширенные аксессуары Планика и Экономыча']
+} as const;

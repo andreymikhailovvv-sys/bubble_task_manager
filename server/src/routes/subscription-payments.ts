@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { Router, type Request } from 'express';
-import { getSubscriptionPlanByKey } from '../config/subscription-plans.js';
+import { getSubscriptionPlanByKey, subscriptionRank } from '../config/subscription-plans.js';
 import { prisma } from '../db/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { reconcileSubscriptionPurchaseFromYooKassa } from '../services/subscription-purchase.service.js';
@@ -54,12 +54,13 @@ subscriptionPaymentsRouter.post('/subscriptions/:planKey', requireAuth, async (r
     try {
       purchase = await prisma.$transaction(async (tx) => {
         // Checkout and activation take the same user row lock.
-        const rows = await tx.$queryRaw<Array<{ subscriptionExpiresAt: Date | null }>>(
-          Prisma.sql`SELECT "subscriptionExpiresAt" FROM "User" WHERE "id" = ${user.id} FOR UPDATE`
+        const rows = await tx.$queryRaw<Array<{ subscriptionExpiresAt: Date | null; subscriptionPlan: string }>>(
+          Prisma.sql`SELECT "subscriptionExpiresAt", "subscriptionPlan" FROM "User" WHERE "id" = ${user.id} FOR UPDATE`
         );
         if (rows[0]?.subscriptionExpiresAt && rows[0].subscriptionExpiresAt.getTime() > Date.now()) {
-          throw new CheckoutConflict('SUBSCRIPTION_ACTIVE',
-            'Подписка уже активна. Продлить её можно после окончания текущего периода.');
+          const rank = subscriptionRank(rows[0].subscriptionPlan);
+          if (subscriptionRank(plan.key) <= rank) throw new CheckoutConflict('SUBSCRIPTION_ACTIVE',
+            subscriptionRank(plan.key) === rank ? 'Этот тариф уже активен.' : 'Перейти на более доступный тариф можно после окончания действующей подписки. Сейчас доступно только повышение тарифа.');
         }
         const unfinished = await tx.subscriptionPurchase.findFirst({
           where: { userId: user.id, status: { in: ['created', 'pending', 'create_failed'] } }

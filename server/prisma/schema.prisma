@@ -401,6 +401,7 @@ model User {
   telegramLinkedAt DateTime?
   subscriptionPlan String @default("free")
   subscriptionExpiresAt DateTime?
+  subscriptionAllowanceMilli Int @default(0)
   subscriptionPurchases SubscriptionPurchase[]
   adminSubscriptionChanges AdminSubscriptionChange[]
   aiCredits    Int      @default(0)
