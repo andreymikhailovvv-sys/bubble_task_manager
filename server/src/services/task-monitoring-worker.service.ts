@@ -1,3 +1,4 @@
+import { getSubscriptionRank } from './subscription-access.service.js';
 import { Prisma } from '@prisma/client';
 import { measureBackground } from '../lib/performance-diagnostics.js';
 import { prisma } from '../db/prisma.js';
@@ -61,6 +62,7 @@ async function hasMonitoringProgressSince(trigger: {
 async function deliver(run: Run, question: string, checkCurrent: () => Promise<boolean>, kind: 'trigger' | 'overdue' | 'subtask_completed' | 'monitoring_intro') {
   console.info('[TaskMonitoring] AI delivery starting', { runId: run.id, taskId: run.taskId });
   try {
+    if (await getSubscriptionRank(run.userId) < 3) { await markRun(run.id,'cancelled'); return; }
     const taskAtStart = kind === 'trigger'
       ? await requireMonitoringOwner(run.userId, run.taskId)
       : await requireMonitoredTask(run.userId, run.taskId);

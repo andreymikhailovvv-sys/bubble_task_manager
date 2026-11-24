@@ -1,3 +1,4 @@
+import { startSubscriptionWelcomeWorker } from './services/subscription-welcome-worker.service.js';
 import 'dotenv/config';
 import './lib/timestamp-console.js';
 import cookieParser from 'cookie-parser';
@@ -182,6 +183,7 @@ setInterval(() => {
 // A lightweight safety tick watches the queue, never scans all overdue tasks.
 startTaskMonitoringWorker();
 startAndroidPushWorker();
+startSubscriptionWelcomeWorker();
 
 const CHECKUP_POLL_INTERVAL_MS = Number(process.env.AI_CHECKUP_POLL_INTERVAL_MS ?? 60_000);
 const formatLocalCheckupSlot = (date: Date, timeZone: string) => {
