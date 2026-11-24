@@ -62,7 +62,7 @@ try {
   });
   let writes=0;
   let wardrobeWrites=0;
-  const wardrobe={userId:user.id,rank:2,expiresAt:'2099-01-01T00:00:00.000Z',selected:{planner:'classic',economic:'classic'},catalog:[{id:'classic',variant:'planner',name:'Классический',description:'Базовый',rank:0},{id:'aviator',variant:'planner',name:'Авиатор',description:'Шлем и очки',rank:2},{id:'wizard',variant:'planner',name:'Астролог',description:'Шляпа',rank:3}]};
+  const wardrobe={userId:user.id,rank:2,expiresAt:'2099-01-01T00:00:00.000Z',selected:{planner:'classic',economic:'classic'},catalog:[{id:'classic',variant:'planner',name:'Классический',description:'Базовый',rank:0},{id:'aviator',variant:'planner',name:'Авиатор',description:'Шлем и очки',rank:2},{id:'wizard',variant:'planner',name:'Астролог',description:'Шляпа',rank:3},...['Север','Маэстро','Дипломат','Орбита','Самурай','Гран-при'].map((name,i)=>({id:'fixture-'+i,variant:'planner',name,description:'Комплект',rank:i<2?2:3}))]};
   await page.route('**/api/**',async route=>{
     const request=route.request();
     const path=new URL(request.url()).pathname;
@@ -108,6 +108,15 @@ try {
   const trigger=page.locator('.mascot-wardrobe-anchor').filter({has:launcher}).getByRole('button',{name:'Аксессуары и скины'});
   await trigger.click({timeout:12000});
   const wardrobeDialog=page.getByRole('dialog',{name:'Аксессуары и скины'});
+  const skinList=wardrobeDialog.getByRole('navigation',{name:'Скины'});
+  const listWrap=wardrobeDialog.locator('.mascot-wardrobe-list-wrap');
+  await wardrobeDialog.locator('.mascot-wardrobe-list-wrap[data-more-below="true"]').waitFor({state:'visible'});
+  assert.equal(await skinList.evaluate(el=>getComputedStyle(el).scrollbarWidth),'none');
+  await skinList.evaluate(el=>{el.scrollTop=el.scrollHeight;});
+  await wardrobeDialog.locator('.mascot-wardrobe-list-wrap[data-more-below="false"]').waitFor({state:'visible'});
+  await skinList.evaluate(el=>{el.scrollTop=0;});
+  await wardrobeDialog.locator('.mascot-wardrobe-list-wrap[data-more-below="true"]').waitFor({state:'visible'});
+  assert.equal(await listWrap.count(),1);
   await wardrobeDialog.getByRole('button',{name:/Астролог/}).click();
   await wardrobeDialog.locator('[data-skin="wizard"]').waitFor({state:'visible'});
   assert.equal(await wardrobeDialog.getByRole('button',{name:/Тариф «Максимум»/}).isDisabled(),true);
@@ -119,6 +128,8 @@ try {
   assert.equal(wardrobeWrites,1);
   await page.keyboard.press('Escape');
   await wardrobeDialog.waitFor({state:'hidden'});
+  await page.mouse.move(35,35);
+  await page.waitForFunction(()=>Array.from(document.querySelectorAll('.mascot-wardrobe-trigger')).every(el=>Number(getComputedStyle(el).opacity)===0));
   await launcher.locator('[data-skin="aviator"]').waitFor({state:'visible'});
   metrics.wardrobe='locked preview, animated outfit, save and Escape PASS';
   const openStart=Date.now();
