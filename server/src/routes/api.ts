@@ -1411,6 +1411,8 @@ apiRouter.patch('/user/settings', requireAuth, async (req, res) => {
       deviceId: true,
       aiCredits: true,
       aiCreditsPeriod: true,
+      subscriptionPlan: true,
+      subscriptionExpiresAt: true,
       aiIncludedCreditsMilli: true,
       aiBonusCreditsMilli: true,
       aiPurchasedCreditsMilli: true,

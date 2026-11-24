@@ -418,9 +418,10 @@ export default function TestPage() {
     setCreditError('');
     setCreditPacksError('');
     try {
-      const [stats,links,packs,plans]=await Promise.allSettled([
-        api.getCreditUsageStatistics(),api.getSubscriptionLinks(),api.getCreditPacks(),api.getSubscriptionPlans()
+      const [stats,links,packs,plans,profile]=await Promise.allSettled([
+        api.getCreditUsageStatistics(),api.getSubscriptionLinks(),api.getCreditPacks(),api.getSubscriptionPlans(),api.getMe()
       ]);
+      if(profile.status==='fulfilled')setUser(profile.value.user);
       if(stats.status==='fulfilled')setCreditStats(stats.value.statistics);
       if(links.status==='fulfilled')setSubscriptionLinks(links.value.links);
       setSubscriptionPurchaseAvailable(plans.status==='fulfilled'&&plans.value.purchaseAvailable);
