@@ -1,7 +1,8 @@
 import { memo, useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import './PlanikMascot.css';
+import { MascotSkinArtwork, isScarfSkin } from './MascotSkinArtwork';
 
-type PlanikMode = 'idle' | 'hover' | 'thinking' | 'typing' | 'searching' | 'painting' | 'celebrating' | 'clearing';
+type PlanikMode = 'idle' | 'hover' | 'thinking' | 'typing' | 'searching' | 'painting' | 'celebrating' | 'clearing' | 'showcase';
 
 // Fixed particle paths avoid creating random values or timers on every render.
 const POPPER_CONFETTI = Array.from({ length: 24 }, (_, index) => ({
@@ -22,6 +23,8 @@ type Props = {
   size?: 'launcher' | 'composer' | 'sidekick';
   variant?: 'planner' | 'economic';
   className?: string;
+  skinId?: string;
+  showcase?: boolean;
 };
 
 /**
@@ -37,7 +40,9 @@ export const PlanikMascot = memo(function PlanikMascot({
   celebrationKey = 0,
   size = 'launcher',
   variant = 'planner',
-  className = ''
+  className = '',
+  skinId = 'classic',
+  showcase = false
 }: Props) {
   const gradientSuffix = useId().replace(/:/g, '');
   const [hovered, setHovered] = useState(false);
@@ -91,6 +96,7 @@ export const PlanikMascot = memo(function PlanikMascot({
   const mode: PlanikMode = clearingCount !== null ? 'clearing'
     : celebrating ? 'celebrating'
     : busy ? (isPainting ? 'painting' : isSearching ? 'searching' : isThinking ? 'thinking' : 'typing')
+    : showcase && skinId !== 'classic' ? 'showcase'
     : hovered ? 'hover' : 'idle';
   const badgeNumber = clearingCount ?? count;
   const badgeText = badgeNumber > 99 ? '99+' : String(badgeNumber);
@@ -145,6 +151,8 @@ export const PlanikMascot = memo(function PlanikMascot({
     <span
       className={`planik-mascot planik-mascot--${size} ${variant === 'economic' ? 'planik-mascot--economic' : ''} ${className}`}
       data-mode={mode}
+      data-skin={skinId}
+      data-skin-gesture={isScarfSkin(skinId) ? 'scarf' : 'hat'}
       data-has-notifs={count > 0 ? 'true' : 'false'}
       role="img"
       aria-label={variant === 'economic' ? 'Экономыч, анимированный финансовый помощник' : 'Планик, анимированный помощник ИИ'}
@@ -179,6 +187,7 @@ export const PlanikMascot = memo(function PlanikMascot({
         <g ref={leftEye}><ellipse className="planik-eye" cx="190" cy="162" rx="10" ry="15" fill="#f1f3ff" /></g>
         <g ref={rightEye}><ellipse className="planik-eye" cx="240" cy="162" rx="10" ry="15" fill="#f1f3ff" /></g>
 
+        <MascotSkinArtwork skinId={skinId} suffix={gradientSuffix} />
         {/* Red notification counter sits on the upper-left edge of Planik's body.
             It is visible only while idle. The three animated copies below share
             exactly the same number when notifications are marked read. */}
@@ -346,6 +355,11 @@ export const PlanikMascot = memo(function PlanikMascot({
           </g>
         </g>
 
+        {showcase && skinId !== 'classic' && <g className="planik-showcase-arm" aria-hidden="true">
+          <path d={isScarfSkin(skinId) ? 'M301 194Q293 225 257 233' : 'M301 194Q329 153 307 115Q293 91 267 83'} fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round"/>
+          <circle cx={isScarfSkin(skinId) ? 254 : 265} cy={isScarfSkin(skinId) ? 233 : 83} r="10" fill="#aaa6f0"/>
+          <path d={isScarfSkin(skinId) ? 'M252 226l-6 2M251 233l-8 2' : 'M262 75l-4-7M270 76l1-8'} fill="none" stroke="#c4c0f4" strokeWidth="3.5" strokeLinecap="round"/>
+        </g>}
         <g className="planik-hover">
           <g className="planik-hover-left"><g>
             <path d="M129 194Q141 219 170 224" fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round" />

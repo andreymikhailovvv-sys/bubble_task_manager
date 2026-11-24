@@ -33,7 +33,7 @@ test('single list and timeline remain unframed, and Planik moves with real chat'
   assert.match(css, /\.fullscreen-workspace-single--open \.fullscreen-mode-surface-content > :is\(\.list-mode-canvas, \.timeline-canvas\)/);
   assert.match(app, /!hasGeneralAiPane \? <QuickAiLauncherFrame/);
   assert.match(app, /inlineTarget=\{hasGeneralAiPane \? fullscreenChatTarget : null\}/);
-  assert.match(chat, /showPlanik \? <div className="planik-composer-float"/);
+  assert.match(chat, /showPlanik \? <div className="planik-composer-float(?:\s+[^"]+)?"[^>]*>/);
   assert.match(css, /\.ai-chat-expanded-backdrop\.ai-chat-expanded-embedded/);
 });
 

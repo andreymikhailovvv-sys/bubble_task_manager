@@ -1,0 +1,50 @@
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { MASCOT_SKINS, effectiveMascotSkin, findMascotSkin } from '../src/config/mascot-skins.js';
+import { wardrobeState } from '../src/services/mascot-wardrobe.service.js';
+const read=(path:string)=>readFileSync(new URL(path,import.meta.url),'utf8');
+test('all packs are previewable, pro has exactly three and maximum inherits them plus five and three',()=>{
+ const available=(variant:string,rank:number)=>MASCOT_SKINS.filter(s=>s.variant===variant&&s.rank>0&&s.rank<=rank);
+ assert.equal(available('planner',2).length,3);
+ assert.equal(available('planner',3).length,8);
+ assert.equal(available('economic',2).length,0);
+ assert.equal(available('economic',3).length,3);
+ assert.equal(MASCOT_SKINS.length,13);
+ assert.equal(findMascotSkin('economic','aviator'),undefined);
+ assert.equal(findMascotSkin('planner','reserve'),undefined);
+ assert.equal(effectiveMascotSkin('planner','aviator',1),'classic');
+ assert.equal(effectiveMascotSkin('planner','aviator',2),'aviator');
+ assert.equal(effectiveMascotSkin('economic','reserve',2),'classic');
+ assert.equal(effectiveMascotSkin('economic','reserve',3),'reserve');
+});
+test('expired or downgraded user sees classic but stored preference remains untouched',()=>{
+ const base={id:'u',subscriptionPlan:'max',subscriptionExpiresAt:new Date('2026-12-01'),plannerMascotSkin:'wizard',economicMascotSkin:'reserve'};
+ const active=wardrobeState(base,new Date('2026-11-24'));
+ assert.deepEqual(active.selected,{planner:'wizard',economic:'reserve'});
+ const expired=wardrobeState(base,new Date('2026-12-01'));
+ assert.deepEqual(expired.selected,{planner:'classic',economic:'classic'});
+ assert.equal(expired.catalog.length,13);
+ assert.equal(base.plannerMascotSkin,'wizard');
+ assert.equal(wardrobeState({...base,subscriptionPlan:'pro'},new Date('2026-11-24')).selected.economic,'classic');
+});
+test('each catalogue outfit has SVG art and the original rig stays in front of it',()=>{
+ const art=read('../../client/src/components/MascotSkinArtwork.tsx');
+ const rig=read('../../client/src/components/PlanikMascot.tsx');
+ const modal=read('../../client/src/components/MascotWardrobe.tsx');
+ const css=read('../../client/src/components/MascotWardrobe.css');
+ for(const skin of MASCOT_SKINS.filter(s=>s.rank>0))assert.ok(art.includes("case '"+skin.id+"'"),skin.id);
+ assert.ok(rig.indexOf('<MascotSkinArtwork')<rig.indexOf('className="planik-notif-static"'));
+ assert.match(rig,/planik-showcase-arm/);
+ assert.match(modal,/skin\.rank<=wardrobe\.rank/);
+ assert.match(modal,/element\.showModal\(\)/);
+ assert.match(css,/wardrobe-leave/);
+ assert.match(css,/wardrobe-enter/);
+ assert.match(css,/prefers-reduced-motion/);
+ const route=read('../src/routes/api.ts');
+ assert.match(route,/put\('\/mascot-wardrobe', requireAuth, taskProposalSameOrigin/);
+ const service=read('../src/services/mascot-wardrobe.service.ts');
+ assert.match(service,/rank < skin.rank/);
+ assert.match(service,/subscriptionExpiresAt:\{equals:user.subscriptionExpiresAt,gt:new Date\(\)\}/);
+});

@@ -1502,3 +1502,6 @@ body:has(.tp-root) .notes-editor-panel .text-muted {color:var(--text-muted);}
 @media(max-width:650px) {
   .tp-root .tp-integrations-content {padding:9px;}
 }
+
+.tp-mascot-dressing{position:fixed;right:24px;bottom:23px;z-index:139}.tp-mascot-dressing .tp-mascot{position:relative;right:auto;bottom:auto;z-index:auto}.tp-mascot-dressing .mascot-wardrobe-trigger{top:calc(100% - 9px)}
+@media(max-width:570px){.tp-mascot-dressing{right:8px;bottom:23px}.tp-mascot-dressing .tp-mascot{transform:none}}

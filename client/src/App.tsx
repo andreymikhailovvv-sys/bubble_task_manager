@@ -63,6 +63,7 @@ import { useSubscriptionPurchase } from './lib/useSubscriptionPurchase';
 import { ExpandedAiChat } from './components/ExpandedAiChat';
 import { QuickAiLauncherFrame } from './components/QuickAiLauncherFrame';
 import { PlanikMascot } from './components/PlanikMascot';
+import { useMascotWardrobe, MascotWardrobeDialog, MascotWardrobeTrigger } from './components/MascotWardrobe';
 import ModuleRail from './components/ModuleRail';
 import { FocusedTaskWindowFrame } from './components/FocusedTaskWindowFrame';
 import { FocusedSubtaskComposer } from './components/FocusedSubtaskComposer';
@@ -837,6 +838,7 @@ function buildTimelineViewData(
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const wardrobe = useMascotWardrobe(currentUser?.id,currentUser?.subscriptionPlan,currentUser?.subscriptionExpiresAt);
   const workspaceUserIdRef = useRef<string | null>(null);
   if (currentUser?.id) workspaceUserIdRef.current = currentUser.id;
   const browserNotificationsEnabledRef = useRef(true);
@@ -9438,6 +9440,7 @@ export default function App() {
             </div>
           </div>
         </div>
+        <div className="mascot-wardrobe-anchor">
         <button
           type="button"
           className="planik-launcher-button touch-none select-none"
@@ -9445,9 +9448,12 @@ export default function App() {
           aria-label="Открыть общий чат с ИИ"
           onClick={() => { setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}
         >
-          <PlanikMascot notificationCount={unreadSystemNotificationCount} busy={quickAiChatLoading} progress={aiChatProgress} celebrationKey={planikCelebrationKey} />
+          <PlanikMascot notificationCount={unreadSystemNotificationCount} busy={quickAiChatLoading} progress={aiChatProgress} celebrationKey={planikCelebrationKey} skinId={wardrobe.selected('planner')} />
         </button>
+        {currentUser&&<MascotWardrobeTrigger onClick={wardrobe.show}/>}
+        </div>
       </QuickAiLauncherFrame> : null}
+      {wardrobe.open&&<MascotWardrobeDialog wardrobe={wardrobe} variant="planner" theme={effectiveThemeMode}/>}
 
       {isCollaborationSettingsOpen && focusedTask?.isCollaborative ? (
         <div className="modal-backdrop fixed inset-0 z-[175] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsCollaborationSettingsOpen(false)}>
@@ -9549,6 +9555,8 @@ export default function App() {
         <ExpandedAiChat
           inlineTarget={hasGeneralAiPane ? fullscreenChatTarget : null}
           showPlanik
+          planikSkinId={wardrobe.selected('planner')}
+          onOpenWardrobe={currentUser?wardrobe.show:undefined}
           projects={aiChatProjects}
           activeProject={activeAiChatProject}
           activeChat={activeAiChat}

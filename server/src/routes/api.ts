@@ -1,3 +1,4 @@
+import { getMascotWardrobe, equipMascotSkin } from '../services/mascot-wardrobe.service.js';
 import { requireSubscriptionFeature, SubscriptionAccessError, type PremiumFeature } from '../services/subscription-access.service.js';
 import { setAdminSubscription, AdminSubscriptionError } from '../services/admin-subscription.service.js';
 import { getSubscriptionPlanByKey as getLimitPlan } from '../config/subscription-plans.js';
@@ -2243,6 +2244,20 @@ const taskProposalSameOrigin = (req: Request, res: Response, next: NextFunction)
 };
 // A deliberately independent, user-initiated checkup. It neither requires
 // automatic checkups to be enabled nor consumes their daily scheduling slot.
+apiRouter.get('/mascot-wardrobe', requireAuth, asyncHandler(async (req,res) => {
+  res.set('Cache-Control','private, no-store').json(await getMascotWardrobe(req.user!.id));
+}));
+apiRouter.put('/mascot-wardrobe', requireAuth, taskProposalSameOrigin, asyncHandler(async (req,res) => {
+  try {
+    const state = await equipMascotSkin(req.user!.id,req.body?.variant,req.body?.skinId);
+    if (!state) { res.status(409).json({error:'Подписка изменилась. Откройте гардероб заново.'}); return; }
+    res.set('Cache-Control','private, no-store').json(state);
+  } catch(error) {
+    if(error instanceof TypeError) { res.status(400).json({error:error.message}); return; }
+    throw error;
+  }
+}));
+
 // The same-origin check protects the authenticated cookie from cross-site POSTs.
 apiRouter.post('/ai/checkup/generate', requireAuth, taskProposalSameOrigin, asyncHandler(async (req, res) => {
   try {

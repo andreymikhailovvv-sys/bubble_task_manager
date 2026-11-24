@@ -402,6 +402,8 @@ model User {
   subscriptionPlan String @default("free")
   subscriptionExpiresAt DateTime?
   subscriptionAllowanceMilli Int @default(0)
+  plannerMascotSkin String @default("classic")
+  economicMascotSkin String @default("classic")
   subscriptionPurchases SubscriptionPurchase[]
   adminSubscriptionChanges AdminSubscriptionChange[]
   aiCredits    Int      @default(0)

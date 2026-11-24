@@ -11,6 +11,7 @@ import type { AiChatModel } from '../lib/types';
 import { AiReplyPreview, type AiReplyTarget } from './AiMessageReply';
 import { AiChatWelcome } from './AiChatWelcome';
 import { PlanikMascot } from './PlanikMascot';
+import { MascotWardrobeTrigger } from './MascotWardrobe';
 
 export type ExpandedAiChatThread = { id: string; title: string; messages: unknown[] };
 export type ExpandedAiChatProject = { id: string; title: string; color: string; icon: string; chats: ExpandedAiChatThread[] };
@@ -32,6 +33,8 @@ type Props = {
   celebrationKey?: number;
   progress?: string;
   showPlanik?: boolean;
+  planikSkinId?: string;
+  onOpenWardrobe?: () => void;
   inlineTarget?: HTMLElement | null;
   onOpenCheckups?: () => void;
   messages: ReactNode;
@@ -57,7 +60,7 @@ type Props = {
   onClearReply?: () => void;
 };
 
-export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, uploadProgress, messageCount, themeMode, notificationCount=0, celebrationKey=0, progress, showPlanik=false, onOpenCheckups, inlineTarget, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend, onLiveMessage, onLiveToolResult, onLiveStatus, readOnlyStructure=false, attachmentsEnabled=true, replyTo, onClearReply }: Props) {
+export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, uploadProgress, messageCount, themeMode, notificationCount=0, celebrationKey=0, progress, showPlanik=false, planikSkinId='classic', onOpenWardrobe, onOpenCheckups, inlineTarget, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend, onLiveMessage, onLiveToolResult, onLiveStatus, readOnlyStructure=false, attachmentsEnabled=true, replyTo, onClearReply }: Props) {
   const [draft, setDraft] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [headerHidden, setHeaderHidden] = useState(false);
@@ -231,7 +234,7 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
             </div>
             <div className="ai-chat-expanded-bottom-spacer" aria-hidden="true" />
           </div>
-          {showPlanik ? <div className="planik-composer-float"><PlanikMascot size="composer" notificationCount={notificationCount} busy={loading} progress={progress} celebrationKey={celebrationKey} /></div> : null}
+          {showPlanik ? <div className="planik-composer-float mascot-wardrobe-anchor"><PlanikMascot size="composer" notificationCount={notificationCount} busy={loading} progress={progress} celebrationKey={celebrationKey} skinId={planikSkinId} />{onOpenWardrobe&&<MascotWardrobeTrigger onClick={onOpenWardrobe}/>}</div> : null}
           <div ref={composerRef} className="ai-chat-expanded-composer-wrap">
             {replyTo ? <AiReplyPreview target={replyTo} onDismiss={onClearReply} /> : null}
             {attachmentsEnabled&&<AiAttachmentTiles files={pendingFiles} onRemove={onRemoveFile} busy={loading} uploadProgress={uploadProgress} />}
