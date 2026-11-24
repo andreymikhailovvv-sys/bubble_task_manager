@@ -49,6 +49,13 @@ final class NativeWorkspaceSession: ObservableObject {
         }
     }
 
+    func refreshAiBalance() async {
+        guard let id = account?.id else { return }
+        if let profile = try? await api.restoreAccount(), profile.id == id, account?.id == id {
+            account = profile
+        }
+    }
+
     func refresh() async {
         guard account != nil, !isWorking else { return }
         isWorking = true
