@@ -1723,9 +1723,9 @@ apiRouter.get('/spheres', requireAuth, sphereController.list);
 apiRouter.post('/spheres', requireAuth, sphereController.create);
 apiRouter.patch('/spheres/:id', requireAuth, sphereController.update);
 apiRouter.delete('/spheres/:id', requireAuth, sphereController.remove);
-apiRouter.get('/tasks', requireAuth, taskController.list);
-apiRouter.post('/tasks', requireAuth, taskController.create);
-apiRouter.patch('/tasks/:id', requireAuth, taskController.update);
+apiRouter.get('/tasks', requireAuth, asyncHandler(taskController.list));
+apiRouter.post('/tasks', requireAuth, asyncHandler(taskController.create));
+apiRouter.patch('/tasks/:id', requireAuth, asyncHandler(taskController.update));
 apiRouter.post('/tasks/:id/bubble-action', requireAuth, asyncHandler(async (req, res) => {
   if (!telegramChatRequestIsSameOrigin(req.get('origin'), req.get('host'), req.get('sec-fetch-site'))) {
     res.status(403).json({ error: 'Недопустимый источник запроса' });
@@ -1745,7 +1745,7 @@ apiRouter.post('/tasks/:id/completion-report', requireAuth, asyncHandler(async (
   const result = await generateTaskCompletionReport({ userId: req.user!.id, taskId: req.params.id });
   res.json(result);
 }));
-apiRouter.delete('/tasks/:id', requireAuth, taskController.remove);
+apiRouter.delete('/tasks/:id', requireAuth, asyncHandler(taskController.remove));
 apiRouter.get('/tasks/:id/comments', requireAuth, taskCommentController.list);
 apiRouter.post('/tasks/:id/comments', requireAuth, taskCommentController.create);
 apiRouter.post('/tasks/:id/comments/read', requireAuth, taskCommentController.markRead);
