@@ -1,3 +1,4 @@
+import { requireSubscriptionFeature } from './subscription-access.service.js';
 import { randomUUID } from 'node:crypto';
 import { runDynamicResponsesCall, settleDynamicResponsesCall, refundDynamicResponsesCall, type DynamicResponsesCall } from './dynamic-responses-billing.service.js';
 import { TelegramUserClientError } from './telegram-user-client-auth.service.js';
@@ -134,6 +135,7 @@ export function parseQuickRewriteOutput(response: unknown): string {
 
 export type QuickRewriteResult = { text: string; creditsSpentMilli: number };
 export async function rewriteSharedQuickText(userId: string, original: string, instruction: string, destination: 'telegram' | 'notes' | 'mail', onChunkComplete?: () => Promise<void>): Promise<QuickRewriteResult> {
+  if(destination !== 'notes') await requireSubscriptionFeature(userId,destination === 'telegram' ? 'telegram' : 'mail');
   if (destination === 'telegram' && !isTelegramAiDraftEnabled()) throw new TelegramUserClientError(403, 'Изменение сообщений ИИ недоступно');
   const text = validateShareText(original);
   const task = validateQuickInstruction(instruction);

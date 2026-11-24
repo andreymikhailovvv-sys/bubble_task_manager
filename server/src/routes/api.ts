@@ -1937,7 +1937,7 @@ apiRouter.post('/telegram-user-client/assistant/chats/:chatId/summarize', requir
 apiRouter.post('/telegram-user-client/chat/quick-send', requireAuth, requireTelegramChatOrigin, async (req, res) => {
   setTelegramChatNoCache(res);
   try {
-    if (req.body?.mode !== 'original' && req.body?.instruction) await requireSubscriptionFeature(req.user!.id,'telegram');
+    if (req.body?.mode === 'REWRITE_AND_SEND') await requireSubscriptionFeature(req.user!.id,'telegram');
     const result = await telegramQuickShare.enqueue(req.user!.id, {
       recipientIds: req.body?.recipientIds, text: req.body?.text,
       instruction: req.body?.instruction, mode: req.body?.mode, requestId: req.body?.requestId

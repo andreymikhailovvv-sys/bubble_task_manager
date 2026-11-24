@@ -1998,6 +1998,9 @@ export const aiAssistantService = {
   },
 
   askTaskAssistant: async (input: AskTaskAssistantInput) => {
+    const subscriptionRank = await getSubscriptionRank(input.userId);
+    const modelError = modelAccessError(subscriptionRank, input.model);
+    if (modelError) throw modelError;
     input.onProgress?.('analyzing_request');
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
@@ -2272,9 +2275,6 @@ export const aiAssistantService = {
         hasAttachmentPayload: hasAttachments
       });
     }
-    const subscriptionRank = await getSubscriptionRank(input.userId);
-    const modelError = modelAccessError(subscriptionRank, input.model);
-    if (modelError) throw modelError;
     if (monitoringEnabled) { const error = featureAccessError(subscriptionRank, 'monitoring'); if (error) throw error; }
     const reasoningEffort = resolveReasoningEffort(input.mode);
     const modelCandidates = subscriptionRank < 2 ? [AI_CHAT_MODEL_NANO] : subscriptionRank < 3 ? [input.model === 'gpt-6-luna' ? AI_CHAT_MODEL_NANO : AI_CHAT_MODEL_TERRA] : monitoringEnabled
