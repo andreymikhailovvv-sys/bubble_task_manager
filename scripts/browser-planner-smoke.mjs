@@ -61,12 +61,18 @@ try {
       failures.push(message.text().slice(0,600));
   });
   let writes=0;
+  let wardrobeWrites=0;
+  const wardrobe={userId:user.id,rank:2,expiresAt:'2099-01-01T00:00:00.000Z',selected:{planner:'classic',economic:'classic'},catalog:[{id:'classic',variant:'planner',name:'Классический',description:'Базовый',rank:0},{id:'aviator',variant:'planner',name:'Авиатор',description:'Шлем и очки',rank:2},{id:'wizard',variant:'planner',name:'Астролог',description:'Шляпа',rank:3}]};
   await page.route('**/api/**',async route=>{
     const request=route.request();
     const path=new URL(request.url()).pathname;
     const method=request.method();
     let payload={};
     if(path==='/api/auth/me')payload={user};
+    else if(path==='/api/mascot-wardrobe'){
+      if(method==='PUT'){const body=request.postDataJSON();assert.equal(body.variant,'planner');assert.equal(body.skinId,'aviator');wardrobe.selected.planner=body.skinId;wardrobeWrites++;}
+      payload=wardrobe;
+    }
     else if(path==='/api/tasks')payload=tasks;
     else if(/^\/api\/tasks\/[^/]+\/attachments$/.test(path))payload=[];
     else if(path==='/api/spheres')payload=spheres;
@@ -91,6 +97,24 @@ try {
   await page.goto(baseUrl+'/?enter=1',{waitUntil:'domcontentloaded'});
   const primary=page.locator('[data-bubble-task-id="smoke-primary-task"]').first();
   await primary.waitFor({state:'visible',timeout:30000});
+  const launcher=page.locator('.planik-launcher-button').first();
+  await launcher.locator('.planik-body-surface').hover({timeout:12000});
+  const trigger=page.locator('.mascot-wardrobe-anchor').filter({has:launcher}).getByRole('button',{name:'Аксессуары и скины'});
+  await trigger.click({timeout:12000});
+  const wardrobeDialog=page.getByRole('dialog',{name:'Аксессуары и скины'});
+  await wardrobeDialog.getByRole('button',{name:/Астролог/}).click();
+  await wardrobeDialog.locator('[data-skin="wizard"]').waitFor({state:'visible'});
+  assert.equal(await wardrobeDialog.getByRole('button',{name:/Тариф «Максимум»/}).isDisabled(),true);
+  assert.equal(wardrobeWrites,0);
+  await wardrobeDialog.getByRole('button',{name:/Авиатор/}).click();
+  await wardrobeDialog.locator('[data-skin="aviator"][data-mode="showcase"]').waitFor({state:'visible'});
+  await wardrobeDialog.getByRole('button',{name:'Применить образ'}).click();
+  await wardrobeDialog.getByRole('button',{name:'Уже выбран'}).waitFor({state:'visible'});
+  assert.equal(wardrobeWrites,1);
+  await page.keyboard.press('Escape');
+  await wardrobeDialog.waitFor({state:'hidden'});
+  await launcher.locator('[data-skin="aviator"]').waitFor({state:'visible'});
+  metrics.wardrobe='locked preview, animated outfit, save and Escape PASS';
   const openStart=Date.now();
   await primary.click();
   const focusedTitle=page.locator('textarea[title="Редактировать название"]').first();

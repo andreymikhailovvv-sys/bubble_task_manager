@@ -1,3 +1,4 @@
+import { fileToolFailure, terminalFileToolAnswer } from './ai-file-operations.service.js';
 import { getSubscriptionRank, modelAccessError, premiumToolFeature, featureAccessError } from './subscription-access.service.js';
 import { prisma } from '../db/prisma.js';
 import { deductEfficiencyPenalty } from './efficiency-rating.service.js';
@@ -2471,7 +2472,15 @@ export const aiAssistantService = {
           for (const call of toolCalls.slice(0, 1)) {
             const feature = premiumToolFeature(call.name);
             const unavailable = feature ? featureAccessError(subscriptionRank, feature) : null;
-            if (unavailable) { providerInput.push({type:'function_call_output',call_id:call.call_id,output:JSON.stringify({ok:false,code:unavailable.code,message:unavailable.message})}); continue; }
+            if (unavailable) {
+              const failure = fileToolFailure(unavailable, '', unavailable.code);
+              console.info('[AI task tool] subscription denied', { requestId, operation: call.name, code: failure.code, requiredPlan: unavailable.requiredPlan });
+              providerInput.push({type:'function_call_output',call_id:call.call_id,output:JSON.stringify(failure)});
+              toolCallsExecuted += 1;
+              const terminal = terminalFileToolAnswer(call.name, failure);
+              if (terminal) rawAnswer = JSON.stringify({ answer: terminal, actions: [], document: null, spreadsheet: null });
+              continue;
+            }
             let args: TaskContextLookupArguments;
             try { args = JSON.parse(call.arguments) as TaskContextLookupArguments; } catch {
               providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: false, code: 'INVALID_ARGUMENTS' }) });
@@ -2618,6 +2627,11 @@ export const aiAssistantService = {
                 providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(result.response) });
                 if (call.name === 'edit_file' && !result.response.ok) {
                   failedFileEditReason = result.response.message || 'Редактор не смог применить изменения к выбранному файлу.';
+                  const terminal = terminalFileToolAnswer(call.name, result.response);
+                  if (terminal) {
+                    rawAnswer = JSON.stringify({ answer: terminal, actions: [], document: null, spreadsheet: null });
+                    failedFileEditReason = null;
+                  }
                 }
                 if (result.modelAttachment) {
                   const fileMessage = buildAttachmentsPromptMessage([result.modelAttachment]);
@@ -2634,10 +2648,14 @@ export const aiAssistantService = {
                 }
               } catch (error) {
                 if (call.name === 'edit_file') failedFileEditReason = error instanceof Error ? error.message : 'Редактор не смог изменить файл.';
-                providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({
-                  ok: false, code: 'FILE_OPERATION_FAILED',
-                  message: error instanceof Error ? error.message : 'Операция с файлом не выполнена.'
-                }) });
+                const failure = fileToolFailure(error, 'Операция с файлом не выполнена.', 'FILE_OPERATION_FAILED');
+                console.warn('[AI file tool] failed', { requestId, operation: call.name, code: failure.code });
+                providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(failure) });
+                const terminal = terminalFileToolAnswer(call.name, failure);
+                if (terminal) {
+                  rawAnswer = JSON.stringify({ answer: terminal, actions: [], document: null, spreadsheet: null });
+                  failedFileEditReason = null;
+                }
               } finally {
                 if (call.name === 'edit_file') input.onProgress?.('forming_answer');
               }
@@ -2660,8 +2678,12 @@ export const aiAssistantService = {
                      apiKey, args: imageArgs, sourceImages
                    });
                   providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: true, image: { id: generatedImage.document.id, fileName: generatedImage.document.fileName } }) });
+                    rawAnswer = JSON.stringify({ answer: 'Изображение готово. Файл прикреплён к сообщению.', actions: [], document: null, spreadsheet: null });
                 } catch (error) {
-                  providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: false, code: 'IMAGE_GENERATION_FAILED', message: error instanceof Error ? error.message : 'Не удалось создать изображение.' }) });
+                  const failure = fileToolFailure(error, 'Не удалось создать изображение.', 'IMAGE_GENERATION_FAILED');
+                  console.warn('[AI file tool] failed', { requestId, operation: call.name, code: failure.code });
+                  providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(failure) });
+                  rawAnswer = JSON.stringify({ answer: failure.message, actions: [], document: null, spreadsheet: null });
                 } finally {
                   input.onProgress?.('forming_answer');
                 }

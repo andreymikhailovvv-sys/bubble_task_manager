@@ -1,3 +1,4 @@
+import { fileToolFailure, terminalFileToolAnswer } from './ai-file-operations.service.js';
 import { getSubscriptionRank, premiumToolFeature, featureAccessError } from './subscription-access.service.js';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../db/prisma.js';
@@ -404,7 +405,9 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
       initialInput: input.messages,
       consumeAdditionalInput: () => extraProviderInput.splice(0),
       finalizeAfterTool: (name, result) => name === 'edit_file' && generatedDocument && result && typeof result === 'object' && (result as { ok?: unknown }).ok === true
-        ? String((result as { message?: unknown }).message || 'Файл изменён. Новая версия прикреплена к сообщению.') : null,
+        ? String((result as { message?: unknown }).message || 'Файл изменён. Новая версия прикреплена к сообщению.') : name === 'generate_image' && generatedDocument && result && typeof result === 'object' && (result as { ok?: unknown }).ok === true
+          ? 'Изображение готово. Файл прикреплён к сообщению.'
+          : terminalFileToolAnswer(name, result),
       request: async (requestInput) => {
         if (hasPreviewText) { input.onTextReset?.(); hasPreviewText = false; }
         const providerCallIndex = providerCallCount + 1;
@@ -471,8 +474,11 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
       executeTool: async (name, value, round) => {
         const feature = premiumToolFeature(name);
         const unavailable = feature ? featureAccessError(rank, feature) : null;
-        if (unavailable) return {ok:false,code:unavailable.code,message:unavailable.message};
         toolOperations.push(name);
+        if (unavailable) {
+          console.info('[AI tools] subscription denied', { requestId, operation: name, code: unavailable.code, requiredPlan: unavailable.requiredPlan });
+          return fileToolFailure(unavailable, '', unavailable.code);
+        }
         
         const progressByTool: Record<string, import('./ai-chat-progress.js').AiChatProgressStatus> = {
           search_workspace: 'searching_workspace',
@@ -837,7 +843,9 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
             }
             return result.response;
           } catch (error) {
-            return { ok: false, code: 'FILE_OPERATION_FAILED', message: error instanceof Error ? error.message : 'Операция над файлом не выполнена.' };
+            const failure = fileToolFailure(error, 'Операция над файлом не выполнена.', 'FILE_OPERATION_FAILED');
+            console.warn('[AI file tool] failed', { requestId, operation: name, code: failure.code });
+            return failure;
           }
         }
         if (name === 'generate_image') {
@@ -857,18 +865,25 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
             imageCreditsSpentMilli += result.creditsSpentMilli;
             return { ok: true, image: { id: result.document.id, fileName: result.document.fileName, mimeType: result.document.mimeType } };
           } catch (error) {
-            return { ok: false, code: 'IMAGE_GENERATION_FAILED', message: error instanceof Error ? error.message : 'Не удалось создать изображение.' };
+            const failure = fileToolFailure(error, 'Не удалось создать изображение.', 'IMAGE_GENERATION_FAILED');
+            console.warn('[AI file tool] failed', { requestId, operation: name, code: failure.code });
+            return failure;
           } finally {
             emitProgress('forming_answer');
           }
         }
         if (name === 'create_word_document' || name === 'create_excel_workbook') {
           if (generatedDocument) return { ok: false, code: 'DOCUMENT_ALREADY_CREATED', message: 'Файл для этого ответа уже создан.' };
-          generatedDocument = name === 'create_excel_workbook'
-            ? await excelWorkbookService.create({ userId: input.userId, spec: value })
-            : await wordDocumentService.create({ userId: input.userId, spec: value });
-          console.info('[AI tools] document created', { requestId, userId: input.userId, documentId: generatedDocument.id, fileName: generatedDocument.fileName, size: generatedDocument.size });
-          return { ok: true, document: generatedDocument };
+          try {
+            generatedDocument = name === 'create_excel_workbook'
+              ? await excelWorkbookService.create({ userId: input.userId, spec: value })
+              : await wordDocumentService.create({ userId: input.userId, spec: value });
+            console.info('[AI tools] document created', { requestId, userId: input.userId, documentId: generatedDocument.id, fileName: generatedDocument.fileName, size: generatedDocument.size });
+            return { ok: true, document: generatedDocument };
+          } catch {
+            console.warn('[AI file tool] failed', { requestId, operation: name, code: 'DOCUMENT_CREATION_FAILED' });
+            return { ok: false, code: 'DOCUMENT_CREATION_FAILED', message: 'Не удалось создать документ. Проверьте параметры и повторите запрос.' };
+          }
         }
         return { ok: false, code: 'UNKNOWN_TOOL', message: 'Неизвестный инструмент.' };
       }

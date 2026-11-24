@@ -27,7 +27,6 @@ export function useMascotWardrobe(userId?:string, plan?:string, expiresAt?:strin
     setOpen(false);
     setData(null);
     setError('');
-    if(userId)void refresh();
     return ()=>{sequence.current++;};
   },[userId,refresh]);
   useEffect(()=>{if(userId)void refresh();},[plan,expiresAt,refresh,userId]);
