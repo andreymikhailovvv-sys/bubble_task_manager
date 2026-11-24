@@ -1,3 +1,4 @@
+import { setAdminSubscription, AdminSubscriptionError } from '../services/admin-subscription.service.js';
 import { getSubscriptionPlanByKey as getLimitPlan } from '../config/subscription-plans.js';
 import { createLiveVoiceTicket } from '../services/ai-live-voice.service.js';
 import { mergeChatProjectSnapshots, canonicalizeTelegramAssistantProjects, canonicalizeMailAssistantProjects } from '../lib/ai-chat-project-sync.js';
@@ -1069,7 +1070,9 @@ apiRouter.post('/admin/users', async (req, res) => {
       email: true,
       username: true,
       telegramChatId: true,
+      deviceId: true, passwordHash: true, googleSub: true,
       subscriptionPlan: true,
+      subscriptionExpiresAt: true,
       aiCredits: true,
       aiCreditsPeriod: true,
       aiIncludedCreditsMilli: true,
@@ -1080,8 +1083,9 @@ apiRouter.post('/admin/users', async (req, res) => {
   });
 
   res.set('Cache-Control', 'no-store');
-  res.json({ users: users.map(({ telegramChatId, ...user }) => ({
+  res.json({ users: users.map(({ telegramChatId, deviceId, passwordHash, googleSub, ...user }) => ({
     ...user,
+    isGuest: isGuestAccount({ ...user, telegramChatId, deviceId, passwordHash, googleSub }),
     telegramLinked: Boolean(telegramChatId)
   })) });
 });
@@ -1144,32 +1148,38 @@ apiRouter.post('/admin/credit-packs', async (req, res) => {
   res.json({ links });
 });
 
-apiRouter.post('/admin/users/:userId/subscription', async (req, res) => {
+apiRouter.post('/admin/users/:userId/subscription', asyncHandler(async (req, res) => {
   if (!requireAdminPassword(req, res)) return;
   const userId = String(req.params.userId ?? '').trim();
   const subscriptionPlan = String(req.body?.subscriptionPlan ?? '').trim() as AdminSubscriptionPlanKey;
-  if (!userId) {
-    res.status(400).json({ error: 'Не указан пользователь' });
+  if (!userId || !(ADMIN_SUBSCRIPTION_PLAN_KEYS as readonly string[]).includes(subscriptionPlan)) {
+    res.status(400).json({ error: 'Не указан пользователь или неизвестный тариф' });
     return;
   }
-  if (!(ADMIN_SUBSCRIPTION_PLAN_KEYS as readonly string[]).includes(subscriptionPlan)) {
-    res.status(400).json({ error: 'Неизвестный тариф' });
-    return;
-  }
-  const user = await prisma.user.update({
-    where: { id: userId },
-    data: { subscriptionPlan },
-    select: { id: true, subscriptionPlan: true }
-  }).catch((error) => {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') return null;
+  try {
+    const result = await setAdminSubscription({
+      userId, subscriptionPlan, requestId: String(req.body?.requestId ?? ''),
+      expectedPeriod: req.body?.expectedPeriod, expectedPlan: req.body?.expectedPlan,
+      expectedExpiresAt: req.body?.expectedExpiresAt, reason: req.body?.reason ?? ''
+    });
+    res.set('Cache-Control', 'no-store');
+    res.json(result);
+  } catch (error) {
+    if (error instanceof AdminSubscriptionError) {
+      res.status(error.status).json({ error: error.message }); return;
+    }
     throw error;
-  });
-  if (!user) {
-    res.status(404).json({ error: 'Пользователь не найден' });
-    return;
   }
-  res.json({ user });
-});
+}));
+
+apiRouter.post('/admin/users/:userId/subscription-history', asyncHandler(async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+  const history = await prisma.adminSubscriptionChange.findMany({
+    where: { userId: req.params.userId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 50
+  });
+  res.set('Cache-Control', 'no-store');
+  res.json({ history });
+}));
 
 apiRouter.post('/admin/broadcasts', async (req, res) => {
   if (!requireAdminPassword(req, res)) return;
@@ -1239,9 +1249,9 @@ apiRouter.post('/admin/broadcasts', async (req, res) => {
   const where: Prisma.UserWhereInput = target === 'user'
     ? { id: userId, telegramChatId: { not: null } }
     : target === 'paid'
-      ? { telegramChatId: { not: null }, subscriptionPlan: { in: [...SUBSCRIPTION_PLAN_KEYS] } }
+      ? { telegramChatId: { not: null }, subscriptionPlan: { in: [...SUBSCRIPTION_PLAN_KEYS] }, subscriptionExpiresAt: { gt: new Date() } }
       : target === 'free'
-        ? { telegramChatId: { not: null }, subscriptionPlan: 'free' }
+        ? { telegramChatId: { not: null }, OR: [{ subscriptionPlan: 'free' }, { subscriptionExpiresAt: null }, { subscriptionExpiresAt: { lte: new Date() } }] }
         : { telegramChatId: { not: null } };
 
   const recipients = await prisma.user.findMany({
@@ -1341,7 +1351,12 @@ apiRouter.post('/admin/users/:userId/credits', async (req, res) => {
     id: updatedUser.id,
     aiCredits: updatedUser.aiCredits,
     aiCreditsMilli: updatedUser.aiIncludedCreditsMilli + updatedUser.aiBonusCreditsMilli + updatedUser.aiPurchasedCreditsMilli,
-    aiCreditsPeriod: updatedUser.aiCreditsPeriod
+    aiCreditsPeriod: updatedUser.aiCreditsPeriod,
+    subscriptionPlan: updatedUser.subscriptionPlan,
+    subscriptionExpiresAt: updatedUser.subscriptionExpiresAt,
+    aiIncludedCreditsMilli: updatedUser.aiIncludedCreditsMilli,
+    aiBonusCreditsMilli: updatedUser.aiBonusCreditsMilli,
+    aiPurchasedCreditsMilli: updatedUser.aiPurchasedCreditsMilli
   } });
 });
 

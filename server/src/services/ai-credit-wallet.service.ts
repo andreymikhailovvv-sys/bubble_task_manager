@@ -89,7 +89,7 @@ const refreshLockedWallet = async (tx: WalletTransaction, row: WalletRow, period
       data: { subscriptionPlan: 'free', subscriptionExpiresAt: null } });
     return expired;
   }
-  if (row.aiCreditsPeriod === period) return row;
+  if (row.aiCreditsPeriod === period || (row.subscriptionPlan === 'free' && row.aiCreditsPeriod.startsWith(`free:${period}:`))) return row;
   // Free accounts get a one-time trial (bonus bucket), never a recurring
   // monthly free grant. Keep existing included balances until their own
   // period rolls over. Paid plan behavior remains unchanged.
