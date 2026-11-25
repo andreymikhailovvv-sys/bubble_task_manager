@@ -94,3 +94,30 @@ test('small Planik matches light/dark website palette with tight tap bounds and 
   assert.match(build, /versionCode = 24/);
   assert.match(build, /versionName = "1\.0\.22"/);
 });
+
+test('native mascot only hides its offline fallback after real transparent pixel coverage',async()=>{
+  const [art,native,skins,entry,mini,home] = await Promise.all([
+    read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/SharedMascotArtwork.kt'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/PlanikNativeLauncher.kt'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeMascotSkinSvg.kt'),
+    read('../../client/android-mascot.html'),
+    read('../../client/src/MiniApp.tsx'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/HomeScreen.kt')
+  ]);
+  assert.match(art,/super\.onDraw\(requireNotNull\(frameCanvas\)\)/);
+  assert.match(art,/if\(hasMascotPixels\(bitmap\)\)/);
+  assert.match(art,/canvas\.drawBitmap\(bitmap,0f,0f,null\)[\s\S]*?publish\(true\)/);
+  assert.match(art,/if\(!painted\|\|rendererFailed\)NativeMascotFallback/);
+  assert.match(art,/Modifier\.fillMaxSize\(\)\.zIndex\(1f\)/);
+  assert.doesNotMatch(art,/\balpha\s*=\s*0f/);
+  assert.match(art,/onRenderProcessGone/);
+  assert.match(native,/nativeMascotSkinSvg\(source, skinId, dark, mode, alternate\)/);
+  for(const id of ['cat','northern','maestro','zoomer','pirate','wizard','ninja','space']){
+    assert.ok(skins.includes('"'+id+'"'),id+' offline artwork missing');
+  }
+  assert.match(entry,/src="\/src\/android-mascot-main\.tsx"/);
+  assert.doesNotMatch(entry,/src="\/src\/main\.tsx"|telegram-web-app|workspace-boot-splash/);
+  assert.doesNotMatch(mini,/miniapp-mascot-wardrobe-button/);
+  assert.match(mini,/setIsSettingsOpen\(false\); wardrobe\.show\(\);/);
+  assert.match(home,/Аксессуары и скины Планика/);
+});

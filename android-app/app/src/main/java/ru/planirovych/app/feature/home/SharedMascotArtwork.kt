@@ -19,6 +19,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -106,7 +107,7 @@ private class MascotFrameView(context:android.content.Context,
     fun releaseArtwork(){
         released=true
         removeCallbacks(retryDraw)
-        stopLoading()
+        runCatching { stopLoading() }
         frame?.recycle();frame=null;frameCanvas=null
         destroy()
     }
@@ -120,7 +121,7 @@ internal fun SharedMascotArtwork(skinId:String,dark:Boolean,mode:String,
     var painted by remember(skinId,dark){mutableStateOf(false)}
     var rendererFailed by remember(skinId,dark){mutableStateOf(false)}
     Box(modifier){
-        if(!painted||rendererFailed)NativeMascotFallback(dark,mode,skinId,Modifier.fillMaxSize())
+        if(!painted||rendererFailed)NativeMascotFallback(dark,mode,skinId,Modifier.fillMaxSize().zIndex(1f))
         if(!rendererFailed)key(skinId,dark){
             AndroidView(
                 modifier=Modifier.fillMaxSize(),
