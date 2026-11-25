@@ -123,7 +123,15 @@ try {
   const skinList=wardrobeDialog.getByRole('navigation',{name:'Скины'});
   const listWrap=wardrobeDialog.locator('.mascot-wardrobe-list-wrap');
   await skinList.getByRole('button',{name:/Маэстро/}).waitFor({state:'visible'});
-  assert.equal(await skinList.getByRole('button').count(),9);
+  const skinButtons=skinList.locator('button.mascot-wardrobe-option');
+  const moduleSwitch=wardrobeDialog.getByRole('group',{name:'Маскот'});
+  assert.equal(await skinButtons.count(),9);
+  await moduleSwitch.getByRole('button',{name:'Экономыч',exact:true}).click();
+  assert.equal(await skinButtons.count(),3);
+  await skinButtons.filter({hasText:'Хранитель бюджета'}).waitFor({state:'visible'});
+  await moduleSwitch.getByRole('button',{name:'Планик',exact:true}).click();
+  assert.equal(await skinButtons.count(),9);
+  assert.equal(wardrobeWrites,0);
   const classicBody=await wardrobeDialog.locator('.planik-body-surface').boundingBox();
   assert.ok(classicBody);
   assert.equal(await skinList.evaluate(el=>getComputedStyle(el).scrollbarWidth),'none');
