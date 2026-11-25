@@ -15,10 +15,18 @@ export default function AndroidMascotSurface() {
     document.body.dataset.theme = params.get('theme') === 'dark' ? 'dark' : 'light';
     const listener = (event: Event) => setMode(normalizeMode((event as CustomEvent).detail));
     window.addEventListener('planik-native-mode',listener);
-    document.documentElement.dataset.androidMascotReady = 'true';
-    return () => { window.removeEventListener('planik-native-mode',listener); delete document.documentElement.dataset.androidMascotReady; };
+    let frame = 0;
+    const markReady = () => {
+      const body = document.querySelector('.android-mascot-artwork .planik-body-surface');
+      const bounds = body?.getBoundingClientRect();
+      if (bounds && bounds.width > 0 && bounds.height > 0) {
+        document.documentElement.dataset.androidMascotReady = 'true';
+      } else frame = requestAnimationFrame(markReady);
+    };
+    frame = requestAnimationFrame(() => { frame = requestAnimationFrame(markReady); });
+    return () => { cancelAnimationFrame(frame); window.removeEventListener('planik-native-mode',listener); delete document.documentElement.dataset.androidMascotReady; };
   },[]);
-  return <><style>{'html,body,#root{margin:0!important;padding:0!important;width:100%!important;height:100%!important;overflow:hidden!important;background:transparent!important} .android-mascot-artwork{width:100%!important;height:100%!important;max-width:none!important;max-height:none!important}'}</style>
+  return <><style>{'html,body,#root{margin:0!important;padding:0!important;width:100%!important;height:100%!important;overflow:hidden!important;background:transparent!important} #root{display:grid;place-items:center} .android-mascot-artwork{display:block;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important} .android-mascot-artwork .planik-svg{width:100%;height:100%}'}</style>
     <PlanikMascot className="android-mascot-artwork" skinId={skinId} variant="planner" previewMode={mode} arrivalKey={1} size="composer"/>
   </>;
 }

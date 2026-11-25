@@ -119,6 +119,12 @@ app.get(['/economic', '/economic/'], (_req, res) => {
   res.sendFile(path.join(clientDist, 'economic.html'));
 });
 
+app.get(['/android-mascot', '/android-mascot/'], (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, must-revalidate');
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+  res.sendFile(path.join(clientDist, 'android-mascot.html'));
+});
+
 app.get('/auth/email', (_req, res) => {
   res.setHeader('Cache-Control', 'no-store, must-revalidate');
   res.setHeader('Referrer-Policy', 'no-referrer');
