@@ -4580,6 +4580,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   options={[...new Set([userTimeZone,'Europe/Moscow','Europe/Kaliningrad','Europe/Samara','Asia/Yekaterinburg','Asia/Omsk','Asia/Krasnoyarsk','Asia/Irkutsk','Asia/Yakutsk','Asia/Vladivostok','Asia/Magadan','Asia/Kamchatka','Europe/Minsk','Europe/Berlin','Europe/London','America/New_York','America/Chicago','America/Denver','America/Los_Angeles','Asia/Dubai','Asia/Almaty','Asia/Tokyo'])].map(value => ({ value, label: value }))}
                   ariaLabel="Часовой пояс пользователя" detachedPopup popupVariant="settings" />
               </div>
+              {currentUser && <button type="button" className="surface-muted w-full rounded-xl px-3 py-2.5 text-sm font-semibold text-primary" onClick={() => { setIsSettingsOpen(false); wardrobe.show(); }}>Аксессуары и скины Планика</button>}
               <AiCheckupScheduleSettings user={currentUser} onUserUpdated={setCurrentUser}>
                 <button type="button" onClick={() => { void generateManualCheckup(); }}
                   disabled={manualCheckupLoading}
@@ -6009,7 +6010,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <PlanikMascot skinId={wardrobe.selected('planner')} size="composer" busy={aiChatLoading} responding={Boolean(aiChatStreamingText)} progress={aiChatProgress} />
                 </button>
               ) : null}
-              {currentUser && !miniLiveVoiceActive && <button type="button" className="miniapp-mascot-wardrobe-button" onClick={wardrobe.show} aria-label="Аксессуары и скины Планика">Скины</button>}
               {replyToGeneral ? <AiReplyPreview target={replyToGeneral} onDismiss={() => setReplyToGeneral(null)} /> : null}
               <AiAttachmentTiles files={aiChatPendingFiles} onRemove={(file) => setAiChatPendingFiles((prev) => prev.filter((item) => item !== file))} busy={aiChatLoading} uploadProgress={aiChatUploadProgress} />
               <div className="miniapp-ai-chat-composer-card miniapp-ai-chat-composer-card-general flex items-end gap-2 rounded-3xl border p-2">

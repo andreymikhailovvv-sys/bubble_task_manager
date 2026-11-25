@@ -2,6 +2,9 @@ package ru.planirovych.app.feature.home
 
 import android.annotation.SuppressLint
 import android.net.Uri
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
 import android.view.MotionEvent
 import android.view.View
 import android.webkit.WebResourceRequest
@@ -16,6 +19,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -24,74 +28,155 @@ import org.json.JSONObject
 import ru.planirovych.app.BuildConfig
 
 /**
- * Noninteractive artwork only: no bridge, account information, microphone,
- * file access or navigation. The website owns the SVG and its animations.
- * Keep the native launcher visible until the shared artwork actually paints.
+ * Render the same web artwork into a reusable software bitmap. A DOM-ready
+ * marker or a visual-state callback is not proof that a transparent WebView
+ * actually drew pixels, especially inside Compose / AlertDialog.
  */
+private class MascotFrameView(context:android.content.Context,
+    private val painted:(Boolean)->Unit):WebView(context) {
+    private var frame:Bitmap?=null
+    private var frameCanvas:Canvas?=null
+    private var showing=false
+    private var lastGoodAt=0L
+    var pageReady=false
+        private set
+    var released=false
+        private set
+    private val retryDraw=Runnable{if(!released)invalidate()}
+
+    init {
+        // Never set alpha=0: Chromium may stop compositing invisible views.
+        setBackgroundColor(Color.TRANSPARENT)
+        setLayerType(View.LAYER_TYPE_SOFTWARE,null)
+        isClickable=false
+        isFocusable=false
+        importantForAccessibility=View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+    }
+    override fun onTouchEvent(event:MotionEvent?):Boolean=false
+
+    fun setPageReady(ready:Boolean){
+        if(released)return
+        pageReady=ready
+        if(!ready){lastGoodAt=0;publish(false)}
+        invalidate()
+    }
+    private fun publish(value:Boolean){
+        if(showing==value)return
+        showing=value
+        post { if(!released&&showing==value)painted(value) }
+    }
+    override fun onDraw(canvas:Canvas){
+        if(released||!pageReady||width<=0||height<=0)return
+        if(frame?.width!=width||frame?.height!=height){
+            frame?.recycle()
+            frame=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888)
+            frameCanvas=Canvas(requireNotNull(frame))
+        }
+        val bitmap=frame ?: return
+        bitmap.eraseColor(Color.TRANSPARENT)
+        try{super.onDraw(requireNotNull(frameCanvas))}
+        catch(_:RuntimeException){publish(false);return}
+        // Verify actual alpha coverage, not HTML readiness. The edges must
+        // remain transparent; an opaque error/splash page is not a mascot.
+        if(hasMascotPixels(bitmap)){
+            lastGoodAt=android.os.SystemClock.uptimeMillis()
+            canvas.drawBitmap(bitmap,0f,0f,null)
+            publish(true)
+            removeCallbacks(retryDraw)
+        }else{
+            val elapsed=android.os.SystemClock.uptimeMillis()-lastGoodAt
+            if(!showing||elapsed>=900L)publish(false)
+            else {
+                // Intentional arrival/disappearance animations may briefly
+                // contain no pixels. Don't flash the fallback mid-animation.
+                removeCallbacks(retryDraw)
+                postDelayed(retryDraw,900L-elapsed)
+            }
+        }
+    }
+    private fun hasMascotPixels(bitmap:Bitmap):Boolean {
+        val w=bitmap.width;val h=bitmap.height
+        val corners=listOf(0 to 0,w-1 to 0,0 to h-1,w-1 to h-1)
+        if(corners.count{(x,y)->Color.alpha(bitmap.getPixel(x,y))<64}<3)return false
+        var visible=0
+        for(y in 2..8)for(x in 2..8){
+            if(Color.alpha(bitmap.getPixel((w-1)*x/10,(h-1)*y/10))>100)visible++
+        }
+        return visible>=5
+    }
+    fun releaseArtwork(){
+        released=true
+        removeCallbacks(retryDraw)
+        runCatching { stopLoading() }
+        frame?.recycle();frame=null;frameCanvas=null
+        destroy()
+    }
+}
+
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 internal fun SharedMascotArtwork(skinId:String,dark:Boolean,mode:String,
-    modifier:Modifier=Modifier,onReady:(Boolean)->Unit={}){
+    modifier:Modifier=Modifier){
     val latestMode by rememberUpdatedState(mode)
-    val readyCallback by rememberUpdatedState(onReady)
-    key(skinId,dark){
-        AndroidView(
-            modifier=modifier,
-            factory={context->
-                val base=Uri.parse(BuildConfig.API_BASE_URL)
-                val address=base.buildUpon().path("/android-mascot").clearQuery()
-                    .appendQueryParameter("skin",skinId)
-                    .appendQueryParameter("theme",if(dark)"dark" else "light")
-                    .appendQueryParameter("mode",mode).build()
-                object:WebView(context){
-                    override fun onTouchEvent(event:MotionEvent?):Boolean=false
-                }.apply {
-                    alpha=0f
-                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                    setLayerType(View.LAYER_TYPE_SOFTWARE,null)
-                    isClickable=false
-                    isFocusable=false
-                    importantForAccessibility=View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-                    settings.javaScriptEnabled=true
-                    settings.allowFileAccess=false
-                    settings.allowContentAccess=false
-                    settings.javaScriptCanOpenWindowsAutomatically=false
-                    settings.mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                    webViewClient=object:WebViewClient(){
-                        override fun shouldOverrideUrlLoading(view:WebView,request:WebResourceRequest):Boolean =
-                            request.url.scheme!="https" || request.url.host!=base.host ||
-                                request.url.encodedPath!="/android-mascot"
-                        override fun onReceivedError(view:WebView,request:WebResourceRequest,error:WebResourceError){
-                            if(request.isForMainFrame){view.alpha=0f;readyCallback(false)}
-                        }
-                        override fun onPageFinished(view:WebView,url:String){
-                            if(Uri.parse(url).encodedPath!="/android-mascot")return
-                            fun probe(attempt:Int){
-                                if(view.tag=="released"||attempt>=35)return
-                                view.evaluateJavascript("document.documentElement.dataset.androidMascotReady === 'true'"){value->
-                                    if(view.tag=="released")return@evaluateJavascript
-                                    if(value=="true"){
-                                        view.evaluateJavascript(modeScript(latestMode),null)
-                                        view.postVisualStateCallback(1L,object:WebView.VisualStateCallback(){
-                                            override fun onComplete(requestId:Long){
-                                                if(view.tag!="released"){view.alpha=1f;readyCallback(true)}
-                                            }
-                                        })
-                                    }else view.postDelayed({probe(attempt+1)},150)
-                                }
+    var painted by remember(skinId,dark){mutableStateOf(false)}
+    var rendererFailed by remember(skinId,dark){mutableStateOf(false)}
+    Box(modifier){
+        if(!painted||rendererFailed)NativeMascotFallback(dark,mode,skinId,Modifier.fillMaxSize().zIndex(1f))
+        if(!rendererFailed)key(skinId,dark){
+            AndroidView(
+                modifier=Modifier.fillMaxSize(),
+                factory={context->
+                    val base=Uri.parse(BuildConfig.API_BASE_URL)
+                    val address=base.buildUpon().path("/android-mascot").clearQuery()
+                        .appendQueryParameter("skin",skinId)
+                        .appendQueryParameter("theme",if(dark)"dark" else "light")
+                        .appendQueryParameter("mode",mode).build()
+                    MascotFrameView(context){painted=it}.apply {
+                        settings.javaScriptEnabled=true
+                        settings.allowFileAccess=false
+                        settings.allowContentAccess=false
+                        settings.javaScriptCanOpenWindowsAutomatically=false
+                        settings.mixedContentMode=WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                        webViewClient=object:WebViewClient(){
+                            override fun shouldOverrideUrlLoading(view:WebView,request:WebResourceRequest):Boolean =
+                                request.url.scheme!="https" || request.url.host!=base.host ||
+                                    request.url.encodedPath!="/android-mascot"
+                            override fun onReceivedError(view:WebView,request:WebResourceRequest,error:WebResourceError){
+                                if(request.isForMainFrame)setPageReady(false)
                             }
-                            probe(0)
+                            override fun onReceivedHttpError(view:WebView,request:WebResourceRequest,error:android.webkit.WebResourceResponse){
+                                if(request.isForMainFrame)setPageReady(false)
+                            }
+                            override fun onRenderProcessGone(view:WebView,detail:android.webkit.RenderProcessGoneDetail):Boolean {
+                                setPageReady(false)
+                                rendererFailed=true
+                                return true
+                            }
+                            override fun onPageFinished(view:WebView,url:String){
+                                if(Uri.parse(url).encodedPath!="/android-mascot")return
+                                fun probe(attempt:Int){
+                                    if(released||attempt>=50)return
+                                    view.evaluateJavascript("document.documentElement.dataset.androidMascotReady === 'true'"){value->
+                                        if(released)return@evaluateJavascript
+                                        if(value=="true"){
+                                            view.evaluateJavascript(modeScript(latestMode),null)
+                                            setPageReady(true)
+                                        }else view.postDelayed({probe(attempt+1)},150)
+                                    }
+                                }
+                                probe(0)
+                            }
                         }
+                        if(base.scheme=="https")loadUrl(address.toString())
                     }
-                    if(base.scheme=="https")loadUrl(address.toString())
+                },
+                onReset=null,
+                onRelease={view->view.releaseArtwork()},
+                update={view->
+                    if(view.pageReady&&!view.released)view.evaluateJavascript(modeScript(mode),null)
                 }
-            },
-            onReset=null,
-            onRelease={view->view.tag="released";view.stopLoading();view.destroy()},
-            update={view->
-                if(view.alpha>0f&&view.tag!="released")view.evaluateJavascript(modeScript(mode),null)
-            }
-        )
+            )
+        }
     }
 }
 

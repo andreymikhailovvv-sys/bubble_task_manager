@@ -53,14 +53,32 @@ internal fun PlanikNativeLauncher(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    val pressInteraction = remember { MutableInteractionSource() }
+    Box(modifier.size(width = 84.dp, height = 90.dp)) {
+        if(skinId=="classic") NativeMascotFallback(dark,mode,skinId,Modifier.fillMaxSize())
+        else SharedMascotArtwork(skinId,dark,mode,Modifier.fillMaxSize())
+          // A central clickable torso lets users scroll through empty corners.
+        Box(Modifier.align(Alignment.Center).offset(y = 1.dp)
+            .size(width = 58.dp, height = 56.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .clickable(enabled = enabled, interactionSource = pressInteraction,
+                indication = null, onClick = onClick)
+            .semantics { contentDescription = "Поговорить с Плаником" })
+    }
+}
+
+/** Offline fallback for both the chat launcher and wardrobe. */
+@Composable
+internal fun NativeMascotFallback(dark:Boolean,mode:String,skinId:String,modifier:Modifier=Modifier) {
     val context = LocalContext.current
     // Only decode two frames when the phase changes. A streaming token cannot
     // trigger costly SVG parsing or bitmap allocation.
-    val frames = remember(context, dark, mode) {
+    val frames = remember(context, dark, mode, skinId) {
         fun render(asset: String, alternate: Boolean): Bitmap? = runCatching {
             context.assets.open(asset).bufferedReader().use { stream ->
                 val source = stream.readText()
-                val artwork = source.replace("</svg>", planikActionSvg(mode, alternate) + "</svg>")
+                val artwork = nativeMascotSkinSvg(source, skinId, dark, mode, alternate)
+                    .replace("</svg>", planikActionSvg(mode, alternate) + "</svg>")
                 val picture = SVG.getFromString(artwork).renderToPicture(420, 375)
                 val full = Bitmap.createBitmap(420, 375, Bitmap.Config.ARGB_8888).apply {
                     AndroidCanvas(this).drawPicture(picture)
@@ -69,14 +87,13 @@ internal fun PlanikNativeLauncher(
                 // (90,29,255,275) amputated the left edge of the mascot.
                 // The new crop preserves the ~84:90 aspect ratio of the
                 // composer launcher while keeping the hit area compact.
-                Bitmap.createBitmap(full, 80, 12, 280, 300).also { full.recycle() }
+                if(skinId=="classic") Bitmap.createBitmap(full, 80, 12, 280, 300).also { full.recycle() }
+                else full
             }
         }.getOrNull()
         val suffix = if (dark) "" else "_light"
         Pair(render("planik_idle${suffix}.svg", false), render("planik_blink${suffix}.svg", true))
     }
-    val pressInteraction = remember { MutableInteractionSource() }
-
     var blinking by remember { mutableStateOf(false) }
     LaunchedEffect(mode) {
         blinking = false
@@ -103,9 +120,7 @@ internal fun PlanikNativeLauncher(
         label = "planik-vertical-float"
     )
 
-    var sharedReady by remember(skinId,dark){mutableStateOf(false)}
-    Box(modifier.size(width = 84.dp, height = 90.dp)) {
-        if(!sharedReady) {
+    Box(modifier) {
         val picture = if (blinking) frames.second ?: frames.first else frames.first
         if (picture != null) {
             Image(
@@ -140,15 +155,6 @@ internal fun PlanikNativeLauncher(
                     center = Offset(size.width * .5f, size.height * .13f))
             }
         }
-        }
-        if(skinId!="classic") SharedMascotArtwork(skinId,dark,mode,Modifier.fillMaxSize()){sharedReady=it}
-          // A central clickable torso lets users scroll through empty corners.
-        Box(Modifier.align(Alignment.Center).offset(y = 1.dp)
-            .size(width = 58.dp, height = 56.dp)
-            .clip(RoundedCornerShape(22.dp))
-            .clickable(enabled = enabled, interactionSource = pressInteraction,
-                indication = null, onClick = onClick)
-            .semantics { contentDescription = "Поговорить с Плаником" })
     }
 }
 

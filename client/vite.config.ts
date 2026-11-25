@@ -10,6 +10,9 @@ export default defineConfig({
       configureServer(server) {
         server.middlewares.use((req, _res, next) => {
           const [pathname, query] = (req.url || '').split('?', 2);
+          if (pathname === '/android-mascot' || pathname === '/android-mascot/') {
+            req.url = '/android-mascot.html' + (query ? '?' + query : '');
+          }
           if (pathname === '/economic' || pathname === '/economic/') {
             req.url = '/economic.html' + (query ? '?' + query : '');
           }
@@ -24,7 +27,8 @@ export default defineConfig({
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
         work: fileURLToPath(new URL('./work.html', import.meta.url)),
         authEmail: fileURLToPath(new URL('./auth-email.html', import.meta.url)),
-        economic: fileURLToPath(new URL('./economic.html', import.meta.url))
+        economic: fileURLToPath(new URL('./economic.html', import.meta.url)),
+        androidMascot: fileURLToPath(new URL('./android-mascot.html', import.meta.url))
       }
     }
   },
