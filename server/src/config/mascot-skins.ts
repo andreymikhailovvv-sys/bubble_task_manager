@@ -13,6 +13,7 @@ export const MASCOT_SKINS: readonly MascotSkin[] = [
   { id:'space', variant:'planner', name:'Космонавт продуктивности', description:'Прозрачный шлем и скафандр. В невесомости делает оборот, а при размышлении принимает сигнал спутника.', rank:3 },
   { id:'classic', variant:'economic', name:'Верный казначей', description:'Фирменный Экономыч без аксессуаров.', rank:0 },
   { id:'cat', variant:'economic', name:'Котик накоплений', description:'Золотистые кошачьи ушки. При размышлении двигаются независимо друг от друга.', rank:0 },
+  { id:'king', variant:'economic', name:'Король', description:'Рубиновый скипетр, золотая корона, драгоценности и бархатный трон. Приветствует короной и опирается на скипетр при размышлении.', rank:3 },
   { id:'banker', variant:'economic', name:'Хранитель бюджета', description:'Белая рубашка, красный галстук и очки. Пересчитывает деньги и складывает их в портфель.', rank:2 },
 ];
 export function findMascotSkin(variant: unknown, id: unknown): MascotSkin | undefined {
