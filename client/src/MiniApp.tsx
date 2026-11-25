@@ -44,6 +44,7 @@ import { CalendarExportDialog } from './components/CalendarExportDialog';
 import { AutoGrowingTextarea } from './components/AutoGrowingTextarea';
 import { MiniAiChatComposer, type MiniAiChatComposerHandle } from './components/MiniAiChatComposer';
 import { PlanikMascot } from './components/PlanikMascot';
+import { useMascotWardrobe, MascotWardrobeDialog } from './components/MascotWardrobe';
 import './components/PlanikMiniChatLauncher.css';
 import { MiniGeneralAiChatHeader, type MiniAiContextPicker } from './components/MiniGeneralAiChatHeader';
 import { MiniTaskAiChatHeader } from './components/MiniTaskAiChatHeader';
@@ -1030,6 +1031,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [newStandaloneNote, setNewStandaloneNote] = useState<StandaloneNote | null>(null);
   const [aiCredits, setAiCredits] = useState(0);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const wardrobe = useMascotWardrobe(currentUser?.id,currentUser?.subscriptionPlan,currentUser?.subscriptionExpiresAt);
   const userTimeZone = currentUser?.timeZone?.trim() || localStorage.getItem('btm:user-timezone')?.trim() || 'Europe/Moscow';
   const effectiveMiniTheme = useMemo(
     () => resolveThemeMode(miniThemeMode, userTimeZone, new Date()),
@@ -5797,7 +5799,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   aria-label="Поговорить с Плаником" title="Живое общение с Плаником"
                   disabled={aiLoadingTaskId === openedTask.id}
                   onClick={() => taskAiComposerRef.current?.startLive()}>
-                  <PlanikMascot size="composer" busy={aiLoadingTaskId === openedTask.id} responding={Boolean(taskAiStreamingText[openedTask.id])} progress={aiProgressByTask[openedTask.id]} />
+                  <PlanikMascot skinId={wardrobe.selected('planner')} size="composer" busy={aiLoadingTaskId === openedTask.id} responding={Boolean(taskAiStreamingText[openedTask.id])} progress={aiProgressByTask[openedTask.id]} />
                 </button>
               ) : null}
               <input
@@ -5870,6 +5872,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         <div className="miniapp-quick-create-actions flex flex-col items-end gap-2" aria-hidden={!isQuickCreateOpen}>
           <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={() => { setIsQuickCreateOpen(false); openCreateTaskModal(undefined, 'event'); }} className="miniapp-quick-create-action miniapp-quick-create-event inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
             <span>Добавить событие</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><CalendarDays size={18} /></span>
+          </button>
+          <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={() => { setIsQuickCreateOpen(false); setRequestedStandaloneNote(null); setIsStandaloneNotesOpen(true); }} className="miniapp-quick-create-action miniapp-quick-create-note inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
+            <span>Открыть заметки</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><StickyNote size={18}/></span>
           </button>
           <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} disabled={creatingStandaloneNote}
             onClick={() => {
@@ -6001,9 +6006,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   aria-label="Поговорить с Плаником" title="Живое общение с Плаником"
                   disabled={aiChatLoading}
                   onClick={() => aiChatComposerRef.current?.startLive()}>
-                  <PlanikMascot size="composer" busy={aiChatLoading} responding={Boolean(aiChatStreamingText)} progress={aiChatProgress} />
+                  <PlanikMascot skinId={wardrobe.selected('planner')} size="composer" busy={aiChatLoading} responding={Boolean(aiChatStreamingText)} progress={aiChatProgress} />
                 </button>
               ) : null}
+              {currentUser && !miniLiveVoiceActive && <button type="button" className="miniapp-mascot-wardrobe-button" onClick={wardrobe.show} aria-label="Аксессуары и скины Планика">Скины</button>}
               {replyToGeneral ? <AiReplyPreview target={replyToGeneral} onDismiss={() => setReplyToGeneral(null)} /> : null}
               <AiAttachmentTiles files={aiChatPendingFiles} onRemove={(file) => setAiChatPendingFiles((prev) => prev.filter((item) => item !== file))} busy={aiChatLoading} uploadProgress={aiChatUploadProgress} />
               <div className="miniapp-ai-chat-composer-card miniapp-ai-chat-composer-card-general flex items-end gap-2 rounded-3xl border p-2">
@@ -6476,6 +6482,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         </section>
       ) : null}
 
+      {wardrobe.open && <MascotWardrobeDialog wardrobe={wardrobe} variant="planner" theme={effectiveMiniTheme}/>}
       {isStandaloneNotesOpen && currentUser ? (
         <StandaloneNotesWorkspace key={currentUser.id} userId={currentUser.id}
           requestedNote={requestedStandaloneNote}

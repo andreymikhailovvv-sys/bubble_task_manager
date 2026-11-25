@@ -226,13 +226,9 @@ export function MiniAppHabitTracker({ habit, onHabitChanged }: { habit: Habit; o
             {weekdays.map((label) => <span key={label}>{label}</span>)}
           </div>
           <div className="miniapp-habit-tracker-days">
-            {tracker.days.map((day, index) => {
+            {tracker.days.map((day) => {
               const belongsToMonth = day.date.getMonth() === shownMonth.getMonth();
               const active = belongsToMonth && day.date <= tracker.today && day.scheduled;
-              const before = index > 0 && tracker.days[index - 1].done && tracker.days[index - 1].date.getMonth() === shownMonth.getMonth();
-              const after = index < tracker.days.length - 1 && tracker.days[index + 1].done && tracker.days[index + 1].date.getMonth() === shownMonth.getMonth();
-              const joinedBefore = day.done && before && index % 7 !== 0;
-              const joinedAfter = day.done && after && index % 7 !== 6;
               return <button
                 type="button"
                 key={day.key}
@@ -241,10 +237,10 @@ export function MiniAppHabitTracker({ habit, onHabitChanged }: { habit: Habit; o
                   active ? 'miniapp-habit-tracker-day-scheduled' : '',
                   day.done && belongsToMonth ? 'miniapp-habit-tracker-day-done' : '',
                   day.partial && active ? 'miniapp-habit-tracker-day-partial' : '',
-                  joinedBefore ? 'miniapp-habit-tracker-day-connected-left' : '',
-                  joinedAfter ? 'miniapp-habit-tracker-day-connected-right' : '',
+
                   day.key === dayKey(tracker.today) ? 'miniapp-habit-tracker-day-today' : ''
                 ].filter(Boolean).join(' ')}
+                style={{ '--day-fill': (belongsToMonth && day.scheduled ? Math.min(100, Math.max(0, day.amount / Math.max(1, habit.targetCount) * 100)) : 0) + '%' } as CSSProperties}
                 title={belongsToMonth ? `${day.date.toLocaleDateString('ru-RU')}: ${day.amount} из ${habit.targetCount}${day.scheduled ? '' : ' · не запланировано'}` : undefined}
                 disabled={!active || history === null || pendingDayKey !== null}
                 aria-pressed={active ? day.done : undefined}

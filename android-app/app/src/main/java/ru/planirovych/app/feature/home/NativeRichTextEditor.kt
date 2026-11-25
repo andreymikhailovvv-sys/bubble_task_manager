@@ -56,6 +56,7 @@ private class RichNativeEditText(context:Context):EditText(context) {
     var dirty=false
     var sentHtml:String?=null
     private var internalChange=false
+    private var insertedNewlineAt=-1
     private var lastPointerY=0f
     private var startPointerX=0f
     private var startPointerY=0f
@@ -155,6 +156,15 @@ private class RichNativeEditText(context:Context):EditText(context) {
                     // expand selection to an unrelated word after setSelection.
                     cancelNativeGesture(event)
                     requestFocus()
+                    val editable=text
+                    val lineStart=if(offset==0)0 else (editable?.lastIndexOf('\n',offset-1)?:-1)+1
+                    val marker=editable?.getOrNull(lineStart)
+                    if(editable!=null && (marker=='☐'||marker=='☑') && offset<=lineStart+1){
+                        editable.replace(lineStart,lineStart+1,if(marker=='☐')"☑" else "☐")
+                        setSelection((lineStart+2).coerceAtMost(editable.length))
+                        velocityTracker?.recycle();velocityTracker=null
+                        return true
+                    }
                     setSelection(offset)
                     (context.getSystemService(Context.INPUT_METHOD_SERVICE) as?
                         InputMethodManager)?.showSoftInput(this,
@@ -198,14 +208,50 @@ private class RichNativeEditText(context:Context):EditText(context) {
         isFocusableInTouchMode=true
         addTextChangedListener(object:TextWatcher {
             override fun beforeTextChanged(s:CharSequence?,start:Int,count:Int,after:Int){}
-            override fun onTextChanged(s:CharSequence?,start:Int,before:Int,count:Int){}
+            override fun onTextChanged(s:CharSequence?,start:Int,before:Int,count:Int){
+                insertedNewlineAt=if(!internalChange&&hydrated&&count==1&&s?.getOrNull(start)=='\n')start else -1
+            }
             override fun afterTextChanged(s:Editable?) {
-                if(!internalChange&&hydrated)notifyContentChanged()
+                if(!internalChange&&hydrated){
+                    val newline=insertedNewlineAt
+                    insertedNewlineAt=-1
+                    if(s!=null&&newline>=0)continueList(s,newline)
+                    if(s!=null)styleChecklistMarkers(s)
+                    notifyContentChanged()
+                }
             }
         })
     }
     private fun Int.dpPx():Int=(this*resources.displayMetrics.density).toInt()
 
+    private val listMarker=Regex("""^(?:[•☐☑] |\d+\. )""")
+    private fun continueList(content:Editable,newline:Int) {
+        val start=if(newline==0)0 else content.lastIndexOf('\n',newline-1)+1
+        val line=content.subSequence(start,newline).toString()
+        val marker=listMarker.find(line)?.value ?: return
+        internalChange=true
+        try {
+            if(line.removePrefix(marker).isBlank()){
+                content.delete(start,newline+1)
+                setSelection(start)
+            }else{
+                val next=when {
+                    marker.startsWith("☐")||marker.startsWith("☑")->"☐ "
+                    marker.startsWith("•")->"• "
+                    else->((marker.substringBefore('.').toIntOrNull()?:0)+1).toString()+". "
+                }
+                content.insert(newline+1,next)
+                setSelection(newline+1+next.length)
+            }
+        }finally{internalChange=false}
+    }
+    private class ChecklistMarkerSize:RelativeSizeSpan(1.38f)
+    private fun styleChecklistMarkers(content:Editable){
+        content.getSpans(0,content.length,ChecklistMarkerSize::class.java).forEach{content.removeSpan(it)}
+        Regex("""(?m)^[☐☑]""").findAll(content).forEach{
+            content.setSpan(ChecklistMarkerSize(),it.range.first,it.range.last+1,Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+    }
     fun hydrate(html:String) {
         if(hydrated)return
         internalChange=true
@@ -216,6 +262,7 @@ private class RichNativeEditText(context:Context):EditText(context) {
             // Android's HTML reader adds terminal newlines for block elements.
             while(content.isNotEmpty()&&content.last()=='\n')
                 content.delete(content.length-1,content.length)
+            styleChecklistMarkers(content)
             setText(content)
             setSelection(0)
             hydrated=true
@@ -296,8 +343,14 @@ private fun prepareEditorHtml(raw:String):String {
         return Html.escapeHtml(raw).replace("\n","<br>")
     // Android's Html reader does not display HTML checkbox inputs. Show them
     // as editable glyphs; preserve the untouched original HTML on save.
+    val lists=Regex("""<(ul|ol)\b[^>]*>(.*?)</\1>""",setOf(RegexOption.IGNORE_CASE,RegexOption.DOT_MATCHES_ALL)).replace(raw){list->
+        val ordered=list.groupValues[1].equals("ol",true)
+        Regex("""<li\b[^>]*>(.*?)</li>""",setOf(RegexOption.IGNORE_CASE,RegexOption.DOT_MATCHES_ALL)).findAll(list.groupValues[2]).mapIndexed{index,item->
+            "<p>"+(if(ordered)(index+1).toString()+". " else "• ")+item.groupValues[1]+"</p>"
+        }.joinToString("")
+    }
     return Regex("""<input\b([^>]*)>""",RegexOption.IGNORE_CASE)
-        .replace(raw){match->
+        .replace(lists){match->
             if(Regex("""\bchecked(?:\b|=)""",RegexOption.IGNORE_CASE)
                     .containsMatchIn(match.groupValues[1]))"☑ " else "☐ "
         }

@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 // Load only the selected route. The desktop workspace should not parse
 // Mini App, admin and public-page code before it can show the user's tasks.
+const AndroidMascot = React.lazy(() => import('./components/AndroidMascotSurface'));
 const App = React.lazy(() => import('./App'));
 const MiniApp = React.lazy(() => import('./MiniApp'));
 const AdminPage = React.lazy(() => import('./AdminPage'));
@@ -106,6 +107,7 @@ const isTestPageRoute = /^\/(?:test-page|test%20page)\/?$/i.test(window.location
 const isTestMainPageRoute = /^\/(?:test-main-page|test%20main%20page)\/?$/i.test(window.location.pathname);
 // Android embeds this SAME MiniApp frontend for pixel-identical Realtime UI.
 // Runtime web uses existing authenticated session, never Telegram initData.
+const isAndroidMascotRoute = window.location.pathname === '/android-mascot';
 const isAndroidPlanikRoute = window.location.pathname === '/android-planik';
 if (isAndroidPlanikRoute) {
   // Native Android inspects this marker without enabling a JavaScript bridge.
@@ -126,7 +128,7 @@ const isPublicRoute = window.location.pathname === '/android'
 const isCompactWorkspaceViewport = window.matchMedia('(max-width: 1024px)').matches;
 // Small, opt-in-free production diagnostics for UI stalls, aggregated and
 // reported only when interactions are measurably slow.
-if (!isBusinessRoute && !isPublicRoute && !isAdminRoute &&
+if (!isAndroidMascotRoute && !isBusinessRoute && !isPublicRoute && !isAdminRoute &&
     !isTelegramAuthRoute && !isAccountEmailRoute && !isEconomicRoute && !isTestPageRoute && !isTestMainPageRoute) {
   startUiPerformanceDiagnostics(
     isAndroidPlanikRoute ? 'android-web'
@@ -143,7 +145,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <AppErrorBoundary>
       <React.Suspense fallback={<main className="app-shell flex min-h-screen items-center justify-center bg-slate-950 p-4 text-slate-200">Загружаем интерфейс…</main>}>
-      {isBusinessRoute
+      {isAndroidMascotRoute ? <AndroidMascot /> : isBusinessRoute
         ? <React.Suspense fallback={<main className="min-h-screen bg-slate-950 p-8 text-slate-200">Загружаем Планировыч Work…</main>}><BusinessApp /></React.Suspense>
         : isAdminRoute
           ? <AdminPage />
@@ -168,7 +170,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               ? <MiniApp runtime="web" />
               : <App />}
       </React.Suspense>
-      {!isBusinessRoute && !isMiniAppRoute && !isAndroidPlanikRoute && !isTelegramAuthRoute && !isAdminRoute ? <CookieBanner /> : null}
+      {!isAndroidMascotRoute && !isBusinessRoute && !isMiniAppRoute && !isAndroidPlanikRoute && !isTelegramAuthRoute && !isAdminRoute ? <CookieBanner /> : null}
     </AppErrorBoundary>
   </React.StrictMode>
 );

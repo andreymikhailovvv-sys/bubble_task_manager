@@ -3,7 +3,10 @@ package ru.planirovych.app.data.model
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class SubscriptionLimit(val usedPercent: Int, val expiresAt: String, val planName: String, val allowanceMilli: Int? = null)
+data class SubscriptionLimit(val usedPercent: Int, val expiresAt: String, val planName: String, val allowanceMilli: Int? = null,
+    val daily: SubscriptionWindow? = null, val weekly: SubscriptionWindow? = null)
+@Serializable
+data class SubscriptionWindow(val capMilli: Long, val remainingMilli: Long, val remainingPercent: Int, val resetsAt: String)
 
 @Serializable
 data class CurrentUser(
@@ -220,3 +223,15 @@ data class TaskMonitoringStatus(
     val detail:String?=null,
     val createdAt:String?=null
 )
+
+@kotlinx.serialization.Serializable
+data class MascotCatalogSkin(val id:String,val variant:String,val name:String,val description:String="",val rank:Int=0)
+@kotlinx.serialization.Serializable
+data class MascotWardrobeState(val userId:String,val rank:Int=0,val expiresAt:String?=null,val selected:Map<String,String>,val catalog:List<MascotCatalogSkin>) {
+    fun plannerSkin(owner:String?):String {
+        if(owner!=userId)return "classic"
+        val id=selected["planner"] ?: "classic"
+        val activeRank=if(expiresAt?.let{runCatching{java.time.Instant.parse(it).isAfter(java.time.Instant.now())}.getOrDefault(false)}==true)rank else 0
+        return catalog.firstOrNull{it.variant=="planner"&&it.id==id&&it.rank<=activeRank}?.id ?: "classic"
+    }
+}

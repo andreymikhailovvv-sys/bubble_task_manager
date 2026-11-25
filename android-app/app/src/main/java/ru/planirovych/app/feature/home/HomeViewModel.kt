@@ -68,6 +68,27 @@ data class HomeState(val loading: Boolean = true, val user: CurrentUser? = null,
     val profileBusy:Boolean=false,val profileError:String?=null)
 class HomeViewModel(private val repository: WorkspaceRepository, private val themes: ThemePreferences) : ViewModel() {
     private val mutable = MutableStateFlow(HomeState())
+    private val wardrobeMutable=MutableStateFlow<MascotWardrobeState?>(null)
+    val mascotWardrobe=wardrobeMutable.asStateFlow()
+    private val wardrobeMutex=Mutex()
+    fun refreshMascotWardrobe(userId:String?) {
+        if(wardrobeMutable.value?.userId!=userId)wardrobeMutable.value=null
+        if(userId==null)return
+        viewModelScope.launch {
+            wardrobeMutex.withLock {
+                try {
+                    val result=repository.loadMascotWardrobe()
+                    if(mutable.value.user?.id==userId&&result.userId==userId)wardrobeMutable.value=result
+                } catch(e:kotlinx.coroutines.CancellationException){throw e} catch(_:Exception){}
+            }
+        }
+    }
+    suspend fun equipMascotSkin(id:String) = wardrobeMutex.withLock {
+        val owner=mutable.value.user?.id ?: error("Войдите в аккаунт")
+        val result=repository.equipMascotSkin(id)
+        check(mutable.value.user?.id==owner&&result.userId==owner){"Аккаунт изменился"}
+        wardrobeMutable.value=result
+    }
     private val taskAiMutable=MutableStateFlow(TaskAiChatState())
     private val taskProposalAutoApplyMutable=MutableStateFlow<Boolean?>(null)
     val taskProposalAutoApply=taskProposalAutoApplyMutable.asStateFlow()
