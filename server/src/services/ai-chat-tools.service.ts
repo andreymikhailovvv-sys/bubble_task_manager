@@ -389,7 +389,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
   };
   const webSources: WebSource[] = []; const webCitations: WebCitation[] = [];
   if (webSearchAvailable) {
-    try { webReservation = await reserveAiCreditsMilli(input.userId, WEB_SEARCH_CALL_CREDITS_MILLI); }
+    try { webReservation = await reserveAiCreditsMilli(input.userId, WEB_SEARCH_CALL_CREDITS_MILLI, undefined, 'premium'); }
     catch (error) { if (error instanceof Error && error.message === 'Недостаточно AI кредитов') webSearchAvailable = false; else throw error; }
   }
   emitProgress('analyzing_request');

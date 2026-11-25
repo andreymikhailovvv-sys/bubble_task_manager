@@ -3,7 +3,7 @@ import { normalizeSelectableAiChatModel } from '../lib/ai-chat-model.js';
 import { randomUUID } from 'node:crypto';
 import { Prisma, type TelegramAiChatPolicy, type TelegramAiMonitorCall } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
-import { refundAiCreditReservation, reserveAiCreditsMilliWithTransaction, settleAiCreditReservation, type AiCreditReservation } from './ai-credit-wallet.service.js';
+import { refundAiCreditReservation, modelCreditWindowMode, reserveAiCreditsMilliWithTransaction, settleAiCreditReservation, type AiCreditReservation } from './ai-credit-wallet.service.js';
 import { recordAiCreditCharge } from './ai-usage-metering.service.js';
 import { telegramUserChatCapability } from './telegram-user-client-chat-access.service.js';
 import { telegramUserClientRead } from './telegram-user-client-read.service.js';
@@ -286,7 +286,7 @@ async function reserveForCall(claimed: Claimed, desired: number, dayKey: string)
         data: { id: callId, policyId: policy.id, userId: policy.userId,
           reservationId: walletReservation.id, creditDayKey: dayKey, reservedMilli: desired }
       });
-  });
+  }, undefined, modelCreditWindowMode(normalizeSelectableAiChatModel(policy.monitorModel) ?? 'gpt-6-luna'));
   return { reservation, callId };
 }
 

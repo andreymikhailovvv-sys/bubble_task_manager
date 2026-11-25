@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   calculateDebitBreakdown,
+  modelCreditWindowMode,
   creditsToMilli,
   currentAiCreditsPeriod,
   getAiCreditWallet,
@@ -347,4 +348,22 @@ test('weekly UTC boundary and remaining budget constrain each new day', async ()
   assert.equal(limit?.daily.capMilli,150000);
   assert.equal(limit?.daily.remainingMilli,50000);
   assert.equal(limit?.weekly.resetsAt,'2026-11-30T00:00:00.000Z');
+});
+
+test('short subscription limits block costly reservations but keep Luna and nano on the real monthly balance', async () => {
+  const db = wallet({ subscriptionPlan: 'start', subscriptionExpiresAt: new Date(Date.now() + 86400000), aiCreditsPeriod: 'subscription:test', aiCredits: 3100, aiIncludedCreditsMilli: 3000000, aiPurchasedCreditsMilli: 100000 });
+  const first = await reserveAiCreditsMilli('user-1', 150000, db as any, 'premium');
+  await settleAiCreditReservation(first, 150000, db as any);
+  await assert.rejects(reserveAiCreditsMilli('user-1', 1, db as any, 'premium'), /Недостаточно/);
+  await assert.rejects(reserveAiCreditsMilliUpTo('user-1', 1, 1000, db as any, 'premium'), /Недостаточно/);
+  const luna = await reserveAiCreditsMilliUpTo('user-1', 1000, 2000, db as any, modelCreditWindowMode('gpt-6-luna'));
+  await settleAiCreditReservation(luna, 2000, db as any);
+  const nano = await reserveAiCreditsMilli('user-1', 1000, db as any, modelCreditWindowMode('gpt-5-nano'));
+  await settleAiCreditReservation(nano, 1000, db as any);
+  assert.equal(db.state?.aiIncludedCreditsMilli, 2847000);
+  assert.equal(db.state?.aiPurchasedCreditsMilli, 100000);
+  assert.equal(modelCreditWindowMode('gpt-6.1-terra'), 'premium');
+  assert.equal(modelCreditWindowMode('gpt-6.1-sol'), 'premium');
+  assert.equal(modelCreditWindowMode('unknown'), 'premium');
+  await assert.rejects(reserveAiCreditsMilli('user-1', 3000000, db as any, 'basic'), /Недостаточно/);
 });

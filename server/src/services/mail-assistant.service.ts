@@ -5,7 +5,7 @@ import { prisma } from '../db/prisma.js';
 import { FixedWindowRateLimiter } from '../lib/security-rate-limiter.js';
 import { mailKeyReady, encryptMailPassword, decryptMailPassword } from '../lib/mail-crypto.js';
 import { ReadOnlyImap, validateMailCredentials, type MailProvider, type MailMessage } from './mail-imap.service.js';
-import { reserveAiCreditsMilli, settleAiCreditReservation, refundAiCreditReservation } from './ai-credit-wallet.service.js';
+import { modelCreditWindowMode, reserveAiCreditsMilli, settleAiCreditReservation, refundAiCreditReservation } from './ai-credit-wallet.service.js';
 import { calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordOpenAiUsageShadow, recordAiCreditCharge, type OpenAiUsage } from './ai-usage-metering.service.js';
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { normalizeMonitorTaskAction } from './telegram-ai-monitor-summary.service.js';
@@ -276,7 +276,7 @@ async function analyze(account: EmailMailbox, message: MailMessage, requestId: s
   const daily = latest.creditDayKey === dayKey ? latest.dailySpentMilli : 0;
   if (latest.dailyCreditLimitMilli !== null && daily + estimate > latest.dailyCreditLimitMilli)
     throw new Error('Дневной лимит кредитов достигнут');
-  const reservation = await reserveAiCreditsMilli(account.userId, Math.max(1, estimate));
+  const reservation = await reserveAiCreditsMilli(account.userId, Math.max(1, estimate), undefined, modelCreditWindowMode(account.monitorModel));
   let settled = false;
   try {
     const response = await openAiFetch('https://api.openai.com/v1/responses', {

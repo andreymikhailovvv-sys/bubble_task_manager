@@ -46,6 +46,7 @@ import {
   currentAiCreditsPeriod,
   refundAiCreditReservation as refundWalletReservation,
   reserveAiCreditsMilli,
+  modelCreditWindowMode,
   reserveAiCreditsMilliUpTo,
   settleAiCreditReservation,
   type AiCreditReservation as WalletReservation
@@ -520,7 +521,7 @@ type AiCreditChargeTracking = { actionId: string; feature: string; model: string
 
 async function chargeAiCredits(userId: string, model: string, options?: { deferCommit?: boolean; tracking?: AiCreditChargeTracking }): Promise<AiCreditReservation> {
   const cost = resolveModelCredits(model);
-  const walletReservation = await reserveAiCreditsMilli(userId, creditsToMilli(cost));
+  const walletReservation = await reserveAiCreditsMilli(userId, creditsToMilli(cost), undefined, modelCreditWindowMode(model));
   const reservation = { ...walletReservation, cost };
   if (!options?.deferCommit) await commitAiCreditReservation(userId, reservation, options?.tracking);
   return reservation;
@@ -568,7 +569,7 @@ async function withAiCreditReservation<T>(userId: string, model: string, operati
 
 async function chargeFixedAiCredits(userId: string, cost: number, tracking?: AiCreditChargeTracking) {
   const period = currentAiCreditsPeriod();
-  const reservation = await reserveAiCreditsMilli(userId, creditsToMilli(cost));
+  const reservation = await reserveAiCreditsMilli(userId, creditsToMilli(cost), undefined, tracking ? modelCreditWindowMode(tracking.model) : 'standard');
   await settleAiCreditReservation(reservation, reservation.totalMilli);
   const efficiencyState = await prisma.user.findUnique({ where: { id: userId }, select: { aiEfficiencyCreditsPeriod: true } });
   const updated = await prisma.user.update({ where: { id: userId }, data: aiCreditEfficiencyData(cost, period, efficiencyState?.aiEfficiencyCreditsPeriod), select: { efficiencyScore: true } });
@@ -1586,7 +1587,7 @@ export const aiAssistantService = {
     // The former 1024-token budget was entirely consumed by nano reasoning,
     // yielding HTTP 200 with no output. Failed attempts are refunded.
     for (let attempt = 1; attempt <= 2; attempt += 1) {
-      const model = attempt === 1 ? (RECURRENCE_MODEL || 'gpt-5-nano') : 'gpt-6.1-terra';
+      const model = attempt === 1 ? (RECURRENCE_MODEL || 'gpt-5-nano') : AI_CHAT_MODEL_NANO;
       const payload = {
         model,
         ...(supportsReasoningEffort(model) ? { reasoning: { effort: 'low' } } : {}),
@@ -1703,7 +1704,7 @@ export const aiAssistantService = {
       throw new Error(`Неизвестна стоимость модели расшифровки "${model}"`);
     }
     if (metering.estimatedCreditsMilli > 0) {
-      await reserveAiCreditsMilli(input.userId, metering.estimatedCreditsMilli);
+      await reserveAiCreditsMilli(input.userId, metering.estimatedCreditsMilli, undefined, 'basic');
       await recordAiCreditCharge({
         userId: input.userId,
         actionId: requestId,
@@ -2314,11 +2315,13 @@ export const aiAssistantService = {
     const webCitations: TaskWebCitation[] = [];
     let webReservation: WalletReservation | null = null;
     try {
-      webReservation = await reserveAiCreditsMilli(input.userId, WEB_SEARCH_CALL_CREDITS_MILLI);
+      webReservation = await reserveAiCreditsMilli(input.userId, WEB_SEARCH_CALL_CREDITS_MILLI, undefined, 'premium');
     } catch (error) {
       if (!(error instanceof Error && error.message === 'Недостаточно AI кредитов')) throw error;
     }
     for (const model of modelCandidates) {
+      // A cheap legacy reservation cannot authorize a more expensive fallback.
+      if (!dynamicBilling && modelCreditWindowMode(modelCandidates[0]) === 'basic' && modelCreditWindowMode(model) !== 'basic') continue;
       const dynamicCalls: Array<{ reservation: WalletReservation; actualCreditsMilli: number; usageCost: ReturnType<typeof calculateOpenAiUsageCost>; providerCallIndex: number }> = [];
       let pendingDynamicReservation: WalletReservation | null = null;
       try {
@@ -2376,7 +2379,7 @@ export const aiAssistantService = {
             if (inputTokens === null) throw new Error('AI_DYNAMIC_PREFLIGHT_FAILED: OpenAI input token preflight returned invalid usage');
             const minimum = calculateMaximumRequestCreditsMilli({ model, inputTokens, maxOutputTokens: TASK_CHAT_MIN_OUTPUT_TOKENS });
             const desired = calculateMaximumRequestCreditsMilli({ model, inputTokens, maxOutputTokens: TASK_CHAT_MAX_OUTPUT_TOKENS });
-            dynamicReservation = await reserveAiCreditsMilliUpTo(input.userId, minimum.totalCreditsMilli, desired.totalCreditsMilli);
+            dynamicReservation = await reserveAiCreditsMilliUpTo(input.userId, minimum.totalCreditsMilli, desired.totalCreditsMilli, undefined, modelCreditWindowMode(model));
             pendingDynamicReservation = dynamicReservation;
             maxOutputTokens = Math.min(TASK_CHAT_MAX_OUTPUT_TOKENS, calculateAffordableOutputTokens(model, inputTokens, dynamicReservation.totalMilli - desired.inputCreditsMilli));
             if (maxOutputTokens < TASK_CHAT_MIN_OUTPUT_TOKENS) throw new Error('Недостаточно AI кредитов');

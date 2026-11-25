@@ -284,7 +284,7 @@ async function startLiveSession(userId: string, peer: ClientPeer, context: LiveV
   };
   peer.onClose(() => stop());
   try {
-    reservation = await reserveAiCreditsMilli(userId, RESERVED_MILLI);
+    reservation = await reserveAiCreditsMilli(userId, RESERVED_MILLI, undefined, 'premium');
     if (closed) { await refundAiCreditReservation(reservation); reservation = null; return; }
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('Голосовой ИИ не настроен.');
