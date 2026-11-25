@@ -36,7 +36,10 @@ export function AdventureIdle({skin}:{skin:AdventureSkin}){
  return <g className="ninja-ready" pointerEvents="none"><AdventureArm skin="ninja" d="M132 196Q149 245 204 225"/><AdventureArm skin="ninja" d="M298 196Q281 245 226 225"/><g fill="#454963" stroke="#292c42" strokeWidth="1.4"><path d="M215 205Q206 204 201 214L193 229Q192 240 205 241L215 229Z"/><path d="M215 205Q224 204 229 214L237 229Q238 240 225 241L215 229Z"/><path d="M215 208v19" stroke="#9b9bbd" fill="none"/></g></g>;
 }
 export function AdventureHover({skin}:{skin:AdventureSkin}){
- if(skin==='ninja')return <g pointerEvents="none"><g className="ninja-hover-ready"><AdventureIdle skin="ninja"/></g><g className="ninja-throw-arm"><AdventureArm skin="ninja" d="M298 196Q321 214 326 206"/></g><g className="ninja-bomb"><circle r="13" fill="#343947" stroke="#a0a8bd" strokeWidth="1.7"/><rect x="-4" y="-15" width="8" height="5" rx="2" fill="#929ab0"/><path d="M0-14q9-11 13-3" stroke="#bfad80" strokeWidth="2.2" fill="none"/><path d={star(13,-17,5)} fill="#ffdc79"/><path d="M-8-5Q-8-9-2-10" stroke="#b6bfd0" strokeWidth="2" strokeLinecap="round" fill="none"/></g></g>;
+ if(skin==='ninja')return <g className="ninja-guard" pointerEvents="none">
+   <g className="ninja-guard-left"><AdventureArm skin="ninja" d="M132 196Q104 221 132 242Q154 246 172 184" strokeWidth={19}/><path d="M164 177q8-12 18-1l-1 14q-8 8-18 0z" fill="#51566f" stroke="#242638" strokeWidth="2"/><path d="m166 181 12 4m-13 2 12 4" stroke="#9299b4" strokeWidth="2"/></g>
+   <g className="ninja-guard-right"><AdventureArm skin="ninja" d="M298 196Q322 221 297 241Q274 247 253 205" strokeWidth={19}/><path d="M244 199q7-10 17-2l4 11q-7 10-18 4z" fill="#51566f" stroke="#242638" strokeWidth="2"/><path d="m249 202 10 4m-11 1 10 4" stroke="#9299b4" strokeWidth="2"/></g>
+ </g>;
  if(skin==='pirate')return <g pointerEvents="none"><AdventureArm skin="pirate" d="M132 196Q135 220 152 231"/><g className="pirate-rest-arm"><AdventureArm skin="pirate" d="M298 196Q295 220 278 231"/></g><g className="pirate-lift-arm"><AdventureArm skin="pirate" d="M298 196Q321 159 257 128"/><path d="M250 132l8-6" stroke="#9693d5" strokeWidth="13" strokeLinecap="round" fill="none"/></g></g>;
  return <g className="space-drift-arms" pointerEvents="none"><g className="space-arm-left"><AdventureArm skin="space" d="M132 196Q111 207 151 222"/></g><g className="space-arm-right"><AdventureArm skin="space" d="M298 196Q319 207 279 222"/></g></g>;
 }
@@ -48,4 +51,24 @@ export function SpaceSignal({suffix}:{suffix:string}){
 }
 export function NinjaSmoke({suffix}:{suffix:string}){
  return <g className="ninja-smoke" pointerEvents="none">{Array.from({length:26},(_,i)=>{const a=i*2.39996,r=15+(i%9)*13;return <circle key={i} cx={215+Math.cos(a)*r} cy={168+Math.sin(a)*r} r={32+i%5*7} fill={url('smoke',suffix)} style={{'--smoke-origin':(215+Math.cos(a)*r)+'px '+(168+Math.sin(a)*r)+'px'} as CSSProperties}/>;})}</g>;
+}
+
+export function NinjaNotebook(){
+ return <g className="ninja-notebook-scene" pointerEvents="none">
+  <AdventureArm skin="ninja" d="M132 196Q111 228 157 249L188 239" strokeWidth={17}/>
+  <g transform="translate(169 199) rotate(-9)">
+   <rect x="0" y="0" width="91" height="65" rx="5" fill="#6f302f" stroke="#35232f" strokeWidth="2"/>
+   <path d="M4 4Q24-1 45 9Q66-1 87 4V59Q67 54 45 63Q22 54 4 59Z" fill="#f2e7ce" stroke="#bca98f" strokeWidth="1.5"/>
+   <path d="M45 9V62" stroke="#a58c78" strokeWidth="1.8"/>
+   {[0,1,2,3].map(i=><path key={i} d={`M11 ${16+i*9}h26M53 ${16+i*9}h26`} stroke="#9c887b" strokeWidth="1.8" strokeLinecap="round"/>)}
+   <g className="ninja-notebook-page"><path d="M45 9Q68-1 87 4V59Q67 54 45 63Z" fill="#fff1d9" stroke="#bca98f" strokeWidth="1.4"/><path d="M53 18h25m-25 9h22m-22 9h26m-26 9h18" stroke="#ab9686" strokeWidth="1.6"/></g>
+   <path d="M4 59Q22 54 45 63Q67 54 87 59" fill="none" stroke="#dbcaad" strokeWidth="2"/>
+  </g>
+  <circle cx="183" cy="242" r="8" fill="#474b63" stroke="#222536" strokeWidth="2"/>
+  <g className="ninja-chopsticks-arm">
+   <AdventureArm skin="ninja" d="M298 196Q316 216 281 228" strokeWidth={17}/>
+   <path d="M279 223L229 207M280 230L230 213" stroke="#ca9b60" strokeWidth="3.8" strokeLinecap="round"/><path d="M277 223L230 207M278 230L231 213" stroke="#eed1a3" strokeWidth="1.2" strokeLinecap="round"/>
+   <circle cx="280" cy="226" r="8" fill="#474b63" stroke="#222536" strokeWidth="2"/>
+  </g>
+ </g>;
 }

@@ -742,7 +742,7 @@ export default function TestPage() {
             ['start','Старт','Базовый лимит · 299 ₽/мес'],['pro','Про','Лимит ×2 · 599 ₽/мес'],['max','Максимум','Лимит ×4,33 · 1290 ₽/мес']
           ] as const).map(([key,name,desc])=><div key={key} className="tp-plan">
             <div><strong>{name}</strong><small>{desc}</small></div>
-            <ul className="mt-2 space-y-1 text-xs text-secondary">{PLAN_FEATURES[key as keyof typeof PLAN_FEATURES].map(feature => <li key={feature}>✓ {feature}</li>)}</ul><button type="button" disabled={!subscriptionPurchaseAvailable||(activeSubscription&&user?.subscriptionPlan===key)||subscriptionPurchase.creatingPlanKey!==null}
+            <ul className="mt-2 space-y-1 text-xs text-secondary">{PLAN_FEATURES[key as keyof typeof PLAN_FEATURES].map(feature => <li key={feature}>✓ {feature}</li>)}{key!=='start'&&<li><button type="button" className="surface-muted rounded-xl px-3 py-2 text-xs font-semibold" onClick={()=>{setCreditsOpen(false);wardrobe.show();}}>Посмотреть образы</button></li>}</ul><button type="button" disabled={!subscriptionPurchaseAvailable||(activeSubscription&&user?.subscriptionPlan===key)||subscriptionPurchase.creatingPlanKey!==null}
               onClick={()=>void subscriptionPurchase.start(key)}>
               {subscriptionPurchase.creatingPlanKey===key?'Создаём платёж…':activeSubscription?(user?.subscriptionPlan===key?'Подписка активна':'Сменить тариф'):subscriptionPurchaseAvailable?'Купить':'Оплата недоступна'}
             </button>

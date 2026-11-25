@@ -484,16 +484,6 @@ body:has(.planik-notes-companion, .planik-task-editor-companion)
 /* Adventure outfits use the original coordinate system, not a scaled mascot. */
 .planik-mascot[data-skin=ninja]:is([data-mode=idle],[data-mode=hover]) .planik-eye{visibility:hidden}
 .ninja-squint{transform-box:fill-box;transform-origin:center;animation:planik-blink 5.4s infinite}
-.planik-mascot[data-skin=ninja][data-mode=hover] .planik-character-rig{animation:ninja-vanish 3.9s linear both}
-.ninja-hover-ready{animation:ninja-ready-return 3.9s steps(1,end) both}
-.ninja-throw-arm{transform-box:view-box;transform-origin:298px 196px;animation:ninja-throw 3.9s ease-in-out both}
-.ninja-bomb{animation:ninja-bomb-drop 3.9s linear both;transform-box:view-box;transform-origin:0 0}
-.ninja-smoke{transform-box:view-box;transform-origin:215px 168px;animation:ninja-smoke-cloud 3.9s ease-out both}
-@keyframes ninja-vanish{0%,26%{opacity:1}34%,75%{opacity:0}83%,100%{opacity:1}}
-@keyframes ninja-ready-return{0%{opacity:1}10%{opacity:0}78%,100%{opacity:1}}
-@keyframes ninja-throw{0%{opacity:0;transform:rotate(25deg)}10%{opacity:1;transform:rotate(0deg)}23%{opacity:1;transform:rotate(32deg)}24%,100%{opacity:0}}
-@keyframes ninja-bomb-drop{0%{opacity:0;transform:translate(232px,225px) scale(.8)}11%{opacity:1;transform:translate(326px,206px) scale(.8)}23%{opacity:1;transform:translate(215px,298px) rotate(210deg) scale(.8)}24%,100%{opacity:0;transform:translate(215px,298px)}}
-@keyframes ninja-smoke-cloud{0%,22%{opacity:0;transform:translateY(117px) scale(.12)}36%{opacity:1;transform:translateY(0) scale(1.05)}48%{opacity:.9;transform:scale(1.12)}65%{opacity:0;transform:scale(1.25)}68%{opacity:0;transform:scale(.3)}77%{opacity:1;transform:scale(1)}86%{opacity:.75;transform:scale(1.12)}100%{opacity:0;transform:scale(1.25)}}
 /* The covered eye is independently hidden, so no white pixel can escape
    the patch when gaze moves down to the map or outside the mascot. */
 .planik-mascot[data-skin=pirate] .planik-eye-right{visibility:hidden}
@@ -583,7 +573,7 @@ body:has(.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded)) [data-manag
 .planik-mascot[data-arriving=true][data-skin=space] .planik-svg{animation:mascot-beam-enter .52s steps(8,end) both!important}
 @keyframes mascot-snow-enter{0%{opacity:0;transform:translateX(20%) scale(.82);filter:blur(7px)}65%{opacity:1;transform:translateX(-3%)}100%{transform:none;filter:none}}
 @keyframes mascot-phone-enter{0%,12%{opacity:0;transform:translateY(12%) scale(.12,.04)}40%{opacity:1;transform:translateY(-4%) scale(.34,1.07)}75%{transform:scale(1.04,.96)}100%{transform:none}}
-@keyframes mascot-gold-enter{0%{opacity:0;transform:translateY(30%) scale(.5);clip-path:inset(100% 0 0)}48%{opacity:1;clip-path:inset(0);transform:translateY(-8%) scale(.92)}100%{transform:none;clip-path:inset(0)}}
+@keyframes mascot-gold-enter{0%,14%{opacity:0;transform:translateY(56%) scale(.62);clip-path:inset(0 0 72% 0)}25%{opacity:1;transform:translateY(18%) scale(.82);clip-path:inset(0 0 28% 0)}53%{opacity:1;transform:translateY(-27%) rotate(-5deg) scale(1.07);clip-path:inset(0)}76%{transform:translateY(-6%) rotate(2deg) scale(.98)}100%{transform:none;clip-path:inset(0)}}
 @keyframes mascot-portal-enter{0%{opacity:0;transform:scale(.08) rotate(-8deg)}55%{opacity:1;transform:scale(1.09) rotate(2deg)}100%{transform:none}}
 @keyframes mascot-smoke-enter{0%{opacity:0;filter:blur(10px);transform:scale(.85)}60%{opacity:1;filter:blur(2px)}100%{filter:none;transform:none}}
 @keyframes mascot-beam-enter{0%{opacity:0;clip-path:inset(100% 0 0)}35%{opacity:.65;filter:brightness(2.5);clip-path:inset(34% 0 0)}70%{opacity:1;filter:brightness(1.4);clip-path:inset(0)}100%{opacity:1;filter:none;clip-path:inset(0)}}
@@ -595,8 +585,10 @@ body:has(.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded)) [data-manag
 .mascot-arrival-phone{position:absolute;left:34%;bottom:1%;width:42%;height:21%;border:2px solid #a39ad0;border-radius:5px;background:linear-gradient(145deg,#625c91,#211f3b);transform:perspective(75px) rotateX(42deg);box-shadow:0 0 10px #9b87f7;animation:mascot-arrival-prop .56s ease-out both}
 .mascot-arrival-phone i{position:absolute;inset:13% 8%;border-radius:2px;background:linear-gradient(130deg,#93ebec,#826ce3)}
 .mascot-arrival-phone b{position:absolute;bottom:4%;left:43%;width:14%;height:2px;background:#d5ccff}
-.mascot-arrival-gold{position:absolute;left:20%;bottom:0;width:68%;height:38%;animation:mascot-arrival-prop .56s ease-out both}
-.mascot-arrival-gold i{position:absolute;width:25%;height:31%;border-radius:50%;border:1px solid #fff0a0;background:radial-gradient(ellipse,#ffe297 40%,#d38a22 60%,#ffd56e 77%);box-shadow:0 2px #a76818}
+.mascot-arrival-gold{position:absolute;left:-10%;bottom:-7%;width:120%;height:70%;overflow:visible;animation:mascot-gold-pile .56s ease-out both}
+@keyframes mascot-gold-pile{0%{opacity:0;transform:translateY(8%) scale(.78)}16%,65%{opacity:1;transform:none}100%{opacity:0;transform:translateY(7%) scale(.98)}}
+.mascot-gold-flying{transform-box:fill-box;transform-origin:center;animation:mascot-gold-splash .39s cubic-bezier(.15,.6,.45,1) both}
+@keyframes mascot-gold-splash{0%{opacity:0;transform:translate(0,0) scale(.5)}12%{opacity:1}55%{opacity:1;transform:translate(var(--coin-x),var(--coin-y)) rotate(var(--coin-turn))}100%{opacity:0;transform:translate(calc(var(--coin-x) * 1.4),16px) rotate(calc(var(--coin-turn) * 1.6)) scale(.75)}}
 [data-arrival-skin=pirate] .mascot-arrival-particle,[data-arrival-skin=banker] .mascot-arrival-particle{background:#ffda72;color:#ffd072}
 .mascot-arrival-portal{position:absolute;inset:4% 16% 2%;border:3px solid #bca2ff;border-radius:50%;background:radial-gradient(ellipse,#170b45aa,transparent 70%);box-shadow:0 0 12px #a98cff,inset 0 0 20px #bca2ff;animation:mascot-portal-ring .52s ease-out both}
 .mascot-arrival-portal i,.mascot-arrival-portal b{position:absolute;inset:8%;border:1px dashed #dfd1ff;border-radius:50%;transform:rotate(40deg)}
@@ -614,3 +606,15 @@ body:has(.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded)) [data-manag
    now the same live mascot as the workspace/modal launcher. */
 .ai-chat-launcher[data-managed-mascot-launcher=planner][data-mascot-chat-embedded=true]{right:var(--mascot-chat-right,16px)!important;bottom:var(--mascot-chat-bottom,138px)!important}
 .ai-chat-launcher[data-mascot-chat-embedded=true] .planik-quick-ai-preview{opacity:0!important;pointer-events:none!important}
+
+.planik-mascot[data-skin=ninja][data-mode=hover] .planik-character-rig{animation:none;opacity:1}
+.planik-mascot[data-skin=ninja][data-mode=hover] :is(.planik-eye-left,.planik-eye-right){animation:ninja-scan 2.1s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+@keyframes ninja-scan{0%,100%{translate:0 0}19%,35%{translate:-12px 0}59%,78%{translate:12px 0}}
+.ninja-guard-left,.ninja-guard-right{transform-box:view-box;animation:ninja-guard-set .28s cubic-bezier(.2,.8,.3,1) both}
+.ninja-guard-left{transform-origin:132px 196px}.ninja-guard-right{transform-origin:298px 196px}
+@keyframes ninja-guard-set{from{rotate:13deg;opacity:.65}to{rotate:0deg;opacity:1}}
+.ninja-notebook-page{transform-box:view-box;transform-origin:45px 34px;animation:ninja-page-turn 1.6s ease-in-out infinite}
+.ninja-chopsticks-arm{transform-box:view-box;transform-origin:298px 196px;animation:ninja-page-pick 1.6s ease-in-out infinite}
+@keyframes ninja-page-turn{0%,30%{transform:scaleX(1);opacity:1}53%{transform:scaleX(.06);opacity:1}70%{transform:scaleX(-.92);opacity:1}73%,100%{transform:scaleX(1);opacity:0}}
+@keyframes ninja-page-pick{0%,18%,100%{transform:rotate(0deg)}34%{transform:rotate(6deg)}65%{transform:rotate(-12deg)}82%{transform:rotate(-3deg)}}
+@media(prefers-reduced-motion:reduce){.ninja-guard-left,.ninja-guard-right,.ninja-notebook-page,.ninja-chopsticks-arm,.planik-mascot[data-skin=ninja][data-mode=hover] :is(.planik-eye-left,.planik-eye-right){animation:none!important;translate:none}}

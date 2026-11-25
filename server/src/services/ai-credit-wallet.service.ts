@@ -120,19 +120,28 @@ export const refreshIncludedCreditsPeriod = getAiCreditWallet;
 
 // The real wallet is never truncated: only the included amount eligible for
 // this reservation is limited. Bonus and purchased credits remain available.
-async function spendableWallet(tx: WalletTransaction, wallet: WalletRow): Promise<AiCreditBuckets> {
+export type AiCreditWindowMode = 'standard' | 'basic' | 'premium';
+// Only explicit, server-selected inexpensive models can spend from the monthly
+// balance after a short window expires. Unknown models fail closed.
+export function modelCreditWindowMode(model: string): AiCreditWindowMode {
+  return /^(gpt-6-luna|gpt-5-nano)(?:-\d{4}-\d{2}-\d{2})?$/i.test(model.trim()) ? 'basic' : 'premium';
+}
+async function spendableWallet(tx: WalletTransaction, wallet: WalletRow, mode: AiCreditWindowMode): Promise<AiCreditBuckets> {
+  if (mode === 'basic') return wallet;
   const limits = await getSubscriptionWindowLimits(tx, wallet);
-  return limits ? { ...wallet, aiIncludedCreditsMilli: limits.daily.remainingMilli } : wallet;
+  if (!limits) return wallet;
+  if (mode === 'premium' && limits.daily.remainingMilli <= 0) return { aiIncludedCreditsMilli: 0, aiBonusCreditsMilli: 0, aiPurchasedCreditsMilli: 0 };
+  return { ...wallet, aiIncludedCreditsMilli: limits.daily.remainingMilli };
 }
 
-export async function reserveAiCreditsMilli(userId: string, amountMilli: number, db: WalletDatabase = prisma): Promise<AiCreditReservation> {
+export async function reserveAiCreditsMilli(userId: string, amountMilli: number, db: WalletDatabase = prisma, mode: AiCreditWindowMode = 'standard'): Promise<AiCreditReservation> {
   return db.$transaction(async (tx) => {
     const row = await selectWalletForUpdate(tx, userId);
     if (!row) throw new Error('User not found');
     if (isGuestAccount(row)) throw new Error('Недостаточно AI кредитов');
     const wallet = await refreshLockedWallet(tx, row, currentAiCreditsPeriod());
     const period = wallet.aiCreditsPeriod;
-    const debit = calculateDebitBreakdown(await spendableWallet(tx, wallet), amountMilli);
+    const debit = calculateDebitBreakdown(await spendableWallet(tx, wallet, mode), amountMilli);
     if (!debit) throw new Error('Недостаточно AI кредитов');
     const next = {
       aiIncludedCreditsMilli: wallet.aiIncludedCreditsMilli - debit.includedMilli,
@@ -155,7 +164,7 @@ export async function reserveAiCreditsMilli(userId: string, amountMilli: number,
 export async function reserveAiCreditsMilliWithTransaction<T>(
   userId: string, amountMilli: number,
   work: (tx: Prisma.TransactionClient, reservation: AiCreditReservation) => Promise<T>,
-  db: WalletDatabase = prisma
+  db: WalletDatabase = prisma, mode: AiCreditWindowMode = 'standard'
 ): Promise<{ reservation: AiCreditReservation; result: T }> {
   if (!Number.isSafeInteger(amountMilli) || amountMilli <= 0) {
     throw new TypeError('amountMilli must be a positive safe integer');
@@ -166,7 +175,7 @@ export async function reserveAiCreditsMilliWithTransaction<T>(
     if (isGuestAccount(row)) throw new Error('Недостаточно AI кредитов');
     const wallet = await refreshLockedWallet(tx, row, currentAiCreditsPeriod());
     const period = wallet.aiCreditsPeriod;
-    const debit = calculateDebitBreakdown(await spendableWallet(tx, wallet), amountMilli);
+    const debit = calculateDebitBreakdown(await spendableWallet(tx, wallet, mode), amountMilli);
     if (!debit) throw new Error('Недостаточно AI кредитов');
     const id = crypto.randomUUID();
     const reservation: AiCreditReservation = { id, userId, period, ...debit };
@@ -181,7 +190,7 @@ export async function reserveAiCreditsMilliWithTransaction<T>(
   });
 }
 
-export async function reserveAiCreditsMilliUpTo(userId: string, minimumMilli: number, desiredMilli: number, db: WalletDatabase = prisma): Promise<AiCreditReservation> {
+export async function reserveAiCreditsMilliUpTo(userId: string, minimumMilli: number, desiredMilli: number, db: WalletDatabase = prisma, mode: AiCreditWindowMode = 'standard'): Promise<AiCreditReservation> {
   if (!Number.isSafeInteger(minimumMilli) || minimumMilli <= 0 || !Number.isSafeInteger(desiredMilli) || desiredMilli < minimumMilli) {
     throw new TypeError('Invalid AI credit reservation range');
   }
@@ -191,7 +200,7 @@ export async function reserveAiCreditsMilliUpTo(userId: string, minimumMilli: nu
     if (isGuestAccount(row)) throw new Error('Недостаточно AI кредитов');
     const wallet = await refreshLockedWallet(tx, row, currentAiCreditsPeriod());
     const period = wallet.aiCreditsPeriod;
-    const eligible = await spendableWallet(tx, wallet);
+    const eligible = await spendableWallet(tx, wallet, mode);
     const balance = getTotalAiCreditsMilli(eligible);
     if (balance < minimumMilli) throw new Error('Недостаточно AI кредитов');
     const amountMilli = Math.min(balance, desiredMilli);

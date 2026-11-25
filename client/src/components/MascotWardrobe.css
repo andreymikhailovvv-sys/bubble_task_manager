@@ -87,3 +87,5 @@ body:has(.mascot-wardrobe-dialog[open]) .mascot-wardrobe-trigger{opacity:0;point
 
 /* Subscription entrances are painted by the shared rig; do not slide them twice. */
 .mascot-wardrobe-character.phase-entering:is([data-arrival-outfit=northern],[data-arrival-outfit=zoomer],[data-arrival-outfit=pirate],[data-arrival-outfit=wizard],[data-arrival-outfit=ninja],[data-arrival-outfit=space],[data-arrival-outfit=banker]){animation:none}
+
+.mascot-wardrobe-module-switch{display:flex;gap:4px;padding:3px;margin:0 0 8px;border:1px solid currentColor;border-color:color-mix(in srgb,currentColor 15%,transparent);border-radius:10px}.mascot-wardrobe-module-switch button{flex:1;font-size:11px;font-weight:650;border-radius:7px;padding:6px 3px;opacity:.72}.mascot-wardrobe-module-switch button[aria-pressed=true]{background:color-mix(in srgb,#8b5cf6 19%,transparent);opacity:1;color:inherit}

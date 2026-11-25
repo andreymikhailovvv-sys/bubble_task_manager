@@ -44,7 +44,7 @@ export async function transcribeWebAudio(userId: string, input: { audioBase64?: 
   if (!apiKey) throw new WebAudioError('Сервис распознавания временно недоступен.', 503);
   // Worst-case reserve for the hard recording limit, then settle from provider duration.
   // The reported browser duration is never trusted as a billing upper bound.
-  const reservation = await reserveAiCreditsMilli(userId, 16_000);
+  const reservation = await reserveAiCreditsMilli(userId, 16_000, undefined, 'basic');
   let providerCompleted = false;
   let finalized = false;
   try {
@@ -287,7 +287,7 @@ export async function readMessageAloud(userId: string, input: unknown) {
   // sized to this message instead of demanding the same huge balance for every sentence.
   const maxOutputTokens = Math.min(4096, Math.max(900, Math.ceil(text.length * 3.2)));
   const upperBoundMilli = Math.ceil(maxOutputTokens * 20_000 / 600) + 10_000;
-  const reservation = await reserveAiCreditsMilli(userId, upperBoundMilli);
+  const reservation = await reserveAiCreditsMilli(userId, upperBoundMilli, undefined, 'premium');
   let finished = false;
   try {
     const { wav, usage } = await synthesizeRealtime(text, apiKey, maxOutputTokens);

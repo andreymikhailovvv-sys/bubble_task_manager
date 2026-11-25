@@ -96,7 +96,8 @@ export function MascotWardrobeTrigger({onClick}:{onClick:()=>void}) {
     }}><Shirt size={12}/>Аксессуары и скины</button>;
 }
 const tier=(rank:number)=>rank===3?'Максимум':rank===2?'Про':'Бесплатно';
-export function MascotWardrobeDialog({wardrobe,variant,theme}:{wardrobe:MascotWardrobeController;variant:MascotVariant;theme:'light'|'dark'}) {
+export function MascotWardrobeDialog({wardrobe,variant:initialVariant,theme}:{wardrobe:MascotWardrobeController;variant:MascotVariant;theme:'light'|'dark'}) {
+  const [variant,setVariant]=useState(initialVariant);
   const dialog=useRef<HTMLDialogElement>(null);
   const titleId=useId();
   const [selected,setSelected]=useState(()=>wardrobe.selected(variant));
@@ -129,6 +130,13 @@ export function MascotWardrobeDialog({wardrobe,variant,theme}:{wardrobe:MascotWa
       timers.current.push(window.setTimeout(()=>setPhase('idle'),560));
     },220));
   };
+  const switchVariant=(next:MascotVariant)=>{
+    if(next===variant||saving)return;
+    timers.current.forEach(timer=>window.clearTimeout(timer));timers.current=[];
+    const id=wardrobe.selected(next);
+    setVariant(next);setSelected(id);setDisplayed(id);setPhase('idle');setPreviewMode('idle');setSaveError('');setReplay(v=>v+1);
+    if(list.current)list.current.scrollTop=0;
+  };
   const catalog=wardrobe.data?.catalog.filter(skin=>skin.variant===variant).sort((a,b)=>a.rank-b.rank)??[];
   const list=useRef<HTMLElement>(null);
   const [moreBelow,setMoreBelow]=useState(false);
@@ -148,7 +156,7 @@ export function MascotWardrobeDialog({wardrobe,variant,theme}:{wardrobe:MascotWa
   },[catalog.length,updateListFade]);
   const skin=catalog.find(item=>item.id===selected);
   const allowed=Boolean(skin&&skin.rank<=wardrobe.rank);
-  const specialModes: Exclude<PlanikMode,'showcase'>[] = selected==='cat'?['idle','thinking']:selected==='banker'?['typing','hover']:['wizard','pirate','space'].includes(selected)?['idle','hover','thinking']:['northern','zoomer','ninja'].includes(selected)?['idle','hover']:[];
+  const specialModes: Exclude<PlanikMode,'showcase'>[] = selected==='cat'?['idle','thinking']:selected==='banker'?['typing','hover']:['wizard','pirate','space','ninja'].includes(selected)?['idle','hover','thinking']:['northern','zoomer'].includes(selected)?['idle','hover']:[];
   const isEquipped=selected===wardrobe.selected(variant);
   const equip=async()=>{
     if(!allowed||isEquipped||saving)return;
@@ -165,6 +173,7 @@ export function MascotWardrobeDialog({wardrobe,variant,theme}:{wardrobe:MascotWa
         <div className="mascot-wardrobe-list-wrap" data-more-below={moreBelow}>
         <nav ref={list} onScroll={updateListFade} className="mascot-wardrobe-list" aria-label="Скины">
           <span className="mascot-wardrobe-list-label">СКИНЫ</span>
+          <div className="mascot-wardrobe-module-switch" role="group" aria-label="Маскот"><button type="button" aria-pressed={variant==='planner'} disabled={saving} onClick={()=>switchVariant('planner')}>Планик</button><button type="button" aria-pressed={variant==='economic'} disabled={saving} onClick={()=>switchVariant('economic')}>Экономыч</button></div>
           {catalog.map(item=><button type="button" key={item.id} aria-pressed={item.id===selected} className={'mascot-wardrobe-option'+(item.id===selected?' is-selected':'')} onClick={()=>select(item.id)} disabled={saving}>
             <span className="mascot-wardrobe-option-title">{item.name}{item.id===wardrobe.selected(variant)?<Check size={14} aria-label="Выбран"/>:null}</span>
             <span className={'mascot-wardrobe-tier tier-'+item.rank}>{item.rank>wardrobe.rank?<LockKeyhole size={10}/>:null}{tier(item.rank)}</span>

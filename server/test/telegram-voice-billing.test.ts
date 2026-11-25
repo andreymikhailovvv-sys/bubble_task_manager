@@ -60,7 +60,7 @@ test('audio transcription records usage and debits the shared AI wallet', async 
 
   assert.match(method, /payload\.usage/);
   assert.match(method, /recordOpenAiTranscriptionUsage/);
-  assert.match(method, /reserveAiCreditsMilli\(input\.userId, metering\.estimatedCreditsMilli\)/);
+  assert.match(method, /reserveAiCreditsMilli\(input\.userId, metering\.estimatedCreditsMilli, undefined, 'basic'\)/);
   assert.match(method, /creditsSpentMilli: metering\.estimatedCreditsMilli/);
 });
 

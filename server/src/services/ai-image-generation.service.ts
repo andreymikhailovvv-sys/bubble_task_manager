@@ -142,7 +142,7 @@ export async function generateAiImage(input: {
     : sourceImage ? [{ mimeType: 'image/png', contentBase64: sourceImage.contentBase64 }] : []);
   if (sources.length > AI_IMAGE_MAX_REFERENCE_FILES) throw new TypeError('Слишком много изображений-референсов.');
   const reservation = await reserveAiCreditsMilliUpTo(
-    input.userId, AI_IMAGE_MIN_RESERVATION_MILLI, AI_IMAGE_MAX_RESERVATION_MILLI
+    input.userId, AI_IMAGE_MIN_RESERVATION_MILLI, AI_IMAGE_MAX_RESERVATION_MILLI, undefined, 'premium'
   );
   let settled = false;
   try {

@@ -111,7 +111,10 @@ test('adventure skins respect tiers, keep the covered eye hidden outside hover a
  assert.match(rig,/pirate && mode==='thinking' \? <PirateMap/);
  assert.match(rig,/space && mode==='thinking' \? <SpaceSignal/);
  assert.match(css,/\[data-skin=pirate\] \.planik-eye-right\{visibility:hidden\}/);
- assert.match(css,/ninja-vanish 3\.9s linear both/);
+ assert.match(css,/ninja-scan 2\.1s ease-in-out infinite/);
+ assert.match(art,/className="ninja-notebook-scene"/);
+ assert.match(art,/className="ninja-chopsticks-arm"/);
+ assert.doesNotMatch(art,/className="ninja-bomb"/);
  assert.match(css,/space-weightless 7s ease-in-out infinite/);
  assert.match(art,/className="pirate-eye-patch"/);
  assert.match(art,/className="ninja-ready"/);

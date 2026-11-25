@@ -44,7 +44,7 @@ test('one provider search action counts once despite duplicated response items',
 
 test('task web search uses reserved credits with separate usage event and sources', async () => {
   const source = await readFile(new URL('../src/services/ai-assistant.service.ts', import.meta.url), 'utf8');
-  assert.match(source, /webReservation = await reserveAiCreditsMilli\(input\.userId, WEB_SEARCH_CALL_CREDITS_MILLI\)/);
+  assert.match(source, /webReservation = await reserveAiCreditsMilli\(input\.userId, WEB_SEARCH_CALL_CREDITS_MILLI, undefined, 'premium'\)/);
   assert.match(source, /const webSearchAnalysis = analyzeWebSearchCalls\(responseJson\)/);
   assert.match(source, /!webSearchUsed && !isForcedFinalRound/);
   assert.doesNotMatch(source, /!isForcedFinalRound && modelProviderCallIndex === 0/);
