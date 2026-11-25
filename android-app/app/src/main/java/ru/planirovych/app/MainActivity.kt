@@ -58,6 +58,7 @@ class MainActivity:ComponentActivity(){
     private var quickAiMode by mutableStateOf<String?>(null)
     private var quickAiRequestId by mutableIntStateOf(0)
     private var availableUpdate by mutableStateOf<AndroidAppRelease?>(null)
+    private var knownUpdate by mutableStateOf<AndroidAppRelease?>(null)
     private var updateDownloading by mutableStateOf(false)
     private var updateDownloadProgress by mutableStateOf<Int?>(null)
     private var updateDownloadError by mutableStateOf<String?>(null)
@@ -170,7 +171,9 @@ class MainActivity:ComponentActivity(){
                     composable("home"){
                         HomeScreen(vm,dark,notificationTaskId,openGeneralAi,
                             quickAiMode,quickAiRequestId,
-                            onQuickAiHandled=::consumeQuickAiCommand)
+                            onQuickAiHandled=::consumeQuickAiCommand,
+                            updateAvailable=knownUpdate!=null,
+                            onCheckUpdates={lifecycleScope.launch { checkAndroidUpdateNow(manual=true) }})
                     }
                 }
                 availableUpdate?.let { release ->
@@ -205,9 +208,15 @@ class MainActivity:ComponentActivity(){
             }
         }
     }
-    private suspend fun checkAndroidUpdateNow() {
+    private suspend fun checkAndroidUpdateNow(manual:Boolean=false) {
         if(BuildConfig.DEBUG || updateDownloading || pendingUpdateFile!=null) return
         val latest=AndroidAppUpdateChecker.latest(this)
+        knownUpdate=latest
+        if(manual){
+            availableUpdate=latest
+            if(latest==null) android.widget.Toast.makeText(this,"Новых обновлений не найдено. Версия ${BuildConfig.VERSION_NAME}",android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
         val now=System.currentTimeMillis()
         val recentlyOpenedInstaller=latest!=null &&
             latest.versionCode==updatePageOpenedVersion &&

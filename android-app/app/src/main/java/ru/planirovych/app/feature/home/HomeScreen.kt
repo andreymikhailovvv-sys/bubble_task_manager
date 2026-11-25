@@ -52,7 +52,8 @@ private enum class AuthMode { LOGIN, REGISTER }
 fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     notificationTaskId:String?=null,openGeneralAi:Boolean=false,
     quickAiMode:String?=null,quickAiRequestId:Int=0,
-    onQuickAiHandled:(Int)->Unit={}) {
+    onQuickAiHandled:(Int)->Unit={},
+    updateAvailable:Boolean=false,onCheckUpdates:()->Unit={}) {
     val state by vm.state.collectAsStateWithLifecycle()
     val themeMode by vm.themeMode.collectAsStateWithLifecycle()
     val focusManager=LocalFocusManager.current
@@ -67,6 +68,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     var creationType by remember { mutableStateOf<TaskType?>(null) }
     var createHabit by remember { mutableStateOf(false) }
     var createNote by remember { mutableStateOf(false) }
+    var notesRequest by remember { mutableIntStateOf(0) }
     var plannerMenuOpen by remember { mutableStateOf(false) }
     val pagerState = rememberPagerState(initialPage=0,pageCount={4})
     val plannerScrimAlpha by animateFloatAsState(
@@ -109,8 +111,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
         financialSuggestions=if(voiceFromFinance)emptySet() else setOf(
             "Запиши расход","Создай счёт","Переведи деньги между счетами","Создай долг")
     )
-    // One shared authenticated Quick AI thread: the assistant reply must finish
-    // before moving away from the originating planner / finance screen.
+    // Open the shared Quick AI thread as soon as processing starts.
     LaunchedEffect(pendingVoiceText,sharedChat.projects,sharedChat.loading,sharedChat.busy){
         val spoken=pendingVoiceText?:return@LaunchedEffect
         if(sharedChat.loading)return@LaunchedEffect
@@ -132,12 +133,10 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
         vm.chooseGeneralAiChat(quick.id,QUICK_AI_THREAD_ID)
         vm.sendGeneralAi(quick.id,QUICK_AI_THREAD_ID,UUID.randomUUID().toString(),
             spoken,spoken,emptyList(),thread.model?:"gpt-6-luna",
-            onDone={
-                voiceAwaiting=false
-                pagerScope.launch{pagerState.animateScrollToPage(2)}
-            },
+            onDone={voiceAwaiting=false},
             onFailed={message->voiceAwaiting=false;voiceError=message}
         )
+        pagerScope.launch{pagerState.scrollToPage(2)}
     }
     var requestPersonalChat by remember { mutableStateOf(false) }
     LaunchedEffect(requestPersonalChat,sharedChat.projects,sharedChat.loading,sharedChat.saving){
@@ -251,6 +250,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                         NativeHoldAction("Добавить напоминание",Icons.Default.Notifications){creationType=TaskType.REMINDER},
                         NativeHoldAction("Добавить привычку",Icons.Default.AutoAwesome){createHabit=true},
                         NativeHoldAction("Добавить заметку",Icons.Default.StickyNote2){createNote=true},
+                        NativeHoldAction("Открыть заметки",Icons.Default.StickyNote2){notesRequest++},
                         NativeHoldAction("Создать чат с ИИ",Icons.Default.SmartToy){
                             requestPersonalChat=true
                             vm.loadGeneralAi(state.user?.id)
@@ -339,6 +339,8 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
                 quickAiRequestId=quickAiRequestId,
                 onQuickAiHandled=onQuickAiHandled,
                 onQuickVoice={voiceFromFinance=true;voiceInput()},voiceAwaiting=voiceAwaiting,
+                notesRequest=notesRequest,
+                updateAvailable=updateAvailable,
                 modifier = Modifier.padding(padding),
             )
         }
@@ -373,6 +375,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     if (settings) SettingsSheet(
         state.user, dark, themeMode, vm::setThemeMode, { settings = false },
         { authMode = it; settings = false }, { vm.logout { settings = false } },
+        updateAvailable=updateAvailable,onCheckUpdates={settings=false;onCheckUpdates()},
     )
     authMode?.let { mode ->
         AuthDialog(mode, state.authBusy, state.authError, { authMode = null; vm.clearAuthError() }, vm::login, vm::register)
@@ -803,7 +806,8 @@ private fun SettingsSheet(
     setMode: (ThemeMode) -> Unit,
     close: () -> Unit,
     auth: (AuthMode) -> Unit,
-    logout: () -> Unit
+    logout: () -> Unit,
+    updateAvailable:Boolean=false,onCheckUpdates:()->Unit={}
 ) {
     ModalBottomSheet(onDismissRequest=close) {
         Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
@@ -840,6 +844,12 @@ private fun SettingsSheet(
                         uncheckedBorderColor=Color(0xFFB8A8D6),
                         uncheckedIconColor=Color(0xFF6D28D9)
                     ))
+            }
+            OutlinedButton(onClick=onCheckUpdates,modifier=Modifier.fillMaxWidth()){
+                Icon(Icons.Default.SystemUpdate,null)
+                Spacer(Modifier.width(8.dp))
+                Text("Обновления",Modifier.weight(1f))
+                if(updateAvailable) Badge { Text("Новое") }
             }
             if(user?.hasAccount==true) {
                 OutlinedButton(logout,Modifier.fillMaxWidth()){Text("Выйти")}

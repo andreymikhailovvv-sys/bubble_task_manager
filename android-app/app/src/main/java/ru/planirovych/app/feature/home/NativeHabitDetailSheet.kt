@@ -232,25 +232,22 @@ fun NativeHabitDetailSheet(vm:HomeViewModel,habit:Habit,dark:Boolean,onClose:()-
                                 val planned=habitScheduled(habit,day,created)
                                 val count=habitAmount(day,counts)
                                 val complete=planned&&count>=habit.targetCount
-                                val partial=planned&&count>0&&!complete
                                 val editable=inside&&planned&&!day.isAfter(today)&&history!=null&&!state.habitBusy
                                 Box(Modifier.weight(1f).aspectRatio(1f)
                                     .clip(RoundedCornerShape(10.dp))
-                                    .background(when {
-                                        complete&&inside->c.done
-                                        partial&&inside->accent.copy(alpha=.46f)
-                                        day==today&&inside->c.primary.copy(alpha=.13f)
-                                        else->c.bg
-                                    })
-                                    .then(if(day==today && inside)Modifier.border(
-                                        1.dp,c.primary,RoundedCornerShape(10.dp))else Modifier)
+                                    .background(c.bg)
                                     .clickable(enabled=editable){
                                         if(complete)vm.uncompleteHabitDay(habit.id,day.toString(),count)
                                         else vm.recordHabitDay(habit.id,day.toString(),
                                             (habit.targetCount-count).coerceAtLeast(1))
                                     },contentAlignment=Alignment.Center){
+                                    if(inside&&planned&&count>0){
+                                        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                                            .fillMaxHeight((count.toFloat()/habit.targetCount.coerceAtLeast(1)).coerceIn(0f,1f))
+                                            .background(accent))
+                                    }
                                     Text(day.dayOfMonth.toString(),fontSize=12.sp,
-                                        color=if(complete&&inside)Color.White
+                                        color=if(complete&&inside) (if(accent.red*.299f+accent.green*.587f+accent.blue*.114f>.6f) Color.Black else Color.White)
                                             else if(inside&&planned)c.text else c.muted.copy(alpha=.42f),
                                         fontWeight=if(day==today)FontWeight.Bold else FontWeight.Normal)
                                 }
@@ -268,8 +265,8 @@ fun NativeHabitDetailSheet(vm:HomeViewModel,habit:Habit,dark:Boolean,onClose:()-
                             color=c.muted,fontSize=11.sp)
                     }
                     Row(horizontalArrangement=Arrangement.spacedBy(11.dp)){
-                        HabitLegend(c.done,"Выполнено",c)
-                        HabitLegend(accent.copy(alpha=.46f),"Частично",c)
+                        HabitLegend(accent,"Выполнено",c)
+                        Text("Частично — пропорциональная заливка",color=c.muted,fontSize=10.sp)
                     }
                 }
             }

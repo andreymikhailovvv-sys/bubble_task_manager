@@ -15,6 +15,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
@@ -122,6 +123,7 @@ fun ModernWorkspace(
     quickAiRequestId:Int=0,
     onQuickAiHandled:(Int)->Unit={},
     onQuickVoice:()->Unit={},voiceAwaiting:Boolean=false,
+    notesRequest:Int=0,updateAvailable:Boolean=false,
     modifier: Modifier = Modifier,
 ) {
     val colors = remember(dark) { workspaceColors(dark) }
@@ -139,6 +141,7 @@ fun ModernWorkspace(
     var overdueOpen by remember { mutableStateOf(false) }
     var sectorSettingsOpen by remember { mutableStateOf(false) }
     var notesVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(notesRequest){if(notesRequest>0)notesVisible=true}
     // HorizontalPager precomposes adjacent pages. A single Boolean made all
     // precomposed search fields request focus and dragged the pager to AI Chat.
     // Only one page can own an open search (and its keyboard focus) at a time.
@@ -202,7 +205,7 @@ fun ModernWorkspace(
                                     searchOpenedOnPage=page
                                 }
                                 searchExpanded=false
-                            },settings=settings,onCredits={creditsOpen=true})
+                            },settings=settings,onCredits={creditsOpen=true},updateAvailable=updateAvailable)
                         if(searchActiveHere) {
                             Spacer(Modifier.height(8.dp))
                             WorkspaceSearchField(state.query,colors,search,
@@ -303,7 +306,7 @@ fun ModernWorkspace(
                             searchOpenedOnPage=page
                         }
                         searchExpanded=false
-                    },settings=settings,onCredits={creditsOpen=true})
+                    },settings=settings,onCredits={creditsOpen=true},updateAvailable=updateAvailable)
                 if(searchActiveHere) {
                     Spacer(Modifier.height(8.dp))
                     WorkspaceSearchField(state.query,colors,search,
@@ -327,7 +330,7 @@ fun ModernWorkspace(
         if (contentMode == WorkspaceMode.LIST) {
             item {
                 HabitsStrip(habits, colors, dark, onHabitClick = { selectedHabitId = it.id },
-                    onAdd = { createHabitOpen = true })
+                    onAdd = { createHabitOpen = true }, onHabitComplete={habit -> if(!state.habitBusy)vm.recordHabitDay(habit.id,LocalDate.now().toString(),1)})
             }
             item {
                 Text("Статистика выполнения",fontSize=24.sp,fontWeight=FontWeight.Bold,
@@ -367,6 +370,7 @@ fun ModernWorkspace(
             WorkspaceToolbar(colors, dark, mode=contentMode,
                 filtered = period != PeriodFilter.ALL ||
                     sort != SortTasks.URGENCY || sectorFilterEnabled,
+                activeFilterCount=listOf(period != PeriodFilter.ALL, sort != SortTasks.URGENCY, sectorFilterEnabled && selectedSectors.isNotEmpty()).count{it},
                 onFilter = { filtersOpen=true },
                 onPostpone = { vm.postponeOverdue() }, canPostpone = overdue && !state.taskBusy,
                 onOpenOverdue = { overdueOpen=true },
@@ -564,7 +568,7 @@ fun ModernWorkspace(
 private fun WorkspaceTopbar(
     state:HomeState,colors:WorkspaceColors,dark:Boolean,
     onAccount:()->Unit,onSearchToggle:()->Unit,settings:()->Unit,
-    onCredits:()->Unit
+    onCredits:()->Unit,updateAvailable:Boolean=false
 ) {
     val shape=RoundedCornerShape(13.dp)
     Row(Modifier.fillMaxWidth().height(54.dp),
@@ -599,8 +603,11 @@ private fun WorkspaceTopbar(
         }
         WorkspaceHeaderIcon(Icons.Default.Search,"Поиск",colors,
             if(dark)Color(0xFF69D4D2) else Color(0xFF0F9B9B),onSearchToggle)
-        WorkspaceHeaderIcon(Icons.Default.Settings,"Настройки",colors,
-            if(dark)Color(0xFFF2CE91) else Color(0xFFC58B31),settings)
+        Box {
+            WorkspaceHeaderIcon(Icons.Default.Settings,"Настройки",colors,
+                if(dark)Color(0xFFF2CE91) else Color(0xFFC58B31),settings)
+            if(updateAvailable) Badge(Modifier.align(Alignment.TopEnd).offset(2.dp,(-2).dp))
+        }
     }
 }
 
@@ -670,11 +677,14 @@ private fun workspaceHabitNextDay(habit: Habit, today: LocalDate): String {
     return "—"
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun WorkspaceHabitBubble(habit: Habit, dueToday: Boolean, colors: WorkspaceColors,
-    dark: Boolean, onClick: () -> Unit) {
+    dark: Boolean, onLongClick: () -> Unit = {}, onClick: () -> Unit) {
     val count = if (dueToday) completedHabitToday(habit) else 0
     val target = habit.targetCount.coerceAtLeast(1)
+    val progress by animateFloatAsState((count.toFloat()/target).coerceIn(0f,1f),tween(500),label="habit-progress")
+    val completed=dueToday&&progress>=.999f
     val accent = if (dueToday) parseWorkspaceColor(habit.color) else Color(0xFF94A3B8)
     val core = when {
         !dueToday -> if (dark) Color(0xFF334155) else Color(0xFFF1F5F9)
@@ -684,7 +694,7 @@ private fun WorkspaceHabitBubble(habit: Habit, dueToday: Boolean, colors: Worksp
     val dayBadge = if (dueToday) "" else workspaceHabitNextDay(habit, LocalDate.now())
     Box(Modifier.width(65.dp).height(67.dp), contentAlignment = Alignment.BottomCenter) {
         Box(Modifier.align(Alignment.BottomCenter).size(58.dp).clip(CircleShape)
-            .clickable(onClick=onClick), contentAlignment=Alignment.Center) {
+            .combinedClickable(onClick=onClick,onLongClick={if(dueToday&&count<target)onLongClick()}), contentAlignment=Alignment.Center) {
             Canvas(Modifier.fillMaxSize()) {
                 val ringWidth=5.dp.toPx()
                 val ringBounds=androidx.compose.ui.geometry.Size(
@@ -693,7 +703,6 @@ private fun WorkspaceHabitBubble(habit: Habit, dueToday: Boolean, colors: Worksp
                     else if (dark) Color(0xFF475569) else Color(0xFFE2E8F0)
                 drawCircle(color=trackColor,radius=size.minDimension/2f-ringWidth/2f,
                     style=Stroke(width=ringWidth))
-                val progress=(count.toFloat()/target).coerceIn(0f,1f)
                 if (progress>0f) {
                     drawArc(color=accent,startAngle=-90f,sweepAngle=progress*360f,
                         useCenter=false,topLeft=Offset(ringWidth/2f,ringWidth/2f),
@@ -704,8 +713,8 @@ private fun WorkspaceHabitBubble(habit: Habit, dueToday: Boolean, colors: Worksp
                 horizontalAlignment=Alignment.CenterHorizontally,
                 verticalArrangement=Arrangement.Center) {
                 Text(habit.icon, modifier=Modifier
-                        .habitEmojiCompletionFilter(dueToday && count>=target)
-                        .alpha(if (!dueToday) .27f else if (count>=target) .72f else 1f),
+                        .habitEmojiCompletionFilter(completed)
+                        .alpha(if (!dueToday) .27f else if (completed) .72f else 1f),
                     fontSize=20.sp,lineHeight=21.sp,maxLines=1,textAlign=TextAlign.Center)
                 Spacer(Modifier.height(1.dp))
                 Text("${count.coerceAtMost(target)}/$target",fontSize=10.sp,
@@ -728,7 +737,7 @@ private fun WorkspaceHabitBubble(habit: Habit, dueToday: Boolean, colors: Worksp
 
 @Composable
 private fun HabitsStrip(habits:List<Habit>, colors:WorkspaceColors, dark:Boolean,
-    onHabitClick:(Habit)->Unit, onAdd:()->Unit) {
+    onHabitClick:(Habit)->Unit, onAdd:()->Unit,onHabitComplete:(Habit)->Unit) {
     val today = LocalDate.now()
     val todayHabits = habits.filter { habitScheduledToday(it, today) }
     val otherHabits = habits.filterNot { habitScheduledToday(it, today) }
@@ -752,7 +761,7 @@ private fun HabitsStrip(habits:List<Habit>, colors:WorkspaceColors, dark:Boolean
             LazyRow(horizontalArrangement=Arrangement.spacedBy(8.dp),contentPadding=PaddingValues(end=2.dp),
                 verticalAlignment=Alignment.CenterVertically) {
                 items(todayHabits,key={it.id}) { habit ->
-                    WorkspaceHabitBubble(habit,true,colors,dark){onHabitClick(habit)}
+                    WorkspaceHabitBubble(habit,true,colors,dark,onLongClick={onHabitComplete(habit)}){onHabitClick(habit)}
                 }
                 if(todayHabits.isNotEmpty() && otherHabits.isNotEmpty()) {
                     item(key="other-day-divider") {
@@ -817,7 +826,7 @@ private fun WorkspaceUtilityMenuItem(
 private fun WorkspaceToolbar(
     colors:WorkspaceColors,dark:Boolean,mode:WorkspaceMode,filtered:Boolean,
     onFilter:()->Unit,onPostpone:()->Unit,canPostpone:Boolean,onOpenOverdue:()->Unit,
-    overdueCount:Int
+    overdueCount:Int,activeFilterCount:Int=0
 ) {
     // No outer tinted container. Mini App renders these as independent chips.
     val filterInk=if(filtered)colors.purple else if(dark)Color(0xFFE2E8F0) else Color(0xFF24354F)
@@ -827,7 +836,7 @@ private fun WorkspaceToolbar(
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End) {
             ToolbarButton("Фильтры",Icons.Default.FilterList,
                 filterInk,filterFill,filterBorder,
-                Modifier.width(124.dp),onFilter)
+                Modifier.width(124.dp),onFilter,badgeCount=activeFilterCount)
         }
     } else {
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp),
@@ -844,7 +853,7 @@ private fun WorkspaceToolbar(
                 Modifier.weight(1.65f),onOpenOverdue,badgeCount=overdueCount)
             ToolbarButton("Фильтры",Icons.Default.FilterList,
                 filterInk,filterFill,filterBorder,
-                Modifier.weight(1.03f),onFilter)
+                Modifier.weight(1.03f),onFilter,badgeCount=activeFilterCount)
         }
     }
 }

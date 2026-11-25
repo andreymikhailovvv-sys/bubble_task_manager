@@ -250,6 +250,18 @@ internal fun NativeAiCreditsDialog(
             if(limit != null){
                 Box(Modifier.fillMaxWidth().padding(vertical=8.dp).height(7.dp).clip(CircleShape).background(violet.copy(alpha=.13f))){ Box(Modifier.fillMaxWidth((100-limit.usedPercent.coerceIn(0,100))/100f).fillMaxHeight().clip(CircleShape).background(violet)) }
                 Text("Использовано ${limit.usedPercent}% · до ${limit.expiresAt.take(10)}",color=muted(dark),fontSize=12.sp)
+                listOf("Дневной лимит" to limit.daily,"Недельный лимит" to limit.weekly).forEach { (title,window) ->
+                    if(window!=null){
+                        val percent=window.remainingPercent.coerceIn(0,100)
+                        val ink=if(percent>=70)Color(0xFF36B982) else if(percent>=30)Color(0xFFE6B84F) else Color(0xFFE36A79)
+                        Spacer(Modifier.height(10.dp))
+                        Text("$title · осталось $percent%",color=fore(dark),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+                        Box(Modifier.fillMaxWidth().padding(vertical=6.dp).height(7.dp).clip(CircleShape).background(ink.copy(alpha=.15f))){
+                            Box(Modifier.fillMaxWidth(percent/100f).fillMaxHeight().clip(CircleShape).background(ink))
+                        }
+                        Text("Обновление: "+runCatching{java.time.OffsetDateTime.parse(window.resetsAt).atZoneSameInstant(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm"))}.getOrDefault(window.resetsAt.take(10)),fontSize=11.sp,color=muted(dark))
+                    }
+                }
             }
         }
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))

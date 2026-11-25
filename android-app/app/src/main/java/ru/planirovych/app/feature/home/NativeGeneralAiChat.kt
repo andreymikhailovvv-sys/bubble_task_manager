@@ -200,11 +200,14 @@ internal fun NativeGeneralAiChatPage(
     var previousAssistant by remember(thread?.id){
         mutableStateOf<Pair<String?,String>?>(null)
     }
-    LaunchedEffect(thread?.id,messages.size,state.pendingMessage,state.busy,latestAssistant){
+    LaunchedEffect(thread?.id,messages.size,state.pendingMessage,state.busy,latestAssistant,chatVisible){
         val count=messages.size+(if(state.pendingMessage!=null)1 else 0)+
             (if(state.busy)1 else 0)+(if(state.busy&&state.streamText.isNotEmpty())1 else 0)
         val receivedAssistant=latestAssistant!=null && latestAssistant!=previousAssistant
-        if(!historyPositioned){
+        if(chatVisible && state.busy && thread?.id==QUICK_AI_THREAD_ID && count>0){
+            listState.scrollToItem(count-1)
+            historyPositioned=true
+        }else if(!historyPositioned){
             if(count>0)listState.scrollToItem(count-1)
             historyPositioned=true
         }else if(count>0 && receivedAssistant){

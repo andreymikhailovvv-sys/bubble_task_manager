@@ -17116,3 +17116,15 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
 .fullscreen-workspace-pane [data-fullscreen-mode='timeline'] .timeline-panel{border:0!important;border-radius:0!important;width:100%;margin:0!important;box-shadow:none}
 .fullscreen-workspace-pane [data-fullscreen-mode='timeline'] .timeline-toolbar{border-width:0 0 1px!important;border-radius:0!important;margin:0!important}
 .fullscreen-workspace-pane [data-fullscreen-mode='timeline'] .timeline-canvas{border:0!important;border-radius:0!important;box-sizing:border-box}
+
+/* Shared Mini App and desktop habit calendar: the habit color is the only
+   progress color. The filled area is the actual number of repetitions. */
+.miniapp-habit-tracker .miniapp-habit-tracker-day:is(.miniapp-habit-tracker-day-done,.miniapp-habit-tracker-day-partial),
+.miniapp-light .miniapp-habit-tracker .miniapp-habit-tracker-day:is(.miniapp-habit-tracker-day-done,.miniapp-habit-tracker-day-partial) {
+  background: linear-gradient(to top,var(--tracker-accent) 0%,var(--tracker-accent) var(--day-fill),transparent var(--day-fill));
+  border: 0;
+  box-shadow: none;
+}
+.miniapp-habit-tracker .miniapp-habit-tracker-day-today { outline: none; font-weight: 800; }
+.miniapp-habit-tracker .miniapp-habit-tracker-legend-dot-done { background:var(--tracker-accent); border-color:var(--tracker-accent); }
+.miniapp-habit-tracker .miniapp-habit-tracker-legend-dot-partial { background:linear-gradient(to top,var(--tracker-accent) 33%,transparent 33%);border-color:var(--tracker-accent); }
