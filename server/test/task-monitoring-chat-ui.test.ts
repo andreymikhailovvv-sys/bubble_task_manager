@@ -190,7 +190,7 @@ test('web Planik fires confetti and flash in sync with a stationary shadow and l
   assert.match(styles, /animation: planik-popper-flash [^;\n]* \.55s both/);
   assert.match(styles, /animation: planik-confetti-burst [^;\n]* calc\(\.55s \+ var\(--planik-stagger/);
   assert.match(styles, /planik-ground-shadow\s*\{[\s\S]{0,500}position:\s*absolute/);
-  assert.match(styles, /body\[data-theme='light'\] \.planik-body-stop-start/);
+  assert.match(styles, /body\[data-theme='light'\] \.planik-mascot:not\(\.planik-mascot--economic\) \.planik-body-stop-start/);
   assert.match(notes, /mode === 'widget' && !editing && !managedMascot \? \([\s\S]*?planik-notes-companion/);
   assert.match(editor, /showPlanik=\{!task\?\.id && !externalSubtask\}/);
   assert.match(frame, /showPlanik && !managed \? <div className="planik-task-editor-companion"/);

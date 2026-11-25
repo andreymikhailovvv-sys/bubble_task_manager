@@ -82,6 +82,25 @@ test('Economic AI applies and reverses real PostgreSQL ledger changes without cr
     });
     assert.equal(pendingRecord.amountMinor,7800n);
     assert.equal(pendingRecord.category,'Продукты');
+    const customName='Гольф '+suffix.slice(0,8);
+    const custom=await propose(a.id,action('operation','create',{
+      kind:'EXPENSE',title:'Тренировка',amountMinor:'1000',sourceAccountId:account.id,category:customName
+    }));
+    assert.equal(await prisma.economicCategory.count({where:{userId:a.id,name:customName}}),0);
+    const customApplied=await applyEconomicProposal(a.id,custom.id);
+    const customRow=await prisma.economicOperation.findUniqueOrThrow({where:{id:customApplied.appliedEntityId!}});
+    assert.equal(customRow.category,customName);
+    assert.equal(await prisma.economicCategory.count({where:{userId:a.id,kind:'EXPENSE',name:customName}}),1);
+    assert.equal(await prisma.economicCategory.count({where:{userId:b.id,name:customName}}),0);
+    const repeat=await propose(a.id,action('operation','create',{
+      kind:'EXPENSE',title:'Тренировка 2',amountMinor:'1000',sourceAccountId:account.id,category:customName.toUpperCase()
+    }));
+    const repeatApplied=await applyEconomicProposal(a.id,repeat.id);
+    assert.equal((await prisma.economicOperation.findUniqueOrThrow({where:{id:repeatApplied.appliedEntityId!}})).category,customName);
+    assert.equal(await prisma.economicCategory.count({where:{userId:a.id,kind:'EXPENSE',name:customName}}),1);
+    await undoEconomicProposal(a.id,repeat.id);
+    await undoEconomicProposal(a.id,custom.id);
+    await prisma.economicCategory.deleteMany({where:{userId:a.id,kind:'EXPENSE',name:customName}});
     await undoEconomicProposal(a.id,pending.id);
 
     // 2. Linked debt cashflow creates FUNDING and SETTLEMENT, then reverts both.
