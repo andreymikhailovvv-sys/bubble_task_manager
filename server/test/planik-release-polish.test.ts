@@ -23,16 +23,17 @@ test('both chat surfaces animate the mascot from real request progress', async (
     read('../../client/src/components/PlanikMascot.css'),
     read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/PlanikNativeLauncher.kt'),
   ]);
-  assert.match(mascot, /busy \? \(isPainting \? 'painting' : isSearching \? 'searching' : 'typing'\)/);
+  assert.match(mascot, /busy \? \(isPainting \? 'painting' : isSearching \? 'searching' : isThinking \? 'thinking' : 'typing'\)/);
   assert.match(mascot, /planik-painting/);
   assert.doesNotMatch(mascot, /setTyping\(true\)/);
   assert.match(mini, /responding=\{Boolean\(aiChatStreamingText\)\}/);
   assert.match(mini, /responding=\{Boolean\(taskAiStreamingText\[openedTask\.id\]\)\}/);
-  assert.match(native, /state\.progressStatus\.orEmpty\(\)\.startsWith\("searching_"\)/);
+  assert.match(native, /nativeChatMascotMode\(state\.busy,state\.streamText\.isNotBlank\(\),state\.progressStatus\)/);
   assert.match(task, /ui\.streamText\.isNotBlank\(\)/);
   assert.match(launcher, /"typing" ->/);
   assert.match(launcher, /"thinking" ->/);
   assert.match(launcher, /"searching" ->/);
+  assert.match(launcher, /"painting" ->/);
   assert.match(styles, /\.planik-body-surface \{ pointer-events: visiblePainted/);
   assert.match(styles, /planik-paint-sweep/);
 });
@@ -47,8 +48,8 @@ test('Android shows a skeleton preview and uses a monotonic release version', as
   assert.match(activity, /loadingIndicator = preview/);
   assert.doesNotMatch(activity, /ProgressBar/);
   assert.match(launcher, /size\(width = 58\.dp, height = 56\.dp\)/);
-  assert.match(build, /versionCode = 24/);
-  assert.match(build, /versionName = "1\.0\.22"/);
+  assert.match(build, /versionCode = 25/);
+  assert.match(build, /versionName = "1\.0\.23"/);
 });
 
 test('quick chat is visibly starred in web, mini app and Android and audio loader has an active wrapper', async () => {
