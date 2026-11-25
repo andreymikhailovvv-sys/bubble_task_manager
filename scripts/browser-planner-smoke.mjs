@@ -238,9 +238,9 @@ try {
   await primary.click();
   const focusedTitle=page.locator('textarea[title="Редактировать название"]').first();
   await focusedTitle.waitFor({state:'visible',timeout:12000});
+  metrics.openTaskMs=Date.now()-openStart;
   await page.locator('[data-managed-mascot-launcher="planner"][data-mascot-surface="modal"] [data-skin="northern"]').waitFor({state:'visible'});
   assert.equal(await page.locator('.planik-mascot:visible').count(),1);
-  metrics.openTaskMs=Date.now()-openStart;
   await focusedTitle.fill('Проверка ввода нового названия');
   await focusedTitle.press('Tab');
   assert.equal(await focusedTitle.inputValue(),'Проверка ввода нового названия');
@@ -312,7 +312,7 @@ try {
   await economicMascot.locator('.cat-ear-left').waitFor({state:'visible'});
   assert.equal(wardrobeWrites,2);
   await page.getByRole('button',{name:'Добавить финансовую запись'}).click();
-  await page.getByRole('menuitem',{name:/Операция/}).click();
+  await page.getByRole('menuitem',{name:'Добавить операцию'}).click();
   await page.locator('.econ-modal-backdrop').waitFor({state:'visible'});
   await page.locator('[data-managed-mascot-launcher="economic"][data-mascot-surface="modal"] [data-skin="cat"]').waitFor({state:'visible'});
   assert.equal(await page.locator('.planik-mascot:visible').count(),1);

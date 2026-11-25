@@ -139,3 +139,24 @@ test('both cat outfits are free even after expiration and preserve independent s
  assert.match(css,/\[data-skin="cat"\]\[data-mode="thinking"\] \.cat-ear-right\{animation:cat-ear-right-think 3\.5s ease-in-out -\.9s/);
  assert.match(modal,/selected==='cat'\?\['idle','thinking'\]/);
 });
+
+test('managed desktop mascots retain selected skin and switch to modal or embedded chat anchors',()=>{
+ const app=read('../../client/src/App.tsx');
+ const econ=read('../../client/src/EconomicApp.tsx');
+ const frame=read('../../client/src/components/QuickAiLauncherFrame.tsx');
+ const rig=read('../../client/src/components/PlanikMascot.tsx');
+ const wardrobe=read('../../client/src/components/MascotWardrobe.tsx');
+ const css=read('../../client/src/components/PlanikMascot.css');
+ const econCss=read('../../client/src/EconomicApp.css');
+ assert.ok(app.includes('modalMascot={mascotSurface.modal}'));
+ assert.ok(app.includes('embeddedChatTarget={hasGeneralAiPane ? fullscreenChatTarget : null}'));
+ assert.ok(app.includes('showPlanik={false}'));
+ assert.ok(frame.includes('--mascot-chat-bottom'));
+ assert.ok(econ.includes('arrivalKey={mascotSurface.arrivalKey}'));
+ assert.ok(rig.includes("skinOverride ?? identity?.skinId ?? 'classic'"));
+ assert.ok(rig.includes("banker && mode==='hover' && <BankerMoney"));
+ assert.ok(!rig.includes("banker && mode==='idle' && <BankerMoney"));
+ assert.ok(wardrobe.includes('.sort((a,b)=>a.rank-b.rank)'));
+ for (const animation of ['snow','phone','gold','portal','smoke','beam']) assert.ok(css.includes('@keyframes mascot-'+animation+'-enter'),animation);
+ assert.ok(econCss.includes('.econ-root.econ-dialog-layer{background:transparent!important}'));
+});
