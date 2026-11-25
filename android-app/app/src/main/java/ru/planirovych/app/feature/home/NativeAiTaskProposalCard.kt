@@ -20,6 +20,13 @@ import java.time.*
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+@Composable
+private fun ProposalMarkdownPreview(text:String, color:Color) {
+    Column(Modifier.fillMaxWidth().height(64.dp).verticalScroll(rememberScrollState())) {
+        NativeAiFormattedMessage(text=text,textColor=color,linkColor=Color(0xFF7954DB),fontSize=11.sp)
+    }
+}
+
 private val proposalStatusTitles=mapOf(
     "PENDING" to "Ожидает подтверждения", "APPLYING" to "Применяется",
     "APPLIED" to "Применено", "REJECTED" to "Отклонено",
@@ -265,21 +272,13 @@ internal fun NativeAiTaskProposalCard(
                                 item.pText("parentTitle")?.let{
                                     Text("В задаче «"+it+"»",color=muted,fontSize=11.sp)
                                 }
-                                proposalDescription(item)?.let{
-                                        Text(it,color=muted,fontSize=11.sp,lineHeight=16.sp)
-                                    }
-                                if(taskChipEditable(item)==null){
-                                    (item["details"] as? JsonArray).orEmpty().take(3).forEach{detail->
-                                        val value=(detail as? JsonPrimitive)?.contentOrNull
-                                        if(!value.isNullOrBlank())Text(value,color=muted,fontSize=11.sp)
-                                    }
-                                }else{
-                                    val fields=taskChipEditable(item)!!.toMap()
-                                    (fields["description"] as? JsonPrimitive)?.contentOrNull
-                                        ?.takeIf{it.isNotBlank()}?.let{Text("Описание: "+it,color=muted,fontSize=11.sp,maxLines=2)}
-                                    (fields["dueDate"] as? JsonPrimitive)?.contentOrNull
-                                        ?.takeIf{it.isNotBlank()}?.let{Text("Срок: "+prettyField(it),color=muted,fontSize=11.sp)}
-                                }
+                                val fields=taskChipEditable(item)?.toMap()
+                                val description=(fields?.get("description") as? JsonPrimitive)?.contentOrNull
+                                val details=(item["details"] as? JsonArray).orEmpty().mapNotNull{(it as? JsonPrimitive)?.contentOrNull}
+                                val preview=description?.takeIf{it.isNotBlank()} ?: (listOfNotNull(proposalDescription(item))+details).joinToString("\n")
+                                if(preview.isNotBlank())ProposalMarkdownPreview(preview,muted)
+                                (fields?.get("dueDate") as? JsonPrimitive)?.contentOrNull
+                                    ?.takeIf{it.isNotBlank()}?.let{Text("Срок: "+prettyField(it),color=muted,fontSize=11.sp)}
                             }
                         }
                     }

@@ -4,6 +4,8 @@ import { api } from './lib/api';
 import type { AiTaskProposal, Sphere } from './lib/types';
 import type { EconomicAiProposal } from './components/EconomicAiProposalCard';
 import { minorToRublesInput, rublesToMinor } from './lib/economicMoney';
+import { WorkAiMessageBody } from './components/WorkAiMessageBody';
+import './components/AiTaskProposalCard.css';
 import { CustomSelect } from './components/CustomSelect';
 
 type TaskValues = NonNullable<AiTaskProposal['operations'][number]['editable']>;
@@ -187,8 +189,7 @@ export function TestPageTaskProposal({initial,spheres,onApplied}:{initial:AiTask
       {checkup&&proposal.status==='PENDING'&&<input type="checkbox" checked={selected.includes(i)} onChange={e=>setSelected(old=>e.target.checked?[...old,i].sort((a,b)=>a-b):old.filter(k=>k!==i))}/>}
       <div><small>{taskLabels[item.type]||item.type}</small><strong>{item.editable?.title||item.title}</strong>
         {item.parentTitle&&<span>В задаче «{item.parentTitle}»</span>}
-        {item.after&&<span>{item.after}</span>}
-        {item.details?.slice(0,3).map((v,k)=><span key={k}>{v}</span>)}
+        {(item.editable?.description||item.after||item.details?.length) ? <div className="ai-proposal-description" tabIndex={0}><WorkAiMessageBody content={item.editable?.description||[item.after,...(item.details||[])].filter(Boolean).join('\n')}/></div> : null}
       </div>
     </div>)}</div>
     {(error||proposal.error)&&<p className="tp-proposal-error" role="alert">{error||proposal.error}</p>}
