@@ -813,8 +813,12 @@ private fun SettingsSheet(
     logout: () -> Unit,
     updateAvailable:Boolean=false,onCheckUpdates:()->Unit={},onOpenWardrobe:()->Unit={}
 ) {
-    ModalBottomSheet(onDismissRequest=close) {
-        Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+    // Open at the content's natural expanded height rather than the
+    // half-screen anchor. It remains a wrap-content sheet, not fullscreen.
+    val sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true)
+    ModalBottomSheet(onDismissRequest=close,sheetState=sheetState) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal=20.dp,vertical=12.dp),
+            verticalArrangement=Arrangement.spacedBy(12.dp)) {
             Text("Настройки",style=MaterialTheme.typography.headlineSmall,
                 fontWeight=FontWeight.Bold)
             Text(user?.displayName ?: "Профиль")

@@ -431,8 +431,10 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                 }
                 generalAiMutable.update{it.copy(
                     busy=false,progressStatus=null,streamText="",pendingMessage=null,error=null)}
+                refreshCreditsBalance()
                 onDone()
             }catch(e:Throwable){
+                refreshCreditsBalance()
                 // A retry must keep the same requestId; server idempotency
                 // prevents duplicate tool actions / credit charges.
                 generalAiMutable.update{it.copy(
@@ -690,17 +692,26 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                 .onSuccess(onResult).onFailure{onError(it.userMessage())}
         }
     }
-    fun refreshCreditsBalance(){
-        viewModelScope.launch{
-            runCatching{repository.establishSession()}.onSuccess{profile->
+    private val creditRefreshMutex=Mutex()
+    suspend fun refreshCreditsBalanceNow(){
+        val owner=mutable.value.user?.id?:return
+        creditRefreshMutex.withLock {
+            if(mutable.value.user?.id!=owner)return@withLock
+            try {
+                val profile=repository.establishSession()
                 mutable.update { current ->
-                    if (current.user != null && current.user.id != profile.id) {
+                    if(current.user?.id!=owner)current
+                    else if(profile.id!=owner){
                         Log.e("PlanikWorkspace", "Account changed during credit refresh; preserving current workspace")
                         current.copy(taskError="Аккаунт на сервере отличается от открытого в Android. Данные задач сохранены; войдите в исходный аккаунт.")
-                    } else current.copy(user=profile)
+                    }else current.copy(user=profile)
                 }
-            }
+            }catch(e:kotlinx.coroutines.CancellationException){throw e}
+            catch(e:Exception){Log.w("PlanikWorkspace","Credit balance refresh failed",e)}
         }
+    }
+    fun refreshCreditsBalance(){
+        viewModelScope.launch{refreshCreditsBalanceNow()}
     }
     fun updateProfile(name:String,username:String,email:String,password:String,
                       onSaved:()->Unit={}) {

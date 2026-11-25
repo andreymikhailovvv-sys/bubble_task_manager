@@ -32,11 +32,19 @@ try{
   async function verifyPixels(label){
     const png=PNG.sync.read(await page.screenshot({omitBackground:true,animations:'disabled'}));
     const alpha=(x,y)=>png.data[(y*png.width+x)*4+3];
-    let visible=0;
-    for(let y=0;y<png.height;y++)for(let x=0;x<png.width;x++)if(alpha(x,y)>100)visible++;
-    assert.ok(visible/(png.width*png.height)>.08,label+' must actually paint the mascot');
-    assert.ok([[0,0],[png.width-1,0],[0,png.height-1],[png.width-1,png.height-1]].filter(([x,y])=>alpha(x,y)<64).length>=3,label+' must have transparent corners');
+    let visible=0,transparent=0;
+    for(let y=0;y<png.height;y++)for(let x=0;x<png.width;x++){
+      const a=alpha(x,y);
+      if(a>100)visible++;
+      if(a<64)transparent++;
+    }
+    const area=png.width*png.height;
+    assert.ok(visible/area>.08,label+' must actually paint the mascot');
+    // Wide capes and accessories may legitimately occupy the corners at
+    // the new uniform body scale. Verify actual background area instead.
+    assert.ok(transparent/area>.08,label+' must retain a transparent background: '+transparent/area);
   }
+  const bodyWidths=new Map();
   for(const theme of ['dark','light'])for(const skin of skins){
     await page.goto(origin+'/android-mascot?skin='+skin+'&theme='+theme+'&mode=idle');
     await page.waitForFunction(()=>document.documentElement.dataset.androidMascotReady==='true');
@@ -44,6 +52,12 @@ try{
     assert.equal(await page.locator('.android-mascot-artwork').getAttribute('data-skin'),skin);
     assert.equal(await page.locator('body').getAttribute('data-theme'),theme);
     await verifyPixels(theme+'/'+skin+'/launcher');
+    const width=await page.locator('.planik-body-surface').evaluate(el=>{
+      const matrix=el.getScreenCTM();
+      return el.getBBox().width*Math.hypot(matrix.a,matrix.b);
+    });
+    if(skin==='classic')bodyWidths.set(theme,width);
+    else assert.ok(Math.abs(width-bodyWidths.get(theme))<2,theme+'/'+skin+' body scale must match classic: '+width);
     await page.evaluate(()=>window.dispatchEvent(new CustomEvent('planik-native-mode',{detail:'thinking'})));
     await page.waitForFunction(()=>document.querySelector('.android-mascot-artwork')?.getAttribute('data-mode')==='thinking');
     await verifyPixels(theme+'/'+skin+'/thinking');

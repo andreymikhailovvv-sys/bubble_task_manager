@@ -77,7 +77,7 @@ test('small Planik matches light/dark website palette with tight tap bounds and 
     read('../../android-app/app/build.gradle.kts')
   ]);
   assert.match(native, /dark: Boolean/);
-  assert.match(native, /remember\(context, dark, mode, skinId\)/);
+  assert.match(native, /produceState<List<Bitmap\?>>\(emptyList\(\),context,dark,mode,skinId\)/);
   assert.match(native, /size\(width = 84\.dp, height = 90\.dp\)/);
   assert.match(native, /Bitmap\.createBitmap\(full, 80, 12, 280, 300\)/);
   assert.match(native, /indication = null/);
@@ -106,12 +106,14 @@ test('native mascot only hides its offline fallback after real transparent pixel
   ]);
   assert.match(art,/super\.onDraw\(requireNotNull\(frameCanvas\)\)/);
   assert.match(art,/if\(hasMascotPixels\(bitmap\)\)/);
+  assert.match(art,/return visible>=10 && transparent>=10/);
+  assert.doesNotMatch(art,/corners\.count/);
   assert.match(art,/canvas\.drawBitmap\(bitmap,0f,0f,null\)[\s\S]*?publish\(true\)/);
   assert.match(art,/if\(!painted\|\|rendererFailed\)NativeMascotFallback/);
   assert.match(art,/Modifier\.fillMaxSize\(\)\.zIndex\(1f\)/);
   assert.doesNotMatch(art,/\balpha\s*=\s*0f/);
   assert.match(art,/onRenderProcessGone/);
-  assert.match(native,/nativeMascotSkinSvg\(source, skinId, dark, mode, alternate\)/);
+  assert.match(native,/nativeMascotSkinSvg\(source, skinId, dark, mode, frame\)/);
   for(const id of ['cat','northern','maestro','zoomer','pirate','wizard','ninja','space']){
     assert.ok(skins.includes('"'+id+'"'),id+' offline artwork missing');
   }
@@ -120,4 +122,57 @@ test('native mascot only hides its offline fallback after real transparent pixel
   assert.doesNotMatch(mini,/miniapp-mascot-wardrobe-button/);
   assert.match(mini,/setIsSettingsOpen\(false\); wardrobe\.show\(\);/);
   assert.match(home,/Аксессуары и скины Планика/);
+});
+
+test('all skins use the original launcher crop and individually cached animation frames', async () => {
+  const [native,motion,art,web,home,live] = await Promise.all([
+    read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/PlanikNativeLauncher.kt'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeMascotMotion.kt'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeMascotSkinSvg.kt'),
+    read('../../client/src/components/AndroidMascotSurface.tsx'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/HomeScreen.kt'),
+    read('../../client/src/components/LiveVoiceDialog.tsx')
+  ]);
+  assert.match(native,/Bitmap\.createBitmap\(full, 80, 12, 280, 300\)/);
+  assert.doesNotMatch(native,/if\(skinId=="classic"\) Bitmap\.createBitmap/);
+  assert.match(native,/withContext\(Dispatchers\.Default\)/);
+  assert.match(native,/nativeMascotMotionSvg\(skinId,mode,frame\)/);
+  for(const part of ['pirate-map','wizard-cards','space-signal','ninja-notebook','northern-warmth','zoomer-phone','ninja-guard','wizard-orb']){
+    assert.ok(motion.includes('native-'+part),part);
+  }
+  assert.match(art,/sin\(frame\*Math\.PI\/6\)/);
+  assert.match(art,/sin\(frame\*Math\.PI\/4\+1\.3\)/);
+  assert.match(web,/setAttribute\('viewBox', '100\.7 25\.4 230 246\.4'\)/);
+  assert.match(home,/rememberModalBottomSheetState\(skipPartiallyExpanded=true\)/);
+  assert.match(home,/sheetState=sheetState/);
+  assert.match(live,/api\.getMascotWardrobe\(\)/);
+  assert.match(live,/wardrobe\.userId!==user\.id/);
+  assert.match(live,/skinId=\{appearance\.skinId\}/);
+  assert.match(live,/<strong>\{mascotName\}<\/strong>/);
+  assert.match(live,/previewMode=\{phase==='thinking'\?'thinking':'idle'\}/);
+});
+
+test('Android uses the server daily remaining percentage and refreshes the same account', async()=>{
+  const [models,header,dialog,vm,activity,api,web]=await Promise.all([
+    read('../../android-app/app/src/main/java/ru/planirovych/app/data/model/Models.kt'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/ModernWorkspace.kt'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeAiAccountSheets.kt'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/HomeViewModel.kt'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/MainActivity.kt'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/core/network/PlanirovychApi.kt'),
+    read('../../client/src/components/SubscriptionLimitPanel.tsx')
+  ]);
+  assert.match(models,/val aiBalanceLabel:[\s\S]*?limit\.daily\?\.let[\s\S]*?remainingPercent/);
+  assert.match(models,/val monthlyAiBalanceLabel/);
+  assert.match(header,/Остаток дневного лимита ИИ/);
+  assert.match(header,/state\.user\?\.aiBalanceLabel/);
+  assert.match(dialog,/user\?\.monthlyAiBalanceLabel/);
+  assert.match(dialog,/window\.remainingPercent\.coerceIn\(0,100\)/);
+  assert.match(dialog,/LaunchedEffect\(user\?\.id\)\{\s*vm\.refreshCreditsBalance\(\)/);
+  assert.match(activity,/repeatOnLifecycle\(Lifecycle\.State\.RESUMED\)[\s\S]*?vm\.refreshCreditsBalanceNow\(\)[\s\S]*?delay\(60_000L\)/);
+  assert.match(vm,/creditRefreshMutex\.withLock/);
+  assert.match(vm,/current\.user\?\.id!=owner/);
+  assert.match(vm,/else if\(profile\.id!=owner\)/);
+  assert.match(api,/Cache-Control: no-cache, no-store/);
+  assert.match(web,/limit\?\.daily\?\.remainingPercent/);
 });

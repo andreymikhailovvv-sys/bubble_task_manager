@@ -76,8 +76,8 @@ private class MascotFrameView(context:android.content.Context,
         bitmap.eraseColor(Color.TRANSPARENT)
         try{super.onDraw(requireNotNull(frameCanvas))}
         catch(_:RuntimeException){publish(false);return}
-        // Verify actual alpha coverage, not HTML readiness. The edges must
-        // remain transparent; an opaque error/splash page is not a mascot.
+        // Verify actual alpha coverage, not HTML readiness. Some larger
+        // outfits fill the corners; an opaque error/splash page still fails.
         if(hasMascotPixels(bitmap)){
             lastGoodAt=android.os.SystemClock.uptimeMillis()
             canvas.drawBitmap(bitmap,0f,0f,null)
@@ -96,13 +96,16 @@ private class MascotFrameView(context:android.content.Context,
     }
     private fun hasMascotPixels(bitmap:Bitmap):Boolean {
         val w=bitmap.width;val h=bitmap.height
-        val corners=listOf(0 to 0,w-1 to 0,0 to h-1,w-1 to h-1)
-        if(corners.count{(x,y)->Color.alpha(bitmap.getPixel(x,y))<64}<3)return false
         var visible=0
-        for(y in 2..8)for(x in 2..8){
-            if(Color.alpha(bitmap.getPixel((w-1)*x/10,(h-1)*y/10))>100)visible++
+        var transparent=0
+        // Sample the whole frame, including the edges, on an 11x11 grid.
+        // Do not reject capes or helmets just because they touch corners.
+        for(y in 0..10)for(x in 0..10){
+            val alpha=Color.alpha(bitmap.getPixel((w-1)*x/10,(h-1)*y/10))
+            if(alpha>100)visible++
+            if(alpha<64)transparent++
         }
-        return visible>=5
+        return visible>=10 && transparent>=10
     }
     fun releaseArtwork(){
         released=true
@@ -197,7 +200,8 @@ internal fun NativeMascotWardrobeDialog(vm:HomeViewModel,dark:Boolean,owner:Stri
         text={
             Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
                 Box(Modifier.fillMaxWidth().height(160.dp),contentAlignment=Alignment.Center){
-                    SharedMascotArtwork(selected,dark,preview,Modifier.size(180.dp,150.dp))
+                    if(selected=="classic") NativeMascotFallback(dark,preview,selected,Modifier.size(180.dp,150.dp))
+                    else SharedMascotArtwork(selected,dark,preview,Modifier.size(180.dp,150.dp))
                 }
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){
                     listOf("idle" to "Ожидание","hover" to "Приветствие","thinking" to "Думает").forEach{(mode,label)->

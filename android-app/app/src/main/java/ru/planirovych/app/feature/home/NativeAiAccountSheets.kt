@@ -178,6 +178,9 @@ internal fun NativeAiCreditsDialog(
     var receiptEmail by remember{mutableStateOf("")}
     var receiptNeeded by remember{mutableStateOf(false)}
     var notice by remember{mutableStateOf<String?>(null)}
+    LaunchedEffect(user?.id){
+        vm.refreshCreditsBalance()
+    }
     LaunchedEffect(Unit){
         vm.loadCreditCatalog({catalog=it;loadingCatalog=false},
             {error=it;loadingCatalog=false})
@@ -245,13 +248,16 @@ internal fun NativeAiCreditsDialog(
             .background(if(dark)Color(0xFF29234F)else Color(0xFFF2EBFF))
             .padding(14.dp)){
             Text(if(limit != null) limit.planName+" · месячный лимит" else "Текущий баланс",color=muted(dark),fontSize=12.sp)
-            Text(if(limit != null) (user?.aiBalanceLabel ?: "0%")+" осталось" else (user?.aiCredits?:0).toString()+" кредитов",
+            Text(if(limit != null) (user?.monthlyAiBalanceLabel ?: "…")+" осталось" else (user?.aiCredits?:0).toString()+" кредитов",
                 color=fore(dark),fontSize=23.sp,fontWeight=FontWeight.Bold)
             if(limit != null){
                 Box(Modifier.fillMaxWidth().padding(vertical=8.dp).height(7.dp).clip(CircleShape).background(violet.copy(alpha=.13f))){ Box(Modifier.fillMaxWidth((100-limit.usedPercent.coerceIn(0,100))/100f).fillMaxHeight().clip(CircleShape).background(violet)) }
                 Text("Использовано ${limit.usedPercent}% · до ${limit.expiresAt.take(10)}",color=muted(dark),fontSize=12.sp)
                 listOf("Дневной лимит" to limit.daily,"Недельный лимит" to limit.weekly).forEach { (title,window) ->
-                    if(window!=null){
+                    if(window==null){
+                        Spacer(Modifier.height(10.dp))
+                        Text("$title · загружается",color=muted(dark),fontSize=12.sp)
+                    }else{
                         val percent=window.remainingPercent.coerceIn(0,100)
                         val ink=if(percent>=70)Color(0xFF36B982) else if(percent>=30)Color(0xFFE6B84F) else Color(0xFFE36A79)
                         Spacer(Modifier.height(10.dp))

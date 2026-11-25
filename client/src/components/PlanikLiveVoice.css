@@ -252,3 +252,13 @@
   .planik-live-avatar-glow,
   .planik-live-avatar .planik-antenna { animation: none !important; transition: none !important; }
 }
+
+/* The skin's actual catalogue name is the title, including on narrow phones. */
+.planik-live-brand { min-width:0; }
+.planik-live-brand span:last-child { min-width:0; }
+.planik-live-brand strong { font-size:clamp(16px,3.9vw,26px); overflow-wrap:anywhere; }
+.planik-live-brand small { color:#b9c3e6; font-size:11px; }
+.planik-live-minimize { flex-shrink:0; }
+.planik-live-compact-state { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.planik-live-compact-state strong { font-size:11px; line-height:1.2; overflow-wrap:anywhere; }
+.planik-live-avatar-loading { position:absolute;left:50%;top:50%;margin:-15px 0 0 -15px;color:#c3bfff;animation:spin 1s linear infinite; }

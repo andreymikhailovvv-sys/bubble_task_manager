@@ -22,6 +22,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.ensureActive
+import kotlin.coroutines.coroutineContext
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,41 +77,43 @@ internal fun PlanikNativeLauncher(
 @Composable
 internal fun NativeMascotFallback(dark:Boolean,mode:String,skinId:String,modifier:Modifier=Modifier) {
     val context = LocalContext.current
-    // Only decode two frames when the phase changes. A streaming token cannot
-    // trigger costly SVG parsing or bitmap allocation.
-    val frames = remember(context, dark, mode, skinId) {
-        fun render(asset: String, alternate: Boolean): Bitmap? = runCatching {
-            context.assets.open(asset).bufferedReader().use { stream ->
-                val source = stream.readText()
-                val artwork = nativeMascotSkinSvg(source, skinId, dark, mode, alternate)
-                    .replace("</svg>", planikActionSvg(mode, alternate) + "</svg>")
-                val picture = SVG.getFromString(artwork).renderToPicture(420, 375)
-                val full = Bitmap.createBitmap(420, 375, Bitmap.Config.ARGB_8888).apply {
-                    AndroidCanvas(this).drawPicture(picture)
-                }
-                // Keep both arms and the full antenna. The old crop
-                // (90,29,255,275) amputated the left edge of the mascot.
-                // The new crop preserves the ~84:90 aspect ratio of the
-                // composer launcher while keeping the hit area compact.
-                if(skinId=="classic") Bitmap.createBitmap(full, 80, 12, 280, 300).also { full.recycle() }
-                else full
+    val frameCount=mascotMotionFrameCount(skinId,mode)
+    // Decode a small reusable sequence off the main thread. Streaming tokens
+    // and animation ticks never trigger SVG parsing or bitmap allocation.
+    val frames by produceState<List<Bitmap?>>(emptyList(),context,dark,mode,skinId) {
+        value=emptyList()
+        value=withContext(Dispatchers.Default) {
+            val suffix = if (dark) "" else "_light"
+            val idle=context.assets.open("planik_idle${suffix}.svg").bufferedReader().use{it.readText()}
+            val blink=context.assets.open("planik_blink${suffix}.svg").bufferedReader().use{it.readText()}
+            List(frameCount){frame->
+                coroutineContext.ensureActive()
+                runCatching {
+                    val alternate=frame%2==1
+                    val source=if((skinId=="classic"&&alternate)||(frameCount>2&&frame==11))blink else idle
+                    val action=nativeMascotMotionSvg(skinId,mode,frame) ?: planikActionSvg(mode, alternate)
+                    val artwork=nativeMascotSkinSvg(source, skinId, dark, mode, frame)
+                        .replace("</svg>",action+"</svg>")
+                    val picture=SVG.getFromString(artwork).renderToPicture(420,375)
+                    val full=Bitmap.createBitmap(420,375,Bitmap.Config.ARGB_8888).apply {
+                        AndroidCanvas(this).drawPicture(picture)
+                    }
+                    // Identical crop for EVERY outfit: the classic body is
+                    // the reference size, never fit the full empty SVG frame.
+                    Bitmap.createBitmap(full, 80, 12, 280, 300).also { full.recycle() }
+                }.getOrNull()
             }
-        }.getOrNull()
-        val suffix = if (dark) "" else "_light"
-        Pair(render("planik_idle${suffix}.svg", false), render("planik_blink${suffix}.svg", true))
+        }
     }
-    var blinking by remember { mutableStateOf(false) }
-    LaunchedEffect(mode) {
-        blinking = false
-        while (true) {
-            if (mode == "idle") {
-                delay(4900)
-                blinking = true
-                delay(115)
-                blinking = false
-            } else {
-                delay(300)
-                blinking = !blinking
+    var frameIndex by remember(skinId,mode){mutableStateOf(0)}
+    LaunchedEffect(skinId,mode,frames) {
+        if(frames.isEmpty())return@LaunchedEffect
+        while(true) {
+            if(frameCount==2 && mode=="idle") {
+                delay(4900);frameIndex=1;delay(115);frameIndex=0
+            }else {
+                delay(mascotMotionFrameMillis(skinId,mode))
+                frameIndex=(frameIndex+1)%frames.size
             }
         }
     }
@@ -120,13 +128,21 @@ internal fun NativeMascotFallback(dark:Boolean,mode:String,skinId:String,modifie
         label = "planik-vertical-float"
     )
 
+    val orbitTransition=rememberInfiniteTransition(label="planik-orbit")
+    val orbit by orbitTransition.animateFloat(
+        initialValue=0f,targetValue=360f,
+        animationSpec=infiniteRepeatable(tween(7000,easing=androidx.compose.animation.core.LinearEasing),RepeatMode.Restart),
+        label="planik-orbit-rotation"
+    )
     Box(modifier) {
-        val picture = if (blinking) frames.second ?: frames.first else frames.first
+        val picture=frames.getOrNull(frameIndex) ?: frames.firstOrNull{it!=null}
         if (picture != null) {
             Image(
                 bitmap = picture.asImageBitmap(),
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize().offset(y = floatOffset.dp)
+                modifier = Modifier.fillMaxSize().offset(y = floatOffset.dp).graphicsLayer {
+                    rotationZ=if(skinId=="space"&&mode=="idle")orbit else 0f
+                }
             )
         } else {
             // Fail visibly on any vendor-specific SVG decoder failure rather

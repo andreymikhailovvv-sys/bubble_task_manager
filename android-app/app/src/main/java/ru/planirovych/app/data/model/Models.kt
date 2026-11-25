@@ -36,7 +36,12 @@ data class CurrentUser(
     val completedLessonIds: List<String> = emptyList(),
     val hasPassword: Boolean = false,
 ) {
-    val aiBalanceLabel: String get() = subscriptionLimit?.let { "${100 - it.usedPercent.coerceIn(0,100)}%" } ?: aiCredits.toString()
+    val monthlyAiBalanceLabel: String get() = subscriptionLimit?.let { "${100 - it.usedPercent.coerceIn(0,100)}%" } ?: aiCredits.toString()
+    // Same server-computed remaining percentage as SubscriptionDailyRing.
+    // Missing window data is unknown, not a real zero or a monthly substitute.
+    val aiBalanceLabel: String get() = subscriptionLimit?.let { limit ->
+        limit.daily?.let { "${it.remainingPercent.coerceIn(0,100)}%" } ?: "…"
+    } ?: aiCredits.toString()
     val hasAccount: Boolean get() = !username.isNullOrBlank() || !email.isNullOrBlank() || !googleSub.isNullOrBlank() || hasPassword
     val displayName: String get() = name?.takeIf { it.isNotBlank() } ?: username ?: email ?: "Локальный профиль"
 }

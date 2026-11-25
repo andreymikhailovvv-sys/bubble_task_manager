@@ -10,6 +10,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.core.view.WindowCompat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -147,6 +151,19 @@ class MainActivity:ComponentActivity(){
         setContent{
             val vm:HomeViewModel=viewModel(
                 factory=HomeViewModel.Factory(app.repository,app.themePreferences))
+            val accountIds=remember(vm){vm.state.map{it.user?.id}.distinctUntilChanged()}
+            val accountId by accountIds.collectAsStateWithLifecycle(initialValue=null)
+            LaunchedEffect(vm,accountId){
+                if(accountId==null)return@LaunchedEffect
+                lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED){
+                    // Match the web client's minute refresh and refresh immediately
+                    // when returning from another app or the live voice Activity.
+                    while(isActive){
+                        vm.refreshCreditsBalanceNow()
+                        delay(60_000L)
+                    }
+                }
+            }
             val preferredMode by vm.themeMode.collectAsStateWithLifecycle()
             val deviceDark=isSystemInDarkTheme()
             val dark=when(preferredMode) {

@@ -18,6 +18,7 @@ interface PlanirovychApi {
     @GET("api/mascot-wardrobe") suspend fun mascotWardrobe():MascotWardrobeState
     @Headers("Sec-Fetch-Site: same-origin")
     @PUT("api/mascot-wardrobe") suspend fun equipMascotSkin(@Body payload:JsonObject):MascotWardrobeState
+    @retrofit2.http.Headers("Cache-Control: no-cache, no-store")
     @GET("api/auth/me") suspend fun me(): UserResponse
     @POST("api/auth/login") suspend fun login(@Body request: LoginRequest): UserResponse
     @POST("api/auth/register") suspend fun register(@Body request: RegisterRequest): UserResponse
