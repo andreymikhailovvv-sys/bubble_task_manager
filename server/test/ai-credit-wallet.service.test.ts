@@ -1,3 +1,4 @@
+import { getSubscriptionWindowLimits, subscriptionWindowBounds } from '../src/services/subscription-window-limits.service.js';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
@@ -39,6 +40,7 @@ type ReservationRow = AiCreditReservation & {
   refundedMilli: number;
   expiredIncludedMilli: number;
   settledAt: Date | null;
+  createdAt: Date;
 };
 
 class FakeWalletDatabase {
@@ -63,6 +65,7 @@ class FakeWalletDatabase {
         }
       },
       aiCreditReservationRecord: {
+        findMany: async ({ where }: any) => [...this.reservations.values()].filter(r => r.userId === where.userId && r.period === where.period && r.createdAt >= where.createdAt.gte && where.status.in.includes(r.status)),
         aggregate: async ({ where }: { where: { userId: string; period: string; status: string } }) => ({
           _sum: { includedMilli: [...this.reservations.values()].filter(r => r.userId === where.userId && r.period === where.period && r.status === where.status).reduce((sum,r) => sum + r.includedMilli, 0) }
         }),
@@ -70,7 +73,7 @@ class FakeWalletDatabase {
           if (this.reservations.has(data.id)) throw new Error('duplicate reservation id');
           this.reservations.set(data.id, {
             ...data, status: 'RESERVED', chargedMilli: 0, refundedMilli: 0,
-            expiredIncludedMilli: 0, settledAt: null
+            expiredIncludedMilli: 0, settledAt: null, createdAt: new Date()
           });
         },
         findUnique: async ({ where }: { where: { id: string } }) => {
@@ -310,19 +313,38 @@ test('reservation migration has database-level identity, balance constraints and
 });
 
 
-test('subscription thresholds count settled usage only and are unique within the term', async () => {
+test('subscription daily cap includes concurrent reservations and refunds release capacity', async () => {
   const db = wallet({ subscriptionPlan: 'start', subscriptionExpiresAt: new Date(Date.now() + 86400000), aiCreditsPeriod: 'subscription:test', aiCredits: 3000, aiIncludedCreditsMilli: 3000000 });
-  const pending = await reserveAiCreditsMilli('user-1', 600000, db as any);
-  const first = await reserveAiCreditsMilli('user-1', 600000, db as any);
-  assert.equal(first.period, 'subscription:test');
-  await settleAiCreditReservation(first, 300000, db as any);
-  assert.equal(db.notifications.size, 1);
-  await settleAiCreditReservation(first, 300000, db as any);
-  assert.equal(db.notifications.size, 1);
-  await refundAiCreditReservation(pending, db as any);
-  assert.equal(db.notifications.size, 1);
-  const second = await reserveAiCreditsMilli('user-1', 600000, db as any);
-  await settleAiCreditReservation(second, 600000, db as any);
-  assert.equal(db.notifications.size, 3);
-  assert.equal(db.state?.aiIncludedCreditsMilli, 2100000);
+  const first = await reserveAiCreditsMilli('user-1', 100000, db as any);
+  const second = await reserveAiCreditsMilli('user-1', 50000, db as any);
+  await assert.rejects(reserveAiCreditsMilli('user-1', 1, db as any), /Недостаточно/);
+  await settleAiCreditReservation(first, 60000, db as any);
+  await refundAiCreditReservation(second, db as any);
+  const third = await reserveAiCreditsMilli('user-1', 90000, db as any);
+  await settleAiCreditReservation(third, 90000, db as any);
+  await assert.rejects(reserveAiCreditsMilli('user-1', 1, db as any), /Недостаточно/);
+  assert.equal(db.state?.aiIncludedCreditsMilli, 2850000);
+});
+
+test('subscription limit never consumes additional balance until eligible included credits are spent', async () => {
+  const db = wallet({ subscriptionPlan: 'start', subscriptionExpiresAt: new Date(Date.now() + 86400000), aiCreditsPeriod: 'subscription:test', aiCredits: 3100, aiIncludedCreditsMilli: 3000000, aiPurchasedCreditsMilli: 100000 });
+  const debit = await reserveAiCreditsMilliUpTo('user-1', 1000, 300000, db as any);
+  assert.equal(debit.includedMilli, 150000);
+  assert.equal(debit.purchasedMilli, 100000);
+  assert.equal(db.state?.aiIncludedCreditsMilli, 2850000);
+});
+
+test('weekly UTC boundary and remaining budget constrain each new day', async () => {
+  const now = new Date('2026-11-27T12:00:00.000Z');
+  assert.equal(subscriptionWindowBounds(now).weekStart.toISOString(), '2026-11-23T00:00:00.000Z');
+  const records = Array.from({length:4}, (_, day) => ({
+    createdAt: new Date(Date.UTC(2026,10,23+day)), status:'SETTLED', includedMilli:150000, chargedMilli:150000
+  }));
+  const db = { aiCreditReservationRecord: { findMany: async () => [...records, { createdAt: now, status:'RESERVED', includedMilli:100000, chargedMilli:0 }] } } as any;
+  const limit = await getSubscriptionWindowLimits(db, { id:'user', subscriptionPlan:'start', subscriptionExpiresAt:new Date('2026-12-20'), aiCreditsPeriod:'subscription:1', aiIncludedCreditsMilli:2300000 }, now);
+  assert.equal(limit?.weekly.capMilli,750000);
+  assert.equal(limit?.weekly.remainingMilli,50000);
+  assert.equal(limit?.daily.capMilli,150000);
+  assert.equal(limit?.daily.remainingMilli,50000);
+  assert.equal(limit?.weekly.resetsAt,'2026-11-30T00:00:00.000Z');
 });

@@ -14,31 +14,31 @@ test('checkbox mode shortcuts and split rendering retain the original BubbleFiel
   assert.match(controls, /<input type="checkbox"/);
 });
 
-test('credits, overdue and fullscreen exit are still functional', async () => {
+test('credits and overdue remain available; classic switch is gone', async () => {
   const app = await load('../../client/src/App.tsx');
   const start = app.indexOf('data-tour="bubbles-fullscreen-toolbar"');
   const header = app.slice(start, app.indexOf('</header>', start));
-  for (const part of ['{renderOverdueControl()}', '{renderCreditsControl()}', 'setIsBubbleFullscreen(false)', 'data-tour="bubbles-fullscreen-exit"']) {
+  for (const part of ['{renderOverdueControl()}', '{renderCreditsControl()}', '<FullscreenBlockMenu']) {
     assert.ok(header.includes(part), 'Missing: ' + part);
   }
+  assert.doesNotMatch(header, /bubbles-fullscreen-exit/);
 });
 
-test('split divider handles pointer/keyboard drag and two independent add buttons', async () => {
+test('split divider handles pointer/keyboard drag and placement targets', async () => {
   const [app, controls, css] = await Promise.all([
     load('../../client/src/App.tsx'),
     load('../../client/src/components/FullscreenWorkspaceLayout.tsx'),
     load('../../client/src/styles.css')
   ]);
   for (const part of ['role="separator" tabIndex={0}', 'setPointerCapture(event.pointerId)',
-    "root.style.setProperty('--fullscreen-split-ratio'", "closest('.fullscreen-add-window')",
-    'onChoose(0, next)', 'onChoose(1, next)']) assert.ok(controls.includes(part), part);
+    "root.style.setProperty('--fullscreen-split-ratio'",
+    'onChoose(0, placement)', 'onChoose(1, placement)']) assert.ok(controls.includes(part), part);
   assert.match(css, /grid-template-columns: minmax\(0, calc\(var\(--fullscreen-split-ratio, 50%\) - 7px\)\) 14px minmax\(0, 1fr\)/);
-  assert.match(css, /\.fullscreen-workspace-divider > \.fullscreen-add-window:first-child \{\s*left: -30px;/);
-  assert.match(css, /\.fullscreen-workspace-divider > \.fullscreen-add-window:last-child \{\s*right: -30px;/);
   assert.match(css, /grid-template-rows: minmax\(0, calc\(var\(--fullscreen-split-ratio, 50%\) - 7px\)\) 14px minmax\(0, 1fr\)/);
-  assert.match(controls, /onPointerDown=\{event => event\.stopPropagation\(\)\}/);
   assert.match(css, /\.fullscreen-workspace-divider \{[^}]*z-index: 60;/);
-  assert.match(css, /\.fullscreen-add-window--compact \.fullscreen-add-window-trigger \{[^}]*border: 0 !important;/);
+  assert.doesNotMatch(controls, /<FullscreenAddWindowMenu/);
+  assert.match(controls, /onDragOver=/);
+  assert.match(controls, /onDrop=/);
   assert.match(app, /<FullscreenWorkspaceSingle panel=\{fullscreenPanels\[0\]\}/);
   assert.match(app, /compact=\{isBubbleFullscreen && fullscreenPanels\.length === 2\}/);
 });

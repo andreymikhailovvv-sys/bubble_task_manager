@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { getSubscriptionWindowLimits } from './subscription-window-limits.service.js';
 import { getSubscriptionPlanByKey } from '../config/subscription-plans.js';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
@@ -117,6 +118,13 @@ export async function getAiCreditWallet(userId: string, db: WalletDatabase = pri
 
 export const refreshIncludedCreditsPeriod = getAiCreditWallet;
 
+// The real wallet is never truncated: only the included amount eligible for
+// this reservation is limited. Bonus and purchased credits remain available.
+async function spendableWallet(tx: WalletTransaction, wallet: WalletRow): Promise<AiCreditBuckets> {
+  const limits = await getSubscriptionWindowLimits(tx, wallet);
+  return limits ? { ...wallet, aiIncludedCreditsMilli: limits.daily.remainingMilli } : wallet;
+}
+
 export async function reserveAiCreditsMilli(userId: string, amountMilli: number, db: WalletDatabase = prisma): Promise<AiCreditReservation> {
   return db.$transaction(async (tx) => {
     const row = await selectWalletForUpdate(tx, userId);
@@ -124,7 +132,7 @@ export async function reserveAiCreditsMilli(userId: string, amountMilli: number,
     if (isGuestAccount(row)) throw new Error('Недостаточно AI кредитов');
     const wallet = await refreshLockedWallet(tx, row, currentAiCreditsPeriod());
     const period = wallet.aiCreditsPeriod;
-    const debit = calculateDebitBreakdown(wallet, amountMilli);
+    const debit = calculateDebitBreakdown(await spendableWallet(tx, wallet), amountMilli);
     if (!debit) throw new Error('Недостаточно AI кредитов');
     const next = {
       aiIncludedCreditsMilli: wallet.aiIncludedCreditsMilli - debit.includedMilli,
@@ -158,7 +166,7 @@ export async function reserveAiCreditsMilliWithTransaction<T>(
     if (isGuestAccount(row)) throw new Error('Недостаточно AI кредитов');
     const wallet = await refreshLockedWallet(tx, row, currentAiCreditsPeriod());
     const period = wallet.aiCreditsPeriod;
-    const debit = calculateDebitBreakdown(wallet, amountMilli);
+    const debit = calculateDebitBreakdown(await spendableWallet(tx, wallet), amountMilli);
     if (!debit) throw new Error('Недостаточно AI кредитов');
     const id = crypto.randomUUID();
     const reservation: AiCreditReservation = { id, userId, period, ...debit };
@@ -183,10 +191,11 @@ export async function reserveAiCreditsMilliUpTo(userId: string, minimumMilli: nu
     if (isGuestAccount(row)) throw new Error('Недостаточно AI кредитов');
     const wallet = await refreshLockedWallet(tx, row, currentAiCreditsPeriod());
     const period = wallet.aiCreditsPeriod;
-    const balance = getTotalAiCreditsMilli(wallet);
+    const eligible = await spendableWallet(tx, wallet);
+    const balance = getTotalAiCreditsMilli(eligible);
     if (balance < minimumMilli) throw new Error('Недостаточно AI кредитов');
     const amountMilli = Math.min(balance, desiredMilli);
-    const debit = calculateDebitBreakdown(wallet, amountMilli)!;
+    const debit = calculateDebitBreakdown(eligible, amountMilli)!;
     const next = {
       aiIncludedCreditsMilli: wallet.aiIncludedCreditsMilli - debit.includedMilli,
       aiBonusCreditsMilli: wallet.aiBonusCreditsMilli - debit.bonusMilli,

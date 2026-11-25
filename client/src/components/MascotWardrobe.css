@@ -75,3 +75,12 @@ body:has(.mascot-wardrobe-dialog[open]) .mascot-wardrobe-trigger{opacity:0;point
 .mascot-wardrobe-animations button[aria-pressed=true]{background:var(--wd-selected);border-color:var(--wd-accent);color:var(--wd-accent)}
 .mascot-wardrobe-stage{container-type:size}
 .mascot-wardrobe-character .planik-mascot{width:min(300px,100%,106cqh);aspect-ratio:345/275}
+
+/* Let the catalogue reach the dialog bottom, even if the preview is short. */
+.mascot-wardrobe-dialog{height:min(740px,calc(100dvh - 34px))}
+.mascot-wardrobe-shell{height:100%;max-height:none}
+.mascot-wardrobe-header{flex:none}
+.mascot-wardrobe-content{flex:1 1 0;min-height:0}
+.mascot-wardrobe-list-fade{height:64px;backdrop-filter:blur(5px);background:linear-gradient(transparent,var(--wd-bg))}
+.mascot-wardrobe-preview{scrollbar-width:none}
+.mascot-wardrobe-preview::-webkit-scrollbar{display:none}

@@ -1,3 +1,4 @@
+export type SubscriptionWindow = { capMilli: number; remainingMilli: number; remainingPercent: number; resetsAt: string };
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, ChatMode, GeneratedDocument, Habit, Sphere, Task, TaskAttachment, TaskComment, WebCitation, WebSource, TelegramInlineSendDraft, TelegramReadDraft, TelegramReadApproval } from './types';
 
 export type TaskMonitoringStatus = { id: string; label: string; detail?: string | null; createdAt: string };
@@ -300,7 +301,7 @@ export type CurrentUser = {
   aiCreditsPeriod?: string;
   subscriptionPlan?: 'free' | SubscriptionPlanKey;
   subscriptionExpiresAt?: string | null;
-  subscriptionLimit?: { usedPercent: number; expiresAt: string; planName: string; allowanceMilli?: number } | null;
+  subscriptionLimit?: { usedPercent: number; expiresAt: string; planName: string; allowanceMilli?: number; daily?: SubscriptionWindow; weekly?: SubscriptionWindow } | null;
   aiEfficiencyCreditsSpent?: number;
   aiEfficiencyCreditsPeriod?: string;
   timeZone?: string | null;

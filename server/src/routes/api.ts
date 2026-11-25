@@ -1,3 +1,4 @@
+import { getSubscriptionWindowLimits } from '../services/subscription-window-limits.service.js';
 import { getMascotWardrobe, equipMascotSkin } from '../services/mascot-wardrobe.service.js';
 import { requireSubscriptionFeature, SubscriptionAccessError, type PremiumFeature } from '../services/subscription-access.service.js';
 import { setAdminSubscription, AdminSubscriptionError } from '../services/admin-subscription.service.js';
@@ -283,7 +284,7 @@ const EFFICIENCY_BONUSES = {
 const TRAINING_LESSON_IDS = ['workspace', 'tasks', 'ai', 'features'] as const;
 const TRAINING_LESSON_REWARD = 5;
 
-const toAuthUser = (user: {
+const toAuthUser = async (user: {
   id: string;
   email?: string | null;
   emailVerifiedAt?: Date | null;
@@ -326,9 +327,10 @@ const toAuthUser = (user: {
   const plan = getLimitPlan(user.subscriptionPlan ?? 'free');
   const active = plan && user.subscriptionExpiresAt && user.subscriptionExpiresAt.getTime() > Date.now() && !isGuestAccount(user);
   const allowanceMilli = user.subscriptionAllowanceMilli || (plan?.creditsAmount ?? 0) * 1000;
+  const windows = active ? await getSubscriptionWindowLimits(prisma, user) : null;
   const subscriptionLimit = active && plan && user.subscriptionExpiresAt && user.aiIncludedCreditsMilli != null ? {
     usedPercent: Math.max(0, Math.min(100, Math.floor((1 - user.aiIncludedCreditsMilli / allowanceMilli) * 100 + 1e-9))),
-    expiresAt: user.subscriptionExpiresAt.toISOString(), planName: plan.name, allowanceMilli,
+    expiresAt: user.subscriptionExpiresAt.toISOString(), planName: plan.name, allowanceMilli, ...windows,
   } : null;
   return ({
   id: user.id,
@@ -707,7 +709,7 @@ apiRouter.post('/auth/register', async (req, res) => {
     }
   }
   console.info(`[Auth] register success userId=${user.id} ${authRequestContext(req)}`);
-  res.json({ user: toAuthUser(user), emailDelivery });
+  res.json({ user: await toAuthUser(user), emailDelivery });
 });
 
 
@@ -827,7 +829,7 @@ apiRouter.post('/auth/login', async (req, res) => {
   accountLoginLimiter.reset(accountRateLimitKey(login));
   setAuthCookies(res, user);
   console.info(`[Auth] login success userId=${user.id} login=${login} ${authRequestContext(req)}`);
-  res.json({ user: toAuthUser(user) });
+  res.json({ user: await toAuthUser(user) });
 });
 
 apiRouter.get('/auth/google', (req, res, next) => {
@@ -996,7 +998,7 @@ apiRouter.patch('/user/profile', requireAuth, async (req, res) => {
         console.warn('[AuthEmail] profile verification mail delivery failed; ' + accountMailFailureDiagnostic(error));
       }
     }
-    res.json({ user: toAuthUser(updatedUser), emailDelivery });
+    res.json({ user: await toAuthUser(updatedUser), emailDelivery });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       const fields = Array.isArray(error.meta?.target) ? error.meta.target : [];
@@ -1463,7 +1465,7 @@ apiRouter.patch('/user/settings', requireAuth, async (req, res) => {
     }
   });
 
-  res.json({ user: toAuthUser(updatedUser) });
+  res.json({ user: await toAuthUser(updatedUser) });
 });
 
 
@@ -1519,7 +1521,7 @@ apiRouter.post('/training/lessons/:lessonId/complete', requireAuth, async (req, 
     res.status(404).json({ error: 'Пользователь не найден' });
     return;
   }
-  res.json({ awarded: result.awarded, reward: result.awarded ? TRAINING_LESSON_REWARD : 0, user: toAuthUser(result.user) });
+  res.json({ awarded: result.awarded, reward: result.awarded ? TRAINING_LESSON_REWARD : 0, user: await toAuthUser(result.user) });
 });
 
 apiRouter.get('/auth/me', async (req, res) => {
@@ -1537,20 +1539,20 @@ apiRouter.get('/auth/me', async (req, res) => {
         }
       }
       console.info(`[Auth] me success userId=${freshUser.id} source=cookie ${authRequestContext(req)}`);
-      res.json({ user: toAuthUser(freshUser) });
+      res.json({ user: await toAuthUser(freshUser) });
       return;
     }
   }
 
   if (req.user) {
     console.warn(`[Auth] me stale user userId=${req.user.id} ${authRequestContext(req)}`);
-    res.json({ user: toAuthUser(req.user) });
+    res.json({ user: await toAuthUser(req.user) });
     return;
   }
 
   const user = await ensureDeviceUser(req, res);
   console.info(`[Auth] me created_or_loaded_device_user userId=${user.id} ${authRequestContext(req)}`);
-  res.json({ user: toAuthUser(user) });
+  res.json({ user: await toAuthUser(user) });
 });
 
 
@@ -1608,7 +1610,7 @@ apiRouter.post('/auth/telegram-miniapp', async (req, res) => {
 
   setAuthCookies(res, user);
   console.info(`[MiniApp] auth success userId=${user.id} telegramChatId=${telegramUserId}`);
-  res.json({ user: toAuthUser(user) });
+  res.json({ user: await toAuthUser(user) });
 });
 
 apiRouter.post('/auth/telegram-web-login', async (req, res) => {
@@ -1646,7 +1648,7 @@ apiRouter.post('/auth/telegram-web-login', async (req, res) => {
   await telegramService.completeWebLogin(telegramChatId, user);
   setAuthCookies(res, user);
   console.info(`[TelegramWebLogin] success chatId=${telegramChatId} userId=${user.id}`);
-  res.json({ user: toAuthUser(user) });
+  res.json({ user: await toAuthUser(user) });
 });
 
 apiRouter.post('/auth/telegram-web-register', async (req, res) => {
@@ -1717,7 +1719,7 @@ apiRouter.post('/auth/telegram-web-register', async (req, res) => {
     console.warn('[AuthEmail] telegram registration mail delivery failed; ' + accountMailFailureDiagnostic(error));
   }
   console.info(`[TelegramWebRegister] success chatId=${telegramChatId} userId=${user.id}`);
-  res.json({ user: toAuthUser(user), emailDelivery });
+  res.json({ user: await toAuthUser(user), emailDelivery });
 });
 
 apiRouter.get('/spheres', requireAuth, sphereController.list);

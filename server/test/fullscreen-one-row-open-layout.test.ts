@@ -12,14 +12,15 @@ test('fullscreen toolbar remains one row, ordered, taller and inset from viewpor
   const order = ['Планировыч AI', '<WorkspaceGlobalSearch', '<FullscreenModePicker',
     'className="fullscreen-create-control', '{renderOverdueControl()}',
     '{renderCreditsControl()}', '<TelegramIntegrationsMenu', 'href="/about"',
-    'className="auth-actions"', 'data-tour="fullscreen-workspace-settings"', 'data-tour="bubbles-fullscreen-exit"'];
+    'className="auth-actions"', 'data-tour="fullscreen-workspace-settings"'];
   let pos = -1;
   for (const part of order) {
     const next = header.indexOf(part);
     assert.ok(next > pos, part);
     pos = next;
   }
-  assert.doesNotMatch(header, /<FullscreenAddWindowMenu/);
+  assert.match(header, /<FullscreenBlockMenu/);
+  assert.doesNotMatch(header, /bubbles-fullscreen-exit/);
   assert.match(css, /\.app-shell\.bubble-fullscreen-shell > \.fullscreen-workspace-toolbar--one-row \{[^}]*min-height: 72px/);
   assert.match(css, /margin-top: 18px/);
   assert.match(css, /--fullscreen-workspace-width: calc\(100vw - clamp\(32px, 4vw, 80px\)\)/);
@@ -36,25 +37,10 @@ test('three checkboxes remain separate from new side-rail menu', async () => {
   assert.match(controls, /export function FullscreenWorkspaceSplit/);
 });
 
-test('multi-pane view is the default; classic view remains reachable from both sides', async () => {
+test('multi-pane view is the only reachable web workspace, including lessons', async () => {
   const app = await load('../../client/src/App.tsx');
   assert.ok(app.includes('const [isBubbleFullscreen, setIsBubbleFullscreen] = useState(true);'));
-  const toolbar = app.slice(app.indexOf('data-tour="bubbles-fullscreen-toolbar"'),
-    app.indexOf('</header>', app.indexOf('data-tour="bubbles-fullscreen-toolbar"')));
-  assert.ok(toolbar.includes('title="Классический вид"'));
-  assert.ok(toolbar.includes('aria-label="Перейти в классический вид"'));
-  assert.ok(toolbar.includes('setIsBubbleFullscreen(false)'));
-  assert.ok(app.includes('data-tour="workspace-fullscreen-enter"'));
-  assert.equal(app.split('data-tour="workspace-fullscreen-enter"').length, 2);
-  assert.ok(app.includes('title="Перейти в основной вид"'));
-  assert.ok(!app.includes('<span>Основной вид</span>'));
-  assert.ok(app.includes('className="topbar-action-button workspace-fullscreen-entry inline-flex h-10 w-10'));
-  assert.ok(app.includes('title="Перейти в основной вид"'));
-  assert.ok(!app.includes('data-tour="bubbles-fullscreen-enter"'));
-  const regularControls = app.slice(app.indexOf('data-tour="display-modes"'),
-    app.indexOf('</section> : null}', app.indexOf('data-tour="display-modes"')));
-  assert.ok(regularControls.lastIndexOf('data-tour="workspace-fullscreen-enter"') >
-    regularControls.lastIndexOf('aria-label="Настройки"'));
+  assert.doesNotMatch(app, /setIsBubbleFullscreen\(false\)|data-tour="bubbles-fullscreen-exit"|data-tour="workspace-fullscreen-enter"/);
 });
 
 test('left updates button reuses training and news, without increasing toolbar dimensions', async () => {
