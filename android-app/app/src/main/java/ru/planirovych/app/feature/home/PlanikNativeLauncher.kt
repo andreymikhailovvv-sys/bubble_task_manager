@@ -38,8 +38,8 @@ import kotlinx.coroutines.delay
 
 /**
  * Website Planik's EXACT gradients, head, faceplate and eyes rendered through
- * AndroidSVG. No WebView: transparent hardware-accelerated WebView surfaces can
- * disappear behind Compose even when the touch target is still present.
+ * AndroidSVG fallback. Non-classic skins use the shared web SVG/CSS artwork
+ * in a software-rendered, noninteractive view with a native fallback.
  *
  * Only the small composer launcher is rendered natively. Fullscreen Realtime
  * still uses the shared live frontend so its cards/Markdown remain identical.
@@ -49,6 +49,7 @@ internal fun PlanikNativeLauncher(
     enabled: Boolean = true,
     dark: Boolean,
     mode: String = "idle",
+    skinId: String = "classic",
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
@@ -102,7 +103,9 @@ internal fun PlanikNativeLauncher(
         label = "planik-vertical-float"
     )
 
+    var sharedReady by remember(skinId,dark){mutableStateOf(false)}
     Box(modifier.size(width = 84.dp, height = 90.dp)) {
+        if(!sharedReady) {
         val picture = if (blinking) frames.second ?: frames.first else frames.first
         if (picture != null) {
             Image(
@@ -137,6 +140,8 @@ internal fun PlanikNativeLauncher(
                     center = Offset(size.width * .5f, size.height * .13f))
             }
         }
+        }
+        if(skinId!="classic") SharedMascotArtwork(skinId,dark,mode,Modifier.fillMaxSize()){sharedReady=it}
           // A central clickable torso lets users scroll through empty corners.
         Box(Modifier.align(Alignment.Center).offset(y = 1.dp)
             .size(width = 58.dp, height = 56.dp)

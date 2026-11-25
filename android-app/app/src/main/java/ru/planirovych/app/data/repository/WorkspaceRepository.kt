@@ -187,6 +187,11 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
         api.telegramQuickSend(payload)
     suspend fun telegramQuickSendStatus(requestId:String):JsonObject =
         api.telegramQuickSendStatus(requestId)
+    suspend fun loadMascotWardrobe()=api.mascotWardrobe()
+    suspend fun equipMascotSkin(id:String)=api.equipMascotSkin(kotlinx.serialization.json.buildJsonObject{
+        put("variant",kotlinx.serialization.json.JsonPrimitive("planner"))
+        put("skinId",kotlinx.serialization.json.JsonPrimitive(id))
+    })
     suspend fun mailAccounts():JsonObject=api.mailAccounts()
     suspend fun mailRecentRecipients():JsonObject=api.mailRecentRecipients()
     suspend fun mailDraftStatus(id:String):JsonObject=api.mailDraftStatus(id)

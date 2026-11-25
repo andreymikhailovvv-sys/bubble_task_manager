@@ -64,6 +64,8 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     // Do not mount a bottom sheet while the search IME is animating out.
     var pendingFocusTaskId by remember{mutableStateOf<String?>(null)}
     var settings by remember { mutableStateOf(false) }
+    var wardrobeOpen by remember(state.user?.id) { mutableStateOf(false) }
+    LaunchedEffect(state.user?.id){vm.refreshMascotWardrobe(state.user?.id)}
     var accountOpen by remember { mutableStateOf(false) }
     var creationType by remember { mutableStateOf<TaskType?>(null) }
     var createHabit by remember { mutableStateOf(false) }
@@ -376,7 +378,9 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
         state.user, dark, themeMode, vm::setThemeMode, { settings = false },
         { authMode = it; settings = false }, { vm.logout { settings = false } },
         updateAvailable=updateAvailable,onCheckUpdates={settings=false;onCheckUpdates()},
+        onOpenWardrobe={settings=false;wardrobeOpen=true;vm.refreshMascotWardrobe(state.user?.id)},
     )
+    if(wardrobeOpen) NativeMascotWardrobeDialog(vm,dark,state.user?.id){wardrobeOpen=false}
     authMode?.let { mode ->
         AuthDialog(mode, state.authBusy, state.authError, { authMode = null; vm.clearAuthError() }, vm::login, vm::register)
     }
@@ -807,7 +811,7 @@ private fun SettingsSheet(
     close: () -> Unit,
     auth: (AuthMode) -> Unit,
     logout: () -> Unit,
-    updateAvailable:Boolean=false,onCheckUpdates:()->Unit={}
+    updateAvailable:Boolean=false,onCheckUpdates:()->Unit={},onOpenWardrobe:()->Unit={}
 ) {
     ModalBottomSheet(onDismissRequest=close) {
         Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
@@ -845,6 +849,7 @@ private fun SettingsSheet(
                         uncheckedIconColor=Color(0xFF6D28D9)
                     ))
             }
+            OutlinedButton(onClick=onOpenWardrobe,enabled=user?.id!=null,modifier=Modifier.fillMaxWidth()){Text("Аксессуары и скины Планика")}
             OutlinedButton(onClick=onCheckUpdates,modifier=Modifier.fillMaxWidth()){
                 Icon(Icons.Default.SystemUpdate,null)
                 Spacer(Modifier.width(8.dp))

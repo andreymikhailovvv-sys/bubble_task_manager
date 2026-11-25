@@ -116,6 +116,8 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit,
     ) { vm.reconcileAfterPlanik() }
     val ui by vm.taskAi.collectAsStateWithLifecycle()
     val home by vm.state.collectAsStateWithLifecycle()
+    val wardrobe by vm.mascotWardrobe.collectAsStateWithLifecycle()
+    LaunchedEffect(home.user?.id){vm.refreshMascotWardrobe(home.user?.id)}
     val taskTitles=remember(home.tasks){home.tasks.associate{it.id to it.title}}
     val completedTaskIds=remember(home.tasks){
         home.tasks.filter{it.status==TaskStatus.DONE}.map{it.id}.toSet()
@@ -512,6 +514,7 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit,
                 PlanikNativeLauncher(
                     enabled = !busy,
                     dark = dark,
+                    skinId = wardrobe?.plannerSkin(home.user?.id) ?: "classic",
                     mode = when {
                         busy && (ui.progressStatus.orEmpty().startsWith("searching_") ||
                             ui.progressStatus in listOf("listing_tasks", "reading_task", "reading_subtask", "reading_file", "analyzing_web_results")) -> "searching"

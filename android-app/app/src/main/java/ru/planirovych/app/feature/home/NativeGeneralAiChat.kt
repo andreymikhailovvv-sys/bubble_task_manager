@@ -81,6 +81,8 @@ internal fun NativeGeneralAiChatPage(
     onOpenTaskAi:(String)->Unit={}
 ){
     val state by vm.generalAi.collectAsStateWithLifecycle()
+    val wardrobe by vm.mascotWardrobe.collectAsStateWithLifecycle()
+    LaunchedEffect(userId,chatVisible){if(chatVisible)vm.refreshMascotWardrobe(userId)}
     val c=remember(dark){chatColors(dark)}
     val context=LocalContext.current
     val planikLauncher = rememberLauncherForActivityResult(
@@ -529,6 +531,7 @@ internal fun NativeGeneralAiChatPage(
                     PlanikNativeLauncher(
                         enabled = !isBusy,
                         dark = dark,
+                        skinId = wardrobe?.plannerSkin(userId) ?: "classic",
                         mode = when {
                             state.busy && (state.progressStatus.orEmpty().startsWith("searching_") ||
                                 state.progressStatus in listOf("listing_tasks", "reading_task", "reading_note", "reading_file", "analyzing_web_results")) -> "searching"
