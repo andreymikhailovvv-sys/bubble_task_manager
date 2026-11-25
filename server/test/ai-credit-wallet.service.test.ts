@@ -1,3 +1,4 @@
+import { getSubscriptionWindowLimits, subscriptionWindowBounds } from '../src/services/subscription-window-limits.service.js';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
@@ -331,4 +332,19 @@ test('subscription limit never consumes additional balance until eligible includ
   assert.equal(debit.includedMilli, 150000);
   assert.equal(debit.purchasedMilli, 100000);
   assert.equal(db.state?.aiIncludedCreditsMilli, 2850000);
+});
+
+test('weekly UTC boundary and remaining budget constrain each new day', async () => {
+  const now = new Date('2026-11-27T12:00:00.000Z');
+  assert.equal(subscriptionWindowBounds(now).weekStart.toISOString(), '2026-11-23T00:00:00.000Z');
+  const records = Array.from({length:4}, (_, day) => ({
+    createdAt: new Date(Date.UTC(2026,10,23+day)), status:'SETTLED', includedMilli:150000, chargedMilli:150000
+  }));
+  const db = { aiCreditReservationRecord: { findMany: async () => [...records, { createdAt: now, status:'RESERVED', includedMilli:100000, chargedMilli:0 }] } } as any;
+  const limit = await getSubscriptionWindowLimits(db, { id:'user', subscriptionPlan:'start', subscriptionExpiresAt:new Date('2026-12-20'), aiCreditsPeriod:'subscription:1', aiIncludedCreditsMilli:2300000 }, now);
+  assert.equal(limit?.weekly.capMilli,750000);
+  assert.equal(limit?.weekly.remainingMilli,50000);
+  assert.equal(limit?.daily.capMilli,150000);
+  assert.equal(limit?.daily.remainingMilli,50000);
+  assert.equal(limit?.weekly.resetsAt,'2026-11-30T00:00:00.000Z');
 });

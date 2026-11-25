@@ -9,7 +9,7 @@ test('fullscreen toolbar retains text labels, settings and account management', 
   const header = app.slice(start,app.indexOf('</header>',start));
   for (const part of ['/icon.png','Планировыч AI','<TelegramIntegrationsMenu','О сервисе','onClick={openProfileModal}',
     'className="auth-login-button"','className="auth-register-button"','className="auth-logout-button"',
-    'data-tour="fullscreen-workspace-settings"','data-tour="bubbles-fullscreen-exit"']) assert.ok(header.includes(part),part);
+    'data-tour="fullscreen-workspace-settings"','<FullscreenBlockMenu']) assert.ok(header.includes(part),part);
   assert.match(css, /@media \(min-width: 1200px\)/);
   assert.match(css, /\.fullscreen-workspace-toolbar--one-row \.auth-logout-button::before \{\s*content: none;/);
   assert.match(css, /\.fullscreen-mode-picker \.fullscreen-mode-picker-option \{[^}]*gap: 8px;[^}]*padding: 8px 12px;/);
