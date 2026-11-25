@@ -55,6 +55,8 @@ try {
   browser=await chromium.launch({headless:true,args:['--no-sandbox']});
   const context=await browser.newContext({viewport:{width:1440,height:900},locale:'ru-RU'});
   const page=await context.newPage();
+  page.setDefaultTimeout(12000);
+  page.setDefaultNavigationTimeout(20000);
   page.on('pageerror',error=>failures.push(error.stack??error.message));
   page.on('console',message=>{
     if(message.type()==='error'&&/react|render|hook|TypeError|Ошибка рендера/i.test(message.text()))
@@ -189,6 +191,7 @@ try {
   await page.waitForFunction(()=>Array.from(document.querySelectorAll('.mascot-wardrobe-trigger')).every(el=>Number(getComputedStyle(el).opacity)===0));
   await launcher.locator('[data-skin="northern"]').waitFor({state:'visible'});
   metrics.wardrobe='locked preview, animated outfit, save and Escape PASS';
+  console.log('[Browser smoke] wardrobe PASS; testing workspace block placement');
   const addMenu=page.locator('.fullscreen-create-control .add-menu-trigger');
   await addMenu.hover();
   await page.getByRole('menuitem',{name:'Добавить блок'}).hover();
@@ -198,15 +201,31 @@ try {
   await page.locator('.fullscreen-workspace-pane .standalone-notes-inline-mount').waitFor({state:'visible'});
   await addMenu.hover();
   await page.getByRole('menuitem',{name:'Добавить блок'}).hover();
-  await page.locator('.workspace-block-submenu').getByRole('menuitem',{name:/Список/}).dragTo(page.locator('[data-fullscreen-pane-index="1"]'),{targetPosition:{x:100,y:100}});
+  const listChoice=page.locator('.workspace-block-submenu').getByRole('menuitem',{name:/Список/});
+  assert.equal(await listChoice.evaluate(el=>{const b=el.getBoundingClientRect();return el.contains(document.elementFromPoint(b.x+b.width/2,b.y+b.height/2));}),true,'submenu must be above the splitter');
+  await listChoice.click();
+  await page.locator('[data-fullscreen-pane-index="1"] .workspace-block-target').click();
   await page.locator('[data-fullscreen-pane-index="1"] [data-fullscreen-mode="list"]').waitFor({state:'visible'});
   await page.getByRole('checkbox',{name:'Показать режим «Список»'}).uncheck();
   await primary.waitFor({state:'visible'});
-  metrics.workspaceBlocks='click and drag placement PASS';
+  await addMenu.hover();
+  await page.getByRole('menuitem',{name:'Добавить блок'}).hover();
+  await page.locator('.workspace-block-submenu').getByRole('menuitem',{name:/Общий чат с ИИ/}).click();
+  assert.equal(await page.locator('.workspace-block-target').count(),2,'AI may only be added in a pair');
+  await page.locator('.fullscreen-workspace-single-rail--right .workspace-block-target').click();
+  await page.locator('.fullscreen-embedded-ai').waitFor({state:'visible'});
+  assert.equal(await page.locator('[data-managed-mascot-launcher="planner"] .planik-mascot').count(),1);
+  await page.getByRole('checkbox',{name:'Показать режим «Список»'}).check();
+  await page.getByRole('checkbox',{name:'Показать режим «Список»'}).uncheck();
+  await primary.waitFor({state:'visible'});
+  metrics.workspaceBlocks='click placement and paired AI PASS';
+  console.log('[Browser smoke] workspace block placement PASS');
   const openStart=Date.now();
   await primary.click();
   const focusedTitle=page.locator('textarea[title="Редактировать название"]').first();
   await focusedTitle.waitFor({state:'visible',timeout:12000});
+  await page.locator('[data-managed-mascot-launcher="planner"][data-mascot-surface="modal"] [data-skin="northern"]').waitFor({state:'visible'});
+  assert.equal(await page.locator('.planik-mascot:visible').count(),1);
   metrics.openTaskMs=Date.now()-openStart;
   await focusedTitle.fill('Проверка ввода нового названия');
   await focusedTitle.press('Tab');
@@ -235,13 +254,15 @@ try {
   await page.locator('.econ-mascot-dressing').getByRole('button',{name:'Аксессуары и скины'}).click();
   const economicDialog=page.getByRole('dialog',{name:'Аксессуары и скины'});
   await economicDialog.getByRole('button',{name:/Хранитель бюджета/}).click();
-  await economicDialog.locator('[data-skin="banker"][data-mode="idle"] .banker-counting').waitFor({state:'visible'});
+  await economicDialog.locator('[data-skin="banker"][data-mode="idle"]').waitFor({state:'visible'});
+  assert.equal(await economicDialog.locator('.banker-counting').count(),0);
   await economicDialog.getByRole('button',{name:'Формирует ответ'}).click();
   await economicDialog.locator('[data-skin="banker"][data-mode="typing"] .banker-briefcase').waitFor({state:'visible'});
   await economicDialog.getByRole('button',{name:'Наведение курсора'}).click();
-  await economicDialog.locator('[data-skin="banker"][data-mode="hover"] .planik-hover').waitFor({state:'visible'});
+  await economicDialog.locator('[data-skin="banker"][data-mode="hover"] .banker-counting').waitFor({state:'visible'});
   assert.equal(wardrobeWrites,1);
-  metrics.economicWardrobe='counting, packing and standard hover PASS';
+  metrics.economicWardrobe='idle, packing and hover counting PASS';
+  console.log('[Browser smoke] economic wardrobe PASS');
   // Exercise both new skins with a genuinely free mock account, independent
   // of the paid-tier previews above. Neither preview may persist a selection.
   wardrobe.rank=0;wardrobe.expiresAt=null;wardrobe.selected.planner='classic';

@@ -9,7 +9,7 @@ import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, CalendarPlus, Check
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { FullscreenBlockMenu, FullscreenModePicker, FullscreenWorkspaceSingle, FullscreenWorkspaceSplit } from './components/FullscreenWorkspaceLayout';
-import { replaceFullscreenPanel, resolveFullscreenPanels, type FullscreenWorkspacePanel } from './lib/fullscreenWorkspacePanels';
+import { replaceFullscreenPanel, resolveFullscreenPanels, requiresCompanionPanel, type FullscreenWorkspacePanel } from './lib/fullscreenWorkspacePanels';
 import { FullscreenUpcomingTasksPanel } from './components/FullscreenUpcomingTasksPanel';
 import { PrimaryWorkspaceSidebar } from './components/PrimaryWorkspaceSidebar';
 import { FullscreenPaneFilters, createDefaultWorkspacePaneFilter, type WorkspacePaneFilter } from './components/FullscreenPaneFilters';
@@ -64,6 +64,7 @@ import { useSubscriptionPurchase } from './lib/useSubscriptionPurchase';
 import { ExpandedAiChat } from './components/ExpandedAiChat';
 import { QuickAiLauncherFrame } from './components/QuickAiLauncherFrame';
 import { PlanikMascot } from './components/PlanikMascot';
+import { MascotIdentityContext, useMascotSurface } from './components/MascotPresence';
 import { useMascotWardrobe, MascotWardrobeDialog, MascotWardrobeTrigger } from './components/MascotWardrobe';
 import ModuleRail from './components/ModuleRail';
 import { FocusedTaskWindowFrame } from './components/FocusedTaskWindowFrame';
@@ -840,6 +841,7 @@ function buildTimelineViewData(
 export default function App() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const wardrobe = useMascotWardrobe(currentUser?.id,currentUser?.subscriptionPlan,currentUser?.subscriptionExpiresAt);
+  const mascotSurface = useMascotSurface(Boolean(currentUser));
   const workspaceUserIdRef = useRef<string | null>(null);
   if (currentUser?.id) workspaceUserIdRef.current = currentUser.id;
   const browserNotificationsEnabledRef = useRef(true);
@@ -6394,7 +6396,8 @@ export default function App() {
     const removed = fullscreenPanels[index];
     const remaining = fullscreenPanels.filter((_, position) => position !== index);
     const nextSlots: FullscreenWorkspacePanel[] = remaining.length
-      ? remaining : [{ kind: 'mode', mode: 'bubbles' }];
+      ? (requiresCompanionPanel(remaining[0]) ? [remaining[0], { kind: 'mode', mode: 'bubbles' }] : remaining)
+      : [{ kind: 'mode', mode: 'bubbles' }];
     if (removed?.kind === 'task-ai' && !nextSlots.some(panel => panel.kind === 'task-ai')) {
       setFocusedTaskId(null);
       setIsAiExpanded(false);
@@ -6421,6 +6424,7 @@ export default function App() {
     setPendingWorkspaceBlock(null);
     setIsAddMenuOpen(false);
     if (fullscreenPanels.some((panel, position) => position !== index && (JSON.stringify(panel) === JSON.stringify(next) || (panel.kind === 'task-ai' && next.kind === 'task-ai')))) return;
+    if (fullscreenPanels.length === 1 && index === 0 && requiresCompanionPanel(next)) return;
     const replacing = fullscreenPanels[index];
     const nextSlots = replaceFullscreenPanel(fullscreenPanels, index, next);
     if (replacing?.kind === 'task-ai' && next.kind !== 'task-ai'
@@ -6465,12 +6469,14 @@ export default function App() {
       }}
       onOpenTask={task => {
         const index = fullscreenPanels.findIndex(item => item === panel);
-        if (index >= 0) chooseFullscreenPanel(index as 0 | 1, { kind: 'task-ai', taskId: task.parentTaskId ?? task.id });
+        if (index >= 0) chooseFullscreenPanel(fullscreenPanels.length === 1 ? 1 : index as 0 | 1, { kind: 'task-ai', taskId: task.parentTaskId ?? task.id });
       }}
       onComplete={async task => { await api.updateTask(task.id, { status: 'DONE' }); if (task.parentTaskId) await syncParentStatusBySubtasks(task.parentTaskId); await load(); }} />;
   };
   return (
+    <MascotIdentityContext.Provider value={{variant:'planner',skinId:wardrobe.selected('planner')}}>
     <main
+      data-managed-mascot="planner"
       className={isBubbleFullscreen
         ? `app-shell bubble-fullscreen-shell flex h-[100dvh] min-h-0 flex-col overflow-hidden p-0 ${workspaceOverlayActive ? 'fullscreen-overlay-active' : ''}`
         : 'app-shell flex h-screen flex-col overflow-y-auto p-4 lg:p-6'}
@@ -9417,7 +9423,9 @@ export default function App() {
       ) : null}
       {isTimelineOptimizeModalOpen ? (<div className="modal-backdrop fixed inset-0 z-[120] flex items-center justify-center p-4 backdrop-blur-sm"><div className="dialog-surface w-full max-w-lg rounded-2xl border p-4"><h3 className="text-lg font-semibold text-primary">Оптимизация таймлайна ИИ</h3><p className="mt-1 text-sm text-muted">Добавьте пожелания к перераспределению задач <span className="inline-flex items-center gap-1 text-rose-300">(1 <Coins size={12} />)</span>.</p><textarea className="form-field mt-3 min-h-28 w-full rounded-lg border p-2 text-sm" value={timelineOptimizeNote} onChange={(e)=>setTimelineOptimizeNote(e.target.value)} /><div className="mt-3 flex justify-end gap-2"><button className="surface-muted rounded px-3 py-2 text-sm" onClick={()=>setIsTimelineOptimizeModalOpen(false)}>Отмена</button><button className="rounded bg-rose-600 px-3 py-2 text-sm text-white" onClick={()=>void handleOptimizeTimeline()} disabled={timelineOptimizeLoading}>Оптимизировать</button></div></div></div>) : null}
 
-      {!hasGeneralAiPane ? <QuickAiLauncherFrame
+      <QuickAiLauncherFrame
+        managedMascot
+        modalMascot={mascotSurface.modal}
         taskOpen={Boolean(focusedTask)}
         embeddedTaskFocus={embeddedFocusActive}
         fullscreenBubbles={isBubbleFullscreen}
@@ -9482,11 +9490,11 @@ export default function App() {
           aria-label="Открыть общий чат с ИИ"
           onClick={() => { setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}
         >
-          <PlanikMascot notificationCount={unreadSystemNotificationCount} busy={quickAiChatLoading} progress={aiChatProgress} celebrationKey={planikCelebrationKey} skinId={wardrobe.selected('planner')} />
+          <PlanikMascot notificationCount={unreadSystemNotificationCount} busy={quickAiChatLoading || aiChatLoading} progress={aiChatProgress} celebrationKey={planikCelebrationKey} skinId={wardrobe.selected('planner')} arrivalKey={mascotSurface.arrivalKey} />
         </button>
         {currentUser&&<MascotWardrobeTrigger onClick={wardrobe.show}/>}
         </div>
-      </QuickAiLauncherFrame> : null}
+      </QuickAiLauncherFrame>
       {wardrobe.open&&<MascotWardrobeDialog wardrobe={wardrobe} variant="planner" theme={effectiveThemeMode}/>}
 
       {isCollaborationSettingsOpen && focusedTask?.isCollaborative ? (
@@ -9588,7 +9596,7 @@ export default function App() {
       {(isAiChatOpen && !hasGeneralAiPane) || (hasGeneralAiPane && Boolean(fullscreenChatTarget)) ? (
         <ExpandedAiChat
           inlineTarget={hasGeneralAiPane ? fullscreenChatTarget : null}
-          showPlanik
+          showPlanik={false}
           planikSkinId={wardrobe.selected('planner')}
           onOpenWardrobe={currentUser?wardrobe.show:undefined}
           projects={aiChatProjects}
@@ -9699,5 +9707,6 @@ export default function App() {
         </div>
       ) : null}
 </main>
+    </MascotIdentityContext.Provider>
   );
 }

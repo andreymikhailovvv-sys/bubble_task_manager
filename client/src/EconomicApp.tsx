@@ -4,6 +4,7 @@ import type { KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import ModuleRail from './components/ModuleRail';
 import { PlanikMascot } from './components/PlanikMascot';
+import { MascotIdentityContext, useMascotSurface } from './components/MascotPresence';
 import { useMascotWardrobe, MascotWardrobeDialog, MascotWardrobeTrigger } from './components/MascotWardrobe';
 import { EconomicAiProposalCard, type EconomicAiProposal } from './components/EconomicAiProposalCard';
 import { askEconomicStream, ECONOMIC_ACCEPTED_FILE_TYPES, validateEconomicFiles, type EconomicAssistantStage } from './lib/economicAssistantStream';
@@ -85,14 +86,14 @@ function RepaymentProgress({ paid, total }: { paid: string; total: string }) {
   </div>;
 }
 
-function EconomicMascot({ onClick, active, busy, progress, skinId, onOpenWardrobe }: {
-  onClick: () => void; active: boolean; busy: boolean; progress: string | null; skinId:string; onOpenWardrobe:()=>void;
+function EconomicMascot({ onClick, active, busy, progress, skinId, onOpenWardrobe, modal, arrivalKey }: {
+  onClick: () => void; active: boolean; busy: boolean; progress: string | null; skinId:string; onOpenWardrobe:()=>void; modal:boolean; arrivalKey:number;
 }) {
-  return <div className="mascot-wardrobe-anchor econ-mascot-dressing"><button className={'econ-mascot ' + (active ? 'active' : '')}
+  return <div className="mascot-wardrobe-anchor econ-mascot-dressing" data-managed-mascot-launcher="economic" data-mascot-surface={modal?'modal':'workspace'}><button className={'econ-mascot ' + (active ? 'active' : '')}
     type="button" onClick={onClick}
     aria-label={active ? 'Закрыть помощника Экономыч AI' : 'Открыть помощника Экономыч AI'}
     aria-expanded={active} aria-controls="econ-assistant-dialog" title="Помощник Экономыч AI">
-    <PlanikMascot variant="economic" size="launcher" busy={busy} progress={progress} skinId={skinId} />
+    <PlanikMascot variant="economic" size="launcher" busy={busy} progress={progress} skinId={skinId} arrivalKey={arrivalKey} />
     <span className="econ-mascot-pulse" aria-hidden="true" />
   </button><MascotWardrobeTrigger onClick={onOpenWardrobe}/></div>;
 }
@@ -102,6 +103,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
 }) {
   const [user, setUser] = useState<EconomicUser | null>(null);
   const wardrobe = useMascotWardrobe(mobile ? undefined : user?.id);
+  const mascotSurface = useMascotSurface(!mobile && Boolean(user));
   const [appearance, setAppearance] = useState<'light' | 'dark'>('dark');
   const effectiveAppearance = themeOverride ?? appearance;
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
@@ -586,7 +588,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
     accounts: () => openDialog('account'), operations: () => openDialog('operation'),
     categories: () => openDialog('category')
   };
-  return <div className={'econ-root ' + (effectiveAppearance === 'light' ? 'econ-light' : '') + (mobile ? ' econ-mobile-workspace' : '')}
+  return <MascotIdentityContext.Provider value={mobile ? null : {variant:'economic',skinId:wardrobe.selected('economic')}}><div className={'econ-root ' + (effectiveAppearance === 'light' ? 'econ-light' : '') + (mobile ? ' econ-mobile-workspace' : '')}
     style={embeddedInMiniApp ? { '--econ-mobile-safe-bottom': mobileSafeBottom + 'px' } as CSSProperties : undefined}>
     {!mobile && <ModuleRail active="economic"/>}
     <div className="econ-shell">
@@ -699,7 +701,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
       </main>
     </div>
 
-    {!mobile && <EconomicMascot active={assistantOpen} busy={assistantBusy} progress={assistantStage} skinId={wardrobe.selected('economic')} onOpenWardrobe={wardrobe.show} onClick={() => setAssistantOpen(v => !v)}/>}
+    {!mobile && <EconomicMascot modal={mascotSurface.modal} arrivalKey={mascotSurface.arrivalKey} active={assistantOpen} busy={assistantBusy} progress={assistantStage} skinId={wardrobe.selected('economic')} onOpenWardrobe={wardrobe.show} onClick={() => setAssistantOpen(v => !v)}/>}
     {wardrobe.open&&<MascotWardrobeDialog wardrobe={wardrobe} variant="economic" theme={effectiveAppearance}/>}
     {!mobile && assistantOpen && <section id="econ-assistant-dialog" className="econ-assistant" role="dialog" aria-label="Экономыч AI, финансовый помощник">
       <div className="econ-assistant-head">
@@ -940,5 +942,5 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
         {error && <div className="econ-error" role="alert">{error}</div>}
         <div className="econ-form-actions"><button type="button" disabled={saving} onClick={() => setDialog(null)}>Отмена</button><button type="submit" disabled={saving}>{saving ? <Loader2 className="econ-spin" size={17}/> : <Check size={17}/>} Сохранить</button></div>
       </form></section></div></div>, document.body)}
-  </div>;
+  </div></MascotIdentityContext.Provider>;
 }

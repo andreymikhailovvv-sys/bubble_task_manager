@@ -17097,3 +17097,15 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
 .subscription-modal:has(.subscription-modal-scroll:is([data-scroll-fade="top"],[data-scroll-fade="both"]))::before{top:0;background:linear-gradient(var(--card-bg),transparent);mask-image:linear-gradient(#000,transparent)}
 .fullscreen-workspace-single-content .workspace-block-target,.fullscreen-workspace-pane .workspace-block-target{min-width:0}
 .fullscreen-workspace-toolbar--one-row .add-menu-popover{overflow:visible!important}
+
+/* Dropdowns sit above the split track, including its oversized grip hit area.
+   A contiguous hover path connects the trigger, menu and submenu. */
+.bubble-fullscreen-shell > .fullscreen-workspace-toolbar:has(.add-menu-popover) { z-index: 125 !important; overflow: visible; }
+.fullscreen-workspace-toolbar .add-menu-popover { top: 100% !important; }
+.bubble-fullscreen-shell:has(.add-menu-popover) .fullscreen-workspace-divider,
+.bubble-fullscreen-shell:has(.add-menu-popover) .fullscreen-focus-inner-divider { pointer-events: none; }
+/* Keep the inline timeline flush with the clipped outer pane. */
+.fullscreen-workspace-pane .fullscreen-mode-surface[data-fullscreen-mode='timeline'],
+.fullscreen-workspace-pane .fullscreen-mode-surface[data-fullscreen-mode='timeline'] .fullscreen-mode-surface-content { padding: 0 !important; margin: 0 !important; border-radius: inherit; }
+.fullscreen-workspace-pane .fullscreen-mode-surface[data-fullscreen-mode='timeline'] .timeline-canvas { padding: 0 !important; margin: 0 !important; border-radius: inherit; width: 100%; height: 100%; }
+.fullscreen-workspace-pane .fullscreen-mode-surface[data-fullscreen-mode='timeline'] .timeline-toolbar { border-radius: inherit; }

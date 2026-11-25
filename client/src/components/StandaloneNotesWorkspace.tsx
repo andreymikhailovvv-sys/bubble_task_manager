@@ -5,6 +5,7 @@ import { api, type StandaloneNote, type StandaloneNoteGroup } from '../lib/api';
 import { noteHtmlToPlainText, noteValueToEditorHtml } from '../lib/notes';
 import { NotesEditor } from './NotesEditor';
 import { PlanikMascot } from './PlanikMascot';
+import { useMascotIdentity } from './MascotPresence';
 import { StandaloneNoteGroupManager, noteGroupStyle } from './StandaloneNoteGroupManager';
 
 type Props = { userId: string; requestedNote?: { id: string; serial: number } | null; mode?: 'widget' | 'mobile' | 'inline'; editorOutsideInline?: boolean; onClose?: () => void; mobileSafeAreaTop?: number; mobileSafeAreaBottom?: number; telegramMiniApp?: boolean; compactWidget?: boolean };
@@ -15,6 +16,7 @@ const summaryOf = (note: StandaloneNote) => noteHtmlToPlainText(note.content).re
 const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : 'Не удалось сохранить заметку.';
 
 export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget', editorOutsideInline = false, onClose, mobileSafeAreaTop = 0, mobileSafeAreaBottom = 0, telegramMiniApp = false, compactWidget = false }: Props) {
+  const managedMascot = useMascotIdentity();
   const [notes, setNotes] = useState<StandaloneNote[]>([]);
   const [groups, setGroups] = useState<StandaloneNoteGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
@@ -563,7 +565,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
               )}
             </div>
           </section>
-          {mode === 'widget' && !editing ? (
+          {mode === 'widget' && !editing && !managedMascot ? (
             <div className="planik-notes-companion" aria-hidden="true">
               <PlanikMascot size="sidekick" />
             </div>

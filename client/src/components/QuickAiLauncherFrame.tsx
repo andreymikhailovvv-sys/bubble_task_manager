@@ -8,6 +8,8 @@ type Props = {
   work?: boolean;
   fullscreenBubbles?: boolean;
   embeddedTaskFocus?: boolean;
+  managedMascot?: boolean;
+  modalMascot?: boolean;
 };
 
 /**
@@ -16,8 +18,10 @@ type Props = {
  * region, exactly as in the original personal planner App.tsx. Moving the
  * cursor upward therefore keeps the original group hovered.
  */
-export function QuickAiLauncherFrame({children,onHoverChange,onFocus,taskOpen=false,work=false,fullscreenBubbles=false,embeddedTaskFocus=false}:Props){
+export function QuickAiLauncherFrame({children,onHoverChange,onFocus,taskOpen=false,work=false,fullscreenBubbles=false,embeddedTaskFocus=false,managedMascot=false,modalMascot=false}:Props){
   return <div
+    data-managed-mascot-launcher={managedMascot ? 'planner' : undefined}
+    data-mascot-surface={modalMascot ? 'modal' : 'workspace'}
     className={`ai-chat-launcher group fixed bottom-8 right-6 z-[95] ${work?'work-ai-launcher':'lg:right-[360px]'} ${taskOpen?'ai-chat-launcher-task-open':''} ${fullscreenBubbles?'bubble-ai-fullscreen':''} ${embeddedTaskFocus?'ai-chat-launcher-task-embedded':''}`}
     onMouseEnter={()=>onHoverChange?.(true)}
     onMouseLeave={()=>onHoverChange?.(false)}
