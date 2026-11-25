@@ -6045,7 +6045,7 @@ export default function App() {
           </div>
         ) : (
           <div data-tour="timeline-workspace" ref={timelineScrollContainerRef} className="timeline-canvas h-full overflow-y-auto rounded-[2.2rem] border p-4 backdrop-blur-sm">
-            <div className="space-y-4 pr-1">
+            <div className="timeline-canvas-inner space-y-4 pr-1">
               <section className={`timeline-toolbar sticky top-0 z-20 rounded-3xl border px-3 py-3 shadow-2xl backdrop-blur-xl transition-all duration-300 ease-out sm:px-4 ${isTimelineToolbarHidden && !isTimelineOverdueModalOpen ? 'timeline-toolbar-hidden' : 'timeline-toolbar-visible'}`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 p-1 shadow-inner">
@@ -6485,7 +6485,7 @@ export default function App() {
         : 'app-shell flex h-screen flex-col overflow-y-auto p-4 lg:p-6'}
       data-theme={effectiveThemeMode}
     >
-      <ModuleRail active="planner" />
+      {!(focusedTask && !embeddedFocusActive) && !isFocusModeOpen && <ModuleRail active="planner" />}
       {reportPromptTask ? (
         <TaskCompletionReportDialog
           hideCreditCost={activeSubscription}
@@ -7580,6 +7580,7 @@ export default function App() {
               )}
             </div>
             <PrimaryWorkspaceSidebar key={currentUser?.id ?? 'anonymous'}
+              hideToggle={Boolean((focusedTask && !embeddedFocusActive) || isFocusModeOpen)}
               userId={currentUser?.id ?? 'anonymous'}
               windowCount={fullscreenPanels.length} tasks={tasks} habits={habits} spheres={spheres}
               timeZone={userTimeZone} requestedNote={requestedStandaloneNote}
