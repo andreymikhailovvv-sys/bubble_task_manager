@@ -107,3 +107,9 @@ body[data-theme='dark'] .ai-task-proposal__field>textarea{color-scheme:dark}
 .ai-task-proposal__modal button{cursor:pointer}
 .ai-task-proposal__modal-actions button{flex:1;padding:10px;border-radius:10px;border:1px solid var(--atp-border)}
 .ai-task-proposal__modal-actions button:last-child{background:#7954db;color:white}
+
+/* Fixed-size, independently scrollable Markdown preview: never truncate stored text. */
+.ai-proposal-description{box-sizing:border-box;height:64px;min-height:64px;max-height:64px;min-width:0;max-width:100%;overflow:auto;overflow-wrap:anywhere;overscroll-behavior:contain;scrollbar-width:thin;line-height:16px;padding:2px 3px 2px 0}
+.ai-proposal-description pre{max-width:100%;overflow:auto;white-space:pre-wrap}
+.ai-proposal-description:focus-visible{outline:1px solid #8b5cf6;outline-offset:2px;border-radius:4px}
+.ai-task-proposal__modal .ai-task-proposal__field>textarea{height:92px;min-height:92px;max-height:92px;resize:none;overflow-y:auto;scrollbar-width:thin}

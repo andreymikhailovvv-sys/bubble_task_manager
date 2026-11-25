@@ -163,3 +163,16 @@ test('managed desktop mascots retain selected skin and switch to modal or embedd
  for (const animation of ['snow','phone','gold','portal','smoke','beam']) assert.ok(css.includes('@keyframes mascot-'+animation+'-enter'),animation);
  assert.ok(econCss.includes('.econ-root.econ-dialog-layer{background:transparent!important}'));
 });
+
+test('split timeline, modal rails and money cloud keep their explicit surface rules',()=>{
+ const css=read('../../client/src/styles.css');
+ const mascot=read('../../client/src/components/PlanikMascot.css');
+ const art=read('../../client/src/components/MascotArrivalEffects.tsx');
+ const frame=read('../../client/src/components/QuickAiLauncherFrame.tsx');
+ const app=read('../../client/src/App.tsx');
+ assert.ok(css.includes('.timeline-canvas-inner>*{margin:0!important}'));
+ assert.ok(mascot.includes('mascot-money-cloud'));
+ assert.ok(art.includes('mascot-money-piece'));
+ assert.ok(frame.includes('data-quick-hover={hovered}'));
+ assert.ok(app.includes('hideToggle={Boolean((focusedTask && !embeddedFocusActive) || isFocusModeOpen)}'));
+});

@@ -184,8 +184,8 @@ export function MascotWardrobeDialog({wardrobe,variant:initialVariant,theme}:{wa
         </div>
         <div className="mascot-wardrobe-preview">
           <div className="mascot-wardrobe-stage" aria-label={'Примерка: '+(skin?.name??'Классический')}>
-            <div key={displayed} className={'mascot-wardrobe-character phase-'+phase} data-arrival-outfit={displayed}>
-              <PlanikMascot key={replay} variant={variant} skinId={displayed} previewMode={previewMode} arrivalKey={phase==='entering' && ['northern','zoomer','pirate','wizard','ninja','space','banker'].includes(displayed)?1:0}/>
+            <div key={variant+':'+displayed} className={'mascot-wardrobe-character phase-'+phase} data-arrival-outfit={displayed}>
+              <PlanikMascot key={variant+':'+replay} variant={variant} skinId={displayed} previewMode={previewMode} arrivalKey={phase==='entering' && ['northern','zoomer','pirate','wizard','ninja','space','banker'].includes(displayed)?1:0}/>
             </div>
           </div>
           <div className="mascot-wardrobe-details"><span className={'mascot-wardrobe-tier tier-'+(skin?.rank??0)}>{tier(skin?.rank??0)}</span><h3>{skin?.name??'Классический'}</h3><p>{skin?.description??'Выберите образ из коллекции.'}</p></div>

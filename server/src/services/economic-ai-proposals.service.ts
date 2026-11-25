@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { ECONOMIC_BASE_CATEGORIES } from '../lib/economic-category-presets.js';
 import { prisma } from '../db/prisma.js';
 import { economicAccountMovementMinor, recordEconomicBalanceAdjustment } from './economic-account-balance.service.js';
 import { debtOperationKind, debtOperationTitle, type EconomicDebtDirection } from '../lib/economic-debt.js';
@@ -174,10 +175,31 @@ async function mutate(tx:Tx,owner:string,action:EconomicAction,record:Snapshot|n
     if(transferred&&!target)no('Для перевода нужен счёт получателя.');
     const sourceAccountId=d.sourceAccountId as string;
     await owned(tx,owner,[sourceAccountId,...(target?[target]:[])]);
+    // Resolve or create the named category in the same serializable transaction
+    // as the approved operation, never during unconfirmed AI preparation.
+    let category: string | null = transferred || d.category == null ? null : String(d.category).trim();
+    if(category && (d.kind==='INCOME'||d.kind==='EXPENSE')){
+      const kind=String(d.kind);
+      const normalized=category.toLocaleLowerCase('ru-RU');
+      const preset=ECONOMIC_BASE_CATEGORIES[d.kind].find(name=>name.toLocaleLowerCase('ru-RU')===normalized);
+      if(preset)category=preset;
+      else {
+        const existing=await tx.economicCategory.findFirst({where:{userId:owner,kind,name:{equals:category,mode:'insensitive'}},orderBy:{createdAt:'asc'}});
+        if(existing)category=existing.name;
+        else {
+          if(category.length>60)no('Название новой категории не должно превышать 60 символов.');
+          const created=await tx.economicCategory.upsert({
+            where:{userId_kind_name:{userId:owner,kind,name:category}},
+            create:{userId:owner,kind,name:category},update:{}
+          });
+          category=created.name;
+        }
+      }
+    }
     const values={
       kind:String(d.kind),sourceAccountId,targetAccountId:target,
       amountMinor:BigInt(String(d.amountMinor)),title:String(d.title),
-      note:d.note==null?null:String(d.note),category:transferred?null:d.category==null?null:String(d.category),
+      note:d.note==null?null:String(d.note),category,
       occurredAt:dates(d.occurredAt)??new Date()
     };
     if(action.action==='create')return (await tx.economicOperation.create({data:{userId:owner,...values}})).id;

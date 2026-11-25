@@ -94,6 +94,7 @@ function Widget({ id, title, headingExtra, children, onMove }: {
 type Props = {
   userId: string;
   windowCount: number;
+  hideToggle?: boolean;
   tasks: readonly Task[];
   habits: readonly Habit[];
   spheres: readonly Sphere[];
@@ -332,7 +333,7 @@ export function PrimaryWorkspaceSidebar(props: Props) {
           : undefined}
         onMove={direction => updateOrder(direction, id)}>{widgetBodies[id]}</Widget>)}
     </Reorder.Group>
-    <div className="primary-workspace-sidebar-toggle-slot">
+    <div className="primary-workspace-sidebar-toggle-slot" hidden={props.hideToggle} style={props.hideToggle ? {display:"none"} : undefined}>
       <button type="button" className="primary-workspace-sidebar-toggle"
         aria-label={isOpen ? 'Скрыть панель блоков' : 'Показать панель блоков'}
         title={isOpen ? 'Скрыть блоки' : 'Развернуть блоки'}

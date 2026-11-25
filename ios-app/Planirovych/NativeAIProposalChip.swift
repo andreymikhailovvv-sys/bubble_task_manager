@@ -55,6 +55,17 @@ struct NativeAIProposalChip: View {
         }
     }
 
+    private func markdownPreview(_ value: String) -> some View {
+        ScrollView {
+            Text((try? AttributedString(markdown: value, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(value))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(height: 64)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
             HStack(spacing: 9) {
@@ -81,9 +92,11 @@ struct NativeAIProposalChip: View {
                         Text(operation.title ?? humanTaskAction(operation.type))
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(.primary)
-                        if let after = operation.after, !after.isEmpty {
-                            Text(after).font(.caption).foregroundStyle(.secondary)
-                        } else if let due = operation.dueDate, !due.isEmpty {
+                        let preview = operation.editable?.description ?? ([operation.after].compactMap { $0 } + (operation.details ?? [])).joined(separator: "\n")
+                        if !preview.isEmpty {
+                            markdownPreview(preview)
+                        }
+                        if let due = operation.dueDate, !due.isEmpty {
                             Text("Срок: \(due.prefix(16))").font(.caption).foregroundStyle(.secondary)
                         }
                     }

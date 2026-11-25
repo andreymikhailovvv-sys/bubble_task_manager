@@ -144,6 +144,10 @@ struct RemoteHabit: Decodable, Identifiable {
     }
 }
 
+struct NativeProposalEditable: Codable {
+    let description: String?
+}
+
 struct NativeProposalOperation: Codable {
     let type: String?
     let title: String?
@@ -151,6 +155,7 @@ struct NativeProposalOperation: Codable {
     let after: String?
     let dueDate: String?
     let details: [String]?
+    let editable: NativeProposalEditable?
 }
 
 struct NativeAIProposal: Codable, Identifiable {
