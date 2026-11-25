@@ -532,13 +532,7 @@ internal fun NativeGeneralAiChatPage(
                         enabled = !isBusy,
                         dark = dark,
                         skinId = wardrobe?.plannerSkin(userId) ?: "classic",
-                        mode = when {
-                            state.busy && (state.progressStatus.orEmpty().startsWith("searching_") ||
-                                state.progressStatus in listOf("listing_tasks", "reading_task", "reading_note", "reading_file", "analyzing_web_results")) -> "searching"
-                            state.busy && state.streamText.isNotBlank() -> "typing"
-                            state.busy -> "thinking"
-                            else -> "idle"
-                        },
+                        mode = nativeChatMascotMode(state.busy,state.streamText.isNotBlank(),state.progressStatus),
                         modifier = Modifier.align(Alignment.BottomEnd)
                             .padding(end = 13.dp, bottom = composerHeight + 1.dp),
                         onClick = {

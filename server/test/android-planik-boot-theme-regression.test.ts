@@ -91,8 +91,8 @@ test('small Planik matches light/dark website palette with tight tap bounds and 
   assert.match(light, /#b8b3ec/);
   assert.match(lightBlink, /#b8b3ec/);
   assert.match(styles, /body\[data-theme='light'\] \.planik-body-stop-start \{ stop-color: #b8b3ec/);
-  assert.match(build, /versionCode = 24/);
-  assert.match(build, /versionName = "1\.0\.22"/);
+  assert.match(build, /versionCode = 25/);
+  assert.match(build, /versionName = "1\.0\.23"/);
 });
 
 test('native mascot only hides its offline fallback after real transparent pixel coverage',async()=>{
@@ -175,4 +175,27 @@ test('Android uses the server daily remaining percentage and refreshes the same 
   assert.match(vm,/else if\(profile\.id!=owner\)/);
   assert.match(api,/Cache-Control: no-cache, no-store/);
   assert.match(web,/limit\?\.daily\?\.remainingPercent/);
+});
+
+test('Android chat uses idle rather than hover and preserves explicit work phases', async()=>{
+  const [native,motion,general,task,web]=await Promise.all([
+    read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/PlanikNativeLauncher.kt'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeMascotMotion.kt'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeGeneralAiChat.kt'),
+    read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeTaskAiChat.kt'),
+    read('../../client/src/components/PlanikMascot.css')
+  ]);
+  assert.match(native,/if\(skinId=="space"&&mode=="hover"\)/);
+  assert.doesNotMatch(native,/skinId=="space"&&mode=="idle"/);
+  assert.match(motion,/skin=="wizard"&&mode=="hover" ->/);
+  assert.match(motion,/skin=="northern"&&mode=="idle" ->/);
+  assert.match(motion,/skin=="ninja"&&mode=="idle" ->/);
+  assert.match(motion,/mode=="idle" -> if\(skin=="zoomer"\)12 else 2/);
+  assert.match(motion,/if\(!busy\)return "idle"/);
+  assert.match(motion,/return "painting"/);
+  assert.match(motion,/return "searching"/);
+  assert.match(motion,/return "thinking"/);
+  assert.match(general,/mode = nativeChatMascotMode\(state.busy/);
+  assert.match(task,/mode = nativeChatMascotMode\(busy/);
+  assert.match(web,/data-skin=space\]\[data-mode=hover\]/);
 });

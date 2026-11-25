@@ -90,7 +90,7 @@ internal fun NativeMascotFallback(dark:Boolean,mode:String,skinId:String,modifie
                 coroutineContext.ensureActive()
                 runCatching {
                     val alternate=frame%2==1
-                    val source=if((skinId=="classic"&&alternate)||(frameCount>2&&frame==11))blink else idle
+                    val source=if((frameCount==2&&alternate)||(frameCount>2&&frame==11))blink else idle
                     val action=nativeMascotMotionSvg(skinId,mode,frame) ?: planikActionSvg(mode, alternate)
                     val artwork=nativeMascotSkinSvg(source, skinId, dark, mode, frame)
                         .replace("</svg>",action+"</svg>")
@@ -128,12 +128,16 @@ internal fun NativeMascotFallback(dark:Boolean,mode:String,skinId:String,modifie
         label = "planik-vertical-float"
     )
 
-    val orbitTransition=rememberInfiniteTransition(label="planik-orbit")
-    val orbit by orbitTransition.animateFloat(
-        initialValue=0f,targetValue=360f,
-        animationSpec=infiniteRepeatable(tween(7000,easing=androidx.compose.animation.core.LinearEasing),RepeatMode.Restart),
-        label="planik-orbit-rotation"
-    )
+    // Weightlessness is a deliberate wardrobe hover preview, never chat idle.
+    val orbit=if(skinId=="space"&&mode=="hover"){
+        val orbitTransition=rememberInfiniteTransition(label="planik-orbit-preview")
+        val rotation by orbitTransition.animateFloat(
+            initialValue=0f,targetValue=360f,
+            animationSpec=infiniteRepeatable(tween(7000,easing=androidx.compose.animation.core.LinearEasing),RepeatMode.Restart),
+            label="planik-orbit-rotation"
+        )
+        rotation
+    }else 0f
     Box(modifier) {
         val picture=frames.getOrNull(frameIndex) ?: frames.firstOrNull{it!=null}
         if (picture != null) {
@@ -141,7 +145,7 @@ internal fun NativeMascotFallback(dark:Boolean,mode:String,skinId:String,modifie
                 bitmap = picture.asImageBitmap(),
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize().offset(y = floatOffset.dp).graphicsLayer {
-                    rotationZ=if(skinId=="space"&&mode=="idle")orbit else 0f
+                    rotationZ=orbit
                 }
             )
         } else {
@@ -199,6 +203,21 @@ private fun planikActionSvg(mode: String, alternate: Boolean): String = when (mo
           <path d="M300 196Q337 183 329 147Q327 124 307 ${handY}" fill="none" stroke="#797ac0" stroke-width="17" stroke-linecap="round"/>
           <circle cx="307" cy="${handY}" r="10" fill="#aba6f0"/>
           <path d="M299 101l-5 -8M308 100v-9M316 102l5 -8" stroke="#c9c3ff" stroke-width="3" stroke-linecap="round"/>
+        </g>
+        """
+    }
+    "painting" -> {
+        val tipY=if(alternate)202 else 218
+        """
+        <g class="planik-activity-painting">
+          <path d="M132 197Q107 205 105 232" fill="none" stroke="#7777b8" stroke-width="17" stroke-linecap="round"/>
+          <path d="M91 159L177 154L183 246L89 252Z" fill="#fffdf5" stroke="#c9c5e5" stroke-width="2.3"/>
+          <circle cx="152" cy="183" r="9" fill="#f2c879"/>
+          <path d="M98 226L119 197L134 214L149 194L173 229" fill="none" stroke="#8a9fd8" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M98 235Q134 217 173 235" fill="none" stroke="#8bc8a5" stroke-width="7"/>
+          <path d="M300 196Q259 237 213 219" fill="none" stroke="#7777b8" stroke-width="17" stroke-linecap="round"/>
+          <path d="M213 219L158 $tipY" stroke="#bf8f68" stroke-width="6" stroke-linecap="round"/>
+          <circle cx="158" cy="$tipY" r="4" fill="#8a9fd8"/>
         </g>
         """
     }

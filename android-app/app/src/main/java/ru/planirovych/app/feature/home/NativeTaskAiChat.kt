@@ -515,13 +515,7 @@ fun NativeTaskAiChat(task:Task,vm:HomeViewModel,dark:Boolean,onClose:()->Unit,
                     enabled = !busy,
                     dark = dark,
                     skinId = wardrobe?.plannerSkin(home.user?.id) ?: "classic",
-                    mode = when {
-                        busy && (ui.progressStatus.orEmpty().startsWith("searching_") ||
-                            ui.progressStatus in listOf("listing_tasks", "reading_task", "reading_subtask", "reading_file", "analyzing_web_results")) -> "searching"
-                        busy && ui.streamText.isNotBlank() -> "typing"
-                        busy -> "thinking"
-                        else -> "idle"
-                    },
+                    mode = nativeChatMascotMode(busy,ui.streamText.isNotBlank(),ui.progressStatus),
                     modifier = Modifier.align(Alignment.BottomEnd)
                         .padding(end = 13.dp, bottom = composerHeight + 1.dp),
                     onClick = {

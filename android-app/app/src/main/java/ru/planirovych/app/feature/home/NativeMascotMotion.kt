@@ -7,10 +7,13 @@ import kotlin.math.sin
 // A small cached frame sequence, not a timer that re-parses SVG on every tick.
 // Coordinates match the original 345 x 275 Planik SVG.
 internal fun mascotMotionFrameCount(skin:String,mode:String):Int =
-    if(skin=="classic")2 else if(mode in setOf("idle","thinking","hover"))12 else 2
+    when {
+        mode=="idle" -> if(skin=="zoomer")12 else 2
+        skin!="classic" && mode in setOf("thinking","hover") -> 12
+        else -> 2
+    }
 
 internal fun mascotMotionFrameMillis(skin:String,mode:String):Long = when {
-    mode=="idle" && skin=="space" -> 550L
     mode=="idle" -> 260L
     mode=="thinking" && skin=="wizard" -> 420L
     mode=="thinking" && skin=="cat" -> 230L
@@ -85,7 +88,14 @@ internal fun nativeMascotMotionSvg(skin:String,mode:String,frame:Int):String? {
               <path d="M280 ${222+step}L234 ${206+step}M281 ${229+step}L235 ${213+step}" stroke="#d8b17e" stroke-width="3.5" stroke-linecap="round"/>
             </g>
         """
-        skin=="northern"&&(mode=="idle"||mode=="hover") -> """
+        skin=="northern"&&mode=="idle" -> """
+            <g class="native-northern-rest">
+              <path d="M129 194Q124 218 153 232M301 194Q306 218 277 232" fill="none" stroke="#418d89" stroke-width="19" stroke-linecap="round"/>
+              <ellipse cx="153" cy="232" rx="15" ry="11" fill="#c7e1d6" stroke="#719c96" transform="rotate(25 153 232)"/>
+              <ellipse cx="277" cy="232" rx="15" ry="11" fill="#c7e1d6" stroke="#719c96" transform="rotate(-25 277 232)"/>
+            </g>
+        """
+        skin=="northern"&&mode=="hover" -> """
             <g class="native-northern-warmth">
               ${arms(185+step,222,245-step,222)}
               <ellipse cx="${185+step}" cy="222" rx="15" ry="11" fill="#c7e1d6" stroke="#719c96"/>
@@ -103,21 +113,42 @@ internal fun nativeMascotMotionSvg(skin:String,mode:String,frame:Int):String? {
               <path d="M187 231L${235+step} ${218-step}" stroke="#9792d7" stroke-width="12" stroke-linecap="round"/>
             </g>
         """
-        skin=="ninja"&&(mode=="idle"||mode=="hover") -> """
+        skin=="ninja"&&mode=="idle" -> """
+            <g class="native-ninja-rest">
+              <path d="M132 196Q149 245 204 225M298 196Q281 245 226 225" fill="none" stroke="#454963" stroke-width="17" stroke-linecap="round"/>
+              <path d="M215 205Q206 204 201 214L193 229Q192 240 205 241L215 229Z M215 205Q224 204 229 214L237 229Q238 240 225 241L215 229Z" fill="#454963" stroke="#292c3d" stroke-width="2"/>
+              <path d="M215 208v19" stroke="#9b9bbd" fill="none"/>
+            </g>
+        """
+        skin=="ninja"&&mode=="hover" -> """
             <g class="native-ninja-guard">
               ${arms(203+step,222,227-step,222)}
               <path d="M215 205Q206 204 201 214L193 229Q192 240 205 241L215 229Z M215 205Q224 204 229 214L237 229Q238 240 225 241L215 229Z" fill="#454963" stroke="#292c3d" stroke-width="2"/>
               ${if(mode=="hover")(0..5).joinToString(""){i->val phase=(frame+i*2)%12;"""<circle cx="${136+i*32}" cy="${230-phase*6}" r="${9+phase*2}" fill="#a1acc4" opacity="${.65f*(1-phase/12f)}"/>"""}else ""}
             </g>
         """
-        skin=="wizard"&&(mode=="idle"||mode=="hover") -> {
+        skin=="wizard"&&mode=="hover" -> {
             val y=230+step
             """<g class="native-wizard-orb">${arms(177,y,253,y)}<circle cx="215" cy="$y" r="${28+step/2}" fill="#8ba9e5" opacity=".25"/><circle cx="215" cy="$y" r="19" fill="#7886ca" stroke="#e3d6fa" stroke-width="2"/><ellipse cx="209" cy="${y-6}" rx="7" ry="5" fill="#d6f8ff"/>${star(188,y-22)}${star(245,y+5)}</g>"""
         }
-        skin=="space"&&(mode=="idle"||mode=="hover") -> arms(151,222+step,279,222-step)
-        skin=="pirate"&&mode=="idle" -> arms(151,231,279,231)
+        skin=="space"&&mode=="hover" -> arms(151,222+step,279,222-step)
+        (skin=="space"||skin=="pirate")&&mode=="idle" -> arms(152,231,278,231)
         skin=="pirate"&&mode=="hover" -> """${arms(151,231,255,129+step)}<path d="M248 ${124+step}l10 7" stroke="#9693d5" stroke-width="11" stroke-linecap="round"/>"""
         skin=="cat"&&mode=="thinking" -> null // Ear motion is drawn in the rear layer.
         else -> null
     }
+}
+
+/** Match website work phases without ever synthesizing pointer hover in chat. */
+internal fun nativeChatMascotMode(busy:Boolean,responding:Boolean,progress:String?):String {
+    if(!busy)return "idle"
+    if(progress in setOf("generating_image","editing_image"))return "painting"
+    if(progress.orEmpty().startsWith("searching_")||
+        progress.orEmpty().startsWith("reading_")||
+        progress.orEmpty().startsWith("listing_")||
+        progress in setOf("checking_sectors","analyzing_subtasks","analyzing_web_results",
+            "analyzing_retrieved_context","editing_document","creating_document",
+            "generating_document","working_with_documents","refreshing_finances"))return "searching"
+    if(!responding && progress in setOf("analyzing_request","using_chat_history"))return "thinking"
+    return "typing"
 }
