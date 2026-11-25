@@ -106,6 +106,8 @@ test('native mascot only hides its offline fallback after real transparent pixel
   ]);
   assert.match(art,/super\.onDraw\(requireNotNull\(frameCanvas\)\)/);
   assert.match(art,/if\(hasMascotPixels\(bitmap\)\)/);
+  assert.match(art,/return visible>=10 && transparent>=10/);
+  assert.doesNotMatch(art,/corners\.count/);
   assert.match(art,/canvas\.drawBitmap\(bitmap,0f,0f,null\)[\s\S]*?publish\(true\)/);
   assert.match(art,/if\(!painted\|\|rendererFailed\)NativeMascotFallback/);
   assert.match(art,/Modifier\.fillMaxSize\(\)\.zIndex\(1f\)/);
