@@ -165,8 +165,12 @@ try {
   await wardrobeDialog.locator('[data-skin="ninja"] .ninja-ready').waitFor({state:'visible'});
   assert.equal(await wardrobeDialog.getByRole('button',{name:/Тариф «Максимум»/}).isDisabled(),true);
   await wardrobeDialog.getByRole('button',{name:'Наведение курсора'}).click();
-  await page.waitForFunction(()=>Number(getComputedStyle(document.querySelector('.mascot-wardrobe-dialog [data-skin="ninja"] .planik-character-rig')).opacity)<.05);
-  await page.waitForFunction(()=>Number(getComputedStyle(document.querySelector('.mascot-wardrobe-dialog [data-skin="ninja"] .planik-character-rig')).opacity)>.95);
+  await wardrobeDialog.locator('[data-skin="ninja"][data-mode="hover"] .ninja-guard').waitFor({state:'visible'});
+  assert.equal(await wardrobeDialog.locator('.ninja-bomb').count(),0);
+  assert.equal(await wardrobeDialog.locator('[data-skin="ninja"] .planik-eye-left').evaluate(el=>getComputedStyle(el).animationName),'ninja-scan');
+  await wardrobeDialog.getByRole('button',{name:'Думает',exact:true}).click();
+  await wardrobeDialog.locator('[data-skin="ninja"][data-mode="thinking"] .ninja-notebook-page').waitFor({state:'visible'});
+  await wardrobeDialog.locator('.ninja-chopsticks-arm').waitFor({state:'visible'});
   await wardrobeDialog.getByRole('button',{name:/Космонавт продуктивности/}).click();
   await wardrobeDialog.locator('[data-skin="space"] .space-helmet').waitFor({state:'visible'});
   await wardrobeDialog.getByRole('button',{name:'Думает',exact:true}).click();
