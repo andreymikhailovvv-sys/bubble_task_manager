@@ -300,15 +300,15 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
                   ['PENDING','APPLIED'].includes(proposal.status)
                     ? (taskDrafts[index]?.title??item.editable.title??item.title) : item.title}</span>
                 {item.parentTitle ? <span className="ai-task-proposal__muted block text-xs">В задаче «{item.parentTitle}»</span> : null}
-                {humanDescription(item) && !item.editable?.description ?
-                  <div className="ai-task-proposal__muted ai-proposal-description mt-1 text-xs" tabIndex={0}><WorkAiMessageBody content={humanDescription(item)!}/></div> : null}
+                {(item.editable?.description || humanDescription(item) || item.details?.length) ? (
+                  <div className="ai-task-proposal__muted ai-proposal-description mt-1 text-xs" tabIndex={0}>
+                    <WorkAiMessageBody content={item.editable?.description || [humanDescription(item),...(item.details ?? [])].filter(Boolean).join('\n')}/>
+                  </div>
+                ) : null}
                 {item.editable && ['PENDING','APPLIED'].includes(proposal.status) ?
                   <div className="ai-task-proposal__muted mt-1 space-y-0.5 break-words text-xs">
-                    {item.editable.description ? <div className="ai-proposal-description" tabIndex={0}><WorkAiMessageBody content={item.editable.description}/></div> : null}
                     {item.editable.dueDate ? <div>Срок: {formatHumanDate(item.editable.dueDate)}</div> : null}
                     {item.editable.sphereId ? <div>Сектор: {spheres.find(s=>s.id===item.editable?.sphereId)?.name??'Выбран'}</div> : null}
-                  </div> : item.details?.length ? <div className="ai-task-proposal__muted mt-1 space-y-0.5 break-words text-xs">
-                    <div className="ai-proposal-description" tabIndex={0}><WorkAiMessageBody content={item.details.join('\n')}/></div>
                   </div> : null}
               </div>
             </div>

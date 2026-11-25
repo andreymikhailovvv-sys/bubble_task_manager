@@ -129,6 +129,11 @@ try {
   await moduleSwitch.getByRole('button',{name:'Экономыч',exact:true}).click();
   assert.equal(await skinButtons.count(),3);
   await skinButtons.filter({hasText:'Хранитель бюджета'}).waitFor({state:'visible'});
+  const economicStop=wardrobeDialog.locator('.planik-mascot--economic .planik-body-stop-start');
+  assert.equal(await economicStop.evaluate(el=>getComputedStyle(el).stopColor),'rgb(255, 225, 164)');
+  const previousTheme=await page.evaluate(()=>{const value=document.body.getAttribute('data-theme');document.body.setAttribute('data-theme','light');return value;});
+  try { assert.equal(await economicStop.evaluate(el=>getComputedStyle(el).stopColor),'rgb(255, 225, 164)'); }
+  finally { await page.evaluate(value=>{if(value===null)document.body.removeAttribute('data-theme');else document.body.setAttribute('data-theme',value);},previousTheme); }
   await moduleSwitch.getByRole('button',{name:'Планик',exact:true}).click();
   assert.equal(await skinButtons.count(),9);
   assert.equal(wardrobeWrites,0);
@@ -225,6 +230,11 @@ try {
   const timeline=page.locator('[data-fullscreen-pane-index="1"] .timeline-canvas');
   await timeline.waitFor({state:'visible'});
   assert.equal(await timeline.evaluate(el=>getComputedStyle(el).padding),'0px');
+  assert.equal(await timeline.locator('.timeline-canvas-inner').evaluate(el=>getComputedStyle(el).padding),'0px');
+  assert.equal(await timeline.locator('.timeline-panel').first().evaluate(el=>getComputedStyle(el).borderRadius),'0px');
+  const paneBounds=await timeline.locator('xpath=ancestor::section[contains(@class,"fullscreen-workspace-pane")]').boundingBox();
+  const gridBounds=await timeline.locator('.timeline-panel').first().boundingBox();
+  assert.ok(paneBounds&&gridBounds&&Math.abs(gridBounds.x-paneBounds.x)<=2&&Math.abs(gridBounds.x+gridBounds.width-paneBounds.x-paneBounds.width)<=2,'timeline grid must touch both pane edges');
   await page.getByRole('checkbox',{name:'Показать режим «Таймлайн»'}).uncheck();
   await primary.waitFor({state:'visible'});
   await addMenu.hover();
@@ -251,6 +261,8 @@ try {
   const focusedTitle=page.locator('textarea[title="Редактировать название"]').first();
   await focusedTitle.waitFor({state:'visible',timeout:12000});
   metrics.openTaskMs=Date.now()-openStart;
+  assert.equal(await page.locator('.module-rail:visible').count(),0);
+  assert.equal(await page.locator('.primary-workspace-sidebar-toggle:visible').count(),0);
   await page.locator('[data-managed-mascot-launcher="planner"][data-mascot-surface="modal"] [data-skin="northern"]').waitFor({state:'visible'});
   assert.equal(await page.locator('.planik-mascot:visible').count(),1);
   await focusedTitle.fill('Проверка ввода нового названия');
