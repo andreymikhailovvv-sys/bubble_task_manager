@@ -1,6 +1,6 @@
 import './PrimaryWorkspaceSidebar.css';
 import type { CurrentUser, SubscriptionWindow } from '../lib/api';
-export const PLAN_FEATURES = {"start":["Базовый месячный лимит ×1","Модель Luna","Запросы и управление задачами","Создание Word и Excel","Поиск в интернете"],"pro":["Месячный лимит ×2","Модели Luna, Terra","Все функции Старта","Создание изображений","Почтовый ИИ-ассистент","Живое общение с ИИ","Образы «Полярник фокуса», «Зумер рабочего потока», «Расхититель задач» и «Хранитель бюджета» в веб-версии"],"max":["Месячный лимит ×4,33","Модели Luna, Terra, Sol; Astra (готовится)","Все функции Про","Telegram ИИ-ассистент","Автомониторинг задач","Образы «Астролог приоритетов», «Ниндзя дедлайнов» и «Космонавт продуктивности» в веб-версии"]} as const;
+export const PLAN_FEATURES = {"start":["Базовый месячный лимит ×1","Модель Luna","Запросы и управление задачами","Создание Word и Excel","Поиск в интернете"],"pro":["Месячный лимит ×2","Модели Luna, Terra","Все функции Старта","Создание изображений","Почтовый ИИ-ассистент","Живое общение с ИИ","Набор образов для Планика и Экономыча"],"max":["Месячный лимит ×4,33","Модели Luna, Terra, Sol; Astra (готовится)","Все функции Про","Telegram ИИ-ассистент","Автомониторинг задач","Расширенный набор образов для Планика и Экономыча"]} as const;
 
 const remainingColor = (remaining: number) => remaining >= 70 ? '#36b982' : remaining >= 30 ? '#e6b84f' : '#e36a79';
 
@@ -42,5 +42,6 @@ export function SubscriptionLimitPanel({ limit }: { limit: CurrentUser['subscrip
     <strong className="text-sm text-secondary">{limit.planName}</strong>
     <WindowProgress title="Дневной лимит" window={limit.daily}/>
     <WindowProgress title="Недельный лимит" window={limit.weekly}/>
+    {Math.min(limit.daily.remainingMilli,limit.weekly.remainingMilli) <= 0 && <p className="mt-3 text-sm text-secondary">Дорогие модели, веб-поиск и изображения недоступны до обновления лимита. Luna и базовые функции продолжают работать в пределах месячного баланса.</p>}
   </div>;
 }

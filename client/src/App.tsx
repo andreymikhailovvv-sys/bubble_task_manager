@@ -7282,6 +7282,7 @@ export default function App() {
                       {plan.features.map((feature) => (
                         <li key={feature} className="subscription-feature-pill flex items-start gap-2 rounded-xl px-3 py-1.5"><Check size={15} className="mt-0.5 shrink-0 text-emerald-300" /> <span>{feature}</span></li>
                       ))}
+                      {plan.key !== 'start' && <li><button type="button" className="surface-muted rounded-xl px-3 py-2 text-sm font-semibold text-primary" onClick={() => { setIsSubscriptionModalOpen(false); wardrobe.show(); }}>Посмотреть образы</button></li>}
                     </ul>
                     <button type="button" disabled={!subscriptionPurchaseAvailable || (activeSubscription && currentUser?.subscriptionPlan === plan.key) || subscriptionPurchase.creatingPlanKey !== null}
                       onClick={() => void subscriptionPurchase.start(plan.key)}

@@ -6,7 +6,7 @@ import { CatMascotEars } from './CatMascotEars';
 import { MascotSkinArtwork, isScarfSkin } from './MascotSkinArtwork';
 import { RefinedSkin, Mitten, NorthernHover, WizardHover, WizardCards } from './RefinedMascotSkins';
 import { ShirtOutfit, ShirtArm, ZoomerPhone, BankerMoney } from './ShirtMascotSkins';
-import { AdventureOutfit, AdventureArm, AdventureIdle, AdventureHover, PirateMap, SpaceSignal, NinjaSmoke, type AdventureSkin } from './AdventureMascotSkins';
+import { AdventureOutfit, AdventureArm, AdventureIdle, AdventureHover, PirateMap, SpaceSignal, NinjaNotebook, type AdventureSkin } from './AdventureMascotSkins';
 
 export type PlanikMode = 'idle' | 'hover' | 'thinking' | 'typing' | 'searching' | 'painting' | 'celebrating' | 'clearing' | 'showcase';
 
@@ -136,7 +136,8 @@ export const PlanikMascot = memo(function PlanikMascot({
   }, []);
 
   useEffect(() => {
-    if (mode === 'thinking' && pirate) gaze(0, 8);
+    if (mode === 'thinking' && ninja) gaze(0, 9);
+    else if (mode === 'thinking' && pirate) gaze(0, 8);
     else if (mode === 'thinking' && space) gaze(7, -8);
     else if (mode === 'thinking') gaze(-2, 4);
     else if (mode === 'searching') gaze(-9, 5);
@@ -145,14 +146,14 @@ export const PlanikMascot = memo(function PlanikMascot({
     else if (mode === 'clearing') gaze(-5, 1);
     else if (mode === 'idle' && zoomer) gaze(0, 7);
     else if (mode !== 'hover' || previewMode) gaze(0, 0);
-  }, [mode, gaze, zoomer, previewMode, pirate, space]);
+  }, [mode, gaze, zoomer, previewMode, pirate, space, ninja]);
 
   // Follow the cursor anywhere in the working area, including empty space
   // and modal surfaces. Only the eyes move while idle; the reaching-hands
   // animation still needs a pointer directly over Planik.
   // One rAF per pointer frame avoids React rerenders on every move.
   useEffect(() => {
-    if ((previewMode && !ninja) || (mode !== 'idle' && mode !== 'hover') || (zoomer && mode === 'idle')) return;
+    if ((ninja && mode === 'hover') || (previewMode && !ninja) || (mode !== 'idle' && mode !== 'hover') || (zoomer && mode === 'idle')) return;
     if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
     let frame = 0;
     let pointerX = 0;
@@ -284,7 +285,7 @@ export const PlanikMascot = memo(function PlanikMascot({
           </g>
         </g>}
 
-        {wizard && mode === 'thinking' ? <WizardCards/> : pirate && mode==='thinking' ? <PirateMap suffix={gradientSuffix}/> : space && mode==='thinking' ? <SpaceSignal suffix={gradientSuffix}/> : <g className="planik-thinking">
+        {wizard && mode === 'thinking' ? <WizardCards/> : pirate && mode==='thinking' ? <PirateMap suffix={gradientSuffix}/> : space && mode==='thinking' ? <SpaceSignal suffix={gradientSuffix}/> : ninja && mode==='thinking' ? <NinjaNotebook/> : <g className="planik-thinking">
           <g className="planik-scratch-arm">
             {shirtSkin ? <ShirtArm skin={shirtSkin} suffix={gradientSuffix} d="M301 188Q327 185 330 163Q335 140 309 118" strokeWidth="18"/> : adventure ? <AdventureArm skin={adventure} d="M301 188Q327 185 330 163Q335 140 309 118" strokeWidth="18"/> : <path d="M301 188Q327 185 330 163Q335 140 309 118" fill="none" stroke="#7274b4" strokeWidth="18" strokeLinecap="round" />}
             {north ? <Mitten x={309} y={118} dx={-26} dy={-22} right suffix={gradientSuffix}/> : <><circle cx="306" cy="116" r="10" fill="#a8a3ed" />
@@ -413,7 +414,6 @@ export const PlanikMascot = memo(function PlanikMascot({
           </g></g>
         </g>}
         </g>
-        {ninja && mode==='hover' && <NinjaSmoke suffix={gradientSuffix}/>}
       </svg>
     </span>
   );
