@@ -1035,6 +1035,12 @@ export default function App() {
   const [isTimelineOverdueModalOpen, setIsTimelineOverdueModalOpen] = useState(false);
   const [timelineOverdueBulkPostponeLoading, setTimelineOverdueBulkPostponeLoading] = useState<null | 'normal' | 'ai'>(null);
   const [postponeNotice, setPostponeNotice] = useState<{ count: number; serial: number } | null>(null);
+  const [workspaceBlockNotice, setWorkspaceBlockNotice] = useState<number | null>(null);
+  useEffect(() => {
+    if (workspaceBlockNotice === null) return;
+    const timer = window.setTimeout(() => setWorkspaceBlockNotice(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [workspaceBlockNotice]);
   useEffect(() => {
     if (!postponeNotice) return;
     const timer = window.setTimeout(() => setPostponeNotice(null), 3200);
@@ -6408,11 +6414,12 @@ export default function App() {
     setFullscreenDisplayModes(nextSlots.flatMap(panel => panel.kind === 'mode' ? [panel.mode] : []));
     setFullscreenPanelSlots(nextSlots);
   };
+  const blockAlreadyPresent = (next: FullscreenWorkspacePanel) => fullscreenPanels.some(panel => JSON.stringify(panel) === JSON.stringify(next) || (panel.kind === 'task-ai' && next.kind === 'task-ai'));
   const addFullscreenSinglePanel = (side: 'left' | 'right', next: FullscreenWorkspacePanel) => {
     blockDragRef.current = false;
     setPendingWorkspaceBlock(null);
     setIsAddMenuOpen(false);
-    if (JSON.stringify(next) === JSON.stringify(fullscreenPanels[0]) || (next.kind === 'task-ai' && fullscreenPanels[0].kind === 'task-ai')) return;
+    if (JSON.stringify(next) === JSON.stringify(fullscreenPanels[0]) || (next.kind === 'task-ai' && fullscreenPanels[0].kind === 'task-ai')) { setWorkspaceBlockNotice(Date.now()); return; }
     if (next.kind === 'task-ai') {
       setFocusedTaskId(next.taskId);
       setIsAiExpanded(false);
@@ -6426,7 +6433,7 @@ export default function App() {
     blockDragRef.current = false;
     setPendingWorkspaceBlock(null);
     setIsAddMenuOpen(false);
-    if (fullscreenPanels.some((panel, position) => position !== index && (JSON.stringify(panel) === JSON.stringify(next) || (panel.kind === 'task-ai' && next.kind === 'task-ai')))) return;
+    if (fullscreenPanels.some((panel, position) => position !== index && (JSON.stringify(panel) === JSON.stringify(next) || (panel.kind === 'task-ai' && next.kind === 'task-ai')))) { setWorkspaceBlockNotice(Date.now()); return; }
     if (fullscreenPanels.length === 1 && index === 0 && requiresCompanionPanel(next)) return;
     const replacing = fullscreenPanels[index];
     const nextSlots = replaceFullscreenPanel(fullscreenPanels, index, next);
@@ -6686,8 +6693,8 @@ export default function App() {
                     <BriefcaseBusiness size={14} /> Новый сектор
                   </button>
                   <FullscreenBlockMenu tasks={fullscreenTaskChoices}
-                    onSelect={next => { setPendingWorkspaceBlock(next); setIsAddMenuOpen(false); }}
-                    onDragStart={next => { blockDragRef.current = true; setPendingWorkspaceBlock(next); }}
+                    onSelect={next => { setIsAddMenuOpen(false); if (blockAlreadyPresent(next)) { setPendingWorkspaceBlock(null); setWorkspaceBlockNotice(Date.now()); return; } setPendingWorkspaceBlock(next); }}
+                    onDragStart={next => { if (blockAlreadyPresent(next)) { blockDragRef.current = false; setPendingWorkspaceBlock(null); setWorkspaceBlockNotice(Date.now()); return; } blockDragRef.current = true; setPendingWorkspaceBlock(next); }}
                     onDragEnd={() => { blockDragRef.current = false; setPendingWorkspaceBlock(null); setIsAddMenuOpen(false); }}/>
                 </div>
               ) : null}
@@ -6697,10 +6704,10 @@ export default function App() {
             {renderOverdueControl()}
             {renderCreditsControl()}
             <div className="relative shrink-0" ref={efficiencyDetailsRef}>
-              <button type="button" className="topbar-action-button inline-flex h-9 w-9 items-center justify-center rounded-xl border" title={`Рейтинг: ${formattedEfficiencyScore}/100`} aria-label="Рейтинг эффективности" onClick={() => setIsEfficiencyDetailsOpen(prev => !prev)}><Gauge size={17}/></button>
+              <button type="button" className="efficiency-icon-button inline-flex h-9 w-9 items-center justify-center rounded-full transition hover:scale-110 focus-visible:ring-2 focus-visible:ring-violet-400" title={`Рейтинг: ${formattedEfficiencyScore}/100`} aria-label="Рейтинг эффективности" onClick={() => setIsEfficiencyDetailsOpen(prev => !prev)}><svg width="34" height="34" viewBox="0 0 72 72" role="img" aria-label="Рейтинг эффективности" className="efficiency-orb-icon"><defs><linearGradient id="effModernOrbFill" x1="10" y1="10" x2="62" y2="62"><stop offset="0%" stopColor="#38bdf8" /><stop offset="45%" stopColor="#8b5cf6" /><stop offset="100%" stopColor="#f472b6" /></linearGradient><linearGradient id="effModernOrbRing" x1="12" y1="58" x2="60" y2="14"><stop offset="0%" stopColor="#22d3ee" /><stop offset="55%" stopColor="#a78bfa" /><stop offset="100%" stopColor="#fb7185" /></linearGradient></defs><circle cx="36" cy="36" r="25" fill="url(#effModernOrbFill)" opacity="0.18" /><circle cx="36" cy="36" r="26" fill="none" stroke="rgba(148,163,184,0.28)" strokeWidth="5" /><circle cx="36" cy="36" r="26" fill="none" stroke="url(#effModernOrbRing)" strokeWidth="5" strokeLinecap="round" pathLength={100} strokeDasharray={`${efficiencyScore} 100`} transform="rotate(-90 36 36)" /><path d="M36 17l5.4 12.1 13.1 1.4-9.8 8.8 2.8 12.9L36 45.5l-11.5 6.7 2.8-12.9-9.8-8.8 13.1-1.4L36 17z" fill="url(#effModernOrbFill)" /></svg></button>
               {isEfficiencyDetailsOpen ? <div data-tour="feature-rating" className="efficiency-details-popover efficiency-details-popover-modern absolute right-0 top-[calc(100%+8px)] z-40 w-80 rounded-[1.6rem] border p-4 text-xs shadow-2xl backdrop-blur"><div className="text-center"><div className="efficiency-score-hero tabular-nums">{formattedEfficiencyScore}/100</div><p className="mt-1 text-sm font-semibold text-primary">{efficiencyGradeMessage}</p></div><div className="mt-4 space-y-2"><div className="efficiency-detail-row"><span>Задачи</span><b>+{formatRatingDelta(efficiencyTaskRating)} рейтинга</b></div><div className="efficiency-detail-row"><span>Привычки</span><b>+{formatRatingDelta(efficiencyHabitRating)} рейтинга</b></div><div className="efficiency-detail-row"><span>Работа с ИИ <span className="block text-[10px] font-normal text-muted">+0,1 за запрос · +0,3 за ИИ-инструмент</span></span><b>+{formatRatingDelta(efficiencyAiRating)} рейтинга</b></div><div className="efficiency-detail-row efficiency-detail-row-focus"><span>Режим концентрации (х2)</span><b>+{formatRatingDelta(efficiencyFocusRating)} рейтинга</b></div></div></div> : null}
             </div>
-            <button type="button" data-tour="feature-focus-button" className="topbar-action-button inline-flex h-9 w-9 items-center justify-center rounded-xl border shrink-0" onClick={openFocusSetup} aria-label="Режим концентрации" title="Режим концентрации"><Bot size={17}/></button>
+            <button type="button" data-tour="feature-focus-button" className="focus-mode-button topbar-action-button inline-flex h-9 w-9 items-center justify-center rounded-xl border shrink-0 text-white shadow-lg transition hover:-translate-y-0.5 hover:scale-105 focus-visible:ring-2 focus-visible:ring-violet-300" onClick={openFocusSetup} aria-label="Режим концентрации" title="Режим концентрации"><Bot size={17}/></button>
         <div data-tour="feature-telegram-button"><TelegramIntegrationsMenu tourIntegration={integrationTourKind} onConnectBot={() => void openTelegramLinkModal()} /></div>
         <a className="public-nav-link shrink-0 px-2 py-2 text-sm" href="/about">О сервисе</a>
         <div className="auth-actions" aria-label="Управление аккаунтом">
@@ -7077,7 +7084,7 @@ export default function App() {
               <div className="focus-task-ai-header flex shrink-0 items-center justify-between gap-3">
                 <div className="min-w-0 flex shrink-0 items-center gap-2"><Bot size={18} className="focus-task-ai-bot-icon shrink-0" /><h3 className="truncate font-semibold ai-panel-title">Помощь ИИ</h3></div>
                 <div className="focus-task-ai-header-actions flex min-w-0 items-center justify-end gap-2">
-                  <TaskMonitoringStatuses taskId={focusActiveTask.id}
+                  <TaskMonitoringStatuses subscriptionAllowed={Boolean(currentUser?.subscriptionPlan === 'max' && activeSubscription)} taskId={focusActiveTask.id}
                     model={focusActiveTask.aiMonitoringModel}
                     generation={focusActiveTask.aiMonitoringGeneration}
                     enabled={focusActiveTask.aiMonitoringEnabled === true}
@@ -7127,7 +7134,7 @@ export default function App() {
               </div>
               <div className="task-ai-fullscreen-actions flex shrink-0 flex-wrap items-center justify-end gap-3">
                 <div className="task-ai-fullscreen-monitor shrink-0">
-                  <TaskMonitoringStatuses taskId={focusActiveTask.id}
+                  <TaskMonitoringStatuses subscriptionAllowed={Boolean(currentUser?.subscriptionPlan === 'max' && activeSubscription)} taskId={focusActiveTask.id}
                     model={focusActiveTask.aiMonitoringModel}
                     generation={focusActiveTask.aiMonitoringGeneration}
                     enabled={focusActiveTask.aiMonitoringEnabled === true}
@@ -8272,7 +8279,7 @@ export default function App() {
                 <div>
                   <p className="flex items-center gap-2 text-sm font-semibold ai-panel-title"><Bot size={16} /><span className="focused-task-ai-toolbar-title">Помощь ИИ</span></p>
                 </div>
-                <TaskMonitoringStatuses tourStage={activeTourStep === 'ai-monitor-model' ? 'model' : activeTourStep === 'ai-monitor-button' ? 'button' : null} taskId={focusedTask.id}
+                <TaskMonitoringStatuses subscriptionAllowed={Boolean(currentUser?.subscriptionPlan === 'max' && activeSubscription)} tourStage={activeTourStep === 'ai-monitor-model' ? 'model' : activeTourStep === 'ai-monitor-button' ? 'button' : null} taskId={focusedTask.id}
                   model={focusedTask.aiMonitoringModel}
                   generation={focusedTask.aiMonitoringGeneration}
                   enabled={focusedTask.aiMonitoringEnabled === true}
@@ -9092,7 +9099,7 @@ export default function App() {
               </div>
               <div className="task-ai-fullscreen-actions flex shrink-0 flex-wrap items-center justify-end gap-3">
                 <div className="task-ai-fullscreen-monitor shrink-0">
-                  <TaskMonitoringStatuses taskId={focusedTask.id}
+                  <TaskMonitoringStatuses subscriptionAllowed={Boolean(currentUser?.subscriptionPlan === 'max' && activeSubscription)} taskId={focusedTask.id}
                     model={focusedTask.aiMonitoringModel}
                   generation={focusedTask.aiMonitoringGeneration}
                     enabled={focusedTask.aiMonitoringEnabled === true}
@@ -9492,7 +9499,6 @@ export default function App() {
         <button
           type="button"
           className="planik-launcher-button touch-none select-none"
-          title="Чат с ИИ"
           aria-label="Открыть общий чат с ИИ"
           onClick={() => { if (hasGeneralAiPane && !mascotSurface.modal) { fullscreenChatTarget?.querySelector<HTMLTextAreaElement>('textarea')?.focus(); return; } setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}
         >
@@ -9566,7 +9572,7 @@ export default function App() {
         </div>
       ), document.body) : null}
 
-      <WorkspaceActionToast count={postponeNotice?.count ?? null} light={effectiveThemeMode === 'light'} />
+      <WorkspaceActionToast message={workspaceBlockNotice !== null ? 'Такой блок уже открыт. Добавить второй такой же блок нельзя.' : null} count={postponeNotice?.count ?? null} light={effectiveThemeMode === 'light'} />
 
       {systemNotificationToast ? createPortal((
         <button key={systemNotificationToast.id} type="button" className="system-notification-toast fixed bottom-8 left-6 z-[2147483647] w-[min(22rem,calc(100vw-3rem))] rounded-2xl border px-4 py-3 text-left text-sm shadow-2xl backdrop-blur" onClick={() => { setSystemNotificationToast(null); openSystemNotification(systemNotificationToast); }}>

@@ -3,6 +3,7 @@ import './PlanikMascot.css';
 import { useMascotIdentity } from './MascotPresence';
 import { MascotArrivalEffects } from './MascotArrivalEffects';
 import { CatMascotEars } from './CatMascotEars';
+import { KingThrone, KingOutfit, KingGesture } from './KingMascotSkin';
 import { MascotSkinArtwork, isScarfSkin } from './MascotSkinArtwork';
 import { RefinedSkin, Mitten, NorthernHover, WizardHover, WizardCards } from './RefinedMascotSkins';
 import { ShirtOutfit, ShirtArm, ZoomerPhone, BankerMoney } from './ShirtMascotSkins';
@@ -61,9 +62,9 @@ export const PlanikMascot = memo(function PlanikMascot({
   useEffect(() => {
     if (!arrivalKey || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setArriving(false); return; }
     setArriving(true);
-    const timer = window.setTimeout(() => setArriving(false), 560);
+    const timer = window.setTimeout(() => setArriving(false), skinId==='pirate'||skinId==='banker' ? 1600 : 560);
     return () => window.clearTimeout(timer);
-  }, [arrivalKey]);
+  }, [arrivalKey, skinId]);
   const gradientSuffix = useId().replace(/:/g, '');
   const [hovered, setHovered] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
@@ -122,6 +123,7 @@ export const PlanikMascot = memo(function PlanikMascot({
   const north = skinId === 'northern', wizard = skinId === 'wizard';
   const refined = north || wizard;
   const zoomer=variant==='planner'&&skinId==='zoomer', banker=variant==='economic'&&skinId==='banker';
+  const king=variant==='economic'&&skinId==='king';
   const shirtSkin=zoomer?'zoomer':banker?'banker':null;
   const adventure:AdventureSkin|null=variant==='planner'&&(skinId==='ninja'||skinId==='pirate'||skinId==='space')?skinId:null;
   const ninja=adventure==='ninja',pirate=adventure==='pirate',space=adventure==='space';
@@ -190,7 +192,8 @@ export const PlanikMascot = memo(function PlanikMascot({
       role="img"
       aria-label={variant === 'economic' ? 'Экономыч, анимированный финансовый помощник' : 'Планик, анимированный помощник ИИ'}
     >
-      {arriving && <MascotArrivalEffects key={arrivalKey} skinId={skinId}/>}
+      {arriving && <MascotArrivalEffects key={'rear-'+arrivalKey} skinId={skinId} layer="rear"/>}
+      {arriving && <MascotArrivalEffects key={'front-'+arrivalKey} skinId={skinId}/> }
       <span className="planik-ground-shadow" aria-hidden="true" />
       <svg
         ref={svgRef}
@@ -214,9 +217,10 @@ export const PlanikMascot = memo(function PlanikMascot({
         </defs>
 
         <g className="planik-character-rig">
+        {king && <KingThrone suffix={gradientSuffix}/> }
         {skinId === 'cat' && <CatMascotEars suffix={gradientSuffix} variant={variant}/> }
         {refined && <RefinedSkin skinId={skinId} suffix={gradientSuffix} layer="rear"/>}
-        {!refined && !zoomer && <><path d="M215 77V58" stroke="#8c8ed3" strokeWidth="7" strokeLinecap="round" />
+        {!refined && !zoomer && !king && <><path d="M215 77V58" stroke="#8c8ed3" strokeWidth="7" strokeLinecap="round" />
         <circle className="planik-antenna" cx="215" cy="52" r="9" fill="#88e0ed" /></>}
         <rect className="planik-body-surface" x="122" y="76" width="186" height="174" rx="65" fill={`url(#planik-body-${gradientSuffix})`} stroke={`url(#planik-rim-${gradientSuffix})`} strokeWidth="4" />
         <path d="M148 100Q163 83 192 83" fill="none" stroke="#d0eaff" strokeOpacity=".2" strokeLinecap="round" strokeWidth="4" />
@@ -224,7 +228,8 @@ export const PlanikMascot = memo(function PlanikMascot({
         <g ref={leftEye} className="planik-eye-left"><ellipse className="planik-eye" cx="190" cy="162" rx="10" ry="15" fill="#f1f3ff" />{squint&&<path className="ninja-squint" d="M179 153Q190 158 201 162Q200 174 190 174Q179 174 179 153Z" fill="#f3f4ff"/>}</g>
         <g ref={rightEye} className="planik-eye-right"><ellipse className="planik-eye" cx="240" cy="162" rx="10" ry="15" fill="#f1f3ff" />{squint&&<path className="ninja-squint" d="M229 162Q240 158 251 153Q251 174 240 174Q230 174 229 162Z" fill="#f3f4ff"/>}</g>
 
-        {refined ? <RefinedSkin skinId={skinId} suffix={gradientSuffix} layer="front"/> : shirtSkin ? <ShirtOutfit skin={shirtSkin} suffix={gradientSuffix}/> : adventure ? <AdventureOutfit skin={adventure} suffix={gradientSuffix}/> : skinId === 'cat' ? null : <MascotSkinArtwork skinId={skinId} suffix={gradientSuffix} />}
+        {king ? <KingOutfit suffix={gradientSuffix}/> : refined ? <RefinedSkin skinId={skinId} suffix={gradientSuffix} layer="front"/> : shirtSkin ? <ShirtOutfit skin={shirtSkin} suffix={gradientSuffix}/> : adventure ? <AdventureOutfit skin={adventure} suffix={gradientSuffix}/> : skinId === 'cat' ? null : <MascotSkinArtwork skinId={skinId} suffix={gradientSuffix} />}
+        {king && (mode==='idle'||mode==='hover'||mode==='thinking'||mode==='showcase') && <KingGesture mode={mode} suffix={gradientSuffix}/>}
         {north && mode === 'idle' && <g pointerEvents="none"><path d="M129 194Q124 218 153 232M301 194Q306 218 277 232" fill="none" stroke="#418d89" strokeWidth="19" strokeLinecap="round"/><Mitten x={153} y={232} dx={29} dy={14} suffix={gradientSuffix}/><Mitten x={277} y={232} dx={-29} dy={14} right suffix={gradientSuffix}/></g>}
         {zoomer && (mode==='idle'||mode==='hover') && <ZoomerPhone key={mode} suffix={gradientSuffix} hide={mode==='hover'}/>}
         {banker && mode==='hover' && <BankerMoney suffix={gradientSuffix}/>}
@@ -285,7 +290,7 @@ export const PlanikMascot = memo(function PlanikMascot({
           </g>
         </g>}
 
-        {wizard && mode === 'thinking' ? <WizardCards/> : pirate && mode==='thinking' ? <PirateMap suffix={gradientSuffix}/> : space && mode==='thinking' ? <SpaceSignal suffix={gradientSuffix}/> : ninja && mode==='thinking' ? <NinjaNotebook/> : <g className="planik-thinking">
+        {king && mode==='thinking' ? null : wizard && mode === 'thinking' ? <WizardCards/> : pirate && mode==='thinking' ? <PirateMap suffix={gradientSuffix}/> : space && mode==='thinking' ? <SpaceSignal suffix={gradientSuffix}/> : ninja && mode==='thinking' ? <NinjaNotebook/> : <g className="planik-thinking">
           <g className="planik-scratch-arm">
             {shirtSkin ? <ShirtArm skin={shirtSkin} suffix={gradientSuffix} d="M301 188Q327 185 330 163Q335 140 309 118" strokeWidth="18"/> : adventure ? <AdventureArm skin={adventure} d="M301 188Q327 185 330 163Q335 140 309 118" strokeWidth="18"/> : <path d="M301 188Q327 185 330 163Q335 140 309 118" fill="none" stroke="#7274b4" strokeWidth="18" strokeLinecap="round" />}
             {north ? <Mitten x={309} y={118} dx={-26} dy={-22} right suffix={gradientSuffix}/> : <><circle cx="306" cy="116" r="10" fill="#a8a3ed" />
@@ -398,12 +403,12 @@ export const PlanikMascot = memo(function PlanikMascot({
           </g>
         </g>
 
-        {showcase && skinId !== 'classic' && <g className="planik-showcase-arm" aria-hidden="true">
+        {showcase && skinId !== 'classic' && !king && <g className="planik-showcase-arm" aria-hidden="true">
           <path d={isScarfSkin(skinId) ? 'M301 194Q293 225 257 233' : 'M301 194Q329 153 307 115Q293 91 267 83'} fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round"/>
           <circle cx={isScarfSkin(skinId) ? 254 : 265} cy={isScarfSkin(skinId) ? 233 : 83} r="10" fill="#aaa6f0"/>
           <path d={isScarfSkin(skinId) ? 'M252 226l-6 2M251 233l-8 2' : 'M262 75l-4-7M270 76l1-8'} fill="none" stroke="#c4c0f4" strokeWidth="3.5" strokeLinecap="round"/>
         </g>}
-        {north && mode === 'hover' ? <NorthernHover suffix={gradientSuffix}/> : wizard && mode === 'hover' ? <WizardHover suffix={gradientSuffix}/> : adventure && mode==='hover' ? <AdventureHover skin={adventure}/> : banker && mode==='hover' ? null : <g className="planik-hover">
+        {king && mode==='hover' ? null : north && mode === 'hover' ? <NorthernHover suffix={gradientSuffix}/> : wizard && mode === 'hover' ? <WizardHover suffix={gradientSuffix}/> : adventure && mode==='hover' ? <AdventureHover skin={adventure}/> : banker && mode==='hover' ? null : <g className="planik-hover">
           <g className="planik-hover-left"><g>
             {shirtSkin ? <ShirtArm skin={shirtSkin} suffix={gradientSuffix} d="M129 194Q141 219 170 224" strokeWidth="17"/> : adventure ? <AdventureArm skin={adventure} d="M129 194Q141 219 170 224" strokeWidth="17"/> : <path d="M129 194Q141 219 170 224" fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round" />}
             <circle cx="170" cy="224" r="10" fill="#b2aaff" />

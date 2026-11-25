@@ -127,7 +127,7 @@ export function MascotWardrobeDialog({wardrobe,variant:initialVariant,theme}:{wa
     setPhase('leaving');
     timers.current.push(window.setTimeout(()=>{
       setDisplayed(id);setPhase('entering');
-      timers.current.push(window.setTimeout(()=>setPhase('idle'),560));
+      timers.current.push(window.setTimeout(()=>setPhase('idle'),id==='pirate'||id==='banker'?1600:560));
     },220));
   };
   const switchVariant=(next:MascotVariant)=>{
@@ -156,7 +156,7 @@ export function MascotWardrobeDialog({wardrobe,variant:initialVariant,theme}:{wa
   },[catalog.length,updateListFade]);
   const skin=catalog.find(item=>item.id===selected);
   const allowed=Boolean(skin&&skin.rank<=wardrobe.rank);
-  const specialModes: Exclude<PlanikMode,'showcase'>[] = selected==='cat'?['idle','thinking']:selected==='banker'?['typing','hover']:['wizard','pirate','space','ninja'].includes(selected)?['idle','hover','thinking']:['northern','zoomer'].includes(selected)?['idle','hover']:[];
+  const specialModes: Exclude<PlanikMode,'showcase'>[] = selected==='cat'?['idle','thinking']:selected==='banker'?['typing','hover']:['wizard','pirate','space','ninja','king'].includes(selected)?['idle','hover','thinking']:['northern','zoomer'].includes(selected)?['idle','hover']:[];
   const isEquipped=selected===wardrobe.selected(variant);
   const equip=async()=>{
     if(!allowed||isEquipped||saving)return;

@@ -1,8 +1,8 @@
 import { createPortal } from 'react-dom';
 
 /** Same compact, frosted success notice used for bubble drag actions. */
-export function WorkspaceActionToast({ count, light }: { count: number | null; light: boolean }) {
-  if (count === null || count < 1) return null;
+export function WorkspaceActionToast({ count, light, message }: { count: number | null; light: boolean; message?: string | null }) {
+  if (!message && (count === null || count < 1)) return null;
   return createPortal(
     <div
       role="status"
@@ -14,8 +14,8 @@ export function WorkspaceActionToast({ count, light }: { count: number | null; l
       }`}
       style={{ top: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}
     >
-      <span className="shrink-0 text-lg" aria-hidden="true">✅</span>
-      <span>Отложено {count} просроченных задач</span>
+      <span className="shrink-0 text-lg" aria-hidden="true">{message ? 'ℹ️' : '✅'}</span>
+      <span>{message || `Отложено ${count} просроченных задач`}</span>
     </div>,
     document.body
   );
