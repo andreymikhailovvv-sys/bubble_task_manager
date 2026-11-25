@@ -609,3 +609,8 @@ body:has(.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded)) [data-manag
 @keyframes mascot-portal-ring{0%{opacity:0;scale:.1}30%{opacity:1;scale:1.1}100%{opacity:0;scale:.65;rotate:40deg}}
 @keyframes mascot-arrival-prop{0%{opacity:0;scale:.6}20%,55%{opacity:1;scale:1}100%{opacity:0;scale:.9}}
 @media(prefers-reduced-motion:reduce){.planik-mascot[data-arriving=true] .planik-svg{animation:none!important}.mascot-arrival-effect{display:none}}
+
+/* A chat pane still owns its old composer anchor, even though its avatar is
+   now the same live mascot as the workspace/modal launcher. */
+.ai-chat-launcher[data-managed-mascot-launcher=planner][data-mascot-chat-embedded=true]{right:var(--mascot-chat-right,16px)!important;bottom:var(--mascot-chat-bottom,138px)!important}
+.ai-chat-launcher[data-mascot-chat-embedded=true] .planik-quick-ai-preview{opacity:0!important;pointer-events:none!important}

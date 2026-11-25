@@ -842,6 +842,8 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const wardrobe = useMascotWardrobe(currentUser?.id,currentUser?.subscriptionPlan,currentUser?.subscriptionExpiresAt);
   const mascotSurface = useMascotSurface(Boolean(currentUser));
+  const selectedPlannerSkin = wardrobe.selected('planner');
+  const mascotIdentity = useMemo(() => ({variant:'planner' as const,skinId:selectedPlannerSkin}), [selectedPlannerSkin]);
   const workspaceUserIdRef = useRef<string | null>(null);
   if (currentUser?.id) workspaceUserIdRef.current = currentUser.id;
   const browserNotificationsEnabledRef = useRef(true);
@@ -6474,7 +6476,7 @@ export default function App() {
       onComplete={async task => { await api.updateTask(task.id, { status: 'DONE' }); if (task.parentTaskId) await syncParentStatusBySubtasks(task.parentTaskId); await load(); }} />;
   };
   return (
-    <MascotIdentityContext.Provider value={{variant:'planner',skinId:wardrobe.selected('planner')}}>
+    <MascotIdentityContext.Provider value={mascotIdentity}>
     <main
       data-managed-mascot="planner"
       className={isBubbleFullscreen
@@ -9426,6 +9428,7 @@ export default function App() {
       <QuickAiLauncherFrame
         managedMascot
         modalMascot={mascotSurface.modal}
+        embeddedChatTarget={hasGeneralAiPane ? fullscreenChatTarget : null}
         taskOpen={Boolean(focusedTask)}
         embeddedTaskFocus={embeddedFocusActive}
         fullscreenBubbles={isBubbleFullscreen}
@@ -9488,9 +9491,9 @@ export default function App() {
           className="planik-launcher-button touch-none select-none"
           title="Чат с ИИ"
           aria-label="Открыть общий чат с ИИ"
-          onClick={() => { setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}
+          onClick={() => { if (hasGeneralAiPane && !mascotSurface.modal) { fullscreenChatTarget?.querySelector<HTMLTextAreaElement>('textarea')?.focus(); return; } setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}
         >
-          <PlanikMascot notificationCount={unreadSystemNotificationCount} busy={quickAiChatLoading || aiChatLoading} progress={aiChatProgress} celebrationKey={planikCelebrationKey} skinId={wardrobe.selected('planner')} arrivalKey={mascotSurface.arrivalKey} />
+          <PlanikMascot notificationCount={unreadSystemNotificationCount} busy={quickAiChatLoading || aiChatLoading || Boolean(aiLoadingTaskId) || focusAiLoading} progress={focusAiLoading ? focusAiProgress : aiLoadingTaskId ? aiProgressByTask[aiLoadingTaskId] : aiChatProgress} celebrationKey={planikCelebrationKey} skinId={wardrobe.selected('planner')} arrivalKey={mascotSurface.arrivalKey} />
         </button>
         {currentUser&&<MascotWardrobeTrigger onClick={wardrobe.show}/>}
         </div>

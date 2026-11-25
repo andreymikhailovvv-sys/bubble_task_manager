@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ChangeEvent, type CSSProperties } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ChangeEvent, type CSSProperties } from 'react';
 import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, BookOpen, Check, ChevronRight, CircleDollarSign, CreditCard, Landmark, LayoutDashboard, Loader2, MessageCircle, Paperclip, Mic, Pencil, Plus, Send, Settings2, Sparkles, Trash2, WalletCards, X } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
@@ -104,6 +104,8 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   const [user, setUser] = useState<EconomicUser | null>(null);
   const wardrobe = useMascotWardrobe(mobile ? undefined : user?.id);
   const mascotSurface = useMascotSurface(!mobile && Boolean(user));
+  const selectedEconomicSkin = wardrobe.selected('economic');
+  const mascotIdentity = useMemo(() => mobile ? null : ({variant:'economic' as const,skinId:selectedEconomicSkin}), [mobile,selectedEconomicSkin]);
   const [appearance, setAppearance] = useState<'light' | 'dark'>('dark');
   const effectiveAppearance = themeOverride ?? appearance;
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
@@ -588,7 +590,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
     accounts: () => openDialog('account'), operations: () => openDialog('operation'),
     categories: () => openDialog('category')
   };
-  return <MascotIdentityContext.Provider value={mobile ? null : {variant:'economic',skinId:wardrobe.selected('economic')}}><div className={'econ-root ' + (effectiveAppearance === 'light' ? 'econ-light' : '') + (mobile ? ' econ-mobile-workspace' : '')}
+  return <MascotIdentityContext.Provider value={mascotIdentity}><div className={'econ-root ' + (effectiveAppearance === 'light' ? 'econ-light' : '') + (mobile ? ' econ-mobile-workspace' : '')}
     style={embeddedInMiniApp ? { '--econ-mobile-safe-bottom': mobileSafeBottom + 'px' } as CSSProperties : undefined}>
     {!mobile && <ModuleRail active="economic"/>}
     <div className="econ-shell">

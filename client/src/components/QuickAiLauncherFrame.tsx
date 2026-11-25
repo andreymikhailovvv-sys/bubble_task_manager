@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 
 type Props = {
   children: ReactNode;
@@ -10,6 +10,7 @@ type Props = {
   embeddedTaskFocus?: boolean;
   managedMascot?: boolean;
   modalMascot?: boolean;
+  embeddedChatTarget?: HTMLElement | null;
 };
 
 /**
@@ -18,8 +19,44 @@ type Props = {
  * region, exactly as in the original personal planner App.tsx. Moving the
  * cursor upward therefore keeps the original group hovered.
  */
-export function QuickAiLauncherFrame({children,onHoverChange,onFocus,taskOpen=false,work=false,fullscreenBubbles=false,embeddedTaskFocus=false,managedMascot=false,modalMascot=false}:Props){
-  return <div
+export function QuickAiLauncherFrame({children,onHoverChange,onFocus,taskOpen=false,work=false,fullscreenBubbles=false,embeddedTaskFocus=false,managedMascot=false,modalMascot=false,embeddedChatTarget}:Props){
+  const launcher = useRef<HTMLDivElement>(null);
+  // The old composer avatar occupied this exact anchor. Keep the one live
+  // launcher there when the chat is an embedded pane, including after resize.
+  useLayoutEffect(() => {
+    const root = launcher.current;
+    if (!root || !embeddedChatTarget || modalMascot) return;
+    let frame = 0;
+    let composer: HTMLElement | null = null;
+    let main: HTMLElement | null = null;
+    const observer = new ResizeObserver(() => schedule());
+    const update = () => {
+      frame = 0;
+      const nextComposer = embeddedChatTarget.querySelector<HTMLElement>('.ai-chat-expanded-composer-wrap');
+      const nextMain = embeddedChatTarget.querySelector<HTMLElement>('.ai-chat-expanded-main');
+      if (nextComposer !== composer || nextMain !== main) {
+        if (composer) observer.unobserve(composer);
+        if (main) observer.unobserve(main);
+        composer = nextComposer; main = nextMain;
+        if (composer) observer.observe(composer);
+        if (main) observer.observe(main);
+      }
+      if (!composer || !main) return;
+      const rect = main.getBoundingClientRect();
+      const input = composer.getBoundingClientRect();
+      root.style.setProperty('--mascot-chat-right', Math.max(8, window.innerWidth-rect.right+4)+'px');
+      root.style.setProperty('--mascot-chat-bottom', Math.max(8, window.innerHeight-input.top+4)+'px');
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
+    observer.observe(embeddedChatTarget);
+    const mount = new MutationObserver(schedule);
+    mount.observe(embeddedChatTarget,{childList:true,subtree:true});
+    window.addEventListener('resize',schedule);
+    update();
+    return () => { observer.disconnect(); mount.disconnect(); window.removeEventListener('resize',schedule); if (frame) cancelAnimationFrame(frame); root.style.removeProperty('--mascot-chat-right'); root.style.removeProperty('--mascot-chat-bottom'); };
+  }, [embeddedChatTarget, modalMascot]);
+  return <div ref={launcher}
+    data-mascot-chat-embedded={embeddedChatTarget && !modalMascot ? 'true' : undefined}
     data-managed-mascot-launcher={managedMascot ? 'planner' : undefined}
     data-mascot-surface={modalMascot ? 'modal' : 'workspace'}
     className={`ai-chat-launcher group fixed bottom-8 right-6 z-[95] ${work?'work-ai-launcher':'lg:right-[360px]'} ${taskOpen?'ai-chat-launcher-task-open':''} ${fullscreenBubbles?'bubble-ai-fullscreen':''} ${embeddedTaskFocus?'ai-chat-launcher-task-embedded':''}`}
