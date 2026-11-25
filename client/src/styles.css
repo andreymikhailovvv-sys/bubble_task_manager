@@ -17053,3 +17053,38 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
 .miniapp-unified-modal-backdrop.miniapp-light .miniapp-unified-sector-edit-row {
   border-color:#d8e2ef;
 }
+
+/* Period budgets and workspace placement, scoped to the desktop workbench. */
+.subscription-daily-ring{display:inline-flex;align-items:center;gap:4px}
+.subscription-daily-ring small{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
+.subscription-modal{overflow-y:auto!important;scrollbar-width:none}
+.subscription-modal::-webkit-scrollbar{display:none}
+.workspace-block-submenu{position:absolute;z-index:100;top:0;left:100%;width:min(272px,calc(100vw - 28px));max-height:min(65dvh,430px);overflow-y:auto;scrollbar-width:none;background:var(--popover-bg)}
+.workspace-block-submenu::-webkit-scrollbar{display:none}
+.workspace-block-option{display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:10px;text-align:left;color:var(--text-primary)}
+.workspace-block-option[draggable=true]{cursor:grab}
+.workspace-block-option[draggable=true]:active{cursor:grabbing}
+.workspace-block-option strong{display:block;font-size:13px}
+.workspace-block-option small{display:block;font-size:11px;color:var(--text-muted)}
+.workspace-block-option svg{flex:none;color:var(--text-muted)}
+.workspace-block-option:hover,.workspace-block-option:focus-visible{background:var(--accent-soft)}
+.fullscreen-workspace-single,.fullscreen-workspace-single-content,.fullscreen-workspace-pane{position:relative}
+.fullscreen-workspace-single-content,.fullscreen-workspace-pane{isolation:isolate}
+.workspace-block-target{position:absolute;inset:2px;z-index:115;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;border:2px dashed var(--accent-strong);border-radius:16px;color:var(--accent-strong);background:color-mix(in srgb,var(--card-bg) 52%,transparent);backdrop-filter:blur(8px);font-size:13px;font-weight:700;text-align:center;padding:8px;transition:background .18s,border-color .18s}
+.workspace-block-target:is(:hover,:focus-visible,.is-over){background:color-mix(in srgb,var(--accent-soft) 76%,var(--card-bg));border-style:solid}
+.workspace-block-target-plus{display:grid;place-items:center;width:45px;height:45px;border:1px solid currentColor;border-radius:50%}
+.fullscreen-workspace-single-rail.workspace-placement-rail{position:absolute;z-index:116;top:0;bottom:0;width:17%;padding:0;min-width:74px}
+.fullscreen-workspace-single-rail.workspace-placement-rail::before{display:none}
+.fullscreen-workspace-single-rail--left.workspace-placement-rail{left:0}
+.fullscreen-workspace-single-rail--right.workspace-placement-rail{right:0}
+.fullscreen-workspace-single:has(.workspace-placement-rail) .fullscreen-workspace-single-content>.workspace-block-target{left:18%;right:18%}
+.fullscreen-overlay-active .workspace-block-target{visibility:hidden;pointer-events:none}
+@media(max-width:1050px){.workspace-block-submenu{left:auto;right:100%}}
+@media(max-width:600px){.workspace-block-submenu{position:relative;left:auto;right:auto;width:100%;max-height:45dvh}.workspace-block-target{font-size:11px}.workspace-placement-rail .workspace-block-target{padding:4px}}
+.fullscreen-workspace-single-content .notes-editor-backdrop.notes-editor-inline,.fullscreen-workspace-pane .notes-editor-backdrop.notes-editor-inline{padding:0!important;backdrop-filter:none}
+.fullscreen-workspace-single-content .notes-editor-inline .notes-editor-panel,.fullscreen-workspace-pane .notes-editor-inline .notes-editor-panel{width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;border-radius:0!important;box-shadow:none!important;border:0!important}
+.fullscreen-workspace-single-content *, .fullscreen-workspace-pane *{scrollbar-width:none}
+.fullscreen-workspace-single-content *::-webkit-scrollbar,.fullscreen-workspace-pane *::-webkit-scrollbar{display:none}
+[data-scroll-fade="bottom"]{mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 58px),transparent 100%)}
+[data-scroll-fade="top"]{mask-image:linear-gradient(to bottom,transparent 0,#000 46px,#000 100%)}
+[data-scroll-fade="both"]{mask-image:linear-gradient(to bottom,transparent 0,#000 46px,#000 calc(100% - 58px),transparent 100%)}

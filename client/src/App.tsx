@@ -1,4 +1,5 @@
-import { SubscriptionLimitPanel, PLAN_FEATURES } from './components/SubscriptionLimitPanel';
+import { useScrollFade } from './hooks/useScrollFade';
+import { SubscriptionLimitPanel, SubscriptionDailyRing, PLAN_FEATURES } from './components/SubscriptionLimitPanel';
 import { AiStreamingMessageBody } from './components/AiStreamingMessageBody';
 import EmailVerificationDialog from './components/EmailVerificationDialog';
 import { subscribeAccountEmailVerified } from './lib/account-email-status-events';
@@ -7,7 +8,7 @@ import { createPortal } from 'react-dom';
 import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, CalendarPlus, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Clock3, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Menu, MessageCircle, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, BellRing, Trash2, UserRound, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
-import { FullscreenModePicker, FullscreenWorkspaceSingle, FullscreenWorkspaceSplit } from './components/FullscreenWorkspaceLayout';
+import { FullscreenBlockMenu, FullscreenModePicker, FullscreenWorkspaceSingle, FullscreenWorkspaceSplit } from './components/FullscreenWorkspaceLayout';
 import { replaceFullscreenPanel, resolveFullscreenPanels, type FullscreenWorkspacePanel } from './lib/fullscreenWorkspacePanels';
 import { FullscreenUpcomingTasksPanel } from './components/FullscreenUpcomingTasksPanel';
 import { PrimaryWorkspaceSidebar } from './components/PrimaryWorkspaceSidebar';
@@ -853,14 +854,22 @@ export default function App() {
   const [mode, setMode] = useState<'global' | 'sectors'>('sectors');
   // Distraction-free viewport for bubbles. Keeps the same BubbleField instance,
   // filters and overlays; only the surrounding chrome is hidden.
-  // The multi-pane workbench is the primary desktop layout. The classic
-  // planner remains available through the explicit 'Классический вид' action.
+  // The multi-pane workbench is the desktop layout. Legacy lesson-only controls are retained for guided training.
   const [isBubbleFullscreen, setIsBubbleFullscreen] = useState(true);
   const [fullscreenDisplayModes, setFullscreenDisplayModes] = useState<DisplayMode[]>(['bubbles']);
   // Two independently replaceable fullscreen slots; the old view toggles stay
   // a quick way to reset them to one or two visualization modes.
   const [fullscreenPanelSlots, setFullscreenPanelSlots] = useState<FullscreenWorkspacePanel[] | null>(null);
   const fullscreenPanels = fullscreenPanelSlots ?? resolveFullscreenPanels(fullscreenDisplayModes, null);
+  const [pendingWorkspaceBlock, setPendingWorkspaceBlock] = useState<FullscreenWorkspacePanel | null>(null);
+  const blockDragRef = useRef(false);
+  const subscriptionScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!pendingWorkspaceBlock) return;
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setPendingWorkspaceBlock(null); };
+    document.addEventListener('keydown', escape);
+    return () => document.removeEventListener('keydown', escape);
+  }, [pendingWorkspaceBlock]);
   const [fullscreenSplitRatio, setFullscreenSplitRatio] = useState(50);
   const [fullscreenChatTarget, setFullscreenChatTarget] = useState<HTMLDivElement | null>(null);
   const [fullscreenFocusTarget, setFullscreenFocusTarget] = useState<HTMLDivElement | null>(null);
@@ -896,6 +905,7 @@ export default function App() {
   const [reportPromptTask, setReportPromptTask] = useState<Task | null>(null);
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
+  useScrollFade(subscriptionScrollRef, isSubscriptionModalOpen);
   const [creditModalView, setCreditModalView] = useState<'purchase' | 'statistics'>('purchase');
   const [creditUsageStatistics, setCreditUsageStatistics] = useState<CreditUsageStatistics | null>(null);
   const [creditUsageStatisticsLoading, setCreditUsageStatisticsLoading] = useState(false);
@@ -5701,7 +5711,7 @@ export default function App() {
           </div>
   );
   const renderCreditsControl = () => (
-          <button data-tour="credits" type="button" onClick={() => { if (currentUser?.isGuest) { setAuthError(null); setAuthModalMode('register'); } else { setCreditModalView('purchase'); setIsSubscriptionModalOpen(true); } }} className="light-credit-badge topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400" title={currentUser?.isGuest ? 'Зарегистрируйтесь, чтобы получить 100 ИИ-кредитов' : 'Посмотреть подписки и увеличить ИИ-кредиты'}><Coins size={15} /><span>{activeSubscription ? `Лимит: ${currentUser?.subscriptionLimit ? `${100 - currentUser.subscriptionLimit.usedPercent}%` : '…'}` : `Кредиты: ${currentUser?.aiCredits ?? 0}`}</span></button>
+          <button data-tour="credits" type="button" onClick={() => { if (currentUser?.isGuest) { setAuthError(null); setAuthModalMode('register'); } else { setCreditModalView('purchase'); setIsSubscriptionModalOpen(true); } }} className="light-credit-badge topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400" title={currentUser?.isGuest ? 'Зарегистрируйтесь, чтобы получить 100 ИИ-кредитов' : 'Посмотреть подписки и увеличить ИИ-кредиты'}>{activeSubscription ? <><span>Лимит:</span><SubscriptionDailyRing limit={currentUser?.subscriptionLimit}/></> : <><Coins size={15}/><span>{`Кредиты: ${currentUser?.aiCredits ?? 0}`}</span></>}</button>
   );
   // Share the original, interactive mode renderers between ordinary workspace
   // and each fullscreen pane. Nothing is duplicated or displayed as a preview.
@@ -6370,6 +6380,9 @@ export default function App() {
     setFullscreenPanelSlots(nextSlots);
   };
   const addFullscreenSinglePanel = (side: 'left' | 'right', next: FullscreenWorkspacePanel) => {
+    setPendingWorkspaceBlock(null);
+    setIsAddMenuOpen(false);
+    if (JSON.stringify(next) === JSON.stringify(fullscreenPanels[0]) || (next.kind === 'task-ai' && fullscreenPanels[0].kind === 'task-ai')) return;
     if (next.kind === 'task-ai') {
       setFocusedTaskId(next.taskId);
       setIsAiExpanded(false);
@@ -6380,6 +6393,9 @@ export default function App() {
     setFullscreenPanelSlots(slots);
   };
   const chooseFullscreenPanel = (index: 0 | 1, next: FullscreenWorkspacePanel) => {
+    setPendingWorkspaceBlock(null);
+    setIsAddMenuOpen(false);
+    if (fullscreenPanels.some((panel, position) => position !== index && (JSON.stringify(panel) === JSON.stringify(next) || (panel.kind === 'task-ai' && next.kind === 'task-ai')))) return;
     const replacing = fullscreenPanels[index];
     const nextSlots = replaceFullscreenPanel(fullscreenPanels, index, next);
     if (replacing?.kind === 'task-ai' && next.kind !== 'task-ai'
@@ -6404,7 +6420,7 @@ export default function App() {
       <div ref={setFullscreenFocusTarget} className="fullscreen-embedded-focus relative h-full min-h-0 w-full">
         {!focusedTask || focusedTask.id !== panel.taskId ? (
           <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted">
-            Выберите задачу через кнопку «+» рядом с разделителем.
+            Выберите задачу через «Добавить» → «Добавить блок».
           </div>
         ) : null}
       </div>
@@ -6598,14 +6614,14 @@ export default function App() {
           <div className="fullscreen-create-control flex items-center justify-center">
             <div className="add-menu-wrap relative shrink-0"
               onMouseEnter={() => setIsAddMenuOpen(true)}
-              onMouseLeave={() => { if (!isTourAddMenuOpen) setIsAddMenuOpen(false); }}>
+              onMouseLeave={() => { if (!isTourAddMenuOpen && !blockDragRef.current) setIsAddMenuOpen(false); }}>
               <button type="button"
                 data-tour="bubbles-fullscreen-create-task"
                 className="add-menu-trigger light-primary-action inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold"
                 aria-expanded={isAddMenuOpen || isTourAddMenuOpen}
                 aria-haspopup="menu"
                 onClick={() => setIsAddMenuOpen((prev) => !prev)}>
-                <Plus size={16} /> Новая задача <ChevronDown size={14} />
+                <Plus size={16} /> Добавить <ChevronDown size={14} />
               </button>
               {isAddMenuOpen || isTourAddMenuOpen ? (
                 <div className="add-menu-popover topbar-dropdown absolute right-0 top-[calc(100%+0.5rem)] z-50 w-56 rounded-2xl border p-2 shadow-2xl" role="menu">
@@ -6634,6 +6650,10 @@ export default function App() {
                     }}>
                     <BriefcaseBusiness size={14} /> Новый сектор
                   </button>
+                  <FullscreenBlockMenu tasks={fullscreenTaskChoices}
+                    onSelect={next => { setPendingWorkspaceBlock(next); setIsAddMenuOpen(false); }}
+                    onDragStart={next => { blockDragRef.current = true; setPendingWorkspaceBlock(next); }}
+                    onDragEnd={() => { blockDragRef.current = false; setPendingWorkspaceBlock(null); setIsAddMenuOpen(false); }}/>
                 </div>
               ) : null}
             </div>
@@ -6680,16 +6700,7 @@ export default function App() {
                 <Settings size={17} />
               </button>
             </div>
-            <button type="button" data-tour="bubbles-fullscreen-exit"
-              className="fullscreen-workspace-exit topbar-action-button inline-flex h-9 w-9 items-center justify-center rounded-xl border text-sm font-semibold"
-              onClick={() => {
-                setDisplayMode(fullscreenDisplayModes[0] ?? 'bubbles');
-                setIsBubbleFullscreen(false);
-                setIsSphereFilterOpen(false);
-                setIsTimelineOverdueModalOpen(false);
-              }} title="Классический вид" aria-label="Перейти в классический вид">
-              <Minimize2 size={17} />
-            </button>
+
           </div>
         </header>
       ) : null}
@@ -6844,17 +6855,7 @@ export default function App() {
           <div className="relative shrink-0" ref={settingsMenuRef}>
             <button className="surface-popover light-menu-trigger topbar-settings-button inline-flex h-10 w-10 items-center justify-center rounded-xl border transition hover:border-cyan-300/70" onClick={() => setIsSettingsOpen((prev) => !prev)} aria-label="Настройки" title="Настройки"><Settings size={17} /></button>
           </div>
-          <button type="button" data-tour="workspace-fullscreen-enter"
-            className="topbar-action-button workspace-fullscreen-entry inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border p-0 text-sm font-semibold transition"
-            onClick={() => {
-              setFullscreenDisplayModes([displayMode]);
-              setFullscreenPanelSlots(null);
-              setIsSphereFilterOpen(false);
-              setIsBubbleFullscreen(true);
-            }}
-            title="Перейти в основной вид" aria-label="Перейти в основной вид">
-            <Maximize2 size={18} />
-          </button>
+
         </div>
       </section> : null}
 
@@ -7207,12 +7208,12 @@ export default function App() {
 
       {isSubscriptionModalOpen ? (
         <div className="modal-backdrop fixed inset-0 z-[130] flex items-start justify-center overflow-y-auto p-4 pt-[min(6vh,4rem)] backdrop-blur-sm" onClick={() => setIsSubscriptionModalOpen(false)}>
-          <div className="subscription-modal dialog-surface max-h-[88dvh] w-full max-w-5xl overflow-y-auto rounded-3xl border p-0 shadow-2xl sm:overflow-hidden" onClick={(event) => event.stopPropagation()}>
+          <div ref={subscriptionScrollRef} className="subscription-modal dialog-surface max-h-[88dvh] w-full max-w-5xl overflow-y-auto rounded-3xl border p-0 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="subscription-hero relative p-4 sm:p-4">
               <button className="absolute right-4 top-4 rounded-full p-2 text-muted transition hover:bg-white/10" onClick={() => setIsSubscriptionModalOpen(false)} aria-label="Закрыть окно подписки"><X size={18} /></button>
               <div className="subscription-eyebrow inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium"><Sparkles size={14} /> Больше возможностей ИИ</div>
-              <h2 className="mt-3 max-w-2xl text-2xl font-bold text-primary">{creditModalView === 'statistics' ? (activeSubscription ? 'Месячный лимит ИИ' : 'Статистика расхода AI-кредитов') : 'Выберите месячный лимит ИИ'}</h2>
-              <p className="mt-2 max-w-2xl text-sm text-muted">{creditModalView === 'statistics' ? (activeSubscription ? 'Лимит действует до окончания оплаченного периода.' : 'Посмотрите расход за день, неделю и 30 дней, а также разбивку по моделям и ИИ-инструментам.') : 'Лимит расходуется в зависимости от модели, длины запроса и инструментов ИИ. Это не фиксированное число запросов.'}</p>
+              <h2 className="mt-3 max-w-2xl text-2xl font-bold text-primary">{creditModalView === 'statistics' ? (activeSubscription ? 'Лимиты ИИ' : 'Статистика расхода AI-кредитов') : 'Выберите подписку'}</h2>
+              <p className="mt-2 max-w-2xl text-sm text-muted">{creditModalView === 'statistics' ? (activeSubscription ? 'Дневной и недельный лимиты обновляются автоматически.' : 'Посмотрите расход за день, неделю и 30 дней, а также разбивку по моделям и ИИ-инструментам.') : 'Лимит расходуется в зависимости от модели, длины запроса и инструментов ИИ. Это не фиксированное число запросов.'}</p>
               {activeSubscription && (<SubscriptionLimitPanel limit={currentUser?.subscriptionLimit}/>)}
                <div className="credit-view-toggle mt-4 inline-flex rounded-xl border p-1">
                 <button type="button" className={`credit-view-toggle-button rounded-lg px-3 py-1.5 text-sm font-semibold ${creditModalView === 'purchase' ? 'is-active is-purchase' : ''}`} onClick={() => setCreditModalView('purchase')}>Пополнить</button>
@@ -7220,7 +7221,7 @@ export default function App() {
               </div>
             </div>
             {creditModalView === 'statistics' ? (
-              <div key="credits-statistics" className="credit-switch-content max-h-[68vh] overflow-y-auto p-4 sm:p-5">
+              <div key="credits-statistics" className="credit-switch-content p-4 sm:p-5">
                 {<CreditUsageStats statistics={creditUsageStatistics} loading={creditUsageStatisticsLoading} error={creditUsageStatisticsError}  allowanceMilli={currentUser?.subscriptionLimit?.allowanceMilli} />}
               </div>
             ) : (
@@ -7526,13 +7527,14 @@ export default function App() {
                   panels={fullscreenPanels as [FullscreenWorkspacePanel, FullscreenWorkspacePanel]}
                   renderPanel={renderFullscreenPanel}
                   onChoose={chooseFullscreenPanel}
-                  tasks={fullscreenTaskChoices}
+                  placement={workspaceOverlayActive ? null : pendingWorkspaceBlock}
                   ratio={fullscreenSplitRatio}
                   onRatioChange={setFullscreenSplitRatio}
                 />
               ) : (
                 <FullscreenWorkspaceSingle panel={fullscreenPanels[0]} renderPanel={renderFullscreenPanel}
-                  tasks={fullscreenTaskChoices} onChoose={addFullscreenSinglePanel} />
+                  placement={workspaceOverlayActive ? null : pendingWorkspaceBlock} onChoose={addFullscreenSinglePanel}
+                  onReplace={next => chooseFullscreenPanel(0, next)} />
               )}
             </div>
             <PrimaryWorkspaceSidebar key={currentUser?.id ?? 'anonymous'}
