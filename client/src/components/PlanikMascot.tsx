@@ -1,5 +1,7 @@
 import { memo, useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import './PlanikMascot.css';
+import { useMascotIdentity } from './MascotPresence';
+import { MascotArrivalEffects } from './MascotArrivalEffects';
 import { CatMascotEars } from './CatMascotEars';
 import { MascotSkinArtwork, isScarfSkin } from './MascotSkinArtwork';
 import { RefinedSkin, Mitten, NorthernHover, WizardHover, WizardCards } from './RefinedMascotSkins';
@@ -30,6 +32,7 @@ type Props = {
   skinId?: string;
   showcase?: boolean;
   previewMode?: Exclude<PlanikMode,'showcase'>;
+  arrivalKey?: number;
 };
 
 /**
@@ -44,12 +47,23 @@ export const PlanikMascot = memo(function PlanikMascot({
   progress,
   celebrationKey = 0,
   size = 'launcher',
-  variant = 'planner',
+  variant: variantOverride,
   className = '',
-  skinId = 'classic',
+  skinId: skinOverride,
   showcase = false,
-  previewMode
+  previewMode,
+  arrivalKey = 0
 }: Props) {
+  const identity = useMascotIdentity();
+  const variant = variantOverride ?? identity?.variant ?? 'planner';
+  const skinId = skinOverride ?? identity?.skinId ?? 'classic';
+  const [arriving, setArriving] = useState(false);
+  useEffect(() => {
+    if (!arrivalKey || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setArriving(false); return; }
+    setArriving(true);
+    const timer = window.setTimeout(() => setArriving(false), 560);
+    return () => window.clearTimeout(timer);
+  }, [arrivalKey]);
   const gradientSuffix = useId().replace(/:/g, '');
   const [hovered, setHovered] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
@@ -129,16 +143,16 @@ export const PlanikMascot = memo(function PlanikMascot({
     else if (mode === 'typing') gaze(0, 7);
     else if (mode === 'painting') gaze(-6, 4);
     else if (mode === 'clearing') gaze(-5, 1);
-    else if (mode === 'idle' && shirtSkin) gaze(0, 7);
+    else if (mode === 'idle' && zoomer) gaze(0, 7);
     else if (mode !== 'hover' || previewMode) gaze(0, 0);
-  }, [mode, gaze, shirtSkin, previewMode, pirate, space]);
+  }, [mode, gaze, zoomer, previewMode, pirate, space]);
 
   // Follow the cursor anywhere in the working area, including empty space
   // and modal surfaces. Only the eyes move while idle; the reaching-hands
   // animation still needs a pointer directly over Planik.
   // One rAF per pointer frame avoids React rerenders on every move.
   useEffect(() => {
-    if ((previewMode && !ninja) || (mode !== 'idle' && mode !== 'hover') || (shirtSkin && mode === 'idle')) return;
+    if ((previewMode && !ninja) || (mode !== 'idle' && mode !== 'hover') || (zoomer && mode === 'idle')) return;
     if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
     let frame = 0;
     let pointerX = 0;
@@ -162,18 +176,20 @@ export const PlanikMascot = memo(function PlanikMascot({
       document.removeEventListener('pointermove', onPointerMove);
       if (frame) window.cancelAnimationFrame(frame);
     };
-  }, [mode, gaze, previewMode, shirtSkin, ninja]);
+  }, [mode, gaze, previewMode, zoomer, ninja]);
 
   return (
     <span
       className={`planik-mascot planik-mascot--${size} ${variant === 'economic' ? 'planik-mascot--economic' : ''} ${className}`}
       data-mode={mode}
+      data-arriving={arriving}
       data-skin={skinId}
       data-skin-gesture={isScarfSkin(skinId) ? 'scarf' : 'hat'}
       data-has-notifs={count > 0 ? 'true' : 'false'}
       role="img"
       aria-label={variant === 'economic' ? 'Экономыч, анимированный финансовый помощник' : 'Планик, анимированный помощник ИИ'}
     >
+      {arriving && <MascotArrivalEffects key={arrivalKey} skinId={skinId}/>}
       <span className="planik-ground-shadow" aria-hidden="true" />
       <svg
         ref={svgRef}
@@ -210,7 +226,7 @@ export const PlanikMascot = memo(function PlanikMascot({
         {refined ? <RefinedSkin skinId={skinId} suffix={gradientSuffix} layer="front"/> : shirtSkin ? <ShirtOutfit skin={shirtSkin} suffix={gradientSuffix}/> : adventure ? <AdventureOutfit skin={adventure} suffix={gradientSuffix}/> : skinId === 'cat' ? null : <MascotSkinArtwork skinId={skinId} suffix={gradientSuffix} />}
         {north && mode === 'idle' && <g pointerEvents="none"><path d="M129 194Q124 218 153 232M301 194Q306 218 277 232" fill="none" stroke="#418d89" strokeWidth="19" strokeLinecap="round"/><Mitten x={153} y={232} dx={29} dy={14} suffix={gradientSuffix}/><Mitten x={277} y={232} dx={-29} dy={14} right suffix={gradientSuffix}/></g>}
         {zoomer && (mode==='idle'||mode==='hover') && <ZoomerPhone key={mode} suffix={gradientSuffix} hide={mode==='hover'}/>}
-        {banker && mode==='idle' && <BankerMoney suffix={gradientSuffix}/>}
+        {banker && mode==='hover' && <BankerMoney suffix={gradientSuffix}/>}
         {adventure && mode==='idle' && <AdventureIdle skin={adventure}/>}
         {/* Red notification counter sits on the upper-left edge of Planik's body.
             It is visible only while idle. The three animated copies below share
@@ -386,7 +402,7 @@ export const PlanikMascot = memo(function PlanikMascot({
           <circle cx={isScarfSkin(skinId) ? 254 : 265} cy={isScarfSkin(skinId) ? 233 : 83} r="10" fill="#aaa6f0"/>
           <path d={isScarfSkin(skinId) ? 'M252 226l-6 2M251 233l-8 2' : 'M262 75l-4-7M270 76l1-8'} fill="none" stroke="#c4c0f4" strokeWidth="3.5" strokeLinecap="round"/>
         </g>}
-        {north && mode === 'hover' ? <NorthernHover suffix={gradientSuffix}/> : wizard && mode === 'hover' ? <WizardHover suffix={gradientSuffix}/> : adventure && mode==='hover' ? <AdventureHover skin={adventure}/> : <g className="planik-hover">
+        {north && mode === 'hover' ? <NorthernHover suffix={gradientSuffix}/> : wizard && mode === 'hover' ? <WizardHover suffix={gradientSuffix}/> : adventure && mode==='hover' ? <AdventureHover skin={adventure}/> : banker && mode==='hover' ? null : <g className="planik-hover">
           <g className="planik-hover-left"><g>
             {shirtSkin ? <ShirtArm skin={shirtSkin} suffix={gradientSuffix} d="M129 194Q141 219 170 224" strokeWidth="17"/> : adventure ? <AdventureArm skin={adventure} d="M129 194Q141 219 170 224" strokeWidth="17"/> : <path d="M129 194Q141 219 170 224" fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round" />}
             <circle cx="170" cy="224" r="10" fill="#b2aaff" />

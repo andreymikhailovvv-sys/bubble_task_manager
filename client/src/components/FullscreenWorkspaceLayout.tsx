@@ -1,7 +1,7 @@
 import { useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { CalendarDays, ChevronRight, GripVertical, LayoutGrid, List, Plus, Search, X } from 'lucide-react';
 import { useScrollFade } from '../hooks/useScrollFade';
-import { FULLSCREEN_AUXILIARY_OPTIONS, fullscreenPanelTitle, type FullscreenWorkspacePanel } from '../lib/fullscreenWorkspacePanels';
+import { FULLSCREEN_AUXILIARY_OPTIONS, fullscreenPanelTitle, requiresCompanionPanel, type FullscreenWorkspacePanel } from '../lib/fullscreenWorkspacePanels';
 
 export type FullscreenWorkspaceMode = 'bubbles' | 'list' | 'timeline';
 
@@ -99,8 +99,8 @@ export function FullscreenBlockMenu({ tasks, onSelect, onDragStart, onDragEnd }:
         {VIEW_OPTIONS.map(view => option({ kind: 'mode', mode: view.value }, view.label))}
         {FULLSCREEN_AUXILIARY_OPTIONS.map(item => item.kind === 'task-ai' ?
           <button key={item.kind} type="button" role="menuitem" className="workspace-block-option fullscreen-add-window-option" onClick={() => setChooseTask(true)}>
-            <span><strong>{item.title}</strong><small>{item.description}</small></span><ChevronRight size={16}/>
-          </button> : option({ kind: item.kind }, item.title, item.description))}
+            <span><strong>{item.title}</strong><small>{item.description} · только в паре</small></span><ChevronRight size={16}/>
+          </button> : option({ kind: item.kind }, item.title, item.description + (item.kind === 'general-ai' ? ' · только в паре' : '')))}
       </>}
     </div>}
   </div>;
@@ -133,7 +133,7 @@ export function FullscreenWorkspaceSingle({ panel, renderPanel, onChoose, onRepl
       {placement && <aside className="fullscreen-workspace-single-rail fullscreen-workspace-single-rail--left workspace-placement-rail"><BlockDropTarget add onPlace={() => onChoose('left', placement)}/></aside>}
       <section className="fullscreen-workspace-single-content min-h-0 min-w-0 flex-1">
         {renderPanel(panel)}
-        {placement && <BlockDropTarget onPlace={() => onReplace(placement)}/>}
+        {placement && !requiresCompanionPanel(placement) && <BlockDropTarget onPlace={() => onReplace(placement)}/>}
       </section>
       {placement && <aside className="fullscreen-workspace-single-rail fullscreen-workspace-single-rail--right workspace-placement-rail"><BlockDropTarget add onPlace={() => onChoose('right', placement)}/></aside>}
     </div>

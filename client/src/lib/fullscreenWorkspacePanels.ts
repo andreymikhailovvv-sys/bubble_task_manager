@@ -16,6 +16,9 @@ export type FullscreenWorkspacePanel =
   | { kind: 'mode'; mode: FullscreenViewMode }
   | FullscreenAuxiliaryPanel;
 
+export const requiresCompanionPanel = (panel: FullscreenWorkspacePanel): boolean =>
+  panel.kind === 'general-ai' || panel.kind === 'task-ai';
+
 export const FULLSCREEN_AUXILIARY_OPTIONS: ReadonlyArray<{ kind: FullscreenAuxiliaryKind; title: string; description: string }> = [
   { kind: 'general-ai', title: 'Общий чат с ИИ', description: 'Отдельное окно общего помощника' },
   { kind: 'task-ai', title: 'Окно задачи', description: 'Focus задачи и ИИ-помощник' },

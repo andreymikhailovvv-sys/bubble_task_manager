@@ -746,3 +746,9 @@ body:has(.econ-root.econ-mobile-workspace) #root{min-height:100dvh}
 .econ-mascot-dressing .mascot-wardrobe-trigger[data-hovered="true"],.econ-mascot-dressing .mascot-wardrobe-trigger:focus-visible{transform:translateY(0)}
 @media(hover:none){.econ-mascot-dressing .mascot-wardrobe-trigger{transform:translateY(0)}}
 @media(max-width:570px){.econ-mascot-dressing{right:6px;bottom:60px}}
+
+/* The portal wrapper must never paint an opaque theme background over the workspace. */
+.econ-root.econ-dialog-layer{background:transparent!important}
+.econ-dialog-layer .econ-modal-backdrop{background:rgba(10,12,20,.48);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
+.econ-dialog-layer.econ-light .econ-modal-backdrop{background:rgba(56,65,82,.25)}
+.econ-mascot-dressing[data-mascot-surface=modal]{z-index:2147483647;right:max(1.5rem,env(safe-area-inset-right));bottom:max(2rem,env(safe-area-inset-bottom))}

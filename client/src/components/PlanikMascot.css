@@ -552,3 +552,65 @@ body:has(.planik-notes-companion, .planik-task-editor-companion)
 @media(prefers-reduced-motion:reduce){
  .planik-mascot[data-skin="cat"][data-mode="thinking"] :is(.cat-ear-left,.cat-ear-right){animation:none!important}
 }
+
+/* One live launcher owns the selected skin; native wardrobe and voice surfaces
+   intentionally show their own single focused avatar instead. */
+.ai-chat-launcher[data-managed-mascot-launcher=planner][data-mascot-surface=modal] {
+  z-index:2147483647!important;
+  right:max(1.5rem,env(safe-area-inset-right))!important;
+  bottom:max(2rem,env(safe-area-inset-bottom))!important;
+  pointer-events:none;
+}
+.ai-chat-launcher[data-managed-mascot-launcher=planner] .mascot-wardrobe-trigger { pointer-events:auto; }
+.ai-chat-launcher[data-managed-mascot-launcher=planner] .mascot-wardrobe-trigger:not([data-hovered=true]):not(:focus-visible) { pointer-events:none; }
+body:has(.mascot-wardrobe-dialog[open],.planik-live-fullscreen,.planik-live-compact) [data-managed-mascot-launcher] { visibility:hidden!important; pointer-events:none!important; }
+body:has(.mascot-wardrobe-dialog[open],.planik-live-fullscreen,.planik-live-compact) [data-managed-mascot-launcher] * { visibility:hidden!important;pointer-events:none!important; }
+/* Keep the expanded chat usable: the mascot remains at the screen edge,
+   but the redundant miniature transcript must not overlay the full chat. */
+body:has(.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded)) [data-managed-mascot-launcher=planner] .planik-quick-ai-preview { opacity:0!important;pointer-events:none!important; }
+@media(max-width:760px){
+  [data-managed-mascot-launcher][data-mascot-surface=modal] .planik-mascot{width:78px;height:70px}
+  .ai-chat-launcher[data-managed-mascot-launcher=planner][data-mascot-surface=modal] .planik-launcher-button{width:78px;height:70px}
+}
+/* Enter on the outer SVG only: all existing pose and gaze animations remain
+   independent. The effect is discarded after 560 ms and never intercepts input. */
+.planik-mascot[data-arriving=true] .planik-svg{animation:wardrobe-enter .44s cubic-bezier(.2,.75,.3,1) both!important}
+.planik-mascot[data-arriving=true][data-skin=northern] .planik-svg{animation:mascot-snow-enter .52s ease-out both!important}
+.planik-mascot[data-arriving=true][data-skin=zoomer] .planik-svg{animation:mascot-phone-enter .52s cubic-bezier(.18,.75,.3,1) both!important;transform-origin:52% 94%}
+.planik-mascot[data-arriving=true]:is([data-skin=pirate],[data-skin=banker]) .planik-svg{animation:mascot-gold-enter .52s ease-out both!important;transform-origin:52% 90%}
+.planik-mascot[data-arriving=true][data-skin=wizard] .planik-svg{animation:mascot-portal-enter .52s ease-out both!important}
+.planik-mascot[data-arriving=true][data-skin=ninja] .planik-svg{animation:mascot-smoke-enter .48s ease-out both!important}
+.planik-mascot[data-arriving=true][data-skin=space] .planik-svg{animation:mascot-beam-enter .52s steps(8,end) both!important}
+@keyframes mascot-snow-enter{0%{opacity:0;transform:translateX(20%) scale(.82);filter:blur(7px)}65%{opacity:1;transform:translateX(-3%)}100%{transform:none;filter:none}}
+@keyframes mascot-phone-enter{0%,12%{opacity:0;transform:translateY(12%) scale(.12,.04)}40%{opacity:1;transform:translateY(-4%) scale(.34,1.07)}75%{transform:scale(1.04,.96)}100%{transform:none}}
+@keyframes mascot-gold-enter{0%{opacity:0;transform:translateY(30%) scale(.5);clip-path:inset(100% 0 0)}48%{opacity:1;clip-path:inset(0);transform:translateY(-8%) scale(.92)}100%{transform:none;clip-path:inset(0)}}
+@keyframes mascot-portal-enter{0%{opacity:0;transform:scale(.08) rotate(-8deg)}55%{opacity:1;transform:scale(1.09) rotate(2deg)}100%{transform:none}}
+@keyframes mascot-smoke-enter{0%{opacity:0;filter:blur(10px);transform:scale(.85)}60%{opacity:1;filter:blur(2px)}100%{filter:none;transform:none}}
+@keyframes mascot-beam-enter{0%{opacity:0;clip-path:inset(100% 0 0)}35%{opacity:.65;filter:brightness(2.5);clip-path:inset(34% 0 0)}70%{opacity:1;filter:brightness(1.4);clip-path:inset(0)}100%{opacity:1;filter:none;clip-path:inset(0)}}
+.mascot-arrival-effect{position:absolute;inset:0;z-index:2;pointer-events:none;overflow:visible}
+.mascot-arrival-particle{position:absolute;width:6%;aspect-ratio:1;border-radius:50%;background:#c5eaff;box-shadow:0 0 8px currentColor;color:#c5eaff;animation:mascot-arrival-spark .48s ease-out both}
+@keyframes mascot-arrival-spark{0%{opacity:0;scale:.3}28%{opacity:1}100%{opacity:0;scale:1.8;translate:12px -20px}}
+[data-arrival-skin=northern] .mascot-arrival-particle{border-radius:0;clip-path:polygon(45% 0,55% 0,55% 38%,90% 18%,95% 28%,65% 50%,95% 72%,90% 82%,55% 62%,55% 100%,45% 100%,45% 62%,10% 82%,5% 72%,35% 50%,5% 28%,10% 18%,45% 38%);width:11%;animation:mascot-snow-particle .52s ease-out both}
+@keyframes mascot-snow-particle{0%{opacity:0;translate:45px -15px;scale:.5}25%{opacity:.95}100%{opacity:0;translate:-40px 20px;scale:1.15}}
+.mascot-arrival-phone{position:absolute;left:34%;bottom:1%;width:42%;height:21%;border:2px solid #a39ad0;border-radius:5px;background:linear-gradient(145deg,#625c91,#211f3b);transform:perspective(75px) rotateX(42deg);box-shadow:0 0 10px #9b87f7;animation:mascot-arrival-prop .56s ease-out both}
+.mascot-arrival-phone i{position:absolute;inset:13% 8%;border-radius:2px;background:linear-gradient(130deg,#93ebec,#826ce3)}
+.mascot-arrival-phone b{position:absolute;bottom:4%;left:43%;width:14%;height:2px;background:#d5ccff}
+.mascot-arrival-gold{position:absolute;left:20%;bottom:0;width:68%;height:38%;animation:mascot-arrival-prop .56s ease-out both}
+.mascot-arrival-gold i{position:absolute;width:25%;height:31%;border-radius:50%;border:1px solid #fff0a0;background:radial-gradient(ellipse,#ffe297 40%,#d38a22 60%,#ffd56e 77%);box-shadow:0 2px #a76818}
+[data-arrival-skin=pirate] .mascot-arrival-particle,[data-arrival-skin=banker] .mascot-arrival-particle{background:#ffda72;color:#ffd072}
+.mascot-arrival-portal{position:absolute;inset:4% 16% 2%;border:3px solid #bca2ff;border-radius:50%;background:radial-gradient(ellipse,#170b45aa,transparent 70%);box-shadow:0 0 12px #a98cff,inset 0 0 20px #bca2ff;animation:mascot-portal-ring .52s ease-out both}
+.mascot-arrival-portal i,.mascot-arrival-portal b{position:absolute;inset:8%;border:1px dashed #dfd1ff;border-radius:50%;transform:rotate(40deg)}
+[data-arrival-skin=wizard] .mascot-arrival-particle{background:#d2b5ff;color:#aa7cff}
+[data-arrival-skin=space] .mascot-arrival-portal{inset:-10% 30% 0;border:0;border-radius:0;background:linear-gradient(90deg,transparent,#9ef7ffbb,transparent);box-shadow:none;animation:mascot-arrival-prop .52s ease-out both}
+[data-arrival-skin=space] .mascot-arrival-portal :is(i,b){display:none}
+[data-arrival-skin=space] .mascot-arrival-particle{border-radius:1px;background:#a7f6ff;color:#7fdbff}
+[data-arrival-skin=ninja] .mascot-arrival-particle{width:31%;background:radial-gradient(circle,#cbd0daaa,#858c9e99 35%,transparent 72%);box-shadow:none;animation:mascot-smoke-particle .5s ease-out both}
+@keyframes mascot-smoke-particle{0%{opacity:0;scale:.4}30%{opacity:.95;scale:1.2}100%{opacity:0;scale:2;translate:15px -15px}}
+@keyframes mascot-portal-ring{0%{opacity:0;scale:.1}30%{opacity:1;scale:1.1}100%{opacity:0;scale:.65;rotate:40deg}}
+@keyframes mascot-arrival-prop{0%{opacity:0;scale:.6}20%,55%{opacity:1;scale:1}100%{opacity:0;scale:.9}}
+@media(prefers-reduced-motion:reduce){.planik-mascot[data-arriving=true] .planik-svg{animation:none!important}.mascot-arrival-effect{display:none}}
+
+/* A chat pane still owns its old composer anchor, even though its avatar is
+   now the same live mascot as the workspace/modal launcher. */
+.ai-chat-launcher[data-managed-mascot-launcher=planner][data-mascot-chat-embedded=true]{right:var(--mascot-chat-right,16px)!important;bottom:var(--mascot-chat-bottom,138px)!important}
+.ai-chat-launcher[data-mascot-chat-embedded=true] .planik-quick-ai-preview{opacity:0!important;pointer-events:none!important}

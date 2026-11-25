@@ -126,10 +126,10 @@ export function MascotWardrobeDialog({wardrobe,variant,theme}:{wardrobe:MascotWa
     setPhase('leaving');
     timers.current.push(window.setTimeout(()=>{
       setDisplayed(id);setPhase('entering');
-      timers.current.push(window.setTimeout(()=>setPhase('idle'),440));
+      timers.current.push(window.setTimeout(()=>setPhase('idle'),560));
     },220));
   };
-  const catalog=wardrobe.data?.catalog.filter(skin=>skin.variant===variant)??[];
+  const catalog=wardrobe.data?.catalog.filter(skin=>skin.variant===variant).sort((a,b)=>a.rank-b.rank)??[];
   const list=useRef<HTMLElement>(null);
   const [moreBelow,setMoreBelow]=useState(false);
   const updateListFade=useCallback(()=>{
@@ -148,7 +148,7 @@ export function MascotWardrobeDialog({wardrobe,variant,theme}:{wardrobe:MascotWa
   },[catalog.length,updateListFade]);
   const skin=catalog.find(item=>item.id===selected);
   const allowed=Boolean(skin&&skin.rank<=wardrobe.rank);
-  const specialModes: Exclude<PlanikMode,'showcase'>[] = selected==='cat'?['idle','thinking']:selected==='banker'?['idle','typing','hover']:['wizard','pirate','space'].includes(selected)?['idle','hover','thinking']:['northern','zoomer','ninja'].includes(selected)?['idle','hover']:[];
+  const specialModes: Exclude<PlanikMode,'showcase'>[] = selected==='cat'?['idle','thinking']:selected==='banker'?['typing','hover']:['wizard','pirate','space'].includes(selected)?['idle','hover','thinking']:['northern','zoomer','ninja'].includes(selected)?['idle','hover']:[];
   const isEquipped=selected===wardrobe.selected(variant);
   const equip=async()=>{
     if(!allowed||isEquipped||saving)return;
@@ -175,8 +175,8 @@ export function MascotWardrobeDialog({wardrobe,variant,theme}:{wardrobe:MascotWa
         </div>
         <div className="mascot-wardrobe-preview">
           <div className="mascot-wardrobe-stage" aria-label={'Примерка: '+(skin?.name??'Классический')}>
-            <div key={displayed} className={'mascot-wardrobe-character phase-'+phase}>
-              <PlanikMascot key={replay} variant={variant} skinId={displayed} previewMode={previewMode}/>
+            <div key={displayed} className={'mascot-wardrobe-character phase-'+phase} data-arrival-outfit={displayed}>
+              <PlanikMascot key={replay} variant={variant} skinId={displayed} previewMode={previewMode} arrivalKey={phase==='entering' && ['northern','zoomer','pirate','wizard','ninja','space','banker'].includes(displayed)?1:0}/>
             </div>
           </div>
           <div className="mascot-wardrobe-details"><span className={'mascot-wardrobe-tier tier-'+(skin?.rank??0)}>{tier(skin?.rank??0)}</span><h3>{skin?.name??'Классический'}</h3><p>{skin?.description??'Выберите образ из коллекции.'}</p></div>
