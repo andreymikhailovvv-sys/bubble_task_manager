@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { CalendarDays, ChevronRight, GripVertical, LayoutGrid, List, Plus, Search, X } from 'lucide-react';
 import { useScrollFade } from '../hooks/useScrollFade';
 import { FULLSCREEN_AUXILIARY_OPTIONS, fullscreenPanelTitle, type FullscreenWorkspacePanel } from '../lib/fullscreenWorkspacePanels';
@@ -85,7 +85,7 @@ export function FullscreenBlockMenu({ tasks, onSelect, onDragStart, onDragEnd }:
     onKeyDown={event => { if (event.key === 'Escape') setOpen(false); }}>
     <button type="button" role="menuitem" aria-haspopup="menu" aria-expanded={open}
       className="add-menu-option mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold"
-      onClick={() => setOpen(value => !value)}><LayoutGrid size={14}/> Добавить блок <ChevronRight size={14} className="ml-auto"/></button>
+      onClick={() => setOpen(true)}><LayoutGrid size={14}/> Добавить блок <ChevronRight size={14} className="ml-auto"/></button>
     {open && <div className="workspace-block-submenu topbar-dropdown rounded-2xl border p-2 shadow-2xl" role="menu" aria-label="Доступные блоки">
       {chooseTask ? <>
         <button type="button" className="workspace-block-option" onClick={() => { setChooseTask(false); setQuery(''); }}>← Все блоки</button>
@@ -111,7 +111,7 @@ function BlockDropTarget({ add = false, onPlace }: { add?: boolean; onPlace: () 
   const isBlock = (event: DragEvent) => event.dataTransfer.types.includes('application/x-planirovych-block');
   return <button type="button" className={`workspace-block-target ${over ? 'is-over' : ''}`}
     onClick={onPlace}
-    onDragOver={event => { if (isBlock(event)) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; setOver(true); } }}
+    onDragOver={event => { if (isBlock(event)) { event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = 'copy'; setOver(true); } }}
     onDragLeave={() => setOver(false)}
     onDrop={event => { if (!isBlock(event)) return; event.preventDefault(); event.stopPropagation(); setOver(false); onPlace(); }}>
     <span className="workspace-block-target-plus"><Plus size={25}/></span>

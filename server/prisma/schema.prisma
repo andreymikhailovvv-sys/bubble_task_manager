@@ -598,6 +598,7 @@ model AiCreditReservationRecord {
   settledAt            DateTime?
 
   @@index([userId, status])
+  @@index([userId, period, createdAt])
 }
 
 model UserConsent {

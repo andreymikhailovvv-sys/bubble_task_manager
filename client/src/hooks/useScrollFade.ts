@@ -1,6 +1,6 @@
 import { useEffect, type RefObject } from 'react';
 
-const selector = '.overflow-y-auto,.overflow-auto,.overflow-y-scroll,.overflow-scroll,.list-mode-canvas,.timeline-canvas,.ai-chat-expanded-thread,.focused-task-editor-shell,.notes-editor-content,.standalone-notes-scroll-area,.subscription-modal';
+const selector = '.overflow-y-auto,.overflow-auto,.overflow-y-scroll,.overflow-scroll,.list-mode-canvas,.timeline-canvas,.ai-chat-expanded-thread,.focused-task-editor-shell,.notes-editor-content,.standalone-notes-scroll-area,.subscription-modal-scroll';
 
 export function useScrollFade(ref: RefObject<HTMLElement | null>, enabled = true) {
   useEffect(() => {
@@ -34,12 +34,18 @@ export function useScrollFade(ref: RefObject<HTMLElement | null>, enabled = true
       if (event.target instanceof HTMLElement && tracked.has(event.target)) update(event.target);
     };
     const mutation = new MutationObserver(schedule);
-    mutation.observe(root, { childList: true, subtree: true, characterData: true });
+    mutation.observe(root, { childList: true, subtree: true });
     resize.observe(root);
+    const input = (event: Event) => {
+      const node = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>(selector) : null;
+      if (node && tracked.has(node)) update(node);
+    };
+    root.addEventListener('input', input, true);
     root.addEventListener('scroll', scroll, true);
     schedule();
     return () => {
       cancelAnimationFrame(frame); mutation.disconnect(); resize.disconnect();
+      root.removeEventListener('input', input, true);
       root.removeEventListener('scroll', scroll, true);
       for (const node of tracked) delete node.dataset.scrollFade;
     };

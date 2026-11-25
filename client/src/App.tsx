@@ -854,7 +854,7 @@ export default function App() {
   const [mode, setMode] = useState<'global' | 'sectors'>('sectors');
   // Distraction-free viewport for bubbles. Keeps the same BubbleField instance,
   // filters and overlays; only the surrounding chrome is hidden.
-  // The multi-pane workbench is the desktop layout. Legacy lesson-only controls are retained for guided training.
+  // The multi-pane workbench is the only user-facing desktop layout.
   const [isBubbleFullscreen, setIsBubbleFullscreen] = useState(true);
   const [fullscreenDisplayModes, setFullscreenDisplayModes] = useState<DisplayMode[]>(['bubbles']);
   // Two independently replaceable fullscreen slots; the old view toggles stay
@@ -866,7 +866,7 @@ export default function App() {
   const subscriptionScrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!pendingWorkspaceBlock) return;
-    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setPendingWorkspaceBlock(null); };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { blockDragRef.current = false; setPendingWorkspaceBlock(null); setIsAddMenuOpen(false); } };
     document.addEventListener('keydown', escape);
     return () => document.removeEventListener('keydown', escape);
   }, [pendingWorkspaceBlock]);
@@ -942,6 +942,26 @@ export default function App() {
   const [subscriptionPurchaseAvailable, setSubscriptionPurchaseAvailable] = useState(false);
   const activeSubscription = Boolean(currentUser?.subscriptionExpiresAt &&
     new Date(currentUser.subscriptionExpiresAt).getTime() > Date.now());
+  const subscriptionUserId = currentUser?.id;
+  useEffect(() => {
+    if (!activeSubscription || !subscriptionUserId) return;
+    let stopped = false;
+    let inFlight = false;
+    const refresh = async () => {
+      if (inFlight || document.visibilityState !== 'visible') return;
+      inFlight = true;
+      try {
+        const { user } = await api.getMe();
+        if (!stopped) setCurrentUser(prev => prev?.id === subscriptionUserId && user.id === subscriptionUserId
+          ? { ...prev, subscriptionLimit: user.subscriptionLimit, subscriptionPlan: user.subscriptionPlan, subscriptionExpiresAt: user.subscriptionExpiresAt, aiCredits: user.aiCredits, aiCreditsMilli: user.aiCreditsMilli } : prev);
+      } catch { /* Reconnect on the next focus or scheduled refresh. */ }
+      finally { inFlight = false; }
+    };
+    const timer = window.setInterval(() => void refresh(), 60_000);
+    const onFocus = () => void refresh();
+    window.addEventListener('focus', onFocus);
+    return () => { stopped = true; window.clearInterval(timer); window.removeEventListener('focus', onFocus); };
+  }, [activeSubscription, subscriptionUserId]);
   const subscriptionPurchase = useSubscriptionPurchase({
     surface: 'web', openConfirmation: (url) => window.location.assign(url),
     onSucceeded: async () => { const me = await api.getMe(); setCurrentUser(me.user); }
@@ -1091,6 +1111,8 @@ export default function App() {
       setEditorState(null);
       setFocusedTaskId(null);
       setDisplayMode('timeline');
+      setFullscreenDisplayModes(['timeline']);
+      setFullscreenPanelSlots([{ kind: 'mode', mode: 'timeline' }]);
     } else if (activeTourStep === 'ai-checkup') {
       setIsAiChatOpen(false);
       setEditorState(null);
@@ -5561,9 +5583,8 @@ export default function App() {
   const startTaskTour = () => {
     rememberTourWorkspace();
     setTourWorkspaceUsesPrimary(false);
-    // Legacy task controls live in the classic toolbar: show them for this
-    // lesson only, then restore the exact multi-pane composition on finish.
-    setIsBubbleFullscreen(false);
+    setFullscreenDisplayModes(['bubbles']);
+    setFullscreenPanelSlots([{ kind: 'mode', mode: 'bubbles' }]);
     setIsUpdatesOpen(false);
     setActiveTourStep(TASK_TOUR_STEPS[0].id);
   };
@@ -5581,14 +5602,16 @@ export default function App() {
   const startAiTour = () => {
     rememberTourWorkspace();
     setTourWorkspaceUsesPrimary(false);
-    setIsBubbleFullscreen(false);
+    setFullscreenDisplayModes(['bubbles']);
+    setFullscreenPanelSlots([{ kind: 'mode', mode: 'bubbles' }]);
     setIsUpdatesOpen(false);
     setActiveTourStep(AI_TOUR_STEPS[0].id);
   };
   const startFeatureTour = () => {
     rememberTourWorkspace();
     setTourWorkspaceUsesPrimary(false);
-    setIsBubbleFullscreen(false);
+    setFullscreenDisplayModes(['bubbles']);
+    setFullscreenPanelSlots([{ kind: 'mode', mode: 'bubbles' }]);
     setIsUpdatesOpen(false);
     setActiveTourStep(FEATURE_TOUR_STEPS[0].id);
   };
@@ -6380,6 +6403,7 @@ export default function App() {
     setFullscreenPanelSlots(nextSlots);
   };
   const addFullscreenSinglePanel = (side: 'left' | 'right', next: FullscreenWorkspacePanel) => {
+    blockDragRef.current = false;
     setPendingWorkspaceBlock(null);
     setIsAddMenuOpen(false);
     if (JSON.stringify(next) === JSON.stringify(fullscreenPanels[0]) || (next.kind === 'task-ai' && fullscreenPanels[0].kind === 'task-ai')) return;
@@ -6393,6 +6417,7 @@ export default function App() {
     setFullscreenPanelSlots(slots);
   };
   const chooseFullscreenPanel = (index: 0 | 1, next: FullscreenWorkspacePanel) => {
+    blockDragRef.current = false;
     setPendingWorkspaceBlock(null);
     setIsAddMenuOpen(false);
     if (fullscreenPanels.some((panel, position) => position !== index && (JSON.stringify(panel) === JSON.stringify(next) || (panel.kind === 'task-ai' && next.kind === 'task-ai')))) return;
@@ -6604,6 +6629,7 @@ export default function App() {
           onOpenNote={(id) => setRequestedStandaloneNote({ id, serial: Date.now() })}
         />
             <FullscreenModePicker modes={fullscreenPanels.filter(panel => panel.kind === 'mode').map(panel => panel.mode)} onChange={(nextModes) => {
+              setPendingWorkspaceBlock(null);
               setFullscreenDisplayModes(nextModes);
               setFullscreenPanelSlots(null);
               setDisplayMode(nextModes[0]);
@@ -6625,12 +6651,12 @@ export default function App() {
               </button>
               {isAddMenuOpen || isTourAddMenuOpen ? (
                 <div className="add-menu-popover topbar-dropdown absolute right-0 top-[calc(100%+0.5rem)] z-50 w-56 rounded-2xl border p-2 shadow-2xl" role="menu">
-                  <button type="button" role="menuitem"
+                  <button type="button" role="menuitem" data-tour="create-task"
                     className="add-menu-option add-menu-option-task flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold"
                     onClick={() => { setEditorState({ initialSphereId: spheres[0]?.id }); setIsAddMenuOpen(false); }}>
                     <FileText size={14} /> Новая задача
                   </button>
-                  <button type="button" role="menuitem"
+                  <button type="button" role="menuitem" data-tour="create-event"
                     className="add-menu-option add-menu-option-event mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold"
                     onClick={() => {
                       setEditorState({ task: { id: '', title: '', description: '', status: 'TODO',
@@ -6641,7 +6667,7 @@ export default function App() {
                     }}>
                     <CalendarDays size={14} /> Новое событие
                   </button>
-                  <button type="button" role="menuitem"
+                  <button type="button" role="menuitem" data-tour="create-sector"
                     className="add-menu-option add-menu-option-sector mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={spheres.length >= MAX_SPHERES}
                     onClick={() => {
@@ -6661,7 +6687,12 @@ export default function App() {
           <div className="fullscreen-workspace-toolbar-actions flex min-w-0 flex-nowrap items-center gap-2">
             {renderOverdueControl()}
             {renderCreditsControl()}
-        <TelegramIntegrationsMenu tourIntegration={integrationTourKind} onConnectBot={() => void openTelegramLinkModal()} />
+            <div className="relative shrink-0" ref={efficiencyDetailsRef}>
+              <button type="button" className="topbar-action-button inline-flex h-9 w-9 items-center justify-center rounded-xl border" title={`Рейтинг: ${formattedEfficiencyScore}/100`} aria-label="Рейтинг эффективности" onClick={() => setIsEfficiencyDetailsOpen(prev => !prev)}><Gauge size={17}/></button>
+              {isEfficiencyDetailsOpen ? <div data-tour="feature-rating" className="efficiency-details-popover efficiency-details-popover-modern absolute right-0 top-[calc(100%+8px)] z-40 w-80 rounded-[1.6rem] border p-4 text-xs shadow-2xl backdrop-blur"><div className="text-center"><div className="efficiency-score-hero tabular-nums">{formattedEfficiencyScore}/100</div><p className="mt-1 text-sm font-semibold text-primary">{efficiencyGradeMessage}</p></div><div className="mt-4 space-y-2"><div className="efficiency-detail-row"><span>Задачи</span><b>+{formatRatingDelta(efficiencyTaskRating)} рейтинга</b></div><div className="efficiency-detail-row"><span>Привычки</span><b>+{formatRatingDelta(efficiencyHabitRating)} рейтинга</b></div><div className="efficiency-detail-row"><span>Работа с ИИ <span className="block text-[10px] font-normal text-muted">+0,1 за запрос · +0,3 за ИИ-инструмент</span></span><b>+{formatRatingDelta(efficiencyAiRating)} рейтинга</b></div><div className="efficiency-detail-row efficiency-detail-row-focus"><span>Режим концентрации (х2)</span><b>+{formatRatingDelta(efficiencyFocusRating)} рейтинга</b></div></div></div> : null}
+            </div>
+            <button type="button" data-tour="feature-focus-button" className="topbar-action-button inline-flex h-9 w-9 items-center justify-center rounded-xl border shrink-0" onClick={openFocusSetup} aria-label="Режим концентрации" title="Режим концентрации"><Bot size={17}/></button>
+        <div data-tour="feature-telegram-button"><TelegramIntegrationsMenu tourIntegration={integrationTourKind} onConnectBot={() => void openTelegramLinkModal()} /></div>
         <a className="public-nav-link shrink-0 px-2 py-2 text-sm" href="/about">О сервисе</a>
         <div className="auth-actions" aria-label="Управление аккаунтом">
           {hasAccount ? (
@@ -7208,7 +7239,8 @@ export default function App() {
 
       {isSubscriptionModalOpen ? (
         <div className="modal-backdrop fixed inset-0 z-[130] flex items-start justify-center overflow-y-auto p-4 pt-[min(6vh,4rem)] backdrop-blur-sm" onClick={() => setIsSubscriptionModalOpen(false)}>
-          <div ref={subscriptionScrollRef} className="subscription-modal dialog-surface max-h-[88dvh] w-full max-w-5xl overflow-y-auto rounded-3xl border p-0 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <div className="subscription-modal dialog-surface relative max-h-[88dvh] w-full max-w-5xl overflow-hidden rounded-3xl border p-0 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div ref={subscriptionScrollRef} className="subscription-modal-scroll max-h-[88dvh] overflow-y-auto">
             <div className="subscription-hero relative p-4 sm:p-4">
               <button className="absolute right-4 top-4 rounded-full p-2 text-muted transition hover:bg-white/10" onClick={() => setIsSubscriptionModalOpen(false)} aria-label="Закрыть окно подписки"><X size={18} /></button>
               <div className="subscription-eyebrow inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium"><Sparkles size={14} /> Больше возможностей ИИ</div>
@@ -7295,7 +7327,7 @@ export default function App() {
             </p>
               </div>
             )}
-
+            </div>
           </div>
         </div>
       ) : null}
