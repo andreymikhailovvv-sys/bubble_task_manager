@@ -5,7 +5,7 @@ package ru.planirovych.app.feature.home
  * renderer uses the full website artwork. These silhouettes keep the chosen
  * outfit recognizable if the device cannot paint a WebView frame.
  */
-internal fun nativeMascotSkinSvg(source:String,skinId:String,dark:Boolean,mode:String,alternate:Boolean):String {
+internal fun nativeMascotSkinSvg(source:String,skinId:String,dark:Boolean,mode:String,frame:Int):String {
     val outline=if(dark)"#afa8ff" else "#8a83c9"
     val body=if(dark)"#5e5ca3" else "#b8b3ec"
     val clip="""<defs><clipPath id="native-outfit"><rect x="122" y="76" width="186" height="174" rx="65"/></clipPath></defs>"""
@@ -35,7 +35,6 @@ internal fun nativeMascotSkinSvg(source:String,skinId:String,dark:Boolean,mode:S
             <circle cx="215" cy="237" r="2" fill="#ecf5f1"/><circle cx="215" cy="248" r="2" fill="#ecf5f1"/></g>
             <path d="M124 128Q119 115 122 99L119 86L125 74L122 65L134 59L133 51L147 47L153 38L167 41L177 33L188 38L202 31L213 36L225 30L235 37L249 35L257 43L271 40L278 49L292 49L295 60L305 64L302 75L312 84Q310 99 309 117L301 128L298 111L288 98L278 110L271 97L258 108L251 94L240 102L231 91L220 105L212 93L203 111L193 95L182 108L176 96L164 113L156 101L146 119L139 108L131 128Z" fill="#e4cca0" stroke="#9a805e" stroke-width="1.6"/>
             <path d="M130 85Q137 68 143 67M148 66Q160 54 169 54M188 56Q200 41 212 43M235 97Q247 82 250 61M282 89Q296 78 296 70" stroke="#f4e4c2" stroke-width="6" fill="none" stroke-linecap="round"/>
-            ${if(mode=="idle") """<rect x="263" y="204" width="29" height="48" rx="5" fill="#879bad" stroke="#526579" stroke-width="2" transform="rotate(-12 277 228)"/>""" else ""}
         """
         "pirate" -> """
             <g clip-path="url(#native-outfit)"><path d="M121 191Q147 190 171 211Q215 223 259 211Q283 190 309 191L319 262H111Z" fill="#e9dbc0"/>
@@ -74,8 +73,8 @@ internal fun nativeMascotSkinSvg(source:String,skinId:String,dark:Boolean,mode:S
     var art=source
     if(skinId=="cat"){
         val ear="""<path d="M135 113C129 100 124 70 124 43Q124 30 136 37C156 49 178 66 192 89L185 108Z" fill="$body" stroke="$outline" stroke-width="3.5" stroke-linejoin="round"/><path d="M139 88Q132 66 135 48Q158 61 177 88L169 99Z" fill="#d9b9e3" stroke="#9c7eb7" stroke-width="1.2"/>"""
-        val leftAngle=if(mode=="thinking"&&alternate) -9 else 0
-        val rightAngle=if(mode=="thinking"&&!alternate) 7 else 0
+        val leftAngle=if(mode=="thinking") (kotlin.math.sin(frame*Math.PI/6)*10).toInt() else 0
+        val rightAngle=if(mode=="thinking") (kotlin.math.sin(frame*Math.PI/4+1.3)*8).toInt() else 0
         art=art.replace("<rect x=\"122\"","""<g transform="rotate($leftAngle 160 100)">$ear</g><g transform="rotate($rightAngle 270 100)"><g transform="translate(430 0) scale(-1 1)">$ear</g></g><rect x="122"""")
     }
     if(skinId in setOf("northern","wizard","zoomer")) art=art.replace(Regex("""<path d="M215 77V58"[^>]*/>\s*<circle class="planik-antenna"[^>]*/>"""),"")

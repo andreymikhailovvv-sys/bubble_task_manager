@@ -197,7 +197,8 @@ internal fun NativeMascotWardrobeDialog(vm:HomeViewModel,dark:Boolean,owner:Stri
         text={
             Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
                 Box(Modifier.fillMaxWidth().height(160.dp),contentAlignment=Alignment.Center){
-                    SharedMascotArtwork(selected,dark,preview,Modifier.size(180.dp,150.dp))
+                    if(selected=="classic") NativeMascotFallback(dark,preview,selected,Modifier.size(180.dp,150.dp))
+                    else SharedMascotArtwork(selected,dark,preview,Modifier.size(180.dp,150.dp))
                 }
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){
                     listOf("idle" to "Ожидание","hover" to "Приветствие","thinking" to "Думает").forEach{(mode,label)->

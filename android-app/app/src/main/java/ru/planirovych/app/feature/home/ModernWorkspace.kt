@@ -594,7 +594,7 @@ private fun WorkspaceTopbar(
                 else Color(0xFF8B5CF6),colors.card,if(dark).13f else .07f),
             border=BorderStroke(1.dp,colors.panelBorder)) {
             Row(Modifier.padding(horizontal=5.dp),verticalAlignment=Alignment.CenterVertically) {
-                Icon(Icons.Default.Paid,if(state.user?.subscriptionLimit != null) "Лимит ИИ" else "Кредиты",Modifier.size(19.dp),
+                Icon(Icons.Default.Paid,if(state.user?.subscriptionLimit != null) "Остаток дневного лимита ИИ" else "Кредиты",Modifier.size(19.dp),
                     tint=if(dark)Color(0xFFF3B7D2) else Color(0xFFC25487))
                 Spacer(Modifier.width(2.dp))
                 Text(state.user?.aiBalanceLabel ?: "0",fontSize=11.sp,
