@@ -367,3 +367,14 @@ test('short subscription limits block costly reservations but keep Luna and nano
   assert.equal(modelCreditWindowMode('unknown'), 'premium');
   await assert.rejects(reserveAiCreditsMilli('user-1', 3000000, db as any, 'basic'), /Недостаточно/);
 });
+
+test('weekly window exhaustion still allows Luna on a new day', async () => {
+  const now = new Date();
+  const {weekStart} = subscriptionWindowBounds(now);
+  const db = wallet({ subscriptionPlan:'start', subscriptionExpiresAt:new Date(Date.now()+86400000), aiCreditsPeriod:'subscription:test', aiCredits:2250, aiIncludedCreditsMilli:2250000 });
+  db.reservations.set('week-spend',{ id:'week-spend', userId:'user-1', period:'subscription:test', includedMilli:750000, bonusMilli:0, purchasedMilli:0, totalMilli:750000, status:'SETTLED', chargedMilli:750000, refundedMilli:0, expiredIncludedMilli:0, settledAt:weekStart, createdAt:weekStart });
+  await assert.rejects(reserveAiCreditsMilli('user-1', 1000, db as any, 'premium'), /Недостаточно/);
+  const basic=await reserveAiCreditsMilli('user-1', 1000, db as any, 'basic');
+  await settleAiCreditReservation(basic,1000,db as any);
+  assert.equal(db.state?.aiIncludedCreditsMilli,2249000);
+});
