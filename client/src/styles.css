@@ -17128,3 +17128,6 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
 .miniapp-habit-tracker .miniapp-habit-tracker-day-today { outline: none; font-weight: 800; }
 .miniapp-habit-tracker .miniapp-habit-tracker-legend-dot-done { background:var(--tracker-accent); border-color:var(--tracker-accent); }
 .miniapp-habit-tracker .miniapp-habit-tracker-legend-dot-partial { background:linear-gradient(to top,var(--tracker-accent) 33%,transparent 33%);border-color:var(--tracker-accent); }
+
+.miniapp-mascot-wardrobe-button {position:absolute;right:96px;bottom:calc(100% + 7px);z-index:3;border-radius:9px;padding:5px 8px;font-size:11px;font-weight:650;color:var(--text-primary,#e2e8f0);background:var(--panel-bg,#273148);border:1px solid var(--panel-border,#64748b)}
+.miniapp-light .miniapp-mascot-wardrobe-button {background:#f5f4fc;color:#5b449b;border-color:#d9d4ec}

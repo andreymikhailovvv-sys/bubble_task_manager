@@ -1026,3 +1026,11 @@ body[data-theme='dark'] .primary-habit-detail-dialog .primary-habit-detail-conte
 @media (max-width: 390px) {
   .primary-habit-dialog--embedded .primary-habit-dialog-footer { flex-wrap: wrap; }
 }
+
+/* Identical fill in the desktop portal; do not tint the selected habit with blue/green. */
+.primary-habit-detail-dialog .primary-habit-detail-content .miniapp-habit-tracker .miniapp-habit-tracker-day:is(.miniapp-habit-tracker-day-done,.miniapp-habit-tracker-day-partial),
+body[data-theme='dark'] .primary-habit-detail-dialog .primary-habit-detail-content .miniapp-habit-tracker .miniapp-habit-tracker-day:is(.miniapp-habit-tracker-day-done,.miniapp-habit-tracker-day-partial) {
+  background:linear-gradient(to top,var(--tracker-accent) var(--day-fill),transparent var(--day-fill));
+  border:0;box-shadow:none;
+}
+.primary-habit-detail-dialog .primary-habit-detail-content .miniapp-habit-tracker .miniapp-habit-tracker-day-today {outline:none;font-weight:800}
