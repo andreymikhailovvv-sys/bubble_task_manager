@@ -19,6 +19,7 @@ import { prisma } from './db/prisma.js';
 import { reconcilePendingCreditPurchases } from './services/credit-purchase-recovery.service.js';
 import { reconcilePendingSubscriptionPurchases } from './services/subscription-purchase-recovery.service.js';
 import { createAiCheckup } from './services/ai-checkup-delivery.service.js';
+import { taskAccessWhere } from './lib/task-access.js';
 import { resolveAiCheckupSchedules } from './lib/ai-checkup-schedules.js';
 import { Prisma } from '@prisma/client';
 import { telegramUpdateQueue, TelegramUpdateWorker } from './services/telegram-update-queue.service.js';
@@ -239,6 +240,13 @@ setInterval(() => {
           throw error;
         }
         try {
+          // Skip scheduled reports without active tasks on the user's local calendar day.
+          const candidates = await prisma.task.findMany({
+            where: { AND: [taskAccessWhere(user.id)], taskType: 'TASK', status: { not: 'DONE' },
+              dueDate: { gte: new Date(now.getTime() - 36 * 60 * 60_000), lt: new Date(now.getTime() + 36 * 60 * 60_000) } },
+            select: { dueDate: true }
+          });
+          if (!candidates.some(task => task.dueDate && formatLocalCheckupSlot(task.dueDate, timeZone).dateKey === local.dateKey)) continue;
           await createAiCheckup({
             userId: user.id,
             requestId: 'daily-checkup:' + local.dateKey + ':' + schedule.id,

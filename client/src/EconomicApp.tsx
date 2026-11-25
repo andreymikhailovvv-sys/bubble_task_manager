@@ -92,7 +92,7 @@ function EconomicMascot({ onClick, active, busy, progress, skinId, onOpenWardrob
   return <div className="mascot-wardrobe-anchor econ-mascot-dressing" data-managed-mascot-launcher="economic" data-mascot-surface={modal?'modal':'workspace'}><button className={'econ-mascot ' + (active ? 'active' : '')}
     type="button" onClick={onClick}
     aria-label={active ? 'Закрыть помощника Экономыч AI' : 'Открыть помощника Экономыч AI'}
-    aria-expanded={active} aria-controls="econ-assistant-dialog" title="Помощник Экономыч AI">
+    aria-expanded={active} aria-controls="econ-assistant-dialog">
     <PlanikMascot variant="economic" size="launcher" busy={busy} progress={progress} skinId={skinId} arrivalKey={arrivalKey} />
     <span className="econ-mascot-pulse" aria-hidden="true" />
   </button><MascotWardrobeTrigger onClick={onOpenWardrobe}/></div>;

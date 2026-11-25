@@ -628,3 +628,26 @@ body:has(.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded)) [data-manag
 .ai-chat-launcher[data-mascot-chat-embedded=true] .planik-quick-ai-preview{opacity:0!important;pointer-events:none!important}
 .ai-chat-launcher[data-mascot-chat-embedded=true] .planik-quick-ai-preview::after{pointer-events:none}
 body:has(.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded)) .planik-quick-ai-preview::after{pointer-events:none}
+
+/* Money entrances: a cloud on both sides of the character, not a central burst. */
+.planik-svg{position:relative;z-index:1}
+.mascot-arrival-rear{z-index:0}
+.mascot-arrival-front{z-index:2}
+.mascot-money-piece{animation-name:mascot-money-drift;animation-timing-function:cubic-bezier(.18,.65,.32,1);transform-origin:center}
+.mascot-money-piece.is-coin{width:8%;height:auto;aspect-ratio:1;color:#a46b18;font-size:clamp(5px,1.5cqh,12px);box-shadow:inset 0 0 0 1px #ffe7a5,0 1px 3px #61421788}
+.mascot-money-piece.is-note{width:18%;height:auto;aspect-ratio:1.85;background:linear-gradient(125deg,#d4eabd,#82bc85);border:1px solid #4b8358;box-shadow:inset 0 0 0 2px #bedba9,0 1px 2px #193d2866}
+@keyframes mascot-money-drift{0%{opacity:0;transform:translate(-50%,-50%) scale(.6)}18%{opacity:1;transform:translate(-50%,-50%) scale(1)}55%{opacity:.95}82%{opacity:.65}100%{opacity:0;transform:translate(calc(-50% + var(--money-x)),calc(-50% + var(--money-y))) rotate(var(--money-r)) scale(.7)}}
+.planik-mascot[data-arriving=true]:is([data-skin=pirate],[data-skin=banker]) .planik-svg{animation:mascot-cloud-reveal .58s ease-out both!important}
+@keyframes mascot-cloud-reveal{0%,13%{opacity:0;filter:blur(3px);transform:scale(.88)}65%,100%{opacity:1;transform:none}}
+.planik-mascot[data-skin=king] .planik-svg{animation:none}
+.planik-mascot[data-skin=king] .planik-eye{animation:planik-blink 6.4s infinite}
+.king-crown{transform-box:view-box;transform-origin:215px 82px}
+.planik-mascot[data-skin=king]:is([data-mode=hover],[data-mode=showcase]) .king-crown{animation:king-tip-crown 1.45s ease-in-out both}
+.king-greeting-arm{transform-box:view-box;transform-origin:300px 195px;animation:king-greet-arm 1.45s ease-in-out both}
+.king-rest-hand{animation:king-rest-hand 1.45s steps(1,end) both}
+.planik-mascot[data-mode=thinking] .king-ruby{animation:king-ruby-glow 1.15s ease-in-out infinite alternate}
+@keyframes king-tip-crown{0%,100%{transform:none}35%,65%{transform:translate(5px,-13px) rotate(8deg)}}
+@keyframes king-greet-arm{0%,100%{opacity:0;transform:rotate(27deg)}25%,75%{opacity:1;transform:none}}
+@keyframes king-rest-hand{0%,78%{opacity:1}24%,76%{opacity:0}100%{opacity:1}}
+@keyframes king-ruby-glow{from{filter:drop-shadow(0 0 2px #ec234c)}to{filter:drop-shadow(0 0 12px #ff285d) drop-shadow(0 0 6px #ff9dad)}}
+@media(prefers-reduced-motion:reduce){.planik-mascot[data-skin=king] :is(.king-crown,.king-greeting-arm,.king-rest-hand,.king-ruby,.planik-eye){animation:none!important}.king-greeting-arm{display:none}.planik-mascot[data-arriving=true]:is([data-skin=pirate],[data-skin=banker]) .planik-svg{animation:none!important}}

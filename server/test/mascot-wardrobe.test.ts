@@ -6,7 +6,7 @@ import { MASCOT_SKINS, effectiveMascotSkin, findMascotSkin } from '../src/config
 import { wardrobeState } from '../src/services/mascot-wardrobe.service.js';
 const read=(path:string)=>readFileSync(new URL(path,import.meta.url),'utf8');
 test('only released skins are available; maestro is free and max inherits northern',()=>{
- assert.deepEqual(MASCOT_SKINS.map(s=>[s.variant,s.id,s.rank]),[['planner','classic',0],['planner','cat',0],['planner','northern',2],['planner','maestro',0],['planner','zoomer',2],['planner','pirate',2],['planner','wizard',3],['planner','ninja',3],['planner','space',3],['economic','classic',0],['economic','cat',0],['economic','banker',2]]);
+ assert.deepEqual(MASCOT_SKINS.map(s=>[s.variant,s.id,s.rank]),[['planner','classic',0],['planner','cat',0],['planner','northern',2],['planner','maestro',0],['planner','zoomer',2],['planner','pirate',2],['planner','wizard',3],['planner','ninja',3],['planner','space',3],['economic','classic',0],['economic','cat',0],['economic','king',3],['economic','banker',2]]);
  assert.equal(findMascotSkin('planner','aviator'),undefined);
  assert.equal(effectiveMascotSkin('planner','maestro',0),'maestro');
  assert.equal(effectiveMascotSkin('planner','northern',1),'classic');
@@ -28,7 +28,7 @@ test('expired or downgraded user sees classic but stored preference remains unto
  assert.deepEqual(active.selected,{planner:'wizard',economic:'classic'});
  const expired=wardrobeState(base,new Date('2026-12-01'));
  assert.deepEqual(expired.selected,{planner:'classic',economic:'classic'});
- assert.equal(expired.catalog.length,12);
+ assert.equal(expired.catalog.length,13);
  assert.equal(base.plannerMascotSkin,'wizard');
  assert.equal(wardrobeState({...base,subscriptionPlan:'pro'},new Date('2026-11-24')).selected.economic,'classic');
 });
@@ -175,4 +175,31 @@ test('split timeline, modal rails and money cloud keep their explicit surface ru
  assert.ok(art.includes('mascot-money-piece'));
  assert.ok(frame.includes('data-quick-hover={hovered}'));
  assert.ok(app.includes('hideToggle={Boolean((focusedTask && !embeddedFocusActive) || isFocusModeOpen)}'));
+});
+
+test('royal Economic outfit requires Maximum and renders its three poses',()=>{
+ assert.equal(findMascotSkin('planner','king'),undefined);
+ for(const rank of [0,1,2]) assert.equal(effectiveMascotSkin('economic','king',rank),'classic');
+ assert.equal(effectiveMascotSkin('economic','king',3),'king');
+ const base={id:'u',subscriptionPlan:'max',subscriptionExpiresAt:new Date('2026-12-01'),plannerMascotSkin:'classic',economicMascotSkin:'king'};
+ assert.equal(wardrobeState(base,new Date('2026-11-25')).selected.economic,'king');
+ assert.equal(wardrobeState({...base,subscriptionPlan:'pro'},new Date('2026-11-25')).selected.economic,'classic');
+ const rig=read('../../client/src/components/PlanikMascot.tsx');
+ const art=read('../../client/src/components/KingMascotSkin.tsx');
+ const css=read('../../client/src/components/PlanikMascot.css');
+ for(const name of ['KingThrone','KingOutfit','KingGesture']) assert.ok(rig.includes(name));
+ assert.ok(art.includes("mode==='thinking'"));
+ assert.ok(css.includes('king-tip-crown'));
+ assert.ok(css.includes('king-ruby-glow'));
+});
+test('money arrivals use front and rear clouds with different materials and delayed particles',()=>{
+ const rig=read('../../client/src/components/PlanikMascot.tsx');
+ const art=read('../../client/src/components/MascotArrivalEffects.tsx');
+ const css=read('../../client/src/components/PlanikMascot.css');
+ assert.ok(rig.includes('layer="rear"'));
+ assert.ok(art.includes("skinId==='pirate'?'is-coin':'is-note'"));
+ assert.ok(art.includes('animationDelay:'));
+ assert.ok(art.includes('animationDuration:'));
+ assert.ok(css.includes('mascot-money-drift'));
+ assert.ok(css.includes('mascot-cloud-reveal'));
 });

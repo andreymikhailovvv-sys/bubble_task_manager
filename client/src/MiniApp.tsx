@@ -4444,7 +4444,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   }, []);
 
   const taskMonitoringControl = openedTask ? (
-              <TaskMonitoringStatuses taskId={openedTask.id}
+              <TaskMonitoringStatuses subscriptionAllowed={Boolean(currentUser?.subscriptionPlan === 'max' && currentUser?.subscriptionExpiresAt && new Date(currentUser.subscriptionExpiresAt).getTime() > Date.now())} taskId={openedTask.id}
                 model={openedTask.aiMonitoringModel}
                  generation={openedTask.aiMonitoringGeneration}
                  enabled={openedTask.aiMonitoringEnabled === true}
