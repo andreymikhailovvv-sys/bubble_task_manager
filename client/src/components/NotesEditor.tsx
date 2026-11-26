@@ -2,6 +2,7 @@ import { Bold, CheckSquare, Heading1, Heading2, Italic, ListChecks, ListOrdered,
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { linkifyNoteHtml, noteValueToEditorHtml } from '../lib/notes';
+import { useScrollFade } from '../hooks/useScrollFade';
 
 type NoteFormat = 'plain' | 'h1' | 'h2' | 'bold' | 'underline' | 'italic' | 'strike';
 type NoteListFormat = 'ordered' | 'unordered';
@@ -144,6 +145,8 @@ function createChecklistItem(line: string) {
 
 export function NotesEditor({ value, onChange, onClose, miniAppSheet = false, telegramSafeTop, heading = 'Заметки', titleEditor, inlineTarget }: Props) {
   const editorRef = useRef<HTMLDivElement | null>(null);
+  // Fade scrolling text above/below the viewport without adding a scrollbar gutter.
+  useScrollFade(editorRef);
   const savedRangeRef = useRef<Range | null>(null);
   const [hasSelection, setHasSelection] = useState(false);
   const [selectionMenuPosition, setSelectionMenuPosition] = useState<SelectionMenuPosition | null>(null);
