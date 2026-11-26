@@ -20,8 +20,11 @@ test('module switcher has independent persistent edge icons and hover-only label
   assert.match(railCss, /top: clamp\(105px, 17vh, 182px\)/);
   assert.match(railCss, /\.module-rail-link:hover \.module-rail-label/);
   assert.match(railCss, /\.module-rail-link:focus-visible \.module-rail-label/);
-  assert.match(railCss, /\.app-shell\[data-theme="light"\] \.module-rail/);
-  assert.match(railCss, /\.econ-light \.module-rail/);
+  // The body carries the actual theme in the fullscreen planner, while
+  // both module wrappers remain supported. All three share the same palette.
+  assert.match(railCss, /:is\(body\[data-theme="light"\], \.app-shell\[data-theme="light"\], \.econ-light\) \.module-rail \{/);
+  assert.match(railCss, /--module-rail-ink: #315374/);
+  assert.match(railCss, /\.module-rail-link\.module-rail-economic svg \{ color: #87510f; \}/);
   assert.match(railCss, /\.module-rail-link\.module-rail-economic\.is-active/);
 });
 
@@ -39,7 +42,11 @@ test('Economic mascot reuses the real Planik SVG and animations with its own pal
   assert.match(economic, /<PlanikMascot variant="economic" size="launcher" busy=\{busy\} progress=\{progress\}/);
   assert.doesNotMatch(economic, /econ-robot-metal/);
   assert.match(mascot, /variant\?: 'planner' \| 'economic'/);
-  assert.match(mascot, /variant = 'planner'/);
+  // Explicit props take priority over the managed mascot identity; only
+  // an unconfigured mascot falls back to the planner palette.
+  assert.match(mascot, /variant: variantOverride/);
+  assert.match(mascot, /const identity = useMascotIdentity\(\)/);
+  assert.match(mascot, /const variant = variantOverride \?\? identity\?\.variant \?\? 'planner'/);
   assert.match(mascotCss, /\.planik-mascot--economic \.planik-body-stop-start/);
   assert.match(mascotCss, /\.planik-eye \{/);
   assert.match(mascotCss, /animation: planik-blink/);
