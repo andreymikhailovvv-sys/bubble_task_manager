@@ -230,13 +230,28 @@ function hexToRgb(hex: string) {
   };
 }
 
-function getBubbleShade(hex: string, distanceRatio: number) {
+function getBubbleShade(hex: string, distanceRatio: number, light: boolean) {
   const { r, g, b } = hexToRgb(hex);
-  const fade = 0.04 + distanceRatio * 0.72;
-  const nextR = Math.round(r + (255 - r) * fade);
-  const nextG = Math.round(g + (255 - g) * fade);
-  const nextB = Math.round(b + (255 - b) * fade);
-  return `rgb(${nextR}, ${nextG}, ${nextB})`;
+  // Keep the ranking tint, but avoid washing it out against the canvas.
+  const distance = Math.max(0, Math.min(1, distanceRatio));
+  let fade = light ? 0.20 + distance * 0.24 : 0.42 - distance * 0.13;
+  const base = light ? { r: 255, g: 255, b: 255 } : { r: 15, g: 23, b: 42 };
+  const mix = () => [r + (base.r - r) * fade, g + (base.g - g) * fade, b + (base.b - b) * fade];
+  const linear = (channel: number) => {
+    const value = channel / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = ([red, green, blue]: number[]) =>
+    0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue);
+  let channels = mix();
+  // Keep the title readable even for user-selected very dark or bright colors.
+  for (let step = 0; step < 7; step++) {
+    const lum = luminance(channels);
+    if (light ? lum >= 0.25 : lum <= 0.17) break;
+    fade = Math.min(1, fade + 0.09);
+    channels = mix();
+  }
+  return `rgb(${channels.map(Math.round).join(', ')})`;
 }
 
 
@@ -258,27 +273,9 @@ function getInfoBadgeStyle(color: string, isLightTheme: boolean) {
   };
 }
 
-function getBubbleTitlePreview(title: string, radius: number) {
-  const normalized = title.trim();
-  if (!normalized) return '';
-
-  const maxWords = radius < 26 ? 2 : radius < 36 ? 4 : radius < 50 ? 6 : radius < 68 ? 9 : 14;
-  const maxChars = Math.max(12, Math.floor(radius * (radius < 36 ? 0.9 : 1.18)));
-  const words = normalized.split(/\s+/);
-  let preview = words.slice(0, maxWords).join(' ');
-
-  if (preview.length > maxChars) {
-    preview = `${preview.slice(0, Math.max(9, maxChars - 1)).trimEnd()}…`;
-  } else if (words.length > maxWords) {
-    preview = `${preview}…`;
-  }
-
-  return preview;
-}
-
 /** Native SVG text remains crisp at fractional viewBox scales. */
 function wrapBubbleTitleForSvg(text: string, radius: number, fontSize: number, maxLines: number): string[] {
-  const maxChars = Math.max(4, Math.floor(radius * 1.5 / (fontSize * 0.56)));
+  const maxChars = Math.max(1, Math.floor(radius * 1.48 / (fontSize * 0.62)));
   const words = text.trim().split(/\s+/).filter(Boolean);
   if (!words.length) return [];
   const parts = words.flatMap((word) => word.length > maxChars
@@ -300,12 +297,9 @@ function wrapBubbleTitleForSvg(text: string, radius: number, fontSize: number, m
   return visible;
 }
 
-function getBubbleTitleFontSize(title: string, radius: number) {
-  const normalizedLength = title.trim().length;
-  const baseSize = radius / (radius < 34 ? 6.2 : 5.2);
-  const longTitleAdjustment = normalizedLength > 24 ? Math.min(2.8, (normalizedLength - 24) / 12) : 0;
-
-  return Math.max(7, Math.min(18, baseSize - longTitleAdjustment));
+function getBubbleTitleFontSize(radius: number) {
+  // Do not shrink long titles into unreadable text. The line clamp handles them.
+  return radius < 25 ? 13 : radius < 45 ? 15 : 16;
 }
 
 
@@ -810,10 +804,12 @@ export function BubbleField({
       edges: component.edges
     }));
   }, [visibleBubbles, bubbleVisualPositions]);
-  const orderedGroups = dragView
+  // Raise the hovered group above its neighbours; preserve the drag priority.
+  const foregroundTaskId = dragView?.taskId ?? hoveredTaskId;
+  const orderedGroups = foregroundTaskId
     ? [...bubbleGroups].sort((a, b) =>
-        Number(a.members.some((member) => member.task.id === dragView.taskId)) -
-        Number(b.members.some((member) => member.task.id === dragView.taskId)))
+        Number(a.members.some((member) => member.task.id === foregroundTaskId)) -
+        Number(b.members.some((member) => member.task.id === foregroundTaskId)))
     : bubbleGroups;
 
   useEffect(() => {
@@ -984,17 +980,22 @@ export function BubbleField({
     const animatedPoint = groupOrigin
       ? { x: displayPoint.x - groupOrigin.x, y: displayPoint.y - groupOrigin.y }
       : displayPoint;
-    const titleLineClamp = bubble.radius < 30 ? 2 : bubble.radius < 44 ? 3 : 4;
-    const titleFontSize = getBubbleTitleFontSize(bubble.task.title, bubble.radius);
-    const titlePreview = getBubbleTitlePreview(bubble.task.title, bubble.radius);
-    const vectorTitleLines = wrapBubbleTitleForSvg(titlePreview, bubble.radius, titleFontSize, titleLineClamp);
+    const expanded = isHovered && !isDragged && !isDragTarget;
+    const hoverScale = 1.30;
+    const baseFontSize = getBubbleTitleFontSize(bubble.radius);
+    // The circle grows by 30%, but the text only grows by about 8%.
+    // That extra space is used for more characters instead of bigger glyphs.
+    const titleFontSize = expanded ? baseFontSize * 1.08 / hoverScale : baseFontSize;
+    const titleLineClamp = Math.max(1, Math.min(expanded ? 6 : 5,
+      Math.floor(bubble.radius * 1.45 / (titleFontSize * 1.12))));
+    const vectorTitleLines = wrapBubbleTitleForSvg(bubble.task.title, bubble.radius, titleFontSize, titleLineClamp);
 
     return (
       <motion.g
         key={bubble.task.id}
         data-bubble-task-id={bubble.task.id}
         initial={false}
-        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: isDragged ? 1.05 : isDragTarget ? 1.04 : isHovered ? 1.075 : 1, x: animatedPoint.x, y: animatedPoint.y }}
+        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: isDragged ? 1.05 : isDragTarget ? 1.04 : expanded ? hoverScale : 1, x: animatedPoint.x, y: animatedPoint.y }}
         exit={isSearchFiltering ? { opacity: 0, scale: 0.96, x: animatedPoint.x, y: animatedPoint.y } : { opacity: 0, scale: isPopping ? 1.28 : 0.96, x: animatedPoint.x, y: animatedPoint.y }}
         transition={isDragged ? { duration: 0 } : isPopping
           ? { type: 'tween', duration: 0.33, ease: 'easeOut' }
@@ -1025,10 +1026,10 @@ export function BubbleField({
           cx={0}
           cy={0}
           r={bubble.radius}
-          fill={getBubbleShade(bubble.color, bubble.distanceRatio)}
-          fillOpacity={isLightTheme ? 0.66 : 0.48}
-          stroke={isDragTarget ? (dragView?.target?.kind === 'nest' ? '#f59e0b' : '#a78bfa') : selectedId === bubble.task.id ? (isLightTheme ? '#0f172a' : '#f8fafc') : (isLightTheme ? 'rgba(14,116,144,0.56)' : '#bae6fd')}
-          strokeOpacity={selectedId === bubble.task.id ? 1 : isLightTheme ? 0.78 : 0.65}
+          fill={getBubbleShade(bubble.color, bubble.distanceRatio, isLightTheme)}
+          fillOpacity={isLightTheme ? 0.94 : 0.90}
+          stroke={isDragTarget ? (dragView?.target?.kind === 'nest' ? '#f59e0b' : '#a78bfa') : selectedId === bubble.task.id ? (isLightTheme ? '#0f172a' : '#f8fafc') : (isLightTheme ? '#47748d' : '#b5d5eb')}
+          strokeOpacity={selectedId === bubble.task.id ? 1 : isLightTheme ? 0.90 : 0.82}
           strokeWidth={isDragTarget || isDragged ? 5 : selectedId === bubble.task.id ? 3.5 : 2.4}
         />
         {ownDeadlineOverdue || subtaskDeadlineOverdue ? (
@@ -1049,7 +1050,7 @@ export function BubbleField({
         ) : null}
         <text x={0}
             y={-((vectorTitleLines.length - 1) * titleFontSize * 1.12) / 2 + titleFontSize * 0.32}
-            textAnchor="middle" fontSize={titleFontSize} fontWeight={600}
+            textAnchor="middle" fontSize={titleFontSize} fontWeight={650}
             fill={isLightTheme ? '#0f172a' : '#f8fafc'}
             stroke="none" pointerEvents="none"
             style={{ userSelect: 'none', textRendering: 'optimizeLegibility' }}>
@@ -1383,7 +1384,7 @@ export function BubbleField({
                         opacity={0.98} pointerEvents="none" />
                     );
                   })}
-                  {members.map((bubble) => renderBubble(bubble, origin))}
+                  {(foregroundTaskId ? [...members].sort((a, b) => Number(a.task.id === foregroundTaskId) - Number(b.task.id === foregroundTaskId)) : members).map((bubble) => renderBubble(bubble, origin))}
                 </motion.g>
               );
             })}
@@ -1537,16 +1538,18 @@ export function BubbleField({
               <g key={item.sphere?.id ?? 'unassigned-tasks'} transform={`translate(${item.x} ${item.y})`}>
                 <foreignObject x={-88} y={-18} width={176} height={40}>
                   <div className="bubble-sector-label flex w-full items-center justify-center gap-1 rounded-full border px-3 py-1.5 text-sm font-semibold"
-                    style={item.sphere ? {
-                      borderColor: `color-mix(in srgb, ${item.sphere.color} 29%, ${isLightTheme ? '#ffffff' : '#475569'})`,
-                      background: `color-mix(in srgb, ${item.sphere.color} ${isLightTheme ? '9%' : '15%'}, ${isLightTheme ? '#ffffff' : '#0f172a'})`
-                    } : undefined}>
+                    style={{
+                      borderColor: `color-mix(in srgb, ${item.sphere?.color ?? '#64748b'} 65%, ${isLightTheme ? '#475569' : '#cbd5e1'})`,
+                      background: `color-mix(in srgb, ${item.sphere?.color ?? '#64748b'} ${isLightTheme ? '25%' : '30%'}, ${isLightTheme ? '#ffffff' : '#101827'})`,
+                      color: `color-mix(in srgb, ${item.sphere?.color ?? '#64748b'} 24%, ${isLightTheme ? '#0f172a' : '#f8fafc'})`,
+                      borderWidth: 2
+                    }}>
                     {item.sphere ? (
                       <button className="inline-flex min-w-0 items-center gap-2" onClick={() => onRenameSphere?.(item.sphere!)}>
-                        {Icon ? <Icon size={15} color={item.sphere.color} /> : null}
-                        <span className="truncate" style={{ color: item.sphere.color }}>{item.sphere.name}</span>
+                        {Icon ? <Icon size={15} color="currentColor" /> : null}
+                        <span className="truncate">{item.sphere.name}</span>
                       </button>
-                    ) : <span className="truncate text-muted">Без сектора</span>}
+                    ) : <span className="truncate">Без сектора</span>}
                   </div>
                 </foreignObject>
                 {item.sphere ? <foreignObject x={-12} y={20} width={24} height={24}>

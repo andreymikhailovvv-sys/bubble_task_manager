@@ -19,9 +19,9 @@ test('desktop and compact web show the actual successful postpone count in a bub
     assert.match(bulk, /if \(postponedCount > 0\) setPostponeNotice\(\{ count: postponedCount/);
     assert.ok(bulk.indexOf('postponedCount += 1') > bulk.indexOf('await api.updateTask'));
   }
-  assert.match(desktop, /<WorkspaceActionToast count=\{postponeNotice\?\.count \?\? null\}/);
+  assert.match(desktop, /<WorkspaceActionToast message=\{workspaceBlockNotice[^}]+\} count=\{postponeNotice\?\.count \?\? null\}/);
   assert.match(mini, /<WorkspaceActionToast count=\{postponeNotice\?\.count \?\? null\}/);
-  assert.match(toast, /Отложено \{count\} просроченных задач/);
+  assert.match(toast, /Отложено \$\{count\} просроченных задач/);
   assert.match(toast, /role="status"/);
   assert.match(toast, /safe-area-inset-top/);
   assert.match(toast, /backdrop-blur-md/);
