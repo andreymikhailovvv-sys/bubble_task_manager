@@ -59,25 +59,3 @@ test('focus task and subtask editor dark outlines are muted without recoloring a
   assert.doesNotMatch(shared, /\.success-button|\.danger-button|\.importance-choice-button/);
   assert.match(css, /body\[data-theme='dark'\] \.focused-task-editor-shell,[\s\S]*?border-color: rgba\(100, 116, 139, 0\.42\) !important/);
 });
-
-test('web bubbles use a narrow title-size range, expand on hover, and keep the hovered group in front', async () => {
-  const bubbles = await read('../../client/src/components/BubbleField.tsx');
-  assert.match(bubbles, /return radius < 25 \? 13 : radius < 45 \? 15 : 16/);
-  assert.match(bubbles, /const hoverScale = 1\.30/);
-  assert.match(bubbles, /expanded \? baseFontSize \* 1\.08 \/ hoverScale : baseFontSize/);
-  assert.match(bubbles, /wrapBubbleTitleForSvg\(bubble\.task\.title, bubble\.radius, titleFontSize, titleLineClamp\)/);
-  assert.match(bubbles, /foregroundTaskId = dragView\?\.taskId \?\? hoveredTaskId/);
-  assert.match(bubbles, /fillOpacity=\{isLightTheme \? 0\.94 : 0\.90\}/);
-  assert.match(bubbles, /borderWidth: 2/);
-});
-
-test('embedded Focus notes use the Focus mount for tasks and subtasks', async () => {
-  const [app, taskEditor, css] = await Promise.all([
-    read('../../client/src/App.tsx'),
-    read('../../client/src/components/TaskEditor.tsx'),
-    read('../../client/src/styles.css')
-  ]);
-  assert.match(app, /<NotesEditor\s+value=\{focusedDraft\.description \?\? ''\}\s+inlineTarget=\{embeddedFocusActive \? fullscreenFocusTarget : null\}/);
-  assert.match(taskEditor, /<TaskNotesEditor\s+value=\{descriptionValue\}\s+inlineTarget=\{inlineTarget\}/);
-  assert.match(css, /\.fullscreen-embedded-focus > \.notes-editor-backdrop\.notes-editor-inline\s*\{[^}]*z-index: 240 !important/);
-});

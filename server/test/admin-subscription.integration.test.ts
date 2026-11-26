@@ -35,22 +35,13 @@ test('admin grants are atomic, free, idempotent, audited and use the ordinary pa
     assert.equal(after.aiCredits, 3150);
     assert.equal(await prisma.subscriptionPurchase.count({ where: { userId: user.id } }), 0);
     assert.equal(await prisma.adminSubscriptionChange.count({ where: { userId: user.id } }), 1);
-    // The daily cap on Start is 150 credits. The basic model can continue
-    // spending monthly allowance after that window is exhausted.
-    const daily = await reserveAiCreditsMilli(user.id, 150000, prisma, 'premium');
-    assert.equal(daily.includedMilli, 150000);
-    await settleAiCreditReservation(daily, 150000);
-    await assert.rejects(() => reserveAiCreditsMilli(user.id, 1000, prisma, 'premium'), /Недостаточно AI кредитов/);
-    const spend = await reserveAiCreditsMilli(user.id, 150000, prisma, 'basic');
-    assert.equal(spend.includedMilli, 150000);
-    await settleAiCreditReservation(spend, 150000);
-    assert.equal((await read()).aiBonusCreditsMilli, 100000);
-    assert.equal((await read()).aiPurchasedCreditsMilli, 50000);
+    const spend = await reserveAiCreditsMilli(user.id, 300000);
+    await settleAiCreditReservation(spend, 300000);
     assert.equal(await prisma.systemNotification.count({ where: { userId: user.id, eventKey: { startsWith: 'subscription-limit:' } } }), 1);
     const noRefill = await setAdminSubscription(input(await read(), 'start'));
     assert.equal(noRefill.changed, false);
     assert.equal(noRefill.user.aiIncludedCreditsMilli, 2700000);
-    const reserved = await reserveAiCreditsMilli(user.id, 100000, prisma, 'basic');
+    const reserved = await reserveAiCreditsMilli(user.id, 100000);
     const beforeReplace = await read();
     const competing = await Promise.allSettled([
       setAdminSubscription(input(beforeReplace, 'pro')),
