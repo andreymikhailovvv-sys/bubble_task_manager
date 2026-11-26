@@ -11,6 +11,7 @@ struct NativeEconomicEditorSheet: View {
 
     @State private var name: String
     @State private var title: String
+    @State private var positions: [EcoPositionDraft]
     @State private var amount: String
     @State private var balance: String
     @State private var paid: String
@@ -68,8 +69,9 @@ struct NativeEconomicEditorSheet: View {
         }
         _name = State(initialValue: raw("name"))
         _title = State(initialValue: raw("title"))
-        _amount = State(initialValue: EcoMoney.plain(
-            target.resource == .loans ? raw("principalMinor") : raw("amountMinor")))
+        _positions = State(initialValue: EcoPositionDraft.read(raw("positionsJson")))
+        _amount = State(initialValue: target.resource == .operations && !raw("calculation").isEmpty
+            ? raw("calculation") : EcoMoney.plain(target.resource == .loans ? raw("principalMinor") : raw("amountMinor")))
         _balance = State(initialValue: EcoMoney.plain(raw("balanceMinor").isEmpty ?
                                                      raw("openingBalanceMinor") : raw("balanceMinor")))
         _paid = State(initialValue: EcoMoney.plain(raw("paidMinor")))
@@ -196,7 +198,11 @@ struct NativeEconomicEditorSheet: View {
                     Text("Перевод между счетами").tag("TRANSFER")
                 }
                 TextField("Название", text: $title)
-                moneyInput("Сумма, ₽", value: $amount)
+                moneyInput("Сумма, ₽", value: $amount, calculator: true)
+                if EcoMoney.isExpression(amount) {
+                    Text(EcoMoney.calculate(amount).map { "= " + EcoMoney.formatted($0) } ?? "Введите корректное выражение")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 accountPicker(kind == "TRANSFER" ? "Счёт списания" : "Счёт", selection: $sourceID)
                 if kind == "TRANSFER" {
                     accountPicker("Счёт зачисления", selection: $targetID, except: sourceID)
@@ -211,6 +217,50 @@ struct NativeEconomicEditorSheet: View {
                 DatePicker("Дата и время", selection: $date, displayedComponents: [.date, .hourAndMinute])
                 TextField("Примечание", text: $note, axis: .vertical)
                     .lineLimit(2...4)
+            }
+            Section("Позиции") {
+                ForEach($positions) { $position in
+                    HStack {
+                        TextField("Название", text: $position.name)
+                        TextField("Сумма, ₽", text: Binding(
+                            get: { position.amount },
+                            set: { position.amount = EcoMoney.grouped($0) }
+                        ))
+                        .keyboardType(.numbersAndPunctuation)
+                        .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: 110)
+                        Button(role: .destructive) {
+                            positions.removeAll { $0.id == position.id }
+                        } label: { Image(systemName: "xmark.circle") }
+                        .buttonStyle(.borderless)
+                    }
+                }
+                if positions.count < 100 {
+                    Button { positions.append(EcoPositionDraft()) } label: {
+                        Label("Добавить позицию", systemImage: "plus")
+                    }
+                }
+                if !positions.isEmpty {
+                    Button("Использовать сумму позиций") {
+                        var total: Int64 = 0
+                        for position in positions {
+                            guard let parsed = EcoMoney.parse(position.amount, allowZero: true, allowNegative: true),
+                                  let number = Int64(parsed) else {
+                                errorText = "Укажите сумму каждой позиции."
+                                return
+                            }
+                            let (next, overflow) = total.addingReportingOverflow(number)
+                            guard !overflow else { errorText = "Сумма вне допустимого диапазона."; return }
+                            total = next
+                        }
+                        guard total > 0, total <= 999_999_999_999_999 else {
+                            errorText = "Сумма позиций должна быть положительной и допустимой."
+                            return
+                        }
+                        amount = EcoMoney.grouped(EcoMoney.plain(String(total)))
+                        errorText = nil
+                    }
+                }
             }
         }
     }
@@ -293,12 +343,12 @@ struct NativeEconomicEditorSheet: View {
         }
     }
 
-    private func moneyInput(_ label: String, value: Binding<String>) -> some View {
+    private func moneyInput(_ label: String, value: Binding<String>, calculator: Bool = false) -> some View {
         HStack {
             Text(label).font(.subheadline)
             Spacer(minLength: 7)
-            TextField("0,00", text: value)
-                .keyboardType(.decimalPad)
+            TextField("0,00", text: Binding(get: { value.wrappedValue }, set: { value.wrappedValue = EcoMoney.grouped($0) }))
+                .keyboardType(calculator ? .numbersAndPunctuation : .decimalPad)
                 .multilineTextAlignment(.trailing)
                 .font(.subheadline.monospacedDigit())
         }
@@ -365,9 +415,20 @@ struct NativeEconomicEditorSheet: View {
             if kind == "TRANSFER" && (targetID.isEmpty || targetID == sourceID) {
                 throw ValidationError.invalid("Для перевода выберите другой счёт зачисления.")
             }
+            guard let calculated = EcoMoney.calculate(amount) else {
+                throw ValidationError.invalid("Укажите корректную сумму или завершённое выражение.")
+            }
+            let lines = try positions.filter { !$0.name.isEmpty || !$0.amount.isEmpty }.map { position -> [String: String] in
+                let name = position.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !name.isEmpty, name.count <= 160 else { throw ValidationError.invalid("Укажите название позиции до 160 символов.") }
+                return ["name": name, "amountMinor": try requiredMoney(position.amount, zero: true, negative: true)]
+            }
+            let lineData = try JSONSerialization.data(withJSONObject: lines, options: [.sortedKeys])
             return [
                 "kind": kind, "title": title.trimmingCharacters(in: .whitespacesAndNewlines),
-                "amountMinor": try requiredMoney(amount),
+                "amountMinor": calculated,
+                "positionsJson": String(decoding: lineData, as: UTF8.self),
+                "calculation": EcoMoney.isExpression(amount) ? amount as Any : NSNull(),
                 "sourceAccountId": sourceID,
                 "targetAccountId": kind == "TRANSFER" ? targetID : NSNull(),
                 "category": kind == "TRANSFER" || category.isEmpty ? NSNull() : category,

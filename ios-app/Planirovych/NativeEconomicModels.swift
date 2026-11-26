@@ -22,6 +22,8 @@ struct EcoOperation: Codable, Identifiable {
     let occurredAt: String?
     let isAdjustment: Bool?
     let debtId: String?
+    let positionsJson: String?
+    let calculation: String?
 }
 
 struct EcoDebt: Codable, Identifiable {
@@ -110,7 +112,80 @@ struct EcoServerUser: Decodable {
 }
 
 /// Money is stored on the server in integer minor units, never a Double.
+struct EcoPositionDraft: Identifiable {
+    let id = UUID()
+    var name: String = ""
+    var amount: String = ""
+    static func read(_ raw: String) -> [EcoPositionDraft] {
+        guard let data = raw.data(using: .utf8),
+              let rows = (try? JSONSerialization.jsonObject(with: data)) as? [[String: String]] else { return [] }
+        return rows.map { EcoPositionDraft(name: $0["name"] ?? "", amount: EcoMoney.plain($0["amountMinor"])) }
+    }
+}
+struct EcoAdjustment: Decodable {
+    let amountMinor: String
+    let accountName: String
+}
+struct EcoMutationResult: Decodable {
+    let ok: Bool
+    let adjustment: EcoAdjustment?
+}
 enum EcoMoney {
+    static func grouped(_ value: String) -> String {
+        var result = value.components(separatedBy: .whitespacesAndNewlines).joined()
+        guard let regex = try? NSRegularExpression(pattern: #"\d+(?:[,.]\d*)?"#) else { return result }
+        let matches = regex.matches(in: result, range: NSRange(result.startIndex..., in: result))
+        for match in matches.reversed() {
+            guard let range = Range(match.range, in: result) else { continue }
+            let token = String(result[range])
+            let parts = token.split(whereSeparator: { $0 == "," || $0 == "." })
+            guard let whole = parts.first else { continue }
+            let digits = Array(whole)
+            let grouped = digits.enumerated().map { index, digit in
+                (index > 0 && (digits.count - index) % 3 == 0 ? " " : "") + String(digit)
+            }.joined()
+            result.replaceSubrange(range, with: grouped + String(token.dropFirst(whole.count)))
+        }
+        return result
+    }
+    static func isExpression(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let input = trimmed.hasPrefix("-") || trimmed.hasPrefix("+") ? String(trimmed.dropFirst()) : trimmed
+        return input.rangeOfCharacter(from: CharacterSet(charactersIn: "+-*/:xXхХ×÷−")) != nil
+    }
+    static func calculate(_ text: String) -> String? {
+        if !isExpression(text) { return parse(text) }
+        let input = text.components(separatedBy: .whitespacesAndNewlines).joined()
+            .replacingOccurrences(of: ",", with: ".")
+            .replacingOccurrences(of: "[xXхХ×]", with: "*", options: .regularExpression)
+            .replacingOccurrences(of: "[:÷]", with: "/", options: .regularExpression)
+            .replacingOccurrences(of: "−", with: "-")
+        guard input.count <= 240,
+              input.range(of: #"^\d{1,12}(?:\.\d{1,2})?(?:[+\-*/]\d{1,12}(?:\.\d{1,2})?)+$"#, options: .regularExpression) != nil,
+              let regex = try? NSRegularExpression(pattern: #"\d+(?:\.\d+)?|[+\-*/]"#) else { return nil }
+        let tokens = regex.matches(in: input, range: NSRange(input.startIndex..., in: input)).compactMap { match in
+            Range(match.range, in: input).map { String(input[$0]) }
+        }
+        guard let first = tokens.first, var current = Decimal(string: first, locale: Locale(identifier: "en_US_POSIX")) else { return nil }
+        var total = Decimal.zero
+        var sign = Decimal(1)
+        for index in stride(from: 1, to: tokens.count, by: 2) {
+            guard index + 1 < tokens.count, let next = Decimal(string: tokens[index + 1], locale: Locale(identifier: "en_US_POSIX")) else { return nil }
+            switch tokens[index] {
+            case "*": current *= next
+            case "/": guard next != 0 else { return nil }; current /= next
+            default: total += sign * current; current = next; sign = tokens[index] == "+" ? 1 : -1
+            }
+            guard !current.isNaN, !total.isNaN else { return nil }
+        }
+        var minor = (total + sign * current) * 100
+        guard !minor.isNaN, minor > 0 else { return nil }
+        var rounded = Decimal.zero
+        NSDecimalRound(&rounded, &minor, 0, .plain)
+        guard rounded > 0, rounded <= Decimal(999_999_999_999_999) else { return nil }
+        return NSDecimalNumber(decimal: rounded).stringValue
+    }
+
     static func decimal(_ minor: String?) -> Decimal {
         let raw = Decimal(string: minor ?? "0", locale: Locale(identifier: "en_US_POSIX")) ?? 0
         return raw / Decimal(100)

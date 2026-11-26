@@ -45,6 +45,7 @@ struct NativeEconomicView: View {
     @State private var isSaving = false
     @State private var loadingOperations = false
     @State private var errorText: String?
+    @State private var adjustmentNotice: String?
     @State private var deletionError: String?
 
     private let gold = Color(red: 0.88, green: 0.61, blue: 0.27)
@@ -143,6 +144,24 @@ struct NativeEconomicView: View {
             quickActionMenu
                 .padding(.trailing, 21)
                 .padding(.bottom, 24)
+        }
+        .overlay(alignment: .top) {
+            if let adjustmentNotice {
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    Text(adjustmentNotice).font(.footnote)
+                    Button { self.adjustmentNotice = nil } label: { Image(systemName: "xmark") }
+                }
+                .padding(12)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+                .shadow(radius: 8)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                .task(id: adjustmentNotice) {
+                    try? await Task.sleep(for: .seconds(5))
+                    if !Task.isCancelled { self.adjustmentNotice = nil }
+                }
+            }
         }
         .task { await refresh() }
         .sheet(item: $editor) { target in
@@ -744,7 +763,12 @@ struct NativeEconomicView: View {
         do {
             let api = NativeAPI()
             if let id = target.raw?["id"] as? String {
-                try await api.economicUpdate(target.resource, id: id, payload: payload)
+                let result = try await api.economicUpdate(target.resource, id: id, payload: payload)
+                if let correction = result.adjustment {
+                    adjustmentNotice = "Добавлена корректирующая операция на сумму " +
+                        (correction.amountMinor.hasPrefix("-") ? "" : "+") +
+                        EcoMoney.formatted(correction.amountMinor) + " на счёт " + correction.accountName
+                }
             } else {
                 try await api.economicCreate(target.resource, payload: payload)
             }

@@ -633,12 +633,13 @@ final class NativeAPI {
     }
 
     func economicUpdate(_ resource: EcoResource, id: String,
-                        payload: [String: Any]) async throws {
+                        payload: [String: Any]) async throws -> EcoMutationResult {
         guard !id.isEmpty else { throw NativeAPIError.invalidResponse }
-        let result: OperationResult = try await request(
+        let result: EcoMutationResult = try await request(
             "economic/\(resource.rawValue)/\(id)", method: "PATCH", json: payload
         )
         guard result.ok else { throw NativeAPIError.invalidResponse }
+        return result
     }
 
     func economicDelete(_ resource: EcoResource, id: String) async throws {
