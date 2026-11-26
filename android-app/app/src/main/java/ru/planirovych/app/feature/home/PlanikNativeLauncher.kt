@@ -75,12 +75,12 @@ internal fun PlanikNativeLauncher(
 
 /** Offline fallback for both the chat launcher and wardrobe. */
 @Composable
-internal fun NativeMascotFallback(dark:Boolean,mode:String,skinId:String,modifier:Modifier=Modifier) {
+internal fun NativeMascotFallback(dark:Boolean,mode:String,skinId:String,modifier:Modifier=Modifier,variant:String="planner") {
     val context = LocalContext.current
     val frameCount=mascotMotionFrameCount(skinId,mode)
     // Decode a small reusable sequence off the main thread. Streaming tokens
     // and animation ticks never trigger SVG parsing or bitmap allocation.
-    val frames by produceState<List<Bitmap?>>(emptyList(),context,dark,mode,skinId) {
+    val frames by produceState<List<Bitmap?>>(emptyList(),context,dark,mode,skinId,variant) {
         value=emptyList()
         value=withContext(Dispatchers.Default) {
             val suffix = if (dark) "" else "_light"
@@ -92,7 +92,7 @@ internal fun NativeMascotFallback(dark:Boolean,mode:String,skinId:String,modifie
                     val alternate=frame%2==1
                     val source=if((frameCount==2&&alternate)||(frameCount>2&&frame==11))blink else idle
                     val action=nativeMascotMotionSvg(skinId,mode,frame) ?: planikActionSvg(mode, alternate)
-                    val artwork=nativeMascotSkinSvg(source, skinId, dark, mode, frame)
+                    val artwork=nativeMascotSkinSvg(if(variant=="economic")economicMascotPalette(source) else source, skinId, dark, mode, frame)
                         .replace("</svg>",action+"</svg>")
                     val picture=SVG.getFromString(artwork).renderToPicture(420,375)
                     val full=Bitmap.createBitmap(420,375,Bitmap.Config.ARGB_8888).apply {
@@ -236,4 +236,16 @@ private fun planikActionSvg(mode: String, alternate: Boolean): String = when (mo
         """
     }
     else -> ""
+}
+
+private fun economicMascotPalette(source:String):String {
+    val pairs=mapOf(
+        "#5e5ca3" to "#ffe1a4","#373965" to "#da9a4b","#242e51" to "#7a431c",
+        "#b8b3ec" to "#ffe1a4","#928fd6" to "#da9a4b","#686cb6" to "#7a431c",
+        "#9ce4f5" to "#fff0c6","#afa8ff" to "#ffd27d","#7a75ca" to "#bb742c",
+        "#d5f4fa" to "#fff0c6","#c7c0fa" to "#ffd27d","#a8a0e7" to "#bb742c",
+        "#212e50" to "#382b27","#141d38" to "#181923","#4a4a7b" to "#382b27",
+        "#323a66" to "#181923","#88e0ed" to "#ffcd72","#8c8ed3" to "#d6a056",
+        "#f1f3ff" to "#ffefce")
+    return pairs.entries.fold(source){art,(from,to)->art.replace(from,to)}
 }

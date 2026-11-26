@@ -65,6 +65,18 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
     var loading by remember(userId) { mutableStateOf(true) }
     var error by remember(userId) { mutableStateOf("") }
     var adjustmentNotice by remember(userId){mutableStateOf("")}
+    var financeGesture by remember(userId){mutableStateOf("")}
+    var financeGestureKey by remember(userId){mutableIntStateOf(0)}
+    var economicSkin by remember(userId){mutableStateOf("classic")}
+    LaunchedEffect(userId,active){
+        if(active&&!userId.isNullOrBlank())runCatching{api.mascotWardrobe()}.onSuccess{wardrobe->
+            if(wardrobe.userId==userId){
+                val selected=wardrobe.selected["economic"] ?: "classic"
+                economicSkin=wardrobe.catalog.firstOrNull{it.variant=="economic"&&it.id==selected&&it.rank<=wardrobe.rank}?.id ?: "classic"
+            }
+        }
+    }
+    LaunchedEffect(financeGestureKey){if(financeGesture.isNotBlank()){kotlinx.coroutines.delay(5500);financeGesture=""}}
     LaunchedEffect(adjustmentNotice){if(adjustmentNotice.isNotBlank()){kotlinx.coroutines.delay(5000);adjustmentNotice=""}}
     var revision by remember(userId) { mutableIntStateOf(0) }
     var section by remember(userId) { mutableStateOf("overview") }
@@ -136,6 +148,10 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                 // would otherwise duplicate a financial record.
                 editor=null
                 error=""
+                if(resource=="operations"&&record==null){
+                    financeGesture=when(payload.ecoText("kind")){"INCOME"->"income";"EXPENSE"->"expense";else->""}
+                    financeGestureKey++
+                }
                 result.ecoObject("adjustment")?.let{adjustment->
                     val amount=adjustment.ecoText("amountMinor")
                     if(amount.isNotBlank())adjustmentNotice="Добавлена корректирующая операция на сумму "+(if(!amount.startsWith("-"))"+" else "")+ecoRubles(amount)+" на счёт "+adjustment.ecoText("accountName")
@@ -563,6 +579,13 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                         )
                     )
                 }
+            }
+        }
+        if(financeGesture.isNotBlank()){
+            key(financeGestureKey){
+                SharedMascotArtwork(economicSkin,dark,financeGesture,
+                    Modifier.align(Alignment.BottomEnd).padding(end=16.dp,bottom=100.dp).size(148.dp,138.dp),
+                    variant="economic")
             }
         }
         if(adjustmentNotice.isNotBlank()){

@@ -1,4 +1,4 @@
-import { normalizeEconomicPositions } from '../lib/economic-operation-details.js';
+import { normalizeEconomicPositions, normalizeEconomicCalculation } from '../lib/economic-operation-details.js';
 import { Prisma } from '@prisma/client';
 import { ECONOMIC_BASE_CATEGORIES } from '../lib/economic-category-presets.js';
 import { prisma } from '../db/prisma.js';
@@ -203,7 +203,10 @@ async function mutate(tx:Tx,owner:string,action:EconomicAction,record:Snapshot|n
       kind:String(d.kind),sourceAccountId,targetAccountId:target,
       amountMinor:BigInt(String(d.amountMinor)),title:String(d.title),
       note:d.note==null?null:String(d.note),category,
-      positionsJson:normalizeEconomicPositions(d.positionsJson), calculation:d.calculation==null?null:String(d.calculation),
+      positionsJson:normalizeEconomicPositions(d.positionsJson), calculation: (()=>{
+        if(action.payload.amountMinor!==undefined&&record?.amountMinor!==action.payload.amountMinor&&action.payload.calculation===undefined)return null;
+        try{return normalizeEconomicCalculation(d.calculation,BigInt(String(d.amountMinor)));}catch(cause){throw new EconomicActionError((cause as Error).message);}
+      })(),
       occurredAt:dates(d.occurredAt)??new Date()
     };
     if(action.action==='create')return (await tx.economicOperation.create({data:{userId:owner,...values}})).id;

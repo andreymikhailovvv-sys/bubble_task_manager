@@ -31,7 +31,7 @@ const LABELS:Record<string,string>={
   accountType:'Тип счёта',creditLimitMinor:'Кредитный лимит, ₽',
   principalMinor:'Сумма кредита, ₽',paidMinor:'Выплачено, ₽',
   sourceAccountId:'Счёт',targetAccountId:'Счёт зачисления',accountId:'Счёт долга',
-  category:'Категория',note:'Примечание',dueAt:'Срок возврата',
+  category:'Категория',note:'Примечание',calculation:'Калькуляция',dueAt:'Срок возврата',
   annualRateBps:'Ставка, базисных пунктов',termMonths:'Срок, мес.',
   startDate:'Дата начала',occurredAt:'Дата операции',lender:'Кредитор',
   paymentDate:'Дата платежа',postedToAccount:'Проводка по счёту',
@@ -92,7 +92,7 @@ function normalizedDraft(draft:Payload,reference:Payload):Payload{
           ? reference[key] : new Date(String(value).slice(0,10)+'T12:00:00.000Z').toISOString()
         : null];
     if(['annualRateBps','termMonths'].includes(key))return [key,Number(value)];
-    if(['category','note','lender','accountId','targetAccountId'].includes(key)&&value==='')
+    if(['category','note','calculation','lender','accountId','targetAccountId'].includes(key)&&value==='')
       return [key,null];
     return [key,value];
   })) as Payload;
@@ -231,7 +231,7 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
     const isDate=['occurredAt','dueAt','startDate','paymentDate'].includes(key);
     return <input aria-label={LABELS[key]} disabled={!editableStatus||busy}
       type={isDate?'date':'text'} inputMode={key.endsWith('Minor')?'decimal':undefined}
-      value={String(value??'')} maxLength={key==='note'?500:160}
+      value={String(value??'')} maxLength={key==='note'?500:key==='calculation'?240:160}
       onChange={e=>setField(key,key.endsWith('Minor')?groupMoneyInput(e.target.value):e.target.value)}/>;
   };
   return <div className="econ-finance-proposal" data-economic-proposal={proposal.id}>

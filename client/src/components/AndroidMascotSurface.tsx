@@ -20,7 +20,7 @@ export default function AndroidMascotSurface() {
       // Match the native 280x300 crop, rather than scaling the entire SVG
       // (including its generous blank side margins) into the small launcher.
       const svg = document.querySelector('.android-mascot-artwork .planik-svg');
-      svg?.setAttribute('viewBox', '100.7 25.4 230 246.4');
+      svg?.setAttribute('viewBox', params.get('variant')==='economic' ? '35 32 345 275' : '100.7 25.4 230 246.4');
       const body = document.querySelector('.android-mascot-artwork .planik-body-surface');
       const bounds = body?.getBoundingClientRect();
       if (bounds && bounds.width > 0 && bounds.height > 0) {

@@ -9,12 +9,14 @@ import kotlin.math.sin
 internal fun mascotMotionFrameCount(skin:String,mode:String):Int =
     when {
         mode=="idle" -> if(skin=="zoomer")12 else 2
+        mode in setOf("income","expense") -> 12
         skin!="classic" && mode in setOf("thinking","hover") -> 12
         else -> 2
     }
 
 internal fun mascotMotionFrameMillis(skin:String,mode:String):Long = when {
     mode=="idle" -> 260L
+    mode in setOf("income","expense") -> 135L
     mode=="thinking" && skin=="wizard" -> 420L
     mode=="thinking" && skin=="cat" -> 230L
     mode=="thinking" -> 240L
@@ -37,6 +39,19 @@ internal fun nativeMascotMotionSvg(skin:String,mode:String,frame:Int):String? {
         """<path d="M132 196Q139 226 $leftX $leftY M298 196Q291 226 $rightX $rightY" fill="none" stroke="$hands" stroke-width="17" stroke-linecap="round"/>"""
     fun star(x:Int,y:Int)= """<path d="M$x ${y-6}l2 4 4 2-4 2-2 4-2-4-4-2 4-2Z" fill="#f5dca0"/>"""
     return when {
+        mode in setOf("income","expense") -> {
+            val income=mode=="income"
+            val king=skin=="king"
+            val wallet=if(income&&!king)"""<rect x="175" y="227" width="80" height="43" rx="7" fill="#895027" stroke="#4b3020" stroke-width="2"/><path d="M175 238h80" stroke="#e8b96d" stroke-width="3"/>""" else ""
+            val money=(0..5).joinToString(""){i->
+                val phase=(frame+i*2)%12
+                val direction=if(i%2==0)-1 else 1
+                val x=if(king)if(income)215+direction*(95-phase*7) else 215+direction*phase*10 else if(income)215 else 176+phase*10
+                val y=if(income)176+phase*7 else 223-phase*7
+                if(king)"""<ellipse cx="$x" cy="$y" rx="10" ry="7" fill="#ffcc59" stroke="#995818" stroke-width="2"/>""" else """<g transform="translate($x $y) rotate(${phase*8})"><rect x="-16" y="-8" width="32" height="16" rx="2" fill="#7bb984" stroke="#28583d"/><circle r="4" fill="#d0e1a8"/></g>"""
+            }
+            """<g><path d="M132 196Q142 222 174 227M298 196Q${if(income)260 else 239} ${190+step} ${if(income)215 else 193} ${220+step}" stroke="#d69a49" stroke-width="18" fill="none" stroke-linecap="round"/>$wallet$money</g>"""
+        }
         skin=="pirate"&&mode=="thinking" -> """
             <g class="native-pirate-map">
               ${arms(161,235+step,269,235-step)}

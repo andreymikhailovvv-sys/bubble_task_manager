@@ -11,6 +11,8 @@ internal fun nativeMascotSkinSvg(source:String,skinId:String,dark:Boolean,mode:S
     val clip="""<defs><clipPath id="native-outfit"><rect x="122" y="76" width="186" height="174" rx="65"/></clipPath></defs>"""
     val front=when(skinId){
         "cat" -> ""
+        "king" -> """<path d="M156 88L148 43L179 62L215 38L251 62L282 43L274 88Q215 105 156 88Z" fill="#f5cc62" stroke="#8a4e16" stroke-width="3"/><path d="M133 196Q215 244 297 196L298 237Q215 270 132 237Z" fill="#991c49" stroke="#e7b452" stroke-width="4"/>"""
+        "banker" -> """<path d="M137 207L173 200L215 219L257 200L293 207L292 244Q215 263 138 244Z" fill="#fff6e8" stroke="#c3a98a" stroke-width="2"/><path d="M208 218H222L227 245L215 252L203 245Z" fill="#a12538"/><rect x="168" y="140" width="42" height="37" rx="10" fill="none" stroke="#50382c" stroke-width="4"/><rect x="220" y="140" width="42" height="37" rx="10" fill="none" stroke="#50382c" stroke-width="4"/><path d="M210 155H220" stroke="#50382c" stroke-width="3"/>"""
         "northern" -> """
             <path d="M261 204Q296 200 300 229Q295 263 280 287L251 278Q267 252 261 222Z" fill="#378784" stroke="#235d5f" stroke-width="2.4"/>
             <path d="M134 182Q151 175 169 183Q216 207 276 183Q295 173 306 190L311 216Q301 242 216 250Q143 246 123 219L125 195Z" fill="#65b8b0" stroke="#26595e" stroke-width="2.5"/>

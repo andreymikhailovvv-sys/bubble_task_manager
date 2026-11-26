@@ -1,4 +1,4 @@
-import { normalizeEconomicPositions } from '../lib/economic-operation-details.js';
+import { normalizeEconomicPositions, normalizeEconomicCalculation } from '../lib/economic-operation-details.js';
 import { Router, type Request, type Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
@@ -33,10 +33,9 @@ const money = (value: unknown, allowZero = false, allowNegative = false): bigint
   const n = BigInt(value);
   return (!allowNegative && n < 0n) || (!allowZero && n === 0n) || n > 999999999999999n || n < -999999999999999n ? null : n;
 };
-function operationDetails(body: Record<string, unknown>) {
+function operationDetails(body: Record<string, unknown>, amountMinor: bigint) {
   const positionsJson = normalizeEconomicPositions(body.positionsJson);
-  const calculation = optionalText(body.calculation, 240);
-  if (calculation === undefined) throw new Error('Некорректная калькуляция');
+  const calculation = normalizeEconomicCalculation(body.calculation, amountMinor);
   return { positionsJson, calculation };
 }
 const toDate = (value: unknown): Date | null => {
@@ -332,7 +331,7 @@ economicRouter.post('/operations', asyncHandler(async (req, res) => {
   const category = kind === 'TRANSFER' ? null : optionalText(body.category, 80);
   if (category === undefined) { error(res, 'Некорректная категория'); return; }
   let details: ReturnType<typeof operationDetails>;
-  try { details = operationDetails(body); } catch (cause) { error(res, (cause as Error).message); return; }
+  try { details = operationDetails(body, amountMinor); } catch (cause) { error(res, (cause as Error).message); return; }
   const operation = await prisma.economicOperation.create({
     data: { userId: owner, kind, amountMinor, sourceAccountId, targetAccountId, category, title, note, occurredAt, ...details }
   });
@@ -344,6 +343,7 @@ economicRouter.patch('/operations/:id', asyncHandler(async (req, res) => {
   if (!found) { error(res, 'Операция не найдена', 404); return; }
   if (found.debtId || found.isAdjustment) { error(res, 'Долговые и корректирующие операции нельзя редактировать напрямую', 409); return; }
   const body = { ...found, ...req.body };
+  if(req.body?.amountMinor !== undefined && String(req.body.amountMinor) !== found.amountMinor.toString() && req.body?.calculation === undefined) body.calculation = null;
   // Reuse POST-like validation without ever trusting client-supplied ownership.
   if (!['INCOME','EXPENSE','TRANSFER'].includes(body.kind)) { error(res,'Некорректный тип'); return; }
   const amountMinor = money(String(body.amountMinor));
@@ -359,7 +359,7 @@ economicRouter.patch('/operations/:id', asyncHandler(async (req, res) => {
   const count = await prisma.economicAccount.count({ where: { userId: owner, id: { in: ids } } });
   if (count !== ids.length) { error(res, 'Один из счетов не найден'); return; }
   let details: ReturnType<typeof operationDetails>;
-  try { details = operationDetails(body); } catch (cause) { error(res, (cause as Error).message); return; }
+  try { details = operationDetails(body, amountMinor); } catch (cause) { error(res, (cause as Error).message); return; }
   await prisma.economicOperation.updateMany({ where: { id: found.id, userId: owner },
     data: { kind: body.kind, amountMinor, title, note, category, occurredAt, sourceAccountId, targetAccountId, ...details } });
   res.json({ ok: true });
