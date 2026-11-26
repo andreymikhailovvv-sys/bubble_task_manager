@@ -77,7 +77,7 @@ test('small Planik matches light/dark website palette with tight tap bounds and 
     read('../../android-app/app/build.gradle.kts')
   ]);
   assert.match(native, /dark: Boolean/);
-  assert.match(native, /produceState<List<Bitmap\?>>\(emptyList\(\),context,dark,mode,skinId\)/);
+  assert.match(native, /produceState<List<Bitmap\?>>\(emptyList\(\),context,dark,mode,skinId,variant\)/);
   assert.match(native, /size\(width = 84\.dp, height = 90\.dp\)/);
   assert.match(native, /Bitmap\.createBitmap\(full, 80, 12, 280, 300\)/);
   assert.match(native, /indication = null/);
@@ -113,7 +113,7 @@ test('native mascot only hides its offline fallback after real transparent pixel
   assert.match(art,/Modifier\.fillMaxSize\(\)\.zIndex\(1f\)/);
   assert.doesNotMatch(art,/\balpha\s*=\s*0f/);
   assert.match(art,/onRenderProcessGone/);
-  assert.match(native,/nativeMascotSkinSvg\(source, skinId, dark, mode, frame\)/);
+  assert.match(native,/nativeMascotSkinSvg\(if\(variant=="economic"\)economicMascotPalette\(source\) else source, skinId, dark, mode, frame\)/);
   for(const id of ['cat','northern','maestro','zoomer','pirate','wizard','ninja','space']){
     assert.ok(skins.includes('"'+id+'"'),id+' offline artwork missing');
   }
@@ -142,7 +142,7 @@ test('all skins use the original launcher crop and individually cached animation
   }
   assert.match(art,/sin\(frame\*Math\.PI\/6\)/);
   assert.match(art,/sin\(frame\*Math\.PI\/4\+1\.3\)/);
-  assert.match(web,/setAttribute\('viewBox', '100\.7 25\.4 230 246\.4'\)/);
+  assert.match(web,/setAttribute\('viewBox', params\.get\('variant'\)==='economic' \? '35 32 345 275' : '100\.7 25\.4 230 246\.4'\)/);
   assert.match(home,/rememberModalBottomSheetState\(skipPartiallyExpanded=true\)/);
   assert.match(home,/sheetState=sheetState/);
   assert.match(live,/api\.getMascotWardrobe\(\)/);
