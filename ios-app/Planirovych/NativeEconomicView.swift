@@ -1,5 +1,6 @@
 import SwiftUI
 import Charts
+import WebKit
 
 private enum EcoSection: String, CaseIterable, Identifiable {
     case overview = "Обзор"
@@ -46,6 +47,9 @@ struct NativeEconomicView: View {
     @State private var loadingOperations = false
     @State private var errorText: String?
     @State private var adjustmentNotice: String?
+    @State private var financeReaction: String?
+    @State private var financeReactionKey = UUID()
+    @State private var economicSkin = "classic"
     @State private var deletionError: String?
 
     private let gold = Color(red: 0.88, green: 0.61, blue: 0.27)
@@ -141,6 +145,19 @@ struct NativeEconomicView: View {
                 .padding(.bottom, 110)
             }
             .background(canvas)
+            if let financeReaction {
+                EcoMoneyMascotView(skin: economicSkin, mode: financeReaction, dark: theme == .dark)
+                    .id(financeReactionKey)
+                    .frame(width: 180, height: 180)
+                    .padding(.trailing, 12)
+                    .padding(.bottom, 76)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                    .task(id: financeReactionKey) {
+                        try? await Task.sleep(for: .seconds(7))
+                        if !Task.isCancelled { self.financeReaction = nil }
+                    }
+            }
             quickActionMenu
                 .padding(.trailing, 21)
                 .padding(.bottom, 24)
@@ -163,7 +180,10 @@ struct NativeEconomicView: View {
                 }
             }
         }
-        .task { await refresh() }
+        .task {
+            await refresh()
+            if let skin = try? await NativeAPI().economicMascotSkin() { economicSkin = skin }
+        }
         .sheet(item: $editor) { target in
             if let snapshot {
                 NativeEconomicEditorSheet(
@@ -771,6 +791,12 @@ struct NativeEconomicView: View {
                 }
             } else {
                 try await api.economicCreate(target.resource, payload: payload)
+                if target.resource.rawValue == "operations",
+                   let kind = payload["kind"] as? String,
+                   ["INCOME", "EXPENSE"].contains(kind) {
+                    financeReaction = kind == "INCOME" ? "income" : "expense"
+                    financeReactionKey = UUID()
+                }
             }
             // The write is already committed. Never retry it merely because
             // refresh failed: otherwise a finance record could be duplicated.
@@ -863,4 +889,34 @@ struct NativeEconomicView: View {
             nextCursor = result.nextCursor
         } catch { errorText = error.localizedDescription }
     }
+}
+
+
+/// Only the mascot artwork is web-rendered; the financial workspace stays native.
+private struct EcoMoneyMascotView: UIViewRepresentable {
+    let skin: String
+    let mode: String
+    let dark: Bool
+
+    func makeUIView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.websiteDataStore = .nonPersistent()
+        let view = WKWebView(frame: .zero, configuration: config)
+        view.isOpaque = false
+        view.backgroundColor = .clear
+        view.scrollView.backgroundColor = .clear
+        view.scrollView.isScrollEnabled = false
+        view.isUserInteractionEnabled = false
+        var parts = URLComponents(string: "https://planirovych.ru/android-mascot")
+        parts?.queryItems = [
+            URLQueryItem(name: "variant", value: "economic"),
+            URLQueryItem(name: "skin", value: skin),
+            URLQueryItem(name: "mode", value: mode),
+            URLQueryItem(name: "theme", value: dark ? "dark" : "light")
+        ]
+        if let url = parts?.url { view.load(URLRequest(url: url)) }
+        return view
+    }
+
+    func updateUIView(_ uiView: WKWebView, context: Context) {}
 }

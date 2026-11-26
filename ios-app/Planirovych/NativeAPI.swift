@@ -596,6 +596,12 @@ final class NativeAPI {
 
     // Economic API: same protected ledger, account-scoped ownership and
     // server-side CSRF validation used by the Android and Mini App clients.
+    func economicMascotSkin() async throws -> String {
+        struct Wardrobe: Decodable { let selected: [String: String] }
+        let response: Wardrobe = try await request("mascot-wardrobe")
+        return response.selected["economic"] ?? "classic"
+    }
+
     func economicSnapshot() async throws -> EcoSnapshot {
         try await request("economic/snapshot")
     }
