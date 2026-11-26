@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { debtOperationKind, debtOperationTitle, economicSourceDelta, ECONOMIC_DEBT_OPERATION_KINDS } from '../src/lib/economic-debt.js';
+import { debtOperationKind, debtOperationTitle, economicSourceDelta, economicOperationTotals, ECONOMIC_DEBT_OPERATION_KINDS } from '../src/lib/economic-debt.js';
 
 test('new borrowed debt credits main account and repayment debits it', () => {
   assert.equal(debtOperationKind('OWE', 'FUNDING'), 'DEBT_BORROWED');
@@ -24,4 +24,10 @@ test('debt classifications are distinct from income, expense and internal transf
   assert.equal(economicSourceDelta('INCOME', 55n), 55n);
   assert.equal(economicSourceDelta('EXPENSE', 55n), -55n);
   assert.equal(economicSourceDelta('TRANSFER', 55n), -55n);
+});
+
+test('filtered ledger totals count debt cash movements and corrections but not internal transfers',()=>{
+  const group=(kind:string,amountMinor:bigint)=>({kind,_sum:{amountMinor}});
+  assert.deepEqual(economicOperationTotals([group('INCOME',100000n),group('EXPENSE',12500n),group('DEBT_BORROWED',50000n),group('DEBT_REPAID',20000n),group('TRANSFER',999999n)]),{receivedMinor:'150000',spentMinor:'32500',netMinor:'117500'});
+  assert.deepEqual(economicOperationTotals([]),{receivedMinor:'0',spentMinor:'0',netMinor:'0'});
 });

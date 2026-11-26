@@ -9,7 +9,7 @@ import { applyEconomicProposal, rejectEconomicProposal, undoEconomicProposal, ed
 import { EconomicActionError } from '../services/economic-ai-action-validation.service.js';
 import { economicAccountMovementMinor, recordEconomicBalanceAdjustment } from '../services/economic-account-balance.service.js';
 import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
-import { debtOperationKind, debtOperationTitle, economicSourceDelta, ECONOMIC_DEBT_OPERATION_KINDS, type EconomicDebtDirection } from '../lib/economic-debt.js';
+import { debtOperationKind, debtOperationTitle, economicSourceDelta, economicOperationTotals, ECONOMIC_DEBT_OPERATION_KINDS, type EconomicDebtDirection } from '../lib/economic-debt.js';
 
 export const economicRouter = Router();
 economicRouter.use(requireAuth);
@@ -311,14 +311,8 @@ economicRouter.get('/operations', asyncHandler(async (req, res) => {
     prisma.economicOperation.findMany({where, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 51, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})}),
     prisma.economicOperation.groupBy({by:['kind'],where,_sum:{amountMinor:true}})
   ],{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
-  let received=0n, spent=0n;
-  for(const group of groups){
-    if(group.kind==='TRANSFER')continue;
-    const delta=economicSourceDelta(group.kind,group._sum.amountMinor??0n);
-    if(delta>0n)received+=delta;else spent-=delta;
-  }
   res.json({ operations: rows.slice(0, 50).map(operationOut), nextCursor: rows.length > 50 ? rows[49].id : null,
-    totals:{receivedMinor:received.toString(),spentMinor:spent.toString(),netMinor:(received-spent).toString()} });
+    totals:economicOperationTotals(groups) });
 }));
 economicRouter.post('/operations', asyncHandler(async (req, res) => {
   const owner = userId(req), body = req.body ?? {};
