@@ -47,22 +47,31 @@ export function EconomicMoneyGesture({mode,skinId,suffix}:{mode:FinancialMascotM
       const duration=king&&income?2.05:1.4;
       const t=(elapsed%duration)/duration;
       if(king&&income){
-        // No permanent pile: coins only appear in the two handfuls as the
-        // king closes his hands, then physically travel with them to his lap.
-        const reach=ease(t/.24),carry=ease((t-.28)/.40),reset=ease((t-.79)/.20);
-        const leftX=mix(mix(155,145,reach),195,carry);
-        const leftY=mix(mix(224,260,reach),231,carry);
-        moveHand(0,mix(leftX,155,reset),mix(leftY,224,reset),123,246);
-        moveHand(1,430-mix(leftX,155,reset),mix(leftY,224,reset),307,246);
+        // The coins are the pile itself, visible before the hands move.
+        // Each coin keeps its identity while both hands sweep across the pile
+        // and pull those same coins towards the king's lap.
+        const approach=ease(t/.19),sweep=ease((t-.22)/.43);
+        const hug=ease((t-.63)/.18),reset=ease((t-.88)/.11);
+        const sweepX=mix(mix(mix(132,147,approach),204,sweep),195,hug);
+        const sweepY=mix(mix(mix(243,270,approach),248,sweep),232,hug);
+        const leftX=mix(sweepX,132,reset),leftY=mix(sweepY,243,reset);
+        moveHand(0,leftX,leftY,128,245);
+        moveHand(1,430-leftX,leftY,302,245);
         nodes.forEach((node,i)=>{
-          const side=i%2===0?-1:1,slot=Math.floor(i/2),col=slot%3,row=Math.floor(slot/3);
-          const grabX=215+side*(64+(col-1)*8),grabY=257-row*9+(col%2)*3;
-          const lapX=215+side*(11+col*6),lapY=238-row*7;
-          const p=ease((t-.28-row*.012)/.40);
-          const x=mix(grabX,lapX,p),y=mix(grabY,lapY,p)-6*Math.sin(Math.PI*p);
-          node.setAttribute('transform','translate('+x+' '+y+') rotate('+mix((col-1)*19,side*8,p)+')');
-          const pickUp=ease((t-.16)/.10),putDown=1-ease((t-.66)/.14);
-          node.setAttribute('opacity',String(pickUp*putDown));
+          const side=i%2===0?-1:1,slot=Math.floor(i/2);
+          const col=slot%3,row=Math.floor(slot/3);
+          // A wide, three-row pile rests on the floor in front of the throne.
+          const pileX=215+side*(70-col*24+row*3);
+          const pileY=268+row*7+(col%2)*3;
+          const lapX=215+side*(10+col*3+row*3);
+          const lapY=232+row*3;
+          // The outside coins get scooped first, matching each hand's sweep.
+          const gathered=ease((t-.23-col*.075-row*.015)/.41);
+          const x=mix(pileX,lapX,gathered);
+          const y=mix(pileY,lapY,gathered)-8*Math.sin(Math.PI*gathered);
+          node.setAttribute('transform','translate('+x+' '+y+') rotate('+mix((col-1)*10,side*6,gathered)+')');
+          // Fade only after all coins have been deposited, ready for a new loop.
+          node.setAttribute('opacity',String(1-ease((t-.91)/.075)));
         });
         return;
       }

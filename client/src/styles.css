@@ -17137,3 +17137,59 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
 .notes-editor-inline .notes-editor-content::-webkit-scrollbar{display:none!important;width:0;height:0}
 
 .fullscreen-workspace-pane:has(.notes-editor-inline){padding:0!important;scrollbar-gutter:auto!important}.fullscreen-workspace-pane:has(.notes-editor-inline)>.standalone-notes-inline-mount{width:100%!important;max-width:none!important;margin:0!important;padding:0!important;scrollbar-gutter:auto!important}
+
+/* The notes board is the entire workspace when it is the only block.
+   Do not expose the underlying rounded canvas at the viewport corners. */
+.fullscreen-workspace-single:has(.standalone-notes-inline-mount) {
+  padding: 0 !important;
+}
+.fullscreen-workspace-single-content:has(> .standalone-notes-inline-mount) {
+  width: 100%;
+  height: 100%;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  overflow: hidden;
+}
+.fullscreen-workspace-single-content > .standalone-notes-inline-mount {
+  width: 100% !important;
+  max-width: none !important;
+  height: 100% !important;
+  min-width: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  overflow: hidden;
+}
+.fullscreen-workspace-single-content .standalone-notes-backdrop.standalone-notes-inline,
+.fullscreen-workspace-single-content .standalone-notes-inline .standalone-notes-board {
+  border-radius: 0 !important;
+}
+.fullscreen-workspace-single-content .standalone-notes-inline .standalone-notes-board {
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* The inline editor must cover the complete notes mount, without a visible
+   right-side gutter or neighboring strip. The content itself keeps its
+   existing scroll-fade mask on both vertical edges. */
+.fullscreen-workspace-single-content .notes-editor-backdrop.notes-editor-inline,
+.fullscreen-workspace-pane .notes-editor-backdrop.notes-editor-inline {
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  box-sizing: border-box;
+}
+.fullscreen-workspace-single-content .notes-editor-inline .notes-editor-panel,
+.fullscreen-workspace-pane .notes-editor-inline .notes-editor-panel {
+  margin: 0 !important;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.fullscreen-workspace-single-content:has(.notes-editor-inline),
+.fullscreen-workspace-pane:has(.notes-editor-inline) {
+  scrollbar-gutter: auto !important;
+  overflow: hidden;
+}

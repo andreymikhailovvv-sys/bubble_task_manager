@@ -9,6 +9,7 @@ import kotlin.math.sin
 internal fun mascotMotionFrameCount(skin:String,mode:String):Int =
     when {
         mode=="idle" -> if(skin=="zoomer")12 else 2
+        skin=="king" && mode=="income" -> 24
         mode in setOf("income","expense") -> 12
         skin!="classic" && mode in setOf("thinking","hover") -> 12
         else -> 2
@@ -16,6 +17,7 @@ internal fun mascotMotionFrameCount(skin:String,mode:String):Int =
 
 internal fun mascotMotionFrameMillis(skin:String,mode:String):Long = when {
     mode=="idle" -> 260L
+    skin=="king" && mode=="income" -> 86L
     mode in setOf("income","expense") -> 135L
     mode=="thinking" && skin=="wizard" -> 420L
     mode=="thinking" && skin=="cat" -> 230L
@@ -42,20 +44,18 @@ internal fun nativeMascotMotionSvg(skin:String,mode:String,frame:Int):String? {
         mode in setOf("income","expense") -> {
             val income=mode=="income"
             val king=skin=="king"
-            val t=(frame%12)/12.0
+            val t=if(king&&income)(frame%24)/24.0 else (frame%12)/12.0
             fun smooth(x:Double):Double{val p=x.coerceIn(0.0,1.0);return p*p*(3-2*p)}
             fun mix(a:Double,b:Double,p:Double)=a+(b-a)*p
             fun coin(x:Int,y:Int) = """<ellipse cx="$x" cy="$y" rx="10" ry="7" fill="#ffcc59" stroke="#995818" stroke-width="2"/>"""
             fun bill(x:Int,y:Int,angle:Int) = """<g transform="translate($x $y) rotate($angle)"><rect x="-16" y="-8" width="32" height="16" rx="2" fill="#7bb984" stroke="#28583d"/><circle r="4" fill="#d0e1a8"/></g>"""
             val wallet=if(income&&!king)"""<rect x="175" y="227" width="80" height="43" rx="7" fill="#895027" stroke="#4b3020" stroke-width="2"/><path d="M175 238h80" stroke="#e8b96d" stroke-width="3"/>""" else ""
-            // The king holds only the handful he is collecting; no separate
-            // static coin pile may appear beside his throne on income.
+            // On income, the coins in front of the king are animated individually;
+            // no second static pile or newly materialized coins are used.
             val pile=if(!income)(0..4).joinToString(""){i->
                 if(king)coin(173+i*3,220-i*3) else bill(173+i*2,220-i*3,0)
             }else ""
             val reach=smooth(t/.24)
-            val carry=smooth((t-.28)/.40)
-            val reset=smooth((t-.79)/.20)
             val lift=smooth((t-.20)/.32)
             val flick=smooth((t-.27)/.20)
             val back=smooth((t-.62)/.36)
@@ -64,10 +64,14 @@ internal fun nativeMascotMotionSvg(skin:String,mode:String,frame:Int):String? {
             val rightX:Double
             val rightY:Double
             if(king&&income){
-                val gatheringX=mix(mix(155.0,145.0,reach),195.0,carry)
-                val gatheringY=mix(mix(224.0,260.0,reach),231.0,carry)
-                leftX=mix(gatheringX,155.0,reset)
-                leftY=mix(gatheringY,224.0,reset)
+                val approaching=smooth(t/.19)
+                val sweeping=smooth((t-.22)/.43)
+                val hugging=smooth((t-.63)/.18)
+                val resetting=smooth((t-.88)/.11)
+                val handX=mix(mix(mix(132.0,147.0,approaching),204.0,sweeping),195.0,hugging)
+                val handY=mix(mix(mix(243.0,270.0,approaching),248.0,sweeping),232.0,hugging)
+                leftX=mix(handX,132.0,resetting)
+                leftY=mix(handY,243.0,resetting)
                 rightX=430-leftX
                 rightY=leftY
             }else if(income){
@@ -84,17 +88,18 @@ internal fun nativeMascotMotionSvg(skin:String,mode:String,frame:Int):String? {
             val actualRightX=if(!income)mix(rightX,254.0,back)else rightX
             val actualRightY=if(!income)mix(rightY,224.0,back)else rightY
             val money=when{
-                king&&income -> if(t<.16||t>.81)""else (0..17).joinToString(""){i->
+                king&&income -> (0..17).joinToString(""){i->
                     val side=if(i%2==0)-1 else 1
                     val slot=i/2;val col=slot%3;val row=slot/3
-                    val grabX=215.0+side*(64.0+(col-1)*8)
-                    val grabY=257.0-row*9+(col%2)*3
-                    val lapX=215.0+side*(11.0+col*6)
-                    val lapY=238.0-row*7
-                    val p=smooth((t-.28-row*.012)/.40)
-                    val x=mix(grabX,lapX,p).toInt()
-                    val y=(mix(grabY,lapY,p)-6*sin(PI*p)).toInt()
-                    val opacity=smooth((t-.16)/.1)*(1-smooth((t-.66)/.14))
+                    // The same coins start in a wide pile, then move with the scoop.
+                    val pileX=215.0+side*(70-col*24+row*3)
+                    val pileY=268.0+row*7+(col%2)*3
+                    val lapX=215.0+side*(10+col*3+row*3)
+                    val lapY=232.0+row*3
+                    val gathered=smooth((t-.23-col*.075-row*.015)/.41)
+                    val x=mix(pileX,lapX,gathered).toInt()
+                    val y=(mix(pileY,lapY,gathered)-8*sin(PI*gathered)).toInt()
+                    val opacity=1-smooth((t-.88)/.08)
                     """<g opacity="$opacity">""" + coin(x,y) + "</g>"
                 }
                 income -> (0..5).joinToString(""){i->

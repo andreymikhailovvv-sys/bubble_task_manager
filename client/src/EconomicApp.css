@@ -771,8 +771,9 @@ body:has(.econ-root.econ-mobile-workspace) #root{min-height:100dvh}
 .econ-operations-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;position:relative;min-height:54px;z-index:3}
 .econ-operations-toolbar .econ-filters-control{position:relative;flex:none;margin:0}
 .econ-operations-toolbar .econ-filters-toggle{width:38px;height:38px;padding:0;display:grid;place-items:center}
-.econ-operations-toolbar .econ-filter-totals{flex:1;min-width:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:center;border:0;padding:0;margin:0}
-.econ-operations-toolbar .econ-filter-totals span{min-width:0;font-size:11px;line-height:1.4;white-space:nowrap}
+/* Keep totals grouped at the left; the filter control owns the far right. */
+.econ-operations-toolbar .econ-filter-totals{flex:0 1 auto;min-width:0;max-width:calc(100% - 50px);display:flex;align-items:center;justify-content:flex-start;gap:clamp(8px,1.6vw,20px);border:0;padding:0;margin:0}
+.econ-operations-toolbar .econ-filter-totals span{flex:0 1 auto;min-width:0;font-size:11px;line-height:1.4;white-space:nowrap}
 .econ-operations-toolbar .econ-filter-totals strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:clamp(12px,1.35vw,16px);font-weight:800;line-height:1.4}
 .econ-root .econ-filters-control .econ-filters,
 .econ-root.econ-mobile-workspace .econ-filters-control .econ-filters{

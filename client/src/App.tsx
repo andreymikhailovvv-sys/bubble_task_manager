@@ -5157,15 +5157,18 @@ export default function App() {
 
   const sourceFullscreenPaneIndex = (target: EventTarget | null): 0 | 1 =>
     target instanceof Element && target.closest('[data-fullscreen-pane-index]')?.getAttribute('data-fullscreen-pane-index') === '1' ? 1 : 0;
-  const openTaskInOtherPane = (task: Task, sourcePaneIndex: 0 | 1) => {
+  const openTaskInOtherPane = (task: Task, _sourcePaneIndex: 0 | 1) => {
     if (!isBubbleFullscreen || task.parentTaskId || (task.taskType ?? 'TASK') !== 'TASK') return;
-    const otherPane: 0 | 1 = sourcePaneIndex === 0 ? 1 : 0;
-    const nextSlots = replaceFullscreenPanel(fullscreenPanels, otherPane, { kind: 'task-ai', taskId: task.id });
-    setFullscreenPanelSlots(nextSlots);
-    setFullscreenDisplayModes(nextSlots.flatMap(panel => panel.kind === 'mode' ? [panel.mode] : []));
-    setFocusedTaskId(task.id);
-    setIsAiExpanded(false);
-    setIsAiChatOpen(false);
+    // Context-menu opening follows "Добавить блок": first choose the target
+    // pane (or the side of a single pane), then replace/add it on selection.
+    // Nothing is replaced, and the focused task is unchanged, until placement.
+    if (fullscreenPanels.some(panel => panel.kind === 'task-ai')) {
+      setWorkspaceBlockNotice(Date.now());
+      return;
+    }
+    blockDragRef.current = false;
+    setIsAddMenuOpen(false);
+    setPendingWorkspaceBlock({ kind: 'task-ai', taskId: task.id });
   };
 
   const sphereById = new Map(spheres.map((sphere) => [sphere.id, sphere]));
