@@ -64,6 +64,8 @@ import { useSubscriptionPurchase } from './lib/useSubscriptionPurchase';
 import { ExpandedAiChat } from './components/ExpandedAiChat';
 import { QuickAiLauncherFrame } from './components/QuickAiLauncherFrame';
 import { PlanikMascot } from './components/PlanikMascot';
+import { BasicPlanikTraining } from './components/BasicPlanikTraining';
+import { TRAINING_SPHERES, TRAINING_COMPLETE_ID, TRAINING_COMPLETE_TITLE, createTrainingTasks, createCompletionTrainingTask, nextBasicTrainingStep, applyTrainingBubbleAction, type BasicTrainingStep } from './lib/basicTraining';
 import { MascotIdentityContext, useMascotSurface } from './components/MascotPresence';
 import { useMascotWardrobe, MascotWardrobeDialog, MascotWardrobeTrigger } from './components/MascotWardrobe';
 import ModuleRail from './components/ModuleRail';
@@ -1014,6 +1016,16 @@ export default function App() {
   const [trainingOpenSignal, setTrainingOpenSignal] = useState(0);
   const [hasUnreadNews, setHasUnreadNews] = useState(false);
   const [isOnboardingOfferOpen, setIsOnboardingOfferOpen] = useState(false);
+  const [basicStep, setBasicStep] = useState<BasicTrainingStep | null>(null);
+  const [basicTasks, setBasicTasks] = useState<Task[]>([]);
+  const [basicNotice, setBasicNotice] = useState<string | null>(null);
+  const basicModeRestore = useRef<'global' | 'sectors'>('sectors');
+  const basicRootTasks = useMemo(() => basicTasks.filter(task => !task.parentTaskId && task.status !== 'DONE'), [basicTasks]);
+  const basicSubtasks = useMemo(() => {
+    const result: Record<string, Task[]> = {};
+    for (const task of basicTasks) if (task.parentTaskId) (result[task.parentTaskId] ??= []).push(task);
+    return result;
+  }, [basicTasks]);
   const [activeTourStep, setActiveTourStep] = useState<TaskTourStep | AiTourStep | FeatureTourStep | WorkspaceTourStep>(null);
   const [tourWorkspaceUsesPrimary, setTourWorkspaceUsesPrimary] = useState(false);
   const tourRestoreStateRef = useRef<{
@@ -5689,9 +5701,51 @@ export default function App() {
     if (next) setActiveTourStep(next.id);
     else finishTaskTour();
   };
-  const isTourAddMenuOpen = activeTourStep === 'create-task' || activeTourStep === 'create-event' || activeTourStep === 'create-sector';
+  const startBasicTraining = () => {
+    rememberTourWorkspace();
+    basicModeRestore.current = mode;
+    setBasicTasks(createTrainingTasks());
+    setBasicNotice(null);
+    setActiveTourStep(null);
+    setIsUpdatesOpen(false);
+    setFocusedTaskId(null);
+    setEditorState(null);
+    setIsAiChatOpen(false);
+    setIsBubbleFullscreen(true);
+    setMode('sectors');
+    setDisplayMode('bubbles');
+    setFullscreenDisplayModes(['bubbles']);
+    setFullscreenPanelSlots([{ kind: 'mode', mode: 'bubbles' }]);
+    setPendingWorkspaceBlock(null);
+    setBasicStep('intro');
+  };
+  const finishBasicTraining = () => {
+    setBasicStep(null);
+    setBasicTasks([]);
+    setBasicNotice(null);
+    setMode(basicModeRestore.current);
+    setPendingWorkspaceBlock(null);
+    blockDragRef.current = false;
+    finishTaskTour();
+  };
+  const advanceBasicTraining = () => {
+    if (!basicStep) return;
+    const next = nextBasicTrainingStep(basicStep);
+    if (!next) { finishBasicTraining(); return; }
+    if (next === 'complete') setBasicTasks(previous => [...previous, createCompletionTrainingTask()]);
+    if (next === 'block' || next === 'notes') {
+      // Free a slot before teaching block placement; restore the sidebar for its lesson.
+      setFullscreenDisplayModes(['bubbles']);
+      setFullscreenPanelSlots([{ kind: 'mode', mode: 'bubbles' }]);
+      setFocusedTaskId(null);
+      setIsAddMenuOpen(next === 'block');
+    }
+    setBasicNotice(null);
+    setBasicStep(next);
+  };
+  const isTourAddMenuOpen = basicStep === 'block' || activeTourStep === 'create-task' || activeTourStep === 'create-event' || activeTourStep === 'create-sector';
   const forceQuickAiPreviewOpen = activeTourStep === 'quick-ai' || activeTourStep === 'ai-quick-chat';
-  const integrationTourKind = activeTourStep === 'feature-integration-send' ? 'messages'
+  const integrationTourKind = basicStep === 'integrations' ? 'bot' : basicStep === 'android' ? 'android' : activeTourStep === 'feature-integration-send' ? 'messages'
     : activeTourStep === 'feature-integration-telegram-ai' ? 'assistant'
     : activeTourStep === 'feature-integration-mail' ? 'email' : null;
 
@@ -5798,7 +5852,7 @@ export default function App() {
               fullscreen={isBubbleFullscreen}
               compact={isBubbleFullscreen && fullscreenPanels.length === 2}
               themeMode={effectiveThemeMode}
-              showTrainingInvitation={isOnboardingOfferOpen}
+              showTrainingInvitation={!basicStep && isOnboardingOfferOpen}
               onOpenTraining={() => {
                 setTrainingOpenSignal(signal => signal + 1);
                 setIsUpdatesOpen(true);
@@ -5807,47 +5861,68 @@ export default function App() {
                 localStorage.setItem(getOnboardingOfferStorageKey(currentUser.id), '1');
                 setIsOnboardingOfferOpen(false);
               }}
-            tasks={isBubbleFullscreen ? fullscreenBubbleTasks : visibleTasks}
-            timelinePreviewTasks={activeTimelineItems}
-            spheres={isBubbleFullscreen ? fullscreenBubbleSpheres : visibleSpheres}
+            tasks={basicStep ? basicRootTasks : isBubbleFullscreen ? fullscreenBubbleTasks : visibleTasks}
+            timelinePreviewTasks={basicStep ? basicTasks : activeTimelineItems}
+            spheres={basicStep ? TRAINING_SPHERES : isBubbleFullscreen ? fullscreenBubbleSpheres : visibleSpheres}
             rankingMode="coefficient"
-            subtaskMap={displayedSubtaskMap}
+            subtaskMap={basicStep ? basicSubtasks : displayedSubtaskMap}
             isSubtaskFilterActive={subtaskFilterMode !== 'none'}
-            onToggleSubtaskFilter={() => setSubtaskFilterMode((prev) => (prev === 'none' ? 'urgency' : 'none'))}
+            onToggleSubtaskFilter={() => { if (!basicStep) setSubtaskFilterMode((prev) => (prev === 'none' ? 'urgency' : 'none')); }}
             mode={mode}
-            poppingTaskId={poppingTaskId}
-            hasAiNotification={hasUnreadAiMessage}
+            poppingTaskId={basicStep ? null : poppingTaskId}
+            hasAiNotification={basicStep ? undefined : hasUnreadAiMessage}
             selectedId={editorState?.task?.id}
             onSelect={(task) => {
-              openTaskWithFocusGuard(task);
+              if (!basicStep) openTaskWithFocusGuard(task);
             }}
-            onSelectSubtask={(subtask) => setEditorState({ task: subtask })}
+            onSelectSubtask={(subtask) => { if (!basicStep) setEditorState({ task: subtask }); }}
             onCreateSubtask={async (parentTask, payload) => {
-              await createSubtaskForParent(parentTask, payload);
+              if (!basicStep) await createSubtaskForParent(parentTask, payload);
             }}
             onBubbleAction={async (task, payload) => {
+              if (basicStep) {
+                const result = applyTrainingBubbleAction(basicTasks, basicStep, task.id, payload);
+                if (result.tasks === basicTasks) {
+                  const message = basicStep === 'link' ? 'Подведи пузырь к краю другого, не в центр.' : basicStep === 'nest' ? 'Задержи пузырь внутри другого до жёлтой подсветки.' : 'Перенеси пузырь в другой сектор.';
+                  setBasicNotice(message);
+                  throw new Error(message);
+                }
+                setBasicTasks(result.tasks);
+                setBasicNotice(result.next ? null : 'Попробуй перенести пузырь именно в другой сектор.');
+                if (result.next) setBasicStep(result.next);
+                return;
+              }
               await api.bubbleAction(task.id, payload);
               await load();
             }}
-            onToggleSubtaskDone={toggleSubtaskDone}
+            onToggleSubtaskDone={async task => { if (!basicStep) await toggleSubtaskDone(task); }}
             onUpdateSubtaskDueDate={async (subtask, dueDate) => {
+              if (basicStep) return;
               await api.updateTask(subtask.id, { dueDate });
               await load();
             }}
-            onQuickCompleteTask={completeTask}
+            onQuickCompleteTask={async task => {
+              if (!basicStep) { await completeTask(task); return; }
+              if (basicStep === 'complete' && task.id === TRAINING_COMPLETE_ID) {
+                setBasicTasks(previous => previous.map(item => item.id === task.id ? { ...item, status: 'DONE' } : item));
+                setBasicNotice(null);
+                setBasicStep('report');
+              }
+            }}
             onQuickChangeTaskImportance={async (task, importanceDelta) => {
+              if (basicStep) return;
               const nextImportance = Math.max(1, Math.min(5, task.importance + importanceDelta));
               if (nextImportance === task.importance) return;
               await api.updateTask(task.id, { importance: nextImportance });
               await load();
             }}
-            onQuickPostponeTask={async (task, option) => await quickPostponeTask(task, option)}
-            onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
-            onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
-            onRescheduleTask={(task) => setTimelineReschedulePicker({ taskId: task.id, signal: Date.now() })}
-             onOpenInOtherPane={openTaskInOtherPane}
+            onQuickPostponeTask={async (task, option) => basicStep ? null : await quickPostponeTask(task, option)}
+            onAddTaskToSphere={basicStep ? undefined : (sphere) => setEditorState({ initialSphereId: sphere.id })}
+            onRenameSphere={(sphere) => { if (basicStep === 'sector') setBasicStep('sector-editor'); else if (!basicStep) setSectorEditorSphere(sphere); }}
+            onRescheduleTask={basicStep ? undefined : (task) => setTimelineReschedulePicker({ taskId: task.id, signal: Date.now() })}
+             onOpenInOtherPane={basicStep ? undefined : openTaskInOtherPane}
             forceTaskContextMenuOpen={activeTourStep === 'task-context-menu'}
-            isSearchFiltering={Boolean(search.trim())}
+            isSearchFiltering={!basicStep && Boolean(search.trim())}
             />
           </div>
         ) : workspaceMode === 'list' ? (
@@ -6428,6 +6503,12 @@ export default function App() {
       setIsAiExpanded(false);
       setIsAiChatOpen(false);
     }
+    if (basicStep === 'block' && next.kind === 'mode') {
+      setBasicNotice('Это ещё один режим отображения. Выбери другой блок, например «Заметки».');
+      setIsAddMenuOpen(true);
+      return;
+    }
+    if (basicStep === 'block') { setBasicNotice(null); setBasicStep('block-added'); }
     const slots = side === 'left' ? [next, fullscreenPanels[0]] : [fullscreenPanels[0], next];
     setFullscreenDisplayModes(slots.flatMap(panel => panel.kind === 'mode' ? [panel.mode] : []));
     setFullscreenPanelSlots(slots);
@@ -6619,8 +6700,12 @@ export default function App() {
         </div>,
         document.body
       ) : null}
-      <UpdatesMenu open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} trainingOpenSignal={trainingOpenSignal} onStartWorkspaceTour={startWorkspaceTour} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} completedLessonIds={currentUser.completedLessonIds ?? []} hasUnreadNews={hasUnreadNews} onNewsViewed={markLatestNewsRead} />
+      <UpdatesMenu open={isUpdatesOpen} onStartBasicTour={startBasicTraining} onClose={() => setIsUpdatesOpen(false)} trainingOpenSignal={trainingOpenSignal} onStartWorkspaceTour={startWorkspaceTour} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} completedLessonIds={currentUser.completedLessonIds ?? []} hasUnreadNews={hasUnreadNews} onNewsViewed={markLatestNewsRead} />
       {trainingRewardMessage ? <div className="training-reward-toast focus-bonus-message focus-bonus-subtask" role="status">{trainingRewardMessage}</div> : null}
+      {basicStep === 'report' && <TaskCompletionReportDialog demo taskId={TRAINING_COMPLETE_ID} taskTitle={TRAINING_COMPLETE_TITLE} onClose={advanceBasicTraining} />}
+      {basicStep === 'sector-editor' && <SectorEditor sphere={TRAINING_SPHERES[0]} onCancel={advanceBasicTraining} onSave={async () => {}} />}
+      {basicStep && <BasicPlanikTraining step={basicStep} theme={effectiveThemeMode} notice={basicNotice}
+        onNext={advanceBasicTraining} onFinish={finishBasicTraining} onGrab={() => { if (basicStep === 'grab') setBasicStep('move'); }} />}
       {activeTourStep ? <TourOverlay activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-') ? (tourWorkspaceUsesPrimary ? PRIMARY_WORKSPACE_TOUR_STEPS : WORKSPACE_TOUR_STEPS) : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-') ? FEATURE_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} onComplete={completeTaskTour} /> : null}
       {isBubbleFullscreen ? (
         <header data-tour="bubbles-fullscreen-toolbar"
@@ -6648,6 +6733,7 @@ export default function App() {
           onOpenNote={(id) => setRequestedStandaloneNote({ id, serial: Date.now() })}
         />
             <FullscreenModePicker modes={fullscreenPanels.filter(panel => panel.kind === 'mode').map(panel => panel.mode)} onChange={(nextModes) => {
+               if (basicStep === 'modes' && nextModes.length === 2) setBasicStep('two-modes');
               setPendingWorkspaceBlock(null);
               setFullscreenDisplayModes(nextModes);
               setFullscreenPanelSlots(null);
@@ -6695,7 +6781,7 @@ export default function App() {
                     }}>
                     <BriefcaseBusiness size={14} /> Новый сектор
                   </button>
-                  <FullscreenBlockMenu tasks={fullscreenTaskChoices}
+                  <FullscreenBlockMenu forceOpen={basicStep === 'block' && !pendingWorkspaceBlock} tasks={fullscreenTaskChoices}
                     onSelect={next => { setIsAddMenuOpen(false); if (blockAlreadyPresent(next)) { setPendingWorkspaceBlock(null); setWorkspaceBlockNotice(Date.now()); return; } setPendingWorkspaceBlock(next); }}
                     onDragStart={next => { if (blockAlreadyPresent(next)) { blockDragRef.current = false; setPendingWorkspaceBlock(null); setWorkspaceBlockNotice(Date.now()); return; } blockDragRef.current = true; setPendingWorkspaceBlock(next); }}
                     onDragEnd={() => { blockDragRef.current = false; setPendingWorkspaceBlock(null); setIsAddMenuOpen(false); }}/>
@@ -7592,7 +7678,7 @@ export default function App() {
             <PrimaryWorkspaceSidebar key={currentUser?.id ?? 'anonymous'}
               hideToggle={Boolean((focusedTask && !embeddedFocusActive) || isFocusModeOpen)}
               userId={currentUser?.id ?? 'anonymous'}
-              windowCount={fullscreenPanels.length} tasks={tasks} habits={habits} spheres={spheres}
+              forceOpen={basicStep === 'notes' || basicStep === 'habits'} windowCount={fullscreenPanels.length} tasks={tasks} habits={habits} spheres={spheres}
               timeZone={userTimeZone} requestedNote={requestedStandaloneNote}
               onOpenUpcoming={() => setIsUpcomingSubtasksModalOpen(true)}
               onOpenTask={task => {

@@ -7,6 +7,7 @@ type UpdatesMenuProps = {
   open: boolean;
   onClose: () => void;
   trainingOpenSignal?: number;
+  onStartBasicTour?: () => void;
   onStartTaskTour: () => void;
   onStartAiTour: () => void;
   onStartFeatureTour: () => void;
@@ -16,7 +17,7 @@ type UpdatesMenuProps = {
   onNewsViewed?: () => void;
 };
 
-export function UpdatesMenu({ open, onClose, trainingOpenSignal = 0, onStartTaskTour, onStartAiTour, onStartFeatureTour, onStartWorkspaceTour, completedLessonIds, hasUnreadNews = false, onNewsViewed }: UpdatesMenuProps) {
+export function UpdatesMenu({ open, onClose, trainingOpenSignal = 0, onStartBasicTour, onStartTaskTour, onStartAiTour, onStartFeatureTour, onStartWorkspaceTour, completedLessonIds, hasUnreadNews = false, onNewsViewed }: UpdatesMenuProps) {
   const [tab, setTab] = useState<'training' | 'news'>('training');
 
   // The invitation must open Training even if the user last viewed News.
@@ -44,6 +45,10 @@ export function UpdatesMenu({ open, onClose, trainingOpenSignal = 0, onStartTask
           <div><p className="text-xs font-semibold uppercase tracking-[0.18em] updates-menu-brand">Планировыч AI</p><h2 id="updates-menu-title" className="mt-1 text-xl font-bold text-primary">Обновления и изменения</h2></div>
           <button type="button" className="updates-menu-close rounded-full p-2 text-muted" onClick={onClose} aria-label="Закрыть меню"><X size={19} /></button>
         </div>
+        {onStartBasicTour && <button type="button" onClick={onStartBasicTour} className="updates-lesson mt-4 flex w-full shrink-0 items-center gap-3 rounded-2xl border p-3 text-left">
+          <span className="updates-lesson-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"><Sparkles size={19}/></span>
+          <span className="min-w-0 flex-1"><span className="block font-semibold text-primary">Тестовое обучение от Планика</span><span className="mt-1 block text-xs text-muted">Интерактивная экскурсия по рабочему пространству</span></span>
+        </button>}
         <div className="mt-6 grid grid-cols-2 gap-1 rounded-xl p-1 updates-menu-tabs">
           <button type="button" className={`rounded-lg px-2 py-2 text-sm font-semibold ${tab === 'training' ? 'updates-menu-tab-active' : 'text-muted'}`} onClick={() => setTab('training')}><BookOpen className="mr-1.5 inline" size={15} />Обучение</button>
           <button type="button" className={`relative rounded-lg px-2 py-2 text-sm font-semibold ${tab === 'news' ? 'updates-menu-tab-active' : 'text-muted'}`} onClick={() => { setTab('news'); onNewsViewed?.(); }}><Newspaper className="mr-1.5 inline" size={15} />Новости и изменения{hasUnreadNews ? <span className="absolute right-2 top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">1</span> : null}</button>

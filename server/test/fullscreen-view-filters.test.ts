@@ -10,7 +10,7 @@ test('Timeline events and reminders cannot leak into Bubbles or List when modes 
   assert.match(app, /filterWorkspaceTasks\(activeTasks, fullscreenPaneFilters\.bubbles\)/);
   assert.match(app, /filterWorkspaceTasks\(activeTasks, fullscreenPaneFilters\.list\)/);
   assert.match(app, /filterWorkspaceTasks\(activeTimelineItems,/);
-  assert.match(app, /tasks=\{isBubbleFullscreen \? fullscreenBubbleTasks : visibleTasks\}/);
+  assert.match(app, /tasks=\{basicStep \? basicRootTasks : isBubbleFullscreen \? fullscreenBubbleTasks : visibleTasks\}/);
   assert.match(app, /const fullscreenListTasks = sortWorkspaceList\(fullscreenListTasksFiltered\)/);
   assert.match(app, /const timelineRootTasks = \[\.\.\.timelineFilteredRootTasks\]/);
   assert.doesNotMatch(app, /\(isTimelineMode \? activeTimelineItems : activeTasks\)\.filter/);

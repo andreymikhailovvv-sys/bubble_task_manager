@@ -361,7 +361,7 @@ jobs:
         run: node --import tsx --test server/test/ai-checkup-manual.test.ts server/test/miniapp-habit-tracker-ui.test.ts
       - name: Verify workspace, AI and integrations training tutorials
         if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
-        run: node --import tsx --test server/test/training-tours-2026.test.ts
+        run: node --import tsx --test server/test/training-tours-2026.test.ts client/src/lib/basicTraining.test.ts
       - name: Verify native Android inline editing, keyboard and shimmer placeholders
         if: ${{ !cancelled() && steps.compile.conclusion == 'success' }}
         run: node --import tsx --test server/test/android-inline-rich-editor-skeleton-status-2026.test.ts server/test/android-keyboard-chat-and-editor-visibility.test.ts

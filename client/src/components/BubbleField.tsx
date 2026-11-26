@@ -1543,7 +1543,7 @@ export function BubbleField({
                       color: `color-mix(in srgb, ${item.sphere.color} ${isLightTheme ? '50%' : '62%'}, ${isLightTheme ? '#0f172a' : '#f8fafc'})`
                     } : undefined}>
                     {item.sphere ? (
-                      <button className="inline-flex min-w-0 items-center gap-2" onClick={() => onRenameSphere?.(item.sphere!)}>
+                      <button data-planik-sector={item.sphere.id} className="inline-flex w-full min-w-0 items-center justify-center gap-2" onClick={() => onRenameSphere?.(item.sphere!)}>
                         {Icon ? <Icon size={15} color="currentColor" /> : null}
                         <span className="truncate">{item.sphere.name}</span>
                       </button>
@@ -1855,6 +1855,7 @@ export function BubbleField({
             <button
               type="button"
               disabled={!contextMenu.task}
+              data-planik-complete-action
               className="success-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
               onMouseEnter={() => setContextPostponeSubmenuOpen(false)}
               onClick={() => {

@@ -52,7 +52,7 @@ test('first-visit training invitation is persistent, anchored above the oval and
     read('../../client/src/components/BubbleField.tsx'),
     read('../../client/src/components/UpdatesMenu.tsx')
   ]);
-  assert.match(desktop, /showTrainingInvitation=\{isOnboardingOfferOpen\}/);
+  assert.match(desktop, /showTrainingInvitation=\{!basicStep && isOnboardingOfferOpen\}/);
   assert.match(desktop, /onOpenTraining=\{\(\) => \{/);
   assert.match(desktop, /setTrainingOpenSignal\(signal => signal \+ 1\)/);
   assert.match(desktop, /onDismissTraining=\{\(\) => \{/);
