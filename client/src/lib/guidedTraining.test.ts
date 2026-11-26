@@ -10,11 +10,14 @@ test('all advanced steps are ordered, end explicitly and contain interactive exa
     assert.equal(steps[0].center, true);
     assert.equal(steps.at(-1)?.done, true);
     assert.equal(nextGuidedStep(lesson, steps.at(-1)!.id), undefined);
-    assert.ok(steps.filter(s => s.action).length >= 4);
+    assert.ok(steps.some(s => s.action));
     for (const step of steps.filter(s => s.action)) assert.ok(step.practice || step.allow, step.id);
   }
-  assert.ok(AI_GUIDED_STEPS.some(s => s.practice === 'quick'));
-  assert.ok(FEATURE_GUIDED_STEPS.some(s => s.practice === 'skins'));
+  assert.deepEqual(AI_GUIDED_STEPS.filter(s => s.action).map(s => s.id), ['ai-open-chat']);
+  assert.ok(FEATURE_GUIDED_STEPS.some(s => s.id === 'feature-skins-practice' && s.action));
+  assert.ok(FEATURE_GUIDED_STEPS.some(s => s.id === 'feature-rating-open' && s.action));
+  assert.ok(FEATURE_GUIDED_STEPS.some(s => s.id === 'feature-focus-setup' && s.allow?.includes('focus-task-pick')));
+  assert.ok([...AI_GUIDED_STEPS, ...FEATURE_GUIDED_STEPS].every(s => !s.practice));
 });
 
 test('training skins match actual catalog and include free and subscription tiers', () => {

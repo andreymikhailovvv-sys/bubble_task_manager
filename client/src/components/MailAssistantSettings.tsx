@@ -21,16 +21,26 @@ const formatDate = (date: string) => new Date(date).toLocaleString('ru-RU');
 const providerName = (value: string) => value === 'yandex' ? 'Яндекс Почта' : 'Почта Mail.ru';
 const accountTitle = (account: MailAccount) => (account.provider === 'yandex' ? 'Письма Яндекс' : 'Письма Mail.ru') + ' · ' + account.email;
 
-export function MailAssistantSettings({ onClose }: { onClose: () => void }) {
-  const [accounts, setAccounts] = useState<MailAccount[]>([]);
+export function MailAssistantSettings({ onClose, trainingSection }: { onClose: () => void; trainingSection?: string }) {
+  const training = trainingSection !== undefined;
+  useEffect(() => {
+    if (!training) return;
+    // The accordion is normally uncontrolled and initially closed.
+    // Only the isolated tutorial profile opens the section being explained.
+    const root = document.querySelector('[data-guided-assistant="mail"]');
+    root?.querySelectorAll<HTMLDetailsElement>('details.telegram-ai-settings-section').forEach(section => {
+      section.open = section.classList.contains('telegram-ai-settings-section--' + trainingSection);
+    });
+  }, [training, trainingSection]);
+  const [accounts, setAccounts] = useState<MailAccount[]>(() => training ? [{ ...defaultSettings, enabled: false, id: 'training-mail', provider: 'yandex', email: 'demo@example.invalid', sentFolder: null, lastCheckedAt: null, nextCheckAt: null, manualDigestRequestedAt: null, lastSummaryAt: null, lastSummary: null, spentTodayMilli: 0, totalSpentMilli: 0, lastError: null, processedCount: 0, createdAt: '' }] : []);
   const [available, setAvailable] = useState(true);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(training ? 'training-mail' : null);
   const [adding, setAdding] = useState(false);
   const [provider, setProvider] = useState<'mailru'|'yandex'>('yandex');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [draft, setDraft] = useState<MailAccountSettings>({ ...defaultSettings });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!training);
   const [busy, setBusy] = useState(false);
   const [pendingAction, setPendingAction] = useState<'summary' | 'status' | null>(null);
   const [error, setError] = useState('');
@@ -49,6 +59,7 @@ export function MailAssistantSettings({ onClose }: { onClose: () => void }) {
     return result.accounts;
   };
   useEffect(() => {
+    if (training) return;
     let live = true;
     api.mailAccounts().then(data => {
       if (!live) return;
@@ -150,7 +161,7 @@ export function MailAssistantSettings({ onClose }: { onClose: () => void }) {
   return createPortal(
     <div className="telegram-integrations-modal fixed inset-0 z-[1100] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm"
       onClick={onClose}>
-      <section role="dialog" aria-modal="true" aria-label="Почтовый ИИ-ассистент"
+      <section role="dialog" aria-modal="true" aria-label="Почтовый ИИ-ассистент" data-guided-assistant={training ? "mail" : undefined}
         className="telegram-integrations-modal__panel flex max-h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border shadow-2xl"
         onClick={event => event.stopPropagation()}>
         <div className="telegram-ai-settings-scroll min-h-0 overflow-y-auto px-5 py-5">
@@ -158,7 +169,7 @@ export function MailAssistantSettings({ onClose }: { onClose: () => void }) {
             <div>
               <p className="telegram-integrations-modal__accent flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"><Mail size={15}/> Интеграции</p>
               <h2 className="mt-1 text-xl font-bold">Почтовый ИИ-ассистент</h2>
-              <p className="integration-menu__muted mt-1 text-sm">Отдельные настройки для каждого почтового ящика.</p>
+              <p className="integration-menu__muted mt-1 text-sm">{training ? 'Учебный ящик · настройки не сохраняются' : 'Отдельные настройки для каждого почтового ящика.'}</p>
             </div>
             <button type="button" onClick={onClose} aria-label="Закрыть" className="integration-menu__icon-button rounded-xl p-2"><X size={18}/></button>
           </div>

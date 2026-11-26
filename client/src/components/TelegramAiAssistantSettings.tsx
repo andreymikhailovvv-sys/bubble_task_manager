@@ -5,7 +5,7 @@ import { api, type TelegramAiChatPolicy, type TelegramAiChatSettings, type Teleg
 import './TelegramIntegrationsMenu.css';
 import './TelegramMessageQuickShare.css';
 
-type Props = { onClose: () => void };
+type Props = { onClose: () => void; trainingSection?: string };
 
 const MODES = ['OBSERVE', 'SUGGEST', 'AUTO'] as const;
 const TASK_MODES = ['NONE', 'SUGGEST', 'AUTO'] as const;
@@ -213,13 +213,23 @@ export function CreditLimitSlider({ value, onChange }: { value: number | null; o
   </div>;
 }
 
-export function TelegramAiAssistantSettings({ onClose }: Props) {
-  const [policies, setPolicies] = useState<TelegramAiChatPolicy[]>([]);
-  const [capability, setCapability] = useState<TelegramChatCapability | null>(null);
+export function TelegramAiAssistantSettings({ onClose, trainingSection }: Props) {
+  const training = trainingSection !== undefined;
+  useEffect(() => {
+    if (!training) return;
+    // The accordion is normally uncontrolled and initially closed.
+    // Only the isolated tutorial profile opens the section being explained.
+    const root = document.querySelector('[data-guided-assistant="telegram"]');
+    root?.querySelectorAll<HTMLDetailsElement>('details.telegram-ai-settings-section').forEach(section => {
+      section.open = section.classList.contains('telegram-ai-settings-section--' + trainingSection);
+    });
+  }, [training, trainingSection]);
+  const [policies, setPolicies] = useState<TelegramAiChatPolicy[]>(() => training ? [{ ...DEFAULTS, id: 'training-chat', userId: 'training', chatId: 'training-chat', chatKind: 'group', chatTitle: 'Учебная переписка · Проект', isEnabled: false, historyImportCursor: null, historyImportedCount: 0, spentTodayMilli: 0, reservedTodayMilli: 0, totalSpentMilli: 0, lastCheckedAt: null, lastSummaryAt: null, lastSummary: null, lastError: null, nextCheckAt: null, createdAt: '', updatedAt: '' }] : []);
+  const [capability, setCapability] = useState<TelegramChatCapability | null>(training ? { connected: true, readEnabled: true, analyzeEnabled: true, sendEnabled: true } : null);
   const [available, setAvailable] = useState<TelegramSendTargetList | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(training ? 'training-chat' : null);
   const [draft, setDraft] = useState<TelegramAiChatSettings>({ ...DEFAULTS });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!training);
   const [busy, setBusy] = useState(false);
   const [loadingChats, setLoadingChats] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -231,6 +241,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
+    if (training) return;
     let live = true;
     Promise.all([api.telegramAssistantPolicies(), api.telegramChatCapability()])
       .then(([list, access]) => {
@@ -255,6 +266,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
   }, [onClose, pickerOpen, pickerBusy]);
 
   useEffect(() => {
+    if (training) return;
     const timer = window.setInterval(() => {
       void api.telegramAssistantPolicies().then(data => setPolicies(data.policies)).catch(() => {});
     }, 30_000);
@@ -404,7 +416,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
   return <>
     {createPortal(
     <div className="telegram-integrations-modal fixed inset-0 z-[1100] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm" onClick={onClose}>
-      <section role="dialog" aria-modal="true" aria-label="ИИ-ассистент Telegram"
+      <section role="dialog" aria-modal="true" aria-label="ИИ-ассистент Telegram" data-guided-assistant={training ? "telegram" : undefined}
         className="telegram-integrations-modal__panel flex max-h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border shadow-2xl"
         onClick={e => e.stopPropagation()}>
         <div className="telegram-ai-settings-scroll min-h-0 overflow-y-auto px-5 py-5">
@@ -412,7 +424,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
           <div>
             <p className="telegram-integrations-modal__accent flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"><Bot size={15}/> Интеграции</p>
             <h2 className="mt-1 text-xl font-bold">ИИ-ассистент в Telegram</h2>
-            <p className="integration-menu__muted mt-1 text-sm">Настройки отдельно для каждого чата или группы.</p>
+            <p className="integration-menu__muted mt-1 text-sm">{training ? 'Учебный профиль · настройки не сохраняются' : 'Настройки отдельно для каждого чата или группы.'}</p>
           </div>
           <button aria-label="Закрыть" type="button" className="integration-menu__icon-button rounded-xl p-2" onClick={onClose}><X size={18}/></button>
         </div>

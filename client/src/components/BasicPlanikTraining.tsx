@@ -20,8 +20,8 @@ const readTarget = (selector?: string): Rect | null => {
     bottom: Math.min(innerHeight, Math.ceil(Math.max(...rects.map(r => r.bottom)) + 5)) };
 };
 
-export function BasicPlanikTraining({ step, lesson, theme, notice, onNext, onFinish, onGrab }: {
-  step: BasicTrainingStep | string; lesson?: AdvancedLesson; theme: 'light' | 'dark'; notice: string | null; onNext: () => void; onFinish: () => void; onGrab: () => void;
+export function BasicPlanikTraining({ step, lesson, theme, notice, actionReady, onNext, onFinish, onGrab }: {
+  step: BasicTrainingStep | string; lesson?: AdvancedLesson; actionReady?: boolean; theme: 'light' | 'dark'; notice: string | null; onNext: () => void; onFinish: () => void; onGrab: () => void;
 }) {
   const steps = lesson ? guidedSteps(lesson) : BASIC_TRAINING_STEPS;
   const config = steps.find(item => item.id === step)!;
@@ -150,11 +150,11 @@ export function BasicPlanikTraining({ step, lesson, theme, notice, onNext, onFin
           </div>
           {practice && <TrainingPractice key={step} kind={practice} skin={skin} onSkin={value => { setSkin(value); setAnimation('idle'); setReplay(n => n + 1); }} onAnimation={value => { setAnimation(value); setReplay(n => n + 1); }} onReady={() => {}} onNext={onNext} />}
           {notice && <p className="basic-planik-notice" role="status">{notice}</p>}
-          {config.action && !notice && !practice && <p className="basic-planik-hint">Ожидаю твоего действия…</p>}
+          {config.action && !actionReady && !notice && !practice && <p className="basic-planik-hint">Ожидаю твоего действия…</p>}
           {isMouseOnly && <p className="basic-planik-touch-hint">Для этого упражнения нужна мышь. На сенсорном устройстве обучение можно завершить и пройти позже.</p>}
           <div className="basic-planik-actions">
             <button type="button" className="basic-planik-exit" onClick={onFinish}>{centered && !last ? 'Пройти обучение позже' : 'Закончить обучение'}</button>
-            {!config.action && <button type="button" className="basic-planik-next" onClick={onNext}>{step === 'intro-next' ? 'Следовать за Плаником' : last ? 'Готово' : 'Далее'}</button>}
+            {(!config.action || actionReady) && <button type="button" className="basic-planik-next" onClick={onNext}>{step === 'intro-next' ? 'Следовать за Плаником' : last ? 'Готово' : 'Далее'}</button>}
           </div>
         </section>
       </div>
