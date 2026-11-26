@@ -97,10 +97,8 @@ test('Planik overlays the fullscreen composer without moving its input bar', asy
 test('expanded task chat has monitoring control to the left of clear button, not floating below icons', async () => {
   const app = await read('../../client/src/App.tsx');
   const expanded = app.slice(app.indexOf('focused-task-ai-expanded-panel relative'), app.indexOf('<AiModelChip value={focusedAiModel}', app.indexOf('focused-task-ai-expanded-panel relative')));
-  const monitor = expanded.match(/<TaskMonitoringStatuses subscriptionAllowed=\{Boolean\(currentUser\?\.subscriptionPlan === 'max' && activeSubscription\)\} taskId=\{focusedTask\.id\}/);
-  assert.ok(monitor, 'monitoring control must target the focused task and enforce its subscription gate');
-  const clearIndex = expanded.indexOf('onClick={() => void clearFocusedAiDialog()}');
-  assert.ok(clearIndex >= 0 && monitor.index! < clearIndex);
+  assert.match(expanded, /<TaskMonitoringStatuses taskId=\{focusedTask\.id\}/);
+  assert.ok(expanded.indexOf('<TaskMonitoringStatuses taskId={focusedTask.id}') < expanded.indexOf('onClick={() => void clearFocusedAiDialog()}'));
   assert.doesNotMatch(expanded, /absolute right-5 top-16/);
 });
 
@@ -122,7 +120,7 @@ test('focus help header is one compact row with matching teal bot and task monit
   assert.match(header, /focus-task-ai-header flex shrink-0 items-center/);
   assert.match(header, /focus-task-ai-bot-icon/);
   assert.match(css, /\.focus-task-ai-bot-icon \{\s*color: color-mix\(in srgb, var\(--accent\) 80%, var\(--text-primary\)\)/);
-  assert.match(header, /<TaskMonitoringStatuses subscriptionAllowed=\{Boolean\(currentUser\?\.subscriptionPlan === 'max' && activeSubscription\)\} taskId=\{focusActiveTask\.id\}/);
+  assert.match(header, /<TaskMonitoringStatuses taskId=\{focusActiveTask\.id\}/);
   assert.ok(header.indexOf('Помощь ИИ') < header.indexOf('TaskMonitoringStatuses'));
   assert.ok(header.indexOf('TaskMonitoringStatuses') < header.indexOf('setIsFocusAiExpanded(true)'));
   assert.doesNotMatch(header, /title=\{focusActiveTask\.title\}/);

@@ -82,41 +82,31 @@
   opacity: 1;
 }
 .module-rail-economic .module-rail-label { color: #ffd18b; }
-body[data-theme="light"] .module-rail,
 .app-shell[data-theme="light"] .module-rail,
 .econ-light .module-rail {
-  --module-rail-bg: #f1f8fc;
-  --module-rail-border: #8aadc3;
-  --module-rail-ink: #245775;
-  --module-rail-hover: #d8edf7;
-  --module-rail-active: #c0e4f3;
+  --module-rail-bg: rgba(255,251,246,.96);
+  --module-rail-border: rgba(151,164,183,.37);
+  --module-rail-ink: #405167;
+  --module-rail-hover: #edf2f9;
+  --module-rail-active: rgba(93,136,172,.15);
 }
-/* Both destinations remain visibly actionable, including the inactive module. */
-:is(body[data-theme="light"], .app-shell[data-theme="light"], .econ-light) .module-rail-planner {
-  color: #185577;
-  border-color: #8aadc3;
+.app-shell[data-theme="light"] .module-rail-link.is-active,
+.econ-light .module-rail-link.is-active { color: #315374; }
+.app-shell[data-theme="light"] .module-rail-economic,
+.econ-light .module-rail-economic {
+  color: #985e19;
+  background: rgba(232,155,57,.11);
 }
-:is(body[data-theme="light"], .app-shell[data-theme="light"], .econ-light) .module-rail-planner.is-active {
-  color: #104b6c;
-  background: #c0e4f3;
-  border-color: #4088ad;
+.app-shell[data-theme="light"] .module-rail-economic svg,
+.econ-light .module-rail-economic svg { color: #ae6b15; }
+.app-shell[data-theme="light"] .module-rail-economic.is-active,
+.econ-light .module-rail-economic.is-active {
+  color: #874809;
+  background: rgba(241,154,45,.20);
+  border-color: rgba(194,119,22,.39);
 }
-:is(body[data-theme="light"], .app-shell[data-theme="light"], .econ-light) .module-rail-economic {
-  color: #85500e;
-  background: #fff0d5;
-  border-color: #cfa05e;
-}
-:is(body[data-theme="light"], .app-shell[data-theme="light"], .econ-light) .module-rail-economic svg { color: #85500e; }
-:is(body[data-theme="light"], .app-shell[data-theme="light"], .econ-light) .module-rail-economic:is(:hover,:focus-visible) {
-  background: #ffe4b0;
-  border-color: #b87c2c;
-}
-:is(body[data-theme="light"], .app-shell[data-theme="light"], .econ-light) .module-rail-economic.is-active {
-  color: #703a08;
-  background: #ffdaa0;
-  border-color: #ac6a1e;
-}
-:is(body[data-theme="light"], .app-shell[data-theme="light"], .econ-light) .module-rail-economic .module-rail-label { color: #85500e; }
+.app-shell[data-theme="light"] .module-rail-economic .module-rail-label,
+.econ-light .module-rail-economic .module-rail-label { color: #985e19; }
 @media (max-width: 720px) {
   .module-rail { top: clamp(78px, 14vh, 132px); width: 39px; gap: 7px; z-index: 95; }
   .module-rail-link { width: 38px; height: 39px; border-radius: 0 12px 12px 0; }

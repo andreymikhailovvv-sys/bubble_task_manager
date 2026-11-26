@@ -8634,7 +8634,6 @@ export default function App() {
                   {isFocusedNotesEditorOpen ? (
                     <NotesEditor
                       value={focusedDraft.description ?? ''}
-                      inlineTarget={embeddedFocusActive ? fullscreenFocusTarget : null}
                       onChange={(description) => setFocusedDraft((p) => ({ ...(p ?? {}), description }))}
                       onClose={() => setIsFocusedNotesEditorOpen(false)}
                     />
