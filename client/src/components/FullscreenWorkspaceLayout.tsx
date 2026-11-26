@@ -53,13 +53,14 @@ export function FullscreenModePicker({ modes, onChange }: {
 export type FullscreenTaskChoice = { id: string; title: string };
 
 type BlockMenuProps = {
+  forceOpen?: boolean;
   tasks: readonly FullscreenTaskChoice[];
   onSelect: (panel: FullscreenWorkspacePanel) => void;
   onDragStart: (panel: FullscreenWorkspacePanel) => void;
   onDragEnd: () => void;
 };
 
-export function FullscreenBlockMenu({ tasks, onSelect, onDragStart, onDragEnd }: BlockMenuProps) {
+export function FullscreenBlockMenu({ tasks, onSelect, onDragStart, onDragEnd, forceOpen = false }: BlockMenuProps) {
   const [open, setOpen] = useState(false);
   const [chooseTask, setChooseTask] = useState(false);
   const [query, setQuery] = useState('');
@@ -83,10 +84,10 @@ export function FullscreenBlockMenu({ tasks, onSelect, onDragStart, onDragEnd }:
     onMouseEnter={() => setOpen(true)}
     onMouseLeave={() => { if (!dragging.current) setOpen(false); }}
     onKeyDown={event => { if (event.key === 'Escape') setOpen(false); }}>
-    <button type="button" role="menuitem" aria-haspopup="menu" aria-expanded={open}
+    <button type="button" role="menuitem" aria-haspopup="menu" aria-expanded={open || forceOpen}
       className="add-menu-option mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold"
       onClick={() => setOpen(true)}><LayoutGrid size={14}/> Добавить блок <ChevronRight size={14} className="ml-auto"/></button>
-    {open && <div className="workspace-block-submenu topbar-dropdown rounded-2xl border p-2 shadow-2xl" role="menu" aria-label="Доступные блоки">
+    {(open || forceOpen) && <div className="workspace-block-submenu topbar-dropdown rounded-2xl border p-2 shadow-2xl" role="menu" aria-label="Доступные блоки">
       {chooseTask ? <>
         <button type="button" className="workspace-block-option" onClick={() => { setChooseTask(false); setQuery(''); }}>← Все блоки</button>
         <label className="fullscreen-add-window-search mb-2 flex items-center gap-2 rounded-xl border px-3 py-2">

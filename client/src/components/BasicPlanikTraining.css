@@ -1,0 +1,36 @@
+.basic-planik-overlay{position:fixed;inset:0;z-index:2400;pointer-events:none;color:#edf4ff;font-family:inherit;--training-surface:rgba(20,31,51,.97);--training-text:#edf4ff;--training-muted:#a7bad0;--training-border:rgba(148,181,219,.28);--training-accent:#61e0df}
+.basic-planik-overlay[data-theme="light"]{--training-surface:rgba(255,255,255,.98);--training-text:#17283c;--training-muted:#51667e;--training-border:#c9d9e9;--training-accent:#087b83;color:#17283c}
+.basic-planik-dim{position:absolute;inset:0;background:rgba(5,13,26,.57);transition:opacity .35s ease}
+.basic-planik-overlay.is-centered .basic-planik-dim{background:radial-gradient(ellipse at 50% 42%,rgba(39,68,99,.78),rgba(10,18,36,.94));backdrop-filter:blur(16px)}
+.basic-planik-overlay.is-centered[data-theme="light"] .basic-planik-dim{background:radial-gradient(ellipse at 50% 42%,rgba(225,248,250,.97),rgba(185,208,232,.95))}
+.basic-planik-spotlight{position:absolute;border:1.5px solid var(--training-accent);border-radius:15px;box-shadow:0 0 0 9999px rgba(5,13,26,.42),0 0 18px rgba(46,210,216,.26);transition:left .26s ease,top .26s ease,width .26s ease,height .26s ease;pointer-events:none}
+.basic-planik-card{position:absolute;transition:left .48s cubic-bezier(.2,.8,.2,1),top .48s cubic-bezier(.2,.8,.2,1),width .35s ease;display:flex;flex-direction:column;align-items:flex-start;max-height:calc(100dvh - 24px);color:var(--training-text);filter:drop-shadow(0 14px 30px rgba(0,0,0,.15))}
+.basic-planik-character{height:90px;margin-left:12px;display:flex;align-items:flex-end;pointer-events:none;transition:height .35s ease}
+.basic-planik-character .planik-mascot{width:100px;height:90px}
+.basic-planik-card--intro{align-items:center;text-align:center}
+.basic-planik-card--intro .basic-planik-character{height:clamp(120px,26vh,220px);margin:0}
+.basic-planik-card--intro .basic-planik-character .planik-mascot{width:clamp(144px,27vh,244px);height:clamp(120px,25vh,220px)}
+.basic-planik-speech{position:relative;width:100%;padding:16px 18px;border:1px solid var(--training-border);border-radius:20px;background:var(--training-surface);box-shadow:0 15px 45px rgba(0,0,0,.15);pointer-events:auto;overflow:auto}
+.basic-planik-speech::before{content:"";position:absolute;left:36px;top:-6px;width:12px;height:12px;border-left:1px solid var(--training-border);border-top:1px solid var(--training-border);background:var(--training-surface);transform:rotate(45deg)}
+.basic-planik-card--intro .basic-planik-speech::before{left:calc(50% - 6px)}
+.basic-planik-meta{display:flex;align-items:center;justify-content:space-between;font-size:11px;letter-spacing:.035em;font-weight:650;color:var(--training-muted);margin-bottom:8px}
+.basic-planik-meta span:first-child{color:var(--training-accent)}
+.basic-planik-text{position:relative;font-size:14px;line-height:1.55;font-weight:500}
+.basic-planik-card--intro .basic-planik-text{font-size:16px}
+.basic-planik-text-measure{visibility:hidden;display:block}
+.basic-planik-text-live{position:absolute;inset:0}
+.basic-planik-caret{display:inline-block;width:2px;height:1em;vertical-align:middle;margin-left:2px;background:var(--training-accent);animation:basic-planik-blink .8s infinite}
+@keyframes basic-planik-blink{50%{opacity:0}}
+.basic-planik-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:15px;flex-wrap:wrap}
+.basic-planik-actions button{border:0;border-radius:10px;padding:9px 12px;font-size:12px;font-weight:650;cursor:pointer}
+.basic-planik-exit{background:transparent;color:var(--training-muted)}
+.basic-planik-exit:hover{background:rgba(127,153,178,.14);color:var(--training-text)}
+.basic-planik-next{color:#fff;background:#167d89;box-shadow:0 4px 12px rgba(12,116,132,.22)}
+.basic-planik-next:hover{background:#126773}
+.basic-planik-actions button:focus-visible{outline:2px solid var(--training-accent);outline-offset:3px}
+.basic-planik-notice,.basic-planik-hint,.basic-planik-touch-hint{margin:8px 0 0;color:var(--training-muted);font-size:12px;line-height:1.4}
+.basic-planik-notice{color:var(--training-accent)}
+.basic-planik-touch-hint{display:none}
+@media(pointer:coarse){.basic-planik-touch-hint{display:block}}
+@media(max-width:650px){.basic-planik-character{height:66px}.basic-planik-character .planik-mascot{width:74px;height:66px}.basic-planik-speech{padding:12px 14px}.basic-planik-text{font-size:13px}}
+@media(prefers-reduced-motion:reduce){.basic-planik-card,.basic-planik-character,.basic-planik-spotlight{transition:none}.basic-planik-caret{animation:none}}

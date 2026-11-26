@@ -7,7 +7,7 @@ import { api, type TelegramIntegrationStatus } from '../lib/api';
 import './TelegramIntegrationsMenu.css';
 
 type Integration = 'bot' | 'android' | 'messages' | 'assistant' | 'email';
-type Props = { onConnectBot: () => void; tourIntegration?: 'messages' | 'assistant' | 'email' | null; embedded?: boolean };
+type Props = { onConnectBot: () => void; tourIntegration?: Integration | null; embedded?: boolean };
 const RUNNING = ['starting', 'qr', 'password_required', 'verifying_password'];
 type MenuPlacement = { left: number; top?: number; bottom?: number; width: number; maxHeight: number };
 
@@ -34,7 +34,7 @@ export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null,
 
   useEffect(() => {
     if(embedded){setOpen(true);setEmbeddedTarget(popupRef.current);return;}
-    if (tourIntegration) { setOpen(true); setExpanded(null); } else setOpen(false);
+    if (tourIntegration) { setOpen(true); setExpanded(tourIntegration === 'bot' || tourIntegration === 'android' ? tourIntegration : null); } else setOpen(false);
   }, [tourIntegration,embedded]);
   const cancelClose = useCallback(() => {
     if (closeTimeout.current) clearTimeout(closeTimeout.current);
@@ -188,7 +188,7 @@ export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null,
               const isEmail = kind === 'email';
               const enabled = isEmail ? mailConnected : isBot ? botConnected : isAssistant ? Boolean(status?.connected && status.readEnabled) : connected;
               return (
-                <div key={kind} data-tour={kind === 'messages' ? 'integration-messages' : kind === 'assistant' ? 'integration-assistant' : kind === 'email' ? 'integration-email' : undefined} className="integration-menu__item mb-2 rounded-xl border">
+                <div key={kind} data-tour={kind === 'messages' ? 'integration-messages' : kind === 'assistant' ? 'integration-assistant' : kind === 'email' ? 'integration-email' : kind === 'bot' ? 'integration-bot' : 'integration-android'} className="integration-menu__item mb-2 rounded-xl border">
                   <button type="button" className="flex w-full items-center gap-2 p-3 text-left" aria-expanded={expanded === kind}
                     onClick={() => expandIntegration(kind)}>
                     <span className="integration-menu__symbol flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">{isAndroid ? <Smartphone size={19}/> : isEmail ? <Mail size={19}/> : isBot ? <Smartphone size={19}/> : isAssistant ? <Bot size={19}/> : <Send size={18}/>}</span>
