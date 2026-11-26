@@ -23,13 +23,13 @@ export function isTodayTask(task: Task, timeZone: string, now: Date): boolean {
   return isTaskDueOn(task, timeZone, completionDateKey(now, timeZone));
 }
 
-export function completionItems(tasks: Task[], scope: CompletionScope, timeZone: string, now: Date): Task[] {
+export function completionItems(tasks: readonly Task[], scope: CompletionScope, timeZone: string, now: Date): Task[] {
   const todayKey = scope === 'today' ? completionDateKey(now, timeZone) : '';
   return tasks.filter(task => (task.taskType ?? 'TASK') === 'TASK' &&
     (scope === 'today' ? isTaskDueOn(task, timeZone, todayKey) : scope === 'subtasks' ? !!task.parentTaskId : !task.parentTaskId));
 }
 
-export function completionProgress(tasks: Task[], target: Task, timeZone: string, now: Date, sequence: number): CompletionProgress | null {
+export function completionProgress(tasks: readonly Task[], target: Task, timeZone: string, now: Date, sequence: number): CompletionProgress | null {
   const current = tasks.find(task => task.id === target.id);
   if (!current || current.status === 'DONE' || (current.taskType ?? 'TASK') !== 'TASK') return null;
   const scope = isTodayTask(current, timeZone, now) ? 'today' : current.parentTaskId ? 'subtasks' : 'tasks';
