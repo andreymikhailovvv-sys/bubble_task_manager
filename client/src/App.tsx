@@ -65,6 +65,7 @@ import { ExpandedAiChat } from './components/ExpandedAiChat';
 import { QuickAiLauncherFrame } from './components/QuickAiLauncherFrame';
 import { PlanikMascot } from './components/PlanikMascot';
 import { BasicPlanikTraining } from './components/BasicPlanikTraining';
+import { BASIC_LESSON_ID, BASIC_OFFER_MARKER, trainingOfferKey, guidedSteps, nextGuidedStep, type AdvancedLesson, type AdvancedTrainingConfig } from './lib/guidedTraining';
 import { TRAINING_SPHERES, TRAINING_COMPLETE_ID, TRAINING_COMPLETE_TITLE, createTrainingTasks, createCompletionTrainingTask, nextBasicTrainingStep, applyTrainingBubbleAction, type BasicTrainingStep } from './lib/basicTraining';
 import { MascotIdentityContext, useMascotSurface } from './components/MascotPresence';
 import { useMascotWardrobe, MascotWardrobeDialog, MascotWardrobeTrigger } from './components/MascotWardrobe';
@@ -1017,6 +1018,11 @@ export default function App() {
   const [hasUnreadNews, setHasUnreadNews] = useState(false);
   const [isOnboardingOfferOpen, setIsOnboardingOfferOpen] = useState(false);
   const [basicStep, setBasicStep] = useState<BasicTrainingStep | null>(null);
+  const [advancedTraining, setAdvancedTraining] = useState<{ lesson: AdvancedLesson; step: string } | null>(null);
+  const autoBasicStartRef = useRef<(() => void) | null>(null);
+  const autoBasicChecked = useRef<string | null>(null);
+  const trainingAccountRef = useRef<string | undefined>(undefined);
+  trainingAccountRef.current = currentUser?.id;
   const [basicTasks, setBasicTasks] = useState<Task[]>([]);
   const [basicNotice, setBasicNotice] = useState<string | null>(null);
   const basicModeRestore = useRef<'global' | 'sectors'>('sectors');
@@ -1154,7 +1160,7 @@ export default function App() {
       setIsEfficiencyDetailsOpen(false);
       setIsFocusSetupOpen(false);
     } else if (activeTourStep === 'feature-focus-setup') {
-      setFocusSelectedTaskIds(visibleFocusCandidateTasks.slice(0, 3).map((task) => task.id));
+      if (!advancedTraining) setFocusSelectedTaskIds(visibleFocusCandidateTasks.slice(0, 3).map((task) => task.id));
       setIsFocusSetupOpen(true);
       setIsFocusModeOpen(false);
     } else if (activeTourStep === 'feature-telegram-button') {
@@ -1836,12 +1842,28 @@ export default function App() {
     void api.getTaskShare(token).then((preview) => setTaskShareDialog({ mode: 'accept', token, preview, sphereId: null })).catch((error) => setTaskShareDialog({ mode: 'accept', token, sphereId: null, error: error instanceof Error ? error.message : 'Ссылка недействительна' }));
   }, [currentUser?.id]);
   useEffect(() => {
-    if (!currentUser) {
-      setIsOnboardingOfferOpen(false);
-      return;
-    }
-    setIsOnboardingOfferOpen(localStorage.getItem(getOnboardingOfferStorageKey(currentUser.id)) !== '1');
-  }, [currentUser?.id]);
+    // The new guide replaces the old invitation banner.
+    setIsOnboardingOfferOpen(false);
+    const userId = currentUser?.id;
+    if (!userId || authLoading || !initialWorkspaceReady || autoBasicChecked.current === userId) return;
+    if (new URLSearchParams(window.location.search).has('joinTask')) return;
+    autoBasicChecked.current = userId;
+    const key = trainingOfferKey(userId);
+    let seenLocally = false;
+    try { seenLocally = localStorage.getItem(key) === '1'; } catch { /* storage is optional */ }
+    if (currentUser?.completedLessonIds?.includes(BASIC_OFFER_MARKER)) return;
+    void api.claimBasicTrainingOffer().then(({ show }) => {
+      if (trainingAccountRef.current !== userId) return;
+      try { localStorage.setItem(key, '1'); } catch { /* account marker is authoritative */ }
+      if (show && !seenLocally) autoBasicStartRef.current?.();
+    }).catch(() => {
+      // A temporary network failure must not block the workspace. The browser
+      // remembers the offer and the next authenticated boot can sync it.
+      if (trainingAccountRef.current !== userId || seenLocally) return;
+      try { localStorage.setItem(key, '1'); } catch { /* best effort */ }
+      autoBasicStartRef.current?.();
+    });
+  }, [currentUser?.id, authLoading, initialWorkspaceReady]);
   useEffect(() => {
     if (!currentUser) return;
     const intervalId = window.setInterval(() => {
@@ -5625,22 +5647,8 @@ export default function App() {
     }
     setActiveTourStep(WORKSPACE_TOUR_STEPS[0].id);
   };
-  const startAiTour = () => {
-    rememberTourWorkspace();
-    setTourWorkspaceUsesPrimary(false);
-    setFullscreenDisplayModes(['bubbles']);
-    setFullscreenPanelSlots([{ kind: 'mode', mode: 'bubbles' }]);
-    setIsUpdatesOpen(false);
-    setActiveTourStep(AI_TOUR_STEPS[0].id);
-  };
-  const startFeatureTour = () => {
-    rememberTourWorkspace();
-    setTourWorkspaceUsesPrimary(false);
-    setFullscreenDisplayModes(['bubbles']);
-    setFullscreenPanelSlots([{ kind: 'mode', mode: 'bubbles' }]);
-    setIsUpdatesOpen(false);
-    setActiveTourStep(FEATURE_TOUR_STEPS[0].id);
-  };
+  const startAiTour = () => startAdvancedTraining('ai');
+  const startFeatureTour = () => startAdvancedTraining('features');
   const finishTaskTour = () => {
     const restore = tourRestoreStateRef.current;
     setActiveTourStep(null);
@@ -5702,6 +5710,7 @@ export default function App() {
     else finishTaskTour();
   };
   const startBasicTraining = () => {
+    if (basicStep || advancedTraining) return;
     rememberTourWorkspace();
     basicModeRestore.current = mode;
     setBasicTasks(createTrainingTasks());
@@ -5719,6 +5728,17 @@ export default function App() {
     setPendingWorkspaceBlock(null);
     setBasicStep('intro');
   };
+  autoBasicStartRef.current = startBasicTraining;
+  const rewardGuidedLesson = (lessonId: string) => {
+    const userId = currentUser.id;
+    void api.completeTrainingLesson(lessonId).then(({ awarded, reward, user }) => {
+      if (trainingAccountRef.current !== userId) return;
+      setCurrentUser(user);
+      if (!awarded) return;
+      setTrainingRewardMessage(`Урок пройден — +${reward} рейтинга!`);
+      window.setTimeout(() => setTrainingRewardMessage(null), 4000);
+    }).catch(error => console.error('Failed to complete guided training lesson', error));
+  };
   const finishBasicTraining = () => {
     setBasicStep(null);
     setBasicTasks([]);
@@ -5731,7 +5751,7 @@ export default function App() {
   const advanceBasicTraining = () => {
     if (!basicStep) return;
     const next = nextBasicTrainingStep(basicStep);
-    if (!next) { finishBasicTraining(); return; }
+    if (!next) { finishBasicTraining(); rewardGuidedLesson(BASIC_LESSON_ID); return; }
     if (next === 'complete') setBasicTasks(previous => [...previous, createCompletionTrainingTask()]);
     if (next === 'block' || next === 'notes') {
       // Free a slot before teaching block placement; restore the sidebar for its lesson.
@@ -5743,9 +5763,49 @@ export default function App() {
     setBasicNotice(null);
     setBasicStep(next);
   };
+  const setAdvancedTrainingStep = (lesson: AdvancedLesson, config: AdvancedTrainingConfig) => {
+    // Reuse the existing read-only tour surfaces, but never run the old
+    // focus session starter, send a prompt, or connect an external account.
+    setIsAiChatOpen(false);
+    setFocusedTaskId(null);
+    setEditorState(null);
+    setIsSettingsOpen(false);
+    setIsAiExpanded(false);
+    setIsEfficiencyDetailsOpen(false);
+    setIsFocusSetupOpen(false);
+    setIsTelegramModalOpen(false);
+    const surface = config.surface;
+    const allowedSurfaces = [...AI_TOUR_STEPS, ...FEATURE_TOUR_STEPS].map(item => item.id as string);
+    setActiveTourStep(surface && allowedSurfaces.includes(surface) && surface !== 'feature-telegram-qr' ? surface as AiTourStep | FeatureTourStep : null);
+    setAdvancedTraining({ lesson, step: config.id });
+  };
+  const startAdvancedTraining = (lesson: AdvancedLesson) => {
+    if (basicStep || advancedTraining) return;
+    rememberTourWorkspace();
+    setIsUpdatesOpen(false);
+    setDisplayMode('bubbles');
+    setFullscreenDisplayModes(['bubbles']);
+    setFullscreenPanelSlots([{ kind: 'mode', mode: 'bubbles' }]);
+    setAdvancedTrainingStep(lesson, guidedSteps(lesson)[0]);
+  };
+  const finishAdvancedTraining = () => {
+    setAdvancedTraining(null);
+    finishTaskTour();
+  };
+  const advanceAdvancedTraining = () => {
+    if (!advancedTraining) return;
+    const next = nextGuidedStep(advancedTraining.lesson, advancedTraining.step);
+    if (!next) {
+      const lesson = advancedTraining.lesson;
+      finishAdvancedTraining();
+      rewardGuidedLesson(lesson);
+      return;
+    }
+    setAdvancedTrainingStep(advancedTraining.lesson, next);
+  };
   const isTourAddMenuOpen = basicStep === 'block' || activeTourStep === 'create-task' || activeTourStep === 'create-event' || activeTourStep === 'create-sector';
   const forceQuickAiPreviewOpen = activeTourStep === 'quick-ai' || activeTourStep === 'ai-quick-chat';
-  const integrationTourKind = basicStep === 'integrations' ? 'bot' : basicStep === 'android' ? 'android' : activeTourStep === 'feature-integration-send' ? 'messages'
+  const integrationTourKind = advancedTraining && ['feature-telegram-button', 'feature-telegram-qr'].includes(advancedTraining.step) ? 'bot' : basicStep === 'integrations' ? 'bot' : basicStep === 'android' ? 'android' : activeTourStep === 'feature-integration-send' ? 'messages'
     : activeTourStep === 'feature-integration-telegram-ai' ? 'assistant'
     : activeTourStep === 'feature-integration-mail' ? 'email' : null;
 
@@ -6700,13 +6760,15 @@ export default function App() {
         </div>,
         document.body
       ) : null}
-      <UpdatesMenu open={isUpdatesOpen} onStartBasicTour={startBasicTraining} onClose={() => setIsUpdatesOpen(false)} trainingOpenSignal={trainingOpenSignal} onStartWorkspaceTour={startWorkspaceTour} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} completedLessonIds={currentUser.completedLessonIds ?? []} hasUnreadNews={hasUnreadNews} onNewsViewed={markLatestNewsRead} />
+      <UpdatesMenu open={isUpdatesOpen} onStartBasicTour={startBasicTraining} onClose={() => setIsUpdatesOpen(false)} trainingOpenSignal={trainingOpenSignal} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} completedLessonIds={currentUser.completedLessonIds ?? []} hasUnreadNews={hasUnreadNews} onNewsViewed={markLatestNewsRead} />
       {trainingRewardMessage ? <div className="training-reward-toast focus-bonus-message focus-bonus-subtask" role="status">{trainingRewardMessage}</div> : null}
       {basicStep === 'report' && <TaskCompletionReportDialog demo taskId={TRAINING_COMPLETE_ID} taskTitle={TRAINING_COMPLETE_TITLE} onClose={advanceBasicTraining} />}
       {basicStep === 'sector-editor' && <SectorEditor sphere={TRAINING_SPHERES[0]} onCancel={advanceBasicTraining} onSave={async () => {}} />}
       {basicStep && <BasicPlanikTraining step={basicStep} theme={effectiveThemeMode} notice={basicNotice}
         onNext={advanceBasicTraining} onFinish={finishBasicTraining} onGrab={() => { if (basicStep === 'grab') setBasicStep('move'); }} />}
-      {activeTourStep ? <TourOverlay activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-') ? (tourWorkspaceUsesPrimary ? PRIMARY_WORKSPACE_TOUR_STEPS : WORKSPACE_TOUR_STEPS) : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-') ? FEATURE_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} onComplete={completeTaskTour} /> : null}
+      {advancedTraining && <BasicPlanikTraining lesson={advancedTraining.lesson} step={advancedTraining.step} theme={effectiveThemeMode} notice={null}
+        onNext={advanceAdvancedTraining} onFinish={finishAdvancedTraining} onGrab={() => {}} />}
+      {activeTourStep && !advancedTraining ? <TourOverlay activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-') ? (tourWorkspaceUsesPrimary ? PRIMARY_WORKSPACE_TOUR_STEPS : WORKSPACE_TOUR_STEPS) : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-') ? FEATURE_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} onComplete={completeTaskTour} /> : null}
       {isBubbleFullscreen ? (
         <header data-tour="bubbles-fullscreen-toolbar"
           className="fullscreen-workspace-toolbar fullscreen-workspace-toolbar--one-row surface-topbar light-glass-topbar relative z-40 mx-auto mt-3 mb-2 flex shrink-0 flex-nowrap items-center gap-2 rounded-2xl border px-3 py-2.5 shadow-lg backdrop-blur-lg">
@@ -6796,7 +6858,7 @@ export default function App() {
               <button type="button" className="efficiency-icon-button inline-flex h-9 w-9 items-center justify-center rounded-full transition hover:scale-110 focus-visible:ring-2 focus-visible:ring-violet-400" title={`Рейтинг: ${formattedEfficiencyScore}/100`} aria-label="Рейтинг эффективности" onClick={() => setIsEfficiencyDetailsOpen(prev => !prev)}><svg width="34" height="34" viewBox="0 0 72 72" role="img" aria-label="Рейтинг эффективности" className="efficiency-orb-icon"><defs><linearGradient id="effModernOrbFill" x1="10" y1="10" x2="62" y2="62"><stop offset="0%" stopColor="#38bdf8" /><stop offset="45%" stopColor="#8b5cf6" /><stop offset="100%" stopColor="#f472b6" /></linearGradient><linearGradient id="effModernOrbRing" x1="12" y1="58" x2="60" y2="14"><stop offset="0%" stopColor="#22d3ee" /><stop offset="55%" stopColor="#a78bfa" /><stop offset="100%" stopColor="#fb7185" /></linearGradient></defs><circle cx="36" cy="36" r="25" fill="url(#effModernOrbFill)" opacity="0.18" /><circle cx="36" cy="36" r="26" fill="none" stroke="rgba(148,163,184,0.28)" strokeWidth="5" /><circle cx="36" cy="36" r="26" fill="none" stroke="url(#effModernOrbRing)" strokeWidth="5" strokeLinecap="round" pathLength={100} strokeDasharray={`${efficiencyScore} 100`} transform="rotate(-90 36 36)" /><path d="M36 17l5.4 12.1 13.1 1.4-9.8 8.8 2.8 12.9L36 45.5l-11.5 6.7 2.8-12.9-9.8-8.8 13.1-1.4L36 17z" fill="url(#effModernOrbFill)" /></svg></button>
               {isEfficiencyDetailsOpen ? <div data-tour="feature-rating" className="efficiency-details-popover efficiency-details-popover-modern absolute right-0 top-[calc(100%+8px)] z-40 w-80 rounded-[1.6rem] border p-4 text-xs shadow-2xl backdrop-blur"><div className="text-center"><div className="efficiency-score-hero tabular-nums">{formattedEfficiencyScore}/100</div><p className="mt-1 text-sm font-semibold text-primary">{efficiencyGradeMessage}</p></div><div className="mt-4 space-y-2"><div className="efficiency-detail-row"><span>Задачи</span><b>+{formatRatingDelta(efficiencyTaskRating)} рейтинга</b></div><div className="efficiency-detail-row"><span>Привычки</span><b>+{formatRatingDelta(efficiencyHabitRating)} рейтинга</b></div><div className="efficiency-detail-row"><span>Работа с ИИ <span className="block text-[10px] font-normal text-muted">+0,1 за запрос · +0,3 за ИИ-инструмент</span></span><b>+{formatRatingDelta(efficiencyAiRating)} рейтинга</b></div><div className="efficiency-detail-row efficiency-detail-row-focus"><span>Режим концентрации (х2)</span><b>+{formatRatingDelta(efficiencyFocusRating)} рейтинга</b></div></div></div> : null}
             </div>
-            <button type="button" data-tour="feature-focus-button" className="focus-mode-button topbar-action-button inline-flex h-9 w-9 items-center justify-center rounded-xl border shrink-0 text-white shadow-lg transition hover:-translate-y-0.5 hover:scale-105 focus-visible:ring-2 focus-visible:ring-violet-300" onClick={openFocusSetup} aria-label="Режим концентрации" title="Режим концентрации"><Bot size={17}/></button>
+            <button type="button" data-tour="feature-focus-button" className="focus-mode-button topbar-action-button inline-flex h-9 w-9 items-center justify-center rounded-xl border shrink-0 text-white shadow-lg transition hover:-translate-y-0.5 hover:scale-105 focus-visible:ring-2 focus-visible:ring-violet-300" onClick={advancedTraining?.step === 'feature-focus-button' ? advanceAdvancedTraining : openFocusSetup} aria-label="Режим концентрации" title="Режим концентрации"><Bot size={17}/></button>
         <div data-tour="feature-telegram-button"><TelegramIntegrationsMenu tourIntegration={integrationTourKind} onConnectBot={() => void openTelegramLinkModal()} /></div>
         <a className="public-nav-link shrink-0 px-2 py-2 text-sm" href="/about">О сервисе</a>
         <div className="auth-actions" aria-label="Управление аккаунтом">
@@ -6982,7 +7044,7 @@ export default function App() {
 
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           {renderOverdueControl()}
-          <button data-tour="feature-focus-button" type="button" onClick={openFocusSetup} className="focus-mode-button topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-violet-300" title="Режим фокуса с ИИ"><Bot size={16} /> Фокус</button>
+          <button data-tour="feature-focus-button" type="button" onClick={advancedTraining?.step === 'feature-focus-button' ? advanceAdvancedTraining : openFocusSetup} className="focus-mode-button topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-violet-300" title="Режим фокуса с ИИ"><Bot size={16} /> Фокус</button>
           {renderCreditsControl()}
           <div className="add-menu-wrap relative" onMouseEnter={() => setIsAddMenuOpen(true)} onMouseLeave={() => { if (!isTourAddMenuOpen) setIsAddMenuOpen(false); }}>
             <button data-tour="create-task" className="add-menu-trigger light-primary-action inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => setIsAddMenuOpen((prev) => !prev)}><Plus size={16} /> Новая задача <ChevronDown size={14} /></button>

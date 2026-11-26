@@ -16,7 +16,7 @@ const user = {
   id:'browser-smoke-user',email:'smoke@example.invalid',name:'Проверка интерфейса',
   username:'smoke',emailVerified:true,isGuest:false,aiCredits:1000,
   aiCreditsMilli:1000000,timeZone:'Europe/Moscow',
-  browserNotificationsEnabled:false,completedLessonIds:[]
+  browserNotificationsEnabled:false,completedLessonIds:['basic-onboarding-v1-seen']
 };
 const spheres = [{id:'browser-smoke-sphere',name:'Тестовые задачи',color:'#8b5cf6',icon:'briefcase'}];
 const tasks = Array.from({length:Number(process.env.PLANNER_BROWSER_SMOKE_TASKS ?? 35)}, (_, index) => ({
