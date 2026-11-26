@@ -20,8 +20,11 @@ test('module switcher has independent persistent edge icons and hover-only label
   assert.match(railCss, /top: clamp\(105px, 17vh, 182px\)/);
   assert.match(railCss, /\.module-rail-link:hover \.module-rail-label/);
   assert.match(railCss, /\.module-rail-link:focus-visible \.module-rail-label/);
-  assert.match(railCss, /\.app-shell\[data-theme="light"\] \.module-rail/);
-  assert.match(railCss, /\.econ-light \.module-rail/);
+  // The body carries the actual theme in the fullscreen planner, while
+  // both module wrappers remain supported. All three share the same palette.
+  assert.match(railCss, /:is\(body\[data-theme="light"\], \.app-shell\[data-theme="light"\], \.econ-light\) \.module-rail \{/);
+  assert.match(railCss, /--module-rail-ink: #315374/);
+  assert.match(railCss, /\.module-rail-link\.module-rail-economic svg \{ color: #87510f; \}/);
   assert.match(railCss, /\.module-rail-link\.module-rail-economic\.is-active/);
 });
 
