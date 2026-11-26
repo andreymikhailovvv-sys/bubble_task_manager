@@ -12,7 +12,7 @@ import { askEconomicStream, ECONOMIC_ACCEPTED_FILE_TYPES, validateEconomicFiles,
 const EconomicVoiceInput = lazy(() => import('./components/VoiceInputButton').then(m => ({ default: m.VoiceInputButton })));
 
 import { loadThemePreference, resolveThemeMode } from './lib/autoTheme';
-import { annuityEstimate, formatMinorRub as money, minorToRublesInput as inputMoney, rublesToMinor as parseMoney } from './lib/economicMoney';
+import { annuityEstimate, formatMinorRub as money, minorToRublesInput as inputMoney, rublesToMinor as parseMoney, groupMoneyInput, calculateMoneyInput, isMoneyExpression, moneyCalculationPreview, readEconomicPositions } from './lib/economicMoney';
 import { formatCreditsSpent } from './lib/credits';
 import { api } from './lib/api';
 import './EconomicApp.css';
@@ -22,7 +22,7 @@ type Kind = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'DEBT_BORROWED' | 'DEBT_LENT' | 
 type Section = 'overview' | 'accounts' | 'operations' | 'debts' | 'categories' | 'report';
 type Dialog = { kind: 'account' | 'operation' | 'debt' | 'loan' | 'category'; id?: string } | null;
 type Account = { id: string; name: string; isPrimary: boolean; currency: string; openingBalanceMinor: string; balanceMinor: string; accountType: 'STANDARD' | 'CREDIT_CARD'; creditLimitMinor: string | null };
-type Operation = { id: string; kind: Kind; amountMinor: string; title: string; note: string | null; category: string | null; sourceAccountId: string; targetAccountId: string | null; occurredAt: string; debtId: string | null; debtPhase: string | null; isAdjustment: boolean };
+type Operation = { id: string; kind: Kind; amountMinor: string; title: string; note: string | null; category: string | null; sourceAccountId: string; targetAccountId: string | null; occurredAt: string; debtId: string | null; debtPhase: string | null; isAdjustment: boolean; positionsJson?: string; calculation?: string | null };
 type Debt = { id: string; direction: 'OWE' | 'OWED_TO_ME'; counterparty: string; amountMinor: string; paidMinor: string; postedToAccount: boolean; accountId: string | null; dueAt: string | null; note: string | null; isClosed: boolean };
 type Loan = { id: string; name: string; lender: string | null; principalMinor: string; paidMinor: string; monthlyPaymentOverrideMinor: string | null; paymentDate: string | null; remindersEnabled: boolean; annualRateBps: number; termMonths: number; startDate: string; isClosed: boolean };
 type EconomicUser = { id: string; name: string | null; username: string | null; timeZone: string | null; telegramLinked: boolean };
@@ -117,6 +117,9 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   const [bannerHidden, setBannerHidden] = useState(false);
   const [reportRevision, setReportRevision] = useState(0);
   const [form, setForm] = useState<Record<string, string>>({});
+  const [positions, setPositions] = useState<Array<{name:string; amount:string}>>([]);
+  const [adjustmentNotice, setAdjustmentNotice] = useState('');
+  useEffect(() => { if (!adjustmentNotice) return; const timer = window.setTimeout(() => setAdjustmentNotice(''), 5000); return () => window.clearTimeout(timer); }, [adjustmentNotice]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -279,17 +282,18 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   }, [kindFilter, accountFilter, categoryFilter]);
   useEffect(() => { if (section === 'operations' && snapshot) void loadOperations(); }, [section, snapshot?.totals.operationCount, kindFilter, accountFilter, categoryFilter]);
 
-  const formSet = (key: string, value: string) => setForm(prev => ({ ...prev, [key]: value }));
+  const formSet = (key: string, value: string) => setForm(prev => ({ ...prev, [key]: ['amount','balance','paid','creditLimit','monthlyOverride'].includes(key) ? groupMoneyInput(value) : value }));
   const openDialog = (kind: NonNullable<Dialog>['kind'], item?: Account | Operation | Debt | Loan | Category) => {
     setError('');
     setNewCategoryOpen(false);
     setNewCategoryName('');
     const fields: Record<string, string> = {};
+    setPositions(kind === 'operation' ? readEconomicPositions((item as Operation | undefined)?.positionsJson).map(p => ({name:p.name,amount:inputMoney(p.amountMinor)})) : []);
     if (kind === 'operation') {
       const op = item as Operation | undefined;
       fields.kind = op?.kind || 'EXPENSE';
       fields.title = op?.title || '';
-      fields.amount = op ? inputMoney(op.amountMinor) : '';
+      fields.amount = op ? op.calculation || inputMoney(op.amountMinor) : '';
       fields.category = op?.category || '';
       fields.sourceAccountId = op?.sourceAccountId || snapshot?.accounts.find(a => a.isPrimary)?.id || snapshot?.accounts[0]?.id || '';
       fields.targetAccountId = op?.targetAccountId || '';
@@ -340,7 +344,9 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
           ...(dialog.id && form.isPrimary === 'yes' && form.accountType !== 'CREDIT_CARD' ? { isPrimary: true } : {}) };
       } else if (dialog.kind === 'operation') {
         path = '/operations';
-        payload = { kind: form.kind, title: form.title, amountMinor: parseMoney(form.amount),
+        payload = { kind: form.kind, title: form.title, amountMinor: calculateMoneyInput(form.amount),
+          calculation: isMoneyExpression(form.amount) ? form.amount : null,
+          positionsJson: JSON.stringify(positions.filter(p=>p.name.trim() || p.amount.trim()).map(p=>{ if(!p.name.trim()) throw new Error('Укажите название позиции'); return {name:p.name.trim(),amountMinor:parseMoney(p.amount,true)}; })),
           sourceAccountId: form.sourceAccountId, targetAccountId: form.kind === 'TRANSFER' ? form.targetAccountId : null,
           category: form.kind === 'TRANSFER' ? null : form.category, note: form.note || null,
           occurredAt: new Date(form.date + 'T12:00:00').toISOString() };
@@ -366,7 +372,8 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
       } else {
         path = '/categories'; payload = { kind: form.kind, name: form.name };
       }
-      await economicRequest(path + idPath, dialog.id ? 'PATCH' : 'POST', payload);
+      const result = await economicRequest<{adjustment?:{amountMinor:string;accountName:string}|null}>(path + idPath, dialog.id ? 'PATCH' : 'POST', payload);
+      if (result.adjustment) setAdjustmentNotice('Добавлена корректирующая операция на сумму ' + (BigInt(result.adjustment.amountMinor)>0n?'+':'') + money(result.adjustment.amountMinor) + ' на счёт ' + result.adjustment.accountName);
       setDialog(null);
       await refresh();
       if (section === 'operations') await loadOperations();
@@ -592,6 +599,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   };
   return <MascotIdentityContext.Provider value={mascotIdentity}><div className={'econ-root ' + (effectiveAppearance === 'light' ? 'econ-light' : '') + (mobile ? ' econ-mobile-workspace' : '')}
     style={embeddedInMiniApp ? { '--econ-mobile-safe-bottom': mobileSafeBottom + 'px' } as CSSProperties : undefined}>
+    {adjustmentNotice && createPortal(<div className="econ-adjustment-toast" role="status"><Check size={18}/><span>{adjustmentNotice}</span><button type="button" onClick={()=>setAdjustmentNotice('')} aria-label="Закрыть"><X size={17}/></button></div>,document.body)}
     {!mobile && <ModuleRail active="economic"/>}
     <div className="econ-shell">
       {!mobile && <aside className="econ-nav">
@@ -815,7 +823,18 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
             <option value="EXPENSE">Расход</option><option value="INCOME">Доход</option><option value="TRANSFER">Перевод между счетами</option>
           </select></label>
           <label>Название<input required maxLength={160} value={form.title} onChange={e => formSet('title', e.target.value)} placeholder="Что купили или получили"/></label>
-          <label>Сумма, ₽<input required inputMode="decimal" value={form.amount} onChange={e => formSet('amount', e.target.value)} placeholder="0,00"/></label>
+          <label>Сумма, ₽<input required inputMode="text" value={form.amount} onChange={e => formSet('amount', e.target.value)} placeholder="0,00 или 1 000 + 200"/>
+            {moneyCalculationPreview(form.amount || '') && <span className="econ-form-hint" aria-live="polite">{moneyCalculationPreview(form.amount || '')}</span>}</label>
+          <div className="econ-positions">
+            <strong>Позиции</strong>
+            {positions.map((position,index)=><div key={index} className="econ-position-row">
+              <input aria-label={'Название позиции '+(index+1)} placeholder="Название" maxLength={160} value={position.name} onChange={e=>setPositions(prev=>prev.map((p,i)=>i===index?{...p,name:e.target.value}:p))}/>
+              <input aria-label={'Сумма позиции '+(index+1)} placeholder="Сумма, ₽" inputMode="decimal" value={position.amount} onChange={e=>setPositions(prev=>prev.map((p,i)=>i===index?{...p,amount:groupMoneyInput(e.target.value)}:p))}/>
+              <button type="button" aria-label="Удалить позицию" onClick={()=>setPositions(prev=>prev.filter((_,i)=>i!==index))}><X size={16}/></button>
+            </div>)}
+            <button type="button" className="econ-inline-category-button" disabled={positions.length>=100} onClick={()=>setPositions(prev=>[...prev,{name:'',amount:''}])}><Plus size={14}/> Добавить позицию</button>
+            {!!positions.length && <button type="button" className="econ-inline-category-button" onClick={()=>{try{const total=positions.reduce((sum,p)=>sum+BigInt(parseMoney(p.amount,true)),0n);if(total<=0n)throw new Error('Сумма позиций должна быть положительной');formSet('amount',inputMoney(total));setError('');}catch(cause){setError((cause as Error).message);}}}>Использовать сумму позиций</button>}
+          </div>
           <label>{form.kind === 'TRANSFER' ? 'Счёт списания' : 'Счёт'}
             <select required value={form.sourceAccountId} onChange={e => formSet('sourceAccountId', e.target.value)}>
               {snapshot.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}

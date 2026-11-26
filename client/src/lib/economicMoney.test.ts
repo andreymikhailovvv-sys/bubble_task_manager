@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { annuityEstimate, formatMinorRub, minorToRublesInput, rublesToMinor } from './economicMoney';
+import { annuityEstimate, formatMinorRub, minorToRublesInput, rublesToMinor, groupMoneyInput, calculateMoneyInput } from './economicMoney';
 
 test('Economic parses rubles as integer kopecks without float rounding', () => {
   assert.equal(rublesToMinor('0,01'), '1');
@@ -9,7 +9,7 @@ test('Economic parses rubles as integer kopecks without float rounding', () => {
   assert.equal(rublesToMinor('-5,13', true), '-513');
   assert.throws(() => rublesToMinor('-5,13'));
   assert.throws(() => rublesToMinor('1,999'));
-  assert.equal(minorToRublesInput('123456'), '1234,56');
+  assert.equal(minorToRublesInput('123456'), '1 234,56');
   assert.match(formatMinorRub('123456'), /1.234,56 ₽/);
 });
 test('Zero-rate annuity has no extra interest and handles final rounding', () => {
@@ -30,4 +30,15 @@ test('Annuity rejects invalid loan parameters', () => {
   assert.throws(() => annuityEstimate({ principalMinor:'0', annualRateBps:1200, termMonths:12 }));
   assert.throws(() => annuityEstimate({ principalMinor:'100', annualRateBps:-1, termMonths:12 }));
   assert.throws(() => annuityEstimate({ principalMinor:'100', annualRateBps:1200, termMonths:0 }));
+});
+
+test('amount grouping and exact calculator', () => {
+  assert.equal(groupMoneyInput('100000,25+2000'), '100 000,25+2 000');
+  assert.equal(groupMoneyInput('-1000,'), '-1 000,');
+  assert.equal(calculateMoneyInput('1 000 + 2 x 50'), '110000');
+  assert.equal(calculateMoneyInput('100 : 3'), '3333');
+  assert.equal(calculateMoneyInput('0,1 + 0,2'), '30');
+  assert.throws(() => calculateMoneyInput('100/0'));
+  assert.throws(() => calculateMoneyInput('100+'));
+  assert.throws(() => calculateMoneyInput('1-2'));
 });
