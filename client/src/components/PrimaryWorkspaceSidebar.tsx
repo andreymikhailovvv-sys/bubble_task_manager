@@ -117,7 +117,7 @@ export function PrimaryWorkspaceSidebar(props: Props) {
   const [visible, setVisible] = useState(() => readVisible(userId));
   // Automatic collapse must not overwrite the user's remembered manual choice.
   const [autoCollapsed, setAutoCollapsed] = useState(windowCount > 1);
-  const isOpen = props.forceOpen || (visible && !autoCollapsed);
+  const isOpen = visible && !autoCollapsed || props.forceOpen === true;
   const [order, setOrder] = useState<WidgetId[]>(() => readOrder(userId));
   const [completedFilter, setCompletedFilter] = useState<'today' | 'all'>('today');
   const [completedLimit, setCompletedLimit] = useState(40);

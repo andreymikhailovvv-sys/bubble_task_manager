@@ -40,7 +40,7 @@ export const BASIC_TRAINING_STEPS: TrainingStepConfig[] = [
   { id: 'linked', target: field, text: 'Молодец! Связанные задачи останутся рядом. Так можно создавать небольшие кластеры.' },
   { id: 'nest', target: field, allow: bubbles, action: true, text: 'Теперь перемести один пузырь внутрь другого. Дождись жёлтой подсветки, задержись на полсекунды и отпусти.' },
   { id: 'nested', target: field, text: 'Супер! Вложенные задачи помогают группировать дела. Их исходные данные сохраняются внутри.' },
-  { id: 'complete', target: completionBubble, allow: completionBubble + ', [data-planik-complete-action]', action: true, text: 'Кажется, с управлением пузырями мы справились! Кликни по новой задаче правой кнопкой мыши и выбери «Выполнить».' },
+  { id: 'complete', target: completionBubble + ', [data-planik-complete-action]', allow: completionBubble + ', [data-planik-complete-action]', action: true, text: 'Кажется, с управлением пузырями мы справились! Кликни по новой задаче правой кнопкой мыши и выбери «Выполнить».' },
   { id: 'report', target: '[data-planik-report-dialog]', text: 'После выполнения задачи можно подготовить Word-отчёт с историей изменений, подзадач и обсуждений. Особенно удобно для больших задач. Сейчас отчёт не нужен.' },
   { id: 'sector', target: sector, allow: sector, action: true, text: 'Нажми на плашку сектора над кнопкой «+», чтобы открыть его настройки.' },
   { id: 'sector-editor', target: '[data-planik-sector-editor]', text: 'Здесь можно изменить название, цвет, иконку и общий промпт сектора. Укажи, например, рабочий график, должность или другие особенности — это поможет мне точнее работать с задачами.' },
@@ -64,7 +64,7 @@ export function applyTrainingBubbleAction(tasks: Task[], step: BasicTrainingStep
   if (!source) return { tasks, next: null };
   if ((step === 'grab' || step === 'move') && payload.action === 'move') {
     const moved = payload.sphereId !== undefined && payload.sphereId !== source.sphereId;
-    return { tasks: tasks.map(item => item.id === id ? { ...item, sphereId: payload.sphereId ?? item.sphereId, bubbleSectorX: payload.x, bubbleSectorY: payload.y } : item), next: moved ? 'link' : null };
+    return { tasks: tasks.map(item => item.id === id ? { ...item, sphereId: payload.sphereId === undefined ? item.sphereId : payload.sphereId, bubbleSectorX: payload.x, bubbleSectorY: payload.y } : item), next: moved ? 'link' : null };
   }
   if (step === 'link' && payload.action === 'link' && target) {
     return { tasks: tasks.map(item => item.id === id || item.id === target.id ? { ...item, linkedTaskIds: [item.id === id ? target.id : id], bubbleLinkAnchorId: target.id } : item), next: 'linked' };

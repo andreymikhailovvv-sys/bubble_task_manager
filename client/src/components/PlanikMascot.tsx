@@ -35,6 +35,7 @@ type Props = {
   showcase?: boolean;
   previewMode?: Exclude<PlanikMode,'showcase'>;
   arrivalKey?: number;
+  trainingPoint?: 'left' | 'right';
 };
 
 /**
@@ -54,7 +55,8 @@ export const PlanikMascot = memo(function PlanikMascot({
   skinId: skinOverride,
   showcase = false,
   previewMode,
-  arrivalKey = 0
+  arrivalKey = 0,
+  trainingPoint
 }: Props) {
   const identity = useMascotIdentity();
   const variant = variantOverride ?? identity?.variant ?? 'planner';
@@ -419,6 +421,11 @@ export const PlanikMascot = memo(function PlanikMascot({
           </g>
         </g>
 
+        {trainingPoint && <g className="planik-training-point" aria-hidden="true" transform={trainingPoint === 'left' ? 'translate(430 0) scale(-1 1)' : undefined}>
+          <path d="M300 191Q324 188 340 172" fill="none" stroke="#7777b8" strokeWidth="16" strokeLinecap="round"/>
+          <circle cx="340" cy="172" r="9" fill="#b2aaff"/>
+          <path d="M343 169L357 158" stroke="#b2aaff" strokeWidth="7" strokeLinecap="round"/>
+        </g>}
         {showcase && skinId !== 'classic' && !king && <g className="planik-showcase-arm" aria-hidden="true">
           <path d={isScarfSkin(skinId) ? 'M301 194Q293 225 257 233' : 'M301 194Q329 153 307 115Q293 91 267 83'} fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round"/>
           <circle cx={isScarfSkin(skinId) ? 254 : 265} cy={isScarfSkin(skinId) ? 233 : 83} r="10" fill="#aaa6f0"/>

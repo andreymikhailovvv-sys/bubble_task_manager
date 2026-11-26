@@ -123,13 +123,14 @@ export function BasicPlanikTraining({ step, theme, notice, onNext, onFinish, onG
   left = clamp(left, 12, Math.max(12, viewport.width - width - 12));
   top = clamp(top, 12, Math.max(12, viewport.height - cardHeight - 12));
   const visibleText = config.text.slice(0, typed);
+  const pointingDirection = step === 'sector' && target ? ((target.left + target.right) / 2 < left + 60 ? 'left' : 'right') : undefined;
   const fullyTyped = typed >= config.text.length;
   const isMouseOnly = ['grab', 'move', 'link', 'nest', 'complete'].includes(step);
   return createPortal(
     <div data-basic-training-overlay data-theme={theme} className={`basic-planik-overlay ${centered ? 'is-centered' : ''}`}>
       {centered || !target ? <div className="basic-planik-dim" /> : <div className="basic-planik-spotlight" style={{ left: target.left, top: target.top, width: target.right - target.left, height: target.bottom - target.top }} />}
       <div ref={cardRef} className={`basic-planik-card ${centered ? 'basic-planik-card--intro' : ''}`} style={{ width, left, top }}>
-        <div className="basic-planik-character"><PlanikMascot variant="planner" size="sidekick" previewMode={step === 'linked' || step === 'nested' || step === 'goodbye' ? 'celebrating' : 'idle'} /></div>
+        <div className="basic-planik-character"><PlanikMascot variant="planner" skinId="classic" size="sidekick" trainingPoint={pointingDirection} previewMode={step === 'linked' || step === 'nested' || step === 'goodbye' ? 'celebrating' : 'idle'} /></div>
         <section className="basic-planik-speech" role="dialog" aria-label="Обучение от Планика">
           <div className="basic-planik-meta"><span>Планик</span><span>{BASIC_TRAINING_STEPS.indexOf(config) + 1} / {BASIC_TRAINING_STEPS.length}</span></div>
           <div className="basic-planik-text">

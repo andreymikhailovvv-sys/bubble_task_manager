@@ -6700,7 +6700,7 @@ export default function App() {
         </div>,
         document.body
       ) : null}
-      <UpdatesMenu onStartBasicTour={startBasicTraining} open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} trainingOpenSignal={trainingOpenSignal} onStartWorkspaceTour={startWorkspaceTour} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} completedLessonIds={currentUser.completedLessonIds ?? []} hasUnreadNews={hasUnreadNews} onNewsViewed={markLatestNewsRead} />
+      <UpdatesMenu open={isUpdatesOpen} onStartBasicTour={startBasicTraining} onClose={() => setIsUpdatesOpen(false)} trainingOpenSignal={trainingOpenSignal} onStartWorkspaceTour={startWorkspaceTour} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} completedLessonIds={currentUser.completedLessonIds ?? []} hasUnreadNews={hasUnreadNews} onNewsViewed={markLatestNewsRead} />
       {trainingRewardMessage ? <div className="training-reward-toast focus-bonus-message focus-bonus-subtask" role="status">{trainingRewardMessage}</div> : null}
       {basicStep === 'report' && <TaskCompletionReportDialog demo taskId={TRAINING_COMPLETE_ID} taskTitle={TRAINING_COMPLETE_TITLE} onClose={advanceBasicTraining} />}
       {basicStep === 'sector-editor' && <SectorEditor sphere={TRAINING_SPHERES[0]} onCancel={advanceBasicTraining} onSave={async () => {}} />}

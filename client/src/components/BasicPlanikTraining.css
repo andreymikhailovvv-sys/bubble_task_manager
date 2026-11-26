@@ -34,3 +34,5 @@
 @media(pointer:coarse){.basic-planik-touch-hint{display:block}}
 @media(max-width:650px){.basic-planik-character{height:66px}.basic-planik-character .planik-mascot{width:74px;height:66px}.basic-planik-speech{padding:12px 14px}.basic-planik-text{font-size:13px}}
 @media(prefers-reduced-motion:reduce){.basic-planik-card,.basic-planik-character,.basic-planik-spotlight{transition:none}.basic-planik-caret{animation:none}}
+
+.planik-training-point{animation:planik-training-point-in .35s ease-out both;pointer-events:none}@keyframes planik-training-point-in{from{opacity:0}to{opacity:1}}@media(prefers-reduced-motion:reduce){.planik-training-point{animation:none}}
