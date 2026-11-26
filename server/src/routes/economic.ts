@@ -1,3 +1,4 @@
+import { normalizeEconomicPositions } from '../lib/economic-operation-details.js';
 import { Router, type Request, type Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
@@ -32,6 +33,12 @@ const money = (value: unknown, allowZero = false, allowNegative = false): bigint
   const n = BigInt(value);
   return (!allowNegative && n < 0n) || (!allowZero && n === 0n) || n > 999999999999999n || n < -999999999999999n ? null : n;
 };
+function operationDetails(body: Record<string, unknown>) {
+  const positionsJson = normalizeEconomicPositions(body.positionsJson);
+  const calculation = optionalText(body.calculation, 240);
+  if (calculation === undefined) throw new Error('Некорректная калькуляция');
+  return { positionsJson, calculation };
+}
 const toDate = (value: unknown): Date | null => {
   if (typeof value !== 'string' || value.length > 40) return null;
   const date = new Date(value);
@@ -237,7 +244,7 @@ economicRouter.patch('/accounts/:id', asyncHandler(async (req, res) => {
   const legacy = req.body?.openingBalanceMinor === undefined ? undefined : money(req.body.openingBalanceMinor, true, true);
   if (desired === null || legacy === null) { error(res, 'Некорректный баланс'); return; }
   try {
-    await prisma.$transaction(async tx => {
+    const adjustment = await prisma.$transaction(async tx => {
       const found = await tx.economicAccount.findFirst({ where: { id: req.params.id, userId: owner } });
       if (!found) throw new EconomicActionError('Счёт не найден',404);
       const name = req.body?.name === undefined ? found.name : text(req.body.name, 60);
@@ -268,10 +275,10 @@ economicRouter.patch('/accounts/:id', asyncHandler(async (req, res) => {
         await tx.economicAccount.updateMany({ where: { userId: owner }, data: { isPrimary: false } });
       await tx.economicAccount.update({ where: { id: found.id, userId: owner },
         data: { name, accountType, creditLimitMinor, ...(req.body?.isPrimary === true ? { isPrimary: true } : {}) } });
-      if (target !== undefined)
-        await recordEconomicBalanceAdjustment(tx, owner, found.id, found.openingBalanceMinor, target);
+      const delta = target === undefined ? 0n : await recordEconomicBalanceAdjustment(tx, owner, found.id, found.openingBalanceMinor, target);
+      return delta === 0n ? null : { amountMinor: delta.toString(), accountName: name };
     },{ isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-    res.json({ ok: true });
+    res.json({ ok: true, adjustment });
   } catch (cause) {
     if (cause instanceof EconomicActionError) { error(res,cause.message,cause.status); return; }
     if (!conflict(cause, res)) throw cause;
@@ -324,8 +331,10 @@ economicRouter.post('/operations', asyncHandler(async (req, res) => {
   if (linked.length !== accountIds.length || linked.some(a => a.currency !== 'RUB')) { error(res, 'Один из счетов не принадлежит пользователю'); return; }
   const category = kind === 'TRANSFER' ? null : optionalText(body.category, 80);
   if (category === undefined) { error(res, 'Некорректная категория'); return; }
+  let details: ReturnType<typeof operationDetails>;
+  try { details = operationDetails(body); } catch (cause) { error(res, (cause as Error).message); return; }
   const operation = await prisma.economicOperation.create({
-    data: { userId: owner, kind, amountMinor, sourceAccountId, targetAccountId, category, title, note, occurredAt }
+    data: { userId: owner, kind, amountMinor, sourceAccountId, targetAccountId, category, title, note, occurredAt, ...details }
   });
   res.status(201).json({ operation: operationOut(operation) });
 }));
@@ -349,8 +358,10 @@ economicRouter.patch('/operations/:id', asyncHandler(async (req, res) => {
   }
   const count = await prisma.economicAccount.count({ where: { userId: owner, id: { in: ids } } });
   if (count !== ids.length) { error(res, 'Один из счетов не найден'); return; }
+  let details: ReturnType<typeof operationDetails>;
+  try { details = operationDetails(body); } catch (cause) { error(res, (cause as Error).message); return; }
   await prisma.economicOperation.updateMany({ where: { id: found.id, userId: owner },
-    data: { kind: body.kind, amountMinor, title, note, category, occurredAt, sourceAccountId, targetAccountId } });
+    data: { kind: body.kind, amountMinor, title, note, category, occurredAt, sourceAccountId, targetAccountId, ...details } });
   res.json({ ok: true });
 }));
 economicRouter.delete('/operations/:id', asyncHandler(async (req, res) => {

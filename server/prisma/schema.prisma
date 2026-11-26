@@ -1608,6 +1608,8 @@ model EconomicOperation {
   user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
   kind              String
   amountMinor       BigInt
+  positionsJson     String @default("[]")
+  calculation       String?
   sourceAccountId   String
   sourceAccount     EconomicAccount @relation("EconomicSourceAccount", fields: [sourceAccountId], references: [id], onDelete: Restrict)
   targetAccountId   String?

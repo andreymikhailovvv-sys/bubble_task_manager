@@ -1,3 +1,4 @@
+import { normalizeEconomicPositions } from '../lib/economic-operation-details.js';
 import { Prisma } from '@prisma/client';
 import { ECONOMIC_BASE_CATEGORIES } from '../lib/economic-category-presets.js';
 import { prisma } from '../db/prisma.js';
@@ -13,7 +14,9 @@ const snapshot = (entity:EconomicEntity,row:any):Snapshot => {
   if(entity==='account')return {id:row.id,name:row.name,accountType:row.accountType,creditLimitMinor:row.creditLimitMinor?.toString()??null,openingBalanceMinor:row.openingBalanceMinor.toString(),updatedAt:iso(row.updatedAt)};
   if(entity==='operation')return {id:row.id,kind:row.kind,amountMinor:row.amountMinor.toString(),
     sourceAccountId:row.sourceAccountId,targetAccountId:row.targetAccountId,category:row.category,
-    title:row.title,note:row.note,occurredAt:iso(row.occurredAt),updatedAt:iso(row.updatedAt)};
+    title:row.title,note:row.note,occurredAt:iso(row.occurredAt),updatedAt:iso(row.updatedAt),
+    ...(row.positionsJson && row.positionsJson !== '[]' ? { positionsJson: row.positionsJson } : {}),
+    ...(row.calculation ? { calculation: row.calculation } : {})};
   if(entity==='category')return {id:row.id,kind:row.kind,name:row.name,createdAt:iso(row.createdAt)};
   if(entity==='debt')return {id:row.id,direction:row.direction,counterparty:row.counterparty,amountMinor:row.amountMinor.toString(),
     paidMinor:row.paidMinor.toString(),note:row.note,dueAt:iso(row.dueAt),
@@ -200,6 +203,7 @@ async function mutate(tx:Tx,owner:string,action:EconomicAction,record:Snapshot|n
       kind:String(d.kind),sourceAccountId,targetAccountId:target,
       amountMinor:BigInt(String(d.amountMinor)),title:String(d.title),
       note:d.note==null?null:String(d.note),category,
+      positionsJson:normalizeEconomicPositions(d.positionsJson), calculation:d.calculation==null?null:String(d.calculation),
       occurredAt:dates(d.occurredAt)??new Date()
     };
     if(action.action==='create')return (await tx.economicOperation.create({data:{userId:owner,...values}})).id;
@@ -441,14 +445,14 @@ export async function undoEconomicProposal(owner:string,id:string){
       const before=row.before as Record<string,unknown>;
       const revertFields:Record<EconomicEntity,string[]>={
         account:['name','balanceMinor','accountType','creditLimitMinor'],
-        operation:['kind','amountMinor','sourceAccountId','targetAccountId','category','title','note','occurredAt'],
+        operation:['kind','amountMinor','sourceAccountId','targetAccountId','category','title','note','occurredAt','positionsJson','calculation'],
         debt:['direction','counterparty','amountMinor','paidMinor','note','dueAt','postedToAccount','accountId'],
         loan:['name','lender','principalMinor','paidMinor','annualRateBps','termMonths',
           'startDate','monthlyPaymentOverrideMinor','paymentDate','remindersEnabled','isClosed'],
         category:['name']
       };
       await mutate(tx,owner,{entity:action.entity,action:'update',targetId:entityId,
-        payload:without(before,revertFields[action.entity]) as EconomicAction['payload']},current);
+        payload:{...(action.entity==='operation'?{positionsJson:'[]',calculation:null}:{}),...without(before,revertFields[action.entity])} as EconomicAction['payload']},current);
     }
     const updated=await tx.economicAiProposal.update({
       where:{id},data:{status:'UNDONE',undoneAt:new Date(),error:null}
