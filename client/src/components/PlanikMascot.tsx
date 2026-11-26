@@ -3,7 +3,6 @@ import { memo, useCallback, useEffect, useId, useRef, useState, type CSSProperti
 import './PlanikMascot.css';
 import { CalendarDays, CheckCircle2, ListChecks } from 'lucide-react';
 import type { CompletionProgress } from '../lib/completionStatistics';
-import './PrimaryWorkspaceSidebar.css';
 import { useMascotIdentity } from './MascotPresence';
 import { MascotArrivalEffects } from './MascotArrivalEffects';
 import { CatMascotEars } from './CatMascotEars';

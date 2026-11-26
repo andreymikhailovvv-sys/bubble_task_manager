@@ -5,7 +5,7 @@ import {
   CalendarDays, CheckCheck, ChevronRight, ClipboardList, FilePenLine,
   FileSpreadsheet, FileText, Globe2, ImagePlus, ListTodo, Mail,
   MessageCircle, Search, Settings2, ShieldCheck, Sparkles,
-  WandSparkles, X, Wallet, ArrowDownLeft, ArrowUpRight as ExpenseIcon, ArrowLeftRight, Tags, HandCoins, Landmark, ChartPie, type LucideIcon
+  WandSparkles, X, Wallet, ArrowDownLeft, ArrowLeftRight, Tags, HandCoins, Landmark, ChartPie, type LucideIcon
 } from 'lucide-react';
 import './AiChatWelcome.css';
 
@@ -65,7 +65,7 @@ export const generalGroups: CapabilityGroup[] = [
     finance: true,
     items: [
       { icon: ArrowDownLeft, title: 'Запись доходов', description: 'Записывать поступления с суммой, счётом, категорией и датой.' },
-      { icon: ExpenseIcon, title: 'Запись расходов', description: 'Записывать расходы, в том числе с детализацией покупок и расчётом суммы.' },
+      { icon: ArrowUpRight, title: 'Запись расходов', description: 'Записывать расходы, в том числе с детализацией покупок и расчётом суммы.' },
       { icon: ArrowLeftRight, title: 'Переводы между счетами', description: 'Подготавливать переводы между вашими счетами.' },
       { icon: Wallet, title: 'Управление счетами', description: 'Создавать счета, менять название и корректировать текущий баланс.' },
       { icon: FilePenLine, title: 'Редактирование операций', description: 'Исправлять сумму, дату, категорию, описание и другие доступные параметры операций.' },

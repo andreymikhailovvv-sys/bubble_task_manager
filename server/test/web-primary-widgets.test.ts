@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import '../../client/src/lib/completionStatistics.test.ts';
 
 const source = async (relativePath: string) =>
   readFile(new URL('../../' + relativePath, import.meta.url), 'utf8');
@@ -48,12 +49,11 @@ test('habit actions and progress metric use the real shared API and Mini App tas
   assert.match(widget, /<MiniAppHabitTracker habit=\{selectedHabit\}/);
   assert.match(widget, /<PrimaryHabitDialog/);
   assert.doesNotMatch(widget, /TestPageHabitDialog|TestPage\.css/);
-  assert.match(widget, /todayTasks = tasks\.filter\(task =>/);
-  assert.match(widget, /&& task\.dueDate && Number\.isFinite/);
+  assert.match(widget, /todayTasks = completionItems\(tasks, 'today', timeZone, now\)/);
   const editor = await source('client/src/components/PrimaryHabitDialog.tsx');
   assert.match(editor, /primary-habit-dialog dialog-surface/);
   assert.match(editor, /onSave/);
-  assert.match(widget, /\(task\.taskType \?\? 'TASK'\) === 'TASK' && !task\.parentTaskId/);
+  assert.match(widget, /taskItems = completionItems\(tasks, 'tasks', timeZone, now\)/);
   assert.match(widget, /metric\('Все задачи', doneCount, taskItems\.length/);
   assert.match(widget, /metric\('За сегодня', todayDone, todayTasks\.length/);
   const css = await source('client/src/components/PrimaryWorkspaceSidebar.css');
@@ -195,4 +195,25 @@ test('desktop habit calendar remains compact and completed days override schedul
   assert.ok(css.includes("body[data-theme='dark'] .primary-habit-detail-dialog"));
   assert.ok(css.includes('.miniapp-habit-tracker-day.miniapp-habit-tracker-day-partial'));
   assert.ok(css.includes('outline: 2px solid var(--tracker-accent)'));
+});
+
+test('website microphone bypasses the live menu and completion spotlight shares the financial-free task metrics', async () => {
+  const [app, chat, voice, mascot, welcome] = await Promise.all([
+    source('client/src/App.tsx'), source('client/src/components/ExpandedAiChat.tsx'),
+    source('client/src/components/VoiceInputButton.tsx'), source('client/src/components/PlanikMascot.tsx'),
+    source('client/src/components/AiChatWelcome.tsx')
+  ]);
+  for (const surface of [app, chat]) {
+    const triggers = [...surface.matchAll(/<VoiceInputButton\b[^>]*?liveContext=/g)];
+    assert.ok(triggers.length > 0);
+    assert.ok(triggers.every(trigger => trigger[0].includes('activationMode="transcription"')));
+    assert.ok(surface.includes('completion={'));
+  }
+  assert.ok(voice.includes("if (activationMode === 'transcription') void start();"));
+  assert.ok(voice.includes('startPersistentPlanikLiveSession'));
+  assert.ok(mascot.includes('planik-completion-beam'));
+  assert.ok(mascot.includes('primary-widget-progress'));
+  assert.ok(welcome.includes("label: 'Финансовые операции'"));
+  assert.ok(welcome.includes('Переводы между счетами'));
+  assert.ok(welcome.includes("variant === 'web' || !group.finance"));
 });

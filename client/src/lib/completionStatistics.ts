@@ -13,15 +13,20 @@ export function completionDateKey(date: Date, timeZone: string): string {
   }
 }
 
-export function isTodayTask(task: Task, timeZone: string, now: Date): boolean {
+function isTaskDueOn(task: Task, timeZone: string, dateKey: string): boolean {
   return (task.taskType ?? 'TASK') === 'TASK' && !!task.dueDate
     && Number.isFinite(new Date(task.dueDate).getTime())
-    && completionDateKey(new Date(task.dueDate), timeZone) === completionDateKey(now, timeZone);
+    && completionDateKey(new Date(task.dueDate), timeZone) === dateKey;
+}
+
+export function isTodayTask(task: Task, timeZone: string, now: Date): boolean {
+  return isTaskDueOn(task, timeZone, completionDateKey(now, timeZone));
 }
 
 export function completionItems(tasks: Task[], scope: CompletionScope, timeZone: string, now: Date): Task[] {
+  const todayKey = scope === 'today' ? completionDateKey(now, timeZone) : '';
   return tasks.filter(task => (task.taskType ?? 'TASK') === 'TASK' &&
-    (scope === 'today' ? isTodayTask(task, timeZone, now) : scope === 'subtasks' ? !!task.parentTaskId : !task.parentTaskId));
+    (scope === 'today' ? isTaskDueOn(task, timeZone, todayKey) : scope === 'subtasks' ? !!task.parentTaskId : !task.parentTaskId));
 }
 
 export function completionProgress(tasks: Task[], target: Task, timeZone: string, now: Date, sequence: number): CompletionProgress | null {
