@@ -729,7 +729,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
               <p>{snapshot.totals.operationCount?snapshot.totals.operationCount+' записей всего':'Здесь появятся доходы и расходы'}</p>
             </div><button type="button" onClick={()=>setSection('operations')}>Все операции <ChevronRight size={16}/></button></div>
             <div className="econ-operations-toolbar">{operationSummary()}{operationFilters()}</div>
-            <div className={'econ-operation-results econ-recent-results'+(operationsBusy?' is-loading':'')} aria-busy={operationsBusy}>
+            <div className={'econ-operation-results econ-recent-results'+(operationsBusy?' is-loading':'')} aria-busy={operationsBusy} style={{height:Math.max(104,Math.min(8,snapshot.recent.length)*70)+'px'}}>
               {operations.length?operations.slice(0,8).map(operationRow):<div className="econ-empty">{operationsBusy?'Загружаем…':'Нет операций по выбранным фильтрам'}</div>}
             </div>
           </section>
