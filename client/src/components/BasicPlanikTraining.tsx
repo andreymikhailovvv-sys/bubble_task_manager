@@ -153,7 +153,7 @@ export function BasicPlanikTraining({ step, lesson, theme, notice, actionReady, 
     const dialog = document.querySelector<HTMLElement>('.mascot-wardrobe-dialog[data-guided-wardrobe]');
     if (!dialog) return;
     dialog.style.setProperty('--guided-wardrobe-reserve', Math.max(180, cardHeight + 36) + 'px');
-    return () => dialog.style.removeProperty('--guided-wardrobe-reserve');
+    return () => { dialog.style.removeProperty('--guided-wardrobe-reserve'); };
   }, [step, cardHeight]);
   const centered = config.center;
   const width = Math.min(centered ? 480 : practice ? 390 : 350, viewport.width - 24);
