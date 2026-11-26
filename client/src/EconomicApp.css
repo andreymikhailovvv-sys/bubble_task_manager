@@ -766,3 +766,44 @@ body:has(.econ-root.econ-mobile-workspace) #root{min-height:100dvh}
 .econ-filters-toggle{position:relative}.econ-filter-count{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;display:grid;place-items:center;padding:0 4px;font-size:10px;font-weight:750;background:var(--ec-orange);color:#fff;border-radius:10px}.econ-filters-toggle-row{justify-content:flex-end;align-items:center}.econ-filter-totals{display:flex;flex-wrap:wrap;gap:9px 22px;padding:12px 0;margin-bottom:6px;border-bottom:1px solid var(--ec-border);font-size:12px;color:var(--ec-muted)}.econ-filter-totals strong{display:block;font-size:16px;color:var(--ec-text);font-variant-numeric:tabular-nums}.econ-filter-totals strong.INCOME{color:#459c6a}.econ-filter-totals strong.EXPENSE{color:#c66f4c}.econ-filter-totals small{flex-basis:100%;font-size:10px}.econ-recent .econ-filters-control{margin-top:-10px}
 
 .econ-operations-list .econ-filters-toggle-row{justify-content:space-between}.econ-operations-heading{margin:0;font-size:15px;font-weight:700}.econ-filters-control .econ-filters{padding-top:8px}.econ-filter-totals span{min-width:90px}
+
+/* A separate anchored filter flyout: opening it never changes the card height. */
+.econ-operations-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;position:relative;min-height:54px;z-index:3}
+.econ-operations-toolbar .econ-filters-control{position:relative;flex:none;margin:0}
+.econ-operations-toolbar .econ-filters-toggle{width:38px;height:38px;padding:0;display:grid;place-items:center}
+.econ-operations-toolbar .econ-filter-totals{flex:1;min-width:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:center;border:0;padding:0;margin:0}
+.econ-operations-toolbar .econ-filter-totals span{min-width:0;font-size:11px;line-height:1.4;white-space:nowrap}
+.econ-operations-toolbar .econ-filter-totals strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:clamp(12px,1.35vw,16px);font-weight:800;line-height:1.4}
+.econ-root .econ-filters-control .econ-filters,
+.econ-root.econ-mobile-workspace .econ-filters-control .econ-filters{
+  position:absolute;z-index:420;right:0;left:auto;top:calc(100% + 9px);
+  width:min(336px,calc(100vw - 34px));max-height:min(70dvh,490px);
+  display:grid;grid-template-columns:minmax(0,1fr);gap:11px;
+  padding:16px;background:var(--ec-panel);border:1px solid var(--ec-border);
+  border-radius:16px;box-shadow:0 22px 55px rgba(0,0,0,.24);
+  overflow-y:auto;overscroll-behavior:contain;
+  animation:econ-filter-flyout-in .19s cubic-bezier(.2,.8,.2,1) both;
+}
+.econ-root .econ-filters-control .econ-filters label{display:grid;gap:6px;color:var(--ec-muted);font-size:11px;font-weight:650}
+.econ-root .econ-filters-control .econ-filters select{width:100%;min-width:0;margin:0;font-size:13px}
+.econ-filters-popover-title{padding-bottom:3px}
+.econ-filters-reset{width:100%;padding:10px 12px;border:1px solid var(--ec-border);border-radius:10px;background:var(--ec-panel2);color:var(--ec-orange2);font-weight:700;font-size:12px}
+.econ-filters-reset:disabled{opacity:.45;cursor:default}
+.econ-recent .econ-filters-control{margin-top:0}
+.econ-recent,.econ-operations-list{overflow:visible}
+.econ-operations-list .econ-operations-heading{margin:9px 0 3px}
+/* Stable independent results viewport prevents the document from scrolling up
+   when filters replace many rows with fewer ones. */
+.econ-operation-results{min-height:0;overflow-y:auto;overscroll-behavior:contain;overflow-anchor:none;scrollbar-gutter:stable;transition:opacity .16s ease}
+.econ-operation-results.is-loading{opacity:.58}
+.econ-operations-results{height:clamp(320px,56dvh,610px)}
+.econ-recent-results{height:auto;max-height:none}
+@keyframes econ-filter-flyout-in{from{opacity:0;transform:translateY(-7px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+@media(max-width:600px){
+ .econ-operations-toolbar .econ-filter-totals{gap:5px}
+ .econ-operations-toolbar .econ-filter-totals span{font-size:10px}
+ .econ-operations-toolbar .econ-filter-totals strong{font-size:12px}
+ .econ-operations-toolbar .econ-filters-toggle{width:39px;height:39px}
+ .econ-operations-results{height:clamp(300px,52dvh,570px)}
+}
+@media(prefers-reduced-motion:reduce){.econ-root .econ-filters-control .econ-filters{animation:none}.econ-operation-results{transition:none}}
