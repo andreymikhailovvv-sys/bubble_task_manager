@@ -22,6 +22,7 @@ struct EcoOperation: Codable, Identifiable {
     let occurredAt: String?
     let isAdjustment: Bool?
     let debtId: String?
+    let debtPhase: String?
     let positionsJson: String?
     let calculation: String?
 }
@@ -78,9 +79,16 @@ struct EcoSnapshot: Decodable {
     let loans: [EcoLoan]
 }
 
+struct EcoOperationTotals: Decodable {
+    let receivedMinor: String
+    let spentMinor: String
+    let netMinor: String
+}
+
 struct EcoOperationsEnvelope: Decodable {
     let operations: [EcoOperation]
     let nextCursor: String?
+    let totals: EcoOperationTotals?
 }
 
 struct EcoReportGroup: Decodable {

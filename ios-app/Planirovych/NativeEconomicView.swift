@@ -36,6 +36,9 @@ struct NativeEconomicView: View {
     @State private var section: EcoSection = .overview
     @State private var editor: EcoEditorTarget?
     @State private var pendingRemoval: EcoEditorTarget?
+    @State private var operationTotals: EcoOperationTotals?
+    @State private var filtersOpen = false
+    @State private var operationRequest = UUID()
     @State private var kindFilter = ""
     @State private var accountFilter = ""
     @State private var categoryFilter = ""
@@ -211,7 +214,7 @@ struct NativeEconomicView: View {
             }
             Button("Отмена", role: .cancel) { pendingRemoval = nil }
         } message: {
-            Text("Удаление изменит финансовые данные во всех приложениях.")
+            Text(pendingRemoval?.raw?["debtPhase"] as? String == "FUNDING" ? "Движение денег будет отменено, связанный долг удалён." : pendingRemoval?.raw?["debtPhase"] as? String == "SETTLEMENT" ? "Погашение будет отменено, долг снова станет непогашенным." : "Удаление отменит движение денег во всех приложениях.")
         }
     }
 
@@ -350,10 +353,12 @@ struct NativeEconomicView: View {
                     section = .operations
                     Task { await loadSection() }
                 }
-                if data.recent.isEmpty {
-                    Text("Операций пока нет").font(.footnote).foregroundStyle(.secondary)
+                operationFilters(data)
+                operationSummary
+                if operations.isEmpty && !loadingOperations {
+                    Text("По выбранным фильтрам операций нет").font(.footnote).foregroundStyle(.secondary)
                 }
-                ForEach(data.recent.prefix(8)) { operation in operationRow(operation) }
+                ForEach(operations.prefix(8)) { operation in operationRow(operation) }
             }
         }
     }
@@ -414,52 +419,14 @@ struct NativeEconomicView: View {
                 }
                 Text("Доходы, расходы, переводы и движения по долгам")
                     .font(.footnote).foregroundStyle(.secondary)
-                ScrollView(.horizontal) {
-                    HStack(spacing: 8) {
-                        Menu {
-                            Button("Все виды") { kindFilter = ""; Task { await fetchOperations() } }
-                            ForEach(["INCOME", "EXPENSE", "TRANSFER"], id: \.self) { kind in
-                                Button(kindLabel(kind)) { kindFilter = kind; Task { await fetchOperations() } }
-                            }
-                        } label: {
-                            Label(kindFilter.isEmpty ? "Все виды" : kindLabel(kindFilter),
-                                  systemImage: "line.3.horizontal.decrease")
-                        }
-                        Menu {
-                            Button("Все счета") { accountFilter = ""; Task { await fetchOperations() } }
-                            ForEach(data.accounts) { account in
-                                Button(account.name) {
-                                    accountFilter = account.id
-                                    Task { await fetchOperations() }
-                                }
-                            }
-                        } label: {
-                            Label(data.accounts.first(where: { $0.id == accountFilter })?.name ?? "Все счета",
-                                  systemImage: "creditcard")
-                        }
-                        Menu {
-                            Button("Все категории") { categoryFilter = ""; Task { await fetchOperations() } }
-                            ForEach(Array(Set(data.categories.map(\.name))).sorted(), id: \.self) { name in
-                                Button(name) {
-                                    categoryFilter = name
-                                    Task { await fetchOperations() }
-                                }
-                            }
-                        } label: {
-                            Label(categoryFilter.isEmpty ? "Категории" : categoryFilter,
-                                  systemImage: "square.grid.2x2")
-                        }
-                    }
-                    .font(.caption)
-                }
-                .scrollIndicators(.hidden)
+                operationFilters(data)
+                operationSummary
             }
 
             if loadingOperations && operations.isEmpty {
                 ProgressView().padding()
             }
-            let list = operations.isEmpty && !loadingOperations && kindFilter.isEmpty &&
-                accountFilter.isEmpty && categoryFilter.isEmpty ? data.recent : operations
+            let list = operations
             if list.isEmpty && !loadingOperations {
                 Text("По выбранным фильтрам операций нет")
                     .font(.subheadline).foregroundStyle(.secondary)
@@ -482,6 +449,59 @@ struct NativeEconomicView: View {
         }
     }
 
+    private func operationFilters(_ data: EcoSnapshot) -> some View {
+        let count = [kindFilter, accountFilter, categoryFilter].filter { !$0.isEmpty }.count
+        return VStack(alignment: .trailing, spacing: 8) {
+            Button { filtersOpen.toggle() } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "line.3.horizontal.decrease")
+                    if count > 0 {
+                        Text(String(count)).font(.caption2.bold()).padding(4)
+                            .background(gold.opacity(0.22), in: Circle())
+                    }
+                }.foregroundStyle(gold)
+            }.accessibilityLabel("Фильтры операций: " + String(count))
+            if filtersOpen {
+                Picker("Тип операции", selection: $kindFilter) {
+                    Text("Все виды").tag("")
+                    ForEach(["INCOME", "EXPENSE", "TRANSFER", "DEBTS"], id: \.self) { kind in
+                        Text(kind == "DEBTS" ? "Долговые операции" : kindLabel(kind)).tag(kind)
+                    }
+                }
+                Picker("Счёт", selection: $accountFilter) {
+                    Text("Все счета").tag("")
+                    ForEach(data.accounts) { account in Text(account.name).tag(account.id) }
+                }
+                Picker("Категория", selection: $categoryFilter) {
+                    Text("Все категории").tag("")
+                    ForEach(Array(Set(data.categories.map(\.name) + ["Долги", "Корректировка"])).sorted(), id: \.self) { name in Text(name).tag(name) }
+                }
+            }
+        }
+        .onChange(of: kindFilter) { _, _ in Task { await fetchOperations() } }
+        .onChange(of: accountFilter) { _, _ in Task { await fetchOperations() } }
+        .onChange(of: categoryFilter) { _, _ in Task { await fetchOperations() } }
+    }
+
+    private var operationSummary: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            if let totals = operationTotals {
+                ForEach(["Получено", "Потрачено", "Итого"], id: \.self) { label in
+                    let amount = label == "Получено" ? totals.receivedMinor : label == "Потрачено" ? totals.spentMinor : totals.netMinor
+                    let sign = label == "Получено" ? "+" : label == "Потрачено" ? "−" : (amount.hasPrefix("-") || amount == "0" ? "" : "+")
+                    HStack {
+                        Text(label).foregroundStyle(.secondary)
+                        Spacer()
+                        Text(sign + EcoMoney.formatted(amount)).fontWeight(.semibold).monospacedDigit()
+                    }.font(.subheadline)
+                }
+                Text("Все совпавшие записи, без переводов между счетами.").font(.caption2).foregroundStyle(.secondary)
+            } else {
+                Text(loadingOperations ? "Загружаем итог…" : "Итог недоступен").font(.caption).foregroundStyle(.secondary)
+            }
+        }.padding(.vertical, 6)
+    }
+
     private func kindLabel(_ kind: String) -> String {
         switch kind {
         case "INCOME": return "Доход"
@@ -495,8 +515,11 @@ struct NativeEconomicView: View {
 
     private func operationRow(_ op: EcoOperation) -> some View {
         let incoming = ["INCOME", "DEBT_BORROWED", "DEBT_RETURNED"].contains(op.kind)
-        return Button {
-            if op.isAdjustment != true {
+        return HStack(spacing: 8) {
+        Button {
+            if let debtId = op.debtId, let debt = snapshot?.debts.first(where: { $0.id == debtId }) {
+                showEditor(debt, resource: .debts)
+            } else if op.isAdjustment != true && op.debtId == nil {
                 showEditor(op, resource: .operations)
             }
         } label: {
@@ -525,6 +548,15 @@ struct NativeEconomicView: View {
         }
         .buttonStyle(.plain)
         .disabled(op.isAdjustment == true)
+        Button(role: .destructive) {
+            if let data = try? JSONEncoder().encode(op),
+               let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                pendingRemoval = EcoEditorTarget(resource: .operations, raw: raw)
+            }
+        } label: {
+            Image(systemName: "trash").font(.caption).foregroundStyle(.secondary).padding(5)
+        }.buttonStyle(.plain).accessibilityLabel("Удалить " + op.title)
+        }
     }
 
     private func debtsScreen(_ data: EcoSnapshot) -> some View {
@@ -846,7 +878,10 @@ struct NativeEconomicView: View {
     private func loadSection() async {
         if section == .operations {
             await fetchOperations()
-        } else if section == .report || section == .overview {
+        } else if section == .overview {
+            await fetchOperations()
+            await loadReport()
+        } else if section == .report {
             await loadReport()
         }
     }
@@ -860,30 +895,39 @@ struct NativeEconomicView: View {
     }
 
     private func fetchOperations() async {
-        guard !loadingOperations else { return }
+        let token = UUID()
+        operationRequest = token
         loadingOperations = true
-        defer { loadingOperations = false }
+        operationTotals = nil
+        operations = []
+        nextCursor = nil
+        defer { if operationRequest == token { loadingOperations = false } }
         do {
             let result = try await NativeAPI().economicOperations(
                 kind: kindFilter.isEmpty ? nil : kindFilter,
                 accountId: accountFilter.isEmpty ? nil : accountFilter,
                 category: categoryFilter.isEmpty ? nil : categoryFilter)
+            guard operationRequest == token else { return }
             operations = result.operations
+            operationTotals = result.totals
             nextCursor = result.nextCursor
             errorText = nil
-        } catch { errorText = error.localizedDescription }
+        } catch { if operationRequest == token { errorText = error.localizedDescription } }
     }
 
     private func loadMoreOperations() async {
         guard !loadingOperations, let cursor = nextCursor, !cursor.isEmpty else { return }
+        let token = operationRequest
         loadingOperations = true
-        defer { loadingOperations = false }
+        defer { if operationRequest == token { loadingOperations = false } }
         do {
             let result = try await NativeAPI().economicOperations(
                 kind: kindFilter.isEmpty ? nil : kindFilter,
                 accountId: accountFilter.isEmpty ? nil : accountFilter,
                 category: categoryFilter.isEmpty ? nil : categoryFilter,
                 cursor: cursor)
+            guard operationRequest == token else { return }
+            operationTotals = result.totals
             let existing = Set(operations.map(\.id))
             operations.append(contentsOf: result.operations.filter { !existing.contains($0.id) })
             nextCursor = result.nextCursor
