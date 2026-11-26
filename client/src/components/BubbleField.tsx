@@ -234,9 +234,24 @@ function getBubbleShade(hex: string, distanceRatio: number, light: boolean) {
   const { r, g, b } = hexToRgb(hex);
   // Keep the ranking tint, but avoid washing it out against the canvas.
   const distance = Math.max(0, Math.min(1, distanceRatio));
-  const fade = light ? 0.20 + distance * 0.24 : 0.42 - distance * 0.13;
+  let fade = light ? 0.20 + distance * 0.24 : 0.42 - distance * 0.13;
   const base = light ? { r: 255, g: 255, b: 255 } : { r: 15, g: 23, b: 42 };
-  return `rgb(${Math.round(r + (base.r - r) * fade)}, ${Math.round(g + (base.g - g) * fade)}, ${Math.round(b + (base.b - b) * fade)})`;
+  const mix = () => [r + (base.r - r) * fade, g + (base.g - g) * fade, b + (base.b - b) * fade];
+  const linear = (channel: number) => {
+    const value = channel / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = ([red, green, blue]: number[]) =>
+    0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue);
+  let channels = mix();
+  // Keep the title readable even for user-selected very dark or bright colors.
+  for (let step = 0; step < 7; step++) {
+    const lum = luminance(channels);
+    if (light ? lum >= 0.25 : lum <= 0.17) break;
+    fade = Math.min(1, fade + 0.09);
+    channels = mix();
+  }
+  return `rgb(${channels.map(Math.round).join(', ')})`;
 }
 
 
