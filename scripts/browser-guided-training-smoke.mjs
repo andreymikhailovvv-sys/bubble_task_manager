@@ -64,7 +64,7 @@ try {
   });
   let writes=0;
   let wardrobeWrites=0;
-  const wardrobe={userId:user.id,rank:2,expiresAt:'2099-01-01T00:00:00.000Z',selected:{planner:'classic',economic:'classic'},catalog:[{id:'classic',variant:'planner',name:'Верный помощник',description:'Базовый',rank:0},{id:'cat',variant:'planner',name:'Котик концентрации',description:'Ушки',rank:0},{id:'northern',variant:'planner',name:'Полярник фокуса',description:'Шарф и варежки',rank:2},{id:'maestro',variant:'planner',name:'Маэстро привычек',description:'Берет',rank:0},{id:'zoomer',variant:'planner',name:'Зумер рабочего потока',description:'Телефон',rank:2},{id:'pirate',variant:'planner',name:'Расхититель задач',description:'Карта сокровищ',rank:2},{id:'wizard',variant:'planner',name:'Астролог приоритетов',description:'Шляпа',rank:3},{id:'ninja',variant:'planner',name:'Ниндзя дедлайнов',description:'Дым',rank:3},{id:'space',variant:'planner',name:'Космонавт продуктивности',description:'Спутник',rank:3},{id:'classic',variant:'economic',name:'Верный казначей',description:'Базовый',rank:0},{id:'cat',variant:'economic',name:'Котик накоплений',description:'Ушки',rank:0},{id:'banker',variant:'economic',name:'Хранитель бюджета',description:'Портфель',rank:2}]};
+  const wardrobe={userId:user.id,rank:2,expiresAt:'2099-01-01T00:00:00.000Z',selected:{planner:'classic',economic:'classic'},catalog:[{id:'classic',variant:'planner',name:'Верный помощник',description:'Базовый',rank:0},{id:'cat',variant:'planner',name:'Котик концентрации',description:'Ушки',rank:0},{id:'northern',variant:'planner',name:'Полярник фокуса',description:'Шарф и варежки',rank:2},{id:'maestro',variant:'planner',name:'Маэстро привычек',description:'Берет',rank:0},{id:'zoomer',variant:'planner',name:'Зумер рабочего потока',description:'Телефон',rank:2},{id:'pirate',variant:'planner',name:'Расхититель задач',description:'Карта сокровищ',rank:2},{id:'wizard',variant:'planner',name:'Астролог приоритетов',description:'Шляпа',rank:3},{id:'ninja',variant:'planner',name:'Ниндзя дедлайнов',description:'Дым',rank:3},{id:'space',variant:'planner',name:'Космонавт продуктивности',description:'Спутник',rank:3},{id:'classic',variant:'economic',name:'Верный казначей',description:'Базовый',rank:0},{id:'cat',variant:'economic',name:'Котик накоплений',description:'Ушки',rank:0},{id:'banker',variant:'economic',name:'Хранитель бюджета',description:'Портфель',rank:2},{id:'king',variant:'economic',name:'Король',description:'Корона',rank:3}]};
   await page.route('**/api/**',async route=>{
     const request=route.request();
     const path=new URL(request.url()).pathname;
@@ -219,6 +219,31 @@ try {
   await next('feature-done');
   await overlay.getByRole('button',{name:'Закончить обучение'}).click();
   await overlay.waitFor({state:'hidden'});
+  // Verify the normal wardrobe, separately from the tutorial, for every
+  // catalogue entry, including locked outfits and both mascots.
+  const launcher = page.locator('.planik-launcher-button').first();
+  await launcher.locator('.planik-body-surface').hover();
+  await page.locator('.mascot-wardrobe-anchor').filter({has:launcher}).getByRole('button',{name:'Аксессуары и скины'}).click();
+  const normalWardrobe = page.getByRole('dialog',{name:'Аксессуары и скины'});
+  const markers = { wizard: '.wizard-deck', pirate: '.pirate-map-scene', ninja: '.ninja-notebook-scene', space: '.space-signal-scene', cat: '.cat-ear-left' };
+  for (const variant of ['planner','economic']) {
+    await normalWardrobe.getByRole('group',{name:'Маскот'}).getByRole('button',{name:variant==='planner'?'Планик':'Экономыч',exact:true}).click();
+    for (const outfit of wardrobe.catalog.filter(item=>item.variant===variant)) {
+      await normalWardrobe.getByRole('button',{name:new RegExp(outfit.name)}).click();
+      const avatar=normalWardrobe.locator('[data-skin="'+outfit.id+'"]');
+      await normalWardrobe.locator('.mascot-wardrobe-character.phase-idle').waitFor({state:'visible'});
+      await avatar.waitFor({state:'visible'});
+      await normalWardrobe.getByRole('button',{name:'Думает',exact:true}).click();
+      await normalWardrobe.locator('[data-skin="'+outfit.id+'"][data-mode="thinking"]').waitFor({state:'visible'});
+      if(markers[outfit.id]) await avatar.locator(markers[outfit.id]).waitFor({state:'visible'});
+      if(outfit.id==='cat') assert.equal(await avatar.locator('.cat-ear-left').evaluate(el=>getComputedStyle(el).animationName),'cat-ear-left-think');
+      await normalWardrobe.getByRole('button',{name:'Ожидание',exact:true}).click();
+      await normalWardrobe.locator('[data-skin="'+outfit.id+'"][data-mode="idle"]').waitFor({state:'visible'});
+      console.log('[Wardrobe thinking] '+variant+'/'+outfit.id+' PASS');
+    }
+  }
+  await page.keyboard.press('Escape');
+  await normalWardrobe.waitFor({state:'hidden'});
   assert.equal(wardrobeWrites,0);
   assert.deepEqual(failures,[],'Browser runtime errors: '+failures.join('\n'));
   console.log('[Guided browser] PASS: launcher, countdown, assistant navigation, scrolling, full wardrobe');
