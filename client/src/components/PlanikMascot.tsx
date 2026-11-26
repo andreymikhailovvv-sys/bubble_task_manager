@@ -1,6 +1,9 @@
 import { EconomicMoneyGesture, FINANCIAL_MASCOT_EVENT, type FinancialMascotMode } from './EconomicMoneyGesture';
 import { memo, useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import './PlanikMascot.css';
+import { CalendarDays, CheckCircle2, ListChecks } from 'lucide-react';
+import type { CompletionProgress } from '../lib/completionStatistics';
+import './PrimaryWorkspaceSidebar.css';
 import { useMascotIdentity } from './MascotPresence';
 import { MascotArrivalEffects } from './MascotArrivalEffects';
 import { CatMascotEars } from './CatMascotEars';
@@ -28,6 +31,7 @@ type Props = {
   responding?: boolean;
   progress?: string | null;
   celebrationKey?: number;
+  completion?: CompletionProgress;
   size?: 'launcher' | 'composer' | 'sidekick';
   variant?: 'planner' | 'economic';
   className?: string;
@@ -49,6 +53,7 @@ export const PlanikMascot = memo(function PlanikMascot({
   responding = false,
   progress,
   celebrationKey = 0,
+  completion,
   size = 'launcher',
   variant: variantOverride,
   className = '',
@@ -131,7 +136,8 @@ export const PlanikMascot = memo(function PlanikMascot({
     progress === 'analyzing_retrieved_context' || progress === 'analyzing_subtasks' ||
     progress === 'checking_sectors'
   );
-  const mode: PlanikMode = previewMode ?? financeMode ?? (clearingCount !== null ? 'clearing'
+  const showCompletion = variant === 'planner' && !previewMode && !!completion;
+  const mode: PlanikMode = previewMode ?? financeMode ?? (showCompletion ? 'celebrating' : clearingCount !== null ? 'clearing'
     : celebrating ? 'celebrating'
     : busy ? (isPainting ? 'painting' : isSearching ? 'searching' : isThinking ? 'thinking' : 'typing')
     : showcase && skinId !== 'classic' ? 'showcase'
@@ -162,10 +168,11 @@ export const PlanikMascot = memo(function PlanikMascot({
     else if (mode === 'searching') gaze(-9, 5);
     else if (mode === 'typing') gaze(0, 7);
     else if (mode === 'painting') gaze(-6, 4);
+    else if (mode === 'celebrating' && showCompletion) gaze(5, -9);
     else if (mode === 'clearing') gaze(-5, 1);
     else if (mode === 'idle' && zoomer) gaze(0, 7);
     else if (mode !== 'hover' || previewMode) gaze(0, 0);
-  }, [mode, gaze, zoomer, previewMode, pirate, space, ninja]);
+  }, [mode, gaze, zoomer, previewMode, pirate, space, ninja, showCompletion]);
 
   // Follow the cursor anywhere in the working area, including empty space
   // and modal surfaces. Only the eyes move while idle; the reaching-hands
@@ -202,6 +209,7 @@ export const PlanikMascot = memo(function PlanikMascot({
     <span
       className={`planik-mascot planik-mascot--${size} ${variant === 'economic' ? 'planik-mascot--economic' : ''} ${className}`}
       data-mode={mode}
+      data-completion={showCompletion ? "true" : undefined}
       data-arriving={arriving}
       data-skin={skinId}
       data-skin-gesture={isScarfSkin(skinId) ? 'scarf' : 'hat'}
@@ -211,6 +219,7 @@ export const PlanikMascot = memo(function PlanikMascot({
     >
       {arriving && <MascotArrivalEffects key={'rear-'+arrivalKey} skinId={skinId} layer="rear"/>}
       {arriving && <MascotArrivalEffects key={'front-'+arrivalKey} skinId={skinId}/> }
+      {showCompletion && completion && <CompletionSpotlight key={completion.sequence} progress={completion} />}
       <span className="planik-ground-shadow" aria-hidden="true" />
       <svg
         ref={svgRef}
@@ -381,7 +390,16 @@ export const PlanikMascot = memo(function PlanikMascot({
           </g>
         </g>
 
-        <g className="planik-celebrating">
+        {showCompletion && completion ? <g key={completion.sequence} className="planik-completion-gesture">
+          <g className="planik-completion-arm">
+            {shirtSkin ? <ShirtArm skin={shirtSkin} suffix={gradientSuffix} d="M301 203Q336 209 326 156" strokeWidth="17"/> : adventure ? <AdventureArm skin={adventure} d="M301 203Q336 209 326 156" strokeWidth="17"/> : <path d="M301 203Q336 209 326 156" fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round"/>}
+            <path className="planik-completion-beam" d="M312 104L335 104L343 -23L215 -23Z" fill="#ffe6a0" fillOpacity=".25"/>
+            <path d="M313 109L334 109L331 158Q324 166 316 158Z" fill="#464367" stroke="#c6c2ed" strokeWidth="3"/>
+            <path d="M308 106L338 106L335 122L311 122Z" fill="#a09ad1" stroke="#e0d9ff" strokeWidth="3"/>
+            <ellipse className="planik-completion-lens" cx="323" cy="106" rx="15" ry="5" fill="#fff1b4"/>
+            {north ? <Mitten x={326} y={153} dx={-5} dy={-4} right suffix={gradientSuffix}/> : <circle cx="326" cy="153" r="9" fill="#b2aaff"/>}
+          </g>
+        </g> : <g className="planik-celebrating">
           {/* Both arms lift a real party popper, aimed toward the left. */}
           <g className="planik-celebrate-rig">
             {shirtSkin ? <ShirtArm skin={shirtSkin} suffix={gradientSuffix} d="M132 207Q146 235 173 224" strokeWidth="18"/> : adventure ? <AdventureArm skin={adventure} d="M132 207Q146 235 173 224" strokeWidth="18"/> : <path d="M132 207Q146 235 173 224" fill="none" stroke="#7272b3" strokeWidth="19" strokeLinecap="round" />}
@@ -419,7 +437,7 @@ export const PlanikMascot = memo(function PlanikMascot({
               />
             ))}
           </g>
-        </g>
+        </g>}
 
         {trainingPoint && <g className="planik-training-point" aria-hidden="true" transform={trainingPoint === 'left' ? 'translate(430 0) scale(-1 1)' : undefined}>
           <path d="M300 191Q324 188 340 172" fill="none" stroke="#7777b8" strokeWidth="16" strokeLinecap="round"/>
@@ -446,3 +464,20 @@ export const PlanikMascot = memo(function PlanikMascot({
     </span>
   );
 });
+
+function CompletionSpotlight({ progress }: { progress: CompletionProgress }) {
+  const { scope, before, after, total } = progress;
+  const percent = (count: number) => total ? Math.round(count / total * 100) : 0;
+  const title = scope === 'today' ? 'За сегодня' : scope === 'subtasks' ? 'Все подзадачи' : 'Все задачи';
+  const Icon = scope === 'today' ? CalendarDays : scope === 'subtasks' ? ListChecks : CheckCircle2;
+  return <span className="primary-widget-metric planik-completion-card" data-scope={scope} aria-label={title + ': ' + after + ' из ' + total}>
+    <span className="primary-widget-metric-title"><Icon size={15}/><span>{title}</span></span>
+    <span className="planik-completion-values">
+      <strong className="planik-completion-before">{before} из {total}<small>{percent(before)}%</small></strong>
+      <strong className="planik-completion-after">{after} из {total}<small>{percent(after)}%</small></strong>
+    </span>
+    <span className="primary-widget-progress" role="progressbar" aria-label={title} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent(after)}>
+      <span style={{ '--completion-from': percent(before) + '%', '--completion-to': percent(after) + '%' } as CSSProperties}/>
+    </span>
+  </span>;
+}

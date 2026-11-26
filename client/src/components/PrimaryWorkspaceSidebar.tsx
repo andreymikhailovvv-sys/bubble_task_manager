@@ -9,6 +9,7 @@ import { MiniAppHabitTracker } from './MiniAppHabitTracker';
 import { StandaloneNotesWorkspace } from './StandaloneNotesWorkspace';
 import { PrimaryHabitDialog } from './PrimaryHabitDialog';
 import './PrimaryWorkspaceSidebar.css';
+import { completionItems } from '../lib/completionStatistics';
 
 const DEFAULT_ORDER = ['upcoming', 'completed', 'habits', 'progress', 'sectors', 'notes'] as const;
 type WidgetId = typeof DEFAULT_ORDER[number];
@@ -144,13 +145,11 @@ export function PrimaryWorkspaceSidebar(props: Props) {
   }, []);
 
   const todayKey = localDateKey(now, timeZone);
-  const taskItems = tasks.filter(task => (task.taskType ?? 'TASK') === 'TASK' && !task.parentTaskId);
+  const taskItems = completionItems(tasks, 'tasks', timeZone, now);
   const doneCount = taskItems.filter(task => task.status === 'DONE').length;
   // For today's metric, match the main task count but also include dated
   // subtasks. Events and reminders are not tasks.
-  const todayTasks = tasks.filter(task => (task.taskType ?? 'TASK') === 'TASK'
-    && task.dueDate && Number.isFinite(new Date(task.dueDate).getTime())
-    && localDateKey(new Date(task.dueDate), timeZone) === todayKey);
+  const todayTasks = completionItems(tasks, 'today', timeZone, now);
   const todayDone = todayTasks.filter(task => task.status === 'DONE').length;
   const upcoming = tasks.filter(task => task.parentTaskId && task.status !== 'DONE' && task.dueDate)
     .filter(task => Number.isFinite(new Date(task.dueDate!).getTime()))

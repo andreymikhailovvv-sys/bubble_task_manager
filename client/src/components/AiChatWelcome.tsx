@@ -5,7 +5,7 @@ import {
   CalendarDays, CheckCheck, ChevronRight, ClipboardList, FilePenLine,
   FileSpreadsheet, FileText, Globe2, ImagePlus, ListTodo, Mail,
   MessageCircle, Search, Settings2, ShieldCheck, Sparkles,
-  WandSparkles, X, type LucideIcon
+  WandSparkles, X, Wallet, ArrowDownLeft, ArrowUpRight as ExpenseIcon, ArrowLeftRight, Tags, HandCoins, Landmark, ChartPie, type LucideIcon
 } from 'lucide-react';
 import './AiChatWelcome.css';
 
@@ -19,7 +19,7 @@ const MailAssistantSettings = lazy(() =>
 type ChatKind = 'task' | 'general';
 type Action = 'telegram' | 'mail' | 'checkups';
 export type Capability = { title: string; description: string; icon: LucideIcon; action?: Action };
-export type CapabilityGroup = { label: string; items: Capability[] };
+export type CapabilityGroup = { label: string; items: Capability[]; finance?: boolean };
 
 export const taskGroups: CapabilityGroup[] = [
   {
@@ -61,6 +61,22 @@ export const generalGroups: CapabilityGroup[] = [
     ]
   },
   {
+    label: 'Финансовые операции',
+    finance: true,
+    items: [
+      { icon: ArrowDownLeft, title: 'Запись доходов', description: 'Записывать поступления с суммой, счётом, категорией и датой.' },
+      { icon: ExpenseIcon, title: 'Запись расходов', description: 'Записывать расходы, в том числе с детализацией покупок и расчётом суммы.' },
+      { icon: ArrowLeftRight, title: 'Переводы между счетами', description: 'Подготавливать переводы между вашими счетами.' },
+      { icon: Wallet, title: 'Управление счетами', description: 'Создавать счета, менять название и корректировать текущий баланс.' },
+      { icon: FilePenLine, title: 'Редактирование операций', description: 'Исправлять сумму, дату, категорию, описание и другие доступные параметры операций.' },
+      { icon: Tags, title: 'Категории доходов и расходов', description: 'Создавать и переименовывать категории, назначать их операциям.' },
+      { icon: HandCoins, title: 'Долги', description: 'Записывать и изменять долги, учитывать частичное погашение и движение денег по счёту.' },
+      { icon: Landmark, title: 'Банковские кредиты', description: 'Создавать и изменять кредиты, суммы погашения, ставки, сроки и напоминания о платежах.' },
+      { icon: ChartPie, title: 'Финансовая аналитика', description: 'Анализировать доступные балансы, доходы, расходы, долги и кредиты.' },
+      { icon: Search, title: 'Поиск финансовых записей', description: 'Находить операции, счета, категории, долги и кредиты по названию или контрагенту.' }
+    ]
+  },
+  {
     label: 'Ассистенты и коммуникации',
     items: [
       { icon: MessageCircle, title: 'Telegram-ассистент', description: 'Сводки по чатам, предложения ответов и задач, а при включении соответствующих режимов — автоматические действия.', action: 'telegram' },
@@ -98,7 +114,7 @@ export function AiChatWelcome({ kind, variant = 'web', onOpenCheckups, themeMode
   const [integration, setIntegration] = useState<'telegram' | 'mail' | null>(null);
   const titleId = useId();
   const resolvedTheme = themeMode ?? (typeof document !== 'undefined' && document.body.dataset.theme === 'light' ? 'light' : 'dark');
-  const groups = kind === 'task' ? taskGroups : generalGroups;
+  const groups = kind === 'task' ? taskGroups : generalGroups.filter(group => variant === 'web' || !group.finance);
 
   useEffect(() => {
     if (!showCapabilities) return;
@@ -158,7 +174,7 @@ export function AiChatWelcome({ kind, variant = 'web', onOpenCheckups, themeMode
             </header>
             <div className="ai-capabilities-scroll">
               {groups.map(group => (
-                <section className="ai-capabilities-group" key={group.label}>
+                <section className={`ai-capabilities-group${group.finance ? " ai-capabilities-group--finance" : ""}`} key={group.label}>
                   <h3>{group.label}</h3>
                   <div className="ai-capabilities-grid">
                     {group.items.map(item => {
