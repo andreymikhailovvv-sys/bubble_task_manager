@@ -68,7 +68,7 @@ test('classic sidebar notes are embedded without a second card, and the rail ani
   assert.match(widget, /<StandaloneNotesWorkspace userId=\{userId\} requestedNote=\{requestedNote\} compactWidget\/>/);
   assert.match(notes, /standalone-notes-widget--embedded/);
   assert.match(notes, /compactWidget \? <span/);
-  assert.match(widget, /<Reorder.Group[\s\S]+?<div className="primary-workspace-sidebar-toggle-slot">/);
+  assert.match(widget, /<Reorder\.Group[\s\S]+?<\/Reorder\.Group>\s*<div className="primary-workspace-sidebar-toggle-slot" hidden=\{props\.hideToggle\}/);
   assert.match(css, /scrollbar-width: none/);
   assert.match(css, /primary-workspace-sidebar\.is-collapsed \.primary-workspace-sidebar-list/);
   assert.match(css, /body:has\(\.primary-workspace-sidebar\.is-open\) \.ai-chat-launcher\.bubble-ai-fullscreen/);
