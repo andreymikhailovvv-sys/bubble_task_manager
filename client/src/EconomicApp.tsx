@@ -211,7 +211,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
       if (target instanceof Element && !target.closest('.econ-filters-control')) setFiltersOpen(false);
     };
     document.addEventListener('pointerdown', closeOutside, true);
-    const closeOnEscape=(event: KeyboardEvent)=>{if(event.key==='Escape')setFiltersOpen(false);};
+    const closeOnEscape=(event: globalThis.KeyboardEvent)=>{if(event.key==='Escape')setFiltersOpen(false);};
     document.addEventListener('keydown',closeOnEscape);
     return ()=>{
       document.removeEventListener('pointerdown',closeOutside,true);
