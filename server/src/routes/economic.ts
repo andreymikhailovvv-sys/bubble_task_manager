@@ -307,10 +307,11 @@ economicRouter.get('/operations', asyncHandler(async (req, res) => {
   if (cursor && !found) { error(res, 'Неверный курсор', 400); return; }
   const where: Prisma.EconomicOperationWhereInput = { userId: owner, ...(kind ? { kind } : debtKinds ? { kind: debtKinds } : {}), ...(category ? { category } : {}),
     ...(accountId ? { OR: [{ sourceAccountId: accountId }, { targetAccountId: accountId }] } : {}) };
-  const [rows,groups] = await prisma.$transaction([
-    prisma.economicOperation.findMany({where, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 51, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})}),
-    prisma.economicOperation.groupBy({by:['kind'],where,_sum:{amountMinor:true}})
-  ],{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
+  const {rows,groups} = await prisma.$transaction(async tx=>{
+    const rows=await tx.economicOperation.findMany({where, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 51, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {})});
+    const groups=await tx.economicOperation.groupBy({by:['kind'],where,_sum:{amountMinor:true}});
+    return {rows,groups};
+  },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
   res.json({ operations: rows.slice(0, 50).map(operationOut), nextCursor: rows.length > 50 ? rows[49].id : null,
     totals:economicOperationTotals(groups) });
 }));

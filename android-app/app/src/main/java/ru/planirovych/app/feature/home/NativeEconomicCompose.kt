@@ -132,7 +132,8 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
             operationTotals=result.ecoObject("totals")
             operations = result.ecoItems("operations")
             nextCursor = result.ecoText("nextCursor")
-        } catch (cause: Exception) { error = readableEconomicError(cause) }
+        } catch (cause: kotlinx.coroutines.CancellationException) { throw cause }
+        catch (cause: Exception) { error = readableEconomicError(cause) }
         finally { operationsBusy = false }
     }
     fun refresh() { revision++ }
@@ -612,7 +613,7 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                             current.ecoItems("accounts").map { it.ecoText("id") to it.ecoText("name") },
                         colors){accountFilter=it}
                     EcoSelect("Категория",categoryFilter,listOf("" to "Все категории")+
-                        (ecoCategories(current,"EXPENSE")+ecoCategories(current,"INCOME"))
+                        (ecoCategories(current,"EXPENSE")+ecoCategories(current,"INCOME")+listOf("Долги","Корректировка"))
                             .distinct().map { it to it },colors){categoryFilter=it}
                     Button(onClick={filtersOpen=false},modifier=Modifier.fillMaxWidth(),
                         colors=ButtonDefaults.buttonColors(

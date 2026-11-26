@@ -17135,3 +17135,5 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
 .notes-editor-inline .notes-editor-panel{box-sizing:border-box;min-width:0;max-width:100%;overflow:hidden}
 .notes-editor-inline .notes-editor-content{scrollbar-width:none!important;scrollbar-gutter:auto!important;overflow-x:hidden;min-width:0;box-sizing:border-box;padding-bottom:calc(1.25rem + 1.5rem);scroll-padding-bottom:1.5rem;mask-image:none!important;-webkit-mask-image:none!important}
 .notes-editor-inline .notes-editor-content::-webkit-scrollbar{display:none!important;width:0;height:0}
+
+.fullscreen-workspace-pane:has(.notes-editor-inline){padding:0!important;scrollbar-gutter:auto!important}.fullscreen-workspace-pane:has(.notes-editor-inline)>.standalone-notes-inline-mount{width:100%!important;max-width:none!important;margin:0!important;padding:0!important;scrollbar-gutter:auto!important}
