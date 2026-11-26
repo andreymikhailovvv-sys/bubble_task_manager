@@ -149,9 +149,9 @@ try {
   await wardrobeDialog.getByRole('button',{name:/Астролог/}).click();
   await wardrobeDialog.locator('[data-skin="wizard"]').waitFor({state:'visible'});
   assert.equal(await wardrobeDialog.getByRole('button',{name:/Тариф «Максимум»/}).isDisabled(),true);
-  // "Думает" is now the built-in work animation, not an optional wardrobe preview.
-  assert.equal(await wardrobeDialog.getByRole('button',{name:'Думает',exact:true}).count(),0);
   await wardrobeDialog.locator('[data-skin="wizard"][data-mode="idle"]').waitFor({state:'visible'});
+  await wardrobeDialog.getByRole('button',{name:'Думает',exact:true}).click();
+  await wardrobeDialog.locator('[data-skin="wizard"][data-mode="thinking"] .wizard-deck').waitFor({state:'visible'});
   await wardrobeDialog.getByRole('button',{name:'Наведение курсора'}).click();
   await wardrobeDialog.locator('[data-skin="wizard"][data-mode="hover"] .wizard-orb').waitFor({state:'visible'});
   assert.equal(wardrobeWrites,0);
@@ -313,8 +313,9 @@ try {
     const ears=cat.locator('.cat-ear-left,.cat-ear-right');
     assert.equal(await ears.count(),2);
     assert.deepEqual(await ears.evaluateAll(els=>els.map(el=>getComputedStyle(el).animationName)),['none','none']);
-    assert.equal(await dialog.getByRole('button',{name:'Думает',exact:true}).count(),0);
-    await dialog.locator('[data-skin="cat"][data-mode="idle"]').waitFor({state:'visible'});
+    await dialog.getByRole('button',{name:'Думает',exact:true}).click();
+    await dialog.locator('[data-skin="cat"][data-mode="thinking"]').waitFor({state:'visible'});
+    assert.deepEqual(await ears.evaluateAll(els=>els.map(el=>getComputedStyle(el).animationName)),['cat-ear-left-think','cat-ear-right-think']);
     await page.emulateMedia({reducedMotion:'reduce'});
     assert.deepEqual(await ears.evaluateAll(els=>els.map(el=>getComputedStyle(el).animationName)),['none','none']);
     await page.emulateMedia({reducedMotion:'no-preference'});

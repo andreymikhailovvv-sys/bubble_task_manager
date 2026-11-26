@@ -158,7 +158,13 @@ export function MascotWardrobeDialog({wardrobe,variant:initialVariant,theme,trai
   },[catalog.length,updateListFade]);
   const skin=catalog.find(item=>item.id===selected);
   const allowed=Boolean(skin&&skin.rank<=wardrobe.rank);
-  const specialModes: Exclude<PlanikMode,'showcase'>[] = variant==='economic'?['idle','hover','income','expense']:selected==='cat'?['idle']:selected==='banker'?['typing','hover']:['wizard','pirate','space','ninja','king'].includes(selected)?['idle','hover']:['northern','zoomer'].includes(selected)?['idle','hover']:[];
+  // Preview the same thinking reaction used during real AI requests. Even
+  // locked outfits can be previewed; only applying an outfit requires its tier.
+  const specialModes: Exclude<PlanikMode,'showcase'>[] = variant==='economic'
+    ? ['idle','hover','thinking','income','expense']
+    : ['wizard','pirate','space','ninja','northern','zoomer'].includes(selected)
+      ? ['idle','hover','thinking']
+      : ['idle','thinking'];
   const isEquipped=selected===wardrobe.selected(variant);
   const equip=async()=>{
     if(training||!allowed||isEquipped||saving)return;
