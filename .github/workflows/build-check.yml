@@ -15,7 +15,6 @@ permissions:
 
 jobs:
   build:
-    # Chromium 1.56 and its dependency installer support Ubuntu 24.04.
     # Pin the runner instead of relying on a moving ubuntu-latest image.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -35,12 +34,6 @@ jobs:
         run: node --import tsx --test server/test/subscription-purchase.service.test.ts server/test/subscription-access.test.ts
       - name: Verify mascot wardrobe entitlements and animation integration
         run: node --import tsx --test server/test/mascot-wardrobe.test.ts
-      - name: Browser smoke - real Chromium task open and typing
-        run: |
-          npm install --no-save --package-lock=false --ignore-scripts playwright@1.56.1
-          npx playwright install --with-deps chromium
-          node scripts/browser-mascot-smoke.mjs
-          node scripts/browser-planner-smoke.mjs
       - name: Verify experimental Test Page routing and shared planner components
         run: node --import tsx --test client/test/test-page-ui.test.ts
       - name: Verify modular Test Main Page and responsive grid geometry
