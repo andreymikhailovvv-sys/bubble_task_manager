@@ -205,7 +205,7 @@ internal fun NativeMascotWardrobeDialog(vm:HomeViewModel,dark:Boolean,owner:Stri
                     else SharedMascotArtwork(selected,dark,preview,Modifier.size(180.dp,150.dp))
                 }
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){
-                    listOf("idle" to "Ожидание","hover" to "Приветствие","thinking" to "Думает").forEach{(mode,label)->
+                    listOf("idle" to "Ожидание","hover" to "Приветствие").forEach{(mode,label)->
                         TextButton(onClick={preview=mode}){Text(label)}
                     }
                 }

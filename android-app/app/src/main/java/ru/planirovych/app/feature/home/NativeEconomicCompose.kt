@@ -97,6 +97,8 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
     var kindFilter by remember { mutableStateOf("") }
     var accountFilter by remember { mutableStateOf("") }
     var categoryFilter by remember { mutableStateOf("") }
+    val filterCount=listOf(kindFilter,accountFilter,categoryFilter).count{it.isNotBlank()}
+    var operationTotals by remember(userId){mutableStateOf<JsonObject?>(null)}
     var operations by remember(userId) { mutableStateOf<List<JsonObject>>(emptyList()) }
     var nextCursor by remember(userId) { mutableStateOf("") }
     var operationsBusy by remember { mutableStateOf(false) }
@@ -120,15 +122,18 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
         } finally { loading = false }
     }
     LaunchedEffect(userId, active, revision, section, kindFilter, accountFilter, categoryFilter) {
-        if (!active || userId.isNullOrBlank() || section != "operations") return@LaunchedEffect
+        if (!active || userId.isNullOrBlank() || section !in listOf("operations","overview")) return@LaunchedEffect
         operationsBusy = true
+        operationTotals=null;operations=emptyList();nextCursor=""
         try {
             val result = api.economicOperations(
                 kindFilter.ifBlank { null }, accountFilter.ifBlank { null },
                 categoryFilter.ifBlank { null })
+            operationTotals=result.ecoObject("totals")
             operations = result.ecoItems("operations")
             nextCursor = result.ecoText("nextCursor")
-        } catch (cause: Exception) { error = readableEconomicError(cause) }
+        } catch (cause: kotlinx.coroutines.CancellationException) { throw cause }
+        catch (cause: Exception) { error = readableEconomicError(cause) }
         finally { operationsBusy = false }
     }
     fun refresh() { revision++ }
@@ -155,17 +160,6 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                 result.ecoObject("adjustment")?.let{adjustment->
                     val amount=adjustment.ecoText("amountMinor")
                     if(amount.isNotBlank())adjustmentNotice="Добавлена корректирующая операция на сумму "+(if(!amount.startsWith("-"))"+" else "")+ecoRubles(amount)+" на счёт "+adjustment.ecoText("accountName")
-                }
-                // A changed account may remove an operation from the currently
-                // filtered list. Show all operations after updating.
-                if(resource=="operations"){
-                    kindFilter=""
-                    accountFilter=""
-                    categoryFilter=""
-                    runCatching{api.economicOperations(null,null,null)}.onSuccess{updated->
-                        operations=updated.ecoItems("operations")
-                        nextCursor=updated.ecoText("nextCursor")
-                    }.onFailure{error="Изменения сохранены, но список операций ещё не обновился."}
                 }
                 runCatching{api.economicSnapshot()}.onSuccess{snapshot=it}
                     .onFailure{error="Изменения сохранены, но финансовый обзор пока не обновился."}
@@ -370,8 +364,10 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                                 EcoPanelHeader("Последние операции",
                                     current.ecoObject("totals").ecoNumber("operationCount").toString()+" записей всего",
                                     "Все операции",colors,{section="operations"})
-                                val recent=current.ecoItems("recent")
-                                if(recent.isEmpty()) EcoEmpty("Пока нет операций. Начните с первой записи.",colors)
+                                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End){EcoOperationsFilterButton(filterCount,colors){filtersOpen=true}}
+                                EcoOperationTotals(operationTotals,operationsBusy,colors)
+                                val recent=operations.take(8)
+                                if(recent.isEmpty()&&!operationsBusy) EcoEmpty("Нет операций по выбранным фильтрам",colors)
                                 recent.forEach { op ->
                                     EcoOperationRow(op,current,colors,
                                         onEdit={ record,resource -> if(resource=="missing-debt")section="debts" else editor=EcoEditorRequest(resource,record) },
@@ -419,12 +415,9 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,
                                     horizontalArrangement=Arrangement.SpaceBetween) {
                                     Text("Последние операции",fontSize=15.sp,fontWeight=FontWeight.SemiBold,color=colors.text)
-                                    IconButton(onClick={filtersOpen=true}) {
-                                        Icon(Icons.Default.FilterList,"Фильтры операций",
-                                            tint=if(kindFilter.isNotBlank()||accountFilter.isNotBlank()||
-                                                categoryFilter.isNotBlank()) colors.gold else colors.goldSoft)
-                                    }
+                                    EcoOperationsFilterButton(filterCount,colors){filtersOpen=true}
                                 }
+                                EcoOperationTotals(operationTotals,operationsBusy,colors)
                                 if (operationsBusy) LinearProgressIndicator(Modifier.fillMaxWidth(),color=colors.gold)
                                 if(operations.isEmpty()&&!operationsBusy)
                                     EcoEmpty("Нет операций по выбранным фильтрам",colors)
@@ -443,7 +436,8 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                                                     val result=api.economicOperations(
                                                         kindFilter.ifBlank{null},accountFilter.ifBlank{null},
                                                         categoryFilter.ifBlank{null},nextCursor)
-                                                    operations=operations+result.ecoItems("operations")
+                                                    operationTotals=result.ecoObject("totals")
+                                                    operations=(operations+result.ecoItems("operations")).distinctBy{it.ecoText("id")}
                                                     nextCursor=result.ecoText("nextCursor")
                                                 } catch(cause:Exception){error=readableEconomicError(cause)}
                                                 finally { operationsBusy=false }
@@ -619,7 +613,7 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                             current.ecoItems("accounts").map { it.ecoText("id") to it.ecoText("name") },
                         colors){accountFilter=it}
                     EcoSelect("Категория",categoryFilter,listOf("" to "Все категории")+
-                        (ecoCategories(current,"EXPENSE")+ecoCategories(current,"INCOME"))
+                        (ecoCategories(current,"EXPENSE")+ecoCategories(current,"INCOME")+listOf("Долги","Корректировка"))
                             .distinct().map { it to it },colors){categoryFilter=it}
                     Button(onClick={filtersOpen=false},modifier=Modifier.fillMaxWidth(),
                         colors=ButtonDefaults.buttonColors(
@@ -652,7 +646,12 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
             AlertDialog(
                 onDismissRequest={removing=null},
                 title={Text("Удалить запись?",color=colors.text)},
-                text={Text("Это действие нельзя отменить.",color=colors.muted)},
+                text={Text(when{
+                    selection.resource=="operations"&&selection.record.ecoText("debtPhase")=="FUNDING"->"Будет отменено получение или выдача денег и удалён связанный долг."
+                    selection.resource=="operations"&&selection.record.ecoText("debtPhase")=="SETTLEMENT"->"Погашение будет отменено, долг снова станет непогашенным."
+                    selection.resource=="operations"&&selection.record.ecoBool("isAdjustment")->"Корректировка остатка счёта будет отменена."
+                    else->"Это действие нельзя отменить."
+                },color=colors.muted)},
                 confirmButton={
                     TextButton(enabled=!busy,onClick={
                         if(busy)return@TextButton
@@ -887,7 +886,7 @@ private fun EcoOperationRow(op:JsonObject,snapshot:JsonObject,colors:EcoColors,
         }
         Text((if(credit)"+" else if(debit)"−" else "")+ecoRubles(op.ecoText("amountMinor")),
             fontSize=12.sp,color=amountColor,fontWeight=FontWeight.SemiBold,maxLines=1)
-        if(linked==null && op.ecoText("debtId").isBlank() && !op.ecoBool("isAdjustment")) {
+        run {
             IconButton(onClick=onDelete,modifier=Modifier.size(27.dp)) {
                 Icon(Icons.Default.Delete,"Удалить",Modifier.size(16.dp),tint=colors.muted)
             }
@@ -1002,5 +1001,34 @@ private fun EcoLoanMetric(label:String,value:String,colors:EcoColors,modifier:Mo
         Text(label,fontSize=10.sp,color=colors.muted,lineHeight=13.sp)
         Text(value,fontSize=12.sp,color=colors.text,fontWeight=FontWeight.Medium,
             maxLines=2,overflow=TextOverflow.Ellipsis,lineHeight=15.sp)
+    }
+}
+
+@Composable
+private fun EcoOperationsFilterButton(count:Int,colors:EcoColors,onClick:()->Unit){
+    IconButton(onClick=onClick){
+        Box{
+            Icon(Icons.Default.FilterList,"Фильтры операций: "+count,tint=if(count>0)colors.gold else colors.goldSoft)
+            if(count>0)Box(Modifier.align(Alignment.TopEnd).offset(x=7.dp,y=(-5).dp).size(16.dp).background(colors.gold,CircleShape),contentAlignment=Alignment.Center){
+                Text(count.toString(),fontSize=9.sp,color=Color(0xFF281703),fontWeight=FontWeight.Bold)
+            }
+        }
+    }
+}
+@Composable
+private fun EcoOperationTotals(totals:JsonObject?,loading:Boolean,colors:EcoColors){
+    Column(Modifier.fillMaxWidth().padding(vertical=8.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){
+        if(totals==null){Text(if(loading)"Загружаем итог…" else "Итог недоступен",color=colors.muted,fontSize=11.sp)}
+        else{
+            listOf("Получено" to "receivedMinor","Потрачено" to "spentMinor","Итого" to "netMinor").forEach{(label,key)->
+                val raw=totals.ecoText(key).ifBlank{"0"}
+                val sign=when(key){"receivedMinor"->"+";"spentMinor"->"−";else->if(raw.startsWith("-")||raw=="0")"" else "+"}
+                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){
+                    Text(label,color=colors.muted,fontSize=12.sp)
+                    Text(sign+ecoRubles(raw),color=colors.text,fontSize=13.sp,fontWeight=FontWeight.SemiBold)
+                }
+            }
+            Text("Все совпавшие записи, без переводов между счетами.",color=colors.muted,fontSize=10.sp)
+        }
     }
 }

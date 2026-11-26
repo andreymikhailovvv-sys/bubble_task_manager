@@ -17129,3 +17129,11 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
 .miniapp-habit-tracker .miniapp-habit-tracker-legend-dot-done { background:var(--tracker-accent); border-color:var(--tracker-accent); }
 .miniapp-habit-tracker .miniapp-habit-tracker-legend-dot-partial { background:linear-gradient(to top,var(--tracker-accent) 33%,transparent 33%);border-color:var(--tracker-accent); }
 
+
+/* Inline note editor owns its scroll area: no reserved scrollbar strip or fade across the caret. */
+.notes-editor-inline{inset:0!important;padding:0!important;overflow:hidden!important;box-sizing:border-box}
+.notes-editor-inline .notes-editor-panel{box-sizing:border-box;min-width:0;max-width:100%;overflow:hidden}
+.notes-editor-inline .notes-editor-content{scrollbar-width:none!important;scrollbar-gutter:auto!important;overflow-x:hidden;min-width:0;box-sizing:border-box;padding-bottom:calc(1.25rem + 1.5rem);scroll-padding-bottom:1.5rem;mask-image:none!important;-webkit-mask-image:none!important}
+.notes-editor-inline .notes-editor-content::-webkit-scrollbar{display:none!important;width:0;height:0}
+
+.fullscreen-workspace-pane:has(.notes-editor-inline){padding:0!important;scrollbar-gutter:auto!important}.fullscreen-workspace-pane:has(.notes-editor-inline)>.standalone-notes-inline-mount{width:100%!important;max-width:none!important;margin:0!important;padding:0!important;scrollbar-gutter:auto!important}

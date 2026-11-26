@@ -42,15 +42,42 @@ internal fun nativeMascotMotionSvg(skin:String,mode:String,frame:Int):String? {
         mode in setOf("income","expense") -> {
             val income=mode=="income"
             val king=skin=="king"
+            val t=(frame%12)/12.0
+            fun smooth(x:Double):Double {val p=x.coerceIn(0.0,1.0);return p*p*(3-2*p)}
+            fun mix(a:Int,b:Int,p:Double)=(a+(b-a)*p).toInt()
+            val reach=smooth(t/.25);val flick=smooth((t-.28)/.18);val back=smooth((t-.58)/.42)
+            val hx=if(king) {
+                if(income)mix(mix(172,115,reach),194,smooth((t-.28)/.38))
+                else mix(mix(158,197,reach),82,flick)
+            } else if(income)mix(262,215,smooth((t-.12)/.55)) else mix(mix(254,179,reach),247,flick)
+            val hy=if(king) {
+                if(income)mix(mix(229,273,reach),238,smooth((t-.28)/.38))
+                else mix(mix(231,218,reach),124,flick)
+            } else if(income)mix(186,235,smooth((t-.12)/.55)) else mix(mix(224,207,reach),151,flick)
+            val x=mix(hx,if(king)158 else 254,if(income)smooth((t-.78)/.22) else back)
+            val y=mix(hy,231,if(income)smooth((t-.78)/.22) else back)
             val wallet=if(income&&!king)"""<rect x="175" y="227" width="80" height="43" rx="7" fill="#895027" stroke="#4b3020" stroke-width="2"/><path d="M175 238h80" stroke="#e8b96d" stroke-width="3"/>""" else ""
-            val money=(0..5).joinToString(""){i->
-                val phase=(frame+i*2)%12
-                val direction=if(i%2==0)-1 else 1
-                val x=if(king)if(income)215+direction*(95-phase*7) else 215+direction*phase*10 else if(income)215 else 176+phase*10
-                val y=if(income)176+phase*7 else 223-phase*7
-                if(king)"""<ellipse cx="$x" cy="$y" rx="10" ry="7" fill="#ffcc59" stroke="#995818" stroke-width="2"/>""" else """<g transform="translate($x $y) rotate(${phase*8})"><rect x="-16" y="-8" width="32" height="16" rx="2" fill="#7bb984" stroke="#28583d"/><circle r="4" fill="#d0e1a8"/></g>"""
+            fun coin(x:Int,y:Int)="""<ellipse cx="$x" cy="$y" rx="10" ry="7" fill="#ffcc59" stroke="#995818" stroke-width="2"/>"""
+            fun bill(x:Int,y:Int,angle:Int)="""<g transform="translate($x $y) rotate($angle)"><rect x="-16" y="-8" width="32" height="16" rx="2" fill="#7bb984" stroke="#28583d"/><circle r="4" fill="#d0e1a8"/></g>"""
+            val pile=if(king) (0..13).joinToString(""){i->coin(180+(i%7)*11,253-(i/7)*10)} else if(!income)(0..3).joinToString(""){i->bill(173+i*2,229-i*3,0)} else ""
+            val money=if(king&&income)(0..19).joinToString(""){i->
+                val side=if(i%2==0)-1 else 1;val col=(i/2)%5;val r=i/10
+                val pull=smooth((t-.30-col*.018)/.34)
+                coin(mix(215+side*(25+col*14),215+side*(10+col*5),pull),mix(268-r*10,242-r*8,pull))
+            } else if(king) (0..9).joinToString(""){i->
+                val side=if(i%2==0)-1 else 1;val j=i/2;val release=.35+j*.008
+                val phase=((t-release)/.49).coerceIn(0.0,1.0)
+                val swing=smooth((release-.28)/.18)
+                val sx=215+side*(215-mix(197,82,swing));val sy=mix(218,124,swing)
+                if(t<release||phase>=1)"" else coin((sx+side*(42+j*7)*phase).toInt(),(sy-(105+j*8)*phase+125*phase*phase).toInt())
+            } else if(income) {if(t<.68)bill(x,y-8,0) else ""} else {
+                val phase=((t-.39)/.56).coerceIn(0.0,1.0)
+                val swing=smooth((.39-.28)/.18)
+                if(t<.39||phase>=1)"" else bill((mix(179,247,swing)+103*phase).toInt(),(mix(207,151,swing)-105*phase+126*phase*phase).toInt(),(phase*165).toInt())
             }
-            """<g><path d="M132 196Q142 222 174 227M298 196Q${if(income)260 else 239} ${190+step} ${if(income)215 else 193} ${220+step}" stroke="#d69a49" stroke-width="18" fill="none" stroke-linecap="round"/>$wallet$money</g>"""
+            val leftX=if(king)x else 173;val leftY=if(king)y else 237
+            val rightX=if(king)430-x else x
+            """<g>$wallet$pile<path d="M132 196Q116 231 $leftX $leftY M298 196Q314 204 $rightX $y" stroke="${if(king)"#9f214c" else "#d69a49"}" stroke-width="18" fill="none" stroke-linecap="round"/>$money</g>"""
         }
         skin=="pirate"&&mode=="thinking" -> """
             <g class="native-pirate-map">

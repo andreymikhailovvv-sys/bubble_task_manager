@@ -23,3 +23,14 @@ const ACCOUNT_CREDITS = new Set<string>(['INCOME', 'DEBT_BORROWED', 'DEBT_RETURN
 export function economicSourceDelta(kind: string, amountMinor: bigint): bigint {
   return ACCOUNT_CREDITS.has(kind) ? amountMinor : -amountMinor;
 }
+
+/** Totals over grouped ledger rows, never over a paginated client list. */
+export function economicOperationTotals(groups:ReadonlyArray<{kind:string;_sum:{amountMinor:bigint|null}}>){
+  let received=0n,spent=0n;
+  for(const group of groups){
+    if(group.kind==='TRANSFER')continue;
+    const delta=economicSourceDelta(group.kind,group._sum.amountMinor??0n);
+    if(delta>0n)received+=delta;else spent-=delta;
+  }
+  return {receivedMinor:received.toString(),spentMinor:spent.toString(),netMinor:(received-spent).toString()};
+}
