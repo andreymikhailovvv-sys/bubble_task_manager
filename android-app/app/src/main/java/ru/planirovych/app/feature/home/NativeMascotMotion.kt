@@ -43,41 +43,96 @@ internal fun nativeMascotMotionSvg(skin:String,mode:String,frame:Int):String? {
             val income=mode=="income"
             val king=skin=="king"
             val t=(frame%12)/12.0
-            fun smooth(x:Double):Double {val p=x.coerceIn(0.0,1.0);return p*p*(3-2*p)}
-            fun mix(a:Int,b:Int,p:Double)=(a+(b-a)*p).toInt()
-            val reach=smooth(t/.25);val flick=smooth((t-.28)/.18);val back=smooth((t-.58)/.42)
-            val hx=if(king) {
-                if(income)mix(mix(172,115,reach),194,smooth((t-.28)/.38))
-                else mix(mix(158,197,reach),82,flick)
-            } else if(income)mix(262,215,smooth((t-.12)/.55)) else mix(mix(254,179,reach),247,flick)
-            val hy=if(king) {
-                if(income)mix(mix(229,273,reach),238,smooth((t-.28)/.38))
-                else mix(mix(231,218,reach),124,flick)
-            } else if(income)mix(186,235,smooth((t-.12)/.55)) else mix(mix(224,207,reach),151,flick)
-            val x=mix(hx,if(king)158 else 254,if(income)smooth((t-.78)/.22) else back)
-            val y=mix(hy,231,if(income)smooth((t-.78)/.22) else back)
+            fun smooth(x:Double):Double{val p=x.coerceIn(0.0,1.0);return p*p*(3-2*p)}
+            fun mix(a:Double,b:Double,p:Double)=a+(b-a)*p
+            fun coin(x:Int,y:Int) = """<ellipse cx="$x" cy="$y" rx="10" ry="7" fill="#ffcc59" stroke="#995818" stroke-width="2"/>"""
+            fun bill(x:Int,y:Int,angle:Int) = """<g transform="translate($x $y) rotate($angle)"><rect x="-16" y="-8" width="32" height="16" rx="2" fill="#7bb984" stroke="#28583d"/><circle r="4" fill="#d0e1a8"/></g>"""
             val wallet=if(income&&!king)"""<rect x="175" y="227" width="80" height="43" rx="7" fill="#895027" stroke="#4b3020" stroke-width="2"/><path d="M175 238h80" stroke="#e8b96d" stroke-width="3"/>""" else ""
-            fun coin(x:Int,y:Int)="""<ellipse cx="$x" cy="$y" rx="10" ry="7" fill="#ffcc59" stroke="#995818" stroke-width="2"/>"""
-            fun bill(x:Int,y:Int,angle:Int)="""<g transform="translate($x $y) rotate($angle)"><rect x="-16" y="-8" width="32" height="16" rx="2" fill="#7bb984" stroke="#28583d"/><circle r="4" fill="#d0e1a8"/></g>"""
-            val pile=if(king) (0..13).joinToString(""){i->coin(180+(i%7)*11,253-(i/7)*10)} else if(!income)(0..3).joinToString(""){i->bill(173+i*2,229-i*3,0)} else ""
-            val money=if(king&&income)(0..19).joinToString(""){i->
-                val side=if(i%2==0)-1 else 1;val col=(i/2)%5;val r=i/10
-                val pull=smooth((t-.30-col*.018)/.34)
-                coin(mix(215+side*(25+col*14),215+side*(10+col*5),pull),mix(268-r*10,242-r*8,pull))
-            } else if(king) (0..9).joinToString(""){i->
-                val side=if(i%2==0)-1 else 1;val j=i/2;val release=.35+j*.008
-                val phase=((t-release)/.49).coerceIn(0.0,1.0)
-                val swing=smooth((release-.28)/.18)
-                val sx=215+side*(215-mix(197,82,swing));val sy=mix(218,124,swing)
-                if(t<release||phase>=1)"" else coin((sx+side*(42+j*7)*phase).toInt(),(sy-(105+j*8)*phase+125*phase*phase).toInt())
-            } else if(income) {if(t<.68)bill(x,y-8,0) else ""} else {
-                val phase=((t-.39)/.56).coerceIn(0.0,1.0)
-                val swing=smooth((.39-.28)/.18)
-                if(t<.39||phase>=1)"" else bill((mix(179,247,swing)+103*phase).toInt(),(mix(207,151,swing)-105*phase+126*phase*phase).toInt(),(phase*165).toInt())
+            // The king holds only the handful he is collecting; no separate
+            // static coin pile may appear beside his throne on income.
+            val pile=if(!income)(0..4).joinToString(""){i->
+                if(king)coin(173+i*3,220-i*3) else bill(173+i*2,220-i*3,0)
+            }else ""
+            val reach=smooth(t/.24)
+            val carry=smooth((t-.28)/.40)
+            val reset=smooth((t-.79)/.20)
+            val lift=smooth((t-.20)/.32)
+            val flick=smooth((t-.27)/.20)
+            val back=smooth((t-.62)/.36)
+            val leftX:Double
+            val leftY:Double
+            val rightX:Double
+            val rightY:Double
+            if(king&&income){
+                val gatheringX=mix(mix(155.0,145.0,reach),195.0,carry)
+                val gatheringY=mix(mix(224.0,260.0,reach),231.0,carry)
+                leftX=mix(gatheringX,155.0,reset)
+                leftY=mix(gatheringY,224.0,reset)
+                rightX=430-leftX
+                rightY=leftY
+            }else if(income){
+                leftX=180.0
+                leftY=245.0
+                rightX=mix(mix(mix(264.0,253.0,smooth(t/.18)),211.0,lift),264.0,smooth((t-.69)/.28))
+                rightY=mix(mix(mix(183.0,199.0,smooth(t/.18)),233.0,lift),183.0,smooth((t-.69)/.28))
+            }else{
+                leftX=173.0
+                leftY=237.0
+                rightX=mix(mix(254.0,179.0,reach),249.0,flick)
+                rightY=mix(mix(224.0,207.0,reach),150.0,flick)
             }
-            val leftX=if(king)x else 173;val leftY=if(king)y else 237
-            val rightX=if(king)430-x else x
-            """<g>$wallet$pile<path d="M132 196Q116 231 $leftX $leftY M298 196Q314 204 $rightX $y" stroke="${if(king)"#9f214c" else "#d69a49"}" stroke-width="18" fill="none" stroke-linecap="round"/>$money</g>"""
+            val actualRightX=if(!income)mix(rightX,254.0,back)else rightX
+            val actualRightY=if(!income)mix(rightY,224.0,back)else rightY
+            val money=when{
+                king&&income -> if(t<.16||t>.81)""else (0..17).joinToString(""){i->
+                    val side=if(i%2==0)-1 else 1
+                    val slot=i/2;val col=slot%3;val row=slot/3
+                    val grabX=215.0+side*(64.0+(col-1)*8)
+                    val grabY=257.0-row*9+(col%2)*3
+                    val lapX=215.0+side*(11.0+col*6)
+                    val lapY=238.0-row*7
+                    val p=smooth((t-.28-row*.012)/.40)
+                    val x=mix(grabX,lapX,p).toInt()
+                    val y=(mix(grabY,lapY,p)-6*sin(PI*p)).toInt()
+                    val opacity=smooth((t-.16)/.1)*(1-smooth((t-.66)/.14))
+                    """<g opacity="$opacity">""" + coin(x,y) + "</g>"
+                }
+                income -> (0..5).joinToString(""){i->
+                    val release=.285+i*.008
+                    val p=((t-release)/.39).coerceIn(0.0,1.0)
+                    if(t<release||p>=1.0)""else{
+                        val fan=i-2.5
+                        val atRelease=smooth((release-.20)/.32)
+                        val sx=mix(253.0,211.0,atRelease)
+                        val sy=mix(199.0,233.0,atRelease)
+                        val flight=smooth(p)
+                        val x=(mix(sx,218.0+fan*8,flight)+fan*4*sin(PI*p)).toInt()
+                        val y=(mix(sy,244.0+kotlin.math.abs(fan)*2,flight)-20*sin(PI*p)).toInt()
+                        val angle=(fan*13+110*p).toInt()
+                        val opacity=1-smooth((p-.76)/.24)
+                        """<g opacity="$opacity">""" + bill(x,y,angle) + "</g>"
+                    }
+                }
+                else -> (0..5).joinToString(""){i->
+                    val release=.34+i*.013
+                    val p=((t-release)/.49).coerceIn(0.0,1.0)
+                    if(t<release||p>=1.0)""else{
+                        val fan=i-2.5
+                        val swing=smooth((release-.27)/.20)
+                        val sx=mix(179.0,249.0,swing)
+                        val sy=mix(207.0,150.0,swing)
+                        val x=(sx+(91+i*9)*p+fan*7*sin(PI*p)).toInt()
+                        val y=(sy-(90+kotlin.math.abs(fan)*17)*p+(118+kotlin.math.abs(fan)*13)*p*p).toInt()
+                        val angle=(p*(150+i*31)+fan*19).toInt()
+                        val opacity=1-smooth((p-.76)/.24)
+                        """<g opacity="$opacity">""" + (if(king)coin(x,y)else bill(x,y,angle)) + "</g>"
+                    }
+                }
+            }
+            val lx=leftX.toInt();val ly=leftY.toInt()
+            val rx=actualRightX.toInt();val ry=actualRightY.toInt()
+            val sleeve=if(king)"#9f214c"else"#d69a49"
+            """<g>$wallet$pile<path d="M132 196Q116 231 $lx $ly M298 196Q314 204 $rx $ry" stroke="$sleeve" stroke-width="18" fill="none" stroke-linecap="round"/>$money</g>"""
         }
         skin=="pirate"&&mode=="thinking" -> """
             <g class="native-pirate-map">
