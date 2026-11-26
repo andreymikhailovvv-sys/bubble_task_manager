@@ -75,7 +75,7 @@ private fun economicDraft(p:JsonObject):Map<String,String>{
         val raw=(value as? JsonPrimitive)?.contentOrNull.orEmpty()
         when{
             key.endsWith("Minor")&&raw.isNotBlank() ->
-                runCatching{BigDecimal(raw).movePointLeft(2).toPlainString()}.getOrDefault(raw)
+                runCatching{ecoInput(raw)}.getOrDefault(raw)
             key in listOf("dueAt","occurredAt","startDate","paymentDate")&&raw.length>=10 ->
                 raw.take(10)
             else->raw
@@ -85,9 +85,13 @@ private fun economicDraft(p:JsonObject):Map<String,String>{
 private fun economicEditedPayload(draft:Map<String,String>,proposal:JsonObject):JsonObject=buildJsonObject{
     val source=proposal["payload"] as? JsonObject
     val before=proposal["before"] as? JsonObject
+    // Preserve receipt metadata even though the compact chip only edits core fields.
+    for(key in listOf("positionsJson","calculation")){
+        source?.get(key)?.let{put(key,it)}
+    }
     for((key,raw) in draft){
         if(key !in ECON_FIELDS)continue
-        val value=raw.trim()
+        val value=if(key.endsWith("Minor"))raw.filterNot{it.isWhitespace()||it=='\u00a0'||it=='\u202f'} else raw.trim()
         when{
             key.endsWith("Minor")->{
                 require(Regex("^-?\\d{1,12}(?:[.,]\\d{1,2})?$").matches(value)){
@@ -98,6 +102,10 @@ private fun economicEditedPayload(draft:Map<String,String>,proposal:JsonObject):
                     "Слишком большая сумма"
                 }
                 put(key,amount.toString())
+                if(key=="amountMinor" && source?.get("calculation")!=null &&
+                    amount.toString()!=((source[key]?:before?.get(key)) as? JsonPrimitive)?.contentOrNull){
+                    put("calculation",JsonNull)
+                }
             }
             key in listOf("dueAt","occurredAt","startDate","paymentDate")->
                 if(value.isEmpty())put(key,JsonNull)else{
@@ -296,6 +304,18 @@ internal fun NativeEconomicAiProposalCard(
                         Text(label,Modifier.weight(.45f),color=muted,fontSize=10.sp)
                         Text(shown,Modifier.weight(.55f),color=ink,fontSize=11.sp,maxLines=2)
                     }
+                }
+                val receipt=(proposal["payload"] as? JsonObject)?.get("positionsJson") as? JsonPrimitive
+                val positions=ecoPositionDrafts(receipt?.contentOrNull.orEmpty())
+                if(positions.isNotEmpty()){
+                    Text("Позиции чека",color=muted,fontSize=11.sp,fontWeight=FontWeight.Bold)
+                    positions.take(30).forEach{position->
+                        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                            Text(position.name,Modifier.weight(1f),color=ink,fontSize=11.sp)
+                            Text(position.amount+" ₽",color=ink,fontSize=11.sp)
+                        }
+                    }
+                    if(positions.size>30)Text("Ещё "+(positions.size-30)+" поз.",color=muted,fontSize=10.sp)
                 }
             }else (proposal["details"] as? JsonArray).orEmpty().take(3).forEach{entry->
                 (entry as? JsonPrimitive)?.contentOrNull?.let{Text(it,color=muted,fontSize=11.sp)}

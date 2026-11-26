@@ -90,7 +90,7 @@ test('shirt outfits share the classic viewport and retain normal hover after the
  assert.doesNotMatch(rig,/viewBox=\{refined/);
  assert.doesNotMatch(wardrobe,/aspect-ratio:394\/325/);
  assert.match(rig,/zoomer && \(mode==='idle'\|\|mode==='hover'\)/);
- assert.match(rig,/banker && mode==='typing' \? <BankerMoney/);
+ assert.match(rig,/banker && mode==='income' \? <BankerMoney/);
  assert.match(css,/zoomer-restore-hover 1\.3s steps\(1,end\) both/);
  assert.match(art,/className="zoomer-phone-back"/);
  assert.match(art,/className="shirt-collar"/);

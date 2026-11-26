@@ -1,3 +1,4 @@
+import { EconomicMoneyGesture, FINANCIAL_MASCOT_EVENT, type FinancialMascotMode } from './EconomicMoneyGesture';
 import { memo, useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import './PlanikMascot.css';
 import { useMascotIdentity } from './MascotPresence';
@@ -9,7 +10,7 @@ import { RefinedSkin, Mitten, NorthernHover, WizardHover, WizardCards } from './
 import { ShirtOutfit, ShirtArm, ZoomerPhone, BankerMoney } from './ShirtMascotSkins';
 import { AdventureOutfit, AdventureArm, AdventureIdle, AdventureHover, PirateMap, SpaceSignal, NinjaNotebook, type AdventureSkin } from './AdventureMascotSkins';
 
-export type PlanikMode = 'idle' | 'hover' | 'thinking' | 'typing' | 'searching' | 'painting' | 'celebrating' | 'clearing' | 'showcase';
+export type PlanikMode = 'idle' | 'hover' | 'thinking' | 'typing' | 'searching' | 'painting' | 'celebrating' | 'clearing' | 'showcase' | 'income' | 'expense';
 
 // Fixed particle paths avoid creating random values or timers on every render.
 const POPPER_CONFETTI = Array.from({ length: 24 }, (_, index) => ({
@@ -58,6 +59,20 @@ export const PlanikMascot = memo(function PlanikMascot({
   const identity = useMascotIdentity();
   const variant = variantOverride ?? identity?.variant ?? 'planner';
   const skinId = skinOverride ?? identity?.skinId ?? 'classic';
+  const [financeMode,setFinanceMode]=useState<FinancialMascotMode|null>(null);
+  useEffect(()=>{
+    if(variant!=='economic'||previewMode)return;
+    let timer=0;
+    const listener=(event:Event)=>{
+      const mode=(event as CustomEvent).detail;
+      if(mode!=='income'&&mode!=='expense')return;
+      window.clearTimeout(timer);
+      setFinanceMode(null);
+      timer=window.setTimeout(()=>{setFinanceMode(mode);timer=window.setTimeout(()=>setFinanceMode(null),4200);},30);
+    };
+    window.addEventListener(FINANCIAL_MASCOT_EVENT,listener);
+    return ()=>{window.removeEventListener(FINANCIAL_MASCOT_EVENT,listener);window.clearTimeout(timer);setFinanceMode(null);};
+  },[variant,previewMode]);
   const [arriving, setArriving] = useState(false);
   useEffect(() => {
     if (!arrivalKey || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setArriving(false); return; }
@@ -114,7 +129,7 @@ export const PlanikMascot = memo(function PlanikMascot({
     progress === 'analyzing_retrieved_context' || progress === 'analyzing_subtasks' ||
     progress === 'checking_sectors'
   );
-  const mode: PlanikMode = previewMode ?? (clearingCount !== null ? 'clearing'
+  const mode: PlanikMode = previewMode ?? financeMode ?? (clearingCount !== null ? 'clearing'
     : celebrating ? 'celebrating'
     : busy ? (isPainting ? 'painting' : isSearching ? 'searching' : isThinking ? 'thinking' : 'typing')
     : showcase && skinId !== 'classic' ? 'showcase'
@@ -229,6 +244,7 @@ export const PlanikMascot = memo(function PlanikMascot({
         <g ref={rightEye} className="planik-eye-right"><ellipse className="planik-eye" cx="240" cy="162" rx="10" ry="15" fill="#f1f3ff" />{squint&&<path className="ninja-squint" d="M229 162Q240 158 251 153Q251 174 240 174Q230 174 229 162Z" fill="#f3f4ff"/>}</g>
 
         {king ? <KingOutfit suffix={gradientSuffix}/> : refined ? <RefinedSkin skinId={skinId} suffix={gradientSuffix} layer="front"/> : shirtSkin ? <ShirtOutfit skin={shirtSkin} suffix={gradientSuffix}/> : adventure ? <AdventureOutfit skin={adventure} suffix={gradientSuffix}/> : skinId === 'cat' ? null : <MascotSkinArtwork skinId={skinId} suffix={gradientSuffix} />}
+        {variant==='economic' && (mode==='income'||mode==='expense') && !(banker&&mode==='income') && <EconomicMoneyGesture mode={mode} skinId={skinId} suffix={gradientSuffix}/>}
         {king && (mode==='idle'||mode==='hover'||mode==='thinking'||mode==='showcase') && <KingGesture mode={mode} suffix={gradientSuffix}/>}
         {north && mode === 'idle' && <g pointerEvents="none"><path d="M129 194Q124 218 153 232M301 194Q306 218 277 232" fill="none" stroke="#418d89" strokeWidth="19" strokeLinecap="round"/><Mitten x={153} y={232} dx={29} dy={14} suffix={gradientSuffix}/><Mitten x={277} y={232} dx={-29} dy={14} right suffix={gradientSuffix}/></g>}
         {zoomer && (mode==='idle'||mode==='hover') && <ZoomerPhone key={mode} suffix={gradientSuffix} hide={mode==='hover'}/>}
@@ -262,7 +278,7 @@ export const PlanikMascot = memo(function PlanikMascot({
             fontWeight="800" fontSize={badgeNumber > 99 ? 15 : badgeNumber > 9 ? 19 : 22}>{badgeText}</text>
         </g>
 
-        {banker && mode==='typing' ? <BankerMoney suffix={gradientSuffix} packing/> : <g className="planik-typing">
+        {banker && mode==='income' ? <BankerMoney suffix={gradientSuffix} packing/> : <g className="planik-typing">
           <path d="M156 224H275L309 279H125Z" fill="#242e54" stroke="#a09de1" strokeWidth="2.5" strokeLinejoin="round" />
           <path d="M164 233H268L289 264H145Z" fill="#303d6b" />
           <g fill="#59649d">

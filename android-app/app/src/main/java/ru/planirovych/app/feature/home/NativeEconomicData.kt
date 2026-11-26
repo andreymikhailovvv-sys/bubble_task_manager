@@ -41,7 +41,7 @@ internal fun ecoWholeRubles(minor: String): String {
 internal fun ecoInput(minor: String): String {
     val n = minor.toBigIntegerOrNull() ?: BigInteger.ZERO
     return (if (n.signum() < 0) "-" else "") +
-        n.abs().divide(BigInteger.valueOf(100)).toString() + "," +
+        ecoGroupMoney(n.abs().divide(BigInteger.valueOf(100)).toString()) + "," +
         n.abs().remainder(BigInteger.valueOf(100)).toString().padStart(2, '0')
 }
 internal fun ecoParseMoney(value: String, negative: Boolean = false): String {
@@ -121,3 +121,48 @@ internal fun ecoColors(dark: Boolean) = if (dark) EcoColors(
     gold = Color(0xFFDF8B25), goldSoft = Color(0xFFAE681B), green = Color(0xFF23824C),
     field = Color(0xFFF7F8FA), bannerStart = Color.White, bannerEnd = Color(0xFFFFF9F0)
 )
+
+internal fun ecoGroupMoney(value:String):String =
+    value.replace(Regex("[\\s\\u00a0\\u202f]"),"").replace(Regex("\\d+(?:[,.]\\d*)?")) { match ->
+        val token=match.value
+        val separator=token.indexOfFirst{it==','||it=='.'}
+        val whole=if(separator<0)token else token.substring(0,separator)
+        whole.reversed().chunked(3).joinToString(" ").reversed() +
+            if(separator<0)"" else token.substring(separator)
+    }
+internal fun ecoIsExpression(value:String):Boolean =
+    Regex("[+*/:xXхХ×÷−-]").containsMatchIn(value.trim().replace(Regex("^[+-]"),""))
+private data class EcoFraction(val n:BigInteger,val d:BigInteger) {
+    fun add(other:EcoFraction,sign:BigInteger)=EcoFraction(n*other.d+sign*other.n*d,d*other.d)
+}
+internal fun ecoCalculateMoney(value:String):String {
+    if(!ecoIsExpression(value))return ecoParseMoney(value)
+    val input=value.replace(Regex("[\\s\\u00a0\\u202f]"),"").replace(',','.')
+        .replace(Regex("[xXхХ×]"),"*").replace(Regex("[:÷]"),"/").replace('−','-')
+    require(input.length<=240 && Regex("\\d{1,12}(?:\\.\\d{1,2})?(?:[+\\-*/]\\d{1,12}(?:\\.\\d{1,2})?)+").matches(input)){
+        "Завершите выражение калькулятора"
+    }
+    val tokens=Regex("\\d+(?:\\.\\d+)?|[+\\-*/]").findAll(input).map{it.value}.toList()
+    fun literal(s:String)=EcoFraction(ecoParseMoney(s).toBigInteger(),BigInteger.valueOf(100))
+    var total=EcoFraction(BigInteger.ZERO,BigInteger.ONE)
+    var current=literal(tokens.first())
+    var sign=BigInteger.ONE
+    for(i in 1 until tokens.size step 2){
+        val next=literal(tokens[i+1])
+        when(tokens[i]){
+            "*"->current=EcoFraction(current.n*next.n,current.d*next.d)
+            "/"->{require(next.n.signum()!=0){"Деление на ноль невозможно"};current=EcoFraction(current.n*next.d,current.d*next.n)}
+            else->{total=total.add(current,sign);current=next;sign=if(tokens[i]=="+")BigInteger.ONE else BigInteger.ONE.negate()}
+        }
+    }
+    val answer=total.add(current,sign)
+    require(answer.n.signum()>0){"Сумма должна быть положительной"}
+    val result=(answer.n*BigInteger.valueOf(200)+answer.d)/(answer.d*BigInteger.valueOf(2))
+    require(result.signum()>0&&result<=BigInteger("999999999999999")){"Сумма вне допустимого диапазона"}
+    return result.toString()
+}
+internal data class EcoPositionDraft(val name:String,val amount:String)
+internal fun ecoPositionDrafts(raw:String):List<EcoPositionDraft> =
+    runCatching{(Json.parseToJsonElement(raw) as JsonArray).mapNotNull{item->
+        (item as? JsonObject)?.let{EcoPositionDraft(it.ecoText("name"),ecoInput(it.ecoText("amountMinor")))}
+    }}.getOrDefault(emptyList())

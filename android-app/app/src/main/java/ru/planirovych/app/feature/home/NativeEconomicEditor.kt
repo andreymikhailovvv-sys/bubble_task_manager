@@ -61,7 +61,7 @@ internal fun EcoEditorSheet(
                 "operations" -> {
                     put("kind",item.ecoText("kind").ifBlank{"EXPENSE"})
                     put("title",item.ecoText("title"))
-                    put("amount",if(editing)ecoInput(item.ecoText("amountMinor")) else "")
+                    put("amount",if(editing)item.ecoText("calculation").ifBlank{ecoInput(item.ecoText("amountMinor"))} else "")
                     put("sourceAccountId",item.ecoText("sourceAccountId").ifBlank{account})
                     put("targetAccountId",item.ecoText("targetAccountId"))
                     put("category",item.ecoText("category"))
@@ -102,7 +102,8 @@ internal fun EcoEditorSheet(
         }
     }
     fun value(key:String)=form[key].orEmpty()
-    fun change(key:String,new:String){ form[key]=new }
+    fun change(key:String,new:String){ form[key]=if(key in listOf("amount","balance","paid","creditLimit","monthlyOverride"))ecoGroupMoney(new) else new }
+    val positions=remember(request){mutableStateListOf<EcoPositionDraft>().apply{addAll(ecoPositionDrafts(item.ecoText("positionsJson")))}}
     val accountOptions = snapshot.ecoItems("accounts").map {
         it.ecoText("id") to it.ecoText("name")
     }
@@ -145,7 +146,14 @@ internal fun EcoEditorSheet(
                             "Укажите другой счёт для перевода"
                         }
                         put("kind",kind); put("title",value("title").trim())
-                        put("amountMinor",ecoParseMoney(value("amount")))
+                        put("amountMinor",ecoCalculateMoney(value("amount")))
+                        put("calculation",if(ecoIsExpression(value("amount")))JsonPrimitive(value("amount")) else JsonNull)
+                        put("positionsJson",buildJsonArray {
+                            positions.filter{it.name.isNotBlank()||it.amount.isNotBlank()}.forEach{p->
+                                require(p.name.isNotBlank()){"Укажите название позиции"}
+                                add(buildJsonObject{put("name",p.name.trim());put("amountMinor",ecoParseMoney(p.amount,true))})
+                            }
+                        }.toString())
                         put("sourceAccountId",value("sourceAccountId"))
                         put("targetAccountId",if(kind=="TRANSFER")
                             JsonPrimitive(value("targetAccountId")) else JsonNull)
@@ -272,8 +280,27 @@ internal fun EcoEditorSheet(
                         }
                         EcoInput("Название",value("title"),colors,160,
                             placeholder="Что купили или получили") {change("title",it)}
-                        EcoInput("Сумма, ₽",value("amount"),colors,40,decimal=true,
-                            placeholder="0,00"){change("amount",it)}
+                        EcoInput("Сумма, ₽",value("amount"),colors,240,
+                            placeholder="0,00 или 1 000 + 200"){change("amount",it)}
+                        if(ecoIsExpression(value("amount")))Text(
+                            runCatching{"= "+ecoRubles(ecoCalculateMoney(value("amount")))}.getOrDefault("Введите корректное выражение"),
+                            color=colors.gold,fontSize=13.sp)
+                        Text("Позиции",color=colors.text,fontWeight=FontWeight.SemiBold,fontSize=13.sp)
+                        positions.forEachIndexed{index,p->
+                            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                                Box(Modifier.weight(1f)){EcoInput("Название",p.name,colors,160){positions[index]=p.copy(name=it)}}
+                                Box(Modifier.weight(.75f)){EcoInput("Сумма, ₽",p.amount,colors,40,decimal=true){positions[index]=p.copy(amount=ecoGroupMoney(it))}}
+                                IconButton(onClick={positions.removeAt(index)}){Icon(Icons.Default.Close,"Удалить позицию",tint=colors.muted)}
+                            }
+                        }
+                        if(positions.size<100)EcoInlineAction("+ Добавить позицию",colors){positions.add(EcoPositionDraft("",""))}
+                        if(positions.isNotEmpty())EcoInlineAction("Использовать сумму позиций",colors){
+                            runCatching{
+                                val total=positions.fold(java.math.BigInteger.ZERO){acc,p->acc+ecoParseMoney(p.amount,true).toBigInteger()}
+                                require(total.signum()>0){"Сумма позиций должна быть положительной"}
+                                change("amount",ecoInput(total.toString()));localError=""
+                            }.onFailure{localError=it.message.orEmpty()}
+                        }
                         EcoSelect(if(value("kind")=="TRANSFER")"Счёт списания" else "Счёт",
                             value("sourceAccountId"),accountOptions,colors){
                             change("sourceAccountId",it)

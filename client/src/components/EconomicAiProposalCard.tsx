@@ -1,6 +1,7 @@
+import { announceEconomicOperation } from './EconomicMoneyGesture';
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Check, CheckCircle2, ClipboardCheck, Loader2, RotateCcw, Pencil, X } from 'lucide-react';
-import { minorToRublesInput, rublesToMinor } from '../lib/economicMoney';
+import { minorToRublesInput, rublesToMinor, groupMoneyInput, readEconomicPositions, formatMinorRub } from '../lib/economicMoney';
 import './EconomicAiProposalCard.css';
 
 type Value = string | number | boolean | null;
@@ -30,7 +31,7 @@ const LABELS:Record<string,string>={
   accountType:'Тип счёта',creditLimitMinor:'Кредитный лимит, ₽',
   principalMinor:'Сумма кредита, ₽',paidMinor:'Выплачено, ₽',
   sourceAccountId:'Счёт',targetAccountId:'Счёт зачисления',accountId:'Счёт долга',
-  category:'Категория',note:'Примечание',dueAt:'Срок возврата',
+  category:'Категория',note:'Примечание',calculation:'Калькуляция',dueAt:'Срок возврата',
   annualRateBps:'Ставка, базисных пунктов',termMonths:'Срок, мес.',
   startDate:'Дата начала',occurredAt:'Дата операции',lender:'Кредитор',
   paymentDate:'Дата платежа',postedToAccount:'Проводка по счёту',
@@ -58,7 +59,7 @@ function editable(proposal:EconomicAiProposal):Payload{
   // the AI originally proposed changing just one field.
   if(proposal.entity==='operation'&&proposal.action==='update'&&proposal.before){
     const keys=['kind','title','amountMinor','sourceAccountId','targetAccountId',
-      'category','note','occurredAt'];
+      'category','note','occurredAt','positionsJson','calculation'];
     return Object.fromEntries(keys.filter(key=>key in incoming||key in proposal.before!)
       .map(key=>[key,key in incoming?incoming[key]:proposal.before![key]])) as Payload;
   }
@@ -91,7 +92,7 @@ function normalizedDraft(draft:Payload,reference:Payload):Payload{
           ? reference[key] : new Date(String(value).slice(0,10)+'T12:00:00.000Z').toISOString()
         : null];
     if(['annualRateBps','termMonths'].includes(key))return [key,Number(value)];
-    if(['category','note','lender','accountId','targetAccountId'].includes(key)&&value==='')
+    if(['category','note','calculation','lender','accountId','targetAccountId'].includes(key)&&value==='')
       return [key,null];
     return [key,value];
   })) as Payload;
@@ -133,6 +134,7 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
       if(action!=='revise')updated=await read<EconomicAiProposal>(path+'/'+action,'POST');
       setProposal(updated);
       setDraft(displayDraft(updated));
+      if(action==='approve'&&updated.status==='APPLIED'&&updated.entity==='operation'&&updated.action==='create')announceEconomicOperation(updated.payload?.kind);
       if(updated.status==='APPLIED'||updated.status==='UNDONE')await onRefresh();
       if(action==='revise')setEditOpen(false);
     }catch(cause){
@@ -229,8 +231,8 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
     const isDate=['occurredAt','dueAt','startDate','paymentDate'].includes(key);
     return <input aria-label={LABELS[key]} disabled={!editableStatus||busy}
       type={isDate?'date':'text'} inputMode={key.endsWith('Minor')?'decimal':undefined}
-      value={String(value??'')} maxLength={key==='note'?500:160}
-      onChange={e=>setField(key,e.target.value)}/>;
+      value={String(value??'')} maxLength={key==='note'?500:key==='calculation'?240:160}
+      onChange={e=>setField(key,key.endsWith('Minor')?groupMoneyInput(e.target.value):e.target.value)}/>;
   };
   return <div className="econ-finance-proposal" data-economic-proposal={proposal.id}>
     <div className="econ-finance-proposal-head">
@@ -248,6 +250,7 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
         {proposal.description&&<p className="econ-finance-description">{proposal.description}</p>}
         {entries.length>0 ? <div className="econ-finance-summary-fields">{entries.slice(0,5).map(([key,value])=><div key={key} className="econ-finance-summary-row"><span>{LABELS[key]}</span><strong>{previewValue(key,value)}</strong></div>)}</div>
           : proposal.details?.map((item,index)=><div key={index}>{item}</div>)}
+        {readEconomicPositions(String(draft.positionsJson??'[]')).map((position,index)=><div key={index} className="econ-finance-summary-row"><span>{position.name}</span><strong>{formatMinorRub(position.amountMinor)}</strong></div>)}
       </div> : null}
     {error||proposal.error?<div role="alert" className="econ-finance-proposal-error">{error||proposal.error}</div>:null}
     {proposal.status==='PENDING'&&entries.length>0?<button type="button" className="econ-finance-edit-link" disabled={busy} onClick={openEditor}><Pencil size={13}/>Изменить поля</button>:null}

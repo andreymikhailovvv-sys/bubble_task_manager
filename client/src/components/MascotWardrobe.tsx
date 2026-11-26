@@ -156,7 +156,7 @@ export function MascotWardrobeDialog({wardrobe,variant:initialVariant,theme}:{wa
   },[catalog.length,updateListFade]);
   const skin=catalog.find(item=>item.id===selected);
   const allowed=Boolean(skin&&skin.rank<=wardrobe.rank);
-  const specialModes: Exclude<PlanikMode,'showcase'>[] = selected==='cat'?['idle','thinking']:selected==='banker'?['typing','hover']:['wizard','pirate','space','ninja','king'].includes(selected)?['idle','hover','thinking']:['northern','zoomer'].includes(selected)?['idle','hover']:[];
+  const specialModes: Exclude<PlanikMode,'showcase'>[] = variant==='economic'?['idle','hover','thinking','income','expense']:selected==='cat'?['idle','thinking']:selected==='banker'?['typing','hover']:['wizard','pirate','space','ninja','king'].includes(selected)?['idle','hover','thinking']:['northern','zoomer'].includes(selected)?['idle','hover']:[];
   const isEquipped=selected===wardrobe.selected(variant);
   const equip=async()=>{
     if(!allowed||isEquipped||saving)return;
@@ -192,7 +192,7 @@ export function MascotWardrobeDialog({wardrobe,variant:initialVariant,theme}:{wa
           {specialModes.length>0&&<div className="mascot-wardrobe-animations" aria-label="Особые анимации">
             <span>Особые анимации:</span>
             <div>{specialModes.map(mode=>{
-              return <button key={mode} type="button" aria-pressed={previewMode===mode} disabled={phase==='leaving'||phase==='entering'} onClick={()=>{setPreviewMode(mode);setReplay(v=>v+1);}}>{mode==='idle'?'Ожидание':mode==='hover'?'Наведение курсора':mode==='typing'?'Формирует ответ':'Думает'}</button>;
+              return <button key={mode} type="button" aria-pressed={previewMode===mode} disabled={phase==='leaving'||phase==='entering'} onClick={()=>{setPreviewMode(mode);setReplay(v=>v+1);}}>{mode==='idle'?'Ожидание':mode==='hover'?'Наведение курсора':mode==='typing'?'Формирует ответ':mode==='income'?'Запись дохода':mode==='expense'?'Запись расхода':'Думает'}</button>;
             })}</div>
           </div>}
           <div className="mascot-wardrobe-actions">

@@ -119,12 +119,12 @@ private class MascotFrameView(context:android.content.Context,
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 internal fun SharedMascotArtwork(skinId:String,dark:Boolean,mode:String,
-    modifier:Modifier=Modifier){
+    modifier:Modifier=Modifier,variant:String="planner"){
     val latestMode by rememberUpdatedState(mode)
     var painted by remember(skinId,dark){mutableStateOf(false)}
     var rendererFailed by remember(skinId,dark){mutableStateOf(false)}
     Box(modifier){
-        if(!painted||rendererFailed)NativeMascotFallback(dark,mode,skinId,Modifier.fillMaxSize().zIndex(1f))
+        if(!painted||rendererFailed)NativeMascotFallback(dark,mode,skinId,Modifier.fillMaxSize().zIndex(1f),variant)
         if(!rendererFailed)key(skinId,dark){
             AndroidView(
                 modifier=Modifier.fillMaxSize(),
@@ -132,6 +132,7 @@ internal fun SharedMascotArtwork(skinId:String,dark:Boolean,mode:String,
                     val base=Uri.parse(BuildConfig.API_BASE_URL)
                     val address=base.buildUpon().path("/android-mascot").clearQuery()
                         .appendQueryParameter("skin",skinId)
+                        .appendQueryParameter("variant",variant)
                         .appendQueryParameter("theme",if(dark)"dark" else "light")
                         .appendQueryParameter("mode",mode).build()
                     MascotFrameView(context){painted=it}.apply {
