@@ -39,7 +39,11 @@ test('Economic mascot reuses the real Planik SVG and animations with its own pal
   assert.match(economic, /<PlanikMascot variant="economic" size="launcher" busy=\{busy\} progress=\{progress\}/);
   assert.doesNotMatch(economic, /econ-robot-metal/);
   assert.match(mascot, /variant\?: 'planner' \| 'economic'/);
-  assert.match(mascot, /variant = 'planner'/);
+  // Explicit props take priority over the managed mascot identity; only
+  // an unconfigured mascot falls back to the planner palette.
+  assert.match(mascot, /variant: variantOverride/);
+  assert.match(mascot, /const identity = useMascotIdentity\(\)/);
+  assert.match(mascot, /const variant = variantOverride \?\? identity\?\.variant \?\? 'planner'/);
   assert.match(mascotCss, /\.planik-mascot--economic \.planik-body-stop-start/);
   assert.match(mascotCss, /\.planik-eye \{/);
   assert.match(mascotCss, /animation: planik-blink/);
