@@ -1026,9 +1026,9 @@ export function BubbleField({
           cy={0}
           r={bubble.radius}
           fill={getBubbleShade(bubble.color, bubble.distanceRatio)}
-          fillOpacity={isLightTheme ? 0.66 : 0.48}
+          fillOpacity={isLightTheme ? 0.70 : 0.50}
           stroke={isDragTarget ? (dragView?.target?.kind === 'nest' ? '#f59e0b' : '#a78bfa') : selectedId === bubble.task.id ? (isLightTheme ? '#0f172a' : '#f8fafc') : (isLightTheme ? 'rgba(14,116,144,0.56)' : '#bae6fd')}
-          strokeOpacity={selectedId === bubble.task.id ? 1 : isLightTheme ? 0.78 : 0.65}
+          strokeOpacity={selectedId === bubble.task.id ? 1 : isLightTheme ? 0.84 : 0.72}
           strokeWidth={isDragTarget || isDragged ? 5 : selectedId === bubble.task.id ? 3.5 : 2.4}
         />
         {ownDeadlineOverdue || subtaskDeadlineOverdue ? (
@@ -1538,13 +1538,14 @@ export function BubbleField({
                 <foreignObject x={-88} y={-18} width={176} height={40}>
                   <div className="bubble-sector-label flex w-full items-center justify-center gap-1 rounded-full border px-3 py-1.5 text-sm font-semibold"
                     style={item.sphere ? {
-                      borderColor: `color-mix(in srgb, ${item.sphere.color} 29%, ${isLightTheme ? '#ffffff' : '#475569'})`,
-                      background: `color-mix(in srgb, ${item.sphere.color} ${isLightTheme ? '9%' : '15%'}, ${isLightTheme ? '#ffffff' : '#0f172a'})`
+                      borderColor: `color-mix(in srgb, ${item.sphere.color} 45%, ${isLightTheme ? '#94a3b8' : '#64748b'})`,
+                      background: `color-mix(in srgb, ${item.sphere.color} ${isLightTheme ? '14%' : '21%'}, ${isLightTheme ? '#ffffff' : '#0f172a'})`,
+                      color: `color-mix(in srgb, ${item.sphere.color} ${isLightTheme ? '50%' : '62%'}, ${isLightTheme ? '#0f172a' : '#f8fafc'})`
                     } : undefined}>
                     {item.sphere ? (
                       <button className="inline-flex min-w-0 items-center gap-2" onClick={() => onRenameSphere?.(item.sphere!)}>
-                        {Icon ? <Icon size={15} color={item.sphere.color} /> : null}
-                        <span className="truncate" style={{ color: item.sphere.color }}>{item.sphere.name}</span>
+                        {Icon ? <Icon size={15} color="currentColor" /> : null}
+                        <span className="truncate">{item.sphere.name}</span>
                       </button>
                     ) : <span className="truncate text-muted">Без сектора</span>}
                   </div>

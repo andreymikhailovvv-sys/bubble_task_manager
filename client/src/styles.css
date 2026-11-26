@@ -17193,3 +17193,13 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
   scrollbar-gutter: auto !important;
   overflow: hidden;
 }
+
+/* An editor opened from the split Focus pane covers only its own slot and
+   sits above the pane-local subtask dialog (z-index 220). */
+.fullscreen-embedded-focus > .notes-editor-backdrop.notes-editor-inline {
+  z-index: 240 !important;
+}
+.bubble-sector-label {
+  border-color: color-mix(in srgb, var(--text-muted) 40%, var(--badge-border));
+  color: var(--text-primary);
+}

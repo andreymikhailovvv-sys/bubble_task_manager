@@ -59,3 +59,23 @@ test('focus task and subtask editor dark outlines are muted without recoloring a
   assert.doesNotMatch(shared, /\.success-button|\.danger-button|\.importance-choice-button/);
   assert.match(css, /body\[data-theme='dark'\] \.focused-task-editor-shell,[\s\S]*?border-color: rgba\(100, 116, 139, 0\.42\) !important/);
 });
+
+test('bubble contrast changes preserve existing title sizing and hover geometry', async () => {
+  const bubbles = await read('../../client/src/components/BubbleField.tsx');
+  assert.match(bubbles, /fillOpacity=\{isLightTheme \? 0\.70 : 0\.50\}/);
+  assert.match(bubbles, /strokeOpacity=\{selectedId === bubble\.task\.id \? 1 : isLightTheme \? 0\.84 : 0\.72\}/);
+  assert.match(bubbles, /getBubbleTitleFontSize\(bubble\.task\.title, bubble\.radius\)/);
+  assert.match(bubbles, /isHovered \? 1\.075 : 1/);
+});
+
+test('split Focus descriptions mount in the selected slot while modal editors remain unchanged', async () => {
+  const [app, editor, css] = await Promise.all([
+    read('../../client/src/App.tsx'),
+    read('../../client/src/components/TaskEditor.tsx'),
+    read('../../client/src/styles.css')
+  ]);
+  assert.match(app, /<NotesEditor\s+value=\{focusedDraft\.description \?\? ''\}\s+inlineTarget=\{embeddedFocusActive && fullscreenPanels\.length === 2 \? fullscreenFocusTarget : null\}/);
+  assert.match(app, /notesInlineTarget=\{embeddedFocusActive && fullscreenPanels\.length === 2 && editorState\.task\?\.parentTaskId === focusedTask\?\.id \? fullscreenFocusTarget : null\}/);
+  assert.match(editor, /<TaskNotesEditor\s+value=\{descriptionValue\}\s+inlineTarget=\{notesInlineTarget\}/);
+  assert.match(css, /\.fullscreen-embedded-focus > \.notes-editor-backdrop\.notes-editor-inline\s*\{[^}]*z-index: 240 !important/);
+});

@@ -8074,6 +8074,7 @@ export default function App() {
       {editorState ? (
         <TaskEditor
           inlineTarget={embeddedFocusActive && editorState.task?.parentTaskId === focusedTask?.id ? fullscreenFocusTarget : null}
+          notesInlineTarget={embeddedFocusActive && fullscreenPanels.length === 2 && editorState.task?.parentTaskId === focusedTask?.id ? fullscreenFocusTarget : null}
           timelineTasks={timelinePickerTasks}
           task={editorState.task}
           subtasks={editorState.task?.id ? (subtaskMap[editorState.task.id] ?? []) : []}
@@ -8634,6 +8635,7 @@ export default function App() {
                   {isFocusedNotesEditorOpen ? (
                     <NotesEditor
                       value={focusedDraft.description ?? ''}
+                      inlineTarget={embeddedFocusActive && fullscreenPanels.length === 2 ? fullscreenFocusTarget : null}
                       onChange={(description) => setFocusedDraft((p) => ({ ...(p ?? {}), description }))}
                       onClose={() => setIsFocusedNotesEditorOpen(false)}
                     />

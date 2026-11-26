@@ -80,6 +80,7 @@ type Props = {
   }>;
   timeZone?: string;
   inlineTarget?: HTMLElement | null;
+  notesInlineTarget?: HTMLElement | null;
 };
 const MAX_AI_ATTACHMENTS = 3;
 const MAX_AI_ATTACHMENT_SIZE = 8 * 1024 * 1024;
@@ -324,6 +325,7 @@ export function TaskEditor({
   editorType,
   timeZone = "Europe/Moscow",
   inlineTarget,
+  notesInlineTarget,
 }: Props) {
   const isEditing = Boolean(task?.id);
   const isEventEditor = editorType === "event" || task?.taskType === "EVENT";
@@ -1125,6 +1127,7 @@ export function TaskEditor({
               {isNotesEditorOpen && !externalReadOnly ? (
                 <TaskNotesEditor
                   value={descriptionValue}
+                  inlineTarget={notesInlineTarget}
                   onChange={updateDescription}
                   onClose={() => setIsNotesEditorOpen(false)}
                 />
