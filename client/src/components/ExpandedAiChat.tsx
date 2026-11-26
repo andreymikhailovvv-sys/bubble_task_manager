@@ -11,6 +11,7 @@ import type { AiChatModel } from '../lib/types';
 import { AiReplyPreview, type AiReplyTarget } from './AiMessageReply';
 import { AiChatWelcome } from './AiChatWelcome';
 import { PlanikMascot } from './PlanikMascot';
+import type { CompletionProgress } from '../lib/completionStatistics';
 import { MascotWardrobeTrigger } from './MascotWardrobe';
 
 export type ExpandedAiChatThread = { id: string; title: string; messages: unknown[] };
@@ -31,6 +32,7 @@ type Props = {
   themeMode?: 'dark' | 'light';
   notificationCount?: number;
   celebrationKey?: number;
+  completion?: CompletionProgress;
   progress?: string;
   showPlanik?: boolean;
   planikSkinId?: string;
@@ -60,7 +62,7 @@ type Props = {
   onClearReply?: () => void;
 };
 
-export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, uploadProgress, messageCount, themeMode, notificationCount=0, celebrationKey=0, progress, showPlanik=false, planikSkinId='classic', onOpenWardrobe, onOpenCheckups, inlineTarget, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend, onLiveMessage, onLiveToolResult, onLiveStatus, readOnlyStructure=false, attachmentsEnabled=true, replyTo, onClearReply }: Props) {
+export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, uploadProgress, messageCount, themeMode, notificationCount=0, celebrationKey=0, completion, progress, showPlanik=false, planikSkinId='classic', onOpenWardrobe, onOpenCheckups, inlineTarget, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend, onLiveMessage, onLiveToolResult, onLiveStatus, readOnlyStructure=false, attachmentsEnabled=true, replyTo, onClearReply }: Props) {
   const [draft, setDraft] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [headerHidden, setHeaderHidden] = useState(false);
@@ -234,7 +236,7 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
             </div>
             <div className="ai-chat-expanded-bottom-spacer" aria-hidden="true" />
           </div>
-          {showPlanik ? <div className="planik-composer-float mascot-wardrobe-anchor"><PlanikMascot size="composer" notificationCount={notificationCount} busy={loading} progress={progress} celebrationKey={celebrationKey} skinId={planikSkinId} />{onOpenWardrobe&&<MascotWardrobeTrigger onClick={onOpenWardrobe}/>}</div> : null}
+          {showPlanik ? <div className="planik-composer-float mascot-wardrobe-anchor"><PlanikMascot size="composer" notificationCount={notificationCount} busy={loading} progress={progress} celebrationKey={celebrationKey} completion={completion} skinId={planikSkinId} />{onOpenWardrobe&&<MascotWardrobeTrigger onClick={onOpenWardrobe}/>}</div> : null}
           <div ref={composerRef} className="ai-chat-expanded-composer-wrap">
             {replyTo ? <AiReplyPreview target={replyTo} onDismiss={onClearReply} /> : null}
             {attachmentsEnabled&&<AiAttachmentTiles files={pendingFiles} onRemove={onRemoveFile} busy={loading} uploadProgress={uploadProgress} />}
@@ -247,7 +249,7 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
                 if (!event.ctrlKey && !event.metaKey && !event.altKey && (event.key.length === 1 || event.key === 'Backspace' || event.key === 'Delete')) {
                 }
                 if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); submit(); }
-              }} placeholder="Напишите сообщение…" />{attachmentsEnabled&&<input ref={fileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { onAddFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} />}{attachmentsEnabled&&<button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted" aria-label="Прикрепить файл" onClick={() => fileInputRef.current?.click()}><Paperclip size={17} /></button>}<VoiceInputButton liveContext={activeChat?.id ? { type: 'chat', projectId: activeProject?.id, chatId: activeChat.id, projectTitle: activeProject?.title, chatTitle: activeChat.title, model, history: (activeChat.messages as Array<{ id?: string; role?: string; content?: string }>).filter(item => (item.role === 'user' || item.role === 'assistant') && typeof item.content === 'string').map(item => ({ id: item.id || '', role: item.role as 'user' | 'assistant', content: item.content! })) } : undefined} onLiveMessage={onLiveMessage} onLiveToolResult={onLiveToolResult} onLiveStatus={onLiveStatus}
+              }} placeholder="Напишите сообщение…" />{attachmentsEnabled&&<input ref={fileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { onAddFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} />}{attachmentsEnabled&&<button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted" aria-label="Прикрепить файл" onClick={() => fileInputRef.current?.click()}><Paperclip size={17} /></button>}<VoiceInputButton activationMode="transcription" liveContext={activeChat?.id ? { type: 'chat', projectId: activeProject?.id, chatId: activeChat.id, projectTitle: activeProject?.title, chatTitle: activeChat.title, model, history: (activeChat.messages as Array<{ id?: string; role?: string; content?: string }>).filter(item => (item.role === 'user' || item.role === 'assistant') && typeof item.content === 'string').map(item => ({ id: item.id || '', role: item.role as 'user' | 'assistant', content: item.content! })) } : undefined} onLiveMessage={onLiveMessage} onLiveToolResult={onLiveToolResult} onLiveStatus={onLiveStatus}
    onLiveActionReveal={() => {
      nearBottomRef.current = true;
      const scrollToLatest = () => {

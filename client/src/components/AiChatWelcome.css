@@ -282,3 +282,10 @@
 @media (prefers-reduced-motion: reduce) {
   .ai-chat-welcome__learn { transition: none; }
 }
+
+/* Economage palette, scoped to the financial capability group. */
+.ai-capabilities-group--finance { --finance-accent: #f5c578; --finance-border: rgba(218,154,75,.30); --finance-card: #302b2d; --finance-icon: rgba(218,154,75,.16); }
+.ai-capabilities-overlay[data-ai-theme='light'] .ai-capabilities-group--finance { --finance-accent: #89501c; --finance-border: #e7cba4; --finance-card: #fff8ec; --finance-icon: #f8e8ce; }
+.ai-capabilities-group--finance h3 { color: var(--finance-accent); }
+.ai-capabilities-group--finance .ai-capabilities-item { background: var(--finance-card); border-color: var(--finance-border); }
+.ai-capabilities-group--finance .ai-capabilities-item__icon { color: var(--finance-accent); background: var(--finance-icon); }

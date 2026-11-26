@@ -10,7 +10,7 @@ test('last-subtask confirmation offers the same completion report as ordinary ta
   assert.match(app, /maybeOfferTaskCompletionReport\(task\);/);
   const confirmation = app.slice(app.indexOf("const shouldCloseParent = window.confirm("), app.indexOf('  const handleSubtaskCommentContextMenu'));
   assert.match(confirmation, /await api\.updateTask\(subtask\.parentTaskId, \{ status: 'DONE' \}\)/);
-  assert.match(confirmation, /if \(completedParent\) maybeOfferTaskCompletionReport\(completedParent\);/);
+  assert.match(confirmation, /if \(completedParent\) \{ celebrateCompletedTask\(completedParent\); maybeOfferTaskCompletionReport\(completedParent\); \}/);
   assert.match(app, /currentUser\?\.offerTaskCompletionReport !== false/);
 });
 

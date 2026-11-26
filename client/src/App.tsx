@@ -64,6 +64,7 @@ import { useSubscriptionPurchase } from './lib/useSubscriptionPurchase';
 import { ExpandedAiChat } from './components/ExpandedAiChat';
 import { QuickAiLauncherFrame } from './components/QuickAiLauncherFrame';
 import { PlanikMascot } from './components/PlanikMascot';
+import { completionProgress, type CompletionProgress } from './lib/completionStatistics';
 import { BasicPlanikTraining } from './components/BasicPlanikTraining';
 import { TelegramAiAssistantSettings } from './components/TelegramAiAssistantSettings';
 import { MailAssistantSettings } from './components/MailAssistantSettings';
@@ -859,6 +860,8 @@ export default function App() {
   const [initialWorkspaceReady, setInitialWorkspaceReady] = useState(false);
   const [spheres, setSpheres] = useState<Sphere[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const completionTasksRef = useRef(tasks);
+  completionTasksRef.current = tasks;
   const [unlinkingBubbleTaskId, setUnlinkingBubbleTaskId] = useState<string | null>(null);
   const [mode, setMode] = useState<'global' | 'sectors'>('sectors');
   // Distraction-free viewport for bubbles. Keeps the same BubbleField instance,
@@ -1331,6 +1334,15 @@ export default function App() {
   const [aiChatUploadProgress, setAiChatUploadProgress] = useState<number | null>(null);
   const [quickAiChatDraft, setQuickAiChatDraft] = useState('');
   const [planikCelebrationKey, setPlanikCelebrationKey] = useState(0);
+  const [planikCompletionQueue, setPlanikCompletionQueue] = useState<CompletionProgress[]>([]);
+  const planikCompletion = planikCompletionQueue[0];
+  const completionSequence = useRef(0);
+  useEffect(() => {
+    if (!planikCompletion) return;
+    setPlanikCelebrationKey(key => key + 1);
+    const timer = window.setTimeout(() => setPlanikCompletionQueue(queue => queue.slice(1)), 3600);
+    return () => window.clearTimeout(timer);
+  }, [planikCompletion]);
   const [quickAiPendingFiles, setQuickAiPendingFiles] = useState<File[]>([]);
   const [quickAiChatLoading, setQuickAiChatLoading] = useState(false);
   const [quickAiPreviewHovered, setQuickAiPreviewHovered] = useState(false);
@@ -4503,6 +4515,13 @@ export default function App() {
     }
   };
 
+  const celebrateCompletedTask = (task: Task) => {
+    const progress = completionProgress(completionTasksRef.current, task, userTimeZone, new Date(), ++completionSequence.current);
+    completionTasksRef.current = completionTasksRef.current.map(item => item.id === task.id ? { ...item, status: 'DONE' as const } : item);
+    setTasks(current => current.map(item => item.id === task.id ? { ...item, status: 'DONE' as const } : item));
+    if (progress) setPlanikCompletionQueue(queue => [...queue, progress]);
+  };
+
   const completeTask = async (task: Task, scope?: 'me' | 'all') => {
     if (closingTaskIds.includes(task.id)) return;
     if (task.isCollaborative && task.collaborationOwner && !scope) {
@@ -4517,10 +4536,7 @@ export default function App() {
       await new Promise((resolve) => setTimeout(resolve, 680));
       await api.updateTask(task.id, { status: 'DONE', collaborationScope: scope ?? 'me' });
       // A successful update is final even if refreshing the workspace is slow.
-      setTasks((current) => current.map((item) =>
-        item.id === task.id ? { ...item, status: 'DONE' as const } : item
-      ));
-      setPlanikCelebrationKey((key) => key + 1);
+      celebrateCompletedTask(task);
       void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneTask, 'task');
       if (isFocusBonusEligible(task.id)) pushFocusBonusMessage('task', EFFICIENCY_BONUSES.doneTask * (FOCUS_BONUS_MULTIPLIERS.task - 1));
       setEditorState((current) => current?.task?.id === task.id ? null : current);
@@ -4601,7 +4617,7 @@ export default function App() {
     }
     await api.updateTask(subtask.id, { status: nextStatus });
     if (nextStatus === 'DONE') {
-      setPlanikCelebrationKey((key) => key + 1);
+      celebrateCompletedTask(subtask);
       void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneSubtask, 'task');
       if (isFocusBonusEligible(subtask.parentTaskId)) pushFocusBonusMessage('subtask', EFFICIENCY_BONUSES.doneSubtask * (FOCUS_BONUS_MULTIPLIERS.subtask - 1));
     }
@@ -4616,7 +4632,7 @@ export default function App() {
           // Still show the same report proposal after server-confirmed completion.
           const completedParent = tasks.find(task => task.id === subtask.parentTaskId)
             ?? (await api.getTasks()).find(task => task.id === subtask.parentTaskId);
-          if (completedParent) maybeOfferTaskCompletionReport(completedParent);
+          if (completedParent) { celebrateCompletedTask(completedParent); maybeOfferTaskCompletionReport(completedParent); }
           if (focusedTaskId === subtask.parentTaskId) {
             setFocusedTaskId(null);
             setFocusedDraft(null);
@@ -7316,7 +7332,7 @@ export default function App() {
               {replyToFocusAi ? <AiReplyPreview target={replyToFocusAi} onDismiss={() => setReplyToFocusAi(null)} /> : null}
               {renderTaskAiRecipientPicker(focusActiveTask)}
 <AiAttachmentTiles files={focusAiPendingFiles} onRemove={(file) => removeFocusAiPendingFile(file.name)} busy={focusAiLoading} uploadProgress={focusAiUploadProgress} />
-              <div className="ai-chat-composer mt-3 flex items-end gap-2 rounded-3xl border p-2"><AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); addFocusAiClipboardImages(files); } }} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder="Напишите сообщение…" disabled={focusAiLoading} /><input ref={focusAiFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} /><button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={focusAiLoading} onClick={() => focusAiFileInputRef.current?.click()}><Paperclip size={16} /></button><VoiceInputButton liveContext={focusActiveTask ? { type: 'task', taskId: focusActiveTask.id, model: focusTaskAiModel } : undefined}
+              <div className="ai-chat-composer mt-3 flex items-end gap-2 rounded-3xl border p-2"><AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); addFocusAiClipboardImages(files); } }} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder="Напишите сообщение…" disabled={focusAiLoading} /><input ref={focusAiFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} /><button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={focusAiLoading} onClick={() => focusAiFileInputRef.current?.click()}><Paperclip size={16} /></button><VoiceInputButton activationMode="transcription" liveContext={focusActiveTask ? { type: 'task', taskId: focusActiveTask.id, model: focusTaskAiModel } : undefined}
     onLiveMessage={event => focusActiveTask && appendLiveTaskMessage(focusActiveTask.id, event)}
     onLiveToolResult={event => focusActiveTask && applyLiveTaskTool(focusActiveTask.id, event)}
     onLiveStatus={status => focusActiveTask && updateLiveTaskStatus(focusActiveTask.id, status)} disabled={focusAiLoading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
@@ -7388,7 +7404,7 @@ export default function App() {
               <AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); addFocusAiClipboardImages(files); } }} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder="Напишите сообщение…" disabled={focusAiLoading} />
               <input ref={focusAiExpandedFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} />
               <button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={focusAiLoading} onClick={() => focusAiExpandedFileInputRef.current?.click()}><Paperclip size={16} /></button>
-              <VoiceInputButton liveContext={focusActiveTask ? { type: 'task', taskId: focusActiveTask.id, model: focusTaskAiModel } : undefined}
+              <VoiceInputButton activationMode="transcription" liveContext={focusActiveTask ? { type: 'task', taskId: focusActiveTask.id, model: focusTaskAiModel } : undefined}
     onLiveMessage={event => focusActiveTask && appendLiveTaskMessage(focusActiveTask.id, event)}
     onLiveToolResult={event => focusActiveTask && applyLiveTaskTool(focusActiveTask.id, event)}
     onLiveStatus={status => focusActiveTask && updateLiveTaskStatus(focusActiveTask.id, status)} disabled={focusAiLoading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
@@ -8583,7 +8599,7 @@ export default function App() {
                 >
                   <Paperclip size={16} />
                 </button>
-                <VoiceInputButton liveContext={{ type: 'task', taskId: focusedTask.id, model: focusedAiModel }}
+                <VoiceInputButton activationMode="transcription" liveContext={{ type: 'task', taskId: focusedTask.id, model: focusedAiModel }}
     onLiveMessage={event => appendLiveTaskMessage(focusedTask.id, event)}
     onLiveToolResult={event => applyLiveTaskTool(focusedTask.id, event)}
     onLiveStatus={status => updateLiveTaskStatus(focusedTask.id, status)} disabled={aiLoadingTaskId === focusedTask.id} className="focused-task-ai-attach-button" onTranscript={(text, immediate) => {
@@ -9393,7 +9409,7 @@ export default function App() {
               <AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm leading-relaxed focus:ring-0" placeholder="Напишите сообщение…" value={aiDraft} onChange={(event) => setAiDraft(event.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); addFocusedAiFiles(files); } }} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusedAiQuestion(); } }} />
               <input ref={expandedAiFileInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={handleAiFileSelect} />
               <button className="focused-task-ai-attach-button inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40" type="button" title={getTaskAiRecipientId(focusedTask) === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'} disabled={getTaskAiRecipientId(focusedTask) !== 'ai'} onClick={() => expandedAiFileInputRef.current?.click()}><Paperclip size={16} /></button>
-              <VoiceInputButton liveContext={{ type: 'task', taskId: focusedTask.id, model: focusedAiModel }}
+              <VoiceInputButton activationMode="transcription" liveContext={{ type: 'task', taskId: focusedTask.id, model: focusedAiModel }}
     onLiveMessage={event => appendLiveTaskMessage(focusedTask.id, event)}
     onLiveToolResult={event => applyLiveTaskTool(focusedTask.id, event)}
     onLiveStatus={status => updateLiveTaskStatus(focusedTask.id, status)} disabled={aiLoadingTaskId === focusedTask.id} className="surface-muted text-muted" onTranscript={(text, immediate) => {
@@ -9693,7 +9709,7 @@ export default function App() {
               <AutoGrowingTextarea maxHeight={144} className="form-field min-h-9 min-w-0 flex-1 resize-none rounded-2xl border px-3 py-2 text-sm leading-5 transition focus:ring-2 focus:ring-violet-300" value={quickAiChatDraft} onChange={(e) => setQuickAiChatDraft(e.target.value)} onPaste={(event) => { const files = clipboardImageFiles(event.clipboardData); if (files.length) { event.preventDefault(); setQuickAiPendingFiles(previous => [...previous, ...files].slice(0, MAX_AI_ATTACHMENTS)); } }} onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void sendAiChatQuestion(true); }
               }} placeholder="Спросить быстро…" />
-              <VoiceInputButton liveContext={{ type: 'chat', projectId: aiChatProjects[0]?.id, chatId: QUICK_AI_CHAT_ID, projectTitle: aiChatProjects[0]?.title, chatTitle: 'Быстрые запросы', model: quickAiChatModel }}
+              <VoiceInputButton activationMode="transcription" liveContext={{ type: 'chat', projectId: aiChatProjects[0]?.id, chatId: QUICK_AI_CHAT_ID, projectTitle: aiChatProjects[0]?.title, chatTitle: 'Быстрые запросы', model: quickAiChatModel }}
     onLiveMessage={event => aiChatProjects[0] && appendLiveProjectMessage(aiChatProjects[0].id, QUICK_AI_CHAT_ID, event)}
     onLiveToolResult={event => aiChatProjects[0] && applyLiveProjectTool(aiChatProjects[0].id, QUICK_AI_CHAT_ID, event)}
     onLiveStatus={status => aiChatProjects[0] && updateLiveChatStatus(aiChatProjects[0].id, QUICK_AI_CHAT_ID, status)} small disabled={quickAiChatLoading} className="surface-muted text-muted" onTranscript={(text, immediate) => {
@@ -9711,7 +9727,7 @@ export default function App() {
           aria-label="Открыть общий чат с ИИ"
           onClick={() => { if (guidedStep === "ai-open-chat") { setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); advanceAdvancedTraining(); return; } if (hasGeneralAiPane && !mascotSurface.modal) { fullscreenChatTarget?.querySelector<HTMLTextAreaElement>('textarea')?.focus(); return; } setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}
         >
-          <PlanikMascot notificationCount={unreadSystemNotificationCount} busy={quickAiChatLoading || aiChatLoading || Boolean(aiLoadingTaskId) || focusAiLoading} progress={focusAiLoading ? focusAiProgress : aiLoadingTaskId ? aiProgressByTask[aiLoadingTaskId] : aiChatProgress} celebrationKey={planikCelebrationKey} skinId={wardrobe.selected('planner')} arrivalKey={mascotSurface.arrivalKey} />
+          <PlanikMascot notificationCount={unreadSystemNotificationCount} busy={quickAiChatLoading || aiChatLoading || Boolean(aiLoadingTaskId) || focusAiLoading} progress={focusAiLoading ? focusAiProgress : aiLoadingTaskId ? aiProgressByTask[aiLoadingTaskId] : aiChatProgress} celebrationKey={planikCelebrationKey} completion={planikCompletion} skinId={wardrobe.selected('planner')} arrivalKey={mascotSurface.arrivalKey} />
         </button>
         {currentUser&&<MascotWardrobeTrigger onClick={wardrobe.show}/>}
         </div>
@@ -9837,7 +9853,7 @@ export default function App() {
           messageCount={activeAiChat?.messages.length ?? 0}
           themeMode={effectiveThemeMode}
           notificationCount={unreadSystemNotificationCount}
-          celebrationKey={planikCelebrationKey}
+          celebrationKey={planikCelebrationKey} completion={planikCompletion}
           progress={aiChatProgress}
           onOpenCheckups={() => {
             setIsAiChatOpen(false);
