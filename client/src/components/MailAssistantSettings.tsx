@@ -23,6 +23,15 @@ const accountTitle = (account: MailAccount) => (account.provider === 'yandex' ? 
 
 export function MailAssistantSettings({ onClose, trainingSection }: { onClose: () => void; trainingSection?: string }) {
   const training = trainingSection !== undefined;
+  useEffect(() => {
+    if (!training) return;
+    // The accordion is normally uncontrolled and initially closed.
+    // Only the isolated tutorial profile opens the section being explained.
+    const root = document.querySelector('[data-guided-assistant="mail"]');
+    root?.querySelectorAll<HTMLDetailsElement>('details.telegram-ai-settings-section').forEach(section => {
+      section.open = section.classList.contains('telegram-ai-settings-section--' + trainingSection);
+    });
+  }, [training, trainingSection]);
   const [accounts, setAccounts] = useState<MailAccount[]>(() => training ? [{ ...defaultSettings, enabled: false, id: 'training-mail', provider: 'yandex', email: 'demo@example.invalid', sentFolder: null, lastCheckedAt: null, nextCheckAt: null, manualDigestRequestedAt: null, lastSummaryAt: null, lastSummary: null, spentTodayMilli: 0, totalSpentMilli: 0, lastError: null, processedCount: 0, createdAt: '' }] : []);
   const [available, setAvailable] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(training ? 'training-mail' : null);
@@ -262,7 +271,7 @@ export function MailAssistantSettings({ onClose, trainingSection }: { onClose: (
                   </details>}
                 </div>
                 <form onSubmit={save} className="space-y-3">
-                  <details key={selected.id+'-reply'} open={training ? trainingSection === 'conversation' : undefined} className="telegram-ai-settings-section telegram-ai-settings-section--conversation">
+                  <details key={selected.id+'-reply'} className="telegram-ai-settings-section telegram-ai-settings-section--conversation">
                     <summary className="telegram-ai-settings-section__header">
                       <span className="telegram-ai-settings-section__number">1</span><span className="telegram-ai-settings-section__header-copy"><span className="telegram-ai-settings-section__title">Ответы на письма</span><span className="telegram-ai-settings-section__description">Когда ассистент предлагает ответы или отправляет их автоматически</span></span>
                       <ChevronDown size={19} className="telegram-ai-settings-section__chevron"/>
@@ -293,7 +302,7 @@ export function MailAssistantSettings({ onClose, trainingSection }: { onClose: (
                       </div>}
                     </div>
                   </details>
-                  <details key={selected.id+'-tasks'} open={training ? trainingSection === 'tasks' : undefined} className="telegram-ai-settings-section telegram-ai-settings-section--tasks">
+                  <details key={selected.id+'-tasks'} className="telegram-ai-settings-section telegram-ai-settings-section--tasks">
                     <summary className="telegram-ai-settings-section__header"><span className="telegram-ai-settings-section__number">2</span>
                       <span className="telegram-ai-settings-section__header-copy"><span className="telegram-ai-settings-section__title">Добавление задач</span><span className="telegram-ai-settings-section__description">Предложения, автосоздание и частота проверки поручений</span></span>
                       <ChevronDown size={19} className="telegram-ai-settings-section__chevron"/>
@@ -314,7 +323,7 @@ export function MailAssistantSettings({ onClose, trainingSection }: { onClose: (
                       </>}
                     </div>
                   </details>
-                  <details key={selected.id+'-summaries'} open={training ? trainingSection === 'summaries' : undefined} className="telegram-ai-settings-section telegram-ai-settings-section--summaries">
+                  <details key={selected.id+'-summaries'} className="telegram-ai-settings-section telegram-ai-settings-section--summaries">
                     <summary className="telegram-ai-settings-section__header"><span className="telegram-ai-settings-section__number">3</span>
                       <span className="telegram-ai-settings-section__header-copy"><span className="telegram-ai-settings-section__title">Частота сводок</span><span className="telegram-ai-settings-section__description">Когда собирать итоги переписки и что в них включать</span></span>
                       <ChevronDown size={19} className="telegram-ai-settings-section__chevron"/>
@@ -330,7 +339,7 @@ export function MailAssistantSettings({ onClose, trainingSection }: { onClose: (
                         </label>}
                     </div>
                   </details>
-                  <details key={selected.id+'-general'} open={training ? trainingSection === 'general' : undefined} className="telegram-ai-settings-section telegram-ai-settings-section--general">
+                  <details key={selected.id+'-general'} className="telegram-ai-settings-section telegram-ai-settings-section--general">
                     <summary className="telegram-ai-settings-section__header"><span className="telegram-ai-settings-section__number">4</span>
                       <span className="telegram-ai-settings-section__header-copy"><span className="telegram-ai-settings-section__title">Общие параметры</span><span className="telegram-ai-settings-section__description">Модель ИИ, дневной предел кредитов и уведомления</span></span>
                       <ChevronDown size={19} className="telegram-ai-settings-section__chevron"/>

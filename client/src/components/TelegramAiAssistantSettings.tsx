@@ -215,6 +215,15 @@ export function CreditLimitSlider({ value, onChange }: { value: number | null; o
 
 export function TelegramAiAssistantSettings({ onClose, trainingSection }: Props) {
   const training = trainingSection !== undefined;
+  useEffect(() => {
+    if (!training) return;
+    // The accordion is normally uncontrolled and initially closed.
+    // Only the isolated tutorial profile opens the section being explained.
+    const root = document.querySelector('[data-guided-assistant="telegram"]');
+    root?.querySelectorAll<HTMLDetailsElement>('details.telegram-ai-settings-section').forEach(section => {
+      section.open = section.classList.contains('telegram-ai-settings-section--' + trainingSection);
+    });
+  }, [training, trainingSection]);
   const [policies, setPolicies] = useState<TelegramAiChatPolicy[]>(() => training ? [{ ...DEFAULTS, id: 'training-chat', userId: 'training', chatId: 'training-chat', chatKind: 'group', chatTitle: 'Учебная переписка · Проект', isEnabled: false, historyImportCursor: null, historyImportedCount: 0, spentTodayMilli: 0, reservedTodayMilli: 0, totalSpentMilli: 0, lastCheckedAt: null, lastSummaryAt: null, lastSummary: null, lastError: null, nextCheckAt: null, createdAt: '', updatedAt: '' }] : []);
   const [capability, setCapability] = useState<TelegramChatCapability | null>(training ? { connected: true, readEnabled: true, analyzeEnabled: true, sendEnabled: true } : null);
   const [available, setAvailable] = useState<TelegramSendTargetList | null>(null);
@@ -509,7 +518,7 @@ export function TelegramAiAssistantSettings({ onClose, trainingSection }: Props)
                       )}
                     </div>
                   )}
-                  <details key={`${selectedId}-conversation`} open={training ? trainingSection === 'conversation' : undefined} className="telegram-ai-settings-section telegram-ai-settings-section--conversation" aria-label="Настройки участия в переписке">
+                  <details key={`${selectedId}-conversation`} className="telegram-ai-settings-section telegram-ai-settings-section--conversation" aria-label="Настройки участия в переписке">
                     <summary className="telegram-ai-settings-section__header">
                       <span className="telegram-ai-settings-section__number" aria-hidden="true">1</span>
                       <span className="telegram-ai-settings-section__header-copy">
@@ -572,7 +581,7 @@ export function TelegramAiAssistantSettings({ onClose, trainingSection }: Props)
                   )}
                     </div>
                   </details>
-                  <details key={`${selectedId}-tasks`} open={training ? trainingSection === 'tasks' : undefined} className="telegram-ai-settings-section telegram-ai-settings-section--tasks" aria-label="Настройки добавления задач">
+                  <details key={`${selectedId}-tasks`} className="telegram-ai-settings-section telegram-ai-settings-section--tasks" aria-label="Настройки добавления задач">
                     <summary className="telegram-ai-settings-section__header">
                       <span className="telegram-ai-settings-section__number" aria-hidden="true">2</span>
                       <span className="telegram-ai-settings-section__header-copy">
@@ -611,7 +620,7 @@ export function TelegramAiAssistantSettings({ onClose, trainingSection }: Props)
                   )}
                     </div>
                   </details>
-                  <details key={`${selectedId}-summaries`} open={training ? trainingSection === 'summaries' : undefined} className="telegram-ai-settings-section telegram-ai-settings-section--summaries" aria-label="Настройки сводок">
+                  <details key={`${selectedId}-summaries`} className="telegram-ai-settings-section telegram-ai-settings-section--summaries" aria-label="Настройки сводок">
                     <summary className="telegram-ai-settings-section__header">
                       <span className="telegram-ai-settings-section__number" aria-hidden="true">3</span>
                       <span className="telegram-ai-settings-section__header-copy">
@@ -636,7 +645,7 @@ export function TelegramAiAssistantSettings({ onClose, trainingSection }: Props)
                   )}
                     </div>
                   </details>
-                  <details key={`${selectedId}-general`} open={training ? trainingSection === 'general' : undefined} className="telegram-ai-settings-section telegram-ai-settings-section--general" aria-label="Общие параметры ассистента">
+                  <details key={`${selectedId}-general`} className="telegram-ai-settings-section telegram-ai-settings-section--general" aria-label="Общие параметры ассистента">
                     <summary className="telegram-ai-settings-section__header">
                       <span className="telegram-ai-settings-section__number" aria-hidden="true">4</span>
                       <span className="telegram-ai-settings-section__header-copy">
