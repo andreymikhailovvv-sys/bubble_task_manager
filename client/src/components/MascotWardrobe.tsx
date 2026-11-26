@@ -96,7 +96,7 @@ export function MascotWardrobeTrigger({onClick}:{onClick:()=>void}) {
     }}><Shirt size={12}/>Аксессуары и скины</button>;
 }
 const tier=(rank:number)=>rank===3?'Максимум':rank===2?'Про':'Бесплатно';
-export function MascotWardrobeDialog({wardrobe,variant:initialVariant,theme}:{wardrobe:MascotWardrobeController;variant:MascotVariant;theme:'light'|'dark'}) {
+export function MascotWardrobeDialog({wardrobe,variant:initialVariant,theme,training}:{wardrobe:MascotWardrobeController;variant:MascotVariant;theme:'light'|'dark';training?: {skin?:string;onSkin:()=>void;onAnimation:()=>void}}) {
   const [variant,setVariant]=useState(initialVariant);
   const dialog=useRef<HTMLDialogElement>(null);
   const titleId=useId();
@@ -115,7 +115,7 @@ export function MascotWardrobeDialog({wardrobe,variant:initialVariant,theme}:{wa
     const element=dialog.current;
     if(!element)return;
     const previous=document.activeElement as HTMLElement|null;
-    element.showModal();
+    if(training) element.show(); else element.showModal();
     return()=>{if(element.open)element.close();previous?.focus({preventScroll:true});};
   },[]);
   useEffect(()=>()=>timers.current.forEach(id=>window.clearTimeout(id)),[]);
@@ -123,6 +123,7 @@ export function MascotWardrobeDialog({wardrobe,variant:initialVariant,theme}:{wa
     if(id===selected||saving)return;
     timers.current.forEach(timer=>window.clearTimeout(timer));timers.current=[];
     setSelected(id);setSaveError('');setPreviewMode('idle');
+    training?.onSkin();
     if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){setDisplayed(id);setPhase('idle');return;}
     setPhase('leaving');
     timers.current.push(window.setTimeout(()=>{
@@ -130,6 +131,7 @@ export function MascotWardrobeDialog({wardrobe,variant:initialVariant,theme}:{wa
       timers.current.push(window.setTimeout(()=>setPhase('idle'),id==='pirate'||id==='banker'?1600:560));
     },220));
   };
+  useEffect(()=>{ if(training?.skin) select(training.skin); },[training?.skin]);
   const switchVariant=(next:MascotVariant)=>{
     if(next===variant||saving)return;
     timers.current.forEach(timer=>window.clearTimeout(timer));timers.current=[];
@@ -159,13 +161,13 @@ export function MascotWardrobeDialog({wardrobe,variant:initialVariant,theme}:{wa
   const specialModes: Exclude<PlanikMode,'showcase'>[] = variant==='economic'?['idle','hover','income','expense']:selected==='cat'?['idle']:selected==='banker'?['typing','hover']:['wizard','pirate','space','ninja','king'].includes(selected)?['idle','hover']:['northern','zoomer'].includes(selected)?['idle','hover']:[];
   const isEquipped=selected===wardrobe.selected(variant);
   const equip=async()=>{
-    if(!allowed||isEquipped||saving)return;
+    if(training||!allowed||isEquipped||saving)return;
     setSaving(true);setSaveError('');
     try {await wardrobe.save(variant,selected);}
     catch(cause){setSaveError(cause instanceof Error?cause.message:'Не удалось сохранить образ.');void wardrobe.refresh();}
     finally{setSaving(false);}
   };
-  return createPortal(<dialog ref={dialog} className="mascot-wardrobe-dialog" data-theme={theme} aria-labelledby={titleId}
+  return createPortal(<dialog ref={dialog} className="mascot-wardrobe-dialog" data-guided-wardrobe={training ? "true" : undefined} data-theme={theme} aria-labelledby={titleId}
     onCancel={event=>{event.preventDefault();closeRef.current();}} onClick={event=>{if(event.target===event.currentTarget)close();}}>
     <section className="mascot-wardrobe-shell">
       <header className="mascot-wardrobe-header"><div><span className="mascot-wardrobe-kicker">ГАРДЕРОБ · {variant==='planner'?'ПЛАНИК':'ЭКОНОМЫЧ'}</span><h2 id={titleId}>Аксессуары и скины</h2><p>Примеряйте любые образы и выбирайте свой стиль.</p></div><button type="button" className="mascot-wardrobe-close" onClick={close} aria-label="Закрыть гардероб"><X size={20}/></button></header>
@@ -192,12 +194,12 @@ export function MascotWardrobeDialog({wardrobe,variant:initialVariant,theme}:{wa
           {specialModes.length>0&&<div className="mascot-wardrobe-animations" aria-label="Особые анимации">
             <span>Особые анимации:</span>
             <div>{specialModes.map(mode=>{
-              return <button key={mode} type="button" aria-pressed={previewMode===mode} disabled={phase==='leaving'||phase==='entering'} onClick={()=>{setPreviewMode(mode);setReplay(v=>v+1);}}>{mode==='idle'?'Ожидание':mode==='hover'?'Наведение курсора':mode==='typing'?'Формирует ответ':mode==='income'?'Запись дохода':mode==='expense'?'Запись расхода':'Думает'}</button>;
+              return <button key={mode} type="button" aria-pressed={previewMode===mode} disabled={phase==='leaving'||phase==='entering'} onClick={()=>{setPreviewMode(mode);setReplay(v=>v+1);training?.onAnimation();}}>{mode==='idle'?'Ожидание':mode==='hover'?'Наведение курсора':mode==='typing'?'Формирует ответ':mode==='income'?'Запись дохода':mode==='expense'?'Запись расхода':'Думает'}</button>;
             })}</div>
           </div>}
           <div className="mascot-wardrobe-actions">
-            <button type="button" className="mascot-wardrobe-apply" disabled={!allowed||isEquipped||saving||phase==='leaving'||phase==='entering'} onClick={()=>void equip()}>{saving?'Сохраняем…':!allowed&&skin?<><LockKeyhole size={15}/>Тариф «{tier(skin.rank)}»</>:isEquipped?<><Check size={16}/>Уже выбран</>:'Применить образ'}</button>
-            <p role={saveError?'alert':undefined}>{saveError||(!allowed&&skin?'Примерка доступна всем. Для применения нужна подписка.':'Выбор сохраняется в вашем аккаунте.')}</p>
+            <button type="button" className="mascot-wardrobe-apply" disabled={Boolean(training)||!allowed||isEquipped||saving||phase==='leaving'||phase==='entering'} onClick={()=>void equip()}>{saving?'Сохраняем…':!allowed&&skin?<><LockKeyhole size={15}/>Тариф «{tier(skin.rank)}»</>:isEquipped?<><Check size={16}/>Уже выбран</>:'Применить образ'}</button>
+            <p role={saveError?'alert':undefined}>{training?'Учебная примерка — образ не сохраняется.':saveError||(!allowed&&skin?'Примерка доступна всем. Для применения нужна подписка.':'Выбор сохраняется в вашем аккаунте.')}</p>
           </div>
         </div>
       </div>

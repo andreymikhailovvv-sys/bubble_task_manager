@@ -50,3 +50,12 @@ body:has([data-training-step^="feature-skins"]) .mascot-wardrobe-trigger{opacity
 .basic-planik-practice button:disabled{opacity:.45;cursor:default}
 .basic-planik-practice-options{display:flex;gap:5px;flex-wrap:wrap}
 .basic-planik-practice button:focus-visible,.basic-planik-practice :is(textarea,input,select):focus-visible{outline:2px solid var(--training-accent);outline-offset:1px}
+
+/* Reveal the actual launcher only when the lesson points to it. Keep the
+   wardrobe's own preview visible, instead of showing a second guide mascot. */
+body:has([data-training-step="ai-open-chat"],[data-training-step="feature-skins-intro"]) .planik-launcher-button .planik-mascot{visibility:visible!important;pointer-events:auto!important}
+body:has([data-training-step="feature-skins-intro"]) .mascot-wardrobe-trigger{visibility:visible!important;opacity:1!important}
+body:has([data-basic-training-overlay]) .mascot-wardrobe-dialog[data-guided-wardrobe] .planik-mascot{visibility:visible!important}
+.mascot-wardrobe-dialog[data-guided-wardrobe]{position:fixed!important;z-index:2390!important;inset:0!important;margin:auto!important}
+body:has(.mascot-wardrobe-dialog[data-guided-wardrobe][open]) .basic-planik-character{display:none}
+body:has(.mascot-wardrobe-dialog[data-guided-wardrobe][open]) .basic-planik-speech::before{display:none}
