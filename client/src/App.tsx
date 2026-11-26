@@ -1024,12 +1024,21 @@ export default function App() {
   const guidedStep = advancedTraining?.step;
   const [guidedFocusSelected, setGuidedFocusSelected] = useState<string[]>([]);
   const [guidedFocusMinutes, setGuidedFocusMinutes] = useState(25);
+  const [guidedFocusDeadline, setGuidedFocusDeadline] = useState<number | null>(null);
+  const [guidedFocusRemaining, setGuidedFocusRemaining] = useState(25 * 60);
   const [guidedFocusIndex, setGuidedFocusIndex] = useState(0);
   const guidedFocusCandidates = useMemo(() => createTrainingTasks().filter(task => !task.parentTaskId), []);
   const guidedFocusTasks = guidedFocusCandidates.filter(task => guidedFocusSelected.includes(task.id));
   const guidedFocusTask: Task | undefined = guidedFocusTasks[guidedFocusIndex] ?? guidedFocusTasks[0];
   const guidedFocusSetup = guidedStep === 'feature-focus-setup';
   const guidedFocusMode = guidedStep === 'feature-focus-timer' || guidedStep === 'feature-focus-task';
+  useEffect(() => {
+    if (!guidedFocusMode || guidedFocusDeadline === null) return;
+    const update = () => setGuidedFocusRemaining(Math.max(0, Math.ceil((guidedFocusDeadline - Date.now()) / 1000)));
+    update();
+    const interval = window.setInterval(update, 150);
+    return () => window.clearInterval(interval);
+  }, [guidedFocusMode, guidedFocusDeadline]);
   const guidedWardrobe = Boolean(guidedStep && ['feature-skins-preview','feature-skins-space','feature-skins-practice'].includes(guidedStep));
   const [guidedSkinChanged, setGuidedSkinChanged] = useState(false);
   const [guidedAnimationPlayed, setGuidedAnimationPlayed] = useState(false);
@@ -5793,7 +5802,8 @@ export default function App() {
     const surface = config.surface;
     const allowedSurfaces = [...AI_TOUR_STEPS, ...FEATURE_TOUR_STEPS].map(item => item.id as string);
     setActiveTourStep(surface && allowedSurfaces.includes(surface) && surface !== 'feature-telegram-qr' ? surface as AiTourStep | FeatureTourStep : null);
-    if (config.id === 'feature-focus-setup') { setGuidedFocusSelected([]); setGuidedFocusMinutes(25); setGuidedFocusIndex(0); }
+    if (config.id === 'feature-focus-setup') { setGuidedFocusSelected([]); setGuidedFocusMinutes(25); setGuidedFocusRemaining(25 * 60); setGuidedFocusDeadline(null); setGuidedFocusIndex(0); }
+    if (config.id !== 'feature-focus-timer' && config.id !== 'feature-focus-task') setGuidedFocusDeadline(null);
     if (config.id === 'feature-skins-preview') wardrobe.show();
     if (config.id === 'feature-skins-practice') { setGuidedSkinChanged(false); setGuidedAnimationPlayed(false); }
     if (config.id === 'feature-done') wardrobe.close();
@@ -5811,6 +5821,7 @@ export default function App() {
   const finishAdvancedTraining = () => {
     if (guidedWardrobe) wardrobe.close();
     setGuidedFocusSelected([]);
+    setGuidedFocusDeadline(null);
     setAdvancedTraining(null);
     finishTaskTour();
   };
@@ -5831,14 +5842,15 @@ export default function App() {
   const shownFocusTasks = guidedFocusMode ? guidedFocusTasks : focusTasks;
   const shownFocusIndex = guidedFocusMode ? guidedFocusIndex : focusActiveIndex;
   const shownFocusMinutes = guidedFocusMode ? guidedFocusMinutes : focusTimerMinutes;
-  const shownFocusRemaining = guidedFocusMode ? guidedFocusMinutes * 60 : focusRemainingSeconds;
-  const shownFocusRunning = !guidedFocusMode && isFocusTimerRunning;
+  const shownFocusRemaining = guidedFocusMode ? guidedFocusRemaining : focusRemainingSeconds;
+  const shownFocusRunning = guidedFocusMode ? guidedFocusDeadline !== null && guidedFocusRemaining > 0 : isFocusTimerRunning;
   const shownFocusAiDialog = guidedFocusMode ? [] : focusTaskAiDialog;
   const isTourAddMenuOpen = basicStep === 'block' || activeTourStep === 'create-task' || activeTourStep === 'create-event' || activeTourStep === 'create-sector';
   const forceQuickAiPreviewOpen = activeTourStep === 'quick-ai' || activeTourStep === 'ai-quick-chat';
-  const integrationTourKind = advancedTraining && ['feature-telegram-button', 'feature-telegram-qr'].includes(advancedTraining.step) ? 'bot' : basicStep === 'integrations' ? 'bot' : basicStep === 'android' ? 'android' : activeTourStep === 'feature-integration-send' ? 'messages'
+  const openGuidedIntegration = guidedStep === 'feature-open-telegram-assistant' ? 'assistant' : guidedStep === 'feature-open-mail-assistant' ? 'email' : null;
+  const integrationTourKind = openGuidedIntegration ?? (advancedTraining && ['feature-telegram-button', 'feature-telegram-qr'].includes(advancedTraining.step) ? 'bot' : basicStep === 'integrations' ? 'bot' : basicStep === 'android' ? 'android' : activeTourStep === 'feature-integration-send' ? 'messages'
     : activeTourStep === 'feature-integration-telegram-ai' ? 'assistant'
-    : activeTourStep === 'feature-integration-mail' ? 'email' : null;
+    : activeTourStep === 'feature-integration-mail' ? 'email' : null);
 
   const renderOverdueControl = () => (
           <div className="topbar-overdue-wrap relative shrink-0" ref={overduePopoverRef}>
@@ -6799,7 +6811,7 @@ export default function App() {
         onNext={advanceBasicTraining} onFinish={finishBasicTraining} onGrab={() => { if (basicStep === 'grab') setBasicStep('move'); }} />}
       {guidedAssistant === 'telegram' && <TelegramAiAssistantSettings onClose={finishAdvancedTraining} trainingSection={guidedAssistantSection} />}
       {guidedAssistant === 'mail' && <MailAssistantSettings onClose={finishAdvancedTraining} trainingSection={guidedAssistantSection} />}
-      {advancedTraining && <BasicPlanikTraining lesson={advancedTraining.lesson} step={advancedTraining.step} theme={effectiveThemeMode} notice={null} actionReady={guidedStep === 'feature-skins-practice' && guidedAnimationPlayed}
+      {advancedTraining && <BasicPlanikTraining lesson={advancedTraining.lesson} step={advancedTraining.step} theme={effectiveThemeMode} notice={null} actionReady={guidedStep === 'feature-skins-practice' && guidedAnimationPlayed || guidedStep === 'feature-focus-timer' && guidedFocusDeadline !== null && guidedFocusRemaining < guidedFocusMinutes * 60}
         onNext={advanceAdvancedTraining} onFinish={finishAdvancedTraining} onGrab={() => {}} />}
       {activeTourStep && !advancedTraining ? <TourOverlay activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-') ? (tourWorkspaceUsesPrimary ? PRIMARY_WORKSPACE_TOUR_STEPS : WORKSPACE_TOUR_STEPS) : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-') ? FEATURE_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} onComplete={completeTaskTour} /> : null}
       {isBubbleFullscreen ? (
@@ -6892,7 +6904,7 @@ export default function App() {
               {isEfficiencyDetailsOpen ? <div data-tour="feature-rating" className="efficiency-details-popover efficiency-details-popover-modern absolute right-0 top-[calc(100%+8px)] z-40 w-80 rounded-[1.6rem] border p-4 text-xs shadow-2xl backdrop-blur"><div className="text-center"><div className="efficiency-score-hero tabular-nums">{formattedEfficiencyScore}/100</div><p className="mt-1 text-sm font-semibold text-primary">{efficiencyGradeMessage}</p></div><div className="mt-4 space-y-2"><div className="efficiency-detail-row"><span>Задачи</span><b>+{formatRatingDelta(efficiencyTaskRating)} рейтинга</b></div><div className="efficiency-detail-row"><span>Привычки</span><b>+{formatRatingDelta(efficiencyHabitRating)} рейтинга</b></div><div className="efficiency-detail-row"><span>Работа с ИИ <span className="block text-[10px] font-normal text-muted">+0,1 за запрос · +0,3 за ИИ-инструмент</span></span><b>+{formatRatingDelta(efficiencyAiRating)} рейтинга</b></div><div className="efficiency-detail-row efficiency-detail-row-focus"><span>Режим концентрации (х2)</span><b>+{formatRatingDelta(efficiencyFocusRating)} рейтинга</b></div></div></div> : null}
             </div>
             <button type="button" data-tour="feature-focus-button" className="focus-mode-button topbar-action-button inline-flex h-9 w-9 items-center justify-center rounded-xl border shrink-0 text-white shadow-lg transition hover:-translate-y-0.5 hover:scale-105 focus-visible:ring-2 focus-visible:ring-violet-300" onClick={advancedTraining?.step === 'feature-focus-button' ? advanceAdvancedTraining : openFocusSetup} aria-label="Режим концентрации" title="Режим концентрации"><Bot size={17}/></button>
-        <div data-tour="feature-telegram-button"><TelegramIntegrationsMenu tourIntegration={integrationTourKind} onConnectBot={() => void openTelegramLinkModal()} /></div>
+        <div data-tour="feature-telegram-button"><TelegramIntegrationsMenu tourIntegration={integrationTourKind} onTourOpenAssistant={openGuidedIntegration ? advanceAdvancedTraining : undefined} onConnectBot={() => void openTelegramLinkModal()} /></div>
         <a className="public-nav-link shrink-0 px-2 py-2 text-sm" href="/about">О сервисе</a>
         <div className="auth-actions" aria-label="Управление аккаунтом">
           {hasAccount ? (
@@ -6962,7 +6974,7 @@ export default function App() {
           onOpenSubtask={(subtask) => setEditorState({ task: subtask })}
           onOpenNote={(id) => setRequestedStandaloneNote({ id, serial: Date.now() })}
         />
-        <TelegramIntegrationsMenu tourIntegration={integrationTourKind} onConnectBot={() => void openTelegramLinkModal()} />
+        <TelegramIntegrationsMenu tourIntegration={integrationTourKind} onTourOpenAssistant={openGuidedIntegration ? advanceAdvancedTraining : undefined} onConnectBot={() => void openTelegramLinkModal()} />
         <a className="public-nav-link shrink-0 px-2 py-2 text-sm" href="/about">О сервисе</a>
         <div className="auth-actions" aria-label="Управление аккаунтом">
           {hasAccount ? (
@@ -7164,16 +7176,16 @@ export default function App() {
                 <div className="mb-4 mt-6 space-y-2">{(['time', 'ai', 'subtask', 'task'] as const).map((type) => focusBonusEvents[type] ? <div key={focusBonusEvents[type]!.id} className={`focus-bonus-message focus-bonus-${type}`}>{focusBonusEvents[type]!.message}</div> : null)}</div><div className="my-6 text-center text-5xl font-black tabular-nums text-slate-900">{formatFocusTime(focusRemainingSeconds)}</div>
                 <CustomSelect
                   value={String(focusTimerMinutes)}
-                  onChange={(value) => { if (guidedFocusMode) { setGuidedFocusMinutes(Number(value)); if (guidedStep === 'feature-focus-timer') advanceAdvancedTraining(); } else handleFocusTimerMinutesChange(Number(value)); }}
+                  onChange={(value) => { if (!guidedFocusMode) handleFocusTimerMinutesChange(Number(value)); }}
                   options={FOCUS_TIMER_OPTIONS.map((value) => ({ value: String(value), label: `${value} минут${FOCUS_RECOMMENDED_MINUTES.has(value) ? ' · рекомендовано' : ''}` }))}
-                  disabled={isFocusTimerRunning}
+                  disabled={guidedFocusMode || isFocusTimerRunning}
                   buttonClassName={`focus-timer-select-trigger ${isFocusTimerRunning ? 'cursor-not-allowed opacity-60' : ''}`}
                   menuClassName="task-edit-notify-menu focus-timer-select-menu"
                   detachedPopup
                   ariaLabel="Длительность фокус-сессии"
                 />
                 <div className="mt-4 flex justify-center gap-3">
-                  <button className="focus-timer-control primary" onClick={() => { if (!guidedFocusMode) { if (isFocusTimerRunning) setIsFocusTimerRunning(false); else startFocusTimer(); } }}>{isFocusTimerRunning ? <Pause size={20} /> : <Play size={20} />}</button>
+                  <button className="focus-timer-control primary" data-guided-focus-play aria-label={isFocusTimerRunning ? "Приостановить таймер" : "Запустить таймер"} onClick={() => { if (guidedFocusMode) { if (guidedFocusDeadline === null) setGuidedFocusDeadline(Date.now() + guidedFocusMinutes * 60_000); } else if (isFocusTimerRunning) setIsFocusTimerRunning(false); else startFocusTimer(); }}>{isFocusTimerRunning ? <Pause size={20} /> : <Play size={20} />}</button>
                   <button className="focus-timer-control" onClick={() => { if (!guidedFocusMode) stopFocusTimer(); }}><Square size={18} /></button>
                 </div>
                 <p className="mt-4 text-center text-xs text-muted">После запуска можно закрыть окно — таймер останется в правом нижнем углу.</p>
@@ -9692,12 +9704,12 @@ export default function App() {
             </div>
           </div>
         </div>
-        <div className="mascot-wardrobe-anchor">
+        <div className="mascot-wardrobe-anchor" data-guided-launcher={guidedStep === "ai-open-chat" || guidedStep === "feature-skins-intro" ? "true" : undefined}>
         <button
           type="button"
           className="planik-launcher-button touch-none select-none"
           aria-label="Открыть общий чат с ИИ"
-          onClick={() => { if (guidedStep === "ai-open-chat") { advanceAdvancedTraining(); return; } if (hasGeneralAiPane && !mascotSurface.modal) { fullscreenChatTarget?.querySelector<HTMLTextAreaElement>('textarea')?.focus(); return; } setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}
+          onClick={() => { if (guidedStep === "ai-open-chat") { setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); advanceAdvancedTraining(); return; } if (hasGeneralAiPane && !mascotSurface.modal) { fullscreenChatTarget?.querySelector<HTMLTextAreaElement>('textarea')?.focus(); return; } setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}
         >
           <PlanikMascot notificationCount={unreadSystemNotificationCount} busy={quickAiChatLoading || aiChatLoading || Boolean(aiLoadingTaskId) || focusAiLoading} progress={focusAiLoading ? focusAiProgress : aiLoadingTaskId ? aiProgressByTask[aiLoadingTaskId] : aiChatProgress} celebrationKey={planikCelebrationKey} skinId={wardrobe.selected('planner')} arrivalKey={mascotSurface.arrivalKey} />
         </button>

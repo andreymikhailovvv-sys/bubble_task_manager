@@ -9,15 +9,47 @@ import './BasicPlanikTraining.css';
 type Rect = { left: number; top: number; right: number; bottom: number };
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 const rectsEqual = (a: Rect | null, b: Rect | null) => a === b || !!a && !!b && a.left === b.left && a.top === b.top && a.right === b.right && a.bottom === b.bottom;
+const scrollContainer = (node: Element) => node.closest('.telegram-ai-settings-scroll,.integration-menu__popup');
+const revealTarget = (node: Element) => {
+  const scroller = scrollContainer(node);
+  if (scroller instanceof HTMLElement && scroller !== node) {
+    const rect = node.getBoundingClientRect();
+    const bounds = scroller.getBoundingClientRect();
+    const height = scroller.clientHeight;
+    const margin = 12;
+    // Show the entire section if it fits; for a tall section, start at its heading.
+    const delta = rect.height > height - margin * 2
+      ? rect.top - bounds.top - margin
+      : rect.bottom > bounds.bottom - margin
+        ? rect.bottom - bounds.bottom + margin
+        : rect.top < bounds.top + margin ? rect.top - bounds.top - margin : 0;
+    if (Math.abs(delta) > 1) scroller.scrollTop += delta;
+  } else {
+    node.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' });
+  }
+};
+const visibleTargetRect = (node: Element) => {
+  const rect = node.getBoundingClientRect();
+  const scroller = scrollContainer(node);
+  const clip = scroller && scroller !== node ? scroller.getBoundingClientRect() : null;
+  const left = Math.max(rect.left, clip?.left ?? 0);
+  const top = Math.max(rect.top, clip?.top ?? 0);
+  const right = Math.min(rect.right, clip?.right ?? innerWidth);
+  const bottom = Math.min(rect.bottom, clip?.bottom ?? innerHeight);
+  return {left, top, right, bottom, width: right - left, height: bottom - top};
+};
 const readTarget = (selector?: string): Rect | null => {
   if (!selector) return null;
-  const rects = Array.from(document.querySelectorAll(selector)).map(node => node.getBoundingClientRect())
+  const nodes = Array.from(document.querySelectorAll(selector));
+  const rects = nodes.map(visibleTargetRect)
     .filter(r => r.width > 1 && r.height > 1 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight);
   if (!rects.length) return null;
-  return { left: Math.max(0, Math.floor(Math.min(...rects.map(r => r.left)) - 5)),
-    top: Math.max(0, Math.floor(Math.min(...rects.map(r => r.top)) - 5)),
-    right: Math.min(innerWidth, Math.ceil(Math.max(...rects.map(r => r.right)) + 5)),
-    bottom: Math.min(innerHeight, Math.ceil(Math.max(...rects.map(r => r.bottom)) + 5)) };
+  const scroller = nodes.length === 1 ? scrollContainer(nodes[0]) : null;
+  const clip = scroller && scroller !== nodes[0] ? scroller.getBoundingClientRect() : null;
+  return { left: Math.max(0, Math.ceil(clip?.left ?? 0), Math.floor(Math.min(...rects.map(r => r.left)) - 5)),
+    top: Math.max(0, Math.ceil(clip?.top ?? 0), Math.floor(Math.min(...rects.map(r => r.top)) - 5)),
+    right: Math.min(innerWidth, Math.floor(clip?.right ?? innerWidth), Math.ceil(Math.max(...rects.map(r => r.right)) + 5)),
+    bottom: Math.min(innerHeight, Math.floor(clip?.bottom ?? innerHeight), Math.ceil(Math.max(...rects.map(r => r.bottom)) + 5)) };
 };
 
 export function BasicPlanikTraining({ step, lesson, theme, notice, actionReady, onNext, onFinish, onGrab }: {
@@ -42,12 +74,21 @@ export function BasicPlanikTraining({ step, lesson, theme, notice, actionReady, 
 
   useLayoutEffect(() => {
     let scrolled = false;
+    let previousNode: Element | null = null;
+    let previousHeight = -1;
     const update = () => {
-      if (!scrolled && (step === 'notes' || step === 'habits' || step === 'integrations' || step === 'android' || Boolean(lesson))) {
+      if (step === 'notes' || step === 'habits' || step === 'integrations' || step === 'android' || Boolean(lesson)) {
         const node = config.target && document.querySelector(config.target);
         if (node && node.getBoundingClientRect().width > 0) {
-          node.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' });
-          scrolled = true;
+          const height = node.getBoundingClientRect().height;
+          // The assistant's accordion and integration cards may expand after
+          // the first measurement. Re-align after their actual height changes.
+          if (!scrolled || node !== previousNode || (scrollContainer(node) && Math.abs(height - previousHeight) > 2)) {
+            revealTarget(node);
+            scrolled = true;
+            previousNode = node;
+            previousHeight = height;
+          }
         }
       }
       const rect = readTarget(config.target);
@@ -107,6 +148,13 @@ export function BasicPlanikTraining({ step, lesson, theme, notice, actionReady, 
     };
   }, [step, config.allow]);
 
+  useLayoutEffect(() => {
+    if (step !== 'feature-skins-practice') return;
+    const dialog = document.querySelector<HTMLElement>('.mascot-wardrobe-dialog[data-guided-wardrobe]');
+    if (!dialog) return;
+    dialog.style.setProperty('--guided-wardrobe-reserve', Math.max(180, cardHeight + 36) + 'px');
+    return () => { dialog.style.removeProperty('--guided-wardrobe-reserve'); };
+  }, [step, cardHeight]);
   const centered = config.center;
   const width = Math.min(centered ? 480 : practice ? 390 : 350, viewport.width - 24);
   let left = (viewport.width - width) / 2;
@@ -129,6 +177,10 @@ export function BasicPlanikTraining({ step, lesson, theme, notice, actionReady, 
       left = viewport.width - width - 16;
       top = step === 'block' || step === 'complete' ? viewport.height - cardHeight - 16 : 16;
     }
+  }
+  if (step === 'feature-skins-practice' && viewport.width <= 1050) {
+    left = (viewport.width - width) / 2;
+    top = viewport.height - cardHeight - 12;
   }
   left = clamp(left, 12, Math.max(12, viewport.width - width - 12));
   top = clamp(top, 12, Math.max(12, viewport.height - cardHeight - 12));
