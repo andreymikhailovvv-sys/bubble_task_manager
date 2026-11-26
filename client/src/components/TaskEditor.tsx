@@ -1125,6 +1125,7 @@ export function TaskEditor({
               {isNotesEditorOpen && !externalReadOnly ? (
                 <TaskNotesEditor
                   value={descriptionValue}
+                  inlineTarget={inlineTarget}
                   onChange={updateDescription}
                   onClose={() => setIsNotesEditorOpen(false)}
                 />
