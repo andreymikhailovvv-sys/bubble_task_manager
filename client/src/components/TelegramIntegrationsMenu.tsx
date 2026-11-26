@@ -7,11 +7,11 @@ import { api, type TelegramIntegrationStatus } from '../lib/api';
 import './TelegramIntegrationsMenu.css';
 
 type Integration = 'bot' | 'android' | 'messages' | 'assistant' | 'email';
-type Props = { onConnectBot: () => void; tourIntegration?: Integration | null; embedded?: boolean };
+type Props = { onConnectBot: () => void; tourIntegration?: Integration | null; onTourOpenAssistant?: () => void; embedded?: boolean };
 const RUNNING = ['starting', 'qr', 'password_required', 'verifying_password'];
 type MenuPlacement = { left: number; top?: number; bottom?: number; width: number; maxHeight: number };
 
-export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null, embedded = false }: Props) {
+export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null, onTourOpenAssistant, embedded = false }: Props) {
   const [open, setOpen] = useState(embedded);
   const [embeddedTarget,setEmbeddedTarget]=useState<HTMLDivElement|null>(null);
   const [expanded, setExpanded] = useState<Integration | null>(null);
@@ -209,6 +209,7 @@ export function TelegramIntegrationsMenu({ onConnectBot, tourIntegration = null,
                       <button type="button" className="integration-menu__action mt-3 w-full rounded-xl px-3 py-2 text-sm font-semibold"
                         onClick={() => {
                           setOpen(false);
+                          if (onTourOpenAssistant && kind === tourIntegration && (isAssistant || isEmail)) { onTourOpenAssistant(); return; }
                           if (isBot) onConnectBot();
                           else if (isAndroid) window.location.assign('/android');
                           else if (isAssistant) setAssistantDialogOpen(true);

@@ -39,7 +39,7 @@
 
 /* The tour is the only visible mascot, including in portalled AI/notes dialogs.
    Keep layout and the real launcher anchor intact for the wardrobe explanation. */
-body:has([data-basic-training-overlay]) .planik-mascot:not([data-basic-training-overlay] .planik-mascot){visibility:hidden!important;pointer-events:none!important}
+body:has([data-basic-training-overlay]) .planik-mascot:not([data-basic-training-overlay] .planik-mascot):not([data-guided-launcher] .planik-mascot):not([data-guided-wardrobe] .planik-mascot){visibility:hidden!important;pointer-events:none!important}
 body:has([data-training-step^="feature-skins"]) .mascot-wardrobe-trigger{opacity:1!important;visibility:visible!important;transform:none!important;pointer-events:none!important}
 .basic-planik-practice{display:grid;gap:8px;margin-top:12px;padding:10px;border:1px solid var(--training-border);border-radius:12px;background:color-mix(in srgb,var(--training-surface) 88%,var(--training-accent))}
 .basic-planik-practice-label{font-size:10px;color:var(--training-muted);letter-spacing:.04em}
@@ -53,9 +53,19 @@ body:has([data-training-step^="feature-skins"]) .mascot-wardrobe-trigger{opacity
 
 /* Reveal the actual launcher only when the lesson points to it. Keep the
    wardrobe's own preview visible, instead of showing a second guide mascot. */
-body:has([data-training-step="ai-open-chat"],[data-training-step="feature-skins-intro"]) .planik-launcher-button .planik-mascot{visibility:visible!important;pointer-events:auto!important}
+[data-guided-launcher], [data-guided-launcher] .planik-launcher-button, [data-guided-launcher] .planik-mascot{visibility:visible!important;opacity:1!important}
+[data-guided-launcher] .planik-launcher-button{pointer-events:auto!important}
+[data-guided-launcher] .planik-body-surface{pointer-events:visiblePainted!important}
 body:has([data-training-step="feature-skins-intro"]) .mascot-wardrobe-trigger{visibility:visible!important;opacity:1!important}
-body:has([data-basic-training-overlay]) .mascot-wardrobe-dialog[data-guided-wardrobe] .planik-mascot{visibility:visible!important}
+
 .mascot-wardrobe-dialog[data-guided-wardrobe]{position:fixed!important;z-index:2390!important;inset:0!important;margin:auto!important}
 body:has(.mascot-wardrobe-dialog[data-guided-wardrobe][open]) .basic-planik-character{display:none}
 body:has(.mascot-wardrobe-dialog[data-guided-wardrobe][open]) .basic-planik-speech::before{display:none}
+
+/* On narrow screens reserve room for the guide beneath the complete wardrobe,
+   so the speech card cannot cover its animation controls. */
+@media(max-width:1050px){
+  body:has([data-training-step="feature-skins-practice"]) .mascot-wardrobe-dialog[data-guided-wardrobe]{
+    top:12px!important;bottom:auto!important;height:min(740px,calc(100dvh - var(--guided-wardrobe-reserve,220px)))!important;max-height:calc(100dvh - var(--guided-wardrobe-reserve,220px))!important;
+  }
+}

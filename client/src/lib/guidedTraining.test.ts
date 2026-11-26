@@ -48,9 +48,32 @@ test('three standard lessons and one visible mascot during guided practice', () 
   assert.match(menu, /title: 'Обучение основам'/);
   assert.doesNotMatch(menu, /title: 'Рабочее пространство'|title: 'Работа с задачами'|Тестовое обучение от Планика/);
   const css = readFileSync(new URL('../components/BasicPlanikTraining.css', import.meta.url), 'utf8');
-  assert.match(css, /body:has\(\[data-basic-training-overlay\]\) \.planik-mascot:not\(\[data-basic-training-overlay\] \.planik-mascot\)/);
+  assert.match(css, /\.planik-mascot:not\(\[data-basic-training-overlay\] \.planik-mascot\):not\(\[data-guided-launcher\] \.planik-mascot\):not\(\[data-guided-wardrobe\] \.planik-mascot\)/);
   const practice = readFileSync(new URL('../components/TrainingPractice.tsx', import.meta.url), 'utf8');
   assert.doesNotMatch(practice, /api\.|fetch\(|localStorage|equipMascotSkin/);
   assert.match(practice, /changedSkin/);
   assert.match(practice, /onAnimation\(item.id\)/);
+});
+
+test('guided lessons require real controls and highlight the full wardrobe', () => {
+  const step = (id: string) => FEATURE_GUIDED_STEPS.find(s => s.id === id)!;
+  assert.equal(step('feature-focus-timer').allow, '[data-guided-focus-play]');
+  for (const [id, next, target] of [
+    ['feature-open-telegram-assistant', 'feature-integration-telegram-ai', '[data-tour="integration-assistant"]'],
+    ['feature-open-mail-assistant', 'feature-integration-mail', '[data-tour="integration-email"]']
+  ]) {
+    assert.equal(step(id).action, true);
+    assert.equal(step(id).target, target);
+    assert.equal(nextGuidedStep('features', id)?.id, next);
+  }
+  assert.equal(step('feature-skins-practice').target, '.mascot-wardrobe-dialog[data-guided-wardrobe]');
+  const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8');
+  assert.match(app, /data-guided-launcher=\{guidedStep === "ai-open-chat" \|\| guidedStep === "feature-skins-intro"/);
+  assert.match(app, /setGuidedFocusDeadline\(Date.now\(\) \+ guidedFocusMinutes \* 60_000\)/);
+  assert.match(app, /Math\.ceil\(\(guidedFocusDeadline - Date\.now\(\)\) \/ 1000\)/);
+  const integration = readFileSync(new URL('../components/TelegramIntegrationsMenu.tsx', import.meta.url), 'utf8');
+  assert.match(integration, /onTourOpenAssistant && kind === tourIntegration/);
+  const overlay = readFileSync(new URL('../components/BasicPlanikTraining.tsx', import.meta.url), 'utf8');
+  assert.match(overlay, /scroller\.scrollTop \+= delta/);
+  assert.match(overlay, /Math\.floor\(clip\?\.bottom/);
 });
