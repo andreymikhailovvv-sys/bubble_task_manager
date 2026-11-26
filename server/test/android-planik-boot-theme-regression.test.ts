@@ -90,7 +90,7 @@ test('small Planik matches light/dark website palette with tight tap bounds and 
   assert.match(blink, /#5e5ca3/);
   assert.match(light, /#b8b3ec/);
   assert.match(lightBlink, /#b8b3ec/);
-  assert.match(styles, /body\[data-theme='light'\] \.planik-body-stop-start \{ stop-color: #b8b3ec/);
+  assert.match(styles, /body\[data-theme='light'\] \.planik-mascot:not\(\.planik-mascot--economic\) \.planik-body-stop-start \{ stop-color: #b8b3ec/);
   assert.match(build, /versionCode = 25/);
   assert.match(build, /versionName = "1\.0\.23"/);
 });
