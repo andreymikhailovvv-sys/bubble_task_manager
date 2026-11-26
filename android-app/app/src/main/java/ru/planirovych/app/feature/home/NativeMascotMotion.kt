@@ -56,8 +56,6 @@ internal fun nativeMascotMotionSvg(skin:String,mode:String,frame:Int):String? {
                 if(king)coin(173+i*3,220-i*3) else bill(173+i*2,220-i*3,0)
             }else ""
             val reach=smooth(t/.24)
-            val carry=smooth((t-.28)/.40)
-            val reset=smooth((t-.79)/.20)
             val lift=smooth((t-.20)/.32)
             val flick=smooth((t-.27)/.20)
             val back=smooth((t-.62)/.36)
