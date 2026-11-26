@@ -47,7 +47,7 @@ test('Android launcher uses real static SVG artwork, animated natively instead o
   assert.match(styles, /@keyframes planik-float/);
   assert.match(blink, /ry="1\.4"/);
   assert.doesNotMatch(asset, /planik-notif-static|planik-celebrating|planik-typing/);
-  assert.match(launcher, /SVG\.getFromString\(artwork\)/);
+  assert.ok(launcher.includes('SVG.getFromString(expanded).renderToPicture(420,375)'));
   assert.match(launcher, /android\.graphics\.Canvas as AndroidCanvas/);
   assert.match(launcher, /renderToPicture\(420,\s*375\)/);
   assert.match(launcher, /rememberInfiniteTransition/);
