@@ -655,7 +655,9 @@ private fun nextHabitWeekday(habit: Habit, today: LocalDate): String {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(9.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     items(dueToday, key = { it.id }) { habit ->
-                        HabitBubble(habit, dayKey, scheduledToday = true)
+                        Box(Modifier.animateItem()) {
+                            HabitBubble(habit, dayKey, scheduledToday = true)
+                        }
                     }
                     if (dueToday.isNotEmpty() && otherDays.isNotEmpty()) {
                         item(key = "other-days-divider") {
@@ -664,8 +666,10 @@ private fun nextHabitWeekday(habit: Habit, today: LocalDate): String {
                         }
                     }
                     items(otherDays, key = { it.id }) { habit ->
-                        HabitBubble(habit, dayKey, scheduledToday = false,
-                            nextWeekday = nextHabitWeekday(habit, today))
+                        Box(Modifier.animateItem()) {
+                            HabitBubble(habit, dayKey, scheduledToday = false,
+                                nextWeekday = nextHabitWeekday(habit, today))
+                        }
                     }
                 }
             }

@@ -381,12 +381,25 @@ fun ModernWorkspace(
                 style=MaterialTheme.typography.bodySmall) }
         }
         if (contentMode == WorkspaceMode.LIST) {
+            if (searchQuery.isNotEmpty()) item(key="reset-task-search") {
+                Box(Modifier.fillMaxWidth(),contentAlignment=Alignment.Center) {
+                    TextButton(onClick={
+                        search("")
+                        searchOpenedOnPage=-1
+                        searchExpanded=false
+                        period=PeriodFilter.ALL
+                        sort=SortTasks.URGENCY
+                        selectedSectors=emptyList()
+                        sectorFilterEnabled=false
+                    }) { Text("Показать все задачи",color=colors.purple) }
+                }
+            }
             if (rootTasks.isEmpty()) item {
                 if (state.tasks.any { it.status != TaskStatus.DONE && it.parentTaskId == null && it.taskType == TaskType.TASK }) {
                     Column(horizontalAlignment=Alignment.CenterHorizontally,
                         modifier=Modifier.fillMaxWidth().padding(vertical=18.dp)) {
                         EmptyWorkspaceMessage("По текущим фильтрам задачи не найдены.", colors)
-                        TextButton(onClick={
+                        if(searchQuery.isEmpty()) TextButton(onClick={
                             period=PeriodFilter.ALL
                             sort=SortTasks.URGENCY
                             selectedSectors=emptyList()
@@ -761,7 +774,9 @@ private fun HabitsStrip(habits:List<Habit>, colors:WorkspaceColors, dark:Boolean
             LazyRow(horizontalArrangement=Arrangement.spacedBy(8.dp),contentPadding=PaddingValues(end=2.dp),
                 verticalAlignment=Alignment.CenterVertically) {
                 items(todayHabits,key={it.id}) { habit ->
-                    WorkspaceHabitBubble(habit,true,colors,dark,onLongClick={onHabitComplete(habit)}){onHabitClick(habit)}
+                    Box(Modifier.animateItem(placementSpec=tween(320))) {
+                        WorkspaceHabitBubble(habit,true,colors,dark,onLongClick={onHabitComplete(habit)}){onHabitClick(habit)}
+                    }
                 }
                 if(todayHabits.isNotEmpty() && otherHabits.isNotEmpty()) {
                     item(key="other-day-divider") {
@@ -770,7 +785,9 @@ private fun HabitsStrip(habits:List<Habit>, colors:WorkspaceColors, dark:Boolean
                     }
                 }
                 items(otherHabits,key={it.id}) { habit ->
-                    WorkspaceHabitBubble(habit,false,colors,dark){onHabitClick(habit)}
+                    Box(Modifier.animateItem(placementSpec=tween(320))) {
+                        WorkspaceHabitBubble(habit,false,colors,dark){onHabitClick(habit)}
+                    }
                 }
                 item(key="habit-add") {
                     val addGreen=if(dark)Color(0xFF6EE7B7) else Color(0xFF6DD9B6)

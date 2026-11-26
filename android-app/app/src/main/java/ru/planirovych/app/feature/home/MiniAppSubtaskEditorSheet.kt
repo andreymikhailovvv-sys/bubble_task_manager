@@ -301,26 +301,26 @@ fun MiniAppSubtaskEditorSheet(
                         Text(it,color=c.danger,fontSize=12.sp)
                     }
                     vmState.taskAttachments.forEach{attachment->
-                        Row(Modifier.fillMaxWidth().padding(bottom=5.dp)
-                            .clip(RoundedCornerShape(11.dp))
-                            .background(c.panel)
-                            .border(1.dp,c.line,RoundedCornerShape(11.dp))
-                            .padding(start=7.dp),verticalAlignment=Alignment.CenterVertically){
+                        Row(Modifier.padding(bottom=6.dp).widthIn(max=194.dp)
+                            .clip(CircleShape).background(c.panel)
+                            .border(1.dp,c.line,CircleShape)
+                            .padding(start=9.dp,end=3.dp),verticalAlignment=Alignment.CenterVertically){
                             Icon(Icons.Default.AttachFile,null,tint=c.purple,
                                 modifier=Modifier.size(13.dp))
-                            Text(attachment.name,Modifier.weight(1f)
+                            Spacer(Modifier.width(5.dp))
+                            Text(attachment.name,Modifier.widthIn(max=125.dp)
                                 .clickable{
                                     vm.openTaskAttachmentLink(task.id,attachment.id){url->
                                         runCatching{ctx.startActivity(
                                             Intent(Intent.ACTION_VIEW,Uri.parse(url)))}
                                     }
-                                }.padding(9.dp),color=c.ink,
-                                fontSize=12.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+                                }.padding(vertical=8.dp),color=c.ink,
+                                fontSize=11.sp,maxLines=1,softWrap=false,overflow=TextOverflow.Ellipsis)
                             IconButton(onClick={pendingAction="file:"+attachment.id},
                                 enabled=!vmState.taskAttachmentsBusy,
-                                modifier=Modifier.size(30.dp)) {
+                                modifier=Modifier.size(27.dp)) {
                                 Icon(Icons.Default.Close,"Удалить вложение",tint=c.muted,
-                                    modifier=Modifier.size(14.dp))
+                                    modifier=Modifier.size(12.dp))
                             }
                         }
                     }

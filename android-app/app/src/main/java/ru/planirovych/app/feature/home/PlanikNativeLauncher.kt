@@ -94,13 +94,13 @@ internal fun NativeMascotFallback(dark:Boolean,mode:String,skinId:String,modifie
                     val action=nativeMascotMotionSvg(skinId,mode,frame) ?: planikActionSvg(mode, alternate)
                     val artwork=nativeMascotSkinSvg(if(variant=="economic")economicMascotPalette(source) else source, skinId, dark, mode, frame)
                         .replace("</svg>",action+"</svg>")
-                    val picture=SVG.getFromString(artwork).renderToPicture(420,375)
-                    val full=Bitmap.createBitmap(420,375,Bitmap.Config.ARGB_8888).apply {
+                    // Keep all animated accessories inside a fixed padded frame.
+                    val expanded=artwork.replace(Regex("viewBox=\\\"[^\\\"]+\\\""),
+                        "viewBox=\"-10 -30 450 365\"")
+                    val picture=SVG.getFromString(expanded).renderToPicture(420,375)
+                    Bitmap.createBitmap(420,375,Bitmap.Config.ARGB_8888).apply {
                         AndroidCanvas(this).drawPicture(picture)
                     }
-                    // Identical crop for EVERY outfit: the classic body is
-                    // the reference size, never fit the full empty SVG frame.
-                    Bitmap.createBitmap(full, 80, 12, 280, 300).also { full.recycle() }
                 }.getOrNull()
             }
         }
@@ -146,6 +146,7 @@ internal fun NativeMascotFallback(dark:Boolean,mode:String,skinId:String,modifie
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize().offset(y = floatOffset.dp).graphicsLayer {
                     rotationZ=orbit
+                    if(skinId=="space" && mode=="hover") { scaleX=.82f; scaleY=.82f }
                 }
             )
         } else {
