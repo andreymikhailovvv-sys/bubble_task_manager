@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { PlanikMascot, type PlanikMode } from './PlanikMascot';
 
-const modes = ['idle','hover','thinking','typing','searching','painting','celebrating','clearing'] as const;
+const modes = ['idle','hover','thinking','typing','searching','painting','celebrating','clearing','income','expense'] as const;
 type Mode = Exclude<PlanikMode,'showcase'>;
 const normalizeMode = (value: unknown): Mode => modes.includes(value as Mode) ? value as Mode : 'idle';
 const skins = ['classic','cat','northern','maestro','zoomer','pirate','wizard','ninja','space','banker','king'];
@@ -31,6 +31,6 @@ export default function AndroidMascotSurface() {
     return () => { cancelAnimationFrame(frame); window.removeEventListener('planik-native-mode',listener); delete document.documentElement.dataset.androidMascotReady; };
   },[]);
   return <><style>{'html,body,#root{margin:0!important;padding:0!important;width:100%!important;height:100%!important;overflow:hidden!important;background:transparent!important} #root{display:grid;place-items:center} .android-mascot-artwork{display:block;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important} .android-mascot-artwork .planik-svg{width:100%;height:100%}'}</style>
-    <PlanikMascot className="android-mascot-artwork" skinId={skinId} variant="planner" previewMode={mode} arrivalKey={1} size="composer"/>
+    <PlanikMascot className="android-mascot-artwork" skinId={skinId} variant={params.get('variant')==='economic'?'economic':'planner'} previewMode={mode} arrivalKey={1} size="composer"/>
   </>;
 }

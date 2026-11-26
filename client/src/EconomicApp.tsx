@@ -1,3 +1,4 @@
+import { announceEconomicOperation, FINANCIAL_MASCOT_EVENT, type FinancialMascotMode } from './components/EconomicMoneyGesture';
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ChangeEvent, type CSSProperties } from 'react';
 import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, BookOpen, Check, ChevronRight, CircleDollarSign, CreditCard, Landmark, LayoutDashboard, Loader2, MessageCircle, Paperclip, Mic, Pencil, Plus, Send, Settings2, Sparkles, Trash2, WalletCards, X } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
@@ -102,9 +103,11 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   mobile?: boolean; embeddedInMiniApp?: boolean; themeOverride?: 'light' | 'dark'; mobileSafeTop?: number; mobileSafeBottom?: number;
 }) {
   const [user, setUser] = useState<EconomicUser | null>(null);
-  const wardrobe = useMascotWardrobe(mobile ? undefined : user?.id);
+  const wardrobe = useMascotWardrobe(user?.id);
   const mascotSurface = useMascotSurface(!mobile && Boolean(user));
   const selectedEconomicSkin = wardrobe.selected('economic');
+  const [mobileFinanceMode,setMobileFinanceMode]=useState<FinancialMascotMode|null>(null);
+  useEffect(()=>{if(!mobile)return;let timer=0;const listener=(event:Event)=>{const mode=(event as CustomEvent).detail;if(mode!=='income'&&mode!=='expense')return;window.clearTimeout(timer);setMobileFinanceMode(mode);timer=window.setTimeout(()=>setMobileFinanceMode(null),4200);};window.addEventListener(FINANCIAL_MASCOT_EVENT,listener);return()=>{window.clearTimeout(timer);window.removeEventListener(FINANCIAL_MASCOT_EVENT,listener);};},[mobile]);
   const mascotIdentity = useMemo(() => mobile ? null : ({variant:'economic' as const,skinId:selectedEconomicSkin}), [mobile,selectedEconomicSkin]);
   const [appearance, setAppearance] = useState<'light' | 'dark'>('dark');
   const effectiveAppearance = themeOverride ?? appearance;
@@ -373,6 +376,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
         path = '/categories'; payload = { kind: form.kind, name: form.name };
       }
       const result = await economicRequest<{adjustment?:{amountMinor:string;accountName:string}|null}>(path + idPath, dialog.id ? 'PATCH' : 'POST', payload);
+      if(dialog.kind==='operation'&&!dialog.id)announceEconomicOperation(form.kind);
       if (result.adjustment) setAdjustmentNotice('Добавлена корректирующая операция на сумму ' + (BigInt(result.adjustment.amountMinor)>0n?'+':'') + money(result.adjustment.amountMinor) + ' на счёт ' + result.adjustment.accountName);
       setDialog(null);
       await refresh();
@@ -439,6 +443,8 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
     try {
       const reply = await askEconomicStream(question, files, stage => setAssistantStage(stage));
       if (typeof reply.autoApply === 'boolean') setEconomicAutoApply(reply.autoApply);
+      const recorded=reply.proposals?.find(p=>p.status==='APPLIED'&&p.entity==='operation'&&p.action==='create');
+      if(recorded)announceEconomicOperation(recorded.payload?.kind);
       setAssistantStage('refreshing_finances');
       // Keep the actual answer visible if the subsequent snapshot refresh fails.
       setSnapshot(prev => prev ? { ...prev,
@@ -600,6 +606,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   return <MascotIdentityContext.Provider value={mascotIdentity}><div className={'econ-root ' + (effectiveAppearance === 'light' ? 'econ-light' : '') + (mobile ? ' econ-mobile-workspace' : '')}
     style={embeddedInMiniApp ? { '--econ-mobile-safe-bottom': mobileSafeBottom + 'px' } as CSSProperties : undefined}>
     {adjustmentNotice && createPortal(<div className="econ-adjustment-toast" role="status"><Check size={18}/><span>{adjustmentNotice}</span><button type="button" onClick={()=>setAdjustmentNotice('')} aria-label="Закрыть"><X size={17}/></button></div>,document.body)}
+    {mobile && mobileFinanceMode && createPortal(<div className="econ-mobile-finance-mascot" aria-hidden="true"><PlanikMascot variant="economic" skinId={selectedEconomicSkin} previewMode={mobileFinanceMode} size="launcher"/></div>,document.body)}
     {!mobile && <ModuleRail active="economic"/>}
     <div className="econ-shell">
       {!mobile && <aside className="econ-nav">

@@ -251,10 +251,11 @@ export function economicProposalView(row:{
     amountMinor:'Сумма',principalMinor:'Сумма кредита',paidMinor:'Выплачено',
     category:'Категория',sourceAccountId:'Счёт',targetAccountId:'Счёт получения',accountId:'Счёт долга',note:'Примечание',dueAt:'Срок возврата',
     annualRateBps:'Ставка (б.п.)',termMonths:'Срок (месяцев)',startDate:'Дата начала',
-    occurredAt:'Дата операции',lender:'Кредитор',paymentDate:'Дата платежа',
+    positionsJson:'Позиции',calculation:'Калькуляция',occurredAt:'Дата операции',lender:'Кредитор',paymentDate:'Дата платежа',
     postedToAccount:'Проводка по счёту',remindersEnabled:'Напоминания',isClosed:'Закрыт'
   };
   const display=(key:string,value:unknown)=>{
+    if(key==='positionsJson')return normalizeEconomicPositions(value)==='[]'?'нет':(JSON.parse(normalizeEconomicPositions(value)) as unknown[]).length+' поз.';
     if(value===null)return 'не указано';
     if(typeof value==='boolean')return value?'да':'нет';
     // The user-facing financial chip must never display EXPENSE / INCOME enums.

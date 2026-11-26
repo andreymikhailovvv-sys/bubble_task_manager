@@ -651,3 +651,19 @@ body:has(.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded)) .planik-qui
 @keyframes king-rest-hand{0%,78%{opacity:1}24%,76%{opacity:0}100%{opacity:1}}
 @keyframes king-ruby-glow{from{filter:drop-shadow(0 0 2px #ec234c)}to{filter:drop-shadow(0 0 12px #ff285d) drop-shadow(0 0 6px #ff9dad)}}
 @media(prefers-reduced-motion:reduce){.planik-mascot[data-skin=king] :is(.king-crown,.king-greeting-arm,.king-rest-hand,.king-ruby,.planik-eye){animation:none!important}.king-greeting-arm{display:none}.planik-mascot[data-arriving=true]:is([data-skin=pirate],[data-skin=banker]) .planik-svg{animation:none!important}}
+
+/* Finance reactions run only after a successful write. */
+.econ-money-particle{opacity:0;transform-box:fill-box;transform-origin:center;animation:econ-money-flight 1.8s ease-in-out var(--money-delay) infinite}
+.econ-money-arm{transform-box:view-box}
+.econ-money-arm-left{transform-origin:132px 194px}
+.econ-money-arm-right{transform-origin:298px 194px}
+.econ-money-income .econ-money-arm-right{animation:econ-money-tuck .8s ease-in-out infinite alternate}
+.econ-money-expense .econ-money-arm-right{animation:econ-money-flick .43s ease-in-out infinite alternate}
+.econ-money-king .econ-money-arm-left{animation:econ-money-flick .65s ease-in-out infinite alternate-reverse}
+.econ-money-king.econ-money-income .econ-money-arm-right{animation:econ-money-tuck .65s ease-in-out infinite alternate}
+.planik-mascot[data-skin=king][data-mode=thinking] .planik-character-rig{transform-box:view-box;transform-origin:215px 220px;animation:king-throne-tremble .55s ease-in-out infinite}
+@keyframes king-throne-tremble{0%,100%{transform:translateX(0) rotate(0)}25%{transform:translateX(-1.5px) rotate(-.7deg)}75%{transform:translateX(1.5px) rotate(.7deg)}}
+@keyframes econ-money-tuck{from{transform:rotate(-9deg)}to{transform:rotate(12deg)}}
+@keyframes econ-money-flick{from{transform:rotate(-12deg)}to{transform:rotate(20deg)}}
+@keyframes econ-money-flight{0%{opacity:0;transform:translate(0,0) rotate(0)}10%{opacity:1}65%{opacity:1;transform:translate(var(--money-dx),var(--money-dy)) rotate(var(--money-turn))}85%,100%{opacity:0;transform:translate(var(--money-dx),calc(var(--money-dy) + 18px)) rotate(var(--money-turn))}}
+@media(prefers-reduced-motion:reduce){.econ-money-particle,.econ-money-arm,.planik-mascot[data-skin=king][data-mode=thinking] .planik-character-rig{animation:none!important}.econ-money-particle{opacity:1}}
