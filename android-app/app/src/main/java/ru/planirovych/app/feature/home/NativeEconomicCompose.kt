@@ -64,6 +64,8 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
     var economicUser by remember(userId) { mutableStateOf<JsonObject?>(null) }
     var loading by remember(userId) { mutableStateOf(true) }
     var error by remember(userId) { mutableStateOf("") }
+    var adjustmentNotice by remember(userId){mutableStateOf("")}
+    LaunchedEffect(adjustmentNotice){if(adjustmentNotice.isNotBlank()){kotlinx.coroutines.delay(5000);adjustmentNotice=""}}
     var revision by remember(userId) { mutableIntStateOf(0) }
     var section by remember(userId) { mutableStateOf("overview") }
     var editor by remember(userId) { mutableStateOf<EcoEditorRequest?>(null) }
@@ -134,6 +136,10 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                 // would otherwise duplicate a financial record.
                 editor=null
                 error=""
+                result.ecoObject("adjustment")?.let{adjustment->
+                    val amount=adjustment.ecoText("amountMinor")
+                    if(amount.isNotBlank())adjustmentNotice="Добавлена корректирующая операция на сумму "+(if(!amount.startsWith("-"))"+" else "")+ecoRubles(amount)+" на счёт "+adjustment.ecoText("accountName")
+                }
                 // A changed account may remove an operation from the currently
                 // filtered list. Show all operations after updating.
                 if(resource=="operations"){
@@ -556,6 +562,16 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                             NativeHoldAction("Добавить долг",Icons.Default.MenuBook){editor=EcoEditorRequest("debts")}
                         )
                     )
+                }
+            }
+        }
+        if(adjustmentNotice.isNotBlank()){
+            Surface(Modifier.align(Alignment.TopCenter).padding(horizontal=12.dp,vertical=8.dp),
+                color=if(dark)Color(0xFF25352B) else Color(0xFFE7F6EB),shape=RoundedCornerShape(14.dp),shadowElevation=6.dp){
+                Row(Modifier.padding(horizontal=12.dp,vertical=10.dp),verticalAlignment=Alignment.CenterVertically){
+                    Icon(Icons.Default.Check,null,tint=colors.green)
+                    Text(adjustmentNotice,Modifier.weight(1f).padding(horizontal=8.dp),color=colors.text,fontSize=13.sp)
+                    IconButton(onClick={adjustmentNotice=""}){Icon(Icons.Default.Close,"Закрыть",tint=colors.muted)}
                 }
             }
         }
