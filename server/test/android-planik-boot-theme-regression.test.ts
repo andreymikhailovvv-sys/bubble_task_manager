@@ -79,7 +79,7 @@ test('small Planik matches light/dark website palette with tight tap bounds and 
   assert.match(native, /dark: Boolean/);
   assert.match(native, /produceState<List<Bitmap\?>>\(emptyList\(\),context,dark,mode,skinId,variant\)/);
   assert.match(native, /size\(width = 84\.dp, height = 90\.dp\)/);
-  assert.match(native, /Bitmap\.createBitmap\(full, 80, 12, 280, 300\)/);
+  assert.ok(native.includes('Bitmap.createBitmap(420,375,Bitmap.Config.ARGB_8888)'));
   assert.match(native, /indication = null/);
   assert.match(native, /if \(dark\) "" else "_light"/);
   assert.match(general, /PlanikNativeLauncher\([\s\S]{0,70}dark = dark/);
@@ -124,7 +124,7 @@ test('native mascot only hides its offline fallback after real transparent pixel
   assert.match(home,/Аксессуары и скины Планика/);
 });
 
-test('all skins use the original launcher crop and individually cached animation frames', async () => {
+test('all skins use an expanded unclipped viewport and individually cached animation frames', async () => {
   const [native,motion,art,web,home,live] = await Promise.all([
     read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/PlanikNativeLauncher.kt'),
     read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeMascotMotion.kt'),
@@ -133,8 +133,10 @@ test('all skins use the original launcher crop and individually cached animation
     read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/HomeScreen.kt'),
     read('../../client/src/components/LiveVoiceDialog.tsx')
   ]);
-  assert.match(native,/Bitmap\.createBitmap\(full, 80, 12, 280, 300\)/);
-  assert.doesNotMatch(native,/if\(skinId=="classic"\) Bitmap\.createBitmap/);
+  assert.ok(native.includes('Bitmap.createBitmap(420,375,Bitmap.Config.ARGB_8888)'));
+  assert.ok(!native.includes('Bitmap.createBitmap(full,'));
+  assert.ok(native.includes('SVG.getFromString(expanded).renderToPicture(420,375)'));
+  assert.ok(native.includes('-10 -30 450 365'));
   assert.match(native,/withContext\(Dispatchers\.Default\)/);
   assert.match(native,/nativeMascotMotionSvg\(skinId,mode,frame\)/);
   for(const part of ['pirate-map','wizard-cards','space-signal','ninja-notebook','northern-warmth','zoomer-phone','ninja-guard','wizard-orb']){
@@ -142,7 +144,7 @@ test('all skins use the original launcher crop and individually cached animation
   }
   assert.match(art,/sin\(frame\*Math\.PI\/6\)/);
   assert.match(art,/sin\(frame\*Math\.PI\/4\+1\.3\)/);
-  assert.match(web,/setAttribute\('viewBox', params\.get\('variant'\)==='economic' \? '35 32 345 275' : '100\.7 25\.4 230 246\.4'\)/);
+  assert.ok(web.includes("setAttribute('viewBox', '-10 -30 450 365')"));
   assert.match(home,/rememberModalBottomSheetState\(skipPartiallyExpanded=true\)/);
   assert.match(home,/sheetState=sheetState/);
   assert.match(live,/api\.getMascotWardrobe\(\)/);

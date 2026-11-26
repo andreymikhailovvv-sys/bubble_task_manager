@@ -17,10 +17,10 @@ export default function AndroidMascotSurface() {
     window.addEventListener('planik-native-mode',listener);
     let frame = 0;
     const markReady = () => {
-      // Match the native 280x300 crop, rather than scaling the entire SVG
-      // (including its generous blank side margins) into the small launcher.
+      // Native WebViews cannot paint outside their viewport. Reserve space
+      // for animated accessories, arms and effects on all four sides.
       const svg = document.querySelector('.android-mascot-artwork .planik-svg');
-      svg?.setAttribute('viewBox', params.get('variant')==='economic' ? '35 32 345 275' : '100.7 25.4 230 246.4');
+      svg?.setAttribute('viewBox', '-10 -30 450 365');
       const body = document.querySelector('.android-mascot-artwork .planik-body-surface');
       const bounds = body?.getBoundingClientRect();
       if (bounds && bounds.width > 0 && bounds.height > 0) {
