@@ -425,7 +425,9 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                                     EcoOperationTotals(operationTotals,operationsBusy,colors,Modifier.weight(1f))
                                     EcoOperationsFilterButton(filterCount,colors){filtersOpen=true}
                                 }
-                                if (operationsBusy) LinearProgressIndicator(Modifier.fillMaxWidth(),color=colors.gold)
+                                Box(Modifier.fillMaxWidth().height(3.dp)) {
+                                    if (operationsBusy) LinearProgressIndicator(Modifier.fillMaxWidth(),color=colors.gold)
+                                }
                                 Column(Modifier.fillMaxWidth().height(520.dp)
                                     .verticalScroll(rememberScrollState())){
                                     if(operations.isEmpty()&&!operationsBusy)
