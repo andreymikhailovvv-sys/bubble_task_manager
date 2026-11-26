@@ -887,7 +887,7 @@ private fun EcoOperationRow(op:JsonObject,snapshot:JsonObject,colors:EcoColors,
         }
         Text((if(credit)"+" else if(debit)"−" else "")+ecoRubles(op.ecoText("amountMinor")),
             fontSize=12.sp,color=amountColor,fontWeight=FontWeight.SemiBold,maxLines=1)
-        if(linked==null && op.ecoText("debtId").isBlank() && !op.ecoBool("isAdjustment")) {
+        run {
             IconButton(onClick=onDelete,modifier=Modifier.size(27.dp)) {
                 Icon(Icons.Default.Delete,"Удалить",Modifier.size(16.dp),tint=colors.muted)
             }

@@ -173,11 +173,15 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
     if (node) node.scrollTop = node.scrollHeight;
   }, [assistantOpen, snapshot?.assistantMessages.length, assistantBusy, assistantStage, assistantError]);
   const [operations, setOperations] = useState<Operation[]>([]);
+  const [operationTotals,setOperationTotals]=useState<{receivedMinor:string;spentMinor:string;netMinor:string}|null>(null);
+  const operationRequestRef=useRef(0);
+
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [operationsBusy, setOperationsBusy] = useState(false);
   const [kindFilter, setKindFilter] = useState('');
   const [accountFilter, setAccountFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const activeFilterCount=[kindFilter,accountFilter,categoryFilter].filter(Boolean).length;
   const [newCategoryOpen, setNewCategoryOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategorySaving, setNewCategorySaving] = useState(false);
@@ -270,20 +274,24 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   }, [user?.id]);
 
   const loadOperations = useCallback(async (append = false, cursor?: string | null) => {
+    const requestId=++operationRequestRef.current;
     setOperationsBusy(true);
+    if(!append){setOperationTotals(null);setOperations([]);setNextCursor(null);}
     try {
       const params = new URLSearchParams();
       if (kindFilter) params.set('kind', kindFilter);
       if (accountFilter) params.set('accountId', accountFilter);
       if (categoryFilter) params.set('category', categoryFilter);
       if (append && cursor) params.set('cursor', cursor);
-      const response = await economicRequest<{ operations: Operation[]; nextCursor: string | null }>('/operations?' + params.toString());
+      const response = await economicRequest<{ operations: Operation[]; nextCursor: string | null; totals:{receivedMinor:string;spentMinor:string;netMinor:string} }>('/operations?' + params.toString());
+      if(requestId!==operationRequestRef.current)return;
+      setOperationTotals(response.totals);
       setOperations(prev => append ? prev.concat(response.operations) : response.operations);
       setNextCursor(response.nextCursor);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Не удалось загрузить операции'); }
-    finally { setOperationsBusy(false); }
+    } catch (cause) { if(requestId===operationRequestRef.current)setError(cause instanceof Error ? cause.message : 'Не удалось загрузить операции'); }
+    finally { if(requestId===operationRequestRef.current)setOperationsBusy(false); }
   }, [kindFilter, accountFilter, categoryFilter]);
-  useEffect(() => { if (section === 'operations' && snapshot) void loadOperations(); }, [section, snapshot?.totals.operationCount, kindFilter, accountFilter, categoryFilter]);
+  useEffect(() => { if ((section === 'operations'||section==='overview') && snapshot) void loadOperations(); }, [section, reportRevision, snapshot?.totals.operationCount, kindFilter, accountFilter, categoryFilter]);
 
   const formSet = (key: string, value: string) => setForm(prev => ({ ...prev, [key]: ['amount','balance','paid','creditLimit','monthlyOverride'].includes(key) ? groupMoneyInput(value) : value }));
   const openDialog = (kind: NonNullable<Dialog>['kind'], item?: Account | Operation | Debt | Loan | Category) => {
@@ -406,8 +414,9 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   const categoryInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') { event.preventDefault(); void createInlineCategory(); }
   };
-  const remove = async (type: 'accounts' | 'operations' | 'debts' | 'loans' | 'categories', id: string) => {
-    if (!window.confirm('Удалить запись? Это действие нельзя отменить.')) return;
+  const remove = async (type: 'accounts' | 'operations' | 'debts' | 'loans' | 'categories', id: string, operation?:Operation) => {
+    const message=operation?.debtPhase==='FUNDING'?'Отменить получение или выдачу долга? Связанный долг будет удалён.':operation?.debtPhase==='SETTLEMENT'?'Отменить погашение? Долг снова станет непогашенным.':operation?.isAdjustment?'Отменить корректировку баланса?':'Удалить запись? Это действие нельзя отменить.';
+    if (!window.confirm(message)) return;
     setError('');
     try {
       await economicRequest('/' + type + '/' + encodeURIComponent(id), 'DELETE');
@@ -484,6 +493,10 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
     ...baseCategories[kind], ...(snapshot?.categories.filter(c => c.kind === kind).map(c => c.name) || [])
   ]));
   const accountName = (id: string | null) => snapshot?.accounts.find(a => a.id === id)?.name || 'Счёт';
+  const operationFilters=()=><div className="econ-filters-control"><div className="econ-filters-toggle-row"><button type="button" className={'econ-filters-toggle' + ((kindFilter||accountFilter||categoryFilter) ? ' active' : '')} title="Фильтры операций" aria-label="Фильтры операций" aria-expanded={filtersOpen} aria-controls="economic-operation-filters" onClick={()=>setFiltersOpen(value=>!value)}><Settings2 size={19}/>{activeFilterCount>0&&<span className="econ-filter-count">{activeFilterCount}</span>}</button></div>{filtersOpen && <div id="economic-operation-filters" className="econ-filters"><div className="econ-filters-popover-title"><strong>Фильтры операций</strong><button type="button" onClick={()=>setFiltersOpen(false)} aria-label="Закрыть фильтры"><X size={16}/></button></div><select value={kindFilter} onChange={e => setKindFilter(e.target.value)} aria-label="Тип операции"><option value="">Все типы</option><option value="EXPENSE">Расходы</option><option value="INCOME">Доходы</option><option value="TRANSFER">Переводы</option><option value="DEBTS">Долговые операции</option></select><select value={accountFilter} onChange={e => setAccountFilter(e.target.value)} aria-label="Счёт"><option value="">Все счета</option>{snapshot?.accounts.map(a => <option value={a.id} key={a.id}>{a.name}</option>)}</select><select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} aria-label="Категория"><option value="">Все категории</option>{[...new Set([...categories('EXPENSE'), ...categories('INCOME')])].map(c => <option value={c} key={c}>{c}</option>)}</select></div>}</div>;
+  const operationSummary=()=> <div className="econ-filter-totals" aria-live="polite">
+    {operationTotals?<><span>Получено <strong className="INCOME">+{money(operationTotals.receivedMinor)}</strong></span><span>Потрачено <strong className="EXPENSE">−{money(operationTotals.spentMinor)}</strong></span><span>Итого <strong>{BigInt(operationTotals.netMinor)>0n?'+':''}{money(operationTotals.netMinor)}</strong></span><small>Денежные движения по всем совпавшим записям, без переводов между счетами.</small></>:<span>{operationsBusy?'Загружаем итог…':'Итог недоступен'}</span>}
+  </div>;
   const operationRow = (op: Operation) => {
     const linkedDebt = op.debtId ? snapshot?.debts.find(d => d.id === op.debtId) : undefined;
     const isCredit = creditKinds.has(op.kind);
@@ -517,8 +530,8 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
             <BookOpen size={16}/></button>
         : <>
             {!op.isAdjustment && <button className="econ-icon-button" type="button" title="Редактировать" aria-label={'Редактировать ' + op.title} onClick={event => { event.stopPropagation(); openDialog('operation', op); }}><Pencil size={15}/></button>}
-            {!op.isAdjustment && <button className="econ-icon-button econ-delete" type="button" title="Удалить" aria-label={'Удалить ' + op.title} onClick={event => { event.stopPropagation(); void remove('operations', op.id); }}><Trash2 size={15}/></button>}
           </>}
+      <button className="econ-icon-button econ-delete" type="button" title="Удалить" aria-label={'Удалить ' + op.title} onClick={event => { event.stopPropagation(); void remove('operations', op.id,op); }}><Trash2 size={15}/></button>
     </div>;
   };
 
@@ -662,7 +675,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
               </div>
             </section>
           </div>
-          <section className="econ-card econ-recent"><div className="econ-card-header"><div><h2>Последние операции</h2><p>{snapshot.totals.operationCount ? snapshot.totals.operationCount + ' записей всего' : 'Здесь появятся доходы и расходы'}</p></div><button type="button" onClick={() => setSection('operations')}>Все операции <ChevronRight size={16}/></button></div>{snapshot.recent.length ? snapshot.recent.map(operationRow) : <div className="econ-empty">Пока нет операций. Начните с первой записи.</div>}</section>
+          <section className="econ-card econ-recent"><div className="econ-card-header"><div><h2>Последние операции</h2><p>{snapshot.totals.operationCount ? snapshot.totals.operationCount + ' записей всего' : 'Здесь появятся доходы и расходы'}</p></div><button type="button" onClick={() => setSection('operations')}>Все операции <ChevronRight size={16}/></button></div>{operationFilters()}{operationSummary()}{operations.length ? operations.slice(0,8).map(operationRow) : <div className="econ-empty">{operationsBusy?'Загружаем…':'Нет операций по выбранным фильтрам'}</div>}</section>
         </>}
         {section !== 'overview' && <div className="econ-section-content">
           <div className="econ-section-heading">
@@ -683,7 +696,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
           </div>
           {section === 'report' && <EconomicReport revision={reportRevision}/>}
           {section === 'accounts' && <div className="econ-collection-grid">{snapshot.accounts.map(a => <article className="econ-card econ-account-detail" key={a.id}><div className="econ-card-top"><span className="econ-account-symbol">{a.accountType === 'CREDIT_CARD' ? <CreditCard size={22}/> : <Landmark size={22}/>}</span>{a.isPrimary && <span className="econ-tag">Основной</span>}</div><h3>{a.name}</h3><strong>{money(a.balanceMinor)}</strong><p>{a.accountType === 'CREDIT_CARD' ? 'Доступно из лимита ' + money(a.creditLimitMinor || '0') : 'Текущий баланс счёта'}</p><div className="econ-row-actions"><button type="button" onClick={() => openDialog('account', a)}><Pencil size={15}/> Изменить</button>{!a.isPrimary && <>{a.accountType !== 'CREDIT_CARD' && <button type="button" onClick={() => void economicRequest('/accounts/' + a.id, 'PATCH', { isPrimary: true }).then(refresh).catch(e => setError(e.message))}><Check size={15}/> Основным</button>}<button type="button" onClick={() => void remove('accounts', a.id)}><Trash2 size={15}/></button></>}</div></article>)}</div>}
-          {section === 'operations' && <section className="econ-card econ-operations-list"><div className="econ-filters-control">{mobile && <div className="econ-filters-toggle-row"><h2 className="econ-operations-heading">Последние операции</h2><button type="button" className={'econ-filters-toggle' + ((kindFilter||accountFilter||categoryFilter) ? ' active' : '')} title="Фильтры операций" aria-label="Фильтры операций" aria-expanded={filtersOpen} aria-controls="economic-operation-filters" onClick={()=>setFiltersOpen(value=>!value)}><Settings2 size={19}/></button></div>}{(!mobile || filtersOpen) && <div id="economic-operation-filters" className="econ-filters">{mobile && <div className="econ-filters-popover-title"><strong>Фильтры операций</strong><button type="button" onClick={()=>setFiltersOpen(false)} aria-label="Закрыть фильтры"><X size={16}/></button></div>}<select value={kindFilter} onChange={e => setKindFilter(e.target.value)} aria-label="Тип операции"><option value="">Все типы</option><option value="EXPENSE">Расходы</option><option value="INCOME">Доходы</option><option value="TRANSFER">Переводы</option><option value="DEBTS">Долговые операции</option></select><select value={accountFilter} onChange={e => setAccountFilter(e.target.value)} aria-label="Счёт"><option value="">Все счета</option>{snapshot.accounts.map(a => <option value={a.id} key={a.id}>{a.name}</option>)}</select><select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} aria-label="Категория"><option value="">Все категории</option>{[...new Set([...categories('EXPENSE'), ...categories('INCOME')])].map(c => <option value={c} key={c}>{c}</option>)}</select></div>}</div>{operations.length ? operations.map(operationRow) : <div className="econ-empty">{operationsBusy ? 'Загружаем…' : 'Нет операций по выбранным фильтрам'}</div>}{nextCursor && <button className="econ-load-more" disabled={operationsBusy} type="button" onClick={() => void loadOperations(true, nextCursor)}>{operationsBusy ? 'Загрузка…' : 'Показать ещё 50 операций'}</button>}</section>}
+          {section === 'operations' && <section className="econ-card econ-operations-list">{operationFilters()}{operationSummary()}{operations.length ? operations.map(operationRow) : <div className="econ-empty">{operationsBusy ? 'Загружаем…' : 'Нет операций по выбранным фильтрам'}</div>}{nextCursor && <button className="econ-load-more" disabled={operationsBusy} type="button" onClick={() => void loadOperations(true, nextCursor)}>{operationsBusy ? 'Загрузка…' : 'Показать ещё 50 операций'}</button>}</section>}
           {section === 'debts' && <>
             <div className="econ-subsection-heading"><BookOpen size={19}/><h2>Долги</h2><small>{snapshot.debts.filter(d => !d.isClosed).length}</small></div>
             <div className="econ-collection-grid">
