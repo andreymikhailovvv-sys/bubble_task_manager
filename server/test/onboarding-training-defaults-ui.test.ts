@@ -46,12 +46,14 @@ test('new-account starter tasks include requested importance, sectors and capita
   }
 });
 
-test('first-visit training invitation is persistent, anchored above the oval and dismissible only with X', async () => {
+test('standard guide is offered once; the legacy banner remains supported by BubbleField', async () => {
   const [desktop, bubble, menu] = await Promise.all([
     read('../../client/src/App.tsx'),
     read('../../client/src/components/BubbleField.tsx'),
     read('../../client/src/components/UpdatesMenu.tsx')
   ]);
+  assert.match(desktop, /api\.claimBasicTrainingOffer\(\)/);
+  assert.match(desktop, /setIsOnboardingOfferOpen\(false\)/);
   assert.match(desktop, /showTrainingInvitation=\{!basicStep && isOnboardingOfferOpen\}/);
   assert.match(desktop, /onOpenTraining=\{\(\) => \{/);
   assert.match(desktop, /setTrainingOpenSignal\(signal => signal \+ 1\)/);

@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { PlanikMascot } from './PlanikMascot';
+import { PlanikMascot, type PlanikMode } from './PlanikMascot';
+import { TrainingPractice } from './TrainingPractice';
+import { guidedSteps, type AdvancedLesson } from '../lib/guidedTraining';
 import { BASIC_TRAINING_STEPS, type BasicTrainingStep } from '../lib/basicTraining';
 import './BasicPlanikTraining.css';
 
@@ -18,10 +20,18 @@ const readTarget = (selector?: string): Rect | null => {
     bottom: Math.min(innerHeight, Math.ceil(Math.max(...rects.map(r => r.bottom)) + 5)) };
 };
 
-export function BasicPlanikTraining({ step, theme, notice, onNext, onFinish, onGrab }: {
-  step: BasicTrainingStep; theme: 'light' | 'dark'; notice: string | null; onNext: () => void; onFinish: () => void; onGrab: () => void;
+export function BasicPlanikTraining({ step, lesson, theme, notice, onNext, onFinish, onGrab }: {
+  step: BasicTrainingStep | string; lesson?: AdvancedLesson; theme: 'light' | 'dark'; notice: string | null; onNext: () => void; onFinish: () => void; onGrab: () => void;
 }) {
-  const config = BASIC_TRAINING_STEPS.find(item => item.id === step)!;
+  const steps = lesson ? guidedSteps(lesson) : BASIC_TRAINING_STEPS;
+  const config = steps.find(item => item.id === step)!;
+  const practice = 'practice' in config ? config.practice : undefined;
+  const scriptedSkin = 'skin' in config ? config.skin : undefined;
+  const last = step === 'goodbye' || ('done' in config && config.done);
+  const [skin, setSkin] = useState('classic');
+  const [animation, setAnimation] = useState<Exclude<PlanikMode, 'showcase'>>('idle');
+  const [replay, setReplay] = useState(0);
+  useEffect(() => { setSkin(scriptedSkin || 'classic'); setAnimation(scriptedSkin ? 'hover' : 'idle'); setReplay(n => n + 1); }, [step, scriptedSkin]);
   const [target, setTarget] = useState<Rect | null>(null);
   const [viewport, setViewport] = useState(() => ({ width: innerWidth, height: innerHeight }));
   const [typed, setTyped] = useState(0);
@@ -33,7 +43,7 @@ export function BasicPlanikTraining({ step, theme, notice, onNext, onFinish, onG
   useLayoutEffect(() => {
     let scrolled = false;
     const update = () => {
-      if (!scrolled && (step === 'notes' || step === 'habits' || step === 'integrations' || step === 'android')) {
+      if (!scrolled && (step === 'notes' || step === 'habits' || step === 'integrations' || step === 'android' || Boolean(lesson))) {
         const node = config.target && document.querySelector(config.target);
         if (node && node.getBoundingClientRect().width > 0) {
           node.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' });
@@ -48,7 +58,7 @@ export function BasicPlanikTraining({ step, theme, notice, onNext, onFinish, onG
     const interval = window.setInterval(update, 100);
     window.addEventListener('resize', update);
     return () => { clearInterval(interval); window.removeEventListener('resize', update); };
-  }, [step, config.target]);
+  }, [step, config.target, lesson]);
 
   useLayoutEffect(() => {
     const node = cardRef.current;
@@ -98,7 +108,7 @@ export function BasicPlanikTraining({ step, theme, notice, onNext, onFinish, onG
   }, [step, config.allow]);
 
   const centered = config.center;
-  const width = Math.min(centered ? 480 : 350, viewport.width - 24);
+  const width = Math.min(centered ? 480 : practice ? 390 : 350, viewport.width - 24);
   let left = (viewport.width - width) / 2;
   let top = (viewport.height - cardHeight) / 2;
   if (!centered) {
@@ -127,23 +137,24 @@ export function BasicPlanikTraining({ step, theme, notice, onNext, onFinish, onG
   const fullyTyped = typed >= config.text.length;
   const isMouseOnly = ['grab', 'move', 'link', 'nest', 'complete'].includes(step);
   return createPortal(
-    <div data-basic-training-overlay data-theme={theme} className={`basic-planik-overlay ${centered ? 'is-centered' : ''}`}>
+    <div data-basic-training-overlay data-training-step={step} data-theme={theme} className={`basic-planik-overlay ${centered ? 'is-centered' : ''}`}>
       {centered || !target ? <div className="basic-planik-dim" /> : <div className="basic-planik-spotlight" style={{ left: target.left, top: target.top, width: target.right - target.left, height: target.bottom - target.top }} />}
       <div ref={cardRef} className={`basic-planik-card ${centered ? 'basic-planik-card--intro' : ''}`} style={{ width, left, top }}>
-        <div className="basic-planik-character"><PlanikMascot variant="planner" skinId="classic" size="sidekick" trainingPoint={pointingDirection} previewMode={step === 'linked' || step === 'nested' || step === 'goodbye' ? 'celebrating' : 'idle'} /></div>
+        <div className="basic-planik-character"><PlanikMascot key={lesson ? replay : undefined} variant="planner" skinId={lesson ? skin : "classic"} size="sidekick" trainingPoint={pointingDirection} previewMode={step === 'linked' || step === 'nested' || last ? 'celebrating' : lesson ? animation : 'idle'} /></div>
         <section className="basic-planik-speech" role="dialog" aria-label="Обучение от Планика">
-          <div className="basic-planik-meta"><span>Планик</span><span>{BASIC_TRAINING_STEPS.indexOf(config) + 1} / {BASIC_TRAINING_STEPS.length}</span></div>
+          <div className="basic-planik-meta"><span>Планик</span><span>{steps.findIndex(item => item.id === step) + 1} / {steps.length}</span></div>
           <div className="basic-planik-text">
             <span className="basic-planik-text-measure" aria-hidden="true">{config.text}</span>
             <span className="basic-planik-text-live" aria-hidden="true">{visibleText}{!fullyTyped && <i className="basic-planik-caret" />}</span>
             <span className="sr-only" role="status">{config.text}</span>
           </div>
+          {practice && <TrainingPractice key={step} kind={practice} skin={skin} onSkin={value => { setSkin(value); setAnimation('idle'); setReplay(n => n + 1); }} onAnimation={value => { setAnimation(value); setReplay(n => n + 1); }} onReady={() => {}} onNext={onNext} />}
           {notice && <p className="basic-planik-notice" role="status">{notice}</p>}
-          {config.action && !notice && <p className="basic-planik-hint">Ожидаю твоего действия…</p>}
+          {config.action && !notice && !practice && <p className="basic-planik-hint">Ожидаю твоего действия…</p>}
           {isMouseOnly && <p className="basic-planik-touch-hint">Для этого упражнения нужна мышь. На сенсорном устройстве обучение можно завершить и пройти позже.</p>}
           <div className="basic-planik-actions">
-            <button type="button" className="basic-planik-exit" onClick={onFinish}>{centered && step !== 'goodbye' ? 'Пройти обучение позже' : 'Закончить обучение'}</button>
-            {!config.action && <button type="button" className="basic-planik-next" onClick={onNext}>{step === 'intro-next' ? 'Следовать за Плаником' : step === 'goodbye' ? 'Готово' : 'Далее'}</button>}
+            <button type="button" className="basic-planik-exit" onClick={onFinish}>{centered && !last ? 'Пройти обучение позже' : 'Закончить обучение'}</button>
+            {!config.action && <button type="button" className="basic-planik-next" onClick={onNext}>{step === 'intro-next' ? 'Следовать за Плаником' : last ? 'Готово' : 'Далее'}</button>}
           </div>
         </section>
       </div>

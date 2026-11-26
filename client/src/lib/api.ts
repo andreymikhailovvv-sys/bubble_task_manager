@@ -765,6 +765,7 @@ export const api = {
     request<{ url: string }>(`/api/tasks/${id}/calendar/ics-link`, { method: 'POST', body: JSON.stringify(payload) }),
   recordEfficiencyEvent: (payload: { delta: number; bucket: 'task' | 'habit' | 'ai' | 'focus' }) =>
     request<Pick<CurrentUser, 'efficiencyScore' | 'efficiencyTaskScore' | 'efficiencyHabitScore' | 'efficiencyAiScore' | 'efficiencyFocusScore' | 'efficiencyLastActivityAt'>>('/api/efficiency/events', { method: 'POST', body: JSON.stringify(payload) }),
+  claimBasicTrainingOffer: () => request<{ show: boolean }>('/api/training/basic/claim', { method: 'POST' }),
   completeTrainingLesson: (lessonId: string) =>
     request<{ awarded: boolean; reward: number; user: CurrentUser }>(`/api/training/lessons/${lessonId}/complete`, { method: 'POST' }),
   getHabits: () => request<Habit[]>('/api/habits'),

@@ -281,7 +281,8 @@ const EFFICIENCY_BONUSES = {
   completedHabit: 20.1,
   createdTask: 1
 } as const;
-const TRAINING_LESSON_IDS = ['workspace', 'tasks', 'ai', 'features'] as const;
+const TRAINING_LESSON_IDS = ['workspace', 'tasks', 'basic', 'ai', 'features'] as const;
+const BASIC_TRAINING_OFFER_MARKER = 'basic-onboarding-v1-seen';
 const TRAINING_LESSON_REWARD = 5;
 
 const toAuthUser = async (user: {
@@ -1489,6 +1490,19 @@ apiRouter.post('/efficiency/events', requireAuth, async (req, res) => {
   }
 
   res.json(efficiencyState);
+});
+
+// Claim once per account, including existing accounts. This is not a completed
+// lesson and never changes credits, ratings, or task data.
+apiRouter.post('/training/basic/claim', requireAuth, async (req, res) => {
+  const show = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${req.user!.id}))`;
+    const user = await tx.user.findUnique({ where: { id: req.user!.id }, select: { completedLessonIds: true } });
+    if (!user || user.completedLessonIds.includes(BASIC_TRAINING_OFFER_MARKER)) return false;
+    await tx.user.update({ where: { id: req.user!.id }, data: { completedLessonIds: [...user.completedLessonIds, BASIC_TRAINING_OFFER_MARKER] } });
+    return true;
+  });
+  res.json({ show });
 });
 
 apiRouter.post('/training/lessons/:lessonId/complete', requireAuth, async (req, res) => {

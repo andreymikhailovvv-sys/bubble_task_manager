@@ -36,3 +36,17 @@
 @media(prefers-reduced-motion:reduce){.basic-planik-card,.basic-planik-character,.basic-planik-spotlight{transition:none}.basic-planik-caret{animation:none}}
 
 .planik-training-point{animation:planik-training-point-in .35s ease-out both;pointer-events:none}@keyframes planik-training-point-in{from{opacity:0}to{opacity:1}}@media(prefers-reduced-motion:reduce){.planik-training-point{animation:none}}
+
+/* The tour is the only visible mascot, including in portalled AI/notes dialogs.
+   Keep layout and the real launcher anchor intact for the wardrobe explanation. */
+body:has([data-basic-training-overlay]) .planik-mascot:not([data-basic-training-overlay] .planik-mascot){visibility:hidden!important;pointer-events:none!important}
+body:has([data-training-step^="feature-skins"]) .mascot-wardrobe-trigger{opacity:1!important;visibility:visible!important;transform:none!important;pointer-events:none!important}
+.basic-planik-practice{display:grid;gap:8px;margin-top:12px;padding:10px;border:1px solid var(--training-border);border-radius:12px;background:color-mix(in srgb,var(--training-surface) 88%,var(--training-accent))}
+.basic-planik-practice-label{font-size:10px;color:var(--training-muted);letter-spacing:.04em}
+.basic-planik-practice label{display:grid;gap:4px;font-size:12px;color:var(--training-muted)}
+.basic-planik-practice input,.basic-planik-practice textarea,.basic-planik-practice select{width:100%;min-width:0;border:1px solid var(--training-border);border-radius:8px;background:var(--training-surface);color:var(--training-text);padding:7px;font-size:12px;resize:none}
+.basic-planik-practice button{border:1px solid var(--training-border);border-radius:8px;background:var(--training-surface);color:var(--training-text);padding:7px 9px;font-size:12px;font-weight:600;cursor:pointer}
+.basic-planik-practice button[aria-pressed="true"],.basic-planik-practice button.basic-planik-practice-next{border-color:var(--training-accent);background:color-mix(in srgb,var(--training-surface) 75%,var(--training-accent));color:var(--training-text)}
+.basic-planik-practice button:disabled{opacity:.45;cursor:default}
+.basic-planik-practice-options{display:flex;gap:5px;flex-wrap:wrap}
+.basic-planik-practice button:focus-visible,.basic-planik-practice :is(textarea,input,select):focus-visible{outline:2px solid var(--training-accent);outline-offset:1px}
