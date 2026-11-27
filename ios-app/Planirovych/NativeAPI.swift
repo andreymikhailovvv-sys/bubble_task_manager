@@ -602,6 +602,12 @@ final class NativeAPI {
         return response.selected["economic"] ?? "classic"
     }
 
+    func economicRepeatNotices() async throws -> [EcoRepeatNotice] {
+        struct Envelope: Decodable { let notifications: [EcoRepeatNotice] }
+        let response: Envelope = try await request("system-notifications")
+        return response.notifications.filter { $0.eventKey.hasPrefix("economic-repeat:") }
+    }
+
     func economicSnapshot() async throws -> EcoSnapshot {
         try await request("economic/snapshot")
     }

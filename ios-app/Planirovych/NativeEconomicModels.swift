@@ -25,6 +25,7 @@ struct EcoOperation: Codable, Identifiable {
     let debtPhase: String?
     let positionsJson: String?
     let calculation: String?
+    let recurrenceJson: NativeRecurrenceRule?
 }
 
 struct EcoDebt: Codable, Identifiable {
@@ -117,6 +118,7 @@ struct EcoSessionEnvelope: Decodable {
 
 struct EcoServerUser: Decodable {
     let telegramLinked: Bool
+    let timeZone: String?
 }
 
 /// Money is stored on the server in integer minor units, never a Double.
@@ -272,4 +274,11 @@ struct EcoEditorTarget: Identifiable {
         self.raw = raw
         self.id = (raw?["id"] as? String).map { resource.rawValue + ":" + $0 } ?? resource.rawValue
     }
+}
+
+struct EcoRepeatNotice: Decodable, Identifiable {
+    let id: String
+    let eventKey: String
+    let content: String
+    let readAt: String?
 }
