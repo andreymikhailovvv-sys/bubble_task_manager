@@ -6622,11 +6622,6 @@ export default function App() {
       setIsAiExpanded(false);
       setIsAiChatOpen(false);
     }
-    if (basicStep === 'block' && next.kind === 'mode') {
-      setBasicNotice('Это ещё один режим отображения. Выбери другой блок, например «Заметки».');
-      setIsAddMenuOpen(true);
-      return;
-    }
     if (basicStep === 'block') { setBasicNotice(null); setBasicStep('block-added'); }
     const slots = side === 'left' ? [next, fullscreenPanels[0]] : [fullscreenPanels[0], next];
     setFullscreenDisplayModes(slots.flatMap(panel => panel.kind === 'mode' ? [panel.mode] : []));
@@ -6856,7 +6851,11 @@ export default function App() {
           onOpenNote={(id) => setRequestedStandaloneNote({ id, serial: Date.now() })}
         />
             <FullscreenModePicker modes={fullscreenPanels.filter(panel => panel.kind === 'mode').map(panel => panel.mode)} onChange={(nextModes) => {
-               if (basicStep === 'modes' && nextModes.length === 2) setBasicStep('two-modes');
+               if (basicStep === 'modes' && nextModes[0] !== fullscreenDisplayModes[0]) setBasicStep('two-modes');
+              else if (basicStep === 'two-modes' && nextModes[0] !== fullscreenDisplayModes[0]) {
+                setBasicStep('block');
+                setIsAddMenuOpen(true);
+              }
               setPendingWorkspaceBlock(null);
               setFullscreenDisplayModes(nextModes);
               setFullscreenPanelSlots(null);
@@ -7802,6 +7801,11 @@ export default function App() {
                   placement={workspaceOverlayActive ? null : pendingWorkspaceBlock}
                   ratio={fullscreenSplitRatio}
                   onRatioChange={setFullscreenSplitRatio}
+                  onSwap={() => {
+                    const slots = [fullscreenPanels[1], fullscreenPanels[0]];
+                    setFullscreenPanelSlots(slots);
+                    setFullscreenDisplayModes(slots.flatMap(panel => panel.kind === 'mode' ? [panel.mode] : []));
+                  }}
                 />
               ) : (
                 <FullscreenWorkspaceSingle panel={fullscreenPanels[0]} renderPanel={renderFullscreenPanel}
@@ -9664,8 +9668,8 @@ export default function App() {
         managedMascot
         modalMascot={mascotSurface.modal}
         embeddedChatTarget={hasGeneralAiPane ? fullscreenChatTarget : null}
-        taskOpen={Boolean(focusedTask)}
-        embeddedTaskFocus={embeddedFocusActive}
+        taskOpen={Boolean(focusedTask) && (!embeddedFocusActive || fullscreenPanels[1]?.kind === 'task-ai')}
+        embeddedTaskFocus={embeddedFocusActive && fullscreenPanels[1]?.kind === 'task-ai' && !hasGeneralAiPane}
         fullscreenBubbles={isBubbleFullscreen}
         onHoverChange={hovered => { setQuickAiPreviewHovered(hovered); if(hovered){ scheduleQuickAiChatScrollToBottom(); markSystemNotificationsRead(); } }}
         onFocus={scheduleQuickAiChatScrollToBottom}
