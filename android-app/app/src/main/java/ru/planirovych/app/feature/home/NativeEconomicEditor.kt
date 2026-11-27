@@ -107,7 +107,7 @@ internal fun EcoEditorSheet(
     val accountOptions = snapshot.ecoItems("accounts").map {
         it.ecoText("id") to it.ecoText("name")
     }
-    var repeatRule by remember(request) { mutableStateOf(item["recurrenceJson"] as? JsonObject) }
+    var repeatRule by remember(request) { mutableStateOf(item?.get("recurrenceJson") as? JsonObject) }
     var repeatEnabled by remember(request) { mutableStateOf(repeatRule!=null) }
     var localError by remember(request) { mutableStateOf("") }
     var newCategoryOpen by remember(request) { mutableStateOf(false) }
