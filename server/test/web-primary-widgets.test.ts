@@ -197,7 +197,7 @@ test('desktop habit calendar remains compact and completed days override schedul
   assert.ok(css.includes('outline: 2px solid var(--tracker-accent)'));
 });
 
-test('website microphone bypasses the live menu and completion spotlight shares the financial-free task metrics', async () => {
+test('website microphone bypasses the live menu and completion sign shares the financial-free task metrics', async () => {
   const [app, chat, voice, mascot, welcome] = await Promise.all([
     source('client/src/App.tsx'), source('client/src/components/ExpandedAiChat.tsx'),
     source('client/src/components/VoiceInputButton.tsx'), source('client/src/components/PlanikMascot.tsx'),
@@ -211,7 +211,10 @@ test('website microphone bypasses the live menu and completion spotlight shares 
   }
   assert.ok(voice.includes("if (activationMode === 'transcription') void start();"));
   assert.ok(voice.includes('startPersistentPlanikLiveSession'));
-  assert.ok(mascot.includes('planik-completion-beam'));
+  assert.ok(mascot.includes('planik-completion-handle'));
+  assert.ok(mascot.includes('planik-completion-hold'));
+  assert.ok(mascot.includes('planik-completion-sign'));
+  assert.ok(!mascot.includes('planik-completion-beam'));
   assert.ok(mascot.includes('primary-widget-progress'));
   assert.ok(welcome.includes("label: 'Финансовые операции'"));
   assert.ok(welcome.includes('Переводы между счетами'));
