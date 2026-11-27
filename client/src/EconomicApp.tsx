@@ -566,10 +566,10 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
         <option value="INCOME">Доходы</option><option value="TRANSFER">Переводы</option>
         <option value="DEBTS">Долговые операции</option>
       </select></label>
-      <label>Счёт<select value={accountFilter} onChange={e=>setAccountFilter(e.target.value)} aria-label="Счёт">
-        <option value="">Все счета</option>
-        {snapshot?.accounts.map(a=><option value={a.id} key={a.id}>{a.name}</option>)}
-      </select></label>
+      <div className="econ-operation-choice"><span>Счёт</span><div className="econ-operation-accounts" role="group" aria-label="Счёт">
+        <button type="button" aria-pressed={!accountFilter} onClick={()=>setAccountFilter('')}>Все счета</button>
+        {snapshot?.accounts.map(a=><button type="button" key={a.id} aria-pressed={accountFilter===a.id} onClick={()=>setAccountFilter(a.id)}><strong>{a.name}</strong><small>{money(a.balanceMinor)}</small></button>)}
+      </div></div>
       <label>Категория<select value={categoryFilter} onChange={e=>setCategoryFilter(e.target.value)} aria-label="Категория">
         <option value="">Все категории</option>
         {[...new Set([...categories('EXPENSE'),...categories('INCOME'),'Долги','Корректировка'])].map(c=><option value={c} key={c}>{c}</option>)}
@@ -1041,11 +1041,11 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
               onChange={e => formSet('postedToAccount', e.target.checked ? 'yes' : 'no')}/>
             <span>Зачислить долг на счёт {form.direction === 'OWED_TO_ME' ? '(списать при выдаче)' : ''}</span>
           </label>
-          {form.postedToAccount === 'yes' && <label>Счёт для учёта долга
-            <select required value={form.accountId} onChange={e => formSet('accountId', e.target.value)}>
-              {snapshot.accounts.map(a => <option key={a.id} value={a.id}>{a.name}{a.isPrimary ? ' (основной)' : ''}</option>)}
-            </select>
-          </label>}
+          {form.postedToAccount === 'yes' && <div className="econ-operation-choice"><span>Счёт для учёта долга</span>
+            <div className="econ-operation-accounts" role="group" aria-label="Счёт для учёта долга">
+              {snapshot.accounts.map(a => <button type="button" key={a.id} aria-pressed={a.id===form.accountId} onClick={()=>formSet('accountId',a.id)}><strong>{a.name}</strong><small>{money(a.balanceMinor)}</small></button>)}
+            </div>
+          </div>}
           <label>Сколько уже возвращено, ₽<input required inputMode="decimal" value={form.paid} onChange={e => formSet('paid', e.target.value)}/></label>
           <label>Срок возврата (необязательно)<input type="date" value={form.date} onChange={e => formSet('date', e.target.value)}/></label>
           <label>Примечание<input maxLength={500} value={form.note} onChange={e => formSet('note', e.target.value)}/></label>

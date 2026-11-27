@@ -206,11 +206,12 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
       </select>;
     }
     if(['sourceAccountId','targetAccountId','accountId'].includes(key)){
-      return <select aria-label={LABELS[key]} value={String(value??'')} disabled={!editableStatus||busy||!options}
-        onChange={e=>setField(key,e.target.value||null)}>
-        <option value="">{options?'Выберите счёт':'Загрузка счетов'}</option>
-        {options?.accounts.map(account=><option key={account.id} value={account.id}>{account.name}</option>)}
-      </select>;
+      const available = options?.accounts.filter(account => key === 'targetAccountId' ? account.id !== draft.sourceAccountId : key === 'sourceAccountId' && draft.kind === 'TRANSFER' ? account.id !== draft.targetAccountId : true);
+      return <div className="econ-chip-account-choices" role="group" aria-label={LABELS[key]}>
+        {!options && <span>Загрузка счетов…</span>}
+        {available?.map(account=><button key={account.id} type="button" aria-pressed={account.id===value} disabled={!editableStatus||busy} onClick={()=>setField(key,account.id)}>{account.name}</button>)}
+        {key==='accountId' && <button type="button" aria-pressed={!value} disabled={!editableStatus||busy} onClick={()=>setField(key,null)}>Без счёта</button>}
+      </div>;
     }
     if(key==='category'){
       const values=Array.from(new Set([...(BASE_CATEGORIES[kind]??[]),

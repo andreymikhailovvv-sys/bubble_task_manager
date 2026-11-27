@@ -215,3 +215,7 @@
 .econ-finance-modal-actions button:last-child{background:#eda54d;color:#261608}
 .econ-root.econ-light .econ-finance-modal{background:white;color:#293444;border-color:#ead6bb}
 .econ-root.econ-light .econ-finance-modal .econ-finance-edit-row>input,.econ-root.econ-light .econ-finance-modal .econ-finance-edit-row>select{color:#293444;background:#f8f9fb;border-color:#e6e9ed}
+
+.econ-chip-account-choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:6px;width:100%;min-width:0}
+.econ-chip-account-choices button{border:1px solid #b78a4e55;border-radius:10px;background:#c58c3b0a;color:inherit;padding:10px 7px;overflow-wrap:anywhere;text-align:left}
+.econ-chip-account-choices button[aria-pressed=true]{border-color:#d6a24e;background:#c58c3b25;box-shadow:inset 0 0 0 1px #c58c3b35}

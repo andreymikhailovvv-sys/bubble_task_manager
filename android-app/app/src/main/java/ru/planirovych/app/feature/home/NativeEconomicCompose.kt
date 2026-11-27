@@ -623,7 +623,7 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                     EcoSelect("Тип операции",kindFilter,
                         listOf("" to "Все типы","EXPENSE" to "Расходы","INCOME" to "Доходы",
                             "TRANSFER" to "Переводы","DEBTS" to "Долговые операции"),colors){kindFilter=it}
-                    EcoSelect("Счёт",accountFilter,
+                    EcoOperationChoices("Счёт",accountFilter,
                         listOf("" to "Все счета")+
                             current.ecoItems("accounts").map { it.ecoText("id") to it.ecoText("name") },
                         colors){accountFilter=it}

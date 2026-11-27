@@ -415,7 +415,7 @@ internal fun EcoEditorSheet(
                             change("postedToAccount",if(it)"yes" else "no")
                         }
                         if(value("postedToAccount")=="yes"){
-                            EcoSelect("Счёт для учёта долга",value("accountId"),accountOptions,colors){
+                            EcoOperationChoices("Счёт для учёта долга",value("accountId"),accountOptions,colors){
                                 change("accountId",it)
                             }
                         }
@@ -595,7 +595,7 @@ private fun EcoHint(text:String,colors:EcoColors) {
 }
 
 @Composable
-private fun EcoOperationChoices(label:String,value:String,options:List<Pair<String,String>>,colors:EcoColors,oneRow:Boolean=false,onChange:(String)->Unit){
+internal fun EcoOperationChoices(label:String,value:String,options:List<Pair<String,String>>,colors:EcoColors,oneRow:Boolean=false,onChange:(String)->Unit){
     Column(verticalArrangement=Arrangement.spacedBy(6.dp)){
         Text(label,fontSize=11.sp,color=colors.muted)
         val rows=if(oneRow)listOf(options) else options.chunked(2)

@@ -928,7 +928,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         }});
         return saveEconomicProposals(tx,input.userId,message.id,preparedFinancialActions);
       });
-      const autoApply=(await prisma.user.findUnique({
+      const autoApply=input.autoApplyTaskActions === true || (await prisma.user.findUnique({
         where:{id:input.userId},select:{economicAiAutoApply:true}
       }))?.economicAiAutoApply===true;
       let applied=0,failed=0;
