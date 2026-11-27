@@ -5,6 +5,7 @@ struct NativeEconomicEditorSheet: View {
     let target: EcoEditorTarget
     let snapshot: EcoSnapshot
     let telegramLinked: Bool
+    let timeZone: String
     let isSaving: Bool
     let onSave: ([String: Any]) async -> Bool
     let onDelete: (() -> Void)?
@@ -40,11 +41,15 @@ struct NativeEconomicEditorSheet: View {
     @State private var saving = false
     @State private var errorText: String?
     @State private var showingDelete = false
+    @State private var repeating: Bool
+    @State private var repeatPeriod: String
+    @State private var repeatTimes: [Date]
+    @State private var repeatDays: Set<Int>
 
     private var editing: Bool { target.raw?["id"] as? String != nil }
     private var resource: EcoResource { target.resource }
 
-    init(target: EcoEditorTarget, snapshot: EcoSnapshot, telegramLinked: Bool,
+    init(target: EcoEditorTarget, snapshot: EcoSnapshot, telegramLinked: Bool, timeZone: String? = nil,
          isSaving: Bool, onSave: @escaping ([String: Any]) async -> Bool,
          onDelete: (() -> Void)?) {
         self.target = target
@@ -54,6 +59,20 @@ struct NativeEconomicEditorSheet: View {
         self.onSave = onSave
         self.onDelete = onDelete
         let row = target.raw ?? [:]
+        let rule = row["recurrenceJson"] as? [String: Any]
+        self.timeZone = (rule?["timezone"] as? String) ?? timeZone ?? TimeZone.current.identifier
+        let period = (rule?["rrule"] as? String)?.replacingOccurrences(of: "FREQ=", with: "") ?? "DAILY"
+        let slots = rule?["slots"] as? [[String: Any]] ?? []
+        let clock = DateFormatter()
+        clock.locale = Locale(identifier: "en_US_POSIX")
+        clock.timeZone = TimeZone(identifier: self.timeZone) ?? .current
+        clock.dateFormat = "HH:mm"
+        let times = slots.compactMap { ($0["time"] as? String).flatMap { clock.date(from: $0) } }
+        _repeating = State(initialValue: rule != nil)
+        _repeatPeriod = State(initialValue: ["DAILY", "WEEKLY", "MONTHLY"].contains(period) ? period : "DAILY")
+        _repeatTimes = State(initialValue: times.isEmpty ? [clock.date(from: "09:00") ?? Date()] : period == "DAILY" ? times : [times[0]])
+        let days = Set(slots.compactMap { $0[period == "MONTHLY" ? "monthDay" : "weekday"] as? Int })
+        _repeatDays = State(initialValue: days.isEmpty ? [1] : days)
         let raw: (String) -> String = { key in
             guard let value = row[key], !(value is NSNull) else { return "" }
             return String(describing: value)
@@ -195,17 +214,20 @@ struct NativeEconomicEditorSheet: View {
                 Picker("Тип операции", selection: $kind) {
                     Text("Расход").tag("EXPENSE")
                     Text("Доход").tag("INCOME")
-                    Text("Перевод между счетами").tag("TRANSFER")
+                    Text("Перевод").tag("TRANSFER")
                 }
+                .pickerStyle(.segmented)
+                .onChange(of: kind) { _, _ in category = "" }
                 TextField("Название", text: $title)
                 moneyInput("Сумма, ₽", value: $amount, calculator: true)
                 if EcoMoney.isExpression(amount) {
                     Text(EcoMoney.calculate(amount).map { "= " + EcoMoney.formatted($0) } ?? "Введите корректное выражение")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
-                accountPicker(kind == "TRANSFER" ? "Счёт списания" : "Счёт", selection: $sourceID)
+                operationAccountCards(kind == "TRANSFER" ? "Счёт списания" : "Счёт", selection: $sourceID)
+                    .onChange(of: sourceID) { _, next in if targetID == next { targetID = "" } }
                 if kind == "TRANSFER" {
-                    accountPicker("Счёт зачисления", selection: $targetID, except: sourceID)
+                    operationAccountCards("Счёт зачисления", selection: $targetID, except: sourceID)
                 } else {
                     Picker("Категория", selection: $category) {
                         Text("Без категории").tag("")
@@ -262,7 +284,90 @@ struct NativeEconomicEditorSheet: View {
                     }
                 }
             }
+            repeatFields
         }
+    }
+
+    private func operationAccountCards(_ label: String, selection: Binding<String>, except: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 120))], spacing: 8) {
+                ForEach(snapshot.accounts.filter { $0.id != except }) { account in
+                    Button { selection.wrappedValue = account.id } label: {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(account.name).font(.subheadline.weight(.semibold))
+                            Text(EcoMoney.formatted(account.balanceMinor)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .background(Color.orange.opacity(selection.wrappedValue == account.id ? 0.17 : 0.04), in: RoundedRectangle(cornerRadius: 11))
+                        .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(Color.orange.opacity(selection.wrappedValue == account.id ? 0.9 : 0.2)))
+                    }.buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var repeatFields: some View {
+        Section {
+            Toggle("Повторять", isOn: $repeating).tint(.orange)
+            if repeating {
+                Picker("Период", selection: $repeatPeriod) {
+                    Text("В день").tag("DAILY")
+                    Text("В неделю").tag("WEEKLY")
+                    Text("В месяц").tag("MONTHLY")
+                }.pickerStyle(.segmented)
+                    .onChange(of: repeatPeriod) { _, _ in repeatDays = [1]; repeatTimes = [repeatTimes.first ?? Date()] }
+                ForEach(repeatTimes.indices, id: \.self) { index in
+                    HStack {
+                        DatePicker("Время", selection: $repeatTimes[index], displayedComponents: .hourAndMinute)
+                            .environment(\.timeZone, TimeZone(identifier: timeZone) ?? .current)
+                        if repeatPeriod == "DAILY" && repeatTimes.count > 1 {
+                            Button(role: .destructive) { repeatTimes.remove(at: index) } label: { Image(systemName: "minus.circle") }.buttonStyle(.borderless)
+                        }
+                    }
+                }
+                if repeatPeriod == "DAILY" && repeatTimes.count < 31 {
+                    Button { repeatTimes.append((repeatTimes.last ?? Date()).addingTimeInterval(3600)) } label: {
+                        Label("Добавить время", systemImage: "plus")
+                    }
+                }
+                if repeatPeriod != "DAILY" {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 5) {
+                        ForEach(1...(repeatPeriod == "WEEKLY" ? 7 : 31), id: \.self) { day in
+                            Button {
+                                if repeatDays.contains(day) {
+                                    if repeatDays.count > 1 { repeatDays.remove(day) }
+                                } else { repeatDays.insert(day) }
+                            } label: {
+                                Text(repeatPeriod == "WEEKLY" ? ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"][day-1] : String(day))
+                                    .font(.caption.weight(.semibold))
+                                    .frame(maxWidth: .infinity, minHeight: 32)
+                                    .background(Color.orange.opacity(repeatDays.contains(day) ? 0.25 : 0.05), in: RoundedRectangle(cornerRadius: 8))
+                            }.buttonStyle(.plain)
+                        }
+                    }
+                }
+                Text("В назначенное время придёт чип. Запись только после подтверждения.").font(.caption).foregroundStyle(.secondary)
+                Text("Часовой пояс: " + timeZone).font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func recurrencePayload() throws -> Any {
+        guard repeating else { return NSNull() }
+        let clock = DateFormatter()
+        clock.locale = Locale(identifier: "en_US_POSIX")
+        clock.timeZone = TimeZone(identifier: timeZone) ?? .current
+        clock.dateFormat = "HH:mm"
+        let times = repeatTimes.map { clock.string(from: $0) }
+        guard let first = times.first, Set(times).count == times.count else {
+            throw ValidationError.invalid("Укажите неповторяющееся время повторений.")
+        }
+        var slots: [[String: Any]]
+        if repeatPeriod == "DAILY" { slots = times.map { ["time": $0] } }
+        else { slots = repeatDays.sorted().map { ["time": first, repeatPeriod == "WEEKLY" ? "weekday" : "monthDay": $0] } }
+        return ["rrule": "FREQ=" + repeatPeriod, "timezone": timeZone, "until": NSNull(), "slots": slots]
     }
 
     private var debtFields: some View {
@@ -433,7 +538,8 @@ struct NativeEconomicEditorSheet: View {
                 "targetAccountId": kind == "TRANSFER" ? targetID : NSNull(),
                 "category": kind == "TRANSFER" || category.isEmpty ? NSNull() : category,
                 "note": note.isEmpty ? NSNull() : note,
-                "occurredAt": iso(date)
+                "occurredAt": iso(date),
+                "recurrenceJson": try recurrencePayload()
             ]
 
         case .debts:

@@ -191,7 +191,7 @@ struct NativeEconomicView: View {
             if let snapshot {
                 NativeEconomicEditorSheet(
                     target: target, snapshot: snapshot,
-                    telegramLinked: serverUser?.telegramLinked == true,
+                    telegramLinked: serverUser?.telegramLinked == true, timeZone: serverUser?.timeZone,
                     isSaving: isSaving,
                     onSave: { payload in await mutate(target, payload: payload) },
                     onDelete: target.raw?["id"] == nil ? nil : { pendingRemoval = target }

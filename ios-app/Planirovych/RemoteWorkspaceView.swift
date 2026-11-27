@@ -42,6 +42,8 @@ struct RemoteWorkspaceView: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var session: NativeWorkspaceSession
     @State private var selectedTab: ConnectedTab = .overview
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var economicRepeatNotice: EcoRepeatNotice?
     @State private var selectedSphereID: String?
     @State private var showingNewTask = false
     @State private var editingTask: RemoteTask?
@@ -137,6 +139,34 @@ struct RemoteWorkspaceView: View {
             navigation
         }
         .background(background.ignoresSafeArea())
+        .task(id: session.account?.id) {
+            guard let owner = session.account?.id else { return }
+            let key = "economic-repeat-notices-seen-" + owner
+            while !Task.isCancelled {
+                if scenePhase == .active && economicRepeatNotice == nil {
+                    let notices = (try? await NativeAPI().economicRepeatNotices()) ?? []
+                    guard !Task.isCancelled, session.account?.id == owner else { return }
+                    let seen = UserDefaults.standard.stringArray(forKey: key) ?? []
+                    if let next = notices.first(where: { $0.readAt == nil && !seen.contains($0.id) }) {
+                        UserDefaults.standard.set(Array((seen + [next.id]).suffix(200)), forKey: key)
+                        economicRepeatNotice = next
+                    }
+                }
+                try? await Task.sleep(for: .seconds(20))
+            }
+        }
+        .alert(item: $economicRepeatNotice) { notice in
+            Alert(title: Text("Экономыч"), message: Text(notice.content),
+                primaryButton: .default(Text("Открыть чип")) {
+                    Task {
+                        await session.loadChat()
+                        if let project = session.chatProjects.first(where: { $0.chats.contains(where: { $0.id == "quick-ai-requests" }) }) {
+                            await session.selectChat(projectId: project.id, chatId: "quick-ai-requests")
+                        }
+                        selectedTab = .chat
+                    }
+                }, secondaryButton: .cancel(Text("Закрыть")))
+        }
         .overlay(alignment: .bottomTrailing) {
             if selectedTab == .overview || selectedTab == .timeline {
                 quickPlusButton
