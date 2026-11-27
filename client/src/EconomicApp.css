@@ -870,7 +870,7 @@ body:has(.econ-root.econ-mobile-workspace) #root{min-height:100dvh}
 }
 .econ-miniapp-dialog-layer{bottom:var(--econ-miniapp-nav-height,calc(4.5rem + var(--econ-mobile-safe-bottom,env(safe-area-inset-bottom,0px)))) !important}
 .econ-miniapp-dialog-layer .econ-modal-backdrop{align-items:flex-end;padding:8px 0 0}
-.econ-miniapp-dialog-layer .econ-modal{width:100%;max-width:none;max-height:100%;border-radius:22px 22px 0 0;border-bottom:0;box-shadow:none}
+.econ-dialog-layer.econ-miniapp-dialog-layer .econ-modal{width:100%;max-width:none;max-height:100%;border-radius:22px 22px 0 0;border-bottom:0;box-shadow:none}
 .econ-miniapp-dialog-layer .econ-form-actions{padding-bottom:12px}
 .econ-mobile-create .econ-mobile-add-fab{bottom:calc(var(--econ-miniapp-nav-height,calc(4.5rem + var(--econ-mobile-safe-bottom,0px))) + 14px)}
 .econ-mobile-create .econ-create-menu{bottom:calc(var(--econ-miniapp-nav-height,calc(4.5rem + var(--econ-mobile-safe-bottom,0px))) + 80px)}
