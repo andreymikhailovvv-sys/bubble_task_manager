@@ -19,7 +19,7 @@ const modalSelector = [
 
 export function useMascotSurface(enabled: boolean) {
   const previous = useRef<Element | null>(null);
-  const [surface, setSurface] = useState({ modal: false, arrivalKey: 0 });
+  const [surface, setSurface] = useState({ modal: false, expandedChat: false, arrivalKey: 0 });
   useLayoutEffect(() => {
     if (!enabled) return;
     let frame = 0;
@@ -40,7 +40,7 @@ export function useMascotSurface(enabled: boolean) {
       }
       if (top === previous.current) return;
       previous.current = top;
-      setSurface(old => ({ modal: !!top, arrivalKey: old.arrivalKey + 1 }));
+      setSurface(old => ({ modal: !!top, expandedChat: !!top?.matches('.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded)'), arrivalKey: old.arrivalKey + 1 }));
     };
     const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
     update();

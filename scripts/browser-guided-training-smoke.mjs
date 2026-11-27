@@ -244,6 +244,19 @@ try {
   }
   await page.keyboard.press('Escape');
   await normalWardrobe.waitFor({state:'hidden'});
+  // The modal and split chat use the same live composer anchor.
+  await launcher.locator('.planik-body-surface').click();
+  await page.locator('.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded)').waitFor({state:'visible'});
+  await page.waitForFunction(()=>{
+    const avatar=document.querySelector('[data-managed-mascot-launcher=planner][data-mascot-chat-embedded=true]');
+    const main=document.querySelector('.ai-chat-expanded-main');
+    const composer=document.querySelector('.ai-chat-expanded-composer-wrap');
+    if(!avatar||!main||!composer)return false;
+    const a=avatar.getBoundingClientRect(),m=main.getBoundingClientRect(),c=composer.getBoundingClientRect();
+    return a.right<=m.right+2 && a.right>=m.right-10 && a.bottom<=c.top+2 && a.bottom>=c.top-10;
+  });
+  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('planirovych:confirmed-send',{detail:'telegram-send'})));
+  await launcher.locator('[data-mode="telegram-send"] .planik-paper-plane').waitFor({state:'visible'});
   assert.equal(wardrobeWrites,0);
   assert.deepEqual(failures,[],'Browser runtime errors: '+failures.join('\n'));
   console.log('[Guided browser] PASS: launcher, countdown, assistant navigation, scrolling, full wardrobe');

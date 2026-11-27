@@ -121,12 +121,13 @@ function BlockDropTarget({ add = false, onPlace }: { add?: boolean; onPlace: () 
   </button>;
 }
 
-export function FullscreenWorkspaceSingle({ panel, renderPanel, onChoose, onReplace, placement }: {
+export function FullscreenWorkspaceSingle({ panel, renderPanel, onChoose, onReplace, placement, allowReplace = true }: {
   panel: FullscreenWorkspacePanel;
   renderPanel: (panel: FullscreenWorkspacePanel) => ReactNode;
   onChoose: (side: 'left' | 'right', panel: FullscreenWorkspacePanel) => void;
   onReplace: (panel: FullscreenWorkspacePanel) => void;
   placement: FullscreenWorkspacePanel | null;
+  allowReplace?: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   useScrollFade(rootRef);
@@ -135,7 +136,7 @@ export function FullscreenWorkspaceSingle({ panel, renderPanel, onChoose, onRepl
       {placement && <aside className="fullscreen-workspace-single-rail fullscreen-workspace-single-rail--left workspace-placement-rail"><BlockDropTarget add onPlace={() => onChoose('left', placement)}/></aside>}
       <section className="fullscreen-workspace-single-content min-h-0 min-w-0 flex-1">
         {renderPanel(panel)}
-        {placement && !requiresCompanionPanel(placement) && <BlockDropTarget onPlace={() => onReplace(placement)}/>}
+        {placement && allowReplace && !requiresCompanionPanel(placement) && <BlockDropTarget onPlace={() => onReplace(placement)}/>}
       </section>
       {placement && <aside className="fullscreen-workspace-single-rail fullscreen-workspace-single-rail--right workspace-placement-rail"><BlockDropTarget add onPlace={() => onChoose('right', placement)}/></aside>}
     </div>

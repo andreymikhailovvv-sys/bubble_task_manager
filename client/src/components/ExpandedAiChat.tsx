@@ -38,6 +38,7 @@ type Props = {
   planikSkinId?: string;
   onOpenWardrobe?: () => void;
   inlineTarget?: HTMLElement | null;
+  surfaceRef?: (node: HTMLDivElement | null) => void;
   onOpenCheckups?: () => void;
   messages: ReactNode;
   status: ReactNode;
@@ -62,7 +63,7 @@ type Props = {
   onClearReply?: () => void;
 };
 
-export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, uploadProgress, messageCount, themeMode, notificationCount=0, celebrationKey=0, completion, progress, showPlanik=false, planikSkinId='classic', onOpenWardrobe, onOpenCheckups, inlineTarget, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend, onLiveMessage, onLiveToolResult, onLiveStatus, readOnlyStructure=false, attachmentsEnabled=true, replyTo, onClearReply }: Props) {
+export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, uploadProgress, messageCount, themeMode, notificationCount=0, celebrationKey=0, completion, progress, showPlanik=false, planikSkinId='classic', onOpenWardrobe, onOpenCheckups, inlineTarget, surfaceRef, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend, onLiveMessage, onLiveToolResult, onLiveStatus, readOnlyStructure=false, attachmentsEnabled=true, replyTo, onClearReply }: Props) {
   const [draft, setDraft] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [headerHidden, setHeaderHidden] = useState(false);
@@ -194,7 +195,7 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
   };
 
   const chatSurface = (
-    <div className={`ai-chat-expanded-backdrop fixed inset-0 z-[140] flex items-center justify-center p-3 sm:p-4 ${inlineTarget ? 'ai-chat-expanded-embedded' : ''}`}
+    <div ref={surfaceRef} className={`ai-chat-expanded-backdrop fixed inset-0 z-[140] flex items-center justify-center p-3 sm:p-4 ${inlineTarget ? 'ai-chat-expanded-embedded' : ''}`}
       onClick={inlineTarget ? undefined : onClose}>
       <div data-tour="ai-full-chat" className={`ai-chat-expanded focus-mode-shell ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}`} onClick={(event) => event.stopPropagation()}>
         <aside className="ai-chat-expanded-sidebar focus-side-panel">

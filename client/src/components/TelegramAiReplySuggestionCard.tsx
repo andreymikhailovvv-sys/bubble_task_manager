@@ -11,6 +11,14 @@ export function TelegramAiReplySuggestionCard({ reply }: { reply: TelegramAiSugg
   const [localStatus, setLocalStatus] = useState<TelegramAiSuggestedReply['status'] | null>(null);
   const [error, setError] = useState('');
   const pending = useRef(false);
+  const previousStatus = useRef({ eventId: reply.eventId, status: reply.status });
+  useEffect(() => {
+    const previous = previousStatus.current;
+    previousStatus.current = { eventId: reply.eventId, status: reply.status };
+    if (previous.eventId === reply.eventId && previous.status !== 'SENT' && reply.status === 'SENT') {
+      announcePlanikSend('telegram-send', reply.eventId);
+    }
+  }, [reply.eventId, reply.status]);
   useEffect(() => {
     setText(reply.text);
     setError('');
