@@ -185,9 +185,9 @@ export function BasicPlanikTraining({ step, lesson, theme, notice, actionReady, 
   left = clamp(left, 12, Math.max(12, viewport.width - width - 12));
   top = clamp(top, 12, Math.max(12, viewport.height - cardHeight - 12));
   const visibleText = config.text.slice(0, typed);
-  const pointingDirection = step === 'sector' && target ? ((target.left + target.right) / 2 < left + 60 ? 'left' : 'right') : undefined;
+  const pointingDirection = (step === 'sector' || step === 'task-window') && target ? ((target.left + target.right) / 2 < left + 60 ? 'left' : 'right') : undefined;
   const fullyTyped = typed >= config.text.length;
-  const isMouseOnly = ['grab', 'move', 'link', 'nest', 'complete'].includes(step);
+  const isMouseOnly = ['grab', 'move', 'link', 'nest', 'complete', 'two-modes', 'task-window'].includes(step);
   return createPortal(
     <div data-basic-training-overlay data-training-step={step} data-theme={theme} className={`basic-planik-overlay ${centered ? 'is-centered' : ''}`}>
       {centered || !target ? <div className="basic-planik-dim" /> : <div className="basic-planik-spotlight" style={{ left: target.left, top: target.top, width: target.right - target.left, height: target.bottom - target.top }} />}

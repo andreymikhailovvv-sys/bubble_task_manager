@@ -17268,3 +17268,16 @@ body[data-theme] .miniapp-shell .miniapp-credit-badge[data-subscription-limit],
   min-width:0;width:auto;padding:0 6px;overflow:visible;
 }
 .miniapp-shell .miniapp-unified-topbar-row .miniapp-credit-badge[data-subscription-limit]{max-width:none;padding:0 5px}
+
+/* Keep onboarding unobstructed until its automatic offer resolves and the guide ends. */
+body[data-defer-training-notices] .cookie-banner { display:none!important; }
+.fullscreen-mode-window { isolation:isolate; overflow:hidden; border-radius:inherit; }
+.fullscreen-mode-window-close {position:absolute;z-index:35;top:10px;right:10px;width:32px;height:32px;display:grid;place-items:center;border:1px solid var(--panel-border);border-radius:10px;background:var(--popover-bg,var(--panel-bg));color:var(--text-muted)}
+.fullscreen-mode-window-close:hover,.fullscreen-mode-window-close:focus-visible{color:var(--text-primary);border-color:var(--accent-strong)}
+.fullscreen-mode-window .fullscreen-pane-filters-anchor{right:50px!important}
+.fullscreen-mode-window [data-tour="bubble-layout"]{right:50px!important}
+.fullscreen-workspace-pane:has(.notes-editor-inline),.fullscreen-workspace-single-content:has(.notes-editor-inline){padding:0!important;scrollbar-width:none!important;scrollbar-gutter:auto!important}
+.fullscreen-workspace-pane:has(.notes-editor-inline) :is(.standalone-notes-inline-mount,.fullscreen-embedded-focus),.fullscreen-workspace-single-content:has(.notes-editor-inline) :is(.standalone-notes-inline-mount,.fullscreen-embedded-focus){position:relative;display:block;width:100%!important;height:100%!important;min-width:0;max-width:none!important;min-height:0;margin:0!important;padding:0!important;overflow:hidden!important;scrollbar-gutter:auto!important}
+.notes-editor-backdrop.notes-editor-inline{display:block!important;position:absolute!important;inset:0!important;width:auto!important;height:auto!important;max-width:none!important;max-height:none!important;margin:0!important;padding:0!important;overflow:hidden!important}
+.notes-editor-inline .notes-editor-panel{position:absolute!important;inset:0!important;width:auto!important;height:auto!important;max-width:none!important;max-height:none!important;min-width:0;min-height:0;margin:0!important;box-sizing:border-box;overflow:hidden}
+.notes-editor-inline .notes-editor-content{width:100%;max-width:100%;min-width:0;overflow-wrap:anywhere}

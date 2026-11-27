@@ -1845,7 +1845,7 @@ export function BubbleField({
             </button>
             {fullscreen && onOpenInOtherPane && contextMenu.task && !contextMenu.task.parentTaskId &&
               (contextMenu.task.taskType ?? 'TASK') === 'TASK' ? (
-              <button type="button"
+              <button type="button" data-training-task-window-action
                 className="surface-muted mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm hover:brightness-110"
                 onMouseEnter={() => setContextPostponeSubmenuOpen(false)}
                 onClick={() => {

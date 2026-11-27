@@ -1053,6 +1053,12 @@ export default function App() {
   const guidedAssistantSection = guidedStep?.split('-').slice(-1)[0] ?? 'intro';
   const autoBasicStartRef = useRef<(() => void) | null>(null);
   const autoBasicChecked = useRef<string | null>(null);
+  const [basicOfferResolvedFor, setBasicOfferResolvedFor] = useState<string | null>(null);
+  const deferTrainingNotices = authLoading || Boolean(currentUser && (!initialWorkspaceReady || basicOfferResolvedFor !== currentUser.id)) || Boolean(basicStep || advancedTraining);
+  useLayoutEffect(() => {
+    document.body.toggleAttribute('data-defer-training-notices', deferTrainingNotices);
+    return () => document.body.removeAttribute('data-defer-training-notices');
+  }, [deferTrainingNotices]);
   const trainingAccountRef = useRef<string | undefined>(undefined);
   trainingAccountRef.current = currentUser?.id;
   const [basicTasks, setBasicTasks] = useState<Task[]>([]);
@@ -1887,12 +1893,12 @@ export default function App() {
     setIsOnboardingOfferOpen(false);
     const userId = currentUser?.id;
     if (!userId || authLoading || !initialWorkspaceReady || autoBasicChecked.current === userId) return;
-    if (new URLSearchParams(window.location.search).has('joinTask')) return;
+    if (new URLSearchParams(window.location.search).has('joinTask')) { setBasicOfferResolvedFor(userId); return; }
     autoBasicChecked.current = userId;
     const key = trainingOfferKey(userId);
     let seenLocally = false;
     try { seenLocally = localStorage.getItem(key) === '1'; } catch { /* storage is optional */ }
-    if (currentUser?.completedLessonIds?.includes(BASIC_OFFER_MARKER)) return;
+    if (currentUser?.completedLessonIds?.includes(BASIC_OFFER_MARKER)) { setBasicOfferResolvedFor(userId); return; }
     void api.claimBasicTrainingOffer().then(({ show }) => {
       if (trainingAccountRef.current !== userId) return;
       try { localStorage.setItem(key, '1'); } catch { /* account marker is authoritative */ }
@@ -1903,7 +1909,7 @@ export default function App() {
       if (trainingAccountRef.current !== userId || seenLocally) return;
       try { localStorage.setItem(key, '1'); } catch { /* best effort */ }
       autoBasicStartRef.current?.();
-    });
+    }).finally(() => { if (trainingAccountRef.current === userId) setBasicOfferResolvedFor(userId); });
   }, [currentUser?.id, authLoading, initialWorkspaceReady]);
   useEffect(() => {
     if (!currentUser) return;
@@ -5811,7 +5817,7 @@ export default function App() {
     const next = nextBasicTrainingStep(basicStep);
     if (!next) { finishBasicTraining(); rewardGuidedLesson(BASIC_LESSON_ID); return; }
     if (next === 'complete') setBasicTasks(previous => [...previous, createCompletionTrainingTask()]);
-    if (next === 'block' || next === 'notes') {
+    if (next === 'block' || next === 'notes' || next === 'task-window') {
       // Free a slot before teaching block placement; restore the sidebar for its lesson.
       setFullscreenDisplayModes(['bubbles']);
       setFullscreenPanelSlots([{ kind: 'mode', mode: 'bubbles' }]);
@@ -6056,7 +6062,7 @@ export default function App() {
             onAddTaskToSphere={basicStep ? undefined : (sphere) => setEditorState({ initialSphereId: sphere.id })}
             onRenameSphere={(sphere) => { if (basicStep === 'sector') setBasicStep('sector-editor'); else if (!basicStep) setSectorEditorSphere(sphere); }}
             onRescheduleTask={basicStep ? undefined : (task) => setTimelineReschedulePicker({ taskId: task.id, signal: Date.now() })}
-             onOpenInOtherPane={basicStep ? undefined : openTaskInOtherPane}
+             onOpenInOtherPane={basicStep === 'task-window' ? (task) => { if (!basicRootTasks.some(item => item.id === task.id)) return; setPendingWorkspaceBlock({ kind: 'task-ai', taskId: task.id }); } : basicStep ? undefined : openTaskInOtherPane}
             forceTaskContextMenuOpen={activeTourStep === 'task-context-menu'}
             isSearchFiltering={!basicStep && Boolean(search.trim())}
             />
@@ -6634,12 +6640,14 @@ export default function App() {
     setPendingWorkspaceBlock(null);
     setIsAddMenuOpen(false);
     if (JSON.stringify(next) === JSON.stringify(fullscreenPanels[0]) || (next.kind === 'task-ai' && fullscreenPanels[0].kind === 'task-ai')) { setWorkspaceBlockNotice(Date.now()); return; }
-    if (next.kind === 'task-ai') {
+    if (next.kind === 'task-ai' && !basicStep) {
       setFocusedTaskId(next.taskId);
       setIsAiExpanded(false);
       setIsAiChatOpen(false);
     }
+    if (basicStep === 'two-modes' && next.kind === 'mode') { setBasicNotice(null); setBasicStep('mode-added'); }
     if (basicStep === 'block') { setBasicNotice(null); setBasicStep('block-added'); }
+    if (basicStep === 'task-window' && next.kind === 'task-ai') { setBasicNotice(null); setBasicStep('task-window-added'); }
     const slots = side === 'left' ? [next, fullscreenPanels[0]] : [fullscreenPanels[0], next];
     setFullscreenDisplayModes(slots.flatMap(panel => panel.kind === 'mode' ? [panel.mode] : []));
     setFullscreenPanelSlots(slots);
@@ -6654,7 +6662,7 @@ export default function App() {
     const nextSlots = replaceFullscreenPanel(fullscreenPanels, index, next);
     if (replacing?.kind === 'task-ai' && next.kind !== 'task-ai'
       && !nextSlots.some(panel => panel.kind === 'task-ai')) setFocusedTaskId(null);
-    if (next.kind === 'task-ai') {
+    if (next.kind === 'task-ai' && !basicStep) {
       setFocusedTaskId(next.taskId);
       setIsAiExpanded(false);
       setIsAiChatOpen(false);
@@ -6666,7 +6674,19 @@ export default function App() {
     setFullscreenPanelSlots(nextSlots);
   };
   const renderFullscreenPanel = (panel: FullscreenWorkspacePanel): ReactNode => {
-    if (panel.kind === 'mode') return renderWorkspaceMode(panel.mode);
+    if (panel.kind === 'mode') return <div className="fullscreen-mode-window relative h-full min-h-0 w-full">
+      {renderWorkspaceMode(panel.mode)}
+      {fullscreenPanels.length === 2 && !workspaceOverlayActive && <button type="button" className="fullscreen-mode-window-close" title="Закрыть окно" aria-label="Закрыть окно режима" onClick={() => closeFullscreenPanel(fullscreenPanels.indexOf(panel) as 0 | 1)}><X size={16}/></button>}
+    </div>;
+    if (panel.kind === 'task-ai' && basicStep) {
+      const demoTask = basicTasks.find(task => task.id === panel.taskId);
+      return <section data-training-task-window className="surface-muted flex h-full w-full flex-col gap-4 rounded-2xl p-5 text-primary">
+        <h2 className="text-lg font-semibold">{demoTask?.title ?? 'Учебная задача'}</h2>
+        <p className="text-sm text-muted">Учебное окно задачи. Настоящие задачи не изменяются.</p>
+        <div className="rounded-xl border p-3 text-sm">Описание задачи</div>
+        <div className="rounded-xl border p-3 text-sm">Подзадачи</div>
+      </section>;
+    }
     if (panel.kind === 'general-ai') return (
       <div ref={setFullscreenChatTarget} className="fullscreen-embedded-ai relative h-full min-h-0 w-full" />
     );
@@ -6869,14 +6889,11 @@ export default function App() {
         />
             <FullscreenModePicker modes={fullscreenPanels.filter(panel => panel.kind === 'mode').map(panel => panel.mode)}
               onHold={mode => { const next: FullscreenWorkspacePanel = { kind: 'mode', mode }; if (blockAlreadyPresent(next)) { setWorkspaceBlockNotice(Date.now()); return; } setPendingWorkspaceBlock(next); }}
-              onDragStart={mode => { const next: FullscreenWorkspacePanel = { kind: 'mode', mode }; if (blockAlreadyPresent(next)) { setWorkspaceBlockNotice(Date.now()); return; } blockDragRef.current = true; setPendingWorkspaceBlock(next); }}
+              onDragStart={mode => { if (basicStep === 'two-modes') return; const next: FullscreenWorkspacePanel = { kind: 'mode', mode }; if (blockAlreadyPresent(next)) { setWorkspaceBlockNotice(Date.now()); return; } blockDragRef.current = true; setPendingWorkspaceBlock(next); }}
               onDragEnd={() => { blockDragRef.current = false; setPendingWorkspaceBlock(null); }}
               onChange={(nextModes) => {
                if (basicStep === 'modes' && nextModes[0] !== fullscreenDisplayModes[0]) setBasicStep('two-modes');
-              else if (basicStep === 'two-modes' && nextModes[0] !== fullscreenDisplayModes[0]) {
-                setBasicStep('block');
-                setIsAddMenuOpen(true);
-              }
+              else if (basicStep === 'two-modes') return;
               setPendingWorkspaceBlock(null);
               const mode = nextModes[0];
               // The toolbar chooses one visualization. Blocks explicitly
@@ -9821,7 +9838,7 @@ export default function App() {
       ) : null}
 
       {currentUser && currentUser.browserNotificationsEnabled !== false && browserPermission === 'default'
-        && !browserPermissionNudgeDismissed && initialWorkspaceReady ? createPortal((
+        && !browserPermissionNudgeDismissed && initialWorkspaceReady && !deferTrainingNotices ? createPortal((
         <div className="surface-popover fixed bottom-24 right-6 z-[2147483646] w-[min(22rem,calc(100vw-3rem))] rounded-2xl border border-[color:var(--panel-border)] p-4 text-sm shadow-2xl" role="status">
           <div className="flex items-start gap-2.5">
             <BellRing size={19} className="mt-0.5 shrink-0 text-violet-500" />
