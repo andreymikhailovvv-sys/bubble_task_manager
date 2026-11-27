@@ -1,6 +1,6 @@
 import { AssistantSettingsProposalCard } from './components/AssistantSettingsProposalCard';
 import { announceAppliedEconomicProposals } from './components/EconomicMoneyGesture';
-import { SubscriptionLimitPanel, PLAN_FEATURES } from './components/SubscriptionLimitPanel';
+import { SubscriptionLimitPanel, SubscriptionDailyRing, subscriptionDailyRemaining, PLAN_FEATURES } from './components/SubscriptionLimitPanel';
 import { AiStreamingMessageBody } from './components/AiStreamingMessageBody';
 import EmailVerificationDialog from './components/EmailVerificationDialog';
 import { subscribeAccountEmailVerified } from './lib/account-email-status-events';
@@ -4720,10 +4720,12 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               <div className="miniapp-workspace-utilities-panel relative inline-flex shrink-0 items-center gap-1"
                 role={undefined}
                 aria-label="Управление сервисом">
-              <button type="button" onClick={() => { if (currentUser?.isGuest && isWebRuntime) { setIsCreditPurchaseOpen(false); openAuthModal('register'); } else { setCreditPopoverView('purchase'); setIsCreditPurchaseOpen((open) => !open); } }} className="miniapp-credit-badge inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold" title={currentUser?.isGuest ? 'Зарегистрируйтесь, чтобы получить 100 ИИ-кредитов' : 'Купить AI-кредиты'} aria-label={activeSubscription ? `Лимит ИИ: ${currentUser?.subscriptionLimit ? `${100 - currentUser.subscriptionLimit.usedPercent}%` : '…'}` : `AI-кредиты: ${aiCredits}`} aria-expanded={isCreditPurchaseOpen}>
-                <Coins size={15} />
-                {displayMode === 'timeline' ? <span className="miniapp-utility-menu-label">{activeSubscription ? "Лимит" : "Кредиты"}</span> : null}
-                <span className={displayMode === 'timeline' ? 'miniapp-utility-menu-value' : undefined}>{activeSubscription ? (currentUser?.subscriptionLimit ? `${100 - currentUser.subscriptionLimit.usedPercent}%` : '…') : aiCredits}</span>
+              <button type="button" onClick={() => { if (currentUser?.isGuest && isWebRuntime) { setIsCreditPurchaseOpen(false); openAuthModal('register'); } else { setCreditPopoverView('purchase'); setIsCreditPurchaseOpen((open) => !open); } }} data-subscription-limit={activeSubscription ? true : undefined} className="miniapp-credit-badge inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold" title={currentUser?.isGuest ? 'Зарегистрируйтесь, чтобы получить 100 ИИ-кредитов' : 'Купить AI-кредиты'} aria-label={activeSubscription ? `Дневной лимит ИИ: ${subscriptionDailyRemaining(currentUser?.subscriptionLimit) ?? '…'}%` : `AI-кредиты: ${aiCredits}`} aria-expanded={isCreditPurchaseOpen}>
+                {activeSubscription ? <SubscriptionDailyRing limit={currentUser?.subscriptionLimit} compact/> : <>
+                  <Coins size={15} />
+                  {displayMode === 'timeline' ? <span className="miniapp-utility-menu-label">Кредиты</span> : null}
+                  <span className={displayMode === 'timeline' ? 'miniapp-utility-menu-value' : undefined}>{aiCredits}</span>
+                </>}
               </button>
               {isCreditPurchaseOpen ? <div onScroll={(event) => event.stopPropagation()} onTouchMove={(event) => event.stopPropagation()} className="miniapp-credit-popover absolute right-0 top-full z-[60] mt-2 max-h-[75vh] w-[min(21rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border p-4 shadow-2xl">
                 <div className="miniapp-credit-popover-hero -m-4 mb-3 rounded-t-2xl p-4">

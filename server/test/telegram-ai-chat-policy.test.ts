@@ -266,3 +266,13 @@ test('assistant settings changes preserve untouched rules and do not accept a ta
   assert.throws(()=>buildAssistantChanges(current,{replyMode:'INVALID'}));
   assert.throws(()=>buildAssistantChanges(current,{summaryInstructions:'x'.repeat(2001)}));
 });
+
+test('subscription percent uses the shared styled slider with 101 values and five visible marks', () => {
+  const ui = readFileSync(new URL('../../client/src/components/TelegramAiAssistantSettings.tsx', import.meta.url), 'utf8');
+  const mail = readFileSync(new URL('../../client/src/components/MailAssistantSettings.tsx', import.meta.url), 'utf8');
+  assert.match(ui, /Array\.from\(\{length:101\}/);
+  assert.match(ui, /\['0%', '25%', '50%', '75%', '100%'\]/);
+  assert.match(ui, /<SettingSlider title="Доля дневного лимита"[\s\S]*?markEvery=\{25\} onChange=\{onChange\}/);
+  assert.match(ui, /max=\{options\.length - 1\} step=\{1\}/);
+  assert.match(mail, /<AssistantPercentSlider/);
+});

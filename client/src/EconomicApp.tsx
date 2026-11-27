@@ -90,11 +90,11 @@ function RepaymentProgress({ paid, total }: { paid: string; total: string }) {
   </div>;
 }
 
-function EconomicMascot({ onClick, onHover, active, busy, progress, skinId, onOpenWardrobe, modal, arrivalKey }: {
-  onClick: () => void; onHover: () => void; active: boolean; busy: boolean; progress: string | null; skinId:string; onOpenWardrobe:()=>void; modal:boolean; arrivalKey:number;
+function EconomicMascot({ onClick, onHover, onLeave, active, busy, progress, skinId, onOpenWardrobe, modal, arrivalKey }: {
+  onClick: () => void; onHover: () => void; onLeave: () => void; active: boolean; busy: boolean; progress: string | null; skinId:string; onOpenWardrobe:()=>void; modal:boolean; arrivalKey:number;
 }) {
-  return <div className="mascot-wardrobe-anchor econ-mascot-dressing" data-managed-mascot-launcher="economic" data-mascot-surface={modal?'modal':'workspace'}><button className={'econ-mascot ' + (active ? 'active' : '')}
-    type="button" onClick={onClick} onMouseEnter={onHover}
+  return <div className="mascot-wardrobe-anchor econ-mascot-dressing" data-managed-mascot-launcher="economic" data-mascot-surface={modal?'modal':'workspace'} onPointerEnter={event => { if (event.pointerType === 'mouse') onHover(); }} onPointerLeave={event => { if (event.pointerType === 'mouse') onLeave(); }}><button className={'econ-mascot ' + (active ? 'active' : '')}
+    type="button" onClick={event => { if (event.detail > 0 && window.matchMedia('(hover: hover) and (pointer: fine)').matches) onHover(); else onClick(); }}
     aria-label={active ? 'Закрыть помощника Экономыч AI' : 'Открыть помощника Экономыч AI'}
     aria-expanded={active} aria-controls="econ-assistant-dialog">
     <PlanikMascot variant="economic" size="launcher" busy={busy} progress={progress} skinId={skinId} arrivalKey={arrivalKey} />
@@ -160,6 +160,33 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [assistantOpen, setAssistantOpen] = useState(false);
+  // A short grace period bridges the space between the floating mascot and
+  // the chat. Entering either cancels the same pending close.
+  const assistantCloseTimer = useRef<number | null>(null);
+  const cancelAssistantClose = useCallback(() => {
+    if (assistantCloseTimer.current !== null) window.clearTimeout(assistantCloseTimer.current);
+    assistantCloseTimer.current = null;
+  }, []);
+  const openAssistant = useCallback(() => {
+    cancelAssistantClose();
+    setAssistantOpen(true);
+  }, [cancelAssistantClose]);
+  const closeAssistant = useCallback(() => {
+    cancelAssistantClose();
+    setAssistantOpen(false);
+  }, [cancelAssistantClose]);
+  const scheduleAssistantClose = useCallback(() => {
+    cancelAssistantClose();
+    assistantCloseTimer.current = window.setTimeout(() => {
+      assistantCloseTimer.current = null;
+      setAssistantOpen(false);
+    }, 220);
+  }, [cancelAssistantClose]);
+  useEffect(() => cancelAssistantClose, [cancelAssistantClose]);
+  const toggleAssistant = useCallback(() => {
+    cancelAssistantClose();
+    setAssistantOpen(previous => !previous);
+  }, [cancelAssistantClose]);
   const [showCreditCost, setShowCreditCost] = useState(false);
   useEffect(() => {
     if (!assistantOpen) return;
@@ -848,14 +875,14 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
       </main>
     </div>
 
-    {!mobile && <EconomicMascot modal={mascotSurface.modal} arrivalKey={mascotSurface.arrivalKey} active={assistantOpen} busy={assistantBusy} progress={assistantStage} skinId={wardrobe.selected('economic')} onOpenWardrobe={wardrobe.show} onHover={() => setAssistantOpen(true)} onClick={() => setAssistantOpen(true)}/>}
+    {!mobile && <EconomicMascot modal={mascotSurface.modal} arrivalKey={mascotSurface.arrivalKey} active={assistantOpen} busy={assistantBusy} progress={assistantStage} skinId={wardrobe.selected('economic')} onOpenWardrobe={wardrobe.show} onHover={openAssistant} onLeave={scheduleAssistantClose} onClick={toggleAssistant}/>}
     {wardrobe.open&&<MascotWardrobeDialog wardrobe={wardrobe} variant="economic" theme={effectiveAppearance}/>}
-    {!mobile && assistantOpen && <section id="econ-assistant-dialog" className={"econ-assistant" + (mascotSurface.modal ? " econ-assistant--above-modal" : "")} role="dialog" aria-label="Экономыч AI, финансовый помощник">
+    {!mobile && assistantOpen && <section id="econ-assistant-dialog" className={"econ-assistant" + (mascotSurface.modal ? " econ-assistant--above-modal" : "")} role="dialog" aria-label="Экономыч AI, финансовый помощник" onPointerEnter={event => { if (event.pointerType === 'mouse') cancelAssistantClose(); }} onPointerLeave={event => { if (event.pointerType === 'mouse') scheduleAssistantClose(); }}>
       <div className="econ-assistant-head">
         <div><span className="econ-assistant-avatar">₽</span>
           <div><strong>Экономыч AI</strong><small>Финансовый помощник</small></div>
         </div>
-        <button type="button" onClick={() => setAssistantOpen(false)} aria-label="Закрыть"><X size={18}/></button>
+        <button type="button" onClick={closeAssistant} aria-label="Закрыть"><X size={18}/></button>
       </div>
       <div className="econ-assistant-body" ref={assistantScrollRef}>
         <div className="econ-insight-table">
