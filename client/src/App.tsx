@@ -918,7 +918,8 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [reportPromptTask, setReportPromptTask] = useState<Task | null>(null);
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
-  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(() => new URLSearchParams(window.location.search).get('openCredits') === '1');
+  useEffect(() => { const url = new URL(window.location.href); if (url.searchParams.get('openCredits') === '1') { url.searchParams.delete('openCredits'); window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash); } }, []);
   useScrollFade(subscriptionScrollRef, isSubscriptionModalOpen);
   const [creditModalView, setCreditModalView] = useState<'purchase' | 'statistics'>('purchase');
   const [creditUsageStatistics, setCreditUsageStatistics] = useState<CreditUsageStatistics | null>(null);
@@ -959,7 +960,7 @@ export default function App() {
   const shortLimitExhausted = activeSubscription && (currentUser?.subscriptionLimit?.daily?.remainingMilli === 0 || currentUser?.subscriptionLimit?.weekly?.remainingMilli === 0);
   const subscriptionUserId = currentUser?.id;
   useEffect(() => {
-    if (!activeSubscription || !subscriptionUserId) return;
+    if (!subscriptionUserId) return;
     let stopped = false;
     let inFlight = false;
     const refresh = async () => {
@@ -6865,7 +6866,11 @@ export default function App() {
           onOpenSubtask={(subtask) => setEditorState({ task: subtask })}
           onOpenNote={(id) => setRequestedStandaloneNote({ id, serial: Date.now() })}
         />
-            <FullscreenModePicker modes={fullscreenPanels.filter(panel => panel.kind === 'mode').map(panel => panel.mode)} onChange={(nextModes) => {
+            <FullscreenModePicker modes={fullscreenPanels.filter(panel => panel.kind === 'mode').map(panel => panel.mode)}
+              onHold={mode => { const next: FullscreenWorkspacePanel = { kind: 'mode', mode }; if (blockAlreadyPresent(next)) { setWorkspaceBlockNotice(Date.now()); return; } setPendingWorkspaceBlock(next); }}
+              onDragStart={mode => { const next: FullscreenWorkspacePanel = { kind: 'mode', mode }; if (blockAlreadyPresent(next)) { setWorkspaceBlockNotice(Date.now()); return; } blockDragRef.current = true; setPendingWorkspaceBlock(next); }}
+              onDragEnd={() => { blockDragRef.current = false; setPendingWorkspaceBlock(null); }}
+              onChange={(nextModes) => {
                if (basicStep === 'modes' && nextModes[0] !== fullscreenDisplayModes[0]) setBasicStep('two-modes');
               else if (basicStep === 'two-modes' && nextModes[0] !== fullscreenDisplayModes[0]) {
                 setBasicStep('block');

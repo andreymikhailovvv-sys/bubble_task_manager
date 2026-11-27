@@ -15,7 +15,7 @@ const EconomicVoiceInput = lazy(() => import('./components/VoiceInputButton').th
 import { loadThemePreference, resolveThemeMode } from './lib/autoTheme';
 import { annuityEstimate, formatMinorRub as money, minorToRublesInput as inputMoney, rublesToMinor as parseMoney, groupMoneyInput, calculateMoneyInput, isMoneyExpression, moneyCalculationPreview, readEconomicPositions } from './lib/economicMoney';
 import { formatCreditsSpent } from './lib/credits';
-import { api } from './lib/api';
+import { api, type CurrentUser } from './lib/api';
 import './EconomicApp.css';
 import EconomicReport from './EconomicReport';
 import { TaskRecurrenceConfigurator, type RecurrenceDraftFields } from './components/TaskRecurrenceConfigurator';
@@ -90,11 +90,11 @@ function RepaymentProgress({ paid, total }: { paid: string; total: string }) {
   </div>;
 }
 
-function EconomicMascot({ onClick, active, busy, progress, skinId, onOpenWardrobe, modal, arrivalKey }: {
-  onClick: () => void; active: boolean; busy: boolean; progress: string | null; skinId:string; onOpenWardrobe:()=>void; modal:boolean; arrivalKey:number;
+function EconomicMascot({ onClick, onHover, active, busy, progress, skinId, onOpenWardrobe, modal, arrivalKey }: {
+  onClick: () => void; onHover: () => void; active: boolean; busy: boolean; progress: string | null; skinId:string; onOpenWardrobe:()=>void; modal:boolean; arrivalKey:number;
 }) {
   return <div className="mascot-wardrobe-anchor econ-mascot-dressing" data-managed-mascot-launcher="economic" data-mascot-surface={modal?'modal':'workspace'}><button className={'econ-mascot ' + (active ? 'active' : '')}
-    type="button" onClick={onClick}
+    type="button" onClick={onClick} onMouseEnter={onHover}
     aria-label={active ? 'Закрыть помощника Экономыч AI' : 'Открыть помощника Экономыч AI'}
     aria-expanded={active} aria-controls="econ-assistant-dialog">
     <PlanikMascot variant="economic" size="launcher" busy={busy} progress={progress} skinId={skinId} arrivalKey={arrivalKey} />
@@ -128,7 +128,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   const formScrollRef = useRef<HTMLDivElement>(null);
   const scrollToRepeatRef = useRef(false);
   const [miniappNavHeight, setMiniappNavHeight] = useState<number | null>(null);
-  useScrollFade(formScrollRef, dialog?.kind === 'operation');
+  useScrollFade(formScrollRef, !!dialog);
   useLayoutEffect(() => {
     if (!embeddedInMiniApp) return;
     const nav = document.querySelector<HTMLElement>('.miniapp-shell .miniapp-bottom-navigation');
@@ -169,6 +169,13 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
     return () => { alive = false; };
   }, [assistantOpen]);
   const [assistantQuestion, setAssistantQuestion] = useState('');
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => { const node = composerRef.current; if (!node) return; node.style.height = 'auto'; node.style.height = Math.min(130, Math.max(40, node.scrollHeight + 2)) + 'px'; }, [assistantQuestion, assistantOpen]);
+  const [creditProfile, setCreditProfile] = useState<CurrentUser | null>(null);
+  const creditOwner = user?.id;
+  useEffect(() => { if (mobile || !creditOwner) return; let stopped = false, running = false; const refresh = async () => { if (running || document.visibilityState !== 'visible') return; running = true; try { const {user: profile} = await api.getMe(); if (!stopped && profile.id === creditOwner) setCreditProfile(profile); } catch { /* Retry on next refresh */ } finally { running = false; } }; void refresh(); const timer = window.setInterval(refresh, 60_000); window.addEventListener('focus',refresh); return () => { stopped = true; window.clearInterval(timer); window.removeEventListener('focus',refresh); }; }, [mobile,creditOwner]);
+  const creditLimit = creditProfile?.id === creditOwner ? creditProfile?.subscriptionLimit : null;
+  const dailyRemaining = creditLimit ? creditLimit.daily?.remainingPercent ?? 100-creditLimit.usedPercent : null;
   const [assistantBusy, setAssistantBusy] = useState(false);
   const [assistantStage, setAssistantStage] = useState<EconomicAssistantStage | 'reading_files' | 'refreshing_finances' | null>(null);
   const [assistantError, setAssistantError] = useState('');
@@ -389,7 +396,8 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   };
   const submitDialog = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!dialog) return;
+    if (!dialog || saving) return;
+    const complete = (event.nativeEvent as SubmitEvent).submitter?.getAttribute('data-complete') === 'true';
     setSaving(true); setError('');
     try {
       const idPath = dialog.id ? '/' + encodeURIComponent(dialog.id) : '';
@@ -414,9 +422,9 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
         path = '/debts';
         payload = { direction: form.direction, counterparty: form.counterparty, amountMinor: parseMoney(form.amount),
           note: form.note || null, dueAt: form.date ? new Date(form.date + 'T12:00:00').toISOString() : null,
-          paidMinor: parseMoney(form.paid || '0'), postedToAccount: form.postedToAccount === 'yes',
+          paidMinor: parseMoney(complete ? form.amount : form.paid || '0'), postedToAccount: form.postedToAccount === 'yes',
           accountId: form.postedToAccount === 'yes' ? form.accountId : null,
-          ...(dialog.id ? { isClosed: form.isClosed === 'yes' } : {}) };
+          ...(dialog.id ? { isClosed: complete || form.isClosed === 'yes' } : {}) };
       } else if (dialog.kind === 'loan') {
         path = '/loans';
         const rate = Number((form.rate || '').replace(',', '.'));
@@ -428,7 +436,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
           monthlyPaymentOverrideMinor: form.monthlyOverride.trim() ? parseMoney(form.monthlyOverride) : null,
           paymentDate: form.paymentDate ? new Date(form.paymentDate + 'T12:00:00Z').toISOString() : null,
           remindersEnabled: form.remindersEnabled === 'yes',
-          ...(dialog.id ? { isClosed: form.isClosed === 'yes' } : {}) };
+          ...(dialog.id ? { isClosed: complete || form.isClosed === 'yes' } : {}) };
       } else {
         path = '/categories'; payload = { kind: form.kind, name: form.name };
       }
@@ -720,7 +728,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
         <div className="econ-nav-foot"><span className="econ-avatar">{(user.name || user.username || 'П')[0].toUpperCase()}</span><div><strong>{user.name || user.username || 'Пользователь'}</strong><small>Личный бюджет · RUB</small></div></div>
       </aside>}
       <main className="econ-main">
-        <header className="econ-topbar"><div><div className="econ-eyebrow">{mobile ? 'ФИНАНСОВЫЙ ПОМОЩНИК' : 'ПЛАНИРОВЫЧ / ЭКОНОМЫЧ AI'}</div><h1>{mobile || section === 'overview' ? 'Экономыч AI' : sectionTitles[section]}</h1></div><div className="econ-top-actions"><button className="econ-add-global" data-economic-create-operation type="button"
+        <header className="econ-topbar"><div><div className="econ-eyebrow">{mobile ? 'ФИНАНСОВЫЙ ПОМОЩНИК' : 'ПЛАНИРОВЫЧ / ЭКОНОМЫЧ AI'}</div><h1>{mobile || section === 'overview' ? 'Экономыч AI' : sectionTitles[section]}</h1></div><div className="econ-top-actions">{!mobile && <a href="/?openCredits=1" className="econ-limit-badge" aria-label="Лимиты и подписки">{dailyRemaining !== null ? <><span className="econ-limit-ring" style={{background:`conic-gradient(var(--ec-orange2) ${dailyRemaining}%, var(--ec-border) 0)`}} aria-hidden="true"/><span>Лимит {dailyRemaining}%</span></> : <><Sparkles size={16}/><span>{creditProfile?.id === creditOwner && creditProfile?.aiCredits != null ? `${creditProfile.aiCredits} кр.` : 'Лимиты'}</span></>}</a>}<button className="econ-add-global" data-economic-create-operation type="button"
   aria-label="Добавить финансовую запись" aria-expanded={addMenuOpen}
   onClick={() => setAddMenuOpen(v => !v)}><Plus size={18}/> Добавить</button>
   {addMenuOpen && !embeddedInMiniApp && createMenu}</div></header>
@@ -796,7 +804,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
             </div>
           </div>
           {section === 'report' && <EconomicReport revision={reportRevision}/>}
-          {section === 'accounts' && <div className="econ-collection-grid">{snapshot.accounts.map(a => <article className="econ-card econ-account-detail" key={a.id}><div className="econ-card-top"><span className="econ-account-symbol">{a.accountType === 'CREDIT_CARD' ? <CreditCard size={22}/> : <Landmark size={22}/>}</span>{a.isPrimary && <span className="econ-tag">Основной</span>}</div><h3>{a.name}</h3><strong>{money(a.balanceMinor)}</strong><p>{a.accountType === 'CREDIT_CARD' ? 'Доступно из лимита ' + money(a.creditLimitMinor || '0') : 'Текущий баланс счёта'}</p><div className="econ-row-actions"><button type="button" onClick={() => openDialog('account', a)}><Pencil size={15}/> Изменить</button>{!a.isPrimary && <>{a.accountType !== 'CREDIT_CARD' && <button type="button" onClick={() => void economicRequest('/accounts/' + a.id, 'PATCH', { isPrimary: true }).then(refresh).catch(e => setError(e.message))}><Check size={15}/> Основным</button>}<button type="button" onClick={() => void remove('accounts', a.id)}><Trash2 size={15}/></button></>}</div></article>)}</div>}
+          {section === 'accounts' && <div className="econ-collection-grid">{snapshot.accounts.map(a => <article className="econ-card econ-account-detail" key={a.id} role="button" tabIndex={0} aria-label={`Настроить счёт ${a.name}`} onClick={event => { if (!(event.target as Element).closest("button,a")) openDialog("account",a); }} onKeyDown={event => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); openDialog("account",a); } }}><div className="econ-card-top"><span className="econ-account-symbol">{a.accountType === 'CREDIT_CARD' ? <CreditCard size={22}/> : <Landmark size={22}/>}</span>{a.isPrimary && <span className="econ-tag">Основной</span>}</div><h3>{a.name}</h3><strong>{money(a.balanceMinor)}</strong><p>{a.accountType === 'CREDIT_CARD' ? 'Доступно из лимита ' + money(a.creditLimitMinor || '0') : 'Текущий баланс счёта'}</p><div className="econ-row-actions"><button type="button" onClick={() => openDialog('account', a)}><Pencil size={15}/> Изменить</button>{!a.isPrimary && <>{a.accountType !== 'CREDIT_CARD' && <button type="button" onClick={() => void economicRequest('/accounts/' + a.id, 'PATCH', { isPrimary: true }).then(refresh).catch(e => setError(e.message))}><Check size={15}/> Основным</button>}<button type="button" onClick={() => void remove('accounts', a.id)}><Trash2 size={15}/></button></>}</div></article>)}</div>}
           {section==='operations'&&<section className="econ-card econ-operations-list">
             <h2 className="econ-operations-heading">Последние операции</h2>
             <div className="econ-operations-toolbar">{operationSummary()}{operationFilters()}</div>
@@ -840,7 +848,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
       </main>
     </div>
 
-    {!mobile && <EconomicMascot modal={mascotSurface.modal} arrivalKey={mascotSurface.arrivalKey} active={assistantOpen} busy={assistantBusy} progress={assistantStage} skinId={wardrobe.selected('economic')} onOpenWardrobe={wardrobe.show} onClick={() => setAssistantOpen(v => !v)}/>}
+    {!mobile && <EconomicMascot modal={mascotSurface.modal} arrivalKey={mascotSurface.arrivalKey} active={assistantOpen} busy={assistantBusy} progress={assistantStage} skinId={wardrobe.selected('economic')} onOpenWardrobe={wardrobe.show} onHover={() => setAssistantOpen(true)} onClick={() => setAssistantOpen(true)}/>}
     {wardrobe.open&&<MascotWardrobeDialog wardrobe={wardrobe} variant="economic" theme={effectiveAppearance}/>}
     {!mobile && assistantOpen && <section id="econ-assistant-dialog" className={"econ-assistant" + (mascotSurface.modal ? " econ-assistant--above-modal" : "")} role="dialog" aria-label="Экономыч AI, финансовый помощник">
       <div className="econ-assistant-head">
@@ -917,7 +925,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
           <button type="button" className="econ-attach-button" disabled={assistantBusy}
             onClick={() => assistantFilePickerRef.current?.click()} title="Прикрепить файл"
             aria-label="Прикрепить файл"><Paperclip size={17}/></button>
-          <textarea aria-label="Вопрос Экономычу AI" placeholder="Спросить об операциях и бюджете"
+          <textarea ref={composerRef} aria-label="Вопрос Экономычу AI" placeholder="Спросить об операциях и бюджете"
             value={assistantQuestion} onChange={e => setAssistantQuestion(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault(); void sendAssistantMessage(assistantQuestion); } }}
@@ -945,7 +953,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
     {dialog && createPortal(<div
       className={'econ-root econ-dialog-layer ' + (effectiveAppearance === 'light' ? 'econ-light ' : '') + (mobile ? 'econ-mobile-dialog-layer ' : '') + (embeddedInMiniApp ? 'econ-miniapp-dialog-layer' : '')}
       style={embeddedInMiniApp ? { '--econ-mobile-safe-top': mobileSafeTop + 'px', '--econ-mobile-safe-bottom': mobileSafeBottom + 'px', ...(miniappNavHeight !== null ? { '--econ-miniapp-nav-height': miniappNavHeight + 'px' } : {}) } as CSSProperties : undefined}>
-      <div className="econ-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !saving) setDialog(null); }}><section className={'econ-modal' + (dialog.kind === 'operation' ? ' econ-operation-modal' : '')} role="dialog" aria-modal="true" aria-label="Редактирование Economic"><header><div><span className="econ-eyebrow">{dialog.id ? 'РЕДАКТИРОВАНИЕ' : 'НОВАЯ ЗАПИСЬ'}</span><h2>{dialog.kind === 'operation' ? 'Операция' : dialog.kind === 'account' ? 'Счёт' : dialog.kind === 'debt' ? 'Долг' : dialog.kind === 'loan' ? 'Кредит' : 'Категория'}</h2></div><button type="button" onClick={() => setDialog(null)} aria-label="Закрыть"><X size={19}/></button></header>
+      <div className="econ-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !saving) setDialog(null); }}><section className={'econ-modal' + (dialog.kind === 'operation' ? ' econ-operation-modal' : dialog.kind === 'loan' ? ' econ-loan-modal econ-obligation-modal' : dialog.kind === 'debt' ? ' econ-obligation-modal' : '')} role="dialog" aria-modal="true" aria-label="Редактирование Economic"><header><div><span className="econ-eyebrow">{dialog.id ? 'РЕДАКТИРОВАНИЕ' : 'НОВАЯ ЗАПИСЬ'}</span><h2>{dialog.kind === 'operation' ? 'Операция' : dialog.kind === 'account' ? 'Счёт' : dialog.kind === 'debt' ? 'Долг' : dialog.kind === 'loan' ? 'Кредит' : 'Категория'}</h2></div><button type="button" onClick={() => setDialog(null)} aria-label="Закрыть"><X size={19}/></button></header>
       <form className="econ-form" onSubmit={submitDialog}>
         <div className="econ-form-viewport">
         <div ref={formScrollRef} className="econ-form-scroll overflow-y-auto">
@@ -1049,11 +1057,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
           <label>Сколько уже возвращено, ₽<input required inputMode="decimal" value={form.paid} onChange={e => formSet('paid', e.target.value)}/></label>
           <label>Срок возврата (необязательно)<input type="date" value={form.date} onChange={e => formSet('date', e.target.value)}/></label>
           <label>Примечание<input maxLength={500} value={form.note} onChange={e => formSet('note', e.target.value)}/></label>
-          {dialog.id && <label>Состояние<select value={form.isClosed} onChange={e => setForm(prev => ({
-              ...prev, isClosed: e.target.value, paid: e.target.value === 'yes' ? prev.amount : prev.paid
-            }))}>
-              <option value="no">Активный долг</option><option value="yes">Долг погашен полностью</option>
-            </select></label>}
+          {dialog.id && form.isClosed === 'yes' && <p className="econ-form-hint">Долг погашен</p>}
           <p className="econ-form-hint">При активном учёте долг изменяет выбранный счёт:
             {form.direction === 'OWE' ? ' полученные деньги прибавятся к балансу.' : ' выданные деньги спишутся с баланса.'}
             {' '}Возвраты учитываются отдельно и не являются доходом или расходом.
@@ -1094,9 +1098,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
           </div>
           {form.remindersEnabled === 'yes' && !form.paymentDate &&
             <p className="econ-form-hint">Укажите дату платежа, чтобы включить уведомления.</p>}
-          {dialog.id && <label>Статус<select value={form.isClosed} onChange={e => formSet('isClosed', e.target.value)}>
-            <option value="no">Активен</option><option value="yes">Закрыт</option>
-          </select></label>}
+          {dialog.id && form.isClosed === 'yes' && <p className="econ-form-hint">Кредит погашен</p>}
           <p className="econ-form-hint">В прогрессе учитывается плановая сумма выплат с процентами.
             Расчёт аннуитетный, ориентировочный, без комиссий, страховок и досрочного погашения.
           </p>
@@ -1105,7 +1107,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
         {error && <div className="econ-error" role="alert">{error}</div>}
         </div>
         </div>
-        <div className="econ-form-actions"><button type="button" disabled={saving} onClick={() => setDialog(null)}>Отмена</button><button type="submit" disabled={saving}>{saving ? <Loader2 className="econ-spin" size={17}/> : <Check size={17}/>} Сохранить</button></div>
+        <div className="econ-form-actions"><button type="button" disabled={saving} onClick={() => setDialog(null)}>Отмена</button>{dialog.id && (dialog.kind === 'debt' || dialog.kind === 'loan') && form.isClosed !== 'yes' && <button type="submit" data-complete="true" disabled={saving}>Завершить</button>}<button type="submit" disabled={saving}>{saving ? <Loader2 className="econ-spin" size={17}/> : <Check size={17}/>} Сохранить</button></div>
       </form></section></div></div>, document.body)}
   </div></MascotIdentityContext.Provider>;
 }

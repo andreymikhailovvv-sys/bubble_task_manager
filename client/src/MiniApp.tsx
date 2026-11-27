@@ -1050,6 +1050,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [subscriptionPurchaseAvailable, setSubscriptionPurchaseAvailable] = useState(false);
   const activeSubscription = Boolean(currentUser?.subscriptionExpiresAt &&
     new Date(currentUser.subscriptionExpiresAt).getTime() > Date.now());
+  const balanceOwner = currentUser?.id;
+  useEffect(() => { if (!balanceOwner) return; let stopped = false, running = false; const refresh = async () => { if (running || document.visibilityState !== 'visible') return; running = true; try { const {user} = await api.getMe(); if (!stopped && user.id === balanceOwner) { setCurrentUser(prev => prev?.id === balanceOwner ? {...prev, subscriptionLimit:user.subscriptionLimit, subscriptionPlan:user.subscriptionPlan, subscriptionExpiresAt:user.subscriptionExpiresAt, aiCredits:user.aiCredits, aiCreditsMilli:user.aiCreditsMilli} : prev); setAiCredits(user.aiCredits ?? 0); } } catch { /* retry next minute */ } finally { running=false; } }; const timer=window.setInterval(refresh,60_000); window.addEventListener('focus',refresh); return () => { stopped=true;window.clearInterval(timer);window.removeEventListener('focus',refresh); }; }, [balanceOwner]);
   const subscriptionPurchase = useSubscriptionPurchase({
     surface: 'miniapp',
     openConfirmation: (url) => { const webApp = (window as TelegramWindow).Telegram?.WebApp; if (webApp?.openLink) webApp.openLink(url); else window.open(url, '_blank', 'noopener,noreferrer'); },
