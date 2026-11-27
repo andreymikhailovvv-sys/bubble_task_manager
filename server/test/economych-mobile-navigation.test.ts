@@ -327,3 +327,18 @@ test('operation editor uses monthly date defaults, shared icons, a separate scro
   assert.ok(overview.includes('EcoInlineAction("Показать все операции",colors){section="operations"}'));
   assert.ok(!overview.includes('val recentHeight='));
 });
+
+test('operation form has a shrinking native scroller with blur and a fixed sibling footer',()=>{
+  const web=read('../../client/src/EconomicApp.tsx');
+  const css=read('../../client/src/EconomicApp.css');
+  assert.ok(web.includes('className="econ-form-viewport"'));
+  assert.ok(web.includes('className="econ-form-scroll overflow-y-auto"'));
+  assert.match(web, /<\/div>\s*<\/div>\s*<div className="econ-form-actions">/);
+  assert.ok(!css.includes('.econ-form > div:not(.econ-form-actions)'));
+  assert.match(css,/\.econ-form-viewport\s*\{[^}]*flex:1 1 auto;min-height:0/);
+  assert.match(css,/\.econ-form-viewport>\.econ-form-scroll\s*\{[^}]*overflow-y:auto/);
+  assert.ok(css.includes('backdrop-filter:blur(5px)'));
+  assert.ok(css.includes('body:has(.econ-miniapp-dialog-layer) .miniapp-shell .miniapp-bottom-navigation'));
+  assert.ok(css.includes('border-top-color:transparent;box-shadow:none'));
+  assert.ok(css.includes('.econ-operation-row[role=button]{cursor:pointer}'));
+});

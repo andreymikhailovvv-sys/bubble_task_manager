@@ -663,9 +663,10 @@ body:has(.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded)) .planik-qui
 /* The website celebration uses the same metric shell and gradients as the right rail. */
 .planik-mascot[data-completion="true"] .planik-svg { animation: none; }
 .planik-completion-gesture { pointer-events: none; }
-.planik-completion-arm { transform-origin: 301px 203px; transform-box: view-box; animation: planik-spotlight-arm 3.6s ease-in-out both; }
-.planik-completion-beam, .planik-completion-lens { animation: planik-spotlight-beam 3.6s ease-in-out both; }
-.planik-mascot .planik-completion-card { position: absolute; z-index: 2; right: 0; bottom: 104%; width: 158px; max-width: calc(100vw - 24px); box-sizing: border-box; display: grid; gap: 7px; padding: 10px 12px; text-align: left; color: var(--text-primary, #f1f5f9); border: 1px solid var(--panel-border, #555c76); background: var(--card-bg, #222c42); box-shadow: 0 5px 22px rgba(18,20,42,.23), 0 0 15px rgba(255,218,130,.18); pointer-events: none; animation: planik-spotlight-card 3.6s ease both; }
+.planik-completion-arm path { animation: planik-sign-arm 3.6s ease both; }
+.planik-completion-hold { animation: planik-sign-hold 3.6s ease both; }
+.planik-completion-sign { position:absolute;inset:0;z-index:2;pointer-events:none;animation:planik-sign-lift 3.6s ease both; }
+.planik-mascot .planik-completion-card { position: absolute; z-index: 2; right: 0; bottom: 104%; width: 158px; max-width: calc(100vw - 24px); box-sizing: border-box; display: grid; gap: 7px; padding: 10px 12px; text-align: left; color: var(--text-primary, #f1f5f9); border: 1px solid var(--panel-border, #555c76); background: var(--card-bg, #222c42); box-shadow: 0 5px 22px rgba(18,20,42,.23), 0 0 15px rgba(255,218,130,.18); pointer-events: none; }
 .planik-completion-card .primary-widget-metric-title { white-space: nowrap; font-size: 11px; gap: 6px; }
 .planik-completion-card .primary-widget-metric-title svg { flex: none; }
 .planik-completion-card .planik-completion-values { display: grid; font-variant-numeric: tabular-nums; }
@@ -678,13 +679,28 @@ body:has(.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded)) .planik-qui
 .planik-completion-card[data-scope="today"] .primary-widget-progress > span { background: linear-gradient(90deg,#79d4e0,#a18bfa 55%,#ea85ac); }
 .planik-completion-card[data-scope="subtasks"] .primary-widget-progress > span { background: linear-gradient(90deg,#69cde7,#23c6b4); }
 body[data-theme='light'] .planik-mascot .planik-completion-card { color: #1e293b; background: #f8fafc; border-color: #dce3ed; }
-@keyframes planik-spotlight-arm { 0% { transform: rotate(58deg); opacity: 0; } 12%,88% { transform: rotate(0); opacity: 1; } 100% { transform: rotate(58deg); opacity: 0; } }
-@keyframes planik-spotlight-beam { 0%,12% { opacity: 0; } 20%,86% { opacity: 1; } 100% { opacity: 0; } }
-@keyframes planik-spotlight-card { 0%,14% { opacity: 0; transform: translateY(8px) scale(.95); } 23%,86% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(4px); } }
+/* The 90-unit SVG lift corresponds to 29% of the mascot's CSS height
+   for the launcher/composer/sidekick aspect ratios. The hand never releases
+   the pole while the card is visible. */
+@keyframes planik-sign-arm {
+  0%,5% { d:path("M301 203Q348 225 326 243");opacity:0 }
+  23%,86% { d:path("M301 203Q348 197 326 153");opacity:1 }
+  100% { d:path("M301 203Q348 225 326 243");opacity:0 }
+}
+@keyframes planik-sign-hold {
+  0%,5% { transform:translateY(90px);opacity:0 }
+  23%,86% { transform:translateY(0);opacity:1 }
+  100% { transform:translateY(90px);opacity:0 }
+}
+@keyframes planik-sign-lift {
+  0%,5% { transform:translateY(29%);opacity:0 }
+  23%,86% { transform:translateY(0);opacity:1 }
+  100% { transform:translateY(29%);opacity:0 }
+}
 @keyframes planik-spotlight-old { 0%,29% { opacity: 1; } 36%,100% { opacity: 0; } }
 @keyframes planik-spotlight-new { 0%,29% { opacity: 0; transform: translateY(4px); } 36%,100% { opacity: 1; transform: none; } }
 @keyframes planik-spotlight-progress { 0%,28% { width: var(--completion-from); } 48%,100% { width: var(--completion-to); } }
 @media (prefers-reduced-motion: reduce) {
-  .planik-mascot .planik-completion-card, .planik-completion-arm, .planik-completion-beam, .planik-completion-lens, .planik-completion-after, .planik-completion-card .primary-widget-progress > span { animation: none; }
+  .planik-mascot .planik-completion-card, .planik-completion-sign, .planik-completion-arm path, .planik-completion-hold, .planik-completion-after, .planik-completion-card .primary-widget-progress > span { animation: none; }
   .planik-completion-before { display: none; }
 }

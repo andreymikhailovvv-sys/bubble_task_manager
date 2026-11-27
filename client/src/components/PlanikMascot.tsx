@@ -218,7 +218,7 @@ export const PlanikMascot = memo(function PlanikMascot({
     >
       {arriving && <MascotArrivalEffects key={'rear-'+arrivalKey} skinId={skinId} layer="rear"/>}
       {arriving && <MascotArrivalEffects key={'front-'+arrivalKey} skinId={skinId}/> }
-      {showCompletion && completion && <CompletionSpotlight key={completion.sequence} progress={completion} />}
+      {showCompletion && completion && <CompletionSign key={completion.sequence} progress={completion} />}
       <span className="planik-ground-shadow" aria-hidden="true" />
       <svg
         ref={svgRef}
@@ -391,12 +391,16 @@ export const PlanikMascot = memo(function PlanikMascot({
 
         {showCompletion && completion ? <g key={completion.sequence} className="planik-completion-gesture">
           <g className="planik-completion-arm">
-            {shirtSkin ? <ShirtArm skin={shirtSkin} suffix={gradientSuffix} d="M301 203Q336 209 326 156" strokeWidth="17"/> : adventure ? <AdventureArm skin={adventure} d="M301 203Q336 209 326 156" strokeWidth="17"/> : <path d="M301 203Q336 209 326 156" fill="none" stroke="#7777b8" strokeWidth="17" strokeLinecap="round"/>}
-            <path className="planik-completion-beam" d="M312 104L335 104L343 -23L215 -23Z" fill="#ffe6a0" fillOpacity=".25"/>
-            <path d="M313 109L334 109L331 158Q324 166 316 158Z" fill="#464367" stroke="#c6c2ed" strokeWidth="3"/>
-            <path d="M308 106L338 106L335 122L311 122Z" fill="#a09ad1" stroke="#e0d9ff" strokeWidth="3"/>
-            <ellipse className="planik-completion-lens" cx="323" cy="106" rx="15" ry="5" fill="#fff1b4"/>
-            {north ? <Mitten x={326} y={153} dx={-5} dy={-4} right suffix={gradientSuffix}/> : <circle cx="326" cy="153" r="9" fill="#b2aaff"/>}
+            {shirtSkin ? <ShirtArm skin={shirtSkin} suffix={gradientSuffix} d="M301 203Q348 197 326 153" strokeWidth="17"/> : adventure ? <AdventureArm skin={adventure} d="M301 203Q348 197 326 153" strokeWidth="17"/> : <path d="M301 203Q348 197 326 153" fill="none" stroke={north?'#418d89':'#7777b8'} strokeWidth="17" strokeLinecap="round"/>}
+          </g>
+          {/* The pole and grip rise as one object, aligned with the HTML metric above. */}
+          <g className="planik-completion-hold">
+            <path className="planik-completion-handle" d="M326 0V174" stroke="#6a638d" strokeWidth="13" strokeLinecap="round"/>
+            <path d="M323 1V170" stroke="#c4bce4" strokeWidth="3" strokeLinecap="round" opacity=".8"/>
+            {north ? <Mitten x={326} y={153} dx={-5} dy={-4} right suffix={gradientSuffix}/> : <>
+              <circle cx="326" cy="153" r="11" fill="#b2aaff"/>
+              <path d="M321 148Q327 145 332 149M322 154L330 154" fill="none" stroke="#d4ceff" strokeWidth="2.5" strokeLinecap="round"/>
+            </>}
           </g>
         </g> : <g className="planik-celebrating">
           {/* Both arms lift a real party popper, aimed toward the left. */}
@@ -464,12 +468,13 @@ export const PlanikMascot = memo(function PlanikMascot({
   );
 });
 
-function CompletionSpotlight({ progress }: { progress: CompletionProgress }) {
+function CompletionSign({ progress }: { progress: CompletionProgress }) {
   const { scope, before, after, total } = progress;
   const percent = (count: number) => total ? Math.round(count / total * 100) : 0;
   const title = scope === 'today' ? 'За сегодня' : scope === 'subtasks' ? 'Все подзадачи' : 'Все задачи';
   const Icon = scope === 'today' ? CalendarDays : scope === 'subtasks' ? ListChecks : CheckCircle2;
-  return <span className="primary-widget-metric planik-completion-card" data-scope={scope} aria-label={title + ': ' + after + ' из ' + total}>
+  return <span className="planik-completion-sign">
+  <span className="primary-widget-metric planik-completion-card" data-scope={scope} aria-label={title + ': ' + after + ' из ' + total}>
     <span className="primary-widget-metric-title"><Icon size={15}/><span>{title}</span></span>
     <span className="planik-completion-values">
       <strong className="planik-completion-before">{before} из {total}<small>{percent(before)}%</small></strong>
@@ -478,5 +483,6 @@ function CompletionSpotlight({ progress }: { progress: CompletionProgress }) {
     <span className="primary-widget-progress" role="progressbar" aria-label={title} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent(after)}>
       <span style={{ '--completion-from': percent(before) + '%', '--completion-to': percent(after) + '%' } as CSSProperties}/>
     </span>
+  </span>
   </span>;
 }

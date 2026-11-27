@@ -947,6 +947,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
       style={embeddedInMiniApp ? { '--econ-mobile-safe-top': mobileSafeTop + 'px', '--econ-mobile-safe-bottom': mobileSafeBottom + 'px', ...(miniappNavHeight !== null ? { '--econ-miniapp-nav-height': miniappNavHeight + 'px' } : {}) } as CSSProperties : undefined}>
       <div className="econ-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !saving) setDialog(null); }}><section className={'econ-modal' + (dialog.kind === 'operation' ? ' econ-operation-modal' : '')} role="dialog" aria-modal="true" aria-label="Редактирование Economic"><header><div><span className="econ-eyebrow">{dialog.id ? 'РЕДАКТИРОВАНИЕ' : 'НОВАЯ ЗАПИСЬ'}</span><h2>{dialog.kind === 'operation' ? 'Операция' : dialog.kind === 'account' ? 'Счёт' : dialog.kind === 'debt' ? 'Долг' : dialog.kind === 'loan' ? 'Кредит' : 'Категория'}</h2></div><button type="button" onClick={() => setDialog(null)} aria-label="Закрыть"><X size={19}/></button></header>
       <form className="econ-form" onSubmit={submitDialog}>
+        <div className="econ-form-viewport">
         <div ref={formScrollRef} className="econ-form-scroll overflow-y-auto">
         {dialog.kind === 'operation' && <>
           <div className="econ-operation-choice"><span>Тип операции</span><div className="econ-operation-kind" role="group" aria-label="Тип операции">
@@ -1102,6 +1103,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
         </>}
         {dialog.kind === 'category' && <><label>Тип<select value={form.kind} onChange={e => formSet('kind',e.target.value)}><option value="EXPENSE">Расходы</option><option value="INCOME">Доходы</option></select></label><label>Название<input required maxLength={60} value={form.name} onChange={e => formSet('name',e.target.value)} placeholder="Например, питомцы"/></label></>}
         {error && <div className="econ-error" role="alert">{error}</div>}
+        </div>
         </div>
         <div className="econ-form-actions"><button type="button" disabled={saving} onClick={() => setDialog(null)}>Отмена</button><button type="submit" disabled={saving}>{saving ? <Loader2 className="econ-spin" size={17}/> : <Check size={17}/>} Сохранить</button></div>
       </form></section></div></div>, document.body)}
