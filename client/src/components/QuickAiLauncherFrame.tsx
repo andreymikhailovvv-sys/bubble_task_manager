@@ -11,7 +11,6 @@ type Props = {
   managedMascot?: boolean;
   modalMascot?: boolean;
   embeddedChatTarget?: HTMLElement | null;
-  modalChatTarget?: HTMLElement | null;
 };
 
 /**
@@ -20,16 +19,16 @@ type Props = {
  * region, exactly as in the original personal planner App.tsx. Moving the
  * cursor upward therefore keeps the original group hovered.
  */
-export function QuickAiLauncherFrame({children,onHoverChange,onFocus,taskOpen=false,work=false,fullscreenBubbles=false,embeddedTaskFocus=false,managedMascot=false,modalMascot=false,embeddedChatTarget,modalChatTarget}:Props){
+export function QuickAiLauncherFrame({children,onHoverChange,onFocus,taskOpen=false,work=false,fullscreenBubbles=false,embeddedTaskFocus=false,managedMascot=false,modalMascot=false,embeddedChatTarget}:Props){
   const launcher = useRef<HTMLDivElement>(null);
   const [hovered,setHovered] = useState(false);
   const closeTimer = useRef<number | undefined>(undefined);
   const enter = () => {window.clearTimeout(closeTimer.current);if (!hovered) {setHovered(true);onHoverChange?.(true);}};
   const leave = () => {window.clearTimeout(closeTimer.current);closeTimer.current=window.setTimeout(() => {setHovered(false);onHoverChange?.(false);},300);};
   useEffect(() => () => window.clearTimeout(closeTimer.current), []);
-  // Both chat presentations share the composer anchor. Other dialogs
-  // retain the standard screen-edge position when they cover the chat.
-  const chatTarget = modalMascot ? modalChatTarget : embeddedChatTarget;
+  // Only the split workspace uses viewport measurements. The expanded chat
+  // mounts its own avatar directly above its composer.
+  const chatTarget = modalMascot ? null : embeddedChatTarget;
   useLayoutEffect(() => {
     const root = launcher.current;
     if (!root || !chatTarget) return;

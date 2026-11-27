@@ -232,19 +232,19 @@ test('successful delivery triggers a real plane or mailbox gesture, with no fake
   assert.match(css,/translateY\(110%\)/);
 });
 
-test('full general chat and split chat use one measured composer anchor', () => {
+test('full general chat mounts the single mascot in the composer while split chat keeps its measured anchor', () => {
  const app=read('../../client/src/App.tsx');
  const frame=read('../../client/src/components/QuickAiLauncherFrame.tsx');
- const presence=read('../../client/src/components/MascotPresence.tsx');
+ const chat=read('../../client/src/components/ExpandedAiChat.tsx');
  const css=read('../../client/src/components/PlanikMascot.css');
- assert.ok(app.includes('modalChatTarget={mascotSurface.expandedChat ? expandedChatTarget : null}'));
- assert.ok(app.includes('surfaceRef={setExpandedChatTarget}'));
- assert.ok(frame.includes('const chatTarget = modalMascot ? modalChatTarget : embeddedChatTarget'));
+ assert.ok(app.includes('composerMascot={useExpandedChatMascot ? renderPlanikLauncher(true) : undefined}'));
+ assert.ok(app.includes('{!useExpandedChatMascot ? renderPlanikLauncher(false) : null}'));
+ assert.ok(app.includes('(!mascotSurface.modal || mascotSurface.expandedChat)'));
+ assert.ok(frame.includes('const chatTarget = modalMascot ? null : embeddedChatTarget'));
  assert.ok(frame.includes("chatTarget.querySelector<HTMLElement>('.ai-chat-expanded-composer-wrap')"));
- assert.ok(frame.includes("chatTarget.addEventListener('animationend',schedule)"));
- assert.ok(frame.includes("chatTarget.removeEventListener('animationend',schedule)"));
- assert.ok(presence.includes("expandedChat: !!top?.matches('.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded)')"));
- assert.ok(css.includes('[data-mascot-surface=modal][data-mascot-chat-embedded=true]'));
+ assert.ok(chat.includes('className="ai-chat-expanded-composer-wrap">\n            {composerMascot ? <div className="planik-chat-mascot-slot"'));
+ assert.ok(css.includes('.ai-chat-expanded-composer-wrap > .planik-chat-mascot-slot'));
+ assert.ok(css.includes('bottom:calc(100% + 4px)'));
 });
 test('confirmed Telegram status changes trigger the gesture without replaying initial history', () => {
  const reply=read('../../client/src/components/TelegramAiReplySuggestionCard.tsx');

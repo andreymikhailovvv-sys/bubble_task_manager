@@ -6731,6 +6731,23 @@ export default function App() {
       }}
       onComplete={async task => { await api.updateTask(task.id, { status: 'DONE' }); if (task.parentTaskId) await syncParentStatusBySubtasks(task.parentTaskId); await load(); }} />;
   };
+  // The modal chat owns a real composer-relative mascot slot. Do not
+  // render the workspace avatar at the same time. Higher dialogs still use
+  // the original screen-corner launcher.
+  const useExpandedChatMascot = isAiChatOpen && !hasGeneralAiPane && (!mascotSurface.modal || mascotSurface.expandedChat);
+  const renderPlanikLauncher = (inChat: boolean) => (
+    <div className="mascot-wardrobe-anchor" data-guided-launcher={!inChat && (guidedStep === "ai-open-chat" || guidedStep === "feature-skins-intro") ? "true" : undefined}>
+        <button
+          type="button"
+          className="planik-launcher-button touch-none select-none"
+          aria-label={inChat ? "Перейти к вводу сообщения" : "Открыть общий чат с ИИ"}
+          onClick={() => { if (inChat) { expandedChatTarget?.querySelector<HTMLTextAreaElement>('textarea')?.focus(); return; } if (guidedStep === "ai-open-chat") { setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); advanceAdvancedTraining(); return; } if ((hasGeneralAiPane && !mascotSurface.modal) || mascotSurface.expandedChat) { (mascotSurface.expandedChat ? expandedChatTarget : fullscreenChatTarget)?.querySelector<HTMLTextAreaElement>('textarea')?.focus(); return; } setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}
+        >
+          <PlanikMascot notificationCount={unreadSystemNotificationCount} busy={quickAiChatLoading || aiChatLoading || Boolean(aiLoadingTaskId) || focusAiLoading} progress={focusAiLoading ? focusAiProgress : aiLoadingTaskId ? aiProgressByTask[aiLoadingTaskId] : aiChatProgress} celebrationKey={planikCelebrationKey} completion={planikCompletion} skinId={wardrobe.selected('planner')} arrivalKey={mascotSurface.arrivalKey} />
+        </button>
+        {currentUser&&<MascotWardrobeTrigger onClick={wardrobe.show}/>}
+        </div>
+  );
   return (
     <MascotIdentityContext.Provider value={mascotIdentity}>
     <main
@@ -9735,7 +9752,6 @@ export default function App() {
         managedMascot
         modalMascot={mascotSurface.modal}
         embeddedChatTarget={hasGeneralAiPane ? fullscreenChatTarget : null}
-        modalChatTarget={mascotSurface.expandedChat ? expandedChatTarget : null}
         taskOpen={Boolean(focusedTask) && (!embeddedFocusActive || fullscreenPanels[1]?.kind === 'task-ai')}
         embeddedTaskFocus={embeddedFocusActive && fullscreenPanels[1]?.kind === 'task-ai' && !hasGeneralAiPane}
         fullscreenBubbles={isBubbleFullscreen}
@@ -9792,17 +9808,7 @@ export default function App() {
             </div>
           </div>
         </div>
-        <div className="mascot-wardrobe-anchor" data-guided-launcher={guidedStep === "ai-open-chat" || guidedStep === "feature-skins-intro" ? "true" : undefined}>
-        <button
-          type="button"
-          className="planik-launcher-button touch-none select-none"
-          aria-label="Открыть общий чат с ИИ"
-          onClick={() => { if (guidedStep === "ai-open-chat") { setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); advanceAdvancedTraining(); return; } if ((hasGeneralAiPane && !mascotSurface.modal) || mascotSurface.expandedChat) { (mascotSurface.expandedChat ? expandedChatTarget : fullscreenChatTarget)?.querySelector<HTMLTextAreaElement>('textarea')?.focus(); return; } setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}
-        >
-          <PlanikMascot notificationCount={unreadSystemNotificationCount} busy={quickAiChatLoading || aiChatLoading || Boolean(aiLoadingTaskId) || focusAiLoading} progress={focusAiLoading ? focusAiProgress : aiLoadingTaskId ? aiProgressByTask[aiLoadingTaskId] : aiChatProgress} celebrationKey={planikCelebrationKey} completion={planikCompletion} skinId={wardrobe.selected('planner')} arrivalKey={mascotSurface.arrivalKey} />
-        </button>
-        {currentUser&&<MascotWardrobeTrigger onClick={wardrobe.show}/>}
-        </div>
+        {!useExpandedChatMascot ? renderPlanikLauncher(false) : null}
       </QuickAiLauncherFrame>
       {(wardrobe.open || guidedWardrobe)&&<MascotWardrobeDialog wardrobe={wardrobe} variant="planner" theme={effectiveThemeMode} training={guidedWardrobe ? {
         skin: guidedStep === 'feature-skins-preview' ? 'pirate' : guidedStep === 'feature-skins-space' ? 'space' : undefined,
@@ -9911,6 +9917,7 @@ export default function App() {
           inlineTarget={hasGeneralAiPane ? fullscreenChatTarget : null}
            surfaceRef={setExpandedChatTarget}
            showPlanik={false}
+           composerMascot={useExpandedChatMascot ? renderPlanikLauncher(true) : undefined}
           planikSkinId={wardrobe.selected('planner')}
           onOpenWardrobe={currentUser?wardrobe.show:undefined}
           projects={aiChatProjects}

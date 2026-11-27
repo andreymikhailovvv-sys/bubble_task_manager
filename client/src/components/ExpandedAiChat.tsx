@@ -35,6 +35,7 @@ type Props = {
   completion?: CompletionProgress;
   progress?: string;
   showPlanik?: boolean;
+  composerMascot?: ReactNode;
   planikSkinId?: string;
   onOpenWardrobe?: () => void;
   inlineTarget?: HTMLElement | null;
@@ -63,7 +64,7 @@ type Props = {
   onClearReply?: () => void;
 };
 
-export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, uploadProgress, messageCount, themeMode, notificationCount=0, celebrationKey=0, completion, progress, showPlanik=false, planikSkinId='classic', onOpenWardrobe, onOpenCheckups, inlineTarget, surfaceRef, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend, onLiveMessage, onLiveToolResult, onLiveStatus, readOnlyStructure=false, attachmentsEnabled=true, replyTo, onClearReply }: Props) {
+export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, uploadProgress, messageCount, themeMode, notificationCount=0, celebrationKey=0, completion, progress, showPlanik=false, composerMascot, planikSkinId='classic', onOpenWardrobe, onOpenCheckups, inlineTarget, surfaceRef, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend, onLiveMessage, onLiveToolResult, onLiveStatus, readOnlyStructure=false, attachmentsEnabled=true, replyTo, onClearReply }: Props) {
   const [draft, setDraft] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [headerHidden, setHeaderHidden] = useState(false);
@@ -239,6 +240,7 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
           </div>
           {showPlanik ? <div className="planik-composer-float mascot-wardrobe-anchor"><PlanikMascot size="composer" notificationCount={notificationCount} busy={loading} progress={progress} celebrationKey={celebrationKey} completion={completion} skinId={planikSkinId} />{onOpenWardrobe&&<MascotWardrobeTrigger onClick={onOpenWardrobe}/>}</div> : null}
           <div ref={composerRef} className="ai-chat-expanded-composer-wrap">
+            {composerMascot ? <div className="planik-chat-mascot-slot" data-managed-chat-mascot="planner">{composerMascot}</div> : null}
             {replyTo ? <AiReplyPreview target={replyTo} onDismiss={onClearReply} /> : null}
             {attachmentsEnabled&&<AiAttachmentTiles files={pendingFiles} onRemove={onRemoveFile} busy={loading} uploadProgress={uploadProgress} />}
             <div className="ai-chat-composer flex items-end gap-2 rounded-3xl border p-2"><AutoGrowingTextarea className="max-h-32 min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2.5 text-sm leading-6 focus:outline-none focus:ring-0" value={draft} onChange={(event) => setDraft(event.target.value)}
