@@ -121,11 +121,11 @@ private class MascotFrameView(context:android.content.Context,
 internal fun SharedMascotArtwork(skinId:String,dark:Boolean,mode:String,
     modifier:Modifier=Modifier,variant:String="planner"){
     val latestMode by rememberUpdatedState(mode)
-    var painted by remember(skinId,dark){mutableStateOf(false)}
-    var rendererFailed by remember(skinId,dark){mutableStateOf(false)}
+    var painted by remember(skinId,dark,variant){mutableStateOf(false)}
+    var rendererFailed by remember(skinId,dark,variant){mutableStateOf(false)}
     Box(modifier){
         if(!painted||rendererFailed)NativeMascotFallback(dark,mode,skinId,Modifier.fillMaxSize().zIndex(1f),variant)
-        if(!rendererFailed)key(skinId,dark){
+        if(!rendererFailed)key(skinId,dark,variant){
             AndroidView(
                 modifier=Modifier.fillMaxSize(),
                 factory={context->

@@ -51,6 +51,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
+import androidx.compose.animation.core.animateFloatAsState
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -82,6 +84,28 @@ internal fun NativeGeneralAiChatPage(
 ){
     val state by vm.generalAi.collectAsStateWithLifecycle()
     val wardrobe by vm.mascotWardrobe.collectAsStateWithLifecycle()
+    var financeVariant by remember(userId){mutableStateOf(false)}
+    var financeMode by remember(userId){mutableStateOf("idle")}
+    var mascotLeaving by remember(userId){mutableStateOf(false)}
+    val financeSkin=wardrobe?.takeIf{it.userId==userId}?.selected?.get("economic") ?: "classic"
+    val plannerSkin=wardrobe?.plannerSkin(userId) ?: "classic"
+    val currentFinanceSkin by rememberUpdatedState(financeSkin)
+    val currentPlannerSkin by rememberUpdatedState(plannerSkin)
+    val mascotOpacity by animateFloatAsState(if(mascotLeaving)0f else 1f,tween(180),label="finance mascot swap")
+    LaunchedEffect(userId,chatVisible){
+        if(!chatVisible)return@LaunchedEffect
+        try{
+            vm.financialGesture.collect{gesture->
+                mascotLeaving=true;delay(180)
+                financeVariant=true;financeMode="idle";mascotLeaving=false
+                delay(if(currentFinanceSkin in setOf("king","banker"))1600 else 560)
+                financeMode=gesture;delay(4200)
+                mascotLeaving=true;delay(180)
+                financeMode="idle";financeVariant=false;mascotLeaving=false
+                delay(if(currentPlannerSkin=="pirate")1600 else 560)
+            }
+        }finally{financeVariant=false;financeMode="idle";mascotLeaving=false}
+    }
     LaunchedEffect(userId,chatVisible){if(chatVisible)vm.refreshMascotWardrobe(userId)}
     val c=remember(dark){chatColors(dark)}
     val context=LocalContext.current
@@ -531,9 +555,11 @@ internal fun NativeGeneralAiChatPage(
                     PlanikNativeLauncher(
                         enabled = !isBusy,
                         dark = dark,
-                        skinId = wardrobe?.plannerSkin(userId) ?: "classic",
-                        mode = nativeChatMascotMode(state.busy,state.streamText.isNotBlank(),state.progressStatus),
-                        modifier = Modifier.align(Alignment.BottomEnd)
+                        skinId = if(financeVariant)financeSkin else plannerSkin,
+                        variant = if(financeVariant)"economic" else "planner",
+                        sharedArtwork = true,
+                        mode = if(financeVariant)financeMode else nativeChatMascotMode(state.busy,state.streamText.isNotBlank(),state.progressStatus),
+                        modifier = Modifier.align(Alignment.BottomEnd).alpha(mascotOpacity)
                             .padding(end = 13.dp, bottom = composerHeight + 1.dp),
                         onClick = {
                             planikLauncher.launch(PlanikLiveActivity.intent(
