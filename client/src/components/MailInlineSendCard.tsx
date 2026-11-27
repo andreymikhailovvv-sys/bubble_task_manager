@@ -1,3 +1,4 @@
+import { announcePlanikSend } from './PlanikSendGesture';
 import {useEffect,useRef,useState} from 'react';
 import {Check,Loader2,Mail,Send,Search,Sparkles} from 'lucide-react';
 import {api,type MailAccount,type MailSendDraft} from '../lib/api';
@@ -53,11 +54,13 @@ export function MailInlineSendCard({draft, hideCreditCost = false}:{draft:MailSe
     try {
       const result=await api.mailSendDraft(draft.id,{mailboxId,recipient,subject,text:body});
       setStatus(result.status);
+      if(result.status==='SENT')announcePlanikSend('mail-send',draft.id);
       if(!result.ok)setError(result.message||'Отправка не подтверждена');
     } catch(e) {
       try{
         const result=await api.mailDraftStatus(draft.id);
         setStatus(result.draft.status);
+        if(result.draft.status==='SENT')announcePlanikSend('mail-send',draft.id);
         if(result.draft.status==='PENDING')setError(e instanceof Error?e.message:'Ошибка отправки');
         else if(result.draft.status!=='SENT')setError('Результат отправки не подтверждён. Проверьте «Отправленные».');
       }catch {

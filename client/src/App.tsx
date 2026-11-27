@@ -1,3 +1,4 @@
+import { announcePlanikSend } from './components/PlanikSendGesture';
 import { AssistantSettingsProposalCard } from './components/AssistantSettingsProposalCard';
 import { announceAppliedEconomicProposals } from './components/EconomicMoneyGesture';
 import { useScrollFade } from './hooks/useScrollFade';
@@ -3520,7 +3521,13 @@ export default function App() {
         // Monitoring notifications are badge-only: they do not duplicate the real AI message.
       setUnreadSystemNotificationCount(result.notifications.filter(notification => notification.readAt == null).length);
         // The first load is a baseline: never produce a pile of historical OS alerts.
-        if (baselineLoaded) deliverBrowserSystemNotifications(newNotifications);
+        if (baselineLoaded) {
+          deliverBrowserSystemNotifications(newNotifications);
+          if (document.visibilityState === 'visible') for (const notification of newNotifications) {
+            if (notification.eventKey?.startsWith('telegram-ai-auto-reply:') && notification.eventKey.endsWith(':sent')) announcePlanikSend('telegram-send',notification.id);
+            if (notification.eventKey?.startsWith('mail-ai-reply:') && notification.eventKey.endsWith(':sent')) announcePlanikSend('mail-send',notification.id);
+          }
+        }
         baselineLoaded = true;
         if (newestUnseen && newestUnseen.readAt == null && document.visibilityState === 'visible') {
           setSystemNotificationToast(newestUnseen);
@@ -6598,6 +6605,7 @@ export default function App() {
           spheres={spheres} theme={effectiveThemeMode}
           onChange={(next) => updateFullscreenPaneFilters(workspaceMode, next)} />
       ) : null}
+      {fullscreenPanels.length === 2 && !workspaceOverlayActive && <button type="button" className="fullscreen-mode-window-close" title="Закрыть окно" aria-label="Закрыть окно режима" onClick={() => closeFullscreenPanel(fullscreenPanels.findIndex(panel => panel.kind === 'mode' && panel.mode === workspaceMode) as 0 | 1)}><X size={16}/></button>}
     </div>
   ) : renderWorkspaceContent(workspaceMode);
   const fullscreenTaskChoices = rootTasks
@@ -6674,10 +6682,7 @@ export default function App() {
     setFullscreenPanelSlots(nextSlots);
   };
   const renderFullscreenPanel = (panel: FullscreenWorkspacePanel): ReactNode => {
-    if (panel.kind === 'mode') return <div className="fullscreen-mode-window relative h-full min-h-0 w-full">
-      {renderWorkspaceMode(panel.mode)}
-      {fullscreenPanels.length === 2 && !workspaceOverlayActive && <button type="button" className="fullscreen-mode-window-close" title="Закрыть окно" aria-label="Закрыть окно режима" onClick={() => closeFullscreenPanel(fullscreenPanels.indexOf(panel) as 0 | 1)}><X size={16}/></button>}
-    </div>;
+    if (panel.kind === 'mode') return renderWorkspaceMode(panel.mode);
     if (panel.kind === 'task-ai' && basicStep) {
       const demoTask = basicTasks.find(task => task.id === panel.taskId);
       return <section data-training-task-window className="surface-muted flex h-full w-full flex-col gap-4 rounded-2xl p-5 text-primary">

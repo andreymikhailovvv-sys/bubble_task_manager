@@ -1,3 +1,4 @@
+import { announcePlanikSend } from './PlanikSendGesture';
 import { useEffect, useRef, useState } from 'react';
 import { Check, Loader2, Mail } from 'lucide-react';
 import { api, type MailAiSuggestedReply } from '../lib/api';
@@ -18,12 +19,14 @@ export function MailAiReplySuggestionCard({ reply }: { reply: MailAiSuggestedRep
     try {
       const response = await api.mailAssistantSendReply(reply.eventId,text);
       setStatus(response.status);
+      if(response.status === 'SENT') announcePlanikSend('mail-send',reply.eventId);
       if (!response.ok) setError('Отправка не подтверждена. Проверьте папку «Отправленные».');
     } catch (cause) {
       try {
         const feed = await api.mailAssistantInbox();
         const current = feed.messages.find(x => x.id === reply.eventId)?.mailSuggestedReply;
         setStatus(current?.status ?? 'UNKNOWN');
+        if(current?.status === 'SENT') announcePlanikSend('mail-send',reply.eventId);
       } catch { setStatus('UNKNOWN'); }
       setError(cause instanceof Error ? cause.message : 'Результат отправки неизвестен');
     } finally { setBusy(false); inFlight.current = false; }

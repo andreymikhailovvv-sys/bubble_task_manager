@@ -163,8 +163,8 @@ export function MascotWardrobeDialog({wardrobe,variant:initialVariant,theme,trai
   const specialModes: Exclude<PlanikMode,'showcase'>[] = variant==='economic'
     ? ['idle','hover','thinking','income','expense']
     : ['wizard','pirate','space','ninja','northern','zoomer'].includes(selected)
-      ? ['idle','hover','thinking']
-      : ['idle','thinking'];
+      ? ['idle','hover','thinking','telegram-send','mail-send']
+      : ['idle','thinking','telegram-send','mail-send'];
   const isEquipped=selected===wardrobe.selected(variant);
   const equip=async()=>{
     if(training||!allowed||isEquipped||saving)return;
@@ -200,7 +200,7 @@ export function MascotWardrobeDialog({wardrobe,variant:initialVariant,theme,trai
           {specialModes.length>0&&<div className="mascot-wardrobe-animations" aria-label="Особые анимации">
             <span>Особые анимации:</span>
             <div>{specialModes.map(mode=>{
-              return <button key={mode} type="button" aria-pressed={previewMode===mode} disabled={phase==='leaving'||phase==='entering'} onClick={()=>{setPreviewMode(mode);setReplay(v=>v+1);training?.onAnimation();}}>{mode==='idle'?'Ожидание':mode==='hover'?'Наведение курсора':mode==='typing'?'Формирует ответ':mode==='income'?'Запись дохода':mode==='expense'?'Запись расхода':'Думает'}</button>;
+              return <button key={mode} type="button" aria-pressed={previewMode===mode} disabled={phase==='leaving'||phase==='entering'} onClick={()=>{setPreviewMode(mode);setReplay(v=>v+1);training?.onAnimation();}}>{mode==='idle'?'Ожидание':mode==='hover'?'Наведение курсора':mode==='typing'?'Формирует ответ':mode==='income'?'Запись дохода':mode==='expense'?'Запись расхода':mode==='telegram-send'?'Отправка в Telegram':mode==='mail-send'?'Отправка письма':'Думает'}</button>;
             })}</div>
           </div>}
           <div className="mascot-wardrobe-actions">

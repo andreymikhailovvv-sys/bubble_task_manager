@@ -1,4 +1,5 @@
 import { EconomicMoneyGesture, FINANCIAL_MASCOT_EVENT, FINANCIAL_CHAT_MASCOT_EVENT, type FinancialMascotMode } from './EconomicMoneyGesture';
+import { PLANIK_SEND_EVENT, PlanikSendGesture, type PlanikSendMode } from './PlanikSendGesture';
 import { memo, useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import './PlanikMascot.css';
 import { CalendarDays, CheckCircle2, ListChecks } from 'lucide-react';
@@ -12,7 +13,7 @@ import { RefinedSkin, Mitten, NorthernHover, WizardHover, WizardCards } from './
 import { ShirtOutfit, ShirtArm, ZoomerPhone, BankerMoney } from './ShirtMascotSkins';
 import { AdventureOutfit, AdventureArm, AdventureIdle, AdventureHover, PirateMap, SpaceSignal, NinjaNotebook, type AdventureSkin } from './AdventureMascotSkins';
 
-export type PlanikMode = 'idle' | 'hover' | 'thinking' | 'typing' | 'searching' | 'painting' | 'celebrating' | 'clearing' | 'showcase' | 'income' | 'expense';
+export type PlanikMode = 'idle' | 'hover' | 'thinking' | 'typing' | 'searching' | 'painting' | 'celebrating' | 'clearing' | 'showcase' | 'income' | 'expense' | PlanikSendMode;
 
 // Fixed particle paths avoid creating random values or timers on every render.
 const POPPER_CONFETTI = Array.from({ length: 24 }, (_, index) => ({
@@ -131,6 +132,21 @@ export const PlanikMascot = memo(function PlanikMascot({
   const gradientSuffix = useId().replace(/:/g, '');
   const [hovered, setHovered] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
+  const [sendGesture, setSendGesture] = useState<{mode: PlanikSendMode; sequence: number} | null>(null);
+  useEffect(() => {
+    if (baseVariant !== 'planner' || previewMode || showcase) return;
+    let timer: number | undefined;
+    let sequence = 0;
+    const listener = (event: Event) => {
+      const mode = (event as CustomEvent<PlanikSendMode>).detail;
+      if (mode !== 'telegram-send' && mode !== 'mail-send') return;
+      window.clearTimeout(timer);
+      setSendGesture({ mode, sequence: ++sequence });
+      timer = window.setTimeout(() => setSendGesture(null), 2800);
+    };
+    window.addEventListener(PLANIK_SEND_EVENT, listener);
+    return () => { window.removeEventListener(PLANIK_SEND_EVENT, listener); window.clearTimeout(timer); };
+  }, [baseVariant, previewMode, showcase]);
   // Keep the previous number alive while the hand removes and discards it.
   // Starting with zero (or fetching notifications for the first time)
   // must never trigger a fake clearing animation.
@@ -178,7 +194,7 @@ export const PlanikMascot = memo(function PlanikMascot({
     progress === 'checking_sectors'
   );
   const showCompletion = variant === 'planner' && !previewMode && !!completion;
-  const mode: PlanikMode = previewMode ?? financeMode ?? (baseVariant==='planner' && swap==='economic' ? 'idle' : showCompletion ? 'celebrating' : clearingCount !== null ? 'clearing'
+  const mode: PlanikMode = previewMode ?? financeMode ?? (baseVariant==='planner' && swap==='economic' ? 'idle' : showCompletion ? 'celebrating' : sendGesture ? sendGesture.mode : clearingCount !== null ? 'clearing'
     : celebrating ? 'celebrating'
     : busy ? (isPainting ? 'painting' : isSearching ? 'searching' : isThinking ? 'thinking' : 'typing')
     : showcase && skinId !== 'classic' ? 'showcase'
@@ -485,6 +501,8 @@ export const PlanikMascot = memo(function PlanikMascot({
           </g>
         </g>}
 
+        {(mode === 'telegram-send' || mode === 'mail-send') && <PlanikSendGesture key={sendGesture?.sequence ?? mode} mode={mode}
+          armColor={north ? '#418d89' : '#7777b8'} handColor={north ? '#70c9bf' : '#b2aaff'}/>}
         {trainingPoint && <g className="planik-training-point" aria-hidden="true" transform={trainingPoint === 'left' ? 'translate(430 0) scale(-1 1)' : undefined}>
           <path d="M300 191Q324 188 340 172" fill="none" stroke="#7777b8" strokeWidth="16" strokeLinecap="round"/>
           <circle cx="340" cy="172" r="9" fill="#b2aaff"/>
@@ -520,8 +538,8 @@ function CompletionSign({ progress }: { progress: CompletionProgress }) {
   <span className="primary-widget-metric planik-completion-card" data-scope={scope} aria-label={title + ': ' + after + ' из ' + total}>
     <span className="primary-widget-metric-title"><Icon size={15}/><span>{title}</span></span>
     <span className="planik-completion-values">
-      <strong className="planik-completion-before">{before} из {total}<small>{percent(before)}%</small></strong>
-      <strong className="planik-completion-after">{after} из {total}<small>{percent(after)}%</small></strong>
+      <strong className="planik-completion-before" aria-hidden="true">{before} из {total}<small>{percent(before)}%</small></strong>
+      <strong className="planik-completion-after" aria-hidden="true">{after} из {total}<small>{percent(after)}%</small></strong>
     </span>
     <span className="primary-widget-progress" role="progressbar" aria-label={title} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent(after)}>
       <span style={{ '--completion-from': percent(before) + '%', '--completion-to': percent(after) + '%' } as CSSProperties}/>
