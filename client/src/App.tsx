@@ -888,6 +888,7 @@ export default function App() {
   }, [pendingWorkspaceBlock]);
   const [fullscreenSplitRatio, setFullscreenSplitRatio] = useState(50);
   const [fullscreenChatTarget, setFullscreenChatTarget] = useState<HTMLDivElement | null>(null);
+  const [expandedChatTarget, setExpandedChatTarget] = useState<HTMLDivElement | null>(null);
   const [fullscreenFocusTarget, setFullscreenFocusTarget] = useState<HTMLDivElement | null>(null);
   // Each fullscreen view owns its own sector and time filters.
   const [fullscreenPaneFilters, setFullscreenPaneFilters] = useState<Record<DisplayMode, WorkspacePaneFilter>>({
@@ -3482,6 +3483,14 @@ export default function App() {
     void api.markSystemNotificationsRead().catch((error) => console.error('[System notifications] mark read failed', error));
   };
 
+  const announceConfirmedNotificationSends = (notifications: SystemNotification[]) => {
+    if (document.visibilityState !== 'visible') return;
+    for (const notification of notifications) {
+      const key = notification.eventKey;
+      if (key?.startsWith('telegram-ai-auto-reply:') && key.endsWith(':sent')) announcePlanikSend('telegram-send', key.slice(0, -5));
+      if (key?.startsWith('mail-ai-reply:') && key.endsWith(':sent')) announcePlanikSend('mail-send', key.slice('mail-ai-reply:'.length, -5));
+    }
+  };
   const refreshSystemNotifications = async () => {
     try {
       const result = await api.getSystemNotifications();
@@ -3493,6 +3502,7 @@ export default function App() {
       // Monitoring notifications are badge-only: they do not duplicate the real AI message.
       setUnreadSystemNotificationCount(result.notifications.filter(notification => notification.readAt == null).length);
       deliverBrowserSystemNotifications(newNotifications);
+      announceConfirmedNotificationSends(newNotifications);
       if (newestUnseen && newestUnseen.readAt == null && document.visibilityState === 'visible') setSystemNotificationToast(newestUnseen);
     } catch (error) {
       console.error('[System notifications] refresh failed', error);
@@ -3523,10 +3533,7 @@ export default function App() {
         // The first load is a baseline: never produce a pile of historical OS alerts.
         if (baselineLoaded) {
           deliverBrowserSystemNotifications(newNotifications);
-          if (document.visibilityState === 'visible') for (const notification of newNotifications) {
-            if (notification.eventKey?.startsWith('telegram-ai-auto-reply:') && notification.eventKey.endsWith(':sent')) announcePlanikSend('telegram-send',notification.id);
-            if (notification.eventKey?.startsWith('mail-ai-reply:') && notification.eventKey.endsWith(':sent')) announcePlanikSend('mail-send',notification.id);
-          }
+          announceConfirmedNotificationSends(newNotifications);
         }
         baselineLoaded = true;
         if (newestUnseen && newestUnseen.readAt == null && document.visibilityState === 'visible') {
@@ -6653,7 +6660,8 @@ export default function App() {
       setIsAiExpanded(false);
       setIsAiChatOpen(false);
     }
-    if (basicStep === 'two-modes' && next.kind === 'mode') { setBasicNotice(null); setBasicStep('mode-added'); }
+    if (basicStep === 'two-modes' && (next.kind !== 'mode' || next.mode !== 'bubbles')) return;
+    if (basicStep === 'two-modes' && next.kind === 'mode' && next.mode === 'bubbles') { setBasicNotice(null); setBasicStep('mode-added'); }
     if (basicStep === 'block') { setBasicNotice(null); setBasicStep('block-added'); }
     if (basicStep === 'task-window' && next.kind === 'task-ai') { setBasicNotice(null); setBasicStep('task-window-added'); }
     const slots = side === 'left' ? [next, fullscreenPanels[0]] : [fullscreenPanels[0], next];
@@ -6893,12 +6901,14 @@ export default function App() {
           onOpenNote={(id) => setRequestedStandaloneNote({ id, serial: Date.now() })}
         />
             <FullscreenModePicker modes={fullscreenPanels.filter(panel => panel.kind === 'mode').map(panel => panel.mode)}
-              onHold={mode => { const next: FullscreenWorkspacePanel = { kind: 'mode', mode }; if (blockAlreadyPresent(next)) { setWorkspaceBlockNotice(Date.now()); return; } setPendingWorkspaceBlock(next); }}
-              onDragStart={mode => { if (basicStep === 'two-modes') return; const next: FullscreenWorkspacePanel = { kind: 'mode', mode }; if (blockAlreadyPresent(next)) { setWorkspaceBlockNotice(Date.now()); return; } blockDragRef.current = true; setPendingWorkspaceBlock(next); }}
+              onHold={mode => { if (basicStep === 'modes' || (basicStep === 'two-modes' && mode !== 'bubbles')) return; const next: FullscreenWorkspacePanel = { kind: 'mode', mode }; if (blockAlreadyPresent(next)) { setWorkspaceBlockNotice(Date.now()); return; } setPendingWorkspaceBlock(next); }}
+              onDragStart={mode => { if (basicStep === 'modes' || (basicStep === 'two-modes' && mode !== 'bubbles')) return; const next: FullscreenWorkspacePanel = { kind: 'mode', mode }; if (blockAlreadyPresent(next)) { setWorkspaceBlockNotice(Date.now()); return; } blockDragRef.current = true; setPendingWorkspaceBlock(next); }}
               onDragEnd={() => { blockDragRef.current = false; setPendingWorkspaceBlock(null); }}
               onChange={(nextModes) => {
-               if (basicStep === 'modes' && nextModes[0] !== fullscreenDisplayModes[0]) setBasicStep('two-modes');
-              else if (basicStep === 'two-modes') return;
+               if (basicStep === 'modes') {
+                  if (nextModes[0] !== 'list') return;
+                  setBasicStep('two-modes');
+                } else if (basicStep === 'two-modes') return;
               setPendingWorkspaceBlock(null);
               const mode = nextModes[0];
               // The toolbar chooses one visualization. Blocks explicitly
@@ -7867,7 +7877,7 @@ export default function App() {
               ) : (
                 <FullscreenWorkspaceSingle panel={fullscreenPanels[0]} renderPanel={renderFullscreenPanel}
                   placement={workspaceOverlayActive ? null : pendingWorkspaceBlock} onChoose={addFullscreenSinglePanel}
-                  onReplace={next => chooseFullscreenPanel(0, next)} />
+                  allowReplace={basicStep !== 'two-modes'} onReplace={next => chooseFullscreenPanel(0, next)} />
               )}
             </div>
             <PrimaryWorkspaceSidebar key={currentUser?.id ?? 'anonymous'}
@@ -9725,6 +9735,7 @@ export default function App() {
         managedMascot
         modalMascot={mascotSurface.modal}
         embeddedChatTarget={hasGeneralAiPane ? fullscreenChatTarget : null}
+        modalChatTarget={mascotSurface.expandedChat ? expandedChatTarget : null}
         taskOpen={Boolean(focusedTask) && (!embeddedFocusActive || fullscreenPanels[1]?.kind === 'task-ai')}
         embeddedTaskFocus={embeddedFocusActive && fullscreenPanels[1]?.kind === 'task-ai' && !hasGeneralAiPane}
         fullscreenBubbles={isBubbleFullscreen}
@@ -9786,7 +9797,7 @@ export default function App() {
           type="button"
           className="planik-launcher-button touch-none select-none"
           aria-label="Открыть общий чат с ИИ"
-          onClick={() => { if (guidedStep === "ai-open-chat") { setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); advanceAdvancedTraining(); return; } if (hasGeneralAiPane && !mascotSurface.modal) { fullscreenChatTarget?.querySelector<HTMLTextAreaElement>('textarea')?.focus(); return; } setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}
+          onClick={() => { if (guidedStep === "ai-open-chat") { setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); advanceAdvancedTraining(); return; } if ((hasGeneralAiPane && !mascotSurface.modal) || mascotSurface.expandedChat) { (mascotSurface.expandedChat ? expandedChatTarget : fullscreenChatTarget)?.querySelector<HTMLTextAreaElement>('textarea')?.focus(); return; } setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}
         >
           <PlanikMascot notificationCount={unreadSystemNotificationCount} busy={quickAiChatLoading || aiChatLoading || Boolean(aiLoadingTaskId) || focusAiLoading} progress={focusAiLoading ? focusAiProgress : aiLoadingTaskId ? aiProgressByTask[aiLoadingTaskId] : aiChatProgress} celebrationKey={planikCelebrationKey} completion={planikCompletion} skinId={wardrobe.selected('planner')} arrivalKey={mascotSurface.arrivalKey} />
         </button>
@@ -9898,7 +9909,8 @@ export default function App() {
       {(isAiChatOpen && !hasGeneralAiPane) || (hasGeneralAiPane && Boolean(fullscreenChatTarget)) ? (
         <ExpandedAiChat
           inlineTarget={hasGeneralAiPane ? fullscreenChatTarget : null}
-          showPlanik={false}
+           surfaceRef={setExpandedChatTarget}
+           showPlanik={false}
           planikSkinId={wardrobe.selected('planner')}
           onOpenWardrobe={currentUser?wardrobe.show:undefined}
           projects={aiChatProjects}

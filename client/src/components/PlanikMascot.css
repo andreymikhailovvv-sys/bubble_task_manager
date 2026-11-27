@@ -555,8 +555,7 @@ body:has(.planik-notes-companion, .planik-task-editor-companion)
 .ai-chat-launcher[data-managed-mascot-launcher=planner] .mascot-wardrobe-trigger:not([data-hovered=true]):not(:focus-visible) { pointer-events:none; }
 body:has(.mascot-wardrobe-dialog[open],.planik-live-fullscreen,.planik-live-compact) [data-managed-mascot-launcher] { visibility:hidden!important; pointer-events:none!important; }
 body:has(.mascot-wardrobe-dialog[open],.planik-live-fullscreen,.planik-live-compact) [data-managed-mascot-launcher] * { visibility:hidden!important;pointer-events:none!important; }
-/* Keep the expanded chat usable: the mascot remains at the screen edge,
-   but the redundant miniature transcript must not overlay the full chat. */
+/* The mascot follows the composer; the miniature transcript stays hidden. */
 body:has(.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded)) [data-managed-mascot-launcher=planner] .planik-quick-ai-preview { opacity:0!important;pointer-events:none!important; }
 @media(max-width:760px){
   [data-managed-mascot-launcher][data-mascot-surface=modal] .planik-mascot{width:78px;height:70px}
@@ -606,6 +605,7 @@ body:has(.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded)) [data-manag
 /* A chat pane still owns its old composer anchor, even though its avatar is
    now the same live mascot as the workspace/modal launcher. */
 .ai-chat-launcher[data-managed-mascot-launcher=planner][data-mascot-chat-embedded=true]{right:var(--mascot-chat-right,16px)!important;bottom:var(--mascot-chat-bottom,138px)!important}
+.ai-chat-launcher[data-managed-mascot-launcher=planner][data-mascot-surface=modal][data-mascot-chat-embedded=true]{right:var(--mascot-chat-right,16px)!important;bottom:var(--mascot-chat-bottom,138px)!important}
 .ai-chat-launcher[data-mascot-chat-embedded=true] .planik-quick-ai-preview{opacity:0!important;pointer-events:none!important}
 
 .planik-mascot[data-skin=ninja][data-mode=hover] .planik-character-rig{animation:none;opacity:1}
@@ -726,8 +726,8 @@ body[data-theme='light'] .planik-mascot .planik-completion-card { color: #1e293b
 .planik-mail-success{animation:planik-mail-success 2.8s both}
 @keyframes planik-send-visibility{0%{opacity:0}9%,88%{opacity:1}100%{opacity:0}}
 @keyframes planik-plane-throw-arm{0%,14%{transform:rotate(-14deg)}30%{transform:rotate(24deg)}42%{transform:rotate(14deg)}65%,100%{transform:rotate(0)}}
-@keyframes planik-plane-flight{0%,14%{transform:rotate(-14deg) translate(3px,7px);opacity:1}30%{transform:translate(-11px,-20px) rotate(24deg);opacity:1}62%{transform:translate(-130px,-125px) rotate(20deg) scale(.65);opacity:0}100%{transform:translate(-130px,-125px) scale(.65);opacity:0}}
-@keyframes planik-plane-trail{0%,28%,100%{opacity:0}35%{opacity:.9}58%{opacity:0;transform:translate(-75px,-66px)}}
+@keyframes planik-plane-flight{0%,14%{transform:rotate(-14deg) translate(3px,7px);opacity:1}30%{transform:translate(-11px,-20px) rotate(24deg);opacity:1}65%{transform:translate(-58px,-64px) rotate(20deg) scale(.95);opacity:1}86%,100%{transform:translate(-130px,-125px) rotate(20deg) scale(.65);opacity:0}}
+@keyframes planik-plane-trail{0%,28%,100%{opacity:0}35%{opacity:.9}80%{opacity:0;transform:translate(-75px,-66px)}}
 @keyframes planik-mailbox-arrival{0%{transform:translateY(22px) scale(.85);opacity:0}15%,86%{transform:none;opacity:1}100%{opacity:0;transform:translateY(12px)}}
 @keyframes planik-mail-deposit-arm{0%,17%{transform:rotate(0)}44%{transform:rotate(-36deg)}57%{transform:rotate(-36deg)}75%,100%{transform:rotate(0)}}
 @keyframes planik-mail-deposit-letter{0%,17%{transform:none;opacity:1}44%{transform:translate(-2px,39px);opacity:1}58%{transform:translate(-2px,50px) scaleY(.15);opacity:0}100%{opacity:0}}

@@ -101,7 +101,7 @@ export function BasicPlanikTraining({ step, lesson, theme, notice, actionReady, 
           .map(visibleTargetRect).find(r => r.width > 1 && r.height > 1 && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight);
         rect = placements ?? menu ?? (bubble ? {left: Math.floor(bubble.left)-5, top: Math.floor(bubble.top)-5, right: Math.ceil(bubble.right)+5, bottom: Math.ceil(bubble.bottom)+5} : rect);
       }
-      if (!lesson && step === 'two-modes') rect = readTarget('.workspace-placement-rail .workspace-block-target') ?? readTarget('.fullscreen-mode-picker');
+      if (!lesson && step === 'two-modes') rect = readTarget('.workspace-placement-rail .workspace-block-target') ?? readTarget('.fullscreen-mode-picker [data-view-mode="bubbles"]');
       setTarget(previous => rectsEqual(previous, rect) ? previous : rect);
       setViewport(previous => previous.width === innerWidth && previous.height === innerHeight ? previous : { width: innerWidth, height: innerHeight });
     };

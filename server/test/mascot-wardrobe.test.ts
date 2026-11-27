@@ -231,3 +231,23 @@ test('successful delivery triggers a real plane or mailbox gesture, with no fake
   assert.match(css,/translateY\(-110%\)/);
   assert.match(css,/translateY\(110%\)/);
 });
+
+test('full general chat and split chat use one measured composer anchor', () => {
+ const app=read('../../client/src/App.tsx');
+ const frame=read('../../client/src/components/QuickAiLauncherFrame.tsx');
+ const presence=read('../../client/src/components/MascotPresence.tsx');
+ const css=read('../../client/src/components/PlanikMascot.css');
+ assert.ok(app.includes('modalChatTarget={mascotSurface.expandedChat ? expandedChatTarget : null}'));
+ assert.ok(app.includes('surfaceRef={setExpandedChatTarget}'));
+ assert.ok(frame.includes('const chatTarget = modalMascot ? modalChatTarget : embeddedChatTarget'));
+ assert.ok(frame.includes("chatTarget.querySelector<HTMLElement>('.ai-chat-expanded-composer-wrap')"));
+ assert.ok(presence.includes("expandedChat: !!top?.matches('.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded)')"));
+ assert.ok(css.includes('[data-mascot-surface=modal][data-mascot-chat-embedded=true]'));
+});
+test('confirmed Telegram status changes trigger the gesture without replaying initial history', () => {
+ const reply=read('../../client/src/components/TelegramAiReplySuggestionCard.tsx');
+ const card=read('../../client/src/components/TelegramInlineSendCard.tsx');
+ assert.ok(reply.includes("previous.eventId === reply.eventId && previous.status !== 'SENT' && reply.status === 'SENT'"));
+ assert.ok(card.includes('initiatedSend.current && result.sentCount > 0'));
+ assert.ok(card.includes("announcePlanikSend('telegram-send', result.id)"));
+});

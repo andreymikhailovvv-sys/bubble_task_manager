@@ -54,3 +54,14 @@ test('basic training requires mode placement and teaches task placement after th
   assert.equal(BASIC_TRAINING_STEPS.find(step => step.id === 'two-modes')?.action, true);
   assert.equal(BASIC_TRAINING_STEPS.find(step => step.id === 'task-window')?.action, true);
 });
+
+test('steps 15 and 16 identify the exact mode and only permit the correct controls', () => {
+  const list = BASIC_TRAINING_STEPS[14];
+  const bubbles = BASIC_TRAINING_STEPS[15];
+  assert.equal(list.id, 'modes');
+  assert.equal(bubbles.id, 'two-modes');
+  assert.match(list.allow ?? '', /data-view-mode="list"/);
+  assert.match(bubbles.allow ?? '', /data-view-mode="bubbles"/);
+  assert.match(bubbles.allow ?? '', /workspace-placement-rail/);
+  assert.doesNotMatch(list.text, /Таймлайн/);
+});

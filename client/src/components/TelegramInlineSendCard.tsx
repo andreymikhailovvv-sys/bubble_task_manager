@@ -23,9 +23,14 @@ export function TelegramInlineSendCard({ draft }: Props) {
   const pending = useRef(false);
   const initiatedSend = useRef(false);
   useEffect(() => { initiatedSend.current = false; }, [draft.requestId]);
-  useEffect(() => { if (initiatedSend.current && job?.state === 'DONE' && job.sentCount > 0) { announcePlanikSend('telegram-send', draft.requestId); initiatedSend.current = false; } }, [job, draft.requestId]);
+  const observeConfirmedJob = (result: TelegramQuickSendJob) => {
+    if (initiatedSend.current && result.sentCount > 0) {
+      announcePlanikSend('telegram-send', result.id);
+      initiatedSend.current = false;
+    }
+  };
 
-  useEffect(() => () => { mounted.current = false; }, []);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => {
     let active = true;
     // A queued job can be rediscovered after reload; the same server-generated
@@ -40,7 +45,7 @@ export function TelegramInlineSendCard({ draft }: Props) {
     let active = true;
     const timer = window.setInterval(() => {
       void api.telegramQuickSendStatus(draft.requestId).then((result) => {
-        if (active) setJob(result);
+        if (active) { observeConfirmedJob(result); setJob(result); }
       }).catch(() => { /* Do not duplicate an uncertain remote send. */ });
     }, 2500);
     return () => { active = false; window.clearInterval(timer); };
@@ -73,6 +78,7 @@ export function TelegramInlineSendCard({ draft }: Props) {
         text: draft.text,
         mode: 'DIRECT'
       });
+      observeConfirmedJob(result);
       if (mounted.current) { setJob(result); setPickerOpen(false); }
     } catch (cause) {
       if (mounted.current) {
@@ -80,6 +86,7 @@ export function TelegramInlineSendCard({ draft }: Props) {
         // Query its stable id before enabling any resubmit.
         try {
           const previous = await api.telegramQuickSendStatus(draft.requestId);
+          observeConfirmedJob(previous);
           if (mounted.current) setJob(previous);
         } catch {
           if (mounted.current) setError(cause instanceof Error ? cause.message : 'Не удалось принять отправку');

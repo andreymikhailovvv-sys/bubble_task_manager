@@ -26,12 +26,14 @@ export function PlanikSendGesture({ mode, armColor, handColor }: {mode: PlanikSe
     </g>
   </g> : <g className="planik-send-gesture planik-send-mail" aria-hidden="true">
     <g className="planik-mailbox">
+      <g transform="translate(82 217) scale(1.24) translate(-82 -217)">
       <path d="M81 249v35" stroke="#7891b2" strokeWidth="12" strokeLinecap="round"/>
       <rect x="46" y="206" width="74" height="55" rx="12" fill="#4265a2" stroke="#b9d4f5" strokeWidth="2.5"/>
       <path d="M47 221h72" stroke="#29446c" strokeWidth="7"/>
       <rect x="55" y="213" width="56" height="8" rx="4" fill="#142c47"/>
       <path d="M119 217v-23h-15v11h15" fill="#f87171" stroke="#fecaca" strokeWidth="2" strokeLinejoin="round"/>
       <path d="M62 244h42" stroke="#9eb9dc" strokeWidth="3" strokeLinecap="round"/>
+      </g>
     </g>
     <g className="planik-mail-arm">
       <path d="M133 194Q122 163 96 162" fill="none" stroke={armColor} strokeWidth="17" strokeLinecap="round"/>
