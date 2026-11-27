@@ -29,14 +29,14 @@ test('opening a task from the context menu requests a pane rather than replacing
   assert.doesNotMatch(handler, /replaceFullscreenPanel|setFocusedTaskId|setFullscreenPanelSlots/);
 });
 
-test('operation totals are grouped left, and a single notes block has square edges', () => {
+test('operation totals are grouped left, and a single notes block has rounded edges', () => {
   const economic = read('../../client/src/EconomicApp.css');
   const css = read('../../client/src/styles.css');
   const notesEditor = read('../../client/src/components/NotesEditor.tsx');
   assert.match(economic, /\.econ-operations-toolbar \.econ-filter-totals\{flex:0 1 auto/);
   assert.match(economic, /justify-content:flex-start/);
   assert.match(css, /\.fullscreen-workspace-single:has\(\.standalone-notes-inline-mount\)/);
-  assert.match(css, /\.fullscreen-workspace-single-content \.standalone-notes-inline \.standalone-notes-board\s*\{/);
+  assert.match(css, /\.fullscreen-workspace-single-content \.standalone-notes-inline \.standalone-notes-board\s*\{\s*border-radius: 18px !important/);
   assert.match(css, /scrollbar-gutter: auto !important/);
   assert.match(notesEditor, /useScrollFade\(editorRef\)/);
 });

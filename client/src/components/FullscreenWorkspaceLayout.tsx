@@ -220,7 +220,7 @@ export function FullscreenWorkspaceSplit({ panels, renderPanel, ratio, onRatioCh
         {renderPanel(panels[0])}
         {placement && <BlockDropTarget onPlace={() => onChoose(0, placement)}/>}
       </section>
-      <div key="workspace-divider" className="fullscreen-workspace-divider" role="separator" tabIndex={0}
+      <div className="fullscreen-workspace-divider" role="separator" tabIndex={0} key="workspace-divider"
         aria-label="Изменить размер областей рабочего пространства" aria-valuemin={25} aria-valuemax={75}
         aria-valuenow={ratio} title="Перетащите для изменения размера. Двойной клик или Enter меняет окна местами."
         onPointerDown={onDividerDown} onPointerMove={onDividerMove}

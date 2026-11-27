@@ -108,6 +108,9 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
   const timerRef = useRef<number | null>(null);
   const loadVersion = useRef(0);
   const instanceId = useRef(Symbol('notes workspace'));
+  const openVersion = useRef(0);
+  const ownerRef = useRef(userId);
+  ownerRef.current = userId;
   const emitUpdate = useCallback((note?: StandaloneNote, deletedId?: string) => {
     window.dispatchEvent(new CustomEvent('standalone-notes-saved', { detail: { userId, source: instanceId.current, note, deletedId } }));
   }, [userId]);
@@ -119,12 +122,13 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     try {
       const [result, allGroups] = await Promise.all([api.getStandaloneNotes(), api.getStandaloneNoteGroups()]);
       if (version !== loadVersion.current) return;
-      setNotes(sortNotes(result));
+      const draft = draftRef.current;
+      setNotes(sortNotes(draft && dirtyRef.current ? result.map(note => note.id === draft.id ? draft : note) : result));
       // Sectors are the default groups; independent groups follow them.
       setGroups([...allGroups].sort((a, b) => Number(Boolean(b.sphereId)) - Number(Boolean(a.sphereId))));
       setError(null);
     } catch (cause) {
-      setError(getErrorMessage(cause));
+      if (version === loadVersion.current) setError(getErrorMessage(cause));
     } finally {
       if (version === loadVersion.current) setLoading(false);
     }
@@ -134,6 +138,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     // Clear cached notes immediately when an account changes, even if the
     // next account's API request is still in flight.
     ++loadVersion.current;
+    ++openVersion.current;
     setNotes([]);
     setGroups([]);
     setSelectedGroup('all');
@@ -184,6 +189,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     dirtyRef.current = false;
     pendingRef.current = pendingRef.current.catch(() => {}).then(async () => {
       const saved = await api.updateStandaloneNote(draft.id, { title: draft.title, content: draft.content });
+      if (ownerRef.current !== userId) return;
       emitUpdate(saved);
       setNotes((current) => sortNotes(current.map((note) => {
         if (note.id !== saved.id) return note;
@@ -200,7 +206,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
       setError('Изменения не сохранены: ' + getErrorMessage(cause));
       throw cause;
     }
-  }, [emitUpdate]);
+  }, [emitUpdate, userId]);
 
   useEffect(() => {
     const receive = (event: Event) => {
@@ -226,6 +232,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
   const changeDraft = (changes: { title?: string; content?: string }) => {
     const draft = draftRef.current;
     if (!draft) return;
+    ++loadVersion.current;
     const next = { ...draft, ...changes };
     draftRef.current = next;
     dirtyRef.current = true;
@@ -235,37 +242,52 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     timerRef.current = window.setTimeout(() => { void saveChanges().catch(() => {}); }, 800);
   };
 
-  const openEditor = (note: StandaloneNote) => {
-    draftRef.current = { ...note };
-    dirtyRef.current = false;
-    setEditing({ ...note });
-    setError(null);
-  };
-
-  // A top-search hit opens the exact note, even if the sidebar has not loaded
-  // it yet. Fetch a fresh copy, as notes can also be edited from Telegram/AI.
+  // A note may be open in the inline pane and the sidebar simultaneously.
+  // Flush its pending autosave before fetching/opening a second editor.
   useEffect(() => {
-    if (!requestedNote?.id || !userId) return;
-    let cancelled = false;
-    void api.getStandaloneNotes().then(result => {
-      if (cancelled) return;
-      const note = result.find(item => item.id === requestedNote.id);
-      if (!note) {
-        setBoardOpen(true);
-        setError('Заметка не найдена или недоступна.');
-        return;
+    const flush = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId: string; id: string; source: symbol; waits: Promise<void>[] }>).detail;
+      if (detail?.userId === userId && detail.source !== instanceId.current && draftRef.current?.id === detail.id) {
+        detail.waits.push(saveChanges());
       }
+    };
+    window.addEventListener('standalone-notes-flush', flush);
+    return () => window.removeEventListener('standalone-notes-flush', flush);
+  }, [userId, saveChanges]);
+
+  // Changing workspace blocks must not cancel a pending text edit.
+  useEffect(() => () => {
+    if (ownerRef.current === userId && dirtyRef.current) void saveChanges().catch(() => {});
+  }, [userId, saveChanges]);
+
+  const openFreshEditor = useCallback(async (id: string) => {
+    const version = ++openVersion.current;
+    try {
+      await saveChanges();
+      const waits: Promise<void>[] = [];
+      window.dispatchEvent(new CustomEvent('standalone-notes-flush', { detail: { userId, id, source: instanceId.current, waits } }));
+      await Promise.all(waits);
+      const result = await api.getStandaloneNotes();
+      if (version !== openVersion.current || ownerRef.current !== userId) return;
+      const note = result.find(item => item.id === id);
+      if (!note) { setError('Заметка не найдена или недоступна.'); return; }
+      ++loadVersion.current;
+      setLoading(false);
       setNotes(sortNotes(result));
       setBoardOpen(true);
       draftRef.current = { ...note };
       dirtyRef.current = false;
       setEditing({ ...note });
       setError(null);
-    }).catch(() => {
-      if (!cancelled) setError('Не удалось открыть найденную заметку. Повторите поиск.');
-    });
-    return () => { cancelled = true; };
-  }, [requestedNote?.id, requestedNote?.serial, userId]);
+    } catch (cause) {
+      if (version === openVersion.current && ownerRef.current === userId) setError(getErrorMessage(cause));
+    }
+  }, [userId, saveChanges]);
+
+  const openEditor = (note: StandaloneNote) => { void openFreshEditor(note.id); };
+  useEffect(() => {
+    if (requestedNote?.id && userId) void openFreshEditor(requestedNote.id);
+  }, [requestedNote?.id, requestedNote?.serial, userId, openFreshEditor]);
 
   const closeEditor = async () => {
     try {

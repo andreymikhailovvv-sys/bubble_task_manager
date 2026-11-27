@@ -6857,9 +6857,23 @@ export default function App() {
                 setIsAddMenuOpen(true);
               }
               setPendingWorkspaceBlock(null);
-              setFullscreenDisplayModes(nextModes);
-              setFullscreenPanelSlots(null);
-              setDisplayMode(nextModes[0]);
+              const mode = nextModes[0];
+              // The toolbar chooses one visualization. Blocks explicitly
+              // added by the user stay in their own slots.
+              const modeIndex = fullscreenPanels.findIndex(panel => panel.kind === 'mode');
+              const index = modeIndex >= 0 ? modeIndex as 0 | 1
+                : fullscreenPanels.findIndex(panel => !requiresCompanionPanel(panel)) as 0 | 1;
+              const existing = fullscreenPanels.findIndex(panel => panel.kind === 'mode' && panel.mode === mode);
+              if (existing !== index || existing < 0) {
+                if (existing >= 0 && fullscreenPanels.length === 2) {
+                  const slots = [fullscreenPanels[1], fullscreenPanels[0]];
+                  setFullscreenPanelSlots(slots);
+                  setFullscreenDisplayModes(slots.flatMap(panel => panel.kind === 'mode' ? [panel.mode] : []));
+                } else {
+                  chooseFullscreenPanel(index === 1 ? 1 : 0, { kind: 'mode', mode });
+                }
+              }
+              setDisplayMode(mode);
               setIsSphereFilterOpen(false);
               setIsTimelineOverdueModalOpen(false);
             }} />
