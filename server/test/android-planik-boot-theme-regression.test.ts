@@ -176,7 +176,9 @@ test('Android uses the server daily remaining percentage and refreshes the same 
   assert.match(vm,/current\.user\?\.id!=owner/);
   assert.match(vm,/else if\(profile\.id!=owner\)/);
   assert.match(api,/Cache-Control: no-cache, no-store/);
-  assert.match(web,/limit\?\.daily\?\.remainingPercent/);
+  assert.match(web,/if \(!limit\) return undefined;/);
+  assert.match(web,/limit\.daily\?\.remainingPercent \?\? 100 - limit\.usedPercent/);
+  assert.match(web,/const remaining = subscriptionDailyRemaining\(limit\);/);
 });
 
 test('Android chat uses idle rather than hover and preserves explicit work phases', async()=>{
