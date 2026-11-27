@@ -504,6 +504,14 @@ struct ContentView: View {
             await session.bootstrap()
         }
         .task(id: session.account?.id) {
+            guard let id = session.account?.id else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                guard !Task.isCancelled, session.account?.id == id else { return }
+                if scenePhase == .active { await session.refreshAiBalance() }
+            }
+        }
+        .task(id: session.account?.id) {
             guard let id = session.account?.id else { subscriptionNotice = nil; return }
             while !Task.isCancelled {
                 if scenePhase == .active && subscriptionNotice == nil {

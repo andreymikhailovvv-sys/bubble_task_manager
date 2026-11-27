@@ -417,6 +417,7 @@ export type TelegramAiChatSettings = {
   historyMessageLimit: 10 | 30 | 50 | 100 | null;
   /** NULL disables the per-chat daily cap; it never bypasses the wallet balance. */
   dailyCreditLimitMilli: number | null;
+  dailyCreditLimitPercent?: number | null;
 };
 export type TelegramAiAssistantInbox = {
   projectId: string;
@@ -1081,7 +1082,7 @@ export type MailAccountSettings = {
   taskCreationWhen: string; taskIntervalMinutes: number;
   summaryIntervalMinutes: number; summaryInstructions: string;
   monitorModel: 'gpt-6-luna' | 'gpt-6.1-terra' | 'gpt-6.1-sol';
-  dailyCreditLimitMilli: number | null; notifyImportant: boolean;
+  dailyCreditLimitMilli: number | null; dailyCreditLimitPercent?: number | null; notifyImportant: boolean;
   instructions: string;
 };
 export type MailAccountConnect = MailAccountSettings & {

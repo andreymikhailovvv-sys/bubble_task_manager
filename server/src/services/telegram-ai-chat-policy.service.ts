@@ -1,3 +1,4 @@
+import { validateAssistantDailyPercent } from './assistant-daily-limit.service.js';
 import { normalizeSelectableAiChatModel } from '../lib/ai-chat-model.js';
 import { prisma } from '../db/prisma.js';
 import { FixedWindowRateLimiter } from '../lib/security-rate-limiter.js';
@@ -46,6 +47,7 @@ export type TelegramAiChatSettings = {
   historyAccessEnabled: boolean;
   historyMessageLimit: 10 | 30 | 50 | 100 | null;
   dailyCreditLimitMilli: number | null;
+  dailyCreditLimitPercent?: number | null;
 };
 
 export const DEFAULT_TELEGRAM_AI_CHAT_SETTINGS: TelegramAiChatSettings = {
@@ -162,7 +164,8 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
     // Older clients lacking the new checkbox must never implicitly grant retroactive access.
     historyAccessEnabled: p.historyAccessEnabled === true,
     historyMessageLimit: p.historyMessageLimit === undefined ? 50 : p.historyMessageLimit as 10 | 30 | 50 | 100 | null,
-    dailyCreditLimitMilli: validateTelegramCreditLimit(p.dailyCreditLimitMilli)
+    dailyCreditLimitMilli: validateTelegramCreditLimit(p.dailyCreditLimitMilli),
+    ...(p.dailyCreditLimitPercent !== undefined ? {dailyCreditLimitPercent: validateAssistantDailyPercent(p.dailyCreditLimitPercent)} : {})
   };
 }
 
