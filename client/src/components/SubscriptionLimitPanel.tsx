@@ -1,20 +1,19 @@
 import './PrimaryWorkspaceSidebar.css';
+import type { CSSProperties } from 'react';
 import type { CurrentUser, SubscriptionWindow } from '../lib/api';
 export const PLAN_FEATURES = {"start":["Базовый месячный лимит ×1","Модель Luna","Запросы и управление задачами","Создание Word и Excel","Поиск в интернете"],"pro":["Месячный лимит ×2","Модели Luna, Terra","Все функции Старта","Создание изображений","Почтовый ИИ-ассистент","Живое общение с ИИ","Набор образов для Планика и Экономыча"],"max":["Месячный лимит ×4,33","Модели Luna, Terra, Sol; Astra (готовится)","Все функции Про","Telegram ИИ-ассистент","Автомониторинг задач","Расширенный набор образов для Планика и Экономыча"]} as const;
 
-const remainingColor = (remaining: number) => remaining >= 70 ? '#36b982' : remaining >= 30 ? '#e6b84f' : '#e36a79';
-
-export function SubscriptionDailyRing({ limit }: { limit: CurrentUser['subscriptionLimit'] }) {
-  const remaining = limit?.daily?.remainingPercent;
-  const percent = Math.max(0, Math.min(100, remaining ?? 0));
-  return <span className="subscription-daily-ring" title={remaining === undefined ? 'Загрузка дневного лимита' : `Дневной лимит: осталось ${percent}%`}
-    aria-label={remaining === undefined ? 'Дневной лимит загружается' : `Осталось ${percent}% дневного лимита`}>
-    <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" opacity=".18" strokeWidth="3"/>
-      <circle cx="12" cy="12" r="9" fill="none" stroke={remainingColor(percent)} strokeWidth="3" pathLength="100"
-        strokeDasharray={`${percent} 100`} strokeLinecap="round" transform="rotate(-90 12 12)" opacity={percent > 0 ? 1 : 0}/>
-    </svg>
-    <small>{remaining === undefined ? '…' : percent + '%'}</small>
+export function subscriptionDailyRemaining(limit: CurrentUser['subscriptionLimit']): number | undefined {
+  if (!limit) return undefined;
+  return Math.max(0, Math.min(100, limit.daily?.remainingPercent ?? 100 - limit.usedPercent));
+}
+export function SubscriptionDailyRing({ limit, compact = false }: { limit: CurrentUser['subscriptionLimit']; compact?: boolean }) {
+  const remaining = subscriptionDailyRemaining(limit);
+  return <span className={'subscription-daily-ring' + (compact ? ' subscription-daily-ring--compact' : '')}
+    title={remaining === undefined ? 'Загрузка дневного лимита' : `Дневной лимит: осталось ${remaining}%`}
+    aria-label={remaining === undefined ? 'Дневной лимит загружается' : `Осталось ${remaining}% дневного лимита`}>
+    <span className="subscription-daily-ring__indicator" style={{ '--daily-remaining': `${remaining ?? 0}%` } as CSSProperties} aria-hidden="true"/>
+    <span className="subscription-daily-ring__text"><span className="subscription-daily-ring__label">Лимит </span>{remaining === undefined ? '…' : remaining + '%'}</span>
   </span>;
 }
 
@@ -23,7 +22,7 @@ function WindowProgress({ title, window }: { title: string; window: Subscription
   return <div className="mt-3">
     <div className="flex items-center justify-between gap-2 text-sm text-secondary"><strong>{title}</strong><span>Осталось {left}%</span></div>
     <div className="primary-widget-progress mt-2" role="progressbar" aria-label={title} aria-valuemin={0} aria-valuemax={100} aria-valuenow={left}>
-      <span style={{ width: left + '%', background: remainingColor(left) }}/>
+      <span style={{ width: left + '%', background: 'var(--accent-strong)' }}/>
     </div>
     <p className="mt-1 text-xs text-muted">Обновление: {new Date(window.resetsAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}</p>
   </div>;

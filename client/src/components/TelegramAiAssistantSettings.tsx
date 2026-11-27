@@ -78,10 +78,11 @@ type SliderProps = {
   index: number;
   options: readonly string[];
   shortLabels?: readonly string[];
+  markEvery?: number;
   onChange: (index: number) => void;
 };
 
-export function SettingSlider({ title, description, index, options, shortLabels, onChange }: SliderProps) {
+export function SettingSlider({ title, description, index, options, shortLabels, markEvery = 1, onChange }: SliderProps) {
   const id = useId();
   const progress = options.length > 1 ? (index / (options.length - 1)) * 100 : 0;
   return (
@@ -99,10 +100,10 @@ export function SettingSlider({ title, description, index, options, shortLabels,
         onChange={event => onChange(Number(event.currentTarget.value))}
       />
       <div className="telegram-ai-slider-setting__marks" aria-hidden="true">
-        {options.map((option, i) => (
+        {options.map((option, i) => (i % markEvery === 0 || i === options.length - 1) ? (
           <span key={option} style={{ left: `${i / Math.max(1, options.length - 1) * 100}%` }}
             className={i <= index ? 'telegram-ai-slider-setting__mark--active' : ''}/>
-        ))}
+        ) : null)}
       </div>
       {shortLabels ? (
         <div className={`telegram-ai-slider-setting__labels ${shortLabels.length >= 8 ? 'telegram-ai-slider-setting__labels--dense' : ''}`} aria-hidden="true">
@@ -219,9 +220,14 @@ export function useAssistantDailyCap() {
   useEffect(() => { let alive = true; void api.getMe().then(({user}) => { if(alive) setCap(user.subscriptionLimit?.daily?.capMilli ?? null); }).catch(()=>undefined); return () => { alive=false; }; }, []);
   return cap;
 }
+const ASSISTANT_PERCENT_OPTIONS = Array.from({length:101},(_,percent)=>`${percent}%`);
+const ASSISTANT_PERCENT_LABELS = ['0%', '25%', '50%', '75%', '100%'] as const;
 export function AssistantPercentSlider({value,legacy,cap,onChange}:{value?:number|null;legacy:number|null;cap:number;onChange:(percent:number)=>void}) {
   const percent = value ?? (legacy === null ? 100 : Math.min(100,Math.max(0,Math.floor(legacy*100/cap))));
-  return <div className="telegram-ai-custom-control"><label className="block text-sm font-semibold">Доля дневного лимита · {percent}%<input className="mt-2 w-full" type="range" min={0} max={100} step={1} value={percent} onChange={e=>onChange(Number(e.target.value))}/></label><p className="integration-menu__muted text-xs">0% запрещает расход. 100% разрешает использовать весь дневной лимит подписки, с учётом общего остатка.</p></div>;
+  return <div className="telegram-ai-custom-control">
+    <SettingSlider title="Доля дневного лимита" description="0% запрещает расход. 100% разрешает использовать весь дневной лимит подписки, с учётом общего остатка."
+      index={percent} options={ASSISTANT_PERCENT_OPTIONS} shortLabels={ASSISTANT_PERCENT_LABELS} markEvery={25} onChange={onChange}/>
+  </div>;
 }
 export function TelegramAiAssistantSettings({ onClose, trainingSection }: Props) {
   const dailyCap = useAssistantDailyCap();

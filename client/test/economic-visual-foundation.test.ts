@@ -70,3 +70,10 @@ test('visible Economic statuses reflect real async request stages and animate', 
   assert.match(economicCss, /@media\(prefers-reduced-motion:reduce\)/);
   assert.doesNotMatch(economic, /Брюс Хуй/);
 });
+
+test('Economych hover chat closes after leaving both hover surfaces and cancels on re-entry', () => {
+  const app = readFileSync(new URL('../src/EconomicApp.tsx', import.meta.url), 'utf8');
+  assert.match(app, /onHover=\{openAssistant\} onLeave=\{scheduleAssistantClose\}/);
+  assert.match(app, /assistantCloseTimer\.current = window\.setTimeout\(\(\) => \{[\s\S]*?setAssistantOpen\(false\);[\s\S]*?\}, 220\)/);
+  assert.match(app, /role="dialog" aria-label="Экономыч AI, финансовый помощник" onPointerEnter=\{event => \{ if \(event.pointerType === 'mouse'\) cancelAssistantClose\(\); \}\} onPointerLeave=\{event => \{ if \(event.pointerType === 'mouse'\) scheduleAssistantClose\(\); \}\}/);
+});
