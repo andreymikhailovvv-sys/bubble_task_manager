@@ -342,7 +342,7 @@ async function processMessage(account: EmailMailbox, folder: 'INBOX'|'SENT', uid
     const reply = !record.summaryOnly && !summaryOnly && folder === 'INBOX' && result.shouldReply && emailAddress(message.from)
       ? result.replyText : '';
     await prisma.emailAnalysis.update({ where: { id: record.id }, data: {
-      summary: result as unknown as Prisma.InputJsonValue, status: 'DONE',
+      summary: { ...result, ...(reply && message.text.trim() ? { replySourceText: message.text.trim().slice(0,12000) } : {}) } as unknown as Prisma.InputJsonValue, status: 'DONE',
       suggestedReplyText: reply || null,
       botStatus: !record.summaryOnly && !summaryOnly && current.notifyImportant && result.important ? 'PENDING' : 'SKIPPED'
     } });

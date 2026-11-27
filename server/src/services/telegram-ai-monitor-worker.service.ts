@@ -597,6 +597,7 @@ async function processClaim(claimed: Claimed) {
         const outcome = await sendConditionalTelegramAutoReply({
           userId: policy.userId, policyId: policy.id, chatId: policy.chatId,
           messageId: reply.messageId, text: reply.text,
+          sourceText: selected.find(message => message.id === reply.messageId)?.text,
           revision: policy.monitorRevision, leaseToken: claimed.token
         });
         if (outcome === 'RATE_LIMITED') {
@@ -626,7 +627,8 @@ async function processClaim(claimed: Claimed) {
       } else if (current.mode === 'SUGGEST') {
         await publishTelegramAiReplySuggestion({
           policy: current, leaseToken: claimed.token,
-          messageId: reply.messageId, text: reply.text
+          messageId: reply.messageId, text: reply.text,
+          sourceText: selected.find(message => message.id === reply.messageId)?.text
         });
       }
     }

@@ -39,11 +39,13 @@ export async function mailAssistantInboxFeed(userId: string) {
   const messages = [
     ...rows.map(row => {
       const summary = row.summary && typeof row.summary === 'object'
-        ? row.summary as { summary?: string; important?: boolean; obligations?: string[]; risks?: string[]; creditsSpentMilli?: number } : null;
+        ? row.summary as { summary?: string; important?: boolean; obligations?: string[]; risks?: string[]; creditsSpentMilli?: number; replySourceText?: string } : null;
       const heading = '📨 ' + safe(row.subject, 140) + '\n' + safe(row.sender, 150);
       const content = heading + (summary?.summary ? '\n\n' + safe(summary.summary, 1000) : '') +
         (typeof summary?.creditsSpentMilli === 'number' && summary.creditsSpentMilli > 0
-          ? '\n\nИИ-анализ: ' + (summary.creditsSpentMilli / 1000).toLocaleString('ru-RU',{maximumFractionDigits:3}) + ' кр.' : '');
+          ? '\n\nИИ-анализ: ' + (summary.creditsSpentMilli / 1000).toLocaleString('ru-RU',{maximumFractionDigits:3}) + ' кр.' : '') +
+        (row.suggestedReplyText && row.replyPublishedAt && row.suggestedReplyStatus !== 'NONE' && typeof summary?.replySourceText === 'string'
+          ? '\n\nВ ответ на письмо:\n' + safe(summary.replySourceText,12000) : '');
       return { id: row.id, chatId: mailAiChatId(row.mailboxId), role: 'assistant' as const,
         createdAt: row.createdAt.toISOString(), content, taskProposal: byRequestId.get(row.id) ?? null,
         mailSuggestedReply: row.suggestedReplyText && row.replyPublishedAt && row.suggestedReplyStatus !== 'NONE'
