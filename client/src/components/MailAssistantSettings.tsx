@@ -130,7 +130,7 @@ export function MailAssistantSettings({ onClose, trainingSection }: { onClose: (
   const connect = (event: FormEvent) => {
     event.preventDefault();
     void action(async () => {
-      const { account } = await api.mailConnect({ ...draft, provider, email: email.trim(), password });
+      const { account } = await api.mailConnect({ ...(dailyCap ? {...draft,dailyCreditLimitPercent:draft.dailyCreditLimitPercent??(draft.dailyCreditLimitMilli==null?100:Math.max(0,Math.min(100,Math.floor(draft.dailyCreditLimitMilli/dailyCap*100))))}:draft), provider, email: email.trim(), password });
       setPassword(''); setEmail(''); setAdding(false);
       await refresh(); pick(account);
       setNotice('Почта подключена. Новые письма будут анализироваться согласно настройкам.');
@@ -141,7 +141,7 @@ export function MailAssistantSettings({ onClose, trainingSection }: { onClose: (
     event.preventDefault();
     if (!selectedId) return;
     void action(async () => {
-      const { account } = await api.mailUpdate(selectedId, draft);
+      const { account } = await api.mailUpdate(selectedId, (dailyCap ? {...draft,dailyCreditLimitPercent:draft.dailyCreditLimitPercent??(draft.dailyCreditLimitMilli==null?100:Math.max(0,Math.min(100,Math.floor(draft.dailyCreditLimitMilli/dailyCap*100))))}:draft));
       await refresh(); pick(account); setNotice('Настройки сохранены.');
     });
   };

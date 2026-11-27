@@ -470,7 +470,7 @@ final class NativeAPI {
 
     func subscriptionNotices() async throws -> [SubscriptionNotice] {
         let response: SubscriptionNoticeEnvelope = try await request("system-notifications")
-        return response.notifications.filter { $0.eventKey.hasPrefix("subscription-welcome:") || $0.eventKey.hasPrefix("subscription-limit:") }
+        return response.notifications.filter { $0.eventKey.hasPrefix("subscription-welcome:") || $0.eventKey.hasPrefix("subscription-limit:") || ($0.eventKey.hasSuffix(":sent") && ($0.eventKey.hasPrefix("telegram-ai-auto-reply:") || $0.eventKey.hasPrefix("mail-ai-reply:"))) }
     }
 
     func restoreAccount() async throws -> ServerAccount? {

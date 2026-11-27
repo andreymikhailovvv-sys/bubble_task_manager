@@ -340,7 +340,7 @@ export function TelegramAiAssistantSettings({ onClose, trainingSection }: Props)
     try {
       // The add button is an explicit opt-in. Use the same save+start path
       // as the existing settings form, not an unsaved placeholder profile.
-      await api.telegramAssistantSavePolicy(pickerChoice, { ...DEFAULTS });
+      await api.telegramAssistantSavePolicy(pickerChoice, { ...DEFAULTS, ...(dailyCap?{dailyCreditLimitPercent:Math.min(100,Math.floor((DEFAULTS.dailyCreditLimitMilli??dailyCap)/dailyCap*100))}:{}) });
       try {
         await api.telegramAssistantStart(pickerChoice);
       } catch (startError) {
@@ -392,7 +392,7 @@ export function TelegramAiAssistantSettings({ onClose, trainingSection }: Props)
     try {
       // The explicit Save/Add click also grants monitoring consent. Do not
       // require a second "Start" action after creating or editing a policy.
-      await api.telegramAssistantSavePolicy(selectedId, draft);
+      await api.telegramAssistantSavePolicy(selectedId, dailyCap ? {...draft,dailyCreditLimitPercent:draft.dailyCreditLimitPercent??(draft.dailyCreditLimitMilli==null?100:Math.max(0,Math.min(100,Math.floor(draft.dailyCreditLimitMilli/dailyCap*100))))}:draft);
       window.dispatchEvent(new Event('telegram-ai-assistant-updated'));
       try {
         await api.telegramAssistantStart(selectedId);

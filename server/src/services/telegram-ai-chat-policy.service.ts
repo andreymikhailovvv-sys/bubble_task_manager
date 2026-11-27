@@ -165,7 +165,7 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
     historyAccessEnabled: p.historyAccessEnabled === true,
     historyMessageLimit: p.historyMessageLimit === undefined ? 50 : p.historyMessageLimit as 10 | 30 | 50 | 100 | null,
     dailyCreditLimitMilli: validateTelegramCreditLimit(p.dailyCreditLimitMilli),
-    ...(p.dailyCreditLimitPercent !== undefined ? {dailyCreditLimitPercent: validateAssistantDailyPercent(p.dailyCreditLimitPercent)} : {})
+    ...(p.dailyCreditLimitPercent !== undefined ? {dailyCreditLimitPercent: (() => { try { return validateAssistantDailyPercent(p.dailyCreditLimitPercent); } catch { throw new TelegramUserClientError(400,'Дневной лимит должен быть от 0 до 100%'); } })()} : {})
   };
 }
 

@@ -67,7 +67,7 @@ function settings(data: Record<string, unknown>) {
     suggestWhen, suggestHow, autoReplyWhen, autoReplyHow,
     monitorModel: String(model),
     dailyCreditLimitMilli: dailyCreditLimitMilli as number | null,
-    ...(data.dailyCreditLimitPercent !== undefined ? {dailyCreditLimitPercent: validateAssistantDailyPercent(data.dailyCreditLimitPercent)} : {}),
+    ...(data.dailyCreditLimitPercent !== undefined ? {dailyCreditLimitPercent: (() => { try { return validateAssistantDailyPercent(data.dailyCreditLimitPercent); } catch { throw new MailAssistantError(400,'Дневной лимит должен быть от 0 до 100%'); } })()} : {}),
     notifyImportant: data.notifyImportant !== false,
     instructions, enabled: data.enabled
   };
