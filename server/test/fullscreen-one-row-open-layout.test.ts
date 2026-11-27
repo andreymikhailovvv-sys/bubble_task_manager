@@ -26,12 +26,12 @@ test('fullscreen toolbar remains one row, ordered, taller and inset from viewpor
   assert.match(css, /--fullscreen-workspace-width: calc\(100vw - clamp\(32px, 4vw, 80px\)\)/);
 });
 
-test('three checkboxes remain separate from new side-rail menu', async () => {
+test('single mode selector remains separate from side-rail menu', async () => {
   const controls = await load('../../client/src/components/FullscreenWorkspaceLayout.tsx');
   const picker = controls.slice(controls.indexOf('export function FullscreenModePicker'), controls.indexOf('export type FullscreenTaskChoice'));
   assert.match(picker, /VIEW_OPTIONS\.map/);
-  assert.match(picker, /<input type="checkbox"/);
-  assert.match(picker, /checked=\{selected\}/);
+  assert.doesNotMatch(picker, /<input type="checkbox"/);
+  assert.match(picker, /aria-pressed=\{selected\}/);
   assert.doesNotMatch(picker, /createPortal|aria-haspopup/);
   assert.match(controls, /fullscreen-workspace-single-rail/);
   assert.match(controls, /export function FullscreenWorkspaceSplit/);
@@ -69,7 +69,7 @@ test('opened modals mask workspace pluses and filters, but not inline task panes
   assert.ok(app.includes("'fullscreen-overlay-active'"));
   assert.ok(css.includes('.bubble-fullscreen-shell.fullscreen-overlay-active .fullscreen-workspace-divider > .fullscreen-add-window'));
   assert.ok(css.includes('.bubble-fullscreen-shell.fullscreen-overlay-active .fullscreen-pane-filters-anchor'));
-  assert.ok(app.includes('embeddedTaskFocus={embeddedFocusActive}'));
+  assert.ok(app.includes("embeddedTaskFocus={embeddedFocusActive && fullscreenPanels[1]?.kind === 'task-ai' && !hasGeneralAiPane}"));
   assert.ok(launcher.includes("embeddedTaskFocus?'ai-chat-launcher-task-embedded':''"));
   assert.ok(css.includes('.ai-chat-launcher.bubble-ai-fullscreen.ai-chat-launcher-task-embedded'));
 });

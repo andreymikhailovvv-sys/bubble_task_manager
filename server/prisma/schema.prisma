@@ -1622,9 +1622,12 @@ model EconomicOperation {
   title             String
   note              String?
   occurredAt        DateTime @default(now())
+  recurrenceJson    Json?
+  nextRepeatAt      DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  @@index([nextRepeatAt])
   @@index([userId, occurredAt, id])
   @@index([userId, kind, occurredAt])
   @@index([userId, isAdjustment, occurredAt])

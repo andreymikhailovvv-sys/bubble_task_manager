@@ -83,7 +83,7 @@ export const PlanikMascot = memo(function PlanikMascot({
   useEffect(() => {
     if (!arrivalKey || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setArriving(false); return; }
     setArriving(true);
-    const timer = window.setTimeout(() => setArriving(false), skinId==='pirate'||skinId==='banker' ? 1600 : 560);
+    const timer = window.setTimeout(() => setArriving(false), skinId==='pirate'||skinId==='banker'||skinId==='king' ? 1600 : 560);
     return () => window.clearTimeout(timer);
   }, [arrivalKey, skinId]);
   const gradientSuffix = useId().replace(/:/g, '');

@@ -42,7 +42,11 @@ test('native Android supports manual JSON schedule both on creation and task edi
     read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/MiniAppTaskFocusSheet.kt')
   ]);
   assert.match(native, /put\("rrule","FREQ="\+period\)/);
-  assert.match(native, /put\("timezone",ZoneId\.systemDefault\(\)\.id\)/);
+  // The shared editor accepts the account timezone for financial operations;
+  // ordinary task callers still default to the device timezone.
+  assert.match(native, /timeZone:String\?=null/);
+  assert.match(native, /put\("timezone",timeZone\?\.takeIf\{it\.isNotBlank\(\)\} \?: ZoneId\.systemDefault\(\)\.id\)/);
+  assert.match(native, /if\(!manualOnly\)Row/);
   assert.match(native, /put\("slots",JsonArray\(slots\)\)/);
   assert.match(native, /"manual" to "Вручную"/);
   assert.match(create, /NativeTaskRecurrenceEditor\(/);

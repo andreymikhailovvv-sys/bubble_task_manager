@@ -14,6 +14,7 @@ import { dispatchOneLegacyVerificationReminder } from './services/legacy-email-o
 import { dispatchOneTelegramEmailVerificationOutreach } from './services/telegram-email-outreach.service.js';
 import { passport } from './auth/passport.js';
 import { telegramService } from './services/telegram.service.js';
+import { dispatchEconomicOperationRepeats } from './services/economic-operation-recurrence.service.js';
 import { sendEconomicLoanPaymentReminders } from './services/economic-loan-reminder.service.js';
 import { prisma } from './db/prisma.js';
 import { reconcilePendingCreditPurchases } from './services/credit-purchase-recovery.service.js';
@@ -180,6 +181,9 @@ const runEconomicReminders = async () => {
 };
 setTimeout(runEconomicReminders, 15_000).unref();
 setInterval(runEconomicReminders, 60_000).unref();
+const runOperationRepeats = () => { void measureBackground('economic.operation_repeats', () => dispatchEconomicOperationRepeats()).catch(err => console.error('[Economic] operation repeat scheduler failed', err)); };
+setTimeout(runOperationRepeats, 20_000).unref();
+setInterval(runOperationRepeats, 60_000).unref();
 
 const telegramPollIntervalMs = Number(process.env.TELEGRAM_POLL_INTERVAL_MS ?? 60_000);
 setInterval(() => {

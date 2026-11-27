@@ -2047,6 +2047,9 @@ export const telegramService = {
   isEnabled,
   createTelegramLinkToken,
   sendAdminBroadcast,
+  async sendEconomicRepeat(chatId: string, title: string) {
+    return sendMessage(chatId, 'Повтор операции <b>' + escapeHtml(title) + '</b>. Подробности в чипе.', { inline_keyboard: [[{ text: 'Открыть чип', web_app: { url: buildMiniAppQuickAiUrl() } }]] });
+  },
   /**
    * One message per existing private chat. The durable outreach worker owns
    * deduplication; this function only performs the Telegram send once.

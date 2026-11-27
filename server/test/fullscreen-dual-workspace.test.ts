@@ -3,15 +3,16 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 const load = (file: string) => readFile(new URL(file, import.meta.url), 'utf8');
 
-test('checkbox mode shortcuts and split rendering retain the original BubbleField', async () => {
+test('single mode shortcuts and split rendering retain the original BubbleField', async () => {
   const [app, controls] = await Promise.all([load('../../client/src/App.tsx'), load('../../client/src/components/FullscreenWorkspaceLayout.tsx')]);
   assert.match(app, /<FullscreenModePicker modes=\{fullscreenPanels\.filter/);
   assert.match(app, /fullscreenPanels\.length === 2 \? \(/);
   assert.match(app, /renderPanel=\{renderFullscreenPanel\}/);
   assert.equal((app.match(/<BubbleField\b/g) ?? []).length, 1);
-  assert.match(controls, /if \(modes\.length > 1\) onChange\(modes\.filter/);
-  assert.match(controls, /onChange\(\[modes\[0\], value\]\)/);
-  assert.match(controls, /<input type="checkbox"/);
+  assert.match(controls, /onChange\(\[value\]\)/);
+  assert.match(controls, /const selected = modes\[0\] === option\.value/);
+  assert.match(controls, /aria-pressed=\{selected\}/);
+  assert.match(controls, /onDoubleClick=\{onSwap\}/);
 });
 
 test('credits and overdue remain available; classic switch is gone', async () => {

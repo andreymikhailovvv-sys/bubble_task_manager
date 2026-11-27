@@ -6622,11 +6622,6 @@ export default function App() {
       setIsAiExpanded(false);
       setIsAiChatOpen(false);
     }
-    if (basicStep === 'block' && next.kind === 'mode') {
-      setBasicNotice('Это ещё один режим отображения. Выбери другой блок, например «Заметки».');
-      setIsAddMenuOpen(true);
-      return;
-    }
     if (basicStep === 'block') { setBasicNotice(null); setBasicStep('block-added'); }
     const slots = side === 'left' ? [next, fullscreenPanels[0]] : [fullscreenPanels[0], next];
     setFullscreenDisplayModes(slots.flatMap(panel => panel.kind === 'mode' ? [panel.mode] : []));
@@ -6856,11 +6851,29 @@ export default function App() {
           onOpenNote={(id) => setRequestedStandaloneNote({ id, serial: Date.now() })}
         />
             <FullscreenModePicker modes={fullscreenPanels.filter(panel => panel.kind === 'mode').map(panel => panel.mode)} onChange={(nextModes) => {
-               if (basicStep === 'modes' && nextModes.length === 2) setBasicStep('two-modes');
+               if (basicStep === 'modes' && nextModes[0] !== fullscreenDisplayModes[0]) setBasicStep('two-modes');
+              else if (basicStep === 'two-modes' && nextModes[0] !== fullscreenDisplayModes[0]) {
+                setBasicStep('block');
+                setIsAddMenuOpen(true);
+              }
               setPendingWorkspaceBlock(null);
-              setFullscreenDisplayModes(nextModes);
-              setFullscreenPanelSlots(null);
-              setDisplayMode(nextModes[0]);
+              const mode = nextModes[0];
+              // The toolbar chooses one visualization. Blocks explicitly
+              // added by the user stay in their own slots.
+              const modeIndex = fullscreenPanels.findIndex(panel => panel.kind === 'mode');
+              const index = modeIndex >= 0 ? modeIndex as 0 | 1
+                : fullscreenPanels.findIndex(panel => !requiresCompanionPanel(panel)) as 0 | 1;
+              const existing = fullscreenPanels.findIndex(panel => panel.kind === 'mode' && panel.mode === mode);
+              if (existing !== index || existing < 0) {
+                if (existing >= 0 && fullscreenPanels.length === 2) {
+                  const slots = [fullscreenPanels[1], fullscreenPanels[0]];
+                  setFullscreenPanelSlots(slots);
+                  setFullscreenDisplayModes(slots.flatMap(panel => panel.kind === 'mode' ? [panel.mode] : []));
+                } else {
+                  chooseFullscreenPanel(index === 1 ? 1 : 0, { kind: 'mode', mode });
+                }
+              }
+              setDisplayMode(mode);
               setIsSphereFilterOpen(false);
               setIsTimelineOverdueModalOpen(false);
             }} />
@@ -7802,6 +7815,11 @@ export default function App() {
                   placement={workspaceOverlayActive ? null : pendingWorkspaceBlock}
                   ratio={fullscreenSplitRatio}
                   onRatioChange={setFullscreenSplitRatio}
+                  onSwap={() => {
+                    const slots = [fullscreenPanels[1], fullscreenPanels[0]];
+                    setFullscreenPanelSlots(slots);
+                    setFullscreenDisplayModes(slots.flatMap(panel => panel.kind === 'mode' ? [panel.mode] : []));
+                  }}
                 />
               ) : (
                 <FullscreenWorkspaceSingle panel={fullscreenPanels[0]} renderPanel={renderFullscreenPanel}
@@ -7813,7 +7831,7 @@ export default function App() {
               hideToggle={Boolean((focusedTask && !embeddedFocusActive) || isFocusModeOpen)}
               userId={currentUser?.id ?? 'anonymous'}
               forceOpen={basicStep === 'notes' || basicStep === 'habits'} windowCount={fullscreenPanels.length} tasks={tasks} habits={habits} spheres={spheres}
-              timeZone={userTimeZone} requestedNote={requestedStandaloneNote}
+              timeZone={userTimeZone} requestedNote={fullscreenPanels.some(panel => panel.kind === 'notes') ? null : requestedStandaloneNote}
               onOpenUpcoming={() => setIsUpcomingSubtasksModalOpen(true)}
               onOpenTask={task => {
                 if (task.parentTaskId || task.taskType === 'EVENT') setEditorState({ task });
@@ -9664,8 +9682,8 @@ export default function App() {
         managedMascot
         modalMascot={mascotSurface.modal}
         embeddedChatTarget={hasGeneralAiPane ? fullscreenChatTarget : null}
-        taskOpen={Boolean(focusedTask)}
-        embeddedTaskFocus={embeddedFocusActive}
+        taskOpen={Boolean(focusedTask) && (!embeddedFocusActive || fullscreenPanels[1]?.kind === 'task-ai')}
+        embeddedTaskFocus={embeddedFocusActive && fullscreenPanels[1]?.kind === 'task-ai' && !hasGeneralAiPane}
         fullscreenBubbles={isBubbleFullscreen}
         onHoverChange={hovered => { setQuickAiPreviewHovered(hovered); if(hovered){ scheduleQuickAiChatScrollToBottom(); markSystemNotificationsRead(); } }}
         onFocus={scheduleQuickAiChatScrollToBottom}

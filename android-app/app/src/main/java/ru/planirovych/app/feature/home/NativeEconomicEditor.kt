@@ -107,6 +107,8 @@ internal fun EcoEditorSheet(
     val accountOptions = snapshot.ecoItems("accounts").map {
         it.ecoText("id") to it.ecoText("name")
     }
+    var repeatRule by remember(request) { mutableStateOf(item?.get("recurrenceJson") as? JsonObject) }
+    var repeatEnabled by remember(request) { mutableStateOf(repeatRule!=null) }
     var localError by remember(request) { mutableStateOf("") }
     var newCategoryOpen by remember(request) { mutableStateOf(false) }
     var newCategoryName by remember(request) { mutableStateOf("") }
@@ -145,6 +147,8 @@ internal fun EcoEditorSheet(
                             value("targetAccountId")!=value("sourceAccountId")) {
                             "Укажите другой счёт для перевода"
                         }
+                        require(!repeatEnabled || repeatRule!=null) { "Настройте расписание повторений" }
+                        put("recurrenceJson",if(repeatEnabled)repeatRule ?: JsonNull else JsonNull)
                         put("kind",kind); put("title",value("title").trim())
                         put("amountMinor",ecoCalculateMoney(value("amount")))
                         put("calculation",if(ecoIsExpression(value("amount")))JsonPrimitive(value("amount")) else JsonNull)
@@ -273,9 +277,9 @@ internal fun EcoEditorSheet(
                 .padding(vertical=12.dp),verticalArrangement=Arrangement.spacedBy(11.dp)) {
                 when(type) {
                     "operations" -> {
-                        EcoSelect("Тип операции",value("kind"),
+                        EcoOperationChoices("Тип операции",value("kind"),
                             listOf("EXPENSE" to "Расход","INCOME" to "Доход",
-                                "TRANSFER" to "Перевод между счетами"),colors) {
+                                "TRANSFER" to "Перевод"),colors,true) {
                             change("kind",it);change("category","");newCategoryOpen=false
                         }
                         EcoInput("Название",value("title"),colors,160,
@@ -301,14 +305,14 @@ internal fun EcoEditorSheet(
                                 change("amount",ecoInput(total.toString()));localError=""
                             }.onFailure{localError=it.message.orEmpty()}
                         }
-                        EcoSelect(if(value("kind")=="TRANSFER")"Счёт списания" else "Счёт",
+                        EcoOperationChoices(if(value("kind")=="TRANSFER")"Счёт списания" else "Счёт",
                             value("sourceAccountId"),accountOptions,colors){
                             change("sourceAccountId",it)
+                            if(value("targetAccountId")==it)change("targetAccountId","")
                         }
                         if(value("kind")=="TRANSFER"){
-                            EcoSelect("Счёт зачисления",value("targetAccountId"),
-                                listOf("" to "Выберите счёт")+accountOptions.filter {
-                                    it.first!=value("sourceAccountId") },colors){
+                            EcoOperationChoices("Счёт зачисления",value("targetAccountId"),
+                                accountOptions.filter { it.first!=value("sourceAccountId") },colors){
                                 change("targetAccountId",it)
                             }
                         } else {
@@ -346,6 +350,14 @@ internal fun EcoEditorSheet(
                         EcoDate("Дата",value("date"),colors){change("date",it)}
                         EcoInput("Примечание",value("note"),colors,500,placeholder="Необязательно") {
                             change("note",it)
+                        }
+                        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                            Checkbox(checked=repeatEnabled,onCheckedChange={repeatEnabled=it},colors=CheckboxDefaults.colors(checkedColor=colors.gold))
+                            Text("Повторять",color=colors.text,fontSize=13.sp)
+                        }
+                        if(repeatEnabled){
+                            NativeTaskRecurrenceEditor(rule=repeatRule,summary=null,prompt="",onPrompt={},onManual={rule,_->repeatRule=rule},onParse={},parsing=false,dark=androidx.compose.foundation.isSystemInDarkTheme(),manualOnly=true,accent=colors.gold,timeZone=user.ecoText("timeZone"))
+                            Text("В назначенное время придёт чип. Запись только после подтверждения.",color=colors.muted,fontSize=11.sp)
                         }
                     }
                     "accounts" -> {
@@ -565,4 +577,26 @@ private fun EcoCheck(text:String,checked:Boolean,colors:EcoColors,onChange:(Bool
 @Composable
 private fun EcoHint(text:String,colors:EcoColors) {
     Text(text,fontSize=11.sp,lineHeight=16.sp,color=colors.muted)
+}
+
+@Composable
+private fun EcoOperationChoices(label:String,value:String,options:List<Pair<String,String>>,colors:EcoColors,oneRow:Boolean=false,onChange:(String)->Unit){
+    Column(verticalArrangement=Arrangement.spacedBy(6.dp)){
+        Text(label,fontSize=11.sp,color=colors.muted)
+        val rows=if(oneRow)listOf(options) else options.chunked(2)
+        rows.forEach{row->
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                row.forEach{(id,name)->
+                    val selected=id==value
+                    Box(Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
+                        .background(if(selected)colors.gold.copy(alpha=.18f) else colors.field)
+                        .border(1.dp,if(selected)colors.gold else colors.outline,RoundedCornerShape(10.dp))
+                        .clickable{onChange(id)}.padding(horizontal=8.dp,vertical=12.dp),contentAlignment=Alignment.Center){
+                        Text(name,color=colors.text,fontSize=12.sp,fontWeight=if(selected)FontWeight.SemiBold else FontWeight.Normal)
+                    }
+                }
+                if(!oneRow&&row.size==1)Spacer(Modifier.weight(1f))
+            }
+        }
+    }
 }

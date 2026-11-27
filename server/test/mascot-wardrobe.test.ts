@@ -197,7 +197,9 @@ test('money arrivals use front and rear clouds with different materials and dela
  const art=read('../../client/src/components/MascotArrivalEffects.tsx');
  const css=read('../../client/src/components/PlanikMascot.css');
  assert.ok(rig.includes('layer="rear"'));
- assert.ok(art.includes("skinId==='pirate'?'is-coin':'is-note'"));
+ assert.ok(art.includes("skinId==='banker'?'is-note':'is-coin'"));
+ assert.ok(art.includes("skinId==='king'"));
+ assert.ok(css.includes('[data-skin=king]'));
  assert.ok(art.includes('animationDelay:'));
  assert.ok(art.includes('animationDuration:'));
  assert.ok(css.includes('mascot-money-drift'));

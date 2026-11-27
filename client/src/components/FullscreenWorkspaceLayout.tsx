@@ -17,33 +17,21 @@ export function FullscreenModePicker({ modes, onChange }: {
   modes: FullscreenWorkspaceMode[];
   onChange: (next: FullscreenWorkspaceMode[]) => void;
 }) {
-  const toggle = (value: FullscreenWorkspaceMode) => {
-    if (modes.includes(value)) {
-      // Keep at least one active view.
-      if (modes.length > 1) onChange(modes.filter(mode => mode !== value));
-    } else if (modes.length === 2) {
-      // The first mode stays anchored when the third one replaces the second.
-      onChange([modes[0], value]);
-    } else {
-      onChange([...modes, value]);
-    }
-  };
+  const selectMode = (value: FullscreenWorkspaceMode) => onChange([value]);
 
   return (
     <div className="fullscreen-mode-picker display-mode-toggle-group inline-flex shrink-0 items-center rounded-xl border p-1"
-      role="group" aria-label="Режимы рабочего пространства, выберите один или два">
+      role="group" aria-label="Режим рабочего пространства">
       {VIEW_OPTIONS.map(option => {
-        const selected = modes.includes(option.value);
+        const selected = modes[0] === option.value;
         const Icon = option.icon;
         return (
-          <label key={option.value}
+          <button type="button" key={option.value} aria-pressed={selected} onClick={() => selectMode(option.value)}
             className={`fullscreen-mode-picker-option display-mode-toggle-button inline-flex cursor-pointer items-center rounded-lg text-sm font-semibold transition ${selected ? 'display-mode-toggle-button-active is-selected' : ''}`}
-            title={selected && modes.length === 1 ? 'Необходимо оставить хотя бы один режим' : option.label}>
+            title={option.label}>
             <Icon size={16} aria-hidden="true" />
             <span className="fullscreen-mode-picker-label">{option.label}</span>
-            <input type="checkbox" className="fullscreen-mode-picker-checkbox" checked={selected}
-              onChange={() => toggle(option.value)} aria-label={`Показать режим «${option.label}»`} />
-          </label>
+          </button>
         );
       })}
     </div>
@@ -166,13 +154,14 @@ export function FullscreenFuturePanel({ panel, onClose }: {
   );
 }
 
-export function FullscreenWorkspaceSplit({ panels, renderPanel, ratio, onRatioChange, onChoose, placement }: {
+export function FullscreenWorkspaceSplit({ panels, renderPanel, ratio, onRatioChange, onChoose, placement, onSwap }: {
   panels: [FullscreenWorkspacePanel, FullscreenWorkspacePanel];
   renderPanel: (panel: FullscreenWorkspacePanel) => ReactNode;
   onChoose: (side: 0 | 1, panel: FullscreenWorkspacePanel) => void;
   placement: FullscreenWorkspacePanel | null;
   ratio: number;
   onRatioChange: (ratio: number) => void;
+  onSwap: () => void;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   useScrollFade(rootRef);
@@ -217,6 +206,7 @@ export function FullscreenWorkspaceSplit({ panels, renderPanel, ratio, onRatioCh
     else if (event.key === forward) next += event.shiftKey ? 10 : 5;
     else if (event.key === 'Home') next = 25;
     else if (event.key === 'End') next = 75;
+    else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSwap(); return; }
     else return;
     event.preventDefault();
     onRatioChange(clampSplit(next));
@@ -226,19 +216,19 @@ export function FullscreenWorkspaceSplit({ panels, renderPanel, ratio, onRatioCh
     <div ref={rootRef} className="fullscreen-workspace-split"
       style={{ '--fullscreen-split-ratio': `${ratio}%` } as CSSProperties}
       aria-label="Рабочее пространство с двумя режимами">
-      <section className="fullscreen-workspace-pane" data-fullscreen-pane-index="0" aria-label={`Окно: ${fullscreenPanelTitle(panels[0])}`}>
+      <section key={JSON.stringify(panels[0])} className="fullscreen-workspace-pane" data-fullscreen-pane-index="0" aria-label={`Окно: ${fullscreenPanelTitle(panels[0])}`}>
         {renderPanel(panels[0])}
         {placement && <BlockDropTarget onPlace={() => onChoose(0, placement)}/>}
       </section>
-      <div className="fullscreen-workspace-divider" role="separator" tabIndex={0}
+      <div className="fullscreen-workspace-divider" role="separator" tabIndex={0} key="workspace-divider"
         aria-label="Изменить размер областей рабочего пространства" aria-valuemin={25} aria-valuemax={75}
-        aria-valuenow={ratio} title="Перетащите для изменения размера. Стрелки на клавиатуре тоже работают."
+        aria-valuenow={ratio} title="Перетащите для изменения размера. Двойной клик или Enter меняет окна местами."
         onPointerDown={onDividerDown} onPointerMove={onDividerMove}
         onPointerUp={finishDrag} onPointerCancel={finishDrag} onKeyDown={onDividerKeyDown}
-        onDoubleClick={() => onRatioChange(50)}>
+        onDoubleClick={onSwap}>
         <span className="fullscreen-workspace-divider-grip"><GripVertical size={16} /></span>
       </div>
-      <section className="fullscreen-workspace-pane" data-fullscreen-pane-index="1" aria-label={`Окно: ${fullscreenPanelTitle(panels[1])}`}>
+      <section key={JSON.stringify(panels[1])} className="fullscreen-workspace-pane" data-fullscreen-pane-index="1" aria-label={`Окно: ${fullscreenPanelTitle(panels[1])}`}>
         {renderPanel(panels[1])}
         {placement && <BlockDropTarget onPlace={() => onChoose(1, placement)}/>}
       </section>

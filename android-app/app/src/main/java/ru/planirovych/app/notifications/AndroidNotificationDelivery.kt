@@ -160,7 +160,7 @@ object AndroidNotificationDelivery {
             flags=Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(MainActivity.EXTRA_NOTIFICATION_TASK_ID,taskId)
             putExtra(MainActivity.EXTRA_NOTIFICATION_ID,id)
-            if(eventKey?.startsWith("ai-checkup:")==true)
+            if(eventKey?.startsWith("ai-checkup:")==true || eventKey?.startsWith("economic-repeat:")==true)
                 putExtra(MainActivity.EXTRA_OPEN_GENERAL_AI,true)
         }
         val requestCode=(account+":"+id).hashCode()

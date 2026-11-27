@@ -106,26 +106,39 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
   const dirtyRef = useRef(false);
   const pendingRef = useRef<Promise<void>>(Promise.resolve());
   const timerRef = useRef<number | null>(null);
+  const loadVersion = useRef(0);
+  const instanceId = useRef(Symbol('notes workspace'));
+  const openVersion = useRef(0);
+  const ownerRef = useRef(userId);
+  ownerRef.current = userId;
+  const emitUpdate = useCallback((note?: StandaloneNote, deletedId?: string) => {
+    window.dispatchEvent(new CustomEvent('standalone-notes-saved', { detail: { userId, source: instanceId.current, note, deletedId } }));
+  }, [userId]);
 
   const reload = useCallback(async () => {
     if (!userId) return;
+    const version = ++loadVersion.current;
     setLoading(true);
     try {
       const [result, allGroups] = await Promise.all([api.getStandaloneNotes(), api.getStandaloneNoteGroups()]);
-      setNotes(sortNotes(result));
+      if (version !== loadVersion.current) return;
+      const draft = draftRef.current;
+      setNotes(sortNotes(draft && dirtyRef.current ? result.map(note => note.id === draft.id ? draft : note) : result));
       // Sectors are the default groups; independent groups follow them.
       setGroups([...allGroups].sort((a, b) => Number(Boolean(b.sphereId)) - Number(Boolean(a.sphereId))));
       setError(null);
     } catch (cause) {
-      setError(getErrorMessage(cause));
+      if (version === loadVersion.current) setError(getErrorMessage(cause));
     } finally {
-      setLoading(false);
+      if (version === loadVersion.current) setLoading(false);
     }
   }, [userId]);
 
   useEffect(() => {
     // Clear cached notes immediately when an account changes, even if the
     // next account's API request is still in flight.
+    ++loadVersion.current;
+    ++openVersion.current;
     setNotes([]);
     setGroups([]);
     setSelectedGroup('all');
@@ -176,6 +189,8 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     dirtyRef.current = false;
     pendingRef.current = pendingRef.current.catch(() => {}).then(async () => {
       const saved = await api.updateStandaloneNote(draft.id, { title: draft.title, content: draft.content });
+      if (ownerRef.current !== userId) return;
+      emitUpdate(saved);
       setNotes((current) => sortNotes(current.map((note) => {
         if (note.id !== saved.id) return note;
         return dirtyRef.current && draftRef.current?.id === saved.id
@@ -191,11 +206,33 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
       setError('Изменения не сохранены: ' + getErrorMessage(cause));
       throw cause;
     }
-  }, []);
+  }, [emitUpdate, userId]);
+
+  useEffect(() => {
+    const receive = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId: string; source: symbol; note?: StandaloneNote; deletedId?: string }>).detail;
+      if (!detail || detail.userId !== userId || detail.source === instanceId.current) return;
+      ++loadVersion.current;
+      setLoading(false);
+      if (detail.deletedId) {
+        setNotes(current => current.filter(note => note.id !== detail.deletedId));
+        if (draftRef.current?.id === detail.deletedId && !dirtyRef.current) { draftRef.current = null; setEditing(null); }
+      } else if (detail.note) {
+        const saved = detail.note;
+        const active = draftRef.current;
+        if (active?.id === saved.id && dirtyRef.current) return;
+        setNotes(current => sortNotes([saved, ...current.filter(note => note.id !== saved.id)]));
+        if (active?.id === saved.id && !dirtyRef.current) { draftRef.current = { ...saved }; setEditing({ ...saved }); }
+      } else { void reload(); }
+    };
+    window.addEventListener('standalone-notes-saved', receive);
+    return () => window.removeEventListener('standalone-notes-saved', receive);
+  }, [userId, reload]);
 
   const changeDraft = (changes: { title?: string; content?: string }) => {
     const draft = draftRef.current;
     if (!draft) return;
+    ++loadVersion.current;
     const next = { ...draft, ...changes };
     draftRef.current = next;
     dirtyRef.current = true;
@@ -205,37 +242,52 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     timerRef.current = window.setTimeout(() => { void saveChanges().catch(() => {}); }, 800);
   };
 
-  const openEditor = (note: StandaloneNote) => {
-    draftRef.current = { ...note };
-    dirtyRef.current = false;
-    setEditing({ ...note });
-    setError(null);
-  };
-
-  // A top-search hit opens the exact note, even if the sidebar has not loaded
-  // it yet. Fetch a fresh copy, as notes can also be edited from Telegram/AI.
+  // A note may be open in the inline pane and the sidebar simultaneously.
+  // Flush its pending autosave before fetching/opening a second editor.
   useEffect(() => {
-    if (!requestedNote?.id || !userId) return;
-    let cancelled = false;
-    void api.getStandaloneNotes().then(result => {
-      if (cancelled) return;
-      const note = result.find(item => item.id === requestedNote.id);
-      if (!note) {
-        setBoardOpen(true);
-        setError('Заметка не найдена или недоступна.');
-        return;
+    const flush = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId: string; id: string; source: symbol; waits: Promise<void>[] }>).detail;
+      if (detail?.userId === userId && detail.source !== instanceId.current && draftRef.current?.id === detail.id) {
+        detail.waits.push(saveChanges());
       }
+    };
+    window.addEventListener('standalone-notes-flush', flush);
+    return () => window.removeEventListener('standalone-notes-flush', flush);
+  }, [userId, saveChanges]);
+
+  // Changing workspace blocks must not cancel a pending text edit.
+  useEffect(() => () => {
+    if (ownerRef.current === userId && dirtyRef.current) void saveChanges().catch(() => {});
+  }, [userId, saveChanges]);
+
+  const openFreshEditor = useCallback(async (id: string) => {
+    const version = ++openVersion.current;
+    try {
+      await saveChanges();
+      const waits: Promise<void>[] = [];
+      window.dispatchEvent(new CustomEvent('standalone-notes-flush', { detail: { userId, id, source: instanceId.current, waits } }));
+      await Promise.all(waits);
+      const result = await api.getStandaloneNotes();
+      if (version !== openVersion.current || ownerRef.current !== userId) return;
+      const note = result.find(item => item.id === id);
+      if (!note) { setError('Заметка не найдена или недоступна.'); return; }
+      ++loadVersion.current;
+      setLoading(false);
       setNotes(sortNotes(result));
       setBoardOpen(true);
       draftRef.current = { ...note };
       dirtyRef.current = false;
       setEditing({ ...note });
       setError(null);
-    }).catch(() => {
-      if (!cancelled) setError('Не удалось открыть найденную заметку. Повторите поиск.');
-    });
-    return () => { cancelled = true; };
-  }, [requestedNote?.id, requestedNote?.serial, userId]);
+    } catch (cause) {
+      if (version === openVersion.current && ownerRef.current === userId) setError(getErrorMessage(cause));
+    }
+  }, [userId, saveChanges]);
+
+  const openEditor = (note: StandaloneNote) => { void openFreshEditor(note.id); };
+  useEffect(() => {
+    if (requestedNote?.id && userId) void openFreshEditor(requestedNote.id);
+  }, [requestedNote?.id, requestedNote?.serial, userId, openFreshEditor]);
 
   const closeEditor = async () => {
     try {
@@ -253,6 +305,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     setCreating(true);
     try {
       const note = await api.createStandaloneNote({ groupId: selectedGroup !== 'all' && selectedGroup !== 'ungrouped' ? selectedGroup : null });
+      emitUpdate(note);
       setNotes((current) => sortNotes([note, ...current]));
       setBoardOpen(true);
       openEditor(note);
@@ -267,6 +320,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     if (!window.confirm('Удалить заметку «' + titleOf(note) + '»?')) return;
     try {
       await api.deleteStandaloneNote(note.id);
+      emitUpdate(undefined, note.id);
       setNotes((current) => current.filter((item) => item.id !== note.id));
       setError(null);
     } catch (cause) {
@@ -304,14 +358,17 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
   const createGroup = async (data: { name: string; color: string }): Promise<StandaloneNoteGroup> => {
     const created = await api.createStandaloneNoteGroup(data);
     setGroups(current => [...current, created]);
+    emitUpdate();
     return created;
   };
   const updateGroup = async (id: string, data: { name: string; color: string }) => {
     const updated = await api.updateStandaloneNoteGroup(id, data);
     setGroups(current => current.map(group => group.id === id ? updated : group));
+    emitUpdate();
   };
   const deleteGroup = async (group: StandaloneNoteGroup) => {
     await api.deleteStandaloneNoteGroup(group.id);
+    emitUpdate();
     setGroups(current => current.filter(item => item.id !== group.id));
     setMobileExcludedGroupIds(current => current.filter(id => id !== group.id));
     setNotes(current => current.map(note => note.groupId === group.id ? { ...note, groupId: null } : note));
@@ -332,6 +389,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
         setEditing(current => current?.id === noteId ? { ...current, groupId } : current);
       }
       const saved = await api.updateStandaloneNote(noteId, { groupId });
+      emitUpdate(saved);
       if (saved.groupId !== groupId) throw new Error('Сервер не подтвердил изменение группы. Обновите страницу и повторите попытку.');
       setNotes(current => sortNotes(current.map(note => note.id === saved.id
         ? { ...note, groupId: saved.groupId, updatedAt: saved.updatedAt } : note)));
