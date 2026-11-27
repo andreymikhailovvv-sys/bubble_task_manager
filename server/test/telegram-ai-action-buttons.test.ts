@@ -25,7 +25,10 @@ test('Telegram undo callback uses same owner-scoped reversal as the chip, withou
   assert.match(bot, /const outcome = await undoTaskProposal\(userId, taskId\)/);
   assert.match(bot, /outcome\.status !== 'UNDONE'/);
   assert.match(bot, /editMessageReplyMarkup/);
-  assert.match(service, /if \(current\.status === 'APPLIED'\) await undoStoredProposal\(userId, id\)/);
+  const undo = service.slice(service.indexOf('export async function undoTaskProposal('), service.indexOf('export async function recordAppliedTelegramBotTask('));
+  assert.match(undo, /findFirst\(\{ where: \{ id, userId \} \}\)/);
+  assert.match(undo, /if \(current\.status === 'APPLIED'\)\s*\{[\s\S]*?\.some\(isExistingHabitAction\)\)\s*throw new Error[\s\S]*?await undoStoredProposal\(userId, id\);\s*\}/);
+  assert.equal((undo.match(/await undoStoredProposal\(userId, id\)/g) ?? []).length, 1);
 });
 
 test('Mini App deep link activates Quick requests after authentication, without changing task chat', () => {

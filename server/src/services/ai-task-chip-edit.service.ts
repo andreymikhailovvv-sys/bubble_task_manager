@@ -18,7 +18,7 @@ const iso=(value:unknown)=>value instanceof Date?value.toISOString():value;
 const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
 export const isTaskChipAction=(action:Record<string,unknown>):boolean=>{
   const kind=String(action.operation??action.type??'');
-  return !['create_note','update_note','create_habit','delete','rebalance_today',
+  return !['create_note','update_note','create_habit','complete_habit','update_habit','delete','rebalance_today',
     'telegram_suggestion'].includes(kind) && !kind.startsWith('delete') && (
       Boolean(action.operation) || Boolean(action.type) &&
       /task|subtask|event|reminder|rename|reschedule|priority|due_date|description|complete|reopen|sphere|notification/.test(kind)

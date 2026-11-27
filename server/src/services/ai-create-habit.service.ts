@@ -8,7 +8,7 @@ export type AiCreateHabitArgs = {
   intervalDays: number | null;
   reminderTimes: string[];
   targetCount: number;
-};
+} & AiHabitDuration;
 export type CreateHabitProposalAction = Record<string, unknown> & AiCreateHabitArgs & { operation: 'create_habit' };
 
 export function validateAiCreateHabitArgs(value: unknown): AiCreateHabitArgs {
@@ -41,6 +41,57 @@ export function validateAiCreateHabitArgs(value: unknown): AiCreateHabitArgs {
     intervalDays: intervalDays as number | null,
     weekdays: [...new Set(weekdays as number[])].sort((a, b) => a - b),
     reminderTimes: [...new Set(data.reminderTimes as string[])].sort(),
-    targetCount: targetCount as number
+    targetCount: targetCount as number,
+    ...validateAiHabitDuration(data)
   };
+}
+
+export type AiHabitDuration = {
+  durationMode: 'FOREVER' | 'UNTIL_DATE' | 'REPEAT_COUNT';
+  endDate: string | null;
+  totalRepeatTarget: number | null;
+};
+export function validateAiHabitDuration(data: Record<string, unknown>): AiHabitDuration {
+  const mode = data.durationMode ?? 'FOREVER';
+  if (mode !== 'FOREVER' && mode !== 'UNTIL_DATE' && mode !== 'REPEAT_COUNT')
+    throw new TypeError('Неизвестный тип срока привычки.');
+  if (mode === 'UNTIL_DATE') {
+    const date = data.endDate;
+    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+      !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0,10) !== date)
+      throw new TypeError('Укажите существующую дату YYYY-MM-DD.');
+    return { durationMode: mode, endDate: date, totalRepeatTarget: null };
+  }
+  if (mode === 'REPEAT_COUNT') {
+    const count = data.totalRepeatTarget;
+    if (!Number.isInteger(count) || Number(count) < 1 || Number(count) > 9999)
+      throw new TypeError('Общее число выполнений должно быть от 1 до 9999.');
+    return { durationMode: mode, endDate: null, totalRepeatTarget: count as number };
+  }
+  return { durationMode: mode, endDate: null, totalRepeatTarget: null };
+}
+export function habitDurationLabel(duration: AiHabitDuration) {
+  return duration.durationMode === 'UNTIL_DATE' ? 'До ' + duration.endDate :
+    duration.durationMode === 'REPEAT_COUNT' ? 'Всего выполнений: ' + duration.totalRepeatTarget : 'Без срока';
+}
+export function aiHabitDateKey(now: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone, year:'numeric', month:'2-digit', day:'2-digit' }).formatToParts(now);
+  const part = (type: string) => parts.find(p => p.type === type)?.value;
+  return part('year') + '-' + part('month') + '-' + part('day');
+}
+export function validateAiHabitCompletion(data: Record<string, unknown>) {
+  const fullDay = data.fullDay ?? false;
+  if (typeof fullDay !== 'boolean') throw new TypeError('fullDay должен быть логическим значением.');
+  const amount = data.amount ?? 1;
+  if (!Number.isInteger(amount) || Number(amount) < 1 || Number(amount) > 99)
+    throw new TypeError('Количество выполнений должно быть от 1 до 99.');
+  return { fullDay, amount: fullDay ? 99 : amount as number };
+}
+export type ExistingHabitProposalAction = Record<string, unknown> & {
+  operation: 'complete_habit' | 'update_habit';
+  habitId: string;
+  expectedUpdatedAt: string;
+};
+export function isExistingHabitAction(action: Record<string, unknown>): action is ExistingHabitProposalAction {
+  return action.operation === 'complete_habit' || action.operation === 'update_habit';
 }

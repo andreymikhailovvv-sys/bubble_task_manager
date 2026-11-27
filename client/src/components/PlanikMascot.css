@@ -604,8 +604,30 @@ body:has(.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded)) [data-manag
 
 /* A chat pane still owns its old composer anchor, even though its avatar is
    now the same live mascot as the workspace/modal launcher. */
-.ai-chat-launcher[data-managed-mascot-launcher=planner][data-mascot-chat-embedded=true]{right:var(--mascot-chat-right,16px)!important;bottom:var(--mascot-chat-bottom,138px)!important}
-.ai-chat-launcher[data-managed-mascot-launcher=planner][data-mascot-surface=modal][data-mascot-chat-embedded=true]{right:var(--mascot-chat-right,16px)!important;bottom:var(--mascot-chat-bottom,138px)!important}
+.ai-chat-launcher[data-managed-mascot-launcher=planner][data-mascot-chat-embedded=true]{right:var(--mascot-chat-right,16px)!important;bottom:var(--mascot-chat-bottom,138px)!important;display:flex;align-items:flex-end}
+/* The expanded-chat avatar lives in the composer, not at viewport coordinates.
+   It follows resizing, attachments, reply previews and the dialog transition. */
+.ai-chat-expanded-composer-wrap > .planik-chat-mascot-slot {
+  position:absolute;
+  right:0;
+  bottom:calc(100% + 4px);
+  z-index:1;
+  display:flex;
+  width:max-content;
+  pointer-events:none;
+}
+.planik-chat-mascot-slot .mascot-wardrobe-trigger {
+  top:auto;bottom:8px;left:auto;right:calc(100% - 12px);
+  transform:translateY(3px);
+}
+.planik-chat-mascot-slot .mascot-wardrobe-trigger[data-hovered=true],
+.planik-chat-mascot-slot .mascot-wardrobe-trigger:focus-visible {transform:translateY(0)}
+body:has(.mascot-wardrobe-dialog[open],.planik-live-fullscreen,.planik-live-compact) [data-managed-chat-mascot],
+body:has(.mascot-wardrobe-dialog[open],.planik-live-fullscreen,.planik-live-compact) [data-managed-chat-mascot] * {visibility:hidden!important;pointer-events:none!important}
+@media(max-width:600px) {
+  .planik-chat-mascot-slot .planik-launcher-button,
+  .planik-chat-mascot-slot .planik-mascot {width:99px;height:88px}
+}
 .ai-chat-launcher[data-mascot-chat-embedded=true] .planik-quick-ai-preview{opacity:0!important;pointer-events:none!important}
 
 .planik-mascot[data-skin=ninja][data-mode=hover] .planik-character-rig{animation:none;opacity:1}
