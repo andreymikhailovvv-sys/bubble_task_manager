@@ -197,7 +197,13 @@ test('Android chat uses idle rather than hover and preserves explicit work phase
   assert.match(motion,/return "painting"/);
   assert.match(motion,/return "searching"/);
   assert.match(motion,/return "thinking"/);
-  assert.match(general,/mode = nativeChatMascotMode\(state.busy/);
+  // The financial gesture has temporary priority; the normal chat still
+  // uses its explicit idle/thinking/searching/painting mode resolver.
+  assert.match(general,/mode = if\(financeVariant\)financeMode else nativeChatMascotMode\(state\.busy,state\.streamText\.isNotBlank\(\),state\.progressStatus\)/);
+  assert.match(general,/skinId = if\(financeVariant\)financeSkin else plannerSkin/);
+  assert.match(general,/variant = if\(financeVariant\)"economic" else "planner"/);
+  assert.match(general,/financeVariant=true;financeMode="idle"/);
+  assert.match(general,/financeMode="idle";financeVariant=false/);
   assert.match(task,/mode = nativeChatMascotMode\(busy/);
   assert.match(web,/data-skin=space\]\[data-mode=hover\]/);
 });
