@@ -50,8 +50,8 @@ test('split bubbles display scrollable viewport-safe hover cards outside clipped
     load('../../client/src/styles.css')
   ]);
   assert.match(bubbles, /compact && hoveredBubble && compactHoverPoint/);
-  assert.match(bubbles, /timeline-hover-card bubble-compact-hover-scroll pointer-events-auto fixed/);
-  assert.match(bubbles, /overflow-y-auto rounded-lg/);
+  assert.match(bubbles, /timeline-hover-card bubble-compact-hover-shell pointer-events-auto fixed/);
+  assert.match(bubbles, /bubble-compact-hover-scroll overflow-y-auto/);
   assert.match(bubbles, /compactBubbleHoverPlacement\(/);
   assert.match(bubbles, /onMouseEnter=\{cancelHoverExit\} onMouseLeave=\{scheduleHoverExit\}/);
   assert.match(bubbles, /noteHtmlToPlainText\(hoveredBubble\.task\.description/);

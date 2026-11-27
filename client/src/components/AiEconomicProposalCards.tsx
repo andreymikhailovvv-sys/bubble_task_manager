@@ -56,6 +56,6 @@ export function AiEconomicProposalCards({ proposals }: { proposals: EconomicAiPr
   return <div className="ai-inline-economic-proposals" aria-label="Финансовые действия ИИ">
     {syncError ? <div className="ai-inline-economic-error" role="status">{syncError}</div> : null}
     {views.map(item => <EconomicAiProposalCard key={item.id} initial={item}
-      autoApply={autoApply} onAutoApplyChange={setAutomatic} onRefresh={reload}/>)}
+      autoApply={autoApply} onAutoApplyChange={setAutomatic} onRefresh={reload} generalChat/>)}
   </div>;
 }

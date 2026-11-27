@@ -1772,9 +1772,10 @@ export function BubbleField({
         </motion.g>
       </svg>
       {compact && hoveredBubble && compactHoverPoint && !dragSessionRef.current ? createPortal(
-        <div ref={compactHoverScrollRef} className="timeline-hover-card bubble-compact-hover-scroll pointer-events-auto fixed z-[2147483647] overflow-y-auto rounded-lg border p-2.5 text-[11px]"
+        <div className="timeline-hover-card bubble-compact-hover-shell pointer-events-auto fixed z-[2147483647] rounded-lg border text-[11px]"
           style={compactHoverPoint} onMouseEnter={cancelHoverExit} onMouseLeave={scheduleHoverExit}
           aria-label={`Информация о задаче: ${hoveredBubble.task.title}`}>
+          <div ref={compactHoverScrollRef} className="bubble-compact-hover-scroll overflow-y-auto p-2.5">
           <p className="font-semibold text-primary">{hoveredBubble.task.title}</p>
           <p className="mt-1 min-w-0 max-w-full whitespace-pre-wrap break-words text-muted [overflow-wrap:anywhere]">
             <LinkifiedText
@@ -1801,6 +1802,7 @@ export function BubbleField({
               </ul>
             ) : <p className="mt-1 text-subtle">Нет активных подзадач</p>}
             {hoveredSubtasks.length > 3 ? <p className="mt-1 text-subtle">+ ещё {hoveredSubtasks.length - 3} подзадач</p> : null}
+          </div>
           </div>
         </div>,
         document.body

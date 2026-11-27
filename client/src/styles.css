@@ -17209,14 +17209,14 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
 .bubble-compact-hover-scroll[data-scroll-fade=bottom]{mask-image:linear-gradient(to bottom,#000,#000 calc(100% - 20px),transparent)}
 .bubble-compact-hover-scroll[data-scroll-fade=both]{mask-image:linear-gradient(to bottom,transparent,#000 16px,#000 calc(100% - 20px),transparent)}
 .fullscreen-mode-picker [data-view-mode=bubbles]{--view-accent:#67c9e6}
-.fullscreen-mode-picker [data-view-mode=list]{--view-accent:#a5cf91}
-.fullscreen-mode-picker [data-view-mode=timeline]{--view-accent:#bca6f7}
+.fullscreen-mode-picker [data-view-mode=list]{--view-accent:#c4b5fd}
+.fullscreen-mode-picker [data-view-mode=timeline]{--view-accent:#fcd34d}
 .fullscreen-mode-picker .fullscreen-mode-picker-option[data-view-mode]{color:var(--view-accent);background:color-mix(in srgb,var(--view-accent) 8%,transparent)}
 .fullscreen-mode-picker .fullscreen-mode-picker-option[data-view-mode]:hover{background:color-mix(in srgb,var(--view-accent) 18%,var(--field-bg))}
 .fullscreen-mode-picker .fullscreen-mode-picker-option[data-view-mode].is-selected{color:var(--view-accent);background:color-mix(in srgb,var(--view-accent) 23%,var(--field-bg));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--view-accent) 55%,transparent)}
 body[data-theme=light] .fullscreen-mode-picker [data-view-mode=bubbles]{--view-accent:#187d9c}
-body[data-theme=light] .fullscreen-mode-picker [data-view-mode=list]{--view-accent:#437c35}
-body[data-theme=light] .fullscreen-mode-picker [data-view-mode=timeline]{--view-accent:#7654bd}
+body[data-theme=light] .fullscreen-mode-picker [data-view-mode=list]{--view-accent:#7654bd}
+body[data-theme=light] .fullscreen-mode-picker [data-view-mode=timeline]{--view-accent:#a36510}
 
 /* Real blur overlay for settings, using the same non-interactive technique
    as the subscription modal. The underlying scroller keeps native input. */
@@ -17228,3 +17228,13 @@ body[data-theme=light] .fullscreen-mode-picker [data-view-mode=timeline]{--view-
 }
 .telegram-integrations-modal__panel:has(>.telegram-ai-settings-scroll:is([data-scroll-fade=top],[data-scroll-fade=both]))::before{top:0;mask-image:linear-gradient(#000,transparent);-webkit-mask-image:linear-gradient(#000,transparent)}
 .telegram-integrations-modal__panel:has(>.telegram-ai-settings-scroll:is([data-scroll-fade=bottom],[data-scroll-fade=both]))::after{bottom:0;mask-image:linear-gradient(transparent,#000);-webkit-mask-image:linear-gradient(transparent,#000)}
+
+.bubble-compact-hover-shell{display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box}
+.bubble-compact-hover-shell>.bubble-compact-hover-scroll{min-height:0;flex:1 1 auto;overflow-y:auto;touch-action:pan-y}
+.bubble-compact-hover-shell>.bubble-compact-hover-scroll[data-scroll-fade]{mask-image:none;-webkit-mask-image:none}
+.bubble-compact-hover-shell:has(>.bubble-compact-hover-scroll:is([data-scroll-fade=top],[data-scroll-fade=both]))::before,
+.bubble-compact-hover-shell:has(>.bubble-compact-hover-scroll:is([data-scroll-fade=bottom],[data-scroll-fade=both]))::after{
+  content:"";position:absolute;left:0;right:0;height:20px;z-index:1;pointer-events:none;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)
+}
+.bubble-compact-hover-shell:has(>.bubble-compact-hover-scroll:is([data-scroll-fade=top],[data-scroll-fade=both]))::before{top:0;mask-image:linear-gradient(#000,transparent);-webkit-mask-image:linear-gradient(#000,transparent)}
+.bubble-compact-hover-shell:has(>.bubble-compact-hover-scroll:is([data-scroll-fade=bottom],[data-scroll-fade=both]))::after{bottom:0;mask-image:linear-gradient(transparent,#000);-webkit-mask-image:linear-gradient(transparent,#000)}

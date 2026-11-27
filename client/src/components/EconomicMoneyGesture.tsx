@@ -3,6 +3,7 @@ import { ShirtArm } from './ShirtMascotSkins';
 
 export type FinancialMascotMode = 'income' | 'expense';
 export const FINANCIAL_MASCOT_EVENT = 'economych-operation-recorded';
+export const FINANCIAL_CHAT_MASCOT_EVENT = 'planik-finance-chat-operation-recorded';
 export function announceEconomicOperation(kind: unknown) {
   if (kind === 'INCOME' || kind === 'EXPENSE')
     window.dispatchEvent(new CustomEvent(FINANCIAL_MASCOT_EVENT, {detail:kind==='INCOME'?'income':'expense'}));
@@ -10,13 +11,14 @@ export function announceEconomicOperation(kind: unknown) {
 // Only fresh server replies or a successful manual approval may trigger
 // the celebration; loading old history must never replay it.
 const celebratedProposalIds = new Set<string>();
-export function announceAppliedEconomicProposals(proposals?: ReadonlyArray<{id:string;status:string;entity:string;action:string;payload?: Record<string, unknown> | null}>) {
+export function announceAppliedEconomicProposals(proposals?: ReadonlyArray<{id:string;status:string;entity:string;action:string;payload?: Record<string, unknown> | null}>, generalChat = true) {
   for (const item of proposals ?? []) {
     if(item.status!=='APPLIED'||item.entity!=='operation'||item.action!=='create'||celebratedProposalIds.has(item.id))continue;
     if(item.payload?.kind!=='INCOME'&&item.payload?.kind!=='EXPENSE')continue;
     celebratedProposalIds.add(item.id);
     if(celebratedProposalIds.size>500)celebratedProposalIds.delete(celebratedProposalIds.values().next().value!);
-    announceEconomicOperation(item.payload.kind);
+    if(generalChat) window.dispatchEvent(new CustomEvent(FINANCIAL_CHAT_MASCOT_EVENT,{detail:item.payload.kind==='INCOME'?'income':'expense'}));
+    else announceEconomicOperation(item.payload.kind);
   }
 }
 function Bill({x,y}:{x:number;y:number}) {

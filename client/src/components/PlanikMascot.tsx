@@ -1,4 +1,4 @@
-import { EconomicMoneyGesture, FINANCIAL_MASCOT_EVENT, type FinancialMascotMode } from './EconomicMoneyGesture';
+import { EconomicMoneyGesture, FINANCIAL_MASCOT_EVENT, FINANCIAL_CHAT_MASCOT_EVENT, type FinancialMascotMode } from './EconomicMoneyGesture';
 import { memo, useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import './PlanikMascot.css';
 import { CalendarDays, CheckCircle2, ListChecks } from 'lucide-react';
@@ -118,8 +118,8 @@ export const PlanikMascot = memo(function PlanikMascot({
       queue.push(mode);
       if(!active)next();
     };
-    window.addEventListener(FINANCIAL_MASCOT_EVENT,listener);
-    return () => { window.removeEventListener(FINANCIAL_MASCOT_EVENT,listener); window.clearTimeout(timer); setSwap('planner'); setFinanceMode(null); setLeaving(false); };
+    window.addEventListener(FINANCIAL_CHAT_MASCOT_EVENT,listener);
+    return () => { window.removeEventListener(FINANCIAL_CHAT_MASCOT_EVENT,listener); window.clearTimeout(timer); setSwap('planner'); setFinanceMode(null); setLeaving(false); };
   }, [baseVariant,baseSkinId,economicSkinId,previewMode,showcase]);
   const [arriving, setArriving] = useState(false);
   useEffect(() => {

@@ -18,6 +18,7 @@ type Props = {
   initial:EconomicAiProposal;autoApply:boolean;
   onAutoApplyChange:(next:boolean)=>Promise<void>;
   onRefresh:()=>Promise<void>;
+  generalChat?:boolean;
 };
 const STATUS:Record<string,string>={
   PENDING:'Ожидает подтверждения',APPLYING:'Применяется',
@@ -97,7 +98,7 @@ function normalizedDraft(draft:Payload,reference:Payload):Payload{
     return [key,value];
   })) as Payload;
 }
-export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRefresh}:Props){
+export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRefresh,generalChat=false}:Props){
   const [proposal,setProposal]=useState(initial);
   const [draft,setDraft]=useState<Payload>(()=>displayDraft(initial));
   const [options,setOptions]=useState<Options|null>(null);
@@ -134,7 +135,7 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
       if(action!=='revise')updated=await read<EconomicAiProposal>(path+'/'+action,'POST');
       setProposal(updated);
       setDraft(displayDraft(updated));
-      if(action==='approve')announceAppliedEconomicProposals([updated]);
+      if(action==='approve')announceAppliedEconomicProposals([updated],generalChat);
       if(updated.status==='APPLIED'||updated.status==='UNDONE')await onRefresh();
       if(action==='revise')setEditOpen(false);
     }catch(cause){
