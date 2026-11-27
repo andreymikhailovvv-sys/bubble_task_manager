@@ -1,3 +1,4 @@
+import { getAssistantSettingsProposal, applyAssistantSettingsProposal } from '../services/assistant-settings-proposal.service.js';
 import { getSubscriptionWindowLimits } from '../services/subscription-window-limits.service.js';
 import { getMascotWardrobe, equipMascotSkin } from '../services/mascot-wardrobe.service.js';
 import { requireSubscriptionFeature, SubscriptionAccessError, type PremiumFeature } from '../services/subscription-access.service.js';
@@ -129,6 +130,20 @@ const mailFailure = (res: Response, error: unknown) => {
   else res.status(500).json({ error: 'Не удалось выполнить действие с почтой' });
 };
 
+apiRouter.get('/assistant-settings-proposals/:id',requireAuth,asyncHandler(async(req,res)=>{
+  res.set('Cache-Control','no-store, private');
+  const proposal=await getAssistantSettingsProposal(req.user!.id,req.params.id);
+  if(!proposal){res.status(404).json({error:'Предложение не найдено'});return;}
+  res.json(proposal);
+}));
+apiRouter.post('/assistant-settings-proposals/:id/apply',requireAuth,mailOrigin,asyncHandler(async(req,res)=>{
+  res.set('Cache-Control','no-store, private');
+  try{
+    const proposal=await applyAssistantSettingsProposal(req.user!.id,req.params.id);
+    if(!proposal){res.status(404).json({error:'Предложение не найдено'});return;}
+    res.json(proposal);
+  }catch(error){res.status(409).json({error:error instanceof Error?error.message:'Не удалось применить настройки'});}
+}));
 apiRouter.get('/mail-assistant/recent-recipients', requireAuth, async(req,res)=>{
   res.set('Cache-Control','no-store, private');
   const rows=await prisma.emailAnalysis.findMany({where:{userId:req.user!.id,folder:'INBOX'},

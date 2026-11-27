@@ -268,7 +268,8 @@ async function askWorkAiStreaming(path: string, question: string, textEvents?: A
   } finally { reader.releaseLock(); }
 }
 
-export type AiChatResult = { suggestedChatTitle?: string; economicProposals?: import('../components/EconomicAiProposalCard').EconomicAiProposal[]; taskProposal?: import('./types').AiTaskProposal | null; answer: string; model: string; telegramSendDraft?: TelegramInlineSendDraft | null; mailSendDraft?: MailSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; taskDataChanged: boolean; actionReports?: string[]; generatedDocument?: GeneratedDocument | null; undoOperations?: Array<{ taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } }>; webSearchUsed: boolean; webSources?: WebSource[]; webCitations?: WebCitation[]; billing?: AiBilling };
+export type AssistantSettingsProposal = {id:string;kind:'telegram'|'mail';targetLabel:string;status:'PENDING'|'APPLIED'|'CONFLICT'|'APPLYING';changes:Array<{field:string;before:string;after:string}>};
+export type AiChatResult = { assistantSettingsProposalId?: string | null; suggestedChatTitle?: string; economicProposals?: import('../components/EconomicAiProposalCard').EconomicAiProposal[]; taskProposal?: import('./types').AiTaskProposal | null; answer: string; model: string; telegramSendDraft?: TelegramInlineSendDraft | null; mailSendDraft?: MailSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; taskDataChanged: boolean; actionReports?: string[]; generatedDocument?: GeneratedDocument | null; undoOperations?: Array<{ taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } }>; webSearchUsed: boolean; webSources?: WebSource[]; webCitations?: WebCitation[]; billing?: AiBilling };
 export async function readAiChatNdjson(stream: ReadableStream<Uint8Array>, onStatus?: (status: AiChatProgressStatus) => void, textEvents?: AiTextStreamCallbacks): Promise<AiChatResult> {
   const reader = stream.getReader(); const decoder = new TextDecoder(); let buffer = ''; let result: AiChatResult | null = null;
   const consume = (line: string) => { if (!line.trim()) return; const event = JSON.parse(line) as { type: string; status?: AiChatProgressStatus; result?: AiChatResult; message?: string; text?: string }; if (event.type === 'status' && event.status) onStatus?.(event.status); else if (event.type === 'delta' && typeof event.text === 'string') textEvents?.onTextDelta?.(event.text); else if (event.type === 'reset') textEvents?.onTextReset?.(); else if (event.type === 'result' && event.result) result = event.result; else if (event.type === 'error') throw new Error(event.message || 'Ошибка чата ИИ'); };
@@ -573,6 +574,8 @@ export type MascotSkin = { id:string; variant:MascotVariant; name:string; descri
 export type MascotWardrobeState = { userId:string; rank:number; expiresAt:string|null; selected:Record<MascotVariant,string>; catalog:MascotSkin[] };
 
 export const api = {
+  getAssistantSettingsProposal: (id:string) => request<AssistantSettingsProposal>('/api/assistant-settings-proposals/'+encodeURIComponent(id)),
+  applyAssistantSettingsProposal: (id:string) => request<AssistantSettingsProposal>('/api/assistant-settings-proposals/'+encodeURIComponent(id)+'/apply',{method:'POST'}),
   getMascotWardrobe: () => request<MascotWardrobeState>('/api/mascot-wardrobe'),
   equipMascotSkin: (variant:MascotVariant,skinId:string) => request<MascotWardrobeState>('/api/mascot-wardrobe',{method:'PUT',body:JSON.stringify({variant,skinId})}),
   transcribeVoice: (input: { audioBase64: string; mimeType: string; durationSeconds: number }) =>

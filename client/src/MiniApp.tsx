@@ -1,3 +1,4 @@
+import { AssistantSettingsProposalCard } from './components/AssistantSettingsProposalCard';
 import { announceAppliedEconomicProposals } from './components/EconomicMoneyGesture';
 import { SubscriptionLimitPanel, PLAN_FEATURES } from './components/SubscriptionLimitPanel';
 import { AiStreamingMessageBody } from './components/AiStreamingMessageBody';
@@ -227,6 +228,7 @@ function normalizeMiniAiChatProjects(rawProjects: Array<Partial<MiniAiChatProjec
           ...(message.economicProposals?.length ? { economicProposals: message.economicProposals } : {}),
           ...(message.telegramSendDraft ? { telegramSendDraft: message.telegramSendDraft } : {}),
           ...(message.mailSendDraft ? { mailSendDraft: message.mailSendDraft } : {}),
+          ...(message.assistantSettingsProposalId ? {assistantSettingsProposalId:message.assistantSettingsProposalId} : {}),
           ...(message.telegramSuggestedReply ? { telegramSuggestedReply: message.telegramSuggestedReply } : {}),
           ...(message.mailSuggestedReply ? { mailSuggestedReply: message.mailSuggestedReply } : {}),
           ...(message.telegramReadDraft ? { telegramReadDraft: message.telegramReadDraft } : {})
@@ -3708,7 +3710,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       if (result.actionReports?.some((item) => item.startsWith('Изменена заметка'))) {
          window.dispatchEvent(new Event('standalone-notes-updated'));
        }
-       const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', createdAt: new Date().toISOString(), content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, mailSendDraft: result.mailSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, economicProposals: result.economicProposals ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
+       const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', createdAt: new Date().toISOString(), content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, assistantSettingsProposalId: result.assistantSettingsProposalId ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, mailSendDraft: result.mailSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, economicProposals: result.economicProposals ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
       announceAppliedEconomicProposals(result.economicProposals);
       updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
       if (history.length === 0 && result.suggestedChatTitle && activeAiChatProject?.id && activeAiChat?.id) {
@@ -5991,7 +5993,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     : <AiResolvedGeneratedDocument content={message.content} onDownload={downloadAiGeneratedDocument} />) : null}
                   {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} /> : null}
                   {message.role === 'assistant' && message.economicProposals?.length ? <AiEconomicProposalCards proposals={message.economicProposals} /> : null}
-                  {message.role === 'assistant' && message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={message.telegramSuggestedReply} /> : null}{message.role === 'assistant' && message.mailSuggestedReply ? <MailAiReplySuggestionCard reply={message.mailSuggestedReply} /> : null}
+                  {message.role === 'assistant' && message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={message.telegramSuggestedReply} /> : null}{message.role === 'assistant' && message.mailSuggestedReply ? <MailAiReplySuggestionCard reply={message.mailSuggestedReply} /> : null}{message.role === 'assistant' && message.assistantSettingsProposalId ? <AssistantSettingsProposalCard id={message.assistantSettingsProposalId} /> : null}
                   {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.mailSendDraft ? <MailInlineSendCard draft={message.mailSendDraft} hideCreditCost={activeSubscription} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={continueTelegramReadAiChat} /> : null}
                   {!activeSubscription && message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{!activeSubscription && message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(message.id)} /> : null}
                   </div>

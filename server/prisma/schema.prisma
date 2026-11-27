@@ -439,6 +439,7 @@ model User {
   telegramAiTaskApprovals TelegramAiTaskApproval[]
   telegramAiMonitorCalls TelegramAiMonitorCall[]
   emailMailboxes EmailMailbox[]
+  assistantSettingsProposals AssistantSettingsProposal[]
   emailAnalyses EmailAnalysis[]
   emailDigests EmailDigest[]
   mailComposeDrafts MailComposeDraft[]
@@ -1751,4 +1752,18 @@ model AdminSubscriptionChange {
   createdAt           DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+model AssistantSettingsProposal {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind String
+  targetId String
+  targetLabel String
+  revision Int
+  changes Json
+  status String @default("PENDING")
+  createdAt DateTime @default(now())
+  @@index([userId, kind, targetId, createdAt])
 }
