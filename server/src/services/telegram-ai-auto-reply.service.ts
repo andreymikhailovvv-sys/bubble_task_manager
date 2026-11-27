@@ -178,8 +178,9 @@ export async function sendConditionalTelegramAutoReply(input: {
     });
     await prisma.telegramAiInboxEvent.updateMany({
       where: { id: eventId, userId: input.userId, suggestedReplyStatus: 'SENDING' },
-      data: { suggestedReplyStatus: 'SENT' }
+      data: { suggestedReplyStatus: 'SENT', botStatus: 'PENDING' }
     }).catch(() => { /* The SENT attempt is authoritative; do not retry the Telegram send. */ });
+    await prisma.systemNotification.upsert({ where: { eventKey: eventId + ':sent' }, update: {}, create: { userId: input.userId, eventKey: eventId + ':sent', content: '🤖 ИИ ответил в Telegram · ' + currentPolicy.chatTitle.slice(0,90) } }).catch(() => {});
     console.info('[TelegramAutoReply] sent', { policyId: input.policyId, messageId: input.messageId });
     return 'SENT';
   } catch {

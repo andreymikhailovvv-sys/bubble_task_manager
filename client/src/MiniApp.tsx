@@ -1,3 +1,4 @@
+import { AssistantSettingsProposalCard } from './components/AssistantSettingsProposalCard';
 import { announceAppliedEconomicProposals } from './components/EconomicMoneyGesture';
 import { SubscriptionLimitPanel, PLAN_FEATURES } from './components/SubscriptionLimitPanel';
 import { AiStreamingMessageBody } from './components/AiStreamingMessageBody';
@@ -227,6 +228,7 @@ function normalizeMiniAiChatProjects(rawProjects: Array<Partial<MiniAiChatProjec
           ...(message.economicProposals?.length ? { economicProposals: message.economicProposals } : {}),
           ...(message.telegramSendDraft ? { telegramSendDraft: message.telegramSendDraft } : {}),
           ...(message.mailSendDraft ? { mailSendDraft: message.mailSendDraft } : {}),
+          ...(message.assistantSettingsProposalId ? {assistantSettingsProposalId:message.assistantSettingsProposalId} : {}),
           ...(message.telegramSuggestedReply ? { telegramSuggestedReply: message.telegramSuggestedReply } : {}),
           ...(message.mailSuggestedReply ? { mailSuggestedReply: message.mailSuggestedReply } : {}),
           ...(message.telegramReadDraft ? { telegramReadDraft: message.telegramReadDraft } : {})
@@ -1050,6 +1052,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [subscriptionPurchaseAvailable, setSubscriptionPurchaseAvailable] = useState(false);
   const activeSubscription = Boolean(currentUser?.subscriptionExpiresAt &&
     new Date(currentUser.subscriptionExpiresAt).getTime() > Date.now());
+  const balanceOwner = currentUser?.id;
+  useEffect(() => { if (!balanceOwner) return; let stopped = false, running = false; const refresh = async () => { if (running || document.visibilityState !== 'visible') return; running = true; try { const {user} = await api.getMe(); if (!stopped && user.id === balanceOwner) { setCurrentUser(prev => prev?.id === balanceOwner ? {...prev, subscriptionLimit:user.subscriptionLimit, subscriptionPlan:user.subscriptionPlan, subscriptionExpiresAt:user.subscriptionExpiresAt, aiCredits:user.aiCredits, aiCreditsMilli:user.aiCreditsMilli} : prev); setAiCredits(user.aiCredits ?? 0); } } catch { /* retry next minute */ } finally { running=false; } }; const timer=window.setInterval(refresh,60_000); window.addEventListener('focus',refresh); return () => { stopped=true;window.clearInterval(timer);window.removeEventListener('focus',refresh); }; }, [balanceOwner]);
   const subscriptionPurchase = useSubscriptionPurchase({
     surface: 'miniapp',
     openConfirmation: (url) => { const webApp = (window as TelegramWindow).Telegram?.WebApp; if (webApp?.openLink) webApp.openLink(url); else window.open(url, '_blank', 'noopener,noreferrer'); },
@@ -3431,10 +3435,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             if (inbox.chats.length) {
               remaining.push({ id: inbox.projectId, title: inbox.projectTitle, color: '#0891b2', icon: '@',
                 chats: inbox.chats.map(chat => ({
-                  id: chat.id, title: chat.title, messages: inbox.messages.filter(m => m.chatId === chat.id)
+                  id: chat.id, title: chat.title, messages: mergeTelegramManagedMessages(previous.find(p=>p.id===inbox.projectId)?.chats.find(c=>c.id===chat.id)?.messages??[], mergeTelegramManagedMessages(clean.find(p=>p.id===inbox.projectId)?.chats.find(c=>c.id===chat.id)?.messages??[],inbox.messages.filter(m => m.chatId === chat.id)
                     .map(m => ({ id: m.id, content: m.content, role: 'assistant' as const,
                       taskProposal: m.taskProposal ?? undefined,
-                      mailSuggestedReply: m.mailSuggestedReply ?? undefined }))
+                      mailSuggestedReply: m.mailSuggestedReply ?? undefined }))))
                 })) });
             }
             aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(remaining);
@@ -3706,7 +3710,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       if (result.actionReports?.some((item) => item.startsWith('Изменена заметка'))) {
          window.dispatchEvent(new Event('standalone-notes-updated'));
        }
-       const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', createdAt: new Date().toISOString(), content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, mailSendDraft: result.mailSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, economicProposals: result.economicProposals ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
+       const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', createdAt: new Date().toISOString(), content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, assistantSettingsProposalId: result.assistantSettingsProposalId ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, mailSendDraft: result.mailSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, economicProposals: result.economicProposals ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
       announceAppliedEconomicProposals(result.economicProposals);
       updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
       if (history.length === 0 && result.suggestedChatTitle && activeAiChatProject?.id && activeAiChat?.id) {
@@ -5989,7 +5993,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     : <AiResolvedGeneratedDocument content={message.content} onDownload={downloadAiGeneratedDocument} />) : null}
                   {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} /> : null}
                   {message.role === 'assistant' && message.economicProposals?.length ? <AiEconomicProposalCards proposals={message.economicProposals} /> : null}
-                  {message.role === 'assistant' && message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={message.telegramSuggestedReply} /> : null}{message.role === 'assistant' && message.mailSuggestedReply ? <MailAiReplySuggestionCard reply={message.mailSuggestedReply} /> : null}
+                  {message.role === 'assistant' && message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={message.telegramSuggestedReply} /> : null}{message.role === 'assistant' && message.mailSuggestedReply ? <MailAiReplySuggestionCard reply={message.mailSuggestedReply} /> : null}{message.role === 'assistant' && message.assistantSettingsProposalId ? <AssistantSettingsProposalCard id={message.assistantSettingsProposalId} /> : null}
                   {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.mailSendDraft ? <MailInlineSendCard draft={message.mailSendDraft} hideCreditCost={activeSubscription} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={continueTelegramReadAiChat} /> : null}
                   {!activeSubscription && message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{!activeSubscription && message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(message.id)} /> : null}
                   </div>

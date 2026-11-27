@@ -317,7 +317,7 @@ test('operation editor uses monthly date defaults, shared icons, a separate scro
   assert.ok(web.includes('defaultEconomicRecurrence(form.date'));
   assert.ok(web.includes('useScrollFade(formScrollRef'));
   assert.ok(web.includes('top: node.scrollHeight'));
-  assert.ok(css.includes('.econ-operation-modal .econ-form-scroll::-webkit-scrollbar{display:none}'));
+  assert.ok(css.includes(':is(.econ-operation-modal,.econ-obligation-modal) .econ-form-scroll::-webkit-scrollbar{display:none}'));
   assert.ok(css.includes('--econ-miniapp-nav-height'));
   assert.ok(css.includes('.econ-recent-results{overflow:visible;overscroll-behavior:auto'));
   assert.ok(web.includes('className="econ-recent-show-all"'));

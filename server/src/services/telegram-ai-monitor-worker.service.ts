@@ -1,3 +1,4 @@
+import { effectiveAssistantDailyLimit } from './assistant-daily-limit.service.js';
 import { requireSubscriptionFeature, SubscriptionAccessError } from './subscription-access.service.js';
 import { normalizeSelectableAiChatModel } from '../lib/ai-chat-model.js';
 import { randomUUID } from 'node:crypto';
@@ -259,10 +260,10 @@ async function reserveForCall(claimed: Claimed, desired: number, dayKey: string)
   const { reservation } = await reserveAiCreditsMilliWithTransaction(policy.userId, desired, async (tx, walletReservation) => {
       const rows = await tx.$queryRaw<Array<{
         id: string; isEnabled: boolean; monitorRevision: number; leaseToken: string | null;
-        creditDayKey: string | null; dailySpentMilli: number; dailyReservedMilli: number; dailyCreditLimitMilli: number | null
+        creditDayKey: string | null; dailySpentMilli: number; dailyReservedMilli: number; dailyCreditLimitMilli: number | null; dailyCreditLimitPercent: number | null
       }>>(Prisma.sql`
         SELECT "id", "isEnabled", "monitorRevision", "leaseToken", "creditDayKey",
-               "dailySpentMilli", "dailyReservedMilli", "dailyCreditLimitMilli"
+               "dailySpentMilli", "dailyReservedMilli", "dailyCreditLimitMilli", "dailyCreditLimitPercent"
         FROM "TelegramAiChatPolicy" WHERE "id" = ${policy.id} FOR UPDATE
       `);
       const row = rows[0];
@@ -271,7 +272,9 @@ async function reserveForCall(claimed: Claimed, desired: number, dayKey: string)
       }
       const spent = row.creditDayKey === dayKey ? row.dailySpentMilli : 0;
       const reserved = row.creditDayKey === dayKey ? row.dailyReservedMilli : 0;
-      const remaining = availableMonitorBudget(row.dailyCreditLimitMilli, spent, reserved);
+      const owner = row.dailyCreditLimitPercent == null ? null : await tx.user.findUnique({where:{id:policy.userId},select:{subscriptionPlan:true,subscriptionExpiresAt:true}});
+       const limit = effectiveAssistantDailyLimit(row.dailyCreditLimitMilli,row.dailyCreditLimitPercent,owner);
+       const remaining = availableMonitorBudget(limit, spent, reserved);
       if (remaining !== null && desired > remaining) {
         throw new TelegramUserClientError(402, 'Дневной лимит кредитов для переписки достигнут');
       }

@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { CalendarDays, ChevronRight, GripVertical, LayoutGrid, List, Plus, Search, X } from 'lucide-react';
 import { useScrollFade } from '../hooks/useScrollFade';
 import { FULLSCREEN_AUXILIARY_OPTIONS, fullscreenPanelTitle, requiresCompanionPanel, type FullscreenWorkspacePanel } from '../lib/fullscreenWorkspacePanels';
@@ -13,10 +13,17 @@ const VIEW_OPTIONS = [
 
 const clampSplit = (value: number) => Math.max(25, Math.min(75, Math.round(value)));
 
-export function FullscreenModePicker({ modes, onChange }: {
+export function FullscreenModePicker({ modes, onChange, onHold, onDragStart, onDragEnd }: {
   modes: FullscreenWorkspaceMode[];
   onChange: (next: FullscreenWorkspaceMode[]) => void;
+  onHold?: (mode: FullscreenWorkspaceMode) => void;
+  onDragStart?: (mode: FullscreenWorkspaceMode) => void;
+  onDragEnd?: () => void;
 }) {
+  const holdTimer = useRef<number | null>(null);
+  const suppressClick = useRef(false);
+  const clearHold = () => { if (holdTimer.current !== null) window.clearTimeout(holdTimer.current); holdTimer.current = null; };
+  useEffect(() => () => { if (holdTimer.current !== null) window.clearTimeout(holdTimer.current); }, []);
   const selectMode = (value: FullscreenWorkspaceMode) => onChange([value]);
 
   return (
@@ -26,10 +33,16 @@ export function FullscreenModePicker({ modes, onChange }: {
         const selected = modes[0] === option.value;
         const Icon = option.icon;
         return (
-          <button type="button" key={option.value} data-view-mode={option.value} aria-pressed={selected} onClick={() => selectMode(option.value)}
+          <button type="button" key={option.value} data-view-mode={option.value} aria-pressed={selected} draggable={Boolean(onDragStart)}
+            onPointerDown={event => { if (event.button !== 0) return; clearHold(); suppressClick.current = false; if (onHold) holdTimer.current = window.setTimeout(() => { suppressClick.current = true; onHold(option.value); }, 420); }}
+            onPointerUp={clearHold} onPointerLeave={clearHold} onPointerCancel={clearHold}
+            onDragStart={event => { clearHold(); suppressClick.current = true; event.dataTransfer.effectAllowed = 'copy'; event.dataTransfer.setData('application/x-planirovych-block', 'workspace-block'); onDragStart?.(option.value); }}
+            onDragEnd={() => { clearHold(); onDragEnd?.(); }}
+            onClick={event => { if (event.detail !== 0 && suppressClick.current) { suppressClick.current = false; return; } selectMode(option.value); }}
             className={`fullscreen-mode-picker-option display-mode-toggle-button inline-flex cursor-pointer items-center rounded-lg text-sm font-semibold transition ${selected ? 'display-mode-toggle-button-active is-selected' : ''}`}
             title={option.label}>
-            <Icon size={16} aria-hidden="true" />
+            <Icon className="fullscreen-mode-color-icon" size={16} aria-hidden="true" />
+            {onHold && <GripVertical className="fullscreen-mode-grip" size={11} aria-hidden="true" />}
             <span className="fullscreen-mode-picker-label">{option.label}</span>
           </button>
         );

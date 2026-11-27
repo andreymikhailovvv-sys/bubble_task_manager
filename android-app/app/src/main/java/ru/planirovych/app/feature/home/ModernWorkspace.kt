@@ -126,6 +126,10 @@ fun ModernWorkspace(
     notesRequest:Int=0,updateAvailable:Boolean=false,
     modifier: Modifier = Modifier,
 ) {
+    LaunchedEffect(state.user?.id) {
+        if(state.user?.id==null)return@LaunchedEffect
+        while(true){delay(60_000);vm.refreshCreditsBalanceNow()}
+    }
     val colors = remember(dark) { workspaceColors(dark) }
     val completionScope=rememberCoroutineScope()
     val completingTaskIds=remember { mutableStateListOf<String>() }

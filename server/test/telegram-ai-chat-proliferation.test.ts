@@ -79,7 +79,9 @@ test('attachment review is enabled by default and disabled explicitly, including
 
 test('save click is also explicit monitoring activation; manual start still remains for recovery', () => {
   const ui = source('../../client/src/components/TelegramAiAssistantSettings.tsx');
-  assert.match(ui, /await api\.telegramAssistantSavePolicy\(selectedId, draft\);[\s\S]*await api\.telegramAssistantStart\(selectedId\)/);
+  const save = ui.slice(ui.indexOf('const save = async () => {'));
+  assert.match(save, /await api\.telegramAssistantSavePolicy\(selectedId, dailyCap \? \{\.\.\.draft,dailyCreditLimitPercent:draft\.dailyCreditLimitPercent\?\?[\s\S]*?\}:draft\);[\s\S]*?await api\.telegramAssistantStart\(selectedId\)/);
+  assert.match(save, /draft\.dailyCreditLimitMilli==null\?100:/);
   assert.match(ui, /checked=\{draft\.reviewAttachments\}/);
   assert.match(ui, /увеличивает расход кредитов/);
   assert.match(ui, /Настройки сохранены\. Мониторинг переписки включён/);

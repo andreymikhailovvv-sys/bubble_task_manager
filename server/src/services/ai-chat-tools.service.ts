@@ -1,3 +1,4 @@
+import { READ_ASSISTANT_SETTINGS_TOOL, PROPOSE_ASSISTANT_SETTINGS_TOOL, readAssistantSettings, prepareAssistantSettings } from './assistant-settings-proposal.service.js';
 import { fileToolFailure, terminalFileToolAnswer } from './ai-file-operations.service.js';
 import { getSubscriptionRank, premiumToolFeature, featureAccessError } from './subscription-access.service.js';
 import { randomUUID } from 'node:crypto';
@@ -351,6 +352,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
   let generatedDocument: GeneratedDocumentMeta | null = null;
   let telegramSendDraft: TelegramInlineSendDraft | null = null;
   let mailSendDraft: MailSendDraft | null = null;
+  let assistantSettingsProposalId: string | null = null;
   let mailReadUsed = false;
   let telegramReadDraft: TelegramReadDraft | null = null;
   let imageCreditsSpentMilli = 0;
@@ -419,7 +421,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         const requiredLookup = providerCallIndex === 1 && input.requiredLookupTool && !isForcedFinalRound
           ? input.requiredLookupTool : null;
         const includeWebSearch = !isForcedFinalRound && !requiredLookup && webSearchAvailable && !webSearchUsed;
-        const assistantReplyTools = input.assistantReplyContext ? [PREPARE_ASSISTANT_REPLY_TOOL] : [];
+        const assistantReplyTools = input.assistantReplyContext ? [PREPARE_ASSISTANT_REPLY_TOOL, READ_ASSISTANT_SETTINGS_TOOL, PROPOSE_ASSISTANT_SETTINGS_TOOL] : [];
         const tools = includeWebSearch ? [...AI_CHAT_OPENAI_TOOLS, ...assistantReplyTools, AI_CHAT_WEB_SEARCH_TOOL] : [...AI_CHAT_OPENAI_TOOLS, ...assistantReplyTools];
         const toolChoice = requiredLookup
           ? { type: 'function' as const, name: requiredLookup }
@@ -585,6 +587,17 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
             if(cause instanceof EconomicActionError)return {ok:false,code:'FINANCE_VALIDATION',message:cause.message};
             throw cause;
           }
+        }
+        if(name==='read_assistant_settings'||name==='propose_assistant_settings'){
+          const context=input.assistantReplyContext;
+          if(!context)return {ok:false,code:'NOT_AN_ASSISTANT_CHAT'};
+          const denied=featureAccessError(rank,context.kind==='telegram'?'telegram':'mail');
+          if(denied)return {ok:false,code:denied.code,message:denied.message};
+          if(name==='read_assistant_settings')return readAssistantSettings(input.userId,context);
+          if(assistantSettingsProposalId)return {ok:false,code:'ALREADY_PREPARED'};
+          const result=await prepareAssistantSettings(input.userId,context,value);
+          if(result.ok)assistantSettingsProposalId=result.id;
+          return result;
         }
         if (name === 'prepare_assistant_reply') {
           const context = input.assistantReplyContext;
@@ -973,7 +986,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         : taskProposal.status === 'PENDING'
           ? 'Подготовил изменения. Просмотрите карточку и нажмите «Принять».'
           : 'Изменения не применены: ' + (taskProposal.error || 'Не удалось выполнить операцию.') + ' Задача не создана, повторно подтверждать нечего.')
-      : loop.answer) + (financialResult ? '\n\n'+financialResult : ''), economicProposals, telegramSendDraft, telegramReadDraft, mailSendDraft, mailReadUsed, taskProposal, model: input.model, taskDataChanged: taskProposal?.status === 'APPLIED', actionReports, undoOperations, generatedDocument, imageCreditsSpentMilli: imageCreditsSpentMilli + fileEditCreditsSpentMilli, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
+      : loop.answer) + (financialResult ? '\n\n'+financialResult : ''), economicProposals, telegramSendDraft, telegramReadDraft, mailSendDraft, assistantSettingsProposalId, mailReadUsed, taskProposal, model: input.model, taskDataChanged: taskProposal?.status === 'APPLIED', actionReports, undoOperations, generatedDocument, imageCreditsSpentMilli: imageCreditsSpentMilli + fileEditCreditsSpentMilli, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
   } catch (error) {
     await Promise.all(dynamicCalls.map((call) => refundDynamicResponsesCall(call)));
     if (webReservation) await refundAiCreditReservation(webReservation);

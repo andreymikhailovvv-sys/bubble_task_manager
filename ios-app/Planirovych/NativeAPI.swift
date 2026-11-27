@@ -227,6 +227,20 @@ struct NativeChatReply {
     let raw: [String: Any]
 }
 
+struct NativeAssistantReply: Codable {
+    let eventId: String
+    let text: String
+    let status: String
+    let recipient: String?
+    let subject: String?
+}
+struct NativeAssistantSettingsProposal: Decodable {
+    struct Change: Decodable { let field: String; let before: String; let after: String }
+    let id: String
+    let targetLabel: String
+    let status: String
+    let changes: [Change]
+}
 struct RemoteChatMessage: Codable {
     let id: String?
     let role: String
@@ -234,21 +248,28 @@ struct RemoteChatMessage: Codable {
     let taskProposal: NativeAIProposal?
     let economicProposals: [NativeAIProposal]?
     let generatedDocument: NativeGeneratedDocument?
+    let assistantSettingsProposalId: String?
+    let telegramSuggestedReply: NativeAssistantReply?
+    let mailSuggestedReply: NativeAssistantReply?
 
     init(id: String?, role: String, content: String,
          taskProposal: NativeAIProposal? = nil,
          economicProposals: [NativeAIProposal]? = nil,
-         generatedDocument: NativeGeneratedDocument? = nil) {
+         generatedDocument: NativeGeneratedDocument? = nil,
+         assistantSettingsProposalId: String? = nil, telegramSuggestedReply: NativeAssistantReply? = nil, mailSuggestedReply: NativeAssistantReply? = nil) {
         self.id = id
         self.role = role
         self.content = content
         self.taskProposal = taskProposal
         self.economicProposals = economicProposals
         self.generatedDocument = generatedDocument
+        self.assistantSettingsProposalId = assistantSettingsProposalId
+        self.telegramSuggestedReply = telegramSuggestedReply
+        self.mailSuggestedReply = mailSuggestedReply
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, role, content, taskProposal, economicProposals, generatedDocument
+        case id, role, content, taskProposal, economicProposals, generatedDocument, assistantSettingsProposalId, telegramSuggestedReply, mailSuggestedReply
     }
 
     init(from decoder: Decoder) throws {
@@ -259,6 +280,9 @@ struct RemoteChatMessage: Codable {
         taskProposal = try? values.decodeIfPresent(NativeAIProposal.self, forKey: .taskProposal)
         economicProposals = try? values.decodeIfPresent([NativeAIProposal].self, forKey: .economicProposals)
         generatedDocument = try? values.decodeIfPresent(NativeGeneratedDocument.self, forKey: .generatedDocument)
+        assistantSettingsProposalId = try? values.decodeIfPresent(String.self, forKey: .assistantSettingsProposalId)
+        telegramSuggestedReply = try? values.decodeIfPresent(NativeAssistantReply.self, forKey: .telegramSuggestedReply)
+        mailSuggestedReply = try? values.decodeIfPresent(NativeAssistantReply.self, forKey: .mailSuggestedReply)
     }
 }
 
@@ -446,7 +470,7 @@ final class NativeAPI {
 
     func subscriptionNotices() async throws -> [SubscriptionNotice] {
         let response: SubscriptionNoticeEnvelope = try await request("system-notifications")
-        return response.notifications.filter { $0.eventKey.hasPrefix("subscription-welcome:") || $0.eventKey.hasPrefix("subscription-limit:") }
+        return response.notifications.filter { $0.eventKey.hasPrefix("subscription-welcome:") || $0.eventKey.hasPrefix("subscription-limit:") || ($0.eventKey.hasSuffix(":sent") && ($0.eventKey.hasPrefix("telegram-ai-auto-reply:") || $0.eventKey.hasPrefix("mail-ai-reply:"))) }
     }
 
     func restoreAccount() async throws -> ServerAccount? {
@@ -815,6 +839,7 @@ final class NativeAPI {
         if let image = reply.raw["generatedDocument"], !(image is NSNull) {
             answer["generatedDocument"] = image
         }
+        if let id = reply.raw["assistantSettingsProposalId"] as? String { answer["assistantSettingsProposalId"] = id }
         messages.append(answer)
         threads[chatIndex]["messages"] = messages
         projects[projectIndex]["chats"] = threads
@@ -825,6 +850,15 @@ final class NativeAPI {
         let autoApply: Bool
     }
 
+    func assistantSettingsProposal(id: String, apply: Bool = false) async throws -> NativeAssistantSettingsProposal {
+        try await request("assistant-settings-proposals/\(id)" + (apply ? "/apply" : ""), method: apply ? "POST" : "GET")
+    }
+    func sendAssistantReply(id: String, text: String, mail: Bool) async throws -> String {
+        struct Result: Decodable { let status: String }
+        let root = mail ? "mail-assistant/inbox" : "telegram-user-client/assistant/inbox"
+        let response: Result = try await request("\(root)/\(id)/send-reply", method: "POST", json: ["text": text])
+        return response.status
+    }
     func proposalDetails(id: String, economic: Bool) async throws -> [String: Any] {
         let root = economic ? "economic/assistant/proposals" : "ai/task-proposals"
         let data = try await requestData("\(root)/\(id)")

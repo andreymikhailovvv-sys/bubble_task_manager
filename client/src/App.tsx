@@ -1,3 +1,4 @@
+import { AssistantSettingsProposalCard } from './components/AssistantSettingsProposalCard';
 import { announceAppliedEconomicProposals } from './components/EconomicMoneyGesture';
 import { useScrollFade } from './hooks/useScrollFade';
 import { SubscriptionLimitPanel, SubscriptionDailyRing, PLAN_FEATURES } from './components/SubscriptionLimitPanel';
@@ -918,7 +919,8 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [reportPromptTask, setReportPromptTask] = useState<Task | null>(null);
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
-  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(() => new URLSearchParams(window.location.search).get('openCredits') === '1');
+  useEffect(() => { const url = new URL(window.location.href); if (url.searchParams.get('openCredits') === '1') { url.searchParams.delete('openCredits'); window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash); } }, []);
   useScrollFade(subscriptionScrollRef, isSubscriptionModalOpen);
   const [creditModalView, setCreditModalView] = useState<'purchase' | 'statistics'>('purchase');
   const [creditUsageStatistics, setCreditUsageStatistics] = useState<CreditUsageStatistics | null>(null);
@@ -959,7 +961,7 @@ export default function App() {
   const shortLimitExhausted = activeSubscription && (currentUser?.subscriptionLimit?.daily?.remainingMilli === 0 || currentUser?.subscriptionLimit?.weekly?.remainingMilli === 0);
   const subscriptionUserId = currentUser?.id;
   useEffect(() => {
-    if (!activeSubscription || !subscriptionUserId) return;
+    if (!subscriptionUserId) return;
     let stopped = false;
     let inFlight = false;
     const refresh = async () => {
@@ -3755,7 +3757,7 @@ export default function App() {
       const serviceReport = actionReports.length > 0
         ? `\n\nИзменения:\n- ${actionReports.join('\n- ')}`
         : '';
-      const assistantMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeAiMessageContent(result.answer)}${serviceReport}`, createdAt: new Date().toISOString(), creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, mailSendDraft: result.mailSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, economicProposals: result.economicProposals ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
+      const assistantMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeAiMessageContent(result.answer)}${serviceReport}`, createdAt: new Date().toISOString(), creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, assistantSettingsProposalId: result.assistantSettingsProposalId ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, mailSendDraft: result.mailSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, economicProposals: result.economicProposals ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
       announceAppliedEconomicProposals(result.economicProposals);
       if (quick) setAiChatProjects((prev) => prev.map((project, projectIndex) => projectIndex === 0 ? { ...project, chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: [...chat.messages, assistantMessage].slice(-20) } : chat) } : project));
       else {
@@ -6865,7 +6867,11 @@ export default function App() {
           onOpenSubtask={(subtask) => setEditorState({ task: subtask })}
           onOpenNote={(id) => setRequestedStandaloneNote({ id, serial: Date.now() })}
         />
-            <FullscreenModePicker modes={fullscreenPanels.filter(panel => panel.kind === 'mode').map(panel => panel.mode)} onChange={(nextModes) => {
+            <FullscreenModePicker modes={fullscreenPanels.filter(panel => panel.kind === 'mode').map(panel => panel.mode)}
+              onHold={mode => { const next: FullscreenWorkspacePanel = { kind: 'mode', mode }; if (blockAlreadyPresent(next)) { setWorkspaceBlockNotice(Date.now()); return; } setPendingWorkspaceBlock(next); }}
+              onDragStart={mode => { const next: FullscreenWorkspacePanel = { kind: 'mode', mode }; if (blockAlreadyPresent(next)) { setWorkspaceBlockNotice(Date.now()); return; } blockDragRef.current = true; setPendingWorkspaceBlock(next); }}
+              onDragEnd={() => { blockDragRef.current = false; setPendingWorkspaceBlock(null); }}
+              onChange={(nextModes) => {
                if (basicStep === 'modes' && nextModes[0] !== fullscreenDisplayModes[0]) setBasicStep('two-modes');
               else if (basicStep === 'two-modes' && nextModes[0] !== fullscreenDisplayModes[0]) {
                 setBasicStep('block');
@@ -9936,7 +9942,7 @@ export default function App() {
                 </button>
               ))}
             </div>
-          ) : null}{item.message.role === 'assistant' && item.message.webSearchUsed ? <WebCitations sources={item.message.webSources} searched={item.message.webSearchUsed} /> : null}{item.message.role === 'assistant' && item.message.generatedDocument ? <AiGeneratedDocumentButton document={item.message.generatedDocument} /> : null}{item.message.role === 'assistant' && item.message.taskProposal ? <AiTaskProposalCard proposal={item.message.taskProposal} onApplied={() => void load()} /> : null}{item.message.role === 'assistant' && item.message.economicProposals?.length ? <AiEconomicProposalCards proposals={item.message.economicProposals} /> : null}{item.message.role === 'assistant' && item.message.telegramSendDraft ? <TelegramInlineSendCard draft={item.message.telegramSendDraft} /> : null}{item.message.role === 'assistant' && item.message.mailSendDraft ? <MailInlineSendCard draft={item.message.mailSendDraft} hideCreditCost={activeSubscription} /> : null}{item.message.role === 'assistant' && item.message.telegramReadDraft ? <TelegramReadConsentCard draft={item.message.telegramReadDraft} onContinue={(approval) => continueTelegramReadAiChat(approval, activeAiChatProject!.id, activeAiChat!.id)} /> : null}{!activeSubscription && item.message.role === 'assistant' && item.message.creditsSpentMilli != null && item.message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(item.message.creditsSpentMilli)}</div> : null}{!activeSubscription && item.message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(item.message.id)} /> : null}</div><div className="ai-message-forward-actions">{item.message.role === 'assistant' ? <AiReadAloudAction text={item.message.content} messageKey={String(item.message.id)} /> : null}<AiReplyAction message={item.message} onReply={(target) => (activeAiChat?.id === QUICK_AI_CHAT_ID ? setReplyToQuickAi(target) : setReplyToAiChat(target))} /><TelegramMessageQuickShare text={item.message.content} compact hideCreditCost={activeSubscription} /></div></div></div>)}
+          ) : null}{item.message.role === 'assistant' && item.message.webSearchUsed ? <WebCitations sources={item.message.webSources} searched={item.message.webSearchUsed} /> : null}{item.message.role === 'assistant' && item.message.generatedDocument ? <AiGeneratedDocumentButton document={item.message.generatedDocument} /> : null}{item.message.role === 'assistant' && item.message.taskProposal ? <AiTaskProposalCard proposal={item.message.taskProposal} onApplied={() => void load()} /> : null}{item.message.role === 'assistant' && item.message.economicProposals?.length ? <AiEconomicProposalCards proposals={item.message.economicProposals} /> : null}{item.message.role === 'assistant' && item.message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={item.message.telegramSuggestedReply} /> : null}{item.message.role === 'assistant' && item.message.mailSuggestedReply ? <MailAiReplySuggestionCard reply={item.message.mailSuggestedReply} /> : null}{item.message.role === 'assistant' && item.message.assistantSettingsProposalId ? <AssistantSettingsProposalCard id={item.message.assistantSettingsProposalId} /> : null}{item.message.role === 'assistant' && item.message.telegramSendDraft ? <TelegramInlineSendCard draft={item.message.telegramSendDraft} /> : null}{item.message.role === 'assistant' && item.message.mailSendDraft ? <MailInlineSendCard draft={item.message.mailSendDraft} hideCreditCost={activeSubscription} /> : null}{item.message.role === 'assistant' && item.message.telegramReadDraft ? <TelegramReadConsentCard draft={item.message.telegramReadDraft} onContinue={(approval) => continueTelegramReadAiChat(approval, activeAiChatProject!.id, activeAiChat!.id)} /> : null}{!activeSubscription && item.message.role === 'assistant' && item.message.creditsSpentMilli != null && item.message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(item.message.creditsSpentMilli)}</div> : null}{!activeSubscription && item.message.role === 'assistant' ? <AiSpeechCostLine messageKey={String(item.message.id)} /> : null}</div><div className="ai-message-forward-actions">{item.message.role === 'assistant' ? <AiReadAloudAction text={item.message.content} messageKey={String(item.message.id)} /> : null}<AiReplyAction message={item.message} onReply={(target) => (activeAiChat?.id === QUICK_AI_CHAT_ID ? setReplyToQuickAi(target) : setReplyToAiChat(target))} /><TelegramMessageQuickShare text={item.message.content} compact hideCreditCost={activeSubscription} /></div></div></div>)}
           status={<>{aiChatLoading && aiChatStreamingText ? <div className="ai-message-forward-group w-fit max-w-[calc(100%-2rem)] mr-auto"><div className="ai-chat-message-assistant w-full rounded-2xl p-3 text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]"><AiStreamingMessageBody content={aiChatStreamingText} /></div></div> : null}{aiChatLoading ? <AiProgress status={aiChatProgress} /> : activeLiveVoiceStatus ? <AiProgress status={activeLiveVoiceStatus} /> : null}{aiChatError ? <p className="text-sm text-rose-400">{aiChatError}</p> : null}</>}
         />
       ) : null}

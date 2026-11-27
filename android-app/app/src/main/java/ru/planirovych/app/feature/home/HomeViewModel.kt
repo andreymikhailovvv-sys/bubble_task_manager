@@ -417,7 +417,7 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                         }
                         listOf("webSearchUsed","webSources","webCitations",
                             "generatedDocument","taskProposal","economicProposals","telegramSendDraft",
-                            "telegramReadDraft","mailSendDraft","telegramSuggestedReply").forEach{key->
+                            "telegramReadDraft","mailSendDraft","telegramSuggestedReply","mailSuggestedReply","assistantSettingsProposalId").forEach{key->
                             response[key]?.let{put(key,it)}
                         }
                     }
@@ -467,6 +467,9 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
     suspend fun telegramSendTargets()=repository.telegramSendTargets()
     suspend fun telegramQuickSend(payload:JsonObject)=repository.telegramQuickSend(payload)
     suspend fun telegramQuickSendStatus(id:String)=repository.telegramQuickSendStatus(id)
+    suspend fun assistantSettingsProposal(id:String)=repository.assistantSettingsProposal(id)
+    suspend fun applyAssistantSettingsProposal(id:String)=repository.applyAssistantSettingsProposal(id)
+    suspend fun sendSuggestedReply(id:String,text:String,mail:Boolean)=repository.sendSuggestedReply(id,text,mail)
     suspend fun mailAccounts()=repository.mailAccounts()
     suspend fun mailRecentRecipients()=repository.mailRecentRecipients()
     suspend fun mailDraftStatus(id:String)=repository.mailDraftStatus(id)

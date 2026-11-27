@@ -1,6 +1,6 @@
 import { useEffect, type RefObject } from 'react';
 
-const selector = '.overflow-y-auto,.overflow-auto,.overflow-y-scroll,.overflow-scroll,.list-mode-canvas,.timeline-canvas,.ai-chat-expanded-thread,.focused-task-editor-shell,.notes-editor-content,.standalone-notes-scroll-area,.subscription-modal-scroll';
+const selector = '.overflow-y-auto,.overflow-auto,.overflow-y-scroll,.overflow-scroll,.list-mode-canvas,.timeline-canvas,.ai-chat-expanded-thread,.focused-task-editor-shell,.notes-editor-content,.standalone-notes-scroll-area,.subscription-modal-scroll,.telegram-ai-settings-scroll,.econ-form-scroll';
 
 export function useScrollFade(ref: RefObject<HTMLElement | null>, enabled = true) {
   useEffect(() => {

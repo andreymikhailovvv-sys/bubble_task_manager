@@ -46,7 +46,12 @@ test('managed assistant chat can only prepare a reply card with bound recipient'
     src('../../client/src/MiniApp.tsx')
   ]);
   assert.match(tools, /name: 'prepare_assistant_reply'/);
-  assert.match(tools, /input\.assistantReplyContext \? \[PREPARE_ASSISTANT_REPLY_TOOL\] : \[\]/);
+  assert.match(tools, /input\.assistantReplyContext \? \[PREPARE_ASSISTANT_REPLY_TOOL, READ_ASSISTANT_SETTINGS_TOOL, PROPOSE_ASSISTANT_SETTINGS_TOOL\] : \[\]/);
+  const settingsHandler = tools.slice(tools.indexOf("if(name==='read_assistant_settings'"), tools.indexOf("if (name === 'prepare_assistant_reply')"));
+  assert.match(settingsHandler, /if\(!context\)return \{ok:false,code:'NOT_AN_ASSISTANT_CHAT'\}/);
+  assert.match(settingsHandler, /featureAccessError\(rank,context\.kind==='telegram'\?'telegram':'mail'\)/);
+  assert.match(settingsHandler, /prepareAssistantSettings\(input\.userId,context,value\)/);
+  assert.doesNotMatch(settingsHandler, /applyAssistantSettingsProposal|sendMessage\(|smtpReply\(/);
   assert.match(tools, /where: \{ id: context\.policyId, userId: input\.userId, isEnabled: true \}/);
   assert.match(tools, /recipientId: policy\.chatId/);
   assert.match(tools, /mailboxId: context\.mailboxId/);

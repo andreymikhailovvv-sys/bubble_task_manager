@@ -823,6 +823,11 @@ internal fun TaskChatBubble(message:TaskAiChatMessage,c:TaskChatColors,
                         message.telegramReadDraft?.let {
                             NativeTelegramReadCard(actions,it,c,actionTaskId,actionTaskModel)
                         }
+                        if(generalChat){
+                            message.assistantSettingsProposalId?.let{NativeAssistantSettingsChip(actions,it,c)}
+                            message.telegramSuggestedReply?.let{NativeAssistantReplyChip(actions,it,false,c)}
+                            message.mailSuggestedReply?.let{NativeAssistantReplyChip(actions,it,true,c)}
+                        }
                         message.mailSendDraft?.let {
                             NativeMailSendCard(actions,it,c)
                         }
@@ -1112,5 +1117,52 @@ internal fun TaskChatPaperclip(tint:Color){
         }
         drawPath(path,tint,style=Stroke(width=1.7.dp.toPx(),
             cap=StrokeCap.Round,join=StrokeJoin.Round))
+    }
+}
+
+private fun JsonObject.assistantString(key:String)= (this[key] as? JsonPrimitive)?.contentOrNull.orEmpty()
+private val assistantRuleNames=mapOf("summaryInstructions" to "Правила сводок","suggestWhen" to "Когда предлагать ответы","suggestHow" to "Как предлагать ответы","autoReplyWhen" to "Когда отвечать автоматически","autoReplyHow" to "Как отвечать автоматически","taskCreationWhen" to "Когда создавать задачи","replyMode" to "Режим ответов")
+@Composable private fun NativeAssistantSettingsChip(vm:HomeViewModel,id:String,c:TaskChatColors){
+    var proposal by remember(id){mutableStateOf<JsonObject?>(null)}
+    var busy by remember(id){mutableStateOf(false)}
+    var error by remember(id){mutableStateOf("")}
+    val scope=rememberCoroutineScope()
+    LaunchedEffect(id){runCatching{vm.assistantSettingsProposal(id)}.onSuccess{proposal=it}.onFailure{error="Не удалось загрузить изменения"}}
+    Column(Modifier.fillMaxWidth().border(1.dp,c.border,RoundedCornerShape(12.dp)).padding(10.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){
+        Text("Настройки ассистента",color=c.text,fontWeight=FontWeight.SemiBold)
+        proposal?.let{p->
+            Text(p.assistantString("targetLabel"),color=c.secondary,fontSize=11.sp)
+            (p["changes"] as? JsonArray).orEmpty().forEach{entry->
+                val change=entry as? JsonObject
+                if(change!=null){
+                    Text(assistantRuleNames[change.assistantString("field")]?:change.assistantString("field"),color=c.text,fontSize=12.sp)
+                    Text("Было: "+change.assistantString("before"),color=c.secondary,fontSize=11.sp)
+                    Text("Станет: "+change.assistantString("after"),color=c.text,fontSize=12.sp)
+                }
+            }
+            val status=p.assistantString("status")
+            OutlinedButton(enabled=!busy&&status=="PENDING",onClick={busy=true;scope.launch{try{proposal=vm.applyAssistantSettingsProposal(id)}catch(e:Exception){error="Не удалось применить настройки"}finally{busy=false}}}){
+                Text(when(status){"APPLIED"->"✓ Применено";"CONFLICT"->"Настройки уже изменились";else->"Подтвердить изменения"})
+            }
+        }
+        if(error.isNotEmpty())Text(error,color=c.secondary,fontSize=11.sp)
+    }
+}
+@Composable private fun NativeAssistantReplyChip(vm:HomeViewModel,reply:JsonObject,mail:Boolean,c:TaskChatColors){
+    val id=reply.assistantString("eventId")
+    var text by remember(id,reply.assistantString("text")){mutableStateOf(reply.assistantString("text"))}
+    var status by remember(id,reply.assistantString("status")){mutableStateOf(reply.assistantString("status"))}
+    var busy by remember(id){mutableStateOf(false)}
+    var error by remember(id){mutableStateOf("")}
+    val scope=rememberCoroutineScope()
+    val pending=status=="PENDING"||(!mail&&status=="FAILED")
+    Column(Modifier.fillMaxWidth().border(1.dp,c.border,RoundedCornerShape(12.dp)).padding(10.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){
+        Text(if(mail)"Ответ на письмо" else "Ответ в Telegram",color=c.text,fontWeight=FontWeight.SemiBold)
+        if(mail){Text(reply.assistantString("recipient"),color=c.secondary,fontSize=11.sp);Text(reply.assistantString("subject"),color=c.secondary,fontSize=11.sp)}
+        if(pending)OutlinedTextField(value=text,onValueChange={text=it},enabled=!busy,modifier=Modifier.fillMaxWidth()) else Text(text,color=c.text,fontSize=12.sp)
+        OutlinedButton(enabled=pending&&!busy&&text.isNotBlank(),onClick={busy=true;scope.launch{try{val response=vm.sendSuggestedReply(id,text,mail);status=response.assistantString("status").ifBlank{"UNKNOWN"}}catch(e:Exception){error="Не удалось подтвердить отправку. Проверьте историю.";status="UNKNOWN"}finally{busy=false}}}){
+            Text(when(status){"SENT"->"✓ Отправлено";"UNKNOWN"->"Статус неизвестен";"SENDING"->"Отправляется";else->"Принять и отправить"})
+        }
+        if(error.isNotEmpty())Text(error,color=c.secondary,fontSize=11.sp)
     }
 }

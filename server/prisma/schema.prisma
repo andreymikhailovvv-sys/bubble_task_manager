@@ -439,6 +439,7 @@ model User {
   telegramAiTaskApprovals TelegramAiTaskApproval[]
   telegramAiMonitorCalls TelegramAiMonitorCall[]
   emailMailboxes EmailMailbox[]
+  assistantSettingsProposals AssistantSettingsProposal[]
   emailAnalyses EmailAnalysis[]
   emailDigests EmailDigest[]
   mailComposeDrafts MailComposeDraft[]
@@ -1189,6 +1190,7 @@ model TelegramAiChatPolicy {
   historyImportedCount    Int      @default(0)
   // NULL means no per-chat DAILY cap. Global wallet balance always applies.
   dailyCreditLimitMilli   Int?     @default(50000)
+  dailyCreditLimitPercent Int?
   isEnabled               Boolean  @default(false)
   lastSeenMessageId       Int?
   lastInteractionMessageId Int?
@@ -1433,6 +1435,7 @@ model EmailMailbox {
   summaryInstructions String @default("")
   monitorModel String @default("gpt-6-luna")
   dailyCreditLimitMilli Int?
+  dailyCreditLimitPercent Int?
   creditDayKey String?
   dailySpentMilli Int @default(0)
   dailyReservedMilli Int @default(0)
@@ -1749,4 +1752,18 @@ model AdminSubscriptionChange {
   createdAt           DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+model AssistantSettingsProposal {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind String
+  targetId String
+  targetLabel String
+  revision Int
+  changes Json
+  status String @default("PENDING")
+  createdAt DateTime @default(now())
+  @@index([userId, kind, targetId, createdAt])
 }

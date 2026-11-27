@@ -3,7 +3,7 @@ import { useRef, useEffect, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckCircle2, ChevronDown, Loader2, Mail, Plus, ShieldCheck, Trash2, X } from 'lucide-react';
 import { api, type MailAccount, type MailAccountSettings } from '../lib/api';
-import { SettingSlider, TimeFrequencySlider, CreditLimitSlider } from './TelegramAiAssistantSettings';
+import { SettingSlider, TimeFrequencySlider, CreditLimitSlider, AssistantPercentSlider, useAssistantDailyCap } from './TelegramAiAssistantSettings';
 import './TelegramIntegrationsMenu.css';
 import './TelegramMessageQuickShare.css';
 import './MailAssistantSettings.css';
@@ -23,6 +23,7 @@ const providerName = (value: string) => value === 'yandex' ? 'Яндекс По�
 const accountTitle = (account: MailAccount) => (account.provider === 'yandex' ? 'Письма Яндекс' : 'Письма Mail.ru') + ' · ' + account.email;
 
 export function MailAssistantSettings({ onClose, trainingSection }: { onClose: () => void; trainingSection?: string }) {
+  const dailyCap = useAssistantDailyCap();
   const settingsScrollRef = useRef<HTMLDivElement>(null);
   useScrollFade(settingsScrollRef);
   const training = trainingSection !== undefined;
@@ -115,7 +116,7 @@ export function MailAssistantSettings({ onClose, trainingSection }: { onClose: (
       replyIntervalMinutes: account.replyIntervalMinutes,
       taskCreationWhen: account.taskCreationWhen, taskIntervalMinutes: account.taskIntervalMinutes,
       summaryIntervalMinutes: account.summaryIntervalMinutes, summaryInstructions: account.summaryInstructions,
-      monitorModel: account.monitorModel, dailyCreditLimitMilli: account.dailyCreditLimitMilli,
+      monitorModel: account.monitorModel, dailyCreditLimitMilli: account.dailyCreditLimitMilli, dailyCreditLimitPercent: account.dailyCreditLimitPercent ?? null,
       notifyImportant: account.notifyImportant, instructions: account.instructions
     });
   };
@@ -129,7 +130,7 @@ export function MailAssistantSettings({ onClose, trainingSection }: { onClose: (
   const connect = (event: FormEvent) => {
     event.preventDefault();
     void action(async () => {
-      const { account } = await api.mailConnect({ ...draft, provider, email: email.trim(), password });
+      const { account } = await api.mailConnect({ ...(dailyCap ? {...draft,dailyCreditLimitPercent:draft.dailyCreditLimitPercent??(draft.dailyCreditLimitMilli==null?100:Math.max(0,Math.min(100,Math.floor(draft.dailyCreditLimitMilli/dailyCap*100))))}:draft), provider, email: email.trim(), password });
       setPassword(''); setEmail(''); setAdding(false);
       await refresh(); pick(account);
       setNotice('Почта подключена. Новые письма будут анализироваться согласно настройкам.');
@@ -140,7 +141,7 @@ export function MailAssistantSettings({ onClose, trainingSection }: { onClose: (
     event.preventDefault();
     if (!selectedId) return;
     void action(async () => {
-      const { account } = await api.mailUpdate(selectedId, draft);
+      const { account } = await api.mailUpdate(selectedId, (dailyCap ? {...draft,dailyCreditLimitPercent:draft.dailyCreditLimitPercent??(draft.dailyCreditLimitMilli==null?100:Math.max(0,Math.min(100,Math.floor(draft.dailyCreditLimitMilli/dailyCap*100))))}:draft));
       await refresh(); pick(account); setNotice('Настройки сохранены.');
     });
   };
@@ -355,8 +356,7 @@ export function MailAssistantSettings({ onClose, trainingSection }: { onClose: (
                           <option value="gpt-6-luna">GPT-6 Luna</option><option value="gpt-6.1-terra">GPT-6.1 Terra</option><option value="gpt-6.1-sol">GPT-6.1 Sol</option>
                         </select>
                       </label>
-                      <CreditLimitSlider key={selected.id+'-credits'} value={draft.dailyCreditLimitMilli}
-                        onChange={value=>update('dailyCreditLimitMilli',value)}/>
+                      {dailyCap ? <AssistantPercentSlider cap={dailyCap} legacy={draft.dailyCreditLimitMilli} value={draft.dailyCreditLimitPercent} onChange={value=>update('dailyCreditLimitPercent',value)}/> : <CreditLimitSlider key={selected.id+'-credits'} value={draft.dailyCreditLimitMilli} onChange={value=>{update('dailyCreditLimitMilli',value);update('dailyCreditLimitPercent',null);}}/>}
                       <p className="integration-menu__muted text-xs">Лимит касается только этого ящика. Используются кредиты общего баланса Планировыча.</p>
                       <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={draft.notifyImportant}
                         onChange={e=>update('notifyImportant',e.target.checked)} className="mt-1"/> Уведомлять о важных событиях и рисках</label>

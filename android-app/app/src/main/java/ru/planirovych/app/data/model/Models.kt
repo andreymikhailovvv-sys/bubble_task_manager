@@ -203,6 +203,9 @@ data class TaskAiChatMessage(
     val telegramSendDraft: kotlinx.serialization.json.JsonObject?=null,
     val telegramReadDraft: kotlinx.serialization.json.JsonObject?=null,
     val mailSendDraft: kotlinx.serialization.json.JsonObject?=null,
+    val assistantSettingsProposalId:String?=null,
+    val telegramSuggestedReply:kotlinx.serialization.json.JsonObject?=null,
+    val mailSuggestedReply:kotlinx.serialization.json.JsonObject?=null,
 )
 data class TaskAiFile(val name:String,val mimeType:String,val bytes:ByteArray)
 data class TaskAiReply(

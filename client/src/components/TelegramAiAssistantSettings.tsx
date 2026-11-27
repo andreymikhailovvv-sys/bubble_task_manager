@@ -214,7 +214,17 @@ export function CreditLimitSlider({ value, onChange }: { value: number | null; o
   </div>;
 }
 
+export function useAssistantDailyCap() {
+  const [cap,setCap] = useState<number | null>(null);
+  useEffect(() => { let alive = true; void api.getMe().then(({user}) => { if(alive) setCap(user.subscriptionLimit?.daily?.capMilli ?? null); }).catch(()=>undefined); return () => { alive=false; }; }, []);
+  return cap;
+}
+export function AssistantPercentSlider({value,legacy,cap,onChange}:{value?:number|null;legacy:number|null;cap:number;onChange:(percent:number)=>void}) {
+  const percent = value ?? (legacy === null ? 100 : Math.min(100,Math.max(0,Math.floor(legacy*100/cap))));
+  return <div className="telegram-ai-custom-control"><label className="block text-sm font-semibold">Доля дневного лимита · {percent}%<input className="mt-2 w-full" type="range" min={0} max={100} step={1} value={percent} onChange={e=>onChange(Number(e.target.value))}/></label><p className="integration-menu__muted text-xs">0% запрещает расход. 100% разрешает использовать весь дневной лимит подписки, с учётом общего остатка.</p></div>;
+}
 export function TelegramAiAssistantSettings({ onClose, trainingSection }: Props) {
+  const dailyCap = useAssistantDailyCap();
   const settingsScrollRef = useRef<HTMLDivElement>(null);
   useScrollFade(settingsScrollRef);
   const training = trainingSection !== undefined;
@@ -300,6 +310,7 @@ export function TelegramAiAssistantSettings({ onClose, trainingSection }: Props)
       suggestHow: existing.suggestHow ?? '',
       monitorModel: existing.monitorModel,
       dailyCreditLimitMilli: existing.dailyCreditLimitMilli,
+      dailyCreditLimitPercent: existing.dailyCreditLimitPercent ?? null,
        autoReplyWhen: existing.autoReplyWhen ?? '',
       autoReplyHow: existing.autoReplyHow ?? '',
       notifyImportant: existing.notifyImportant,
@@ -329,7 +340,7 @@ export function TelegramAiAssistantSettings({ onClose, trainingSection }: Props)
     try {
       // The add button is an explicit opt-in. Use the same save+start path
       // as the existing settings form, not an unsaved placeholder profile.
-      await api.telegramAssistantSavePolicy(pickerChoice, { ...DEFAULTS });
+      await api.telegramAssistantSavePolicy(pickerChoice, { ...DEFAULTS, ...(dailyCap?{dailyCreditLimitPercent:Math.min(100,Math.floor((DEFAULTS.dailyCreditLimitMilli??dailyCap)/dailyCap*100))}:{}) });
       try {
         await api.telegramAssistantStart(pickerChoice);
       } catch (startError) {
@@ -381,7 +392,7 @@ export function TelegramAiAssistantSettings({ onClose, trainingSection }: Props)
     try {
       // The explicit Save/Add click also grants monitoring consent. Do not
       // require a second "Start" action after creating or editing a policy.
-      await api.telegramAssistantSavePolicy(selectedId, draft);
+      await api.telegramAssistantSavePolicy(selectedId, dailyCap ? {...draft,dailyCreditLimitPercent:draft.dailyCreditLimitPercent??(draft.dailyCreditLimitMilli==null?100:Math.max(0,Math.min(100,Math.floor(draft.dailyCreditLimitMilli/dailyCap*100))))}:draft);
       window.dispatchEvent(new Event('telegram-ai-assistant-updated'));
       try {
         await api.telegramAssistantStart(selectedId);
@@ -669,10 +680,9 @@ export function TelegramAiAssistantSettings({ onClose, trainingSection }: Props)
                       <option value="gpt-6.1-sol">GPT-6.1 Sol</option>
                     </select>
                   </label>
-                  <CreditLimitSlider key={selectedId + '-credits'} value={draft.dailyCreditLimitMilli}
-                    onChange={value => update('dailyCreditLimitMilli', value)}/>
+                  {dailyCap ? <AssistantPercentSlider cap={dailyCap} legacy={draft.dailyCreditLimitMilli} value={draft.dailyCreditLimitPercent} onChange={value=>update('dailyCreditLimitPercent',value)}/> : <CreditLimitSlider key={selectedId + '-credits'} value={draft.dailyCreditLimitMilli} onChange={value => { update('dailyCreditLimitMilli', value); update('dailyCreditLimitPercent', null); }}/>}
                   <p className="integration-menu__muted text-xs leading-relaxed">
-                    «Без ограничения» отменяет только дневной предел для этого чата. Расходы учитываются по фактическим токенам модели и списываются из общего баланса. При нехватке кредитов новые анализы не выполняются.
+                    Расходы учитываются по фактическим токенам модели и списываются из общего баланса. При исчерпании лимита новые анализы не выполняются.
                   </p>
                   <label className="flex items-start gap-2 text-sm">
                     <input type="checkbox" checked={draft.notifyImportant} onChange={e => update('notifyImportant', e.target.checked)} className="mt-1"/>

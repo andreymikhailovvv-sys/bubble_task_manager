@@ -381,7 +381,8 @@ final class NativeWorkspaceSession: ObservableObject {
             chatMessages.append(RemoteChatMessage(id: UUID().uuidString, role: "assistant",
                                                   content: reply.answer, taskProposal: reply.taskProposal,
                                                   economicProposals: reply.economicProposals,
-                                                  generatedDocument: reply.generatedDocument))
+                                                  generatedDocument: reply.generatedDocument,
+                                                  assistantSettingsProposalId: reply.raw["assistantSettingsProposalId"] as? String))
             do {
                 try await api.persistChatReply(projectId: project.id, chatId: thread.id,
                                                question: cleaned, reply: reply)
@@ -502,6 +503,14 @@ struct ContentView: View {
             if Self.ciPreviewTab != nil { return }
 #endif
             await session.bootstrap()
+        }
+        .task(id: session.account?.id) {
+            guard let id = session.account?.id else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                guard !Task.isCancelled, session.account?.id == id else { return }
+                if scenePhase == .active { await session.refreshAiBalance() }
+            }
         }
         .task(id: session.account?.id) {
             guard let id = session.account?.id else { subscriptionNotice = nil; return }

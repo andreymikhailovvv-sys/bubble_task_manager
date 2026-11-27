@@ -1,3 +1,4 @@
+import { effectiveAssistantDailyLimit, validateAssistantDailyPercent } from './assistant-daily-limit.service.js';
 import { requireSubscriptionFeature, SubscriptionAccessError, getSubscriptionRank, modelAccessError, featureAccessError } from './subscription-access.service.js';
 import { randomUUID } from 'node:crypto';
 import { Prisma, type EmailMailbox } from '@prisma/client';
@@ -66,6 +67,7 @@ function settings(data: Record<string, unknown>) {
     suggestWhen, suggestHow, autoReplyWhen, autoReplyHow,
     monitorModel: String(model),
     dailyCreditLimitMilli: dailyCreditLimitMilli as number | null,
+    ...(data.dailyCreditLimitPercent !== undefined ? {dailyCreditLimitPercent: (() => { try { return validateAssistantDailyPercent(data.dailyCreditLimitPercent); } catch { throw new MailAssistantError(400,'Дневной лимит должен быть от 0 до 100%'); } })()} : {}),
     notifyImportant: data.notifyImportant !== false,
     instructions, enabled: data.enabled
   };
@@ -82,7 +84,7 @@ function publicAccount(a: EmailMailbox) {
     replyIntervalMinutes: a.replyIntervalMinutes, summaryIntervalMinutes: a.summaryIntervalMinutes,
     summaryInstructions: a.summaryInstructions, suggestWhen: a.suggestWhen, suggestHow: a.suggestHow,
     autoReplyWhen: a.autoReplyWhen, autoReplyHow: a.autoReplyHow,
-    monitorModel: a.monitorModel, dailyCreditLimitMilli: a.dailyCreditLimitMilli,
+    monitorModel: a.monitorModel, dailyCreditLimitMilli: a.dailyCreditLimitMilli, dailyCreditLimitPercent: a.dailyCreditLimitPercent,
     notifyImportant: a.notifyImportant, instructions: a.instructions,
     lastSummary: a.lastSummary, lastSummaryAt: a.lastSummaryAt,
     manualDigestRequestedAt: a.manualDigestRequestedAt,
@@ -274,7 +276,9 @@ async function analyze(account: EmailMailbox, message: MailMessage, requestId: s
   if (!latest) throw new Error('Мониторинг остановлен');
   const dayKey = new Date().toISOString().slice(0, 10);
   const daily = latest.creditDayKey === dayKey ? latest.dailySpentMilli : 0;
-  if (latest.dailyCreditLimitMilli !== null && daily + estimate > latest.dailyCreditLimitMilli)
+  const owner = latest.dailyCreditLimitPercent == null ? null : await prisma.user.findUnique({where:{id:account.userId},select:{subscriptionPlan:true,subscriptionExpiresAt:true}});
+  const limit = effectiveAssistantDailyLimit(latest.dailyCreditLimitMilli,latest.dailyCreditLimitPercent,owner);
+  if (limit !== null && daily + estimate > limit)
     throw new Error('Дневной лимит кредитов достигнут');
   const reservation = await reserveAiCreditsMilli(account.userId, Math.max(1, estimate), undefined, modelCreditWindowMode(account.monitorModel));
   let settled = false;
@@ -413,9 +417,9 @@ async function publishPending(account: EmailMailbox, token: string, manualReady:
     for (const row of rows.filter(x => x.folder === 'INBOX' && !x.summaryOnly && !x.replyPublishedAt).slice(0, 20)) {
       if (row.suggestedReplyText && emailAddress(row.sender) && (latest.replyMode !== 'AUTO' || autoReplyAllowed(row.sender, latest.email))) {
         await prisma.emailAnalysis.updateMany({ where: { id: row.id, userId: account.userId },
-          data: { replyPublishedAt: now, botStatus: 'PENDING',
+          data: { replyPublishedAt: now, botStatus: latest.replyMode === 'AUTO' ? 'SKIPPED' : 'PENDING',
             suggestedReplyStatus: latest.replyMode === 'AUTO' ? 'AUTO_PENDING' : 'PENDING' } });
-        await prisma.systemNotification.upsert({ where: { eventKey: 'mail-ai-reply:' + row.id },
+        if(latest.replyMode === 'SUGGEST') await prisma.systemNotification.upsert({ where: { eventKey: 'mail-ai-reply:' + row.id },
           update: {}, create: { userId: account.userId, eventKey: 'mail-ai-reply:' + row.id,
             content: '✉️ Почтовый ассистент · ' + latest.email + ': предложен ответ на письмо «' + row.subject.slice(0,90) + '»' } });
         if (latest.replyMode === 'AUTO') await deliverMailReply(account.userId, row.id, row.suggestedReplyText, true);

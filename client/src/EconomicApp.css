@@ -848,23 +848,23 @@ body:has(.econ-root.econ-mobile-workspace) #root{min-height:100dvh}
 }
 .econ-form-scroll>*{flex:none}
 .econ-dialog-layer .econ-form-actions{margin:0;padding:12px 17px;position:relative;flex:0 0 auto}
-.econ-operation-modal .econ-form-scroll{scrollbar-width:none;-ms-overflow-style:none}
-.econ-operation-modal .econ-form-scroll::-webkit-scrollbar{display:none}
+:is(.econ-operation-modal,.econ-obligation-modal) .econ-form-scroll{scrollbar-width:none;-ms-overflow-style:none}
+:is(.econ-operation-modal,.econ-obligation-modal) .econ-form-scroll::-webkit-scrollbar{display:none}
 /* Blur only the clipped edges, as in the planner's scroll overlays. The
    scrollbar is invisible; wheel, touch and keyboard scrolling stay native. */
-.econ-operation-modal{--econ-dialog-bg:#23212b}
-.econ-dialog-layer.econ-light .econ-operation-modal{--econ-dialog-bg:#fff}
-.econ-operation-modal .econ-form-scroll[data-scroll-fade]{mask-image:none;-webkit-mask-image:none}
-.econ-operation-modal .econ-form-viewport:has(>.econ-form-scroll:is([data-scroll-fade=top],[data-scroll-fade=both]))::before,
-.econ-operation-modal .econ-form-viewport:has(>.econ-form-scroll:is([data-scroll-fade=bottom],[data-scroll-fade=both]))::after{
+:is(.econ-operation-modal,.econ-obligation-modal){--econ-dialog-bg:#23212b}
+.econ-dialog-layer.econ-light :is(.econ-operation-modal,.econ-obligation-modal){--econ-dialog-bg:#fff}
+:is(.econ-operation-modal,.econ-obligation-modal) .econ-form-scroll[data-scroll-fade]{mask-image:none;-webkit-mask-image:none}
+:is(.econ-operation-modal,.econ-obligation-modal) .econ-form-viewport:has(>.econ-form-scroll:is([data-scroll-fade=top],[data-scroll-fade=both]))::before,
+:is(.econ-operation-modal,.econ-obligation-modal) .econ-form-viewport:has(>.econ-form-scroll:is([data-scroll-fade=bottom],[data-scroll-fade=both]))::after{
   content:"";position:absolute;left:0;right:0;height:32px;z-index:1;pointer-events:none;
   backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
 }
-.econ-operation-modal .econ-form-viewport::before{
+:is(.econ-operation-modal,.econ-obligation-modal) .econ-form-viewport::before{
   top:0;background:linear-gradient(var(--econ-dialog-bg),transparent);
   mask-image:linear-gradient(#000,transparent);-webkit-mask-image:linear-gradient(#000,transparent)
 }
-.econ-operation-modal .econ-form-viewport::after{
+:is(.econ-operation-modal,.econ-obligation-modal) .econ-form-viewport::after{
   bottom:0;background:linear-gradient(transparent,var(--econ-dialog-bg));
   mask-image:linear-gradient(transparent,#000);-webkit-mask-image:linear-gradient(transparent,#000)
 }
@@ -889,3 +889,13 @@ body:has(.econ-miniapp-dialog-layer) .miniapp-shell .miniapp-bottom-navigation{
 }
 body:has(.econ-miniapp-dialog-layer.econ-light) .miniapp-shell .miniapp-bottom-navigation{background:#fff}
 .econ-root:not(.econ-mobile-workspace) .econ-operation-row[role=button]{cursor:pointer}
+
+.econ-dialog-layer:not(.econ-mobile-dialog-layer) .econ-loan-modal{width:min(560px,100%)}
+.econ-assistant-body,.econ-assistant-composer textarea{scrollbar-width:none;-ms-overflow-style:none;scrollbar-gutter:auto}
+.econ-assistant-body::-webkit-scrollbar,.econ-assistant-composer textarea::-webkit-scrollbar{display:none}
+.econ-account-detail[role=button]{cursor:pointer;transition:border-color .18s,box-shadow .18s,transform .18s}
+.econ-account-detail[role=button]:hover,.econ-account-detail[role=button]:focus-visible{border-color:var(--ec-orange2);box-shadow:0 6px 22px #b7772924;transform:translateY(-2px)}
+.econ-limit-badge{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;color:var(--ec-orange2);border:1px solid var(--ec-border);border-radius:12px;padding:9px 11px;font-size:13px;font-weight:650;text-decoration:none;font-variant-numeric:tabular-nums;min-height:40px}
+.econ-limit-badge:hover{border-color:var(--ec-orange2)}
+.econ-limit-ring{width:17px;height:17px;border-radius:50%;mask:radial-gradient(farthest-side,transparent 56%,#000 59%);flex:none}
+.econ-form-actions button[data-complete]{color:var(--ec-orange2);border:1px solid var(--ec-border);background:transparent}
