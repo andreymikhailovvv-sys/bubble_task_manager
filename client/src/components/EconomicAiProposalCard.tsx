@@ -1,4 +1,4 @@
-import { announceEconomicOperation } from './EconomicMoneyGesture';
+import { announceAppliedEconomicProposals } from './EconomicMoneyGesture';
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Check, CheckCircle2, ClipboardCheck, Loader2, RotateCcw, Pencil, X } from 'lucide-react';
 import { minorToRublesInput, rublesToMinor, groupMoneyInput, readEconomicPositions, formatMinorRub } from '../lib/economicMoney';
@@ -134,7 +134,7 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
       if(action!=='revise')updated=await read<EconomicAiProposal>(path+'/'+action,'POST');
       setProposal(updated);
       setDraft(displayDraft(updated));
-      if(action==='approve'&&updated.status==='APPLIED'&&updated.entity==='operation'&&updated.action==='create')announceEconomicOperation(updated.payload?.kind);
+      if(action==='approve')announceAppliedEconomicProposals([updated]);
       if(updated.status==='APPLIED'||updated.status==='UNDONE')await onRefresh();
       if(action==='revise')setEditOpen(false);
     }catch(cause){

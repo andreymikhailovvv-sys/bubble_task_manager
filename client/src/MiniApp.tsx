@@ -1,3 +1,4 @@
+import { announceAppliedEconomicProposals } from './components/EconomicMoneyGesture';
 import { SubscriptionLimitPanel, PLAN_FEATURES } from './components/SubscriptionLimitPanel';
 import { AiStreamingMessageBody } from './components/AiStreamingMessageBody';
 import EmailVerificationDialog from './components/EmailVerificationDialog';
@@ -3620,6 +3621,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         telegramSendDraft: result.telegramSendDraft ?? undefined, mailSendDraft: result.mailSendDraft ?? undefined,
         taskProposal: result.taskProposal ?? undefined, economicProposals: result.economicProposals ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined
       };
+      announceAppliedEconomicProposals(result.economicProposals);
       setAiChatProjects(prev => prev.map(project => project.id !== projectId ? project : {
         ...project, chats: project.chats.map(chat => chat.id !== chatId ? chat : {
           ...chat, messages: [...chat.messages, answer]
@@ -3705,6 +3707,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
          window.dispatchEvent(new Event('standalone-notes-updated'));
        }
        const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', createdAt: new Date().toISOString(), content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, mailSendDraft: result.mailSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, economicProposals: result.economicProposals ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
+      announceAppliedEconomicProposals(result.economicProposals);
       updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
       if (history.length === 0 && result.suggestedChatTitle && activeAiChatProject?.id && activeAiChat?.id) {
         const projectId = activeAiChatProject.id, chatId = activeAiChat.id;
@@ -6007,7 +6010,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   aria-label="Поговорить с Плаником" title="Живое общение с Плаником"
                   disabled={aiChatLoading}
                   onClick={() => aiChatComposerRef.current?.startLive()}>
-                  <PlanikMascot skinId={wardrobe.selected('planner')} size="composer" busy={aiChatLoading} responding={Boolean(aiChatStreamingText)} progress={aiChatProgress} />
+                  <PlanikMascot skinId={wardrobe.selected('planner')} economicSkinId={wardrobe.selected('economic')} size="composer" busy={aiChatLoading} responding={Boolean(aiChatStreamingText)} progress={aiChatProgress} />
                 </button>
               ) : null}
               {replyToGeneral ? <AiReplyPreview target={replyToGeneral} onDismiss={() => setReplyToGeneral(null)} /> : null}

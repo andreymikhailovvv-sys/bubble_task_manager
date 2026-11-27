@@ -7,6 +7,18 @@ export function announceEconomicOperation(kind: unknown) {
   if (kind === 'INCOME' || kind === 'EXPENSE')
     window.dispatchEvent(new CustomEvent(FINANCIAL_MASCOT_EVENT, {detail:kind==='INCOME'?'income':'expense'}));
 }
+// Only fresh server replies or a successful manual approval may trigger
+// the celebration; loading old history must never replay it.
+const celebratedProposalIds = new Set<string>();
+export function announceAppliedEconomicProposals(proposals?: ReadonlyArray<{id:string;status:string;entity:string;action:string;payload?: {kind?: unknown} | null}>) {
+  for (const item of proposals ?? []) {
+    if(item.status!=='APPLIED'||item.entity!=='operation'||item.action!=='create'||celebratedProposalIds.has(item.id))continue;
+    if(item.payload?.kind!=='INCOME'&&item.payload?.kind!=='EXPENSE')continue;
+    celebratedProposalIds.add(item.id);
+    if(celebratedProposalIds.size>500)celebratedProposalIds.delete(celebratedProposalIds.values().next().value!);
+    announceEconomicOperation(item.payload.kind);
+  }
+}
 function Bill({x,y}:{x:number;y:number}) {
   return <g transform={`translate(${x} ${y})`}>
     <rect x="-17" y="-9" width="34" height="18" rx="2" fill="#73ba83" stroke="#275943" strokeWidth="1.5"/>
