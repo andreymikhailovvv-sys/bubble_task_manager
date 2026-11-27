@@ -416,7 +416,25 @@ internal fun NativeEconomicAiProposalCard(
                             else->null
                         }
                         Box(Modifier.weight(.62f)){
-                        if(selections!=null)EconomicChipSelect(
+                        if(key in listOf("sourceAccountId","targetAccountId","accountId")){
+                            val choices=accountChoices.filter{(code,_)->
+                                when(key){
+                                    "targetAccountId"->code!=draft["sourceAccountId"]
+                                    "sourceAccountId"->kind!="TRANSFER"||code!=draft["targetAccountId"]
+                                    else->true
+                                }
+                            }
+                            Column(verticalArrangement=Arrangement.spacedBy(4.dp)){
+                                (if(key=="accountId")listOf("" to "Без счёта")+choices else choices).forEach{(code,name)->
+                                    Box(Modifier.fillMaxWidth().border(1.dp,if(code==value)amber else tileBorder,RoundedCornerShape(8.dp))
+                                        .background(if(code==value)amber.copy(alpha=.18f) else tile,RoundedCornerShape(8.dp))
+                                        .clickable(enabled=editable&&!busy&&options!=null){draft[key]=code}
+                                        .padding(8.dp)){
+                                        Text(name,color=ink,fontSize=11.sp)
+                                    }
+                                }
+                            }
+                        }else if(selections!=null)EconomicChipSelect(
                             value,selections,editable&&!busy&&
                                 (key !in listOf("sourceAccountId","targetAccountId","accountId")||options!=null)&&
                                 !(key=="category"&&kind=="TRANSFER"),

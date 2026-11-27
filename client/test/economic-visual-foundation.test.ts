@@ -46,7 +46,14 @@ test('Economic mascot reuses the real Planik SVG and animations with its own pal
   // an unconfigured mascot falls back to the planner palette.
   assert.match(mascot, /variant: variantOverride/);
   assert.match(mascot, /const identity = useMascotIdentity\(\)/);
-  assert.match(mascot, /const variant = variantOverride \?\? identity\?\.variant \?\? 'planner'/);
+  assert.match(mascot, /const baseVariant = variantOverride \?\? identity\?\.variant \?\? 'planner'/);
+  // Finance chat temporarily overrides the planner mascot, never the
+  // explicit Economic variant; returning to planner restores its own skin.
+  assert.match(mascot, /const variant = baseVariant === 'planner' && swap==='economic' \? 'economic' : baseVariant/);
+  assert.match(mascot, /const baseSkinId = skinOverride \?\? identity\?\.skinId \?\? 'classic'/);
+  assert.match(mascot, /const skinId = baseVariant === 'planner' && swap==='economic' \? economicSkinId \?\? 'classic' : baseSkinId/);
+  assert.match(mascot, /setSwap\('economic'\)/);
+  assert.match(mascot, /setSwap\('planner'\)/);
   assert.match(mascotCss, /\.planik-mascot--economic \.planik-body-stop-start/);
   assert.match(mascotCss, /\.planik-eye \{/);
   assert.match(mascotCss, /animation: planik-blink/);

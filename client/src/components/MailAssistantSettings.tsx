@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useScrollFade } from '../hooks/useScrollFade';
+import { useRef, useEffect, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckCircle2, ChevronDown, Loader2, Mail, Plus, ShieldCheck, Trash2, X } from 'lucide-react';
 import { api, type MailAccount, type MailAccountSettings } from '../lib/api';
@@ -22,6 +23,8 @@ const providerName = (value: string) => value === 'yandex' ? 'Яндекс По�
 const accountTitle = (account: MailAccount) => (account.provider === 'yandex' ? 'Письма Яндекс' : 'Письма Mail.ru') + ' · ' + account.email;
 
 export function MailAssistantSettings({ onClose, trainingSection }: { onClose: () => void; trainingSection?: string }) {
+  const settingsScrollRef = useRef<HTMLDivElement>(null);
+  useScrollFade(settingsScrollRef);
   const training = trainingSection !== undefined;
   useEffect(() => {
     if (!training) return;
@@ -164,7 +167,7 @@ export function MailAssistantSettings({ onClose, trainingSection }: { onClose: (
       <section role="dialog" aria-modal="true" aria-label="Почтовый ИИ-ассистент" data-guided-assistant={training ? "mail" : undefined}
         className="telegram-integrations-modal__panel flex max-h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border shadow-2xl"
         onClick={event => event.stopPropagation()}>
-        <div className="telegram-ai-settings-scroll min-h-0 overflow-y-auto px-5 py-5">
+        <div ref={settingsScrollRef} className="telegram-ai-settings-scroll min-h-0 overflow-y-auto px-5 py-5">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="telegram-integrations-modal__accent flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"><Mail size={15}/> Интеграции</p>

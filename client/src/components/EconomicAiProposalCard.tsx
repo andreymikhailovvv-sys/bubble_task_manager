@@ -1,4 +1,4 @@
-import { announceEconomicOperation } from './EconomicMoneyGesture';
+import { announceAppliedEconomicProposals } from './EconomicMoneyGesture';
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Check, CheckCircle2, ClipboardCheck, Loader2, RotateCcw, Pencil, X } from 'lucide-react';
 import { minorToRublesInput, rublesToMinor, groupMoneyInput, readEconomicPositions, formatMinorRub } from '../lib/economicMoney';
@@ -18,6 +18,7 @@ type Props = {
   initial:EconomicAiProposal;autoApply:boolean;
   onAutoApplyChange:(next:boolean)=>Promise<void>;
   onRefresh:()=>Promise<void>;
+  generalChat?:boolean;
 };
 const STATUS:Record<string,string>={
   PENDING:'Ожидает подтверждения',APPLYING:'Применяется',
@@ -97,7 +98,7 @@ function normalizedDraft(draft:Payload,reference:Payload):Payload{
     return [key,value];
   })) as Payload;
 }
-export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRefresh}:Props){
+export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRefresh,generalChat=false}:Props){
   const [proposal,setProposal]=useState(initial);
   const [draft,setDraft]=useState<Payload>(()=>displayDraft(initial));
   const [options,setOptions]=useState<Options|null>(null);
@@ -134,7 +135,7 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
       if(action!=='revise')updated=await read<EconomicAiProposal>(path+'/'+action,'POST');
       setProposal(updated);
       setDraft(displayDraft(updated));
-      if(action==='approve'&&updated.status==='APPLIED'&&updated.entity==='operation'&&updated.action==='create')announceEconomicOperation(updated.payload?.kind);
+      if(action==='approve')announceAppliedEconomicProposals([updated],generalChat);
       if(updated.status==='APPLIED'||updated.status==='UNDONE')await onRefresh();
       if(action==='revise')setEditOpen(false);
     }catch(cause){
@@ -206,11 +207,12 @@ export function EconomicAiProposalCard({initial,autoApply,onAutoApplyChange,onRe
       </select>;
     }
     if(['sourceAccountId','targetAccountId','accountId'].includes(key)){
-      return <select aria-label={LABELS[key]} value={String(value??'')} disabled={!editableStatus||busy||!options}
-        onChange={e=>setField(key,e.target.value||null)}>
-        <option value="">{options?'Выберите счёт':'Загрузка счетов'}</option>
-        {options?.accounts.map(account=><option key={account.id} value={account.id}>{account.name}</option>)}
-      </select>;
+      const available = options?.accounts.filter(account => key === 'targetAccountId' ? account.id !== draft.sourceAccountId : key === 'sourceAccountId' && draft.kind === 'TRANSFER' ? account.id !== draft.targetAccountId : true);
+      return <div className="econ-chip-account-choices" role="group" aria-label={LABELS[key]}>
+        {!options && <span>Загрузка счетов…</span>}
+        {available?.map(account=><button key={account.id} type="button" aria-pressed={account.id===value} disabled={!editableStatus||busy} onClick={()=>setField(key,account.id)}>{account.name}</button>)}
+        {key==='accountId' && <button type="button" aria-pressed={!value} disabled={!editableStatus||busy} onClick={()=>setField(key,null)}>Без счёта</button>}
+      </div>;
     }
     if(key==='category'){
       const values=Array.from(new Set([...(BASE_CATEGORIES[kind]??[]),

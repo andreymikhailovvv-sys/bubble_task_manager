@@ -1,6 +1,6 @@
 import { createContext, useContext, useLayoutEffect, useRef, useState } from 'react';
 
-type Identity = { variant: 'planner' | 'economic'; skinId: string };
+type Identity = { variant: 'planner' | 'economic'; skinId: string; economicSkinId?: string };
 export const MascotIdentityContext = createContext<Identity | null>(null);
 export const useMascotIdentity = () => useContext(MascotIdentityContext);
 

@@ -704,3 +704,6 @@ body[data-theme='light'] .planik-mascot .planik-completion-card { color: #1e293b
   .planik-mascot .planik-completion-card, .planik-completion-sign, .planik-completion-arm path, .planik-completion-hold, .planik-completion-after, .planik-completion-card .primary-widget-progress > span { animation: none; }
   .planik-completion-before { display: none; }
 }
+
+.planik-mascot[data-finance-leaving=true]{opacity:0;transition:opacity .18s ease}
+@media(prefers-reduced-motion:reduce){.planik-mascot[data-finance-leaving=true]{transition:none}}

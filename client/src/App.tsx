@@ -1,3 +1,4 @@
+import { announceAppliedEconomicProposals } from './components/EconomicMoneyGesture';
 import { useScrollFade } from './hooks/useScrollFade';
 import { SubscriptionLimitPanel, SubscriptionDailyRing, PLAN_FEATURES } from './components/SubscriptionLimitPanel';
 import { AiStreamingMessageBody } from './components/AiStreamingMessageBody';
@@ -849,7 +850,8 @@ export default function App() {
   const wardrobe = useMascotWardrobe(currentUser?.id,currentUser?.subscriptionPlan,currentUser?.subscriptionExpiresAt);
   const mascotSurface = useMascotSurface(Boolean(currentUser));
   const selectedPlannerSkin = wardrobe.selected('planner');
-  const mascotIdentity = useMemo(() => ({variant:'planner' as const,skinId:selectedPlannerSkin}), [selectedPlannerSkin]);
+  const selectedEconomicSkin = wardrobe.selected('economic');
+  const mascotIdentity = useMemo(() => ({variant:'planner' as const,skinId:selectedPlannerSkin,economicSkinId:selectedEconomicSkin}), [selectedPlannerSkin,selectedEconomicSkin]);
   const workspaceUserIdRef = useRef<string | null>(null);
   if (currentUser?.id) workspaceUserIdRef.current = currentUser.id;
   const browserNotificationsEnabledRef = useRef(true);
@@ -3754,6 +3756,7 @@ export default function App() {
         ? `\n\nИзменения:\n- ${actionReports.join('\n- ')}`
         : '';
       const assistantMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeAiMessageContent(result.answer)}${serviceReport}`, createdAt: new Date().toISOString(), creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, mailSendDraft: result.mailSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, economicProposals: result.economicProposals ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
+      announceAppliedEconomicProposals(result.economicProposals);
       if (quick) setAiChatProjects((prev) => prev.map((project, projectIndex) => projectIndex === 0 ? { ...project, chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: [...chat.messages, assistantMessage].slice(-20) } : chat) } : project));
       else {
         updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
@@ -3952,6 +3955,7 @@ export default function App() {
         telegramSendDraft: result.telegramSendDraft ?? undefined, mailSendDraft: result.mailSendDraft ?? undefined,
         taskProposal: result.taskProposal ?? undefined, economicProposals: result.economicProposals ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined
       };
+      announceAppliedEconomicProposals(result.economicProposals);
       setAiChatProjects(prev => prev.map(p => p.id !== projectId ? p : {
         ...p, chats: p.chats.map(c => c.id !== chatId ? c : {
           ...c, messages: [...c.messages, response].slice(quick ? -20 : -300)
@@ -4344,15 +4348,20 @@ export default function App() {
     // With several explicitly selected sectors, reserve space only for the
     // tasks that survive all current filters. A single selected empty sector
     // remains available, as does the unfiltered drag-and-drop workspace.
-    if (sectorIds === null || selected.length <= 1) return selected;
+    if (sectorIds === null && fullscreenPaneFilters.bubbles.timeFilter === 'all' && !search.trim()) return selected;
     const populated = new Set(fullscreenBubbleTasks.map(task => task.sphereId));
     return selected.filter(sphere => populated.has(sphere.id));
-  }, [fullscreenPaneFilters.bubbles, spheres, fullscreenBubbleTasks]);
+  }, [fullscreenPaneFilters.bubbles, spheres, fullscreenBubbleTasks, search]);
   const visibleSpheres = useMemo(() => {
     if (selectedSphereIds.length === 0) return spheres;
     const selectedSet = new Set(selectedSphereIds);
     return spheres.filter((sphere) => selectedSet.has(sphere.id));
   }, [selectedSphereIds, spheres]);
+  const classicBubbleSpheres = useMemo(() => {
+    if (timeFilter === 'all' && !search.trim() && (selectedSphereIds.length === 0 || selectedSphereIds.length === spheres.length)) return visibleSpheres;
+    const populated = new Set(visibleTasks.map(task => task.sphereId));
+    return visibleSpheres.filter(sphere => populated.has(sphere.id));
+  }, [visibleSpheres, visibleTasks, timeFilter, search, selectedSphereIds.length, spheres.length]);
   const isAllSpheresSelected = spheres.length > 0 && visibleSpheres.length === spheres.length;
   const sphereFilterLabel = spheres.length === 0
     ? 'Секторов нет'
@@ -5988,7 +5997,7 @@ export default function App() {
               }}
             tasks={basicStep ? basicRootTasks : isBubbleFullscreen ? fullscreenBubbleTasks : visibleTasks}
             timelinePreviewTasks={basicStep ? basicTasks : activeTimelineItems}
-            spheres={basicStep ? TRAINING_SPHERES : isBubbleFullscreen ? fullscreenBubbleSpheres : visibleSpheres}
+            spheres={basicStep ? TRAINING_SPHERES : isBubbleFullscreen ? fullscreenBubbleSpheres : classicBubbleSpheres}
             rankingMode="coefficient"
             subtaskMap={basicStep ? basicSubtasks : displayedSubtaskMap}
             isSubtaskFilterActive={subtaskFilterMode !== 'none'}

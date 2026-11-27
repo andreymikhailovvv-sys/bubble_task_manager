@@ -1,4 +1,4 @@
-import { EconomicMoneyGesture, FINANCIAL_MASCOT_EVENT, type FinancialMascotMode } from './EconomicMoneyGesture';
+import { EconomicMoneyGesture, FINANCIAL_MASCOT_EVENT, FINANCIAL_CHAT_MASCOT_EVENT, type FinancialMascotMode } from './EconomicMoneyGesture';
 import { memo, useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import './PlanikMascot.css';
 import { CalendarDays, CheckCircle2, ListChecks } from 'lucide-react';
@@ -35,6 +35,7 @@ type Props = {
   variant?: 'planner' | 'economic';
   className?: string;
   skinId?: string;
+  economicSkinId?: string;
   showcase?: boolean;
   previewMode?: Exclude<PlanikMode,'showcase'>;
   arrivalKey?: number;
@@ -57,17 +58,25 @@ export const PlanikMascot = memo(function PlanikMascot({
   variant: variantOverride,
   className = '',
   skinId: skinOverride,
+  economicSkinId: economicSkinOverride,
   showcase = false,
   previewMode,
-  arrivalKey = 0,
+  arrivalKey: surfaceArrivalKey = 0,
   trainingPoint
 }: Props) {
   const identity = useMascotIdentity();
-  const variant = variantOverride ?? identity?.variant ?? 'planner';
-  const skinId = skinOverride ?? identity?.skinId ?? 'classic';
+  const baseVariant = variantOverride ?? identity?.variant ?? 'planner';
+  const baseSkinId = skinOverride ?? identity?.skinId ?? 'classic';
+  const economicSkinId = economicSkinOverride ?? identity?.economicSkinId;
+  const [swap,setSwap]=useState<'planner'|'economic'>('planner');
+  const [leaving,setLeaving]=useState(false);
+  const [swapArrival,setSwapArrival]=useState(0);
   const [financeMode,setFinanceMode]=useState<FinancialMascotMode|null>(null);
+  const variant = baseVariant === 'planner' && swap==='economic' ? 'economic' : baseVariant;
+  const skinId = baseVariant === 'planner' && swap==='economic' ? economicSkinId ?? 'classic' : baseSkinId;
+  const arrivalKey = surfaceArrivalKey + swapArrival;
   useEffect(()=>{
-    if(variant!=='economic'||previewMode)return;
+    if(baseVariant!=='economic'||previewMode)return;
     let timer=0;
     const listener=(event:Event)=>{
       const mode=(event as CustomEvent).detail;
@@ -78,7 +87,40 @@ export const PlanikMascot = memo(function PlanikMascot({
     };
     window.addEventListener(FINANCIAL_MASCOT_EVENT,listener);
     return ()=>{window.removeEventListener(FINANCIAL_MASCOT_EVENT,listener);window.clearTimeout(timer);setFinanceMode(null);};
-  },[variant,previewMode]);
+  },[baseVariant,previewMode]);
+  useEffect(() => {
+    if (baseVariant !== 'planner' || !economicSkinId || previewMode || showcase) return;
+    let timer = 0;
+    let active = false;
+    const queue: FinancialMascotMode[] = [];
+    const next = () => {
+      const mode = queue.shift();
+      if (!mode) { active=false; return; }
+      active=true;
+      setLeaving(true);
+      timer=window.setTimeout(() => {
+        setSwap('economic'); setLeaving(false); setSwapArrival(key=>key+1);
+        timer=window.setTimeout(() => {
+          setFinanceMode(mode);
+          timer=window.setTimeout(() => {
+            setFinanceMode(null); setLeaving(true);
+            timer=window.setTimeout(() => {
+              setSwap('planner'); setLeaving(false); setSwapArrival(key=>key+1);
+              timer=window.setTimeout(next,baseSkinId==='pirate'?1600:560);
+            },180);
+          },4200);
+        },economicSkinId==='king'||economicSkinId==='banker'?1600:560);
+      },180);
+    };
+    const listener=(event:Event) => {
+      const mode=(event as CustomEvent).detail;
+      if(mode!=='income'&&mode!=='expense')return;
+      queue.push(mode);
+      if(!active)next();
+    };
+    window.addEventListener(FINANCIAL_CHAT_MASCOT_EVENT,listener);
+    return () => { window.removeEventListener(FINANCIAL_CHAT_MASCOT_EVENT,listener); window.clearTimeout(timer); setSwap('planner'); setFinanceMode(null); setLeaving(false); };
+  }, [baseVariant,baseSkinId,economicSkinId,previewMode,showcase]);
   const [arriving, setArriving] = useState(false);
   useEffect(() => {
     if (!arrivalKey || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setArriving(false); return; }
@@ -136,7 +178,7 @@ export const PlanikMascot = memo(function PlanikMascot({
     progress === 'checking_sectors'
   );
   const showCompletion = variant === 'planner' && !previewMode && !!completion;
-  const mode: PlanikMode = previewMode ?? financeMode ?? (showCompletion ? 'celebrating' : clearingCount !== null ? 'clearing'
+  const mode: PlanikMode = previewMode ?? financeMode ?? (baseVariant==='planner' && swap==='economic' ? 'idle' : showCompletion ? 'celebrating' : clearingCount !== null ? 'clearing'
     : celebrating ? 'celebrating'
     : busy ? (isPainting ? 'painting' : isSearching ? 'searching' : isThinking ? 'thinking' : 'typing')
     : showcase && skinId !== 'classic' ? 'showcase'
@@ -210,6 +252,7 @@ export const PlanikMascot = memo(function PlanikMascot({
       data-mode={mode}
       data-completion={showCompletion ? "true" : undefined}
       data-arriving={arriving}
+      data-finance-leaving={leaving || undefined}
       data-skin={skinId}
       data-skin-gesture={isScarfSkin(skinId) ? 'scarf' : 'hat'}
       data-has-notifs={count > 0 ? 'true' : 'false'}

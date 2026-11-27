@@ -318,6 +318,14 @@ const keyboardForAppliedAiProposal = (
     ? telegramAiActionKeyboard(proposal.id, buildMiniAppQuickAiUrl(), taskId)
     : (taskId ? keyboardBackTask(taskId) : keyboardReplyMain);
 
+const keyboardForGeneralAiReply = (result: { taskProposal?: { id: string; status: string } | null; economicProposals?: unknown[] }) =>
+  result.economicProposals?.length ? {
+    inline_keyboard: [
+      ...(result.taskProposal?.status === 'APPLIED' ? [[{ text: '↩️ Отменить изменения задач', callback_data: 'aiundo:' + result.taskProposal.id }]] : []),
+      [{ text: '📱 Посмотреть в приложении', web_app: { url: buildMiniAppQuickAiUrl() } }]
+    ]
+  } : keyboardForAppliedAiProposal(result.taskProposal);
+
 const keyboardMain = (taskId: string) => ({
   inline_keyboard: [
     [
@@ -1203,6 +1211,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
         chatTitle: 'Быстрые запросы',
         userTimeZone,
         autoApplyTaskActions: true,
+        autoApplyEconomicActions: true,
         requestId: `telegram-voice:${chatId}:${updateMessage.message_id ?? crypto.randomUUID()}`
       });
       const nextHistory: ChatMessage[] = [
@@ -1216,7 +1225,8 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       ] });
       await aiAssistantService.appendGeneralDialogAssistantMessage({
         userId: session.userId, content: result.answer, creditsSpentMilli: result.billing?.creditsSpentMilli ?? 0,
-        taskProposalId: result.taskProposal?.id
+        taskProposalId: result.taskProposal?.id,
+        economicProposals: result.economicProposals
       });
 
       const totalCreditsSpentMilli =
@@ -1238,7 +1248,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       lines.push('', `<b>Потрачено кредитов:</b> ${escapeHtml(formattedCredits)}`);
 
       await setSession(chatId, { mode: 'GENERAL_AI_CHAT', activeTaskId: null });
-      await sendMessage(chatId, lines.join('\n'), keyboardForAppliedAiProposal(result.taskProposal));
+      await sendMessage(chatId, lines.join('\n'), keyboardForGeneralAiReply(result));
       return;
     } catch (error) {
       const message = normalizeAiErrorMessage(error instanceof Error ? error.message : 'Не удалось обработать голосовое.');
@@ -1271,6 +1281,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       projectTitle: 'Личный проект',
       chatTitle: 'Быстрые запросы',
       autoApplyTaskActions: true,
+      autoApplyEconomicActions: true,
       requestId: `telegram-text:${chatId}:${updateMessage.message_id ?? crypto.randomUUID()}`
     });
     const nextHistory: ChatMessage[] = [
@@ -1284,7 +1295,8 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     ] });
     await aiAssistantService.appendGeneralDialogAssistantMessage({
       userId: session.userId, content: result.answer, creditsSpentMilli: result.billing?.creditsSpentMilli ?? 0,
-      taskProposalId: result.taskProposal?.id
+      taskProposalId: result.taskProposal?.id,
+        economicProposals: result.economicProposals
     });
 
     const lines = [
@@ -1298,7 +1310,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     }
     if (result.webSources?.length) lines.push('', '<b>Источники:</b>', ...result.webSources.map((source, index) => `${index + 1}. <a href="${escapeHtml(source.url)}">${escapeHtml(source.title)}</a>`));
 
-    await sendMessage(chatId, lines.join('\n'), keyboardForAppliedAiProposal(result.taskProposal));
+    await sendMessage(chatId, lines.join('\n'), keyboardForGeneralAiReply(result));
     return;
   }
 

@@ -96,8 +96,25 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
     suspend fun economicProposalOptions():JsonObject=repository.economicProposalOptions()
     suspend fun economicProposalEdit(id:String,payload:JsonObject):JsonObject=
         repository.editEconomicProposal(id,payload)
-    suspend fun economicProposalAction(id:String,action:String):JsonObject=
-        repository.economicProposalAction(id,action)
+    private val financialGestureMutable=MutableSharedFlow<String>(extraBufferCapacity=32)
+    val financialGesture=financialGestureMutable.asSharedFlow()
+    private val celebratedFinancialIds=LinkedHashSet<String>()
+    private fun announceAppliedFinancial(proposal:JsonObject){
+        if(proposal.aiString("status")!="APPLIED" || proposal.aiString("entity")!="operation" ||
+            proposal.aiString("action")!="create")return
+        val id=proposal.aiString("id")
+        val mode=when((proposal["payload"] as? JsonObject)?.aiString("kind")){
+            "INCOME"->"income"; "EXPENSE"->"expense"; else->return
+        }
+        if(id.isBlank()||!celebratedFinancialIds.add(id))return
+        if(celebratedFinancialIds.size>500)celebratedFinancialIds.remove(celebratedFinancialIds.first())
+        financialGestureMutable.tryEmit(mode)
+    }
+    suspend fun economicProposalAction(id:String,action:String):JsonObject{
+        val result=repository.economicProposalAction(id,action)
+        if(action=="approve")announceAppliedFinancial(result)
+        return result
+    }
     suspend fun economicAutoApply():Boolean=repository.economicPreferences()
     suspend fun setEconomicAutoApply(enabled:Boolean):Boolean=
         repository.setEconomicPreferences(enabled)
@@ -378,6 +395,8 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
                     }
                 }
                 val answer=response.aiString("answer")
+                (response["economicProposals"] as? JsonArray).orEmpty()
+                    .mapNotNull{it as? JsonObject}.forEach(::announceAppliedFinancial)
                 if(chatId==QUICK_AI_THREAD_ID){
                     val remote=repository.loadQuickAiHistory()
                     generalAiMutable.update{state->state.copy(
