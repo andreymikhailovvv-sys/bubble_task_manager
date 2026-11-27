@@ -70,3 +70,21 @@ test('managed assistant chat can only prepare a reply card with bound recipient'
   const occurrences = [...mini.matchAll(/<MailAiReplySuggestionCard reply=\{message\.mailSuggestedReply\}/g)];
   assert.ok(occurrences.length >= 2, 'both Mini App chat contexts render the mail card');
 });
+
+test('monitor replies quote the actual incoming message matched by ID, not AI-generated summary', async () => {
+  const [worker, inbox, auto, mailWorker, mailInbox] = await Promise.all([
+    src('../src/services/telegram-ai-monitor-worker.service.ts'),
+    src('../src/services/telegram-ai-inbox.service.ts'),
+    src('../src/services/telegram-ai-auto-reply.service.ts'),
+    src('../src/services/mail-assistant.service.ts'),
+    src('../src/services/mail-assistant-inbox.service.ts')
+  ]);
+  assert.equal([...worker.matchAll(/sourceText: selected\.find\(message => message\.id === reply\.messageId\)\?\.text/g)].length, 2);
+  for (const telegram of [inbox, auto]) {
+    assert.match(telegram, /В ответ на сообщение:/);
+    assert.match(telegram, /input\.sourceText\.trim\(\)\.slice\(0,4096\)/);
+  }
+  assert.match(mailWorker, /replySourceText: message\.text\.trim\(\)\.slice\(0,12000\)/);
+  assert.match(mailInbox, /typeof summary\?\.replySourceText === 'string'/);
+  assert.match(mailInbox, /В ответ на письмо:/);
+});

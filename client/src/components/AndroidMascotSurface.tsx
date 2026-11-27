@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { PlanikMascot, type PlanikMode } from './PlanikMascot';
 
-const modes = ['idle','hover','thinking','typing','searching','painting','celebrating','clearing','income','expense'] as const;
+const modes = ['idle','hover','thinking','typing','searching','painting','celebrating','clearing','income','expense','telegram-send','mail-send'] as const;
 type Mode = Exclude<PlanikMode,'showcase'>;
 const normalizeMode = (value: unknown): Mode => modes.includes(value as Mode) ? value as Mode : 'idle';
 const skins = ['classic','cat','northern','maestro','zoomer','pirate','wizard','ninja','space','banker','king'];

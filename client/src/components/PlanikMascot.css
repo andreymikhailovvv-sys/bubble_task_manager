@@ -707,3 +707,29 @@ body[data-theme='light'] .planik-mascot .planik-completion-card { color: #1e293b
 
 .planik-mascot[data-finance-leaving=true]{opacity:0;transition:opacity .18s ease}
 @media(prefers-reduced-motion:reduce){.planik-mascot[data-finance-leaving=true]{transition:none}}
+
+/* Mechanical scoreboard: the old row drops out and the new row falls in
+   from above. The light runs across the entire track even at equal widths. */
+.planik-completion-card .planik-completion-values{overflow:hidden;line-height:1.25}
+@keyframes planik-spotlight-old{0%,29%{opacity:1;transform:translateY(0)}42%,100%{opacity:0;transform:translateY(110%)}}
+@keyframes planik-spotlight-new{0%,29%{opacity:0;transform:translateY(-110%)}42%,100%{opacity:1;transform:translateY(0)}}
+.planik-completion-card .primary-widget-progress{position:relative;overflow:hidden}
+.planik-completion-card .primary-widget-progress::after{content:"";position:absolute;inset:0;width:45%;background:linear-gradient(90deg,transparent,rgba(222,250,255,.9),transparent);transform:translateX(-120%);animation:planik-completion-shine 3.6s both;pointer-events:none}
+@keyframes planik-completion-shine{0%,27%{transform:translateX(-120%);opacity:0}31%{opacity:1}61%{transform:translateX(250%);opacity:1}65%,100%{transform:translateX(250%);opacity:0}}
+.planik-send-gesture{pointer-events:none;animation:planik-send-visibility 2.8s both}
+.planik-plane-arm{transform-origin:133px 194px;animation:planik-plane-throw-arm 2.8s both}
+.planik-paper-plane{transform-origin:88px 180px;animation:planik-plane-flight 2.8s both}
+.planik-plane-trail{animation:planik-plane-trail 2.8s both}
+.planik-mailbox{transform-origin:82px 261px;animation:planik-mailbox-arrival 2.8s both}
+.planik-mail-arm{transform-origin:133px 194px;animation:planik-mail-deposit-arm 2.8s both}
+.planik-mail-letter{transform-origin:90px 172px;animation:planik-mail-deposit-letter 2.8s both}
+.planik-mail-success{animation:planik-mail-success 2.8s both}
+@keyframes planik-send-visibility{0%{opacity:0}9%,88%{opacity:1}100%{opacity:0}}
+@keyframes planik-plane-throw-arm{0%,14%{transform:rotate(-14deg)}30%{transform:rotate(24deg)}42%{transform:rotate(14deg)}65%,100%{transform:rotate(0)}}
+@keyframes planik-plane-flight{0%,14%{transform:rotate(-14deg) translate(3px,7px);opacity:1}30%{transform:translate(-11px,-20px) rotate(24deg);opacity:1}62%{transform:translate(-130px,-125px) rotate(20deg) scale(.65);opacity:0}100%{transform:translate(-130px,-125px) scale(.65);opacity:0}}
+@keyframes planik-plane-trail{0%,28%,100%{opacity:0}35%{opacity:.9}58%{opacity:0;transform:translate(-75px,-66px)}}
+@keyframes planik-mailbox-arrival{0%{transform:translateY(22px) scale(.85);opacity:0}15%,86%{transform:none;opacity:1}100%{opacity:0;transform:translateY(12px)}}
+@keyframes planik-mail-deposit-arm{0%,17%{transform:rotate(0)}44%{transform:rotate(-36deg)}57%{transform:rotate(-36deg)}75%,100%{transform:rotate(0)}}
+@keyframes planik-mail-deposit-letter{0%,17%{transform:none;opacity:1}44%{transform:translate(-2px,39px);opacity:1}58%{transform:translate(-2px,50px) scaleY(.15);opacity:0}100%{opacity:0}}
+@keyframes planik-mail-success{0%,55%{opacity:0;transform:translateY(4px)}65%,87%{opacity:1;transform:none}100%{opacity:0}}
+@media(prefers-reduced-motion:reduce){.planik-completion-card .primary-widget-progress::after{animation:none;display:none}.planik-send-gesture,.planik-send-gesture *{animation:none}.planik-plane-trail,.planik-mail-success{display:none}}

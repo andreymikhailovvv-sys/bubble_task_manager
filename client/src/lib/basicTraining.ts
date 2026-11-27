@@ -23,7 +23,7 @@ export type TrainingBubbleAction = {
   action: 'move' | 'link' | 'unlink' | 'nest';
   targetTaskId?: string; sphereId?: string | null; mode?: 'global' | 'sectors'; x?: number; y?: number;
 };
-export type BasicTrainingStep = 'intro' | 'intro-next' | 'workspace' | 'bubbles' | 'grab' | 'move' | 'link' | 'linked' | 'nest' | 'nested' | 'complete' | 'report' | 'sector' | 'sector-editor' | 'modes' | 'two-modes' | 'divider' | 'block' | 'block-added' | 'notes' | 'habits' | 'integrations' | 'android' | 'goodbye';
+export type BasicTrainingStep = 'intro' | 'intro-next' | 'workspace' | 'bubbles' | 'grab' | 'move' | 'link' | 'linked' | 'nest' | 'nested' | 'complete' | 'report' | 'sector' | 'sector-editor' | 'modes' | 'two-modes' | 'mode-added' | 'task-window' | 'task-window-added' | 'divider' | 'block' | 'block-added' | 'notes' | 'habits' | 'integrations' | 'android' | 'goodbye';
 export type TrainingStepConfig = { id: BasicTrainingStep; text: string; target?: string; allow?: string; action?: boolean; center?: boolean };
 const field = '[data-tour="bubbles-workspace"]';
 const bubbles = field + ' [data-bubble-task-id]';
@@ -45,10 +45,13 @@ export const BASIC_TRAINING_STEPS: TrainingStepConfig[] = [
   { id: 'sector', target: sector, allow: sector, action: true, text: 'Нажми на плашку сектора над кнопкой «+», чтобы открыть его настройки.' },
   { id: 'sector-editor', target: '[data-planik-sector-editor]', text: 'Здесь можно изменить название, цвет, иконку и общий промпт сектора. Укажи, например, рабочий график, должность или другие особенности — это поможет мне точнее работать с задачами.' },
   { id: 'modes', target: '.fullscreen-mode-picker', allow: '.fullscreen-mode-picker', action: true, text: 'Здесь переключаются режимы отображения. Выбери «Список» или «Таймлайн».' },
-  { id: 'two-modes', target: '.fullscreen-mode-picker', allow: '.fullscreen-mode-picker', action: true, text: 'Попробуй переключиться ещё раз. В верхнем меню выбирается один режим.' },
+  { id: 'two-modes', target: '.fullscreen-mode-picker, .workspace-placement-rail .workspace-block-target', allow: '.fullscreen-mode-picker, .workspace-placement-rail .workspace-block-target', action: true, text: 'Зажми левую кнопку мыши на другом режиме отображения. Когда появятся области размещения, выбери одну из них — так ты откроешь второй режим отдельным окном.' },
+  { id: 'mode-added', target: '[data-tour="workspace"]', text: 'Теперь два режима работают рядом. Можно закрыть любой из них крестиком в правом верхнем углу.' },
   { id: 'block', target: '.workspace-block-submenu, .workspace-block-target', allow: '.workspace-block-menu, .workspace-block-target', action: true, text: 'Чтобы открыть два окна одновременно, добавь блок. Перетащи его из меню в боковую область или выбери блок и нажми на неё. Например, «Заметки» или другой режим.' },
   { id: 'block-added', target: '[data-tour="workspace"]', text: 'Теперь у тебя два окна! Так можно комбинировать режимы и другие блоки под свои задачи.' },
   { id: 'divider', target: '.fullscreen-workspace-divider', allow: '.fullscreen-workspace-divider', text: 'Потяни перемычку, чтобы изменить размер окон. А двойным кликом по ней можно поменять окна местами. Попробуй оба действия.' },
+  { id: 'task-window', target: field + ' [data-bubble-task-id], [data-training-task-window-action], .workspace-block-target', allow: bubbles + ', [data-training-task-window-action], .workspace-block-target', action: true, text: 'Любую задачу можно открыть в отдельном окне. Нажми правой кнопкой мыши на учебный пузырь, выбери «Открыть в отдельном окне» и укажи область размещения.' },
+  { id: 'task-window-added', target: '[data-training-task-window]', text: 'Вот и отдельное окно задачи! Теперь можно работать с задачей, не закрывая основной режим.' },
   { id: 'notes', target: '[data-primary-widget="notes"]', text: 'Создавай заметки и объединяй их в группы. Не обязательно делать это вручную: попроси меня создать, найти или изменить заметку.' },
   { id: 'habits', target: '[data-primary-widget="habits"]', text: 'Создавай привычки и следи за прогрессом самостоятельно или с моей помощью. Особенно удобно отмечать привычки с телефона.' },
   { id: 'integrations', target: '[data-tour="integration-bot"]', text: 'Подключи Telegram-бота, чтобы отмечать привычки и отправлять мне голосовые. В Mini App доступна почти вся функциональность сайта.' },

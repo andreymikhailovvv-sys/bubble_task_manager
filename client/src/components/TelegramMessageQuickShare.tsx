@@ -1,3 +1,4 @@
+import { announcePlanikSend } from './PlanikSendGesture';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import './TelegramMessageQuickShare.css';
@@ -115,6 +116,7 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null, hi
           setToast(`Telegram: текст изменён через ИИ, отправка в очереди.${creditSuffix}`);
         }
         if (next.state === 'DONE') {
+          if(next.sentCount > 0) announcePlanikSend('telegram-send',next.id);
           setToast((next.unknownCount
             ? `Telegram: отправлено ${next.sentCount}; результат неизвестен для ${next.unknownCount}. Проверьте вручную.`
             : next.failedCount
@@ -278,6 +280,7 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null, hi
       });
       if (!alive.current) return;
       setJob(accepted);
+      if(accepted.state === 'DONE' && accepted.sentCount > 0) announcePlanikSend('telegram-send',accepted.id);
       setToast((modeToSend === 'REWRITE_AND_SEND'
         ? 'Запрос будет обработан ИИ и отправлен выбранным пользователям.'
         : 'Сообщение принято к отправке в Telegram.') +

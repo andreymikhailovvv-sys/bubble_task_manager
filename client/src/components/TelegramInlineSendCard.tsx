@@ -1,3 +1,4 @@
+import { announcePlanikSend } from './PlanikSendGesture';
 import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Loader2, Search, Send, X } from 'lucide-react';
 import { api, type TelegramSendTarget, type TelegramQuickSendJob } from '../lib/api';
@@ -20,6 +21,9 @@ export function TelegramInlineSendCard({ draft }: Props) {
   const [job, setJob] = useState<TelegramQuickSendJob | null>(null);
   const mounted = useRef(true);
   const pending = useRef(false);
+  const initiatedSend = useRef(false);
+  useEffect(() => { initiatedSend.current = false; }, [draft.requestId]);
+  useEffect(() => { if (initiatedSend.current && job?.state === 'DONE' && job.sentCount > 0) { announcePlanikSend('telegram-send', draft.requestId); initiatedSend.current = false; } }, [job, draft.requestId]);
 
   useEffect(() => () => { mounted.current = false; }, []);
   useEffect(() => {
@@ -59,6 +63,7 @@ export function TelegramInlineSendCard({ draft }: Props) {
   const send = async () => {
     if (!recipientId || pending.current || job) return;
     pending.current = true;
+    initiatedSend.current = true;
     setSending(true);
     setError('');
     try {

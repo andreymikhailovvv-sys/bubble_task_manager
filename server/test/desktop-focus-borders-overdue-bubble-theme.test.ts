@@ -74,8 +74,8 @@ test('split Focus descriptions mount in the selected slot while modal editors re
     read('../../client/src/components/TaskEditor.tsx'),
     read('../../client/src/styles.css')
   ]);
-  assert.match(app, /<NotesEditor\s+value=\{focusedDraft\.description \?\? ''\}\s+inlineTarget=\{embeddedFocusActive && fullscreenPanels\.length === 2 \? fullscreenFocusTarget : null\}/);
-  assert.match(app, /notesInlineTarget=\{embeddedFocusActive && fullscreenPanels\.length === 2 && editorState\.task\?\.parentTaskId === focusedTask\?\.id \? fullscreenFocusTarget : null\}/);
+  assert.match(app, /<NotesEditor\s+value=\{focusedDraft\.description \?\? ''\}\s+inlineTarget=\{embeddedFocusActive \? fullscreenFocusTarget : null\}/);
+  assert.match(app, /notesInlineTarget=\{embeddedFocusActive && editorState\.task\?\.parentTaskId === focusedTask\?\.id \? fullscreenFocusTarget : null\}/);
   assert.match(editor, /<TaskNotesEditor\s+value=\{descriptionValue\}\s+inlineTarget=\{notesInlineTarget\}/);
   assert.match(css, /\.fullscreen-embedded-focus > \.notes-editor-backdrop\.notes-editor-inline\s*\{[^}]*z-index: 240 !important/);
 });

@@ -70,3 +70,12 @@ test('standard guide is offered once; the legacy banner remains supported by Bub
   assert.match(bubble, /y=\{VIEWBOX_TOP \+ \(showTrainingInvitation \? 82 : 8\)\}/);
   assert.match(menu, /if \(trainingOpenSignal > 0\) setTab\('training'\)/);
 });
+
+test('basic offer and all active guides defer cookie and notification prompts', async () => {
+  const desktop = await readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8');
+  const css = await readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8');
+  assert.match(desktop, /basicOfferResolvedFor !== currentUser\.id/);
+  assert.match(desktop, /\|\| Boolean\(basicStep \|\| advancedTraining\)/);
+  assert.match(desktop, /initialWorkspaceReady && !deferTrainingNotices \? createPortal/);
+  assert.match(css, /body\[data-defer-training-notices\] \.cookie-banner \{ display:none!important; \}/);
+});

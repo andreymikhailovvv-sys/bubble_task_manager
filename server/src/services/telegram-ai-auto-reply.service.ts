@@ -60,7 +60,7 @@ export async function telegramAutoReplyNextAllowedAt(userId: string, policyId: s
  * lease. No chats or message bodies are written into the send audit. */
 export async function sendConditionalTelegramAutoReply(input: {
   userId: string; policyId: string; chatId: string;
-  messageId: number; text: string; revision: number; leaseToken: string;
+  messageId: number; text: string; sourceText?: string; revision: number; leaseToken: string;
 }): Promise<'SENT' | 'SKIPPED' | 'RATE_LIMITED'> {
   const skip = (reason: string): 'SKIPPED' | 'RATE_LIMITED' => {
     // Do not log message or reply bodies, contacts, or authentication data.
@@ -156,7 +156,8 @@ export async function sendConditionalTelegramAutoReply(input: {
       create: {
         id: eventId, userId: input.userId, policyId: currentPolicy.id, messageId: input.messageId,
         taskModeAtPublish: 'NONE', botStatus: 'SKIPPED',
-        content: '🤖 Автоответ в Telegram · ' + currentPolicy.chatTitle.slice(0, 90),
+        content: '🤖 Автоответ в Telegram · ' + currentPolicy.chatTitle.slice(0, 90) +
+          (input.sourceText?.trim() ? '\n\nВ ответ на сообщение:\n' + input.sourceText.trim().slice(0,4096) : ''),
         summary: { taskSuggestions: [] }, model: currentPolicy.monitorModel,
         suggestedReplyMessageId: input.messageId, suggestedReplyText: input.text.trim(),
         suggestedReplyStatus: 'SENDING'

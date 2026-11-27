@@ -91,7 +91,17 @@ export function BasicPlanikTraining({ step, lesson, theme, notice, actionReady, 
           }
         }
       }
-      const rect = readTarget(config.target);
+      // Point at one visible training bubble, not the whole cluster. As
+      // the real context menu and placement rails open, follow those targets.
+      let rect = readTarget(config.target);
+      if (!lesson && step === 'task-window') {
+        const placements = readTarget('.workspace-placement-rail .workspace-block-target');
+        const menu = readTarget('[data-training-task-window-action]');
+        const bubble = Array.from(document.querySelectorAll('[data-tour="bubbles-workspace"] [data-bubble-task-id]'))
+          .map(visibleTargetRect).find(r => r.width > 1 && r.height > 1 && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight);
+        rect = placements ?? menu ?? (bubble ? {left: Math.floor(bubble.left)-5, top: Math.floor(bubble.top)-5, right: Math.ceil(bubble.right)+5, bottom: Math.ceil(bubble.bottom)+5} : rect);
+      }
+      if (!lesson && step === 'two-modes') rect = readTarget('.workspace-placement-rail .workspace-block-target') ?? readTarget('.fullscreen-mode-picker');
       setTarget(previous => rectsEqual(previous, rect) ? previous : rect);
       setViewport(previous => previous.width === innerWidth && previous.height === innerHeight ? previous : { width: innerWidth, height: innerHeight });
     };
@@ -185,9 +195,9 @@ export function BasicPlanikTraining({ step, lesson, theme, notice, actionReady, 
   left = clamp(left, 12, Math.max(12, viewport.width - width - 12));
   top = clamp(top, 12, Math.max(12, viewport.height - cardHeight - 12));
   const visibleText = config.text.slice(0, typed);
-  const pointingDirection = step === 'sector' && target ? ((target.left + target.right) / 2 < left + 60 ? 'left' : 'right') : undefined;
+  const pointingDirection = (step === 'sector' || step === 'task-window') && target ? ((target.left + target.right) / 2 < left + 60 ? 'left' : 'right') : undefined;
   const fullyTyped = typed >= config.text.length;
-  const isMouseOnly = ['grab', 'move', 'link', 'nest', 'complete'].includes(step);
+  const isMouseOnly = ['grab', 'move', 'link', 'nest', 'complete', 'two-modes', 'task-window'].includes(step);
   return createPortal(
     <div data-basic-training-overlay data-training-step={step} data-theme={theme} className={`basic-planik-overlay ${centered ? 'is-centered' : ''}`}>
       {centered || !target ? <div className="basic-planik-dim" /> : <div className="basic-planik-spotlight" style={{ left: target.left, top: target.top, width: target.right - target.left, height: target.bottom - target.top }} />}

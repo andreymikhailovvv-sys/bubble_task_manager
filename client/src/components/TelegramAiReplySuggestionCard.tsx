@@ -1,3 +1,4 @@
+import { announcePlanikSend } from './PlanikSendGesture';
 import { useEffect, useRef, useState } from 'react';
 import { Check, Loader2, Send } from 'lucide-react';
 import { api, type TelegramAiSuggestedReply } from '../lib/api';
@@ -26,13 +27,14 @@ export function TelegramAiReplySuggestionCard({ reply }: { reply: TelegramAiSugg
     try {
       const result = await api.telegramAssistantSendSuggestedReply(reply.eventId, text);
       setLocalStatus(result.status);
+      if(result.status === 'SENT') announcePlanikSend('telegram-send',reply.eventId);
     } catch (cause) {
       // The outcome might be unknown after a timeout; server state is
       // authoritative, so refresh the event before allowing a repeat click.
       try {
         const feed = await api.telegramAssistantInbox();
         const latest = feed.messages.find(message => message.id === reply.eventId)?.telegramSuggestedReply;
-        if (latest) setLocalStatus(latest.status);
+        if (latest) { setLocalStatus(latest.status); if(latest.status === 'SENT') announcePlanikSend('telegram-send',reply.eventId); }
         else setLocalStatus('UNKNOWN');
       } catch { setLocalStatus('UNKNOWN'); }
       setError(cause instanceof Error ? cause.message : 'Не удалось отправить ответ');

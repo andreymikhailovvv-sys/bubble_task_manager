@@ -162,3 +162,11 @@ test('embedded Focus subtask modal stays centered and smaller than its host pane
   assert.ok(app.includes('editorState.task?.parentTaskId === focusedTask?.id ? fullscreenFocusTarget : null'));
   assert.ok(frame.includes('inlineTarget ? createPortal(surface, inlineTarget) : surface'));
 });
+
+test('display-mode close is available only in a split and collapses to the remaining pane', async () => {
+  const [app, css] = await Promise.all([load('../../client/src/App.tsx'),load('../../client/src/styles.css')]);
+  assert.match(app, /fullscreenPanels\.length === 2 && !workspaceOverlayActive && <button type="button" className="fullscreen-mode-window-close"/);
+  assert.match(app, /const nextSlots: FullscreenWorkspacePanel\[\] = remaining\.length\s*\? remaining/);
+  assert.match(css, /\.notes-editor-backdrop\.notes-editor-inline\{display:block!important;position:absolute!important;inset:0!important/);
+  assert.match(css, /\.notes-editor-inline \.notes-editor-panel\{position:absolute!important;inset:0!important;width:auto!important;height:auto!important/);
+});

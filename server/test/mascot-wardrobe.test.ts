@@ -140,7 +140,8 @@ test('both cat outfits are free even after expiration and preserve independent s
  assert.match(art,/translate\(430 0\) scale\(-1 1\)/);
  assert.match(css,/\[data-skin="cat"\]\[data-mode="thinking"\] \.cat-ear-left\{animation:cat-ear-left-think 2\.8s/);
  assert.match(css,/\[data-skin="cat"\]\[data-mode="thinking"\] \.cat-ear-right\{animation:cat-ear-right-think 3\.5s ease-in-out -\.9s/);
- assert.match(modal,/: \['idle','thinking'\]/);
+ // Cat uses the shared planner preview list, including both confirmed-send gestures.
+ assert.match(modal,/const specialModes:[^\n]+\n\s*\? \['idle','hover','thinking','income','expense'\]\s*:\s*\['wizard','pirate','space','ninja','northern','zoomer'\]\.includes\(selected\)\s*\? \['idle','hover','thinking','telegram-send','mail-send'\]\s*:\s*\['idle','thinking','telegram-send','mail-send'\]/);
 });
 
 test('managed desktop mascots retain selected skin and switch to modal or embedded chat anchors',()=>{
@@ -209,7 +210,24 @@ test('money arrivals use front and rear clouds with different materials and dela
 test('thinking is available in wardrobe previews for both modules and every outfit',()=>{
  const modal=read('../../client/src/components/MascotWardrobe.tsx');
  assert.match(modal,/variant==='economic'\s*\? \['idle','hover','thinking','income','expense'\]/);
- assert.match(modal,/\? \['idle','hover','thinking'\]\s*: \['idle','thinking'\]/);
+ assert.match(modal,/\? \['idle','hover','thinking','telegram-send','mail-send'\]\s*: \['idle','thinking','telegram-send','mail-send'\]/);
  assert.match(modal,/onClick=\{\(\)=>\{setPreviewMode\(mode\);setReplay\(v=>v\+1\);training\?\.onAnimation\(\);\}\}/);
  assert.match(modal,/previewMode=\{previewMode\}/);
+});
+
+test('successful delivery triggers a real plane or mailbox gesture, with no fake animation on a pending reply', () => {
+  const rig=read('../../client/src/components/PlanikMascot.tsx');
+  const gesture=read('../../client/src/components/PlanikSendGesture.tsx');
+  const css=read('../../client/src/components/PlanikMascot.css');
+  const telegram=read('../../client/src/components/TelegramAiReplySuggestionCard.tsx');
+  const mail=read('../../client/src/components/MailAiReplySuggestionCard.tsx');
+  assert.match(rig,/window\.addEventListener\(PLANIK_SEND_EVENT, listener\)/);
+  assert.match(gesture,/planik-paper-plane/);
+  assert.match(gesture,/planik-mailbox/);
+  assert.match(gesture,/planik-mail-letter/);
+  assert.match(telegram,/if\(result\.status === 'SENT'\) announcePlanikSend\('telegram-send',reply\.eventId\)/);
+  assert.match(mail,/if\(response\.status === 'SENT'\) announcePlanikSend\('mail-send',reply\.eventId\)/);
+  assert.match(css,/@keyframes planik-completion-shine/);
+  assert.match(css,/translateY\(-110%\)/);
+  assert.match(css,/translateY\(110%\)/);
 });

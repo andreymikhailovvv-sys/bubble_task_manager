@@ -43,3 +43,14 @@ test('wrong gestures and non-training IDs cannot mutate tasks or advance', () =>
   assert.equal(result.next, null);
   assert.equal(applyTrainingBubbleAction(tasks, 'move', 'real-user-task', { action: 'move', sphereId: TRAINING_SPHERES[1].id }).tasks, tasks);
 });
+
+test('basic training requires mode placement and teaches task placement after the divider', () => {
+  assert.equal(nextBasicTrainingStep('modes'), 'two-modes');
+  assert.equal(nextBasicTrainingStep('two-modes'), 'mode-added');
+  assert.equal(nextBasicTrainingStep('mode-added'), 'block');
+  assert.equal(nextBasicTrainingStep('divider'), 'task-window');
+  assert.equal(nextBasicTrainingStep('task-window'), 'task-window-added');
+  assert.equal(nextBasicTrainingStep('task-window-added'), 'notes');
+  assert.equal(BASIC_TRAINING_STEPS.find(step => step.id === 'two-modes')?.action, true);
+  assert.equal(BASIC_TRAINING_STEPS.find(step => step.id === 'task-window')?.action, true);
+});
