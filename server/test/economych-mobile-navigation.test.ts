@@ -308,3 +308,22 @@ test('Native Economic bottom sheets swipe away without a second dismissal button
   assert.match(native,/sheetGesturesEnabled=true/);
 });
 
+
+test('operation editor uses monthly date defaults, shared icons, a separate scroll area and docked sheets',()=>{
+  const web=read('../../client/src/EconomicApp.tsx');
+  const css=read('../../client/src/EconomicApp.css');
+  const native=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeEconomicEditor.kt');
+  const overview=read('../../android-app/app/src/main/java/ru/planirovych/app/feature/home/NativeEconomicCompose.kt');
+  assert.ok(web.includes('defaultEconomicRecurrence(form.date'));
+  assert.ok(web.includes('useScrollFade(formScrollRef'));
+  assert.ok(web.includes('top: node.scrollHeight'));
+  assert.ok(css.includes('.econ-operation-modal .econ-form-scroll::-webkit-scrollbar{display:none}'));
+  assert.ok(css.includes('--econ-miniapp-nav-height'));
+  assert.ok(css.includes('.econ-recent-results{overflow:visible;overscroll-behavior:auto'));
+  assert.ok(web.includes('className="econ-recent-show-all"'));
+  assert.ok(native.includes('put("rrule","FREQ=MONTHLY")'));
+  assert.ok(native.includes('put("monthDay",day)'));
+  assert.ok(native.includes('Icons.Default.SouthWest'));
+  assert.ok(overview.includes('EcoInlineAction("Показать все операции",colors){section="operations"}'));
+  assert.ok(!overview.includes('val recentHeight='));
+});

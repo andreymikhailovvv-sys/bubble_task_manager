@@ -835,3 +835,32 @@ body:has(.econ-root.econ-mobile-workspace) #root{min-height:100dvh}
 .econ-repeat-settings .recurrence-day-button{aspect-ratio:1}
 .econ-repeat-settings p,.econ-repeat-settings small{margin:0;font-size:11px;opacity:.85}
 .econ-repeat-settings [role=alert]{color:#e88781}
+
+/* Keep the editor footer out of the scrolling content, and dock mini-app
+   sheets against the measured bottom navigation rather than its old height. */
+.econ-dialog-layer:not(.econ-mobile-dialog-layer) .econ-operation-modal{width:min(570px,100%)}
+.econ-dialog-layer .econ-form{overflow:hidden;padding:0;gap:0}
+.econ-dialog-layer .econ-form>.econ-form-scroll{
+  display:flex;flex-direction:column;align-items:stretch;flex:1 1 auto;min-height:0;
+  gap:13px;padding:15px 17px 13px;overflow-y:auto;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+}
+.econ-form-scroll>*{flex:none}
+.econ-dialog-layer .econ-form-actions{margin:0;padding:12px 17px;position:relative}
+.econ-operation-modal .econ-form-scroll{scrollbar-width:none;-ms-overflow-style:none}
+.econ-operation-modal .econ-form-scroll::-webkit-scrollbar{display:none}
+.econ-operation-modal .econ-form-scroll[data-scroll-fade=top]{mask-image:linear-gradient(to bottom,transparent,#000 32px,#000)}
+.econ-operation-modal .econ-form-scroll[data-scroll-fade=bottom]{mask-image:linear-gradient(to bottom,#000,#000 calc(100% - 38px),transparent)}
+.econ-operation-modal .econ-form-scroll[data-scroll-fade=both]{mask-image:linear-gradient(to bottom,transparent,#000 32px,#000 calc(100% - 38px),transparent)}
+.econ-miniapp-dialog-layer{bottom:var(--econ-miniapp-nav-height,calc(4.5rem + var(--econ-mobile-safe-bottom,env(safe-area-inset-bottom,0px)))) !important}
+.econ-miniapp-dialog-layer .econ-modal-backdrop{align-items:flex-end;padding:8px 0 0}
+.econ-miniapp-dialog-layer .econ-modal{width:100%;max-width:none;max-height:100%;border-radius:22px 22px 0 0;border-bottom:0;box-shadow:0 -12px 45px rgba(0,0,0,.18)}
+.econ-miniapp-dialog-layer .econ-form-actions{padding-bottom:12px}
+.econ-mobile-create .econ-mobile-add-fab{bottom:calc(var(--econ-miniapp-nav-height,calc(4.5rem + var(--econ-mobile-safe-bottom,0px))) + 14px)}
+.econ-mobile-create .econ-create-menu{bottom:calc(var(--econ-miniapp-nav-height,calc(4.5rem + var(--econ-mobile-safe-bottom,0px))) + 80px)}
+.econ-operation-kind button{display:flex;align-items:center;justify-content:center;gap:6px;padding-inline:5px;white-space:nowrap}
+.econ-operation-kind .econ-operation-icon{width:25px;height:25px;border-radius:8px}
+.econ-recent-results{overflow:visible;overscroll-behavior:auto;scrollbar-gutter:auto;min-height:104px;height:auto}
+.econ-recent-show-all{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:12px 8px 4px;color:var(--ec-orange2);font-size:12px;font-weight:650;border-top:1px solid var(--ec-border)}
+.econ-light .econ-recent-show-all{color:#a45d10}
+@media(max-width:380px){.econ-operation-kind button{gap:3px;font-size:11px;padding-inline:3px}.econ-operation-kind .econ-operation-icon{width:22px;height:22px}}

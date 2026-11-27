@@ -370,15 +370,18 @@ internal fun EconomicComposePage(userId: String?, dark: Boolean, active: Boolean
                                     EcoOperationsFilterButton(filterCount,colors){filtersOpen=true}
                                 }
                                 val recent=operations.take(8)
-                                val recentHeight=(current.ecoItems("recent").size.coerceIn(1,8)*68).dp
-                                Column(Modifier.fillMaxWidth().height(recentHeight)
-                                    .verticalScroll(rememberScrollState())){
+                                // The outer overview LazyColumn owns vertical scrolling.
+                                Column(Modifier.fillMaxWidth()){
                                     if(recent.isEmpty()&&!operationsBusy) EcoEmpty("Нет операций по выбранным фильтрам",colors)
                                     recent.forEach { op ->
                                         EcoOperationRow(op,current,colors,
                                             onEdit={ record,resource -> if(resource=="missing-debt")section="debts" else editor=EcoEditorRequest(resource,record) },
                                             onDelete={ remove("operations",op) })
                                     }
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                Box(Modifier.fillMaxWidth(),contentAlignment=Alignment.Center){
+                                    EcoInlineAction("Показать все операции",colors){section="operations"}
                                 }
                             }
                         }
