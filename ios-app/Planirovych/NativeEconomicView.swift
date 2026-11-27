@@ -468,9 +468,27 @@ struct NativeEconomicView: View {
                         Text(kind == "DEBTS" ? "Долговые операции" : kindLabel(kind)).tag(kind)
                     }
                 }
-                Picker("Счёт", selection: $accountFilter) {
-                    Text("Все счета").tag("")
-                    ForEach(data.accounts) { account in Text(account.name).tag(account.id) }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Счёт").font(.caption).foregroundStyle(.secondary)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 120))], spacing: 8) {
+                        Button { accountFilter = "" } label: {
+                            Text("Все счета").font(.subheadline.weight(.semibold))
+                                .frame(maxWidth: .infinity, alignment: .leading).padding(10)
+                                .background(gold.opacity(accountFilter.isEmpty ? 0.17 : 0.04), in: RoundedRectangle(cornerRadius: 11))
+                                .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(gold.opacity(accountFilter.isEmpty ? 0.9 : 0.2)))
+                        }.buttonStyle(.plain)
+                        ForEach(data.accounts) { account in
+                            Button { accountFilter = account.id } label: {
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(account.name).font(.subheadline.weight(.semibold))
+                                    Text(EcoMoney.formatted(account.balanceMinor)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading).padding(10)
+                                .background(gold.opacity(accountFilter == account.id ? 0.17 : 0.04), in: RoundedRectangle(cornerRadius: 11))
+                                .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(gold.opacity(accountFilter == account.id ? 0.9 : 0.2)))
+                            }.buttonStyle(.plain)
+                        }
+                    }
                 }
                 Picker("Категория", selection: $categoryFilter) {
                     Text("Все категории").tag("")

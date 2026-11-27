@@ -382,7 +382,7 @@ struct NativeEconomicEditorSheet: View {
                 moneyInput("Уже погашено, ₽", value: $paid)
                 Toggle("Учитывать на счёте", isOn: $postedToAccount)
                 if postedToAccount {
-                    accountPicker("Счёт", selection: $sourceID)
+                    operationAccountCards("Счёт", selection: $sourceID)
                 }
                 Toggle("Указать срок возврата", isOn: $dueEnabled)
                 if dueEnabled {
@@ -456,16 +456,6 @@ struct NativeEconomicEditorSheet: View {
                 .keyboardType(calculator ? .numbersAndPunctuation : .decimalPad)
                 .multilineTextAlignment(.trailing)
                 .font(.subheadline.monospacedDigit())
-        }
-    }
-
-    private func accountPicker(_ label: String, selection: Binding<String>,
-                               except: String? = nil) -> some View {
-        Picker(label, selection: selection) {
-            Text("Выберите счёт").tag("")
-            ForEach(snapshot.accounts.filter { $0.id != except }) { account in
-                Text(account.name).tag(account.id)
-            }
         }
     }
 
