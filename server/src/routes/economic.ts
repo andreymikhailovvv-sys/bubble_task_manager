@@ -1,3 +1,4 @@
+import { operationRecurrenceData } from '../services/economic-operation-recurrence.service.js';
 import { normalizeEconomicPositions, normalizeEconomicCalculation } from '../lib/economic-operation-details.js';
 import { Router, type Request, type Response } from 'express';
 import { Prisma } from '@prisma/client';
@@ -335,8 +336,10 @@ economicRouter.post('/operations', asyncHandler(async (req, res) => {
   if (category === undefined) { error(res, 'Некорректная категория'); return; }
   let details: ReturnType<typeof operationDetails>;
   try { details = operationDetails(body, amountMinor); } catch (cause) { error(res, (cause as Error).message); return; }
+  let recurrence: ReturnType<typeof operationRecurrenceData>;
+  try { recurrence = operationRecurrenceData(body.recurrenceJson); } catch (cause) { error(res, (cause as Error).message); return; }
   const operation = await prisma.economicOperation.create({
-    data: { userId: owner, kind, amountMinor, sourceAccountId, targetAccountId, category, title, note, occurredAt, ...details }
+    data: { userId: owner, kind, amountMinor, sourceAccountId, targetAccountId, category, title, note, occurredAt, ...details, ...recurrence }
   });
   res.status(201).json({ operation: operationOut(operation) });
 }));
@@ -363,8 +366,10 @@ economicRouter.patch('/operations/:id', asyncHandler(async (req, res) => {
   if (count !== ids.length) { error(res, 'Один из счетов не найден'); return; }
   let details: ReturnType<typeof operationDetails>;
   try { details = operationDetails(body, amountMinor); } catch (cause) { error(res, (cause as Error).message); return; }
+  let recurrence: ReturnType<typeof operationRecurrenceData>;
+  try { recurrence = operationRecurrenceData(req.body?.recurrenceJson); } catch (cause) { error(res, (cause as Error).message); return; }
   await prisma.economicOperation.updateMany({ where: { id: found.id, userId: owner },
-    data: { kind: body.kind, amountMinor, title, note, category, occurredAt, sourceAccountId, targetAccountId, ...details } });
+    data: { kind: body.kind, amountMinor, title, note, category, occurredAt, sourceAccountId, targetAccountId, ...details, ...recurrence } });
   res.json({ ok: true });
 }));
 economicRouter.delete('/operations/:id', asyncHandler(async (req, res) => {
