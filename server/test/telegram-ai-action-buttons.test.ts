@@ -10,7 +10,8 @@ test('Telegram AI action replies include exact undo and Mini App quick chat butt
   assert.match(bot, /text: '📱 Открыть в приложении', web_app: \{ url: openUrl \}/);
   assert.match(bot, /url\.searchParams\.set\('openQuickAi', '1'\)/);
   assert.match(bot, /proposal\?\.status === 'APPLIED'/);
-  assert.ok((bot.match(/keyboardForAppliedAiProposal\(result\.taskProposal/g) ?? []).length >= 3);
+  assert.equal((bot.match(/keyboardForGeneralAiReply\(result\)/g) ?? []).length, 2);
+  assert.match(bot, /keyboardForAppliedAiProposal\(result\.taskProposal, session\.activeTaskId\)/);
   assert.match(bot, /createdProposalId\s*\? telegramAiActionKeyboard/);
 });
 
@@ -47,4 +48,17 @@ test('Telegram assistant task proposal callbacks use owner-bound chip approval a
   assert.match(bot, /await applyTaskProposal\(userId, taskId\)/);
   assert.match(bot, /await rejectTaskProposal\(userId, taskId\)/);
   assert.match(bot, /url\.searchParams\.set\('openTelegramAiChat', policyId\)/);
+});
+
+test('direct text and voice requests from the bot automatically apply finance chips and retain shared history',()=>{
+  const bot=code('../src/services/telegram.service.ts');
+  const tools=code('../src/services/ai-chat-tools.service.ts');
+  const service=code('../src/services/ai-assistant.service.ts');
+  const repeats=code('../src/services/economic-operation-recurrence.service.ts');
+  assert.equal((bot.match(/autoApplyEconomicActions: true/g)??[]).length,2);
+  assert.equal((bot.match(/economicProposals: result\.economicProposals/g)??[]).length,2);
+  assert.match(bot,/text: '📱 Посмотреть в приложении', web_app: \{ url: buildMiniAppQuickAiUrl\(\) \}/);
+  assert.match(service,/autoApplyEconomicActions: input\.autoApplyEconomicActions === true/);
+  assert.match(tools,/const autoApply=input\.autoApplyEconomicActions === true \|\|/);
+  assert.doesNotMatch(repeats,/applyEconomicProposal\(/);
 });

@@ -1211,6 +1211,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
         chatTitle: 'Быстрые запросы',
         userTimeZone,
         autoApplyTaskActions: true,
+        autoApplyEconomicActions: true,
         requestId: `telegram-voice:${chatId}:${updateMessage.message_id ?? crypto.randomUUID()}`
       });
       const nextHistory: ChatMessage[] = [
@@ -1280,6 +1281,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       projectTitle: 'Личный проект',
       chatTitle: 'Быстрые запросы',
       autoApplyTaskActions: true,
+      autoApplyEconomicActions: true,
       requestId: `telegram-text:${chatId}:${updateMessage.message_id ?? crypto.randomUUID()}`
     });
     const nextHistory: ChatMessage[] = [
@@ -1369,8 +1371,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       await aiAssistantService.appendTaskDialogAssistantMessage({
         userId: session.userId, taskId: session.activeTaskId,
         content: result.answer, creditsSpentMilli: result.billing?.creditsSpentMilli ?? 0,
-        taskProposalId: result.taskProposal?.id,
-        economicProposals: result.economicProposals
+        taskProposalId: result.taskProposal?.id
       });
 
       pendingAiAttachmentByChatId.delete(chatId);

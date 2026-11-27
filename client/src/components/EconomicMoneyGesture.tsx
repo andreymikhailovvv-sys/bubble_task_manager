@@ -10,7 +10,7 @@ export function announceEconomicOperation(kind: unknown) {
 // Only fresh server replies or a successful manual approval may trigger
 // the celebration; loading old history must never replay it.
 const celebratedProposalIds = new Set<string>();
-export function announceAppliedEconomicProposals(proposals?: ReadonlyArray<{id:string;status:string;entity:string;action:string;payload?: {kind?: unknown} | null}>) {
+export function announceAppliedEconomicProposals(proposals?: ReadonlyArray<{id:string;status:string;entity:string;action:string;payload?: Record<string, unknown> | null}>) {
   for (const item of proposals ?? []) {
     if(item.status!=='APPLIED'||item.entity!=='operation'||item.action!=='create'||celebratedProposalIds.has(item.id))continue;
     if(item.payload?.kind!=='INCOME'&&item.payload?.kind!=='EXPENSE')continue;

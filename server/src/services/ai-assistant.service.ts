@@ -364,6 +364,7 @@ type AskAiChatInput = AskGeneralAssistantInput & {
   fileReferences?: AiFileHistoryReference[];
   currentMessageId?: string;
   autoApplyTaskActions?: boolean;
+  autoApplyEconomicActions?: boolean;
   onProgress?: (status: AiChatProgressStatus) => void;
   onTextDelta?: (delta: string) => void;
   onTextReset?: () => void;
@@ -1550,7 +1551,7 @@ export const aiAssistantService = {
       console.info('[AI file catalog] prepared', { requestId: actionRequestId, surface: 'general', count: fileCatalog.items.length, truncated: fileCatalog.truncated, sources: fileCatalog.items.reduce((acc, item) => ({ ...acc, [item.source]: (acc[item.source] ?? 0) + 1 }), {} as Record<string, number>) });
       console.info('[AI chat context] prepared', { requestId: actionRequestId, userId: input.userId, projectId: input.projectId, chatId: input.chatId, clientSurface: input.clientSurface, contextMode: context.contextMode, historyMessagesAvailable: normalizedHistory.length, historyMessagesUsed: history.length, historyEstimatedTokens: history.reduce((sum, item) => sum + estimateAiChatTokens(item.content), 0), unsummarizedMessages: context.unsummarizedMessages, unsummarizedEstimatedTokens: context.unsummarizedEstimatedTokens, memoryPresent: Boolean(memoryBlock), memoryRevision: context.memoryRevision, memoryEstimatedTokens: estimateAiChatTokens(memoryBlock), memoryCompactionTriggered: context.memoryCompactionTriggered, memoryCompactionBatches: context.memoryCompactionBatches, memoryCaughtUp: context.memoryCaughtUp, fallback: context.fallback, fallbackReason: context.fallbackReason });
       input.onDiagnosticsPrepared?.({ context });
-      const result = await askAiChatWithTools({ userId: input.userId, model, messages, userTimeZone, apiKey, actionRequestId, assistantReplyContext, autoApplyTaskActions: input.autoApplyTaskActions === true, requiredLookupTool: requiresNoteCreation(question) ? 'create_note' : selectRequiredPersonalLookup(question) ?? undefined, dynamicBilling: isDynamicTextBillingEnabled(input.userId), onProgress: input.onProgress, onTextDelta: input.onTextDelta, onTextReset: input.onTextReset,
+      const result = await askAiChatWithTools({ userId: input.userId, model, messages, userTimeZone, apiKey, actionRequestId, assistantReplyContext, autoApplyTaskActions: input.autoApplyTaskActions === true, autoApplyEconomicActions: input.autoApplyEconomicActions === true, requiredLookupTool: requiresNoteCreation(question) ? 'create_note' : selectRequiredPersonalLookup(question) ?? undefined, dynamicBilling: isDynamicTextBillingEnabled(input.userId), onProgress: input.onProgress, onTextDelta: input.onTextDelta, onTextReset: input.onTextReset,
         fileTools: { userId: input.userId, projectId: input.projectId, chatId: input.chatId, catalog: fileCatalog,
           uploads: input.attachments, model, apiKey, actionId: actionRequestId, dynamicBilling: isDynamicTextBillingEnabled(input.userId) } });
       const titled = shouldTitleChat ? extractAiChatTitleFromAnswer(result.answer) : { answer: result.answer, title: null };

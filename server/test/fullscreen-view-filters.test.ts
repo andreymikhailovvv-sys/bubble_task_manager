@@ -50,7 +50,7 @@ test('split bubbles display scrollable viewport-safe hover cards outside clipped
     load('../../client/src/styles.css')
   ]);
   assert.match(bubbles, /compact && hoveredBubble && compactHoverPoint/);
-  assert.match(bubbles, /timeline-hover-card pointer-events-auto fixed/);
+  assert.match(bubbles, /timeline-hover-card bubble-compact-hover-scroll pointer-events-auto fixed/);
   assert.match(bubbles, /overflow-y-auto rounded-lg/);
   assert.match(bubbles, /compactBubbleHoverPlacement\(/);
   assert.match(bubbles, /onMouseEnter=\{cancelHoverExit\} onMouseLeave=\{scheduleHoverExit\}/);
@@ -62,7 +62,7 @@ test('split bubbles display scrollable viewport-safe hover cards outside clipped
   assert.match(css, /\.fullscreen-pane-filter-popover \{/);
 });
 
-test('multiple explicitly selected bubble sectors omit empty sectors without changing filters',async()=>{
+test('active time, sector and search filters omit empty bubble sectors without changing filter selections',async()=>{
   const app=await load('../../client/src/App.tsx');
   assert.ok(app.includes("sectorIds === null && fullscreenPaneFilters.bubbles.timeFilter === 'all' && !search.trim()"));
   assert.ok(app.includes('const classicBubbleSpheres = useMemo'));

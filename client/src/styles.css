@@ -17217,3 +17217,14 @@ body[data-theme='light'] .fullscreen-mode-picker-menu {
 body[data-theme=light] .fullscreen-mode-picker [data-view-mode=bubbles]{--view-accent:#187d9c}
 body[data-theme=light] .fullscreen-mode-picker [data-view-mode=list]{--view-accent:#437c35}
 body[data-theme=light] .fullscreen-mode-picker [data-view-mode=timeline]{--view-accent:#7654bd}
+
+/* Real blur overlay for settings, using the same non-interactive technique
+   as the subscription modal. The underlying scroller keeps native input. */
+.telegram-integrations-modal__panel:has(>.telegram-ai-settings-scroll){position:relative}
+.telegram-ai-settings-scroll[data-scroll-fade]{mask-image:none;-webkit-mask-image:none}
+.telegram-integrations-modal__panel:has(>.telegram-ai-settings-scroll:is([data-scroll-fade=top],[data-scroll-fade=both]))::before,
+.telegram-integrations-modal__panel:has(>.telegram-ai-settings-scroll:is([data-scroll-fade=bottom],[data-scroll-fade=both]))::after{
+  content:"";position:absolute;left:0;right:0;height:34px;z-index:5;pointer-events:none;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px)
+}
+.telegram-integrations-modal__panel:has(>.telegram-ai-settings-scroll:is([data-scroll-fade=top],[data-scroll-fade=both]))::before{top:0;mask-image:linear-gradient(#000,transparent);-webkit-mask-image:linear-gradient(#000,transparent)}
+.telegram-integrations-modal__panel:has(>.telegram-ai-settings-scroll:is([data-scroll-fade=bottom],[data-scroll-fade=both]))::after{bottom:0;mask-image:linear-gradient(transparent,#000);-webkit-mask-image:linear-gradient(transparent,#000)}

@@ -331,7 +331,7 @@ export async function runAiChatToolLoop(options: ToolLoopOptions) {
   throw new Error(`Превышен безопасный лимит обращений к модели (${MAX_PROVIDER_CALLS}).`);
 }
 
-export async function askAiChatWithTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string; assistantReplyContext?: AssistantReplyToolContext; autoApplyTaskActions?: boolean; dynamicBilling?: boolean; fileTools?: FileToolContext; requiredLookupTool?: 'search_workspace' | 'search_notes' | 'create_note'; onProgress?: (status: import('./ai-chat-progress.js').AiChatProgressStatus) => void; onTextDelta?: (delta: string) => void; onTextReset?: () => void }) {
+export async function askAiChatWithTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string; assistantReplyContext?: AssistantReplyToolContext; autoApplyTaskActions?: boolean; autoApplyEconomicActions?: boolean; dynamicBilling?: boolean; fileTools?: FileToolContext; requiredLookupTool?: 'search_workspace' | 'search_notes' | 'create_note'; onProgress?: (status: import('./ai-chat-progress.js').AiChatProgressStatus) => void; onTextDelta?: (delta: string) => void; onTextReset?: () => void }) {
   const rank = await getSubscriptionRank(input.userId);
   const requestId = input.actionRequestId; const startedAt = Date.now();
   // Freeze relative dates when the user's request starts, not on later approval.
@@ -928,7 +928,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         }});
         return saveEconomicProposals(tx,input.userId,message.id,preparedFinancialActions);
       });
-      const autoApply=input.autoApplyTaskActions === true || (await prisma.user.findUnique({
+      const autoApply=input.autoApplyEconomicActions === true || (await prisma.user.findUnique({
         where:{id:input.userId},select:{economicAiAutoApply:true}
       }))?.economicAiAutoApply===true;
       let applied=0,failed=0;
