@@ -4340,8 +4340,14 @@ export default function App() {
   );
   const fullscreenBubbleSpheres = useMemo(() => {
     const sectorIds = fullscreenPaneFilters.bubbles.sphereIds;
-    return sectorIds === null ? spheres : spheres.filter(sphere => sectorIds.includes(sphere.id));
-  }, [fullscreenPaneFilters.bubbles, spheres]);
+    const selected = sectorIds === null ? spheres : spheres.filter(sphere => sectorIds.includes(sphere.id));
+    // With several explicitly selected sectors, reserve space only for the
+    // tasks that survive all current filters. A single selected empty sector
+    // remains available, as does the unfiltered drag-and-drop workspace.
+    if (sectorIds === null || selected.length <= 1) return selected;
+    const populated = new Set(fullscreenBubbleTasks.map(task => task.sphereId));
+    return selected.filter(sphere => populated.has(sphere.id));
+  }, [fullscreenPaneFilters.bubbles, spheres, fullscreenBubbleTasks]);
   const visibleSpheres = useMemo(() => {
     if (selectedSphereIds.length === 0) return spheres;
     const selectedSet = new Set(selectedSphereIds);

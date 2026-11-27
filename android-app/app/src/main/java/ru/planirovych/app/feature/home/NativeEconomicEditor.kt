@@ -12,6 +12,9 @@ import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.NorthEast
+import androidx.compose.material.icons.filled.SouthWest
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.serialization.json.*
 import java.time.LocalDate
+import java.time.ZoneId
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -352,7 +356,18 @@ internal fun EcoEditorSheet(
                             change("note",it)
                         }
                         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
-                            Checkbox(checked=repeatEnabled,onCheckedChange={repeatEnabled=it},colors=CheckboxDefaults.colors(checkedColor=colors.gold))
+                            Checkbox(checked=repeatEnabled,onCheckedChange={checked->
+                                if(checked && repeatRule==null){
+                                    val day=runCatching{LocalDate.parse(value("date")).dayOfMonth}.getOrDefault(LocalDate.now().dayOfMonth)
+                                    repeatRule=buildJsonObject{
+                                        put("rrule","FREQ=MONTHLY")
+                                        put("timezone",user.ecoText("timeZone").ifBlank{ZoneId.systemDefault().id})
+                                        put("until",JsonNull)
+                                        put("slots",buildJsonArray{add(buildJsonObject{put("time","09:00");put("monthDay",day)})})
+                                    }
+                                }
+                                repeatEnabled=checked
+                            },colors=CheckboxDefaults.colors(checkedColor=colors.gold))
                             Text("Повторять",color=colors.text,fontSize=13.sp)
                         }
                         if(repeatEnabled){
@@ -591,8 +606,21 @@ private fun EcoOperationChoices(label:String,value:String,options:List<Pair<Stri
                     Box(Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
                         .background(if(selected)colors.gold.copy(alpha=.18f) else colors.field)
                         .border(1.dp,if(selected)colors.gold else colors.outline,RoundedCornerShape(10.dp))
-                        .clickable{onChange(id)}.padding(horizontal=8.dp,vertical=12.dp),contentAlignment=Alignment.Center){
-                        Text(name,color=colors.text,fontSize=12.sp,fontWeight=if(selected)FontWeight.SemiBold else FontWeight.Normal)
+                        .clickable{onChange(id)}.padding(horizontal=if(oneRow)4.dp else 8.dp,vertical=12.dp),contentAlignment=Alignment.Center){
+                        Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)){
+                            if(oneRow){
+                                val light=colors.background==Color(0xFFF7F8FA)
+                                val icon=when(id){"INCOME"->Icons.Default.SouthWest;"EXPENSE"->Icons.Default.NorthEast;else->Icons.Default.SwapHoriz}
+                                val tint=if(light)when(id){"INCOME"->Color(0xFF23824C);"EXPENSE"->Color(0xFFB16D22);else->Color(0xFF5755A0)}
+                                    else when(id){"INCOME"->Color(0xFF9CE0B0);"EXPENSE"->Color(0xFFF4B58B);else->Color(0xFFB3BDFA)}
+                                val iconBackground=if(light)when(id){"INCOME"->Color(0xFFE3F6E9);"EXPENSE"->Color(0xFFFFF0DF);else->Color(0xFFE9ECF8)}
+                                    else when(id){"INCOME"->Color(0xFF263B34);"EXPENSE"->Color(0xFF383038);else->Color(0xFF353747)}
+                                Box(Modifier.size(23.dp).clip(RoundedCornerShape(7.dp)).background(iconBackground),contentAlignment=Alignment.Center){
+                                    Icon(icon,null,tint=tint,modifier=Modifier.size(15.dp))
+                                }
+                            }
+                            Text(name,color=colors.text,fontSize=12.sp,fontWeight=if(selected)FontWeight.SemiBold else FontWeight.Normal,maxLines=if(oneRow)1 else 2)
+                        }
                     }
                 }
                 if(!oneRow&&row.size==1)Spacer(Modifier.weight(1f))

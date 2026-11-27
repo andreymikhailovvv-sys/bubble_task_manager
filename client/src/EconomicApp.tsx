@@ -19,6 +19,8 @@ import { api } from './lib/api';
 import './EconomicApp.css';
 import EconomicReport from './EconomicReport';
 import { TaskRecurrenceConfigurator, type RecurrenceDraftFields } from './components/TaskRecurrenceConfigurator';
+import { defaultEconomicRecurrence } from './lib/recurrenceSchedule';
+import { useScrollFade } from './hooks/useScrollFade';
 
 type Kind = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'DEBT_BORROWED' | 'DEBT_LENT' | 'DEBT_REPAID' | 'DEBT_RETURNED';
 type Section = 'overview' | 'accounts' | 'operations' | 'debts' | 'categories' | 'report';
@@ -123,6 +125,34 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   const [form, setForm] = useState<Record<string, string>>({});
   const [repeatOperation, setRepeatOperation] = useState(false);
   const [recurrence, setRecurrence] = useState<RecurrenceDraftFields>({});
+  const formScrollRef = useRef<HTMLDivElement>(null);
+  const scrollToRepeatRef = useRef(false);
+  const [miniappNavHeight, setMiniappNavHeight] = useState<number | null>(null);
+  useScrollFade(formScrollRef, dialog?.kind === 'operation');
+  useLayoutEffect(() => {
+    if (!embeddedInMiniApp) return;
+    const nav = document.querySelector<HTMLElement>('.miniapp-shell .miniapp-bottom-navigation');
+    if (!nav) return;
+    const measure = () => {
+      const height = nav.getBoundingClientRect().height;
+      if (height > 0) setMiniappNavHeight(height);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(nav);
+    return () => observer.disconnect();
+  }, [embeddedInMiniApp, mobileSafeBottom]);
+  useLayoutEffect(() => {
+    if (dialog?.kind !== 'operation' || !repeatOperation || !scrollToRepeatRef.current) return;
+    scrollToRepeatRef.current = false;
+    const node = formScrollRef.current;
+    if (!node) return;
+    const frame = requestAnimationFrame(() => node.scrollTo({
+      top: node.scrollHeight,
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+    }));
+    return () => cancelAnimationFrame(frame);
+  }, [dialog, repeatOperation]);
   const [positions, setPositions] = useState<Array<{name:string; amount:string}>>([]);
   const [adjustmentNotice, setAdjustmentNotice] = useState('');
   useEffect(() => { if (!adjustmentNotice) return; const timer = window.setTimeout(() => setAdjustmentNotice(''), 5000); return () => window.clearTimeout(timer); }, [adjustmentNotice]);
@@ -310,6 +340,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   const formSet = (key: string, value: string) => setForm(prev => ({ ...prev, [key]: ['amount','balance','paid','creditLimit','monthlyOverride'].includes(key) ? groupMoneyInput(value) : value }));
   const openDialog = (kind: NonNullable<Dialog>['kind'], item?: Account | Operation | Debt | Loan | Category) => {
     setError('');
+    scrollToRepeatRef.current = false;
     setNewCategoryOpen(false);
     setNewCategoryName('');
     const fields: Record<string, string> = {};
@@ -741,9 +772,10 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
               <p>{snapshot.totals.operationCount?snapshot.totals.operationCount+' записей всего':'Здесь появятся доходы и расходы'}</p>
             </div><button type="button" onClick={()=>setSection('operations')}>Все операции <ChevronRight size={16}/></button></div>
             <div className="econ-operations-toolbar">{operationSummary()}{operationFilters()}</div>
-            <div className={'econ-operation-results econ-recent-results'+(operationsBusy?' is-loading':'')} aria-busy={operationsBusy} style={{height:Math.max(104,Math.min(8,snapshot.recent.length)*70)+'px'}}>
+            <div className={'econ-operation-results econ-recent-results'+(operationsBusy?' is-loading':'')} aria-busy={operationsBusy}>
               {operations.length?operations.slice(0,8).map(operationRow):<div className="econ-empty">{operationsBusy?'Загружаем…':'Нет операций по выбранным фильтрам'}</div>}
             </div>
+            <button className="econ-recent-show-all" type="button" onClick={() => setSection('operations')}>Показать все операции <ChevronRight size={16}/></button>
           </section>
         </>}
         {section !== 'overview' && <div className="econ-section-content">
@@ -903,7 +935,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
 
     {mobile && embeddedInMiniApp && !dialog && createPortal(
       <div className={'econ-root econ-mobile-create' + (effectiveAppearance === 'light' ? ' econ-light' : '')}
-        style={{ '--econ-mobile-safe-bottom': mobileSafeBottom + 'px' } as CSSProperties}>
+        style={{ '--econ-mobile-safe-bottom': mobileSafeBottom + 'px', ...(miniappNavHeight !== null ? { '--econ-miniapp-nav-height': miniappNavHeight + 'px' } : {}) } as CSSProperties}>
         {addMenuOpen && createMenu}
         <button type="button" className="econ-mobile-add-fab" aria-label="Добавить финансовую запись"
           aria-expanded={addMenuOpen} title="Добавить" onClick={() => setAddMenuOpen(v=>!v)}>
@@ -912,12 +944,13 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
       </div>, document.body)}
     {dialog && createPortal(<div
       className={'econ-root econ-dialog-layer ' + (effectiveAppearance === 'light' ? 'econ-light ' : '') + (mobile ? 'econ-mobile-dialog-layer ' : '') + (embeddedInMiniApp ? 'econ-miniapp-dialog-layer' : '')}
-      style={embeddedInMiniApp ? { '--econ-mobile-safe-top': mobileSafeTop + 'px', '--econ-mobile-safe-bottom': mobileSafeBottom + 'px' } as CSSProperties : undefined}>
-      <div className="econ-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !saving) setDialog(null); }}><section className="econ-modal" role="dialog" aria-modal="true" aria-label="Редактирование Economic"><header><div><span className="econ-eyebrow">{dialog.id ? 'РЕДАКТИРОВАНИЕ' : 'НОВАЯ ЗАПИСЬ'}</span><h2>{dialog.kind === 'operation' ? 'Операция' : dialog.kind === 'account' ? 'Счёт' : dialog.kind === 'debt' ? 'Долг' : dialog.kind === 'loan' ? 'Кредит' : 'Категория'}</h2></div><button type="button" onClick={() => setDialog(null)} aria-label="Закрыть"><X size={19}/></button></header>
+      style={embeddedInMiniApp ? { '--econ-mobile-safe-top': mobileSafeTop + 'px', '--econ-mobile-safe-bottom': mobileSafeBottom + 'px', ...(miniappNavHeight !== null ? { '--econ-miniapp-nav-height': miniappNavHeight + 'px' } : {}) } as CSSProperties : undefined}>
+      <div className="econ-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !saving) setDialog(null); }}><section className={'econ-modal' + (dialog.kind === 'operation' ? ' econ-operation-modal' : '')} role="dialog" aria-modal="true" aria-label="Редактирование Economic"><header><div><span className="econ-eyebrow">{dialog.id ? 'РЕДАКТИРОВАНИЕ' : 'НОВАЯ ЗАПИСЬ'}</span><h2>{dialog.kind === 'operation' ? 'Операция' : dialog.kind === 'account' ? 'Счёт' : dialog.kind === 'debt' ? 'Долг' : dialog.kind === 'loan' ? 'Кредит' : 'Категория'}</h2></div><button type="button" onClick={() => setDialog(null)} aria-label="Закрыть"><X size={19}/></button></header>
       <form className="econ-form" onSubmit={submitDialog}>
+        <div ref={formScrollRef} className="econ-form-scroll overflow-y-auto">
         {dialog.kind === 'operation' && <>
           <div className="econ-operation-choice"><span>Тип операции</span><div className="econ-operation-kind" role="group" aria-label="Тип операции">
-            {([['EXPENSE','Расход'],['INCOME','Доход'],['TRANSFER','Перевод']] as const).map(([kind,label]) => <button type="button" key={kind} aria-pressed={form.kind === kind} onClick={() => { formSet('kind', kind); formSet('category', ''); setNewCategoryOpen(false); }}>{label}</button>)}
+            {([['EXPENSE','Расход'],['INCOME','Доход'],['TRANSFER','Перевод']] as const).map(([kind,label]) => <button type="button" key={kind} aria-pressed={form.kind === kind} onClick={() => { formSet('kind', kind); formSet('category', ''); setNewCategoryOpen(false); }}><span className={'econ-operation-icon ' + kind} aria-hidden="true">{kind === 'INCOME' ? <ArrowDownLeft size={16}/> : kind === 'EXPENSE' ? <ArrowUpRight size={16}/> : <ArrowRightLeft size={16}/>}</span><span>{label}</span></button>)}
           </div></div>
           <label>Название<input required maxLength={160} value={form.title} onChange={e => formSet('title', e.target.value)} placeholder="Что купили или получили"/></label>
           <label>Сумма, ₽<input required inputMode="text" value={form.amount} onChange={e => formSet('amount', e.target.value)} placeholder="0,00 или 1 000 + 200"/>
@@ -962,7 +995,14 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
           </div>}
           <label>Дата<input required type="date" value={form.date} onChange={e => formSet('date', e.target.value)}/></label>
           <label>Примечание<input maxLength={500} value={form.note} onChange={e => formSet('note', e.target.value)} placeholder="Необязательно"/></label>
-          <label className="econ-repeat-check"><input type="checkbox" checked={repeatOperation} onChange={e => setRepeatOperation(e.target.checked)}/> Повторять</label>
+          <label className="econ-repeat-check"><input type="checkbox" checked={repeatOperation} onChange={e => {
+            const checked = e.target.checked;
+            if (checked) {
+              if (!recurrence.recurrenceJson) setRecurrence({ recurrenceJson: defaultEconomicRecurrence(form.date, user.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow') });
+              scrollToRepeatRef.current = true;
+            }
+            setRepeatOperation(checked);
+          }}/> Повторять</label>
           {repeatOperation && <div className="econ-repeat-settings">
             <TaskRecurrenceConfigurator manualOnly timeZone={user.timeZone} value={recurrence} onChange={patch => setRecurrence(previous => ({...previous, ...patch}))} onParseWithAi={() => {}} parsing={false}/>
             <small>В назначенное время придёт чип. Операция будет записана только после подтверждения.</small>
@@ -1062,6 +1102,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
         </>}
         {dialog.kind === 'category' && <><label>Тип<select value={form.kind} onChange={e => formSet('kind',e.target.value)}><option value="EXPENSE">Расходы</option><option value="INCOME">Доходы</option></select></label><label>Название<input required maxLength={60} value={form.name} onChange={e => formSet('name',e.target.value)} placeholder="Например, питомцы"/></label></>}
         {error && <div className="econ-error" role="alert">{error}</div>}
+        </div>
         <div className="econ-form-actions"><button type="button" disabled={saving} onClick={() => setDialog(null)}>Отмена</button><button type="submit" disabled={saving}>{saving ? <Loader2 className="econ-spin" size={17}/> : <Check size={17}/>} Сохранить</button></div>
       </form></section></div></div>, document.body)}
   </div></MascotIdentityContext.Provider>;
