@@ -77,3 +77,16 @@ test('Economych hover chat closes after leaving both hover surfaces and cancels 
   assert.match(app, /assistantCloseTimer\.current = window\.setTimeout\(\(\) => \{[\s\S]*?setAssistantOpen\(false\);[\s\S]*?\}, 220\)/);
   assert.match(app, /role="dialog" aria-label="Экономыч AI, финансовый помощник" onPointerEnter=\{event => \{ if \(event.pointerType === 'mouse'\) cancelAssistantClose\(\); \}\} onPointerLeave=\{event => \{ if \(event.pointerType === 'mouse'\) scheduleAssistantClose\(\); \}\}/);
 });
+
+
+test('Economic overview welcome banner can be collapsed and restored with the existing account preference', () => {
+  const app = read('../src/EconomicApp.tsx');
+  const styles = read('../src/EconomicApp.css');
+  assert.match(app, /localStorage\.getItem\('btm:' \+ user\.id \+ ':economic-banner-hidden'\) === '1'/);
+  assert.match(app, /localStorage\.setItem\('btm:' \+ user\.id \+ ':economic-banner-hidden', hidden \? '1' : '0'\)/);
+  assert.match(app, /!bannerHidden \? <div className="econ-intro"/);
+  assert.match(app, /className="econ-intro-hide" onClick=\{\(\) => setBannerVisibility\(true\)\} aria-expanded="true"/);
+  assert.match(app, /: <button type="button" className="econ-intro-restore" onClick=\{\(\) => setBannerVisibility\(false\)\} aria-expanded="false"><ChevronDown size=\{16\}\/> Развернуть приветственный блок/);
+  assert.match(styles, /\.econ-root \.econ-intro-restore\{[\s\S]*?min-height:37px/);
+  assert.match(styles, /\.econ-root\.econ-light \.econ-intro \.econ-intro-hide/);
+});
