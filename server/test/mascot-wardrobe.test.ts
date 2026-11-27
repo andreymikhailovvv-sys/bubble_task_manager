@@ -209,7 +209,7 @@ test('money arrivals use front and rear clouds with different materials and dela
 test('thinking is available in wardrobe previews for both modules and every outfit',()=>{
  const modal=read('../../client/src/components/MascotWardrobe.tsx');
  assert.match(modal,/variant==='economic'\s*\? \['idle','hover','thinking','income','expense'\]/);
- assert.match(modal,/\? \['idle','hover','thinking'\]\s*: \['idle','thinking'\]/);
+ assert.match(modal,/\? \['idle','hover','thinking','telegram-send','mail-send'\]\s*: \['idle','thinking','telegram-send','mail-send'\]/);
  assert.match(modal,/onClick=\{\(\)=>\{setPreviewMode\(mode\);setReplay\(v=>v\+1\);training\?\.onAnimation\(\);\}\}/);
  assert.match(modal,/previewMode=\{previewMode\}/);
 });

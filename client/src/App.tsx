@@ -6633,7 +6633,7 @@ export default function App() {
     const removed = fullscreenPanels[index];
     const remaining = fullscreenPanels.filter((_, position) => position !== index);
     const nextSlots: FullscreenWorkspacePanel[] = remaining.length
-      ? (requiresCompanionPanel(remaining[0]) ? [remaining[0], { kind: 'mode', mode: 'bubbles' }] : remaining)
+      ? remaining
       : [{ kind: 'mode', mode: 'bubbles' }];
     if (removed?.kind === 'task-ai' && !nextSlots.some(panel => panel.kind === 'task-ai')) {
       setFocusedTaskId(null);
@@ -8355,7 +8355,7 @@ export default function App() {
       {editorState ? (
         <TaskEditor
           inlineTarget={embeddedFocusActive && editorState.task?.parentTaskId === focusedTask?.id ? fullscreenFocusTarget : null}
-          notesInlineTarget={embeddedFocusActive && fullscreenPanels.length === 2 && editorState.task?.parentTaskId === focusedTask?.id ? fullscreenFocusTarget : null}
+          notesInlineTarget={embeddedFocusActive && editorState.task?.parentTaskId === focusedTask?.id ? fullscreenFocusTarget : null}
           timelineTasks={timelinePickerTasks}
           task={editorState.task}
           subtasks={editorState.task?.id ? (subtaskMap[editorState.task.id] ?? []) : []}
@@ -8916,7 +8916,7 @@ export default function App() {
                   {isFocusedNotesEditorOpen ? (
                     <NotesEditor
                       value={focusedDraft.description ?? ''}
-                      inlineTarget={embeddedFocusActive && fullscreenPanels.length === 2 ? fullscreenFocusTarget : null}
+                      inlineTarget={embeddedFocusActive ? fullscreenFocusTarget : null}
                       onChange={(description) => setFocusedDraft((p) => ({ ...(p ?? {}), description }))}
                       onClose={() => setIsFocusedNotesEditorOpen(false)}
                     />
