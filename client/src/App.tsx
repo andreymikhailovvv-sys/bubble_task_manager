@@ -7817,7 +7817,7 @@ export default function App() {
               hideToggle={Boolean((focusedTask && !embeddedFocusActive) || isFocusModeOpen)}
               userId={currentUser?.id ?? 'anonymous'}
               forceOpen={basicStep === 'notes' || basicStep === 'habits'} windowCount={fullscreenPanels.length} tasks={tasks} habits={habits} spheres={spheres}
-              timeZone={userTimeZone} requestedNote={requestedStandaloneNote}
+              timeZone={userTimeZone} requestedNote={fullscreenPanels.some(panel => panel.kind === 'notes') ? null : requestedStandaloneNote}
               onOpenUpcoming={() => setIsUpcomingSubtasksModalOpen(true)}
               onOpenTask={task => {
                 if (task.parentTaskId || task.taskType === 'EVENT') setEditorState({ task });

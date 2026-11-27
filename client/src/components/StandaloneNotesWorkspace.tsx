@@ -106,12 +106,19 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
   const dirtyRef = useRef(false);
   const pendingRef = useRef<Promise<void>>(Promise.resolve());
   const timerRef = useRef<number | null>(null);
+  const loadVersion = useRef(0);
+  const instanceId = useRef(Symbol('notes workspace'));
+  const emitUpdate = useCallback((note?: StandaloneNote, deletedId?: string) => {
+    window.dispatchEvent(new CustomEvent('standalone-notes-saved', { detail: { userId, source: instanceId.current, note, deletedId } }));
+  }, [userId]);
 
   const reload = useCallback(async () => {
     if (!userId) return;
+    const version = ++loadVersion.current;
     setLoading(true);
     try {
       const [result, allGroups] = await Promise.all([api.getStandaloneNotes(), api.getStandaloneNoteGroups()]);
+      if (version !== loadVersion.current) return;
       setNotes(sortNotes(result));
       // Sectors are the default groups; independent groups follow them.
       setGroups([...allGroups].sort((a, b) => Number(Boolean(b.sphereId)) - Number(Boolean(a.sphereId))));
@@ -119,13 +126,14 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     } catch (cause) {
       setError(getErrorMessage(cause));
     } finally {
-      setLoading(false);
+      if (version === loadVersion.current) setLoading(false);
     }
   }, [userId]);
 
   useEffect(() => {
     // Clear cached notes immediately when an account changes, even if the
     // next account's API request is still in flight.
+    ++loadVersion.current;
     setNotes([]);
     setGroups([]);
     setSelectedGroup('all');
@@ -176,6 +184,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     dirtyRef.current = false;
     pendingRef.current = pendingRef.current.catch(() => {}).then(async () => {
       const saved = await api.updateStandaloneNote(draft.id, { title: draft.title, content: draft.content });
+      emitUpdate(saved);
       setNotes((current) => sortNotes(current.map((note) => {
         if (note.id !== saved.id) return note;
         return dirtyRef.current && draftRef.current?.id === saved.id
@@ -191,7 +200,28 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
       setError('Изменения не сохранены: ' + getErrorMessage(cause));
       throw cause;
     }
-  }, []);
+  }, [emitUpdate]);
+
+  useEffect(() => {
+    const receive = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId: string; source: symbol; note?: StandaloneNote; deletedId?: string }>).detail;
+      if (!detail || detail.userId !== userId || detail.source === instanceId.current) return;
+      ++loadVersion.current;
+      setLoading(false);
+      if (detail.deletedId) {
+        setNotes(current => current.filter(note => note.id !== detail.deletedId));
+        if (draftRef.current?.id === detail.deletedId && !dirtyRef.current) { draftRef.current = null; setEditing(null); }
+      } else if (detail.note) {
+        const saved = detail.note;
+        const active = draftRef.current;
+        if (active?.id === saved.id && dirtyRef.current) return;
+        setNotes(current => sortNotes([saved, ...current.filter(note => note.id !== saved.id)]));
+        if (active?.id === saved.id && !dirtyRef.current) { draftRef.current = { ...saved }; setEditing({ ...saved }); }
+      } else { void reload(); }
+    };
+    window.addEventListener('standalone-notes-saved', receive);
+    return () => window.removeEventListener('standalone-notes-saved', receive);
+  }, [userId, reload]);
 
   const changeDraft = (changes: { title?: string; content?: string }) => {
     const draft = draftRef.current;
@@ -253,6 +283,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     setCreating(true);
     try {
       const note = await api.createStandaloneNote({ groupId: selectedGroup !== 'all' && selectedGroup !== 'ungrouped' ? selectedGroup : null });
+      emitUpdate(note);
       setNotes((current) => sortNotes([note, ...current]));
       setBoardOpen(true);
       openEditor(note);
@@ -267,6 +298,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     if (!window.confirm('Удалить заметку «' + titleOf(note) + '»?')) return;
     try {
       await api.deleteStandaloneNote(note.id);
+      emitUpdate(undefined, note.id);
       setNotes((current) => current.filter((item) => item.id !== note.id));
       setError(null);
     } catch (cause) {
@@ -304,14 +336,17 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
   const createGroup = async (data: { name: string; color: string }): Promise<StandaloneNoteGroup> => {
     const created = await api.createStandaloneNoteGroup(data);
     setGroups(current => [...current, created]);
+    emitUpdate();
     return created;
   };
   const updateGroup = async (id: string, data: { name: string; color: string }) => {
     const updated = await api.updateStandaloneNoteGroup(id, data);
     setGroups(current => current.map(group => group.id === id ? updated : group));
+    emitUpdate();
   };
   const deleteGroup = async (group: StandaloneNoteGroup) => {
     await api.deleteStandaloneNoteGroup(group.id);
+    emitUpdate();
     setGroups(current => current.filter(item => item.id !== group.id));
     setMobileExcludedGroupIds(current => current.filter(id => id !== group.id));
     setNotes(current => current.map(note => note.groupId === group.id ? { ...note, groupId: null } : note));
@@ -332,6 +367,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
         setEditing(current => current?.id === noteId ? { ...current, groupId } : current);
       }
       const saved = await api.updateStandaloneNote(noteId, { groupId });
+      emitUpdate(saved);
       if (saved.groupId !== groupId) throw new Error('Сервер не подтвердил изменение группы. Обновите страницу и повторите попытку.');
       setNotes(current => sortNotes(current.map(note => note.id === saved.id
         ? { ...note, groupId: saved.groupId, updatedAt: saved.updatedAt } : note)));

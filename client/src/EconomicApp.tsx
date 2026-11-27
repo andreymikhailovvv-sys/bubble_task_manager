@@ -361,6 +361,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
           ...(dialog.id && form.isPrimary === 'yes' && form.accountType !== 'CREDIT_CARD' ? { isPrimary: true } : {}) };
       } else if (dialog.kind === 'operation') {
         path = '/operations';
+        if (!form.sourceAccountId || (form.kind === 'TRANSFER' && (!form.targetAccountId || form.sourceAccountId === form.targetAccountId))) throw new Error('Выберите счета операции');
         payload = { kind: form.kind, title: form.title, amountMinor: calculateMoneyInput(form.amount),
           calculation: isMoneyExpression(form.amount) ? form.amount : null,
           positionsJson: JSON.stringify(positions.filter(p=>p.name.trim() || p.amount.trim()).map(p=>{ if(!p.name.trim()) throw new Error('Укажите название позиции'); return {name:p.name.trim(),amountMinor:parseMoney(p.amount,true)}; })),
@@ -798,7 +799,7 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
 
     {!mobile && <EconomicMascot modal={mascotSurface.modal} arrivalKey={mascotSurface.arrivalKey} active={assistantOpen} busy={assistantBusy} progress={assistantStage} skinId={wardrobe.selected('economic')} onOpenWardrobe={wardrobe.show} onClick={() => setAssistantOpen(v => !v)}/>}
     {wardrobe.open&&<MascotWardrobeDialog wardrobe={wardrobe} variant="economic" theme={effectiveAppearance}/>}
-    {!mobile && assistantOpen && <section id="econ-assistant-dialog" className="econ-assistant" role="dialog" aria-label="Экономыч AI, финансовый помощник">
+    {!mobile && assistantOpen && <section id="econ-assistant-dialog" className={"econ-assistant" + (mascotSurface.modal ? " econ-assistant--above-modal" : "")} role="dialog" aria-label="Экономыч AI, финансовый помощник">
       <div className="econ-assistant-head">
         <div><span className="econ-assistant-avatar">₽</span>
           <div><strong>Экономыч AI</strong><small>Финансовый помощник</small></div>
@@ -904,9 +905,9 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
       <div className="econ-modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget && !saving) setDialog(null); }}><section className="econ-modal" role="dialog" aria-modal="true" aria-label="Редактирование Economic"><header><div><span className="econ-eyebrow">{dialog.id ? 'РЕДАКТИРОВАНИЕ' : 'НОВАЯ ЗАПИСЬ'}</span><h2>{dialog.kind === 'operation' ? 'Операция' : dialog.kind === 'account' ? 'Счёт' : dialog.kind === 'debt' ? 'Долг' : dialog.kind === 'loan' ? 'Кредит' : 'Категория'}</h2></div><button type="button" onClick={() => setDialog(null)} aria-label="Закрыть"><X size={19}/></button></header>
       <form className="econ-form" onSubmit={submitDialog}>
         {dialog.kind === 'operation' && <>
-          <label>Тип операции<select value={form.kind} onChange={e => { formSet('kind', e.target.value); formSet('category', ''); setNewCategoryOpen(false); }}>
-            <option value="EXPENSE">Расход</option><option value="INCOME">Доход</option><option value="TRANSFER">Перевод между счетами</option>
-          </select></label>
+          <div className="econ-operation-choice"><span>Тип операции</span><div className="econ-operation-kind" role="group" aria-label="Тип операции">
+            {([['EXPENSE','Расход'],['INCOME','Доход'],['TRANSFER','Перевод']] as const).map(([kind,label]) => <button type="button" key={kind} aria-pressed={form.kind === kind} onClick={() => { formSet('kind', kind); formSet('category', ''); setNewCategoryOpen(false); }}>{label}</button>)}
+          </div></div>
           <label>Название<input required maxLength={160} value={form.title} onChange={e => formSet('title', e.target.value)} placeholder="Что купили или получили"/></label>
           <label>Сумма, ₽<input required inputMode="text" value={form.amount} onChange={e => formSet('amount', e.target.value)} placeholder="0,00 или 1 000 + 200"/>
             {moneyCalculationPreview(form.amount || '') && <span className="econ-form-hint" aria-live="polite">{moneyCalculationPreview(form.amount || '')}</span>}</label>
@@ -920,17 +921,16 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
             <button type="button" className="econ-inline-category-button" disabled={positions.length>=100} onClick={()=>setPositions(prev=>[...prev,{name:'',amount:''}])}><Plus size={14}/> Добавить позицию</button>
             {!!positions.length && <button type="button" className="econ-inline-category-button" onClick={()=>{try{const total=positions.reduce((sum,p)=>sum+BigInt(parseMoney(p.amount,true)),0n);if(total<=0n)throw new Error('Сумма позиций должна быть положительной');formSet('amount',inputMoney(total));setError('');}catch(cause){setError((cause as Error).message);}}}>Использовать сумму позиций</button>}
           </div>
-          <label>{form.kind === 'TRANSFER' ? 'Счёт списания' : 'Счёт'}
-            <select required value={form.sourceAccountId} onChange={e => formSet('sourceAccountId', e.target.value)}>
-              {snapshot.accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </label>
-          {form.kind === 'TRANSFER' && <label>Счёт зачисления
-            <select required value={form.targetAccountId} onChange={e => formSet('targetAccountId', e.target.value)}>
-              <option value="">Выберите счёт</option>
-              {snapshot.accounts.filter(a => a.id !== form.sourceAccountId).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-          </label>}
+          <div className="econ-operation-choice"><span>{form.kind === 'TRANSFER' ? 'Счёт списания' : 'Счёт'}</span>
+            <div className="econ-operation-accounts" role="group" aria-label="Счёт операции">
+              {snapshot.accounts.map(a => <button key={a.id} type="button" aria-pressed={a.id === form.sourceAccountId} onClick={() => { formSet('sourceAccountId', a.id); if (form.targetAccountId === a.id) formSet('targetAccountId', ''); }}><strong>{a.name}</strong><small>{money(a.balanceMinor)}</small></button>)}
+            </div>
+          </div>
+          {form.kind === 'TRANSFER' && <div className="econ-operation-choice"><span>Счёт зачисления</span>
+            <div className="econ-operation-accounts" role="group" aria-label="Счёт зачисления">
+              {snapshot.accounts.filter(a => a.id !== form.sourceAccountId).map(a => <button key={a.id} type="button" aria-pressed={a.id === form.targetAccountId} onClick={() => formSet('targetAccountId', a.id)}><strong>{a.name}</strong><small>{money(a.balanceMinor)}</small></button>)}
+            </div>
+          </div>}
           {form.kind !== 'TRANSFER' && <div className="econ-category-controls">
             <label>Категория<select value={form.category} onChange={e => formSet('category', e.target.value)}>
               <option value="">Без категории</option>

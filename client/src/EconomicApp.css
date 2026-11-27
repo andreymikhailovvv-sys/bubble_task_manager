@@ -808,3 +808,15 @@ body:has(.econ-root.econ-mobile-workspace) #root{min-height:100dvh}
  .econ-operations-results{height:clamp(300px,52dvh,570px)}
 }
 @media(prefers-reduced-motion:reduce){.econ-root .econ-filters-control .econ-filters{animation:none}.econ-operation-results{transition:none}}
+
+.econ-assistant.econ-assistant--above-modal{z-index:2147483646}
+.econ-operation-choice{display:grid;gap:7px;font-size:12px;color:inherit}
+.econ-operation-kind,.econ-operation-accounts{display:grid;gap:7px}
+.econ-operation-kind{grid-template-columns:repeat(3,minmax(0,1fr))}
+.econ-operation-accounts{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
+.econ-operation-choice button{min-width:0;padding:10px 7px;border-radius:11px;border:1px solid #b78a4e45;background:#c58c3b0a;color:inherit;font-size:12px}
+.econ-operation-choice button[aria-pressed=true]{border-color:#d6a24e;background:#c58c3b25;box-shadow:inset 0 0 0 1px #c58c3b35}
+.econ-operation-accounts button{display:grid;gap:4px;text-align:left;padding:10px}
+.econ-operation-accounts button strong{overflow-wrap:anywhere}
+.econ-operation-accounts button small{opacity:.8;font-variant-numeric:tabular-nums}
+.econ-light .econ-operation-choice button[aria-pressed=true]{border-color:#b57c27;background:#f5e5c9}
