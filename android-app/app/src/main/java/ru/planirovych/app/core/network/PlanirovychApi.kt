@@ -170,6 +170,15 @@ interface PlanirovychApi {
     @GET("api/telegram-user-client/chat/quick-send/{requestId}")
     suspend fun telegramQuickSendStatus(@Path("requestId") requestId:String):JsonObject
 
+    @GET("api/assistant-settings-proposals/{id}")
+    suspend fun assistantSettingsProposal(@Path("id") id:String):JsonObject
+    @POST("api/assistant-settings-proposals/{id}/apply")
+    suspend fun applyAssistantSettingsProposal(@Path("id") id:String):JsonObject
+    @POST("api/telegram-user-client/assistant/inbox/{id}/send-reply")
+    suspend fun sendTelegramSuggestedReply(@Path("id") id:String,@Body payload:JsonObject):JsonObject
+    @POST("api/mail-assistant/inbox/{id}/send-reply")
+    suspend fun sendMailSuggestedReply(@Path("id") id:String,@Body payload:JsonObject):JsonObject
+
     @GET("api/mail-assistant/accounts")
     suspend fun mailAccounts():JsonObject
     @GET("api/mail-assistant/recent-recipients")

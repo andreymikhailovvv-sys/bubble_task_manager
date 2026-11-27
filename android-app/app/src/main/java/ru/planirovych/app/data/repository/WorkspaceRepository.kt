@@ -170,7 +170,10 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
             generatedDocument=item["generatedDocument"] as? kotlinx.serialization.json.JsonObject,
             telegramSendDraft=item["telegramSendDraft"] as? kotlinx.serialization.json.JsonObject,
             telegramReadDraft=item["telegramReadDraft"] as? kotlinx.serialization.json.JsonObject,
-            mailSendDraft=item["mailSendDraft"] as? kotlinx.serialization.json.JsonObject
+            mailSendDraft=item["mailSendDraft"] as? kotlinx.serialization.json.JsonObject,
+            assistantSettingsProposalId=item.optString("assistantSettingsProposalId"),
+            telegramSuggestedReply=item["telegramSuggestedReply"] as? JsonObject,
+            mailSuggestedReply=item["mailSuggestedReply"] as? JsonObject
         )
     }
     suspend fun registerAndroidPushDevice(installationId:String,token:String)=
@@ -192,6 +195,12 @@ class WorkspaceRepository(private val api: PlanirovychApi,private val context:Co
         put("variant",kotlinx.serialization.json.JsonPrimitive("planner"))
         put("skinId",kotlinx.serialization.json.JsonPrimitive(id))
     })
+    suspend fun assistantSettingsProposal(id:String)=api.assistantSettingsProposal(id)
+    suspend fun applyAssistantSettingsProposal(id:String)=api.applyAssistantSettingsProposal(id)
+    suspend fun sendSuggestedReply(id:String,text:String,mail:Boolean):JsonObject {
+        val payload=buildJsonObject{put("text",text)}
+        return if(mail)api.sendMailSuggestedReply(id,payload) else api.sendTelegramSuggestedReply(id,payload)
+    }
     suspend fun mailAccounts():JsonObject=api.mailAccounts()
     suspend fun mailRecentRecipients():JsonObject=api.mailRecentRecipients()
     suspend fun mailDraftStatus(id:String):JsonObject=api.mailDraftStatus(id)

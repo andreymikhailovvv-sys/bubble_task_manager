@@ -3435,10 +3435,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             if (inbox.chats.length) {
               remaining.push({ id: inbox.projectId, title: inbox.projectTitle, color: '#0891b2', icon: '@',
                 chats: inbox.chats.map(chat => ({
-                  id: chat.id, title: chat.title, messages: inbox.messages.filter(m => m.chatId === chat.id)
+                  id: chat.id, title: chat.title, messages: mergeTelegramManagedMessages(previous.find(p=>p.id===inbox.projectId)?.chats.find(c=>c.id===chat.id)?.messages??[], mergeTelegramManagedMessages(clean.find(p=>p.id===inbox.projectId)?.chats.find(c=>c.id===chat.id)?.messages??[],inbox.messages.filter(m => m.chatId === chat.id)
                     .map(m => ({ id: m.id, content: m.content, role: 'assistant' as const,
                       taskProposal: m.taskProposal ?? undefined,
-                      mailSuggestedReply: m.mailSuggestedReply ?? undefined }))
+                      mailSuggestedReply: m.mailSuggestedReply ?? undefined }))))
                 })) });
             }
             aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(remaining);

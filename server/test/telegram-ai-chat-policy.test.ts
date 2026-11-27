@@ -198,7 +198,9 @@ test('wider Telegram settings put profile tags above one-column sliders and use 
   assert.ok(ui.indexOf('telegram-ai-profile-list') < ui.indexOf('aria-label="Настройки участия в переписке"'));
   assert.match(css, /telegram-ai-slider-setting__marks span/);
   assert.match(css, /telegram-ai-slider-setting__labels span/);
-  assert.match(css, /scrollbar-gutter: stable/);
+  assert.match(css, /scrollbar-gutter: auto/);
+  assert.match(css, /scrollbar-width: none/);
+  assert.match(css, /\.telegram-ai-settings-scroll::-webkit-scrollbar\s*\{\s*display: none/);
 });
 
 test('Telegram assistant live monitor status colors and closed settings work in both themes', () => {

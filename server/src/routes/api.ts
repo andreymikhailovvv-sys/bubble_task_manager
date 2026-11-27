@@ -2067,12 +2067,6 @@ apiRouter.get('/ai-chat/projects/:projectId/chats/:chatId/messages', requireAuth
     res.json({ messages, projectsOutline: outline });
     return;
   }
-  if (projectId === 'mail-ai-assistant-project' && chatId.startsWith('mail-ai-assistant:')) {
-    const inbox = await mailAssistantInboxFeed(userId);
-    if (!inbox.chats.some(x => x.id === chatId)) { res.status(404).json({ error: 'Диалог не найден' }); return; }
-    res.json({ messages: inbox.messages.filter(m => m.chatId === chatId), projectsOutline: outline });
-    return;
-  }
   const project = projects.find((entry: unknown) =>
     entry !== null && typeof entry === 'object' && !Array.isArray(entry) &&
     (entry as { id?: unknown }).id === projectId) as { chats?: unknown } | undefined;
@@ -2084,7 +2078,15 @@ apiRouter.get('/ai-chat/projects/:projectId/chats/:chatId/messages', requireAuth
     res.status(404).json({ error: 'Диалог не найден' });
     return;
   }
-  res.json({ messages: chat.messages.slice(-300), projectsOutline: outline });
+  let messages = chat.messages as Array<{id?:string;createdAt?:string}>;
+  if(projectId==='mail-ai-assistant-project'||projectId==='telegram-ai-assistant-project'){
+    const inbox=projectId==='mail-ai-assistant-project'?await mailAssistantInboxFeed(userId):await telegramAiInboxFeed(userId);
+    if(!inbox.chats.some(x=>x.id===chatId)){res.status(404).json({error:'Диалог не найден'});return;}
+    const merged=new Map(messages.map(m=>[m.id,m]));
+    for(const m of inbox.messages.filter(m=>m.chatId===chatId))merged.set(m.id,m);
+    messages=[...merged.values()].sort((a,b)=>(a.createdAt??'').localeCompare(b.createdAt??''));
+  }
+  res.json({ messages: messages.slice(-300), projectsOutline: outline });
 }));
 
 apiRouter.get('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) => {
