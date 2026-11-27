@@ -68,7 +68,11 @@ test('guided lessons require real controls and highlight the full wardrobe', () 
   }
   assert.equal(step('feature-skins-practice').target, '.mascot-wardrobe-dialog[data-guided-wardrobe]');
   const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8');
-  assert.match(app, /data-guided-launcher=\{guidedStep === "ai-open-chat" \|\| guidedStep === "feature-skins-intro"/);
+  // Only the workspace launcher is a guided target. The expanded chat
+  // has its own mascot slot and must not create a duplicate training target.
+  assert.match(app, /data-guided-launcher=\{!inChat && \(guidedStep === "ai-open-chat" \|\| guidedStep === "feature-skins-intro"\) \? "true" : undefined\}/);
+  assert.match(app, /\{!useExpandedChatMascot \? renderPlanikLauncher\(false\) : null\}/);
+  assert.match(app, /composerMascot=\{useExpandedChatMascot \? renderPlanikLauncher\(true\) : undefined\}/);
   assert.match(app, /setGuidedFocusDeadline\(Date.now\(\) \+ guidedFocusMinutes \* 60_000\)/);
   assert.match(app, /Math\.ceil\(\(guidedFocusDeadline - Date\.now\(\)\) \/ 1000\)/);
   const integration = readFileSync(new URL('../components/TelegramIntegrationsMenu.tsx', import.meta.url), 'utf8');
