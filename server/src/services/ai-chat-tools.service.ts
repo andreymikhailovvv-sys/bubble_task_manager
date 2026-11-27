@@ -13,7 +13,9 @@ import { plannerToolsService, authorizePlannerActionReferences, PLANNER_OPERATIO
 import { personalNotesToolsService, mergeTaskAndNoteSearchResults, validateNoteSearchInput } from './personal-notes-tools.service.js';
 import { validateAiCreateNoteArgs, validateAiUpdateNoteArgs } from './ai-create-note.service.js';
 import type { NoteProposalAction, CreateNoteProposalAction } from './ai-task-proposal.service.js';
-import { validateAiCreateHabitArgs, type CreateHabitProposalAction } from './ai-create-habit.service.js';
+import { validateAiCreateHabitArgs, validateAiHabitDuration, validateAiHabitCompletion, aiHabitDateKey, type CreateHabitProposalAction, type ExistingHabitProposalAction } from './ai-create-habit.service.js';
+import { habitService } from './habit.service.js';
+import { editTaskDescription, DESCRIPTION_FORMAT_GUIDE } from './ai-task-description.service.js';
 import { providerNanoUsdToMilliCredits, recordAiCreditCharge, recordOpenAiUsageShadow, type OpenAiUsage } from './ai-usage-metering.service.js';
 import { refundDynamicResponsesCall, runDynamicResponsesCall, settleDynamicResponsesCall, type DynamicResponsesCall } from './dynamic-responses-billing.service.js';
 import { OPENAI_WEB_SEARCH_COST_NANO_USD } from '../config/openai-pricing.js';
@@ -95,18 +97,47 @@ export const AI_CHAT_OPENAI_TOOLS = [
   },
   {
     type: 'function', name: 'create_habit', strict: true,
-    description: 'Подготовить новую ПРИВЫЧКУ с расписанием для подтверждения пользователем. Вызывай только по явной просьбе создать привычку, а не задачу или напоминание. Укажи название, эмодзи, повторение DAILY (ежедневно), WEEKDAYS (определённые дни недели) или INTERVAL (каждые N дней), число повторов в день и уведомления в формате HH:mm по локальному времени пользователя. weekdays: 0 — воскресенье, 1 — понедельник ... 6 — суббота. Для DAILY и WEEKDAYS intervalDays=null; для остальных типов weekdays=[]. reminderTimes=[] означает без уведомлений. Не утверждай о создании до подтверждения карточки.',
+    description: 'Подготовить новую ПРИВЫЧКУ с расписанием для подтверждения пользователем. Вызывай только по явной просьбе создать привычку, а не задачу или напоминание. Укажи название, эмодзи, повторение DAILY (ежедневно), WEEKDAYS (определённые дни недели) или INTERVAL (каждые N дней), число повторов в день и уведомления в формате HH:mm по локальному времени пользователя. weekdays: 0 — воскресенье, 1 — понедельник ... 6 — суббота. Для DAILY и WEEKDAYS intervalDays=null; для остальных типов weekdays=[]. reminderTimes=[] означает без уведомлений. Срок: FOREVER без срока, UNTIL_DATE с endDate YYYY-MM-DD, REPEAT_COUNT с totalRepeatTarget (общее количество выполнений, не дневная норма); неиспользуемые поля null. Не утверждай о создании до подтверждения карточки.',
     parameters: { type: 'object', additionalProperties: false,
-      required: ['name', 'icon', 'recurrenceType', 'weekdays', 'intervalDays', 'reminderTimes', 'targetCount'],
+      required: ['name', 'icon', 'recurrenceType', 'weekdays', 'intervalDays', 'reminderTimes', 'targetCount', 'durationMode', 'endDate', 'totalRepeatTarget'],
       properties: {
         name: { type: 'string' }, icon: { type: 'string' },
         recurrenceType: { type: 'string', enum: ['DAILY', 'WEEKDAYS', 'INTERVAL'] },
         weekdays: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 6 } },
         intervalDays: { type: ['integer', 'null'] },
         reminderTimes: { type: 'array', items: { type: 'string' } },
-        targetCount: { type: 'integer', minimum: 1, maximum: 99 }
+        targetCount: { type: 'integer', minimum: 1, maximum: 99 },
+        durationMode: { type: 'string', enum: ['FOREVER','UNTIL_DATE','REPEAT_COUNT'] },
+        endDate: nullable('string'), totalRepeatTarget: { type: ['integer','null'] }
       }
     }
+  },
+  {
+    type: 'function', name: 'list_habits', strict: true,
+    description: 'Получить активные привычки пользователя, их расписание, дневную норму, сегодняшний прогресс и общий срок. Обязательно вызови перед отметкой или изменением привычки. Не угадывай ID.',
+    parameters: { type: 'object', additionalProperties: false, required: [], properties: {} }
+  },
+  {
+    type: 'function', name: 'complete_habit', strict: true,
+    description: 'Подготовить отметку выполнения привычки на текущий локальный день. Сначала list_habits. amount=null означает одно выполнение, amount=N — добавить N выполнений, fullDay=true — закрыть остаток дневной нормы (не завершить привычку навсегда). Не превышай норму. Только по просьбе или явному сообщению пользователя о выполнении, не по планам на будущее. Действие ожидает подтверждения или автоприменения.',
+    parameters: { type: 'object', additionalProperties: false, required: ['habitId','amount','fullDay'], properties: {
+      habitId: { type:'string' }, amount: { type:['integer','null'], minimum:1, maximum:99 }, fullDay: { type:'boolean' }
+    } }
+  },
+  {
+    type: 'function', name: 'update_habit', strict: true,
+    description: 'Изменить срок существующей привычки после list_habits. FOREVER без срока; UNTIL_DATE до endDate YYYY-MM-DD; REPEAT_COUNT до totalRepeatTarget суммарных выполнений с начала привычки. Остальные настройки не меняются. Подготовка карточки, не немедленная запись.',
+    parameters: { type:'object', additionalProperties:false, required:['habitId','durationMode','endDate','totalRepeatTarget'], properties:{
+      habitId:{type:'string'}, durationMode:{type:'string',enum:['FOREVER','UNTIL_DATE','REPEAT_COUNT']},
+      endDate:nullable('string'), totalRepeatTarget:{type:['integer','null']}
+    } }
+  },
+  {
+    type: 'function', name: 'edit_task_description', strict: true,
+    description: 'Изменить описание существующей задачи или подзадачи. Сначала search_tasks или list_tasks, затем обязательно get_task. append добавляет только новый фрагмент в конец, replace передаёт полный итоговый текст (для правки в середине сохрани остальное). ' + DESCRIPTION_FORMAT_GUIDE + ' Формат text для обычного текста, html для оформленного. Подготовка подтверждаемого изменения.',
+    parameters: {type:'object',additionalProperties:false,required:['itemId','mode','format','content'],properties:{
+      itemId:{type:'string'}, mode:{type:'string',enum:['append','replace']}, format:{type:'string',enum:['text','html']}, content:{type:'string'}
+    }}
   },
   {
     type: 'function', name: 'update_note', strict: true,
@@ -338,7 +369,11 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
   // Freeze relative dates when the user's request starts, not on later approval.
   const dateResolutionNow = new Date(startedAt);
   const resolvedItemIds = new Set<string>(); const resolvedSphereIds = new Set<string>();
-  const preparedTaskActions: Array<PlannerActionInput | NoteProposalAction | CreateNoteProposalAction | CreateHabitProposalAction> = [];
+  const preparedTaskActions: Array<PlannerActionInput | NoteProposalAction | CreateNoteProposalAction | CreateHabitProposalAction | ExistingHabitProposalAction> = [];
+  const readDescriptions = new Map<string, { description: string | null; parentTaskId: string | null }>();
+  const readHabits = new Map<string, { updatedAt: string }>();
+  const preparedHabitIds = new Set<string>();
+  const editedDescriptionIds = new Set<string>();
   const resolvedNoteIds = new Set<string>();
   const observedFinancialVersions = new Map<string,string>();
   let readFinancialContext = false;
@@ -488,6 +523,9 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           read_note: 'reading_note',
           create_note: 'applying_changes',
           create_habit: 'applying_changes',
+          complete_habit: 'applying_changes',
+          update_habit: 'applying_changes',
+          edit_task_description: 'applying_changes',
           search_tasks: 'searching_tasks',
           list_tasks: 'listing_tasks',
           get_task: 'reading_task',
@@ -675,6 +713,50 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           }
           return result;
         }
+        if (name === 'list_habits') {
+          const dateKey = aiHabitDateKey(dateResolutionNow, input.userTimeZone);
+          const habits = await habitService.list(input.userId);
+          readHabits.clear();
+          return { dateKey, habits: habits.map(habit => {
+            readHabits.set(habit.id, { updatedAt: habit.updatedAt.toISOString() });
+            return { id: habit.id, name: habit.name, icon: habit.icon, recurrenceType: habit.recurrenceType,
+              weekdays: habit.weekdays, intervalDays: habit.intervalDays, targetCount: habit.targetCount,
+              todayCompleted: habit.stats.find(stat => stat.dateKey === dateKey)?.amount ?? 0,
+              completedTotal: habit.completedTotal, durationMode: habit.durationMode,
+              endDate: habit.endDate?.toISOString().slice(0,10) ?? null, totalRepeatTarget: habit.totalRepeatTarget,
+              reminderTimes: habit.reminderTimes };
+          }) };
+        }
+        if (name === 'complete_habit' || name === 'update_habit') {
+          if (preparedTaskActions.length >= MAX_BATCH_TASK_ACTIONS) return { ok:false, code:'TOO_MANY_ACTIONS' };
+          try {
+            const data = value as Record<string, unknown>;
+            const habitId = data.habitId;
+            if (typeof habitId !== 'string' || !readHabits.has(habitId)) throw new TypeError('Сначала получите привычку через list_habits.');
+            if (preparedHabitIds.has(habitId)) throw new TypeError('Изменение этой привычки уже подготовлено в текущем запросе.');
+            const payload = name === 'complete_habit'
+              ? { ...validateAiHabitCompletion(data), dateKey: aiHabitDateKey(dateResolutionNow, input.userTimeZone) }
+              : validateAiHabitDuration(data);
+            preparedTaskActions.push({ operation: name, habitId, expectedUpdatedAt: readHabits.get(habitId)!.updatedAt, ...payload });
+            preparedHabitIds.add(habitId);
+            return { ok:true, status:'prepared', message:'Изменение привычки ожидает подтверждения.' };
+          } catch (error) { return { ok:false, code:'INVALID_HABIT', message: error instanceof Error ? error.message : 'Неверные параметры привычки.' }; }
+        }
+        if (name === 'edit_task_description') {
+          if (preparedTaskActions.length >= MAX_BATCH_TASK_ACTIONS) return { ok:false, code:'TOO_MANY_ACTIONS' };
+          try {
+            const data = value as Record<string, unknown>;
+            const itemId = data.itemId;
+            if (typeof itemId !== 'string' || !readDescriptions.has(itemId)) throw new TypeError('Сначала прочитайте описание через get_task.');
+            if (editedDescriptionIds.has(itemId)) throw new TypeError('Описание уже подготовлено к изменению.');
+            const old = readDescriptions.get(itemId)!;
+            const description = editTaskDescription(old.description, data.content, data.mode, !!old.parentTaskId, data.format);
+            const action = { operation:'set_description' as const, itemId, parentTaskId:null, title:null, description, dueDate:null, importance:null, urgency:null, notifyBeforeMinutes:null, sphereId:null, location:null, expectedDescription:old.description };
+            preparedTaskActions.push(action);
+            editedDescriptionIds.add(itemId);
+            return { ok:true,status:'prepared',message:'Описание подготовлено к изменению; исходный текст сохранён при append.' };
+          } catch (error) { return { ok:false,code:'INVALID_DESCRIPTION',message:error instanceof Error ? error.message : 'Некорректное описание.' }; }
+        }
         if (name === 'create_habit') {
           if (habitCreated) return { ok: false, code: 'HABIT_ALREADY_PREPARED', message: 'Привычка уже предложена в этом запросе.' };
           if (preparedTaskActions.length >= MAX_BATCH_TASK_ACTIONS)
@@ -792,7 +874,9 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           if (typeof id !== 'string') return { ok: false, code: 'INVALID_ID', message: 'id обязателен.' };
           const item = await plannerToolsService.getItem(input.userId, id);
           if (!item) return { ok: false, code: 'ITEM_NOT_FOUND', message: 'Объект не найден.' };
-          resolvedItemIds.add(item.id); emitProgress('analyzing_retrieved_context'); return { ok: true, item };
+          resolvedItemIds.add(item.id);
+          readDescriptions.set(item.id, { description: item.description ?? null, parentTaskId: item.parentTaskId ?? null });
+          emitProgress('analyzing_retrieved_context'); return { ok: true, item };
         }
         if (name === 'list_sectors') {
           const spheres = await plannerToolsService.listSpheres(input.userId); spheres.forEach((sphere: { id: string }) => resolvedSphereIds.add(sphere.id)); return spheres;
@@ -805,6 +889,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
             return { ok: false, code: 'TOO_MANY_ACTIONS', message: 'Лимит предложений изменений исчерпан.' };
           }
           if (!PLANNER_OPERATIONS.includes(action.operation)) return { ok: false, code: 'INVALID_ACTION' };
+          if (action.operation === 'set_description') return { ok:false, code:'USE_DESCRIPTION_EDITOR', message:'Для описания используй get_task и edit_task_description, чтобы не потерять существующий текст.' };
           const invalid = await authorizePlannerActionReferences(input.userId, action, resolvedItemIds, resolvedSphereIds, plannerToolsService.getItem);
           if (invalid) return invalid;
           preparedTaskActions.push(action);

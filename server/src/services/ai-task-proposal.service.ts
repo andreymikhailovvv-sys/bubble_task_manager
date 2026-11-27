@@ -6,7 +6,7 @@ import { plannerToolsService, type PlannerActionInput } from './planner-tools.se
 import { aiPersonalNotesService, validateAiCreateNoteArgs, validateAiUpdateNoteArgs, type CreatePersonalNoteArgs, type UpdatePersonalNoteArgs } from './ai-create-note.service.js';
 import type { Prisma } from '@prisma/client';
 import { habitService } from './habit.service.js';
-import { validateAiCreateHabitArgs, type CreateHabitProposalAction } from './ai-create-habit.service.js';
+import { validateAiCreateHabitArgs, validateAiHabitDuration, validateAiHabitCompletion, habitDurationLabel, aiHabitDateKey, isExistingHabitAction, type CreateHabitProposalAction } from './ai-create-habit.service.js';
 import { taskChipInitial, validateTaskChipValues, chipChanged, applyChipEdits, chipDbPatch, validateChipReferences, type TaskChipValues } from './ai-task-chip-edit.service.js';
 import { rescheduleMonitoringSource } from './task-monitoring-schedule.service.js';
 import { signalTaskMonitoringWakeup } from './task-monitoring-wakeup.service.js';
@@ -94,6 +94,21 @@ async function ownerSnapshot(userId: string, actions: TaskProposalAction[]) {
   const byId = new Map(tasks.map(task => [task.id, task]));
   const createdNoteActions = actions.filter(isCreateNoteAction);
   for (const action of actions.filter(isCreateHabitAction)) validateAiCreateHabitArgs(action);
+  const habitActions = actions.filter(isExistingHabitAction);
+  const habitIds = [...new Set(habitActions.map(action => action.habitId))];
+  const habits = habitIds.length ? await prisma.habit.findMany({
+    where: { userId, id: { in: habitIds }, isArchived: false, isAutoCompleted: false },
+    select: { id: true, name: true, icon: true, updatedAt: true }
+  }) : [];
+  const habitsById = new Map(habits.map(habit => [habit.id, habit]));
+  for (const action of habitActions) {
+    const habit = habitsById.get(action.habitId);
+    if (!habit || habit.updatedAt.toISOString() !== action.expectedUpdatedAt) throw new Error('Привычка изменилась или недоступна. Получите её заново.');
+    if (action.operation === 'complete_habit') {
+      validateAiHabitCompletion(action);
+      if (typeof action.dateKey !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(action.dateKey)) throw new Error('Некорректная дата выполнения.');
+    } else validateAiHabitDuration(action);
+  }
   const noteActions = actions.filter(isNoteAction);
   for (const action of createdNoteActions) {
     const payload = validateAiCreateNoteArgs(action);
@@ -122,7 +137,13 @@ async function ownerSnapshot(userId: string, actions: TaskProposalAction[]) {
   const sphereNames = new Map<string, string>();
   // All existing references must remain reachable by the consenting actor.
   for (const action of actions) {
-    if (isNoteAction(action) || isCreateNoteAction(action) || isCreateHabitAction(action)) continue;
+    if (isNoteAction(action) || isCreateNoteAction(action) || isCreateHabitAction(action) || isExistingHabitAction(action)) continue;
+    if (action.operation === 'set_description' && Object.prototype.hasOwnProperty.call(action, 'expectedDescription')) {
+      const target = byId.get(String(action.itemId ?? ''));
+      if (!target || target.description !== action.expectedDescription) throw new Error('Описание изменилось. Прочитайте его заново.');
+      if (typeof action.description !== 'string' || action.description.length > (target.parentTaskId ? 2000 : 4000))
+        throw new Error('Некорректный размер описания.');
+    }
     for (const id of actionIds(action)) {
       if (!byId.has(id)) throw new Error('Задача или подзадача недоступна. Предложение не создано.');
     }
@@ -135,7 +156,8 @@ async function ownerSnapshot(userId: string, actions: TaskProposalAction[]) {
   return {
     snapshots: [
       ...tasks.map(task => ({ id: task.id, updatedAt: task.updatedAt.toISOString() })),
-      ...notes.map(note => ({ kind: 'note', id: note.id, updatedAt: note.updatedAt.toISOString() }))
+      ...notes.map(note => ({ kind: 'note', id: note.id, updatedAt: note.updatedAt.toISOString() })),
+      ...habits.map(habit => ({ kind: 'habit', id: habit.id, updatedAt: habit.updatedAt.toISOString() }))
     ],
     display: actions.map(action => {
       if (isCreateHabitAction(action)) {
@@ -145,7 +167,14 @@ async function ownerSnapshot(userId: string, actions: TaskProposalAction[]) {
           'Дни недели: ' + habit.weekdays.join(', ') + ' (0 — воскресенье)';
         return { type: 'create_habit', title: habit.icon + ' ' + habit.name,
           details: [schedule, 'Повторов в день: ' + habit.targetCount,
-            'Уведомления: ' + (habit.reminderTimes.join(', ') || 'не заданы')] };
+            'Уведомления: ' + (habit.reminderTimes.join(', ') || 'не заданы'), habitDurationLabel(habit)] };
+      }
+      if (isExistingHabitAction(action)) {
+        const habit = habitsById.get(action.habitId)!;
+        const details = action.operation === 'complete_habit'
+          ? [action.fullDay ? 'Закрыть дневную норму' : 'Добавить выполнений: ' + validateAiHabitCompletion(action).amount, 'Дата: ' + String(action.dateKey)]
+          : [habitDurationLabel(validateAiHabitDuration(action))];
+        return { type: action.operation, title: habit.icon + ' ' + habit.name, details };
       }
       if (isCreateNoteAction(action)) return {
         type: 'create_note', title: action.title || 'Без названия',
@@ -396,6 +425,14 @@ export async function applyTaskProposal(userId: string, id: string, selectedIndi
     if (row.source !== 'telegram_assistant' || actions.some(a => 'operation' in a)) {
       // Recheck access AND optimistic version before writing anything.
       for (const snapshot of snapshots) {
+        if (snapshot.kind === 'habit') {
+          const habit = await prisma.habit.findFirst({ where: { id: snapshot.id, userId, isArchived:false, isAutoCompleted:false }, select:{updatedAt:true} });
+          if (!habit || habit.updatedAt.toISOString() !== snapshot.updatedAt) {
+            await prisma.aiTaskProposal.update({ where:{id}, data:{status:'CONFLICT',error:'Привычка изменилась или недоступна. Создайте предложение заново.'} });
+            return getTaskProposal(userId,id);
+          }
+          continue;
+        }
         if (snapshot.kind === 'note') {
           const note = await prisma.standaloneNote.findFirst({
             where: { id: snapshot.id, userId }, select: { updatedAt: true }
@@ -459,6 +496,23 @@ export async function applyTaskProposal(userId: string, id: string, selectedIndi
             : String(action.itemId??action.subtaskId??action.taskId??'')||null;
           if(action.__chipEdit&&actionTaskIds[actionIndex])
             await applyChipEdits(userId,actionTaskIds[actionIndex]!,action.__chipEdit as TaskChipValues);
+          continue;
+        }
+        if (isExistingHabitAction(action)) {
+          const current = await prisma.habit.findFirst({ where:{ id:action.habitId, userId, isArchived:false, isAutoCompleted:false } });
+          if (!current || current.updatedAt.toISOString() !== action.expectedUpdatedAt) throw new Error('Привычка изменилась или недоступна.');
+          if (action.operation === 'complete_habit') {
+            const dateKey = String(action.dateKey);
+            if (dateKey !== aiHabitDateKey(new Date(), row.userTimeZone)) throw new Error('День изменился. Подготовьте отметку заново.');
+            const completion = validateAiHabitCompletion(action);
+            const habit = await habitService.complete(action.habitId, userId, { dateKey, amount: completion.amount });
+            const progress = habit.stats.find(stat => stat.dateKey === dateKey)?.amount ?? 0;
+            reports.push('Привычка «' + habit.name + '»: за день ' + progress + ' из ' + habit.targetCount + '.');
+          } else {
+            const duration = validateAiHabitDuration(action);
+            const habit = await habitService.update(action.habitId, userId, duration);
+            reports.push('Изменён срок привычки «' + habit.name + '»: ' + habitDurationLabel(duration) + '.');
+          }
           continue;
         }
         if (isCreateHabitAction(action)) {
@@ -541,7 +595,11 @@ export async function applyTaskProposal(userId: string, id: string, selectedIndi
 export async function undoTaskProposal(userId: string, id: string): Promise<TaskProposalView> {
   const current = await prisma.aiTaskProposal.findFirst({ where: { id, userId } });
   if (!current) throw new Error('Предложение не найдено.');
-  if (current.status === 'APPLIED') await undoStoredProposal(userId, id);
+  if (current.status === 'APPLIED') {
+    if (Array.isArray(current.operations) && (current.operations as TaskProposalAction[]).some(isExistingHabitAction))
+      throw new Error('Автоматическая отмена отметок и изменения срока привычки пока не поддерживается. Используйте редактор привычки.');
+    await undoStoredProposal(userId, id);
+  }
   return getTaskProposal(userId, id);
 }
 
