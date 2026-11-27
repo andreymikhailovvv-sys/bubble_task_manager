@@ -18,12 +18,13 @@ import { formatCreditsSpent } from './lib/credits';
 import { api } from './lib/api';
 import './EconomicApp.css';
 import EconomicReport from './EconomicReport';
+import { TaskRecurrenceConfigurator, type RecurrenceDraftFields } from './components/TaskRecurrenceConfigurator';
 
 type Kind = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'DEBT_BORROWED' | 'DEBT_LENT' | 'DEBT_REPAID' | 'DEBT_RETURNED';
 type Section = 'overview' | 'accounts' | 'operations' | 'debts' | 'categories' | 'report';
 type Dialog = { kind: 'account' | 'operation' | 'debt' | 'loan' | 'category'; id?: string } | null;
 type Account = { id: string; name: string; isPrimary: boolean; currency: string; openingBalanceMinor: string; balanceMinor: string; accountType: 'STANDARD' | 'CREDIT_CARD'; creditLimitMinor: string | null };
-type Operation = { id: string; kind: Kind; amountMinor: string; title: string; note: string | null; category: string | null; sourceAccountId: string; targetAccountId: string | null; occurredAt: string; debtId: string | null; debtPhase: string | null; isAdjustment: boolean; positionsJson?: string; calculation?: string | null };
+type Operation = { id: string; kind: Kind; amountMinor: string; title: string; note: string | null; category: string | null; sourceAccountId: string; targetAccountId: string | null; occurredAt: string; debtId: string | null; debtPhase: string | null; isAdjustment: boolean; positionsJson?: string; calculation?: string | null; recurrenceJson?: Record<string, unknown> | null };
 type Debt = { id: string; direction: 'OWE' | 'OWED_TO_ME'; counterparty: string; amountMinor: string; paidMinor: string; postedToAccount: boolean; accountId: string | null; dueAt: string | null; note: string | null; isClosed: boolean };
 type Loan = { id: string; name: string; lender: string | null; principalMinor: string; paidMinor: string; monthlyPaymentOverrideMinor: string | null; paymentDate: string | null; remindersEnabled: boolean; annualRateBps: number; termMonths: number; startDate: string; isClosed: boolean };
 type EconomicUser = { id: string; name: string | null; username: string | null; timeZone: string | null; telegramLinked: boolean };
@@ -120,6 +121,8 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
   const [bannerHidden, setBannerHidden] = useState(false);
   const [reportRevision, setReportRevision] = useState(0);
   const [form, setForm] = useState<Record<string, string>>({});
+  const [repeatOperation, setRepeatOperation] = useState(false);
+  const [recurrence, setRecurrence] = useState<RecurrenceDraftFields>({});
   const [positions, setPositions] = useState<Array<{name:string; amount:string}>>([]);
   const [adjustmentNotice, setAdjustmentNotice] = useState('');
   useEffect(() => { if (!adjustmentNotice) return; const timer = window.setTimeout(() => setAdjustmentNotice(''), 5000); return () => window.clearTimeout(timer); }, [adjustmentNotice]);
@@ -222,6 +225,11 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
     setSnapshot(await economicRequest<Snapshot>('/snapshot'));
     setReportRevision(value => value+1);
   }, []);
+  useEffect(() => {
+    if (!assistantOpen || !user?.id) return;
+    const timer = window.setInterval(() => { void refresh().catch(() => undefined); }, 15000);
+    return () => window.clearInterval(timer);
+  }, [assistantOpen, user?.id, refresh]);
   // Native Android pager keeps WebView warm while other tabs are open.
   // Re-read finance when its tab becomes active, including proposals prepared
   // by the general AI voice widget while the finance tab was out of view.
@@ -308,6 +316,8 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
     setPositions(kind === 'operation' ? readEconomicPositions((item as Operation | undefined)?.positionsJson).map(p => ({name:p.name,amount:inputMoney(p.amountMinor)})) : []);
     if (kind === 'operation') {
       const op = item as Operation | undefined;
+      setRepeatOperation(Boolean(op?.recurrenceJson));
+      setRecurrence({ recurrenceJson: op?.recurrenceJson ?? null });
       fields.kind = op?.kind || 'EXPENSE';
       fields.title = op?.title || '';
       fields.amount = op ? op.calculation || inputMoney(op.amountMinor) : '';
@@ -361,13 +371,14 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
           ...(dialog.id && form.isPrimary === 'yes' && form.accountType !== 'CREDIT_CARD' ? { isPrimary: true } : {}) };
       } else if (dialog.kind === 'operation') {
         path = '/operations';
+        if (repeatOperation && !recurrence.recurrenceJson) throw new Error('Настройте корректное расписание повторений');
         if (!form.sourceAccountId || (form.kind === 'TRANSFER' && (!form.targetAccountId || form.sourceAccountId === form.targetAccountId))) throw new Error('Выберите счета операции');
         payload = { kind: form.kind, title: form.title, amountMinor: calculateMoneyInput(form.amount),
           calculation: isMoneyExpression(form.amount) ? form.amount : null,
           positionsJson: JSON.stringify(positions.filter(p=>p.name.trim() || p.amount.trim()).map(p=>{ if(!p.name.trim()) throw new Error('Укажите название позиции'); return {name:p.name.trim(),amountMinor:parseMoney(p.amount,true)}; })),
           sourceAccountId: form.sourceAccountId, targetAccountId: form.kind === 'TRANSFER' ? form.targetAccountId : null,
           category: form.kind === 'TRANSFER' ? null : form.category, note: form.note || null,
-          occurredAt: new Date(form.date + 'T12:00:00').toISOString() };
+          occurredAt: new Date(form.date + 'T12:00:00').toISOString(), recurrenceJson: repeatOperation ? recurrence.recurrenceJson : null };
       } else if (dialog.kind === 'debt') {
         path = '/debts';
         payload = { direction: form.direction, counterparty: form.counterparty, amountMinor: parseMoney(form.amount),
@@ -951,6 +962,11 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
           </div>}
           <label>Дата<input required type="date" value={form.date} onChange={e => formSet('date', e.target.value)}/></label>
           <label>Примечание<input maxLength={500} value={form.note} onChange={e => formSet('note', e.target.value)} placeholder="Необязательно"/></label>
+          <label className="econ-repeat-check"><input type="checkbox" checked={repeatOperation} onChange={e => setRepeatOperation(e.target.checked)}/> Повторять</label>
+          {repeatOperation && <div className="econ-repeat-settings">
+            <TaskRecurrenceConfigurator manualOnly timeZone={user.timeZone} value={recurrence} onChange={patch => setRecurrence(previous => ({...previous, ...patch}))} onParseWithAi={() => {}} parsing={false}/>
+            <small>В назначенное время придёт чип. Операция будет записана только после подтверждения.</small>
+          </div>}
         </>}
         {dialog.kind === 'account' && <>
           <label>Название счёта<input required maxLength={60} value={form.name} onChange={e=>formSet('name',e.target.value)} placeholder="Наличные, карта, накопления"/></label>

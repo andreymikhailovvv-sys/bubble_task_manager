@@ -820,3 +820,18 @@ body:has(.econ-root.econ-mobile-workspace) #root{min-height:100dvh}
 .econ-operation-accounts button strong{overflow-wrap:anywhere}
 .econ-operation-accounts button small{opacity:.8;font-variant-numeric:tabular-nums}
 .econ-light .econ-operation-choice button[aria-pressed=true]{border-color:#b57c27;background:#f5e5c9}
+
+.econ-form .econ-repeat-check{display:flex;align-items:center;gap:8px;flex-direction:row}
+.econ-form .econ-repeat-check input[type=checkbox]{width:17px;height:17px;accent-color:#c28b38}
+.econ-repeat-settings{border:1px solid #b78a4e45;border-radius:14px;padding:10px;background:#c58c3b09;display:grid;gap:10px}
+.econ-repeat-settings section,.econ-repeat-settings .space-y-3,.econ-repeat-settings .space-y-2{display:grid;gap:9px}
+.econ-repeat-settings .grid{display:grid;gap:5px}
+.econ-repeat-settings .grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.econ-repeat-settings .grid-cols-7{grid-template-columns:repeat(7,minmax(0,1fr))}
+.econ-repeat-settings button{border:1px solid #b78a4e45;border-radius:9px;padding:7px 4px;font-size:11px;color:inherit}
+.econ-repeat-settings button[aria-pressed=true]{background:#c58c3b25;border-color:#d6a24e}
+.econ-repeat-settings .recurrence-time-row,.econ-repeat-settings .recurrence-time-row>div{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.econ-repeat-settings .recurrence-time-input{width:110px}
+.econ-repeat-settings .recurrence-day-button{aspect-ratio:1}
+.econ-repeat-settings p,.econ-repeat-settings small{margin:0;font-size:11px;opacity:.85}
+.econ-repeat-settings [role=alert]{color:#e88781}

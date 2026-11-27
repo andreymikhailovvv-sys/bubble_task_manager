@@ -61,7 +61,7 @@ export async function dispatchEconomicOperationRepeats(now = new Date()): Promis
         if (!committed) continue;
         count++;
         if (op.user.telegramChatId && telegramService.isEnabled()) {
-          await telegramService.sendAdminBroadcast(op.user.telegramChatId, { text: content + '. Подробности в чипе.' });
+          await telegramService.sendEconomicRepeat(op.user.telegramChatId, op.title);
         }
       } catch (cause) {
         console.error('[Economic] repeat dispatch failed', { operationId: op.id, cause });

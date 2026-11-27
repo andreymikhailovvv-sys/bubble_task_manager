@@ -17,12 +17,14 @@ type Props = {
   parsing: boolean;
   nextDueLabel?: string | null;
   isEvent?: boolean;
+  manualOnly?: boolean;
+  timeZone?: string | null;
 };
 
 /** The same saved recurrenceJson slots as the desktop task editor. */
-export function TaskRecurrenceConfigurator({ value, onChange, onParseWithAi, parsing, nextDueLabel, isEvent }: Props) {
+export function TaskRecurrenceConfigurator({ value, onChange, onParseWithAi, parsing, nextDueLabel, isEvent, manualOnly = false, timeZone }: Props) {
   const initial = loadManualRecurrence(value.recurrenceJson);
-  const [method, setMethod] = useState<'manual' | 'ai'>(initial || !value.recurrenceJson ? 'manual' : 'ai');
+  const [method, setMethod] = useState<'manual' | 'ai'>(manualOnly || initial || !value.recurrenceJson ? 'manual' : 'ai');
   const [period, setPeriod] = useState<RecurrencePeriod>(initial?.period ?? 'DAILY');
   const [slots, setSlots] = useState<RecurrenceSlot[]>(initial?.slots ?? defaultRecurrenceSlots());
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +33,7 @@ export function TaskRecurrenceConfigurator({ value, onChange, onParseWithAi, par
     setPeriod(nextPeriod);
     setSlots(nextSlots);
     try {
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
+      const timezone = timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
       const { schedule, summary } = buildManualRecurrence(nextPeriod, nextSlots, timezone);
       onChange({
         recurrenceJson: schedule,
@@ -42,6 +44,7 @@ export function TaskRecurrenceConfigurator({ value, onChange, onParseWithAi, par
       });
       setError(null);
     } catch (cause) {
+      if (manualOnly) onChange({ recurrenceJson: null, recurrenceSummary: null });
       setError(cause instanceof Error ? cause.message : 'Проверьте расписание.');
     }
   };
@@ -71,7 +74,7 @@ export function TaskRecurrenceConfigurator({ value, onChange, onParseWithAi, par
   };
 
   return <section className="recurrence-configuration mini-recurrence-configuration space-y-3 rounded-2xl border p-3 text-xs" aria-label="Настройка повторения">
-    <div className="grid grid-cols-2 gap-2" role="group" aria-label="Способ настройки повторений">
+    {!manualOnly && <div className="grid grid-cols-2 gap-2" role="group" aria-label="Способ настройки повторений">
       {([['manual', 'Вручную'], ['ai', 'Через ИИ']] as const).map(([option, label]) =>
         <button key={option} type="button" className="recurrence-choice-button rounded-xl border px-3 py-2 font-semibold"
           aria-pressed={method === option} onClick={() => {
@@ -79,7 +82,7 @@ export function TaskRecurrenceConfigurator({ value, onChange, onParseWithAi, par
             setMethod(option); setError(null);
             if (option === 'manual') commit(period, slots);
           }}>{label}</button>)}
-    </div>
+    </div>}
     {method === 'manual' ? <div className="space-y-3">
       <div className="grid grid-cols-3 gap-2" role="group" aria-label="Период повторения">
         {([['DAILY', 'В день'], ['WEEKLY', 'В неделю'], ['MONTHLY', 'В месяц']] as const).map(([kind, label]) =>
