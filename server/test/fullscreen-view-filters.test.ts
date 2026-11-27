@@ -64,7 +64,8 @@ test('split bubbles display scrollable viewport-safe hover cards outside clipped
 
 test('multiple explicitly selected bubble sectors omit empty sectors without changing filters',async()=>{
   const app=await load('../../client/src/App.tsx');
-  assert.ok(app.includes('if (sectorIds === null || selected.length <= 1) return selected;'));
+  assert.ok(app.includes("sectorIds === null && fullscreenPaneFilters.bubbles.timeFilter === 'all' && !search.trim()"));
+  assert.ok(app.includes('const classicBubbleSpheres = useMemo'));
   assert.ok(app.includes('new Set(fullscreenBubbleTasks.map(task => task.sphereId))'));
   assert.ok(app.includes('return selected.filter(sphere => populated.has(sphere.id));'));
 });

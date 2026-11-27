@@ -1,4 +1,5 @@
-import { useEffect, useId, useState, type CSSProperties } from 'react';
+import { useScrollFade } from '../hooks/useScrollFade';
+import { useRef, useEffect, useId, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { Bot, Check, CheckCircle2, ChevronDown, Loader2, MessageCircle, Plus, Search, ShieldCheck, Trash2, X } from 'lucide-react';
 import { api, type TelegramAiChatPolicy, type TelegramAiChatSettings, type TelegramChatCapability, type TelegramSendTargetList } from '../lib/api';
@@ -214,6 +215,8 @@ export function CreditLimitSlider({ value, onChange }: { value: number | null; o
 }
 
 export function TelegramAiAssistantSettings({ onClose, trainingSection }: Props) {
+  const settingsScrollRef = useRef<HTMLDivElement>(null);
+  useScrollFade(settingsScrollRef);
   const training = trainingSection !== undefined;
   useEffect(() => {
     if (!training) return;
@@ -419,7 +422,7 @@ export function TelegramAiAssistantSettings({ onClose, trainingSection }: Props)
       <section role="dialog" aria-modal="true" aria-label="ИИ-ассистент Telegram" data-guided-assistant={training ? "telegram" : undefined}
         className="telegram-integrations-modal__panel flex max-h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border shadow-2xl"
         onClick={e => e.stopPropagation()}>
-        <div className="telegram-ai-settings-scroll min-h-0 overflow-y-auto px-5 py-5">
+        <div ref={settingsScrollRef} className="telegram-ai-settings-scroll min-h-0 overflow-y-auto px-5 py-5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="telegram-integrations-modal__accent flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"><Bot size={15}/> Интеграции</p>

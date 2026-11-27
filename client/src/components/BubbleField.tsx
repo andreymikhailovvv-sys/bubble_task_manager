@@ -1,3 +1,4 @@
+import { useScrollFade } from '../hooks/useScrollFade';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { TaskMonitoringBadge } from './TaskMonitoringBadge';
 import { CalendarDays, ChevronRight, Coins, Gauge, LoaderCircle, MessageCircle, Plus, Repeat, Sparkles, X } from 'lucide-react';
@@ -782,6 +783,8 @@ export function BubbleField({
   };
 
   const hoveredBubble = useMemo(() => visibleBubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null, [hoveredTaskId, visibleBubbles]);
+  const compactHoverScrollRef = useRef<HTMLDivElement>(null);
+  useScrollFade(compactHoverScrollRef, !!(compact && hoveredBubble && compactHoverPoint));
   const hoveredSubtasks = hoveredBubble ? (subtaskMap[hoveredBubble.task.id] ?? []).filter((subtask) => subtask.status !== 'DONE') : [];
   const hoveredSphere = hoveredBubble?.task.sphereId ? spheres.find((sphere) => sphere.id === hoveredBubble.task.sphereId) : null;
   const hoveredTaskCoefficient = hoveredBubble ? getTaskCoefficient(getSourceTask(hoveredBubble.task), subtaskMap) : 0;
@@ -1769,16 +1772,13 @@ export function BubbleField({
         </motion.g>
       </svg>
       {compact && hoveredBubble && compactHoverPoint && !dragSessionRef.current ? createPortal(
-        <div className="timeline-hover-card pointer-events-auto fixed z-[2147483647] overflow-y-auto rounded-lg border p-2.5 text-[11px]"
+        <div ref={compactHoverScrollRef} className="timeline-hover-card bubble-compact-hover-scroll pointer-events-auto fixed z-[2147483647] overflow-y-auto rounded-lg border p-2.5 text-[11px]"
           style={compactHoverPoint} onMouseEnter={cancelHoverExit} onMouseLeave={scheduleHoverExit}
           aria-label={`Информация о задаче: ${hoveredBubble.task.title}`}>
           <p className="font-semibold text-primary">{hoveredBubble.task.title}</p>
           <p className="mt-1 min-w-0 max-w-full whitespace-pre-wrap break-words text-muted [overflow-wrap:anywhere]">
             <LinkifiedText
-              text={(() => {
-                const description = noteHtmlToPlainText(hoveredBubble.task.description ?? '', { trimEnd: true });
-                return description.length > 240 ? `${description.slice(0, 240)}...` : description;
-              })()}
+              text={noteHtmlToPlainText(hoveredBubble.task.description ?? '', { trimEnd: true })}
               fallback="Без описания" stopPropagationOnLinkClick />
           </p>
           <p className="mt-1 text-muted">{hoveredBubble.task.aiMonitoringEnabled

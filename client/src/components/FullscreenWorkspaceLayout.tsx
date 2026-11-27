@@ -26,7 +26,7 @@ export function FullscreenModePicker({ modes, onChange }: {
         const selected = modes[0] === option.value;
         const Icon = option.icon;
         return (
-          <button type="button" key={option.value} aria-pressed={selected} onClick={() => selectMode(option.value)}
+          <button type="button" key={option.value} data-view-mode={option.value} aria-pressed={selected} onClick={() => selectMode(option.value)}
             className={`fullscreen-mode-picker-option display-mode-toggle-button inline-flex cursor-pointer items-center rounded-lg text-sm font-semibold transition ${selected ? 'display-mode-toggle-button-active is-selected' : ''}`}
             title={option.label}>
             <Icon size={16} aria-hidden="true" />
