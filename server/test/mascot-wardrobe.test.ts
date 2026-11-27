@@ -241,6 +241,8 @@ test('full general chat and split chat use one measured composer anchor', () => 
  assert.ok(app.includes('surfaceRef={setExpandedChatTarget}'));
  assert.ok(frame.includes('const chatTarget = modalMascot ? modalChatTarget : embeddedChatTarget'));
  assert.ok(frame.includes("chatTarget.querySelector<HTMLElement>('.ai-chat-expanded-composer-wrap')"));
+ assert.ok(frame.includes("chatTarget.addEventListener('animationend',schedule)"));
+ assert.ok(frame.includes("chatTarget.removeEventListener('animationend',schedule)"));
  assert.ok(presence.includes("expandedChat: !!top?.matches('.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded)')"));
  assert.ok(css.includes('[data-mascot-surface=modal][data-mascot-chat-embedded=true]'));
 });

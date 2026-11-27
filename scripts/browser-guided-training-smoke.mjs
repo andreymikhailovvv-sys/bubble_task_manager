@@ -247,14 +247,29 @@ try {
   // The modal and split chat use the same live composer anchor.
   await launcher.locator('.planik-body-surface').click();
   await page.locator('.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded)').waitFor({state:'visible'});
-  await page.waitForFunction(()=>{
-    const avatar=document.querySelector('[data-managed-mascot-launcher=planner][data-mascot-chat-embedded=true]');
-    const main=document.querySelector('.ai-chat-expanded-main');
-    const composer=document.querySelector('.ai-chat-expanded-composer-wrap');
-    if(!avatar||!main||!composer)return false;
-    const a=avatar.getBoundingClientRect(),m=main.getBoundingClientRect(),c=composer.getBoundingClientRect();
-    return a.right<=m.right+2 && a.right>=m.right-10 && a.bottom<=c.top+2 && a.bottom>=c.top-10;
-  });
+  const checkComposerAnchor = async () => {
+    try {
+      await page.waitForFunction(()=>{
+        const avatar=document.querySelector('[data-managed-mascot-launcher=planner][data-mascot-chat-embedded=true] .mascot-wardrobe-anchor');
+        const main=document.querySelector('.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded) .ai-chat-expanded-main');
+        const composer=main?.querySelector('.ai-chat-expanded-composer-wrap');
+        if(!avatar||!main||!composer||getComputedStyle(avatar).visibility!=='visible')return false;
+        const a=avatar.getBoundingClientRect(),m=main.getBoundingClientRect(),c=composer.getBoundingClientRect();
+        return a.width>0 && a.height>0 && a.right<=m.right+2 && a.right>=m.right-10 && a.bottom<=c.top+2 && a.bottom>=c.top-10;
+      });
+    } catch (error) {
+      console.error('[Composer anchor diagnostics]',await page.evaluate(()=>{
+        const root=document.querySelector('[data-managed-mascot-launcher=planner]');
+        const main=document.querySelector('.ai-chat-expanded-main');
+        const composer=main?.querySelector('.ai-chat-expanded-composer-wrap');
+        return JSON.stringify({surface:root?.getAttribute('data-mascot-surface'),anchored:root?.getAttribute('data-mascot-chat-embedded'),right:root?.style.getPropertyValue('--mascot-chat-right'),bottom:root?.style.getPropertyValue('--mascot-chat-bottom'),root:root?.getBoundingClientRect().toJSON(),avatar:root?.querySelector('.mascot-wardrobe-anchor')?.getBoundingClientRect().toJSON(),main:main?.getBoundingClientRect().toJSON(),composer:composer?.getBoundingClientRect().toJSON()});
+      }));
+      throw error;
+    }
+  };
+  await checkComposerAnchor();
+  await page.setViewportSize({width:1280,height:800});
+  await checkComposerAnchor();
   await page.evaluate(()=>window.dispatchEvent(new CustomEvent('planirovych:confirmed-send',{detail:'telegram-send'})));
   await launcher.locator('[data-mode="telegram-send"] .planik-paper-plane').waitFor({state:'visible'});
   assert.equal(wardrobeWrites,0);

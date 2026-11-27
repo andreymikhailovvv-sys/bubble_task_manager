@@ -58,9 +58,14 @@ export function QuickAiLauncherFrame({children,onHoverChange,onFocus,taskOpen=fa
     observer.observe(chatTarget);
     const mount = new MutationObserver(schedule);
     mount.observe(chatTarget,{childList:true,subtree:true});
+    // The expanded dialog enters with translate/scale. ResizeObserver only
+    // observes layout dimensions, not CSS transforms; remeasure after entrance.
+    chatTarget.addEventListener('animationend',schedule);
+    chatTarget.addEventListener('transitionend',schedule);
     window.addEventListener('resize',schedule);
     update();
-    return () => { observer.disconnect(); mount.disconnect(); window.removeEventListener('resize',schedule); if (frame) cancelAnimationFrame(frame); root.style.removeProperty('--mascot-chat-right'); root.style.removeProperty('--mascot-chat-bottom'); };
+    const settle = window.setTimeout(schedule, 300);
+    return () => { observer.disconnect(); mount.disconnect(); chatTarget.removeEventListener('animationend',schedule); chatTarget.removeEventListener('transitionend',schedule); window.removeEventListener('resize',schedule); window.clearTimeout(settle); if (frame) cancelAnimationFrame(frame); root.style.removeProperty('--mascot-chat-right'); root.style.removeProperty('--mascot-chat-bottom'); };
   }, [chatTarget]);
   return <div ref={launcher}
     data-quick-hover={hovered}

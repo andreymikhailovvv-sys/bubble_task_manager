@@ -604,7 +604,7 @@ body:has(.ai-chat-expanded-backdrop:not(.ai-chat-expanded-embedded)) [data-manag
 
 /* A chat pane still owns its old composer anchor, even though its avatar is
    now the same live mascot as the workspace/modal launcher. */
-.ai-chat-launcher[data-managed-mascot-launcher=planner][data-mascot-chat-embedded=true]{right:var(--mascot-chat-right,16px)!important;bottom:var(--mascot-chat-bottom,138px)!important}
+.ai-chat-launcher[data-managed-mascot-launcher=planner][data-mascot-chat-embedded=true]{right:var(--mascot-chat-right,16px)!important;bottom:var(--mascot-chat-bottom,138px)!important;display:flex;align-items:flex-end}
 .ai-chat-launcher[data-managed-mascot-launcher=planner][data-mascot-surface=modal][data-mascot-chat-embedded=true]{right:var(--mascot-chat-right,16px)!important;bottom:var(--mascot-chat-bottom,138px)!important}
 .ai-chat-launcher[data-mascot-chat-embedded=true] .planik-quick-ai-preview{opacity:0!important;pointer-events:none!important}
 
