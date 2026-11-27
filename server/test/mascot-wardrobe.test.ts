@@ -140,7 +140,8 @@ test('both cat outfits are free even after expiration and preserve independent s
  assert.match(art,/translate\(430 0\) scale\(-1 1\)/);
  assert.match(css,/\[data-skin="cat"\]\[data-mode="thinking"\] \.cat-ear-left\{animation:cat-ear-left-think 2\.8s/);
  assert.match(css,/\[data-skin="cat"\]\[data-mode="thinking"\] \.cat-ear-right\{animation:cat-ear-right-think 3\.5s ease-in-out -\.9s/);
- assert.match(modal,/: \['idle','thinking'\]/);
+ // Cat uses the shared planner preview list, including both confirmed-send gestures.
+ assert.match(modal,/const specialModes:[^\n]+\n\s*\? \['idle','hover','thinking','income','expense'\]\s*:\s*\['wizard','pirate','space','ninja','northern','zoomer'\]\.includes\(selected\)\s*\? \['idle','hover','thinking','telegram-send','mail-send'\]\s*:\s*\['idle','thinking','telegram-send','mail-send'\]/);
 });
 
 test('managed desktop mascots retain selected skin and switch to modal or embedded chat anchors',()=>{
