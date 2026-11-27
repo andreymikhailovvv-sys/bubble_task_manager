@@ -213,3 +213,20 @@ test('thinking is available in wardrobe previews for both modules and every outf
  assert.match(modal,/onClick=\{\(\)=>\{setPreviewMode\(mode\);setReplay\(v=>v\+1\);training\?\.onAnimation\(\);\}\}/);
  assert.match(modal,/previewMode=\{previewMode\}/);
 });
+
+test('successful delivery triggers a real plane or mailbox gesture, with no fake animation on a pending reply', () => {
+  const rig=read('../../client/src/components/PlanikMascot.tsx');
+  const gesture=read('../../client/src/components/PlanikSendGesture.tsx');
+  const css=read('../../client/src/components/PlanikMascot.css');
+  const telegram=read('../../client/src/components/TelegramAiReplySuggestionCard.tsx');
+  const mail=read('../../client/src/components/MailAiReplySuggestionCard.tsx');
+  assert.match(rig,/window\.addEventListener\(PLANIK_SEND_EVENT, listener\)/);
+  assert.match(gesture,/planik-paper-plane/);
+  assert.match(gesture,/planik-mailbox/);
+  assert.match(gesture,/planik-mail-letter/);
+  assert.match(telegram,/if\(result\.status === 'SENT'\) announcePlanikSend\('telegram-send',reply\.eventId\)/);
+  assert.match(mail,/if\(response\.status === 'SENT'\) announcePlanikSend\('mail-send',reply\.eventId\)/);
+  assert.match(css,/@keyframes planik-completion-shine/);
+  assert.match(css,/translateY\(-110%\)/);
+  assert.match(css,/translateY\(110%\)/);
+});
