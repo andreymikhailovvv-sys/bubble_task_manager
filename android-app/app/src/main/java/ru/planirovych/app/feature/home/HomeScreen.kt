@@ -171,7 +171,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     var quickNavigationHandled by remember(openGeneralAi,quickAiRequestId,notificationRequestId){mutableStateOf(false)}
     LaunchedEffect(openGeneralAi,quickAiMode,quickAiRequestId,sharedChat.projects,state.loading,notificationRequestId,state.user?.id){
         if(notificationAccount!=null && state.user?.id!=notificationAccount)return@LaunchedEffect
-        if(quickAiMode=="live" || quickAiMode=="wake_voice")return@LaunchedEffect
+        if(quickAiMode in listOf("live","wake_voice","assistant_chat"))return@LaunchedEffect
         if(quickAiMode=="voice" && quickAiRequestId>0 && !quickNavigationHandled && !state.loading){
             quickNavigationHandled=true
             onQuickAiHandled(quickAiRequestId)
@@ -214,6 +214,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     // Direct timeline navigation must close back to the timeline.
     var subtaskReturnToTaskId by remember { mutableStateOf<String?>(null) }
     var taskAiChatId by remember { mutableStateOf<String?>(null) }
+    var openedNotificationHabitId by remember(state.user?.id){mutableStateOf<String?>(null)}
     LaunchedEffect(quickAiRequestId){
         if(quickAiRequestId>0){
             // A widget should not be hidden behind an already-open task sheet.
@@ -230,12 +231,12 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     // must not cancel a pending recording or cause the chat composer to open it twice.
     val wakeProjectId=sharedChat.projects.firstOrNull { p -> p.chats.any { it.id==QUICK_AI_THREAD_ID } }?.id
     LaunchedEffect(quickAiMode,quickAiRequestId,notificationAccount,state.user?.id,state.loading,
-        if(quickAiMode=="live")wakeProjectId else null) {
+        if(quickAiMode in listOf("live","assistant_chat"))wakeProjectId else null) {
         val mode=quickAiMode
         val account=state.user?.id
-        if(mode !in listOf("live","wake_voice") || state.loading || account==null ||
+        if(mode !in listOf("live","wake_voice","assistant_chat") || state.loading || account==null ||
             notificationAccount!=account || quickNavigationHandled)return@LaunchedEffect
-        if(mode=="live" && wakeProjectId==null) {
+        if(mode in listOf("live","assistant_chat") && wakeProjectId==null) {
             vm.loadGeneralAi(account)
             return@LaunchedEffect
         }
@@ -251,9 +252,22 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
         overlaySubtaskId=null
         overlayNewSubtaskParentId=null
         taskAiChatId=null
+        subtaskReturnToTaskId=null
+        openedNotificationHabitId=null
+        plannerMenuOpen=false
+        authMode=null
+        voiceError=null
         focusManager.clearFocus(force=true)
         softwareKeyboard?.hide()
-        if(mode=="live") {
+        if(mode=="assistant_chat") {
+            val projectId=wakeProjectId ?: return@LaunchedEffect
+            vm.chooseGeneralAiChat(projectId,QUICK_AI_THREAD_ID)
+            pagerState.scrollToPage(2)
+            vm.syncGeneralAiThread(projectId,QUICK_AI_THREAD_ID)
+            quickNavigationHandled=true
+            // NativeGeneralAiChatPage consumes this after closing its own menus.
+            return@LaunchedEffect
+        } else if(mode=="live") {
             val projectId=wakeProjectId ?: return@LaunchedEffect
             vm.chooseGeneralAiChat(projectId,QUICK_AI_THREAD_ID)
             pagerState.scrollToPage(2)
@@ -290,7 +304,6 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     LaunchedEffect(notificationLoanId,notificationRequestId,state.user?.id,state.loading){
         if(!state.loading && notificationAccount==state.user?.id && !notificationLoanId.isNullOrBlank())pagerState.scrollToPage(3)
     }
-    var openedNotificationHabitId by remember(state.user?.id){mutableStateOf<String?>(null)}
     LaunchedEffect(notificationHabitId,notificationRequestId,state.user?.id,state.loading){
         if(!state.loading && notificationAccount==state.user?.id && !notificationHabitId.isNullOrBlank()){
             pagerState.scrollToPage(0)

@@ -55,7 +55,7 @@ private class PlanikVoiceSession(private val appContext:Context):VoiceInteractio
             // Only a deliberate tap on the chat link may switch applications.
             val intent=Intent(appContext,ru.planirovych.app.MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                .putExtra(ru.planirovych.app.MainActivity.EXTRA_OPEN_GENERAL_AI,true)
+                .setAction(ru.planirovych.app.MainActivity.ACTION_PLANIK_OPEN_CHAT)
                 .putExtra(ru.planirovych.app.MainActivity.EXTRA_NOTIFICATION_ACCOUNT,account)
             if(wakeDeviceUnlocked(appContext)) {
                 runCatching { appContext.startActivity(intent) }.onSuccess { hide() }

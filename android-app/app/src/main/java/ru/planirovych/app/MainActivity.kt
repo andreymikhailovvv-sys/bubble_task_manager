@@ -58,6 +58,7 @@ class MainActivity:ComponentActivity(){
         const val EXTRA_OPEN_GENERAL_AI="planirovych_open_general_ai"
         const val EXTRA_QUICK_AI_MODE="planirovych_widget_quick_ai_mode"
         const val ACTION_WIDGET_QUICK_AI="ru.planirovych.action.OPEN_QUICK_AI"
+        const val ACTION_PLANIK_OPEN_CHAT="ru.planirovych.action.PLANIK_OPEN_CHAT"
         const val QUICK_AI_TEXT="text"
         const val QUICK_AI_VOICE="voice"
         const val EXTRA_CHECK_ANDROID_UPDATE="planirovych_check_android_update"
@@ -104,6 +105,21 @@ class MainActivity:ComponentActivity(){
     }
 
     private fun applyNavigation(intent:Intent?){
+        if(intent?.action==ACTION_PLANIK_OPEN_CHAT) {
+            val account=intent.getStringExtra(EXTRA_NOTIFICATION_ACCOUNT)
+            if(account!=null && ru.planirovych.app.planik.wakeDeviceUnlocked(this)) {
+                notificationTaskId=null;notificationHabitId=null;notificationLoanId=null
+                notificationTaskChat=false;notificationChatId=null
+                notificationAccount=account
+                notificationRequestId++
+                quickAiMode="assistant_chat"
+                openGeneralAi=true
+                quickAiRequestId++
+            }
+            intent.action=null
+            intent.removeExtra(EXTRA_NOTIFICATION_ACCOUNT)
+            return
+        }
         if(intent?.action==ru.planirovych.app.planik.PlanikWakeDispatch.ACTION_WAKE) {
             val account=intent.getStringExtra(EXTRA_NOTIFICATION_ACCOUNT)
             val mode=intent.getStringExtra(EXTRA_QUICK_AI_MODE)

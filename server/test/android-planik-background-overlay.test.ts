@@ -95,3 +95,32 @@ test('System invocation uses a bottom overlay and tears down audio on dismissal'
   assert.match(panel,/view.destroy\(\)/);
   assert.doesNotMatch(panel,/startActivity\(/);
 });
+
+test('System panel has stable insets, gesture expansion, markdown, real progress and direct general chat navigation',async()=>{
+  const [panel,session,main,home,chat,workspace,progress]=await Promise.all([
+    read(pkg+'planik/PlanikAssistantPanel.kt'),read(pkg+'planik/PlanikSystemAssistant.kt'),
+    read(pkg+'MainActivity.kt'),read(pkg+'feature/home/HomeScreen.kt'),read(pkg+'feature/home/NativeGeneralAiChat.kt'),
+    read(pkg+'feature/home/ModernWorkspace.kt'),read(pkg+'feature/home/NativeTaskAiChat.kt')
+  ]);
+  assert.match(panel,/WindowInsetsCompat.Type.mandatorySystemGestures/);
+  assert.match(panel,/params.bottomMargin=bottomInset/);
+  assert.match(panel,/panel.translationY=\(panel.height\+bottomInset\+dp\(24\)\)/);
+  assert.match(panel,/setDuration\(430\)/);
+  assert.match(panel,/MotionEvent.ACTION_MOVE/);
+  assert.match(panel,/settle\(true\)/);
+  assert.match(panel,/dismissAnimated\(\)/);
+  assert.match(panel,/RippleDrawable/);
+  assert.match(panel,/performHapticFeedback/);
+  assert.match(panel,/planik_blink.svg/);
+  assert.match(panel,/markdown.setMarkdown\(result,/);
+  assert.match(panel,/onProgress=\{code->/);
+  assert.match(panel,/handler.post \{ if\(valid\(token\)\)updateProgress\(code\)/);
+  assert.match(progress,/fun nativeAiProgressLabel/);
+  assert.match(panel,/requiresChat\(response\)/);
+  assert.match(panel,/Посмотреть в чате/);
+  assert.match(session,/ACTION_PLANIK_OPEN_CHAT/);
+  assert.match(main,/quickAiMode="assistant_chat"/);
+  assert.match(home,/if\(mode=="assistant_chat"\)[\s\S]*?chooseGeneralAiChat\(projectId,QUICK_AI_THREAD_ID\)/);
+  assert.match(chat,/quickAiMode=="assistant_chat"/);
+  assert.match(workspace,/quickAiMode=="assistant_chat"/);
+});

@@ -1,6 +1,25 @@
 package ru.planirovych.app.planik
 
 import android.Manifest
+import android.animation.ValueAnimator
+import android.animation.ObjectAnimator
+import android.animation.PropertyValuesHolder
+import android.content.res.ColorStateList
+import android.graphics.drawable.RippleDrawable
+import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
+import android.view.ViewConfiguration
+import android.view.animation.PathInterpolator
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import io.noties.markwon.Markwon
+import io.noties.markwon.ext.tables.TablePlugin
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import ru.planirovych.app.feature.home.nativeAiProgressLabel
+import ru.planirovych.app.feature.home.planikActionSvg
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -77,6 +96,20 @@ internal class PlanikAssistantPanel(
     private var transcript:TextView?=null
     private var status:TextView?=null
     private var waveform:VoiceWave?=null
+    private var expanded=false
+    private var entering=false
+    private var closing=false
+    private var bottomInset=dp(24)
+    private var heightAnimation:ValueAnimator?=null
+    private var mascotJob:Job?=null
+    private var mascotMode="idle"
+    private var mascotFloat:ObjectAnimator?=null
+    private var progressView:ProgressSegments?=null
+    private val markdown by lazy { Markwon.builder(context).usePlugin(TablePlugin.create(context)).build() }
+    private val body=LinearLayout(context).apply {
+        orientation=LinearLayout.VERTICAL
+        gravity=Gravity.CENTER_HORIZONTAL
+    }
     private val panel=LinearLayout(context).apply {
         orientation=LinearLayout.VERTICAL
         background=GradientDrawable(GradientDrawable.Orientation.TL_BR,
@@ -86,16 +119,73 @@ internal class PlanikAssistantPanel(
         }
         clipToOutline=true
         elevation=dp(18).toFloat()
-        setPadding(dp(16),dp(10),dp(16),dp(14))
+        setPadding(dp(16),dp(6),dp(16),dp(16))
         isClickable=true
     }
     val root=FrameLayout(context).apply {
         setBackgroundColor(Color.TRANSPARENT)
         isClickable=true
-        setOnClickListener { onClose() }
-        addView(panel,FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM).apply {
-            setMargins(dp(10),0,dp(10),dp(10))
+        setOnClickListener { dismissAnimated() }
+        addView(panel,FrameLayout.LayoutParams(-1,dp(330),Gravity.BOTTOM).apply {
+            setMargins(dp(12),0,dp(12),dp(36))
         })
+        panel.visibility=View.INVISIBLE
+        ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
+            val safe=insets.getInsets(WindowInsetsCompat.Type.systemBars() or
+                WindowInsetsCompat.Type.displayCutout() or WindowInsetsCompat.Type.mandatorySystemGestures())
+            bottomInset=maxOf(dp(16),safe.bottom)+dp(12)
+            if(active)applyGeometry()
+            insets
+        }
+        addOnLayoutChangeListener { _,l,t,r,b,ol,ot,orr,ob ->
+            if(active && (r-l!=orr-ol || b-t!=ob-ot))applyGeometry()
+        }
+    }
+
+    private fun screenHeight():Int = (root.height.takeIf{it>0}
+        ?:context.resources.displayMetrics.heightPixels).coerceAtLeast(dp(160))
+    private fun targetHeight(open:Boolean):Int {
+        val available=(screenHeight()-bottomInset-dp(16)).coerceAtLeast(dp(120))
+        val compact=dp(if(request?.action=="live")420 else 330).coerceAtMost((available*.80f).toInt())
+        return if(open)maxOf(compact,(available*.69f).toInt()).coerceAtMost(available) else compact
+    }
+    private fun setPanelHeight(value:Int) {
+        val params=panel.layoutParams as FrameLayout.LayoutParams
+        if(params.height!=value || params.bottomMargin!=bottomInset) {
+            params.height=value
+            params.bottomMargin=bottomInset
+            panel.layoutParams=params
+        }
+    }
+    private fun applyGeometry() {
+        if(heightAnimation?.isRunning!=true)setPanelHeight(targetHeight(expanded))
+    }
+    private fun settle(open:Boolean) {
+        expanded=open
+        heightAnimation?.cancel()
+        val from=panel.height.takeIf{it>0} ?:targetHeight(!open)
+        heightAnimation=ValueAnimator.ofInt(from,targetHeight(open)).apply {
+            duration=300
+            interpolator=PathInterpolator(.2f,.8f,.2f,1f)
+            addUpdateListener { setPanelHeight(it.animatedValue as Int) }
+            start()
+        }
+    }
+
+    private fun dismissAnimated() {
+        if(closing || !active)return
+        closing=true
+        heightAnimation?.cancel()
+        stopRecorder()
+        file?.delete();file=null
+        destroyBrowser()
+        releaseGate()
+        scope?.cancel()
+        panel.animate().cancel()
+        panel.animate().translationY((panel.height+bottomInset+dp(20)).toFloat()).alpha(0f)
+            .setDuration(240).setInterpolator(PathInterpolator(.4f,0f,1f,1f))
+            .withEndAction { if(active)onClose() }.start()
+        root.animate().alpha(0f).setDuration(230).start()
     }
 
     private fun label(text:String,size:Float,color:Int=0xfff1f3ff.toInt())=TextView(context).apply {
@@ -110,36 +200,186 @@ internal class PlanikAssistantPanel(
         isAllCaps=false
         textSize=14f
         setTextColor(0xfff4f3ff.toInt())
-        background=GradientDrawable().apply {
-            setColor(0xff3b3863.toInt())
-            cornerRadius=dp(18).toFloat()
+        minHeight=0;minimumHeight=0;minWidth=0;minimumWidth=0
+        setPadding(dp(8),0,dp(8),0)
+        stateListAnimator=null
+        background=RippleDrawable(ColorStateList.valueOf(0x66b6a5ff),
+            GradientDrawable().apply {
+                setColor(0xff3b3863.toInt())
+                cornerRadius=dp(18).toFloat()
+            },null)
+        setOnClickListener {
+            performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            action()
         }
-        setOnClickListener { action() }
+        setOnTouchListener { v,event ->
+            when(event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> v.animate().scaleX(.96f).scaleY(.96f).setDuration(85).start()
+                MotionEvent.ACTION_UP,MotionEvent.ACTION_CANCEL ->
+                    v.animate().scaleX(1f).scaleY(1f).setDuration(150).start()
+            }
+            false
+        }
     }
 
     private fun header(title:String,account:String?) {
+        stopMascot()
+        progressView=null
         panel.removeAllViews()
-        val grip=View(context).apply {
-            background=GradientDrawable().apply {setColor(0xff817ca6.toInt());cornerRadius=dp(4).toFloat()}
+        body.removeAllViews()
+        val grip=FrameLayout(context).apply {
+            contentDescription="Потяните вверх для раскрытия, вниз для закрытия"
+            isClickable=true
+            isFocusable=true
+            addView(View(context).apply {
+                background=GradientDrawable().apply {setColor(0xffa09abf.toInt());cornerRadius=dp(4).toFloat()}
+            },FrameLayout.LayoutParams(dp(38),dp(4),Gravity.CENTER))
+            setOnClickListener {
+                performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                settle(!expanded)
+            }
         }
-        panel.addView(grip,LinearLayout.LayoutParams(dp(38),dp(4)).apply {
-            gravity=Gravity.CENTER_HORIZONTAL;bottomMargin=dp(8)
-        })
+        var downY=0f
+        var downHeight=0
+        var dragged=false
+        val slop=ViewConfiguration.get(context).scaledTouchSlop
+        grip.setOnTouchListener { v,event ->
+            when(event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    heightAnimation?.cancel()
+                    downY=event.rawY;downHeight=panel.height;dragged=false
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val delta=downY-event.rawY
+                    if(kotlin.math.abs(delta)>slop)dragged=true
+                    if(dragged) {
+                        setPanelHeight((downHeight+delta).toInt().coerceIn(dp(90).coerceAtMost(targetHeight(false)),targetHeight(true)))
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    val delta=downY-event.rawY
+                    if(!dragged)v.performClick()
+                    else if(delta < -dp(55) && !expanded)dismissAnimated()
+                    else if(delta < -dp(55) && expanded)settle(false)
+                    else if(delta > dp(35))settle(true)
+                    else settle(expanded)
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> {settle(expanded);true}
+                else -> true
+            }
+        }
+        panel.addView(grip,LinearLayout.LayoutParams(-1,dp(28)))
         val row=LinearLayout(context).apply {gravity=Gravity.CENTER_VERTICAL}
         row.addView(label(title,18f).apply {gravity=Gravity.START or Gravity.CENTER_VERTICAL},
             LinearLayout.LayoutParams(0,dp(40),1f))
         if(account!=null)row.addView(button("В чат"){onOpenChat(account)},LinearLayout.LayoutParams(dp(85),dp(40)).apply {marginEnd=dp(8)})
-        row.addView(button("×"){onClose()}.apply {contentDescription="Закрыть Планика"},
+        row.addView(button("×"){dismissAnimated()}.apply {contentDescription="Закрыть Планика"},
             LinearLayout.LayoutParams(dp(44),dp(40)))
         panel.addView(row,LinearLayout.LayoutParams(-1,-2))
+        panel.addView(body,LinearLayout.LayoutParams(-1,0,1f))
     }
 
     private fun animateIn() {
+        entering=true
         panel.animate().cancel()
-        panel.alpha=0f
-        panel.translationY=dp(100).toFloat()
-        panel.animate().translationY(0f).alpha(1f).setDuration(260)
-            .setInterpolator(DecelerateInterpolator(1.5f)).start()
+        panel.visibility=View.INVISIBLE
+        root.alpha=1f
+        root.setBackgroundColor(Color.TRANSPARENT)
+        applyGeometry()
+        val token=generation
+        panel.post {
+            if(!active || generation!=token || closing)return@post
+            panel.translationY=(panel.height+bottomInset+dp(24)).toFloat()
+            panel.alpha=1f
+            panel.visibility=View.VISIBLE
+            panel.animate().translationY(0f).setDuration(430)
+                .setInterpolator(PathInterpolator(.16f,1f,.3f,1f))
+                .withEndAction {entering=false}.start()
+        }
+    }
+
+    private fun stopMascot() {
+        mascotJob?.cancel();mascotJob=null
+        mascotFloat?.cancel();mascotFloat=null
+    }
+
+    private fun addMascot(mode:String,compact:Boolean=false) {
+        stopMascot()
+        mascotMode=mode
+        val mascot=ImageView(context).apply {
+            contentDescription="Планик"
+            scaleType=ImageView.ScaleType.FIT_CENTER
+        }
+        body.addView(mascot,LinearLayout.LayoutParams(-1,dp(if(compact)100 else 118)).apply {
+            gravity=Gravity.CENTER_HORIZONTAL
+        })
+        mascotFloat=ObjectAnimator.ofPropertyValuesHolder(mascot,
+            PropertyValuesHolder.ofFloat(View.TRANSLATION_Y,dp(2).toFloat(),-dp(2).toFloat())).apply {
+            duration=1600;repeatCount=ValueAnimator.INFINITE;repeatMode=ValueAnimator.REVERSE
+            interpolator=android.view.animation.AccelerateDecelerateInterpolator();start()
+        }
+        val token=generation
+        mascotJob=scope?.launch {
+            val frames=withContext(Dispatchers.Default) {
+                val idle=context.assets.open("planik_idle.svg").bufferedReader().use{it.readText()}
+                val blink=context.assets.open("planik_blink.svg").bufferedReader().use{it.readText()}
+                listOf("idle","thinking","searching","typing").associateWith { state ->
+                    List(2){index->
+                        val source=if(index==1)blink else idle
+                        val action=planikActionSvg(state,index==1)
+                        // Existing drawing is centered on x=215; symmetric padding
+                        // prevents both asymmetric alignment and clipped accessories.
+                        val svg=source.replace(Regex("viewBox=\\\"[^\\\"]+\\\""),"viewBox=\"-10 -30 450 365\"")
+                            .replace("</svg>",action+"</svg>")
+                        runCatching {
+                            val picture=SVG.getFromString(svg).renderToPicture(450,365)
+                            Bitmap.createBitmap(450,365,Bitmap.Config.ARGB_8888).apply {Canvas(this).drawPicture(picture)}
+                        }.getOrNull()
+                    }
+                }
+            }
+            var frame=0
+            var previous=""
+            while(valid(token)) {
+                val state=mascotMode
+                if(previous!=state){frame=0;previous=state}
+                mascot.setImageBitmap(frames[state]?.getOrNull(frame) ?: frames["idle"]?.firstOrNull())
+                delay(if(state=="idle")if(frame==0)4900L else 115L else 260L)
+                frame=1-frame
+            }
+        }
+    }
+
+    private fun updateProgress(code:String) {
+        status?.text=nativeAiProgressLabel(code)
+        mascotMode=when {
+            code.startsWith("searching") || code.startsWith("reading") || code.startsWith("listing") -> "searching"
+            code=="forming_answer" || code=="editing_document" -> "typing"
+            else -> "thinking"
+        }
+    }
+
+    private fun addProgress() {
+        addMascot("thinking",compact=true)
+        status=label("Распознаю запрос…",17f)
+        body.addView(status,LinearLayout.LayoutParams(-1,dp(34)))
+        progressView=ProgressSegments(context).also { body.addView(it,LinearLayout.LayoutParams(-1,dp(18))) }
+    }
+
+    private fun requiresChat(response:JsonObject):Boolean {
+        val keys=listOf("taskProposal","economicProposals","generatedDocument","telegramSendDraft",
+            "telegramReadDraft","mailSendDraft","telegramSuggestedReply","mailSuggestedReply",
+            "assistantSettingsProposalId","generatedImage","generatedImages","image","images")
+        fun present(key:String)=when(val value=response[key]) {
+            null,JsonNull -> false
+            is JsonArray -> value.isNotEmpty()
+            is JsonObject -> value.isNotEmpty()
+            is JsonPrimitive -> value.contentOrNull?.let{it.isNotBlank() && it!="false"}==true
+        }
+        return keys.any(::present)
     }
 
     fun show(invocation:PlanikSystemAssistant.Invocation?) {
@@ -147,26 +387,29 @@ internal class PlanikAssistantPanel(
         active=true
         val token=++generation
         request=invocation
+        expanded=false
+        closing=false
         scope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate)
         header(if(invocation?.action=="live")"Планик · живое общение" else "Планик",invocation?.account)
         animateIn()
         if(invocation==null) {
-            panel.addView(label("Включите системный режим в настройках Планировыча. Для вызова устройство должно быть разблокировано.",15f))
+            body.addView(label("Включите системный режим в настройках Планировыча. Для вызова устройство должно быть разблокировано.",15f))
             return
         }
         if(ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED) {
-            panel.addView(label("Разрешите доступ к микрофону в настройках Android.",15f))
+            body.addView(label("Разрешите доступ к микрофону в настройках Android.",15f))
             return
         }
         // The Vosk listener and native chat must not compete with this session.
         if(PlanikWakeMicGate.busy) {
-            panel.addView(label("Микрофон уже используется Плаником. Завершите другой голосовой сеанс.",15f))
+            body.addView(label("Микрофон уже используется Плаником. Завершите другой голосовой сеанс.",15f))
             return
         }
         PlanikWakeMicGate.acquire(this)
         micOwned=true
+        addMascot("idle")
         val loading=label("Подключаюсь…",15f)
-        panel.addView(loading,LinearLayout.LayoutParams(-1,dp(80)))
+        body.addView(loading,LinearLayout.LayoutParams(-1,dp(40)))
         work=scope?.launch {
             try {
                 val current=repository.establishSession()
@@ -176,7 +419,8 @@ internal class PlanikAssistantPanel(
                     fail("Аккаунт Android изменился. Откройте Планировыч и проверьте вход.")
                     return@launch
                 }
-                panel.removeView(loading)
+                stopMascot()
+                body.removeAllViews()
                 if(invocation.action=="voice")startDictation(invocation,token)
                 else startLive(invocation,token)
             } catch(cancel:CancellationException) { throw cancel }
@@ -184,7 +428,7 @@ internal class PlanikAssistantPanel(
         }
     }
 
-    private fun valid(token:Int):Boolean=active && generation==token && wakeDeviceUnlocked(context)
+    private fun valid(token:Int):Boolean=active && !closing && generation==token && wakeDeviceUnlocked(context)
     private fun stillSelected(invocation:PlanikSystemAssistant.Invocation):Boolean =
         PlanikSystemAssistant.invocation(context)?.account==invocation.account
     private fun releaseGate() {
@@ -193,28 +437,18 @@ internal class PlanikAssistantPanel(
 
     @Suppress("DEPRECATION")
     private fun startDictation(invocation:PlanikSystemAssistant.Invocation,token:Int) {
-        val mascot=ImageView(context).apply {
-            contentDescription="Планик"
-            scaleType=ImageView.ScaleType.FIT_CENTER
-            runCatching {
-                val source=context.assets.open("planik_idle.svg").bufferedReader().use{it.readText()}
-                val picture=SVG.getFromString(source).renderToPicture(280,220)
-                val bitmap=Bitmap.createBitmap(280,220,Bitmap.Config.ARGB_8888)
-                Canvas(bitmap).drawPicture(picture)
-                setImageBitmap(bitmap)
-            }
-        }
-        panel.addView(mascot,LinearLayout.LayoutParams(dp(146),dp(108)).apply {gravity=Gravity.CENTER_HORIZONTAL})
+        addMascot("idle")
         status=label("Слушаю…",19f)
-        panel.addView(status)
+        body.addView(status)
         val wave=VoiceWave(context)
         waveform=wave
-        panel.addView(wave,LinearLayout.LayoutParams(-1,dp(42)))
+        body.addView(wave,LinearLayout.LayoutParams(-1,dp(42)))
         val controls=LinearLayout(context).apply {gravity=Gravity.CENTER}
-        controls.addView(button("Отмена"){onClose()},LinearLayout.LayoutParams(0,dp(46),1f).apply{marginEnd=dp(8)})
+        controls.addView(button("Отмена"){dismissAnimated()},LinearLayout.LayoutParams(0,dp(46),1f).apply{marginEnd=dp(8)})
         val send=button("Отправить"){finishDictation(invocation,token)}
         controls.addView(send,LinearLayout.LayoutParams(0,dp(46),1f))
-        panel.addView(controls,LinearLayout.LayoutParams(-1,-2))
+        body.addView(View(context),LinearLayout.LayoutParams(-1,0,1f))
+        body.addView(controls,LinearLayout.LayoutParams(-1,-2))
         try {
             val output=File.createTempFile("planik-system-voice-",".m4a",context.cacheDir)
             file=output
@@ -269,8 +503,7 @@ internal class PlanikAssistantPanel(
             return
         }
         header("Планик",invocation.account)
-        status=label("Распознаю запрос…",17f)
-        panel.addView(status,LinearLayout.LayoutParams(-1,dp(48)))
+        addProgress()
         work=scope?.launch {
             try {
                 val bytes=withContext(Dispatchers.IO) {
@@ -281,8 +514,10 @@ internal class PlanikAssistantPanel(
                 if(!valid(token))return@launch
                 val question=repository.transcribeVoice(bytes,duration.coerceAtMost(120.0))
                 if(!valid(token))return@launch
-                panel.addView(label(question,15f).apply {gravity=Gravity.START;maxLines=4})
-                status?.text="Думаю…"
+                body.addView(label(question,14f,0xffc7c4dd.toInt()).apply {
+                    gravity=Gravity.START;maxLines=2;ellipsize=android.text.TextUtils.TruncateAt.END
+                },LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(8)})
+                updateProgress("analyzing_request")
                 val project=repository.loadGeneralAiProjects().firstOrNull { it.chats.any { chat -> chat.id==QUICK_AI_THREAD_ID } }
                     ?: error("Откройте Планировыч один раз, чтобы создать быстрый чат")
                 val thread=project.chats.first { it.id==QUICK_AI_THREAD_ID }
@@ -290,17 +525,29 @@ internal class PlanikAssistantPanel(
                 check(stillSelected(invocation) && repository.establishSession().id==invocation.account)
                 if(!valid(token))return@launch
                 val response=repository.askGeneralAi(project,thread,history,UUID.randomUUID().toString(),
-                    question,emptyList(),onProgress={})
+                    question,emptyList(),onProgress={code->
+                        // The streaming repository calls this from Dispatchers.IO.
+                        handler.post { if(valid(token))updateProgress(code) }
+                    })
                 if(!valid(token))return@launch
-                status?.text="Готово"
+                header("Планик",invocation.account)
                 val answer=response["answer"]?.jsonPrimitive?.contentOrNull.orEmpty()
-                val result=label(answer.ifBlank{"Ответ сохранён в чате Планировыча."},15f).apply {
+                val result=label("",15f).apply {
                     gravity=Gravity.START
-                    setTextIsSelectable(true)
+                    setLineSpacing(dp(3).toFloat(),1.12f)
+                    setLinkTextColor(0xff8ee8e6.toInt())
+                    setPadding(dp(4),dp(8),dp(4),dp(8))
                 }
+                markdown.setMarkdown(result,answer.ifBlank{"Ответ сохранён в чате Планировыча."})
                 transcript=result
-                panel.addView(ScrollView(context).apply {addView(result)},LinearLayout.LayoutParams(-1,dp(164)))
-                panel.addView(label("Карточки действий и полный ответ доступны в чате.",12f,0xffb9b7d8.toInt()))
+                body.addView(ScrollView(context).apply {
+                    isFillViewport=true
+                    addView(result,ScrollView.LayoutParams(-1,-2))
+                },LinearLayout.LayoutParams(-1,0,1f))
+                if(requiresChat(response) || answer.contains("[[task_ref")) {
+                    body.addView(button("Посмотреть в чате"){onOpenChat(invocation.account)},
+                        LinearLayout.LayoutParams(-1,dp(46)).apply{topMargin=dp(8)})
+                }
                 PlanikLiveUpdates.publish()
             } catch(cancel:CancellationException){throw cancel}
             catch(_:Exception){if(valid(token))fail("Не удалось обработать запрос. Проверьте интернет или откройте чат.")}
@@ -347,15 +594,14 @@ internal class PlanikAssistantPanel(
         val waiting=label("Подключаю живое общение…",15f)
         frame.addView(view,FrameLayout.LayoutParams(-1,-1))
         frame.addView(waiting,FrameLayout.LayoutParams(-1,-1))
-        val available=(context.resources.displayMetrics.heightPixels/context.resources.displayMetrics.density).toInt()
-        panel.addView(frame,LinearLayout.LayoutParams(-1,dp((available*0.51f).toInt().coerceIn(250,430))))
+        body.addView(frame,LinearLayout.LayoutParams(-1,0,1f))
         var ready=false
         var missing=0
         val deadline=SystemClock.elapsedRealtime()+40_000L
         val script="""(function(){
           var css=document.getElementById('planik-system-panel');
           if(!css){css=document.createElement('style');css.id='planik-system-panel';
-          css.textContent='html,body{background:transparent!important} body *{visibility:hidden!important;pointer-events:none!important} .planik-live-fullscreen,.planik-live-fullscreen *,.planik-live-compact,.planik-live-compact *{visibility:visible!important;pointer-events:auto!important} .planik-live-fullscreen{background:transparent!important} .planik-live-fullscreen::before{display:none!important} .planik-live-stage{height:100%!important;padding:6px 10px!important} .planik-live-header{display:none!important} .planik-live-center{gap:3px!important;justify-content:center!important} .planik-live-avatar{width:124px!important;height:106px!important} .planik-live-phase{margin-top:0!important} .planik-live-visualizer{height:25px!important;margin:0!important} .planik-live-transcript{max-height:95px!important} .planik-live-caption{display:none!important} .planik-live-footer{padding:2px!important} .planik-live-compact{bottom:12px!important;right:50%!important;transform:translateX(50%)!important}';
+          css.textContent='html,body{background:transparent!important} body *{visibility:hidden!important;pointer-events:none!important} .planik-live-fullscreen,.planik-live-fullscreen *,.planik-live-compact,.planik-live-compact *{visibility:visible!important;pointer-events:auto!important} .planik-live-fullscreen{background:transparent!important} .planik-live-fullscreen::before{display:none!important} .planik-live-stage{height:100%!important;padding:6px 10px!important} .planik-live-header{display:none!important} .planik-live-center{gap:3px!important;justify-content:center!important} .planik-live-avatar{width:124px!important;height:106px!important;margin:0 auto!important;align-self:center!important} .planik-live-phase{margin-top:0!important} .planik-live-visualizer{height:25px!important;margin:0!important} .planik-live-transcript{max-height:clamp(72px,28vh,240px)!important} .planik-live-caption{display:none!important} .planik-live-footer{padding:2px!important} .planik-live-compact{bottom:12px!important;right:50%!important;transform:translateX(50%)!important}';
           document.head.appendChild(css);}
           return document.querySelector('.planik-live-fullscreen,.planik-live-compact')?'live':(document.documentElement.dataset.planikAndroid||'pending');
         })();"""
@@ -435,7 +681,7 @@ internal class PlanikAssistantPanel(
         destroyBrowser()
         releaseGate()
         header("Планик",request?.account)
-        panel.addView(label(message,15f),LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(12);bottomMargin=dp(12)})
+        body.addView(label(message,15f),LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(12);bottomMargin=dp(12)})
     }
 
     fun close(){
@@ -449,9 +695,36 @@ internal class PlanikAssistantPanel(
         destroyBrowser()
         releaseGate()
         request=null;status=null;transcript=null;waveform=null
+        stopMascot()
+        heightAnimation?.cancel();heightAnimation=null
         panel.animate().cancel()
+        root.animate().cancel()
+        root.alpha=1f
+        panel.visibility=View.INVISIBLE
         panel.removeAllViews()
+        body.removeAllViews()
+        progressView=null
+        entering=false;closing=false
         PlanikLiveUpdates.publish()
+    }
+
+    private class ProgressSegments(context:Context):View(context) {
+        private val paint=Paint(Paint.ANTI_ALIAS_FLAG)
+        override fun onDraw(canvas:Canvas) {
+            super.onDraw(canvas)
+            val density=resources.displayMetrics.density
+            val bar=30*density;val gap=5*density;val h=4*density
+            val left=(width-(bar*3+gap*2))/2
+            val sweep=(SystemClock.uptimeMillis()%1250L)/1250f*3f
+            for(i in 0..2){
+                val intensity=(1f-kotlin.math.abs(sweep-i)).coerceIn(0f,1f)
+                paint.color=0xff67e8f9.toInt()
+                paint.alpha=(51+204*intensity).toInt()
+                val x=left+i*(bar+gap)
+                canvas.drawRoundRect(x,(height-h)/2,x+bar,(height+h)/2,h/2,h/2,paint)
+            }
+            if(isShown)postInvalidateOnAnimation()
+        }
     }
 
     private class VoiceWave(context:Context):View(context) {

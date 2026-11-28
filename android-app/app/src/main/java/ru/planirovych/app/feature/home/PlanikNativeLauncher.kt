@@ -183,7 +183,7 @@ internal fun NativeMascotFallback(dark:Boolean,mode:String,skinId:String,modifie
 
 /** Small actions use the same SVG coordinate system as the website mascot.
  * These overlays do not exist at rest; frame alternation animates hands and lens. */
-private fun planikActionSvg(mode: String, alternate: Boolean): String = when (mode) {
+internal fun planikActionSvg(mode: String, alternate: Boolean): String = when (mode) {
     "typing" -> {
         val leftY = if (alternate) 241 else 249
         val rightY = if (alternate) 251 else 241

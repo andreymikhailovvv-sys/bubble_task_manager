@@ -164,6 +164,13 @@ fun ModernWorkspace(
     }
     var selectedHabitId by remember { mutableStateOf<String?>(null) }
     var createHabitOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(quickAiMode,quickAiRequestId) {
+        if(quickAiMode=="assistant_chat") {
+            filtersOpen=false;overdueOpen=false;sectorSettingsOpen=false
+            notesVisible=false;scoreOpen=false;creditsOpen=false;searchExpanded=false
+            searchOpenedOnPage=-1;searchNoteTarget=null;selectedHabitId=null;createHabitOpen=false
+        }
+    }
     val sectors = remember(state.spheres) { state.spheres.associateBy { it.id } }
     val searchQuery = state.query.trim().lowercase(Locale.getDefault())
     val now = System.currentTimeMillis()
