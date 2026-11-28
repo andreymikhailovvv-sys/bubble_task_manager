@@ -554,7 +554,7 @@ internal class PlanikAssistantPanel(
                 val cardCount=cards.attach(content,response)
                 body.addView(ScrollView(context).apply {
                     isFillViewport=true
-                    addView(content,ScrollView.LayoutParams(-1,-2))
+                    addView(content,FrameLayout.LayoutParams(-1,-2))
                 },LinearLayout.LayoutParams(-1,0,1f))
                 if(cardCount>0)settle(true)
                 if(requiresChat(response) || answer.contains("[[task_ref")) {

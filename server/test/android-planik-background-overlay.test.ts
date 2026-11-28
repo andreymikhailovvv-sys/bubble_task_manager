@@ -32,7 +32,8 @@ test('Wake action and foreground service remain explicit and account-bound',asyn
   assert.match(manifest,/android.permission.SYSTEM_ALERT_WINDOW/);
   assert.match(service,/setSound\(null,null\); enableVibration\(false\)/);
   assert.match(main,/PlanikWakeDispatch.consume\(intent\)/);
-  assert.match(home,/quickAiMode=="live"/);
+  assert.match(home,/quickAiMode in listOf\("live","wake_voice","assistant_chat"\)/);
+  assert.match(home,/else if\(mode=="live"\)/);
   assert.match(home,/quickAiMode=="voice"/);
   assert.match(main,/quickAiMode=if\(mode=="voice"\)"wake_voice" else "live"/);
   assert.match(manifest,/android:foregroundServiceType="microphone"/);
@@ -113,6 +114,8 @@ test('System panel has stable insets, gesture expansion, markdown, real progress
   assert.match(panel,/performHapticFeedback/);
   assert.match(panel,/planik_blink.svg/);
   assert.match(panel,/markdown.setMarkdown\(result,/);
+  assert.match(panel,/addView\(content,FrameLayout.LayoutParams\(-1,-2\)\)/);
+  assert.doesNotMatch(panel,/ScrollView\.LayoutParams/);
   assert.match(panel,/onProgress=\{code->/);
   assert.match(panel,/handler.post \{ if\(valid\(token\)\)updateProgress\(code\)/);
   assert.match(progress,/fun nativeAiProgressLabel/);
