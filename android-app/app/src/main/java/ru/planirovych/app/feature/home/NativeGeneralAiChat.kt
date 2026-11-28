@@ -208,7 +208,6 @@ internal fun NativeGeneralAiChatPage(
             headerCollapsed=false;reply=null
             keyboard?.hide()
             handledQuickLaunch=quickAiRequestId
-            onQuickAiHandled(quickAiRequestId)
         }else if(quickAiMode=="text"){
             handledQuickLaunch=quickAiRequestId
             onQuickAiHandled(quickAiRequestId)

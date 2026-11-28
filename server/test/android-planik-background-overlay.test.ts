@@ -124,3 +124,19 @@ test('System panel has stable insets, gesture expansion, markdown, real progress
   assert.match(chat,/quickAiMode=="assistant_chat"/);
   assert.match(workspace,/quickAiMode=="assistant_chat"/);
 });
+
+test('System voice result includes inline owner-verified proposal cards',async()=>{
+  const [panel,cards]=await Promise.all([read(pkg+'planik/PlanikAssistantPanel.kt'),read(pkg+'planik/PlanikPanelProposalCards.kt')]);
+  assert.match(panel,/cards.attach\(content,response\)/);
+  assert.match(panel,/if\(cardCount>0\)settle\(true\)/);
+  assert.match(cards,/repository.updateTaskAiProposal/);
+  assert.match(cards,/repository.editTaskAiProposal/);
+  assert.match(cards,/put\("revision",revision\)/);
+  assert.match(cards,/repository.economicProposalAction/);
+  assert.match(cards,/repository.editEconomicProposal/);
+  assert.match(cards,/put\("expectedPayload"/);
+  assert.match(cards,/verifyAccount\(\)/);
+  assert.match(cards,/"APPLIED"->/);
+  assert.match(cards,/confirm\("undo"\)/);
+  assert.match(cards,/confirm\("reject"\)/);
+});

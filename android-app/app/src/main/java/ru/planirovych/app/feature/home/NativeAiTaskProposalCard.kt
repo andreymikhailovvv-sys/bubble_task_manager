@@ -27,12 +27,12 @@ private fun ProposalMarkdownPreview(text:String, color:Color) {
     }
 }
 
-private val proposalStatusTitles=mapOf(
+internal val proposalStatusTitles=mapOf(
     "PENDING" to "Ожидает подтверждения", "APPLYING" to "Применяется",
     "APPLIED" to "Применено", "REJECTED" to "Отклонено",
     "FAILED" to "Ошибка применения", "CONFLICT" to "Конфликт изменений",
     "UNDOING" to "Возвращаем изменения", "UNDONE" to "Изменения отменены")
-private val operationTitles=mapOf(
+internal val operationTitles=mapOf(
     "create_task" to "Новая задача", "create_event" to "Новое событие",
     "create_reminder" to "Новое напоминание", "create_subtask" to "Новая подзадача",
     "telegram_suggestion" to "Предложение задачи",
@@ -70,7 +70,7 @@ private fun prettyField(raw:String):String{
         "DONE"->"Выполнено";else->raw}
 }
 /** Mirrors humanDescription() from the Mini App task proposal card. */
-private fun proposalDescription(item:JsonObject):String?{
+internal fun proposalDescription(item:JsonObject):String?{
     val type=item.pText("type").orEmpty()
     val before=isoFrom(item.pText("before"))
     val after=isoFrom(item.pText("after"))

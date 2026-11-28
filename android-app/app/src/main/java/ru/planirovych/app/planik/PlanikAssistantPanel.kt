@@ -146,7 +146,7 @@ internal class PlanikAssistantPanel(
         ?:context.resources.displayMetrics.heightPixels).coerceAtLeast(dp(160))
     private fun targetHeight(open:Boolean):Int {
         val available=(screenHeight()-bottomInset-dp(16)).coerceAtLeast(dp(120))
-        val compact=dp(if(request?.action=="live")420 else 330).coerceAtMost((available*.80f).toInt())
+        val compact=dp(if(request?.action=="live")420 else 350).coerceAtMost((available*.85f).toInt())
         return if(open)maxOf(compact,(available*.69f).toInt()).coerceAtMost(available) else compact
     }
     private fun setPanelHeight(value:Int) {
@@ -158,7 +158,7 @@ internal class PlanikAssistantPanel(
         }
     }
     private fun applyGeometry() {
-        if(heightAnimation?.isRunning!=true)setPanelHeight(targetHeight(expanded))
+        if(!closing && heightAnimation?.isRunning!=true)setPanelHeight(targetHeight(expanded))
     }
     private fun settle(open:Boolean) {
         expanded=open
@@ -538,12 +538,25 @@ internal class PlanikAssistantPanel(
                     setLinkTextColor(0xff8ee8e6.toInt())
                     setPadding(dp(4),dp(8),dp(4),dp(8))
                 }
-                markdown.setMarkdown(result,answer.ifBlank{"Ответ сохранён в чате Планировыча."})
+                val readable=answer.replace(Regex("""\[\[task_ref=([^\]]+)\]\]|\[\[task_ref:([^|\]]+)\|([^\]]+)\]\]""")) {
+                    it.groups[3]?.value ?: "Задача в чате"
+                }
+                markdown.setMarkdown(result,readable.ifBlank{"Ответ сохранён в чате Планировыча."})
                 transcript=result
+                val content=LinearLayout(context).apply {
+                    orientation=LinearLayout.VERTICAL
+                    addView(result,LinearLayout.LayoutParams(-1,-2))
+                }
+                val cards=PlanikPanelProposalCards(context,repository,
+                    requireNotNull(scope),isValid={valid(token)&&stillSelected(invocation)},
+                    verifyAccount={check(repository.establishSession().id==invocation.account)},
+                    makeButton={text,action->button(text,action)},onEdit={settle(true)})
+                val cardCount=cards.attach(content,response)
                 body.addView(ScrollView(context).apply {
                     isFillViewport=true
-                    addView(result,ScrollView.LayoutParams(-1,-2))
+                    addView(content,ScrollView.LayoutParams(-1,-2))
                 },LinearLayout.LayoutParams(-1,0,1f))
+                if(cardCount>0)settle(true)
                 if(requiresChat(response) || answer.contains("[[task_ref")) {
                     body.addView(button("Посмотреть в чате"){onOpenChat(invocation.account)},
                         LinearLayout.LayoutParams(-1,dp(46)).apply{topMargin=dp(8)})

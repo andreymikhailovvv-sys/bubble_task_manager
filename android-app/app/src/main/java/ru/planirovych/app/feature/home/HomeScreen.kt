@@ -265,7 +265,9 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
             pagerState.scrollToPage(2)
             vm.syncGeneralAiThread(projectId,QUICK_AI_THREAD_ID)
             quickNavigationHandled=true
-            // NativeGeneralAiChatPage consumes this after closing its own menus.
+            // Give the chat and workspace their navigation event before clearing it.
+            delay(220)
+            onQuickAiHandled(quickAiRequestId)
             return@LaunchedEffect
         } else if(mode=="live") {
             val projectId=wakeProjectId ?: return@LaunchedEffect
