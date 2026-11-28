@@ -36,7 +36,7 @@ import java.math.BigDecimal
 
 /** Same owner-scoped server proposal and transaction as the browser chip.
  * A corrected auto-applied proposal updates its original record, not a copy. */
-private val ECON_FIELDS=mapOf(
+internal val ECON_FIELDS=mapOf(
     "name" to "Название","title" to "Название","counterparty" to "Контрагент",
     "kind" to "Тип","direction" to "Направление","balanceMinor" to "Баланс, ₽",
     "openingBalanceMinor" to "Баланс, ₽","amountMinor" to "Сумма, ₽",
@@ -56,7 +56,7 @@ private val ECON_EXPENSE_CATEGORIES=listOf(
 private val ECON_INCOME_CATEGORIES=listOf(
     "Зарплата","Подработка","Бизнес","Подарки","Проценты","Другое")
 
-private fun economicDraft(p:JsonObject):Map<String,String>{
+internal fun economicDraft(p:JsonObject):Map<String,String>{
     val source=p["payload"] as? JsonObject ?:return emptyMap()
     val before=p["before"] as? JsonObject
     val operation=(p["entity"] as? JsonPrimitive)?.contentOrNull=="operation"
@@ -82,7 +82,7 @@ private fun economicDraft(p:JsonObject):Map<String,String>{
         }
     }
 }
-private fun economicEditedPayload(draft:Map<String,String>,proposal:JsonObject):JsonObject=buildJsonObject{
+internal fun economicEditedPayload(draft:Map<String,String>,proposal:JsonObject):JsonObject=buildJsonObject{
     val source=proposal["payload"] as? JsonObject
     val before=proposal["before"] as? JsonObject
     // Preserve receipt metadata even though the compact chip only edits core fields.

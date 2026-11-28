@@ -201,6 +201,13 @@ internal fun NativeGeneralAiChatPage(
             handledQuickLaunch=quickAiRequestId
             onQuickAiHandled(quickAiRequestId)
             speechInput()
+        }else if(quickAiMode=="assistant_chat"){
+            menuOpen=false;modelMenu=false;chatMenu=false
+            projectForm=false;projectEdit=null;renameTarget=null
+            deleteProject=null;deleteThread=null;attachError=null
+            headerCollapsed=false;reply=null
+            keyboard?.hide()
+            handledQuickLaunch=quickAiRequestId
         }else if(quickAiMode=="text"){
             handledQuickLaunch=quickAiRequestId
             onQuickAiHandled(quickAiRequestId)

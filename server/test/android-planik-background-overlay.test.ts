@@ -32,7 +32,8 @@ test('Wake action and foreground service remain explicit and account-bound',asyn
   assert.match(manifest,/android.permission.SYSTEM_ALERT_WINDOW/);
   assert.match(service,/setSound\(null,null\); enableVibration\(false\)/);
   assert.match(main,/PlanikWakeDispatch.consume\(intent\)/);
-  assert.match(home,/quickAiMode=="live"/);
+  assert.match(home,/quickAiMode in listOf\("live","wake_voice","assistant_chat"\)/);
+  assert.match(home,/else if\(mode=="live"\)/);
   assert.match(home,/quickAiMode=="voice"/);
   assert.match(main,/quickAiMode=if\(mode=="voice"\)"wake_voice" else "live"/);
   assert.match(manifest,/android:foregroundServiceType="microphone"/);
@@ -94,4 +95,51 @@ test('System invocation uses a bottom overlay and tears down audio on dismissal'
   assert.match(panel,/current.id!=request.account/);
   assert.match(panel,/view.destroy\(\)/);
   assert.doesNotMatch(panel,/startActivity\(/);
+});
+
+test('System panel has stable insets, gesture expansion, markdown, real progress and direct general chat navigation',async()=>{
+  const [panel,session,main,home,chat,workspace,progress]=await Promise.all([
+    read(pkg+'planik/PlanikAssistantPanel.kt'),read(pkg+'planik/PlanikSystemAssistant.kt'),
+    read(pkg+'MainActivity.kt'),read(pkg+'feature/home/HomeScreen.kt'),read(pkg+'feature/home/NativeGeneralAiChat.kt'),
+    read(pkg+'feature/home/ModernWorkspace.kt'),read(pkg+'feature/home/NativeTaskAiChat.kt')
+  ]);
+  assert.match(panel,/WindowInsetsCompat.Type.mandatorySystemGestures/);
+  assert.match(panel,/params.bottomMargin=bottomInset/);
+  assert.match(panel,/panel.translationY=\(panel.height\+bottomInset\+dp\(24\)\)/);
+  assert.match(panel,/setDuration\(430\)/);
+  assert.match(panel,/MotionEvent.ACTION_MOVE/);
+  assert.match(panel,/settle\(true\)/);
+  assert.match(panel,/dismissAnimated\(\)/);
+  assert.match(panel,/RippleDrawable/);
+  assert.match(panel,/performHapticFeedback/);
+  assert.match(panel,/planik_blink.svg/);
+  assert.match(panel,/markdown.setMarkdown\(result,/);
+  assert.match(panel,/addView\(content,FrameLayout.LayoutParams\(-1,-2\)\)/);
+  assert.doesNotMatch(panel,/ScrollView\.LayoutParams/);
+  assert.match(panel,/onProgress=\{code->/);
+  assert.match(panel,/handler.post \{ if\(valid\(token\)\)updateProgress\(code\)/);
+  assert.match(progress,/fun nativeAiProgressLabel/);
+  assert.match(panel,/requiresChat\(response\)/);
+  assert.match(panel,/Посмотреть в чате/);
+  assert.match(session,/ACTION_PLANIK_OPEN_CHAT/);
+  assert.match(main,/quickAiMode="assistant_chat"/);
+  assert.match(home,/if\(mode=="assistant_chat"\)[\s\S]*?chooseGeneralAiChat\(projectId,QUICK_AI_THREAD_ID\)/);
+  assert.match(chat,/quickAiMode=="assistant_chat"/);
+  assert.match(workspace,/quickAiMode=="assistant_chat"/);
+});
+
+test('System voice result includes inline owner-verified proposal cards',async()=>{
+  const [panel,cards]=await Promise.all([read(pkg+'planik/PlanikAssistantPanel.kt'),read(pkg+'planik/PlanikPanelProposalCards.kt')]);
+  assert.match(panel,/cards.attach\(content,response\)/);
+  assert.match(panel,/if\(cardCount>0\)settle\(true\)/);
+  assert.match(cards,/repository.updateTaskAiProposal/);
+  assert.match(cards,/repository.editTaskAiProposal/);
+  assert.match(cards,/put\("revision",revision\)/);
+  assert.match(cards,/repository.economicProposalAction/);
+  assert.match(cards,/repository.editEconomicProposal/);
+  assert.match(cards,/put\("expectedPayload"/);
+  assert.match(cards,/verifyAccount\(\)/);
+  assert.match(cards,/"APPLIED"->/);
+  assert.match(cards,/confirm\("undo"\)/);
+  assert.match(cards,/confirm\("reject"\)/);
 });

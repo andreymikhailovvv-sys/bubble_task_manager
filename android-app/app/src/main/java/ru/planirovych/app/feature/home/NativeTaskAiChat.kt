@@ -914,9 +914,17 @@ private val TASK_AI_PROGRESS_LABELS=mapOf(
     "editing_document" to "Редактирую документ"
 )
 
+internal fun nativeAiProgressLabel(status:String):String =
+    TASK_AI_PROGRESS_LABELS[status.substringBefore(':')] ?: when {
+        status.startsWith("searching_notes") -> "Ищу заметки"
+        status.startsWith("reading_note") -> "Изучаю заметку"
+        status.startsWith("searching_workspace") -> "Ищу информацию"
+        else -> "Обрабатываю запрос"
+    }
+
 @Composable
 internal fun NativeTaskAiProgressChip(status:String,c:TaskChatColors){
-    val title=TASK_AI_PROGRESS_LABELS[status] ?: "Обрабатываю запрос"
+    val title=nativeAiProgressLabel(status)
     val cyan=if(c.bg==Color(0xFF0D1628))Color(0xFF67E8F9) else Color(0xFF0891B2)
     val transition=rememberInfiniteTransition(label="ai-status-shimmer")
     val sweep by transition.animateFloat(initialValue=0f,targetValue=3f,
