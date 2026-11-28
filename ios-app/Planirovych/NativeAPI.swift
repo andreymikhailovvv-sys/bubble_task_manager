@@ -205,6 +205,32 @@ struct NativeChatProject: Identifiable {
     let chats: [NativeChatThread]
 }
 
+struct NativeTelegramSendDraft: Codable {
+    let requestId: String
+    let text: String
+    let requestedRecipient: String?
+    let recipientId: String?
+    let recipientName: String?
+    let match: String?
+}
+
+struct NativeTelegramReadDraft: Codable {
+    let requestId: String
+    let requestedChat: String
+    let chatName: String?
+    let chatId: String?
+    let match: String?
+}
+
+struct NativeMailSendDraft: Codable {
+    let id: String
+    let mailboxId: String?
+    let sender: String?
+    let recipient: String?
+    let subject: String?
+    let text: String
+}
+
 struct NativeGeneratedDocument: Codable, Identifiable {
     let id: String
     let fileName: String
@@ -224,6 +250,9 @@ struct NativeChatReply {
     let taskProposal: NativeAIProposal?
     let economicProposals: [NativeAIProposal]
     let generatedDocument: NativeGeneratedDocument?
+    let telegramSendDraft: NativeTelegramSendDraft?
+    let telegramReadDraft: NativeTelegramReadDraft?
+    let mailSendDraft: NativeMailSendDraft?
     let raw: [String: Any]
 }
 
@@ -251,12 +280,18 @@ struct RemoteChatMessage: Codable {
     let assistantSettingsProposalId: String?
     let telegramSuggestedReply: NativeAssistantReply?
     let mailSuggestedReply: NativeAssistantReply?
+    let telegramSendDraft: NativeTelegramSendDraft?
+    let telegramReadDraft: NativeTelegramReadDraft?
+    let mailSendDraft: NativeMailSendDraft?
 
     init(id: String?, role: String, content: String,
          taskProposal: NativeAIProposal? = nil,
          economicProposals: [NativeAIProposal]? = nil,
          generatedDocument: NativeGeneratedDocument? = nil,
-         assistantSettingsProposalId: String? = nil, telegramSuggestedReply: NativeAssistantReply? = nil, mailSuggestedReply: NativeAssistantReply? = nil) {
+         assistantSettingsProposalId: String? = nil, telegramSuggestedReply: NativeAssistantReply? = nil, mailSuggestedReply: NativeAssistantReply? = nil,
+         telegramSendDraft: NativeTelegramSendDraft? = nil,
+         telegramReadDraft: NativeTelegramReadDraft? = nil,
+         mailSendDraft: NativeMailSendDraft? = nil) {
         self.id = id
         self.role = role
         self.content = content
@@ -266,10 +301,14 @@ struct RemoteChatMessage: Codable {
         self.assistantSettingsProposalId = assistantSettingsProposalId
         self.telegramSuggestedReply = telegramSuggestedReply
         self.mailSuggestedReply = mailSuggestedReply
+        self.telegramSendDraft = telegramSendDraft
+        self.telegramReadDraft = telegramReadDraft
+        self.mailSendDraft = mailSendDraft
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, role, content, taskProposal, economicProposals, generatedDocument, assistantSettingsProposalId, telegramSuggestedReply, mailSuggestedReply
+        case id, role, content, taskProposal, economicProposals, generatedDocument, assistantSettingsProposalId, telegramSuggestedReply, mailSuggestedReply,
+             telegramSendDraft, telegramReadDraft, mailSendDraft
     }
 
     init(from decoder: Decoder) throws {
@@ -283,6 +322,9 @@ struct RemoteChatMessage: Codable {
         assistantSettingsProposalId = try? values.decodeIfPresent(String.self, forKey: .assistantSettingsProposalId)
         telegramSuggestedReply = try? values.decodeIfPresent(NativeAssistantReply.self, forKey: .telegramSuggestedReply)
         mailSuggestedReply = try? values.decodeIfPresent(NativeAssistantReply.self, forKey: .mailSuggestedReply)
+        telegramSendDraft = try? values.decodeIfPresent(NativeTelegramSendDraft.self, forKey: .telegramSendDraft)
+        telegramReadDraft = try? values.decodeIfPresent(NativeTelegramReadDraft.self, forKey: .telegramReadDraft)
+        mailSendDraft = try? values.decodeIfPresent(NativeMailSendDraft.self, forKey: .mailSendDraft)
     }
 }
 
@@ -295,6 +337,9 @@ private struct AiChatReply: Decodable {
     let taskProposal: NativeAIProposal?
     let economicProposals: [NativeAIProposal]?
     let generatedDocument: NativeGeneratedDocument?
+    let telegramSendDraft: NativeTelegramSendDraft?
+    let telegramReadDraft: NativeTelegramReadDraft?
+    let mailSendDraft: NativeMailSendDraft?
 }
 
 private struct VoiceTranscription: Decodable {
@@ -532,6 +577,144 @@ final class NativeAPI {
         vault.clear()
     }
 
+    // Telegram and mail cards only send after an explicit user action.
+    // Durable request IDs prevent duplicate dispatch when a network reply is lost.
+    func telegramSendTargets() async throws -> [[String: Any]] {
+        let data = try await requestData("telegram-user-client/chat/send-targets",
+                                         method: "POST", json: [:])
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        return json?["dialogs"] as? [[String: Any]] ?? []
+    }
+
+    func telegramQuickSend(requestId: String, recipientId: String, text: String) async throws -> [String: Any] {
+        let data = try await requestData("telegram-user-client/chat/quick-send",
+                                        method: "POST", json: [
+            "requestId": requestId, "recipientIds": [recipientId],
+            "text": text, "mode": "DIRECT"
+        ])
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { throw NativeAPIError.invalidResponse }
+        return json
+    }
+
+    func telegramQuickSendStatus(requestId: String) async throws -> [String: Any] {
+        let data = try await requestData("telegram-user-client/chat/quick-send/\(requestId)")
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { throw NativeAPIError.invalidResponse }
+        return json
+    }
+
+    func mailAccounts() async throws -> [[String: Any]] {
+        let data = try await requestData("mail-assistant/accounts")
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        return json?["accounts"] as? [[String: Any]] ?? []
+    }
+
+    func mailRecentRecipients() async throws -> [String] {
+        let data = try await requestData("mail-assistant/recent-recipients")
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        return json?["addresses"] as? [String] ?? []
+    }
+
+    func mailDraftStatus(id: String) async throws -> [String: Any] {
+        let data = try await requestData("mail-assistant/drafts/\(id)")
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let draft = json?["draft"] as? [String: Any] else {
+            throw NativeAPIError.invalidResponse
+        }
+        return draft
+    }
+
+    func mailRewrite(text: String, instruction: String) async throws -> String {
+        let data = try await requestData("mail-assistant/quick-rewrite",
+                                        method: "POST", json: [
+            "text": text, "instruction": instruction
+        ], timeoutInterval: 120)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let result = json?["text"] as? String else { throw NativeAPIError.invalidResponse }
+        return result
+    }
+
+    func mailSend(id: String, mailboxId: String, recipient: String,
+                  subject: String, text: String) async throws -> [String: Any] {
+        let data = try await requestData("mail-assistant/drafts/\(id)/send",
+                                        method: "POST", json: [
+            "mailboxId": mailboxId, "recipient": recipient,
+            "subject": subject, "text": text
+        ])
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { throw NativeAPIError.invalidResponse }
+        return json
+    }
+
+    // Economic API: same protected ledger, account-scoped ownership and
+    // server-side CSRF validation used by the Android and Mini App clients.
+    func economicMascotSkin() async throws -> String {
+        struct Wardrobe: Decodable { let selected: [String: String] }
+        let response: Wardrobe = try await request("mascot-wardrobe")
+        return response.selected["economic"] ?? "classic"
+    }
+
+    func economicRepeatNotices() async throws -> [EcoRepeatNotice] {
+        struct Envelope: Decodable { let notifications: [EcoRepeatNotice] }
+        let response: Envelope = try await request("system-notifications")
+        return response.notifications.filter { $0.eventKey.hasPrefix("economic-repeat:") }
+    }
+
+    func economicSnapshot() async throws -> EcoSnapshot {
+        try await request("economic/snapshot")
+    }
+
+    func economicSession() async throws -> EcoServerUser {
+        let result: EcoSessionEnvelope = try await request("economic/session")
+        return result.user
+    }
+
+    func economicReport(period: String, offset: Int = 0,
+                        start: String? = nil, end: String? = nil) async throws -> EcoReport {
+        guard ["week", "month", "year", "all", "custom"].contains(period),
+              (-120...120).contains(offset) else { throw NativeAPIError.invalidResponse }
+        var path = "economic/report?period=\(period)&offset=\(offset)"
+        if period == "custom", let start, let end {
+            path += "&start=\(start)&end=\(end)"
+        }
+        return try await request(path)
+    }
+
+    func economicOperations(kind: String? = nil, accountId: String? = nil,
+                            category: String? = nil, cursor: String? = nil) async throws -> EcoOperationsEnvelope {
+        var components = URLComponents()
+        components.queryItems = [
+            kind.map { URLQueryItem(name: "kind", value: $0) },
+            accountId.map { URLQueryItem(name: "accountId", value: $0) },
+            category.map { URLQueryItem(name: "category", value: $0) },
+            cursor.map { URLQueryItem(name: "cursor", value: $0) }
+        ].compactMap { $0 }
+        return try await request("economic/operations" + (components.percentEncodedQuery.map { "?" + $0 } ?? ""))
+    }
+
+    func economicCreate(_ resource: EcoResource, payload: [String: Any]) async throws {
+        _ = try await requestData("economic/\(resource.rawValue)", method: "POST", json: payload)
+    }
+
+    func economicUpdate(_ resource: EcoResource, id: String,
+                        payload: [String: Any]) async throws -> EcoMutationResult {
+        guard !id.isEmpty else { throw NativeAPIError.invalidResponse }
+        let result: EcoMutationResult = try await request(
+            "economic/\(resource.rawValue)/\(id)", method: "PATCH", json: payload
+        )
+        guard result.ok else { throw NativeAPIError.invalidResponse }
+        return result
+    }
+
+    func economicDelete(_ resource: EcoResource, id: String) async throws {
+        guard !id.isEmpty else { throw NativeAPIError.invalidResponse }
+        let result: OperationResult = try await request(
+            "economic/\(resource.rawValue)/\(id)", method: "DELETE"
+        )
+        guard result.ok else { throw NativeAPIError.invalidResponse }
+    }
+
     func creditBalance() async throws -> CreditBalance {
         try await request("auth/email/status")
     }
@@ -729,13 +912,97 @@ final class NativeAPI {
         return result.messages
     }
 
+    func loadTaskAiHistory(taskId: String) async throws -> [RemoteChatMessage] {
+        guard !taskId.isEmpty else { throw NativeAPIError.invalidResponse }
+        let result: ChatHistoryEnvelope = try await request("tasks/\(taskId)/ai-chat")
+        return result.messages
+    }
+
+    func sendTaskAI(taskId: String, question: String, model: String,
+                    telegramRead: [String: Any]? = nil,
+                    onEvent: @escaping @MainActor (NativeChatStreamEvent) -> Void
+    ) async throws -> NativeChatReply {
+        guard !taskId.isEmpty,
+              ["gpt-6-luna", "gpt-6.1-terra", "gpt-6.1-sol"].contains(model),
+              let url = URL(string: "tasks/\(taskId)/ai-chat", relativeTo: base),
+              url.scheme == "https", url.host == base.host else {
+            throw NativeAPIError.invalidResponse
+        }
+        var payload: [String: Any] = [
+            "clientRequestId": UUID().uuidString.lowercased(),
+            "question": question,
+            "userMessage": telegramRead == nil ? question : "",
+            "mode": model == "gpt-6.1-sol" ? "smart" : "fast",
+            "model": model,
+            "clientSurface": "miniapp",
+            "interactionContext": "chat",
+            "userTimeZone": TimeZone.current.identifier
+        ]
+        if let telegramRead { payload["telegramRead"] = telegramRead }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpShouldHandleCookies = true
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = 180
+        request.setValue("same-origin", forHTTPHeaderField: "Sec-Fetch-Site")
+        request.setValue("application/x-ndjson", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
+        let (bytes, response) = try await http.bytes(for: request)
+        guard let status = response as? HTTPURLResponse else {
+            throw NativeAPIError.invalidResponse
+        }
+        guard (200..<300).contains(status.statusCode) else {
+            throw NativeAPIError.server(code: status.statusCode,
+                                        message: "Сервер отклонил запрос ИИ по задаче.")
+        }
+        for try await line in bytes.lines {
+            try Task.checkCancellation()
+            guard let lineData = line.data(using: .utf8),
+                  let event = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
+                  let type = event["type"] as? String else { continue }
+            switch type {
+            case "status":
+                if let status = event["status"] as? String { onEvent(.status(status)) }
+            case "delta":
+                if let delta = event["text"] as? String { onEvent(.delta(delta)) }
+            case "reset":
+                onEvent(.reset)
+            case "error":
+                throw NativeAPIError.server(code: 500,
+                    message: event["message"] as? String ?? "Ошибка ИИ по задаче.")
+            case "result":
+                guard let raw = event["result"] as? [String: Any] else {
+                    throw NativeAPIError.invalidResponse
+                }
+                let data = try JSONSerialization.data(withJSONObject: raw)
+                let decoded = try JSONDecoder().decode(AiChatReply.self, from: data)
+                return NativeChatReply(
+                    answer: decoded.answer,
+                    taskProposal: decoded.taskProposal,
+                    economicProposals: decoded.economicProposals ?? [],
+                    generatedDocument: decoded.generatedDocument,
+                    telegramSendDraft: decoded.telegramSendDraft,
+                    telegramReadDraft: decoded.telegramReadDraft,
+                    mailSendDraft: decoded.mailSendDraft,
+                    raw: raw
+                )
+            default: break
+            }
+        }
+        throw NativeAPIError.server(code: 502, message: "Поток ИИ завершился без ответа.")
+    }
+
     /// Streaming NDJSON is the same transport used by Mini App and Android.
     /// The quick intro, status transitions and answer deltas arrive in order.
     func sendChat(question: String, history: [RemoteChatMessage],
                   project: NativeChatProject, thread: NativeChatThread,
+                  telegramRead: [String: Any]? = nil,
                   onEvent: @escaping @MainActor (NativeChatStreamEvent) -> Void
     ) async throws -> NativeChatReply {
-        let payload: [String: Any] = [
+        var payload: [String: Any] = [
             "clientRequestId": UUID().uuidString.lowercased(),
             "question": question,
             "history": history.suffix(25).map { message in
@@ -745,8 +1012,10 @@ final class NativeAPI {
             },
             "projectId": project.id, "projectTitle": project.title,
             "chatId": thread.id, "chatTitle": thread.title,
-            "userTimeZone": TimeZone.current.identifier
+            "userTimeZone": TimeZone.current.identifier,
+            "userMessage": telegramRead == nil ? question : ""
         ]
+        if let telegramRead { payload["telegramRead"] = telegramRead }
         guard let url = URL(string: "ai-chat", relativeTo: base),
               url.scheme == "https", url.host == base.host else {
             throw NativeAPIError.invalidResponse
@@ -795,7 +1064,10 @@ final class NativeAPI {
                 return NativeChatReply(answer: parsed.answer,
                                        taskProposal: parsed.taskProposal,
                                        economicProposals: parsed.economicProposals ?? [],
-                                       generatedDocument: parsed.generatedDocument, raw: data)
+                                       generatedDocument: parsed.generatedDocument,
+                                       telegramSendDraft: parsed.telegramSendDraft,
+                                       telegramReadDraft: parsed.telegramReadDraft,
+                                       mailSendDraft: parsed.mailSendDraft, raw: data)
             default: break
             }
         }
@@ -813,7 +1085,8 @@ final class NativeAPI {
     /// Preserve other clients' unknown project/message metadata when saving.
     /// The server merges the submitted snapshot under a row lock.
     func persistChatReply(projectId: String, chatId: String,
-                          question: String, reply: NativeChatReply) async throws {
+                          question: String, reply: NativeChatReply,
+                          includeUserMessage: Bool = true) async throws {
         guard chatId != "quick-ai-requests" else { return } // Server owns quick-chat history.
         let data = try await requestData("ai-chat/projects")
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -825,7 +1098,10 @@ final class NativeAPI {
         }
         var messages = threads[chatIndex]["messages"] as? [[String: Any]] ?? []
         let timestamp = ISO8601DateFormatter().string(from: Date())
-        messages.append(["id": UUID().uuidString, "role": "user", "content": question, "createdAt": timestamp])
+        if includeUserMessage {
+            messages.append(["id": UUID().uuidString, "role": "user",
+                             "content": question, "createdAt": timestamp])
+        }
         var answer: [String: Any] = [
             "id": UUID().uuidString, "role": "assistant",
             "content": reply.answer, "createdAt": timestamp
@@ -840,6 +1116,9 @@ final class NativeAPI {
             answer["generatedDocument"] = image
         }
         if let id = reply.raw["assistantSettingsProposalId"] as? String { answer["assistantSettingsProposalId"] = id }
+        for key in ["telegramSendDraft", "telegramReadDraft", "mailSendDraft"] {
+            if let value = reply.raw[key], !(value is NSNull) { answer[key] = value }
+        }
         messages.append(answer)
         threads[chatIndex]["messages"] = messages
         projects[projectIndex]["chats"] = threads

@@ -349,7 +349,12 @@ final class NativeWorkspaceSession: ObservableObject {
         return await sendChat(question)
     }
 
-    func sendChat(_ question: String) async -> Bool {
+    func continueTelegramRead(_ approval: [String: Any]) async -> Bool {
+        await sendChat("Продолжи предыдущий запрос по разрешённой Telegram-переписке.",
+                       telegramRead: approval)
+    }
+
+    func sendChat(_ question: String, telegramRead: [String: Any]? = nil) async -> Bool {
         guard account != nil, !isSendingChat, !isLoadingChat,
               let project = selectedChatProject, let thread = selectedChatThread else { return false }
         let cleaned = question.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -359,7 +364,9 @@ final class NativeWorkspaceSession: ObservableObject {
         chatStreamText = ""
         chatProgressStatus = "analyzing_request"
         chatError = nil
-        chatMessages.append(RemoteChatMessage(id: UUID().uuidString, role: "user", content: cleaned))
+        if telegramRead == nil {
+            chatMessages.append(RemoteChatMessage(id: UUID().uuidString, role: "user", content: cleaned))
+        }
         defer {
             isSendingChat = false
             chatProgressStatus = nil
@@ -368,7 +375,8 @@ final class NativeWorkspaceSession: ObservableObject {
         var receivedFirstDelta = false
         do {
             let reply = try await api.sendChat(question: cleaned, history: history,
-                                               project: project, thread: thread) { [weak self] event in
+                                               project: project, thread: thread,
+                                               telegramRead: telegramRead) { [weak self] event in
                 guard let self else { return }
                 switch event {
                 case .delta(let delta):
@@ -387,10 +395,14 @@ final class NativeWorkspaceSession: ObservableObject {
                                                   content: reply.answer, taskProposal: reply.taskProposal,
                                                   economicProposals: reply.economicProposals,
                                                   generatedDocument: reply.generatedDocument,
-                                                  assistantSettingsProposalId: reply.raw["assistantSettingsProposalId"] as? String))
+                                                  assistantSettingsProposalId: reply.raw["assistantSettingsProposalId"] as? String,
+                                                  telegramSendDraft: reply.telegramSendDraft,
+                                                  telegramReadDraft: reply.telegramReadDraft,
+                                                  mailSendDraft: reply.mailSendDraft))
             do {
                 try await api.persistChatReply(projectId: project.id, chatId: thread.id,
-                                               question: cleaned, reply: reply)
+                                               question: cleaned, reply: reply,
+                                               includeUserMessage: telegramRead == nil)
                 chatMessages = try await api.loadChat(projectId: project.id, chatId: thread.id)
             } catch {
                 chatError = "Ответ получен, но история пока не синхронизирована: \(error.localizedDescription)"

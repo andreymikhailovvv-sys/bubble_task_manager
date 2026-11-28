@@ -28,7 +28,8 @@ struct NativeTaskSettingsSheet: View {
     @State private var deadlineEnabled: Bool
     @State private var deadline: Date
     @State private var importance: Int
-    @State private var urgency: Int
+    private let urgency: Int
+    @State private var showingDeadline = false
     @State private var sphereID: String
     @State private var repeating: Bool
     @State private var recurrenceMethod: String
@@ -53,7 +54,7 @@ struct NativeTaskSettingsSheet: View {
         _deadlineEnabled = State(initialValue: due != nil)
         _deadline = State(initialValue: due ?? Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date())
         _importance = State(initialValue: max(1, min(5, task.importance ?? 3)))
-        _urgency = State(initialValue: max(1, min(5, task.urgency ?? 3)))
+        urgency = max(1, min(5, task.urgency ?? 3))
         _sphereID = State(initialValue: task.sphereId ?? "")
 
         let rule = task.recurrenceJson
@@ -84,34 +85,56 @@ struct NativeTaskSettingsSheet: View {
         NavigationStack {
             Form {
                 Section("Дедлайн") {
-                    Toggle("Установить срок", isOn: $deadlineEnabled)
+                    Button {
+                        showingDeadline = true
+                    } label: {
+                        HStack {
+                            Label(deadlineEnabled ? deadline.formatted(date: .abbreviated, time: .shortened) : "Выбрать дату и время", systemImage: "calendar")
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.caption)
+                        }
+                    }
                     if deadlineEnabled {
-                        DatePicker("Дата и время", selection: $deadline,
-                                   displayedComponents: [.date, .hourAndMinute])
+                        Button("Убрать срок", role: .destructive) { deadlineEnabled = false }
                     }
                 }
-
                 Section("Приоритет") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Важность")
-                            Spacer()
-                            Text("\(importance)/5").foregroundStyle(.secondary)
+                    Text("Важность")
+                    HStack(spacing: 8) {
+                        ForEach(task.parentTaskId == nil ? Array(1...5) : Array(1...3), id: \.self) { level in
+                            let colors: [Color] = task.parentTaskId == nil
+                                ? [.blue, .cyan, .purple, .orange, .pink] : [.cyan, .yellow, .red]
+                            Button {
+                                importance = level
+                            } label: {
+                                Text(task.parentTaskId == nil ? String(level) : ["Низкая", "Средняя", "Высокая"][level - 1])
+                                    .font(.caption.weight(.semibold))
+                                    .minimumScaleFactor(0.7)
+                                    .lineLimit(1)
+                                    .frame(maxWidth: .infinity, minHeight: 39)
+                                    .foregroundStyle(Color.primary)
+                                    .background(colors[level - 1].opacity(importance == level ? 0.65 : 0.20), in: RoundedRectangle(cornerRadius: 10))
+                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(colors[level - 1], lineWidth: importance == level ? 2 : 0.5))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(importance == level ? .isSelected : [])
                         }
-                        Slider(value: Binding(get: { Double(importance) },
-                                              set: { importance = Int($0.rounded()) }),
-                               in: 1...5, step: 1)
                     }
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Срочность")
-                            Spacer()
-                            Text("\(urgency)/5").foregroundStyle(.secondary)
+                }
+                .sheet(isPresented: $showingDeadline) {
+                    NavigationStack {
+                        Form {
+                            DatePicker("Дата и время", selection: $deadline, displayedComponents: [.date, .hourAndMinute])
+                                .datePickerStyle(.graphical)
                         }
-                        Slider(value: Binding(get: { Double(urgency) },
-                                              set: { urgency = Int($0.rounded()) }),
-                               in: 1...5, step: 1)
+                        .navigationTitle("Срок")
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Выбрать") { deadlineEnabled = true; showingDeadline = false }
+                            }
+                        }
                     }
+                    .presentationDetents([.large])
                 }
 
                 if task.parentTaskId == nil {

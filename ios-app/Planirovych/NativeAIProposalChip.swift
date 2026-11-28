@@ -15,6 +15,7 @@ struct NativeAIProposalChip: View {
     @State private var autoApply = false
     @State private var preferenceBusy = false
     @State private var remoteStatus: String?
+    @State private var accountNames: [String: String] = [:]
 
     private let finance = Color(red: 0.85, green: 0.53, blue: 0.14)
     private let tasks = Color(red: 0.47, green: 0.39, blue: 0.91)
@@ -117,7 +118,7 @@ struct NativeAIProposalChip: View {
                 }
                 if let details = proposal.details, !details.isEmpty {
                     ForEach(Array(details.enumerated()), id: \.offset) { _, detail in
-                        Text("• " + detail)
+                        Text("• " + displayDetail(detail))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -221,6 +222,16 @@ struct NativeAIProposalChip: View {
         }
     }
 
+    private func displayDetail(_ detail: String) -> String {
+        let prefixes = ["Счёт: ", "Счёт получения: ", "Счёт зачисления: ", "Счёт долга: "]
+        guard let prefix = prefixes.first(where: { detail.hasPrefix($0) }) else { return detail }
+        let raw = String(detail.dropFirst(prefix.count))
+        let names = raw.components(separatedBy: " → ").map { id in
+            accountNames[id] ?? (id == "не указано" ? id : "Выбранный счёт")
+        }
+        return prefix + names.joined(separator: " → ")
+    }
+
     private func humanTaskAction(_ type: String?) -> String {
         switch type {
         case "create_task": return "Создать задачу"
@@ -235,6 +246,9 @@ struct NativeAIProposalChip: View {
 
     private func refreshChip() async {
         let api = NativeAPI()
+        if economic, let snapshot = try? await api.economicSnapshot() {
+            accountNames = Dictionary(snapshot.accounts.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+        }
         do {
             async let details = api.proposalDetails(id: proposal.id, economic: economic)
             async let setting = api.proposalAutoApply(economic: economic)

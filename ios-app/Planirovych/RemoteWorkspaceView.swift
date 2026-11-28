@@ -42,6 +42,8 @@ struct RemoteWorkspaceView: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var session: NativeWorkspaceSession
     @State private var selectedTab: ConnectedTab = .overview
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var economicRepeatNotice: EcoRepeatNotice?
     @State private var selectedSphereID: String?
     @State private var showingNewTask = false
     @State private var editingTask: RemoteTask?
@@ -100,7 +102,12 @@ struct RemoteWorkspaceView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if selectedTab == .chat {
+            if selectedTab == .economic {
+                NativeEconomicView(
+                    session: session, awaitingVoice: quickAIWaiting,
+                    onVoiceRequested: { showingQuickVoice = true }
+                )
+            } else if selectedTab == .chat {
                 header
                     .padding(.horizontal, 16)
                 Rectangle()
@@ -120,12 +127,7 @@ struct RemoteWorkspaceView: View {
                         case .overview: overview
                         case .timeline: timelineContent
                         case .chat: EmptyView()
-                        case .economic:
-                            upcomingModule(
-                                "Экономыч",
-                                symbol: "wallet.bifold.fill",
-                                message: "Финансовые данные не загружаются в этой сборке. Переносим модуль отдельно, без демонстрации вымышленных балансов."
-                            )
+                        case .economic: EmptyView()
                         }
                     }
                     .padding(20)
@@ -138,6 +140,34 @@ struct RemoteWorkspaceView: View {
             navigation
         }
         .background(background.ignoresSafeArea())
+        .task(id: session.account?.id) {
+            guard let owner = session.account?.id else { return }
+            let key = "economic-repeat-notices-seen-" + owner
+            while !Task.isCancelled {
+                if scenePhase == .active && economicRepeatNotice == nil {
+                    let notices = (try? await NativeAPI().economicRepeatNotices()) ?? []
+                    guard !Task.isCancelled, session.account?.id == owner else { return }
+                    let seen = UserDefaults.standard.stringArray(forKey: key) ?? []
+                    if let next = notices.first(where: { $0.readAt == nil && !seen.contains($0.id) }) {
+                        UserDefaults.standard.set(Array((seen + [next.id]).suffix(200)), forKey: key)
+                        economicRepeatNotice = next
+                    }
+                }
+                try? await Task.sleep(for: .seconds(20))
+            }
+        }
+        .alert(item: $economicRepeatNotice) { notice in
+            Alert(title: Text("Экономыч"), message: Text(notice.content),
+                primaryButton: .default(Text("Открыть чип")) {
+                    Task {
+                        await session.loadChat()
+                        if let project = session.chatProjects.first(where: { $0.chats.contains(where: { $0.id == "quick-ai-requests" }) }) {
+                            await session.selectChat(projectId: project.id, chatId: "quick-ai-requests")
+                        }
+                        selectedTab = .chat
+                    }
+                }, secondaryButton: .cancel(Text("Закрыть")))
+        }
         .overlay(alignment: .bottomTrailing) {
             if selectedTab == .overview || selectedTab == .timeline {
                 quickPlusButton
@@ -152,14 +182,14 @@ struct RemoteWorkspaceView: View {
             showOverdue = false; showSectorSettings = false; showAccount = false
             showAppSettings = false; showTaskFilters = false; searchFocused = false
         }
-        .onChange(of: session.firstChatReactionSerial) { _, _ in
-            if quickAIWaiting {
+        .onChange(of: session.isSendingChat) { _, sending in
+            if sending && quickAIWaiting {
                 selectedTab = .chat
                 quickAIWaiting = false
             }
         }
         .sheet(isPresented: $showingQuickVoice) {
-            NativeQuickVoiceSheet(session: session) { recordingData, duration in
+            NativeQuickVoiceSheet(session: session, economic: selectedTab == .economic) { recordingData, duration in
                 quickAIWaiting = true
                 Task {
                     do {
@@ -849,17 +879,12 @@ struct RemoteWorkspaceView: View {
                     ], startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(width: 58, height: 58)
                 if quickAIWaiting {
-                    Circle()
-                        .trim(from: 0.05, to: 0.8)
-                        .stroke(.white.opacity(0.9), style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                        .frame(width: 42, height: 42)
-                        .rotationEffect(.degrees(quickAIWaiting ? 360 : 0))
-                        .animation(.linear(duration: 1.1).repeatForever(autoreverses: false),
-                                   value: quickAIWaiting)
+                    NativeAIWaitingIcon(tint: .white).frame(width: 44, height: 44)
+                } else {
+                    Image(systemName: "plus")
+                        .font(.system(size: 27, weight: .semibold))
+                        .foregroundStyle(.white)
                 }
-                Image(systemName: quickAIWaiting ? "sparkles" : "plus")
-                    .font(.system(size: 27, weight: .semibold))
-                    .foregroundStyle(.white)
             }
             .shadow(color: Color.purple.opacity(0.25), radius: 12, y: 6)
         }

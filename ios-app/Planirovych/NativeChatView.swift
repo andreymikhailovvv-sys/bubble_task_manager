@@ -166,23 +166,25 @@ struct NativeChatView: View {
                     }
                     .padding(.horizontal, 17)
                     .padding(.vertical, 18)
+                    Color.clear.frame(height: 1).id("chat-bottom")
                 }
                 .defaultScrollAnchor(.bottom)
+                .onAppear { proxy.scrollTo("chat-bottom", anchor: .bottom) }
                 .onChange(of: session.chatMessages.count) { _ in
                     if !session.chatMessages.isEmpty {
                         withAnimation(.easeOut(duration: 0.24)) {
-                            proxy.scrollTo(session.chatMessages.count - 1, anchor: .bottom)
+                            proxy.scrollTo("chat-bottom", anchor: .bottom)
                         }
                     }
                 }
                 .onChange(of: session.isSendingChat) { _, sending in
-                    if sending { withAnimation { proxy.scrollTo("pending", anchor: .bottom) } }
+                    if sending { withAnimation { proxy.scrollTo("chat-bottom", anchor: .bottom) } }
                 }
                 .onChange(of: session.chatStreamText) { _, _ in
-                    proxy.scrollTo("pending", anchor: .bottom)
+                    proxy.scrollTo("chat-bottom", anchor: .bottom)
                 }
                 .onChange(of: session.chatProgressStatus) { _, _ in
-                    proxy.scrollTo("pending", anchor: .bottom)
+                    proxy.scrollTo("chat-bottom", anchor: .bottom)
                 }
             }
 
@@ -282,17 +284,30 @@ struct NativeChatView: View {
                 Text(mine ? "Вы" : "Планировыч")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(mine ? Color.white.opacity(0.8) : accent)
-                markdown(message.generatedDocument?.isImage == true
-                    ? message.content.replacingOccurrences(
-                        of: #"\\[\\[file_ref=[^\\]]+\\]\\]"#, with: "",
-                        options: .regularExpression
-                    ).trimmingCharacters(in: .whitespacesAndNewlines)
-                    : message.content)
+                markdown(mine ? message.content : NativeTaskReferences.clean(message.content))
                     .font(.system(size: 15))
                     .textSelection(.enabled)
                     .foregroundStyle(mine ? Color.white : Color.primary)
-                if !mine, let doc = message.generatedDocument, doc.isImage {
-                    NativeGeneratedImageCard(document: doc)
+                if !mine {
+                    NativeTaskReferenceButtons(session: session, content: message.content)
+                }
+                if !mine, let doc = message.generatedDocument {
+                    if doc.isImage {
+                        NativeGeneratedImageCard(document: doc)
+                    } else {
+                        NativeGeneratedDocumentCard(document: doc)
+                    }
+                }
+                if !mine, let telegram = message.telegramSendDraft {
+                    NativeTelegramSendCard(draft: telegram)
+                }
+                if !mine, let mail = message.mailSendDraft {
+                    NativeMailSendCard(draft: mail)
+                }
+                if !mine, let read = message.telegramReadDraft {
+                    NativeTelegramReadCard(draft: read) { approval in
+                        await session.continueTelegramRead(approval)
+                    }
                 }
                 if !mine, let id = message.assistantSettingsProposalId {
                     NativeAssistantSettingsCard(id: id)
@@ -324,60 +339,9 @@ struct NativeChatView: View {
         return Text(value)
     }
 
-    private func statusLabel(_ code: String?) -> String {
-        guard let code else { return "Анализирую запрос" }
-        if code.hasPrefix("reading_file:") || code.hasPrefix("reading_attachment:") {
-            let name = String(code.split(separator: ":", maxSplits: 1).last ?? "")
-            return "Изучаю документ «\(name.prefix(70))»"
-        }
-        switch code {
-        case "analyzing_request": return "Анализирую запрос"
-        case "using_chat_history": return "Учитываю историю диалога"
-        case "searching_workspace": return "Ищу в задачах и заметках"
-        case "searching_tasks": return "Ищу задачи"
-        case "searching_notes": return "Ищу заметки"
-        case "searching_subtasks": return "Ищу подзадачи"
-        case "listing_tasks": return "Собираю список задач"
-        case "reading_task": return "Изучаю задачу"
-        case "reading_note": return "Читаю заметку"
-        case "reading_subtask": return "Изучаю подзадачу"
-        case "checking_sectors": return "Проверяю сектора"
-        case "searching_files": return "Ищу файл"
-        case "reading_file": return "Изучаю документ"
-        case "reading_attachment": return "Изучаю вложение"
-        case "searching_web": return "Ищу в интернете"
-        case "analyzing_web_results": return "Изучаю найденные источники"
-        case "analyzing_retrieved_context": return "Анализирую найденные данные"
-        case "forming_answer": return "Формирую ответ"
-        case "applying_changes": return "Вношу изменения"
-        case "generating_image": return "Создаю изображение"
-        case "editing_image": return "Редактирую изображение"
-        case "editing_document": return "Редактирую документ"
-        default: return "Работаю над запросом"
-        }
-    }
-
     private var aiStreamBubble: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 19, weight: .semibold))
-                    .foregroundStyle(accent)
-                    .symbolEffect(.pulse, options: .repeating)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(statusLabel(session.chatProgressStatus))
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .contentTransition(.opacity)
-                    HStack(spacing: 5) {
-                        ForEach(0..<3) { index in
-                            Capsule()
-                                .fill(accent.opacity(index == 1 ? 0.9 : 0.4))
-                                .frame(width: 17, height: 4)
-                        }
-                    }
-                }
-            }
+            NativeAIProgressHeader(status: session.chatProgressStatus, tint: accent)
             if session.chatProgressStatus == "generating_image" ||
                session.chatProgressStatus == "editing_image" {
                 ZStack {
@@ -397,7 +361,7 @@ struct NativeChatView: View {
                 .accessibilityLabel("ИИ создаёт изображение")
             }
             if !session.chatStreamText.isEmpty {
-                markdown(session.chatStreamText)
+                markdown(NativeTaskReferences.clean(session.chatStreamText))
                     .font(.system(size: 15))
                     .textSelection(.enabled)
                     .foregroundStyle(.primary)
@@ -578,5 +542,150 @@ private struct NativeAssistantReplyCard: View {
         }.padding(8).background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
         .onAppear { text = reply.text; status = reply.status }
         .onChange(of: reply.status) { _, newValue in status = newValue }
+    }
+}
+
+
+struct NativeAIWaitingIcon: View {
+    let tint: Color
+    var body: some View {
+        TimelineView(.animation) { context in
+            let phase = context.date.timeIntervalSinceReferenceDate
+            ZStack {
+                Circle().trim(from: 0.08, to: 0.76)
+                    .stroke(tint.opacity(0.85), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .rotationEffect(.degrees(phase.truncatingRemainder(dividingBy: 1.2) * 300))
+                Image(systemName: "sparkles")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .scaleEffect(CGFloat(0.9 + 0.1 * sin(phase * 5)))
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+struct NativeAIProgressHeader: View {
+    let status: String?
+    let tint: Color
+    var body: some View {
+        HStack(spacing: 12) {
+            NativeAIWaitingIcon(tint: tint).frame(width: 30, height: 30)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(Self.label(status))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .id(status ?? "")
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.22), value: status)
+                TimelineView(.animation) { context in
+                    HStack(spacing: 5) {
+                        ForEach(0..<3) { index in
+                            let wave = (sin(context.date.timeIntervalSinceReferenceDate * 5 - Double(index) * 1.5) + 1) / 2
+                            Capsule().fill(tint.opacity(0.25 + 0.75 * wave))
+                                .frame(width: 17, height: 4)
+                        }
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+    }
+    static func label(_ code: String?) -> String {
+        guard let code else { return "Анализирую запрос" }
+        if code.hasPrefix("reading_file:") || code.hasPrefix("reading_attachment:") {
+            let name = String(code.split(separator: ":", maxSplits: 1).last ?? "")
+            return "Изучаю документ «\(name.prefix(70))»"
+        }
+        switch code {
+        case "analyzing_request": return "Анализирую запрос"
+        case "using_chat_history": return "Учитываю историю диалога"
+        case "searching_workspace": return "Ищу в задачах и заметках"
+        case "searching_tasks": return "Ищу задачи"
+        case "searching_notes": return "Ищу заметки"
+        case "searching_subtasks": return "Ищу подзадачи"
+        case "listing_tasks": return "Собираю список задач"
+        case "reading_task": return "Изучаю задачу"
+        case "reading_note": return "Читаю заметку"
+        case "reading_subtask": return "Изучаю подзадачу"
+        case "checking_sectors": return "Проверяю сектора"
+        case "searching_files": return "Ищу файл"
+        case "reading_file": return "Изучаю документ"
+        case "reading_attachment": return "Изучаю вложение"
+        case "searching_web": return "Ищу в интернете"
+        case "analyzing_web_results": return "Изучаю найденные источники"
+        case "analyzing_retrieved_context": return "Анализирую найденные данные"
+        case "forming_answer": return "Формирую ответ"
+        case "applying_changes": return "Вношу изменения"
+        case "generating_image": return "Создаю изображение"
+        case "editing_image": return "Редактирую изображение"
+        case "generating_document", "creating_document": return "Создаю документ"
+        case "editing_document": return "Редактирую документ"
+        default: return "Работаю над запросом"
+        }
+    }
+
+
+}
+
+enum NativeTaskReferences {
+    private static let pattern = #"\[\[task_ref(?:=([^\]]+)|:([^|\]]+)\|([^\]]+))\]\]"#
+    struct Reference: Identifiable {
+        let id: String
+        let label: String?
+    }
+    static func parse(_ content: String) -> [Reference] {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        var seen = Set<String>()
+        return regex.matches(in: content, range: NSRange(content.startIndex..., in: content)).compactMap { match in
+            func capture(_ index: Int) -> String? {
+                Range(match.range(at: index), in: content).map { String(content[$0]) }
+            }
+            guard let id = (capture(1) ?? capture(2))?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !id.isEmpty, seen.insert(id).inserted else { return nil }
+            return Reference(id: id, label: capture(3))
+        }
+    }
+    static func clean(_ content: String) -> String {
+        content.replacingOccurrences(of: pattern, with: "$3", options: .regularExpression)
+            .replacingOccurrences(of: #"\[\[file_ref=[^\]]+\]\]"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+struct NativeTaskReferenceButtons: View {
+    @ObservedObject var session: NativeWorkspaceSession
+    let content: String
+    @State private var opened: RemoteTask?
+    @State private var error: String?
+    @State private var loading = false
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(NativeTaskReferences.parse(content)) { ref in
+                let target = session.tasks.first { $0.id == ref.id }
+                Button {
+                    Task {
+                        loading = true
+                        defer { loading = false }
+                        error = nil
+                        if let target { opened = target; return }
+                        await session.refresh()
+                        opened = session.tasks.first { $0.id == ref.id }
+                        if opened == nil { error = "Задача недоступна или удалена." }
+                    }
+                } label: {
+                    Label(target?.title ?? ref.label ?? "Открыть задачу",
+                          systemImage: target?.parentTaskId == nil ? "arrow.up.right.square" : "list.bullet.indent")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.bordered)
+                .disabled(loading)
+            }
+            if let error { Text(error).font(.caption2).foregroundStyle(.secondary) }
+        }
+        .sheet(item: $opened) { task in
+            NativeTaskEditorSheet(session: session, task: task)
+                .presentationDetents([.large])
+        }
     }
 }

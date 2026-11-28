@@ -91,18 +91,30 @@ struct NativeQuickVoiceSheet: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var recorder = ChatVoiceRecorder()
     @ObservedObject var session: NativeWorkspaceSession
+    let economic: Bool
     let onSubmitted: (Data, TimeInterval) -> Void
 
      @State private var errorText: String?
-    private let purple = Color(red: 0.55, green: 0.43, blue: 0.91)
+    private var purple: Color {
+        economic ? Color(red: 0.87, green: 0.58, blue: 0.23)
+                 : Color(red: 0.55, green: 0.43, blue: 0.91)
+    }
 
-    private let samples = [
-        "Добавь задачу позвонить клиенту завтра",
-        "Напомни оплатить счёт в пятницу",
-        "Перенеси встречу на понедельник",
-        "Запиши расход 1200 рублей на такси",
-        "Найди просроченные задачи"
-    ]
+    private var samples: [String] {
+        economic ? [
+            "Запиши расход 1200 рублей на такси",
+            "Добавь доход 50 000 рублей зарплата",
+            "Переведи 3000 рублей с карты на накопления",
+            "Сколько потратил на рестораны за месяц?",
+            "Создай долг Ивану на 10 000 рублей"
+        ] : [
+            "Добавь задачу позвонить клиенту завтра",
+            "Напомни оплатить счёт в пятницу",
+            "Перенеси встречу на понедельник",
+            "Запиши расход 1200 рублей на такси",
+            "Найди просроченные задачи"
+        ]
+    }
 
     var body: some View {
         NavigationStack {

@@ -1,0 +1,284 @@
+import Foundation
+
+struct EcoAccount: Codable, Identifiable {
+    let id: String
+    let name: String
+    let accountType: String?
+    let balanceMinor: String?
+    let openingBalanceMinor: String?
+    let creditLimitMinor: String?
+    let isPrimary: Bool?
+}
+
+struct EcoOperation: Codable, Identifiable {
+    let id: String
+    let kind: String
+    let title: String
+    let amountMinor: String
+    let sourceAccountId: String?
+    let targetAccountId: String?
+    let category: String?
+    let note: String?
+    let occurredAt: String?
+    let isAdjustment: Bool?
+    let debtId: String?
+    let debtPhase: String?
+    let positionsJson: String?
+    let calculation: String?
+    let recurrenceJson: NativeRecurrenceRule?
+}
+
+struct EcoDebt: Codable, Identifiable {
+    let id: String
+    let counterparty: String
+    let direction: String?
+    let amountMinor: String
+    let paidMinor: String
+    let isClosed: Bool?
+    let postedToAccount: Bool?
+    let accountId: String?
+    let dueAt: String?
+    let note: String?
+}
+
+struct EcoLoan: Codable, Identifiable {
+    let id: String
+    let name: String
+    let lender: String?
+    let principalMinor: String
+    let paidMinor: String
+    let annualRateBps: Int?
+    let termMonths: Int?
+    let monthlyPaymentOverrideMinor: String?
+    let startDate: String?
+    let paymentDate: String?
+    let remindersEnabled: Bool?
+    let isClosed: Bool?
+}
+
+struct EcoCategory: Codable, Identifiable {
+    let id: String
+    let kind: String
+    let name: String
+}
+
+struct EcoTotals: Decodable {
+    let balanceMinor: String
+    let monthIncomeMinor: String
+    let monthExpenseMinor: String
+    let operationCount: Int
+    let topExpenseCategory: String?
+    let topExpenseCategoryMinor: String?
+}
+
+struct EcoSnapshot: Decodable {
+    let accounts: [EcoAccount]
+    let totals: EcoTotals
+    let recent: [EcoOperation]
+    let categories: [EcoCategory]
+    let debts: [EcoDebt]
+    let loans: [EcoLoan]
+}
+
+struct EcoOperationTotals: Decodable {
+    let receivedMinor: String
+    let spentMinor: String
+    let netMinor: String
+}
+
+struct EcoOperationsEnvelope: Decodable {
+    let operations: [EcoOperation]
+    let nextCursor: String?
+    let totals: EcoOperationTotals?
+}
+
+struct EcoReportGroup: Decodable {
+    let totalMinor: String
+    let categories: [EcoReportCategory]
+}
+
+struct EcoReportCategory: Codable, Identifiable {
+    let name: String
+    let amountMinor: String
+    var id: String { name }
+}
+
+struct EcoReport: Decodable {
+    let period: String
+    let offset: Int
+    let start: String
+    let end: String
+    let expense: EcoReportGroup
+    let income: EcoReportGroup
+}
+
+struct EcoSessionEnvelope: Decodable {
+    let user: EcoServerUser
+}
+
+struct EcoServerUser: Decodable {
+    let telegramLinked: Bool
+    let timeZone: String?
+}
+
+/// Money is stored on the server in integer minor units, never a Double.
+struct EcoPositionDraft: Identifiable {
+    let id = UUID()
+    var name: String = ""
+    var amount: String = ""
+    static func read(_ raw: String) -> [EcoPositionDraft] {
+        guard let data = raw.data(using: .utf8),
+              let rows = (try? JSONSerialization.jsonObject(with: data)) as? [[String: String]] else { return [] }
+        return rows.map { EcoPositionDraft(name: $0["name"] ?? "", amount: EcoMoney.plain($0["amountMinor"])) }
+    }
+}
+struct EcoAdjustment: Decodable {
+    let amountMinor: String
+    let accountName: String
+}
+struct EcoMutationResult: Decodable {
+    let ok: Bool
+    let adjustment: EcoAdjustment?
+}
+enum EcoMoney {
+    static func grouped(_ value: String) -> String {
+        var result = value.components(separatedBy: .whitespacesAndNewlines).joined()
+        guard let regex = try? NSRegularExpression(pattern: #"\d+(?:[,.]\d*)?"#) else { return result }
+        let matches = regex.matches(in: result, range: NSRange(result.startIndex..., in: result))
+        for match in matches.reversed() {
+            guard let range = Range(match.range, in: result) else { continue }
+            let token = String(result[range])
+            let parts = token.split(whereSeparator: { $0 == "," || $0 == "." })
+            guard let whole = parts.first else { continue }
+            let digits = Array(whole)
+            let grouped = digits.enumerated().map { index, digit in
+                (index > 0 && (digits.count - index) % 3 == 0 ? " " : "") + String(digit)
+            }.joined()
+            result.replaceSubrange(range, with: grouped + String(token.dropFirst(whole.count)))
+        }
+        return result
+    }
+    static func isExpression(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let input = trimmed.hasPrefix("-") || trimmed.hasPrefix("+") ? String(trimmed.dropFirst()) : trimmed
+        return input.rangeOfCharacter(from: CharacterSet(charactersIn: "+-*/:xXхХ×÷−")) != nil
+    }
+    static func calculate(_ text: String) -> String? {
+        if !isExpression(text) { return parse(text) }
+        let input = text.components(separatedBy: .whitespacesAndNewlines).joined()
+            .replacingOccurrences(of: ",", with: ".")
+            .replacingOccurrences(of: "[xXхХ×]", with: "*", options: .regularExpression)
+            .replacingOccurrences(of: "[:÷]", with: "/", options: .regularExpression)
+            .replacingOccurrences(of: "−", with: "-")
+        guard input.count <= 240,
+              input.range(of: #"^\d{1,12}(?:\.\d{1,2})?(?:[+\-*/]\d{1,12}(?:\.\d{1,2})?)+$"#, options: .regularExpression) != nil,
+              let regex = try? NSRegularExpression(pattern: #"\d+(?:\.\d+)?|[+\-*/]"#) else { return nil }
+        let tokens = regex.matches(in: input, range: NSRange(input.startIndex..., in: input)).compactMap { match in
+            Range(match.range, in: input).map { String(input[$0]) }
+        }
+        guard let first = tokens.first, var current = Decimal(string: first, locale: Locale(identifier: "en_US_POSIX")) else { return nil }
+        var total = Decimal.zero
+        var sign = Decimal(1)
+        for index in stride(from: 1, to: tokens.count, by: 2) {
+            guard index + 1 < tokens.count, let next = Decimal(string: tokens[index + 1], locale: Locale(identifier: "en_US_POSIX")) else { return nil }
+            switch tokens[index] {
+            case "*": current *= next
+            case "/": guard next != 0 else { return nil }; current /= next
+            default: total += sign * current; current = next; sign = tokens[index] == "+" ? 1 : -1
+            }
+            guard !current.isNaN, !total.isNaN else { return nil }
+        }
+        var minor = (total + sign * current) * 100
+        guard !minor.isNaN, minor > 0 else { return nil }
+        var rounded = Decimal.zero
+        NSDecimalRound(&rounded, &minor, 0, .plain)
+        guard rounded > 0, rounded <= Decimal(999_999_999_999_999) else { return nil }
+        return NSDecimalNumber(decimal: rounded).stringValue
+    }
+
+    static func decimal(_ minor: String?) -> Decimal {
+        let raw = Decimal(string: minor ?? "0", locale: Locale(identifier: "en_US_POSIX")) ?? 0
+        return raw / Decimal(100)
+    }
+
+    static func formatted(_ minor: String?) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "RUB"
+        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.maximumFractionDigits = 2
+        formatter.minimumFractionDigits = 0
+        return formatter.string(from: NSDecimalNumber(decimal: decimal(minor))) ?? "0 ₽"
+    }
+
+    static func parse(_ value: String, allowZero: Bool = false, allowNegative: Bool = false) -> String? {
+        // Russian currency formatting uses non-breaking spaces as grouping
+        // separators. Strip Unicode whitespace before converting to minor units.
+        let clean = value.components(separatedBy: .whitespacesAndNewlines)
+            .joined().replacingOccurrences(of: ",", with: ".")
+        guard clean.range(of: #"^-?\d{1,12}(?:\.\d{1,2})?$"#,
+                          options: .regularExpression) != nil else { return nil }
+        let negative = clean.hasPrefix("-")
+        if negative && !allowNegative { return nil }
+        let components = clean.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+            .split(separator: ".", omittingEmptySubsequences: false)
+        guard let rubles = Int64(components[0]) else { return nil }
+        let cents = components.count > 1
+            ? Int64(String(components[1]).padding(toLength: 2, withPad: "0", startingAt: 0))
+            : 0
+        guard let fraction = cents, rubles <= 9_999_999_999_999 else { return nil }
+        let sum = rubles * 100 + fraction
+        if sum == 0 && !allowZero { return nil }
+        return String(negative ? -sum : sum)
+    }
+
+    static func plain(_ minor: String?) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        formatter.locale = Locale(identifier: "ru_RU")
+        return formatter.string(from: NSDecimalNumber(decimal: decimal(minor))) ?? "0"
+    }
+}
+
+enum EcoResource: String, CaseIterable, Identifiable {
+    case operations, accounts, debts, loans, categories
+    var id: String { rawValue }
+    var display: String {
+        switch self {
+        case .operations: return "Операция"
+        case .accounts: return "Счёт"
+        case .debts: return "Долг"
+        case .loans: return "Кредит"
+        case .categories: return "Категория"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .operations: return "arrow.left.arrow.right"
+        case .accounts: return "creditcard"
+        case .debts: return "person.crop.circle.badge.clock"
+        case .loans: return "banknote"
+        case .categories: return "square.grid.2x2"
+        }
+    }
+}
+
+struct EcoEditorTarget: Identifiable {
+    let id: String
+    let resource: EcoResource
+    let raw: [String: Any]?
+    init(resource: EcoResource, raw: [String: Any]? = nil) {
+        self.resource = resource
+        self.raw = raw
+        self.id = (raw?["id"] as? String).map { resource.rawValue + ":" + $0 } ?? resource.rawValue
+    }
+}
+
+struct EcoRepeatNotice: Decodable, Identifiable {
+    let id: String
+    let eventKey: String
+    let content: String
+    let readAt: String?
+}
