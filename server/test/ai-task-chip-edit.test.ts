@@ -117,3 +117,10 @@ test('rich description input coalesces expensive sanitizing and flushes before s
   assert.match(editor,/onBlur=\{handleBlur\}/);
   assert.match(editor,/flushPending\(\);\s*\};\s*\}, \[\]\)/);
 });
+
+
+test('description chip preserves text beyond the historical 4000-character limit', () => {
+  const base = taskChipInitial({operation:'create_task',title:'Задача'})!;
+  const description = '<p>' + 'текст '.repeat(3000) + '</p>';
+  assert.equal(validateTaskChipValues({...base,description},base).description, description);
+});

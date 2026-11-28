@@ -43,3 +43,22 @@ test('split divider handles pointer/keyboard drag and placement targets', async 
   assert.match(app, /<FullscreenWorkspaceSingle panel=\{fullscreenPanels\[0\]\}/);
   assert.match(app, /compact=\{isBubbleFullscreen && fullscreenPanels\.length === 2\}/);
 });
+
+test('primary workspace sidebar loads account order and saves both drag and keyboard changes', async () => {
+  const [sidebar, api, routes, schema, migration] = await Promise.all([
+    load('../../client/src/components/PrimaryWorkspaceSidebar.tsx'),
+    load('../../client/src/lib/api.ts'), load('../src/routes/api.ts'),
+    load('../prisma/schema.prisma'), load('../prisma/migrations/20261128103000_primary_sidebar_order/migration.sql')
+  ]);
+  assert.match(schema, /primarySidebarOrder String\[\] @default\(\[\]\)/);
+  assert.match(migration, /ADD COLUMN "primarySidebarOrder" TEXT\[\]/);
+  assert.match(routes, /get\('\/user\/primary-sidebar-order', requireAuth/);
+  assert.match(routes, /put\('\/user\/primary-sidebar-order', requireAuth, taskProposalSameOrigin/);
+  assert.match(routes, /where: \{ id: req\.user!\.id, primarySidebarOrder: \{ equals: \[\] \} \}/);
+  assert.match(api, /savePrimarySidebarOrder/);
+  assert.match(sidebar, /api\.getPrimarySidebarOrder\(\)/);
+  assert.match(sidebar, /if \(cancelled \|\| orderDirty\.current\) return/);
+  assert.match(sidebar, /api\.savePrimarySidebarOrder\(orderRef\.current, true\)/);
+  assert.match(sidebar, /onReorder=\{saveOrder\}/);
+  assert.match(sidebar, /saveOrder\(next\);/);
+});
