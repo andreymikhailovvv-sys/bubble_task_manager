@@ -1,6 +1,6 @@
 import { announceEconomicOperation, FINANCIAL_MASCOT_EVENT, type FinancialMascotMode } from './components/EconomicMoneyGesture';
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ChangeEvent, type CSSProperties } from 'react';
-import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, BookOpen, Check, ChevronRight, CircleDollarSign, CreditCard, Landmark, LayoutDashboard, Loader2, MessageCircle, Paperclip, Mic, Pencil, Plus, Send, Settings2, Sparkles, Trash2, WalletCards, X } from 'lucide-react';
+import { ArrowDownLeft, ArrowRightLeft, ArrowUpRight, BookOpen, Check, ChevronDown, ChevronRight, ChevronUp, CircleDollarSign, CreditCard, Landmark, LayoutDashboard, Loader2, MessageCircle, Paperclip, Mic, Pencil, Plus, Send, Settings2, Sparkles, Trash2, WalletCards, X } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import ModuleRail from './components/ModuleRail';
@@ -258,9 +258,9 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
     try { setBannerHidden(localStorage.getItem('btm:' + user.id + ':economic-banner-hidden') === '1'); }
     catch { setBannerHidden(false); }
   }, [user?.id]);
-  const hideBanner = () => {
-    setBannerHidden(true);
-    if (user?.id) try { localStorage.setItem('btm:' + user.id + ':economic-banner-hidden', '1'); } catch { /* Private mode */ }
+  const setBannerVisibility = (hidden: boolean) => {
+    setBannerHidden(hidden);
+    if (user?.id) try { localStorage.setItem('btm:' + user.id + ':economic-banner-hidden', hidden ? '1' : '0'); } catch { /* Private mode */ }
   };
   useEffect(() => {
     if (!addMenuOpen) return;
@@ -769,7 +769,8 @@ export default function EconomicApp({ mobile = false, embeddedInMiniApp = false,
         </nav>}
         {error && <div className="econ-error" role="alert"><span>{error}</span><button type="button" aria-label="Скрыть ошибку" onClick={() => setError('')}><X size={16}/></button></div>}
         {section === 'overview' && <>
-          {!bannerHidden && <div className="econ-intro"><div><span className="econ-kicker"><span className="econ-intro-star">✦</span> Личные финансы без хаоса</span><h2>Держите деньги<br/><em>под контролем.</em></h2><p>Баланс, повседневные траты, долги и кредиты в одном спокойном пространстве.</p></div><div className="econ-intro-illustration" aria-hidden="true"><div className="econ-coin-big">₽</div><div className="econ-coin-small">₽</div><div className="econ-intro-orbit"/></div><button type="button" className="econ-intro-hide" onClick={hideBanner} aria-label="Скрыть баннер">Скрыть</button></div>}
+          {!bannerHidden ? <div className="econ-intro" id="econ-welcome-banner"><div><span className="econ-kicker"><span className="econ-intro-star">✦</span> Личные финансы без хаоса</span><h2>Держите деньги<br/><em>под контролем.</em></h2><p>Баланс, повседневные траты, долги и кредиты в одном спокойном пространстве.</p></div><div className="econ-intro-illustration" aria-hidden="true"><div className="econ-coin-big">₽</div><div className="econ-coin-small">₽</div><div className="econ-intro-orbit"/></div><button type="button" className="econ-intro-hide" onClick={() => setBannerVisibility(true)} aria-expanded="true" aria-label="Свернуть приветственный блок" title="Свернуть блок"><ChevronUp size={18}/></button></div>
+          : <button type="button" className="econ-intro-restore" onClick={() => setBannerVisibility(false)} aria-expanded="false"><ChevronDown size={16}/> Развернуть приветственный блок</button>}
           <div className="econ-stats">
             <article className="econ-stat"><div className="econ-stat-label"><WalletCards size={18}/> Общий баланс</div><strong>{wholeRubles(snapshot.totals.balanceMinor)}</strong><small>Денежные счета без кредитного лимита</small></article>
             <article className="econ-stat"><div className="econ-stat-label"><ArrowDownLeft size={18}/> Доходы за месяц</div><strong className="econ-positive">{wholeRubles(snapshot.totals.monthIncomeMinor)}</strong><small>Без переводов между счетами</small></article>

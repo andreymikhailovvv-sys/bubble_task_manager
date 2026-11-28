@@ -675,9 +675,26 @@ body:has(.econ-root.econ-mobile-workspace) #root{min-height:100dvh}
 .econ-stats .econ-stat strong{white-space:normal;overflow-wrap:anywhere;line-height:1.16}
 .econ-stats .econ-stat small{margin-top:auto}
 .econ-report-preview-wrap{margin-top:20px}
-.econ-intro .econ-intro-hide{position:absolute;z-index:5;right:14px;bottom:13px;
-  padding:5px 11px;font-size:11px;font-weight:600;border:1px solid rgba(254,216,166,.28);
-  background:rgba(20,19,23,.36);color:#fff4e4;border-radius:9px}
+/* Same compact collapse/restore controls as the planner Test Page,
+   using Economic's theme tokens and leaving no empty banner tile. */
+.econ-root .econ-intro{padding-bottom:32px}
+.econ-root .econ-intro .econ-intro-hide{
+  position:absolute;left:50%;bottom:5px;z-index:5;transform:translateX(-50%);
+  display:grid;place-items:center;width:40px;height:23px;
+  padding:0;margin:0;border-radius:12px;border:1px solid rgba(254,216,166,.30);
+  color:#ffdfa8;background:rgba(94,55,24,.62);
+}
+.econ-root .econ-intro .econ-intro-hide:hover{background:rgba(133,79,31,.80)}
+.econ-root.econ-light .econ-intro .econ-intro-hide{background:#fff2df;border-color:#e7c59c;color:#a86013}
+.econ-root.econ-light .econ-intro .econ-intro-hide:hover{background:#ffe5c3}
+.econ-root .econ-intro-restore{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;min-height:37px;margin:5px 0 10px;padding:7px 13px;
+  border:1px dashed var(--ec-border);border-radius:12px;
+  background:var(--ec-panel2);color:var(--ec-muted);font-size:12px;font-weight:710;
+}
+.econ-root .econ-intro-restore:hover{border-color:var(--ec-orange);color:var(--ec-orange)}
+.econ-root.econ-light .econ-intro-restore:hover{color:#a86013}
 .econ-filters-toggle-row{display:flex;justify-content:flex-end;padding:9px 0}
 .econ-filters-toggle{display:inline-flex;align-items:center;gap:8px;padding:9px 12px;
   border:1px solid var(--ec-border);background:var(--ec-panel2);color:var(--ec-text);
