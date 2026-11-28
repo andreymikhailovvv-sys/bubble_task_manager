@@ -24,8 +24,8 @@ internal object PlanikSystemAssistant {
         if(!isSelected(context) || !wakeDeviceUnlocked(context))return null
         val prefs=context.getSharedPreferences("planik_foreground_wake",Context.MODE_PRIVATE)
         val account=prefs.getString(ACCOUNT_KEY,null) ?: return null
-        if(!prefs.getBoolean("enabled_"+account,false) || wakeListeningMode(prefs,account)!=WAKE_SYSTEM)return null
-        val action=prefs.getString("action_"+account,"live") ?: "live"
+        if(!systemAssistantEnabled(prefs,account))return null
+        val action=prefs.getString("system_action_"+account,"live") ?: "live"
         if(action !in listOf("live","voice"))return null
         return Invocation(account,action)
     }
@@ -68,6 +68,7 @@ private class PlanikVoiceSession(private val appContext:Context):VoiceInteractio
             setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
             clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setDimAmount(0f)
+            setWindowAnimations(0)
             clearFlags(android.view.WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM)
             setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         }

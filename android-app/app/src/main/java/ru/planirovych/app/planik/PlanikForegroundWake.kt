@@ -56,23 +56,41 @@ internal data class PlanikWakeControls(
     val autoOpen: Boolean,
     val onAutoOpen: () -> Unit,
     val systemSelected: Boolean,
+    val systemEnabled: Boolean,
+    val systemAction: String,
+    val onSystemEnabled: (Boolean) -> Unit,
+    val onSystemAction: (String) -> Unit,
     val onSystemSettings: () -> Unit,
     val onChange: (Boolean) -> Unit
 )
 
 internal const val WAKE_APP = "app"
 internal const val WAKE_BACKGROUND = "background"
-internal const val WAKE_SYSTEM = "system"
+// Preserve existing system-only opt-in without silently enabling background capture.
+internal fun migrateWakeSettings(prefs:SharedPreferences, accountId:String) {
+    if(prefs.getString("mode_" + accountId,null)!="system")return
+    val enabled=prefs.getBoolean("enabled_" + accountId,false)
+    prefs.edit().putBoolean("system_enabled_"+accountId,enabled)
+        .putString("system_action_"+accountId,prefs.getString("action_"+accountId,"live"))
+        .putString("mode_" + accountId,WAKE_APP)
+        .putBoolean("background_" + accountId,false)
+        .putBoolean("enabled_" + accountId,false).apply()
+}
+internal fun systemAssistantEnabled(prefs:SharedPreferences,accountId:String):Boolean {
+    migrateWakeSettings(prefs,accountId)
+    return prefs.getBoolean("system_enabled_"+accountId,false)
+}
 
 internal fun wakeListeningMode(prefs:SharedPreferences, accountId:String):String =
     when(val stored=prefs.getString("mode_" + accountId, null)) {
-        WAKE_APP, WAKE_BACKGROUND, WAKE_SYSTEM -> stored
+        WAKE_APP, WAKE_BACKGROUND -> stored
+        "system" -> WAKE_APP
         "always" -> WAKE_BACKGROUND
         else -> if(prefs.getBoolean("background_" + accountId, false)) WAKE_BACKGROUND else WAKE_APP
     }
 
 internal fun saveWakeListeningMode(prefs:SharedPreferences, accountId:String, mode:String) {
-    require(mode in listOf(WAKE_APP,WAKE_BACKGROUND,WAKE_SYSTEM))
+    require(mode in listOf(WAKE_APP,WAKE_BACKGROUND))
     prefs.edit().putString("mode_" + accountId,mode)
         .putBoolean("background_" + accountId,mode==WAKE_BACKGROUND).apply()
 }
@@ -327,6 +345,9 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     val preferences = remember(context) { context.getSharedPreferences("planik_foreground_wake", Context.MODE_PRIVATE) }
+    remember(preferences,accountId) { accountId?.let { migrateWakeSettings(preferences,it) } }
+    var systemEnabled by remember(accountId) { mutableStateOf(accountId?.let { systemAssistantEnabled(preferences,it) } ?: false) }
+    var systemAction by remember(accountId) { mutableStateOf(preferences.getString("system_action_"+accountId,"live") ?: "live") }
     var enabled by remember(accountId) {
         mutableStateOf(accountId != null && preferences.getBoolean("enabled_" + accountId, false))
     }
@@ -362,6 +383,8 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
                 listeningMode = wakeListeningMode(preferences,accountId)
             if (accountId != null && key == "enabled_" + accountId)
                 enabled = preferences.getBoolean(key, false)
+            if(accountId!=null && key=="system_enabled_"+accountId)
+                systemEnabled=systemAssistantEnabled(preferences,accountId)
         }
         preferences.registerOnSharedPreferenceChangeListener(observer)
         onDispose { preferences.unregisterOnSharedPreferenceChangeListener(observer) }
@@ -397,11 +420,20 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
         }
         requestedAccount = null
     }
-    DisposableEffect(accountId,enabled,listeningMode,available,ready) {
+    var requestedSystemAccount by remember { mutableStateOf<String?>(null) }
+    val requestSystemPermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        val requested=requestedSystemAccount
+        if(requested!=null && requested==currentAccount && granted) {
+            preferences.edit().putBoolean("system_enabled_"+requested,true).apply()
+            systemEnabled=true
+        }
+        requestedSystemAccount=null
+    }
+    DisposableEffect(accountId,systemEnabled,available,ready) {
         // Do not erase the selected account during a cold-start loading state.
         if(accountId!=null || ready) {
             val editor=preferences.edit()
-            if(accountId!=null && enabled && available && listeningMode==WAKE_SYSTEM)
+            if(accountId!=null && systemEnabled && available)
                 editor.putString(PlanikSystemAssistant.ACCOUNT_KEY,accountId)
             else editor.remove(PlanikSystemAssistant.ACCOUNT_KEY)
             editor.apply()
@@ -412,8 +444,8 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
         if (accountId == null || !enabled || !background || !available)
             PlanikWakeBackgroundService.stop(context)
         else PlanikWakeBackgroundService.stopOtherAccount(context,accountId)
-        if (!enabled || !available || !ready || accountId == null || listeningMode==WAKE_SYSTEM) {
-            // The system owns invocation; no local PCM listener/FGS.
+        if (!enabled || !available || !ready || accountId == null) {
+            // System assistant opt-in is independent of local capture.
             onDispose { }
         } else if (background) {
             val callback: (String) -> Unit = { mode -> activity?.dispatchPlanikWake(accountId, mode) }
@@ -461,9 +493,6 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
         accountId == null -> "Откройте профиль"
         !enabled && status == "На паузе" -> "Выключено"
         enabled && !ready -> "Ожидание рабочего пространства"
-        enabled && listeningMode==WAKE_SYSTEM -> if(systemSelected)
-            "Системный ассистент выбран · вызов жестом или кнопкой"
-            else "Выберите Планировыч ассистентом Android"
         enabled && background -> PlanikWakeBackgroundService.status.ifBlank { status }
         else -> status
     }
@@ -476,7 +505,7 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
             }
         },
         onListeningMode = { value ->
-            if (accountId != null && value in listOf(WAKE_APP,WAKE_BACKGROUND,WAKE_SYSTEM)) {
+            if (accountId != null && value in listOf(WAKE_APP,WAKE_BACKGROUND)) {
                 if (value == WAKE_BACKGROUND && Build.VERSION.SDK_INT >= 33 &&
                     ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                     requestedBackgroundAccount=accountId
@@ -490,6 +519,25 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
             }
         },
         systemSelected=systemSelected,
+        systemEnabled=systemEnabled,
+        systemAction=systemAction,
+        onSystemEnabled={ value ->
+            if(accountId!=null && available) {
+                if(!value || hasPermission(context)) {
+                    preferences.edit().putBoolean("system_enabled_"+accountId,value).apply()
+                    systemEnabled=value
+                } else {
+                    requestedSystemAccount=accountId
+                    requestSystemPermission.launch(Manifest.permission.RECORD_AUDIO)
+                }
+            }
+        },
+        onSystemAction={ value ->
+            if(accountId!=null && value in listOf("live","voice")) {
+                preferences.edit().putString("system_action_"+accountId,value).apply()
+                systemAction=value
+            }
+        },
         onSystemSettings={
             runCatching { assistantSettings.launch(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS)) }.onFailure {
                 runCatching { assistantSettings.launch(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)) }
