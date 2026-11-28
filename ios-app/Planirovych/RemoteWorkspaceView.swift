@@ -61,6 +61,7 @@ struct RemoteWorkspaceView: View {
     @State private var showSectorSettings = false
     @State private var showAccount = false
     @State private var showAppSettings = false
+    @ObservedObject private var shortcutRouter = PlanikShortcutRouter.shared
     @State private var showTaskFilters = false
     @State private var accountName = ""
     @State private var accountUsername = ""
@@ -143,6 +144,13 @@ struct RemoteWorkspaceView: View {
                     .padding(.trailing, 22)
                     .padding(.bottom, 90)
             }
+        }
+        .onChange(of: shortcutRouter.pending?.id) { _, id in
+            guard id != nil else { return }
+            showingQuickVoice = false; quickEntryKind = nil; showingNewTask = false
+            openedTimelineHabit = nil; showCredits = false; editingTask = nil
+            showOverdue = false; showSectorSettings = false; showAccount = false
+            showAppSettings = false; showTaskFilters = false; searchFocused = false
         }
         .onChange(of: session.firstChatReactionSerial) { _, _ in
             if quickAIWaiting {
@@ -298,6 +306,12 @@ struct RemoteWorkspaceView: View {
         .sheet(isPresented: $showAppSettings) {
             NavigationStack {
                 Form {
+                    Section("Кнопка действия") {
+                        Text("Назначьте одну из команд Планировыча в Настройки iPhone → Кнопка действия → Команда. Доступны голосовой ввод и живое общение.")
+                            .font(.footnote)
+                        Button("Голосовой ввод") { shortcutRouter.enqueue(.voice) }
+                        Button("Живое общение") { shortcutRouter.enqueue(.live) }
+                    }
                     Section("Планировыч") {
                         Button("Обновить данные") {
                             Task { await session.refresh() }

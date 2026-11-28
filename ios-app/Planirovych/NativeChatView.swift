@@ -20,6 +20,7 @@ final class ChatVoiceRecorder: NSObject, ObservableObject {
                 continuation.resume(returning: allowed)
             }
         }
+        guard !Task.isCancelled else { return }
         guard granted else {
             errorMessage = "Разреши доступ к микрофону в настройках iPhone."
             return
@@ -55,7 +56,7 @@ final class ChatVoiceRecorder: NSObject, ObservableObject {
                     let decibels = recorder.averagePower(forChannel: 0)
                     let normalized = max(0, min(1, (Double(decibels) + 47) / 43))
                     self.level = CGFloat(pow(normalized, 1.4))
-                    try? await Task.sleep(nanoseconds: 80_000_000)
+                    try? await Task.sleep(nanoseconds: 40_000_000)
                 }
             }
         } catch {

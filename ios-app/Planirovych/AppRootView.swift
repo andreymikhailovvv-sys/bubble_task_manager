@@ -341,6 +341,11 @@ final class NativeWorkspaceSession: ObservableObject {
                 await selectChat(projectId: quickProject.id, chatId: "quick-ai-requests")
             }
         }
+        // Never fall through to an unrelated selected conversation.
+        guard selectedThreadID == "quick-ai-requests", !isLoadingChat else {
+            chatError = "Быстрый чат пока недоступен."
+            return false
+        }
         return await sendChat(question)
     }
 
@@ -482,6 +487,8 @@ struct ContentView: View {
     @StateObject private var session = NativeWorkspaceSession()
     @State private var showOfflineDemo = false
     @State private var subscriptionNotice: SubscriptionNotice?
+    @StateObject private var shortcutRouter = PlanikShortcutRouter.shared
+    @State private var activeAssistant: PlanikShortcutRequest?
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -515,7 +522,7 @@ struct ContentView: View {
         .task(id: session.account?.id) {
             guard let id = session.account?.id else { subscriptionNotice = nil; return }
             while !Task.isCancelled {
-                if scenePhase == .active && subscriptionNotice == nil {
+                if scenePhase == .active && subscriptionNotice == nil && activeAssistant == nil && shortcutRouter.pending == nil {
                     let notices = (try? await NativeAPI().subscriptionNotices()) ?? []
                     guard session.account?.id == id, !Task.isCancelled else { return }
                     let key = "subscription-notices-seen-" + id
@@ -526,6 +533,29 @@ struct ContentView: View {
                 }
                 try? await Task.sleep(for: .seconds(30))
             }
+        }
+        .task(id: "\(shortcutRouter.pending?.id.uuidString ?? "")|\(session.account?.id ?? "")|\(scenePhase == .active)|\(activeAssistant?.id.uuidString ?? "")") {
+#if DEBUG
+            if Self.ciPreviewTab != nil { return }
+#endif
+            guard scenePhase == .active, let request = shortcutRouter.pending,
+                  session.account != nil, activeAssistant == nil else { return }
+            if Date().timeIntervalSince(request.createdAt) > 120 {
+                shortcutRouter.consume(request.id)
+                return
+            }
+            // Let any existing workspace sheet dismiss before presenting.
+            showOfflineDemo = false
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled, shortcutRouter.pending?.id == request.id,
+                  session.account != nil, activeAssistant == nil, scenePhase == .active else { return }
+            activeAssistant = request
+            shortcutRouter.consume(request.id)
+        }
+        .sheet(item: $activeAssistant, onDismiss: {
+            Task { await session.refresh(); await session.loadChat() }
+        }) { request in
+            PlanikShortcutSheet(session: session, mode: request.mode)
         }
         .alert(item: $subscriptionNotice) { notice in
             Alert(title: Text("Планировыч"), message: Text(notice.content), dismissButton: .default(Text("Понятно")) {
