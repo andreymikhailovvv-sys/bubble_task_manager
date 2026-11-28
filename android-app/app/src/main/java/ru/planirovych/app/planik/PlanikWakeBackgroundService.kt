@@ -15,6 +15,9 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -47,11 +50,12 @@ internal object PlanikWakeDispatch {
         ticket=token
         ticketTime=SystemClock.elapsedRealtime()
         return Intent(context, MainActivity::class.java).setAction(ACTION_WAKE)
-            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             .putExtra(TOKEN,token)
             .putExtra(MainActivity.EXTRA_NOTIFICATION_ACCOUNT,id)
             .putExtra(MainActivity.EXTRA_QUICK_AI_MODE,mode)
     }
+    fun pending(intent: Intent): Boolean = ticket!=null && intent.getStringExtra(TOKEN)==ticket
     fun consume(intent: Intent): Boolean {
         val expected=ticket ?: return false
         if(intent.getStringExtra(TOKEN)!=expected ||
@@ -64,8 +68,8 @@ internal object PlanikWakeDispatch {
 
 class PlanikWakeBackgroundService : Service() {
     companion object {
-        private const val CHANNEL="planik_background_wake"
-        private const val ALERT="planik_wake_detected"
+        private const val CHANNEL="planik_background_wake_silent"
+        private const val ALERT="planik_wake_detected_silent"
         private const val ONGOING_ID=7301
         private const val ALERT_ID=7302
         private const val STOP="ru.planirovych.action.PLANIK_WAKE_STOP"
@@ -96,6 +100,7 @@ class PlanikWakeBackgroundService : Service() {
     private var listener: ForegroundWakeListener?=null
     private var id: String?=null
     private var lastAlert=0L
+    private val handler=Handler(Looper.getMainLooper())
     private val gateObserver: () -> Unit = { listener?.refresh() }
     private val screenReceiver=object:BroadcastReceiver(){
         override fun onReceive(context:Context?,intent:Intent?) {
@@ -107,8 +112,12 @@ class PlanikWakeBackgroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         val manager=getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(NotificationChannel(CHANNEL,"Планик: фоновый микрофон",NotificationManager.IMPORTANCE_LOW))
-        manager.createNotificationChannel(NotificationChannel(ALERT,"Планик: голосовой вызов",NotificationManager.IMPORTANCE_HIGH))
+        manager.createNotificationChannel(NotificationChannel(CHANNEL,"Планик: фоновый микрофон",NotificationManager.IMPORTANCE_LOW).apply {
+            setSound(null,null); enableVibration(false); setShowBadge(false)
+        })
+        manager.createNotificationChannel(NotificationChannel(ALERT,"Планик: голосовой вызов",NotificationManager.IMPORTANCE_HIGH).apply {
+            setSound(null,null); enableVibration(false); setShowBadge(false)
+        })
         ContextCompat.registerReceiver(this,screenReceiver,IntentFilter().apply {
             addAction(Intent.ACTION_SCREEN_OFF)
             addAction(Intent.ACTION_SCREEN_ON)
@@ -139,7 +148,7 @@ class PlanikWakeBackgroundService : Service() {
                 .setSmallIcon(R.drawable.ic_stat_planirovych)
                 .setContentTitle("Планик слушает кодовую фразу")
                 .setContentText("Локальное распознавание при разблокированном экране")
-                .setOngoing(true)
+                .setOngoing(true).setOnlyAlertOnce(true)
                 .addAction(Notification.Action.Builder(android.R.drawable.ic_menu_close_clear_cancel,"Выключить фон",stop).build())
                 .build()
             startForeground(ONGOING_ID,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
@@ -157,14 +166,24 @@ class PlanikWakeBackgroundService : Service() {
                 val now=SystemClock.elapsedRealtime()
                 if(lastAlert==0L || now-lastAlert>15_000L) {
                     lastAlert=now
-                    val pending=PendingIntent.getActivity(this,1,PlanikWakeDispatch.intent(this,account,mode),
-                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-                    val alert=Notification.Builder(this,ALERT)
-                        .setSmallIcon(R.drawable.ic_stat_planirovych)
-                        .setContentTitle("Планик услышал вас")
-                        .setContentText(if(mode=="voice")"Открыть голосовой ввод" else "Начать живое общение")
-                        .setContentIntent(pending).setAutoCancel(true).build()
-                    getSystemService(NotificationManager::class.java).notify(ALERT_ID,alert)
+                    val wakeIntent=PlanikWakeDispatch.intent(this,account,mode)
+                    // Explicit user-granted permission permits a background
+                    // Activity launch; no synthetic overlay or full-screen alert.
+                    val attempted=Settings.canDrawOverlays(this) &&
+                        runCatching { startActivity(wakeIntent); true }.getOrDefault(false)
+                    fun fallback() {
+                        if(id!=account || !PlanikWakeDispatch.pending(wakeIntent))return
+                        val pending=PendingIntent.getActivity(this,1,wakeIntent,
+                            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+                        val alert=Notification.Builder(this,ALERT)
+                            .setSmallIcon(R.drawable.ic_stat_planirovych)
+                            .setContentTitle("Планик услышал вас")
+                            .setContentText(if(mode=="voice")"Открыть голосовой ввод" else "Начать живое общение")
+                            .setContentIntent(pending).setAutoCancel(true).setOnlyAlertOnce(true)
+                            .setTimeoutAfter(120_000L).build()
+                        getSystemService(NotificationManager::class.java).notify(ALERT_ID,alert)
+                    }
+                    if(attempted)handler.postDelayed({ fallback() },1800L) else fallback()
                 }
             }
         }.also { it.resume() }
@@ -172,6 +191,7 @@ class PlanikWakeBackgroundService : Service() {
     }
 
     override fun onDestroy() {
+        handler.removeCallbacksAndMessages(null)
         listener?.pause()
         listener=null
         PlanikWakeMicGate.removeObserver(gateObserver)

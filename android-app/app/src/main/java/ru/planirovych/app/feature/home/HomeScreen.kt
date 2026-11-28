@@ -939,7 +939,7 @@ private fun SettingsSheet(
                 Icon(Icons.Default.Mic,null)
                 Column(Modifier.padding(start=10.dp,end=8.dp).weight(1f)) {
                     Text("Эй, Планик")
-                    Text("Голосовой вызов Планика. Распознавание локальное.",
+                    Text("Голосовой вызов Планика. Локальная модель загружается один раз (~45 МБ).",
                         style=MaterialTheme.typography.bodySmall,
                         color=MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(planikWake.status,style=MaterialTheme.typography.bodySmall,
@@ -961,10 +961,17 @@ private fun SettingsSheet(
                 Row(verticalAlignment=Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Слушать в фоне")
-                        Text("При свёрнутом приложении Планик предложит открыть диалог уведомлением. Работает при включённом разблокированном экране.",
+                        Text("Работает при включённом разблокированном экране. Автооткрытие требует разрешения поверх других приложений.",
                             style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Switch(checked=planikWake.background,onCheckedChange=planikWake.onBackground)
+                }
+                if(planikWake.background) {
+                    OutlinedButton(onClick=planikWake.onAutoOpen,modifier=Modifier.fillMaxWidth()) {
+                        Text(if(planikWake.autoOpen)"Автооткрытие разрешено · Настройки" else "Разрешить автооткрытие приложения")
+                    }
+                    if(!planikWake.autoOpen)Text("Без разрешения останется тихое уведомление по кодовой фразе.",
+                        style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             OutlinedButton(onClick=onOpenWardrobe,enabled=user?.id!=null,modifier=Modifier.fillMaxWidth()){Text("Аксессуары и скины Планика")}

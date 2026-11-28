@@ -108,6 +108,7 @@ class MainActivity:ComponentActivity(){
             val account=intent.getStringExtra(EXTRA_NOTIFICATION_ACCOUNT)
             val mode=intent.getStringExtra(EXTRA_QUICK_AI_MODE)
             if(account!=null && mode!=null && ru.planirovych.app.planik.PlanikWakeDispatch.consume(intent)) {
+                getSystemService(android.app.NotificationManager::class.java).cancel(7302)
                 dispatchPlanikWake(account,mode)
             }
             intent.action=null

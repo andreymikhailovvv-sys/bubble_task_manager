@@ -6,13 +6,18 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
-import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
+import android.media.AudioRecord
+import android.media.AudioFormat
+import android.media.MediaRecorder
+import android.annotation.SuppressLint
+import org.vosk.Model
+import org.vosk.Recognizer
+import org.json.JSONObject
+import android.provider.Settings
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
@@ -46,12 +51,14 @@ internal data class PlanikWakeControls(
     val background: Boolean,
     val onAction: (String) -> Unit,
     val onBackground: (Boolean) -> Unit,
+    val autoOpen: Boolean,
+    val onAutoOpen: () -> Unit,
     val onChange: (Boolean) -> Unit
 )
 
 internal fun supported(context: Context): Boolean =
     Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-        runCatching { SpeechRecognizer.isOnDeviceRecognitionAvailable(context) }.getOrDefault(false)
+        context.packageManager.hasSystemFeature(PackageManager.FEATURE_MICROPHONE)
 
 internal fun hasPermission(context: Context): Boolean =
     ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -59,13 +66,12 @@ internal fun hasPermission(context: Context): Boolean =
 internal fun isPlanikWakePhrase(raw: String): Boolean {
     val normalized = raw.lowercase(Locale.forLanguageTag("ru"))
         .replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
-    return Regex("(^|\\s)(эй|хэй)\\s+планн?ик(?=\\s|$)").containsMatchIn(normalized)
+    return Regex("^(эй|хэй) (планн?ик|план ник|план ик)$").matches(normalized)
 }
 
 /**
- * Experimental foreground-only detector. Never falls back to cloud recognition.
- * Android SpeechRecognizer is not an always-on hotword engine; sessions can have
- * gaps and the local Russian model must be installed on the device.
+ * Continuous PCM recognition using a local model, not the interactive
+ * Android recognizer. No recording files or audio uploads.
  */
 internal class ForegroundWakeListener(
     private val context: Context,
@@ -73,11 +79,12 @@ internal class ForegroundWakeListener(
     private val onWake: () -> Unit
 ) {
     private val handler = Handler(Looper.getMainLooper())
-    private var recognizer: SpeechRecognizer? = null
-    private var generation = 0
+    private val captureLock = Any()
+    @Volatile private var generation = 0
+    private var recorder: AudioRecord? = null
+    private var worker: Thread? = null
     private var foreground = false
     private var triggered = false
-    private var failures = 0
     private var failed = false
     private val retry = Runnable { start() }
 
@@ -89,7 +96,6 @@ internal class ForegroundWakeListener(
         foreground = true
         triggered = false
         failed = false
-        failures = 0
         refresh()
     }
 
@@ -105,24 +111,21 @@ internal class ForegroundWakeListener(
             release()
             if (PlanikWakeMicGate.busy) triggered = false
             onStatus("На паузе")
-        } else if (!triggered && !failed && recognizer == null) {
-            schedule(650)
+        } else if (!triggered && !failed && worker == null) {
+            handler.removeCallbacks(retry)
+            handler.postDelayed(retry, 400)
         }
     }
 
     private fun release() {
         generation++
         handler.removeCallbacks(retry)
-        val old = recognizer
-        recognizer = null
-        runCatching { old?.cancel() }
-        runCatching { old?.destroy() }
-    }
-
-    private fun schedule(delay: Long) {
-        handler.removeCallbacks(retry)
-        if (foreground && !triggered && !failed && !PlanikWakeMicGate.busy)
-            handler.postDelayed(retry, delay)
+        synchronized(captureLock) {
+            runCatching { recorder?.stop() }
+            recorder = null
+        }
+        worker?.interrupt()
+        worker = null
     }
 
     private fun fail(message: String) {
@@ -131,102 +134,106 @@ internal class ForegroundWakeListener(
         onStatus(message)
     }
 
+    @SuppressLint("MissingPermission")
     private fun start() {
         if (!foreground || triggered || failed || PlanikWakeMicGate.busy ||
-            !screenAvailable() || recognizer != null) return
+            !screenAvailable() || worker != null) return
         if (!hasPermission(context)) {
             fail("Нет доступа к микрофону")
             return
         }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || !supported(context)) {
-            fail("Локальное распознавание недоступно")
-            return
-        }
         val session = ++generation
-        try {
-            val local = SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
-            recognizer = local
-            local.setRecognitionListener(object : RecognitionListener {
-                private fun valid() = session == generation && foreground &&
-                    !triggered && !PlanikWakeMicGate.busy && screenAvailable()
-                private fun detected(results: Bundle?): Boolean {
-                    if (!valid()) return false
-                    val values = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION).orEmpty()
-                    if (values.none(::isPlanikWakePhrase)) return false
-                    triggered = true
-                    release()
-                    onStatus("Планик услышал вас")
-                    try {
-                        onWake()
-                        handler.postDelayed({
-                            if (foreground && triggered) {
-                                triggered = false
-                                refresh()
-                            }
-                        }, 2500)
-                    } catch (_: Exception) {
-                        triggered = false
-                        fail("Не удалось открыть диалог. Выключите и включите функцию.")
+        fun active() = session == generation && !Thread.currentThread().isInterrupted
+        fun report(message: String) {
+            handler.post { if (session == generation) onStatus(message) }
+        }
+        val thread = Thread({
+            var input: AudioRecord? = null
+            var model: Model? = null
+            var decoder: Recognizer? = null
+            var detected = false
+            try {
+                report("Подготовка локальной модели речи…")
+                val path = PlanikWakeModel.ensure(context.applicationContext, ::active, ::report)
+                if (!active()) return@Thread
+                model = Model(path.absolutePath)
+                // Split pronunciations accommodate names not in the dictionary.
+                decoder = Recognizer(model, 16000f,
+                    """["эй планик","эй планник","хэй планик","хэй планник","эй план ник","хэй план ник","эй план ик","хэй план ик","[unk]"]""")
+                if (!active()) return@Thread
+                val minimum = AudioRecord.getMinBufferSize(16000,
+                    AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+                require(minimum > 0)
+                val buffer = ShortArray(1600)
+                synchronized(captureLock) {
+                    if (!active()) return@Thread
+                    input = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION,16000,
+                        AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT,
+                        maxOf(minimum,buffer.size*4))
+                    val current = requireNotNull(input)
+                    check(current.state == AudioRecord.STATE_INITIALIZED)
+                    recorder = current
+                    current.startRecording()
+                    check(current.recordingState == AudioRecord.RECORDSTATE_RECORDING)
+                }
+                report("Планик слушает")
+                while (active()) {
+                    val count = requireNotNull(input).read(buffer,0,buffer.size)
+                    if (count < 0) {
+                        if (active()) error("Микрофон недоступен")
+                        break
                     }
-                    return true
-                }
-                override fun onReadyForSpeech(params: Bundle?) {
-                    if (valid()) onStatus("Планик слушает")
-                }
-                override fun onBeginningOfSpeech() {}
-                override fun onRmsChanged(rmsdB: Float) {}
-                override fun onBufferReceived(buffer: ByteArray?) {}
-                override fun onEndOfSpeech() {}
-                override fun onPartialResults(partialResults: Bundle?) {
-                    detected(partialResults)
-                }
-                override fun onResults(results: Bundle?) {
-                    if (!valid() || detected(results)) return
-                    failures = 0
-                    release()
-                    schedule(450)
-                }
-                override fun onError(error: Int) {
-                    if (!valid()) return
-                    release()
-                    when (error) {
-                        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
-                            fail("Нет доступа к микрофону")
-                        SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED,
-                        SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ->
-                            fail("Русская офлайн-модель недоступна. Проверьте настройки распознавания Android.")
-                        SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
-                            failures = 0
-                            schedule(450)
+                    if (count == 0) continue
+                    val recognition = requireNotNull(decoder)
+                    // Final hypotheses only: avoid transient false matches.
+                    if (recognition.acceptWaveForm(buffer,count)) {
+                        val phrase = JSONObject(recognition.result).optString("text")
+                        if (isPlanikWakePhrase(phrase)) {
+                            detected = true
+                            break
                         }
-                        else -> retryAfterFailure()
                     }
                 }
-                override fun onEvent(eventType: Int, params: Bundle?) {}
-            })
-            val request = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ru-RU")
-                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+            } catch (error: Exception) {
+                if (active()) handler.post {
+                    if (session == generation)
+                        fail("Не удалось запустить локальное распознавание. Проверьте интернет для модели и включите функцию повторно.")
+                }
+            } catch (error: LinkageError) {
+                if (active()) handler.post {
+                    if (session == generation) fail("Локальный движок недоступен на этом устройстве")
+                }
+            } finally {
+                synchronized(captureLock) {
+                    if (recorder === input) recorder = null
+                    runCatching { input?.stop() }
+                    runCatching { input?.release() }
+                }
+                runCatching { decoder?.close() }
+                runCatching { model?.close() }
             }
-            onStatus("Запуск локального распознавания…")
-            local.startListening(request)
-        } catch (_: Exception) {
-            release()
-            retryAfterFailure()
-        }
-    }
-
-    private fun retryAfterFailure() {
-        failures++
-        if (failures >= 5) {
-            fail("Распознавание остановлено. Выключите и включите функцию или откройте приложение заново.")
-        } else {
-            onStatus("Повторное подключение микрофона…")
-            schedule(2000)
-        }
+            if (detected && active()) handler.post {
+                if (session != generation || !foreground || PlanikWakeMicGate.busy ||
+                    !screenAvailable()) return@post
+                worker = null
+                triggered = true
+                onStatus("Планик услышал вас")
+                try {
+                    onWake()
+                    handler.postDelayed({
+                        if (foreground && triggered) {
+                            triggered = false
+                            refresh()
+                        }
+                    }, 5000)
+                } catch (_: Exception) {
+                    triggered = false
+                    fail("Не удалось открыть диалог")
+                }
+            }
+        }, "Planik-local-wake")
+        worker = thread
+        thread.start()
     }
 }
 
@@ -244,6 +251,17 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
     val available = remember(context) { supported(context) }
     val activity = context as? ru.planirovych.app.MainActivity
     val latestAction by rememberUpdatedState(action)
+    var autoOpen by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
+    val overlaySettings=rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        autoOpen=Settings.canDrawOverlays(context)
+    }
+    DisposableEffect(owner,context) {
+        val observer=LifecycleEventObserver { _, event ->
+            if(event==Lifecycle.Event.ON_RESUME) autoOpen=Settings.canDrawOverlays(context)
+        }
+        owner.lifecycle.addObserver(observer)
+        onDispose { owner.lifecycle.removeObserver(observer) }
+    }
     DisposableEffect(preferences, accountId) {
         val observer = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (accountId != null && key == "background_" + accountId)
@@ -332,7 +350,7 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
         }
     }
     val visibleStatus = when {
-        !available -> "Нужен Android 12+ с локальным распознаванием речи"
+        !available -> "Нужен Android 12+ с микрофоном"
         accountId == null -> "Откройте профиль"
         !enabled && status == "На паузе" -> "Выключено"
         enabled && !ready -> "Ожидание рабочего пространства"
@@ -359,6 +377,13 @@ internal fun rememberPlanikWake(accountId: String?, ready: Boolean): PlanikWakeC
                     if (!value) PlanikWakeBackgroundService.stop(context)
                 }
             }
+        },
+        autoOpen=autoOpen,
+        onAutoOpen={
+            runCatching {
+                overlaySettings.launch(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:"+context.packageName)))
+            }.onFailure { status="Откройте разрешение поверх других приложений в настройках Android" }
         }
     ) { value ->
         if (!value) setConsent(false)

@@ -12,15 +12,16 @@ test('Planik foreground activation is opt-in, local and lifecycle bound', async 
     read(pkg + 'feature/home/HomeScreen.kt')
   ]);
   assert.match(wake, /getBoolean\("enabled_" \+ accountId, false\)/);
-  assert.match(wake, /createOnDeviceSpeechRecognizer\(context\)/);
-  assert.doesNotMatch(wake, /SpeechRecognizer\.createSpeechRecognizer\(/);
-  assert.match(wake, /EXTRA_LANGUAGE, "ru-RU"/);
+  assert.match(wake, /AudioRecord\(MediaRecorder.AudioSource.VOICE_RECOGNITION/);
+  assert.doesNotMatch(wake, /SpeechRecognizer|RecognizerIntent/);
+  assert.match(wake, /Recognizer\(model, 16000f/);
+  assert.match(wake, /recognition.acceptWaveForm\(buffer,count\)/);
   assert.match(wake, /Lifecycle\.Event\.ON_RESUME -> listener\.resume\(\)/);
   assert.match(wake, /Lifecycle\.Event\.ON_PAUSE[\s\S]*?listener\.pause\(\)/);
   assert.match(wake, /dispatchPlanikWake\(accountId, latestAction\)/);
   assert.match(wake, /isKeyguardLocked/);
   assert.match(wake, /generation\+\+/);
-  assert.match(manifest, /android\.speech\.RecognitionService/);
+  assert.match(manifest, /android\.permission\.RECORD_AUDIO/);
   assert.match(manifest, /FOREGROUND_SERVICE_MICROPHONE/);
   assert.doesNotMatch(manifest, /BOOT_COMPLETED/);
   assert.match(home, /rememberPlanikWake\(state\.user\?\.id/);
@@ -34,5 +35,6 @@ test('Every native dictation releases wake microphone before MediaRecorder and r
   assert.match(voice, /PlanikWakeMicGate\.acquire\(wakeMicOwner\)[\s\S]*?MediaRecorder\(\)/);
   assert.equal((voice.match(/PlanikWakeMicGate\.release\(wakeMicOwner\)/g) || []).length, 3);
   assert.match(wake, /PlanikWakeMicGate\.busy[\s\S]*?release\(\)/);
-  assert.match(wake, /old\?\.destroy\(\)/);
+  assert.match(wake, /recorder\?\.stop\(\)/);
+  assert.match(wake, /input\?\.release\(\)/);
 });
