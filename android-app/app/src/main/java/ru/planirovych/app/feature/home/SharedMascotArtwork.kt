@@ -200,9 +200,9 @@ internal fun NativeMascotWardrobeDialog(vm:HomeViewModel,dark:Boolean,owner:Stri
     AlertDialog(onDismissRequest={if(!busy)onClose()},title={Text("Аксессуары и скины Планика")},
         text={
             Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
-                Box(Modifier.fillMaxWidth().height(160.dp),contentAlignment=Alignment.Center){
-                    if(selected=="classic") NativeMascotFallback(dark,preview,selected,Modifier.size(180.dp,150.dp))
-                    else SharedMascotArtwork(selected,dark,preview,Modifier.size(180.dp,150.dp))
+                Box(Modifier.fillMaxWidth().height(185.dp),contentAlignment=Alignment.Center){
+                    if(selected=="classic") NativeMascotFallback(dark,preview,selected,Modifier.size(205.dp,175.dp))
+                    else SharedMascotArtwork(selected,dark,preview,Modifier.size(205.dp,175.dp))
                 }
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){
                     listOf("idle" to "Ожидание","hover" to "Приветствие").forEach{(mode,label)->

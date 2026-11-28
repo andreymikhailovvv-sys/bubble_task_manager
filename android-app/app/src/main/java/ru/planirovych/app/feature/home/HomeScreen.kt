@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.rememberPagerState
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.*
@@ -61,6 +63,15 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     val state by vm.state.collectAsStateWithLifecycle()
     val themeMode by vm.themeMode.collectAsStateWithLifecycle()
     val planikWake=rememberPlanikWake(state.user?.id,!state.loading && state.error==null)
+    val context=LocalContext.current
+    LaunchedEffect(vm) {
+        ru.planirovych.app.planik.PlanikLiveUpdates.events.collect {
+            vm.reconcileAfterPlanik().join()
+            val chat=vm.generalAi.value
+            chat.selectedProjectId?.let { vm.syncGeneralAiThread(it,chat.selectedChatId) }
+            vm.taskAi.value.taskId?.let { vm.syncTaskAiHistory(it) }
+        }
+    }
     val focusManager=LocalFocusManager.current
     val softwareKeyboard=LocalSoftwareKeyboardController.current
     val density=LocalDensity.current
@@ -160,6 +171,7 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
     var quickNavigationHandled by remember(openGeneralAi,quickAiRequestId,notificationRequestId){mutableStateOf(false)}
     LaunchedEffect(openGeneralAi,quickAiMode,quickAiRequestId,sharedChat.projects,state.loading,notificationRequestId,state.user?.id){
         if(notificationAccount!=null && state.user?.id!=notificationAccount)return@LaunchedEffect
+        if(quickAiMode=="live" || quickAiMode=="wake_voice")return@LaunchedEffect
         if(quickAiMode=="voice" && quickAiRequestId>0 && !quickNavigationHandled && !state.loading){
             quickNavigationHandled=true
             onQuickAiHandled(quickAiRequestId)
@@ -213,6 +225,49 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean,
             taskAiChatId=null
             settings=false
         }
+    }
+    // Voice activation has a separate route from the widget: a project sync
+    // must not cancel a pending recording or cause the chat composer to open it twice.
+    val wakeProjectId=sharedChat.projects.firstOrNull { p -> p.chats.any { it.id==QUICK_AI_THREAD_ID } }?.id
+    LaunchedEffect(quickAiMode,quickAiRequestId,notificationAccount,state.user?.id,state.loading,
+        if(quickAiMode=="live")wakeProjectId else null) {
+        val mode=quickAiMode
+        val account=state.user?.id
+        if(mode !in listOf("live","wake_voice") || state.loading || account==null ||
+            notificationAccount!=account || quickNavigationHandled)return@LaunchedEffect
+        if(mode=="live" && wakeProjectId==null) {
+            vm.loadGeneralAi(account)
+            return@LaunchedEffect
+        }
+        settings=false
+        accountOpen=false
+        wardrobeOpen=false
+        creationType=null
+        createHabit=false
+        createNote=false
+        pendingFocusTaskId=null
+        openedTaskId=null
+        newSubtaskParentId=null
+        overlaySubtaskId=null
+        overlayNewSubtaskParentId=null
+        taskAiChatId=null
+        focusManager.clearFocus(force=true)
+        softwareKeyboard?.hide()
+        if(mode=="live") {
+            val projectId=wakeProjectId ?: return@LaunchedEffect
+            vm.chooseGeneralAiChat(projectId,QUICK_AI_THREAD_ID)
+            pagerState.scrollToPage(2)
+            quickNavigationHandled=true
+            context.startActivity(ru.planirovych.app.planik.PlanikLiveActivity.intent(context,
+                projectId=projectId,chatId=QUICK_AI_THREAD_ID,expectedUserId=account))
+        } else {
+            voiceFromFinance=false
+            pagerState.scrollToPage(0)
+            delay(350)
+            quickNavigationHandled=true
+            voiceInput()
+        }
+        onQuickAiHandled(quickAiRequestId)
     }
     // Never resume a previously focused chat input just because the user
     // switched back to Chats AI. A widget's explicit text command is different.
@@ -884,7 +939,7 @@ private fun SettingsSheet(
                 Icon(Icons.Default.Mic,null)
                 Column(Modifier.padding(start=10.dp,end=8.dp).weight(1f)) {
                     Text("Эй, Планик")
-                    Text("Голосовой вызов только внутри открытого приложения. Распознавание локальное.",
+                    Text("Голосовой вызов Планика. Распознавание локальное.",
                         style=MaterialTheme.typography.bodySmall,
                         color=MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(planikWake.status,style=MaterialTheme.typography.bodySmall,
@@ -893,6 +948,24 @@ private fun SettingsSheet(
                 Switch(checked=planikWake.enabled,
                     enabled=planikWake.available || planikWake.enabled,
                     onCheckedChange=planikWake.onChange)
+            }
+            if(planikWake.enabled) {
+                Text("Действие по фразе",style=MaterialTheme.typography.titleSmall)
+                listOf("live" to "Живое общение", "voice" to "Голосовой ввод").forEach { (value,label) ->
+                    Row(Modifier.fillMaxWidth().clickable { planikWake.onAction(value) },
+                        verticalAlignment=Alignment.CenterVertically) {
+                        RadioButton(selected=planikWake.action==value,onClick={planikWake.onAction(value)})
+                        Text(label)
+                    }
+                }
+                Row(verticalAlignment=Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Слушать в фоне")
+                        Text("При свёрнутом приложении Планик предложит открыть диалог уведомлением. Работает при включённом разблокированном экране.",
+                            style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(checked=planikWake.background,onCheckedChange=planikWake.onBackground)
+                }
             }
             OutlinedButton(onClick=onOpenWardrobe,enabled=user?.id!=null,modifier=Modifier.fillMaxWidth()){Text("Аксессуары и скины Планика")}
             OutlinedButton(onClick=onCheckUpdates,modifier=Modifier.fillMaxWidth()){

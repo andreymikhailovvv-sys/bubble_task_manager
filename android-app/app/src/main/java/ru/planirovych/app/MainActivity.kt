@@ -90,7 +90,31 @@ class MainActivity:ComponentActivity(){
         if(granted)AndroidNotificationDelivery.enqueueRefresh(this)
     }
 
+    internal fun dispatchPlanikWake(accountId:String, mode:String) {
+        if(mode !in listOf("live","voice"))return
+        notificationTaskId=null
+        notificationHabitId=null
+        notificationLoanId=null
+        notificationChatId=null
+        notificationTaskChat=false
+        notificationAccount=accountId
+        quickAiMode=if(mode=="voice")"wake_voice" else "live"
+        openGeneralAi=mode=="live"
+        quickAiRequestId++
+    }
+
     private fun applyNavigation(intent:Intent?){
+        if(intent?.action==ru.planirovych.app.planik.PlanikWakeDispatch.ACTION_WAKE) {
+            val account=intent.getStringExtra(EXTRA_NOTIFICATION_ACCOUNT)
+            val mode=intent.getStringExtra(EXTRA_QUICK_AI_MODE)
+            if(account!=null && mode!=null && ru.planirovych.app.planik.PlanikWakeDispatch.consume(intent)) {
+                dispatchPlanikWake(account,mode)
+            }
+            intent.action=null
+            intent.removeExtra(EXTRA_QUICK_AI_MODE)
+            intent.removeExtra(EXTRA_NOTIFICATION_ACCOUNT)
+            return
+        }
         notificationTaskId=intent?.getStringExtra(EXTRA_NOTIFICATION_TASK_ID)
         notificationHabitId=intent?.getStringExtra(EXTRA_NOTIFICATION_HABIT_ID)
         notificationChatId=intent?.getStringExtra(EXTRA_NOTIFICATION_CHAT_ID)
