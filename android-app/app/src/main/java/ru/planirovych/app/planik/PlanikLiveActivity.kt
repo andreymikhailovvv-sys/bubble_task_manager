@@ -526,7 +526,7 @@ class PlanikLiveActivity : ComponentActivity() {
             var small=document.querySelector('.planik-live-compact');
             var style=document.getElementById('android-native-voice-only');
             if(!style){style=document.createElement('style');style.id='android-native-voice-only';
-              style.textContent='html,body{background:transparent!important} #root{visibility:hidden!important;pointer-events:none!important} .planik-live-compact{bottom:8px!important;right:12px!important}';
+              style.textContent='html,body{background:transparent!important} #root{visibility:hidden!important;pointer-events:none!important} body *{visibility:hidden!important;pointer-events:none!important} .planik-live-fullscreen,.planik-live-fullscreen *,.planik-live-compact,.planik-live-compact *{visibility:visible!important} .planik-live-fullscreen,.planik-live-fullscreen button,.planik-live-fullscreen a,.planik-live-fullscreen [role=log],.planik-live-compact > *,.planik-live-compact button{pointer-events:auto!important} .planik-live-compact{bottom:8px!important;right:12px!important}';
               document.head.appendChild(style);}
             if(small)return 'compact';
             if(full)return 'full';

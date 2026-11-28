@@ -74,6 +74,9 @@ dependencies {
     implementation(libs.androidx.compose.material.icons)
     // Render the actual Planik SVG natively instead of an unreliable transparent WebView.
     implementation("com.caverock:androidsvg:1.4")
+    // Continuous, offline wake detection with Android native AARs.
+    implementation("net.java.dev.jna:jna:5.18.1@aar")
+    implementation("com.alphacephei:vosk-android:0.3.75@aar")
     implementation(libs.retrofit.core)
     implementation(libs.retrofit.serialization)
     implementation(libs.okhttp)

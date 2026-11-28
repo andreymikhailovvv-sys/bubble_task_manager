@@ -14,7 +14,11 @@ test('Wake action and foreground service remain explicit and account-bound',asyn
   assert.match(service,/startForeground\(ONGOING_ID,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE\)/);
   assert.match(service,/START_NOT_STICKY/);
   assert.match(service,/PendingIntent.getActivity/);
-  assert.doesNotMatch(service,/startActivity\(/);
+  assert.match(service,/Settings.canDrawOverlays\(this\)/);
+  assert.match(service,/startActivity\(wakeIntent\)/);
+  assert.match(service,/PlanikWakeDispatch.pending\(wakeIntent\)/);
+  assert.match(manifest,/android.permission.SYSTEM_ALERT_WINDOW/);
+  assert.match(service,/setSound\(null,null\); enableVibration\(false\)/);
   assert.match(main,/PlanikWakeDispatch.consume\(intent\)/);
   assert.match(home,/quickAiMode=="live"/);
   assert.match(home,/quickAiMode=="voice"/);
@@ -24,6 +28,8 @@ test('Wake action and foreground service remain explicit and account-bound',asyn
 test('Compact live window hides the web workspace without destroying the session',async()=>{
   const [live,home,manifest]=await Promise.all([read(pkg+'planik/PlanikLiveActivity.kt'),read(pkg+'feature/home/HomeScreen.kt'),read('AndroidManifest.xml')]);
   assert.match(live,/#root\{visibility:hidden!important;pointer-events:none!important\}/);
+  assert.match(live,/body \*\{visibility:hidden!important;pointer-events:none!important\}/);
+  assert.match(live,/\.planik-live-compact \*\{visibility:visible!important\}/);
   assert.match(live,/FLAG_NOT_TOUCH_MODAL/);
   assert.match(live,/"ended" -> \{ finish\(\)/);
   assert.match(live,/PlanikWakeMicGate.acquire\(this\)/);
