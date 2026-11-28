@@ -1,4 +1,4 @@
-import { memo, useEffect, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { memo, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { Reorder, useDragControls } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, GripVertical, Maximize2, Minus, Plus, Settings2, X } from 'lucide-react';
@@ -20,15 +20,18 @@ const SidebarNotes = memo(function SidebarNotes({ userId, requestedNote }: {
   return <StandaloneNotesWorkspace userId={userId} requestedNote={requestedNote} compactWidget/>;
 });
 
+function normalizeOrder(saved: unknown): WidgetId[] {
+  if (!Array.isArray(saved)) return [...DEFAULT_ORDER];
+  const valid = saved.filter((id): id is WidgetId => DEFAULT_ORDER.includes(id) && saved.indexOf(id) === saved.lastIndexOf(id));
+  return [...valid, ...DEFAULT_ORDER.filter(id => !valid.includes(id))];
+}
 function readOrder(userId: string): WidgetId[] {
-  try {
-    const saved = JSON.parse(localStorage.getItem('btm:primary-sidebar:order:' + userId) || 'null');
-    if (Array.isArray(saved)) {
-      const valid = saved.filter((id): id is WidgetId => DEFAULT_ORDER.includes(id) && saved.indexOf(id) === saved.lastIndexOf(id));
-      return [...valid, ...DEFAULT_ORDER.filter(id => !valid.includes(id))];
-    }
-  } catch { /* Use the default order if local storage is unavailable or corrupt. */ }
-  return [...DEFAULT_ORDER];
+  try { return normalizeOrder(JSON.parse(localStorage.getItem('btm:primary-sidebar:order:' + userId) || 'null')); }
+  catch { return [...DEFAULT_ORDER]; }
+}
+function cacheOrder(userId: string, order: WidgetId[]) {
+  try { localStorage.setItem('btm:primary-sidebar:order:' + userId, JSON.stringify(order)); }
+  catch { /* Private mode must not break drag-and-drop. */ }
 }
 
 function readVisible(userId: string): boolean {
@@ -120,6 +123,23 @@ export function PrimaryWorkspaceSidebar(props: Props) {
   const [autoCollapsed, setAutoCollapsed] = useState(windowCount > 1);
   const isOpen = visible && !autoCollapsed || props.forceOpen === true;
   const [order, setOrder] = useState<WidgetId[]>(() => readOrder(userId));
+  const orderRef = useRef(order);
+  const orderDirty = useRef(false);
+  const orderActive = useRef(false);
+  const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const [orderSaveError, setOrderSaveError] = useState(false);
+  const saveOrder = (next: WidgetId[]) => {
+    orderDirty.current = true;
+    orderRef.current = next;
+    setOrder(next);
+    cacheOrder(userId, next);
+    // Serialize saves and skip superseded drag positions.
+    saveQueue.current = saveQueue.current.catch(() => undefined).then(async () => {
+      if (!orderActive.current || orderRef.current !== next) return;
+      try { await api.savePrimarySidebarOrder(next); if (orderActive.current && orderRef.current === next) setOrderSaveError(false); }
+      catch { if (orderActive.current && orderRef.current === next) setOrderSaveError(true); }
+    });
+  };
   const [completedFilter, setCompletedFilter] = useState<'today' | 'all'>('today');
   const [completedLimit, setCompletedLimit] = useState(40);
   const [selectedHabitId, setSelectedHabitId] = useState<string | null>(null);
@@ -136,9 +156,27 @@ export function PrimaryWorkspaceSidebar(props: Props) {
     catch { /* Private mode must not break layout. */ }
   }, [visible, userId]);
   useEffect(() => {
-    try { localStorage.setItem('btm:primary-sidebar:order:' + userId, JSON.stringify(order)); }
-    catch { /* Private mode must not break drag-and-drop. */ }
-  }, [order, userId]);
+    let cancelled = false;
+    orderActive.current = true;
+    const apply = (saved: string[]) => {
+      if (cancelled || orderDirty.current || !saved.length) return;
+      const next = normalizeOrder(saved);
+      orderRef.current = next;
+      setOrder(next);
+      cacheOrder(userId, next);
+    };
+    void api.getPrimarySidebarOrder().then(async ({ order: saved }) => {
+      if (cancelled || orderDirty.current) return;
+      if (saved.length) { apply(saved); return; }
+      let legacy = false;
+      try { legacy = localStorage.getItem('btm:primary-sidebar:order:' + userId) !== null; } catch { /* no local cache */ }
+      if (legacy) {
+        const result = await api.savePrimarySidebarOrder(orderRef.current, true);
+        apply(result.order);
+      }
+    }).catch(() => { if (!cancelled && !orderDirty.current) setOrderSaveError(true); });
+    return () => { cancelled = true; orderActive.current = false; };
+  }, [userId]);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(timer);
@@ -173,14 +211,15 @@ export function PrimaryWorkspaceSidebar(props: Props) {
   const selectedHabit = habits.find(habit => habit.id === selectedHabitId) ?? null;
   const editingHabit = habits.find(habit => habit.id === editingHabitId) ?? null;
 
-  const updateOrder = (direction: -1 | 1, id: WidgetId) => setOrder(previous => {
+  const updateOrder = (direction: -1 | 1, id: WidgetId) => {
+    const previous = orderRef.current;
     const index = previous.indexOf(id);
     const destination = index + direction;
-    if (destination < 0 || destination >= previous.length) return previous;
+    if (index < 0 || destination < 0 || destination >= previous.length) return;
     const next = [...previous];
     [next[index], next[destination]] = [next[destination], next[index]];
-    return next;
-  });
+    saveOrder(next);
+  };
 
   const changeHabit = async (habit: Habit, delta: -1 | 1) => {
     if (busyHabitId) return;
@@ -322,7 +361,8 @@ export function PrimaryWorkspaceSidebar(props: Props) {
 
   return <aside className={`primary-workspace-sidebar ${isOpen ? 'is-open' : 'is-collapsed'}`}
     aria-label="Дополнительные блоки рабочего пространства" data-no-field-zoom="true">
-    <Reorder.Group as="div" axis="y" values={order} onReorder={setOrder}
+    {orderSaveError && isOpen && <button type="button" className="text-xs text-muted px-2 py-1" onClick={() => saveOrder(orderRef.current)} role="status">Не удалось синхронизировать порядок. Повторить</button>}
+    <Reorder.Group as="div" axis="y" values={order} onReorder={saveOrder}
       className="primary-workspace-sidebar-list" aria-hidden={!isOpen}
       aria-label="Блоки рабочего пространства. Перетаскивайте за маркер в заголовке">
       {order.map(id => <Widget key={id} id={id}

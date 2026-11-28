@@ -388,6 +388,7 @@ model User {
   googleSub    String?  @unique
   avatarUrl    String?
   timeZone     String?
+  primarySidebarOrder String[] @default([])
   aiTaskAutoApply Boolean @default(false)
   aiTaskProposals AiTaskProposal[]
   browserNotificationsEnabled Boolean @default(true)

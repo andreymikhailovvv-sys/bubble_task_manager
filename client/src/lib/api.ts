@@ -683,6 +683,9 @@ export const api = {
     body: JSON.stringify({ projects: stripAiChatProjectDisplayPreviews(projects) })
   }),
   generateAiCheckupNow: () => request<{ message: ChatMessage }>('/api/ai/checkup/generate', { method: 'POST', body: '{}' }),
+  getPrimarySidebarOrder: () => request<{ order: string[] }>('/api/user/primary-sidebar-order'),
+  savePrimarySidebarOrder: (order: string[], initialize = false) =>
+    request<{ order: string[] }>('/api/user/primary-sidebar-order', { method: 'PUT', body: JSON.stringify({ order, initialize }) }),
   updateUserSettings: (payload: { timeZone?: string; morningAiCheckupEnabled?: boolean; browserNotificationsEnabled?: boolean; morningAiCheckupTime?: string; aiCheckupSchedules?: AiCheckupSchedule[]; offerTaskCompletionReport?: boolean }) =>
     request<{ user: CurrentUser }>('/api/user/settings', { method: 'PATCH', body: JSON.stringify(payload) }),
   register: (payload: { login: string; email: string; password: string; name?: string; consentAccepted: boolean }) => request<{ user: CurrentUser; emailDelivery?: 'SENT' | 'FAILED' | 'NOT_REQUESTED' }>('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),

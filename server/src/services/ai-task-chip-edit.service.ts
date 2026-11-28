@@ -74,7 +74,7 @@ export function validateTaskChipValues(raw:unknown,base:TaskChipValues):TaskChip
       if(typeof v!=='string'||!v.trim()||v.length>180)throw new Error('Название задачи должно быть от 1 до 180 символов.');
       result.title=v.trim();
     }else if(key==='description'){
-      if(typeof v!=='string'||v.length>4000)throw new Error('Слишком длинное описание задачи.');
+      if(typeof v!=='string')throw new Error('Некорректное описание задачи.');
       result.description=v;
     }else if(key==='location'){
       if(typeof v!=='string'||v.length>500)throw new Error('Слишком длинное место встречи.');

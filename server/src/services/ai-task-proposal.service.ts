@@ -141,8 +141,8 @@ async function ownerSnapshot(userId: string, actions: TaskProposalAction[]) {
     if (action.operation === 'set_description' && Object.prototype.hasOwnProperty.call(action, 'expectedDescription')) {
       const target = byId.get(String(action.itemId ?? ''));
       if (!target || target.description !== action.expectedDescription) throw new Error('Описание изменилось. Прочитайте его заново.');
-      if (typeof action.description !== 'string' || action.description.length > (target.parentTaskId ? 2000 : 4000))
-        throw new Error('Некорректный размер описания.');
+      if (typeof action.description !== 'string')
+        throw new Error('Некорректное описание.');
     }
     for (const id of actionIds(action)) {
       if (!byId.has(id)) throw new Error('Задача или подзадача недоступна. Предложение не создано.');

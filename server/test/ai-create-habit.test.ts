@@ -47,11 +47,17 @@ test('habit completion defaults to one, supports N and full-day without guessing
   assert.throws(()=>validateAiHabitCompletion({amount:0}));
   assert.equal(aiHabitDateKey(new Date('2026-11-27T22:30:00Z'),'Europe/Moscow'),'2026-11-28');
 });
-test('description append preserves text, markup, and rejects truncation or unsafe HTML',()=>{
+test('description append preserves long text and markup and rejects unsafe HTML',()=>{
   assert.equal(editTaskDescription('Исходный текст','Новый текст','append',false,'text'),'Исходный текст\n\nНовый текст');
   assert.equal(editTaskDescription('<h2>План</h2><p>Старое</p>','<p><b>Новое</b></p>','append',true,'html'),'<h2>План</h2><p>Старое</p><br><br><p><b>Новое</b></p>');
   assert.equal(editTaskDescription('x < y','<b>Новое</b>','append',false,'html'),'x &lt; y<br><br><b>Новое</b>');
   assert.throws(()=>editTaskDescription('старое','<img src=x onerror=alert(1)>','append',true,'html'));
   assert.throws(()=>editTaskDescription('старое','<p><b>x</p></b>','append',true,'html'));
-  assert.throws(()=>editTaskDescription('x'.repeat(2000),'y','append',true,'text'));
+  for (const isSubtask of [false,true]) {
+    const original = 'x'.repeat(15000);
+    assert.equal(editTaskDescription(original,'y','append',isSubtask,'text'), original+'\n\ny');
+    const html = '<p>'+original+'</p>';
+    assert.equal(editTaskDescription(html,'<p>Новый пункт</p>','append',isSubtask,'html'),html+'<br><br><p>Новый пункт</p>');
+    assert.equal(editTaskDescription(original,original+'z','replace',isSubtask,'text'),original+'z');
+  }
 });
