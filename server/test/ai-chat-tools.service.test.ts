@@ -25,3 +25,16 @@ test('обычный вопрос завершается без tools', async ()
 test('tool loop безопасно останавливается после пяти tool calls', async () => {
   await assert.rejects(() => runAiChatToolLoop({ initialInput: [], request: async () => ({ output: [{ type: 'function_call', call_id: 'loop', name: 'search_planner_items', arguments: '{}' }] }), executeTool: async () => ({ ok: true }) }), new RegExp(String(MAX_TOOL_CALLS)));
 });
+
+
+test('task chats expose the same description editor and require a fresh read before staging', async () => {
+  const { createTaskChatOpenAiPayload } = await import('../src/services/ai-assistant.service.js');
+  const { createTaskChatWorkspaceTools, TASK_CHAT_WORKSPACE_TOOL_NAMES } = await import('../src/services/task-chat-workspace-tools.service.js');
+  assert.ok(TASK_CHAT_WORKSPACE_TOOL_NAMES.includes('edit_task_description'));
+  const payload = createTaskChatOpenAiPayload('test', [], undefined, { allowTools: true });
+  assert.ok(payload.tools?.some(tool => 'name' in tool && tool.name === 'edit_task_description'));
+  const workspace = createTaskChatWorkspaceTools({userId:'owner',taskId:'task',userTimeZone:'Europe/Moscow',autonomousMonitoring:false});
+  const denied = await workspace.execute('edit_task_description', {itemId:'task',mode:'append',format:'text',content:'Новый пункт'});
+  assert.deepEqual(denied,{ok:false,code:'DESCRIPTION_NOT_READ',message:'Сначала прочитай описание через get_task.'});
+  assert.equal(workspace.actions.length,0);
+});

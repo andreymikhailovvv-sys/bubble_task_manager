@@ -134,7 +134,7 @@ export const AI_CHAT_OPENAI_TOOLS = [
   },
   {
     type: 'function', name: 'edit_task_description', strict: true,
-    description: 'Изменить описание существующей задачи или подзадачи. Сначала search_tasks или list_tasks, затем обязательно get_task. append добавляет только новый фрагмент в конец, replace передаёт полный итоговый текст (для правки в середине сохрани остальное). ' + DESCRIPTION_FORMAT_GUIDE + ' Формат text для обычного текста, html для оформленного. Подготовка подтверждаемого изменения.',
+    description: 'Изменить описание существующей задачи или подзадачи. Для текущей задачи можно сразу вызвать get_task по её ID; для других сначала search_tasks или list_tasks, затем обязательно get_task. append добавляет только новый фрагмент в конец, replace передаёт полный итоговый текст (для правки в середине сохрани остальное). ' + DESCRIPTION_FORMAT_GUIDE + ' Формат text для обычного текста, html для оформленного. Подготовка подтверждаемого изменения.',
     parameters: {type:'object',additionalProperties:false,required:['itemId','mode','format','content'],properties:{
       itemId:{type:'string'}, mode:{type:'string',enum:['append','replace']}, format:{type:'string',enum:['text','html']}, content:{type:'string'}
     }}

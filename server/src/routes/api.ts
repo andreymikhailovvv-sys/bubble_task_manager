@@ -2275,6 +2275,27 @@ const taskProposalSameOrigin = (req: Request, res: Response, next: NextFunction)
   }
   next();
 };
+// The order is owned by the authenticated account, not a browser or device.
+const primarySidebarWidgetIds = ['upcoming', 'completed', 'habits', 'progress', 'sectors', 'notes'];
+apiRouter.get('/user/primary-sidebar-order', requireAuth, asyncHandler(async (req, res) => {
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, select: { primarySidebarOrder: true } });
+  res.set('Cache-Control', 'private, no-store').json({ order: user.primarySidebarOrder });
+}));
+apiRouter.put('/user/primary-sidebar-order', requireAuth, taskProposalSameOrigin, asyncHandler(async (req, res) => {
+  const order: unknown = req.body?.order;
+  if (!Array.isArray(order) || order.length !== primarySidebarWidgetIds.length ||
+      new Set(order).size !== primarySidebarWidgetIds.length ||
+      !order.every(id => typeof id === 'string' && primarySidebarWidgetIds.includes(id))) {
+    res.status(400).json({ error: 'Некорректный порядок блоков.' }); return;
+  }
+  if (req.body?.initialize === true) {
+    await prisma.user.updateMany({ where: { id: req.user!.id, primarySidebarOrder: { equals: [] } }, data: { primarySidebarOrder: order } });
+  } else {
+    await prisma.user.update({ where: { id: req.user!.id }, data: { primarySidebarOrder: order } });
+  }
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, select: { primarySidebarOrder: true } });
+  res.set('Cache-Control', 'private, no-store').json({ order: user.primarySidebarOrder });
+}));
 // A deliberately independent, user-initiated checkup. It neither requires
 // automatic checkups to be enabled nor consumes their daily scheduling slot.
 apiRouter.get('/mascot-wardrobe', requireAuth, asyncHandler(async (req,res) => {

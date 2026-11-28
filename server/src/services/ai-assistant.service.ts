@@ -281,7 +281,7 @@ export function createTaskChatOpenAiPayload(model: string, messages: TaskChatPro
       return { type: message.type, call_id: message.call_id, output: message.output };
     }),
     text: { format: TASK_ASSISTANT_RESPONSE_FORMAT },
-    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL, ...AI_CHAT_OPENAI_TOOLS.filter(tool => tool.name !== 'create_habit' && !['list_habits','complete_habit','update_habit','edit_task_description','read_economic_overview','find_economic_records','propose_economic_changes'].includes(tool.name)), TASK_CHAT_HISTORY_LOOKUP_TOOL, ...(options?.followupTools || options?.monitoringTools ? [TASK_MONITOR_FOLLOWUP_TOOL, TASK_MONITOR_CANCEL_FOLLOWUP_TOOL] : []), ...(options?.monitoringTools ? TASK_MONITOR_ACTION_TOOLS : []), ...(allowWebSearch ? [AI_CHAT_WEB_SEARCH_TOOL] : [])], tool_choice: options?.forceWebSearch && allowWebSearch ? { type: 'web_search' as const } : 'auto', parallel_tool_calls: false, ...(allowWebSearch ? { max_tool_calls: 1 } : {}) } : { tool_choice: 'none' }),
+    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL, ...AI_CHAT_OPENAI_TOOLS.filter(tool => tool.name !== 'create_habit' && !['list_habits','complete_habit','update_habit','read_economic_overview','find_economic_records','propose_economic_changes'].includes(tool.name)), TASK_CHAT_HISTORY_LOOKUP_TOOL, ...(options?.followupTools || options?.monitoringTools ? [TASK_MONITOR_FOLLOWUP_TOOL, TASK_MONITOR_CANCEL_FOLLOWUP_TOOL] : []), ...(options?.monitoringTools ? TASK_MONITOR_ACTION_TOOLS : []), ...(allowWebSearch ? [AI_CHAT_WEB_SEARCH_TOOL] : [])], tool_choice: options?.forceWebSearch && allowWebSearch ? { type: 'web_search' as const } : 'auto', parallel_tool_calls: false, ...(allowWebSearch ? { max_tool_calls: 1 } : {}) } : { tool_choice: 'none' }),
     ...(options?.reasoningEffort ? { reasoning: { effort: options.reasoningEffort } } : {}),
     ...(maxOutputTokens === undefined ? {} : { max_output_tokens: maxOutputTokens })
   };
@@ -792,7 +792,7 @@ function parseGeneratedSubtasks(rawAnswer: string): GeneratedSubtask[] {
       const parsedDueDate = normalizedDueDate ? new Date(normalizedDueDate) : null;
       return {
         title: trimmedTitle.slice(0, 180),
-        description: trimmedDescription.slice(0, 4000),
+        description: trimmedDescription,
         dueDate: parsedDueDate && !Number.isNaN(parsedDueDate.getTime()) ? parsedDueDate.toISOString() : null
       };
     })
@@ -821,7 +821,7 @@ function parseGeneratedTaskDraft(rawAnswer: string): GeneratedTaskDraft {
   }
   const source = parsed as Record<string, unknown>;
   const title = typeof source.title === 'string' ? source.title.trim().slice(0, 180) : '';
-  const description = typeof source.description === 'string' ? source.description.trim().slice(0, 4000) : '';
+  const description = typeof source.description === 'string' ? source.description.trim() : '';
   let firstAssistantMessage = typeof source.firstAssistantMessage === 'string'
     ? source.firstAssistantMessage.trim().slice(0, 6000)
     : '';
@@ -851,7 +851,7 @@ function parseGeneratedTaskDraft(rawAnswer: string): GeneratedTaskDraft {
       if (typeof item !== 'object' || item === null) return null;
       const record = item as Record<string, unknown>;
       const subtaskTitle = typeof record.title === 'string' ? record.title.trim().slice(0, 180) : '';
-      const subtaskDescription = typeof record.description === 'string' ? record.description.trim().slice(0, 2000) : '';
+      const subtaskDescription = typeof record.description === 'string' ? record.description.trim() : '';
       const subtaskDueDate = typeof record.dueDate === 'string' && record.dueDate.trim()
         ? record.dueDate.trim()
         : null;
@@ -2106,6 +2106,7 @@ export const aiAssistantService = {
       'Для любых вычислений времени используй часовой пояс пользователя из контекста.',
       'Если ответ содержит сравнение или табличные данные, оформляй их как корректную Markdown-таблицу с заголовками, строкой разделителей | --- | и строками значений. Не заключай таблицу в блок кода.',
       'Через actions можно менять только текущую задачу и её подзадачи, а также создавать самостоятельные напоминания create_reminder.',
+      'При изменении описания задачи или подзадачи обязательно прочитай её через get_task, затем вызови edit_task_description. Для добавления пункта передай только новый фрагмент с mode=append; для вставки или замены mode=replace с полным итоговым текстом. Не дублируй это действие в actions и не сокращай исходное описание: искусственного лимита 2000/4000 символов нет. Используй format=text или безопасную HTML-разметку h1/h2/p/br/strong/em/u/s/ul/ol/li, без атрибутов и скриптов. После подготовленного изменения сообщи о карточке подтверждения, не об окончательном сохранении.',
       ...(monitoringEnabled ? [
         'РЕЖИМ АВТОМОНИТОРИНГА: у задачи и подзадач нет дедлайнов. Не создавай, не редактируй и не переноси dueDate ни одним action, включая create_subtask, update_task, reschedule_task, update_subtask и reschedule_subtask.',
         'Любые будущие даты действий планируй через set_task_monitoring_trigger. При переносе сначала отмени старый триггер через cancel_task_monitoring_trigger и создай новый. Учитывай список активных триггеров.'
@@ -3647,7 +3648,7 @@ export async function applyTaskChatProposalActions(input: {
                 where: { id: task.id },
                 data: {
                   ...(action.title !== undefined ? { title: action.title.slice(0, 180) } : {}),
-                  ...(action.description !== undefined ? { description: action.description.slice(0, 4000) } : {}),
+                  ...(action.description !== undefined ? { description: action.description } : {}),
                   ...(dueDate === undefined ? {} : { dueDate }),
                   ...(nextImportance !== undefined ? { importance: nextImportance } : {}),
                   ...(nextUrgency !== undefined ? { urgency: nextUrgency } : {}),
@@ -3688,7 +3689,7 @@ export async function applyTaskChatProposalActions(input: {
               const reminder = await prisma.task.create({
                 data: {
                   userId: input.userId, taskType: 'REMINDER',
-                  title: action.title.slice(0, 180), description: (action.description ?? '').slice(0, 4000),
+                  title: action.title.slice(0, 180), description: (action.description ?? ''),
                   dueDate: when, status: 'TODO', importance: 3, urgency: 3, priorityScore: 3,
                   notifyBeforeMinutes: 0, aiNotificationsEnabled: false
                 }
@@ -3705,7 +3706,7 @@ export async function applyTaskChatProposalActions(input: {
               }
               const dueDate = monitoringEnabled ? null : action.dueDate ? new Date(action.dueDate) : null;
               const subtask = await prisma.task.create({
-                data: { title: action.title.slice(0, 180), description: (action.description ?? '').slice(0, 2000), userId: input.userId, parentTaskId: task.id, sphereId: null, collaborationId: task.collaborationId, importance: 3, urgency: 3, priorityScore: 3, status: 'TODO', dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null, notifyBeforeMinutes: 0 }
+                data: { title: action.title.slice(0, 180), description: (action.description ?? ''), userId: input.userId, parentTaskId: task.id, sphereId: null, collaborationId: task.collaborationId, importance: 3, urgency: 3, priorityScore: 3, status: 'TODO', dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null, notifyBeforeMinutes: 0 }
               });
               createdIds.push(subtask.id);
               actionReports.push(`Добавил подзадачу "${subtask.title}". [[task_ref=${subtask.id}]]`);
@@ -3742,7 +3743,7 @@ export async function applyTaskChatProposalActions(input: {
                   actionReports.push(`Обновление подзадачи "${subtask.title}" пропущено: неверный формат dueDate.`);
                   continue;
                 }
-                await taskService.update(subtask.id, input.userId, { ...(action.description !== undefined ? { description: action.description.slice(0, 2000) } : {}), ...(dueDate === undefined ? {} : { dueDate }) });
+                await taskService.update(subtask.id, input.userId, { ...(action.description !== undefined ? { description: action.description } : {}), ...(dueDate === undefined ? {} : { dueDate }) });
                 actionReports.push(`Обновил подзадачу "${subtask.title}".`);
                 appliedActionsCount += 1;
                 console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
@@ -3838,7 +3839,7 @@ export async function applyLegacyGeneralProposalActions(input: {
           const reminder = await prisma.task.create({
             data: {
               userId: input.userId, taskType: 'REMINDER', title: action.title.slice(0, 180),
-              description: (action.description ?? '').slice(0, 4000),
+              description: (action.description ?? ''),
               dueDate: when, status: 'TODO',
               importance: 3, urgency: 3, priorityScore: 3,
               notifyBeforeMinutes: 0, aiNotificationsEnabled: false
@@ -3876,7 +3877,7 @@ export async function applyLegacyGeneralProposalActions(input: {
           const createdTask = await prisma.task.create({
             data: {
               title: action.title.slice(0, 180),
-              description: action.description?.slice(0, 4000) || '',
+              description: action.description || '',
               userId: input.userId,
               sphereId: action.sphereId ?? null,
               importance,
@@ -3896,7 +3897,7 @@ export async function applyLegacyGeneralProposalActions(input: {
               return prisma.task.create({
                 data: {
                   title: subtask.title.slice(0, 180),
-                  description: (subtask.description ?? '').slice(0, 2000),
+                  description: (subtask.description ?? ''),
                   userId: input.userId,
                   parentTaskId: createdTask.id,
                   sphereId: null,
@@ -3929,7 +3930,7 @@ export async function applyLegacyGeneralProposalActions(input: {
           const subtask = await prisma.task.create({
             data: {
               title: action.title.slice(0, 180),
-              description: (action.description ?? '').slice(0, 2000),
+              description: (action.description ?? ''),
               userId: input.userId,
               parentTaskId: parentTask.id,
               sphereId: null,
@@ -3978,7 +3979,7 @@ export async function applyLegacyGeneralProposalActions(input: {
           await prisma.task.update({
             where: { id: subtask.id },
             data: {
-              ...(action.description !== undefined ? { description: action.description.slice(0, 2000) } : {}),
+              ...(action.description !== undefined ? { description: action.description } : {}),
               ...(dueDate === undefined ? {} : { dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null })
             }
           });
@@ -4093,7 +4094,7 @@ export async function applyLegacyGeneralProposalActions(input: {
           await prisma.task.update({
             where: { id: task.id },
             data: {
-              ...(action.description !== undefined ? { description: action.description.slice(0, 4000) } : {}),
+              ...(action.description !== undefined ? { description: action.description } : {}),
               ...(dueDate === undefined ? {} : { dueDate }),
               ...(nextImportance !== undefined ? { importance: nextImportance } : {}),
               ...(nextUrgency !== undefined ? { urgency: nextUrgency } : {}),

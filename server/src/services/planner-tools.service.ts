@@ -239,19 +239,19 @@ export function createPlannerToolsService(db: any = prisma, mutations: Pick<type
     if (value.operation === 'create_subtask') {
       const parent = await db.task.findFirst({ where: { id: value.parentTaskId!, parentTaskId: null, ...plannerTaskAccessWhere(userId) }, select: { id: true, title: true } });
       if (!parent) return errorResult('PARENT_NOT_FOUND', 'Родительская задача не найдена.');
-      item = await mutations.create(userId, { parentTaskId: parent.id, title: (value.title ?? '').trim().slice(0, 180), description: (value.description ?? '').slice(0, 2000), dueDate: value.dueDate ? new Date(value.dueDate) : null, importance: 3, urgency: 3, status: 'TODO', sphereId: null, notifyBeforeMinutes: 0 });
+      item = await mutations.create(userId, { parentTaskId: parent.id, title: (value.title ?? '').trim().slice(0, 180), description: (value.description ?? ''), dueDate: value.dueDate ? new Date(value.dueDate) : null, importance: 3, urgency: 3, status: 'TODO', sphereId: null, notifyBeforeMinutes: 0 });
       return { ok: true, operation: value.operation, itemId: item.id, report: `Добавлена подзадача «${item.title}» к задаче «${parent.title}».` };
     }
     if (value.operation === 'create_task' || value.operation === 'create_event' || value.operation === 'create_reminder') {
       if (value.sphereId && !resolvedSphereIds.has(value.sphereId)) return errorResult('SPHERE_NOT_RESOLVED', 'Сначала получите сектор через list_planner_spheres.');
       const importance = Math.max(1, Math.min(5, Math.round(value.importance ?? 3))); const urgency = Math.max(1, Math.min(5, Math.round(value.urgency ?? 3)));
-      item = await db.task.create({ data: { userId, title: (value.title ?? '').trim().slice(0, 180), description: (value.description ?? '').slice(0, 4000), dueDate: value.dueDate ? new Date(value.dueDate) : null, taskType: value.operation === 'create_reminder' ? 'REMINDER' : value.operation === 'create_event' ? 'EVENT' : 'TASK', location: value.location?.slice(0, 500) ?? null, importance, urgency, priorityScore: Number((importance * .6 + urgency * .4).toFixed(2)), status: 'TODO', sphereId: value.sphereId, notifyBeforeMinutes: value.operation === 'create_reminder' ? 0 : Math.round(value.notifyBeforeMinutes ?? 0), aiNotificationsEnabled: value.operation === 'create_reminder' ? false : true } });
+      item = await db.task.create({ data: { userId, title: (value.title ?? '').trim().slice(0, 180), description: (value.description ?? ''), dueDate: value.dueDate ? new Date(value.dueDate) : null, taskType: value.operation === 'create_reminder' ? 'REMINDER' : value.operation === 'create_event' ? 'EVENT' : 'TASK', location: value.location?.slice(0, 500) ?? null, importance, urgency, priorityScore: Number((importance * .6 + urgency * .4).toFixed(2)), status: 'TODO', sphereId: value.sphereId, notifyBeforeMinutes: value.operation === 'create_reminder' ? 0 : Math.round(value.notifyBeforeMinutes ?? 0), aiNotificationsEnabled: value.operation === 'create_reminder' ? false : true } });
       return { ok: true, operation: value.operation, itemId: item.id, report: `Создано ${value.operation === 'create_reminder' ? 'напоминание' : value.operation === 'create_event' ? 'событие' : 'задача'} «${item.title}».` };
     }
     const undoOperation: PlannerUndoOperation | undefined = ['reschedule', 'clear_due_date', 'complete', 'reopen'].includes(value.operation) ? { taskId: item.id, previous: { dueDate: item.dueDate?.toISOString() ?? null, status: item.status } } : undefined;
     const patch: Parameters<typeof taskService.update>[2] = {};
     if (value.operation === 'rename') patch.title = (value.title ?? '').trim().slice(0, 180);
-    if (value.operation === 'set_description') patch.description = (value.description ?? '').slice(0, item.parentTaskId ? 2000 : 4000);
+    if (value.operation === 'set_description') patch.description = value.description ?? '';
     if (value.operation === 'reschedule') patch.dueDate = new Date(value.dueDate!);
     if (value.operation === 'clear_due_date') patch.dueDate = null;
     if (value.operation === 'complete') patch.status = 'DONE';

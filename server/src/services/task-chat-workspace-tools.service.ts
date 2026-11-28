@@ -2,11 +2,12 @@ import { plannerToolsService, authorizePlannerActionReferences, PLANNER_OPERATIO
 import { personalNotesToolsService, mergeTaskAndNoteSearchResults, validateNoteSearchInput } from './personal-notes-tools.service.js';
 import { validateAiCreateNoteArgs, validateAiUpdateNoteArgs } from './ai-create-note.service.js';
 import { normalizePlannerDueDate } from './planner-due-date.service.js';
+import { editTaskDescription } from './ai-task-description.service.js';
 import { requireMonitoredTask } from './task-monitoring.service.js';
 
 export const TASK_CHAT_WORKSPACE_TOOL_NAMES = [
   'search_workspace', 'search_notes', 'read_note', 'create_note', 'update_note',
-  'search_tasks', 'list_tasks', 'get_task', 'list_sectors', 'task_action', 'task_actions'
+  'search_tasks', 'list_tasks', 'get_task', 'edit_task_description', 'list_sectors', 'task_action', 'task_actions'
 ] as const;
 
 const MAX_ACTIONS = 100;
@@ -27,6 +28,8 @@ export function createTaskChatWorkspaceTools(input: {
   const resolvedItemIds = new Set<string>([input.taskId]);
   const resolvedSphereIds = new Set<string>();
   const noteUpdates = new Set<string>();
+  const readDescriptions = new Map<string, { description: string | null; parentTaskId: string | null }>();
+  const editedDescriptions = new Set<string>();
   const actions: Record<string, unknown>[] = [];
   const now = input.now ?? new Date();
 
@@ -90,7 +93,22 @@ export function createTaskChatWorkspaceTools(input: {
         const item = await plannerToolsService.getItem(input.userId, args.id);
         if (!item) return { ok: false, code: 'ITEM_NOT_FOUND' };
         resolvedItemIds.add(item.id);
+        readDescriptions.set(item.id, { description: item.description ?? null, parentTaskId: item.parentTaskId ?? null });
         return { ok: true, item };
+      }
+      if (name === 'edit_task_description') {
+        if (actions.length >= MAX_ACTIONS) return { ok: false, code: 'TOO_MANY_ACTIONS' };
+        if (input.autonomousMonitoring) await requireMonitoredTask(input.userId, input.taskId);
+        const itemId = args.itemId;
+        if (typeof itemId !== 'string' || !readDescriptions.has(itemId))
+          return { ok: false, code: 'DESCRIPTION_NOT_READ', message: 'Сначала прочитай описание через get_task.' };
+        if (editedDescriptions.has(itemId)) return { ok: false, code: 'DESCRIPTION_ALREADY_PREPARED' };
+        const old = readDescriptions.get(itemId)!;
+        const description = editTaskDescription(old.description, args.content, args.mode, !!old.parentTaskId, args.format);
+        actions.push({ operation: 'set_description', itemId, parentTaskId: null, title: null, description, dueDate: null,
+          importance: null, urgency: null, notifyBeforeMinutes: null, sphereId: null, location: null, expectedDescription: old.description });
+        editedDescriptions.add(itemId);
+        return { ok: true, status: 'prepared', message: 'Изменение описания подготовлено к подтверждению.' };
       }
       if (name === 'list_sectors') {
         const sectors = await plannerToolsService.listSpheres(input.userId);
@@ -114,6 +132,8 @@ export function createTaskChatWorkspaceTools(input: {
               ? !PLANNER_OPERATIONS.includes(action.operation)
               : !PLANNER_BATCH_OPERATIONS.includes(action.operation as typeof PLANNER_BATCH_OPERATIONS[number])))
           return { ok: false, code: 'INVALID_TASK_ACTION' };
+        if (batch.some(action => action.operation === 'set_description'))
+          return { ok: false, code: 'USE_DESCRIPTION_EDITOR', message: 'Используй get_task и edit_task_description.' };
         for (const action of batch) {
           const invalid = await authorizePlannerActionReferences(input.userId, action, resolvedItemIds, resolvedSphereIds, plannerToolsService.getItem);
           if (invalid) return invalid;
